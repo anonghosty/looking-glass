@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0d">
+  <meta name="csrf-token" content="{{ lg_csrf }}">
+  <title>Looking Glass · Settings</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo-mark.svg') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/settings.css') }}" rel="stylesheet">
+</head>
+<body class="settings-page">
+  <header class="hud">
+    <div class="hud-left">
+      <button type="button" class="brand-btn" data-go="/?intro=1" aria-label="Open the Looking Glass overview"><img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32"></button>
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span id="stScope">Settings · both platforms</span></div></div>
+    </div>
+    <div class="hud-right">
+      <button type="button" class="demo-btn" data-go="/?intro=1"><span>Overview</span></button>
+      {% if "users" in lg_perms or "audit" in lg_perms %}<a class="demo-btn account-btn" href="/admin" title="Users, sessions, roles and audit log"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6zM9 12l2 2 4-4"/></svg><span>Admin</span></a>{% endif %}
+      <form method="post" action="/logout" class="account-form"><button type="submit" class="demo-btn account-btn" title="Logged in as {{ lg_user }} ({{ lg_role }}). Click to log out." aria-label="Log out">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg><span class="acct-name">Log out</span></button></form>
+    </div>
+  </header>
+
+  <main class="st-main">
+    <div class="st-banner" id="banner" role="status" hidden></div>
+    <div class="st-access" id="access" hidden></div>
+    <div class="st-loading" id="stLoading">Loading the settings and the networks in the reports…</div>
+
+    <section class="st-card" id="cardCountry">
+      <h2>Country <span class="st-for">publicly accessible / vulnerable services</span></h2>
+      <p class="st-hint">The country your CSIRT covers. The publicly accessible / vulnerable services platform draws this country's regions for its regions map and uses its name in labels.
+        Region boundaries for all 54 African countries come from geoBoundaries (open data, CC BY 4.0).</p>
+      <div class="st-row">
+        <label class="st-field"><span>Country</span><select id="country" class="lg-enhance"></select></label>
+        <div class="st-meta" id="countryMeta"></div>
+      </div>
+      <div class="st-country">
+        <svg id="preview" aria-label="Regions of the selected country"></svg>
+        <div class="st-match">
+          <h3>Regions in the reports and on the map</h3>
+          <p class="st-hint" id="matchHint"></p>
+          <div class="table-wrap"><table class="hosts" id="matchTable"><thead><tr><th>Region in the reports</th><th>Records yesterday</th><th>Drawn as</th></tr></thead><tbody></tbody></table></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="st-card" id="cardScope">
+      <h2>Constituency <span class="st-for">both platforms</span></h2>
+      <p class="st-hint">The networks (AS numbers) your CSIRT is responsible for. Both platforms (network communications and publicly accessible / vulnerable services) then show only
+        records whose host is in these networks or address ranges: every figure, list, map, analysis and export. "Whole country" shows everything in the reports.</p>
+      <div class="seg st-mode" role="group" aria-label="Constituency">
+        <button type="button" data-mode="all" aria-pressed="true">Whole country (everything in the reports)</button>
+        <button type="button" data-mode="some" aria-pressed="false">Only selected networks and address ranges</button>
+      </div>
+      <div id="someBox">
+        <div class="st-row st-tools">
+          <input type="search" class="search" id="netSearch" placeholder="Search networks or AS numbers, for example telecom, university, 64500" autocomplete="off">
+          <div class="chips" id="typeChips"></div>
+        </div>
+        <div class="st-row st-tools">
+          <button class="pill-btn" id="selShown" type="button">Select all shown</button>
+          <button class="pill-btn" id="clearShown" type="button">Clear shown</button>
+          <span class="muted" id="selCount"></span>
+          <button class="pill-btn st-identify" id="btnIdentify" type="button" title="Look up the company name and type of every network in the data that is not identified yet (PeeringDB and RIPEstat, free public sources; only AS numbers are sent). Networks already identified are skipped.">
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM21 21l-5.2-5.2"/></svg>
+            Identify networks <span class="muted" id="unknownCount"></span></button>
+        </div>
+        <div class="table-wrap st-nets"><table class="hosts" id="netTable"><thead><tr><th></th><th>Network (company)</th><th>Type</th><th>AS numbers</th><th>Records yesterday</th></tr></thead><tbody></tbody></table></div>
+        <label class="st-field st-cidrs"><span>Extra address ranges (one per line, for example 41.66.0.0/16 or a single address)</span>
+          <textarea id="cidrs" rows="4" spellcheck="false" placeholder="196.10.0.0/22"></textarea></label>
+      </div>
+      <div class="st-preview" id="preview2"></div>
+    </section>
+
+{% with standalone=False %}{% include "_kb_cards.html" %}{% endwith %}
+
+{% include "_net_card.html" %}
+
+    <section class="st-card">
+      <h2>For deployment (.env)</h2>
+      <p class="st-hint">The same settings can be given at installation in the <span class="mono">.env</span> file; settings applied here take precedence.
+        Set <span class="mono">SETTINGS_TOKEN</span> to allow changes from other computers (otherwise only from the server itself).</p>
+      <pre class="st-env mono" id="envLines"></pre>
+    </section>
+  </main>
+
+  <!-- always visible: what will change, Apply, and the confirmation -->
+  <div class="st-apply" id="applyBar">
+    <div class="st-apply-text"><b id="applyState">No changes</b><span class="muted" id="applyDetail"></span></div>
+    <button class="pill-btn" id="revert" type="button" hidden>Undo changes</button>
+    <button class="intro-cta st-apply-btn" id="save" type="button" disabled>Apply settings</button>
+  </div>
+
+  <div class="tip" id="tip" role="tooltip" hidden></div>
+  <!-- Identify networks: progress of the background look-up -->
+  <div class="st-modal-back" id="idBack" hidden></div>
+  <section class="st-modal" id="idModal" role="dialog" aria-modal="true" aria-labelledby="idTitle" hidden>
+    <div class="st-modal-head"><h2 id="idTitle">Identifying networks</h2><button class="icon-btn" id="idClose" type="button" aria-label="Close">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg></button></div>
+    <p class="st-hint" id="idIntro">Company names and types come from PeeringDB and RIPEstat (free public sources; only AS numbers are sent). Networks already identified are skipped, and names you corrected by hand are never changed. It runs on the server: you can close this window.</p>
+    <div class="id-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><i id="idBar"></i></div>
+    <div class="id-stats">
+      <div><b id="idDone">0</b><span>looked up</span></div><div><b id="idTotal">0</b><span>to look up</span></div>
+      <div><b id="idAdded">0</b><span>identified</span></div><div><b id="idKnown">0</b><span>already known (skipped)</span></div>
+      <div><b id="idFailed">0</b><span>failed</span></div>
+    </div>
+    <div class="id-now mono" id="idNow"></div>
+    <ol class="id-log mono" id="idLog"></ol>
+    <p class="id-msg" id="idMsg"></p>
+  </section>
+  <!-- Define a malware name: description and references (evidence) -->
+  <div class="st-modal-back" id="kbBack" hidden></div>
+  <section class="st-modal kb-modal" id="kbModal" role="dialog" aria-modal="true" aria-labelledby="kbTitle" hidden>
+    <div class="st-modal-head"><h2 id="kbTitle">Define a name</h2><button class="icon-btn" id="kbClose" type="button" aria-label="Close">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg></button></div>
+    <p class="st-hint" id="kbSeen"></p>
+    <form id="kbForm" class="kb-form" autocomplete="off">
+      <label class="st-field">Name in the reports<input id="kbName" required maxlength="80" placeholder="android.midnight-mimosa"></label>
+      <div class="st-field" id="kbMpBox">
+        <label for="kbMp">Name in Malpedia <span class="muted">(optional: if Malpedia lists it under a different name, or as a threat actor; leave empty if it does not)</span></label>
+        <div class="kb-mp-row"><input id="kbMp" maxlength="90" placeholder="win.lumma, or actor:tick">
+          <input id="kbMpQ" maxlength="60" placeholder="search Malpedia by any name or alias" aria-label="Search Malpedia">
+          <button class="pill-btn" id="kbMpFind" type="button">Find in Malpedia</button></div>
+        <div class="kb-mp-hits" id="kbMpHits"></div>
+        <span class="muted kb-mp-note">When set, future look-ups of this name show that Malpedia family (with your references added).</span>
+      </div>
+      <label class="st-field">Title<input id="kbTitleIn" maxlength="120" placeholder="Midnight Mimosa"></label>
+      <label class="st-field">Type<input id="kbType" maxlength="80" placeholder="Android malware (preinstalled)"></label>
+      <p class="st-hint" id="kbCveHint" hidden>This is a CVE: its description, CVSS score, whether it is actively exploited (CISA KEV) and EPSS are looked up automatically. Add a note for your organisation (for example which products in your constituency are affected) and references.</p>
+      <label class="st-field"><span id="kbDescLbl">Description: what it is</span><textarea id="kbDesc" rows="6" maxlength="2000"></textarea></label>
+      <fieldset class="kb-refs"><legend>References (evidence)</legend>
+        <p class="st-hint">Web links to the reports that support this definition (vendor research, CERT advisories, Malpedia). At least one is needed.</p>
+        <div id="kbRefs"></div>
+        <button class="pill-btn" id="kbRefAdd" type="button">Add a reference</button>
+      </fieldset>
+      <p class="id-msg" id="kbMsg"></p>
+      <div class="kb-actions"><span class="muted" id="kbBy"></span><button class="intro-cta" id="kbSave" type="submit">Save definition</button></div>
+    </form>
+  </section>
+  <script src="{{ url_for('static', filename='js/lg-select.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/regions.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/kb-settings.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/net-editor.js') }}"></script>
+</body>
+</html>

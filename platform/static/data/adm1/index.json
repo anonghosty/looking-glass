@@ -1,0 +1,707 @@
+{
+ "countries": {
+  "DZ": {
+   "iso2": "DZ",
+   "iso3": "DZA",
+   "country": "Algeria",
+   "regions": 48,
+   "bbox": [
+    -8.669,
+    18.979,
+    11.846,
+    37.087
+   ],
+   "bytes": 226033
+  },
+  "AO": {
+   "iso2": "AO",
+   "iso3": "AGO",
+   "country": "Angola",
+   "regions": 18,
+   "bbox": [
+    11.668,
+    -18.038,
+    24.076,
+    -4.388
+   ],
+   "bytes": 128496
+  },
+  "BJ": {
+   "iso2": "BJ",
+   "iso3": "BEN",
+   "country": "Benin",
+   "regions": 12,
+   "bbox": [
+    0.769,
+    6.211,
+    3.843,
+    12.411
+   ],
+   "bytes": 18807
+  },
+  "BW": {
+   "iso2": "BW",
+   "iso3": "BWA",
+   "country": "Botswana",
+   "regions": 10,
+   "bbox": [
+    19.999,
+    -26.906,
+    29.362,
+    -17.778
+   ],
+   "bytes": 44747
+  },
+  "BF": {
+   "iso2": "BF",
+   "iso3": "BFA",
+   "country": "Burkina Faso",
+   "regions": 13,
+   "bbox": [
+    -5.519,
+    9.402,
+    2.405,
+    15.082
+   ],
+   "bytes": 74196
+  },
+  "BI": {
+   "iso2": "BI",
+   "iso3": "BDI",
+   "country": "Burundi",
+   "regions": 18,
+   "bbox": [
+    29.001,
+    -4.467,
+    30.852,
+    -2.312
+   ],
+   "bytes": 49526
+  },
+  "CV": {
+   "iso2": "CV",
+   "iso3": "CPV",
+   "country": "Cabo Verde",
+   "regions": 22,
+   "bbox": [
+    -25.361,
+    14.803,
+    -22.668,
+    17.205
+   ],
+   "bytes": 37407
+  },
+  "CM": {
+   "iso2": "CM",
+   "iso3": "CMR",
+   "country": "Cameroon",
+   "regions": 10,
+   "bbox": [
+    8.501,
+    1.656,
+    16.188,
+    13.079
+   ],
+   "bytes": 43589
+  },
+  "CF": {
+   "iso2": "CF",
+   "iso3": "CAF",
+   "country": "Central African Republic",
+   "regions": 17,
+   "bbox": [
+    14.421,
+    2.221,
+    27.453,
+    11.002
+   ],
+   "bytes": 39384
+  },
+  "TD": {
+   "iso2": "TD",
+   "iso3": "TCD",
+   "country": "Chad",
+   "regions": 23,
+   "bbox": [
+    13.473,
+    7.441,
+    24.0,
+    23.497
+   ],
+   "bytes": 60833
+  },
+  "KM": {
+   "iso2": "KM",
+   "iso3": "COM",
+   "country": "Comoros",
+   "regions": 3,
+   "bbox": [
+    43.229,
+    -12.422,
+    44.541,
+    -11.366
+   ],
+   "bytes": 11797
+  },
+  "CG": {
+   "iso2": "CG",
+   "iso3": "COG",
+   "country": "Congo",
+   "regions": 12,
+   "bbox": [
+    11.126,
+    -5.041,
+    18.644,
+    3.713
+   ],
+   "bytes": 56143
+  },
+  "CD": {
+   "iso2": "CD",
+   "iso3": "COD",
+   "country": "Democratic Republic of the Congo",
+   "regions": 26,
+   "bbox": [
+    12.201,
+    -13.454,
+    31.277,
+    5.39
+   ],
+   "bytes": 332074
+  },
+  "CI": {
+   "iso2": "CI",
+   "iso3": "CIV",
+   "country": "Côte d'Ivoire",
+   "regions": 14,
+   "bbox": [
+    -8.58,
+    4.361,
+    -2.494,
+    10.742
+   ],
+   "bytes": 88458
+  },
+  "DJ": {
+   "iso2": "DJ",
+   "iso3": "DJI",
+   "country": "Djibouti",
+   "regions": 6,
+   "bbox": [
+    41.749,
+    10.93,
+    43.419,
+    12.708
+   ],
+   "bytes": 4971
+  },
+  "EG": {
+   "iso2": "EG",
+   "iso3": "EGY",
+   "country": "Egypt",
+   "regions": 27,
+   "bbox": [
+    24.707,
+    22.0,
+    36.894,
+    31.674
+   ],
+   "bytes": 82267
+  },
+  "GQ": {
+   "iso2": "GQ",
+   "iso3": "GNQ",
+   "country": "Equatorial Guinea",
+   "regions": 7,
+   "bbox": [
+    5.617,
+    -1.468,
+    11.36,
+    3.788
+   ],
+   "bytes": 20870
+  },
+  "ER": {
+   "iso2": "ER",
+   "iso3": "ERI",
+   "country": "Eritrea",
+   "regions": 6,
+   "bbox": [
+    36.433,
+    12.355,
+    43.137,
+    18.018
+   ],
+   "bytes": 66693
+  },
+  "SZ": {
+   "iso2": "SZ",
+   "iso3": "SWZ",
+   "country": "Eswatini",
+   "regions": 4,
+   "bbox": [
+    30.791,
+    -27.318,
+    32.135,
+    -25.719
+   ],
+   "bytes": 13382
+  },
+  "ET": {
+   "iso2": "ET",
+   "iso3": "ETH",
+   "country": "Ethiopia",
+   "regions": 11,
+   "bbox": [
+    33.005,
+    3.4,
+    47.959,
+    14.842
+   ],
+   "bytes": 73744
+  },
+  "GA": {
+   "iso2": "GA",
+   "iso3": "GAB",
+   "country": "Gabon",
+   "regions": 9,
+   "bbox": [
+    8.723,
+    -3.953,
+    14.524,
+    2.319
+   ],
+   "bytes": 31459
+  },
+  "GM": {
+   "iso2": "GM",
+   "iso3": "GMB",
+   "country": "Gambia",
+   "regions": 8,
+   "bbox": [
+    -16.814,
+    13.043,
+    -13.791,
+    13.823
+   ],
+   "bytes": 29661
+  },
+  "GH": {
+   "iso2": "GH",
+   "iso3": "GHA",
+   "country": "Ghana",
+   "regions": 16,
+   "bbox": [
+    -3.261,
+    4.739,
+    1.199,
+    11.175
+   ],
+   "bytes": 86110
+  },
+  "GN": {
+   "iso2": "GN",
+   "iso3": "GIN",
+   "country": "Guinea",
+   "regions": 8,
+   "bbox": [
+    -15.086,
+    7.201,
+    -7.65,
+    12.676
+   ],
+   "bytes": 55417
+  },
+  "GW": {
+   "iso2": "GW",
+   "iso3": "GNB",
+   "country": "Guinea-Bissau",
+   "regions": 9,
+   "bbox": [
+    -16.717,
+    10.892,
+    -13.635,
+    12.686
+   ],
+   "bytes": 83951
+  },
+  "KE": {
+   "iso2": "KE",
+   "iso3": "KEN",
+   "country": "Kenya",
+   "regions": 47,
+   "bbox": [
+    33.912,
+    -4.702,
+    41.906,
+    5.431
+   ],
+   "bytes": 228504
+  },
+  "LS": {
+   "iso2": "LS",
+   "iso3": "LSO",
+   "country": "Lesotho",
+   "regions": 10,
+   "bbox": [
+    27.012,
+    -30.669,
+    29.456,
+    -28.571
+   ],
+   "bytes": 52119
+  },
+  "LR": {
+   "iso2": "LR",
+   "iso3": "LBR",
+   "country": "Liberia",
+   "regions": 15,
+   "bbox": [
+    -11.5,
+    4.354,
+    -7.369,
+    8.552
+   ],
+   "bytes": 68851
+  },
+  "LY": {
+   "iso2": "LY",
+   "iso3": "LBY",
+   "country": "Libya",
+   "regions": 22,
+   "bbox": [
+    9.287,
+    19.496,
+    25.156,
+    33.181
+   ],
+   "bytes": 27267
+  },
+  "MG": {
+   "iso2": "MG",
+   "iso3": "MDG",
+   "country": "Madagascar",
+   "regions": 22,
+   "bbox": [
+    43.225,
+    -25.607,
+    50.481,
+    -11.952
+   ],
+   "bytes": 244552
+  },
+  "MW": {
+   "iso2": "MW",
+   "iso3": "MWI",
+   "country": "Malawi",
+   "regions": 3,
+   "bbox": [
+    32.67,
+    -17.128,
+    35.872,
+    -9.368
+   ],
+   "bytes": 38068
+  },
+  "ML": {
+   "iso2": "ML",
+   "iso3": "MLI",
+   "country": "Mali",
+   "regions": 9,
+   "bbox": [
+    -12.239,
+    10.141,
+    4.245,
+    25.0
+   ],
+   "bytes": 58217
+  },
+  "MR": {
+   "iso2": "MR",
+   "iso3": "MRT",
+   "country": "Mauritania",
+   "regions": 13,
+   "bbox": [
+    -17.067,
+    14.716,
+    -4.828,
+    27.298
+   ],
+   "bytes": 56807
+  },
+  "MU": {
+   "iso2": "MU",
+   "iso3": "MUS",
+   "country": "Mauritius",
+   "regions": 12,
+   "bbox": [
+    56.586,
+    -20.525,
+    63.502,
+    -10.337
+   ],
+   "bytes": 21854
+  },
+  "MA": {
+   "iso2": "MA",
+   "iso3": "MAR",
+   "country": "Morocco",
+   "regions": 12,
+   "bbox": [
+    -17.103,
+    20.77,
+    -0.998,
+    35.922
+   ],
+   "bytes": 71351
+  },
+  "MZ": {
+   "iso2": "MZ",
+   "iso3": "MOZ",
+   "country": "Mozambique",
+   "regions": 10,
+   "bbox": [
+    30.218,
+    -26.868,
+    40.837,
+    -10.476
+   ],
+   "bytes": 86528
+  },
+  "NA": {
+   "iso2": "NA",
+   "iso3": "NAM",
+   "country": "Namibia",
+   "regions": 13,
+   "bbox": [
+    11.718,
+    -28.958,
+    25.26,
+    -16.951
+   ],
+   "bytes": 43586
+  },
+  "NE": {
+   "iso2": "NE",
+   "iso3": "NER",
+   "country": "Niger",
+   "regions": 6,
+   "bbox": [
+    0.189,
+    11.694,
+    15.999,
+    23.5
+   ],
+   "bytes": 18514
+  },
+  "NG": {
+   "iso2": "NG",
+   "iso3": "NGA",
+   "country": "Nigeria",
+   "regions": 37,
+   "bbox": [
+    2.693,
+    4.27,
+    14.677,
+    13.886
+   ],
+   "bytes": 167182
+  },
+  "RW": {
+   "iso2": "RW",
+   "iso3": "RWA",
+   "country": "Rwanda",
+   "regions": 5,
+   "bbox": [
+    28.862,
+    -2.838,
+    30.898,
+    -1.048
+   ],
+   "bytes": 27293
+  },
+  "ST": {
+   "iso2": "ST",
+   "iso3": "STP",
+   "country": "São Tomé and Príncipe",
+   "regions": 2,
+   "bbox": [
+    6.46,
+    -0.014,
+    7.462,
+    1.694
+   ],
+   "bytes": 7364
+  },
+  "SN": {
+   "iso2": "SN",
+   "iso3": "SEN",
+   "country": "Senegal",
+   "regions": 14,
+   "bbox": [
+    -17.531,
+    12.308,
+    -11.348,
+    16.694
+   ],
+   "bytes": 64222
+  },
+  "SC": {
+   "iso2": "SC",
+   "iso3": "SYC",
+   "country": "Seychelles",
+   "regions": 26,
+   "bbox": [
+    46.203,
+    -10.227,
+    56.294,
+    -3.71
+   ],
+   "bytes": 28790
+  },
+  "SL": {
+   "iso2": "SL",
+   "iso3": "SLE",
+   "country": "Sierra Leone",
+   "regions": 4,
+   "bbox": [
+    -13.309,
+    6.923,
+    -10.271,
+    9.999
+   ],
+   "bytes": 40180
+  },
+  "SO": {
+   "iso2": "SO",
+   "iso3": "SOM",
+   "country": "Somalia",
+   "regions": 18,
+   "bbox": [
+    40.989,
+    -1.662,
+    51.416,
+    11.988
+   ],
+   "bytes": 41589
+  },
+  "ZA": {
+   "iso2": "ZA",
+   "iso3": "ZAF",
+   "country": "South Africa",
+   "regions": 9,
+   "bbox": [
+    16.453,
+    -34.833,
+    32.945,
+    -22.125
+   ],
+   "bytes": 142688
+  },
+  "SS": {
+   "iso2": "SS",
+   "iso3": "SSD",
+   "country": "South Sudan",
+   "regions": 10,
+   "bbox": [
+    24.151,
+    3.48,
+    35.952,
+    12.236
+   ],
+   "bytes": 42312
+  },
+  "SD": {
+   "iso2": "SD",
+   "iso3": "SDN",
+   "country": "Sudan",
+   "regions": 19,
+   "bbox": [
+    21.815,
+    8.641,
+    38.58,
+    23.143
+   ],
+   "bytes": 81678
+  },
+  "TZ": {
+   "iso2": "TZ",
+   "iso3": "TZA",
+   "country": "Tanzania",
+   "regions": 30,
+   "bbox": [
+    29.329,
+    -11.761,
+    40.446,
+    -0.987
+   ],
+   "bytes": 154653
+  },
+  "TG": {
+   "iso2": "TG",
+   "iso3": "TGO",
+   "country": "Togo",
+   "regions": 5,
+   "bbox": [
+    -0.144,
+    6.112,
+    1.802,
+    11.136
+   ],
+   "bytes": 22356
+  },
+  "TN": {
+   "iso2": "TN",
+   "iso3": "TUN",
+   "country": "Tunisia",
+   "regions": 24,
+   "bbox": [
+    7.522,
+    30.23,
+    11.6,
+    37.542
+   ],
+   "bytes": 110477
+  },
+  "UG": {
+   "iso2": "UG",
+   "iso3": "UGA",
+   "country": "Uganda",
+   "regions": 4,
+   "bbox": [
+    29.575,
+    -1.481,
+    35.0,
+    4.234
+   ],
+   "bytes": 87964
+  },
+  "ZM": {
+   "iso2": "ZM",
+   "iso3": "ZMB",
+   "country": "Zambia",
+   "regions": 10,
+   "bbox": [
+    21.998,
+    -18.077,
+    33.71,
+    -8.272
+   ],
+   "bytes": 146547
+  },
+  "ZW": {
+   "iso2": "ZW",
+   "iso3": "ZWE",
+   "country": "Zimbabwe",
+   "regions": 10,
+   "bbox": [
+    25.239,
+    -22.421,
+    33.065,
+    -15.607
+   ],
+   "bytes": 82534
+  }
+ },
+ "source": "geoBoundaries gbOpen ADM1 (simplified), CC BY 4.0, https://www.geoboundaries.org"
+}

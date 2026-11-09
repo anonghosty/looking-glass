@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+# shadowserver - global entry point for the Shadowserver pipeline.
+# Installed by deploy.sh as /usr/local/bin/shadowserver (a symlink to this file),
+# so it works from any folder. See: shadowserver help | man shadowserver
+set -uo pipefail
+
+SELF=$(readlink -f "${BASH_SOURCE[0]}")
+PROJECT_DIR=$(dirname "$(dirname "$SELF")")
+VERSION="1.0"
+
+die() { printf 'shadowserver: %s\n' "$*" >&2; exit 1; }
+[[ -f $PROJECT_DIR/shadowserver_pipeline.py ]] || die "project folder not found at $PROJECT_DIR"
+
+usage() {
+  cat <<EOF
+Usage: shadowserver <command> [options]
+
+Commands:
+  run [options]        pull e-mails, unzip/sort, load into MongoDB (default command)
+  check                verify MongoDB, indexes, data structure, folders and the mailbox login
+  status               short overview: MongoDB service, data, last run, schedule
+  logs [-f] [N]        show the last N lines (default 40) of the latest run log; -f to follow
+  schedule every 30m   run automatically every 30 minutes (or every 2h, or HH:MM daily; no sudo)
+  schedule [show|off]  show the schedule / remove it
+  deploy [options]     install/update MongoDB, dependencies and these commands (uses sudo)
+  help                 this help         man      the full manual
+  version              show version and project folder
+
+Run options (shadowserver run --help for details):
+  --stage all|email|load   --days N   --workers N   -q|--quiet   -v|--verbose
+
+Deploy options (shadowserver deploy --help):
+  --schedule 'every 30m'|HH:MM   --unschedule   --remove-container   --uninstall-commands
+
+Examples:
+  shadowserver run                  run now
+  shadowserver run --days 8         catch up on the last 8 days
+  shadowserver --days 8             same (options alone mean "run")
+  shadowserver run --stage load     load files already on disk into MongoDB
+  shadowserver schedule every 30m   run every 30 minutes (recommended)
+  shadowserver schedule off         stop the scheduled runs
+  shadowserver logs -f              watch a running job
+
+Scheduled runs only fire while WSL is running (see: shadowserver schedule --help).
+
+Project folder: $PROJECT_DIR
+EOF
+}
+
+latest_log() { ls -1t "$PROJECT_DIR"/logs/pipeline-*.log 2>/dev/null | head -n1; }
+
+# ------------------------------------------------------------------ schedule (cron, no sudo)
+CRON_MARK="# shadowserver-pipeline"
+
+schedule_line() { crontab -l 2>/dev/null | grep -F -- "$CRON_MARK" | head -n1; }
+
+schedule_desc() {  # "every 30 minutes", "every 2 hours", "every day at 06:30", or nothing
+  schedule_line | awk '{
+    if ($1 ~ /^\*\//)                     { sub(/^\*\//, "", $1); printf "every %s minutes", $1 }
+    else if ($2 ~ /^\*\//)                { sub(/^\*\//, "", $2); printf "every %s hours", $2 }
+    else if ($2 == "*")                   { printf "every hour" }
+    else                                  { printf "every day at %02d:%02d", $2, $1 } }'
+}
+schedule_time() { schedule_desc; }   # (old name)
+
+schedule_show() {
+  local t; t=$(schedule_desc)
+  if [[ -n $t ]]; then
+    echo "Scheduled: $t (quiet mode, cron)"
+    echo "Cron line: $(schedule_line)"
+    echo "Logs:      $PROJECT_DIR/logs/pipeline-YYYY-MM-DD.log   (shadowserver logs)"
+  else
+    echo "Not scheduled.  Recommended:  shadowserver schedule every 30m"
+  fi
+  [[ $(systemctl is-active cron 2>/dev/null) == active ]] \
+    || echo "WARNING: the cron service is not running - scheduled runs will not happen (sudo systemctl enable --now cron)"
+}
+
+schedule_write() {  # $1 = new cron line or empty to remove
+  local others
+  others=$(crontab -l 2>/dev/null | grep -vF -- "$CRON_MARK" || true)
+  if [[ -z $others && -z $1 ]]; then
+    crontab -r 2>/dev/null || true
+  else
+    printf '%s\n%s\n' "$others" "$1" | sed '/^$/d' | crontab -
+  fi
+}
+
+# "06:30" | "every 30m" | "30m" | "every 2h" | "2h" | "every 30 minutes" -> cron time fields, or empty if invalid
+schedule_cron() {
+  local a="${*,,}"; a="${a#every }"; a="${a// /}"
+  if [[ $a =~ ^([01]?[0-9]|2[0-3]):([0-5][0-9])$ ]]; then
+    echo "$((10#${BASH_REMATCH[2]})) $((10#${BASH_REMATCH[1]})) * * *"; return
+  fi
+  if [[ $a =~ ^([0-9]+)(m|min|mins|minute|minutes)$ ]]; then
+    case "${BASH_REMATCH[1]}" in 5|10|15|20|30) echo "*/${BASH_REMATCH[1]} * * * *" ;; 60) echo "0 * * * *" ;; esac; return
+  fi
+  if [[ $a =~ ^([0-9]+)(h|hr|hrs|hour|hours)$ ]]; then
+    case "${BASH_REMATCH[1]}" in 1) echo "0 * * * *" ;; 2|3|4|6|8|12) echo "0 */${BASH_REMATCH[1]} * * *" ;; esac; return
+  fi
+}
+
+schedule() {
+  local arg="${*:-show}"
+  case "$arg" in
+    show|status) schedule_show ;;
+    off|remove|none|disable)
+      if [[ -n $(schedule_line) ]]; then schedule_write ""; echo "Scheduled runs removed."; else echo "There was no scheduled run."; fi ;;
+    -h|--help)
+      cat <<'EOF'
+Usage: shadowserver schedule [every 30m | every 2h | HH:MM | off | show]
+
+  shadowserver schedule every 30m  run the pipeline every 30 minutes (recommended: Shadowserver sends
+                                   reports throughout the day; each run only fetches what is new)
+  shadowserver schedule every 2h   every 2 hours (minutes: 5 10 15 20 30; hours: 1 2 3 4 6 8 12)
+  shadowserver schedule 06:30      once a day at 06:30 (24h clock, this computer's time)
+  shadowserver schedule            show the current schedule
+  shadowserver schedule off        remove it
+
+It is a cron job for your user (no sudo needed). It runs "run.sh --quiet": new e-mail -> unzip/sort ->
+load into MongoDB, appending to logs/pipeline-YYYY-MM-DD.log. A run still going when the next one is
+due makes the next one skip itself. Setting a new schedule replaces the old one.
+
+On WSL, cron only fires while WSL is running (keep a WSL terminal open, or start WSL at Windows logon).
+EOF
+      ;;
+    *)
+      local cron old
+      cron=$(schedule_cron "$arg")
+      [[ -n $cron ]] || die "schedule: expected 'every 30m', 'every 2h', HH:MM (e.g. 06:30), 'off' or 'show' - got '$arg' (shadowserver schedule --help)"
+      old=$(schedule_desc)
+      schedule_write "$cron $PROJECT_DIR/run.sh --quiet >/dev/null 2>&1 $CRON_MARK"
+      [[ -n $old ]] && echo "Changed the schedule: $old -> $(schedule_desc)" || echo "Scheduled: $(schedule_desc)."
+      schedule_show | tail -n +2
+      ;;
+  esac
+}
+
+status() {
+  local active enabled mem log cron
+  active=$(systemctl is-active mongod 2>/dev/null); enabled=$(systemctl is-enabled mongod 2>/dev/null)
+  mem=$(systemctl show -p MemoryCurrent --value mongod 2>/dev/null)
+  [[ $mem =~ ^[0-9]+$ ]] && mem="$((mem / 1048576)) MB" || mem="-"
+  printf '%-14s %s (%s at boot), memory %s\n' "MongoDB:" "${active:-not installed}" "${enabled:-?}" "$mem"
+  if [[ $active == active ]]; then
+    (cd "$PROJECT_DIR" && .venv/bin/python - <<'PY' 2>/dev/null) || printf '%-14s %s\n' "Database:" "could not connect (shadowserver check)"
+import argparse, sys
+sys.path.insert(0, ".")
+import shadowserver_pipeline as sp
+s = sp.load_settings(argparse.Namespace(env_file=".env", workers=None, days=None))
+db = sp.mongo_client(s.mongo, serverSelectionTimeoutMS=3000)[s.mongo_db]
+svc = [n for n in db.list_collection_names() if not n.startswith(("files_", "discovered_fields_", "system."))]
+rows = sum(db[n].estimated_document_count() for n in svc)
+print(f"{'Database:':<14} {s.mongo_db}: {len(svc)} services, {rows:,} rows")
+PY
+  fi
+  local csvs
+  csvs=$(find "$PROJECT_DIR/sorting_backup" -type f -name '*.csv' 2>/dev/null | wc -l)
+  printf '%-14s %s report CSV files in sorting_backup/\n' "Files:" "$csvs"
+  if exec 9>"$PROJECT_DIR/.pipeline.lock" && ! flock -n 9; then
+    printf '%-14s %s\n' "Running:" "YES - a run is in progress (shadowserver logs -f)"
+  else
+    printf '%-14s %s\n' "Running:" "no"
+  fi
+  exec 9>&-
+  log=$(latest_log)
+  if [[ -n $log ]]; then
+    printf '%-14s %s\n' "Last log:" "$log"
+    grep -E 'Done in|Load: [0-9]+ files|E-mail: |ERROR' "$log" | tail -n 4 | sed 's/^/               /'
+  else
+    printf '%-14s %s\n' "Last log:" "none yet"
+  fi
+  cron=$(schedule_desc)
+  if [[ -n $cron ]]; then
+    printf '%-14s %s\n' "Schedule:" "$cron (shadowserver schedule off to remove)"
+  else
+    printf '%-14s %s\n' "Schedule:" "none (recommended: shadowserver schedule every 30m)"
+  fi
+}
+
+logs() {
+  local follow=0 n=40 log
+  for a in "$@"; do
+    case "$a" in -f|--follow) follow=1 ;; ''|*[!0-9]*) die "logs: unknown option '$a'" ;; *) n=$a ;; esac
+  done
+  log=$(latest_log); [[ -n $log ]] || die "no logs yet in $PROJECT_DIR/logs"
+  echo "==> $log"
+  if [[ $follow -eq 1 ]]; then exec tail -n "$n" -F "$log"; else tail -n "$n" "$log"; fi
+}
+
+cmd="${1:-help}"
+case "$cmd" in
+  run)            shift; exec "$PROJECT_DIR/run.sh" "$@" ;;
+  check)          shift; exec "$PROJECT_DIR/check.sh" "$@" ;;
+  deploy)         shift; exec "$PROJECT_DIR/deploy.sh" "$@" ;;
+  status)         status ;;
+  schedule|cron)  shift; schedule "$@" ;;
+  logs|log)       shift; logs "$@" ;;
+  man)            exec man -l "$PROJECT_DIR/docs/shadowserver.1" ;;
+  help|-h|--help) usage ;;
+  version|--version) echo "shadowserver $VERSION ($PROJECT_DIR)" ;;
+  -*)             exec "$PROJECT_DIR/run.sh" "$@" ;;   # options only -> run
+  *)              echo "shadowserver: unknown command '$cmd'" >&2; echo >&2; usage >&2; exit 2 ;;
+esac

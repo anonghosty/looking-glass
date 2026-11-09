@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0d">
+  <meta name="csrf-token" content="{{ lg_csrf }}">
+  <title>Looking Glass · Threat replay map</title>
+  <meta name="description" content="Looking Glass: replay of yesterday's Shadowserver threat reports on a map.">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo-mark.svg') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css" rel="stylesheet" integrity="sha384-GTsgKcJXGSkBp0M68qpxkz9XovzVH0PwSrjYONvkn3tXtySOSq+a14bG2gVJHwQG" crossorigin="anonymous">
+  <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+  <script src="{{ url_for('static', filename='js/lg-select.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/display.js') }}"></script>
+</head>
+<body{% if "unmasked" not in lg_perms %} data-masked="1"{% endif %}{% if "export" in lg_perms %} data-export="1"{% endif %}>
+  <!-- ===================== Intro ===================== -->
+  <section class="intro" id="intro" role="dialog" aria-modal="true" aria-labelledby="introTitle">
+    <!-- Top left: display quality (small). Top right: the page buttons as one group (Executive, Admin, Settings),
+         then the account button (Log out last); under them, what both platforms are showing -->
+    <div class="intro-display-corner">
+      <div class="intro-display" data-term="display"><span class="intro-display-label">Display</span>
+        <div class="seg perf-seg" role="group" aria-label="Display quality">
+            <button type="button" data-perf="auto" title="Full on capable devices; Lite on TVs, older computers or when drawing is slow">Auto</button>
+            <button type="button" data-perf="full" title="Every effect: 3D tilt, glow, trails, camera drift, blurred panels">Full</button>
+            <button type="button" data-perf="lite" title="For smart TVs and older computers: flat map, fewer simultaneous arcs, lighter effects">Lite</button>
+          </div>
+      </div>
+    </div>
+    <div class="intro-gear-wrap">
+      <div class="intro-gear-row">
+      <div class="intro-nav" role="group" aria-label="Pages">
+      {% if "management" in lg_perms %}<a class="intro-gear account-btn" href="/management" title="The management portal (Executive): aggregated dashboard and executive reports"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Executive</span></a>{% endif %}
+      {% if "users" in lg_perms or "audit" in lg_perms %}<a class="intro-gear account-btn" href="/admin" title="Users, sessions, roles and audit log"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6zM9 12l2 2 4-4"/></svg><span>Admin</span></a>{% endif %}
+      {% if "settings" in lg_perms %}
+      <button type="button" class="intro-gear" id="introSettings" aria-label="Settings: country and constituency for both platforms">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        <span>Settings</span>
+      </button>
+      {% endif %}
+      </div>
+      <form method="post" action="/logout" class="account-form"><button type="submit" class="intro-gear account-btn" title="Logged in as {{ lg_user }} ({{ lg_role }}). Click to log out.">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+        <span class="acct-name">{{ lg_user }}</span><span class="acct-sep" aria-hidden="true">·</span><span>Log out</span></button></form>
+      </div>
+      <span class="intro-scope" id="introScope"></span>
+    </div>
+    <div class="intro-inner">
+      <svg class="intro-logo" viewBox="0 0 32 32" aria-hidden="true">
+        <defs>
+          <linearGradient id="il-arc" x1="8" y1="18" x2="20" y2="11" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#5b8def"/><stop offset="1" stop-color="#e5484d"/></linearGradient>
+          <clipPath id="il-lens"><circle cx="14" cy="14" r="8.9"/></clipPath>
+        </defs>
+        <circle class="il-glass" cx="14" cy="14" r="8.9" fill="#141417"/>
+        <g class="il-grid" clip-path="url(#il-lens)" fill="none" stroke="#ededef" stroke-opacity=".18" stroke-width=".8">
+          <ellipse cx="14" cy="14" rx="9" ry="3.4"/><ellipse cx="14" cy="14" rx="3.6" ry="9"/>
+        </g>
+        <path class="il-arc" d="M8.4 18.2 Q12.4 6.6 19.4 11.6" fill="none" stroke="url(#il-arc)" stroke-width="1.7" stroke-linecap="round" pathLength="100"/>
+        <circle class="il-src" cx="8.4" cy="18.2" r="1.5" fill="#5b8def"/>
+        <circle class="il-ring" cx="19.4" cy="11.6" r="2.7" fill="none" stroke="#e5484d" stroke-width=".8"/>
+        <circle class="il-hit" cx="19.4" cy="11.6" r="1.5" fill="#e5484d"/>
+        <circle class="il-rim" cx="14" cy="14" r="10" fill="none" stroke="#ededef" stroke-width="2" pathLength="100"/>
+        <path class="il-handle" d="M21.4 21.4 L27.6 27.6" stroke="#ededef" stroke-width="3" stroke-linecap="round" pathLength="100"/>
+      </svg>
+      <div class="intro-kicker" id="introKicker">Shadowserver threat intelligence</div>
+      <h1 id="introTitle">Welcome to <span>Looking Glass</span></h1>
+      <p class="intro-lead">A simplified analysis platform for CSIRTs. Looking Glass turns the Shadowserver Foundation's daily reports into a moving picture, replayed in real time exactly one day later. <b>Reported network communications</b> shows infected devices calling botnet sinkholes, brute-force attempts, scanning and other attacks on a map. <b>Publicly accessible / vulnerable services</b> shows the devices and services in your constituency that anyone on the internet can reach, and the ones with known vulnerabilities, by service and by region of your country.</p>
+
+      <div class="intro-tabs" role="tablist" aria-label="Intro sections">
+        <button role="tab" aria-selected="true" data-itab="overview">Overview</button>
+        <button role="tab" aria-selected="false" data-itab="glossary">Glossary</button>
+      </div>
+
+      <div class="intro-pane" id="introOverview">
+      <div class="intro-stats" id="introStats"></div>
+
+      <div class="intro-grid">
+        <div class="intro-card">
+          <div class="ic-head"><h2 id="introDayTitle">Yesterday at a glance</h2><span class="muted mono" id="introPeak"></span></div>
+          <canvas id="introTimeline" height="70"></canvas>
+          <div class="tl-axis mono"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+          <div class="sevbar intro-classbar" id="introClassBar"></div>
+          <div class="sevlegend" id="introClassLegend"></div>
+        </div>
+        <div class="intro-card">
+          <div class="ic-head"><h2 id="introReportsTitle">Reports monitored</h2><span class="muted" id="introReportsSub"></span></div>
+          <ul class="intro-reports" id="introReports"></ul>
+          <div class="intro-unsupported" id="introUnsupported" hidden></div>
+        </div>
+      </div>
+      <div class="intro-card intro-svc-card">
+        <div class="ic-head"><h2 id="introSvcTitle">Publicly accessible / vulnerable services reports</h2><span class="muted" id="introSvcSub"></span></div>
+        <ul class="intro-reports intro-svc-reports" id="introSvcReports"></ul>
+        <div class="intro-unsupported" id="introSvcUnsupported" hidden></div>
+      </div>
+      </div>
+
+      <div class="intro-pane" id="introGlossary" hidden>
+        <div class="gl-top">
+          <input type="search" class="search gl-search" id="glSearch" placeholder="Search the glossary, for example median, sinkhole, demo" autocomplete="off">
+          <span class="muted" id="glCount"></span>
+        </div>
+        <div class="gl-groups" id="glGroups"></div>
+        <p class="gl-hint">This glossary covers both platforms: reported network communications and publicly accessible / vulnerable services, with a link to each report's page on shadowserver.org.
+          Each platform's own Glossary button shows only its terms and reports. Tip: on a platform, hover over any label with a dotted underline to see its explanation.</p>
+      </div>
+
+      <!-- the platform's two tracks: reported communications (available) and exposed services (next phase) -->
+      <div class="intro-tracks">
+        <div class="intro-track live">
+          <div class="it-head"><h2>Reported network communications</h2><span class="it-badge on" id="trackCommsBadge">Available</span></div>
+          <p class="it-desc">Infected devices calling botnet sinkholes, brute-force attempts, scanning and other attacks, as connections from a source to a destination, replayed on the map one day later.</p>
+          <div class="it-meta mono" id="trackCommsMeta"></div>
+          <div class="intro-actions">
+            <button class="intro-cta" id="btnExplore">Explore the platform <span aria-hidden="true">→</span></button>
+            <button class="intro-alt" id="btnExploreDemo">Explore in demo mode</button>
+          </div>
+        </div>
+        <div class="intro-track live">
+          <div class="it-head"><h2>Publicly accessible / vulnerable services</h2><span class="it-badge on" id="trackServicesBadge">Available</span></div>
+          <p class="it-desc">Devices and services in your constituency that anyone on the internet can reach, and the ones with known vulnerabilities: open remote desktop, exposed databases, vulnerable web and SSH servers, routers and misconfigured network services, from Shadowserver's scan reports.</p>
+          <div class="it-meta mono" id="trackServicesMeta"></div>
+          <div class="intro-actions">
+            <a class="intro-cta" id="btnServices" href="/services">Explore the platform <span aria-hidden="true">→</span></a>
+            <a class="intro-alt" id="btnServicesDemo" href="/services?demo=1">Explore in demo mode</a>
+          </div>
+        </div>
+      </div>
+      <div class="intro-foot">Data: The Shadowserver Foundation · all times UTC · demo mode conceals network names, AS numbers and IP addresses</div>
+    </div>
+  </section>
+
+  <div id="map" aria-label="Threat replay map"></div>
+  <div class="fx-vignette" aria-hidden="true"></div>
+  <div id="popups" aria-hidden="true"></div>
+
+  <!-- ===================== Top bar ===================== -->
+  <header class="hud">
+    <div class="hud-left">
+      <button class="icon-btn" id="btnDrawer" aria-label="Open filters and intel" aria-controls="drawer" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M4 6h16v1.5H4zm3 5.25h10v1.5H7zm3 5.25h4V18h-4z"/></svg>
+      </button>
+      <button class="brand-btn" id="btnIntro" title="About Looking Glass and yesterday's reports" aria-label="Open the Looking Glass overview">
+        <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
+      </button>
+      <div class="brand">
+        <div class="brand-title">Looking Glass</div>
+        <div class="brand-sub"><span class="demo-pill" id="demoPill" hidden title="Demo mode: network names, AS numbers and IP addresses are concealed">Demo</span><button type="button" class="scope-pill" id="scopePill" hidden></button><span class="bs-more" id="collectionName">Shadowserver</span><span class="sep bs-more">·</span><span class="bs-more">replay of yesterday</span></div>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis">
+      <div class="kpi"><span class="kpi-label">Events yesterday</span><span class="kpi-value" id="kpiTotal">0</span></div>
+      <div class="kpi"><span class="kpi-label">Replayed so far</span><span class="kpi-value" id="kpiReplayed">0</span></div>
+      <div class="kpi"><span class="kpi-label">Source hosts</span><span class="kpi-value" id="kpiHosts">0</span></div>
+      <div class="kpi"><span class="kpi-label">Reports</span><span class="kpi-value" id="kpiReports">0</span></div>
+      <div class="kpi"><span class="kpi-label">Cross-report hosts</span><span class="kpi-value" id="kpiCross">0</span></div>
+      <div class="kpi crit"><span class="kpi-label">Critical</span><span class="kpi-value" id="kpiCritical">0</span></div>
+    </div>
+
+    <div class="hud-right">
+      <div class="level">
+        <span class="kpi-label">Activity</span>
+        <div class="level-row"><div class="level-bar" id="levelBar"><i></i><i></i><i></i><i></i><i></i></div></div>
+      </div>
+      <div class="clocks">
+        <span class="kpi-label" id="clockDate">Replay time (UTC)</span>
+        <span class="clock-time" id="replayDate">---------- --:--:--</span>
+        <span class="kpi-label now-clock">Current time (UTC)</span>
+        <span class="clock-time now-clock" id="nowClock">---------- --:--:--</span>
+      </div>
+      <select id="speed" class="speed lg-enhance" aria-label="Playback speed">
+        <option value="1">Speed 1×</option>
+        <option value="5">Speed 5×</option>
+        <option value="15">Speed 15×</option>
+        <option value="60">Speed 60×</option>
+      </select>
+      <button class="demo-btn" id="btnOverview" title="Back to the overview page">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M4 5h7v6H4zM13 5h7v3h-7zM13 10h7v9h-7zM4 13h7v6H4z"/></svg>
+        <span>Overview</span>
+      </button>
+      <button class="demo-btn" id="btnGlossary" title="Definitions of every report, figure and term">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h10"/></svg>
+        <span>Glossary</span>
+      </button>
+      {% if "settings" in lg_perms %}
+      <button type="button" class="demo-btn" id="btnSettings" title="Settings for both platforms: country and constituency">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        <span>Settings</span>
+      </button>
+      {% endif %}
+      {% if "management" in lg_perms %}<a class="demo-btn account-btn" href="/management" title="The management portal (Executive): aggregated dashboard and executive reports"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Executive</span></a>{% endif %}
+      {% if "users" in lg_perms or "audit" in lg_perms %}<a class="demo-btn account-btn" href="/admin" title="Users, sessions, roles and audit log"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6zM9 12l2 2 4-4"/></svg><span>Admin</span></a>{% endif %}
+      <form method="post" action="/logout" class="account-form"><button type="submit" class="demo-btn account-btn" title="Logged in as {{ lg_user }} ({{ lg_role }}). Click to log out.">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+        <span class="acct-name">Log out</span></button></form>
+      <button class="demo-btn" id="btnDemo" aria-pressed="false" title="Demo mode: conceal network names, AS numbers and IP addresses for public presentations">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M3 3l18 18M10.6 6.2A9.8 9.8 0 0 1 12 6c5 0 8.5 4.2 9.5 6-.5.9-1.6 2.4-3.1 3.7M6.6 7.7C4.7 9 3.2 10.9 2.5 12c1 1.8 4.5 6 9.5 6 1.4 0 2.7-.3 3.9-.9M9.9 10a3 3 0 0 0 4.1 4.1"/></svg>
+        <span>Demo</span>
+      </button>
+      <button class="icon-btn" id="btnCinema" aria-label="Toggle camera drift" aria-pressed="true" title="Camera drift">
+        <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M3 12a9 9 0 0 1 15.5-6.2M21 12a9 9 0 0 1-15.5 6.2M18.5 2.5v3.3h-3.3M5.5 21.5v-3.3h3.3"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===================== Left: filters (drawer on tablet/phone) ===================== -->
+  <aside class="panel drawer" id="drawer" aria-label="Filters and intel">
+    <div class="drawer-tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="filters">Filters</button>
+      <button role="tab" aria-selected="false" data-tab="intel" class="intel-tab">Intel</button>
+      <button class="icon-btn close-drawer" id="btnCloseDrawer" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg>
+      </button>
+    </div>
+
+    <div class="tab-body" data-body="filters">
+      <div class="panel-head"><h2>Filters</h2><button class="link-btn" id="btnReset">Reset</button></div>
+      <section class="fg">
+        <h3>Attack type</h3>
+        <div class="chips" id="fClass"></div>
+      </section>
+      <section class="fg">
+        <h3>Source report <span class="muted" id="srcCount"></span></h3>
+        <ul class="checklist" id="fSource"></ul>
+      </section>
+      <section class="fg">
+        <h3>Severity</h3>
+        <div class="chips" id="fSeverity"></div>
+      </section>
+      <section class="fg">
+        <h3>Infection / category <span class="muted" id="infCount"></span></h3>
+        <input type="search" class="search" id="infSearch" placeholder="Search infections and categories" autocomplete="off">
+        <ul class="checklist" id="fInfection"></ul>
+      </section>
+      <section class="fg grid2">
+        <label><span>Affected city</span><select id="fSrcCity" class="lg-enhance"></select></label>
+        <label><span>Target country</span><select id="fDst" class="lg-enhance"></select></label>
+        <label><span data-term="network" title="Source network: the company whose host made the connection">Src network</span><select id="fSrcAsn" class="lg-enhance"></select></label>
+        <label><span data-term="network" title="Destination network: the company of the server it reached">Dst network</span><select id="fDstAsn" class="lg-enhance"></select></label>
+        <label><span>Tag</span><select id="fTag" class="lg-enhance"></select></label>
+        <label><span>Target port</span><select id="fPort" class="lg-enhance"></select></label>
+      </section>
+      <section class="fg">
+        <h3>Protocol</h3>
+        <div class="chips" id="fProtocol"></div>
+      </section>
+      <section class="fg">
+        <h3>Display</h3>
+<div class="seg perf-seg" id="perfSeg" role="group" aria-label="Display quality">
+          <button type="button" data-perf="auto" title="Full on capable devices; Lite on TVs, older computers or when drawing is slow">Auto</button>
+          <button type="button" data-perf="full" title="Every effect: 3D tilt, glow, trails, camera drift, blurred panels">Full</button>
+          <button type="button" data-perf="lite" title="For smart TVs and older computers: flat map, fewer simultaneous arcs, lighter effects">Lite</button>
+        </div>
+        <p class="fg-hint perf-hint" id="perfHint"></p>
+        <label class="check-row" title="Draw every place and connection of the whole day (with the active filters) underneath the live animation">
+          <input type="checkbox" id="fAllFlows" checked> <span>Show all of the day's connections</span>
+        </label>
+      </section>
+    </div>
+
+    <div class="tab-body" data-body="intel" hidden>
+      <div id="intelSlot"></div>
+    </div>
+  </aside>
+
+  <!-- ===================== Right: intel column (desktop) ===================== -->
+  <aside class="panel intel-col" id="intelCol" aria-label="Threat intel">
+    <div id="intel">
+      <section class="intel-block">
+        <div class="ib-head"><h3>Activity yesterday</h3><span class="muted mono" id="tlInfo"></span></div>
+        <canvas id="timeline" height="64"></canvas>
+        <div class="tl-axis mono"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+      </section>
+      <section class="intel-block">
+        <div class="ib-head"><h3>Attack types</h3><span class="hint">Hover or click</span></div>
+        <div class="donut-wrap"><svg id="donut" viewBox="0 0 120 120" aria-label="Share of events by attack type"></svg><ol class="legend" id="topClass"></ol></div>
+      </section>
+      <section class="intel-block">
+        <div class="ib-head"><h3>Events by hour and type</h3><span class="muted mono" id="hbcInfo"></span></div>
+        <canvas id="hourClass" height="80" aria-label="Events per hour by attack type"></canvas>
+        <div class="tl-axis mono"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+      </section>
+      <section class="intel-block">
+        <div class="ib-head"><h3>Severity mix</h3></div>
+        <div class="sevbar" id="sevBar"></div>
+        <div class="sevlegend" id="sevLegend"></div>
+      </section>
+      <section class="intel-block">
+        <h3>Source networks</h3>
+        <ol class="toplist" id="topSrcNet"></ol>
+      </section>
+      <section class="intel-block">
+        <h3>Source reports</h3>
+        <ol class="toplist" id="topSource"></ol>
+      </section>
+      <section class="intel-block">
+        <h3>Top infections / categories</h3>
+        <ol class="toplist" id="topInfection"></ol>
+      </section>
+      <section class="intel-block">
+        <h3>Most affected cities</h3>
+        <ol class="toplist" id="topCity"></ol>
+      </section>
+      <section class="intel-block">
+        <h3>Contacted C2 / sinkhole domains</h3>
+        <ol class="toplist" id="topHost"></ol>
+      </section>
+      <section class="intel-block">
+        <h3>Target countries</h3>
+        <ol class="toplist" id="topDst"></ol>
+      </section>
+      <section class="intel-block">
+        <h3>Destination networks</h3>
+        <ol class="toplist" id="topDstNet"></ol>
+      </section>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim" hidden></div>
+
+  <!-- ===================== Bottom: live attack stream ===================== -->
+  <section class="panel stream" id="stream" aria-label="Event stream">
+    <div class="stream-resize" id="streamResize" aria-hidden="true"></div>
+    <button class="grabber" id="btnStreamToggle" aria-label="Expand attack stream" aria-expanded="false"><span></span></button>
+    <div class="stream-head">
+      <div class="sh-title"><h2>Event stream</h2><span class="muted mono" id="streamInfo"></span></div>
+      <div class="sh-actions">
+        <button class="pill-btn primary" id="btnNew" hidden>↑ <span id="newCount">0</span> new</button>
+        <button class="pill-btn" id="btnCatchUp" hidden title="The replay is behind because it was paused. Jump forward to the current replay time.">Catch up</button>
+        <button class="pill-btn" id="btnPause" aria-pressed="false" title="Freeze the replay: map, stream and clock">Pause</button>
+        <button class="pill-btn" id="btnStreamMin" aria-expanded="true" title="Hide the list to give the map the screen (shortcut: L)">Hide list</button>
+      </div>
+    </div>
+    <div class="filter-bar" id="filterBar" hidden></div>
+    <div class="stream-cols" aria-hidden="true">
+      <span>Replay time (UTC)</span><span>Severity</span><span>Infection / category</span><span>Source host</span><span></span><span>Destination</span><span>Proto</span><span>Request</span><span></span>
+    </div>
+    <div class="stream-body" id="streamBody" tabindex="0" aria-label="Event list: arrow keys to move, Enter to open">
+      <div class="pinned-wrap" id="pinnedWrap" hidden>
+        <div class="group-label">Pinned <span class="muted" id="pinCount"></span></div>
+        <ul class="rows" id="pinnedRows"></ul>
+        <div class="group-label">Replay</div>
+      </div>
+      <ul class="rows" id="rows"></ul>
+      <div class="stream-empty" id="streamEmpty">Waiting for attacks in the replay window…</div>
+    </div>
+  </section>
+
+  <!-- ===================== Communication detail dialog ===================== -->
+  <div class="modal-scrim" id="modalScrim" hidden></div>
+  <section class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mInfection" hidden>
+    <header class="m-head">
+      <div class="m-title">
+        <div class="m-kicker">Communication detail</div>
+        <h2 id="mInfection">infection</h2>
+        <div class="m-badges"><span class="sev" id="mSev"></span><span class="badge mono" id="mTag"></span><span class="muted mono" id="mTime"></span></div>
+        <div class="kb" id="mKb"></div>
+      </div>
+      <button class="icon-btn" id="btnModalClose" aria-label="Close details">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg>
+      </button>
+    </header>
+    <div class="m-route">
+      <div class="m-ep"><div class="ep-k">Source host</div><div class="ep-place" id="mSrcPlace"></div><div class="ep-ip mono" id="mSrcIp"></div></div>
+      <div class="m-wire" aria-hidden="true"><span class="mono" id="mProto"></span><div class="wire"><i></i></div></div>
+      <div class="m-ep"><div class="ep-k">Destination</div><div class="ep-place" id="mDstPlace"></div><div class="ep-ip mono" id="mDstIp"></div></div>
+    </div>
+    <div class="m-body" id="mBody"></div>
+    <footer class="m-foot">
+      <button class="pill-btn" id="mHost">Analyse this host</button>
+      <button class="pill-btn" id="mPin">Pin</button>
+      <button class="pill-btn" id="mFly">Show on map</button>
+      <button class="pill-btn" id="mCopy">Copy JSON</button>
+    </footer>
+  </section>
+
+  <!-- ===================== Analytics dialog ===================== -->
+  <section class="modal insight" id="insight" role="dialog" aria-modal="true" aria-labelledby="iTitle" hidden>
+    <header class="m-head">
+      <div class="m-title">
+        <div class="m-kicker" id="iKind">Analysis</div>
+        <h2 id="iTitle">Loading</h2>
+        <div class="m-badges"><span class="muted" id="iRange"></span></div>
+        <div class="kb" id="iKb"></div>
+      </div>
+      <div class="i-actions">
+        <button class="pill-btn" id="iBack" hidden>← Back</button>
+        <button class="pill-btn" id="iFilter">Filter map</button>
+        <button class="icon-btn" id="btnInsightClose" aria-label="Close analysis">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg>
+        </button>
+      </div>
+    </header>
+    <div class="i-body" id="iBody"><div class="i-loading">Analysing…</div></div>
+  </section>
+
+  <!-- ===================== Glossary dialog (same as on the services platform) ===================== -->
+  <section class="modal insight" id="glossaryDlg" role="dialog" aria-modal="true" aria-labelledby="gdTitle" hidden>
+    <header class="m-head">
+      <div class="m-title">
+        <div class="m-kicker">Glossary</div>
+        <h2 id="gdTitle">Reported network communications</h2>
+        <div class="m-badges"><span class="muted" id="gdCount"></span></div>
+      </div>
+      <div class="i-actions">
+        <button class="icon-btn" id="btnGlossaryClose" aria-label="Close glossary">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg>
+        </button>
+      </div>
+    </header>
+    <div class="i-body">
+      <input type="search" class="search gl-search" id="gdSearch" placeholder="Search terms and reports, for example sinkhole, badbox, median" autocomplete="off">
+      <div class="gl-groups svc-gl" id="gdBody"></div>
+      <p class="gl-hint">Terms and reports of this platform. The overview's Glossary covers both platforms.</p>
+    </div>
+  </section>
+
+  <div class="page-fade" id="pageFade"></div>
+  <div class="toast" id="toast" hidden></div>
+  <div class="tip" id="tip" role="tooltip" hidden></div>
+
+  <!-- modern-syntax probe: an old browser fails to parse this one script only (no eval, so the CSP needs no 'unsafe-eval') -->
+  <script nonce="{{ csp_nonce }}">window.LG_MODERN = (function () { var a = {}; return (a?.b ?? 1) === 1; })();</script>
+  <script nonce="{{ csp_nonce }}">
+    window.TM_CONFIG = { mapboxToken: {{ mapbox_token|tojson }}, offsetHours: {{ offset_hours|tojson }}, malpedia: {{ malpedia_enabled|tojson }}, enrich: {{ enrich_enabled|tojson }} };
+    // Written in old-style JavaScript on purpose so even very old TV browsers can run it. The map needs WebGL 2
+    // and a browser from about 2021 or later; older ones get a clear message instead of a blank screen.
+    (function () {
+      var why = "";
+      if (window.LG_MODERN !== true) why = "its browser is too old for this platform";
+      if (!why) {
+        var gl = null;
+        try { gl = document.createElement("canvas").getContext("webgl2"); } catch (e) { gl = null; }
+        if (!gl) why = "its browser cannot draw the 3D map (WebGL 2 is not available)";
+      }
+      if (!why) return;
+      window.LG_UNSUPPORTED = why;
+      var box = document.createElement("div");
+      box.className = "unsupported";
+      box.innerHTML = "<div><h1>Looking Glass</h1><p>This screen cannot show the threat map because " + why + ".</p>" +
+        "<p>Open it on a recent version of Chrome, Edge, Firefox or Safari, for example on a computer or a streaming stick connected to the TV, " +
+        "or share the screen of a computer to the TV.</p></div>";
+      document.body.appendChild(box);
+    })();
+  </script>
+  <!-- pinned versions with Subresource Integrity: a changed file on the CDN is refused by the browser -->
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js" integrity="sha384-Wl62XBVL/js8ZmcbcLnA+s5wPf+GKmdd0ozW/8e1EiW2rTgz4x82hxJCRarBlfMT" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/deck.gl@9.1.14/dist.min.js" integrity="sha384-9Qz9Vg68oxSJ8alpsDVG3eFNLSZ8P16UxKNQyVheKTcnTlbnueGTD7D0MRd6Na0z" crossorigin="anonymous"></script>
+  <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/glossary.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/hud-fit.js') }}"></script>
+</body>
+</html>

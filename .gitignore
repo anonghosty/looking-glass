@@ -1,0 +1,19 @@
+# Each folder has its own .gitignore; these apply to the whole repository as a safety net.
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.pyc
+*.log
+# run logs and scratch notes of any kind (only the dependency lists are text files in this repository)
+logs/
+*.txt
+!requirements.txt
+*.output
+*.tmp
+# created by install.sh: its log (no secrets, but local details) and the checker's Python environment
+install-logs/
+.installer-venv/
+# marker left by platform/tools/make_release.py
+.looking-glass-release

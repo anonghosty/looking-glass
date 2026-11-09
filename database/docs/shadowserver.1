@@ -1,0 +1,400 @@
+.TH SHADOWSERVER 1 "November 2026" "shadowserver pipeline" "User Commands"
+.\" no hyphenation / left-aligned, so file names and URLs stay readable and copyable
+.nr HY 0
+.nh
+.ds AD l
+.ad l
+.SH NAME
+shadowserver \- pull Shadowserver reports from e\-mail and load them into MongoDB
+.SH SYNOPSIS
+.B shadowserver run
+.RB [ \-\-stage
+.IR all | email | load ]
+.RB [ \-\-days
+.IR N ]
+.RB [ \-\-workers
+.IR N ]
+.RB [ \-q | \-v ]
+.RB [ \-\-env\-file
+.IR PATH ]
+.br
+.B shadowserver check
+.br
+.B shadowserver status
+.br
+.B shadowserver logs
+.RB [ \-f ]
+.RI [ N ]
+.br
+.B shadowserver schedule
+.RI [ HH:MM
+.RB | off | show ]
+.br
+.B shadowserver deploy
+.RB [ \-\-schedule
+.IR HH:MM ]
+.RB [ \-\-unschedule ]
+.RB [ \-\-remove\-container ]
+.RB [ \-\-uninstall\-commands ]
+.br
+.B shadowserver
+.RB [ help | man | version ]
+.SH COMMANDS
+.B shadowserver
+works from any folder; it is a link in
+.I /usr/local/bin
+to
+.I bin/shadowserver
+in the project folder, installed by
+.BR deploy .
+The project scripts
+.BR ./run.sh ,
+.B ./check.sh
+and
+.B ./deploy.sh
+can still be used directly and take the same options.
+.TP
+.BR run " [options]"
+Run the pipeline (see OPTIONS). This is the default: options without a
+command, e.g.
+.BR "shadowserver \-\-days 8" ,
+mean
+.BR run .
+.TP
+.B check
+Full setup check: MongoDB binaries, the mongod service and its memory limit,
+/etc/mongod.conf, login, cache size, unique indexes, document structure, data
+folders, unfinished loads and the IMAP login. Exit status 1 if anything failed.
+.TP
+.B status
+Short overview: mongod service and memory, number of services and rows in the
+database, report files on disk, whether a run is in progress, the summary of
+the last run, and the schedule.
+.TP
+.BR logs " [" \-f "] [" \fIN\fR ]
+Last
+.I N
+lines (default 40) of the newest log;
+.B \-f
+keeps following it (Ctrl\-C to stop).
+.TP
+.BR schedule " [" \fIHH:MM\fR | off | show ]
+Run the pipeline automatically every day.
+.B "schedule 06:30"
+sets (or changes) the daily time,
+.B "schedule off"
+removes it, and
+.B schedule
+alone shows it. No sudo needed. See SCHEDULING.
+.TP
+.BR deploy " [options]"
+Install or update everything (asks for sudo): MongoDB from the official
+repository, /etc/mongod.conf, the systemd memory limit, the MongoDB user,
+the Python environment, data folders, and this command with its manual and tab
+completion. Safe to run again at any time.
+.RS
+.TP
+.BI \-\-schedule " HH:MM"
+Also set the daily run, same as
+.BR "shadowserver schedule" " \fIHH:MM\fR."
+.TP
+.B \-\-unschedule
+Remove the daily run, same as
+.BR "shadowserver schedule off" .
+.TP
+.B \-\-remove\-container
+Delete the old Docker MongoDB container and volume (only after its data was migrated).
+.TP
+.B \-\-uninstall\-commands
+Remove the global command, man page and completion (project files stay).
+.RE
+.TP
+.BR help ", " man ", " version
+Short help, this manual, version and project folder.
+.SH DESCRIPTION
+.B shadowserver run
+runs
+.BR shadowserver_pipeline.py ,
+which replaces the two original scripts
+.I pull_emails_and_create_services.py
+and
+.IR mongo_added_json.py .
+A full run has three steps:
+.TP
+.B 1. E\-mail
+Logs in to the IMAP mailbox (read\-only, messages stay unread), fetches the
+messages of the last
+.I N
+days, saves new attachments to
+.I attachments_backup/
+and, for e\-mails without a new attachment, downloads the
+.I https://dl.shadowserver.org/
+links they contain.
+.TP
+.B 2. Unzip and sort
+Extracts each new zip once. Report files named
+.I YYYY\-MM\-DD\-<service>[\-<number>]\-<country>\-geo[_asNNNN].csv
+go to
+.IR sorting_backup/<service>/ ;
+everything else goes to
+.IR unzipped_backup/<zip\ name>/ .
+Corrupt zips are deleted. Loose report CSVs in the attachment folder are moved
+the same way.
+.TP
+.B 3. Load
+Every CSV/JSON file in
+.I sorting_backup/
+that is not yet in MongoDB is loaded by parallel worker processes. Files
+already in the database are skipped, so repeated runs only load new reports.
+.PP
+Only one run can be active at a time (a lock file); a second run exits
+immediately. All output is also appended to
+.IR logs/pipeline\-YYYY\-MM\-DD.log .
+.SH OPTIONS
+.TP
+.BR \-\-stage " " all | email | load
+Which steps to run.
+.B all
+(default) runs everything;
+.B email
+runs steps 1 and 2 only (no database);
+.B load
+runs step 3 only (no e\-mail), e.g. to rebuild the database from files on disk.
+.TP
+.BI \-\-days " N"
+Pull e\-mails received in the last
+.I N
+days. Default:
+.B EMAIL_DAYS
+from
+.IR .env ,
+normally 1 (since yesterday, like the original script). Use a larger value to
+catch up after a gap, e.g.
+.BR "\-\-days 8" .
+.TP
+.BI \-\-workers " N"
+Number of parallel loader processes. Default:
+.B WORKERS
+from
+.IR .env ,
+normally 6. Each uses about 100\-200 MB of RAM; lower it if memory is tight.
+.TP
+.BR \-q ", " \-\-quiet
+Summary lines only. Used by the daily cron job.
+.TP
+.BR \-v ", " \-\-verbose
+Also print attachments that were already saved, and debug information.
+.TP
+.B \-\-check
+Verify the setup and exit: configuration, Python packages, data folders,
+memory, MongoDB login, cache size, unique indexes, document structure,
+unfinished loads and the IMAP login. Exit status 1 if any check fails.
+.TP
+.BI \-\-env\-file " PATH"
+Read settings from
+.I PATH
+instead of
+.IR ./.env .
+.TP
+.BR \-h ", " \-\-help
+Short help.
+.TP
+.B \-\-man
+Show this manual.
+.SH OUTPUT
+By default each action is printed on its own line:
+.PP
+.nf
+.RS
+[EMAIL 12/1200] <date> | <subject> | 1 new attachment(s)
+    [ATTACHMENT] saved <file> (412.3 KB)
+[LINK 3/53] downloaded <file> (88.1 KB)
+[UNZIP 2/40] <zip> \-> 1 report CSV(s)
+    [SORT] <file> \-> <service>        (OVERWRITE if it replaced a file)
+[MOVE] <file> \-> <service>
+[SCAN] <service>  9 file(s): 0 already in MongoDB, 9 to load
+[LOAD 5/412] <service>/<file>: 1,200 rows inserted (0.1s)
+.RE
+.fi
+.PP
+Progress lines (every 100 e\-mails, every 10 seconds while loading) and a
+summary for each step follow. Problems are logged as
+.B WARNING
+or
+.BR ERROR ;
+anything that failed is retried on the next run.
+.SH SCHEDULING
+.TP
+.B shadowserver schedule 06:30
+Run the full pipeline every day at 06:30 (24\-hour clock, the time shown by
+.BR date
+in WSL). Running it again with another time replaces the old time; there is
+only ever one daily run.
+.TP
+.B shadowserver schedule
+Show the time, the cron line and where the logs go.
+.TP
+.B shadowserver schedule off
+Remove the daily run.
+.PP
+The daily run is a cron job of your own user (see
+.BR "crontab \-l" ,
+marked
+.IR "# shadowserver\-pipeline" ).
+It runs
+.BR "run.sh \-\-quiet" :
+e\-mail of the last
+.B EMAIL_DAYS
+days, unzip/sort, load into MongoDB. Output is appended to
+.IR logs/pipeline\-YYYY\-MM\-DD.log ;
+check it with
+.B shadowserver logs
+or
+.BR "shadowserver status" .
+If a manual run is still going at that time, the scheduled run skips itself.
+.PP
+.B Important on WSL:
+cron only fires while WSL is running, and WSL shuts down by itself when no
+terminal or app uses it. Keep a WSL terminal open at the scheduled time, or
+start WSL before it. If a day is missed, catch up with
+.BR "shadowserver run \-\-days" " \fIN\fR."
+.SH DATABASE LAYOUT
+Database
+.B shadowserver
+(setting
+.BR MONGO_DB ),
+the same as the original scripts:
+.TP
+.I <service>
+One document per unique CSV row: the CSV columns plus
+.BR filename ,
+.BR category ,
+.B line_hash
+(SHA\-256 of the row), and, when the
+.B timestamp
+column parses as
+.IR "YYYY\-MM\-DD HH:MM:SS" ,
+.B logged_date
+(string) and
+.B extracted_date
+(date). Unique index on
+.RB ( filename ", " category ", " line_hash ).
+Rows whose timestamp cannot be parsed are skipped, as before.
+.TP
+.I discovered_fields_<service>
+One document
+.RB { category ", " field_name }
+per CSV column seen.
+.TP
+.I files_<service>
+One document
+.RB { filename ", " category ", " path }
+per file in the service folder.
+.SH CONFIGURATION
+Settings are read from
+.I .env
+(see
+.IR .env.example ).
+Values are taken literally, so passwords may contain $, # or @.
+.TP
+.BR IMAP_SERVER ", " IMAP_USER ", " IMAP_PASSWORD ", " IMAP_FOLDER
+Mailbox to read (folder default
+.BR inbox ).
+.TP
+.B IMAP_VERIFY_TLS
+.B false
+(default, as before) skips verification of the mail server certificate.
+.TP
+.B EMAIL_DAYS
+Default for
+.BR \-\-days .
+.TP
+.BR MONGO_HOST ", " MONGO_PORT ", " MONGO_USER ", " MONGO_PASSWORD ", " MONGO_AUTH_SOURCE ", " MONGO_DB
+MongoDB connection (default 127.0.0.1:27017, auth source admin, database shadowserver).
+.TP
+.BR MONGO_SERIES ", " MONGO_CACHE_GB ", " MONGO_MEMORY_LIMIT
+Used by
+.BR deploy.sh :
+MongoDB release installed (8.0), WiredTiger cache (1.5 GB), and the hard
+memory cap of the mongod service (3g).
+.TP
+.B DATA_DIR
+Folder holding attachments_backup/, unzipped_backup/ and sorting_backup/
+(default: the project folder).
+.TP
+.BR WORKERS ", " INSERT_CHUNK ", " DOWNLOAD_THREADS ", " IMAP_FETCH_BATCH
+Tuning: loader processes (6), rows per bulk insert (2000), parallel link
+downloads (4), e\-mails per IMAP round trip (25).
+.SH FILES
+.TP
+.I .env
+Settings and credentials (mode 600).
+.TP
+.IR attachments_backup/ ", " unzipped_backup/ ", " sorting_backup/
+Downloaded attachments, extracted zip contents, and report CSVs by service.
+.TP
+.I logs/pipeline\-YYYY\-MM\-DD.log
+Run logs.
+.TP
+.I .pipeline_state.sqlite
+Files whose load was interrupted; they are completed on the next run.
+.TP
+.I backups/
+Database exports made by
+.BR deploy.sh .
+.TP
+.IR /etc/mongod.conf ", " /var/lib/mongodb ", " /var/log/mongodb/mongod.log
+MongoDB configuration, data and log (service
+.BR mongod ).
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+A file failed to load, the e\-mail step failed, a check failed, or another run
+was already in progress.
+.TP
+.B 130
+Interrupted with Ctrl\-C (unfinished loads resume on the next run).
+.SH EXAMPLES
+.TP
+.B shadowserver run
+Normal daily run.
+.TP
+.B shadowserver run \-\-days 8
+Catch up on the last 8 days of e\-mail.
+.TP
+.B shadowserver run \-\-stage load
+Load the files already on disk, e.g. after reinstalling MongoDB.
+.TP
+.B shadowserver run \-\-stage email \-\-days 3 \-v
+Download and sort only, showing everything.
+.TP
+.B shadowserver status
+Is MongoDB up, how much data, how did the last run go.
+.TP
+.B shadowserver logs \-f
+Watch a run that is in progress (e.g. the cron job).
+.TP
+.B shadowserver check
+Verify the whole setup.
+.TP
+.B shadowserver schedule 06:30
+Run automatically every day at 06:30.
+.TP
+.B shadowserver schedule off
+Stop the daily run.
+.TP
+.B sudo systemctl status mongod
+MongoDB service status.
+.TP
+.B mongosh \-u <MONGO_USER> \-\-authenticationDatabase admin shadowserver
+Open the database in the MongoDB shell.
+.SH SEE ALSO
+.BR mongod (1),
+.BR mongosh (1),
+.BR mongodump (1),
+.BR crontab (1),
+.I README.md
+in the project folder.

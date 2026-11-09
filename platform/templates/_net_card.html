@@ -1,0 +1,41 @@
+{# Network names and types (AS-number registry): admins in Settings, researchers on the Definitions page.
+   Filled by static/js/net-editor.js. #}
+    <section class="st-card dz" id="cardNets" hidden>
+      <header class="dz-head">
+        <div class="dz-icon dz-icon-net" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9M12 3C9.5 5.6 8.3 8.6 8.3 12s1.2 6.4 3.7 9"/></svg>
+        </div>
+        <div class="dz-title">
+          <h2>Network names &amp; types</h2>
+          <p class="dz-sub">The company name and sector shown for each network (AS number) on both platforms, in analyses, filters and
+            reports. Automatic names (PeeringDB, RIPEstat) are often the legal holder: correct them here, for example "Example Holdings Limited" to
+            "Example Telecom". Corrected networks are marked reviewed and never overwritten; every change is in the audit log.</p>
+        </div>
+        <div class="dz-actions">
+          <button class="lg-btn" id="netTypeOpen" type="button" aria-expanded="false" aria-controls="netTypePanel">
+            <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
+            <span>Add a type</span></button>
+        </div>
+      </header>
+      <div class="dz-panel" id="netTypePanel" hidden>
+        <div class="dz-panel-row">
+          <label class="st-field">Type (sector) name<input id="netTypeLabel" maxlength="60" placeholder="for example Telecom regulator"></label>
+          <label class="st-field">Word used in Demo mode<input id="netTypeAlias" maxlength="24" placeholder="for example Institution"></label>
+          <button class="lg-btn primary" id="netTypeAdd" type="button"><span>Add type</span></button>
+        </div>
+        <p class="dz-hint">In Demo mode, network names become this word and a number (Telco 1, Institution 2…). The new type is offered for every
+          network, here and in the Settings constituency filter. <span id="netTypeMsg" class="dz-status" role="status"></span></p>
+      </div>
+      <div class="dz-stats" role="tablist" aria-label="Networks">
+        <button class="dz-stat warn" type="button" role="tab" data-net="todo" aria-selected="true"><b id="netN1">–</b><span>Not reviewed</span><em>check the name and type</em></button>
+        <button class="dz-stat ok" type="button" role="tab" data-net="reviewed" aria-selected="false"><b id="netN3">–</b><span>Reviewed</span><em>never overwritten</em></button>
+        <button class="dz-stat" type="button" role="tab" data-net="all" aria-selected="false"><b id="netN2">–</b><span>All networks</span><em>seen in the reports</em></button>
+        <button class="dz-stat" type="button" role="tab" data-net="types" aria-selected="false"><b id="netN4">–</b><span>Types (sectors)</span><em id="netN4sub">built-in and your own</em></button>
+      </div>
+      <div class="dz-toolbar">
+        <input type="search" class="dz-search" id="netEdSearch" placeholder="Search a company, AS number, holder or type" autocomplete="off" aria-label="Search the networks">
+        <select class="dz-select lg-enhance" id="netTypeFilter" aria-label="Show one type"><option value="">All types</option></select>
+        <span class="dz-status" id="netStatus" role="status"></span>
+      </div>
+      <div class="table-wrap dz-table net-table"><table id="netEdTable"><thead><tr><th>AS number</th><th>Company name</th><th>Type</th><th>Note</th><th>Registry holder</th><th class="num">Events</th><th>Status</th><th class="dz-act"></th></tr></thead><tbody></tbody></table></div>
+    </section>

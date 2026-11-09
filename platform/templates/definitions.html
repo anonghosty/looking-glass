@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0d">
+  <meta name="csrf-token" content="{{ lg_csrf }}">
+  <title>Looking Glass · Definitions</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo-mark.svg') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/settings.css') }}" rel="stylesheet">
+</head>
+<body class="settings-page kb-only">
+  <header class="hud">
+    <div class="hud-left">
+      <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Definitions and network names · signed in as {{ lg_user }} ({{ lg_role }})</span></div></div>
+    </div>
+    <div class="hud-right">
+      {% if "view" in lg_perms %}<a class="demo-btn" href="/?intro=1"><span>Overview</span></a>{% endif %}
+      {% if "settings" in lg_perms %}<a class="demo-btn" href="/settings"><span>Settings</span></a>{% endif %}
+      {% if "management" in lg_perms %}<a class="demo-btn account-btn" href="/management" title="The management portal (Executive): aggregated dashboard and executive reports"><span>Executive</span></a>{% endif %}
+      {% if "users" in lg_perms or "audit" in lg_perms %}<a class="demo-btn account-btn" href="/admin"><span>Admin</span></a>{% endif %}
+      <form method="post" action="/logout" class="account-form"><button type="submit" class="demo-btn account-btn" title="Logged in as {{ lg_user }} ({{ lg_role }}). Click to log out." aria-label="Log out">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg><span class="acct-name">Log out</span></button></form>
+    </div>
+  </header>
+  <main class="st-main">
+{% with standalone=True %}{% include "_kb_cards.html" %}{% endwith %}
+
+{% include "_net_card.html" %}
+
+  </main>
+  <!-- Define a malware name: description and references (evidence) -->
+  <div class="st-modal-back" id="kbBack" hidden></div>
+  <section class="st-modal kb-modal" id="kbModal" role="dialog" aria-modal="true" aria-labelledby="kbTitle" hidden>
+    <div class="st-modal-head"><h2 id="kbTitle">Define a name</h2><button class="icon-btn" id="kbClose" type="button" aria-label="Close">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg></button></div>
+    <p class="st-hint" id="kbSeen"></p>
+    <form id="kbForm" class="kb-form" autocomplete="off">
+      <label class="st-field">Name in the reports<input id="kbName" required maxlength="80" placeholder="android.midnight-mimosa"></label>
+      <div class="st-field" id="kbMpBox">
+        <label for="kbMp">Name in Malpedia <span class="muted">(optional: if Malpedia lists it under a different name, or as a threat actor; leave empty if it does not)</span></label>
+        <div class="kb-mp-row"><input id="kbMp" maxlength="90" placeholder="win.lumma, or actor:tick">
+          <input id="kbMpQ" maxlength="60" placeholder="search Malpedia by any name or alias" aria-label="Search Malpedia">
+          <button class="pill-btn" id="kbMpFind" type="button">Find in Malpedia</button></div>
+        <div class="kb-mp-hits" id="kbMpHits"></div>
+        <span class="muted kb-mp-note">When set, future look-ups of this name show that Malpedia family (with your references added).</span>
+      </div>
+      <label class="st-field">Title<input id="kbTitleIn" maxlength="120" placeholder="Midnight Mimosa"></label>
+      <label class="st-field">Type<input id="kbType" maxlength="80" placeholder="Android malware (preinstalled)"></label>
+      <p class="st-hint" id="kbCveHint" hidden>This is a CVE: its description, CVSS score, whether it is actively exploited (CISA KEV) and EPSS are looked up automatically. Add a note for your organisation (for example which products in your constituency are affected) and references.</p>
+      <label class="st-field"><span id="kbDescLbl">Description: what it is</span><textarea id="kbDesc" rows="6" maxlength="2000"></textarea></label>
+      <fieldset class="kb-refs"><legend>References (evidence)</legend>
+        <p class="st-hint">Web links to the reports that support this definition (vendor research, CERT advisories, Malpedia). At least one is needed.</p>
+        <div id="kbRefs"></div>
+        <button class="pill-btn" id="kbRefAdd" type="button">Add a reference</button>
+      </fieldset>
+      <p class="id-msg" id="kbMsg"></p>
+      <div class="kb-actions"><span class="muted" id="kbBy"></span><button class="intro-cta" id="kbSave" type="submit">Save definition</button></div>
+    </form>
+  </section>
+  <script src="{{ url_for('static', filename='js/lg-select.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/kb-settings.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/net-editor.js') }}"></script>
+</body>
+</html>

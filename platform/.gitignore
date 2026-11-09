@@ -1,0 +1,21 @@
+# secrets and local configuration
+.env
+.env.*
+!.env.example
+# Python
+.venv/
+__pycache__/
+*.pyc
+# runtime data: accounts, sessions, audit log, settings, caches, certificates, keys.
+# Only the curated reference files below belong in the repository.
+data/*
+!data/infections.json
+!data/service_reports.json
+# rendered by deploy/install.sh for this computer
+deploy/*.service
+# outputs of the tools/ diagnostics
+tools/discovery.json
+tools/services_fields.json
+# old location of the geocoding cache
+/geocache.json
+*.log

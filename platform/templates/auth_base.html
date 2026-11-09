@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#07080c">
+  <meta name="referrer" content="{% block referrer %}same-origin{% endblock %}">
+  <title>Looking Glass · {% block title %}Log in{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo-mark.svg') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/auth.css') }}" rel="stylesheet">
+</head>
+<body class="auth-page">
+  <!-- decorative scene: a globe with attack arcs and morphing charts (no real data before login) -->
+  <canvas id="authBg" class="auth-bg" tabindex="0" role="img" aria-label="Interactive globe of attacks (decorative). Drag or use the arrow keys to turn it, + and - to zoom, Enter to launch an attack."></canvas>
+  <div class="auth-vignette" aria-hidden="true"></div>
+  <main class="auth-wrap">
+    <section class="auth-hero" aria-hidden="true">
+      <img class="auth-hero-logo" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="88" height="88">
+      <h2 class="auth-hero-title">Looking Glass</h2>
+      <p class="auth-hero-sub">Looking Glass turns the daily Shadowserver reports on your constituency into a picture your team can act on: infected devices calling botnet sinkholes and attacking others, replayed on a map, and the services your networks expose to the internet with their known vulnerabilities, region by region.</p>
+      <p class="auth-hero-sub">It is built for CSIRTs and security operations teams, to find the hosts to follow up, analyse what is happening and brief management and partners.</p>
+    </section>
+    {% block card %}{% endblock %}
+  </main>
+  <script src="{{ url_for('static', filename='js/lg-select.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/auth-bg.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

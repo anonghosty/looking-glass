@@ -1,0 +1,62 @@
+/* Looking Glass · Publicly accessible / vulnerable services.
+   Everything comes from app.css (the network communications platform), so both platforms look the same.
+   This file only adds the stage that replaces the map: the services constellation and the Ghana regions heatmap. */
+#stage { position: fixed; inset: 0; background: radial-gradient(ellipse at 50% 42%, #121624 0%, var(--bg) 72%); }
+#sky, #ghana { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#ghana path.rg { stroke: rgba(11, 11, 13, .9); stroke-width: 1.1; cursor: pointer; transition: fill .6s ease, filter .3s ease; vector-effect: non-scaling-stroke; }
+#ghana path.rg:hover, #ghana path.rg.hot { stroke: #ededef; stroke-width: 2; filter: brightness(1.25); }
+#ghana path.rg.sel { stroke: var(--med); stroke-width: 2.4; }
+#ghana path.rg.pulse { animation: rgPulse .9s ease-out; }
+@keyframes rgPulse { 0% { filter: brightness(1.9) drop-shadow(0 0 6px rgba(245, 181, 74, .9)); } 100% { filter: none; } }
+#ghana text { font: 600 12px var(--font); fill: #ededef; paint-order: stroke; stroke: rgba(11,11,13,.85); stroke-width: 3px; pointer-events: none; }
+#ghana text.n { font: 500 11px var(--mono); fill: #d6d6db; }
+#ghana .ping { fill: none; stroke: var(--med); stroke-width: 1.5; pointer-events: none; }
+
+/* view switch and hint: centred over the free area between the panels, under the top bar */
+.stage-bar { position: fixed; z-index: 5; top: calc(var(--hud-h) + var(--gutter) * 2);
+  left: calc(var(--left-w) + var(--gutter) * 2); right: calc(var(--right-w) + var(--gutter) * 2);
+  display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
+.stage-bar .seg { pointer-events: auto; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+.stage-hint { font-size: 11.5px; color: var(--muted); text-shadow: 0 1px 2px #000; }
+.stage-legend { position: fixed; z-index: 5; left: calc(var(--left-w) + var(--gutter) * 2); bottom: calc(var(--stream-h) + var(--gutter) * 2);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; max-width: calc(100vw - var(--left-w) - var(--right-w) - var(--gutter) * 6);
+  font-size: 11.5px; color: var(--text-2); pointer-events: none; text-shadow: 0 1px 2px #000; }
+.stage-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+.stage-legend .ramp { display: inline-block; width: 140px; height: 8px; border-radius: 4px; vertical-align: middle; margin: 0 6px;
+  background: linear-gradient(90deg, #1d2a4a, #1f6f8b, #2bb07f, #f5b54a, #e5484d); }
+.region-notice { position: fixed; z-index: 6; top: calc(var(--hud-h) + var(--gutter) * 2 + 64px); left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px; max-width: min(620px, calc(100vw - 32px)); padding: 10px 14px; border-radius: 10px;
+  background: rgba(20,20,23,.96); border: 1px solid rgba(245,181,74,.6); box-shadow: 0 12px 30px rgba(0,0,0,.5); font-size: 13px; color: var(--text); }
+.stage-waiting { position: fixed; z-index: 5; top: 45%; left: calc(var(--left-w) + var(--gutter) * 2); right: calc(var(--right-w) + var(--gutter) * 2);
+  text-align: center; color: var(--text-2); font-size: 14px; padding: 0 24px; text-shadow: 0 1px 3px #000; }
+
+/* figures in the top bar: hosts with issues in amber */
+.kpi.warn .kpi-value { color: #f5b54a; }
+.brand-sub .track-name { color: #f5b54a; }
+/* this platform's top bar has a longer subtitle and four buttons: make room for the figure cards
+   (cards that still don't fit are hidden whole by fitKpis, never cut off) */
+@media (max-width: 2199px) and (min-width: 701px) { .svc .brand-sub .bs-more { display: none; } }
+@media (max-width: 1799px) and (min-width: 701px) {
+  .svc .hud-right .demo-btn > span { display: none; }
+  .svc .hud-right .demo-btn { padding-left: 9px; padding-right: 9px; }
+}
+.check-row.issues-only { padding: 8px 10px; border: 1px solid rgba(245,181,74,.35); border-radius: 8px; background: rgba(245,181,74,.06); }
+
+/* stream: issues in amber */
+.row .r-req .host.iss { color: #f5b54a; }
+.row .r-arrow { color: var(--muted); }
+
+/* glossary dialog (same groups as the intro glossary) */
+.svc-gl { margin-top: 12px; }
+#glossary .gl-search { width: 100%; }
+#glossary dd a { color: var(--accent); }
+
+/* drill-down rows that open an analysis */
+.drill-table tr.click { cursor: pointer; }
+
+/* Ghana view on phones: the hint is enough, the legend would cover the map */
+@media (max-width: 700px) {
+  body.svc .r-src::before { content: "Host"; }
+  body.svc .r-dst::before { content: "Device"; }
+}
+@media (max-width: 700px) { .stage-legend { display: none; } .stage-hint { display: none; } .stage-bar .seg button { padding: 5px 10px; font-size: 11px; } }

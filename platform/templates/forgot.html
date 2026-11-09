@@ -1,0 +1,41 @@
+{% extends "auth_base.html" %}
+{% from "_pw.html" import pw %}
+{% block title %}Reset password{% endblock %}
+{% block card %}
+<div class="auth-card">
+  <img class="auth-logo" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="44" height="44">
+  <h1>Reset password</h1>
+  {% if error %}<div class="auth-alert err" role="alert">{{ error }}</div>{% endif %}
+  {% if notice %}<div class="auth-alert ok" role="status">{{ notice }}</div>{% endif %}
+  {% if not tls %}<div class="auth-alert err" role="alert">This connection is not encrypted. Open Looking Glass over HTTPS.</div>{% endif %}
+  {% if mode != "done" %}
+  <div class="auth-seg" role="tablist">
+    <a href="/forgot?mode=self" role="tab" aria-selected="{{ 'true' if mode == 'self' else 'false' }}">Use my authenticator</a>
+    <a href="/forgot?mode=ask" role="tab" aria-selected="{{ 'true' if mode == 'ask' else 'false' }}">Ask an administrator</a>
+  </div>
+  {% endif %}
+  {% if mode == "self" %}
+  <form method="post" action="/forgot" class="auth-form" autocomplete="off">
+    <input type="hidden" name="mode" value="self">
+    <div class="fl"><input id="f-user" name="username" placeholder=" " autocomplete="username" required maxlength="40" value="{{ username or '' }}"><label for="f-user">User name</label></div>
+    <div class="auth-grid">
+      <div class="fl"><input id="f-code" name="code" placeholder=" " inputmode="numeric" autocomplete="one-time-code" required maxlength="6" pattern="\d{6}"><label for="f-code">Authenticator code</label></div>
+      <div class="fl"><input id="f-rec" name="recovery" placeholder=" " maxlength="14"><label for="f-rec">Recovery code</label></div>
+    </div>
+    <p class="auth-hint">No recovery code is needed once an administrator has allowed the reset.</p>
+    {{ pw("f-pw", "password", "New password", "new-password", meter=True, minlength=12) }}
+    {{ pw("f-pw2", "password2", "Repeat new password", "new-password", match="f-pw", minlength=12) }}
+    <button class="auth-btn" type="submit"><span>Set new password</span></button>
+  </form>
+  {% elif mode == "ask" %}
+  <form method="post" action="/forgot" class="auth-form" autocomplete="off">
+    <input type="hidden" name="mode" value="ask">
+    <p class="auth-sub">The administrators are notified. Once they allow it, return here and use your authenticator.</p>
+    <div class="fl"><input id="a-user" name="username" placeholder=" " autocomplete="username" required maxlength="40"><label for="a-user">User name</label></div>
+    <button class="auth-btn" type="submit"><span>Notify administrators</span></button>
+  </form>
+  {% endif %}
+  <div class="auth-links"><a href="/login?form=signin">Back to sign in</a></div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/auth-card.js') }}"></script>{% endblock %}

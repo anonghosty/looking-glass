@@ -1,0 +1,12 @@
+{% extends "auth_base.html" %}
+{% block title %}Not allowed{% endblock %}
+{% block card %}
+<div class="auth-card">
+  <img class="auth-logo" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="52" height="52">
+  <h1>Not allowed</h1>
+  <p class="auth-sub">{{ message }}</p>
+  <p class="auth-sub">Signed in as <b>{{ lg_user }}</b> ({{ lg_role }}).</p>
+  <a class="auth-btn" href="/?intro=1"><span>Back to the overview</span></a>
+  <form method="post" action="/logout"><button class="auth-btn ghost" type="submit"><span>Sign out</span></button></form>
+</div>
+{% endblock %}

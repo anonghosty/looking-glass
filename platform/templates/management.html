@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#070a12">
+  <meta name="csrf-token" content="{{ lg_csrf }}">
+  <title>Looking Glass · Executive</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo-mark.svg') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/management.css') }}" rel="stylesheet">
+</head>
+<body class="mg"{% if "settings" in lg_perms %} data-settings="1"{% endif %}>
+  <div class="mg-glow" aria-hidden="true"></div>
+  <header class="mg-top">
+    <div class="mg-brand">
+      <img src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="34" height="34">
+      <div><div class="mg-brand-title">Looking Glass <span>Executive</span></div><div class="mg-brand-sub" id="mgScope">Loading…</div></div>
+    </div>
+    <div class="mg-top-actions">
+      <select id="mgDay" class="lg-enhance mg-daysel" aria-label="Report day" data-caption="Report day"></select>
+      <button class="mg-toggle" id="mgDemo" type="button" aria-pressed="false" title="Demo mode: network names become aliases, for presentations">
+        <span class="mg-toggle-dot"></span><span>Demo</span></button>
+      {% if "view" in lg_perms %}<a class="mg-link" href="/?intro=1">Overview</a>{% endif %}
+      <form method="post" action="/logout" class="mg-logout"><button type="submit" class="mg-link" title="Signed in as {{ lg_user }} ({{ lg_role }})">
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+        <span>Log out</span></button></form>
+    </div>
+  </header>
+
+  <main class="mg-main">
+    <section class="mg-hero">
+      <div class="mg-switch" role="tablist" aria-label="Platform">
+        <button type="button" role="tab" data-plat="comms" aria-selected="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M3 12h4l3-8 4 16 3-8h4"/></svg>
+          <span><b>Infections &amp; attacks</b><small>Network communications</small></span></button>
+        <button type="button" role="tab" data-plat="services" aria-selected="false">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/></svg>
+          <span><b>Exposure &amp; vulnerabilities</b><small>Publicly accessible services</small></span></button>
+      </div>
+      <div class="mg-headline">
+        <p class="mg-eyebrow" id="mgEyebrow">Executive overview</p>
+        <h1 id="mgHeadline">Loading the latest day…</h1>
+      </div>
+      <button class="mg-report" id="mgReport" type="button">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M12 12v6M9 15l3 3 3-3"/></svg>
+        <span><b>Executive report</b><small>PDF + CSV · as filtered</small></span></button>
+    </section>
+
+    <section class="mg-filters" aria-label="Filters">
+      <div class="mg-filter-row" id="mgFilters"></div>
+      <div class="mg-active" id="mgActive"></div>
+    </section>
+
+    <section class="mg-kpis" id="mgKpis" aria-label="Key figures"></section>
+
+    <section class="mg-grid">
+      <article class="mg-card mg-span2" id="cTrend">
+        <header><h2>Activity across the day</h2><p id="tTrend">Events per hour (UTC)</p></header>
+        <div class="mg-chart" id="chTrend"></div>
+      </article>
+      <article class="mg-card" id="cFind">
+        <header><h2>Key findings</h2><p>For this selection</p></header>
+        <ol class="mg-findings" id="mgFindings"></ol>
+      </article>
+
+      <article class="mg-card mg-span3" id="cBase">
+        <header class="mg-head-actions"><div><h2>7-day baseline</h2><p id="tBase">Each figure over the 7 days before the report day, with the day itself · the dashed line is the 7-day average</p></div>
+          <span class="mg-base-status" id="mgBaseStatus"></span></header>
+        <div class="mg-base" id="chBase"></div>
+        <div class="mg-scale" id="mgScale"></div>
+      </article>
+
+      <article class="mg-card mg-span2" id="cMap">
+        <header><h2>Regions</h2><p id="tMap">Regions coloured by activity, with their cities · hover a region for its figures; click to focus on it</p></header>
+        <div class="mg-mapwrap"><svg class="mg-map" id="chMap" role="img" aria-label="Map of the regions"></svg><div class="mg-maptip" id="mgMapTip" hidden></div><div class="mg-mapnote" id="mgMapNote" role="status" hidden><span></span><a class="mg-link mg-mapnote-btn" href="/settings">Open Settings</a></div><div class="mg-maplist" id="chRegions"></div></div>
+      </article>
+      <article class="mg-card" id="cSectors">
+        <header><h2>Sectors</h2><p>By the type of network</p></header>
+        <div class="mg-donut" id="chSectors"></div>
+      </article>
+
+      <article class="mg-card mg-span3" id="cTop">
+        <header class="mg-head-actions"><div><h2 id="tTopTitle">Top infections</h2><p id="tTop">Devices per infection · click a name to explain it</p></div>
+          <button class="mg-mini" id="mgExplainAll" type="button"><span>Explain all</span></button></header>
+        <div class="mg-rank" id="chTop"></div>
+      </article>
+      <article class="mg-card" id="cNets">
+        <header><h2>Most affected networks</h2><p id="tNets">Devices per network</p></header>
+        <div class="mg-bars" id="chNets"></div>
+      </article>
+      <article class="mg-card" id="cExtra1">
+        <header><h2 id="tX1Title"></h2><p id="tX1"></p></header>
+        <div class="mg-bars" id="chX1"></div>
+      </article>
+      <article class="mg-card" id="cExtra2">
+        <header><h2 id="tX2Title"></h2><p id="tX2"></p></header>
+        <div class="mg-bars" id="chX2"></div>
+      </article>
+    </section>
+
+    <h2 class="mg-section">Deeper insight</h2>
+    <section class="mg-grid mg-grid-insight">
+      <article class="mg-card" id="cMulti">
+        <header><h2 id="tMultiTitle"></h2><p id="tMulti"></p></header>
+        <div class="mg-stat-hero" id="sMulti"></div>
+        <div class="mg-steps" id="chMultiCount"></div>
+        <h3 class="mg-sub" id="tCombos"></h3>
+        <div class="mg-bars" id="chCombos"></div>
+      </article>
+      <article class="mg-card" id="cCross">
+        <header><h2>Cross-report analysis</h2><p id="tCross"></p></header>
+        <div class="mg-stat-hero" id="sCross"></div>
+        <div class="mg-steps" id="chCrossCount"></div>
+        <h3 class="mg-sub" id="tPairs"></h3>
+        <div class="mg-bars" id="chPairs"></div>
+      </article>
+      <div class="mg-stack">
+        <article class="mg-card" id="cSev">
+          <header><h2>Severity</h2><p>As rated by Shadowserver</p></header>
+          <div class="mg-donut" id="chSev"></div>
+        </article>
+        <article class="mg-card" id="cMix">
+          <header><h2 id="tMixTitle">Attack types</h2><p id="tMix">Share of the events</p></header>
+          <div class="mg-donut" id="chMix"></div>
+        </article>
+        <article class="mg-card" id="cX3">
+          <header><h2 id="tX3Title"></h2><p id="tX3"></p></header>
+          <div class="mg-stat-hero" id="sX3"></div>
+          <div class="mg-bars" id="chX3"></div>
+        </article>
+      </div>
+      <article class="mg-card mg-span2" id="cX4">
+        <header><h2 id="tX4Title"></h2><p id="tX4"></p></header>
+        <div class="mg-bars" id="chX4"></div>
+      </article>
+    </section>
+    <p class="mg-foot">Aggregated figures for the constituency from the Shadowserver Foundation's daily reports. No individual addresses are shown.
+      <span id="mgTook"></span></p>
+  </main>
+
+  <!-- Explain: what an infection or a vulnerability is -->
+  <div class="mg-scrim" id="mgScrim" hidden></div>
+  <aside class="mg-drawer" id="mgDrawer" aria-hidden="true" aria-labelledby="mgDrawerTitle" role="dialog">
+    <div class="mg-drawer-head"><div><p class="mg-eyebrow" id="mgDrawerKind">Explained</p><h2 id="mgDrawerTitle"></h2></div>
+      <button class="mg-close" id="mgDrawerClose" type="button" aria-label="Close">×</button></div>
+    <div class="mg-drawer-body" id="mgDrawerBody"></div>
+  </aside>
+  <div class="mg-toast" id="mgToast" role="status" hidden></div>
+
+  <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/lg-select.js') }}"></script>
+
+  <script src="{{ url_for('static', filename='js/regions.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/management.js') }}"></script>
+</body>
+</html>

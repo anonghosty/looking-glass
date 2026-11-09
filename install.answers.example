@@ -1,0 +1,71 @@
+# Answers for an unattended installation:   ./install.sh --answers my.answers
+# Copy this file, fill it in, keep it private (chmod 600: it holds passwords) and delete it afterwards.
+# One KEY=value per line, taken literally. A question with no line here is asked (or, with --yes, takes its default).
+# Every answer is still checked (mailbox login, tokens, MongoDB, ports); a failed check stops the installation
+# unless SKIP_FAILED_CHECKS=yes.
+
+# both | database | platform
+COMPONENTS=both
+
+# ---- MongoDB: local = install on this computer; remote = use an existing server
+MONGO_MODE=local
+MONGO_PORT=27017
+MONGO_ADMIN_USER=shadowserver_admin
+# empty = generate a strong random password (running the installer again: keep the one in database/.env)
+MONGO_ADMIN_PASSWORD=
+MONGO_AUTH_SOURCE=admin
+MONGO_DB=shadowserver
+# remote only:
+#MONGO_HOST=10.0.0.5
+#READONLY_DB=yes
+# local, with the platform on another computer only: this server's address for MongoDB to listen on
+#MONGO_BIND_ADDR=10.0.0.5
+
+# ---- Mailbox (database/docs/MAIL_SETUP.md): google_app | gmail_api | microsoft | imap
+MAIL_PROVIDER=imap
+# imap and google_app (google_app: IMAP_USER is the Gmail address, IMAP_PASSWORD the app password)
+IMAP_SERVER=mail.example.org
+IMAP_USER=csirt@example.org
+IMAP_PASSWORD=change-me
+IMAP_FOLDER=inbox
+IMAP_VERIFY_TLS=yes
+# gmail_api
+#GMAIL_KEY_FILE=/home/you/gmail-service-account.json
+#GMAIL_USER=shadowserver@example.org
+#GMAIL_LABEL=INBOX
+# microsoft
+#MS_TENANT_ID=example.org
+#MS_CLIENT_ID=00000000-0000-0000-0000-000000000000
+#MS_CLIENT_SECRET=change-me
+#MS_MAILBOX=shadowserver@example.org
+#MS_FOLDER=inbox
+
+# every 30m | every 15m | every 1h | every 6h | daily | off   (daily: also SCHEDULE_TIME=06:30)
+SCHEDULE=every 30m
+# days of e-mail every run looks back (1-60); already fetched e-mails are skipped, so 7 costs little and catches up
+EMAIL_DAYS=7
+RUN_PIPELINE_NOW=yes
+FIRST_DAYS=7
+
+# ---- Platform
+# ISO 3166 two-letter code of an African country
+COUNTRY=GH
+MAPBOX_TOKEN=
+MALPEDIA_TOKEN=
+# local | private | public
+ACCESS_MODE=local
+# private only: allowed addresses and ranges
+#VIEWER_NETWORKS=10.20.0.0/24
+# private / public only: selfsigned | proxy | none
+#HTTPS=selfsigned
+#ALLOWED_HOSTS=lookingglass.example.org
+LG_PORT=5000
+REGISTRATION=yes
+SERVICE_NAME=looking-glass
+RUN_CHECKS=yes
+
+# existing .env files: yes = keep a copy and replace them; no = keep them unchanged
+#KEEP_DB_ENV=yes
+#KEEP_PF_ENV=yes
+# yes = continue when a check fails (fix it later in the .env files); each failure is still shown with its reason
+#SKIP_FAILED_CHECKS=no

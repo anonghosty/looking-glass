@@ -1,0 +1,23 @@
+{% extends "auth_base.html" %}
+{% block title %}Authenticator{% endblock %}
+{% block referrer %}same-origin{% endblock %}
+{% block card %}
+<form class="auth-card" method="post" action="{{ '/register' if request.path == '/register' else '/login' }}" autocomplete="off">
+  <h1>Set up your authenticator</h1>
+  <ol class="auth-steps" aria-label="Steps"><li class="done">Account</li><li class="on">Authenticator</li><li>Recovery codes</li></ol>
+  {% if error %}<div class="auth-alert err" role="alert">{{ error }}</div>{% endif %}
+  <p class="auth-sub">Scan with Google Authenticator, Microsoft Authenticator or a similar app.</p>
+  <div class="auth-qr-wrap"><img class="auth-qr" id="qr" alt="QR code for {{ name }}" data-uri="{{ uri }}" width="208" height="208"></div>
+  <details class="auth-key"><summary>Can't scan? Enter the key instead</summary>
+    <code>{{ secret }}</code>
+    <span>Account: Looking Glass ({{ name }}) · Time based</span></details>
+  <div class="fl"><input id="e-code" name="code" placeholder=" " inputmode="numeric" autocomplete="one-time-code" required maxlength="6" pattern="\d{6}" autofocus><label for="e-code">Code shown in the app</label></div>
+  <input type="hidden" name="step" value="enrol">
+  <input type="hidden" name="next" value="{{ next }}">
+  <button class="auth-btn" type="submit"><span>Confirm</span></button>
+</form>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" integrity="sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1" crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='js/enrol.js') }}"></script>
+{% endblock %}

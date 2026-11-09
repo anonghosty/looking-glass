@@ -1,0 +1,67 @@
+{# The researchers' work: infections / categories (network communications) and issues (services). Used by Settings and
+   by the Definitions page (standalone=True). Filled by static/js/kb-settings.js. #}
+    <section class="st-card dz" id="cardInf" hidden>
+      <header class="dz-head">
+        <div class="dz-icon dz-icon-inf" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M8 9a4 4 0 0 1 8 0v4a4 4 0 0 1-8 0zM12 9v8M4 13h4M16 13h4M5 7l3 2M19 7l-3 2M5 19l3-2M19 19l-3-2M10 5 9 3M14 5l1-2"/></svg>
+        </div>
+        <div class="dz-title">
+          <h2>Infections &amp; categories</h2>
+          <p class="dz-sub">Network communications · the names in the sinkhole and honeypot reports, looked up in Malpedia. Names Malpedia
+            does not list are defined here, with references, and every user then sees that definition.</p>
+        </div>
+        <div class="dz-actions">
+          <button class="lg-btn primary" id="infLookup" type="button">
+            <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="m21 21-4.3-4.3M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z"/></svg>
+            <span>Look up with Malpedia</span></button>
+          <button class="lg-btn" id="infAdd" type="button">
+            <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
+            <span>Define a name</span></button>
+          {% if not standalone %}<a class="lg-btn ghost" href="/definitions" title="The same work on a page of its own (what researchers see)">Open as a page</a>{% endif %}
+        </div>
+      </header>
+      <div class="dz-stats" role="tablist" aria-label="Infections and categories">
+        <button class="dz-stat warn" type="button" role="tab" data-inf="unresolved" aria-selected="true"><b id="infN1">–</b><span>Malpedia doesn't know</span><em>need a definition</em></button>
+        <button class="dz-stat" type="button" role="tab" data-inf="unchecked" aria-selected="false"><b id="infN2">–</b><span>New, not checked yet</span><em>checked every 30 minutes</em></button>
+        <button class="dz-stat ok" type="button" role="tab" data-inf="defined" aria-selected="false"><b id="infN3">–</b><span>Defined</span><em>with references</em></button>
+        <button class="dz-stat" type="button" role="tab" data-inf="all" aria-selected="false"><b id="infN4">–</b><span>All names in the reports</span><em>Malpedia, actors, definitions</em></button>
+      </div>
+      <div class="dz-toolbar">
+        <input type="search" class="dz-search" id="infSearch" placeholder="Search a name, report or definition" autocomplete="off" aria-label="Search the infections and categories">
+        <span class="dz-status" id="infStatus" role="status"></span>
+      </div>
+      <div class="table-wrap dz-table"><table id="infTable"><thead><tr><th>Name</th><th>Seen in</th><th>Status</th><th>Definition / Malpedia</th><th class="dz-act"></th></tr></thead><tbody></tbody></table></div>
+    </section>
+
+    <section class="st-card dz" id="cardIss" hidden>
+      <header class="dz-head">
+        <div class="dz-icon dz-icon-iss" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6zM12 8v5M12 16.5v.5"/></svg>
+        </div>
+        <div class="dz-title">
+          <h2>Issues · publicly accessible / vulnerable services</h2>
+          <p class="dz-sub">CVEs are looked up by themselves: CISA's Known Exploited Vulnerabilities catalog (actively exploited?),
+            EPSS, the official CVE.org record and NVD. Other issues (admin panels, certificates, implants…) are never looked up:
+            they need a definition with references.</p>
+        </div>
+        <div class="dz-actions">
+          <button class="lg-btn primary" id="issLookup" type="button">
+            <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>
+            <span>Look up the CVEs</span></button>
+          <button class="lg-btn" id="issAdd" type="button">
+            <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
+            <span>Define an issue</span></button>
+        </div>
+      </header>
+      <div class="dz-stats" role="tablist" aria-label="Issues">
+        <button class="dz-stat warn" type="button" role="tab" data-iss="needs" aria-selected="true"><b id="issN1">–</b><span>Need a definition</span><em>issues that are not CVEs</em></button>
+        <button class="dz-stat bad" type="button" role="tab" data-iss="kev" aria-selected="false"><b id="issN2">–</b><span>Actively exploited</span><em>in CISA's KEV catalog</em></button>
+        <button class="dz-stat" type="button" role="tab" data-iss="cves" aria-selected="false"><b id="issN3">–</b><span>All CVEs</span><em>CVSS · EPSS · KEV</em></button>
+        <button class="dz-stat ok" type="button" role="tab" data-iss="defined" aria-selected="false"><b id="issN4">–</b><span>Defined issues</span><em>and notes on CVEs</em></button>
+      </div>
+      <div class="dz-toolbar">
+        <input type="search" class="dz-search" id="issSearch" placeholder="Search an issue, CVE or product" autocomplete="off" aria-label="Search the issues">
+        <span class="dz-status" id="issStatus" role="status"></span>
+      </div>
+      <div class="table-wrap dz-table"><table id="issTable"><thead><tr><th>Issue</th><th>Hosts</th><th>Status</th><th>What it is</th><th class="dz-act"></th></tr></thead><tbody></tbody></table></div>
+    </section>

@@ -1,0 +1,16 @@
+.env
+.venv/
+__pycache__/
+logs/
+attachments_backup/
+unzipped_backup/
+sorting_backup/
+.pipeline_state.sqlite*
+.pipeline.lock
+backups/
+*.part
+*.partial/
+.mail_state.sqlite*
+secrets/
+.env.*
+!.env.example

@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0d">
+  <meta name="csrf-token" content="{{ lg_csrf }}">
+  <title>Looking Glass · Publicly accessible / vulnerable services</title>
+  <meta name="description" content="Looking Glass: replay of yesterday's Shadowserver reports on publicly accessible / vulnerable services.">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo-mark.svg') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- the same stylesheet as the network communications platform, plus the stage that replaces the map -->
+  <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/services.css') }}" rel="stylesheet">
+  <script src="{{ url_for('static', filename='js/lg-select.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/display.js') }}"></script>
+</head>
+<body class="svc"{% if "unmasked" not in lg_perms %} data-masked="1"{% endif %}{% if "export" in lg_perms %} data-export="1"{% endif %}>
+  <!-- ===================== Stage (instead of the map): constellation or Ghana regions ===================== -->
+  <div id="stage" aria-label="Publicly accessible / vulnerable services">
+    <canvas id="sky" aria-label="Services constellation: one bubble per service, sized by records, pulsing as records replay"></canvas>
+    <svg id="ghana" hidden aria-label="Regions heatmap"></svg>
+  </div>
+  <div class="fx-vignette" aria-hidden="true"></div>
+  <div class="stage-bar" id="stageBar">
+    <div class="seg" id="viewSeg" role="group" aria-label="View">
+      <button type="button" data-view="sky" aria-pressed="true">Services constellation</button>
+      <button type="button" data-view="ghana" aria-pressed="false">Regions</button>
+    </div>
+    <span class="stage-hint" id="stageHint">one bubble per service · click to analyse</span>
+  </div>
+  <div class="stage-legend" id="legend"></div>
+  <div class="region-notice" id="regionNotice" role="status" hidden><span></span><button type="button" class="pill-btn primary" id="regionNoticeBtn">Open Settings</button></div>
+  <div class="stage-waiting" id="waiting" hidden></div>
+
+  <!-- ===================== Top bar ===================== -->
+  <header class="hud">
+    <div class="hud-left">
+      <button class="icon-btn" id="btnDrawer" aria-label="Open filters and intel" aria-controls="drawer" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M4 6h16v1.5H4zm3 5.25h10v1.5H7zm3 5.25h4V18h-4z"/></svg>
+      </button>
+      <a class="brand-btn" href="/?intro=1" title="Back to the Looking Glass overview" aria-label="Open the Looking Glass overview">
+        <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
+      </a>
+      <div class="brand">
+        <div class="brand-title">Looking Glass</div>
+        <div class="brand-sub"><span class="demo-pill" id="demoPill" hidden>Demo</span><button type="button" class="scope-pill" id="scopePill" hidden></button><span class="track-name">Publicly accessible / vulnerable services</span><span class="sep bs-more">·</span><span class="bs-more" id="collectionName">Shadowserver</span></div>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis">
+      <div class="kpi click" tabindex="0" role="button" data-open="total"><span class="kpi-label" data-term="exposures">Records yesterday</span><span class="kpi-value" id="kTotal">0</span></div>
+      <div class="kpi click" tabindex="0" role="button" data-open="replayed"><span class="kpi-label" data-term="replayed">Replayed so far</span><span class="kpi-value" id="kReplayed">0</span></div>
+      <div class="kpi click" tabindex="0" role="button" data-open="hosts"><span class="kpi-label" data-term="exposed_host">Exposed hosts</span><span class="kpi-value" id="kHosts">0</span></div>
+      <div class="kpi click" tabindex="0" role="button" data-open="services"><span class="kpi-label" data-term="service">Reports</span><span class="kpi-value" id="kServices">0</span></div>
+      <div class="kpi click warn" tabindex="0" role="button" data-open="vulnerable"><span class="kpi-label" data-term="vulnerable_host">Hosts with issues</span><span class="kpi-value" id="kVuln">0</span></div>
+      <div class="kpi click crit" tabindex="0" role="button" data-open="critical"><span class="kpi-label" data-term="severity">Critical</span><span class="kpi-value" id="kCrit">0</span></div>
+    </div>
+
+    <div class="hud-right">
+      <div class="level">
+        <span class="kpi-label" data-term="activity">Activity</span>
+        <div class="level-row"><div class="level-bar" id="levelBar"><i></i><i></i><i></i><i></i><i></i></div></div>
+      </div>
+      <div class="clocks">
+        <span class="kpi-label" id="clockDate" data-term="replay_time">Replay time (UTC)</span>
+        <span class="clock-time" id="replayDate">---------- --:--:--</span>
+        <span class="kpi-label now-clock" data-term="current_time">Current time (UTC)</span>
+        <span class="clock-time now-clock" id="nowClock">---------- --:--:--</span>
+      </div>
+      <select id="speed" class="speed lg-enhance" aria-label="Playback speed">
+        <option value="1">Speed 1×</option>
+        <option value="5">Speed 5×</option>
+        <option value="15">Speed 15×</option>
+        <option value="60">Speed 60×</option>
+      </select>
+      <a class="demo-btn" id="btnOverview" href="/?intro=1" title="Back to the overview page">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M4 5h7v6H4zM13 5h7v3h-7zM13 10h7v9h-7zM4 13h7v6H4z"/></svg>
+        <span>Overview</span>
+      </a>
+      <button class="demo-btn" id="btnGlossary" title="Definitions of every report, issue and figure">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h10"/></svg>
+        <span>Glossary</span>
+      </button>
+      {% if "management" in lg_perms %}<a class="demo-btn account-btn" href="/management" title="The management portal (Executive): aggregated dashboard and executive reports"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Executive</span></a>{% endif %}
+      {% if "users" in lg_perms or "audit" in lg_perms %}<a class="demo-btn account-btn" href="/admin" title="Users, sessions, roles and audit log"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6zM9 12l2 2 4-4"/></svg><span>Admin</span></a>{% endif %}
+      <form method="post" action="/logout" class="account-form"><button type="submit" class="demo-btn account-btn" title="Logged in as {{ lg_user }} ({{ lg_role }}). Click to log out.">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+        <span class="acct-name">Log out</span></button></form>
+      <button type="button" class="demo-btn" id="btnSettings" title="Settings for both platforms: country and constituency"{% if "settings" not in lg_perms %} hidden{% endif %}>
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        <span>Settings</span>
+      </button>
+      <button class="demo-btn" id="btnDemo" aria-pressed="false" title="Demo mode: conceal IP addresses, host names, network names and identifying certificate fields">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M3 3l18 18M10.6 6.2A9.8 9.8 0 0 1 12 6c5 0 8.5 4.2 9.5 6-.5.9-1.6 2.4-3.1 3.7M6.6 7.7C4.7 9 3.2 10.9 2.5 12c1 1.8 4.5 6 9.5 6 1.4 0 2.7-.3 3.9-.9M9.9 10a3 3 0 0 0 4.1 4.1"/></svg>
+        <span>Demo</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===================== Left: filters (drawer on tablet/phone) ===================== -->
+  <aside class="panel drawer" id="drawer" aria-label="Filters and intel">
+    <div class="drawer-tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="filters">Filters</button>
+      <button role="tab" aria-selected="false" data-tab="intel" class="intel-tab">Intel</button>
+      <button class="icon-btn close-drawer" id="btnCloseDrawer" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg>
+      </button>
+    </div>
+    <div class="tab-body" data-body="filters">
+      <div class="panel-head"><h2>Filters</h2><button class="link-btn" id="btnReset">Reset</button></div>
+      <section class="fg">
+        <label class="check-row issues-only"><input type="checkbox" id="fVuln"> <span data-term="vulnerable_host">Only hosts with issues</span></label>
+        <label class="check-row issues-only"><input type="checkbox" id="fMulti"> <span data-term="multi">Only hosts with multiple issues</span></label>
+        <label class="check-row issues-only"><input type="checkbox" id="fCross"> <span data-term="cross">Only hosts in several reports</span></label>
+      </section>
+      <section class="fg">
+        <h3 data-term="family">Report family</h3>
+        <div class="chips" id="fFamily"></div>
+      </section>
+      <section class="fg">
+        <h3 data-term="service">Service report <span class="muted" id="srcCount"></span></h3>
+        <input type="search" class="search" id="svcSearch" placeholder="Search services, for example RDP" autocomplete="off">
+        <ul class="checklist" id="fService"></ul>
+      </section>
+      <section class="fg">
+        <h3 data-term="severity">Severity</h3>
+        <div class="chips" id="fSeverity"></div>
+      </section>
+      <section class="fg">
+        <h3 data-term="issue">Issue <span class="muted" id="issCount"></span></h3>
+        <input type="search" class="search" id="issSearch" placeholder="Search issues, for example CVE" autocomplete="off">
+        <ul class="checklist" id="fIssue"></ul>
+      </section>
+      <section class="fg grid2">
+        <label><span data-term="region">Region</span><select id="fRegion" class="lg-enhance"></select></label>
+        <label><span data-term="city">City</span><select id="fCity" class="lg-enhance"></select></label>
+        <label><span data-term="network">Network</span><select id="fAsn" class="lg-enhance"></select></label>
+        <label><span data-term="port">Port</span><select id="fPort" class="lg-enhance"></select></label>
+        <label><span data-term="vendor">Vendor</span><select id="fVendor" class="lg-enhance"></select></label>
+        <label><span data-term="device_type">Device type</span><select id="fDevice" class="lg-enhance"></select></label>
+      </section>
+      <section class="fg">
+        <h3 data-term="display">Display</h3>
+        <div class="seg perf-seg" role="group" aria-label="Display quality">
+          <button type="button" data-perf="auto" title="Full on capable devices; Lite on TVs, older computers or when drawing is slow">Auto</button>
+          <button type="button" data-perf="full" title="Every effect: 3D tilt, glow, trails, camera drift, blurred panels">Full</button>
+          <button type="button" data-perf="lite" title="For smart TVs and older computers: fewer stars and particles, no glow or blur">Lite</button>
+        </div>
+        <p class="fg-hint perf-hint"></p>
+      </section>
+      <section class="fg" id="unsupportedBox" hidden></section>
+    </div>
+    <div class="tab-body" data-body="intel" hidden><div id="intelSlot"></div></div>
+  </aside>
+
+  <!-- ===================== Right: intel column (desktop) ===================== -->
+  <aside class="panel intel-col" id="intelCol" aria-label="Intel">
+    <div id="intel">
+      <section class="intel-block">
+        <div class="ib-head"><h3 data-term="timeline">Activity yesterday</h3><span class="muted mono" id="tlInfo"></span></div>
+        <canvas id="timeline" height="64"></canvas>
+        <div class="tl-axis mono"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+      </section>
+      <section class="intel-block">
+        <div class="ib-head"><h3 data-term="family">Report families</h3><span class="hint">Hover or click</span></div>
+        <div class="donut-wrap"><svg id="donut" viewBox="0 0 120 120" aria-label="Share of records by report family"></svg><ol class="legend" id="topFamily"></ol></div>
+      </section>
+      <section class="intel-block">
+        <div class="ib-head"><h3>Records by hour and family</h3><span class="muted mono" id="hbcInfo"></span></div>
+        <canvas id="hourClass" height="80" aria-label="Records per hour by report family"></canvas>
+        <div class="tl-axis mono"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+      </section>
+      <section class="intel-block">
+        <div class="ib-head"><h3 data-term="severity">Severity mix</h3></div>
+        <div class="sevbar" id="sevBar"></div>
+        <div class="sevlegend" id="sevLegend"></div>
+      </section>
+      <section class="intel-block"><h3 data-term="issue">Issues found</h3><ol class="toplist" id="topIssue"></ol></section>
+      <section class="intel-block"><h3 data-term="service">Services</h3><ol class="toplist" id="topService"></ol></section>
+      <section class="intel-block"><h3 data-term="network">Networks</h3><ol class="toplist" id="topNet"></ol></section>
+      <section class="intel-block"><h3 data-term="region">Regions</h3><ol class="toplist" id="topRegion"></ol></section>
+      <section class="intel-block"><h3 data-term="city">Most affected cities</h3><ol class="toplist" id="topCity"></ol></section>
+      <section class="intel-block"><h3 data-term="vendor">Device vendors</h3><ol class="toplist" id="topVendor"></ol></section>
+      <section class="intel-block"><h3 data-term="product">Products</h3><ol class="toplist" id="topProduct"></ol></section>
+      <section class="intel-block"><h3 data-term="port">Ports</h3><ol class="toplist" id="topPort"></ol></section>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim" hidden></div>
+
+  <!-- ===================== Bottom: record stream ===================== -->
+  <section class="panel stream" id="stream" aria-label="Record stream">
+    <div class="stream-resize" id="streamResize" aria-hidden="true"></div>
+    <div class="stream-head">
+      <div class="sh-title"><h2 data-term="stream">Record stream</h2><span class="muted mono" id="streamInfo"></span></div>
+      <div class="sh-actions">
+        <button class="pill-btn" id="btnCatchUp" hidden title="The replay is behind because it was paused. Jump forward to the current replay time.">Catch up</button>
+        <button class="pill-btn" id="btnPause" aria-pressed="false" title="Freeze the replay: animation, stream and clock">Pause</button>
+        <button class="pill-btn" id="btnStreamMin" aria-expanded="true" title="Hide the list to give the view the screen (shortcut: L)">Hide list</button>
+      </div>
+    </div>
+    <div class="filter-bar" id="filterBar" hidden></div>
+    <div class="stream-cols" aria-hidden="true">
+      <span>Replay time (UTC)</span><span>Severity</span><span>Service</span><span>Host</span><span></span><span>Device / product</span><span>Proto</span><span>Issues / tags</span><span></span>
+    </div>
+    <div class="stream-body" id="streamBody" tabindex="0" aria-label="Record list: arrow keys to move, Enter to open">
+      <ul class="rows" id="rows"></ul>
+      <div class="stream-empty" id="streamEmpty">Waiting for records in the replay window…</div>
+    </div>
+  </section>
+
+  <!-- ===================== Record detail dialog ===================== -->
+  <div class="modal-scrim" id="modalScrim" hidden></div>
+  <section class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle" hidden>
+    <header class="m-head">
+      <div class="m-title">
+        <div class="m-kicker">Record detail</div>
+        <h2 id="mTitle">service</h2>
+        <div class="m-badges"><span class="sev" id="mSev"></span><span class="badge mono" id="mTag"></span><span class="muted mono" id="mTime"></span></div>
+        <div class="kb" id="mKb"></div>
+      </div>
+      <button class="icon-btn" id="btnModalClose" aria-label="Close details">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg>
+      </button>
+    </header>
+    <div class="m-route">
+      <div class="m-ep"><div class="ep-k">Exposed host</div><div class="ep-place" id="mPlace"></div><div class="ep-ip mono" id="mIp"></div></div>
+      <div class="m-wire" aria-hidden="true"><span class="mono" id="mProto"></span><div class="wire"><i></i></div></div>
+      <div class="m-ep"><div class="ep-k">Reachable service</div><div class="ep-place" id="mSvc"></div><div class="ep-ip mono" id="mProduct"></div></div>
+    </div>
+    <div class="m-body" id="mBody"></div>
+    <footer class="m-foot">
+      <button class="pill-btn" id="mHost">Analyse this host</button>
+      <button class="pill-btn" id="mService">Analyse this service</button>
+      <button class="pill-btn" id="mShow">Filter the view</button>
+      <button class="pill-btn" id="mCopy">Copy JSON</button>
+    </footer>
+  </section>
+
+  <!-- ===================== Analytics dialog ===================== -->
+  <section class="modal insight" id="insight" role="dialog" aria-modal="true" aria-labelledby="iTitle" hidden>
+    <header class="m-head">
+      <div class="m-title">
+        <div class="m-kicker" id="iKind">Analysis</div>
+        <h2 id="iTitle">Loading</h2>
+        <div class="m-badges"><span class="muted" id="iRange"></span></div>
+        <div class="i-parts" id="iParts" hidden></div>
+        <div class="kb" id="iKb"></div>
+      </div>
+      <div class="i-actions">
+        <button class="pill-btn" id="iBack" hidden>← Back</button>
+        <button class="pill-btn" id="iFilter">Filter the view</button>
+        <button class="icon-btn" id="btnInsightClose" aria-label="Close analysis">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg>
+        </button>
+      </div>
+    </header>
+    <div class="i-body" id="iBody"><div class="i-loading">Analysing…</div></div>
+  </section>
+
+  <!-- ===================== Glossary dialog ===================== -->
+  <section class="modal insight" id="glossary" role="dialog" aria-modal="true" aria-labelledby="gTitle" hidden>
+    <header class="m-head">
+      <div class="m-title">
+        <div class="m-kicker">Glossary</div>
+        <h2 id="gTitle">Publicly accessible / vulnerable services</h2>
+        <div class="m-badges"><span class="muted" id="gCount"></span></div>
+      </div>
+      <div class="i-actions">
+        <button class="icon-btn" id="btnGlossaryClose" aria-label="Close glossary">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg>
+        </button>
+      </div>
+    </header>
+    <div class="i-body">
+      <input type="search" class="search gl-search" id="gSearch" placeholder="Search terms and reports, for example RDP, MikroTik, CVE" autocomplete="off">
+      <div class="gl-groups svc-gl" id="gBody"></div>
+      <p class="gl-hint">Terms and reports of this platform. The overview's Glossary covers both platforms.</p>
+    </div>
+  </section>
+
+  <!-- page transition: fades in on arrival (from the intro) and out when leaving for the overview -->
+  <div class="page-fade in" id="pageFade"></div>
+  <div class="toast" id="toast" hidden></div>
+  <div class="tip" id="tip" role="tooltip" hidden></div>
+
+  <script nonce="{{ csp_nonce }}">window.SVC_CONFIG = { offsetHours: {{ offset_hours|tojson }}, lookups: {{ ("malpedia" in lg_perms)|tojson }} };</script>
+  <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/regions.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/services.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/hud-fit.js') }}"></script>
+</body>
+</html>

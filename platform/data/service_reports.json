@@ -1,0 +1,665 @@
+{
+  "_about": "Definitions of Shadowserver reports, written for Looking Glass from the official report pages at https://www.shadowserver.org/what-we-do/network-reporting/ (severity = Shadowserver's own rating of the report). Keys are collection names; IPv6 variants (scan6_*, population6_*, event6_*, device_id6) use the IPv4 entry.",
+  "reports": {
+    "blocklist": {
+      "title": "Block List Report",
+      "severity": "low",
+      "url": "blocklist-report/",
+      "def": "Addresses in your network that appear on public block or deny lists run by third parties, gathered into one feed.",
+      "why": "Listed hosts are often sending abuse (spam, login attacks) and may be blocked by others; check what they run."
+    },
+    "compromised_iot": {
+      "title": "Compromised IoT Report",
+      "severity": "critical",
+      "url": "compromised-iot-report/",
+      "def": "IoT devices (routers, cameras and similar) that show clear signs of compromise, detected by means other than web scans, for example honeypot activity.",
+      "why": "The device is already under someone else's control: isolate it, reset it and update its firmware."
+    },
+    "compromised_website": {
+      "title": "Compromised Website Report",
+      "severity": "critical",
+      "url": "compromised-website-report/",
+      "def": "Websites that Shadowserver or its partners have verified as compromised, for example with implants, injected code or defacements.",
+      "why": "Visitors may be infected or redirected; clean the site and find how the attacker got in."
+    },
+    "device_id": {
+      "title": "Device Identification Report",
+      "severity": "info",
+      "url": "device-identification-report/",
+      "def": "Devices fingerprinted in Shadowserver's daily internet scans, classified by vendor, type and model.",
+      "why": "An inventory of what is visible from the internet; use it to spot end-of-life or unexpected devices."
+    },
+    "event4_honeypot_brute_force": {
+      "title": "Honeypot Brute Force Events Report",
+      "severity": "critical",
+      "url": "honeypot-brute-force-events-report/",
+      "def": "Hosts seen by honeypots trying to guess passwords (SSH, Telnet, RDP and other logins).",
+      "why": "The host is attacking others, usually because it is infected."
+    },
+    "event4_honeypot_ddos_amp": {
+      "title": "Honeypot Amplification DDoS Events Report",
+      "severity": "info",
+      "url": "honeypot-amplification-ddos-events-report/",
+      "def": "Amplification DDoS attacks seen by honeypots in which your address was the victim, flooded through other reflecting services.",
+      "why": "Shows attacks against you, not by you."
+    },
+    "event4_honeypot_http_scan": {
+      "title": "Honeypot HTTP Scanner Events Report",
+      "severity": "high",
+      "url": "honeypot-http-scanner-events/",
+      "def": "Hosts seen scanning web services or trying web exploits against honeypots.",
+      "why": "Scanning from your network usually means an infected or misused host."
+    },
+    "event4_honeypot_rdp_scan": {
+      "title": "Honeypot RDP Scanner Events Report",
+      "severity": "high",
+      "url": "honeypot-rdp-scanner-events-report/",
+      "def": "Hosts seen scanning or attacking Remote Desktop (RDP) on honeypots.",
+      "why": "Often a step before ransomware attacks; find the scanning process."
+    },
+    "event4_honeypot_smb_scan": {
+      "title": "Honeypot SMB Scanner Events Report",
+      "severity": "high",
+      "url": "honeypot-smb-scanner-events-report/",
+      "def": "Hosts seen scanning or exploiting Windows file sharing (SMB) on honeypots.",
+      "why": "Typical of worms and infected Windows machines."
+    },
+    "event4_initial_access_broker": {
+      "title": "Initial Access Broker Report",
+      "severity": "critical",
+      "url": "initial-access-broker-report/",
+      "def": "Compromised hosts that are likely controlled by initial access brokers, criminals who sell access to networks.",
+      "why": "Access to this host may be sold to ransomware groups; treat as an incident."
+    },
+    "event4_microsoft_sinkhole_http": {
+      "title": "Microsoft Sinkhole HTTP Events Report",
+      "severity": "critical",
+      "url": "microsoft-sinkhole-http-events-report/",
+      "def": "Devices that contacted Microsoft's HTTP sinkholes (seized malware domains), shared with Shadowserver by Microsoft.",
+      "why": "The device is infected with the named malware."
+    },
+    "event4_sinkhole": {
+      "title": "Sinkhole Events Report",
+      "severity": "critical",
+      "url": "sinkhole-events-report/",
+      "def": "Connections from infected devices to non-HTTP sinkholes: malware command servers taken over by defenders.",
+      "why": "The device is infected with the named malware."
+    },
+    "event4_sinkhole_dns": {
+      "title": "Sinkhole DNS Events Report",
+      "severity": "info",
+      "url": "sinkhole-dns-events-report/",
+      "def": "DNS lookups for sinkholed malware domains seen from recursive DNS servers. The address is the resolver, not necessarily the infected client.",
+      "why": "Check the resolver's logs to find the client that asked."
+    },
+    "event4_sinkhole_http": {
+      "title": "Sinkhole HTTP Events Report",
+      "severity": "critical",
+      "url": "sinkhole-http-events-report/",
+      "def": "HTTP connections from infected devices to sinkholed malware command servers.",
+      "why": "The device is infected with the named malware."
+    },
+    "event4_sinkhole_http_referer": {
+      "title": "Sinkhole HTTP Referer Events Report",
+      "severity": "critical",
+      "url": "sinkhole-http-referer-events-report/",
+      "def": "Web pages that referred visitors to sinkholed malware domains, pointing to compromised or malicious sites.",
+      "why": "The referring site may be compromised."
+    },
+    "event4_honeypot_darknet": {
+      "title": "Darknet Events Report",
+      "severity": "high",
+      "url": "honeypot-darknet-events-report/",
+      "def": "Traffic from your network to unused address space (darknets), typical of scanning and worms.",
+      "why": "Indicates scanning or an infection."
+    },
+    "population_bgp": {
+      "title": "Open BGP Service Report",
+      "severity": "high",
+      "url": "open-bgp-service-report/",
+      "def": "Routers with the BGP routing service (179/tcp) reachable from the internet. This is the population variant of Shadowserver's Open BGP Service report (scan_bgp): every host answering BGP is counted, not only problematic ones.",
+      "why": "BGP should only accept known peers; restrict it with filters.",
+      "population_variant": true
+    },
+    "population_http_proxy": {
+      "title": "Accessible HTTP Proxy Report",
+      "severity": "low",
+      "url": "accessible-http-proxy-report/",
+      "def": "HTTP proxy servers reachable from the internet (most ask for a password).",
+      "why": "Proxies can be abused to hide attacks; confirm they are meant to be public."
+    },
+    "population_isakmp": {
+      "title": "Accessible ISAKMP Report",
+      "severity": "info",
+      "url": "accessible-isakmp-report/",
+      "def": "Hosts with an IPsec VPN key exchange service (ISAKMP/IKE, 500/udp) reachable from the internet.",
+      "why": "Usually a VPN gateway; keep it patched, as VPNs are frequent targets."
+    },
+    "population_msmq": {
+      "title": "Accessible MSMQ Service Report",
+      "severity": "medium",
+      "url": "accessible-msmq-service-report/",
+      "def": "Windows hosts with Microsoft Message Queuing (1801/tcp) reachable from the internet.",
+      "why": "MSMQ has had critical remote flaws; it rarely needs to be public."
+    },
+    "population_ntrip": {
+      "title": "Accessible NTRIP Report",
+      "severity": "info",
+      "url": "info-accessible-ntrip-report/",
+      "def": "NTRIP casters (GNSS/GPS correction streaming) reachable from the internet.",
+      "why": "Check that access is intended and protected."
+    },
+    "scan_adb": {
+      "title": "Accessible ADB Report",
+      "severity": "critical",
+      "url": "accessible-adb-report/",
+      "def": "Android devices with the debugging bridge (ADB, 5555/tcp) open to the internet.",
+      "why": "Gives full control of the device; close it immediately."
+    },
+    "scan_afp": {
+      "title": "Accessible AFP Report",
+      "severity": "high",
+      "url": "accessible-afp-report/",
+      "def": "Hosts with Apple file sharing (AFP) reachable from the internet.",
+      "why": "File shares should not be public."
+    },
+    "scan_amqp": {
+      "title": "Accessible AMQP Report",
+      "severity": "medium",
+      "url": "accessible-amqp-report/",
+      "def": "Message brokers (AMQP, 5672/tcp, for example RabbitMQ) reachable from the internet.",
+      "why": "May expose application data or weak logins."
+    },
+    "scan_ard": {
+      "title": "Accessible Apple Remote Desktop (ARD) Report",
+      "severity": "high",
+      "url": "accessible-apple-remote-desktop-ard-report/",
+      "def": "Hosts with Apple Remote Desktop (3283/udp) reachable from the internet.",
+      "why": "Can be abused for DDoS amplification and leaks system details."
+    },
+    "scan_badsecrets": {
+      "title": "Badsecrets Report",
+      "severity": "high",
+      "url": "badsecrets-report/",
+      "def": "Web applications using known or very weak cryptographic secrets, often copied from examples.",
+      "why": "Attackers can forge sessions or run code; replace the secrets."
+    },
+    "scan_chargen": {
+      "title": "Open CharGen Report",
+      "severity": "medium",
+      "url": "open-chargen-report/",
+      "def": "Hosts running the old Character Generator service (19/udp) on the internet.",
+      "why": "Used for DDoS amplification; switch it off."
+    },
+    "scan_cisco_smart_install": {
+      "title": "Accessible Cisco Smart Install Report",
+      "severity": "critical",
+      "url": "accessible-cisco-smart-install-report/",
+      "def": "Cisco switches with the Smart Install feature (4786/tcp) reachable from the internet.",
+      "why": "Allows taking over the switch configuration; disable the feature."
+    },
+    "scan_coap": {
+      "title": "Accessible CoAP Report",
+      "severity": "medium",
+      "url": "accessible-coap-report/",
+      "def": "IoT devices with the CoAP protocol reachable from the internet.",
+      "why": "Can be abused for amplification and leaks device data."
+    },
+    "scan_couchdb": {
+      "title": "Accessible CouchDB Report",
+      "severity": "high",
+      "url": "accessible-couchdb-report/",
+      "def": "Apache CouchDB databases (5984/tcp) reachable from the internet.",
+      "why": "Databases should not be public; data may be exposed."
+    },
+    "scan_cwmp": {
+      "title": "Open CWMP Report",
+      "severity": "medium",
+      "url": "open-cwmp-report/",
+      "def": "Routers with the TR-069 remote management service (CWMP) reachable from the internet.",
+      "why": "Rarely needs to be public and has been exploited by botnets."
+    },
+    "scan_ddos_middlebox": {
+      "title": "Vulnerable DDoS Middlebox Report",
+      "severity": "medium",
+      "url": "vulnerable-ddos-middlebox-report/",
+      "def": "Network middleboxes (such as filters or firewalls) that can be abused to reflect and amplify TCP DDoS attacks.",
+      "why": "Fix the device configuration to stop it being used in attacks."
+    },
+    "scan_dns": {
+      "title": "DNS Open Resolvers Report",
+      "severity": "medium",
+      "url": "dns-open-resolvers-report/",
+      "def": "DNS servers that answer anyone's queries (open resolvers).",
+      "why": "Used for DNS amplification DDoS; limit recursion to your own users."
+    },
+    "scan_docker": {
+      "title": "Accessible Docker Service Report",
+      "severity": "critical",
+      "url": "accessible-docker-service-report/",
+      "def": "Docker API services reachable from the internet.",
+      "why": "Gives control of the server's containers."
+    },
+    "scan_dvr_dhcpdiscover": {
+      "title": "Open DVR DHCPDiscover Report",
+      "severity": "high",
+      "url": "open-dvr-dhcpdiscover-report/",
+      "def": "Video recorders (DVRs) with a management discovery service (37810/udp) reachable from the internet.",
+      "why": "Can be abused for amplification and leaks device details."
+    },
+    "scan_elasticsearch": {
+      "title": "Open Elasticsearch Report",
+      "severity": "high",
+      "url": "open-elasticsearch-report/",
+      "def": "Elasticsearch or OpenSearch databases reachable from the internet.",
+      "why": "Frequently leaks data; restrict access."
+    },
+    "scan_epmd": {
+      "title": "Accessible Erlang Port Mapper Daemon Report",
+      "severity": "high",
+      "url": "accessible-erlang-port-mapper-report-daemon/",
+      "def": "Erlang port mapper (EPMD, 4369/tcp) reachable from the internet, for example from RabbitMQ or CouchDB installations.",
+      "why": "Exposes internal services; keep it internal."
+    },
+    "scan_exchange": {
+      "title": "Vulnerable Exchange Server Report",
+      "severity": "critical",
+      "url": "vulnerable-exchange-server-report/",
+      "def": "Microsoft Exchange mail servers that appear vulnerable, from daily scans.",
+      "why": "Exchange flaws are widely exploited; patch at once and check for compromise."
+    },
+    "scan_ftp": {
+      "title": "Accessible FTP Report",
+      "severity": "medium",
+      "url": "accessible-ftp-report/",
+      "def": "FTP servers (21/tcp) reachable from the internet.",
+      "why": "FTP sends passwords in clear text; prefer SFTP and check for anonymous access."
+    },
+    "scan_gtp": {
+      "title": "Accessible GPRS Tunneling Protocol (GTP) Report",
+      "severity": "low",
+      "url": "accessible-gprs-tunneling-protocol-gtp-report/",
+      "def": "Mobile network GTP services reachable from the internet.",
+      "why": "Mobile core services should not be public."
+    },
+    "scan_hadoop": {
+      "title": "Accessible Hadoop Report",
+      "severity": "high",
+      "url": "accessible-hadoop-report/",
+      "def": "Hadoop big-data services reachable from the internet.",
+      "why": "May expose data and allow running jobs."
+    },
+    "scan_http": {
+      "title": "Accessible HTTP Report",
+      "severity": "info",
+      "url": "accessible-http-report/",
+      "def": "Web servers (HTTP on any port) reachable from the internet, with their banners.",
+      "why": "An inventory; look for admin panels and outdated server software."
+    },
+    "scan_http_proxy": {
+      "title": "Open HTTP Proxy Report",
+      "severity": "medium",
+      "url": "open-http-proxy-report/",
+      "def": "HTTP proxies that relay traffic for anyone.",
+      "why": "Open proxies are abused to hide attacks; close them."
+    },
+    "scan_http_vulnerable": {
+      "title": "Vulnerable HTTP Report",
+      "severity": "critical",
+      "url": "vulnerable-http-report/",
+      "def": "Web services that appear to have a known vulnerability (named in the tag, often a CVE).",
+      "why": "Patch or remove; these are actively targeted."
+    },
+    "scan_ics": {
+      "title": "Accessible ICS Report",
+      "severity": "critical",
+      "url": "accessible-ics-report/",
+      "def": "Industrial control systems (ICS/OT protocols such as Modbus or BACnet) reachable from the internet.",
+      "why": "Can affect physical processes; must not be public."
+    },
+    "scan_imap": {
+      "title": "Accessible IMAP Report",
+      "severity": "low",
+      "url": "accessible-imap-report/",
+      "def": "Mail servers with IMAP (143/tcp or 993/tcp) reachable from the internet, with their TLS details.",
+      "why": "Normal for mail servers; check for old TLS and clear-text logins."
+    },
+    "scan_ip_tunnel": {
+      "title": "Open IP-Tunnel Report",
+      "severity": "medium",
+      "url": "open-ip-tunnel-report/",
+      "def": "Hosts that accept tunnelling packets (IPIP, GRE and similar) from anyone.",
+      "why": "Can be abused for spoofing and DoS; filter tunnel traffic."
+    },
+    "scan_ipmi": {
+      "title": "Open IPMI Report",
+      "severity": "high",
+      "url": "open-ipmi-report/",
+      "def": "Server management controllers (IPMI, 623/udp) reachable from the internet.",
+      "why": "Gives low-level control of the server; keep on a management network."
+    },
+    "scan_ipp": {
+      "title": "Open IPP Report",
+      "severity": "high",
+      "url": "open-ipp-report/",
+      "def": "Printers with the Internet Printing Protocol (631/tcp) open to anyone.",
+      "why": "Can be abused and has had critical flaws; do not expose printers."
+    },
+    "scan_isakmp": {
+      "title": "Vulnerable ISAKMP Report",
+      "severity": "medium",
+      "url": "vulnerable-isakmp-report/",
+      "def": "VPN gateways with an IKE service that has a known weakness.",
+      "why": "Patch the VPN device."
+    },
+    "scan_kubernetes": {
+      "title": "Accessible Kubernetes API Server Report",
+      "severity": "high",
+      "url": "accessible-kubernetes-api-server-report/",
+      "def": "Kubernetes API servers reachable from the internet.",
+      "why": "Controls the whole cluster; restrict access."
+    },
+    "scan_ldap_tcp": {
+      "title": "Open LDAP TCP Report",
+      "severity": "high",
+      "url": "open-ldap-tcp-report/",
+      "def": "Directory servers (LDAP 389/tcp or LDAPS 636/tcp) reachable from the internet.",
+      "why": "May leak directory data; keep internal."
+    },
+    "scan_ldap_udp": {
+      "title": "Open LDAP Report",
+      "severity": "high",
+      "url": "open-ldap-report/",
+      "def": "Directory servers answering LDAP on 389/udp from the internet.",
+      "why": "Used for DDoS amplification."
+    },
+    "scan_loop_dos": {
+      "title": "Loop DoS Report",
+      "severity": "high",
+      "url": "high-loop-dos-report/",
+      "def": "Services that can be tricked into endless reply loops with another service (application-layer loop DoS).",
+      "why": "Can be used to overload networks; update or restrict the service."
+    },
+    "scan_mdns": {
+      "title": "Open mDNS Report",
+      "severity": "medium",
+      "url": "open-mdns-report/",
+      "def": "Hosts answering multicast DNS (5353/udp) from the internet.",
+      "why": "Leaks device details and can amplify DDoS."
+    },
+    "scan_memcached": {
+      "title": "Open Memcached Report",
+      "severity": "high",
+      "url": "open-memcached-report/",
+      "def": "Memcached caches reachable from the internet.",
+      "why": "Huge DDoS amplification potential."
+    },
+    "scan_mikrotik_service": {
+      "title": "Accessible MikroTik Service Report",
+      "severity": "medium",
+      "url": "accessible-mikrotik-service-report/",
+      "def": "MikroTik routers answering the bandwidth test (btest) or WinBox management service from the internet.",
+      "why": "MikroTik routers are popular botnet targets; restrict management access and update RouterOS."
+    },
+    "scan_mongodb": {
+      "title": "Open MongoDB Report",
+      "severity": "high",
+      "url": "open-mongodb-report/",
+      "def": "MongoDB databases (27017/tcp) reachable from the internet.",
+      "why": "Often leaked or held to ransom; restrict access."
+    },
+    "scan_mqtt": {
+      "title": "Open MQTT Report",
+      "severity": "medium",
+      "url": "open-mqtt-report/",
+      "def": "IoT message brokers (MQTT 1883/8883) reachable from the internet, including ones without login.",
+      "why": "May expose or allow control of IoT devices."
+    },
+    "scan_msrpc": {
+      "title": "Accessible MS-RPC Service Report",
+      "severity": "high",
+      "url": "accessible-ms-rpc-service-report/",
+      "def": "Windows RPC services (for example 135/tcp) reachable from the internet.",
+      "why": "Should never be public; a common attack path."
+    },
+    "scan_mssql": {
+      "title": "Open MS-SQL Server Resolution Service Report",
+      "severity": "high",
+      "url": "open-ms-sql-server-resolution-service-report/",
+      "def": "Microsoft SQL Server browser service (1434/udp) reachable from the internet.",
+      "why": "Reveals database servers and can amplify DDoS."
+    },
+    "scan_mysql": {
+      "title": "Accessible MySQL Server Report",
+      "severity": "high",
+      "url": "accessible-mysql-server-report/",
+      "def": "MySQL databases (3306/tcp) answering from the internet.",
+      "why": "Databases should not be public."
+    },
+    "scan_nat_pmp": {
+      "title": "Open NAT-PMP Report",
+      "severity": "high",
+      "url": "open-nat-pmp-report/",
+      "def": "Routers answering NAT port mapping requests from the internet.",
+      "why": "Can let outsiders change router port forwarding."
+    },
+    "scan_netbios": {
+      "title": "Open NetBIOS Report",
+      "severity": "high",
+      "url": "open-netbios-report/",
+      "def": "Hosts answering Windows NetBIOS name requests from the internet.",
+      "why": "Leaks system details and can amplify DDoS."
+    },
+    "scan_ntp": {
+      "title": "NTP Version Report",
+      "severity": "medium",
+      "url": "ntp-version-report/",
+      "def": "Time servers (NTP) that answer version queries and can amplify DDoS.",
+      "why": "Restrict queries in the NTP configuration."
+    },
+    "scan_ntpmonitor": {
+      "title": "NTP Monitor Report",
+      "severity": "medium",
+      "url": "ntp-monitor-report/",
+      "def": "Time servers answering the 'monlist' query, a strong DDoS amplifier.",
+      "why": "Disable monlist or update NTP."
+    },
+    "scan_pop3": {
+      "title": "Accessible POP3 Report",
+      "severity": "low",
+      "url": "accessible-pop3-report/",
+      "def": "Mail servers with POP3 (110/tcp or 995/tcp) reachable from the internet, with their TLS details.",
+      "why": "Normal for mail servers; check for old TLS and clear-text logins."
+    },
+    "scan_portmapper": {
+      "title": "Open Portmapper Report",
+      "severity": "medium",
+      "url": "open-portmapper-report/",
+      "def": "Hosts with the RPC portmapper (111) reachable from the internet.",
+      "why": "Leaks services and amplifies DDoS."
+    },
+    "scan_postgres": {
+      "title": "Accessible PostgreSQL Server Report",
+      "severity": "high",
+      "url": "accessible-postgresql-server-report/",
+      "def": "PostgreSQL databases (5432/tcp) reachable from the internet.",
+      "why": "Databases should not be public."
+    },
+    "scan_qotd": {
+      "title": "Open QOTD Report",
+      "severity": "medium",
+      "url": "open-qotd-report/",
+      "def": "Hosts running the old Quote of the Day service on the internet.",
+      "why": "Used for DDoS amplification; switch it off."
+    },
+    "scan_quic": {
+      "title": "Accessible QUIC Report",
+      "severity": "info",
+      "url": "accessible-quic-report/",
+      "def": "Services using the QUIC transport reachable from the internet.",
+      "why": "An inventory."
+    },
+    "scan_radmin": {
+      "title": "Accessible Radmin Report",
+      "severity": "high",
+      "url": "accessible-radmin-report/",
+      "def": "Radmin remote control services (4899/tcp) reachable from the internet.",
+      "why": "Remote access tools are prime targets; put them behind a VPN."
+    },
+    "scan_rdp": {
+      "title": "Accessible RDP Report",
+      "severity": "high",
+      "url": "accessible-rdp-report/",
+      "def": "Windows Remote Desktop (RDP) reachable from the internet.",
+      "why": "A leading ransomware entry point; put RDP behind a VPN."
+    },
+    "scan_rdpeudp": {
+      "title": "Accessible MS-RDPEUDP Report",
+      "severity": "high",
+      "url": "accessible-ms-rdpeudp/",
+      "def": "Remote Desktop over UDP (3389/udp) reachable from the internet.",
+      "why": "Exposes RDP and can amplify DDoS."
+    },
+    "scan_redis": {
+      "title": "Open Redis Report",
+      "severity": "high",
+      "url": "open-redis-report/",
+      "def": "Redis databases reachable from the internet without a password.",
+      "why": "Often taken over to run code; restrict immediately."
+    },
+    "scan_rsync": {
+      "title": "Accessible Rsync Report",
+      "severity": "medium",
+      "url": "accessible-rsync-report/",
+      "def": "rsync file services reachable from the internet without a password.",
+      "why": "May expose files or backups."
+    },
+    "scan_sip": {
+      "title": "Accessible SIP Report",
+      "severity": "high",
+      "url": "accessible-sip-report/",
+      "def": "VoIP (SIP) services reachable from the internet.",
+      "why": "Targeted for toll fraud; restrict access."
+    },
+    "scan_slp": {
+      "title": "Accessible SLP Service Report",
+      "severity": "high",
+      "url": "accessible-slp-service-report/",
+      "def": "Service Location Protocol (427) reachable from the internet.",
+      "why": "Very high DDoS amplification and known flaws."
+    },
+    "scan_smb": {
+      "title": "Accessible SMB Report",
+      "severity": "high",
+      "url": "accessible-smb-report/",
+      "def": "Windows file sharing (SMB, 445/tcp) reachable from the internet.",
+      "why": "A favourite target of worms and ransomware; block it at the border."
+    },
+    "scan_smtp": {
+      "title": "Accessible SMTP Report",
+      "severity": "info",
+      "url": "accessible-smtp-report/",
+      "def": "Mail transfer servers (SMTP) reachable from the internet, with their TLS details.",
+      "why": "Normal for mail servers; check for open relays and old TLS."
+    },
+    "scan_snmp": {
+      "title": "Open SNMP Report",
+      "severity": "high",
+      "url": "open-snmp-report/",
+      "def": "Devices answering SNMP with the default 'public' community from the internet.",
+      "why": "Leaks configuration and amplifies DDoS."
+    },
+    "scan_socks": {
+      "title": "Accessible SOCKS 4/5 Proxy Report",
+      "severity": "medium",
+      "url": "accessible-socks4-5-proxy-report/",
+      "def": "SOCKS proxies (1080/tcp) reachable from the internet.",
+      "why": "Can be abused to relay attacks."
+    },
+    "scan_ssdp": {
+      "title": "Open SSDP Report",
+      "severity": "high",
+      "url": "open-ssdp-report/",
+      "def": "Devices answering UPnP discovery (SSDP, 1900/udp) from the internet.",
+      "why": "A common DDoS amplifier; disable UPnP on the WAN side."
+    },
+    "scan_ssh": {
+      "title": "Accessible SSH Report",
+      "severity": "info",
+      "url": "accessible-ssh-report/",
+      "def": "SSH servers reachable from the internet, with software version and supported algorithms.",
+      "why": "Check for outdated versions and weaknesses such as Terrapin (CVE-2023-48795)."
+    },
+    "scan_ssl": {
+      "title": "Accessible SSL Report",
+      "severity": "info",
+      "url": "accessible-ssl-report/",
+      "def": "SSL/TLS services reachable from the internet, with certificate and encryption details.",
+      "why": "Look for expired or self-signed certificates and VPN or admin portals."
+    },
+    "scan_ssl_freak": {
+      "title": "SSL FREAK Report",
+      "severity": "low",
+      "url": "ssl-freak-report/",
+      "def": "Servers that still accept weak 'export-grade' RSA ciphers (FREAK).",
+      "why": "Disable export ciphers."
+    },
+    "scan_ssl_poodle": {
+      "title": "SSL POODLE Report",
+      "severity": "low",
+      "url": "ssl-poodle-report/",
+      "def": "Servers that still accept SSL 3.0, which is open to the POODLE attack.",
+      "why": "Disable SSL 3.0."
+    },
+    "scan_stun": {
+      "title": "Accessible STUN Service Report",
+      "severity": "medium",
+      "url": "accessible-stun-service-report/",
+      "def": "STUN servers (3478/udp, used by VoIP and video calls) reachable from the internet.",
+      "why": "Can amplify DDoS."
+    },
+    "scan_telnet": {
+      "title": "Accessible Telnet Report",
+      "severity": "medium",
+      "url": "accessible-telnet-report/",
+      "def": "Telnet logins (23/tcp and others) reachable from the internet.",
+      "why": "Clear-text logins and a top botnet target; disable Telnet."
+    },
+    "scan_tftp": {
+      "title": "Open TFTP Report",
+      "severity": "medium",
+      "url": "open-accessible-tftp-report/",
+      "def": "TFTP file services reachable from the internet.",
+      "why": "Often leaks device configurations."
+    },
+    "scan_ubiquiti": {
+      "title": "Open Ubiquiti Report",
+      "severity": "high",
+      "url": "open-ubiquiti-report/",
+      "def": "Ubiquiti devices answering their discovery service (10001/udp) from the internet.",
+      "why": "Leaks device details and amplifies DDoS."
+    },
+    "scan_vnc": {
+      "title": "Accessible VNC Report",
+      "severity": "high",
+      "url": "accessible-vnc-report/",
+      "def": "VNC remote desktop services reachable from the internet.",
+      "why": "Remote screens are often weakly protected; restrict access."
+    },
+    "scan_ws_discovery": {
+      "title": "Accessible WS-Discovery Service Report",
+      "severity": "medium",
+      "url": "accessible-ws-discovery-service-report/",
+      "def": "Devices answering WS-Discovery (3702/udp, printers and cameras) from the internet.",
+      "why": "Strong DDoS amplifier."
+    },
+    "scan_xdmcp": {
+      "title": "Accessible XDMCP Service Report",
+      "severity": "high",
+      "url": "accessible-xdmcp-service-report/",
+      "def": "X display managers (XDMCP) reachable from the internet.",
+      "why": "Remote desktop login and amplification."
+    }
+  },
+  "_verified": "2026-11-07: every collection was matched to its report by file name (MongoDB filename / category = collection name) and the 'Filename' line on Shadowserver's report page. population_bgp is the population variant of scan_bgp; scan_mikrotik_service is listed as 'scan_miktrotik_service' (typo) on Shadowserver's page; the NTRIP and Radmin pages list no file name."
+}

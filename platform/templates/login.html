@@ -1,0 +1,78 @@
+{% extends "auth_base.html" %}
+{% from "_pw.html" import pw %}
+{% block title %}Sign in{% endblock %}
+{% block card %}
+<div class="auth-card" id="authCard" data-view="{{ view }}">
+  <img class="auth-logo" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="44" height="44">
+  {% if error %}<div class="auth-alert err" role="alert">{{ error }}</div>{% endif %}
+  {% if notice %}<div class="auth-alert ok" role="status">{{ notice }}</div>{% endif %}
+  {% if not tls %}<div class="auth-alert err" role="alert">This connection is not encrypted. Open Looking Glass over HTTPS from this computer.</div>{% endif %}
+
+  <!-- choice -->
+  <section class="auth-view" data-v="choice">
+    {% if no_admin %}
+      {% if local %}
+      <h1>Welcome to Looking Glass</h1>
+      <p class="auth-sub">Set up the administrator account.</p>
+      <button type="button" class="auth-btn" data-show="register"><span>Let's get started</span></button>
+      {% else %}
+      <h1>Not set up yet</h1>
+      <p class="auth-sub">An administrator must create the first account on the server itself.</p>
+      {% endif %}
+    {% else %}
+      <h1>Welcome</h1>
+      <p class="auth-sub">Sign in to your account, or request access.</p>
+      <button type="button" class="auth-btn" data-show="signin"><span>Sign in</span></button>
+      {% if registration %}<button type="button" class="auth-btn ghost" data-show="register"><span>Create an account</span></button>{% endif %}
+      <div class="auth-links"><a href="/forgot">Forgot password?</a></div>
+    {% endif %}
+  </section>
+
+  <!-- sign in -->
+  {% if not no_admin %}
+  <form class="auth-view" data-v="signin" method="post" action="/login" autocomplete="on">
+    <h1>Sign in</h1>
+    <div class="fl"><input id="s-user" name="username" placeholder=" " autocomplete="username" required maxlength="40" value="{{ username or '' }}"><label for="s-user">User name</label></div>
+    {{ pw("s-pw", "password", "Password", "current-password") }}
+    <label class="auth-check"><input type="checkbox" name="remember" value="1"><span>Stay signed in</span></label>
+    <input type="hidden" name="next" value="{{ next }}">
+    <button class="auth-btn" type="submit"><span>Continue</span></button>
+    <div class="auth-links"><button type="button" class="auth-back" data-show="choice">Back</button><a href="/forgot">Forgot password?</a></div>
+  </form>
+  {% endif %}
+
+  <!-- create an account -->
+  {% if registration and (local or not no_admin) %}
+  <form class="auth-view" data-v="register" method="post" action="/register" autocomplete="off">
+    <h1>{% if no_admin %}Administrator account{% else %}Create an account{% endif %}</h1>
+    <ol class="auth-steps" aria-label="Steps"><li class="on">Details</li><li>Authenticator</li><li>Recovery codes</li></ol>
+    <div class="auth-grid">
+      <div class="fl"><input id="r-name" name="full_name" placeholder=" " autocomplete="name" required minlength="2" maxlength="100" data-person="Full name" value="{{ form.full_name or '' }}"><label for="r-name">Full name</label></div>
+      <div class="fl"><input id="r-org" name="organisation" placeholder=" " autocomplete="organization" required minlength="2" maxlength="100" data-person="Organisation" value="{{ form.organisation or '' }}"><label for="r-org">Organisation</label></div>
+      <div class="fl"><input id="r-mail" name="email" type="email" placeholder=" " autocomplete="email" required maxlength="254" data-email spellcheck="false" autocapitalize="off" value="{{ form.email or '' }}"><label for="r-mail">Email</label></div>
+      <div class="fl sel"><select id="r-country" name="country" class="lg-enhance" required>{% set sel = form.country or default_country %}{% for code, cname in countries %}<option value="{{ code }}"{% if code == sel %} selected{% endif %}>{{ cname }}</option>{% endfor %}</select><label for="r-country">Country</label></div>
+      <div class="fl wide"><input id="r-user" name="username" placeholder=" " autocomplete="username" required minlength="2" maxlength="40" pattern="[A-Za-z0-9._\-]{2,40}" value="{{ form.username or '' }}"><label for="r-user">User name (to sign in)</label></div>
+      <div class="wide">{{ pw("r-pw", "password", "Password", "new-password", meter=True, minlength=12) }}</div>
+      <div class="wide">{{ pw("r-pw2", "password2", "Repeat password", "new-password", match="r-pw", minlength=12) }}</div>
+    </div>
+    <button class="auth-btn" type="submit"><span>Continue</span></button>
+    {% if not no_admin %}<div class="auth-links"><button type="button" class="auth-back" data-show="choice">Back</button></div>{% endif %}
+  </form>
+  {% endif %}
+
+  <!-- second step: authenticator code -->
+  {% if view == "mfa" %}
+  <form class="auth-view" data-v="mfa" method="post" action="/login" autocomplete="off">
+    <h1>Verify it's you</h1>
+    <p class="auth-sub">Enter the code from your authenticator app.</p>
+    <div class="fl"><input id="m-code" name="code" placeholder=" " inputmode="numeric" autocomplete="one-time-code" required maxlength="14"><label for="m-code">Authentication code</label></div>
+    <input type="hidden" name="step" value="mfa">
+    <input type="hidden" name="next" value="{{ next }}">
+    <button class="auth-btn" type="submit"><span>Verify</span></button>
+    <p class="auth-hint">Lost your phone? Enter one of your recovery codes instead.</p>
+    <div class="auth-links"><a href="/login?form=signin">Back</a></div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/auth-card.js') }}"></script>{% endblock %}

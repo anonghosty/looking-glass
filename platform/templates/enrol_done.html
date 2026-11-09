@@ -1,0 +1,20 @@
+{% extends "auth_base.html" %}
+{% block title %}Recovery codes{% endblock %}
+{% block referrer %}same-origin{% endblock %}
+{% block card %}
+<div class="auth-card">
+  <h1>Recovery codes</h1>
+  <ol class="auth-steps" aria-label="Steps"><li class="done">Account</li><li class="done">Authenticator</li><li class="on">Recovery codes</li></ol>
+  <p class="auth-sub">Each code signs you in once if your phone is unavailable. They are shown only now.</p>
+  <ul class="auth-codes">{% for c in codes %}<li>{{ c }}</li>{% endfor %}</ul>
+  <button type="button" class="auth-btn ghost" id="copyCodes"><span>Copy codes</span></button>
+  {% if status == "active" %}
+  <div class="auth-alert ok" role="status">Account {{ name }} is active.</div>
+  <a class="auth-btn" href="/login"><span>Sign in</span></a>
+  {% else %}
+  <div class="auth-alert ok" role="status">Account {{ name }} is waiting for approval by an administrator.</div>
+  <a class="auth-btn" href="/login"><span>Back to sign in</span></a>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/enrol.js') }}"></script>{% endblock %}
