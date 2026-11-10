@@ -96,7 +96,14 @@ def install(app, ctx):
     paths = {"ids": os.path.join(ctx["base_dir"], "data", "acodes")}       # data/acodes/<code>.json (tests point it elsewhere)
 
     def ids_path(code):
-        return os.path.join(paths["ids"], f"{code}.json")
+        """data/acodes/<code>.json, only for a well-formed analyst code and only inside that folder."""
+        if not ACODE_RX.match(code or ""):
+            raise ValueError("not an analyst code")
+        base = os.path.realpath(paths["ids"])
+        p = os.path.realpath(os.path.join(base, f"{code}.json"))
+        if not p.startswith(base + os.sep):
+            raise ValueError("not an analyst code")
+        return p
 
     def save_ids(code, evs):
         """The exact records of the selection when the analyst made the code: every role then sees exactly these, whatever

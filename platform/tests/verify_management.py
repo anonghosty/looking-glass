@@ -216,8 +216,9 @@ for plat, key, rows, ipk, items_of, ev, skip, unit, part in cases:
            f"row said {r['count']:,}, MongoDB {len(ips):,} {unit} / {len(sel):,} records, list now {[x['label'][:30] for x in rows_after][:3]}")
 # with another filter on top: the combination inside one region
 reg = d0["facets"]["region"][0]
-top = d0["multi"]["combos"][0]["label"]
 d = api("/api/mgmt/comms", [("region", reg)])
+# the region's own most common combination: the country's top one need not occur in this region on every day
+top = (d["multi"]["combos"] or d0["multi"]["combos"])[0]["label"]
 r_in = next((x for x in d["multi"]["combos"] if x["label"] == top), None)
 ips, sel = exact([e for e in EV if L.title(e["src_region"]) == reg], "src_ip", lambda e: {e["infection"] or "unknown"}, top)
 d2 = api("/api/mgmt/comms", [("region", reg), ("icombo", top)])

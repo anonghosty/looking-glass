@@ -718,12 +718,17 @@ def install(app, ctx):
         """A finished search after a restart: (meta, zip bytes) if it is still on disk and younger than an hour."""
         if not re.fullmatch(r"[0-9a-f]{16}", jid or ""):
             return None, None
+        base = os.path.realpath(out_dir)
+        meta_p = os.path.realpath(os.path.join(base, jid + ".json"))
+        zip_p = os.path.realpath(os.path.join(base, jid + ".zip"))
+        if not (meta_p.startswith(base + os.sep) and zip_p.startswith(base + os.sep)):
+            return None, None                     # never outside data/combo_exports
         try:
-            with open(os.path.join(out_dir, jid + ".json"), encoding="utf-8") as f:
+            with open(meta_p, encoding="utf-8") as f:
                 meta = json.load(f)
             if time.time() - meta.get("at", 0) > JOB_TTL:
                 return None, None
-            with open(os.path.join(out_dir, jid + ".zip"), "rb") as f:
+            with open(zip_p, "rb") as f:
                 return meta, f.read()
         except (OSError, ValueError):
             return None, None
