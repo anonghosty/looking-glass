@@ -254,7 +254,7 @@ A new finding a researcher records on a name (the C2 moved, seen together with a
 A short code for one exact combination Intel gathered shows: LG-C-… for one report (the records that carry exactly these indicators), LG-X-… for a cross-report pattern (what a device carried in each of several reports). The same combination always has the same code, and a code carries no address, so researchers and management can pass it on in notes and reports; an analyst pastes it on the Combinations page to get exactly those devices.
 
 **Combination search**  
-The analysts' page (/combinations) that turns a combination code into the devices behind it, over the days in memory or up to 31 days of stored history, with a PDF summary (region map, researchers' notes, across reports) and CSV files of the devices and records. It lists real addresses, so it is only for roles that see them and may export, and is off in Demo mode.
+The analysts' page (/combinations) that turns a combination code into the devices behind it, over the days in memory or up to 31 days of stored history, with a PDF summary (region map, across reports, each name and CVE explained with its references, and the researchers' notes on every name) and CSV files of the devices and records. A chart with nothing to show is left out of the PDF. It lists real addresses, so it is only for roles that see them and may export, and is off in Demo mode.
 
 **Analyst code (LG-A)**  
 A code for exactly the records of an analyst's selection on one day (for example a network and one host), made in an analysis window. It becomes a finding: researchers open it without any address and answer with their own codes, management filters the Executive portal by it, and analysts report on it again from the Combinations page.

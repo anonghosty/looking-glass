@@ -32,8 +32,9 @@ against the trends, an analyst pulls exactly those devices and writes the adviso
   a map of the country's regions (hover a region for its devices, cities, networks and IP addresses), networks,
   cities, activity by hour, what the devices are, ports and the busiest devices. The download is a ZIP with a PDF in the
   Executive report's design (overview and key findings, the region map with each region's cities, the devices with
-  their addresses, across reports, and the explanations of the name and every CVE in the combination with the
-  researchers' notes) and two CSV files (one row per device, one per record). A finished search survives a service
+  their addresses, across reports, and the explanations of the name (each name, for an analyst code) and every CVE
+  in the combination, each with its references and where it comes from, with the researchers' notes on those names;
+  a chart with nothing to show is left out) and two CSV files (one row per device, one per record). A finished search survives a service
   restart for an hour; an expired one is run again by the download button. Off in Demo mode; every search is in the
   audit log.
 - **Findings** (`/findings`). A note can be tracked as a finding: it gets a number and a status (*New → With

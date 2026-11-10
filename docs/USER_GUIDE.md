@@ -313,7 +313,10 @@ or the Findings page) is for roles that see addresses and may export:
    pattern with its own `LG-X` code to search next.
 4. **Download PDF + CSV (ZIP)**: a PDF in the Executive report's design (overview with key findings and activity, the
    region map with its cities, networks and cities, the devices with their addresses, across reports, and the
-   explanations of the name and of every CVE in the combination, with the researchers' notes) and two CSV files: one
+   explanations of the name (each name, for an analyst code) and of every CVE in the combination, each with its
+   references as links and where it comes from, and the researchers' notes on those names, or a line saying there are
+   none yet; a chart with nothing to show, such as across reports when no device was in another report, is left out)
+   and two CSV files: one
    row per device (with the other reports it was seen in and its cross-report code) and one row per record. The columns
    have fixed names, ready for enrichment and dashboards. If the search has expired (after an hour), the button runs it
    again and then downloads.
