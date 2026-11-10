@@ -12,24 +12,27 @@ works out, for every report type:
   data/report_map_local.json win over both);
 * the affected thing: a host, an e-mail account, an organisation, a URL.
 
-Kept current (loop(), started by app.py when it serves):
-* daily, one request for the schema repository's latest commit; only when it moved are the files downloaded, checked
-  and the map rebuilt; a new report type is placed by the rules at once and flagged ("check its place"), a changed one
-  (section, group, severity, title) is noted;
-* every 30 minutes, the report collections in the database: one the map does not know is placed from its fields and
-  flagged, so nothing that arrives stays invisible;
-* each report's page on shadowserver.org (its description, last-updated date and field meanings), at most weekly per
-  page, slowly, with conditional requests; a changed description is noted.
-A failed or unreadable download keeps the last good copy. A fresh installation uses data/report_map_snapshot.json
-(shipped: the map and the schema facts it was built from, no description text) until the first update.
+Two roles, so that Shadowserver is asked once, not by every installation:
 
-Files: data/report_map_rules.json (shipped, curated), data/report_map_snapshot.json (shipped), data/report_map.json
-(run time: the map, its status and the events), data/report_map_local.json (run time: administrators' moves),
-data/report_schema/ (run time: the downloaded schema), data/shadowserver_reports.json (run time: the descriptions).
+* The FEED BUILDER (FeedBuilder; run by the maintainer's own deployment, looking-glass-feed-builder): the only thing that contacts
+  Shadowserver. Daily it asks their GitHub whether the schema changed (one request) and downloads it only then; it reads
+  the report pages that are due (each at most weekly, slowly, conditional requests); it writes feed/report_feed.json in
+  the Looking Glass repository, which the deployment commits and pushes when something changed. Shadowserver's
+  description text stays in the builder's own state folder unless FEED_INCLUDE_TEXT=1 (their permission first).
+* Every INSTALLATION (ReportMap; loop() started by app.py): once a day, after 06:30 GMT (the builder runs at 06:00),
+  one conditional request for that file on GitHub; the map is rebuilt locally from its facts with this installation's rules. Every 30 minutes, the report
+  collections in the database: one the map does not know is placed from its fields and flagged. An installation never
+  contacts Shadowserver. A failed or unreadable feed keeps the last good copy; before the first one, the shipped
+  data/report_map_snapshot.json is used.
+
+Files (installation): data/report_map_rules.json and data/report_map_snapshot.json (shipped), data/report_map.json
+(the map, its facts, status and events), data/report_map_local.json (administrators' moves),
+data/shadowserver_reports.json (what the feed says about each report page).
 
 Command line (from the platform folder):
-  .venv/bin/python report_map.py --update [--force] [--descriptions N] [--arrivals]   check now and print a summary
-  .venv/bin/python report_map.py --snapshot                                        write the shipped snapshot
+  .venv/bin/python report_map.py --update [--force] [--arrivals]     pull the feed now (installation) and print a summary
+  .venv/bin/python report_map.py --snapshot                          write the shipped snapshot (maintainers)
+  python3 report_map.py --build-feed OUT_DIR --state STATE_DIR [--pages N] [--text]   the feed builder
 """
 import hashlib
 import html as _html
@@ -41,29 +44,40 @@ import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
-from email.utils import formatdate, parsedate_to_datetime
 
 REPO = "The-Shadowserver-Foundation/report_schema"
 API_COMMIT = f"https://api.github.com/repos/{REPO}/commits/main"
 RAW = "https://raw.githubusercontent.com/" + REPO + "/{sha}/{file}"
 SS_BASE = "https://www.shadowserver.org/what-we-do/network-reporting/"
+FEED_URL = "https://raw.githubusercontent.com/anonghosty/looking-glass/main/feed/report_feed.json"
+FEED_FORMAT = 1
 UA = "LookingGlass-report-map/1 (+https://github.com/anonghosty/looking-glass)"
 SCHEMA_FILES = ("reports.json", "types.md")
-MAX_BYTES = 4_000_000                     # a schema file or page larger than this is not what we expect
-MIN_REPORTS = 100                         # a reports.json with fewer types than this is refused
-SCHEMA_EVERY = 24 * 3600
+MAX_BYTES = 4_000_000                     # a schema file, page or feed larger than this is not what we expect
+MIN_REPORTS = 100                         # a schema or feed with fewer report types than this is refused
+FEED_READ_AT = (6, 30)                    # installations: the feed once a day, after 06:30 GMT (the builder runs at 06:00)
 ARRIVALS_EVERY = 30 * 60
-PAGE_EVERY = 7 * 24 * 3600                # each report page at most weekly
-PAGES_PER_RUN = 30
+PAGE_EVERY = 7 * 24 * 3600                # the builder: each report page at most weekly
+PAGES_PER_RUN = 40
 PAGE_DELAY = 3.0                          # seconds between two page requests
 EVENTS_KEPT = 300
 NO_REPORT = ("files_", "discovered_fields_", "system.")
 PLATFORM_COMMS, PLATFORM_SVC, PLATFORM_NONE = "Network communications", "Publicly accessible services", "none yet (no IP address)"
 UNPLACED = "Not yet placed: check"
+PAGE_FACTS = ("title", "last_updated", "severity", "filenames", "field_names", "hash", "fetched")    # always in the feed
+#  (no check times or errors: the feed changes, and is committed, only when what a page says changes)
+PAGE_TEXT = ("blocks", "description", "notes", "fields")                                              # only with their OK
 
 
 def _now():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _age(stamp):
+    try:
+        return (datetime.now(timezone.utc) - datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))).total_seconds()
+    except ValueError:
+        return float("inf")
 
 
 def _read(path, default=None):
@@ -75,10 +89,10 @@ def _read(path, default=None):
 
 
 def _write(path, data):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     tmp = f"{path}.{os.getpid()}.tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=1, ensure_ascii=False)
+        json.dump(data, f, indent=1, ensure_ascii=False, sort_keys=True)
     os.replace(tmp, path)
 
 
@@ -95,6 +109,10 @@ def _get(url, headers=None, timeout=25):
         if e.code == 304:
             return 304, b"", dict(e.headers or {})
         raise
+
+
+def _h(headers, name):
+    return next((v for k, v in (headers or {}).items() if k.lower() == name.lower()), "")
 
 
 # ------------------------------------------------------------------ the schema files
@@ -137,6 +155,12 @@ def check_schema(reports_json, types):
     if len(types) < MIN_REPORTS:
         probs.append(f"types.md has {len(types)} report types (expected at least {MIN_REPORTS})")
     return probs
+
+
+def check_facts(facts):
+    ok = isinstance(facts, dict) and len(facts) >= MIN_REPORTS and \
+        sum(1 for f in facts.values() if isinstance(f, dict) and f.get("fields")) >= MIN_REPORTS
+    return [] if ok else [f"the facts hold {len(facts) if isinstance(facts, dict) else 0} report types (expected at least {MIN_REPORTS})"]
 
 
 # ------------------------------------------------------------------ the placement logic
@@ -208,11 +232,9 @@ def place(k, facts, rules, local=None):
                     ("administrator", ((local or {}).get("overrides") or {}).get(k))):
         if ov:
             section, group, placed_by = ov.get("section", section), ov.get("group", group), src
-    url = a.get("url") or ""
-    return {"report": k, "title": a.get("title") or k, "severity": a.get("severity") or "", "url": url,
+    return {"report": k, "title": a.get("title") or k, "severity": a.get("severity") or "", "url": a.get("url") or "",
             "taxonomy": tax, "type": typ, "classified": how, "platform": platform, "section": section, "group": group,
-            "affected": affected, "has_ip": has_ip, "placed_by": placed_by,
-            "in_schema": bool(a.get("fields") or a.get("taxonomy") or a.get("title") != k)}
+            "affected": affected, "has_ip": has_ip, "placed_by": placed_by, "in_schema": True}
 
 
 def build(facts, rules, local=None):
@@ -305,16 +327,123 @@ def parse_page(page):
     return out if (out["description"] or out["fields"]) else None
 
 
-# ------------------------------------------------------------------ the map, kept up to date
+def page_digest(p):
+    return hashlib.sha256(json.dumps([p.get("description"), p.get("fields")], sort_keys=True).encode()).hexdigest()
+
+
+# ------------------------------------------------------------------ the feed builder (the only one asking Shadowserver)
+
+class FeedBuilder:
+    """Builds feed/report_feed.json from Shadowserver's schema and report pages. state_dir is private (the downloaded
+    schema, every page read, with their text); out_dir is the repository's feed/ folder (published)."""
+
+    def __init__(self, out_dir, state_dir, include_text=False, logger=None):
+        self.out, self.state, self.text, self.log = out_dir, state_dir, include_text, logger
+        self.p = {"schema": os.path.join(state_dir, "schema"), "pages": os.path.join(state_dir, "pages.json"),
+                  "status": os.path.join(state_dir, "status.json"), "feed": os.path.join(out_dir, "report_feed.json")}
+
+    def schema(self, force=False):
+        """(facts, commit, note): Shadowserver's schema, downloaded only when their repository moved."""
+        st = _read(self.p["status"], {}) or {}
+        cached = None
+        try:
+            rj = _read(os.path.join(self.p["schema"], "reports.json"))
+            with open(os.path.join(self.p["schema"], "types.md"), encoding="utf-8") as f:
+                types = parse_types_md(f.read())
+            if rj and not check_schema(rj, types):
+                cached = schema_facts(rj, types)
+        except OSError:
+            pass
+        try:
+            _, body, _ = _get(API_COMMIT, {"Accept": "application/vnd.github.sha"})
+            sha = body.decode().strip()
+            if not re.match(r"^[0-9a-f]{40}$", sha):
+                raise ValueError("unexpected answer for the latest commit")
+            if cached and sha == st.get("schema_commit") and not force:
+                return cached, sha, f"schema unchanged ({sha[:7]})"
+            got = {fn: _get(RAW.format(sha=sha, file=fn))[1].decode("utf-8") for fn in SCHEMA_FILES}
+            rj, types = json.loads(got["reports.json"]), parse_types_md(got["types.md"])
+            probs = check_schema(rj, types)
+            if probs:
+                raise ValueError("; ".join(probs))
+            os.makedirs(self.p["schema"], exist_ok=True)
+            for fn, txt in got.items():
+                with open(os.path.join(self.p["schema"], fn), "w", encoding="utf-8") as f:
+                    f.write(txt)
+            _write(self.p["status"], dict(st, schema_commit=sha, schema_updated=_now(), schema_error=""))
+            return schema_facts(rj, types), sha, f"schema {sha[:7]} downloaded: {len(rj)} report types"
+        except Exception as exc:                                   # noqa: BLE001  (the last good copy is kept)
+            _write(self.p["status"], dict(st, schema_error=f"{type(exc).__name__}: {str(exc)[:200]}", schema_failed=_now()))
+            if cached:
+                return cached, st.get("schema_commit", ""), f"schema check failed, last good copy kept: {exc}"
+            raise
+
+    def pages(self, facts, limit=PAGES_PER_RUN, delay=PAGE_DELAY):
+        """The report pages that are due (each at most weekly), read slowly with conditional requests."""
+        store = _read(self.p["pages"], {}) or {}
+        urls = sorted({f["url"] for f in facts.values() if (f.get("url") or "").startswith(SS_BASE)})
+        due = sorted((u for u in urls if _age((store.get(u) or {}).get("checked", "")) > PAGE_EVERY),
+                     key=lambda u: (store.get(u) or {}).get("checked", ""))
+        done = changed = failed = 0
+        for u in due[:limit]:
+            if done:
+                time.sleep(delay)
+            done += 1
+            p = store.get(u) or {}
+            hdr = {"If-Modified-Since": p["last_modified"]} if p.get("last_modified") else {}
+            try:
+                code, body, h = _get(u, hdr)
+                if code == 304:
+                    p.update(checked=_now(), error="")
+                else:
+                    parsed = parse_page(body.decode("utf-8", "replace"))
+                    if not parsed:
+                        raise ValueError("no description found on the page")
+                    digest = page_digest(parsed)
+                    if p.get("hash") and p["hash"] != digest:
+                        changed += 1
+                    p = dict(parsed, hash=digest, last_modified=_h(h, "Last-Modified"),
+                             fetched=_now() if p.get("hash") != digest else p.get("fetched", _now()), checked=_now(), error="")
+            except Exception as exc:                               # noqa: BLE001  (the last good copy stays; retried in 6 hours)
+                failed += 1
+                retry = datetime.now(timezone.utc) - timedelta(seconds=PAGE_EVERY - 6 * 3600)
+                p.update(checked=retry.strftime("%Y-%m-%dT%H:%M:%SZ"), error=f"{type(exc).__name__}: {str(exc)[:160]}")
+            store[u] = p
+        _write(self.p["pages"], store)
+        return store, f"pages: {done} read of {len(due)} due ({len(urls)} in all), {changed} changed, {failed} failed"
+
+    def build(self, force=False, limit=PAGES_PER_RUN, delay=PAGE_DELAY):
+        """Write feed/report_feed.json when something changed. Returns (changed?, summary)."""
+        facts, commit, n1 = self.schema(force)
+        store, n2 = self.pages(facts, limit, delay)
+        keep = PAGE_FACTS + (PAGE_TEXT if self.text else ())
+        pages = {u: {k: v for k, v in dict(p, field_names=sorted(p.get("fields") or {})).items() if k in keep}
+                 for u, p in sorted(store.items()) if p.get("hash")}
+        body = {"format": FEED_FORMAT, "schema_commit": commit, "text_included": bool(self.text), "facts": facts, "pages": pages}
+        old = _read(self.p["feed"], {}) or {}
+        same = {k: v for k, v in old.items() if k not in ("_about", "built")} == \
+               {k: v for k, v in json.loads(json.dumps(body)).items()}
+        if same and not force:
+            return False, f"{n1}; {n2}; feed unchanged"
+        feed = dict(body, built=_now(), _about=(
+            "Looking Glass report feed: Shadowserver's report types (from github.com/" + REPO + ") and what each report "
+            "page on shadowserver.org says, gathered once by the Looking Glass feed builder so that installations never "
+            "need to ask Shadowserver. Source: The Shadowserver Foundation." +
+            ("" if self.text else " Description text is not included; each page is linked.")))
+        _write(self.p["feed"], feed)
+        return True, f"{n1}; {n2}; feed written ({len(facts)} report types, {len(pages)} pages)"
+
+
+# ------------------------------------------------------------------ an installation's map
 
 class ReportMap:
-    def __init__(self, base_dir, collections=None, fields_of=None, logger=None):
+    def __init__(self, base_dir, collections=None, fields_of=None, logger=None, feed_url=None):
         d = os.path.join(base_dir, "data")
         self.paths = {"rules": os.path.join(d, "report_map_rules.json"), "snapshot": os.path.join(d, "report_map_snapshot.json"),
                       "map": os.path.join(d, "report_map.json"), "local": os.path.join(d, "report_map_local.json"),
-                      "schema": os.path.join(d, "report_schema"), "pages": os.path.join(d, "shadowserver_reports.json"),
-                      "lock": os.path.join(d, ".report_map.lock")}
+                      "pages": os.path.join(d, "shadowserver_reports.json"), "lock": os.path.join(d, ".report_map.lock")}
         self.collections, self.fields_of, self.log = collections, fields_of, logger
+        self.feed_url = feed_url or os.environ.get("REPORT_MAP_FEED_URL") or FEED_URL
         self.lock = threading.RLock()
         self._cache = {"mtime": None, "data": None}
 
@@ -326,7 +455,7 @@ class ReportMap:
         return _read(self.paths["local"], {}) or {}
 
     def get(self):
-        """The current map: the run-time one, else the shipped snapshot. {reports, status, events}"""
+        """The current map: the run-time one, else the shipped snapshot. {reports, facts, status, events}"""
         for key in ("map", "snapshot"):
             p = self.paths[key]
             try:
@@ -341,7 +470,7 @@ class ReportMap:
                 d["status"]["source"] = "updated here" if key == "map" else "shipped snapshot"
                 self._cache = {"mtime": m, "data": d}
             return self._cache["data"]
-        return {"reports": {}, "status": {"source": "none"}, "events": []}
+        return {"reports": {}, "facts": {}, "status": {"source": "none"}, "events": []}
 
     def entry(self, name):
         return self.get()["reports"].get(name)
@@ -354,80 +483,88 @@ class ReportMap:
         return (self.descriptions().get("pages") or {}).get(e.get("url") or "")
 
     # ---- writing
-    def _base(self):
-        """The facts to build from: the downloaded schema, else the snapshot's."""
-        raw = {f: os.path.join(self.paths["schema"], f) for f in SCHEMA_FILES}
-        try:
-            rj = _read(raw["reports.json"])
-            with open(raw["types.md"], encoding="utf-8") as f:
-                types = parse_types_md(f.read())
-            if rj and not check_schema(rj, types):
-                return schema_facts(rj, types), _read(os.path.join(self.paths["schema"], "commit.json"), {}).get("sha", "")
-        except OSError:
-            pass
+    def _facts(self):
+        cur = self.get()
+        if cur.get("facts"):
+            return cur["facts"], (cur.get("status") or {}).get("schema_commit", "")
         snap = _read(self.paths["snapshot"], {}) or {}
         return snap.get("facts") or {}, (snap.get("status") or {}).get("schema_commit", "")
 
-    def rebuild(self, facts=None, commit=None, note=None):
+    def _save(self, data):
+        data = dict(data)
+        data["status"] = {k: v for k, v in (data.get("status") or {}).items() if k != "source"}
+        _write(self.paths["map"], data)
+        self._cache = {"mtime": None, "data": None}
+
+    def rebuild(self, facts=None, commit=None, note=None, events=None):
         """Build the map from the facts with the current rules and the administrators' moves; record what changed."""
         with self.lock:
             if facts is None:
-                facts, commit = self._base()
+                facts, commit = self._facts()
             cur = self.get()
             extra = {k: v for k, v in (cur.get("facts_db") or {}).items() if k not in facts}   # seen only in the database
             reports = build({**facts, **extra}, self.rules(), self.local())
             for k in extra:
-                reports[k]["in_schema"] = False
-                reports[k]["flag"] = "not in Shadowserver's schema: placed from its fields"
+                reports[k].update(in_schema=False, flag="not in Shadowserver's schema: placed from its fields")
             when = _now()
-            ev = diff(cur.get("reports") or {}, reports, when) if cur.get("reports") else []
+            ev = (events or []) + (diff(cur.get("reports") or {}, reports, when) if cur.get("reports") else [])
             status = dict(cur.get("status") or {}, schema_commit=commit or (cur.get("status") or {}).get("schema_commit", ""),
                           built=when, reports=len(reports))
-            status.pop("source", None)
             if note:
                 status["note"] = note
-            data = {"status": status, "reports": reports, "facts_db": extra,
-                    "events": (ev + (cur.get("events") or []))[:EVENTS_KEPT]}
-            _write(self.paths["map"], data)
-            self._cache = {"mtime": None, "data": None}
+            self._save({"status": status, "reports": reports, "facts": facts, "facts_db": extra,
+                        "events": (ev + (cur.get("events") or []))[:EVENTS_KEPT]})
             return ev
 
-    def update_schema(self, force=False):
-        """Daily: has Shadowserver's schema changed? If so, download, check and rebuild. Returns a short summary."""
-        cur = self.get()
-        st = cur.get("status") or {}
-        if not force and st.get("schema_checked") and \
-                datetime.now(timezone.utc) - datetime.fromisoformat(st["schema_checked"].replace("Z", "+00:00")) < timedelta(seconds=SCHEMA_EVERY):
-            return "schema checked recently"
+    def _status(self, **kw):
+        with self.lock:
+            if not os.path.exists(self.paths["map"]):
+                self.rebuild()
+            cur = self.get()
+            self._save(dict(cur, status=dict(cur.get("status") or {}, **kw)))
+
+    def update_feed(self, force=False):
+        """Once a day: the feed on GitHub (one conditional request). The map is rebuilt from its facts; what it says
+        about each report page is kept for the cards. A feed that cannot be read keeps the last good copy."""
+        st = self.get().get("status") or {}
+        now = datetime.now(timezone.utc)
+        mark = now.replace(hour=FEED_READ_AT[0], minute=FEED_READ_AT[1], second=0, microsecond=0)
+        if mark > now:
+            mark -= timedelta(days=1)                  # the latest 06:30 GMT that has passed
+        if not force and _age(st.get("feed_checked", "")) < (now - mark).total_seconds():
+            return "feed already read since the last 06:30 GMT"
         try:
-            _, body, _ = _get(API_COMMIT, {"Accept": "application/vnd.github.sha"})
-            sha = body.decode().strip()
-            if not re.match(r"^[0-9a-f]{40}$", sha):
-                raise ValueError("unexpected answer for the latest commit")
-            if sha == st.get("schema_commit") and not force:
-                self._status(schema_checked=_now(), schema_error="")
-                return f"schema unchanged ({sha[:7]})"
-            got = {}
-            for fn in SCHEMA_FILES:
-                _, b, _ = _get(RAW.format(sha=sha, file=fn))
-                got[fn] = b.decode("utf-8")
-            rj, types = json.loads(got["reports.json"]), parse_types_md(got["types.md"])
-            probs = check_schema(rj, types)
+            hdr = {"If-None-Match": st["feed_etag"]} if st.get("feed_etag") and not force else {}
+            code, body, h = _get(self.feed_url, hdr)
+            if code == 304:
+                self._status(feed_checked=_now(), feed_error="")
+                return "feed unchanged"
+            feed = json.loads(body.decode("utf-8"))
+            if not isinstance(feed, dict) or feed.get("format") != FEED_FORMAT:
+                raise ValueError(f"feed format {feed.get('format') if isinstance(feed, dict) else '?'} (this installation reads {FEED_FORMAT})")
+            probs = check_facts(feed.get("facts"))
             if probs:
                 raise ValueError("; ".join(probs))
-            os.makedirs(self.paths["schema"], exist_ok=True)
-            for fn, txt in got.items():
-                with open(os.path.join(self.paths["schema"], fn), "w", encoding="utf-8") as f:
-                    f.write(txt)
-            _write(os.path.join(self.paths["schema"], "commit.json"), {"sha": sha, "downloaded": _now()})
-            ev = self.rebuild(schema_facts(rj, types), sha)
-            self._status(schema_checked=_now(), schema_error="", schema_updated=_now())
-            return f"schema {sha[:7]}: {len(rj)} report types, {len(ev)} change(s)"
+            events = self._take_pages(feed.get("pages") or {}, bool(feed.get("text_included")))
+            if feed.get("schema_commit") != st.get("schema_commit") or force or events or not os.path.exists(self.paths["map"]):
+                self.rebuild(feed["facts"], feed.get("schema_commit", ""), events=events)
+            self._status(feed_checked=_now(), feed_error="", feed_etag=_h(h, "ETag"), feed_built=feed.get("built", ""))
+            return f"feed {str(feed.get('schema_commit', ''))[:7]} (built {feed.get('built', '?')}): {len(feed['facts'])} report types, {len(events)} change(s)"
         except Exception as exc:                                   # noqa: BLE001  (keep the last good copy)
-            self._status(schema_checked=_now(), schema_error=f"{type(exc).__name__}: {str(exc)[:200]}")
+            self._status(feed_checked=_now(), feed_error=f"{type(exc).__name__}: {str(exc)[:200]}")
             if self.log:
-                self.log.warning("Report map: schema update failed, last good copy kept: %s", exc)
-            return f"schema update failed, last good copy kept: {exc}"
+                self.log.warning("Report map: feed not read, last good copy kept: %s", exc)
+            return f"feed not read, last good copy kept: {exc}"
+
+    def _take_pages(self, pages, text):
+        """Keep what the feed says about each report page; a changed description becomes an event."""
+        store = self.descriptions()
+        old = store.get("pages") or {}
+        ev = [{"at": _now(), "kind": "description_changed", "url": u, "title": p.get("title", ""),
+               "text": f"Shadowserver updated the description of {p.get('title') or u}."}
+              for u, p in pages.items() if (old.get(u) or {}).get("hash") and p.get("hash") and old[u]["hash"] != p["hash"]]
+        _write(self.paths["pages"], {"pages": pages, "text_included": text, "updated": _now()})
+        return ev
 
     def check_arrivals(self):
         """The report collections in the database that the map does not know: placed from their fields and flagged."""
@@ -445,83 +582,25 @@ class ReportMap:
             return "every report collection is in the map"
         with self.lock:
             cur = self.get()
-            data = dict(cur)
-            data["facts_db"] = {**(cur.get("facts_db") or {}), **new}
-            _write(self.paths["map"], {k: v for k, v in data.items()})
-            self._cache = {"mtime": None, "data": None}
+            self._save(dict(cur, facts_db={**(cur.get("facts_db") or {}), **new}))
         ev = self.rebuild(note="placed report collections found only in the database")
         return f"{len(new)} report collection(s) not in the schema, placed and flagged: {', '.join(sorted(new))} ({len(ev)} event(s))"
 
-    def update_pages(self, limit=PAGES_PER_RUN, delay=PAGE_DELAY):
-        """Each report's page, at most weekly: description, last-updated date, field meanings. Conditional requests."""
-        store = self.descriptions()
-        pages = store.setdefault("pages", {})
-        urls = sorted({e["url"] for e in (self.get().get("reports") or {}).values()
-                       if (e.get("url") or "").startswith(SS_BASE)})
-        due = [u for u in urls if time.time() - (pages.get(u) or {}).get("checked_ts", 0) > PAGE_EVERY]
-        done, changed, failed, events = 0, 0, 0, []
-        for u in due[:limit]:
-            if done:
-                time.sleep(delay)
-            done += 1
-            p = pages.get(u) or {}
-            hdr = {"If-Modified-Since": p["last_modified"]} if p.get("last_modified") else {}
-            try:
-                code, body, h = _get(u, hdr)
-                if code == 304:
-                    p.update(checked_ts=time.time(), checked=_now(), error="")
-                    pages[u] = p
-                    continue
-                parsed = parse_page(body.decode("utf-8", "replace"))
-                if not parsed:
-                    raise ValueError("no description found on the page")
-                digest = hashlib.sha256(json.dumps([parsed["description"], parsed["fields"]], sort_keys=True).encode()).hexdigest()
-                if p.get("hash") and p["hash"] != digest:
-                    changed += 1
-                    events.append({"at": _now(), "kind": "description_changed", "url": u, "title": parsed["title"],
-                                   "text": f"Shadowserver updated the description of {parsed['title'] or u}."})
-                pages[u] = dict(parsed, url=u, hash=digest, last_modified=h.get("Last-Modified") or h.get("last-modified") or "",
-                                fetched=_now(), checked=_now(), checked_ts=time.time(), error="",
-                                source="Shadowserver Foundation, " + u)
-            except Exception as exc:                               # noqa: BLE001  (the last good copy stays)
-                failed += 1
-                p.update(checked_ts=time.time() - PAGE_EVERY + 6 * 3600, error=f"{type(exc).__name__}: {str(exc)[:160]}")
-                pages[u] = p
-        store["updated"] = _now()
-        with self.lock:
-            _write(self.paths["pages"], store)
-            if events:
-                cur = self.get()
-                _write(self.paths["map"], dict(cur, events=(events + (cur.get("events") or []))[:EVENTS_KEPT]))
-                self._cache = {"mtime": None, "data": None}
-        return f"pages: {done} checked of {len(due)} due ({len(urls)} in all), {changed} changed, {failed} failed"
-
-    def _status(self, **kw):
-        with self.lock:
-            cur = self.get()
-            if cur.get("status", {}).get("source") == "shipped snapshot" and not os.path.exists(self.paths["map"]):
-                self.rebuild()
-                cur = self.get()
-            st = dict(cur.get("status") or {}, **kw)
-            st.pop("source", None)
-            _write(self.paths["map"], dict(cur, status=st))
-            self._cache = {"mtime": None, "data": None}
-
     def snapshot(self):
-        """The shipped snapshot: the current map and the schema facts it was built from (no description text)."""
-        facts, commit = self._base()
+        """The shipped snapshot: the map and the schema facts it was built from (no description text)."""
+        facts, commit = self._facts()
         reports = build(facts, self.rules())
-        snap = {"_about": "Shipped with Looking Glass: where each Shadowserver report type belongs (report_map.py), and the "
-                          "facts from Shadowserver's report_schema it was built from. Replaced on each installation by "
-                          "data/report_map.json once the daily update has run.",
-                "status": {"schema_commit": commit, "built": _now(), "reports": len(reports)},
-                "facts": facts, "reports": reports, "events": []}
-        _write(self.paths["snapshot"], snap)
+        _write(self.paths["snapshot"], {
+            "_about": "Shipped with Looking Glass: where each Shadowserver report type belongs (report_map.py), and the "
+                      "facts from Shadowserver's report_schema it was built from. Replaced on each installation by "
+                      "data/report_map.json once the daily feed has been read.",
+            "status": {"schema_commit": commit, "built": _now(), "reports": len(reports)},
+            "facts": facts, "reports": reports, "events": []})
         return f"snapshot: {len(reports)} report types, schema {commit[:7]}"
 
     # ---- background
     def loop(self):
-        """Started by app.py when it serves: schema daily, arrivals every 30 minutes, pages a few at a time."""
+        """Started by app.py when it serves: the feed once a day, the database every 30 minutes."""
         import fcntl
         time.sleep(150)
         while True:
@@ -531,11 +610,9 @@ class ReportMap:
                         fcntl.flock(lf, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     except OSError:
                         lf = None
-                    if lf and os.environ.get("REPORT_MAP_FETCH", "1") != "0":
-                        self.update_schema()
-                        self.check_arrivals()
-                        self.update_pages()
-                    elif lf:
+                    if lf:
+                        if os.environ.get("REPORT_MAP_FETCH", "1") != "0":
+                            self.update_feed()
                         self.check_arrivals()
             except Exception as exc:                               # never let the background job stop the platform
                 if self.log:
@@ -547,12 +624,22 @@ def _cli():
     import argparse
     import sys
     ap = argparse.ArgumentParser(description="Where each Shadowserver report type belongs (report_map.py).")
-    ap.add_argument("--update", action="store_true", help="check Shadowserver's schema now")
-    ap.add_argument("--force", action="store_true", help="download and rebuild even if the schema did not change")
-    ap.add_argument("--descriptions", type=int, default=0, metavar="N", help="also check up to N report pages")
-    ap.add_argument("--arrivals", action="store_true", help="also check the database for report collections the map does not know")
+    ap.add_argument("--update", action="store_true", help="installation: read the feed now")
+    ap.add_argument("--force", action="store_true", help="read / build even if nothing seems changed")
+    ap.add_argument("--arrivals", action="store_true", help="installation: also check the database for unknown report collections")
     ap.add_argument("--snapshot", action="store_true", help="write data/report_map_snapshot.json (maintainers, before a release)")
+    ap.add_argument("--build-feed", metavar="OUT_DIR", help="feed builder: write OUT_DIR/report_feed.json")
+    ap.add_argument("--state", metavar="STATE_DIR", help="feed builder: private state folder (schema, pages with their text)")
+    ap.add_argument("--pages", type=int, default=PAGES_PER_RUN, help="feed builder: at most this many report pages per run")
+    ap.add_argument("--text", action="store_true", help="feed builder: include Shadowserver's description text (only with their OK)")
     a = ap.parse_args()
+    if a.build_feed:
+        if not a.state:
+            ap.error("--build-feed needs --state")
+        changed, summary = FeedBuilder(a.build_feed, a.state, include_text=a.text or os.environ.get("FEED_INCLUDE_TEXT") == "1").build(
+            force=a.force, limit=a.pages)
+        print(summary)
+        sys.exit(0 if changed else 3)                              # 3: nothing to commit
     base = os.path.dirname(os.path.abspath(__file__))
     cols = fields = None
     if a.arrivals:
@@ -566,11 +653,9 @@ def _cli():
         fields = lambda n: list((db[n].find_one(sort=[("_id", -1)]) or {}).keys())
     rm = ReportMap(base, cols, fields)
     if a.update:
-        print(rm.update_schema(force=a.force))
+        print(rm.update_feed(force=a.force))
     if a.arrivals:
         print(rm.check_arrivals())
-    if a.descriptions:
-        print(rm.update_pages(limit=a.descriptions))
     if a.snapshot:
         print(rm.snapshot())
     m = rm.get()
@@ -579,10 +664,10 @@ def _cli():
     for e in (m.get("reports") or {}).values():
         counts[(e["section"], e["group"])] = counts.get((e["section"], e["group"]), 0) + 1
     print(f"map: {len(m.get('reports') or {})} report types · source: {st.get('source')} · schema {str(st.get('schema_commit', ''))[:7]}"
-          f" · checked {st.get('schema_checked', '–')}{' · error: ' + st['schema_error'] if st.get('schema_error') else ''}")
+          f" · feed checked {st.get('feed_checked', '–')}{' · error: ' + st['feed_error'] if st.get('feed_error') else ''}")
     for (s, g), n in sorted(counts.items(), key=lambda x: (str(x[0][0]), str(x[0][1]))):
         print(f"  {s:14s} {g or '':74s} {n:>4}")
-    for e in (m.get("events") or [])[:10]:
+    for e in (m.get("events") or [])[:8]:
         print("  event:", e["at"], e["text"])
     sys.exit(0)
 
