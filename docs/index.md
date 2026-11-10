@@ -7,7 +7,17 @@ hide:
 
 <div class="lg-hero" markdown>
 
-<img class="lg-hero-mark" src="assets/logo-mark.svg" alt="" width="84" height="84">
+<div class="lg-hero-mark" aria-hidden="true"><svg class="lgh-logo" viewBox="0 0 32 32" width="88" height="88">
+<defs><linearGradient id="lgh-arc" x1="8" y1="18" x2="20" y2="11" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#5b8def"/><stop offset="1" stop-color="#e5484d"/></linearGradient><clipPath id="lgh-lens"><circle cx="14" cy="14" r="8.9"/></clipPath></defs>
+<circle class="lgh-glass" cx="14" cy="14" r="8.9" fill="#141417"/>
+<g class="lgh-grid" clip-path="url(#lgh-lens)" fill="none" stroke="#ededef" stroke-opacity=".18" stroke-width=".8"><ellipse cx="14" cy="14" rx="9" ry="3.4"/><ellipse cx="14" cy="14" rx="3.6" ry="9"/></g>
+<path class="lgh-arc" d="M8.4 18.2 Q12.4 6.6 19.4 11.6" fill="none" stroke="url(#lgh-arc)" stroke-width="1.7" stroke-linecap="round" pathLength="100"/>
+<circle class="lgh-src" cx="8.4" cy="18.2" r="1.5" fill="#5b8def"/>
+<circle class="lgh-ring" cx="19.4" cy="11.6" r="2.7" fill="none" stroke="#e5484d" stroke-width=".8"/>
+<circle class="lgh-hit" cx="19.4" cy="11.6" r="1.5" fill="#e5484d"/>
+<circle class="lgh-rim" cx="14" cy="14" r="10" fill="none" stroke="#ededef" stroke-width="2" pathLength="100"/>
+<path class="lgh-handle" d="M21.4 21.4 L27.6 27.6" stroke="#ededef" stroke-width="3" stroke-linecap="round" pathLength="100"/>
+</svg></div>
 
 <p class="lg-eyebrow">Free and open source · built in Africa, for African CSIRTs</p>
 

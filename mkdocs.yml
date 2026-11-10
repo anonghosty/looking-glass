@@ -39,7 +39,6 @@ theme:
     - search.suggest
     - search.highlight
     - content.code.copy
-    - content.action.view
 
 extra_css:
   - assets/stylesheets/looking-glass.css
@@ -88,6 +87,7 @@ nav:
 
 extra_javascript:
   - assets/javascripts/films.js
+  - assets/javascripts/motion.js
 
 extra:
   generator: false

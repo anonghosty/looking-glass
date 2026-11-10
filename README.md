@@ -7,6 +7,7 @@ Free and open source (AGPL-3.0) · built in Africa, for African CSIRTs · worldw
 <sub>Built by <a href="https://www.linkedin.com/in/iowuraku">Ike Owuraku Amponsah</a>, Cybersecurity Threat Intelligence Analyst</sub></p>
 
 <p align="center">
+  <a href="https://looking-glass-gh.readthedocs.io/"><b>Documentation</b></a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#features">Features</a> ·
   <a href="docs/USE_CASES.md">Use cases</a> ·
@@ -282,6 +283,9 @@ Please report security problems **privately** to the maintainers rather than in 
 | Browsers | current Chrome, Edge, Firefox or Safari; TVs and phones supported |
 
 ## Documentation
+
+**Read it online: [looking-glass-gh.readthedocs.io](https://looking-glass-gh.readthedocs.io/)**, every guide below in one
+searchable site, with the films. The same guides are in the [`docs/`](docs) folder:
 
 | Topic | Document |
 |---|---|

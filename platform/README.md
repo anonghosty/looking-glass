@@ -13,6 +13,9 @@ loads into MongoDB, and replays the previous day, at the same time of day, as tw
 Built for African national and sector CSIRTs: any of the 54 countries, with its own regions map, your
 constituency's networks only if you wish, masked views for partners and public screens, and sign-in with MFA.
 
+**Documentation:** [looking-glass-gh.readthedocs.io](https://looking-glass-gh.readthedocs.io/), every guide in one
+searchable site, with the films.
+
 ## Quick start
 
 ```bash

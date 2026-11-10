@@ -268,6 +268,60 @@ body {
 .md-typeset .lg-hero-film .lg-film figcaption { text-align: center; justify-items: center; }
 .md-typeset .lg-hero-film a.lg-film-yt { justify-self: center; }
 
+/* ---------------- motion: the platform's (rise with its ease, the logo that draws itself, a ping on what to press).
+   Load animations are CSS only and end visible; scroll reveals need motion.js to add .lg-reveal first. */
+.lg-hero-mark { display: flex; justify-content: center; }
+.lgh-logo { overflow: visible; }
+.lgh-ring { transform-origin: 19.4px 11.6px; opacity: 0; }
+@keyframes lg-rise { from { opacity: 0; transform: translateY(14px); } }
+@keyframes lg-fade-in { from { opacity: 0; } }
+@keyframes lg-draw { to { stroke-dashoffset: 0; } }
+@keyframes lg-show { to { opacity: 1; } }
+@keyframes lg-pop { 0% { opacity: 0; transform: scale(.2); } 70% { opacity: 1; transform: scale(1.4); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes lg-ping { 0% { opacity: .9; transform: scale(.6); } 70%, 100% { opacity: 0; transform: scale(1.9); } }
+@keyframes lg-blink { 50% { opacity: .45; } }
+@keyframes lg-flow { from { stroke-dasharray: 6 4; stroke-dashoffset: 0; } to { stroke-dasharray: 6 4; stroke-dashoffset: -20; } }
+@keyframes lg-bar { from { transform: scaleX(0); } }
+@keyframes lg-btn-ping { 0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, .45), 0 14px 40px rgba(40, 60, 160, .6); }
+                         100% { box-shadow: 0 0 0 18px rgba(139, 92, 246, 0), 0 14px 40px rgba(40, 60, 160, .6); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* every page: the content fades up as the platform's pages do */
+  .md-main__inner { animation: lg-rise .6s cubic-bezier(.2, .8, .2, 1) both; }
+  .md-sidebar { animation: lg-fade-in .7s ease .1s both; }
+  .md-typeset h1 { animation: lg-rise .7s cubic-bezier(.2, .8, .2, 1) .08s both; }
+
+  /* the home page: the logo draws itself (rim, handle, arc, the hit), then each line rises in turn */
+  .lgh-rim, .lgh-handle { stroke-dasharray: 100; stroke-dashoffset: 100; animation: lg-draw .9s ease-out forwards; }
+  .lgh-handle { animation-delay: .55s; }
+  .lgh-glass, .lgh-grid { opacity: 0; animation: lg-show .6s ease-out .3s forwards; }
+  .lgh-src { opacity: 0; animation: lg-show .3s ease-out .7s forwards, lg-blink 2.4s ease-in-out 2s infinite; }
+  .lgh-arc { stroke-dasharray: 100; stroke-dashoffset: 100; animation: lg-draw .8s ease-in-out .8s forwards, lg-flow 1.6s linear 2.2s infinite; }
+  .lgh-hit { opacity: 0; transform-origin: 19.4px 11.6px; animation: lg-pop .35s ease-out 1.5s forwards; }
+  .lgh-ring { animation: lg-ping 2.4s ease-out 1.6s infinite; }
+  .md-main__inner:has(.lg-hero) { animation: none; }
+  .lg-hero > * { animation: lg-rise .7s cubic-bezier(.2, .8, .2, 1) both; }
+  .lg-hero > .lg-hero-mark { animation: none; }
+  .lg-hero > :nth-child(2) { animation-delay: .9s; }
+  .lg-hero > :nth-child(3) { animation-delay: 1s; }
+  .lg-hero > :nth-child(4) { animation-delay: 1.1s; }
+  .lg-hero > :nth-child(n+5) { animation-delay: 1.25s; }
+  .lg-hero-film { animation: lg-rise .8s cubic-bezier(.2, .8, .2, 1) 1.4s both; }
+
+  /* what is below the fold rises into view (motion.js marks it .lg-reveal, then .is-in) */
+  .lg-reveal { opacity: 0; transform: translateY(18px);
+    transition: opacity .7s cubic-bezier(.2, .8, .2, 1) var(--lg-d, 0s), transform .7s cubic-bezier(.2, .8, .2, 1) var(--lg-d, 0s); }
+  .lg-reveal.is-in { opacity: 1; transform: none; }
+  .md-typeset h2.lg-reveal::before { transform-origin: left; transform: scaleX(0); transition: transform .8s cubic-bezier(.2, .8, .2, 1) .15s; }
+  .md-typeset h2.lg-reveal.is-in::before { transform: none; }
+  .md-typeset .grid.cards > ul > li.lg-reveal:hover { transition-delay: 0s; }
+
+  /* the film play buttons ping like the map's hits */
+  .lg-film-play { animation: lg-btn-ping 2.4s ease-out 2s infinite; }
+  .lg-film-poster:hover .lg-film-play { animation: none; }
+  .lg-film-poster img { animation: lg-fade-in .8s ease both; }
+}
+
 /* footer */
 .md-footer { border-top: 1px solid rgba(120, 140, 190, .1); }
 .md-footer-meta { background: #04050a; }
