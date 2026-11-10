@@ -6,6 +6,10 @@ can act on, instead of forwarding a spreadsheet of thousands of addresses.
 > All figures and network names on this page come from the **demonstration data** shipped for testing (fictional
 > networks, documentation address ranges, real public CVEs). Your own figures will differ.
 
+**Watch first:** the three stories on this page, told on screen in 11 minutes, narrated, with captions.
+
+[![Watch the use case scenarios (11:24) on YouTube](media/films/use-cases.jpg)](https://www.youtube.com/watch?v=TyIG8su7vNQ) <!-- film: use-cases -->
+
 ## Contents
 
 1. [The problem: a full dump is not an advisory](#1-the-problem-a-full-dump-is-not-an-advisory)

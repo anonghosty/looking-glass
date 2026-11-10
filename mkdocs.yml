@@ -1,0 +1,139 @@
+# The documentation site (Read the Docs, or any MkDocs host), built from the same docs/ folder GitHub shows.
+# Local preview:  pip install -r docs/requirements.txt && mkdocs serve
+site_name: Looking Glass
+site_description: Your Shadowserver reports, replayed as a living picture of your country. Free and open source, built in Africa, for African CSIRTs.
+site_author: Ike Owuraku Amponsah
+site_url: !ENV [READTHEDOCS_CANONICAL_URL, ""]
+repo_url: https://github.com/anonghosty/looking-glass
+repo_name: anonghosty/looking-glass
+edit_uri: blob/main/docs/
+copyright: Copyright &copy; 2026 Ike Owuraku Amponsah &middot; AGPL-3.0 &middot; screenshots use dummy data only
+
+docs_dir: docs
+exclude_docs: |
+  media/README.md
+  requirements.txt
+
+hooks:
+  - mkdocs_hooks.py
+
+theme:
+  name: material
+  logo: assets/logo-mark.svg
+  favicon: assets/logo-mark.svg
+  palette:
+    scheme: slate
+    primary: custom
+    accent: custom
+  font:
+    text: Inter
+    code: Geist Mono
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.view
+
+extra_css:
+  - assets/stylesheets/looking-glass.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - def_list
+  - toc:
+      permalink: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify   # the same anchors as GitHub, so links work on both
+        kwds:
+          case: lower
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: INSTALLATION.md
+      - Connecting the mailbox: MAIL_SETUP.md
+      - Configuration: CONFIGURATION.md
+  - Using Looking Glass:
+      - User guide: USER_GUIDE.md
+      - "Use cases: a needle through the haystack": USE_CASES.md
+      - Features: FEATURES.md
+      - Glossary: GLOSSARY.md
+  - Running it:
+      - Operations: OPERATIONS.md
+      - Technical reference: TECHNICAL_REFERENCE.md
+  - Security:
+      - Security: SECURITY.md
+      - Penetration test report: SECURITY_REPORT.md
+  - Comparison with IntelMQ and Elastic: COMPARISON.md
+
+extra_javascript:
+  - assets/javascripts/films.js
+
+extra:
+  generator: false
+  # the films, on YouTube; a line in a guide that ends with <!-- film: NAME --> becomes this player (mkdocs_hooks.py)
+  films:
+    overview:
+      id: emxvs2wKADc
+      title: "Looking Glass in 2½ minutes: why it exists, and how it fits with IntelMQ and Elastic"
+      length: "2:35"
+      sound: "no narration"
+      chapters:
+        - [0, "The daily reports"]
+        - [26, "The problem: a flood of e-mails"]
+        - [34, "How CSIRTs handle them today"]
+        - [74, "Why it matters for Africa"]
+        - [85, "Looking Glass"]
+        - [130, "The honest comparison"]
+        - [146, "Use them together"]
+    live-demo:
+      id: wobiRbg-Lqs
+      title: "Live demo: every screen and every role"
+      length: "7:38"
+      sound: "narrated, with captions"
+      chapters:
+        - [0, "Introduction"]
+        - [32, "Sign-in with two-factor authentication"]
+        - [55, "Network communications: map, analysis, PDF report, demo mode"]
+        - [176, "Publicly accessible / vulnerable services"]
+        - [251, "Administration and settings"]
+        - [284, "Analyst role"]
+        - [302, "Researcher role: definitions, look-ups"]
+        - [338, "Executive portal: 7-day baseline and the executive report"]
+        - [421, "External viewer: always masked"]
+        - [443, "Get Looking Glass"]
+    use-cases:
+      id: TyIG8su7vNQ
+      title: "Use case scenarios: a needle through the haystack"
+      length: "11:24"
+      sound: "narrated, with captions"
+      chapters:
+        - [0, "The haystack: one day of reports, and the dump"]
+        - [92, "Part 1: the haystack, and the needle"]
+        - [251, "Part 1: the analyst asks first"]
+        - [326, "Part 2: Looking Glass asks"]
+        - [507, "Part 3: the researcher's own find"]
+        - [655, "Then tomorrow, again"]
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/anonghosty/looking-glass

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 236 40" width="236" height="40" role="img" aria-label="Looking Glass">
+  <defs>
+    <linearGradient id="lgw-arc" x1="12" y1="22" x2="24" y2="15" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5b8def"/>
+      <stop offset="1" stop-color="#e5484d"/>
+    </linearGradient>
+    <clipPath id="lgw-lens"><circle cx="18" cy="18" r="8.9"/></clipPath>
+  </defs>
+  <g transform="translate(0 2)">
+    <circle cx="18" cy="18" r="8.9" fill="#141417"/>
+    <g clip-path="url(#lgw-lens)" fill="none" stroke="#ededef" stroke-opacity=".18" stroke-width="1">
+      <ellipse cx="18" cy="18" rx="9" ry="3.4"/>
+      <ellipse cx="18" cy="18" rx="3.6" ry="9"/>
+    </g>
+    <path d="M12.4 22.2 Q16.4 10.6 23.4 15.6" fill="none" stroke="url(#lgw-arc)" stroke-width="1.9" stroke-linecap="round"/>
+    <circle cx="12.4" cy="22.2" r="1.6" fill="#5b8def"/>
+    <circle cx="23.4" cy="15.6" r="2.7" fill="none" stroke="#e5484d" stroke-opacity=".5" stroke-width="1"/>
+    <circle cx="23.4" cy="15.6" r="1.6" fill="#e5484d"/>
+    <circle cx="18" cy="18" r="10" fill="none" stroke="#ededef" stroke-width="2.2"/>
+    <path d="M25.4 25.4 L31.6 31.6" stroke="#ededef" stroke-width="3.2" stroke-linecap="round"/>
+  </g>
+  <text x="44" y="26.5" fill="#ededef" font-family="Inter, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="19" font-weight="600" letter-spacing="-0.3">Looking Glass</text>
+</svg>

@@ -3,6 +3,11 @@
 An honest comparison of the free tools a CSIRT can use with its [Shadowserver](https://www.shadowserver.org/what-we-do/network-reporting/)
 reports, why Looking Glass exists, and how the tools work **together**. Every figure below has its source linked.
 
+**In 2½ minutes:** the problem, the tools, and the comparison on screen (the player starts at the comparison; the
+chapters take you anywhere else).
+
+[![Watch the overview (2:35) on YouTube](media/films/overview.jpg)](https://www.youtube.com/watch?v=emxvs2wKADc) <!-- film: overview start=130 -->
+
 ## Contents
 
 - [The problem](#the-problem)

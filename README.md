@@ -189,7 +189,7 @@ No Shadowserver reports yet? [Sign up your CSIRT](https://www.shadowserver.org/w
 
 1. **Get the code**
    ```bash
-   git clone https://github.com/<your-account>/looking-glass.git
+   git clone https://github.com/anonghosty/looking-glass.git
    cd looking-glass
    ```
 2. **Run the guided installer**

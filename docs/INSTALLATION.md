@@ -1,9 +1,32 @@
 # Installing Looking Glass
 
-**The easy way:** from the top of the repository, run `./install.sh`. It asks its questions in windows, checks
-every answer (mailbox login, tokens, MongoDB, ports), installs both parts and runs the checks. On WSL, do A1 below
-first (systemd and mirrored networking). The rest of this guide is the same installation by hand, and the
-background the installer's questions refer to (access modes, HTTPS, firewall).
+## The easy way: the guided installer
+
+On Windows, do [A1](#a1-wsl-with-systemd-and-mirrored-networking) first (systemd and mirrored networking), then
+run these steps in the Ubuntu window. On Ubuntu, run them in a terminal, as the ordinary user who will run Looking Glass
+(not as root).
+
+1. **Install git**, if the computer does not have it yet:
+   ```bash
+   sudo apt update && sudo apt install -y git
+   ```
+2. **Get the code:** clone the repository and go into it.
+   ```bash
+   git clone https://github.com/anonghosty/looking-glass.git
+   cd looking-glass
+   ```
+3. **Run the installer:**
+   ```bash
+   ./install.sh
+   ```
+   It asks its questions in windows (`./install.sh --text` for plain prompts), checks every answer (mailbox login,
+   tokens, MongoDB, ports), installs both parts and runs the checks.
+4. **Open the address it shows** and create the first administrator (see [A6](#a6-the-first-administrator-security)).
+
+Later updates are a `git pull` in the same folder (see [Updating](#updating)).
+
+The rest of this guide is the same installation by hand, and the background the installer's questions refer to
+(access modes, HTTPS, firewall).
 
 **MongoDB already on the computer?** The installer finds it and shows its version, port, whether it is running and
 whether it requires a login. It then uses that MongoDB as it is: its configuration is never rewritten (other programs
@@ -78,14 +101,19 @@ firewall must let the traffic through (A6, A7, B6).
 
 With mirrored networking your Windows browser opens Looking Glass at `http://localhost:5000`.
 
-### A2. The database
-Install MongoDB and the Shadowserver pipeline as described in [../../database/README.md](../database/README.md),
-and let it load your reports once (`shadowserver run`). Looking Glass needs at least one day of reports to show.
+### A2. Get the code, then the database
+Clone the repository into your home folder; both parts are installed from it:
+```bash
+sudo apt update && sudo apt install -y git
+cd ~ && git clone https://github.com/anonghosty/looking-glass.git looking-glass
+```
+Then install MongoDB and the Shadowserver pipeline from its `database` folder as described in
+[../../database/README.md](../database/README.md), and let it load your reports once (`shadowserver run`).
+Looking Glass needs at least one day of reports to show.
 
 ### A3. Install the platform
 ```bash
-sudo apt update && sudo apt install -y python3-venv python3-pip git curl openssl
-cd ~ && git clone <repository address> looking-glass
+sudo apt install -y python3-venv python3-pip curl openssl
 cd ~/looking-glass/platform
 deploy/install.sh
 ```
@@ -185,14 +213,15 @@ To show Looking Glass on a TV, a wall screen or colleagues' computers:
 ```bash
 sudo apt update && sudo apt install -y python3-venv python3-pip git curl openssl ufw
 sudo adduser --system --group --home /opt/looking-glass lookingglass     # a dedicated service account
+sudo -u lookingglass -H git clone https://github.com/anonghosty/looking-glass.git /opt/looking-glass/src   # the code
 ```
-Install MongoDB and the pipeline ([../../database/README.md](../database/README.md)). Keep
+Install MongoDB and the pipeline from `/opt/looking-glass/src/database` ([../../database/README.md](../database/README.md)). Keep
 `net.bindIp: 127.0.0.1` and `security.authorization: enabled` in `/etc/mongod.conf`. If MongoDB runs on another
 server, allow only this server to reach it, and use TLS for MongoDB.
 
 ### B2. Platform
 ```bash
-sudo -u lookingglass -H bash -c 'cd /opt/looking-glass && git clone <repository address> src && cd src/platform && deploy/install.sh'
+sudo -u lookingglass -H bash -c 'cd /opt/looking-glass/src/platform && deploy/install.sh'   # the code is from B1
 sudoedit /opt/looking-glass/src/platform/.env          # MongoDB, MAPBOX_TOKEN, COUNTRY (CONFIGURATION.md)
 ```
 

@@ -3,8 +3,9 @@
 Looking Glass replays your country's Shadowserver reports from the previous day, at the same time of day, as two
 live platforms:
 
-- **Reported network communications** (the map): infected and attacking hosts in your country talking to command
-  and control servers, sinkholes and honeypots, drawn as arcs on a 3D map.
+- **Reported network communications** (the map): infected and attacking hosts in your country and what caught
+  them: infected devices calling botnet sinkholes (sinkholed C2 domains), and attackers caught by honeypots, drawn as
+  arcs on a 3D map.
 - **Publicly accessible / vulnerable services**: hosts in your country with exposed or vulnerable services
   (open databases, remote desktop, old TLS, vulnerable devices, compromised or blocklisted hosts).
 
@@ -13,6 +14,10 @@ partners see the country's situation at a glance on a wall screen.
 
 > Every screenshot in this guide uses **dummy data** (documentation IP ranges, private AS numbers, fictional
 > networks). New terms are explained in the [glossary](GLOSSARY.md).
+
+**Watch first:** the live demo shows every screen and every role in 7½ minutes, narrated, with captions.
+
+[![Watch the live demo (7:38) on YouTube](media/films/live-demo.jpg)](https://www.youtube.com/watch?v=wobiRbg-Lqs) <!-- film: live-demo -->
 
 ## Contents
 

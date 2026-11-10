@@ -5,8 +5,8 @@
 The web platform of Looking Glass. It reads the Shadowserver reports that the database pipeline (`../database`)
 loads into MongoDB, and replays the previous day, at the same time of day, as two live platforms:
 
-- **Reported network communications:** a 3D map of infected and attacking hosts in your country and the servers
-  they reach (botnet command and control, sinkholes, honeypots), with filters, analysis and an event stream.
+- **Reported network communications:** a 3D map of infected and attacking hosts in your country and what caught
+  them (botnet sinkholes and honeypots), with filters, analysis and an event stream.
 - **Publicly accessible / vulnerable services:** exposed and vulnerable services, devices, compromised and
   blocklisted hosts, by service, region, network and issue, with the hosts to follow up first.
 

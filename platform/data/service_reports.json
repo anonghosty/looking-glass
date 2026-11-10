@@ -82,7 +82,7 @@
       "title": "Sinkhole Events Report",
       "severity": "critical",
       "url": "sinkhole-events-report/",
-      "def": "Connections from infected devices to non-HTTP sinkholes: malware command servers taken over by defenders.",
+      "def": "Connections from infected devices to non-HTTP botnet sinkholes: C2 domains and addresses that defenders have taken over (sinkholed).",
       "why": "The device is infected with the named malware."
     },
     "event4_sinkhole_dns": {
@@ -96,7 +96,7 @@
       "title": "Sinkhole HTTP Events Report",
       "severity": "critical",
       "url": "sinkhole-http-events-report/",
-      "def": "HTTP connections from infected devices to sinkholed malware command servers.",
+      "def": "HTTP connections from infected devices to botnet sinkholes: C2 domains that defenders have taken over (sinkholed).",
       "why": "The device is infected with the named malware."
     },
     "event4_sinkhole_http_referer": {
