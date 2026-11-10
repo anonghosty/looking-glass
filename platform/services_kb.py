@@ -27,6 +27,7 @@ import time
 from flask import jsonify, request
 
 from report_map import sibling
+from svc_patterns import MIN_HOSTS
 
 CACHE_SECONDS = 60
 TOP = 12
@@ -109,8 +110,35 @@ def _merge(parts):
 
 def install(app, ctx):
     """ctx: report_map (ReportMap), svc_store, load_day() (the current replay day into memory), report_info(name),
-    notes (Notes), allowed(), cve_card(name), issues_kb(), collections() (report collections in the database)."""
+    notes (Notes), allowed(), cve_card(name), issues_kb(), collections() (report collections in the database);
+    for the patterns (phase 2b): patterns (svc_patterns.Patterns), services_intel (services_intel.ServicesIntel),
+    change_allowed() (may write, CSRF checked), fresh() (recent sign-in), audit, user()."""
     rmap = ctx["report_map"]
+    pat, sintel = ctx.get("patterns"), ctx.get("services_intel")
+
+    def pattern_asks(base, names, hosts):
+        """What Looking Glass asks a researcher about a report's pattern fields (empty: nothing to check)."""
+        if not pat or not hosts:
+            return []
+        out = []
+        fields = [f for f in pat.fields_for(base) if f["kind"] != "tags"]
+        if not fields:
+            out.append("Choose its pattern fields: only its tags are read so far.")
+        if sintel and fields:
+            seen = {lbl for (lbl, _v) in (sintel.index()["vals"].get(base) or {})}
+            gone = [f["label"] for f in fields if f["label"] not in seen]
+            if gone:
+                out.append(f"{', '.join(gone)}: no longer in the records. Check its pattern fields.")
+        own = pat.choice(base)
+        if own and own.get("reviewed"):
+            now = set()
+            for n in names:
+                p = rmap.description(n) or {}
+                now.update(p.get("field_names") or [])
+            new = sorted(now - set(own["reviewed"]))
+            if new:
+                out.append(f"Shadowserver added field{'s' if len(new) > 1 else ''} {', '.join(new[:6])}: check its pattern fields.")
+        return out
 
     def services_reports():
         """base name -> {entry, names[]}: the Services section of the map, IPv6 twins folded into their IPv4 report."""
@@ -189,7 +217,9 @@ def install(app, ctx):
                 "def": info.get("def", ""), "why": info.get("why", ""),
                 "notes": len(notes), "last_note": notes[0]["date"] if notes else "",
                 "page": {k: pf.get(k) for k in ("last_updated", "fetched") if pf.get(k)} | {"fields": len(pf.get("field_names") or [])},
-                "new": any(n in new for n in g["names"])})
+                "new": any(n in new for n in g["names"]),
+                "pattern_asks": pattern_asks(base, g["names"], agg["hosts"]),
+                "pattern_fields": [f["label"] for f in pat.fields_for(base)] if pat else []})
         order = (ctx["report_map"].rules().get("group_order") or {}).get("Services") or []
         rows.sort(key=lambda r: (order.index(r["group"]) if r["group"] in order else 99, -r["hosts"], r["title"]))
         st = rmap.get().get("status") or {}
@@ -222,4 +252,91 @@ def install(app, ctx):
             shadowserver=page_facts(g["names"]), hosts=agg["hosts"], records=agg["records"], days=days, per_day=agg["per_day"],
             products=agg["products"], devices=agg["devices"], versions=agg["versions"], ports=agg["ports"],
             severity_counts=agg["severity"], tags=agg["tags"], issues=issues[:60], issues_total=len(issues),
-            notes=ctx["notes"].list("services", base))
+            notes=ctx["notes"].list("services", base), pattern_asks=pattern_asks(base, g["names"], agg["hosts"]))
+
+    # ---------------- phase 2b: patterns, across reports, sinkholes; the pattern fields and product rules
+    def _base_or_404(name):
+        groups = services_reports()
+        base = name if name in groups else sibling(name)
+        return base if base in groups else None
+
+    @app.route("/api/kb/service/intel")
+    def api_kb_service_intel():
+        if not ctx["allowed"]():
+            return jsonify(error="Definitions are for researchers and admins."), 403
+        base = _base_or_404((request.args.get("name") or "").strip()[:80])
+        if not base or not sintel:
+            return jsonify(error="No such services report."), 404
+        return jsonify(sintel.gathered(base))
+
+    @app.route("/api/kb/service/fields", methods=["GET", "POST"])
+    def api_kb_service_fields():
+        if request.method == "GET":
+            if not ctx["allowed"]():
+                return jsonify(error="Definitions are for researchers and admins."), 403
+            base = _base_or_404((request.args.get("name") or "").strip()[:80])
+            if not base or not pat:
+                return jsonify(error="No such services report."), 404
+            recs = sintel.records_of(base) if sintel else []
+            own = pat.choice(base)
+            return jsonify(report=base, fields=pat.fields_for(base), suggestions=pat.suggest(base, recs),
+                           chosen_by=({"by": own.get("by"), "date": own.get("date")} if own else None),
+                           shipped=bool((pat.shipped().get("reports") or {}).get(base)), records=len(recs),
+                           min_hosts=MIN_HOSTS)
+        if not ctx["change_allowed"]():
+            return jsonify(error="Only researchers and admins can choose pattern fields."), 403
+        if ctx.get("fresh") and not ctx["fresh"]():
+            return jsonify(error="Sign in again to make changes (your session is older than 12 hours)."), 403
+        b = request.get_json(silent=True) or {}
+        base = _base_or_404(str(b.get("name") or "").strip()[:80])
+        if not base or not pat:
+            return jsonify(error="No such services report."), 404
+        user = (ctx["user"]() or {}).get("user", "") if ctx.get("user") else ""
+        if b.get("reset"):
+            pat.reset(base)
+            ctx["audit"].add("pattern_fields_reset", user=user, target=f"service:{base}", detail="back to the shipped pattern fields")
+            return jsonify(saved=True, fields=pat.fields_for(base))
+        recs = sintel.records_of(base) if sintel else []
+        allowed = {s["field"]: s for s in pat.suggest(base, recs)}
+        fields = b.get("fields") or []
+        if not isinstance(fields, list) or len(fields) > 12:
+            return jsonify(error="Choose up to 12 pattern fields."), 400
+        for f in fields:
+            s = allowed.get(str((f or {}).get("field") or ""))
+            if s is None:
+                return jsonify(error=f"{(f or {}).get('field')}: not a field of this report's records."), 400
+            if not s["may"]:
+                return jsonify(error=f"{s['field']}: {s['why']}."), 400
+        reviewed = set(allowed)                            # the fields known now: new ones are asked about later
+        for n in services_reports()[base]["names"]:
+            reviewed.update((rmap.description(n) or {}).get("field_names") or [])
+        try:
+            clean = pat.save(base, fields, user, reviewed)
+        except ValueError as e:
+            return jsonify(error=str(e)), 400
+        if sintel:
+            sintel.cache["key"] = None                     # the patterns are recounted with the new fields
+        ctx["audit"].add("pattern_fields_set", user=user, target=f"service:{base}",
+                         detail=", ".join(f"{f['field']} ({f['kind']})" for f in clean)[:200])
+        return jsonify(saved=True, fields=pat.fields_for(base))
+
+    @app.route("/api/kb/product-rules", methods=["GET", "POST"])
+    def api_kb_product_rules():
+        if request.method == "GET":
+            if not ctx["allowed"]():
+                return jsonify(error="Definitions are for researchers and admins."), 403
+            return jsonify(rules=pat.rules() if pat else [])
+        if not ctx["change_allowed"]():
+            return jsonify(error="Only researchers and admins can add product rules."), 403
+        if ctx.get("fresh") and not ctx["fresh"]():
+            return jsonify(error="Sign in again to make changes (your session is older than 12 hours)."), 403
+        b = request.get_json(silent=True) or {}
+        user = (ctx["user"]() or {}).get("user", "") if ctx.get("user") else ""
+        try:
+            pat.add_rule(b.get("contains"), b.get("product"), b.get("version"), user)
+        except ValueError as e:
+            return jsonify(error=str(e)), 400
+        if sintel:
+            sintel.cache["key"] = None
+        ctx["audit"].add("product_rule_added", user=user, target=str(b.get("product"))[:60], detail=f"text: {str(b.get('contains'))[:60]}")
+        return jsonify(saved=True, rules=pat.rules())

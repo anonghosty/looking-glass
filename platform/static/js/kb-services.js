@@ -75,6 +75,9 @@
       const meta = el("small", "mono", x.names.join(" · "));
       name.append(meta);
       if (x.new) name.append(pill("New report type", "warn"));
+      if (x.pattern_asks?.length && x.hosts) {
+        const p = pill("Check pattern fields", "warn"); p.title = x.pattern_asks.join("\n"); name.append(p);
+      }
       const seen = el("td", "dz-seen");
       if (x.hosts) {
         seen.append(el("b", null, `${fmt(x.hosts)} hosts`), el("small", null, `${fmt(x.records)} records`));
@@ -100,7 +103,7 @@
       const act = el("td", "dz-act");
       const det = el("button", "lg-btn sm primary", "Details"); det.type = "button"; det.addEventListener("click", () => openDetail(x.name));
       const nb = el("button", "lg-btn sm ghost", "Notes"); nb.type = "button"; nb.hidden = !window.LGNotes;
-      nb.addEventListener("click", () => window.LGNotes?.open(x.name, "services"));
+      nb.addEventListener("click", () => window.LGNotes?.open(x.name, "services", x.title));
       act.append(det, nb);
       tr.append(name, seen, sev, iss, what, act); tb.append(tr);
     }
@@ -176,7 +179,7 @@
     const nt = el("section", "svc-block"); nt.append(el("h4", null, `Researchers' notes${d.notes.length ? ` (${d.notes.length})` : ""}`));
     for (const n of d.notes.slice(0, 5)) { const q = el("blockquote", "svc-note"); q.append(el("p", null, n.text), el("small", null, `${n.role}: ${n.by} · ${n.date}`)); nt.append(q); }
     const nb = el("button", "lg-btn sm", d.notes.length ? "All notes / add one" : "Add a note"); nb.type = "button";
-    nb.addEventListener("click", () => { shut(); window.LGNotes?.open(d.name, "services"); }); nt.append(nb);
+    nb.addEventListener("click", () => { shut(); window.LGNotes?.open(d.name, "services", d.title); }); nt.append(nb);
     left.append(nt);
     // what the reports show here
     const fig = el("section", "svc-block svc-figs"); fig.append(el("h4", null, "Seen here (the days in memory)"));
@@ -203,7 +206,26 @@
     right.append(issS, bars("Products", d.products), bars("Devices (vendor and type)", d.devices), bars("Versions", d.versions),
       bars("Ports", d.ports), bars("Tags (not CVEs)", d.tags));
     body.append(left, right);
-    box.append(head, body);
+    // tabs: Overview, and the patterns (kb-services-patterns.js): Patterns, Across reports, Pattern fields
+    if (d.pattern_asks?.length) {
+      const ask = el("div", "svp-ask"); ask.append(el("b", null, "Looking Glass asks: "), document.createTextNode(d.pattern_asks.join(" ")));
+      t.append(ask);
+    }
+    const titleOf = (n) => (data?.reports || []).find((r) => r.name === n || r.names.includes(n))?.title || n;
+    const extra = window.LGServicePatterns ? window.LGServicePatterns.panes(d.name, titleOf, () => load()) : [];
+    const tabs = el("div", "svp-tabs"); tabs.setAttribute("role", "tablist");
+    const panes = [["Overview", null], ...extra].map(([label, fill]) => {
+      const b = el("button", null, label); b.type = "button"; b.setAttribute("role", "tab");
+      const pane = label === "Overview" ? body : el("div", "svc-mbody svp-pane");
+      return { label, fill, b, pane, done: !fill };
+    });
+    const show = (p) => {
+      for (const q of panes) { q.b.setAttribute("aria-selected", String(q === p)); q.pane.hidden = q !== p; }
+      if (!p.done) { p.done = true; p.fill(p.pane); }
+    };
+    for (const p of panes) { p.b.addEventListener("click", () => show(p)); tabs.append(p.b); }
+    box.append(head, tabs, ...panes.map((p) => p.pane));
+    show(panes[0]);
     x.focus();
   }
 

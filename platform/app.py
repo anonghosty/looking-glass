@@ -2981,9 +2981,19 @@ import report_map as _report_map  # noqa: E402
 REPORT_MAP = _report_map.ReportMap(
     BASE_DIR, collections=db.list_collection_names,
     fields_of=lambda n: list((db[n].find_one(sort=[("_id", -1)]) or {}).keys()), logger=app.logger)
-# the Services section of the Definitions page: each services report as something researchers study (services_kb.py)
+# the Services section of the Definitions page: each services report as something researchers study (services_kb.py),
+# with its patterns, across reports and sinkholes (svc_patterns.py, services_intel.py)
 import services_kb as _services_kb  # noqa: E402
+import svc_patterns as _svc_patterns  # noqa: E402
+import services_intel as _services_intel  # noqa: E402
+PATTERNS = _svc_patterns.Patterns(BASE_DIR)
+SVC_INTEL = _services_intel.ServicesIntel({
+    "svc_store": svc["store"], "comms_store": store, "patterns": PATTERNS,
+    "load_day": lambda: (svc["store"].get(replay_now()), store.get(replay_now())),     # both: sinkholes are compared too
+    "on_codes": lambda *a: getattr(INTEL, "on_codes", None) and INTEL.on_codes(*a)})
 _services_kb.install(app, {
+    "patterns": PATTERNS, "services_intel": SVC_INTEL, "change_allowed": _kb_change_allowed, "fresh": AUTH["fresh"],
+    "audit": AUTH["audit"], "user": lambda: getattr(g, "user", None),
     "report_map": REPORT_MAP, "svc_store": svc["store"], "load_day": lambda: svc["store"].get(replay_now()),
     "report_info": report_info, "notes": NOTES, "allowed": _kb_allowed,
     "cve_card": lambda n: cve_intel.card(n, fetch=False), "issues_kb": issues_kb,

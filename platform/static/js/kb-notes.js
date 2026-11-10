@@ -280,11 +280,12 @@
   function shut() { box.hidden = true; back.hidden = true; document.body.classList.remove("kbn-open"); opener?.focus?.(); }
   close.addEventListener("click", shut); back.addEventListener("click", shut);
   box.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); shut(); } });
-  function open(name, section) {
+  // label: the readable title to show (e.g. a report's official name); the notes stay keyed on name
+  function open(name, section, label) {
     opener = document.activeElement;
     cur = { name: name || "", section: section || "infections" }; codes = []; intel = null; tab = "seen"; groupSel = "";
     const svc = cur.section === "services";              // a services report: no combination codes (yet)
-    title.textContent = cur.name; eyebrow.textContent = `Notes · ${svc ? "services report" : cur.section === "issues" ? "issue" : "infection / category"}`;
+    title.textContent = label || cur.name; eyebrow.textContent = `Notes · ${svc ? "services report" : cur.section === "issues" ? "issue" : "infection / category"}`;
     ta.value = ""; msg.textContent = ""; msg.className = "kbn-msg";
     for (const n of [combosH, picked, tabs, pane]) n.hidden = svc;
     render([]); if (!svc) { renderPicked(); renderPane(); } load();
