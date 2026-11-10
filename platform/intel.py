@@ -27,6 +27,13 @@ import time
 from flask import jsonify, request
 
 from privacy import mask_text
+import hostmask
+
+# Researchers never see what identifies a constituent host (a host name, address, e-mail, date or ID). What the services
+# reports say about a constituent's own hosts is masked (hostmask.py) before it is counted, and a value is shown only
+# when at least MIN_HOSTS hosts share it. Only the match index behind the leads keeps a certificate name as it is, and a
+# lead shows it only when it is also a C2 domain from the communications reports (threat-side, not constituent data).
+MIN_HOSTS = 5
 
 # (what it is, where it is: a record field, or x:<name> for the report's extra fields)
 COMMS_FIELDS = [
@@ -82,7 +89,9 @@ def _get(e, key):
     return e.get(key)
 
 
-def _values(e, key, kind):
+def _values(e, key, kind, svc=False, raw=False):
+    """The values of one indicator in one record. svc: the record is a services record (it describes a constituent's own
+    host), so everything but fingerprints is masked (hostmask.py) unless raw (only for the leads' match index)."""
     v = _get(e, key)
     vals = v if isinstance(v, (list, tuple, set)) else [v]
     for x in vals:
@@ -93,9 +102,13 @@ def _values(e, key, kind):
             continue                              # an all-zero fingerprint means "none", not a shared value
         if kind in DOMAIN_KINDS:
             s = s.lower().rstrip(".").split(":")[0] if not s.startswith("[") else s.lower()
-            if kind != "C2 domain" and not DOMAIN_RX.match(s):
+            if kind != "C2 domain" and not DOMAIN_RX.match(s) and not (svc and not raw):
                 continue
-        if kind not in KEEP_AS_IS and kind not in EXACT_KINDS:
+        if svc and not raw and kind not in EXACT_KINDS:
+            s = hostmask.mask(s)
+            if not s or hostmask.looks_like_host(s):
+                continue                          # nothing left but "<host>": it named a host and nothing else
+        elif kind not in KEEP_AS_IS and kind not in EXACT_KINDS:
             s = mask_text(s)
         if s:
             yield s[:300]
@@ -133,7 +146,7 @@ def cross_code(section, name, parts):
 def record_items(section, e, me):
     """The combination one record carries, exactly as index() counts it (tests/check_combos.py compares the two)."""
     fields, kinds = (COMMS_FIELDS, COMMS_COMBO_KINDS) if section == "infections" else (SVC_FIELDS, COMBO_KINDS)
-    together = [v for kind, f in fields if kind in kinds for v in _values(e, f, kind)]
+    together = [v for kind, f in fields if kind in kinds for v in _values(e, f, kind, svc=section != "infections")]
     return tuple(sorted({v for v in together if _norm(v) != me}))
 
 
@@ -207,15 +220,17 @@ class Intel:
                     slot["records"] += 1
                     together, host = [], e.get("ip") or ""
                     for kind, f in SVC_FIELDS:
-                        for v in _values(e, f, kind):
+                        for v in _values(e, f, kind, svc=True):          # masked: what researchers may see
                             slot["kinds"][kind][v] += 1
                             if host:
                                 slot["vh"][(kind, v)][host] += 1
                             if kind in COMBO_KINDS:
                                 together.append(v)
-                            # services take part in leads only with their certificate names (a constituent service
-                            # carrying an infection's C2 domain); a host with several issues shares everything else
-                            if kind in DOMAIN_KINDS:
+                        # services take part in leads only with their certificate names (a constituent service carrying
+                        # an infection's C2 domain); the name as it is, for matching only: a lead shows it only when the
+                        # communications reports carry it too (leads(): services alone are never a lead)
+                        if kind in DOMAIN_KINDS:
+                            for v in _values(e, f, kind, svc=True, raw=True):
                                 match[_match_key(kind, v)][("issues", issue)][rep] += 1
                     combo(slot, together, _norm(issue), host, ("issues", issue), rep)
                     if host:
@@ -243,8 +258,13 @@ class Intel:
             kinds = []
             for k, c in slot["kinds"].items():
                 c = collections.Counter({v: n for v, n in c.items() if _norm(v) != me})   # not itself
-                if c:
-                    kinds.append({"kind": k, "distinct": len(c),
+                hidden = 0
+                if section == "issues":            # services: a value is shown only when MIN_HOSTS hosts share it
+                    rare = {v for v in c if len(slot["vh"].get((k, v)) or ()) < MIN_HOSTS}
+                    hidden = len(rare)
+                    c = collections.Counter({v: n for v, n in c.items() if v not in rare})
+                if c or hidden:
+                    kinds.append({"kind": k, "distinct": len(c), "hidden": hidden,
                                   "values": [{"value": v, "count": n, "share": round(n / total, 4), **hosts(slot["vh"].get((k, v)))}
                                              for v, n in c.most_common(TOP)]})
             kinds.sort(key=lambda k: (k["kind"] in NO_LEADS, -k["distinct"]))
@@ -293,6 +313,8 @@ class Intel:
                 for v, n in c.items():
                     if _norm(v) == me:
                         continue
+                    if key[0] == "issues" and len(slot["vh"].get((kind, v)) or ()) < MIN_HOSTS:
+                        continue                  # services: only values MIN_HOSTS hosts share
                     s = seen[_match_key(kind, v)]
                     s["kinds"].add(kind); s["value"] = s["value"] or v; s["where"][rep] += n
         shared = [{"value": s["value"], "kinds": sorted(s["kinds"]), "where": dict(s["where"].most_common()), "records": sum(s["where"].values())}

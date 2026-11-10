@@ -201,6 +201,8 @@
     }
     if (st.q && !ul.querySelector("li:not(.out)")) card.classList.add("empty");
     if (k.distinct > k.values.length) card.append(el("p", "ig-foot", `The ${k.values.length} most frequent of ${fmt(k.distinct)}.`));
+    // services: values fewer than 5 hosts share are not shown (they could point at one host)
+    if (k.hidden) card.append(el("p", "ig-foot", `${fmt(k.hidden)} other value${k.hidden === 1 ? "" : "s"}, each on fewer than 5 hosts: not shown, to keep hosts unidentifiable.`));
     return card;
   }
 

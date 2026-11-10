@@ -32,7 +32,8 @@ data/shadowserver_reports.json (what the feed says about each report page).
 Command line (from the platform folder):
   .venv/bin/python report_map.py --update [--force] [--arrivals]     pull the feed now (installation) and print a summary
   .venv/bin/python report_map.py --snapshot                          write the shipped snapshot (maintainers)
-  python3 report_map.py --build-feed OUT_DIR --state STATE_DIR [--pages N] [--text]   the feed builder
+  python3 report_map.py --build-feed OUT_DIR --state STATE_DIR [--pages N] [--text]   the feed builder (daily build)
+  python3 report_map.py --build-feed OUT_DIR --state STATE_DIR --pages-only [--pages N]   its hourly page reading
 """
 import hashlib
 import html as _html
@@ -57,7 +58,9 @@ MAX_BYTES = 4_000_000                     # a schema file, page or feed larger t
 MIN_REPORTS = 100                         # a schema or feed with fewer report types than this is refused
 FEED_READ_AT = (6, 30)                    # installations: the feed once a day, after 06:30 GMT (the builder runs at 06:00)
 ARRIVALS_EVERY = 30 * 60
-PAGE_EVERY = 7 * 24 * 3600                # the builder: each report page at most weekly
+PAGE_EVERY = 7 * 24 * 3600                # the builder, without a sitemap: each report page at most weekly
+SITEMAP = "https://www.shadowserver.org/wp-sitemap.xml"   # the site's own list of pages with the date each last changed
+PAGE_SAFETY = 90 * 24 * 3600              # with the sitemap: a page is read again when its date moves, or after 90 days
 PAGES_PER_RUN = 40
 PAGE_DELAY = 3.0                          # seconds between two page requests
 EVENTS_KEPT = 300
@@ -340,7 +343,47 @@ class FeedBuilder:
     def __init__(self, out_dir, state_dir, include_text=False, logger=None):
         self.out, self.state, self.text, self.log = out_dir, state_dir, include_text, logger
         self.p = {"schema": os.path.join(state_dir, "schema"), "pages": os.path.join(state_dir, "pages.json"),
-                  "status": os.path.join(state_dir, "status.json"), "feed": os.path.join(out_dir, "report_feed.json")}
+                  "status": os.path.join(state_dir, "status.json"), "feed": os.path.join(out_dir, "report_feed.json"),
+                  "sitemap": os.path.join(state_dir, "sitemap.json")}
+
+    @staticmethod
+    def _key(url):
+        return re.sub(r"^https?://[^/]+", "", url or "").rstrip("/").lower()
+
+    def sitemap(self):
+        """Once a day: the site's sitemap, report page -> the date it last changed (2 small requests). Kept in the state
+        for the hourly runs. None when it cannot be read (the pages then fall back to 'at most weekly')."""
+        try:
+            _, body, _ = _get(SITEMAP)
+            subs = [u for u in re.findall(r"<loc>([^<]+)</loc>", body.decode("utf-8", "replace")) if "posts-page" in u]
+            dates = {}
+            for s in subs[:5]:
+                time.sleep(1)
+                _, b, _ = _get(s)
+                for loc, lm in re.findall(r"<loc>([^<]+)</loc>\s*<lastmod>([^<]+)</lastmod>", b.decode("utf-8", "replace")):
+                    if "/network-reporting/" in loc:
+                        dates[self._key(loc)] = lm.strip()
+            if not dates:
+                raise ValueError("no report pages in the sitemap")
+            _write(self.p["sitemap"], {"read": _now(), "pages": dates})
+            return dates
+        except Exception as exc:                                   # noqa: BLE001  (fall back to weekly reading)
+            if self.log:
+                self.log.warning("Feed builder: sitemap not read (%s): pages fall back to weekly", exc)
+            _write(self.p["sitemap"], {"read": _now(), "pages": {}, "error": f"{type(exc).__name__}: {str(exc)[:160]}"})
+            return None
+
+    def _due(self, url, page, dates):
+        """Is a report page due? Never read: yes. With the sitemap: when its date moved past our last reading, or after
+        PAGE_SAFETY. Without it: at most weekly."""
+        if not page.get("checked"):
+            return True
+        if dates:
+            lm = dates.get(self._key(url))
+            if lm and lm != page.get("lastmod"):            # the sitemap's date moved since we read the page
+                return True
+            return _age(page.get("checked", "")) > PAGE_SAFETY
+        return _age(page.get("checked", "")) > PAGE_EVERY
 
     def schema(self, force=False):
         """(facts, commit, note): Shadowserver's schema, downloaded only when their repository moved."""
@@ -378,11 +421,19 @@ class FeedBuilder:
                 return cached, st.get("schema_commit", ""), f"schema check failed, last good copy kept: {exc}"
             raise
 
-    def pages(self, facts, limit=PAGES_PER_RUN, delay=PAGE_DELAY):
-        """The report pages that are due (each at most weekly), read slowly with conditional requests."""
+    def pages(self, facts, limit=PAGES_PER_RUN, delay=PAGE_DELAY, dates=None):
+        """The report pages that are due (_due: by the sitemap's dates, or at most weekly), read slowly with conditional
+        requests. dates: the sitemap (the daily run reads it; the hourly runs use the one it kept)."""
         store = _read(self.p["pages"], {}) or {}
+        if dates is None:
+            dates = (_read(self.p["sitemap"], {}) or {}).get("pages") or None
         urls = sorted({f["url"] for f in facts.values() if (f.get("url") or "").startswith(SS_BASE)})
-        due = sorted((u for u in urls if _age((store.get(u) or {}).get("checked", "")) > PAGE_EVERY),
+        if dates:                                          # pages read before the sitemap was used take its date once
+            for u in urls:
+                p, lm = store.get(u) or {}, dates.get(self._key(u))
+                if lm and p.get("checked") and "lastmod" not in p and lm[:19] <= p["checked"][:19]:
+                    p["lastmod"] = lm
+        due = sorted((u for u in urls if self._due(u, store.get(u) or {}, dates)),
                      key=lambda u: (store.get(u) or {}).get("checked", ""))
         done = changed = failed = 0
         for u in due[:limit]:
@@ -404,18 +455,37 @@ class FeedBuilder:
                         changed += 1
                     p = dict(parsed, hash=digest, last_modified=_h(h, "Last-Modified"),
                              fetched=_now() if p.get("hash") != digest else p.get("fetched", _now()), checked=_now(), error="")
+                if dates and dates.get(self._key(u)):
+                    p["lastmod"] = dates[self._key(u)]                 # the sitemap date this reading covers
             except Exception as exc:                               # noqa: BLE001  (the last good copy stays; retried in 6 hours)
                 failed += 1
                 retry = datetime.now(timezone.utc) - timedelta(seconds=PAGE_EVERY - 6 * 3600)
                 p.update(checked=retry.strftime("%Y-%m-%dT%H:%M:%SZ"), error=f"{type(exc).__name__}: {str(exc)[:160]}")
+                p.pop("lastmod", None)                                 # not read: due again at the next run
             store[u] = p
         _write(self.p["pages"], store)
         return store, f"pages: {done} read of {len(due)} due ({len(urls)} in all), {changed} changed, {failed} failed"
 
+    def pages_only(self, limit=10, delay=PAGE_DELAY):
+        """The hourly run: read a few due report pages into the private state, from the schema already downloaded; no
+        request to Shadowserver's GitHub, and no feed written (that is the daily build's job)."""
+        try:
+            rj = _read(os.path.join(self.p["schema"], "reports.json"))
+            with open(os.path.join(self.p["schema"], "types.md"), encoding="utf-8") as f:
+                types = parse_types_md(f.read())
+        except OSError:
+            return "no schema downloaded yet: the daily run fetches it first"
+        if not rj or check_schema(rj, types):
+            return "the downloaded schema is not usable: the daily run fetches it again"
+        _, summary = self.pages(schema_facts(rj, types), limit, delay)
+        return summary
+
     def build(self, force=False, limit=PAGES_PER_RUN, delay=PAGE_DELAY):
         """Write feed/report_feed.json when something changed. Returns (changed?, summary)."""
         facts, commit, n1 = self.schema(force)
-        store, n2 = self.pages(facts, limit, delay)
+        dates = self.sitemap()
+        store, n2 = self.pages(facts, limit, delay, dates=dates)
+        n2 += f" · sitemap: {len(dates)} report pages dated" if dates else " · sitemap not read: weekly reading"
         keep = PAGE_FACTS + (PAGE_TEXT if self.text else ())
         pages = {u: {k: v for k, v in dict(p, field_names=sorted(p.get("fields") or {})).items() if k in keep}
                  for u, p in sorted(store.items()) if p.get("hash")}
@@ -657,7 +727,13 @@ def _cli():
     ap.add_argument("--state", metavar="STATE_DIR", help="feed builder: private state folder (schema, pages with their text)")
     ap.add_argument("--pages", type=int, default=PAGES_PER_RUN, help="feed builder: at most this many report pages per run")
     ap.add_argument("--text", action="store_true", help="feed builder: include Shadowserver's description text (only with their OK)")
+    ap.add_argument("--pages-only", action="store_true", help="feed builder: the hourly run, read due report pages only (no feed written)")
     a = ap.parse_args()
+    if a.build_feed and a.pages_only:
+        if not a.state:
+            ap.error("--pages-only needs --state")
+        print(FeedBuilder(a.build_feed, a.state).pages_only(limit=a.pages))
+        sys.exit(3)                                                # nothing to commit: the daily build publishes
     if a.build_feed:
         if not a.state:
             ap.error("--build-feed needs --state")

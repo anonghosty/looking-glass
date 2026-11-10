@@ -141,6 +141,56 @@ try:
     NET[rm.API_COMMIT] = OSError("network unreachable")
     changed, s = fb.build(limit=0, delay=0)
     ok("no network: the last good copy kept, the feed untouched", changed is False and open(os.path.join(out_dir, "report_feed.json")).read() == before)
+    # the sitemap: pages are read only when their date moves (or after 90 days), not weekly
+    sstate = os.path.join(tmp, "state_sitemap")
+    shutil.copytree(state, sstate)
+    sp = json.load(open(os.path.join(sstate, "pages.json")))
+    ten_days = "2000-01-01T00:00:00Z"
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+    ten_days = (_dt.now(_tz.utc) - _td(days=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for u in sp:
+        sp[u]["checked"] = ten_days                                 # older than a week, younger than 90 days
+    json.dump(sp, open(os.path.join(sstate, "pages.json"), "w"))
+    urls = sorted(sp)
+    def site_map(changed=None):
+        rows = "".join(f"<url><loc>{u}</loc><lastmod>{'2099-01-01T00:00:00+00:00' if u == changed else '2020-01-01T00:00:00+00:00'}</lastmod></url>" for u in urls)
+        NET[rm.SITEMAP] = (200, b"<sitemapindex><sitemap><loc>https://www.shadowserver.org/wp-sitemap-posts-page-1.xml</loc></sitemap></sitemapindex>", {})
+        NET["https://www.shadowserver.org/wp-sitemap-posts-page-1.xml"] = (200, f"<urlset>{rows}</urlset>".encode(), {})
+    site_map()
+    NET[rm.API_COMMIT] = (200, SHA1.encode(), {})
+    sb = rm.FeedBuilder(os.path.join(tmp, "feed_sitemap"), sstate)
+    n = len(CALLS)
+    changed, s = sb.build(limit=500, delay=0)
+    pages_asked = [u for u, _ in CALLS[n:] if u.startswith(rm.SS_BASE)]
+    ok("with the sitemap, unchanged pages are not read again after a week", not pages_asked and "sitemap" in s, s[-90:])
+    ok("…a quiet day asks Shadowserver 3 small things: the schema commit and the sitemap (2)",
+       sorted(u for u, _ in CALLS[n:]) == sorted([rm.API_COMMIT, rm.SITEMAP, "https://www.shadowserver.org/wp-sitemap-posts-page-1.xml"]),
+       f"{len(CALLS) - n} requests")
+    site_map(changed=urls[2])
+    n = len(CALLS)
+    sb.build(limit=500, delay=0)
+    ok("a page whose date moves is read, and only that one", [u for u, _ in CALLS[n:] if u.startswith(rm.SS_BASE)] == [urls[2]])
+    n = len(CALLS)
+    hs = sb.pages_only(limit=10, delay=0)
+    ok("the hourly runs use the morning's sitemap: nothing due, nobody asked", len(CALLS) == n, hs)
+    del NET[rm.SITEMAP]
+    for u in list(NET):
+        if "wp-sitemap" in u:
+            del NET[u]
+    hstate = os.path.join(tmp, "state_hourly")
+    shutil.copytree(state, hstate)
+    hp = json.load(open(os.path.join(hstate, "pages.json")))
+    for u in list(hp)[:5]:
+        hp[u]["checked"] = "2000-01-01T00:00:00Z"            # five pages due again
+    json.dump(hp, open(os.path.join(hstate, "pages.json"), "w"))
+    hb = rm.FeedBuilder(os.path.join(tmp, "feed_hourly"), hstate)
+    n = len(CALLS)
+    s = hb.pages_only(limit=10, delay=0)
+    asked = [u for u, _ in CALLS[n:]]
+    ok("the hourly run reads due pages only", "5 read" in s and all(u.startswith(rm.SS_BASE) for u in asked), s)
+    ok("…never asks Shadowserver's GitHub, and writes no feed", not [u for u in asked if "github" in u]
+       and not os.path.exists(os.path.join(tmp, "feed_hourly", "report_feed.json")))
+    ok("…and without a downloaded schema it waits for the daily run", "daily run" in rm.FeedBuilder(os.path.join(tmp, "x"), os.path.join(tmp, "empty")).pages_only())
     fbt = rm.FeedBuilder(os.path.join(tmp, "feed_text"), state, include_text=True)
     NET[rm.API_COMMIT] = (200, SHA1.encode(), {})
     changed, s = fbt.build(limit=0, delay=0)
