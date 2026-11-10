@@ -2976,6 +2976,12 @@ _mgmt = management.register(app, {
     "geocode": lambda cc, region, city: geocoder.lookup(cc or settings.data["country"], region, city),
 })
 
+# where each Shadowserver report type belongs (researchers' page): kept current from Shadowserver's schema (report_map.py)
+import report_map as _report_map  # noqa: E402
+REPORT_MAP = _report_map.ReportMap(
+    BASE_DIR, collections=db.list_collection_names,
+    fields_of=lambda n: list((db[n].find_one(sort=[("_id", -1)]) or {}).keys()), logger=app.logger)
+
 # Not when app.py is merely imported by a script or check: the schedule state file belongs to the server.
 _SERVING = __name__ == "__main__" or "gunicorn" in os.path.basename(sys.argv[0] if sys.argv else "")
 if _SERVING or os.environ.get("THREATMAP_SCHEDULE") == "1":
@@ -2984,6 +2990,7 @@ if _SERVING:
     threading.Thread(target=_autocheck_loop, daemon=True, name="malpedia-new-names").start()
     threading.Thread(target=_cve_loop, daemon=True, name="cve-lookups").start()
     threading.Thread(target=_mgmt["prewarm"], daemon=True, name="mgmt-baseline-prewarm").start()
+    threading.Thread(target=REPORT_MAP.loop, daemon=True, name="report-map").start()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "5000")), debug=False, threaded=True)

@@ -12,6 +12,8 @@ data/*
 !data/infections.json
 !data/service_reports.json
 !data/issues.json
+!data/report_map_rules.json
+!data/report_map_snapshot.json
 # rendered by deploy/install.sh for this computer
 deploy/*.service
 # outputs of the tools/ diagnostics

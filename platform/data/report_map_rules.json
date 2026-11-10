@@ -1,0 +1,44 @@
+{
+  "_about": "Where each Shadowserver report type belongs on the researchers' page (report_map.py). The classification in Shadowserver's reports.json decides the section; the groups and exceptions below are Looking Glass's own choices and are applied after it. A rebuild of the map never changes this file. An administrator's own moves are kept apart, in data/report_map_local.json.",
+  "sections": ["Infections", "Attacks seen", "Services", "Intelligence"],
+  "services_by_class": [
+    ["vulnerable", "*"],
+    ["other", "other"],
+    ["other", "potentially-unwanted-accessible"],
+    ["other", "undetermined"]
+  ],
+  "intelligence_by_class": [
+    ["intrusions", "system-compromise", "Compromised systems and victims"],
+    ["information-content-security", "data-leak", "Leaked accounts and credentials"],
+    ["malicious-code", "malware-distribution", "Malicious content hosted in the constituency"],
+    ["abusive-content", "spam", "Malicious content hosted in the constituency"],
+    ["other", "blocklist", "Reputation: listed or targeted"],
+    ["intrusion-attempts", "exploit", "Reputation: listed or targeted"]
+  ],
+  "service_groups": [
+    {"group": "Known vulnerability",
+     "pattern": "_(http_vulnerable|exchange|smtp_vulnerable|imap_vulnerable|pop3_vulnerable|netis_router|synfulknock|badsecrets|ssl_freak|ssl_poodle|isakmp|cisco_smart_install)$"},
+    {"group": "Can be abused for attacks (amplification, tunnels)",
+     "pattern": "_(dns|ntp|ntpmonitor|ssdp|snmp|chargen|qotd|memcached|mdns|portmapper|ddos_middlebox|loop_dos|ws_discovery|ldap_udp|netbios|ubiquiti|dvr_dhcpdiscover|coap|nat_pmp|tftp|stun|slp|mssql|db2|ipp|rdpeudp|ip_tunnel|gtp)$"},
+    {"group": "Should not be open to the internet (remote access, databases, management)",
+     "pattern": "_(rdp|vnc|ard|radmin|telnet|smb|msrpc|xdmcp|adb|docker|kubernetes|ipmi|ics|cwmp|mikrotik_service|epmd|afp|rsync|ftp|mysql|postgres|mongodb|couchdb|elasticsearch|redis|hadoop|amqp|activemq|mqtt|mqtt_anon|ldap_tcp|socks|http_proxy|sip|msmq|bgp)$"},
+    {"group": "Inventory: what is visible (informational)",
+     "pattern": "^(scan_(http|ssl|ssh|smtp|imap|pop3|quic)|population_\\w+|device_id)$"}
+  ],
+  "service_default_group": "Should not be open to the internet (remote access, databases, management)",
+  "group_order": {
+    "Services": ["Known vulnerability", "Should not be open to the internet (remote access, databases, management)",
+                 "Can be abused for attacks (amplification, tunnels)", "Inventory: what is visible (informational)"],
+    "Intelligence": ["Compromised systems and victims", "Leaked accounts and credentials",
+                     "Malicious content hosted in the constituency", "Reputation: listed or targeted",
+                     "Attacker infrastructure found in the constituency", "Not yet placed: check"]
+  },
+  "overrides": {
+    "spam_url": {"section": "Intelligence", "group": "Malicious content hosted in the constituency",
+                 "why": "drawn on the communications map (its records have a source), but it is spam links hosted in the constituency"},
+    "sandbox_dns": {"section": "Intelligence", "group": "Malicious content hosted in the constituency",
+                    "why": "DNS requests made by malware samples in a sandbox: no host of the constituency"},
+    "scan_post_exploitation_framework": {"section": "Intelligence", "group": "Attacker infrastructure found in the constituency",
+                                         "why": "a command and control framework found by a scan: attacker infrastructure, not a service"}
+  }
+}
