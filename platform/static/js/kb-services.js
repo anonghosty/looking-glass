@@ -54,17 +54,59 @@
     }
   }
 
+  // sorting and the quick filters (kept per viewer while the page is open)
+  const SEVN = { critical: 5, high: 4, medium: 3, low: 2, info: 1 };
+  const SORTS = { hosts: ["Most hosts", (a, b) => b.hosts - a.hosts],
+    asks: ["Check pattern fields first", (a, b) => (b.pattern_asks?.length && b.hosts ? 1 : 0) - (a.pattern_asks?.length && a.hosts ? 1 : 0) || b.hosts - a.hosts],
+    issues: ["Most issues on their hosts", (a, b) => b.issues_total - a.issues_total || (b.exploited || 0) - (a.exploited || 0) || b.hosts - a.hosts],
+    kev: ["Actively exploited first", (a, b) => (b.exploited || 0) - (a.exploited || 0) || b.issues_total - a.issues_total],
+    sink: ["Most hosts calling sinkholes", (a, b) => sinkN(b) - sinkN(a) || b.hosts - a.hosts],
+    severity: ["Severity", (a, b) => (SEVN[b.severity] || 0) - (SEVN[a.severity] || 0) || b.hosts - a.hosts],
+    name: ["Name", (a, b) => a.title.localeCompare(b.title)] };
+  const FILTERS = { asks: ["Check pattern fields", (x) => x.pattern_asks?.length && x.hosts], issues: ["With issues", (x) => x.issues_total > 0],
+    kev: ["Actively exploited", (x) => x.exploited > 0], sink: ["Calling sinkholes", (x) => sinkN(x) > 0] };
+  const sinkN = (x) => (x.infections || []).reduce((s, i) => s + i.hosts, 0);
+  let sortBy = "hosts"; const on = new Set(); const open = new Set();
+  function controls() {
+    if ($("svcSort")) return;
+    const bar = el("div", "svc-ctl");
+    const sl = el("label", "svc-sort"); sl.append(el("span", null, "Sort"));
+    const sel = el("select"); sel.id = "svcSort"; sel.setAttribute("aria-label", "Sort the services reports");
+    for (const [k, [l]] of Object.entries(SORTS)) { const o = el("option", null, l); o.value = k; sel.append(o); }
+    sel.addEventListener("change", () => { sortBy = sel.value; render(); }); sl.append(sel);
+    const chips = el("div", "svc-fchips"); chips.setAttribute("role", "group"); chips.setAttribute("aria-label", "Show only");
+    for (const [k, [l]] of Object.entries(FILTERS)) {
+      const b = el("button", `svc-fchip f-${k}`); b.type = "button"; b.dataset.f = k; b.setAttribute("aria-pressed", "false");
+      b.append(el("span", null, l), el("em", null, ""));
+      b.addEventListener("click", () => { on.has(k) ? on.delete(k) : on.add(k); render(); }); chips.append(b);
+    }
+    bar.append(sl, chips);
+    $("svcSearch").parentElement.after(bar);
+  }
   function rows() {
     const q = $("svcSearch").value.trim().toLowerCase(), only = $("svcSeen").checked;
-    return data.reports.filter((x) => (q ? true : x.group === tab) && (!only || x.hosts || q)
-      && (!q || [x.title, x.name, x.names.join(" "), x.products.join(" "), x.ports.join(" "), x.issues.map((i) => i.name).join(" "), x.def].join(" ").toLowerCase().includes(q)));
+    // a quick filter looks across every group (like the search): "which reports ask me to check their pattern fields?"
+    const wide = q || on.size;
+    const list = data.reports.filter((x) => (wide ? true : x.group === tab) && (!only || x.hosts || q)
+      && [...on].every((k) => FILTERS[k][1](x))
+      && (!q || [x.title, x.name, x.names.join(" "), x.products.join(" "), x.ports.join(" "), x.issues.map((i) => i.name).join(" "),
+                 (x.infections || []).map((i) => i.name).join(" "), x.def].join(" ").toLowerCase().includes(q)));
+    return list.sort(SORTS[sortBy][1]);
+  }
+  function chipCounts() {
+    const only = $("svcSeen").checked;
+    for (const b of document.querySelectorAll(".svc-fchip")) {
+      const k = b.dataset.f; b.setAttribute("aria-pressed", String(on.has(k)));
+      b.querySelector("em").textContent = fmt(data.reports.filter((x) => (!only || x.hosts) && FILTERS[k][1](x)).length);
+    }
   }
   function render() {
-    for (const b of $("svcTabs").children) b.setAttribute("aria-selected", String(b.dataset.g === tab && !$("svcSearch").value.trim()));
+    controls(); chipCounts();
+    for (const b of $("svcTabs").children) b.setAttribute("aria-selected", String(b.dataset.g === tab && !$("svcSearch").value.trim() && !on.size));
     const tb = $("svcTable").querySelector("tbody"); tb.replaceChildren();
     const list = rows();
     if (!list.length) {
-      const tr = el("tr", "dz-empty"), td = el("td", null, $("svcSearch").value.trim() ? "Nothing matches the search." :
+      const tr = el("tr", "dz-empty"), td = el("td", null, $("svcSearch").value.trim() || on.size ? "Nothing matches the search and filters." :
         "No report of this group was seen in the days in memory. Untick “Only reports seen here” to see them all.");
       td.colSpan = 6; tr.append(td); tb.append(tr); return;
     }
@@ -75,8 +117,9 @@
       const meta = el("small", "mono", x.names.join(" · "));
       name.append(meta);
       if (x.new) name.append(pill("New report type", "warn"));
-      if (x.pattern_asks?.length && x.hosts) {
-        const p = pill("Check pattern fields", "warn"); p.title = x.pattern_asks.join("\n"); name.append(p);
+      if (x.pattern_asks?.length && x.hosts) {          // opens the pattern fields straight away
+        const p = el("button", "dz-pill warn svc-askpill", "Check pattern fields"); p.type = "button"; p.title = `${x.pattern_asks.join("\n")}\nClick to open the pattern fields`;
+        p.addEventListener("click", () => window.LGIntel?.open(x.name, "services", "*fields*")); name.append(p);
       }
       const seen = el("td", "dz-seen");
       if (x.hosts) {
@@ -84,15 +127,40 @@
         if (x.products.length) seen.append(el("small", "muted svc-prod", x.products.join(" · ")));
       } else seen.append(el("span", "muted", x.received ? "Received, not in the days in memory" : "Not received here"));
       const sev = el("td"); sev.append(pill(x.severity ? x.severity[0].toUpperCase() + x.severity.slice(1) : "–", SEV[x.severity] ?? ""));
+      // the issues (CVEs and named issues) and the infections (hosts also calling botnet sinkholes), each with its hosts;
+      // the first four of each, "+N more" opens the rest in place
       const iss = el("td", "dz-pills svc-iss");
-      if (!x.issues.length) iss.append(el("span", "muted", x.hosts ? "none found" : "–"));
-      for (const i of x.issues.slice(0, 4)) {
+      const infs = x.infections || [];
+      if (!x.issues.length && !infs.length) iss.append(el("span", "muted", x.hosts ? "none found" : "–"));
+      const all = open.has(x.name);
+      const more = (hidden) => {
+        const b = el("button", "svc-more", all ? "show fewer" : `+${fmt(hidden)} more`); b.type = "button";
+        b.title = all ? "Show the first four only" : "Show them all here";
+        b.addEventListener("click", () => { all ? open.delete(x.name) : open.add(x.name); render(); }); return b;
+      };
+      const iv = all ? x.issues : x.issues.slice(0, 4);
+      for (const i of iv) {
         const b = el("button", `dz-pill svc-ip ${i.exploited ? "bad" : i.cve ? "info" : i.defined ? "ok" : "warn"}`, i.name); b.type = "button";
         b.title = `${fmt(i.hosts)} host${i.hosts === 1 ? "" : "s"}${i.exploited ? " · actively exploited (CISA KEV)" : ""}${i.cvss != null ? ` · CVSS ${i.cvss}` : ""} — show it in Issues`;
         if (i.exploited) b.prepend(el("i", "svc-kev", "KEV"));
+        b.append(el("em", "svc-n", fmt(i.hosts)));
         b.addEventListener("click", () => toIssue(i.name)); iss.append(b);
       }
-      if (x.issues_total > 4) iss.append(el("span", "muted", `+${x.issues_total - 4} more`));
+      if (all && x.issues_total > x.issues.length) iss.append(el("span", "muted", `the ${x.issues.length} with most hosts of ${fmt(x.issues_total)}: all in Intel gathered › About this report`));
+      if (infs.length) {
+        const iw = el("div", "svc-infs");
+        iw.append(el("span", "svc-infs-h", "Calling sinkholes"));
+        for (const i of all ? infs : infs.slice(0, 4)) {
+          const b = el("button", "dz-pill svc-ip svc-inf", i.name); b.type = "button";
+          b.prepend(el("i", "svc-sinkdot", ""));
+          b.append(el("em", "svc-n", fmt(i.hosts)));
+          b.title = `${fmt(i.hosts)} host${i.hosts === 1 ? "" : "s"} of this report also call a botnet sinkhole as ${i.name} — open Intel gathered for ${i.name}`;
+          b.addEventListener("click", () => window.LGIntel?.open(i.name, "infections")); iw.append(b);
+        }
+        iss.append(iw);
+      }
+      const hiddenN = Math.max(0, Math.min(x.issues.length, x.issues_total) - 4) + Math.max(0, infs.length - 4);
+      if (hiddenN) iss.append(more(hiddenN));
       const what = el("td", "dz-def svc-def");
       what.append(el("span", null, x.def || "—"));
       const src = el("small", "svc-src");
@@ -101,7 +169,8 @@
       if (x.notes) src.append(document.createTextNode(` · ${x.notes} note${x.notes === 1 ? "" : "s"}`));
       what.append(src);
       const act = el("td", "dz-act");
-      const det = el("button", "lg-btn sm primary", "Details"); det.type = "button"; det.addEventListener("click", () => openDetail(x.name));
+      const det = el("button", "lg-btn sm primary", "Intel gathered"); det.type = "button"; det.addEventListener("click", () => openDetail(x.name));
+      det.title = "The patterns, combinations and codes of this report, the other reports its hosts are in, and the sinkholes they call";
       const nb = el("button", "lg-btn sm ghost", "Notes"); nb.type = "button"; nb.hidden = !window.LGNotes;
       nb.addEventListener("click", () => window.LGNotes?.open(x.name, "services", x.title));
       act.append(det, nb);
@@ -119,14 +188,10 @@
   $("svcSearch").addEventListener("input", render);
   $("svcSeen").addEventListener("change", render);
 
-  // ---------------- the Details window
-  const back = el("div", "kbn-back"); back.hidden = true;
-  const box = el("section", "svc-modal"); box.hidden = true; box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true");
-  document.body.append(back, box);
-  let opener = null;
-  function shut() { box.hidden = true; back.hidden = true; document.body.classList.remove("kbn-open"); opener?.focus?.(); }
-  back.addEventListener("click", shut);
-  box.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); shut(); } });
+  // ---------------- Intel gathered (intel.js, section services) holds the report's patterns, across reports and sinkholes;
+  // "About this report" in that window is drawn here (overview), "Pattern fields" by kb-services-patterns.js
+  const openDetail = (name) => window.LGIntel?.open(name, "services");
+  const shut = () => document.querySelector(".ig-modal .ig-close")?.click();
   function bars(title, items, unit) {
     const s = el("section", "svc-block"); s.append(el("h4", null, title));
     if (!items?.length) { s.append(el("p", "muted", "Nothing in the reports.")); return s; }
@@ -138,21 +203,17 @@
     }
     s.append(ul); return s;
   }
-  async function openDetail(name) {
-    opener = document.activeElement;
+  async function overview(box, name) {
     box.replaceChildren(el("p", "svc-loading", "Reading what the reports show for this service…"));
-    box.hidden = false; back.hidden = false; document.body.classList.add("kbn-open");
     const r = await fetch(`/api/kb/service?name=${encodeURIComponent(name)}`, { cache: "no-store" });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { box.replaceChildren(el("p", "svc-loading", d.error || `Could not open (HTTP ${r.status})`)); return; }
     box.replaceChildren();
-    const head = el("header", "svc-mhead"), t = el("div");
-    t.append(el("div", "kbn-eyebrow", `Services report · ${SHORT[d.group] || d.group}`), el("h2", null, d.title), el("div", "mono svc-names", d.names.join(" · ")));
+    const t = el("div", "svc-ohead");
+    t.append(el("div", "kbn-eyebrow", `Services report · ${SHORT[d.group] || d.group}`), el("div", "mono svc-names", d.names.join(" · ")));
     const pills = el("div", "dz-pills");
     pills.append(pill(`Shadowserver: ${d.severity || "unrated"}`, SEV[d.severity] ?? ""), pill(d.classification, ""));
     t.append(pills);
-    const x = el("button", "icon-btn kbn-close", "✕"); x.type = "button"; x.setAttribute("aria-label", "Close"); x.addEventListener("click", shut);
-    head.append(t, x);
     const body = el("div", "svc-mbody"), left = el("div", "svc-col"), right = el("div", "svc-col");
     // what Looking Glass says
     const lg = el("section", "svc-block"); lg.append(el("h4", null, "What Looking Glass says"));
@@ -206,28 +267,9 @@
     right.append(issS, bars("Products", d.products), bars("Devices (vendor and type)", d.devices), bars("Versions", d.versions),
       bars("Ports", d.ports), bars("Tags (not CVEs)", d.tags));
     body.append(left, right);
-    // tabs: Overview, and the patterns (kb-services-patterns.js): Patterns, Across reports, Pattern fields
-    if (d.pattern_asks?.length) {
-      const ask = el("div", "svp-ask"); ask.append(el("b", null, "Looking Glass asks: "), document.createTextNode(d.pattern_asks.join(" ")));
-      t.append(ask);
-    }
-    const titleOf = (n) => (data?.reports || []).find((r) => r.name === n || r.names.includes(n))?.title || n;
-    const extra = window.LGServicePatterns ? window.LGServicePatterns.panes(d.name, titleOf, () => load()) : [];
-    const tabs = el("div", "svp-tabs"); tabs.setAttribute("role", "tablist");
-    const panes = [["Overview", null], ...extra].map(([label, fill]) => {
-      const b = el("button", null, label); b.type = "button"; b.setAttribute("role", "tab");
-      const pane = label === "Overview" ? body : el("div", "svc-mbody svp-pane");
-      return { label, fill, b, pane, done: !fill };
-    });
-    const show = (p) => {
-      for (const q of panes) { q.b.setAttribute("aria-selected", String(q === p)); q.pane.hidden = q !== p; }
-      if (!p.done) { p.done = true; p.fill(p.pane); }
-    };
-    for (const p of panes) { p.b.addEventListener("click", () => show(p)); tabs.append(p.b); }
-    box.append(head, tabs, ...panes.map((p) => p.pane));
-    show(panes[0]);
-    x.focus();
+    box.append(t, body);
   }
+  window.LGServices = { overview, reload: () => load() };
 
   load().catch((e) => { $("svcStatus").textContent = `Could not load the services: ${e.message}`; });
 })();

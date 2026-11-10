@@ -39,6 +39,12 @@ LABELS = {"src_asn": "Source network", "asn": "Network", "dst_asn": "Destination
           "severity": "Severity", "sector": "Sector", "tag": "Tag", "time": "Time", "port": "Port", "src_ip": "Host", "ip": "Host"}
 
 
+def day_span(entry):
+    """An analyst code's day, or its first to last day (a code made from a combination search)."""
+    days = entry.get("days") or [entry.get("day", "")]
+    return days[0] if len(days) == 1 else f"{days[0]} to {days[-1]}"
+
+
 def acode(platform, day, sel):
     raw = json.dumps([platform, day, sel], sort_keys=True)
     return "LG-A-" + hashlib.sha256(raw.encode()).hexdigest()[:8].upper()
@@ -115,17 +121,29 @@ def install(app, ctx):
             json.dump(sorted(e["id"] for e in evs if e.get("id")), f)
         os.replace(tmp, ids_path(code))
 
+    def days_of(entry):
+        """The day objects of an analyst code: its day, or its days (a code made from a combination search)."""
+        out = []
+        for iso in entry.get("days") or [entry["day"]]:
+            d = ctx["day"](entry["platform"], iso)
+            if d is not None:
+                out.append(d)
+        return out
+
     def records(entry, day=None):
-        """The records of an analyst code on its day (the given day object, or the code's day loaded)."""
-        day = day or ctx["day"](entry["platform"], entry["day"])
-        if day is None:
+        """The records of an analyst code on its day (the given day object, or the code's day(s) loaded)."""
+        days = [day] if day is not None else days_of(entry)
+        if not days:
             return []
         try:
             with open(ids_path(entry["code"]), encoding="utf-8") as f:
                 ids = set(json.load(f))
-            return [e for e in day.events if e.get("id") in ids]
+            return [e for d in days for e in d.events if e.get("id") in ids]
         except (OSError, ValueError, KeyError):
             pass                                  # made before the records were kept: apply the selection again
+        if (entry.get("sel") or {}).get("from_code"):
+            return []                             # made from a search: only its kept records stand for it
+        day = days[0]
         if entry["platform"] == "comms":
             sel = entry["sel"]
             return ctx["slice"](day, sel["kind"], sel["value"])[2]
@@ -149,6 +167,10 @@ def install(app, ctx):
         text = str(b.get("text") or "").replace("\r", "").strip()[:2000]
         if not title:
             return jsonify(error="Give the finding a short title."), 400
+        # the researcher it goes to (a channel, like a ticket: only the two of them see it, and whoever joins later)
+        to, err = ctx["findings"].recipient("researcher", b.get("to"))
+        if not to:
+            return jsonify(error=err), 400
         try:
             at = datetime.fromisoformat(str(b.get("at") or "").replace("Z", "+00:00"))
         except ValueError:
@@ -162,8 +184,12 @@ def install(app, ctx):
         else:
             q = [(k, v) for k, v in parse_qsl(str(b.get("query") or "")[:4000]) if k not in ("at", "demo", "n", "metric", "all")]
             sel = {"query": sorted(q)}
-        code = acode(platform, day_iso, sel)
+        # the analyst may ask about the combinations across reports only: the researchers' page then leads with them
+        focus = "across" if b.get("focus") == "across" else ""
+        code = acode(platform, day_iso, dict(sel, focus=focus) if focus else sel)
         entry = {"kind": "a", "platform": platform, "day": day_iso, "sel": sel, "code": "-"}     # "-": apply the selection
+        if focus:
+            entry["focus"] = focus
         evs = records(entry)
         entry.pop("code")
         if not evs:
@@ -176,16 +202,72 @@ def install(app, ctx):
         save_ids(code, evs)
         book.put(code, entry)
         me, role = user()
-        item = ctx["findings"].create_analyst(code, "issues" if platform == "services" else "infections", entry["label"], title, text, me, role)
-        ctx["audit"].add("analyst_code", user=me, target=code, detail=f"#{item['id']} {title[:60]} · {entry['label'][:80]}")
-        return jsonify(code=code, finding=f"#{item['id']}", label=entry["label"], records=entry["records"], hosts=entry["hosts"])
+        item = ctx["findings"].create_analyst(code, "issues" if platform == "services" else "infections", entry["label"], title, text, me, role,
+                                              to, "researcher")
+        ctx["audit"].add("analyst_code", user=me, target=code, detail=f"#{item['id']} to {to} · {title[:60]} · {entry['label'][:80]}")
+        return jsonify(code=code, finding=f"#{item['id']}", label=entry["label"], records=entry["records"], hosts=entry["hosts"],
+                       to=ctx["people_name"](to))
+
+    # ------------------------------------------------------------------ an analyst asks for the analysis across reports
+    @app.route("/api/combos/search/<jid>/acode", methods=["POST"])
+    def api_acode_from_search(jid):
+        """From a combination search's result (combos.py): exactly its devices' records become an analyst code, and a
+        finding sent to management with the analyst's request: the researchers analyse them across every category (or
+        across reports only), management accepts or rejects and directs the report (findings.py)."""
+        if not analyst():
+            return jsonify(error="Analyst codes are made by analysts (roles that see addresses)."), 403
+        if ctx["is_demo"]():
+            return jsonify(error="Demo mode is on: switch it off to make an analyst code."), 403
+        if not ctx["csrf_ok"]():
+            return jsonify(error="Refused (the request did not come from this page)."), 403
+        if not ctx["fresh"]():
+            return jsonify(error="Sign in again to make changes (your session is older than 12 hours)."), 403
+        j = book.own_job(jid) if hasattr(book, "own_job") else None
+        if not j or not j.get("inputs"):
+            return jsonify(error="This search has expired (finished searches are kept for an hour): run it again."), 404
+        src, found = j["inputs"][0], j["inputs"][1]
+        if not found:
+            return jsonify(error="The search found no device: nothing to pass on."), 400
+        b = request.get_json(silent=True) or {}
+        title = str(b.get("title") or "").strip()[:140]
+        text = str(b.get("text") or "").replace("\r", "").strip()[:2000]
+        if not title:
+            return jsonify(error="Give the finding a short title."), 400
+        to, err = ctx["findings"].recipient("management", b.get("to"))      # the manager it goes to
+        if not to:
+            return jsonify(error=err), 400
+        focus = "across" if b.get("focus") == "across" else ""
+        platform = "comms" if src.get("section") == "infections" or src.get("platform") == "comms" else "services"
+        days = sorted({str(e.get("extracted_date") or e.get("timestamp") or "")[:10] for e in found} - {""})
+        if not days:
+            return jsonify(error="The records carry no day."), 400
+        sel = {"from_code": src["code"], "days": days}
+        code = acode(platform, days[-1], dict(sel, focus=focus) if focus else sel)
+        host = (lambda e: e.get("src_ip")) if platform == "comms" else (lambda e: e.get("ip"))
+        names = collections.Counter(n for e in found for n in ([(e.get("infection") or "").lower()] if platform == "comms" else (e.get("issues") or [])) if n)
+        what = book.describe(src["code"]) if hasattr(book, "describe") else src["code"]
+        entry = {"kind": "a", "platform": platform, "day": days[-1], "days": days, "sel": sel,
+                 "label": f"The devices of {src['code']} ({what})"[:400], "records": len(found),
+                 "hosts": len({host(e) for e in found if host(e)}), "names": [n for n, _ in names.most_common(12)]}
+        if focus:
+            entry["focus"] = focus
+        save_ids(code, found)
+        book.put(code, entry)
+        me, role = user()
+        ask = ("Analysis across reports requested" if focus else "Analysis across every category requested") + f" on the devices of {src['code']}."
+        item = ctx["findings"].create_analyst(code, "issues" if platform == "services" else "infections", entry["label"], title, text, me, role,
+                                              to, "management", ask)
+        ctx["audit"].add("analyst_code", user=me, target=code, detail=f"#{item['id']} to {to} · {title[:60]} · from {src['code']} · {len(found)} records")
+        return jsonify(code=code, finding=f"#{item['id']}", label=entry["label"], records=entry["records"], hosts=entry["hosts"], days=days,
+                       to=ctx["people_name"](to))
 
     # ------------------------------------------------------------------ the researcher's view of an analyst code
     def view(code):
         entry = book.get(code)
         if not entry or entry.get("kind") != "a":
             return None
-        evs = records(entry)
+        days = days_of(entry)
+        evs = records(entry) if days else []
         section = "infections" if entry["platform"] == "comms" else "issues"
         labels = ctx["labels"]()
         host = (lambda e: e.get("src_ip") or "") if section == "infections" else (lambda e: e.get("ip") or "")
@@ -203,6 +285,16 @@ def install(app, ctx):
                 c = p["combos"][(r, items)]; c["records"] += 1
                 if h:
                     p["hosts"].add(h); c["hosts"][h] += 1; p["dev"][h][r].update(items)
+        # across reports: the same devices in the name's other reports that day, beyond the selection (a selection is
+        # often one report): what each device carried there, as the cross-report patterns Intel gathered shows
+        mine = {n: p["hosts"] for n, p in per.items()}
+        for e in (e for d in days for e in d.events):
+            h = host(e)
+            if not h:
+                continue
+            for n in names_of(e):
+                if n in mine and h in mine[n]:
+                    per[n]["dev"][h][rep(e)].update(I.record_items(section, e, I._norm(n)))
         out = []
         for n, p in sorted(per.items(), key=lambda kv: -kv[1]["records"]):
             combos = []
@@ -218,13 +310,32 @@ def install(app, ctx):
                         "reports": [{"report": r, "records": k} for r, k in p["reports"].most_common()],
                         "combinations": combos, "combinations_total": len(p["combos"]),
                         "across": [{"code": I.cross_code(section, n, pt), "devices": k, "parts": [{"report": r, "items": list(i)} for r, i in pt]}
-                                   for pt, k in pats.most_common(8)]})
+                                   for pt, k in pats.most_common(8)],
+                        "across_total": len(pats),
+                        "multi_devices": sum(1 for reps in p["dev"].values() if len(reps) > 1),
+                        "other_reports": sorted({r for reps in p["dev"].values() for r in reps} - set(p["reports"]))})
         hosts = {host(e) for e in evs if host(e)}
+        # every category for these hosts: the services reports they are in (pattern codes), the CVEs and issues on them,
+        # the infections they call sinkholes as (services_intel.for_hosts; counts and codes only)
+        cross = None
+        if ctx.get("cross") and hosts:
+            try:
+                cross = ctx["cross"](hosts)
+            except Exception:                              # noqa: BLE001  (the page still shows the selection itself)
+                cross = None
         f = ctx["findings"].of_code(code)
-        return {"code": code, "platform": entry["platform"], "section": section, "day": entry["day"], "label": entry.get("label", ""),
+        span = entry.get("days") or [entry["day"]]
+        return {"code": code, "platform": entry["platform"], "section": section, "label": entry.get("label", ""),
+                "day": span[0] if len(span) == 1 else f"{span[0]} to {span[-1]}", "days": span,
                 "records": len(evs), "devices": len(hosts), "reports": len({rep(e) for e in evs}), "names": out,
                 "finding": {"id": f["id"], "number": f"#{f['id']}", "title": f["title"], "text": f["text"], "status": f["status"]} if f else None,
-                "in_memory": bool(evs)}
+                "in_memory": bool(evs), "cross": cross, "focus": entry.get("focus", "")}
+
+    def in_channel(code, f=None):
+        """Whether this user may open the code: one of the people of its finding (a channel, like a ticket), or an admin;
+        a code made before channels is open to the roles that read codes, as it was."""
+        f = f if f is not None else ctx["findings"].of_code(code)
+        return not f or ctx["findings"].sees(f, user()[0], hp("settings"))
 
     @app.route("/api/intel/acode/<code>")
     def api_acode_view(code):
@@ -233,6 +344,8 @@ def install(app, ctx):
         code = (code or "").strip().upper()
         if not ACODE_RX.match(code):
             return jsonify(error="An analyst code looks like LG-A-1A2B3C4D."), 400
+        if not in_channel(code):                           # only the people of its finding (and admins)
+            return jsonify(error=f"{code} is not an analyst code known here."), 404
         v = view(code)
         if v is None:
             return jsonify(error=f"{code} is not an analyst code known here."), 404
@@ -250,6 +363,8 @@ def install(app, ctx):
         out = []
         for c, e in items:
             f = ctx["findings"].of_code(c)
+            if not in_channel(c, f):
+                continue
             out.append({"code": c, "day": e["day"], "platform": e["platform"], "label": e.get("label", ""), "records": e.get("records"),
                         "hosts": e.get("hosts"), "names": e.get("names", [])[:6], "first": e.get("first", ""),
                         "finding": {"number": f"#{f['id']}", "title": f["title"], "status": f["status"], "by": ctx["people_name"](f["user"])} if f else None})
@@ -267,5 +382,7 @@ def install(app, ctx):
     api = API()
     api.records = records
     api.paths = paths
-    api.describe = lambda entry: f"Analyst selection on {entry['day']} ({'network communications' if entry['platform'] == 'comms' else 'services'}): {entry.get('label', '')}"
+    api.describe = lambda entry: f"Analyst selection on {day_span(entry)} ({'network communications' if entry['platform'] == 'comms' else 'services'}): {entry.get('label', '')}"
+    api.days_of = days_of
+    api.allowed = lambda code: in_channel(code)            # combos.py, the Executive filter: the channel rule
     return api

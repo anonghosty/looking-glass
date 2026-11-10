@@ -1,6 +1,7 @@
 /* Looking Glass · the Findings page (/findings) */
 .fd-main { max-width: 1040px; margin: 0 auto; display: grid; gap: 16px; padding-bottom: 60px; }
 .fd-page { --s-new: #7c9cff; --s-management: #b18cf5; --s-researcher: #f5b54a; --s-analyst: #22b8a6; --s-advisory: #2bb07f; --s-closed: #7c7c85; }
+.s-approved { --sc: #8ee0bd; }
 .s-new { --sc: var(--s-new); } .s-management { --sc: var(--s-management); } .s-researcher { --sc: var(--s-researcher); }
 .s-analyst { --sc: var(--s-analyst); } .s-advisory { --sc: var(--s-advisory); } .s-closed { --sc: var(--s-closed); }
 .fd-hero { padding: 26px 26px 20px; border-radius: 20px; border: 1px solid rgba(177, 140, 245, .22);
@@ -63,3 +64,18 @@
 .fd-replybox[open] { padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(124, 156, 255, .25); background: rgba(124, 156, 255, .04); }
 .fd-replybox .fd-in { width: 100%; box-sizing: border-box; resize: vertical; }
 .fd-replybox .lg-btn { justify-self: start; text-decoration: none; }
+/* the channel */
+.fd-with { color: #f5d9a8; font-weight: 600; }
+.fd-channel { color: #c5d2ff; }
+.fd-to[hidden] { display: none; }
+.fd-to { display: grid; gap: 8px; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(245, 181, 74, .45); background: rgba(245, 181, 74, .07); }
+.fd-ask { font-size: 13px; color: var(--text-2); } .fd-ask b { color: #f5d9a8; margin-right: 4px; }
+/* management's decision */
+.fd-decide { display: grid; gap: 8px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(245, 181, 74, .35); background: rgba(245, 181, 74, .05); }
+.fd-decide > b { font-size: 13px; color: #f5d9a8; } .fd-decide > small { font-size: 12px; color: var(--muted); margin-top: -4px; }
+.fd-decide .fd-in { width: 100%; box-sizing: border-box; resize: vertical; }
+.fd-decide-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.fd-decide-row .fd-msg { margin-right: auto; }
+.fd-reject { border-color: rgba(229, 72, 77, .5) !important; color: #ffb4b6 !important; }
+.fd-hist li.decision.accepted b { color: #8ff0c4; } .fd-hist li.decision.accepted::before { background: #2bb07f; }
+.fd-hist li.decision.rejected b { color: #ffb4b6; } .fd-hist li.decision.rejected::before { background: #e5484d; }

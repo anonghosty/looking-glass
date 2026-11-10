@@ -155,6 +155,8 @@
       if (x.patterns_total > x.patterns.length) days.append(el("p", "cb-hint", `The ${x.patterns.length} most frequent of ${fmt(x.patterns_total)} patterns; the devices CSV gives each device's pattern code.`));
     } else if (s.devices && entry?.kind === "r") days.append(el("p", "cb-hint", "Across reports: none of these devices was seen in another report of this name in this period."));
     if (!s.devices) days.append(el("p", "cb-hint", "No device carried exactly this combination in this period. Try the stored history over a longer range."));
+    // the analysis across every category, added to this report, and the request to management (combos-enrich.js)
+    if (s.devices && window.LGEnrich) days.append(window.LGEnrich.box(job, s, entry));
     // the report for one network provider (to attach to the advisory sent to that operator), or for all of them
     const ns = $("cbNet"), keep = ns.value;
     ns.replaceChildren(new Option("All networks", ""));

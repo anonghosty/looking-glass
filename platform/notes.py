@@ -162,15 +162,20 @@ def install(app, ctx):
             if not CODE_RX.match(c) or not (book and book.resolve(c)):
                 return jsonify(error=f"{c} is not a combination code known here."), 400
         user, role, _ = me()
+        fnd = b.get("finding")
+        track = getattr(notes, "findings", None)
+        to = None
+        if fnd and track:                  # a finding goes to a manager the researcher names (a channel, like a ticket)
+            to, err = track.recipient("management", (fnd or {}).get("to") if isinstance(fnd, dict) else None)
+            if not to:
+                return jsonify(error=err), 400
         n = notes.add(section, name, text, user, role, codes)
         ctx["audit"].add("note_added", user=user, target=f"{ {'issues': 'issue:', 'services': 'service:'}.get(section, '') }{name}",
                          detail=text[:120] + (f" · {', '.join(codes)}" if codes else ""))
-        fnd = b.get("finding")
-        track = getattr(notes, "findings", None)
         if fnd and track:                  # "Track as a finding": the team follows it up on the Findings page (findings.py)
             title = str((fnd or {}).get("title") or "").strip() if isinstance(fnd, dict) else ""
-            item = track.create({"id": n["id"], "text": text, "codes": codes}, section, name, title, user, role)
-            ctx["audit"].add("finding_created", user=user, target=f"#{item['id']} {name}", detail=item["title"][:120])
+            item = track.create({"id": n["id"], "text": text, "codes": codes}, section, name, title, user, role, to, "management")
+            ctx["audit"].add("finding_created", user=user, target=f"#{item['id']} {name}", detail=f"to {to} · " + item["title"][:120])
         return jsonify(saved=True, note=n, notes=notes.list(section, name))
 
     @app.route("/api/notes/delete", methods=["POST"])

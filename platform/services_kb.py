@@ -27,6 +27,7 @@ import time
 from flask import jsonify, request
 
 from report_map import sibling
+from services_intel import SINK
 from svc_patterns import MIN_HOSTS
 
 CACHE_SECONDS = 60
@@ -197,6 +198,10 @@ def install(app, ctx):
         except Exception:                                  # noqa: BLE001  (no database: shown as not known)
             in_db = set()
         new = {e["report"] for e in (rmap.get().get("events") or []) if e.get("kind") == "new_report"}
+        try:
+            sdata = sintel.index() if sintel else None       # the sinkholes per report (cached five minutes)
+        except Exception:                                  # noqa: BLE001  (the list still shows without them)
+            sdata = None
         rows = []
         for base, g in groups.items():
             e = g["entry"]
@@ -212,7 +217,9 @@ def install(app, ctx):
                 "received": any(n in in_db for n in g["names"]), "hosts": agg["hosts"], "records": agg["records"],
                 "ipv6": [n for n in g["names"] if n != base],
                 "products": [p for p, _ in agg["products"][:3]], "ports": [p for p, _ in agg["ports"][:3]],
-                "issues": top_issues[:5], "issues_total": len(agg["issues"]),
+                "issues": top_issues[:20], "issues_total": len(agg["issues"]),
+                "infections": ([{"name": n["name"], "hosts": n["hosts"]} for n in sintel.sinkholes_of(base, sdata)["names"]]
+                               if sdata else []),
                 "exploited": sum(1 for r in top_issues if r.get("exploited")),
                 "def": info.get("def", ""), "why": info.get("why", ""),
                 "notes": len(notes), "last_note": notes[0]["date"] if notes else "",
@@ -340,3 +347,37 @@ def install(app, ctx):
             sintel.cache["key"] = None
         ctx["audit"].add("product_rule_added", user=user, target=str(b.get("product"))[:60], detail=f"text: {str(b.get('contains'))[:60]}")
         return jsonify(saved=True, rules=pat.rules())
+
+    # ---------------- for Intel gathered (intel.py, section=services) and the combination codes (combos.py)
+    def title_of(name):
+        """A services report's readable title (its IPv6 twin's too); the name itself when it is not a services report."""
+        if name == SINK:
+            return name
+        g = services_reports().get(name) or services_reports().get(sibling(name or ""))
+        if not g:                                          # a report of another section (e.g. compromised devices)
+            reps = rmap.get().get("reports") or {}
+            e = reps.get(name) or reps.get(sibling(name or "")) or {}
+            t = e.get("title") or (ctx["report_info"](sibling(name or "")) or {}).get("title")
+            return re.sub(r"^IPv6 ", "", t) if t else name
+        return re.sub(r"^IPv6 ", "", (g["entry"] or {}).get("title") or (ctx["report_info"](sibling(name)) or {}).get("title") or name)
+
+    def kind_of(name):
+        """What kind of report a services-store report is, for people: vulnerability, services, or its own section."""
+        reps = rmap.get().get("reports") or {}
+        e = reps.get(name) or reps.get(sibling(name or "")) or {}
+        sec, grp = e.get("section") or "", e.get("group") or ""
+        if sec == "Services":
+            return "Vulnerability reports" if grp == "Known vulnerability" else "Services reports"
+        return f"{sec} reports" if sec else "Other reports"
+
+    def view(name):
+        base = _base_or_404(str(name or "").strip()[:80])
+        if not base or not sintel:
+            return None
+        stats, _days = _stats(ctx["svc_store"], ctx.get("load_day"))
+        hosts = _merge([stats.get(n) for n in services_reports()[base]["names"]])["hosts"]
+        return sintel.intel_view(base, title_of, pattern_asks(base, services_reports()[base]["names"], hosts), kind_of)
+
+    if sintel:
+        sintel.title_of, sintel.kind_of = title_of, kind_of
+    return {"title_of": title_of, "kind_of": kind_of, "view": view, "base": _base_or_404}

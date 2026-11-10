@@ -21,12 +21,18 @@ import time
 
 from flask import g, jsonify, render_template, request
 
-STATUSES = [("new", "New"), ("management", "With management"), ("researcher", "Back with the researcher"),
-            ("analyst", "With the analyst"), ("advisory", "Advisory sent"), ("closed", "Closed")]
+STATUSES = [("new", "New"), ("management", "With management"), ("approved", "Approved by management"),
+            ("researcher", "Back with the researcher"), ("analyst", "With the analyst"), ("advisory", "Advisory sent"), ("closed", "Closed")]
 LABEL = dict(STATUSES)
-OPEN = {"new", "management", "researcher", "analyst"}
+OPEN = {"new", "management", "approved", "researcher", "analyst"}
 ROLE_LABEL = {"researcher": "Researcher", "admin": "Administrator", "analyst": "Analyst", "management": "Management"}
 MAX_TITLE, MAX_COMMENT = 140, 1000
+# a finding is a channel, like a ticket: whoever sends it on names the person it goes to (a manager, a researcher, an
+# analyst), and only the people who took part see it and its trail (admins too, for oversight). The status a hand-over
+# leads to, per kind of person:
+TO_STATUS = {"management": "management", "researcher": "researcher", "analyst": "analyst"}
+KIND_LABEL = {"management": "a manager", "researcher": "a researcher", "analyst": "an analyst"}
+NONE_FOUND = "Looked into the selection: no combination of interest found. The request is closed."
 
 
 class Findings:
@@ -34,6 +40,38 @@ class Findings:
         self.path, self.people, self.log = path, people, logger
         self.lock = threading.Lock()
         self.mtime, self.data = None, {"seq": 0, "items": {}}
+        self.people_of = lambda kind: []          # app.py: the active accounts that do that job (manager, researcher, analyst)
+        self.title_of = lambda n: n               # app.py: a services report's readable title
+
+    # ---- the channel
+    def recipient(self, kind, to):
+        """(username, "") when `to` is an active account of that kind, else (None, error)."""
+        to = str(to or "").strip()
+        if kind not in TO_STATUS:
+            return None, "Unknown kind of recipient."
+        if not to:
+            return None, f"Choose {KIND_LABEL[kind]} to send it to."
+        if to not in {p["user"] for p in self.people_of(kind)}:
+            return None, f"{to} is not {KIND_LABEL[kind]} here."
+        return to, ""
+
+    @staticmethod
+    def sees(x, user, admin):
+        """Only the people in the channel (and admins); a finding made before channels is open to all, as it was."""
+        return admin or not x.get("participants") or user in x["participants"]
+
+    @staticmethod
+    def _join(item, to):
+        if to:
+            item.setdefault("participants", [item["user"]])
+            if to not in item["participants"]:
+                item["participants"].append(to)
+            item["assignee"] = to
+
+    def get(self, fid):
+        with self.lock:
+            self._load()
+            return self.data["items"].get(str(fid))
 
     def _load(self):
         try:
@@ -59,30 +97,35 @@ class Findings:
         os.replace(tmp, self.path)
         self.mtime = os.path.getmtime(self.path)
 
-    def create(self, note, section, name, title, user, role):
-        """A finding from a saved note (notes.Notes.add's raw note: id, text, codes)."""
+    def create(self, note, section, name, title, user, role, to=None, kind="management"):
+        """A finding from a saved note (notes.Notes.add's raw note: id, text, codes), sent to `to` (a manager)."""
         now = round(time.time(), 3)
+        status = TO_STATUS.get(kind, "new") if to else "new"
         with self.lock:
             self._load()
             self.data["seq"] += 1
             fid = str(self.data["seq"])
             item = {"id": fid, "note": note["id"], "section": section, "name": name, "title": (title or "").strip()[:MAX_TITLE] or name,
                     "text": note.get("text", ""), "codes": list(note.get("codes") or []), "user": user, "role": role,
-                    "at": now, "status": "new", "history": [{"status": "new", "user": user, "role": role, "at": now, "comment": ""}]}
+                    "at": now, "status": status, "history": [{"status": status, "user": user, "role": role, "at": now, "comment": "", "to": to or ""}]}
+            self._join(item, to)
             self.data["items"][fid] = item
             self._save()
         return item
 
-    def create_analyst(self, code, section, label, title, text, user, role):
-        """A finding made by an analyst from an analysis selection (acodes.py): its code is an analyst code."""
+    def create_analyst(self, code, section, label, title, text, user, role, to=None, kind="researcher", comment=""):
+        """A finding made by an analyst from an analysis selection (acodes.py): its code is an analyst code; sent to `to`
+        (a researcher for the analysis, or a manager)."""
         now = round(time.time(), 3)
+        status = TO_STATUS.get(kind, "new") if to else "new"
         with self.lock:
             self._load()
             self.data["seq"] += 1
             fid = str(self.data["seq"])
             item = {"id": fid, "note": None, "origin": "analyst", "section": section, "name": label, "title": title[:MAX_TITLE],
-                    "text": text, "codes": [code], "user": user, "role": role, "at": now, "status": "new",
-                    "history": [{"status": "new", "user": user, "role": role, "at": now, "comment": ""}]}
+                    "text": text, "codes": [code], "user": user, "role": role, "at": now, "status": status,
+                    "history": [{"status": status, "user": user, "role": role, "at": now, "comment": comment[:MAX_COMMENT], "to": to or ""}]}
+            self._join(item, to)
             self.data["items"][fid] = item
             self._save()
         return item
@@ -93,20 +136,45 @@ class Findings:
             self._load()
             return next((x for x in sorted(self.data["items"].values(), key=lambda x: x["at"]) if code in (x.get("codes") or [])), None)
 
-    def reply(self, fid, text, codes, user, role):
+    def reply(self, fid, text, codes, user, role, none_found=False):
         """A reply on a finding (a researcher answering an analyst's code, an analyst answering a researcher…), with
-        its own codes. The status stays; the reply is in the history."""
+        its own codes. The status stays; the reply is in the history. none_found: the researcher looked and found no
+        combination of interest in the selection, which answers the request: the finding is closed with that reply."""
         with self.lock:
             self._load()
             item = self.data["items"].get(str(fid))
             if not item:
                 return None, "No such finding."
-            item["history"].append({"status": item["status"], "kind": "reply", "user": user, "role": role, "at": round(time.time(), 3),
-                                    "comment": text[:MAX_COMMENT], "codes": list(codes)})
+            if none_found:
+                item["status"] = "closed"
+            h = {"status": item["status"], "kind": "reply", "user": user, "role": role, "at": round(time.time(), 3),
+                 "comment": text[:MAX_COMMENT], "codes": list(codes)}
+            if none_found:
+                h["none_found"] = True
+            item["history"].append(h)
             self._save()
             return item, ""
 
-    def set_status(self, fid, status, comment, user, role):
+    def decide(self, fid, accept, text, user, role, to=None):
+        """Management's decision on a finding, first: approved, with its comment (the directive; then "Move it on" asks
+        to whom it goes), or rejected, with the reason (it is closed). Kept in the history as a decision."""
+        with self.lock:
+            self._load()
+            item = self.data["items"].get(str(fid))
+            if not item:
+                return None, "No such finding."
+            if item["status"] not in OPEN:
+                return None, "This finding is no longer open."
+            if item["status"] == "approved":
+                return None, "It is already approved: move it on to the person it goes to."
+            item["status"] = "approved" if accept else "closed"
+            item["history"].append({"status": item["status"], "kind": "decision", "decision": "accepted" if accept else "rejected",
+                                    "user": user, "role": role, "at": round(time.time(), 3), "comment": text[:MAX_COMMENT], "to": to or ""})
+            self._join(item, to if accept else None)
+            self._save()
+            return item, ""
+
+    def set_status(self, fid, status, comment, user, role, to=None):
         with self.lock:
             self._load()
             item = self.data["items"].get(str(fid))
@@ -114,10 +182,11 @@ class Findings:
                 return None, "No such finding."
             if status not in LABEL:
                 return None, "Unknown status."
-            if status == item["status"] and not comment:
+            if status == item["status"] and not comment and not to:
                 return None, "It already has that status; add a comment to note something."
             item["status"] = status
-            item["history"].append({"status": status, "user": user, "role": role, "at": round(time.time(), 3), "comment": comment[:MAX_COMMENT]})
+            item["history"].append({"status": status, "user": user, "role": role, "at": round(time.time(), 3), "comment": comment[:MAX_COMMENT], "to": to or ""})
+            self._join(item, to)
             self._save()
             return item, ""
 
@@ -136,15 +205,19 @@ class Findings:
                 "created": day(x["at"]), **who(x["user"], x["role"]), "origin": x.get("origin", "researcher"),
                 "replies": sum(1 for h in x["history"] if h.get("kind") == "reply"),
                 "history": [{"status": h["status"], "status_label": LABEL.get(h["status"], h["status"]), "at": day(h["at"]),
-                             "kind": h.get("kind", "status"), "comment": h.get("comment", ""),
+                             "kind": h.get("kind", "status"), "comment": h.get("comment", ""), "decision": h.get("decision", ""),
+                             "to": self.people.name(h["to"]) if h.get("to") else "",
                              "codes": [{"code": c, "text": (describe(c) if describe else "") or ""} for c in h.get("codes") or []],
                              **who(h["user"], h["role"])} for h in x["history"]],
-                "updated": day(x["history"][-1]["at"])}
+                "updated": day(x["history"][-1]["at"]),
+                "display_name": self.title_of(x["name"]) if x.get("section") == "services" else x["name"],
+                "assignee": self.people.name(x["assignee"]) if x.get("assignee") else "",
+                "channel": [self.people.name(u) for u in x.get("participants") or []]}
 
-    def list(self, open_only, describe=None):
+    def list(self, open_only, describe=None, user=None, admin=True):
         with self.lock:
             self._load()
-            items = list(self.data["items"].values())
+            items = [x for x in self.data["items"].values() if self.sees(x, user, admin)]
         if open_only:
             items = [x for x in items if x["status"] in OPEN]
         items.sort(key=lambda x: -x["history"][-1]["at"])
@@ -164,6 +237,26 @@ def install(app, ctx):
         u = getattr(g, "user", None) or {}
         return u.get("user", ""), u.get("role", "")
 
+    f.people_of = ctx.get("people_of") or f.people_of
+    admin = lambda: hp("settings")
+
+    def in_channel(fid):
+        """The finding when this user is in its channel (or an admin), else None: the same answer as an unknown one."""
+        x = f.get(fid)
+        return x if x and f.sees(x, me()[0], admin()) else None
+
+    @app.route("/api/findings/people")
+    def api_findings_people():
+        """Whom a finding can be sent to: the active managers, researchers or analysts (names, never more)."""
+        if not allowed():
+            return jsonify(error="Findings are for researchers, management, analysts and admins."), 403
+        kind = request.args.get("kind") or ""
+        if kind not in TO_STATUS:
+            return jsonify(error="kind is management, researcher or analyst."), 400
+        mine = me()[0]
+        return jsonify(kind=kind, people=[{"user": p["user"], "name": p["name"], "role": p.get("role", "")}
+                                          for p in f.people_of(kind) if p["user"] != mine])
+
     @app.route("/findings")
     def findings_page():
         if not allowed():
@@ -174,9 +267,10 @@ def install(app, ctx):
     def api_findings():
         if not allowed():
             return jsonify(error="Findings are for researchers, management, analysts and admins."), 403
-        items = f.list(request.args.get("state") != "all", ctx["describe"])
+        items = f.list(request.args.get("state") != "all", ctx["describe"], me()[0], admin())
         return jsonify(findings=items, statuses=[{"key": k, "label": v, "open": k in OPEN} for k, v in STATUSES],
                        can_search=bool(hp("unmasked") and hp("export")), can_portal=bool(hp("management")),
+                       can_decide=bool(hp("management") or hp("settings")),
                        can_research=bool(hp("definitions") or hp("settings")))
 
     @app.route("/api/findings/<fid>/status", methods=["POST"])
@@ -187,15 +281,50 @@ def install(app, ctx):
             return jsonify(error="Refused (the request did not come from this page)."), 403
         if not ctx["fresh"]():
             return jsonify(error="Sign in again to make changes (your session is older than 12 hours)."), 403
+        if not in_channel(fid):
+            return jsonify(error="No such finding."), 404
         b = request.get_json(silent=True) or {}
         status = str(b.get("status") or "")
         comment = str(b.get("comment") or "").replace("\r", "").strip()[:MAX_COMMENT]
+        to = None
+        kind = next((k for k, s in TO_STATUS.items() if s == status), None)
+        if kind:                                           # a hand-over names the person it goes to
+            to, err = f.recipient(kind, b.get("to"))
+            if not to:
+                return jsonify(error=err), 400
         user, role = me()
-        item, err = f.set_status(fid, status, comment, user, role)
+        item, err = f.set_status(fid, status, comment, user, role, to)
         if not item:
             return jsonify(error=err), 404 if "No such" in err else 400
         ctx["audit"].add("finding_status", user=user, target=f"#{fid} {item['name']}",
-                         detail=f"{LABEL.get(status, status)}" + (f" · {comment[:100]}" if comment else ""))
+                         detail=f"{LABEL.get(status, status)}" + (f" · to {to}" if to else "") + (f" · {comment[:100]}" if comment else ""))
+        return jsonify(finding=f.shown(item, ctx["describe"]))
+
+    @app.route("/api/findings/<fid>/decision", methods=["POST"])
+    def api_findings_decision(fid):
+        """Management decides first: approves a finding with a comment (the directive), or rejects it with the reason (it
+        is closed). Who it then goes to is asked when it is moved on."""
+        if not (hp("management") or hp("settings")):
+            return jsonify(error="Management decides on findings."), 403
+        if not ctx["csrf_ok"]():
+            return jsonify(error="Refused (the request did not come from this page)."), 403
+        if not ctx["fresh"]():
+            return jsonify(error="Sign in again to make changes (your session is older than 12 hours)."), 403
+        b = request.get_json(silent=True) or {}
+        accept = b.get("decision") == "accept"
+        if b.get("decision") not in ("accept", "reject"):
+            return jsonify(error="Accept or reject."), 400
+        text = str(b.get("text") or "").replace("\r", "").strip()[:MAX_COMMENT]
+        if not text:
+            return jsonify(error="Give your comment (the directive)." if accept else "Give the reason for rejecting it."), 400
+        if not in_channel(fid):
+            return jsonify(error="No such finding."), 404
+        user, role = me()
+        item, err = f.decide(fid, accept, text, user, role)
+        if not item:
+            return jsonify(error=err), 404 if "No such" in err else 400
+        ctx["audit"].add("finding_decision", user=user, target=f"#{fid} {item['name'][:60]}",
+                         detail=("approved · " if accept else "rejected · ") + text[:100])
         return jsonify(finding=f.shown(item, ctx["describe"]))
 
     @app.route("/api/findings/<fid>/reply", methods=["POST"])
@@ -210,16 +339,24 @@ def install(app, ctx):
         b = request.get_json(silent=True) or {}
         text = str(b.get("text") or "").replace("\r", "").strip()[:MAX_COMMENT]
         codes = list(dict.fromkeys(str(c).strip().upper() for c in (b.get("codes") or []) if str(c).strip()))[:10]
+        none_found = bool(b.get("none_found"))
+        if none_found and codes:
+            return jsonify(error="“No combination of interest” and ticked codes do not go together: untick one."), 400
+        if none_found:
+            text = text or NONE_FOUND
         if not text and not codes:
             return jsonify(error="Write a reply or attach a code."), 400
         for c in codes:
             if not ctx["known"](c):
                 return jsonify(error=f"{c} is not a code known here."), 400
+        if not in_channel(fid):
+            return jsonify(error="No such finding."), 404
         user, role = me()
-        item, err = f.reply(fid, text, codes, user, role)
+        item, err = f.reply(fid, text, codes, user, role, none_found)
         if not item:
             return jsonify(error=err), 404
-        ctx["audit"].add("finding_reply", user=user, target=f"#{fid} {item['name'][:60]}", detail=(text[:100] + (f" · {', '.join(codes)}" if codes else "")))
+        ctx["audit"].add("finding_reply", user=user, target=f"#{fid} {item['name'][:60]}",
+                         detail=("no combination of interest, closed · " if none_found else "") + text[:100] + (f" · {', '.join(codes)}" if codes else ""))
         return jsonify(finding=f.shown(item, ctx["describe"]))
 
     return f

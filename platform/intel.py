@@ -248,6 +248,16 @@ class Intel:
             self.cache.update(key=key, at=time.time(), data=data)
         return data
 
+    def hosts_of(self, section, name):
+        """The hosts behind a name in the days in memory (never returned: for the analysis across every category)."""
+        key = (section, name if section == "issues" else (name or "").lower())
+        out = set()
+        for slot in (self.index()["by"].get(key) or {}).values():
+            for per in slot["ch"].values():
+                out.update(per)
+        out.discard("")
+        return out
+
     def gathered(self, section, name):
         data = self.index()
         key = (section, name if section == "issues" else (name or "").lower())
@@ -416,12 +426,22 @@ def install(app, ctx):
     def api_intel():
         if not ctx["allowed"]():
             return jsonify(error="Intel gathered is for researchers and admins."), 403
-        section = "issues" if request.args.get("section") == "issues" else "infections"
         name = (request.args.get("name") or "").strip()[:120]
         if not name:
             return jsonify(error="name= is needed"), 400
+        if request.args.get("section") == "services":     # a services report: services_intel.py, in the same shape
+            v = ctx["services_view"](name) if ctx.get("services_view") else None
+            return jsonify(v) if v else (jsonify(error="No such services report."), 404)
+        section = "issues" if request.args.get("section") == "issues" else "infections"
         g = intel.gathered(section, name)
         g["leads"] = [{k: v for k, v in x.items() if k not in ("names_key", "_seen")} for x in g["leads"]]
+        # the same hosts in every other category: services reports (pattern codes), CVEs and issues, infections
+        if ctx.get("cross"):
+            try:
+                hs = intel.hosts_of(section, name)
+                g["cross"] = ctx["cross"](hs) if hs else None
+            except Exception:                              # noqa: BLE001  (the window still shows the name itself)
+                g["cross"] = None
         return jsonify(g)
 
     @app.route("/api/intel/summary")

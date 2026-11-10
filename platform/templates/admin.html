@@ -21,11 +21,7 @@
       <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Admin · users, sessions, roles and audit</span></div></div>
     </div>
     <div class="hud-right">
-      <a class="demo-btn" href="/?intro=1"><span>Overview</span></a>
-      <a class="demo-btn" href="/"><span>Network communications</span></a>
-      <a class="demo-btn" href="/services"><span>Publicly accessible / vulnerable services</span></a>
-      {% if "management" in lg_perms %}<a class="demo-btn account-btn" href="/management" title="The management portal (Executive): aggregated dashboard and executive reports"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Executive</span></a>{% endif %}
-      <form method="post" action="/logout" class="account-form"><button type="submit" class="demo-btn account-btn" title="Logged in as {{ lg_user }} ({{ lg_role }})"><span class="acct-name">Log out</span></button></form>
+      {% set nav_here = "admin" %}{% set nav_go = false %}{% include "_page_nav.html" %}
     </div>
   </header>
 

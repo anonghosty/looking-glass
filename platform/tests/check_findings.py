@@ -41,16 +41,32 @@ A.NOTES.path, A.NOTES.mtime, A.NOTES.data = os.path.join(tmp, "notes.json"), Non
 A.FINDINGS.path, A.FINDINGS.mtime, A.FINDINGS.data = os.path.join(tmp, "findings.json"), None, {"seq": 0, "items": {}}
 audit = A.AUTH["audit"]; real_add = audit.add; audited = []
 audit.add = lambda *a, **k: audited.append(a[0] if a else k.get("event"))
+real_people = A.FINDINGS.people_of           # the accounts that do each job: test accounts here
+A.FINDINGS.people_of = lambda kind: [{"user": f"lg-check-{kind}", "name": f"Check {kind}", "role": kind}]
 try:
     A.store.get(A.replay_now())
     gat = A.INTEL.gathered("infections", "android.badbox2")
     code0 = next((c["code"] for r in gat["reports"] for c in r["combinations"]), None)
-    print("A researcher tracks a note as a finding")
+    print("A researcher tracks a note as a finding, sent to a manager")
+    st, d = call("/api/notes", RESEARCHER, "POST", {"section": "infections", "name": "android.badbox2", "text": "No recipient.", "finding": {"title": "x"}})
+    ok("a finding without the manager it goes to is refused (and no note is saved)", st == 400 and "manager" in d.get("error", "")
+       and not any(n["text"] == "No recipient." for n in A.NOTES.list("infections", "android.badbox2")), d.get("error", ""))
+    st, d = call("/api/findings/people?kind=management", RESEARCHER)
+    ok("the managers to choose from are listed (names only)", st == 200 and d["people"] and set(d["people"][0]) == {"user", "name", "role"})
     st, d = call("/api/notes", RESEARCHER, "POST", {"section": "infections", "name": "android.badbox2", "text": "Test: a new C2 cluster.",
-                                                     "codes": [code0] if code0 else [], "finding": {"title": "Test cluster"}})
+                                                     "codes": [code0] if code0 else [], "finding": {"title": "Test cluster", "to": "lg-check-management"}})
     ok("the note is saved", st == 200, f"HTTP {st} {d.get('error', '')}")
     mine = next((n for n in d.get("notes", []) if n["id"] == d.get("note", {}).get("id")), {})
-    ok("…and carries its finding number and status", (mine.get("finding") or {}).get("number") == "#1" and mine["finding"]["status"] == "new", str(mine.get("finding")))
+    ok("…and carries its finding number, with management", (mine.get("finding") or {}).get("number") == "#1" and mine["finding"]["status"] == "management", str(mine.get("finding")))
+    print("Only the people in its channel see it")
+    st, d = call("/api/findings", MGMT, role="management", user="lg-check-management")
+    ok("the manager it was sent to sees it, held by them", st == 200 and d["findings"] and d["findings"][0]["assignee"] == "lg-check-management")
+    st, d = call("/api/findings", MGMT, role="management", user="lg-other-manager")
+    ok("another manager does not", st == 200 and not d["findings"])
+    st, d = call("/api/findings/1/status", MGMT, "POST", {"status": "closed", "comment": "x"}, role="management", user="lg-other-manager")
+    ok("…and cannot move it (as unknown)", st == 404)
+    st, d = call("/api/findings", ANALYST, role="analyst", user="lg-check-analyst")
+    ok("an analyst not yet in it does not see it", st == 200 and not d["findings"])
     st, d = call("/api/notes", RESEARCHER, "POST", {"section": "infections", "name": "android.badbox2", "text": "Just a note."})
     ok("a note not tracked makes no finding", st == 200 and not any(n.get("finding") for n in d["notes"] if n["text"] == "Just a note."))
     print("Everyone who works on it sees it, without addresses")
@@ -66,9 +82,15 @@ try:
     ok("external: refused", st == 403, f"HTTP {st}")
     ok("researchers and management can open the page (their allowed paths)", "/findings".startswith(auth.DEFINITIONS_PATHS) and "/api/findings".startswith(auth.MANAGEMENT_PATHS))
     print("Moving it on")
-    st, d = call("/api/findings/1/status", MGMT, "POST", {"status": "analyst", "comment": "Rising in the north: pull the devices."}, role="management")
-    ok("management moves it to the analyst, with a comment", st == 200 and d["finding"]["status"] == "analyst" and d["finding"]["history"][-1]["comment"].startswith("Rising"))
-    st, d = call("/api/findings/1/status", ANALYST, "POST", {"status": "advisory", "comment": "Advisory sent to the affected networks."}, role="analyst")
+    st, d = call("/api/findings/1/status", MGMT, "POST", {"status": "analyst", "comment": "x"}, role="management", user="lg-check-management")
+    ok("a hand-over without the analyst it goes to is refused", st == 400)
+    st, d = call("/api/findings/1/status", MGMT, "POST", {"status": "analyst", "comment": "Rising in the north: pull the devices.", "to": "lg-check-analyst"},
+                 role="management", user="lg-check-management")
+    ok("management moves it to the analyst they name, with a comment", st == 200 and d["finding"]["status"] == "analyst"
+       and d["finding"]["history"][-1]["comment"].startswith("Rising") and d["finding"]["history"][-1]["to"] == "lg-check-analyst")
+    st, d = call("/api/findings", ANALYST, role="analyst", user="lg-check-analyst")
+    ok("…who now sees it, with its whole trail", st == 200 and d["findings"] and len(d["findings"][0]["history"]) == 2 and len(d["findings"][0]["channel"]) == 3)
+    st, d = call("/api/findings/1/status", ANALYST, "POST", {"status": "advisory", "comment": "Advisory sent to the affected networks."}, role="analyst", user="lg-check-analyst")
     ok("the analyst marks the advisory sent", st == 200 and len(d["finding"]["history"]) == 3, f"{len(d.get('finding', {}).get('history', []))} steps")
     st, d = call("/api/findings/1/status", ANALYST, "POST", {"status": "nonsense"}, role="analyst")
     ok("an unknown status is refused", st == 400)
@@ -82,9 +104,24 @@ try:
     nid = next(n["id"] for n in A.NOTES.list("infections", "android.badbox2") if n.get("finding"))
     A.NOTES.delete(nid, "lg-check", True)
     ok("removing the note keeps the finding (it holds its own copy)", call("/api/findings?state=all", MGMT, role="management")[1]["findings"][0]["text"].startswith("Test:"))
-    ok("every step is in the audit log", {"finding_created", "finding_status"} <= set(audited), ", ".join(sorted(set(audited))))
+    print("Management decides first, then moves it on to the person it names")
+    st, d = call("/api/notes", RESEARCHER, "POST", {"section": "infections", "name": "android.badbox2", "text": "Test: second.",
+                                                     "finding": {"title": "Second", "to": "lg-check-management"}})
+    st, d = call("/api/findings/2/decision", MGMT, "POST", {"decision": "accept", "text": "Generate the advisory for the three operators."},
+                 role="management", user="lg-check-management")
+    ok("approving with a comment makes it Approved (no recipient yet)", st == 200 and d["finding"]["status"] == "approved", d.get("error", ""))
+    st, d = call("/api/findings/2/decision", MGMT, "POST", {"decision": "accept", "text": "again"}, role="management", user="lg-check-management")
+    ok("…once", st == 400)
+    st, d = call("/api/findings/2/status", MGMT, "POST", {"status": "analyst", "comment": "", "to": "lg-check-analyst"}, role="management", user="lg-check-management")
+    ok("moving it on hands it to the analyst named", st == 200 and d["finding"]["status"] == "analyst" and d["finding"]["assignee"] == "lg-check-analyst")
+    st, d = call("/api/notes", RESEARCHER, "POST", {"section": "infections", "name": "android.badbox2", "text": "Test: third.",
+                                                     "finding": {"title": "Third", "to": "lg-check-management"}})
+    st, d = call("/api/findings/3/decision", MGMT, "POST", {"decision": "reject", "text": "Not enough evidence."}, role="management", user="lg-check-management")
+    ok("rejecting with the reason closes it", st == 200 and d["finding"]["status"] == "closed")
+    ok("every step is in the audit log", {"finding_created", "finding_status", "finding_decision"} <= set(audited), ", ".join(sorted(set(audited))))
 finally:
     audit.add = real_add
+    A.FINDINGS.people_of = real_people
     for o, (p, m, dd) in saved.items():
         o.path, o.mtime, o.data = p, m, dd
     import shutil; shutil.rmtree(tmp, ignore_errors=True)

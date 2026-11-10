@@ -1,0 +1,32 @@
+{#- The header buttons of the pages beside the two platforms (Definitions, Findings, Combinations, analyst codes, Settings,
+    Admin): icon buttons like the platforms', their names in the tooltip, Log out last with its label.
+    Set before including: nav_here (this page: definitions | findings | combinations | acode | settings | admin), and
+    nav_go (true on pages that guard unsaved changes: buttons with data-go instead of links). -#}
+{%- set _defs = "settings" in lg_perms or "definitions" in lg_perms -%}
+{%- set _analyst = "unmasked" in lg_perms and "export" in lg_perms -%}
+{%- set _findings = "definitions" in lg_perms or "management" in lg_perms or "settings" in lg_perms or _analyst -%}
+{%- set _items = [
+  ("overview", "view" in lg_perms or "settings" in lg_perms, "/?intro=1", "Overview", "Back to the overview page",
+   "M4 5h7v6H4zM13 5h7v3h-7zM13 10h7v9h-7zM4 13h7v6H4z"),
+  ("map", "view" in lg_perms, "/", "Network communications", "Network communications: infections and attacks on the map",
+   "M3 12h4l3-8 4 16 3-8h4"),
+  ("services", "view" in lg_perms, "/services", "Publicly accessible services", "Publicly accessible / vulnerable services",
+   "M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01"),
+  ("definitions", _defs, "/definitions", "Definitions", "Definitions, Intel gathered, researchers' notes and network names",
+   "M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15zM21 21l-4.3-4.3M7.5 10.5h6M10.5 7.5v6"),
+  ("combinations", _analyst, "/combinations", "Combinations", "Combination search: paste a combination code (LG-C-…, LG-X-…) to get exactly those devices, as PDF + CSV",
+   "M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L11.8 5.8M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.4-1.4"),
+  ("findings", _findings, "/findings", "Findings", "Findings: researchers' notes the team follows up, from the first look to the advisory",
+   "M5 21V4h11l-1.5 4L16 12H5M5 12"),
+  ("executive", "management" in lg_perms, "/management", "Executive", "The management portal (Executive): aggregated dashboard and executive reports",
+   "M4 20V10M10 20V4M16 20v-7M22 20H2"),
+  ("settings", "settings" in lg_perms, "/settings", "Settings", "Settings for both platforms: country and constituency",
+   "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"),
+  ("admin", "users" in lg_perms or "audit" in lg_perms, "/admin", "Admin", "Users, sessions, roles and audit log",
+   "M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6zM9 12l2 2 4-4"),
+] -%}
+{%- for key, ok, href, name, tip, d in _items if ok and key != nav_here %}
+      {% if nav_go %}<button type="button" class="demo-btn nav-ic" data-go="{{ href }}" title="{{ tip }}" aria-label="{{ name }}">{% else %}<a class="demo-btn nav-ic" href="{{ href }}" title="{{ tip }}" aria-label="{{ name }}">{% endif %}<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="{{ d }}"/></svg><span>{{ name }}</span>{% if nav_go %}</button>{% else %}</a>{% endif %}
+{%- endfor %}
+      <form method="post" action="/logout" class="account-form"><button type="submit" class="demo-btn account-btn" title="Logged in as {{ lg_user }} ({{ lg_role }}). Click to log out." aria-label="Log out">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg><span class="acct-name">Log out</span></button></form>

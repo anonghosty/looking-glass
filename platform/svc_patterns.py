@@ -129,7 +129,8 @@ class Patterns:
             return sorted({t for t in tags if not CVE.match(t)})
         s = str(raw).strip()
         if kind == "exact":
-            return [s[:200]] if s.strip("0:") else []
+            # as it is, but never a value that holds an address, a host name, an e-mail, a date or a long ID
+            return [s[:200]] if s.strip("0:") and hostmask.mask(s) == s else []
         if kind == "template":
             if HEX.match(s.replace(" ", "")):
                 return [s[:200]]                       # a binary response: masking would make them all alike

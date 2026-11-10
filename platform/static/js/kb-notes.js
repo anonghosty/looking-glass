@@ -17,7 +17,9 @@
   const CODE_RX = /^LG-[CX]-[0-9A-F]{8}$/;
   // the kinds a combination is made of (intel.py: COMMS_COMBO_KINDS, COMBO_KINDS)
   const KINDS = { infections: ["C2 domain", "DNS lookup", "TLS server name (SNI)", "User agent", "Associated tags"],
-                  issues: ["Associated tags", "Other CVEs on the same hosts"] };
+                  issues: ["Associated tags", "Other CVEs on the same hosts"], services: null };   // services: every pattern field
+  const ofKinds = (k) => !KINDS[cur.section] || KINDS[cur.section].includes(k.kind);
+  const rn = (x) => (intel?.labels || {})[x] || x;                    // a services report's title
   async function clip(text) {
     try { await navigator.clipboard.writeText(text); return true; } catch { /* not a secure page */ }
     const ta = el("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.append(ta); ta.select();
@@ -55,8 +57,12 @@
   tl.append(tcb, el("span", null, "Track as a finding"), el("small", null, "gets a number and a status on the Findings page, so management and the analysts can follow it up"));
   const tt = el("input", "kbn-in kbn-track-t"); tt.maxLength = 140; tt.placeholder = "A short title, e.g. New BadBox2 C2 cluster on Android TV boxes"; tt.hidden = true;
   tt.setAttribute("aria-label", "Finding title");
-  tcb.addEventListener("change", () => { tt.hidden = !tcb.checked; add.textContent = tcb.checked ? "Add note and track it" : "Add note"; if (tcb.checked) tt.focus(); });
+  // the manager it goes to: a finding is a channel, only the people in it see it (people-pick.js)
+  const toMgr = window.LGPeople ? window.LGPeople.picker("management") : null;
+  if (toMgr) toMgr.el.hidden = true;
+  tcb.addEventListener("change", () => { tt.hidden = !tcb.checked; if (toMgr) toMgr.el.hidden = !tcb.checked; add.textContent = tcb.checked ? "Add note and send it" : "Add note"; if (tcb.checked) tt.focus(); });
   track.append(tl, tt);
+  if (toMgr) track.append(toMgr.el);
   comp.append(ta, combosH, picked, tabs, pane, track, row);
   bodyEl.append(listHead, list, el("h3", "kbn-newh", "New note"), comp);
   box.append(head, bodyEl);
@@ -146,7 +152,9 @@
     return intel;
   }
   async function renderPane() {
-    for (const b of tabs.children) b.setAttribute("aria-selected", String(b.dataset.k === tab));
+    // no list of every combination (noise): a code comes from "Move to notes" in Intel gathered, or is pasted
+    tab = "paste";
+    for (const b of tabs.children) { b.hidden = b.dataset.k !== "paste"; b.setAttribute("aria-selected", String(b.dataset.k === tab)); }
     if (tab === "paste") return pastePane();
     const d = await ensureIntel();
     if (tab === "seen") return seenPane(d);
@@ -158,15 +166,21 @@
     const groups = [];
     for (const r of d.reports || []) {
       const all = (r.combinations?.length ? r.combinations : r.single ? [r.single] : []).filter((c) => c.code);
-      if (all.length) groups.push({ label: r.report, sub: `${fmt(r.records)} records`, rows: all.map((c) => ({ code: c.code,
-        text: `${r.report}: ${c.items.join(" + ") || "the name only"}`, show: c.items.join(" + ") || "the name only", figs: () =>
+      const svc = cur.section === "services";
+      if (all.length) groups.push({ label: svc ? "Combinations" : r.report, sub: `${fmt(r.records)} records`, rows: all.map((c) => ({ code: c.code,
+        text: `${rn(r.report)}: ${c.items.join(" + ") || "the name only"}`, show: c.items.join(" + ") || "the name only", figs: () =>
           [stat(pl(c.count, "record")), stat(pl(c.hosts, "device")), c.repeat_hosts ? stat(`${fmt(c.repeat_hosts)} repeating`, "rep") : stat("")] })) });
     }
     const xs = (d.across?.cross_combos || []).filter((x) => x.code);
     // a name seen in two or more reports always gets its Across reports tab, even when no device is shared (it says why)
-    if (xs.length || (d.reports || []).length > 1) groups.push({ label: "Across reports", sub: "devices seen in several reports", empty: !xs.length, rows: xs.map((x) => ({ code: x.code,
-      text: `Across ${x.parts.map((p) => `${p.report}: ${p.items.join(" + ") || "the name only"}`).join(" | ")}`,
-      show: x.parts.map((p) => `${p.report}: ${p.items.join(" + ") || "the name only"}`).join("  |  "), figs: () => [stat(pl(x.devices, "device")), stat("across reports", "x")] })) });
+    if (xs.length || (d.reports || []).length > 1 || d.across_always) groups.push({ label: "Across reports", sub: "devices seen in several reports", empty: !xs.length, rows: xs.map((x) => ({ code: x.code,
+      text: `Across ${x.parts.map((p) => `${rn(p.report)}: ${p.items.join(" + ") || "the name only"}`).join(" | ")}`,
+      show: x.parts.map((p) => `${rn(p.report)}: ${p.items.join(" + ") || "the report only"}`).join("  |  "), figs: () => [stat(pl(x.devices, "device")), stat("across reports", "x")] })) });
+    // services: the hosts also calling botnet sinkholes, per infection
+    const sk = (d.sinkholes?.names || []).filter((x) => x.code);
+    if (sk.length) groups.push({ label: "Calling sinkholes", sub: "hosts also in the network communications reports", rows: sk.map((x) => ({ code: x.code,
+      text: `${d.title || cur.name}: hosts also calling botnet sinkholes as ${x.name}`, show: `Also calling botnet sinkholes as ${x.name}`,
+      figs: () => [stat(pl(x.hosts, "device")), stat("sinkholes", "x")] })) });
     if (!groups.length) { pane.append(el("p", "kbn-empty", "Intel gathered saw no combination for this name in the days in memory. Build one, or paste a code.")); return; }
     // one tab per report, and "Across reports" as a tab of its own; the list shows the chosen one
     if (!groups.some((g) => g.label === groupSel)) groupSel = groups[0].label;
@@ -185,7 +199,9 @@
       for (const x of rows) ul.append(choice(x.code, x.text, x.figs(), x.show));
       if (g.empty) {
         const reps = (d.reports || []).map((r) => r.report), v6 = reps.filter((r) => /ipv6/i.test(r));
-        const why = [`No device of ${cur.name} was seen in more than one report in the days in memory, so there is no cross-report combination to attach.`];
+        const why = [cur.section === "services"
+          ? `No exact pattern across reports is shared by ${d.min_hosts || 5} or more of this report's devices in the days in memory, so there is none to attach.`
+          : `No device of ${cur.name} was seen in more than one report in the days in memory, so there is no cross-report combination to attach.`];
         if (v6.length && v6.length < reps.length) why.push(`${v6.join(", ")} records a different IP address for a machine than the other reports, so their devices never match.`);
         if (reps.some((r) => /dns/i.test(r)) && reps.some((r) => !/dns/i.test(r))) why.push("A DNS report often sees the resolver that looked the name up, not the infected machine, so it rarely shares a device with the other reports.");
         const box = el("div", "kbn-empty kbn-why"); for (const t of why) box.append(el("p", null, t)); lists.append(box);
@@ -202,21 +218,24 @@
   }
   function buildPane(d) {
     pane.replaceChildren();
-    const reps = (d.reports || []).filter((r) => r.indicators.some((k) => KINDS[cur.section].includes(k.kind)));
-    if (!reps.length) { pane.append(el("p", "kbn-empty", "There is nothing to build from: the reports in memory carry no C2 domain, lookup, user agent or tag for this name.")); return; }
+    const reps = (d.reports || []).filter((r) => r.indicators.some(ofKinds));
+    if (!reps.length) { pane.append(el("p", "kbn-empty", cur.section === "services"
+      ? "There is nothing to build from yet: no pattern value of this report is shared by 5 or more hosts in the days in memory."
+      : "There is nothing to build from: the reports in memory carry no C2 domain, lookup, user agent or tag for this name.")); return; }
     const form = el("div", "kbn-build");
     const sel = el("select", "kbn-sel"); sel.setAttribute("aria-label", "Report");
-    for (const r of reps) { const o = el("option", null, `${r.report} (${fmt(r.records)} records)`); o.value = r.report; sel.append(o); }
+    for (const r of reps) { const o = el("option", null, `${rn(r.report)} (${fmt(r.records)} records)`); o.value = r.report; sel.append(o); }
     const vals = el("div", "kbn-vals");
     const res = el("div", "kbn-res");
     const go = el("button", "lg-btn sm", "Make the code"); go.type = "button";
     const draw = () => {
       vals.replaceChildren(); res.replaceChildren();
       const r = reps.find((x) => x.report === sel.value);
-      for (const k of r.indicators.filter((k) => KINDS[cur.section].includes(k.kind))) {
+      for (const k of r.indicators.filter(ofKinds)) {
         const g = el("fieldset", "kbn-kind"); g.append(el("legend", null, k.kind));
         for (const v of k.values) {
-          const l = el("label", "kbn-tick"); const cb = el("input"); cb.type = "checkbox"; cb.value = v.value;
+          // services: an item is "Label: value" (svc_patterns / services_intel), the value shown as it is
+          const l = el("label", "kbn-tick"); const cb = el("input"); cb.type = "checkbox"; cb.value = cur.section === "services" ? `${k.kind}: ${v.value}` : v.value;
           l.append(cb, el("span", null, v.value), el("small", null, `${fmt(v.count)}`)); l.title = `${fmt(v.count)} records carry it`; g.append(l);
         }
         vals.append(g);
@@ -256,7 +275,14 @@
       pick({ code, text: x.text }); inp.value = ""; out.replaceChildren(el("span", "kbn-msg ok", `Attached: ${x.text}`));
     };
     b.addEventListener("click", run); inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); run(); } });
-    f.append(inp, b); pane.append(el("p", "kbn-foot", "A code from another note, report or colleague, for example a combination of another name this finding ties in with."), f, out);
+    const svcHint = el("div", "kbn-svc-hint");
+    svcHint.append(el("b", null, cur.section === "services" ? "To attach a pattern of this report: " : "To attach a combination: "),
+      document.createTextNode("open Intel gathered, find the combination, the pattern across reports or the group that matters, and press “Move to notes”: it arrives here attached. Or paste a code below."));
+    const go = el("button", "lg-btn sm", "Open Intel gathered"); go.type = "button";
+    go.addEventListener("click", () => { const n = cur.name, s = cur.section; shut(); window.LGIntel?.open(n, s); }); svcHint.append(go);
+    f.append(inp, b);
+    pane.append(svcHint,
+      el("p", "kbn-foot", "A code from another note, report or colleague, for example a combination of another name this finding ties in with."), f, out);
   }
 
   add.addEventListener("click", async () => {
@@ -264,14 +290,18 @@
     add.disabled = true;
     try {
       const body = { section: cur.section, name: cur.name, text, codes: codes.map((c) => c.code) };
-      if (tcb.checked) body.finding = { title: tt.value.trim() };
+      if (tcb.checked) {
+        if (toMgr && !toMgr.check()) { msg.textContent = "Choose the manager it goes to."; msg.className = "kbn-msg bad"; return; }
+        body.finding = { title: tt.value.trim(), to: toMgr ? toMgr.value() : "" };
+      }
       const r = await post("/api/notes", body);
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { msg.textContent = d.error || `Not saved (HTTP ${r.status})`; msg.className = "kbn-msg bad"; return; }
       const tracked = tcb.checked;
-      ta.value = ""; codes = []; tcb.checked = false; tt.value = ""; tt.hidden = true; add.textContent = "Add note"; renderPicked(); renderPane();
+      ta.value = ""; codes = []; tcb.checked = false; tt.value = ""; tt.hidden = true; add.textContent = "Add note";
+      if (toMgr) { toMgr.reset(); toMgr.el.hidden = true; } renderPicked(); renderPane();
       const f = (d.notes || []).find((n) => n.id === d.note?.id)?.finding;
-      msg.textContent = tracked && f ? `Note saved and tracked as finding ${f.number}.` : "Note saved and shared."; msg.className = "kbn-msg ok"; render(d.notes || []);
+      msg.textContent = tracked && f ? `Note saved and sent as finding ${f.number}: only you and the manager you chose see it.` : "Note saved and shared."; msg.className = "kbn-msg ok"; render(d.notes || []);
     } finally { add.disabled = false; }
   });
 
@@ -281,14 +311,16 @@
   close.addEventListener("click", shut); back.addEventListener("click", shut);
   box.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); shut(); } });
   // label: the readable title to show (e.g. a report's official name); the notes stay keyed on name
-  function open(name, section, label) {
+  // attach: [{code, text}] already on the new note ("Move to notes" in Intel gathered)
+  function open(name, section, label, attach) {
     opener = document.activeElement;
-    cur = { name: name || "", section: section || "infections" }; codes = []; intel = null; tab = "seen"; groupSel = "";
-    const svc = cur.section === "services";              // a services report: no combination codes (yet)
+    cur = { name: name || "", section: section || "infections" }; codes = (attach || []).slice(0, 10); intel = null; tab = "seen"; groupSel = "";
+    const svc = cur.section === "services";              // a services report: its pattern combinations, as for any name
     title.textContent = label || cur.name; eyebrow.textContent = `Notes · ${svc ? "services report" : cur.section === "issues" ? "issue" : "infection / category"}`;
+    title.classList.toggle("kbn-title-text", !!label);
     ta.value = ""; msg.textContent = ""; msg.className = "kbn-msg";
-    for (const n of [combosH, picked, tabs, pane]) n.hidden = svc;
-    render([]); if (!svc) { renderPicked(); renderPane(); } load();
+    render([]); renderPicked(); renderPane(); load();
+    if (codes.length) { msg.textContent = `${codes.length === 1 ? "The combination is" : `${codes.length} combinations are`} attached: write what you found and add the note.`; msg.className = "kbn-msg ok"; }
     box.hidden = false; back.hidden = false; document.body.classList.add("kbn-open");
     setTimeout(() => ta.focus(), 30);
   }

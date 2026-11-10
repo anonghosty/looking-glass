@@ -128,12 +128,30 @@ class CodeBook:
                     self.log.warning("combination codes not saved: %s", exc)
 
 
+_TITLE = {"of": lambda n: n}     # a services report's readable title (install: ctx title_of)
+
+
+def items_of(m, section, e):
+    """What a record carries for a code's matcher: a services matcher reads its pattern items (services_intel.py)."""
+    return m.items(e) if hasattr(m, "items") else I.record_items(section, e, m.me)
+
+
 def describe(entry):
     """One line for people: what the code stands for."""
     if not entry:
         return ""
     if entry["kind"] == "a":
-        return f"Analyst selection on {entry['day']} ({'network communications' if entry['platform'] == 'comms' else 'services'}): {entry.get('label', '')}"
+        days = entry.get("days") or [entry["day"]]
+        on = days[0] if len(days) == 1 else f"{days[0]} to {days[-1]}"
+        return f"Analyst selection on {on} ({'network communications' if entry['platform'] == 'comms' else 'services'}): {entry.get('label', '')}"
+    if entry.get("section") == "services":                # a services report: its title, never the collection name
+        t = _TITLE["of"]
+        if entry["kind"] == "r":
+            return f"{t(entry['report'])}: {' + '.join(entry['items']) or 'no pattern item'}"
+        sink = [i for r, items in entry["parts"] if r == "Botnet sinkholes" for i in items]
+        if sink:
+            return f"{t(entry['name'])}: hosts also calling botnet sinkholes as {', '.join(s.split(': ', 1)[-1] for s in sink)}"
+        return f"{t(entry['name'])} across " + "; ".join(f"{t(r)}: {' + '.join(i) or 'the report only'}" for r, i in entry["parts"])
     if entry["kind"] == "r":
         items = " + ".join(entry["items"]) or "no indicator (the name only)"
         return f"{entry['name']} in {entry['report']}: {items}"
@@ -208,6 +226,46 @@ def _share(n, total):
     return "0%" if not n else "<0.1%" if s < .001 else f"{100 * s:.1f}%" if s < .1 else f"{round(100 * s)}%"
 
 
+def enrich_points(enr):
+    """The analysis across every category, in the report's words (summary points of the PDF)."""
+    out = []
+    for s in enr.get("sources") or []:
+        n = len(s["reports"])
+        out.append(f"Seen in {n} {s['kind'].lower().replace(' reports', '')} report{'s' if n != 1 else ''}: "
+                   + ", ".join(f"{r['title']} ({r['hosts']:,})" for r in s["reports"][:10]) + (f" and {n - 10} more" if n > 10 else "") + ".")
+    xs = enr.get("cross") or []
+    if xs:
+        out.append(f"Across reports: {enr.get('multi_hosts', 0):,} of these devices are in two or more reports, in {enr.get('cross_total', len(xs)):,} exact patterns; "
+                   + "; ".join(f"{x['code']} ({x['hosts']:,}): " + " + ".join(p["title"] for p in x["parts"]) for x in xs[:4]) + ".")
+    iss = enr.get("issues") or []
+    if iss:
+        out.append("CVEs and issues found on them: " + ", ".join(f"{i['name']} ({i['hosts']:,})" for i in iss[:10])
+                   + (f", and {enr.get('issues_total', len(iss)) - 10} more" if enr.get("issues_total", len(iss)) > 10 else "") + ".")
+    inf = enr.get("infections") or []
+    if inf:
+        out.append(f"{enr.get('infections_hosts', 0):,} of them also call botnet sinkholes as " + ", ".join(f"{i['name']} ({i['hosts']:,})" for i in inf[:8]) + ".")
+    if not out:
+        out.append("Across every category: these devices show nothing more in the other categories in the days in memory.")
+    return out
+
+
+def enrich_rows(enr):
+    """The analysis across every category as CSV rows: category, report, value, hosts, records, code."""
+    rows = []
+    for s in enr.get("services") or []:
+        rows.append(["services", s["title"], "", s["hosts"], s.get("records", ""), ""])
+    for x in enr.get("cross") or []:                   # the exact patterns across reports (LG-X)
+        rows.append(["across reports", " | ".join(p["title"] for p in x["parts"]),
+                     " | ".join(f"{p['title']}: {' + '.join(p['items']) or 'the report only'}" for p in x["parts"]), x["hosts"], "", x["code"]])
+    for i in enr.get("issues") or []:
+        rows.append(["cve / issue", "; ".join(f"{r['title']} ({r['hosts']})" for r in i.get("reports") or []), i["name"], i["hosts"], "", ""])
+    for i in enr.get("infections") or []:
+        rows.append(["infection (calling sinkholes)", "", i["name"], i["hosts"], "", ""])
+        for r in i.get("reports") or []:
+            rows.append(["infection in a services report", r["title"], i["name"], r["hosts"], "", r["code"]])
+    return rows
+
+
 def _cell(e, key):
     v = (e.get("extras") or {}).get(key[2:]) if key.startswith("x:") else e.get(key)
     if isinstance(v, (list, tuple, set)):
@@ -220,6 +278,8 @@ def install(app, ctx):
     -> scoped events of those reports that day from MongoDB, network(asn) -> name, has_perm(p), csrf_ok(), is_demo(),
     audit, notes (notes.Notes), explain(section, name) -> card or None, build_pdf(spec), scope_text(), base_dir, logger."""
     book = CodeBook(os.path.join(ctx["base_dir"], "data", "combo_codes.json"), ctx.get("logger"))
+    if ctx.get("title_of"):
+        _TITLE["of"] = ctx["title_of"]
     ctx["intel"].on_codes = book.record
     jobs, jobs_lock = {}, threading.Lock()
 
@@ -271,6 +331,8 @@ def install(app, ctx):
         if not ANY_RX.match(code):
             return jsonify(error="A combination code looks like LG-C-1A2B3C4D or LG-X-1A2B3C4D (an analyst's: LG-A-…)."), 400
         entry = book.resolve_any(code)
+        if entry and entry.get("kind") == "a" and hasattr(book, "acode_allowed") and not book.acode_allowed(code):
+            entry = None                          # another channel's analyst code: as unknown as any other
         if not entry:
             return jsonify(error=f"{code} is not known here: it was never shown in Intel gathered on this platform."), 404
         if entry.get("kind") == "a":              # an analyst's selection: what it stands for, without an address
@@ -290,12 +352,22 @@ def install(app, ctx):
         if not ctx["can_note"]():
             return jsonify(error="Only researchers and admins can make combination codes."), 403
         b = request.get_json(silent=True) or {}
-        section = "issues" if b.get("section") == "issues" else "infections"
+        section = "issues" if b.get("section") == "issues" else "services" if b.get("section") == "services" else "infections"
         name = str(b.get("name") or "").strip()[:120]
         report = str(b.get("report") or "").strip()[:120]
         items = sorted({str(x).strip()[:300] for x in (b.get("items") or []) if str(x).strip()})[:20]
         if not name or not report:
             return jsonify(error="Pick a report first."), 400
+        if section == "services":                            # the pattern items of a services report (services_intel.py)
+            if not ctx.get("svc_new_code"):
+                return jsonify(error="Services codes are not available here."), 404
+            facts, err = ctx["svc_new_code"](report, items)
+            if err:
+                return jsonify(error=err), 400
+            book.record("services", facts["report"], facts["report"], [tuple(facts["items"])])
+            code = I.combo_code("services", facts["report"], facts["report"], facts["items"])
+            ctx["audit"].add("combo_code", user=user(), target=code, detail=describe(book.get(code)))
+            return jsonify(public_entry(book.get(code)) | {k: facts[k] for k in ("records", "devices", "repeat_devices", "days")})
         data = ctx["intel"].index()
         key = (section, name if section == "issues" else name.lower())
         slot = (data["by"].get(key) or {}).get(report)
@@ -324,12 +396,16 @@ def install(app, ctx):
                      name=names[0] if len(names) == 1 else "the analyst's selection")
         m = AMatcher(entry, labels)
         try:
-            job["log"].append(f"Reading the selection on {entry['day']}")
+            days = entry.get("days") or [entry["day"]]
+            job["log"].append(f"Reading the selection on {', '.join(days)}")
             found = book.acode_records(entry)
             job["done"] = job["total"] = 1
-            job["log"].append(f"{entry['day']}: {len(found):,} records")
-            job["result"] = package(job, entry, found, [(entry["day"], len(found))], None, (), m)
-            job["inputs"] = (entry, found, [(entry["day"], len(found))], None, (), m)     # for one network's report later
+            by_day = collections.Counter(str(e.get("extracted_date") or e.get("timestamp") or "")[:10] for e in found)
+            per_day = [(dd, by_day.get(dd, 0)) for dd in days] if len(days) > 1 else [(days[0], len(found))]
+            for dd, n in per_day:
+                job["log"].append(f"{dd}: {n:,} records")
+            job["result"] = package(job, entry, found, per_day, None, (), m)
+            job["inputs"] = (entry, found, per_day, None, (), m)     # for one network's report later
             job["state"] = "done"
         except Exception as exc:                              # noqa: BLE001
             if ctx.get("logger"):
@@ -341,12 +417,16 @@ def install(app, ctx):
         if entry.get("kind") == "a":
             return run_acode(job, entry)
         labels = ctx["labels"]()
-        m = Matcher(entry, labels)
+        svc_code = entry["section"] == "services" and ctx.get("svc_matcher")
+        m = ctx["svc_matcher"](entry) if svc_code else Matcher(entry, labels)
         store = ctx["store"] if entry["section"] == "infections" else ctx["svc_store"]
-        # every report the name turns up in (memory), so the devices found can be followed into the name's other reports
-        key = (entry["section"], entry["name"] if entry["section"] == "issues" else entry["name"].lower())
-        reps = set((ctx["intel"].index()["by"].get(key) or {}).keys()) | m.reports
-        cols = {c for c, lbl in labels.items() if lbl in reps}
+        if svc_code:                                          # services: the code's reports (services_intel.Matcher)
+            cols = m.collections(labels)
+        else:
+            # every report the name turns up in (memory), so the devices found can be followed into the name's other reports
+            key = (entry["section"], entry["name"] if entry["section"] == "issues" else entry["name"].lower())
+            reps = set((ctx["intel"].index()["by"].get(key) or {}).keys()) | m.reports
+            cols = {c for c, lbl in labels.items() if lbl in reps}
         found, around, per_day = [], [], []
 
         def keep(evs, hit):
@@ -374,8 +454,8 @@ def install(app, ctx):
                     per_day.append((day.date().isoformat(), len(hit)))
                     job["done"] = i + 1
                     job["log"].append(f"{day.date()}: {len(hit):,} records" + (" (in memory)" if mem is not None else ""))
-            job["result"] = package(job, entry, found, per_day, days, around)
-            job["inputs"] = (entry, found, per_day, days, around, None)                  # for one network's report later
+            job["result"] = package(job, entry, found, per_day, days, around, m if svc_code else None)
+            job["inputs"] = (entry, found, per_day, days, around, m if svc_code else None)   # for one network's report later
             job["state"] = "done"
         except Exception as exc:                              # noqa: BLE001  (reported to the analyst, logged in full)
             if ctx.get("logger"):
@@ -388,7 +468,7 @@ def install(app, ctx):
         and which sets of reports they were seen in. Counted per device over the whole period searched."""
         per = collections.defaultdict(lambda: collections.defaultdict(set))
         for e in around:
-            per[m.host(e)][m.report(e)].update(I.record_items(entry["section"], e, m.me))
+            per[m.host(e)][m.report(e)].update(items_of(m, entry["section"], e))
         sets = collections.Counter(tuple(sorted(r)) for r in per.values())
         pats = collections.Counter(tuple(sorted((r, tuple(sorted(i))) for r, i in reps.items())) for reps in per.values() if len(reps) > 1)
         top = pats.most_common(15)
@@ -422,6 +502,7 @@ def install(app, ctx):
         """The ZIP (PDF + devices CSV + records CSV). network: the report for one network provider only (an advisory to
         that operator): the same report on its devices and records; the search's own result and summary stay as they are."""
         section = entry["section"]
+        T = _TITLE["of"] if section == "services" else (lambda n: n)       # what people read: a report's title
         cols = COMMS_COLS if section == "infections" else SVC_COLS
         labels = ctx["labels"]()
         m = m or Matcher(entry, labels)
@@ -458,7 +539,7 @@ def install(app, ctx):
         # per device: the other reports of the name it was seen in, and its cross-report pattern code
         per_dev = collections.defaultdict(lambda: collections.defaultdict(set))
         for e in ([] if is_a else around):
-            per_dev[m.host(e)][m.report(e)].update(I.record_items(section, e, m.me))
+            per_dev[m.host(e)][m.report(e)].update(items_of(m, section, e))
         xcode = {h: I.cross_code(section, entry["name"], [(r, tuple(sorted(i))) for r, i in reps.items()])
                  for h, reps in per_dev.items() if len(reps) > 1}
         dev_cols = ["ip", "asn", "network", "country", "region", "city", "records", "days", "first_seen", "last_seen", "reports",
@@ -478,7 +559,7 @@ def install(app, ctx):
 
         # the period, as dates: the days searched (history) or the days in memory
         if is_a:
-            d0 = d1 = entry["day"]
+            d0, d1 = (entry.get("days") or [entry["day"]])[0], (entry.get("days") or [entry["day"]])[-1]
         elif days:
             d0, d1 = days[0].date().isoformat(), days[-1].date().isoformat()
         else:
@@ -508,7 +589,8 @@ def install(app, ctx):
         else:
             pts = [f"Combination {entry['code']}: {describe(entry)}.", first,
                    "Exactly means that each record carries these indicators and no other indicator of the kinds compared ("
-                   + ("C2 domain, DNS lookup, TLS name, user agent and tags)." if section == "infections" else "associated tags and CVEs).")
+                   + ("C2 domain, DNS lookup, TLS name, user agent and tags)." if section == "infections" else
+                      "the report's pattern fields, the values 5 or more hosts share)." if section == "services" else "associated tags and CVEs).")
                    + (" For a cross-report code, the device carried, in each of these reports, exactly what is listed." if entry["kind"] == "x" else "")]
         if network:                               # the report for one network provider says so first
             asn_n = next((d["asn"] for d in devs if d["asn"]), "")
@@ -526,11 +608,11 @@ def install(app, ctx):
             other = sorted({r for s_ in x["sets"] for r in s_["reports"]} - set(m.reports))
             who = ("All of these devices were" if x["multi"] == n_dev and n_dev > 1 else "This device was" if x["multi"] == n_dev
                    else f"{x['multi']:,} of these devices {'was' if x['multi'] == 1 else 'were'}")
-            pts.append(f"{who} also seen in {', '.join(other) if other else 'other reports'} for {entry['name']}, in "
+            pts.append(f"{who} also seen in {', '.join(T(o) for o in other) if other else 'other reports'} for {T(entry['name'])}, in "
                        f"{x['patterns_total']:,} exact pattern{'s' if x['patterns_total'] != 1 else ''}, listed under Across reports with "
                        f"{'its code' if x['patterns_total'] == 1 else 'their codes'} for a follow-up search.")
         elif entry["kind"] == "r":
-            pts.append(f"None of these devices was seen in another report of {entry['name']} in this period.")
+            pts.append(f"None of these devices was seen in another report of {T(entry['name'])} in this period.")
         # the researchers' notes on the name (an analyst code: on each of its names), the ones that point at this code first
         note_names = entry.get("names", [])[:8] if is_a else [entry["name"]]
         notes = sorted(({**n, "name": nm} for nm in note_names for n in ctx["notes"].list(section, nm)),
@@ -539,11 +621,15 @@ def install(app, ctx):
                       ", ".join(c["code"] for c in n.get("codes") or [])] for n in notes[:12]]
         if notes:
             pts.append(f"{len(notes)} researcher note{'s' if len(notes) != 1 else ''} on "
-                       + (", ".join(sorted({n['name'] for n in notes})) if is_a else entry['name'])
+                       + (", ".join(sorted({n['name'] for n in notes})) if is_a else T(entry['name']))
                        + (f", {sum(1 for n in notes if any(c['code'] == entry['code'] for c in n.get('codes') or []))} of them on this combination"
                           if any(any(c["code"] == entry["code"] for c in n.get("codes") or []) for n in notes) else "")
                        + "; they are on the Explained page, with what the name"
                        + (" and its vulnerabilities are." if section == "issues" else " is."))
+        # the analyst added the analysis across every category (enrich): what these devices show in the other categories
+        enr = job.get("enrich")
+        if enr:
+            pts.extend(enrich_points(enr))
         # activity by hour of the day (network communications carry the event time)
         hours = None
         if section == "infections":
@@ -576,12 +662,12 @@ def install(app, ctx):
         port_rows = [[k, f"{n:,}", f"{n / max(1, len(rows)):.1%}"] for k, n in ports.most_common(10)]
         geo_rows = [[r["label"], f"{r['count']:,}", f"{r['share']:.1%}"] for r in regions[:15]]
         city_tab = [[c, r, f"{n:,}", f"{n / max(1, len(devs)):.1%}"] for (c, r), n in city_rows.most_common(15)]
-        x_rows = [[" | ".join(f"{p['report']}: {' + '.join(p['items']) or 'the name only'}" for p in pt["parts"]), f"{pt['devices']:,}", pt["code"]]
+        x_rows = [[" | ".join(f"{T(p['report'])}: {' + '.join(p['items']) or 'the name only'}" for p in pt["parts"]), f"{pt['devices']:,}", pt["code"]]
                   for pt in x["patterns"]]
         spec = {"platform_label": "Network communications" if section == "infections" else "Publicly accessible services",
                 "title": f"Combination {entry['code']}", "selection": describe(entry)[:150], "day": span,
                 "generated_by": job["user"], "scope": ctx["scope_text"](), "demo": False,
-                "intro": (f"Every device that carried exactly the combination {entry['code']} of {entry['name']}, found by the analyst's "
+                "intro": (f"Every device that carried exactly the combination {entry['code']} of {T(entry['name'])}, found by the analyst's "
                           f"combination search over {span}. The researcher's code and this list use the same matching rule as Intel gathered."),
                 "summary_points": pts,
                 "kpis": [(f"{len(devs):,}", "devices"), (f"{len(rows):,}", "records"), (f"{repeat:,}", "devices repeating it"),
@@ -607,7 +693,7 @@ def install(app, ctx):
                     ("Across reports: what these devices carried in the name's other reports",
                      ["Exact pattern, report by report", "Devices", "Code"], x_rows, [0.7, 0.1, 0.2]),
                     ("Reports these devices were seen in", ["Reports", "Devices", "Share"],
-                     [[" + ".join(s["reports"]), f"{s['devices']:,}", f"{s['devices'] / max(1, x['devices']):.1%}"] for s in x["sets"]]),
+                     [[" + ".join(T(r) for r in s["reports"]), f"{s['devices']:,}", f"{s['devices'] / max(1, x['devices']):.1%}"] for s in x["sets"]]),
                     ("Devices per network", ["Network", "AS number", "Devices", "Records", "Share of devices"], net_rows, [0.4, 0.14, 0.14, 0.14, 0.18]),
                     ("Devices per region", ["Region", "Devices", "Share"], geo_rows),
                     ("Devices per city", ["City", "Region", "Devices", "Share"], city_tab, [0.3, 0.3, 0.2, 0.2]),
@@ -668,6 +754,8 @@ def install(app, ctx):
             zf.writestr(f"{base}.pdf", pdf)
             zf.writestr(f"{base}_devices.csv", csv_text(dev_cols, dev_rows))
             zf.writestr(f"{base}_records.csv", csv_text([c for c, _ in cols], rows))
+            if enr:                                   # the analysis across every category, one row per finding
+                zf.writestr(f"{base}_other_categories.csv", csv_text(["category", "report", "value", "hosts", "records", "code"], enrich_rows(enr)))
         # for the page: the key analytics, and per region what the map shows on hover (with the devices' addresses: this
         # page is for analysts only)
         reg_det = {}
@@ -700,7 +788,8 @@ def install(app, ctx):
                           "top_devices": [{"ip": d["ip"], "network": d["network"], "region": (d["region"] or "").title(), "city": (d["city"] or "").title(),
                                            "records": d["records"], "days": len(d["days"]), "last": (d["last"] or "")[:16].replace("T", " "),
                                            "also": sorted(set(per_dev.get(d["ip"], {})) - d["reports"])} for d in devs[:15]],
-                          "across": {"multi": x["multi"], "patterns": x["patterns"][:10], "patterns_total": x["patterns_total"], "sets": x["sets"][:6]}}
+                          "across": {"multi": x["multi"], "patterns": x["patterns"][:10], "patterns_total": x["patterns_total"], "sets": x["sets"][:6]},
+                          "enrich": enr or None}
         ctx["audit"].add("combo_export", user=job["user"], target=entry["code"],
                          detail=f"{entry['name']} · {span} · {len(devs)} devices, {len(rows)} records")
         # kept on disk for an hour (owner-only files), so a service restart between the search and the download loses nothing
@@ -763,6 +852,8 @@ def install(app, ctx):
         if not ANY_RX.match(code):
             return jsonify(error="A code looks like LG-C-1A2B3C4D or LG-X-1A2B3C4D (an analyst's: LG-A-1A2B3C4D)."), 400
         entry = book.resolve_any(code)
+        if entry and entry.get("kind") == "a" and hasattr(book, "acode_allowed") and not book.acode_allowed(code):
+            entry = None                          # another channel's analyst code
         if not entry:
             return jsonify(error=f"{code} is not known here: it was never shown in Intel gathered on this platform."), 404
         days = None
@@ -823,6 +914,28 @@ def install(app, ctx):
         j["cancel"] = True
         return jsonify(stopping=True)
 
+    @app.route("/api/combos/search/<jid>/enrich", methods=["POST"])
+    def api_combos_enrich(jid):
+        """Add the analysis across every category to a finished search: what its devices show in the services reports
+        (with their pattern codes), the CVEs and issues on them, and the infections they call sinkholes as. It goes into
+        this search's report (PDF summary points and a CSV of its own) and onto the page."""
+        if not can_export() or not ctx["csrf_ok"]():
+            return jsonify(error="Refused."), 403
+        j = own(jid)
+        if not j or not j.get("inputs"):
+            return jsonify(error="This search has expired (finished searches are kept for an hour): run it again."), 404
+        if not ctx.get("cross"):
+            return jsonify(error="The analysis across categories is not available here."), 404
+        entry, found = j["inputs"][0], j["inputs"][1]
+        m = j["inputs"][5] or Matcher(entry, ctx["labels"]())
+        hosts = {m.host(e) for e in found if m.host(e)}
+        if not hosts:
+            return jsonify(error="The search found no device."), 400
+        j["enrich"] = ctx["cross"](hosts)
+        j["result"] = package(j, *j["inputs"][:5], m=j["inputs"][5])     # the report again, with the analysis in it
+        ctx["audit"].add("combo_enrich", user=user(), target=entry.get("code", ""), detail=f"{len(hosts)} devices across every category")
+        return jsonify(enrich=j["enrich"], summary=j.get("summary"), file=j["result"]["name"])
+
     @app.route("/api/combos/search/<jid>/download")
     def api_combos_download(jid):
         if not can_export():
@@ -854,6 +967,7 @@ def install(app, ctx):
         return render_template("combinations.html", max_days=MAX_DAYS)
 
     book.resolve = resolve
+    book.own_job = own                    # acodes.py: an analyst's request made from a finished search
     book.describe = lambda code: (describe(resolve(code)) if CODE_RX.match(code or "") else
                                   describe(book.get(code)) if ANY_RX.match(code or "") else "")
     book.resolve_any = lambda code: resolve(code) if CODE_RX.match(code or "") else book.get(code) if ANY_RX.match(code or "") else None

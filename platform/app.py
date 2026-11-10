@@ -2574,6 +2574,8 @@ NOTES = _notes.install(app, {"people": people, "audit": AUTH["audit"], "allowed"
                              "fresh": AUTH["fresh"], "base_dir": BASE_DIR, "logger": app.logger})
 
 INTEL = _intel.install(app, {"store": store, "svc_store": svc["store"], "allowed": _kb_allowed, "defined": _defined_titles,
+                             "services_view": lambda n: SVC_KB["view"](n),     # Services in Intel gathered (services_kb.py)
+                             "cross": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"]),   # every category
                              "labels": lambda: {**{x["name"]: x["label"] for x in registry.get()},
                                                 **{x["name"]: x["label"] for x in svc["registry"].get()}}})
 
@@ -2639,6 +2641,9 @@ COMBOS = _combos.install(app, {
     "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"], "is_demo": is_demo, "audit": AUTH["audit"], "notes": NOTES,
     "explain": _combo_explain, "build_pdf": _combo_pdf, "scope_text": lambda: _scope_text(), "base_dir": BASE_DIR,
     "can_note": _kb_change_allowed, "shapes": lambda: _adm1_shapes(), "country": lambda: settings.data["country"],
+    "svc_matcher": lambda entry: SVC_INTEL.matcher(entry), "svc_new_code": lambda r, items: SVC_INTEL.new_code(r, items),
+    "title_of": lambda n: SVC_KB["title_of"](n),
+    "cross": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"]),     # a search's devices across every category
     "logger": app.logger})
 NOTES.codes = COMBOS            # notes carry combination codes; their meaning is read from the code book
 
@@ -2648,6 +2653,23 @@ FINDINGS = _findings.install(app, {"people": people, "audit": AUTH["audit"], "fr
                                    "has_perm": AUTH["has_perm"], "describe": COMBOS.describe, "base_dir": BASE_DIR,
                                    "known": lambda c: bool(COMBOS.resolve_any(c)), "logger": app.logger})
 NOTES.findings = FINDINGS
+
+
+def _people_of(kind):
+    """The active accounts that do a job, by what their role may do (roles are configurable): managers (management),
+    researchers (definitions), analysts (see addresses and export). Names only, for the "send to" lists."""
+    need = {"management": {"management"}, "researcher": {"definitions"}, "analyst": {"unmasked", "export"}}[kind]
+    out = []
+    for name, u in AUTH["users"].all().items():
+        if (u or {}).get("status") != "active" or name.startswith(auth.TEST_PREFIX):
+            continue
+        if need <= set(AUTH["roles"].perms(u.get("role") or "")):
+            out.append({"user": name, "name": people.name(name), "role": u.get("role") or ""})
+    return sorted(out, key=lambda p: p["name"].lower())
+
+
+FINDINGS.people_of = _people_of
+FINDINGS.title_of = lambda n: SVC_KB["title_of"](n)     # a services report's finding shows its title
 
 # analyst codes: an analyst's selection passed to researchers and management without an address (acodes.py)
 import acodes as _acodes  # noqa: E402
@@ -2675,8 +2697,10 @@ ACODES = _acodes.install(app, {
     "is_demo": is_demo, "audit": AUTH["audit"], "day": _day_for, "slice": _slice_on, "svc_scope": svc["scope_events"],
     "labels": lambda: {**{x["name"]: x["label"] for x in registry.get()}, **{x["name"]: x["label"] for x in svc["registry"].get()}},
     "network": lambda asn: asn_registry.company(asn, False) if asn else "", "defined": _defined_titles,
-    "people_name": lambda u: people.name(u, ""), "base_dir": BASE_DIR})
+    "people_name": lambda u: people.name(u, ""), "base_dir": BASE_DIR,
+    "cross": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"])})     # every category for the code's hosts
 COMBOS.acode_records = ACODES.records          # the Combinations page searches analyst codes too
+COMBOS.acode_allowed = ACODES.allowed          # …only those of the channels this user is in (findings.py)
 
 
 import netypes  # noqa: E402  (network types: built-in sectors and the ones this site added)
@@ -2954,7 +2978,9 @@ def _combo_filter(code, section, events, day=None):
         entry = COMBOS.get(code)
         if not entry or entry.get("kind") != "a" or ("infections" if entry["platform"] == "comms" else "issues") != section:
             return []
-        if day is None or day.start.date().isoformat() != entry["day"]:
+        if not ACODES.allowed(code):          # another channel's analyst code (findings.py)
+            return []
+        if day is None or day.start.date().isoformat() not in (entry.get("days") or [entry["day"]]):
             return []
         return ACODES.records(entry, day)
     if not _combos.CODE_RX.match(code):
@@ -2989,9 +3015,10 @@ import services_intel as _services_intel  # noqa: E402
 PATTERNS = _svc_patterns.Patterns(BASE_DIR)
 SVC_INTEL = _services_intel.ServicesIntel({
     "svc_store": svc["store"], "comms_store": store, "patterns": PATTERNS,
+    "labels": lambda: {x["name"]: x["label"] for x in registry.get()},     # the sinkhole reports' names
     "load_day": lambda: (svc["store"].get(replay_now()), store.get(replay_now())),     # both: sinkholes are compared too
     "on_codes": lambda *a: getattr(INTEL, "on_codes", None) and INTEL.on_codes(*a)})
-_services_kb.install(app, {
+SVC_KB = _services_kb.install(app, {
     "patterns": PATTERNS, "services_intel": SVC_INTEL, "change_allowed": _kb_change_allowed, "fresh": AUTH["fresh"],
     "audit": AUTH["audit"], "user": lambda: getattr(g, "user", None),
     "report_map": REPORT_MAP, "svc_store": svc["store"], "load_day": lambda: svc["store"].get(replay_now()),

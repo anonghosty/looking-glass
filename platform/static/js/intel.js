@@ -32,6 +32,9 @@
   const SHOW = 6, MATRIX_MAX = 14;
   const pct = (s) => (s == null ? "" : s >= 0.995 ? "100%" : s >= 0.1 ? `${Math.round(s * 100)}%` : s >= 0.001 ? `${(s * 100).toFixed(1)}%` : "<0.1%");
   const plural = (n, w) => `${fmt(n)} ${w}${n === 1 ? "" : /(s|ch|sh|x)$/.test(w) ? "es" : "s"}`;
+  // what people read for a report: its title (services reports), never the collection name
+  const rn = (x) => (st?.d?.labels || {})[x] || x;
+  const SEC = { issues: "issue", services: "services report", infections: "infection / category" };
 
   // ---------------- copying: one value per line (files, tools) or one line with commas (search boxes, messages)
   async function writeClip(text) {
@@ -57,6 +60,19 @@
     b.setAttribute("aria-label", `Copy the combination code ${code}`);
     b.append(el("span", "ig-code-k", "Code"), el("code", null, code), svg(ICON.copy, 11));
     b.addEventListener("click", (e) => { e.stopPropagation(); copy(`${code} (${what})`, `the code ${code}`); });
+    return b;
+  }
+  // "Move to notes": a pattern of interest goes to a new note with its code attached (the note says why it matters;
+  // nothing is saved until the researcher adds the note)
+  function noteBtn(code, text) {
+    const b = el("button", "ig-tonote"); b.type = "button"; b.hidden = !window.LGNotes;
+    b.title = `Open a new note on ${st?.d?.title || st?.d?.name} with ${code} attached`;
+    b.append(svg("M5 4h11l3 3v13H5zM9 9h6M9 13h6M9 17h3", 13), el("span", null, "Move to notes"));
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const d = st.d; close();
+      window.LGNotes?.open(d.name, d.section || "infections", d.title, [{ code, text }]);
+    });
     return b;
   }
   function copySeg(getValues, what) {
@@ -277,7 +293,11 @@
           chip.addEventListener("click", () => { st.focus = st.focus === x ? null : x; paint(); }); set.append(chip);
         });
         blk.append(set);
-        if (c.code) blk.append(codeChip(c.code, `${st.d.name} in ${r.report}: ${c.items.join(" + ") || "the name only"}`));
+        if (c.code) {
+          const what = `${st.d.title || st.d.name} in ${rn(r.report)}: ${c.items.join(" + ") || "the name only"}`;
+          const codes = el("div", "ig-code-row"); codes.append(codeChip(c.code, what), noteBtn(c.code, `${rn(r.report)}: ${c.items.join(" + ") || "the name only"}`));
+          blk.append(codes);
+        }
         const meta = el("div", "ig-cmb-meta");
         const dv = el("div"); dv.append(el("b", null, fmt(c.hosts || 0)), el("span", null, (c.hosts || 0) === 1 ? "device" : "devices"));
         dv.title = `${plural(c.hosts || 0, "device")} carry this set (counted, never shown)`;
@@ -291,7 +311,8 @@
     }
     card.append(el("p", "ig-foot", `Each row is one exact set, counted per record (of ${fmt(r.records)}).` +
       (r.combinations_total > r.combinations.length ? ` The ${r.combinations.length} most frequent of ${fmt(r.combinations_total)} are shown.` : "") +
-      " Click a value to focus on it."));
+      (r.combinations_small ? ` ${plural(r.combinations_small, "other set")} on fewer than ${st.d.min_hosts || 5} devices: not shown, to keep hosts unidentifiable.` : "") +
+      " Click a value to highlight every set that carries it."));
     return card;
   }
 
@@ -299,9 +320,11 @@
   function acrossView(pane) {
     const d = st.d, a = d.across || {};
     const path = el("div", "ig-path");
-    path.append(el("code", null, d.name), el("span", "ig-sep", "›"), el("b", null, "Across reports"), el("span", "ig-sep", "›"),
+    path.append(el("code", null, d.title || d.name), el("span", "ig-sep", "›"), el("b", null, "Across reports"), el("span", "ig-sep", "›"),
       el("span", null, `${plural(a.devices || 0, "device")} · ${fmt(a.multi_devices || 0)} seen in more than one report`));
     pane.append(path);
+    if (d.section === "services") pane.append(sinkCard(d));   // the hosts that also call botnet sinkholes, first
+    if (d.cross) pane.append(everyCard(d));                  // the same hosts in every other category
     // 0. combinations across reports: for devices in two or more reports, exactly what each carried in each report
     const c0 = el("article", "ig-card ig-xcombos");
     const h0 = el("header", "ig-card-h"), t0 = el("div", "ig-card-t");
@@ -310,7 +333,11 @@
     h0.append(t0); c0.append(h0);
     const xs = (a.cross_combos || []).filter((x) => !st.q || x.parts.some((p) => p.items.some((v) => v.toLowerCase().includes(st.q))));
     if (!xs.length) {
-      if (a.multi_devices || 0) c0.append(el("p", "ig-empty", `Nothing matches “${st.q}”.`));
+      if (st.q) c0.append(el("p", "ig-empty", `Nothing matches “${st.q}”.`));
+      else if (d.section === "services") c0.append(el("p", "ig-empty", (a.multi_devices || 0)
+        ? `${plural(a.multi_devices, "device")} of this report ${a.multi_devices === 1 ? "is" : "are"} in other services reports too, but no exact pattern is shared by ${d.min_hosts || 5} or more: smaller groups are not shown, to keep hosts unidentifiable.`
+        : "None of this report's devices is in another services report in the days in memory."));
+      else if (a.multi_devices || 0) c0.append(el("p", "ig-empty", "No exact pattern to show."));
       else c0.append(noOverlap(st.d.reports.map((r) => r.report)));
     }
     const ulx = el("ul", "ig-xc"), maxx = Math.max(1, ...xs.map((x) => x.devices));
@@ -338,14 +365,14 @@
       if (same && x.parts.length > 1) {
         const blk = el("div", "ig-xc-part same");
         const hd = el("div", "ig-xc-reps"); hd.append(el("span", "ig-xc-rep", x.parts.length === 2 ? "Same in both reports" : `Same in all ${x.parts.length} reports`));
-        for (const p of x.parts) hd.append(el("span", "ig-xc-rname", p.report));
+        for (const p of x.parts) hd.append(el("span", "ig-xc-rname", rn(p.report)));
         blk.append(hd, chipSet(x.parts[0].items)); parts.append(blk);
       } else {
-        for (const p of x.parts) { const blk = el("div", "ig-xc-part"); blk.append(el("span", "ig-xc-rep", p.report), chipSet(p.items)); parts.append(blk); }
+        for (const p of x.parts) { const blk = el("div", `ig-xc-part${p.report === d.name ? " cur" : ""}`); blk.append(el("span", "ig-xc-rep", rn(p.report)), chipSet(p.items)); parts.append(blk); }
       }
       if (st.focus && !x.parts.some((p) => p.items.includes(st.focus))) li.classList.add("dim");
-      const pat = x.parts.map((p) => `${p.report}: ${p.items.join(", ") || "-"}`).join(" | ");
-      if (x.code) parts.append(codeChip(x.code, `${d.name} across ${pat}`));
+      const pat = x.parts.map((p) => `${rn(p.report)}: ${p.items.join(", ") || "-"}`).join(" | ");
+      if (x.code) { const cr = el("div", "ig-code-row"); cr.append(codeChip(x.code, `${d.title || d.name} across ${pat}`), noteBtn(x.code, `Across ${pat}`)); parts.append(cr); }
       li.append(stat, parts, iconBtn(ICON.copy, "Copy this pattern on one line (with its code)", () => copy((x.code ? `${x.code}: ` : "") + pat, "this pattern")));
       li.title = `${plural(x.devices, "device")} carried exactly this, report by report`;
       ulx.append(li);
@@ -363,7 +390,7 @@
     for (const s of a.report_sets || []) {
       const li = el("li", s.reports.length > 1 ? "multi" : "");
       const set = el("div", "ig-set");
-      s.reports.forEach((x, i) => { if (i) set.append(el("span", "ig-plus", " + ")); set.append(el("span", "ig-rchip", x)); });
+      s.reports.forEach((x, i) => { if (i) set.append(el("span", "ig-plus", " + ")); set.append(el("span", "ig-rchip", rn(x))); });
       if (s.reports.length > 1) set.append(el("span", "ig-xtag", `${s.reports.length} reports`));
       const bar = el("div", "ig-mbar"); const f = el("i"); f.style.width = `${Math.max(2, (s.devices / max1) * 100)}%`; bar.append(f);
       const n = el("span"); n.append(el("b", null, fmt(s.devices)), el("small", null, pct(s.share))); bar.append(n);
@@ -371,8 +398,11 @@
       li.append(set, bar, dv, el("span"), el("span"));
       ul1.append(li);
     }
+    if (!(a.report_sets || []).length) c1.append(el("p", "ig-empty", d.section === "services"
+      ? `No set of reports is shared by ${d.min_hosts || 5} or more devices.` : "No set of reports to show."));
     c1.append(ul1, el("p", "ig-foot", "Each row is one exact set of reports a device was seen in for this name, in the days held in memory."));
     pane.append(c1);
+    if (d.section === "services") return;             // services: the sinkhole card is at the top
     // 2. indicators seen in more than one report
     const c2 = el("article", "ig-card g-net");
     const h2 = el("header", "ig-card-h"), t2 = el("div", "ig-card-t");
@@ -395,6 +425,170 @@
     pane.append(c2);
   }
 
+  // every report that led to a finding, grouped by kind: "Sinkhole reports 1: Sinkhole DNS (1)", "Services reports 3: …"
+  function seenIn(groups) {
+    const w = el("div", "ig-seenin");
+    for (const g of groups || []) {
+      const r = el("div", "ig-seenin-r");
+      r.append(el("span", "ig-seenin-k", `${g.kind} ${g.reports.length}`),
+        el("span", "ig-seenin-l", g.reports.map((x) => `${x.title} (${fmt(x.hosts)})`).join(" · ")));
+      w.append(r);
+    }
+    return w;
+  }
+  // services: the report's devices that the network communications reports show calling botnet sinkholes, per infection,
+  // each with its code (an analyst gets exactly those devices of this report)
+  function sinkCard(d) {
+    const s = d.sinkholes || { hosts: 0, share: 0, names: [] };
+    const c = el("article", `ig-card g-cred ig-sink${s.hosts ? " on" : ""}`);
+    const h = el("header", "ig-card-h"), t = el("div", "ig-card-t");
+    t.append(el("i"), el("b", null, "Also calling botnet sinkholes"),
+      el("span", null, s.hosts ? `${plural(s.hosts, "device")} (${pct(s.share)} of this report's) are in the network communications reports too: an exposed service on a device that is already infected`
+        : "None of this report's devices is in the network communications reports of the days in memory"));
+    h.append(t); c.append(h);
+    if ((s.reports || []).length) {                // which sinkhole reports these hosts are in
+      const reps = el("div", "ig-set ig-sink-reps");
+      reps.append(el("span", "ig-sink-k", "In the sinkhole reports"));
+      for (const r of s.reports) { const c2 = el("span", "ig-rchip"); c2.append(document.createTextNode(r.report), el("b", null, fmt(r.hosts))); reps.append(c2); }
+      c.append(reps);
+    }
+    const rows = (s.names || []).filter((x) => !st.q || x.name.toLowerCase().includes(st.q));
+    if (rows.length) {
+      const cols = el("div", "ig-cols"); cols.append(el("span", null, "Infection / category"), el("span", null, ""), el("span", null, "Devices"), el("span", null, "")); c.append(cols);
+      const ul = el("ul", "ig-vals"), max = Math.max(1, ...rows.map((x) => x.hosts));
+      for (const x of rows) {
+        const li = el("li", "ig-v ig-sink-r"); li.style.setProperty("--w", String(Math.max(1.5, (x.hosts / max) * 100)));
+        const main = el("div", "ig-v-main");
+        const nm = el("button", "ig-where-name", x.name); nm.type = "button"; nm.title = `Intel gathered for ${x.name}`;
+        nm.addEventListener("click", (e) => { e.stopPropagation(); open(x.name, "infections"); });
+        main.append(nm);
+        if (x.seen_in?.length) main.append(seenIn(x.seen_in));
+        else if (x.reports?.length) main.append(el("span", "ig-sink-in", `in ${x.reports.map((r) => r.report).join(", ")}`));
+        if (x.code) main.append(codeChip(x.code, `${d.title || d.name}: devices also calling botnet sinkholes as ${x.name}`),
+          noteBtn(x.code, `${d.title || d.name}: hosts also calling botnet sinkholes as ${x.name}`));
+        const f = el("div", "ig-fig"), hh = el("span", "ig-f-host"); hh.append(svg(ICON.host, 12), document.createTextNode(fmt(x.hosts)));
+        hh.title = `${plural(x.hosts, "device")} of this report call a sinkhole as ${x.name} (counted, never shown)`;
+        f.append(el("span"), hh, el("span", "ig-f-rep none", ""));
+        li.append(main, f, iconBtn(ICON.copy, `Copy ${x.name}`, () => copy(x.name, "the name"), "ig-v-copy"));
+        ul.append(li);
+      }
+      c.append(ul, el("p", "ig-foot", "Threat names, not hosts. A code gives an analyst exactly the devices of this report that call a sinkhole as that infection."));
+    }
+    return c;
+  }
+  // infections and issues: the same hosts in every other category (services_intel.for_hosts): the services reports they
+  // are in with their pattern combinations, the CVEs and issues on them, the infections they call sinkholes as; codes
+  // with "Move to notes"; values clickable like everywhere in this window
+  function everyCard(d) {
+    const x = d.cross, me = String(d.name).toLowerCase();
+    const c = el("article", "ig-card ig-every");
+    const h = el("header", "ig-card-h"), t = el("div", "ig-card-t");
+    t.append(el("i"), el("b", null, "In every other category"),
+      el("span", null, `the same ${d.section === "issues" ? "hosts" : "devices"} in the services reports, with the CVEs, issues and infections on them · counts and codes only`));
+    h.append(t); c.append(h);
+    // where these hosts were seen: every report, grouped by kind (sinkhole, vulnerability, services, other categories)
+    if ((x.sources || []).length) {
+      const w = el("div", "ig-src");
+      w.append(el("b", "ig-src-h", `Where these ${d.section === "issues" ? "hosts" : "devices"} were seen`));
+      for (const s of x.sources) {
+        const r = el("div", "ig-src-r");
+        r.append(el("span", "ig-src-k", `${s.reports.length} ${s.kind.replace(/ reports$/, "").toLowerCase()} report${s.reports.length === 1 ? "" : "s"}`));
+        const list = el("div", "ig-src-l");
+        for (const x2 of s.reports) { const ch = el("span", "ig-rchip"); ch.append(document.createTextNode(x2.title), el("b", null, fmt(x2.hosts))); list.append(ch); }
+        r.append(list); w.append(r);
+      }
+      c.append(w);
+    }
+    const qOk = (s) => !st.q || s.toLowerCase().includes(st.q);
+    const chipOf = (v) => { const b = el("button", `ig-chip${st.focus === v ? " on" : ""}`, v); b.type = "button";
+      b.addEventListener("click", (e) => { e.stopPropagation(); st.focus = st.focus === v ? null : v; paint(); }); return b; };
+    const block = (title, n, cls) => { const b = el("section", `ig-every-b ${cls}`); const hh = el("div", "ig-every-h"); hh.append(el("b", null, title), el("span", null, n)); b.append(hh); c.append(b); return b; };
+    // infections (other than this one; a services report shows its sinkholes in the card above)
+    const svcSec = d.section === "services";
+    const infs = svcSec ? [] : (x.infections || []).filter((i) => i.name.toLowerCase() !== me && qOk(i.name));
+    const bi = svcSec ? el("div") : block(d.section === "issues" ? "Infections" : "Other infections", !infs.length ? "none"
+      : d.section === "issues" ? `${plural(x.infections_hosts, "host")} calling botnet sinkholes` : `${plural(infs.length, "other infection")} on these devices`, "inf");
+    if (!infs.length && !svcSec) bi.append(el("p", "ig-empty", d.section === "issues" ? "None of these hosts calls a botnet sinkhole in the days in memory." : "These devices call no other infection's sinkhole in the days in memory."));
+    for (const i of infs) {
+      const row = el("div", `ig-every-r${st.focus && st.focus !== i.name ? " dim" : ""}`);
+      const nm = el("button", "ig-where-name", i.name); nm.type = "button"; nm.title = `Intel gathered for ${i.name}`;
+      nm.addEventListener("click", (e) => { e.stopPropagation(); open(i.name, "infections"); });
+      row.append(nm, el("span", "ig-every-n", plural(i.hosts, "host")));
+      for (const r of i.reports.slice(0, 3)) {
+        const cr = el("div", "ig-code-row"); cr.append(el("span", "ig-every-in", r.title),
+          codeChip(r.code, `${r.title}: hosts also calling botnet sinkholes as ${i.name}`), noteBtn(r.code, `${r.title}: hosts also calling botnet sinkholes as ${i.name}`));
+        row.append(cr);
+      }
+      bi.append(row);
+    }
+    // CVEs and issues (other than this one)
+    const iss = (x.issues || []).filter((i) => i.name !== d.name && qOk(i.name));
+    const bc = block("CVEs and issues", iss.length ? `${fmt(x.issues_total)} on these hosts` : "none", "cve");
+    if (!iss.length) bc.append(el("p", "ig-empty", "No CVE or other issue on these hosts in the services reports of the days in memory."));
+    else {
+      // each CVE or issue with the services reports it was found in (what a researcher is about to send)
+      const ul = el("div", "ig-every-iss"), openI = (st.open || {}).iss;
+      iss.forEach((i, n) => {
+        const row = el("div", `ig-every-ir${st.focus && st.focus !== i.name ? " dim" : ""}`); if (n >= 12 && !openI) row.hidden = true;
+        const b = chipOf(i.name); b.classList.add(/^CVE-/i.test(i.name) ? "cve" : "iss"); b.append(el("em", null, fmt(i.hosts)));
+        const w = i.seen_in?.length ? seenIn(i.seen_in) : el("span", "ig-every-in", `in ${(i.reports || []).map((r) => `${r.title} (${fmt(r.hosts)})`).join(", ") || "the services reports"}`);
+        row.append(b, w); ul.append(row);
+      });
+      bc.append(ul);
+      if (iss.length > 12 && !openI) {
+        const more = el("button", "ig-more", `Show all ${iss.length}`); more.type = "button";
+        more.addEventListener("click", () => { st.open = { ...(st.open || {}), iss: true }; paint(); }); bc.append(more);
+      }
+    }
+    // services, with their pattern combinations
+    const svc = (x.services || []).filter((s) => s.report !== d.name && (qOk(s.title) || s.combinations.some((k) => k.items.some(qOk))));
+    const bs = block(svcSec ? "Other services reports" : "Services", svc.length ? plural(svc.length, "report") : "none", "svc");
+    if (!svc.length) bs.append(el("p", "ig-empty", "None of these hosts is in the services reports of the days in memory."));
+    const open_ = (st.open || {}).every;
+    // grouped by kind of report, each kind with its count and names: vulnerability, services, other categories
+    const KORD = ["Vulnerability reports", "Services reports"];
+    const kinds = [...new Set(svc.map((s) => s.kind || "Services reports"))].sort((a, b) => ((KORD.indexOf(a) + 1) || 9) - ((KORD.indexOf(b) + 1) || 9));
+    svc.sort((a, b) => kinds.indexOf(a.kind || "Services reports") - kinds.indexOf(b.kind || "Services reports") || b.hosts - a.hosts);
+    if (svc.length) {
+      const sum = el("div", "ig-seenin ig-svc-kinds");
+      for (const k of kinds) {
+        const of = svc.filter((s) => (s.kind || "Services reports") === k);
+        const r = el("div", "ig-seenin-r"); r.append(el("span", "ig-seenin-k", `${k} ${of.length}`), el("span", "ig-seenin-l", of.map((s) => `${s.title} (${fmt(s.hosts)})`).join(" · ")));
+        sum.append(r);
+      }
+      bs.append(sum);
+    }
+    let lastKind = null;
+    svc.forEach((s, n) => {
+      const kind = s.kind || "Services reports";
+      if (kind !== lastKind) { lastKind = kind; const kh = el("div", "ig-every-kh", `${kind} · ${svc.filter((x) => (x.kind || "Services reports") === kind).length}`); if (n >= 6 && !open_) kh.hidden = true; bs.append(kh); }
+      const r = el("div", "ig-every-s"); if (n >= 6 && !open_) r.hidden = true;
+      const hh = el("div", "ig-every-r"); hh.append(el("b", null, s.title), el("span", "ig-every-n", plural(s.hosts, "host"))); r.append(hh);
+      for (const k of s.combinations.filter((k) => k.items.length).slice(0, 3)) {
+        const row = el("div", `ig-every-k${st.focus && !k.items.includes(st.focus) ? " dim" : ""}`);
+        const set = el("div", "ig-set"); k.items.forEach((v, j) => { if (j) set.append(el("span", "ig-plus", " + ")); set.append(chipOf(v)); });
+        const cr = el("div", "ig-code-row"); cr.append(el("span", "ig-every-n", plural(k.hosts, "host")), codeChip(k.code, `${s.title}: ${k.items.join(" + ")}`), noteBtn(k.code, `${s.title}: ${k.items.join(" + ")}`));
+        row.append(set, cr); r.append(row);
+      }
+      bs.append(r);
+    });
+    if (svc.length > 6 && !open_) {
+      const more = el("button", "ig-more", `Show all ${svc.length} reports`); more.type = "button";
+      more.addEventListener("click", () => { st.open = { ...(st.open || {}), every: true }; paint(); }); bs.append(more);
+    }
+    c.append(el("p", "ig-foot", `In the days in memory (${(x.days || []).join(", ")}). A pattern value is shown only when 5 or more hosts share it; hosts are counted, never shown.`));
+    return c;
+  }
+  // services: the report's overview (kb-services.js) and its pattern fields (kb-services-patterns.js) in the same window
+  function servicePane(kind) {
+    const pane = st.pane; pane.replaceChildren();
+    const path = el("div", "ig-path");
+    path.append(el("code", null, st.d.title || st.d.name), el("span", "ig-sep", "›"), el("b", null, kind === -3 ? "About this report" : "Pattern fields"));
+    const inner = el("div", "ig-svc-pane"); pane.append(path, inner);
+    if (kind === -3) window.LGServices?.overview(inner, st.d.name);
+    else window.LGServicePatterns?.fields(inner, st.d.name, () => { const n = st.d.name; open(n, "services", "*fields*"); window.LGServices?.reload(); });
+  }
+
   // ---------------- painting the chosen report (on focus, search and sort changes too)
   // the empty "across" answer: say that the addresses are there, and why the reports can still not share one
   function noOverlap(reps) {
@@ -413,14 +607,17 @@
     return box;
   }
   function pick(i) { if (!st || i === st.i || i < st.min || i >= st.d.reports.length) return; st.i = i; st.focus = null; st.open = {}; paint(true); }
+  // services: the extra rail entries (-2 pattern fields, -3 about this report) are not in the [ ] cycle
+  function pickExtra(i) { if (!st) return; st.i = i; st.focus = null; paint(true); }
   function paint(scrollTop) {
     const d = st.d;
     st.rail.querySelectorAll(".ig-rep-btn").forEach((b) => { const on = +b.dataset.i === st.i; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; });
     if (st.i === -1) { st.pane.replaceChildren(); acrossView(st.pane); if (scrollTop) keepPlace(); return; }
+    if (st.i < -1) { if (scrollTop) servicePane(st.i); if (scrollTop) keepPlace(); return; }    // drawn once (forms keep their state)
     const r = d.reports[st.i];
     const pane = st.pane; pane.replaceChildren();
     const path = el("div", "ig-path");
-    path.append(el("code", null, d.name), el("span", "ig-sep", "›"), el("b", null, r.report), el("span", "ig-sep", "›"),
+    path.append(el("code", null, d.title || d.name), el("span", "ig-sep", "›"), el("b", null, rn(r.report)), el("span", "ig-sep", "›"),
       el("span", null, `${plural(r.records, "record")} · what comes with it here`));
     if (st.focus) {
       const f = el("button", "ig-focus"); f.type = "button"; f.title = "Clear the focus (Esc)";
@@ -435,14 +632,15 @@
       // one combination only: no card, but its code, so an analyst can still pull exactly these devices
       const one = el("div", "ig-one-code");
       one.append(el("span", null, `Every record here carries the same set${r.single.items.length ? `: ${r.single.items.join(" + ")}` : ""}`),
-        codeChip(r.single.code, `${d.name} in ${r.report}: ${r.single.items.join(" + ") || "the name only"}`));
+        codeChip(r.single.code, `${d.name} in ${r.report}: ${r.single.items.join(" + ") || "the name only"}`),
+        noteBtn(r.single.code, `${rn(r.report)}: ${r.single.items.join(" + ") || "the name only"}`));
       pane.append(one);
     }
     const grid = el("div", "ig-grid");
     for (const k of ks) grid.append(kindCard(k));
     pane.append(grid);
     if (st.q && !pane.querySelector(".ig-card:not(.empty) li.ig-v:not(.out), .ig-mrow:not(.dim):not(.ig-mhead), .ig-sets li:not(.dim)"))
-      pane.append(el("p", "ig-empty", `Nothing in ${r.report} matches “${st.q}”.`));
+      pane.append(el("p", "ig-empty", `Nothing in ${rn(r.report)} matches “${st.q}”.`));
     if (scrollTop) keepPlace();
   }
   // switching report: stay where the reader is; only when they are below the start of the report content, bring that
@@ -455,17 +653,28 @@
 
   async function open(name, section, report) {
     shell();
-    $("igName").textContent = name; $("igSec").textContent = section === "issues" ? "issue" : "infection / category"; $("igMeta").replaceChildren();
+    $("igName").textContent = name; $("igSec").textContent = SEC[section] || SEC.infections; $("igMeta").replaceChildren();
     $("igQ").value = "";
     body.replaceChildren(el("div", "ig-loading lg-loading", "Gathering the indicators from the reports…"));   // the searching logo (loader.js)
     back.hidden = false; box.hidden = false; document.documentElement.classList.add("ig-open");
     let d; try { d = await get(`/api/intel?section=${encodeURIComponent(section || "infections")}&name=${encodeURIComponent(name)}`); }
     catch (e) { body.replaceChildren(el("p", "ig-empty", `Could not gather the intel: ${e.message}`)); return; }
+    const svc = d.section === "services";
+    if (d.title) $("igName").textContent = d.title;            // a services report: its title, the collection names small
     const records = d.reports.reduce((s, r) => s + r.records, 0), kinds = new Set(d.reports.flatMap((r) => r.indicators.map((k) => k.kind)));
     const meta = $("igMeta");
-    for (const [n, l] of [[plural(d.reports.length, "report"), ""], [plural(records, "record"), ""], [plural(kinds.size, "kind"), " of indicator"], [d.days.map((x) => x.slice(5)).join(" · "), " in memory"]])
+    const facts = svc ? [[plural(d.reports[0]?.hosts || 0, "device"), ""], [plural(records, "record"), ""], [plural(kinds.size, "pattern field"), " with values"],
+                         [d.days.map((x) => x.slice(5)).join(" · "), " in memory"], [d.name, ""]]
+      : [[plural(d.reports.length, "report"), ""], [plural(records, "record"), ""], [plural(kinds.size, "kind"), " of indicator"], [d.days.map((x) => x.slice(5)).join(" · "), " in memory"]];
+    for (const [n, l] of facts)
       { const s = el("span"); s.append(el("b", null, n), document.createTextNode(l)); meta.append(s); }
+    if (svc) meta.lastChild.classList.add("ig-meta-id");
     body.replaceChildren();
+    if (d.asks?.length) {                         // services: Looking Glass's question about the pattern fields
+      const ask = el("div", "ig-svc-ask"); ask.append(svg(ICON.ask, 16), el("b", null, "Looking Glass asks:"), el("span", null, d.asks.join(" ")));
+      const go = el("button", "ig-more", "Open the pattern fields"); go.type = "button"; go.addEventListener("click", () => pickExtra(-2)); ask.append(go);
+      body.append(ask);
+    }
     if (d.leads?.length) {
       const asks = el("section", "ig-asks");
       const ah = el("div", "ig-asks-h"); ah.append(svg(ICON.ask, 16), el("b", null, "Looking Glass asks: can you look into this?"), el("span", null, plural(d.leads.length, "match")));
@@ -481,27 +690,39 @@
     if (!d.reports.length) { body.append(el("p", "ig-empty", `${d.name} is not in the reports held in memory (${d.days.join(", ")}), so there is nothing to gather right now. The Definitions list shows where and when it was last seen.`)); return; }
     const layout = el("div", "ig-layout");
     const rail = el("nav", "ig-rail"); rail.setAttribute("role", "tablist"); rail.setAttribute("aria-label", "Reports");
-    rail.append(el("div", "ig-rail-h", `Seen in ${plural(d.reports.length, "report")}`));
+    rail.append(el("div", "ig-rail-h", svc ? "This report" : `Seen in ${plural(d.reports.length, "report")}`));
     const maxRec = Math.max(1, ...d.reports.map((r) => r.records));
-    const cross = d.reports.length > 1;
+    const crossAny = d.cross && ((d.cross.services || []).length || (d.cross.issues || []).length || (d.cross.infections || []).length);
+    const cross = d.reports.length > 1 || !!d.across_always || !!crossAny;
     if (cross) {                                   // the view across the reports, first in the rail
       const a = d.across || {};
       const b = el("button", "ig-rep-btn ig-rep-x"); b.type = "button"; b.setAttribute("role", "tab"); b.dataset.i = -1;
-      b.append(el("span", "ig-rep-n", "Across reports"), el("span", "ig-rep-m", `${fmt(a.multi_devices || 0)} devices in 2+ · ${fmt(a.shared_total || 0)} shared`));
+      b.append(el("span", "ig-rep-n", "Across reports"), el("span", "ig-rep-m", svc
+        ? `${fmt(a.multi_devices || 0)} in other reports · ${fmt(d.sinkholes?.hosts || 0)} calling sinkholes`
+        : `${fmt(a.multi_devices || 0)} devices in 2+ · ${fmt(a.shared_total || 0)} shared`));
+      if (svc && d.sinkholes?.hosts) b.classList.add("alert");
       b.addEventListener("click", () => pick(-1)); rail.append(b);
     }
     d.reports.forEach((r, i) => {
       const b = el("button", "ig-rep-btn"); b.type = "button"; b.setAttribute("role", "tab"); b.dataset.i = i;
       const kinds = r.indicators.length;
-      b.append(el("span", "ig-rep-n", r.report), el("span", "ig-rep-m", `${fmt(r.records)} · ${kinds ? plural(kinds, "kind") : "name only"}`));
+      b.append(el("span", "ig-rep-n", svc ? "Patterns and combinations" : rn(r.report)),
+        el("span", "ig-rep-m", `${fmt(r.records)} · ${kinds ? plural(kinds, svc ? "field" : "kind") : svc ? "tags only" : "name only"}`));
       const bar = el("i", "ig-rep-bar"); bar.style.width = `${Math.max(3, (r.records / maxRec) * 100)}%`; b.append(bar);
       if (!kinds) b.classList.add("bare");
       b.addEventListener("click", () => pick(i)); rail.append(b);
     });
+    if (svc) {                                     // services: the pattern fields and what the report is, in the same window
+      rail.append(el("div", "ig-rail-h", "The report"));
+      for (const [i, l, m] of [[-2, "Pattern fields", d.asks?.length ? "Looking Glass asks" : "what is compared"], [-3, "About this report", "definitions, issues, products"]]) {
+        const b = el("button", `ig-rep-btn ig-rep-s${i === -2 && d.asks?.length ? " ask" : ""}`); b.type = "button"; b.setAttribute("role", "tab"); b.dataset.i = i;
+        b.append(el("span", "ig-rep-n", l), el("span", "ig-rep-m", m)); b.addEventListener("click", () => pickExtra(i)); rail.append(b);
+      }
+    }
     rail.append(el("p", "ig-keys", "[ ]  switch report · /  search · Esc  close"));
     const pane = el("div", "ig-pane");
     layout.append(rail, pane); body.append(layout, el("p", "ig-note", "Indicators only: the hosts themselves are never shown here. Addresses inside URLs and banners are masked."));
-    st = { d, i: report === "*across*" && cross ? -1 : Math.max(0, report ? d.reports.findIndex((r) => r.report === report) : 0), q: "", sort: "count", focus: null, open: {}, rail, pane,
+    st = { d, i: report === "*across*" && cross ? -1 : report === "*fields*" && svc ? -2 : Math.max(0, report ? d.reports.findIndex((r) => r.report === report) : 0), q: "", sort: "count", focus: null, open: {}, rail, pane,
       min: cross ? -1 : 0 };
     paint(true);
   }

@@ -22,13 +22,7 @@
       <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Definitions and network names · signed in as {{ lg_user }} ({{ lg_role }})</span></div></div>
     </div>
     <div class="hud-right">
-      {% if "view" in lg_perms %}<a class="demo-btn" href="/?intro=1"><span>Overview</span></a>{% endif %}
-      {% if "settings" in lg_perms %}<a class="demo-btn" href="/settings"><span>Settings</span></a>{% endif %}
-      {% if "management" in lg_perms %}<a class="demo-btn account-btn" href="/management" title="The management portal (Executive): aggregated dashboard and executive reports"><span>Executive</span></a>{% endif %}
-      {% if "definitions" in lg_perms or "management" in lg_perms or "settings" in lg_perms or ("unmasked" in lg_perms and "export" in lg_perms) %}<a class="demo-btn account-btn" href="/findings" title="Findings: researchers' notes the team follows up, from the first look to the advisory"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M5 21V4h11l-1.5 4L16 12H5M5 12"/></svg><span>Findings</span></a>{% endif %}
-      {% if "users" in lg_perms or "audit" in lg_perms %}<a class="demo-btn account-btn" href="/admin"><span>Admin</span></a>{% endif %}
-      <form method="post" action="/logout" class="account-form"><button type="submit" class="demo-btn account-btn" title="Logged in as {{ lg_user }} ({{ lg_role }}). Click to log out." aria-label="Log out">
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg><span class="acct-name">Log out</span></button></form>
+      {% set nav_here = "definitions" %}{% set nav_go = false %}{% include "_page_nav.html" %}
     </div>
   </header>
   <main class="st-main">
@@ -71,6 +65,7 @@
   <script src="{{ url_for('static', filename='js/lg-select.js') }}"></script>
   <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>
   <script src="{{ url_for('static', filename='js/intel.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/people-pick.js') }}"></script>
   <script src="{{ url_for('static', filename='js/kb-notes.js') }}"></script>
   <script src="{{ url_for('static', filename='js/kb-settings.js') }}"></script>
   <script src="{{ url_for('static', filename='js/kb-services-patterns.js') }}"></script>

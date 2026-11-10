@@ -23,9 +23,9 @@ def ok(label, cond, info=""):
     print(f"  {'ok  ' if cond else 'FAIL'} {label}" + (f"  [{info}]" if info else ""), flush=True)
 
 
-def call(path, perms, method="GET", body=None, role="analyst", raw=False):
+def call(path, perms, method="GET", body=None, role="analyst", raw=False, user="lg-check"):
     with A.app.test_request_context(path, method=method, json=body):
-        g.user = {"user": "lg-check", "role": role, "perms": set(perms), "csrf": None, "automation": True}
+        g.user = {"user": user, "role": role, "perms": set(perms), "csrf": None, "automation": True}
         ep = A.app.url_map.bind("localhost").match(path.split("?")[0], method=method)
         r = A.app.view_functions[ep[0]](**ep[1])
         code = r[1] if isinstance(r, tuple) else r.status_code
@@ -41,6 +41,8 @@ F.path, F.mtime, F.data = os.path.join(tmp, "findings.json"), None, {"seq": 0, "
 real_ids = A.ACODES.paths["ids"]; A.ACODES.paths["ids"] = os.path.join(tmp, "acodes")
 audit = A.AUTH["audit"]; real_add = audit.add; audited = []
 audit.add = lambda *a, **k: audited.append(a[0] if a else "")
+real_people = F.people_of        # the accounts that do each job: test accounts here (findings.py channels)
+F.people_of = lambda kind: [{"user": f"lg-check-{kind}", "name": f"Check {kind}", "role": kind}]
 jids = []
 try:
     day = A.store.get(A.replay_now()); A.svc["store"].get(A.replay_now())
@@ -55,7 +57,11 @@ try:
     ok("a researcher cannot make an analyst code", st == 403, f"HTTP {st}")
     st, d = call("/api/analyst-codes?demo=1", ANALYST, "POST", {"platform": "comms", "kind": "filters", "value": value, "at": at, "title": "t"})
     ok("demo mode: refused", st == 403)
-    st, d = call("/api/analyst-codes", ANALYST, "POST", {"platform": "comms", "kind": "filters", "value": value, "at": at,
+    st, d = call("/api/analyst-codes", ANALYST, "POST", {"platform": "comms", "kind": "filters", "value": value, "at": at, "title": "no recipient"})
+    ok("a code without the researcher it goes to is refused", st == 400 and "researcher" in d.get("error", ""), d.get("error", ""))
+    st, d = call("/api/analyst-codes", ANALYST, "POST", {"platform": "comms", "kind": "filters", "value": value, "at": at, "title": "x", "to": "lg-nobody"})
+    ok("…and one sent to someone who is not a researcher", st == 400)
+    st, d = call("/api/analyst-codes", ANALYST, "POST", {"platform": "comms", "kind": "filters", "value": value, "at": at, "to": "lg-check-researcher",
                                                           "title": "Test host on two sinkholes", "text": "Which infections share a C2 here?"})
     ok("the analyst makes an LG-A code and a finding", st == 200 and re.match(r"^LG-A-[0-9A-F]{8}$", d.get("code", "")) and d.get("finding") == "#1",
        f"{d.get('code')} {d.get('finding')} · {d.get('records')} records")
@@ -65,7 +71,7 @@ try:
     p_ids = os.path.join(A.ACODES.paths["ids"], f"{code}.json")
     ok("its exact records are kept (owner-only file), so every role sees the same records", os.path.exists(p_ids)
        and oct(os.stat(p_ids).st_mode & 0o777) == "0o600" and len(json.load(open(p_ids))) == len(want))
-    st, d2 = call("/api/analyst-codes", ANALYST, "POST", {"platform": "comms", "kind": "filters", "value": value, "at": at, "title": "again"})
+    st, d2 = call("/api/analyst-codes", ANALYST, "POST", {"platform": "comms", "kind": "filters", "value": value, "at": at, "title": "again", "to": "lg-check-researcher"})
     ok("the same selection on the same day gives the same code", d2.get("code") == code)
     print("The researcher opens it")
     st, v = call(f"/api/intel/acode/{code}", RESEARCHER, role="researcher")
@@ -77,6 +83,16 @@ try:
        and all(re.match(r"^LG-C-", c["code"]) for n in v["names"] for c in n["combinations"]), ", ".join(names))
     st, _ = call(f"/api/intel/acode/{code}", {"view"}, role="external")
     ok("external: refused", st == 403)
+    st, _ = call(f"/api/intel/acode/{code}", RESEARCHER, role="researcher", user="lg-check-researcher")
+    ok("the researcher it was sent to opens it", st == 200)
+    st, _ = call(f"/api/intel/acode/{code}", RESEARCHER, role="researcher", user="lg-outsider")
+    ok("a researcher outside its channel does not (as unknown)", st == 404)
+    st, _ = call("/api/findings/1/reply", RESEARCHER, "POST", {"text": "sneaking in"}, role="researcher", user="lg-outsider")
+    ok("…and cannot reply on its finding", st == 404)
+    st, fl = call("/api/findings", RESEARCHER, role="researcher", user="lg-outsider")
+    ok("…nor see it on the Findings page", st == 200 and not fl["findings"])
+    st, _ = call(f"/api/combo-codes/{code}", ANALYST, user="lg-outsider")
+    ok("an analyst outside the channel cannot look the code up", st == 404)
     reply_code = v["names"][0]["combinations"][0]["code"]
     st, r = call("/api/findings/1/reply", RESEARCHER, "POST", {"text": "Shares the C2 with another family.", "codes": [reply_code]}, role="researcher")
     ok("the researcher replies on the finding with a code", st == 200 and r["finding"]["history"][-1]["kind"] == "reply"
@@ -115,6 +131,7 @@ finally:
             try: os.remove(os.path.join(A.BASE_DIR, "data", "combo_exports", jid + s))
             except OSError: pass
     audit.add = real_add
+    F.people_of = real_people
     A.ACODES.paths["ids"] = real_ids
     book.path, book.data, book.loaded, F.path, F.mtime, F.data = saved
     import shutil; shutil.rmtree(tmp, ignore_errors=True)

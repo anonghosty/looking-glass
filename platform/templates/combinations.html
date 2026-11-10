@@ -21,14 +21,7 @@
       <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Combination search · signed in as {{ lg_user }} ({{ lg_role }})</span></div></div>
     </div>
     <div class="hud-right">
-      <a class="demo-btn" href="/?intro=1"><span>Overview</span></a>
-      <a class="demo-btn" href="/"><span>Map</span></a>
-      <a class="demo-btn" href="/services"><span>Services</span></a>
-      {% if "settings" in lg_perms or "definitions" in lg_perms %}<a class="demo-btn account-btn" href="/definitions"><span>Definitions</span></a>{% endif %}
-      {% if "definitions" in lg_perms or "management" in lg_perms or "settings" in lg_perms or ("unmasked" in lg_perms and "export" in lg_perms) %}<a class="demo-btn account-btn" href="/findings" title="Findings: researchers' notes the team follows up, from the first look to the advisory"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M5 21V4h11l-1.5 4L16 12H5M5 12"/></svg><span>Findings</span></a>{% endif %}
-      {% if "users" in lg_perms or "audit" in lg_perms %}<a class="demo-btn account-btn" href="/admin"><span>Admin</span></a>{% endif %}
-      <form method="post" action="/logout" class="account-form"><button type="submit" class="demo-btn account-btn" title="Logged in as {{ lg_user }} ({{ lg_role }}). Click to log out." aria-label="Log out">
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg><span class="acct-name">Log out</span></button></form>
+      {% set nav_here = "combinations" %}{% set nav_go = false %}{% include "_page_nav.html" %}
     </div>
   </header>
   <main class="st-main cb-main">
@@ -90,6 +83,8 @@
   </main>
   <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
   <script src="{{ url_for('static', filename='js/regions.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/people-pick.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/combos-enrich.js') }}"></script>
   <script src="{{ url_for('static', filename='js/combos.js') }}"></script>
 </body>
 </html>
