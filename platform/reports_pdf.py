@@ -220,6 +220,22 @@ class Painted(Flowable):
         self.fn(executive_pdf.Doc.painter(self.canv), self.width, self.height)
 
 
+def dash_geo(geo, width, height=92 * mm):
+    """The Executive report's region map (the country's first-level regions, coloured by devices) with each region and
+    its cities beside it. Without a map for the country, the regions and cities alone."""
+    import executive_pdf as ex
+
+    def fn(p, w, h):
+        c = p.c
+        c.setFillColor(ex.CARD); c.setStrokeColor(colors.Color(1, 1, 1, .06)); c.roundRect(0, 0, w, h, 8, stroke=1, fill=1)
+        if geo.get("shapes"):
+            p.region_map(8, h - 8, w * .55, h - 16, geo["shapes"], geo["regions"], geo.get("details") or {}, True)
+            p.region_tree(w * .59, h - 10, w * .39, 10, geo["regions"], geo.get("details") or {}, True)
+        else:
+            p.region_tree(14, h - 10, w - 28, 10, geo["regions"], geo.get("details") or {}, True)
+    return Painted(width, height, fn)
+
+
 def dash_tiles(items, width):
     """Key figures as the dashboard's coloured tiles, four per row."""
     import executive_pdf as ex
@@ -310,6 +326,12 @@ def enrichment_block(name, x, stat, S, width):
     desc = x.get("description") or x.get("text") or x.get("reason") or ""
     if desc:
         out.append(P(t(desc), S["body"]))
+    for n in x.get("notes") or []:                 # researchers' notes on this name, newest first (notes.py)
+        out.append(P(f"<b>Notes shared by {t(n.get('role') or 'Researcher')}: {t(n.get('by') or 'a researcher')}</b>"
+                     f"{' (' + t(n['date']) + ')' if n.get('date') else ''}: {t(n.get('text', ''))}", S["meta"]))
+        if n.get("codes"):                         # the combinations the note points at (combos.py): an analyst pulls them
+            out.append(P("<b>Combinations:</b> " + "; ".join(f"{t(c['code'])}" + (f" ({t(c['text'])})" if c.get("text") else "")
+                                                             for c in n["codes"]), S["meta"]))
     if x.get("kind") == "cve":
         kv = x.get("kev")
         if kv:
@@ -428,6 +450,18 @@ def build(spec):
         st.append(CondPageBreak(80 * mm))
         st.append(h)
 
+    # ---- where: the region map and the cities (the analyst's combination report, combos.py)
+    geo = spec.get("geo")
+    if geo and geo.get("regions"):
+        gh = (84 if geo.get("shapes") else max(30, min(84, 14 + 6 * len(geo["regions"])))) * mm
+        st.append(CondPageBreak(gh + 22 * mm))
+        st.append(P(t(geo.get("title") or "Where"), S["h1"]))
+        if geo.get("note"):
+            st.append(P(t(geo["note"]), S["body"]))
+        st.append(Spacer(1, 4))
+        st.append(dash_geo(geo, W, gh))
+        st.append(Spacer(1, 6))
+
     # ---- priorities (hosts to act on first)
     if spec.get("priorities"):
         st.append(CondPageBreak(60 * mm))
@@ -461,11 +495,13 @@ def build(spec):
         st.append(P("Breakdowns", S["h1"]))
         for i in range(0, len(charts), 2):
             st += [dash_chart_pair(charts[i:i + 2], W), Spacer(1, 10)]
-        for title, head, rows in bds:
+        for b in bds:
+            title, head, rows = b[:3]
             if not rows:
                 continue
             n = len(head)
-            widths = [W * 0.34] + [W * 0.66 / (n - 1)] * (n - 1) if n > 1 else [W]
+            widths = ([W * f for f in b[3]] if len(b) > 3 and b[3] else
+                      [W * 0.34] + [W * 0.66 / (n - 1)] * (n - 1) if n > 1 else [W])
             st.append(KeepTogether([P(t(title), S["h2"]), data_table(head, rows, S, widths)]))
             st.append(Spacer(1, 4))
 

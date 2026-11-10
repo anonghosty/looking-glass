@@ -12,7 +12,7 @@ It is built for national and sector CSIRTs: analysts use it to find and follow u
 partners see the country's situation at a glance on a wall screen.
 
 > Every screenshot in this guide uses **dummy data** (documentation IP ranges, private AS numbers, fictional
-> networks). New terms are explained in the [glossary](../../docs/GLOSSARY.md).
+> networks). New terms are explained in the [glossary](GLOSSARY.md).
 
 ## Contents
 
@@ -60,7 +60,7 @@ partners see the country's situation at a glance on a wall screen.
 
 ## 1. Signing in
 
-![The sign-in page](../../docs/media/screens/00-login.png)
+![The sign-in page](media/screens/00-login.png)
 
 ### First time on a new installation
 The very first visit shows only **Let's get started**: it creates the first administrator (name, organisation,
@@ -110,7 +110,7 @@ too (they reach the page at `/definitions`).
 
 ## 2. The intro page
 
-![The intro page: yesterday at a glance](../../docs/media/screens/10-overview.png)
+![The intro page: yesterday at a glance](media/screens/10-overview.png)
 
 At the top left: **Display** quality (Auto / Full / Lite, see section 6). At the top right: **Executive**, **Admin**
 and **Settings** (as your role allows), then your name and **Log out**; under them, whether both platforms show the
@@ -125,7 +125,7 @@ Come back to it at any time with **Overview** or the logo in the top bar.
 
 ## 3. Reported network communications (the map)
 
-![Reported network communications](../../docs/media/screens/20-comms-map.png)
+![Reported network communications](media/screens/20-comms-map.png)
 
 - **Top bar:** the day's figures (events yesterday, replayed so far, source hosts, reports, hosts in several
   reports, critical). Every figure opens an analysis. The clocks show the replay time and the current time (UTC).
@@ -143,13 +143,13 @@ Come back to it at any time with **Overview** or the logo in the top bar.
   Their 5 IP addresses are already in the charts and statistics: click them to analyse them, or find them on the map."
   (The services record stream does the same, for records and hosts.)
 
-  ![An event's details](../../docs/media/screens/23-comms-event.png)
+  ![An event's details](media/screens/23-comms-event.png)
 - **Playback:** pause, speed (1×, 5×, 15×, 60×) and **Catch up**. A hidden browser tab pauses itself and resumes
   where it stopped.
 
 ## 4. Publicly accessible / vulnerable services
 
-![Services constellation](../../docs/media/screens/30-services.png)
+![Services constellation](media/screens/30-services.png)
 
 The same layout, without a map:
 - **Services constellation:** one bubble per service, sized by its records; a dot flies in as each record replays.
@@ -160,11 +160,11 @@ The same layout, without a map:
   network, port, vendor, device type, **Hosts in several reports** and **Hosts with multiple issues**.
 - **Intel and stream** as on the map, with the report's definition in every record's details.
 
-![The regions view](../../docs/media/screens/31-services-view-kenya-regions.png)
+![The regions view](media/screens/31-services-view-kenya-regions.png)
 
 ## 5. Analysis and follow-up
 
-![An analysis](../../docs/media/screens/21-comms-insight.png)
+![An analysis](media/screens/21-comms-insight.png)
 
 Clicking any figure, bubble, region, chart line or row opens the **analysis**: key findings, charts, breakdowns and
 the hosts to follow up first, ranked by reasons such as "10 issues · critical · 5 reports". Each tile has
@@ -181,10 +181,11 @@ to the CSV (families found, and why the others are not there: an activity such a
 generic sinkhole label, or simply not catalogued). A host's own analysis (click its IP) looks up all its infections at
 once.
 
-![The Definitions page (researcher role)](../../docs/media/screens/61-definitions.png)
+![The Definitions page (researcher role)](media/screens/61-definitions.png)
 
 **Definitions for names Malpedia does not know** (researchers and admins: the **Definitions** page at `/definitions`,
-also in Settings → *Malware names: definitions and references*).
+a page of its own; admins open it with the **Definitions** button on the intro page, the map, the services platform
+and Settings).
 Names that Malpedia cannot match are listed under **Malpedia doesn't know**; names that new reports bring in appear under
 **New, not checked yet** by themselves and are checked with Malpedia in the background every 30 minutes (or at once with
 **Check new names with Malpedia**). Scanning, brute-force and other activities are not malware and are left out.
@@ -201,13 +202,134 @@ Names that Malpedia cannot match are listed under **Malpedia doesn't know**; nam
 From then on every user sees the definition (badge *Looking Glass definition*, with its references and who wrote it and
 when) in the stream, host lists, host analysis, the CSV and the PDF reports, instead of "not in Malpedia". Every change
 is in the audit log. Definitions written on a site are kept in `data/definitions.json` (kept on upgrades, included in
-backups); the definitions that come with Looking Glass are in `data/infections.json`.
+backups); the definitions that come with Looking Glass are in `data/infections.json` and `data/issues.json`.
+
+**Who wrote it.** Definitions, notes and network corrections name their author by the **full name** given when the
+account was registered, not the username. The definitions that come with Looking Glass are signed **Looking Glass**.
+
+**Seen in.** The *Seen in* column shows each report a name was seen in as a small card: **intel · N kinds** when that
+report carries indicators for it (domains, URLs, user agents…), **name only** when it carries just the name. Click a
+card to open *Intel gathered* on that report. A name that is not in today's reports shows **Last seen in *report* on
+*date*** (the last 30 days are remembered), or *Not seen in the last N days*.
+
+**Intel gathered** (button on every infection and issue). What the reports carry for that name, organised as
+**name › report › what comes with it there**:
+
+- for infections and categories: the C2 domains contacted, DNS lookups, TLS server names, URLs, user agents, request
+  patterns and the usernames tried by brute-force bots;
+- for issues: the other CVEs found on the same hosts, the associated tags, products, certificate names and fingerprints;
+- **Combinations**: the exact sets that occur together on one record (for example *iot + router-os + winbox*), with
+  the number of records, their share of the report, the number of devices and how many devices **repeat** it (↻: more
+  than one record each). A combination many devices keep repeating is a pattern, not a one-off;
+- every value shows records, share and devices, and can be copied: one value, one set, or a whole card as lines or as
+  one line.
+
+Indicators only: researchers never see the hosts themselves, and addresses inside URLs and banners are masked.
+
+**Looking Glass asks: can you look into this?** The card at the top of the Definitions page lists matches the platform
+found in the reports: the same indicator under two names (possibly one family under two names, or shared
+infrastructure; it says so when one of them has no definition yet), the same indicator in two reports for one name (a
+probable indicator of that name, worth putting in its notes), and an infection's C2 domain that is also the certificate
+name of a service in the constituency. Each match is an analysis box: what kind of match, the indicator (with copy),
+**where Looking Glass saw it** (every name and report with its records, and whether the name is defined; click a name to
+open its intel on that report) and what Looking Glass saw, in words. Looking Glass states what it saw and leaves the
+conclusions to the researcher. At the top of the card: how many matches, names involved and names without a definition,
+and chips to show one kind of match. Values that are common to everything (stock browser user agents, "/", usernames
+such as *root*) are never raised.
+
+**Across reports** (first in the report rail when a name is seen in two or more reports) looks at the reports together:
+**combinations across reports** (for the devices seen in more than one report, exactly what each carried in each report,
+for example *iot + router-os* in one report **and** the same set in another, with the number of devices), the
+**reports seeing the same devices** (the exact sets of reports per device), and the **indicators in more than one
+report** (for example a domain looked up in Sinkhole DNS and contacted in Sinkhole HTTP), with records per report.
+
+In the Intel window the combinations are shown as a **List** (each set as its values joined with +) or as a **Matrix**
+(values as columns, sets as rows). *Devices* counts the distinct devices that carry a value; they are counted, never
+shown. Values are listed with the most records first. **Focus** (click a value) dims everything that does not carry
+it; **search** (`/`) works across all cards; `[` and `]` switch report, Esc clears the search, then the focus, then closes.
+
+**Notes.** Every row of both tables has a **Notes** button, apart from Define. It opens the name's Notes window for new
+findings ("the C2 moved to …", "seen together with … since Monday"). A note is saved at once, dated and signed, and
+appears on every card of that name (map, services, Executive) and in the PDF reports as **Notes shared by Researcher:
+*full name* (*date*)**. Notes are kept apart from the definitions (`data/notes.json`) and are never replaced by an
+update. The author or an administrator can remove a note; both are in the audit log. (For a CVE, the define button reads
+*Add context*: your organisation's remarks on the CVE, which NVD describes.)
+
+### Combination codes, the combination search and findings
+
+These three tie the team's work together: the researcher names exactly what was found, management decides it matters,
+the analyst pulls exactly those devices and writes the advisory. Two complete walk-throughs, with the figures of the
+demonstration data, are in [Use case scenarios: a needle through the haystack](USE_CASES.md).
+
+**Combination codes.** Every combination in Intel gathered carries a code: **`LG-C-…`** for one exact combination in
+one report, **`LG-X-…`** for a cross-report pattern (what a device carried in each of several reports). The same
+combination always has the same code, and a code carries no address. Click a code to copy it.
+
+**Attaching codes to a note.** The Notes window has a **Combinations for this note** section with three ways in:
+- **Seen in the reports:** every combination of the name, grouped by report like a detailed drop-down list, with
+  records, devices and repeating devices, and a filter. One click attaches it.
+- **Build one:** pick a report and tick the indicators that must come together (the name's real values only). Looking
+  Glass makes the code and says how many records and devices carry exactly that now.
+- **Paste a code:** a code from another note or colleague; it is checked before it is attached.
+
+The note's codes are printed with it on every card and in the PDFs (Executive reports included).
+
+**Track as a finding.** Tick it in the Notes window (with a short title) to follow the note up on the **Findings** page
+(`/findings`). It gets a number (#1, #2…) and a status: *New → With management → Back with the researcher → With the
+analyst → Advisory sent → Closed*. Whoever's turn it is moves it on with a short comment; the history shows who did what
+and when. Researchers, management, analysts and admins share the page; no address is ever shown there. Management gets
+**Show in Executive** on each code: the Executive portal opens filtered to exactly that combination (a *Combination
+code* chip; counts only; no 7-day comparison for a code). Analysts get **Search**, the combination search below.
+
+**Analyst codes: the other way round.** In any analysis window (map or services platform), **Make analyst code** turns
+the current selection (for example *Source network: Example Telecom · Host: …*) into an analyst code, **`LG-A-…`**, and a
+finding with your title and note. The code keeps exactly the records of that selection on that day.
+- *Researchers* open it from the finding (**Open as researcher**, or `/intel/LG-A-…`): the selection in words (a host
+  is "1 host", never its address), the analyst's note, and for every name in those records its definition, its
+  combinations and cross-report patterns with their codes. Tick the codes that answer the analyst and **Send the
+  reply**: it goes into the finding's history with the codes.
+- *Management* uses **Show in Executive**: the portal opens on the code's day, filtered to exactly those records
+  (counts only).
+- *Analysts* find every analyst code in the searchable **Analysts' codes** list at the top of the Combinations page,
+  to revisit one and download its PDF + CSV for the advisory (**Report (PDF + CSV)** on the finding does the same).
+
+Any finding takes replies (text and codes) from everyone who works on it.
+
+**Sorting and the Across reports flag.** Both tables on the Definitions page sort by a click on a column heading (↕,
+then ▲ / ▼). The **Across reports** column flags every name whose devices (or hosts) were seen in more than one of its
+reports, with how many; click the flag to open that name's cross-report view.
+
+**The combination search (analysts).** The **Combinations** page (`/combinations`, from the map, the services platform
+or the Findings page) is for roles that see addresses and may export:
+1. Paste the code and **Look up**: what it stands for, the name, the report(s), and the researchers' notes (the ones on
+   this code are marked).
+2. Choose where to look: **the days in memory** (exactly the counts the researcher saw) or **a date range of the stored
+   history** (up to 31 days, read from the database one day at a time; the progress shows each day).
+3. The result: the key figures (devices, records, repeating, on several days, in other reports, networks, regions and
+   cities, peak hour); a **map** of the country's regions coloured by devices (hover a region for its devices,
+   records, cities, networks and IP addresses) with each region and its cities beside it; networks, cities, activity
+   by hour, what the devices are and ports; **the busiest devices** (address, network, region, city, records, last
+   seen, other reports); and **across reports**: what these devices carried in the name's other reports, each exact
+   pattern with its own `LG-X` code to search next.
+4. **Download PDF + CSV (ZIP)**: a PDF in the Executive report's design (overview with key findings and activity, the
+   region map with its cities, networks and cities, the devices with their addresses, across reports, and the
+   explanations of the name and of every CVE in the combination, with the researchers' notes) and two CSV files: one
+   row per device (with the other reports it was seen in and its cross-report code) and one row per record. The columns
+   have fixed names, ready for enrichment and dashboards. If the search has expired (after an hour), the button runs it
+   again and then downloads.
+5. **A report for one network provider**, to attach to the advisory sent to that operator: choose it in **Report for**
+   next to the download button, or click the network in the *Networks* card. The PDF and both CSV files then cover
+   only that provider's devices and records, and its name is in the title and the file names.
+
+"Exactly" means the record carries these indicators and no other indicator of the kinds compared (C2 domain, DNS
+lookup, TLS name, user agent and tags; for services, the associated tags and CVEs). The search is off in Demo mode, a
+search can be downloaded for an hour by the analyst who ran it, and every search is in the audit log.
 
 **Without a Malpedia token** the same buttons (**Enrich with definitions**, the look-ups in the stream and the host
 analysis) still work: they show the Looking Glass definitions written by researchers and the built-in knowledge base,
 and a plain explanation for anything not defined yet ("No definition yet").
 
-![Issues on the services platform](../../docs/media/screens/32-services-insight.png)
+![Issues on the services platform](media/screens/32-services-insight.png)
 
 **Issues explained** (publicly accessible / vulnerable services; permission *malpedia*). Lists with issues have
 **Explain issues**. Issues that are CVEs are looked up in the NIST National Vulnerability Database (description, CVSS
@@ -216,7 +338,8 @@ CISA added it, ransomware use and CISA's required action) and in FIRST EPSS (pro
 days). Issues that are not CVEs (Exposed admin panel, Expired certificate, POODLE, BADCANDY…) are never looked up: their
 definition and references are used. A progress window shows each step and every issue as it is looked up (it takes a few seconds; the look-up continues if you close the window). The CVEs are looked up in batches: the official CVE.org records at once, NVD's own analysis in the background within minutes. **Enrich with Malpedia** (network communications) uses the same progress window.
 
-**Network names and types** (admins in Settings, researchers on the Definitions page; permission *networks*). Correct a
+**Network names and types** (on the Definitions page, researchers and admins; permission *networks*. Settings shows
+them read-only for reference). Correct a
 network's company name, type (sector) and note; the change is marked reviewed and is never overwritten by the automatic
 look-ups. Types come from PeeringDB's categories and the company name (bank, university, hospital, power company…); if a
 sector is missing, **Add a type** (with the word used for it in Demo mode, for example Institution). Added types are kept
@@ -241,9 +364,12 @@ does not repeat every address, it refers to the CSV. The PDF contains:
 
 In Demo mode the PDF is masked like the page. Each download is recorded in the audit log (`report_pdf`).
 
+CSV files are safe to open in a spreadsheet: a cell that would start a formula (`=`, `+`, `-`, `@`) gets a leading
+apostrophe, so text that came from scanned devices (a vendor or product banner) can never run as a formula.
+
 ## Management portal (Executive)
 
-![The Executive portal](../../docs/media/screens/40-executive-comms.png)
+![The Executive portal](media/screens/40-executive-comms.png)
 
 Accounts with the **management** role open straight into the **Executive** portal (`/management`); admins reach it with
 **Executive** on the intro page and in the top bar. It is a dashboard for managers and executives with two views:
@@ -277,7 +403,7 @@ network, sector, report and so on. The chip at the top shows it; click the row a
 
 ### The 7-day baseline
 
-![The 7-day baseline and how changes are graded](../../docs/media/screens/40-executive-comms-baseline.png)
+![The 7-day baseline and how changes are graded](media/screens/40-executive-comms-baseline.png)
 
 Every figure is compared with its own average over the **7 days before the report day**, so management can follow what
 the analysts deal with from day to day. The figure tiles, the **7-day baseline** card and every row of **Top infections**
@@ -305,18 +431,23 @@ permission cannot be given to any other role (the roles editor locks it; the ser
 
 ## 6. Demo mode and public screens
 
-![Demo mode](../../docs/media/screens/26-comms-demo.png)
+![Demo mode](media/screens/26-comms-demo.png)
 
 **Demo** in the top bar masks the data while it keeps playing: IP addresses lose their 1st and 3rd parts, network
 names become stable aliases ("Telco 1", "Bank 2"), host names disappear. Masking happens on the server, so the
 hidden values never reach the browser. External accounts are always masked; `PUBLIC_DEMO=1` masks everyone.
+While masked, filters accept only the aliases and opaque host references: typing a real network name, AS number or
+address finds nothing, so a viewer cannot test whether a network or host is in the data.
+
+**Pinned events** (the pin at the end of a row on the map) keep their full details in your browser only while you are
+signed in: they belong to your account and are deleted when you log out. Masked accounts do not keep pins.
 
 For a TV or wall screen: sign in with an external account, tick **Stay signed in**, and open the
 platform full screen. The display adapts to TVs and weaker devices by itself (`?perf=lite` forces the light mode).
 
 ## 7. Settings (administrators)
 
-![Settings](../../docs/media/screens/60-settings.png)
+![Settings](media/screens/60-settings.png)
 
 **Settings** (gear on the intro page, or the button in the top bar):
 - **Country:** any of the 54 African countries. The services platform shows its regions and uses its name.
@@ -325,6 +456,9 @@ platform full screen. The display adapts to TVs and weaker devices by itself (`?
 
 **Apply settings** saves and applies at once for everyone.
 
+Settings also lists the **network names and types** read-only, for reference; they are corrected on the Definitions
+page (**Edit on the Definitions page**). The researchers' work (definitions, Intel gathered, notes) is on that page too.
+
 **Identify networks** (above the network list) looks up the company name and type of every network in the data that
 is not identified yet, from PeeringDB and RIPEstat (free public sources; only AS numbers are sent). A window shows the
 progress: how many are looked up, identified, already known (skipped) or failed. Names you corrected by hand are never
@@ -332,7 +466,7 @@ changed, and failed look-ups are tried again next time. The names then appear ev
 
 ## 8. Administration
 
-![Admin: users](../../docs/media/screens/50-admin-users.png)
+![Admin: users](media/screens/50-admin-users.png)
 
 **Admin** in the top bar (administrators):
 - **Users:** approve new accounts with a role, change roles, revoke or restore, reset an authenticator, allow a
@@ -340,10 +474,12 @@ changed, and failed look-ups are tried again next time. The names then appear ev
   You cannot remove the last administrator or your own account.
 - **Sessions:** every signed-in session with its address, approximate location, browser, type (normal or 5 days)
   and expiry; end any of them.
-- **Audit log:** sign-ins, failures, account and settings changes, with address, location and browser.
+- **Audit log:** sign-ins, failures, account and settings changes, definitions and notes, with address, location and
+  browser. People are shown as *Full Name (username)*, and the search finds them by either. The table fits the page;
+  on narrow screens location and browser give way.
 - **Roles:** the permissions of each role, and custom roles.
 
-![Admin: the audit log](../../docs/media/screens/52-admin-audit.png)
+![Admin: the audit log](media/screens/52-admin-audit.png)
 
 Changes need a recent sign-in: in a 5-day session older than 12 hours, Looking Glass asks you to sign in again
 before changing anything.

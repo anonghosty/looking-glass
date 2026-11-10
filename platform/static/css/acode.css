@@ -1,0 +1,50 @@
+/* Looking Glass · an analyst code seen by the researchers (/intel/LG-A-…) */
+.ax-main { max-width: 1100px; margin: 0 auto; display: grid; gap: 16px; padding-bottom: 60px; }
+.ax-hero { display: grid; gap: 10px; padding: 24px 26px; border-radius: 20px; border: 1px solid rgba(245, 181, 74, .25);
+  background: radial-gradient(circle at 10% 0, rgba(245, 181, 74, .12), transparent 55%), linear-gradient(180deg, #17150f, #111114); }
+.ax-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #f5b54a; }
+.ax-hero h1 { margin: 0; font-size: 22px; line-height: 1.3; color: #fff; overflow-wrap: anywhere; }
+.ax-hero h1 code { font-family: "Geist Mono", ui-monospace, monospace; color: #f5d9a8; margin-right: 6px; }
+.ax-sel { margin: 0; font-size: 14px; color: var(--text-2); overflow-wrap: anywhere; }
+.ax-note { margin: 0; padding: 10px 14px; border-radius: 12px; border-left: 3px solid #f5b54a; background: rgba(245, 181, 74, .06); }
+.ax-note b { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #f5d9a8; } .ax-note p { margin: 4px 0 0; font-size: 14px; line-height: 1.55; white-space: pre-line; overflow-wrap: anywhere; }
+.ax-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.ax-kpi { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255, 255, 255, .02); display: grid; gap: 2px; }
+.ax-kpi b { font-size: 22px; color: #fff; } .ax-kpi span { font-size: 12px; color: var(--muted); }
+.ax-hint { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.ax-hero .lg-btn { justify-self: start; text-decoration: none; }
+.ax-empty { margin: 0; padding: 22px; text-align: center; border-radius: 14px; border: 1px dashed var(--border); color: var(--muted); }
+.ax-card { display: grid; gap: 10px; padding: 18px 20px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface-1, #121216); min-width: 0; }
+.ax-card-h { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 14px; }
+.ax-card-t { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; min-width: 0; }
+.ax-name { font: 600 16px "Geist Mono", ui-monospace, monospace; color: #fff; overflow-wrap: anywhere; }
+.ax-def { font-size: 12.5px; padding: 2px 9px; border-radius: 999px; color: #f5d9a8; background: rgba(245, 181, 74, .1); border: 1px solid rgba(245, 181, 74, .35); }
+.ax-def.ok { color: #8ff0c4; background: rgba(143, 240, 196, .08); border-color: rgba(143, 240, 196, .3); }
+.ax-fig { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.ax-reps { font-size: 12.5px; color: var(--text-2); overflow-wrap: anywhere; }
+.ax-card h3 { margin: 6px 0 0; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.ax-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ax-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 10px;
+  background: rgba(255, 255, 255, .02); border: 1px solid rgba(255, 255, 255, .05); }
+.ax-tick { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.ax-tick input { accent-color: #f5b54a; margin: 0; }
+.ax-code { font: 600 11.5px "Geist Mono", ui-monospace, monospace; color: #a9b8ff; } .ax-code.x { color: #d2b8ff; }
+.ax-what { display: grid; gap: 4px; min-width: 0; } .ax-parts { gap: 6px; }
+.ax-part { display: grid; grid-template-columns: minmax(100px, 160px) minmax(0, 1fr); gap: 8px; align-items: start; }
+.ax-rep { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.ax-set { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; min-width: 0; }
+.ax-chip { max-width: 100%; padding: 2px 8px; border-radius: 7px; font: 12px "Geist Mono", ui-monospace, monospace; background: rgba(255, 255, 255, .06);
+  border: 1px solid var(--border); overflow-wrap: anywhere; }
+.ax-plus { color: var(--muted); font-size: 11px; } .ax-none { font-size: 12px; color: var(--muted); font-style: italic; }
+.ax-reply { position: sticky; bottom: 12px; display: grid; gap: 8px; padding: 16px 18px; border-radius: 16px; border: 1px solid rgba(245, 181, 74, .35);
+  background: rgba(20, 18, 12, .96); box-shadow: 0 20px 50px rgba(0, 0, 0, .5); backdrop-filter: blur(8px); }
+.ax-reply h2 { margin: 0; font-size: 15px; color: #f5d9a8; }
+.ax-picked { display: flex; flex-wrap: wrap; gap: 6px; }
+.ax-pick { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 9px; border-radius: 999px; font-size: 12px;
+  background: rgba(124, 156, 255, .1); border: 1px solid rgba(124, 156, 255, .3); color: #c5d2ff; }
+.ax-pick code { font-family: "Geist Mono", ui-monospace, monospace; } .ax-pick span { overflow-wrap: anywhere; }
+.ax-in { width: 100%; box-sizing: border-box; padding: 9px 11px; border-radius: 9px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: inherit; resize: vertical; }
+.ax-in:focus { outline: none; border-color: #f5b54a; box-shadow: 0 0 0 3px rgba(245, 181, 74, .15); }
+.ax-row { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+.ax-msg { margin-right: auto; font-size: 12.5px; color: var(--text-2); } .ax-msg.ok { color: #8ff0c4; } .ax-msg.bad { color: #ffb4b6; }
+@media (max-width: 700px) { .ax-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ax-list li { grid-template-columns: 1fr; } .ax-part { grid-template-columns: 1fr; } }

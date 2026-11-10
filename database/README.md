@@ -87,7 +87,7 @@ receives your Shadowserver reports (sign up for free at https://www.shadowserver
         files_<service>              one document per file
 ```
 
-**Step 1, e-mail.** The pipeline reads the mailbox **read-only** (messages stay unread) over IMAP, the Gmail API (Google Workspace) or Microsoft Graph (Microsoft 365): `MAIL_PROVIDER`, set up as described in [docs/MAIL_SETUP.md](docs/MAIL_SETUP.md). E-mails and links already handled on an earlier run are skipped (`.mail_state.sqlite`), so a run with nothing new takes a second or two. It fetches all messages received in the last `N` days (default 1 = since yesterday), 25 per round trip. New attachments are saved to `attachments_backup/`; attachments that are already there are skipped. If an e-mail brought no new attachment, its `https://dl.shadowserver.org/...` links are downloaded instead, 4 at a time. This is the same rule as the original script.
+**Step 1, e-mail.** The pipeline reads the mailbox **read-only** (messages stay unread) over IMAP, the Gmail API (Google Workspace) or Microsoft Graph (Microsoft 365): `MAIL_PROVIDER`, set up as described in [docs/MAIL_SETUP.md](../docs/MAIL_SETUP.md). E-mails and links already handled on an earlier run are skipped (`.mail_state.sqlite`), so a run with nothing new takes a second or two. It fetches all messages received in the last `N` days (default 1 = since yesterday), 25 per round trip. New attachments are saved to `attachments_backup/`; attachments that are already there are skipped. If an e-mail brought no new attachment, its `https://dl.shadowserver.org/...` links are downloaded instead, 4 at a time. This is the same rule as the original script.
 
 **Step 2, unzip and sort.** Each zip is extracted once; a zip already extracted on an earlier run is skipped. Files whose name matches the report pattern
 
@@ -252,7 +252,7 @@ All settings live in `.env` in the project folder. Its permissions are `600`, so
 
 | Setting | Meaning | Default |
 |---|---|---|
-| `MAIL_PROVIDER` | `imap`, `gmail_api` or `microsoft_graph` ([docs/MAIL_SETUP.md](docs/MAIL_SETUP.md)) | `imap` |
+| `MAIL_PROVIDER` | `imap`, `gmail_api` or `microsoft_graph` ([docs/MAIL_SETUP.md](../docs/MAIL_SETUP.md)) | `imap` |
 | `GMAIL_SERVICE_ACCOUNT_FILE`, `GMAIL_USER`, `GMAIL_LABEL` | Gmail API: service account key, mailbox, label | –, –, `INBOX` |
 | `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_MAILBOX`, `MS_FOLDER` | Microsoft Graph app registration and mailbox | –, –, –, –, `inbox` |
 | `IMAP_SERVER` | mail server | – |

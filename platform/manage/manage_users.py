@@ -18,7 +18,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from auth import PASSWORD_RULES, NAME_RE, Users, new_recovery_codes, password_problem, totp_check, totp_new_secret, totp_uri  # noqa: E402
+from auth import LOWEST_ROLE, PASSWORD_RULES, NAME_RE, Users, new_recovery_codes, password_problem, totp_check, totp_new_secret, totp_uri  # noqa: E402
 
 PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "users.json")
 users = Users(PATH)
@@ -79,12 +79,12 @@ def main(a):
     cmd = a[0]
     if cmd == "list":
         for n, u in sorted(users.all().items()):
-            print(f"  {n:20s} {u.get('role', 'viewer'):7s} MFA {'on ' if u.get('totp') else 'OFF'}  recovery codes left: {len(u.get('recovery', []))}")
+            print(f"  {n:20s} {u.get('role', LOWEST_ROLE):10s} MFA {'on ' if u.get('totp') else 'OFF'}  recovery codes left: {len(u.get('recovery', []))}")
         return
     name = a[1] if len(a) > 1 else ""
     if cmd == "add":
         need(name, exists=False)
-        role = "admin" if "--admin" in a else "viewer"
+        role = "admin" if "--admin" in a else LOWEST_ROLE   # "viewer" was renamed "external"
         users.set_password(name, ask_password(name), role)
         print(f"Account {name} ({role}) created.")
         setup_mfa(name)
@@ -96,7 +96,7 @@ def main(a):
         need(name)
         import json as _json
         rp = os.path.join(os.path.dirname(PATH), "roles.json")
-        known = set(_json.load(open(rp))) if os.path.exists(rp) else {"external", "analyst", "admin"}
+        known = set(_json.load(open(rp))) if os.path.exists(rp) else {"external", "analyst", "researcher", "management", "admin"}
         if len(a) < 3 or a[2] not in known:
             sys.exit("role NAME " + "|".join(sorted(known)))
         users._load(); users.data["users"][name]["role"] = a[2]; users.save(); print(f"{name} is now {a[2]}.")

@@ -147,7 +147,17 @@
     for (const u of refs) { const li = el("li"); li.append(extLink(u, u.replace(/^https?:\/\//, "").slice(0, 90))); ul.append(li); }
     card.append(el("p", "mp-meta", label), ul);
   }
+  // the card, plus the researchers' notes on the name (notes.py): new findings, newest first
   function mpCard(x, name) {
+    const card = mpCardBody(x, name);
+    for (const n of x.notes || []) {
+      const p = el("p", "mp-note"); p.append(el("b", null, `Notes shared by ${n.role || "Researcher"}: ${n.by || "a researcher"}${n.date ? ` (${n.date})` : ""}: `), document.createTextNode(n.text));
+      card.append(p);
+      if (n.codes?.length) card.append(window.LGCodes ? window.LGCodes.line(n.codes) : el("p", "mp-note", `Combinations: ${n.codes.map((c) => c.code).join(", ")}`));
+    }
+    return card;
+  }
+  function mpCardBody(x, name) {
     const card = el("div", "mp-card");
     const head = el("div", "mp-head");
     if (x.curated) {                                 // Malpedia has nothing, an administrator defined it (Settings)
@@ -325,6 +335,11 @@
     get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } },
   };
+  // pinned events keep full detail, so they belong to the signed-in account (cleared on the login page, i.e. at log
+  // out), and an account that only sees masked data stores none. The old shared key is removed.
+  const PIN_KEY = "tm.pins:" + (document.body.dataset.user || "");
+  const PIN_STORE = !document.body.dataset.masked;
+  try { localStorage.removeItem("tm.pins"); if (!PIN_STORE) localStorage.removeItem(PIN_KEY); } catch { /* private mode */ }
 
   // ------------------------------------------------------------------ state
   const state = {
@@ -333,7 +348,7 @@
     pending: [], active: [], popups: [],
     events: new Map(),                 // id -> event (recent, for lookups)
     rowsById: new Map(),               // id -> <li>
-    pins: new Map(store.get("tm.pins", []).map((e) => [e.id, e])),
+    pins: new Map((PIN_STORE ? store.get(PIN_KEY, []) : []).map((e) => [e.id, e])),
     infColors: new Map(),
     facets: null, stats: null,
     filters: { source: new Set(), attack_class: new Set(), infection: new Set(), severity: new Set(), protocol: new Set(),
@@ -1260,7 +1275,7 @@
   function togglePin(ev) {
     if (state.pins.has(ev.id)) state.pins.delete(ev.id);
     else { const { _path, ...clean } = ev; state.pins.set(ev.id, clean); }
-    store.set("tm.pins", [...state.pins.values()].slice(-50).map(({ _path, ...e }) => e));
+    if (PIN_STORE) store.set(PIN_KEY, [...state.pins.values()].slice(-50).map(({ _path, ...e }) => e));
     renderPins();
     const row = state.rowsById.get(ev.id);
     if (row) { row.classList.toggle("pinned", state.pins.has(ev.id)); row.querySelector(".pin").setAttribute("aria-pressed", String(state.pins.has(ev.id))); }
@@ -1909,6 +1924,7 @@
     $("iFilter").hidden = scopePairs(kind, value).every(([k]) => k === "time");
     $("insight").hidden = false; $("modalScrim").hidden = false;
     $("btnInsightClose").focus();
+    window.LGAnalysis = { platform: "comms", kind, value, at: new Date(replayNow()).toISOString(), title: entityLabel(kind, value) };   // acode-make.js
     let d;
     try {
       d = await getJSON(`/api/insight?kind=${encodeURIComponent(kind)}&value=${encodeURIComponent(value)}&at=${encodeURIComponent(new Date(replayNow()).toISOString())}`);
@@ -2207,7 +2223,8 @@
     if (r.total > r.rows.length) {   // the table shows the first rows; the file gets all of them
       try { r = await getJSON(`/api/insight/drill?kind=${encodeURIComponent(d.kind)}&value=${encodeURIComponent(d.value)}&metric=${r.metric}&at=${encodeURIComponent(d.as_of)}&all=1`); } catch { /* fall back to the rows shown */ }
     }
-    const q = (s) => `"${String(s).replace(/"/g, '""')}"`;
+    // quoted, and spreadsheet-safe: a cell starting with = + - @ (not a plain number) would run as a formula
+    const q = (s) => { s = String(s); if (/^[=+\-@\t\r\n＝＋－＠]/.test(s) && !/^([+-]?\d+([.,]\d+)*%?|-+)$/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; };
     const lines = [[...r.columns.map(([, l]) => q(l)), ...(mp ? [q("Malpedia families"), q("Malpedia descriptions"), q("Not in Malpedia: what it is and why")] : [])].join(",")];
     for (const row of r.rows) {
       const cells = r.columns.map(([k]) => q(k === "followup" ? (row[k] || []).join("; ") : drillCell(k, row[k])));
@@ -2335,8 +2352,9 @@
   });
 
   // toast
-  let toastTimer = null;
-  let toastIsError = false;
+  // var, not let: the event feed can come back (and read these) before this line has run at start-up
+  var toastTimer = null;
+  var toastIsError = false;
   function toast(msg) {
     const t = $("toast"); t.textContent = msg; t.hidden = false;
     toastIsError = /error|could not|cannot/i.test(msg);

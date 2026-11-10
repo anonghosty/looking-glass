@@ -17,7 +17,7 @@ data and administrator account: leave the MongoDB password empty and it is taken
 Looking Glass has two parts, installed in this order:
 
 1. **The Shadowserver database pipeline** (`../database`): fetches your Shadowserver report e-mails every day and
-   loads them into MongoDB. Install it first: [../../database/README.md](../../database/README.md).
+   loads them into MongoDB. Install it first: [../../database/README.md](../database/README.md).
 2. **The Looking Glass platform** (this folder): reads that database and replays it on the two platforms.
 
 Two setups are supported, with the same code:
@@ -25,7 +25,7 @@ Two setups are supported, with the same code:
 - **A. Windows with WSL 2:** Ubuntu running inside Windows on an analyst's PC or laptop.
 - **B. Ubuntu Desktop or Server:** Ubuntu 24.04 or later, on its own computer or in a virtual machine. Recommended for a permanent, shared installation. On Ubuntu Server, create the first administrator through an SSH tunnel (`ssh -L 5000:127.0.0.1:5000 user@server`, then open http://localhost:5000).
 
-Security is described in [../security_testing/SECURITY.md](../security_testing/SECURITY.md). Steps marked
+Security is described in [../docs/SECURITY.md](SECURITY.md). Steps marked
 **(security)** are part of the hardening and must be done on every installation.
 
 ---
@@ -79,7 +79,7 @@ firewall must let the traffic through (A6, A7, B6).
 With mirrored networking your Windows browser opens Looking Glass at `http://localhost:5000`.
 
 ### A2. The database
-Install MongoDB and the Shadowserver pipeline as described in [../../database/README.md](../../database/README.md),
+Install MongoDB and the Shadowserver pipeline as described in [../../database/README.md](../database/README.md),
 and let it load your reports once (`shadowserver run`). Looking Glass needs at least one day of reports to show.
 
 ### A3. Install the platform
@@ -186,7 +186,7 @@ To show Looking Glass on a TV, a wall screen or colleagues' computers:
 sudo apt update && sudo apt install -y python3-venv python3-pip git curl openssl ufw
 sudo adduser --system --group --home /opt/looking-glass lookingglass     # a dedicated service account
 ```
-Install MongoDB and the pipeline ([../../database/README.md](../../database/README.md)). Keep
+Install MongoDB and the pipeline ([../../database/README.md](../database/README.md)). Keep
 `net.bindIp: 127.0.0.1` and `security.authorization: enabled` in `/etc/mongod.conf`. If MongoDB runs on another
 server, allow only this server to reach it, and use TLS for MongoDB.
 

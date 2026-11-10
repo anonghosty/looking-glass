@@ -2,13 +2,18 @@
 import os
 import sys
 from collections import Counter, defaultdict
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import app as tm  # noqa: E402
 
 day_arg = sys.argv[1] if len(sys.argv) > 1 else None
-start = tm.parse_iso(day_arg + "T00:00:00Z", None) if day_arg else tm.day_start(tm.utcnow() - timedelta(days=1))
+# not tm.parse_iso: that clamps to the replay day and the day before it (for web requests), so any other day was ignored
+try:
+    start = (datetime.strptime(day_arg, "%Y-%m-%d").replace(tzinfo=timezone.utc) if day_arg
+             else tm.day_start(tm.utcnow() - timedelta(days=1)))
+except ValueError:
+    sys.exit("usage: tools/list_infections.py [YYYY-MM-DD]")
 d = tm.store._load(start)
 info = defaultdict(lambda: {"n": 0, "src": Counter(), "tag": Counter(), "fam": Counter(), "host": Counter(), "port": Counter(), "app": Counter()})
 for e in d.events:

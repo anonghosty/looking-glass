@@ -5,6 +5,7 @@ a filter), same demo masking. Registered from app.py with `register(app, ctx)`.
 """
 import bisect
 import csv
+import csvsafe
 import io
 import os
 import time
@@ -576,7 +577,7 @@ def register(app, ctx):
         day, evs, _ = selection(request.args)
         rows, _ = host_rows(evs, demo, None)
         buf = io.StringIO()
-        w = csv.writer(buf)
+        w = csvsafe.writer(buf)   # vendor / product come from the hosts: no spreadsheet formulas
         w.writerow(["ip", "events", "worst severity", "issues", "services", "ports", "city", "network", "vendor", "product", "first seen", "last seen"])
         for r in rows:
             w.writerow([r["ip"], r["events"], r["severity"], "; ".join(r["issues"]), "; ".join(r["services"]), "; ".join(r["ports"]),
@@ -611,4 +612,14 @@ def register(app, ctx):
                        total=len(day.events) if day else 0, hosts=len({e["ip"] for e in day.events}) if day else 0,
                        day=day.start.date().isoformat() if day else None)
 
-    return {"tick": tick, "registry": registry, "store": store}
+    def scope_events(args, day):
+        """The records of a selection (the analysis's query arguments) on a given day: analyst codes (combos.py)."""
+        pred = scope(day, args)
+        evs = [e for e in day.events if pred(e)] if pred else list(day.events)
+        tw = parse_time(args.get("time"))
+        if tw:
+            t0 = day.start.timestamp()
+            evs = [e for e in evs if t0 + tw[0] <= e["_t"] < t0 + tw[1]]
+        return evs
+
+    return {"tick": tick, "registry": registry, "store": store, "scope_events": scope_events}

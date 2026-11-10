@@ -47,7 +47,7 @@ The archive holds the code, `.env` and all of `data/` (accounts, sessions, audit
 `.venv`. It contains secrets: copy it to safe storage off the computer. **Restore:** unpack it in the parent folder
 (`tar -xzf <archive>`), run `deploy/install.sh` (recreates `.venv`, keeps `.env`) and restart the service.
 
-MongoDB itself is backed up with the pipeline ([../../database/README.md](../../database/README.md)).
+MongoDB itself is backed up with the pipeline ([../../database/README.md](../database/README.md)).
 
 ## Reference data
 
@@ -72,6 +72,27 @@ Simpler: give a person the **researcher** role. The **Definitions** page lists t
 report names appear by themselves) and saves definitions with references to `data/definitions.json`. That file takes
 precedence over `data/infections.json`, is never part of a release (so upgrades keep it) and is in the backups.
 
+Updates replace `data/infections.json` and `data/issues.json` (the shipped definitions, signed *Looking Glass*) and
+never touch what a site wrote: `data/definitions.json` (site definitions), `data/notes.json` (researchers' notes),
+`data/combo_codes.json` (combination codes), `data/findings.json` (findings and their history) and
+`data/seen_names.json` (where and when each name was last seen) are run-time files, all in the backups. A site
+definition still overrides a shipped one of the same name after an update; to take the shipped one instead, delete the
+site's entry from `data/definitions.json`.
+
+### Researchers' notes (`data/notes.json`) and last seen (`data/seen_names.json`)
+Notes are written on the Definitions page and shown on every card and in the PDF reports; the author or an
+administrator removes them there. The last-seen record fills itself: once from the last 14 days (in the background
+after the first start; `data/seen_names.json.done` marks it done, delete both files to rebuild it) and then from every
+replay day. It keeps 30 days.
+
+### Combination codes (`data/combo_codes.json`) and findings (`data/findings.json`)
+Every code a researcher is shown is written to `data/combo_codes.json`, so an analyst can still resolve it after the days
+that produced it have left memory (a code not found there is looked for in memory again). It keeps the twenty thousand most
+recently shown. A history search reads at most 31 days, one day at a time, only the reports of that name, in a background
+thread (two searches cannot run at once for one analyst); a finished search is held for an hour, in memory and in
+`data/combo_exports/` (owner-only files, so a service restart before the download loses nothing), then deleted.
+Findings are never deleted by the platform; a closed finding stays under *All*.
+
 ### Report definitions (`data/service_reports.json`)
 Plain-language definitions of every Shadowserver report, with Shadowserver's severity and a link to its page. When
 Shadowserver adds a report type, add an entry with the collection name as key.
@@ -86,7 +107,7 @@ found in reports to the map regions (needs Ubuntu's `iso-codes` package).
 | Command | What it checks | Time |
 |---|---|---|
 | `security_testing/security_retest.py` ▶ | about 120 checks of every security protection against the running service; must end with ALL PASSED | 2 min |
-| `tests/run_all_checks.sh` | replay schedule, new reports on both platforms, consistency of every figure, totals against MongoDB, every statistic and filter of both platforms and the Executive portal against MongoDB (`tests/verify_stats.py`, `verify_svc_stats.py`, `verify_management.py`), report downloads, masking, cross-report filters | 4 min |
+| `tests/run_all_checks.sh` | replay schedule, new reports on both platforms, consistency of every figure, totals against MongoDB, every statistic and filter of both platforms and the Executive portal against MongoDB (`tests/verify_stats.py`, `verify_svc_stats.py`, `verify_management.py`), report downloads, CSV formula safety, masking (fails on any leak), privacy and roles unit tests, Intel gathered, researchers' notes, cross-report filters | 4 min |
 | `tests/check_baseline_concurrency.py` | 24 new Executive selections at the same moment: every 7-day baseline completes and none fails; runs in a temporary copy | 3 min |
 | `tests/check_past_days.py` | the Executive 7-day baseline from compact past days equals the full days (complete answers, 7 days, both platforms); runs in a temporary copy | 5 min |
 | `tests/e2e_test.py all` ▶ | end to end: runs a copy on port 5055 with a throwaway database, simulates Shadowserver deliveries and checks what both platforms show | 5 min |

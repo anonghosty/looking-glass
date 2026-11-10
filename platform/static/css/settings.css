@@ -4,6 +4,10 @@ body.settings-page { background: radial-gradient(ellipse at 50% 0%, #121624 0%, 
 body.settings-page .hud { position: sticky; top: 0; }
 .st-main { max-width: 1180px; margin: 0 auto; padding: 22px 16px 60px; display: grid; gap: 16px; }
 .st-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+/* the researchers' work moved to /definitions: a signpost where it used to be */
+.st-moved { display: grid; gap: 10px; justify-items: start; border-color: rgba(91, 141, 239, .3); background: linear-gradient(135deg, rgba(91, 141, 239, .08), var(--surface) 60%); }
+.st-moved h2, .st-moved .st-hint { margin: 0; }
+.st-moved-btn { display: inline-flex; align-items: center; width: auto; text-decoration: none; padding-inline: 18px; }
 .st-card h2 { margin: 0 0 6px; font-size: 16px; }
 .st-card h3 { margin: 14px 0 6px; font-size: 13px; }
 .st-hint { margin: 4px 0 10px; color: var(--text-2); font-size: 12.5px; line-height: 1.5; max-width: 900px; }

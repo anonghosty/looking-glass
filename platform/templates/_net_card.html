@@ -1,6 +1,6 @@
-{# Network names and types (AS-number registry): admins in Settings, researchers on the Definitions page.
-   Filled by static/js/net-editor.js. #}
-    <section class="st-card dz" id="cardNets" hidden>
+{# Network names and types (AS-number registry): edited on the Definitions page; shown read-only in Settings
+   (readonly=True). Filled by static/js/net-editor.js. #}
+    <section class="st-card dz" id="cardNets" hidden{% if readonly %} data-readonly="1"{% endif %}>
       <header class="dz-head">
         <div class="dz-icon dz-icon-net" aria-hidden="true">
           <svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9M12 3C9.5 5.6 8.3 8.6 8.3 12s1.2 6.4 3.7 9"/></svg>
@@ -8,15 +8,21 @@
         <div class="dz-title">
           <h2>Network names &amp; types</h2>
           <p class="dz-sub">The company name and sector shown for each network (AS number) on both platforms, in analyses, filters and
-            reports. Automatic names (PeeringDB, RIPEstat) are often the legal holder: correct them here, for example "Example Holdings Limited" to
+            reports. Automatic names (PeeringDB, RIPEstat) are often the legal holder: {% if readonly %}researchers and admins correct them on the
+            Definitions page{% else %}correct them here{% endif %}, for example "Example Holdings Limited" to
             "Example Telecom". Corrected networks are marked reviewed and never overwritten; every change is in the audit log.</p>
         </div>
         <div class="dz-actions">
+          {% if readonly %}
+          <a class="lg-btn primary" href="/definitions#cardNets" title="Names and types are corrected on the Definitions page"><span>Edit on the Definitions page</span></a>
+          {% else %}
           <button class="lg-btn" id="netTypeOpen" type="button" aria-expanded="false" aria-controls="netTypePanel">
             <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
             <span>Add a type</span></button>
+          {% endif %}
         </div>
       </header>
+      {% if readonly %}<p class="dz-hint st-ro-note">Shown here for reference: who each network is and its sector. To correct a name or a type, open the Definitions page.</p>{% endif %}
       <div class="dz-panel" id="netTypePanel" hidden>
         <div class="dz-panel-row">
           <label class="st-field">Type (sector) name<input id="netTypeLabel" maxlength="60" placeholder="for example Telecom regulator"></label>

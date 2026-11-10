@@ -75,5 +75,34 @@ at("2026-11-14T07:38:00"); check("another report arrives 7 min later: settle res
 at("2026-11-14T07:42:00"); check("10 min after the FIRST report: still settling", s, "settling", "2026-11-13 00:00")
 at("2026-11-14T07:48:30"); check("10 min after the LAST report: replay starts", s, "playing", "2026-11-13 00:00")
 
+# the day reload (on_start) runs once per started day, with the schedule lock RELEASED: while a day loads,
+# another thread asking for the position must not wait for it
+import threading  # noqa: E402
+os.remove(path)
+arrived["2026-11-14"] = d("2026-11-15T03:00:00")
+at("2026-11-15T05:00:00"); s = mk()
+calls = []
+
+
+def reload(day):
+    got = {}
+    t = threading.Thread(target=lambda: got.update(pos=s.position()))
+    t.start(); t.join(2)
+    calls.append((day.date().isoformat(), not t.is_alive()))
+
+
+s.on_start = reload
+check("start with a day reload hooked in", s, "playing", "2026-11-14 05:00")
+ok = calls == [("2026-11-14", True)]
+fails += not ok
+print(f"{'ok ' if ok else 'FAIL'} day reload ran once, outside the lock (position answered meanwhile): {calls}")
+check("next tick: no second reload", s, "playing", "2026-11-14 05:00")
+ok = len(calls) == 1
+fails += not ok
+print(f"{'ok ' if ok else 'FAIL'} still one reload after the next tick")
+s.on_start = lambda day: 1 / 0
+os.remove(path); s = mk(); s.on_start = lambda day: 1 / 0
+check("a failing reload is logged, the schedule still runs", s, "playing", "2026-11-14 05:00")
+
 print("\nALL PASSED" if not fails else f"\n{fails} FAILED")
 sys.exit(1 if fails else 0)

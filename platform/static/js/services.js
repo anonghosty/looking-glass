@@ -1102,6 +1102,7 @@
     $("iBody").replaceChildren(el("div", "i-loading", "Analysing…"));
     $("insight").hidden = false; $("modalScrim").hidden = false; $("btnInsightClose").focus();
     const p = new URLSearchParams(pairs); p.set("at", atParam());
+    window.LGAnalysis = { platform: "services", query: p.toString(), at: p.get("at"), title: selTitle(pairs) };   // acode-make.js
     let d;
     try { d = await getJSON(`/api/svc/insight?${p}`); } catch (err) { $("iBody").replaceChildren(el("div", "i-loading", `Could not load analysis: ${err.message}`)); return; }
     if (stack[stack.length - 1] !== pairs) return;
@@ -1339,7 +1340,8 @@
   async function downloadDrill(r, pairs, d) {
     const iss = r.iss, kind = r.row_kind;
     if (r.total > r.rows.length) { try { const p = new URLSearchParams(pairs); p.set("at", atParam()); p.set("metric", r.metric); p.set("all", "1"); r = await getJSON(`/api/svc/drill?${p}`); } catch { /* the rows shown */ } }
-    const q = (s) => `"${String(s).replace(/"/g, '""')}"`;
+    // quoted, and spreadsheet-safe: a cell starting with = + - @ (not a plain number) would run as a formula
+    const q = (s) => { s = String(s); if (/^[=+\-@\t\r\n＝＋－＠]/.test(s) && !/^([+-]?\d+([.,]\d+)*%?|-+)$/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; };
     const lines = [[...r.columns.map(([, l]) => q(l)), ...(iss ? [q("What the issues are (CVE: NVD / CISA KEV / EPSS; others: definition)")] : [])].join(",")];
     for (const row of r.rows) {
       const cells = r.columns.map(([k]) => q(k === "followup" ? (row[k] || []).join("; ") : drillCell(row[k])));
@@ -1408,6 +1410,11 @@
       head.append(el("span", "badge mp-badge mp-badge-no", "No definition yet"), el("b", null, name)); card.append(head);
       if (x.text) card.append(el("p", "mp-desc", x.text));
     }
+    for (const n of x.notes || []) {               // researchers' notes on the issue (notes.py), newest first
+      const p = el("p", "mp-note"); p.append(el("b", null, `Notes shared by ${n.role || "Researcher"}: ${n.by || "a researcher"}${n.date ? ` (${n.date})` : ""}: `), document.createTextNode(n.text));
+      card.append(p);
+      if (n.codes?.length) card.append(window.LGCodes ? window.LGCodes.line(n.codes) : el("p", "mp-note", `Combinations: ${n.codes.map((c) => c.code).join(", ")}`));
+    }
     return card;
   }
   function closeInsight() { $("insight").hidden = true; stack.length = 0; if ($("modal").hidden && $("glossary").hidden) $("modalScrim").hidden = true; }
@@ -1467,7 +1474,8 @@
     state.demo = on; ls.set("lg.svc.demo", on);
     $("btnDemo").setAttribute("aria-pressed", String(on)); $("demoPill").hidden = !on;
     const u = new URL(location.href); if (on) u.searchParams.set("demo", "1"); else u.searchParams.delete("demo"); history.replaceState(null, "", u);
-    if (state.filters.ip) state.filters.ip = "";
+    // host references and network aliases differ between the two modes (the server accepts only aliases when masked)
+    for (const k of ["ip", "asn"]) if (state.filters[k]) state.filters[k] = "";
     resetStream(); refreshAll(); backfill();
   }
   $("btnDemo").addEventListener("click", () => setDemo(!state.demo));

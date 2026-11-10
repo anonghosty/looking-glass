@@ -24,9 +24,16 @@ run "statistics + filters vs MongoDB" $PY tests/verify_stats.py
 run "services statistics vs MongoDB"  $PY tests/verify_svc_stats.py
 run "Executive + baseline vs MongoDB" $PY tests/verify_management.py
 run "reports (PDF, ZIP, CSV)"         $PY tests/check_reports.py
+run "CSV formula safety"              $PY tests/check_csv_safety.py
 run "replayed counts"                 $PY tests/verify_replayed.py
 run "constituency"                    $PY tests/verify_constituency.py
 run "demo masking"                    $PY tests/test_demo.py
+run "privacy + roles unit tests"      $PY tests/test_privacy_roles.py
+run "intel gathered (researchers)"    $PY tests/check_intel.py
+run "researchers' notes"              $PY tests/check_notes.py
+run "combination codes + search"      $PY tests/check_combos.py
+run "findings (researcher → advisory)" $PY tests/check_findings.py
+run "analyst codes (analyst → researcher)" $PY tests/check_acodes.py
 run "several reports + filters"       $PY tests/check_cross_filters.py
 run "management portal (no addresses)" $PY tests/check_management.py
 echo; echo "$pass passed, $fail failed${skip:+, $skip skipped}${failed:+: ${failed[*]}}"

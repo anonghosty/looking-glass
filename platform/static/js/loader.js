@@ -98,7 +98,8 @@
     o.classList.add("leaving");
     setTimeout(() => o.classList.remove("on", "leaving"), calm() ? 0 : 520);
   }
-  const LABELS = { "/services": "Opening publicly accessible / vulnerable services", "/settings": "Opening settings", "/?intro": "Opening the overview", "/": "Opening reported network communications" };
+  const LABELS = { "/services": "Opening publicly accessible / vulnerable services", "/settings": "Opening settings",
+    "/definitions": "Opening definitions and intel", "/admin": "Opening administration", "/?intro": "Opening the overview", "/": "Opening reported network communications" };
   const labelFor = (url) => LABELS[Object.keys(LABELS).find((k) => url.startsWith(k) && (k !== "/" || url === "/" || url.startsWith("/?") && !url.startsWith("/?intro")))] || "Opening";
   let arrived = null, arriveTimer = null;
   window.LGLoader = {

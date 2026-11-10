@@ -1,6 +1,6 @@
 {
   "_about": "Looking Glass infection knowledge base. One entry per infection name as it appears in Shadowserver reports (lower case). Fields: title, type, description, action (recommended response), confidence (high | medium | low), status (reviewed | needs-review), aliases, updated. Run manage/infections_missing.py to list infections seen in the data that have no entry yet.",
-  "_version": "2026-11-06",
+  "_version": "2026-11-09",
   "infections": {
     "android.badbox2": {
       "title": "BADBOX 2.0",
@@ -13,7 +13,11 @@
         "badbox",
         "badbox2"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "apk.badbox",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/apk.badbox"
+      ]
     },
     "android.vo1d2": {
       "title": "Vo1d (variant 2)",
@@ -25,7 +29,11 @@
       "aliases": [
         "vo1d2"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "apk.vo1d",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/apk.vo1d"
+      ]
     },
     "android.vo1d": {
       "title": "Vo1d",
@@ -37,7 +45,11 @@
       "aliases": [
         "vo1d"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "apk.vo1d",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/apk.vo1d"
+      ]
     },
     "vo1d": {
       "title": "Vo1d (DNS lookups)",
@@ -47,7 +59,11 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "apk.vo1d",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/apk.vo1d"
+      ]
     },
     "m0yv": {
       "title": "m0yv (file infector)",
@@ -59,7 +75,11 @@
       "aliases": [
         "expiro"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.m0yv",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.m0yv"
+      ]
     },
     "ipidea": {
       "title": "IPIDEA (residential proxy network)",
@@ -77,7 +97,7 @@
         "https://synthient.com/research/who-are-the-victims-of-residential-proxies"
       ],
       "malpedia": "",
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
     },
     "netnut": {
       "title": "NetNut / Popa (residential proxy network)",
@@ -93,17 +113,20 @@
         "https://bleepingcomputer.com/news/security/netnut-proxy-network-disrupted-2-million-infected-devices-cut-off"
       ],
       "malpedia": "",
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
     },
     "residential-proxy": {
       "title": "Residential proxy",
       "type": "Residential proxy software",
       "description": "The device is relaying third-party traffic as a proxy exit node. Proxy software is often bundled with free apps, VPNs or pre-installed on cheap devices.",
       "action": "Identify and remove the proxy software. Check the device for other malware bundled with it.",
-      "confidence": "high",
+      "confidence": "medium",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://www.shadowserver.org/what-we-do/network-reporting/sinkhole-events-report/"
+      ]
     },
     "glassworm": {
       "title": "GlassWorm",
@@ -113,7 +136,11 @@
       "confidence": "medium",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "js.glassworm",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/js.glassworm"
+      ]
     },
     "avalanche-andromeda": {
       "title": "Andromeda (Gamarue)",
@@ -123,10 +150,17 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [
-        "gamarue",
-        "andromeda"
+        "andromeda",
+        "gamarue"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.andromeda",
+        "https://www.csk.gov.in/alerts/andromeda.html",
+        "https://www.europol.europa.eu/media-press/newsroom/news/andromeda-botnet-dismantled-in-international-cyber-operation",
+        "https://www.shadowserver.org/news/avalanche/"
+      ],
+      "malpedia": "win.andromeda"
     },
     "avalanche": {
       "title": "Avalanche network family",
@@ -136,7 +170,10 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://www.shadowserver.org/news/avalanche/"
+      ]
     },
     "bondat": {
       "title": "Bondat (JavaScript USB worm)",
@@ -153,7 +190,7 @@
         "https://www.microsoft.com/en-us/wdsi/threats/malware-encyclopedia-description?Name=Worm:JS/Bondat"
       ],
       "malpedia": "",
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
     },
     "js.worm.bondat": {
       "title": "Bondat (JavaScript USB worm)",
@@ -170,7 +207,7 @@
         "https://www.microsoft.com/en-us/wdsi/threats/malware-encyclopedia-description?Name=Worm:JS/Bondat"
       ],
       "malpedia": "",
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
     },
     "popcorntime": {
       "title": "Popcorn Time (Time4Popcorn) with an abandoned updater (not malware)",
@@ -186,7 +223,7 @@
         "https://www.securityweek.com/dead-popcorn-time-updater-put-millions-of-computers-at-risk-of-takeover/"
       ],
       "malpedia": "",
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
     },
     "abandoned-software": {
       "title": "Abandoned software",
@@ -196,7 +233,11 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://www.shadowserver.org/what-we-do/network-reporting/sinkhole-dns-events-report/",
+        "https://bleepingcomputer.com/news/security/abandoned-popcorn-time-app-exposed-millions-of-device-to-rce-attacks"
+      ]
     },
     "android.midnight-mimosa": {
       "title": "Midnight Mimosa (preinstalled Android malware)",
@@ -211,7 +252,7 @@
         "https://www.bitdefender.com/en-gb/blog/labs/midnight-mimosa-malware"
       ],
       "malpedia": "",
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
     },
     "amadey": {
       "title": "Amadey",
@@ -221,7 +262,11 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.amadey",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.amadey"
+      ]
     },
     "ranbyus": {
       "title": "Ranbyus",
@@ -233,7 +278,11 @@
       "aliases": [
         "avalanche-ranbyus"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.ranbyus",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.ranbyus"
+      ]
     },
     "avalanche-ranbyus": {
       "title": "Ranbyus (Avalanche)",
@@ -245,7 +294,12 @@
       "aliases": [
         "ranbyus"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.ranbyus",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.ranbyus",
+        "https://www.shadowserver.org/news/avalanche/"
+      ]
     },
     "ngioweb": {
       "title": "Ngioweb",
@@ -255,7 +309,11 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "elf.ngioweb",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/elf.ngioweb"
+      ]
     },
     "nymaim": {
       "title": "Nymaim",
@@ -267,7 +325,11 @@
       "aliases": [
         "avalanche-nymaim"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.nymaim",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.nymaim"
+      ]
     },
     "avalanche-nymaim": {
       "title": "Nymaim (Avalanche)",
@@ -279,7 +341,12 @@
       "aliases": [
         "nymaim"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.nymaim",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.nymaim",
+        "https://www.shadowserver.org/news/avalanche/"
+      ]
     },
     "smokeloader": {
       "title": "SmokeLoader",
@@ -289,7 +356,11 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.smokeloader",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.smokeloader"
+      ]
     },
     "911-socks5-proxy": {
       "title": "911 S5 (residential proxy botnet)",
@@ -308,7 +379,7 @@
         "https://flashpoint.io/blog/911-s5-botnet-dismantled/"
       ],
       "malpedia": "",
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
     },
     "pykspa": {
       "title": "Pykspa",
@@ -318,7 +389,11 @@
       "confidence": "medium",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.pykspa",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.pykspa"
+      ]
     },
     "kovter": {
       "title": "Kovter",
@@ -328,7 +403,11 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.kovter",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.kovter"
+      ]
     },
     "boaxxe": {
       "title": "Boaxxe",
@@ -338,17 +417,24 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.boaxxe",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.boaxxe"
+      ]
     },
     "3ve": {
       "title": "3ve ad-fraud operation",
       "type": "Ad-fraud botnet",
-      "description": "Large ad-fraud operation built on the Kovter and Boaxxe botnets, dismantled in 2018.",
+      "description": "3ve (Operation Eversion) was an ad-fraud operation built on the Kovter and Boaxxe botnets, which made infected computers load and 'view' online ads. The FBI, with Google, White Ops and other partners, took it down in November 2018 and sinkholed its domains; a host seen here is still infected with one of those botnets.",
       "action": "Reimage the machine.",
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://www.justice.gov/usao-edny/pr/two-international-cybercriminal-rings-dismantled-and-eight-defendants-indicted-causing"
+      ]
     },
     "vipersoftx": {
       "title": "ViperSoftX",
@@ -358,7 +444,11 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "ps1.vipersoftx",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/ps1.vipersoftx"
+      ]
     },
     "likely-rat-adwind": {
       "title": "Adwind RAT (likely)",
@@ -371,7 +461,11 @@
         "adwind",
         "jrat"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "jar.adwind",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/jar.adwind"
+      ]
     },
     "pseudomanuscrypt": {
       "title": "PseudoManuscrypt",
@@ -381,13 +475,13 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-07",
+      "updated": "2026-11-09",
       "malpedia": "win.pseudo_manuscrypt",
       "references": [
-        "https://ics-cert.kaspersky.com/publications/reports/2021/12/16/pseudomanuscrypt-a-mass-scale-spyware-attack-campaign/",
-        "https://malpedia.caad.fkie.fraunhofer.de/details/win.pseudo_manuscrypt"
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.pseudo_manuscrypt",
+        "https://ics-cert.kaspersky.com/publications/reports/2021/12/16/pseudomanuscrypt-a-mass-scale-spyware-attack-campaign/"
       ],
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
     },
     "lumma-stealer-beacon": {
       "title": "Lumma Stealer (beacon)",
@@ -400,12 +494,12 @@
         "lumma",
         "lummac2"
       ],
-      "updated": "2026-11-07",
+      "updated": "2026-11-09",
       "malpedia": "win.lumma",
       "references": [
         "https://malpedia.caad.fkie.fraunhofer.de/details/win.lumma"
       ],
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
     },
     "lumma-stealer-download": {
       "title": "Lumma Stealer (download)",
@@ -417,12 +511,12 @@
       "aliases": [
         "lumma"
       ],
-      "updated": "2026-11-07",
+      "updated": "2026-11-09",
       "malpedia": "win.lumma",
       "references": [
         "https://malpedia.caad.fkie.fraunhofer.de/details/win.lumma"
       ],
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
     },
     "matsnu": {
       "title": "Matsnu",
@@ -434,7 +528,11 @@
       "aliases": [
         "avalanche-matsnu"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.matsnu",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.matsnu"
+      ]
     },
     "avalanche-matsnu": {
       "title": "Matsnu (Avalanche)",
@@ -446,7 +544,12 @@
       "aliases": [
         "matsnu"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.matsnu",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.matsnu",
+        "https://www.shadowserver.org/news/avalanche/"
+      ]
     },
     "adload": {
       "title": "AdLoad (macOS adware)",
@@ -462,7 +565,7 @@
         "https://alienvault.com/blogs/labs-research/mac-systems-turned-into-proxy-exit-nodes-by-adload"
       ],
       "malpedia": "",
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
     },
     "qsnatch": {
       "title": "QSnatch",
@@ -472,7 +575,11 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "elf.qsnatch",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/elf.qsnatch"
+      ]
     },
     "necurs": {
       "title": "Necurs",
@@ -482,7 +589,11 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.necurs",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.necurs"
+      ]
     },
     "avalanche-goznym": {
       "title": "GozNym (banking trojan, Avalanche network)",
@@ -494,14 +605,15 @@
       "aliases": [
         "goznym"
       ],
-      "updated": "2026-11-07",
+      "updated": "2026-11-09",
       "references": [
         "https://www.eurojust.europa.eu/news/goznym-malware-cybercriminal-network-dismantled-international-operation",
         "https://www.cisa.gov/news-events/alerts/2016/12/01/avalanche-crimeware-service-infrastructure",
-        "https://malpedia.caad.fkie.fraunhofer.de/details/win.nymaim"
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.nymaim",
+        "https://www.shadowserver.org/news/avalanche/"
       ],
       "malpedia": "",
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
     },
     "worm.phorpiex": {
       "title": "Phorpiex (Trik)",
@@ -514,7 +626,11 @@
         "phorpiex",
         "trik"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.phorpiex",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.phorpiex"
+      ]
     },
     "cryptolocker": {
       "title": "CryptoLocker",
@@ -524,7 +640,11 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.cryptolocker",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.cryptolocker"
+      ]
     },
     "non-authoritative-whois": {
       "title": "Out-of-date .mobi WHOIS server (not malware)",
@@ -539,7 +659,7 @@
         "https://labs.watchtowr.com/we-spent-20-to-achieve-rce-and-accidentally-became-the-admins-of-mobi/"
       ],
       "malpedia": "",
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
     },
     "avalanche-panda-banker": {
       "title": "Panda Banker",
@@ -551,19 +671,31 @@
       "aliases": [
         "panda-banker"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.pandabanker",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.pandabanker",
+        "https://www.shadowserver.org/news/avalanche/"
+      ]
     },
     "avalanche-tiny-banker": {
       "title": "Tinba (Tiny Banker)",
       "type": "Banking trojan",
-      "description": "Very small banking trojan that injects into browsers to steal online-banking credentials.",
+      "description": "Tinba (also known as Tiny Banker or Zusy) is a compact banking trojan that first emerged around 2012. It is known for its very small file size (about 20 KB) while carrying capabilities derived from, or inspired by, older banking malware such as ZeuS. It was one of the families the Avalanche crimeware network distributed.",
       "action": "Reimage the machine and change banking passwords from a clean device.",
       "confidence": "high",
       "status": "reviewed",
       "aliases": [
         "tinba"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.tinba",
+        "https://www.imperva.com/learn/application-security/tiny-banker-trojan-tbt-tinba/",
+        "https://www.cloudsek.com/knowledge-base/tiny-banker-trojan-tinba",
+        "https://www.shadowserver.org/news/avalanche/"
+      ],
+      "malpedia": "win.tinba"
     },
     "avalanche-unknown": {
       "title": "Avalanche network (malware family not identified)",
@@ -579,7 +711,7 @@
         "https://www.shadowserver.org/news/avalanche/"
       ],
       "malpedia": "",
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
     },
     "avalanche-generic": {
       "title": "Avalanche network (malware family not identified)",
@@ -595,7 +727,7 @@
         "https://www.shadowserver.org/news/avalanche/"
       ],
       "malpedia": "",
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
     },
     "locky": {
       "title": "Locky",
@@ -605,7 +737,11 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.locky",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.locky"
+      ]
     },
     "sality": {
       "title": "Sality",
@@ -617,7 +753,11 @@
       "aliases": [
         "sality-p2p"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.sality",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.sality"
+      ]
     },
     "sality-p2p": {
       "title": "Sality (P2P)",
@@ -629,7 +769,11 @@
       "aliases": [
         "sality"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.sality",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.sality"
+      ]
     },
     "modpack": {
       "title": "ModPack (Misfox)",
@@ -643,7 +787,11 @@
         "mixfox",
         "dromedan"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.misfox",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.misfox"
+      ]
     },
     "jackskid": {
       "title": "Jackskid (RCtea)",
@@ -655,7 +803,11 @@
       "aliases": [
         "rctea"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "elf.jackskid",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/elf.jackskid"
+      ]
     },
     "dragon-boss": {
       "title": "Dragon Boss Solutions adware (Chromstera browser)",
@@ -670,7 +822,7 @@
         "https://www.huntress.com/blog/pups-grow-fangs"
       ],
       "malpedia": "",
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
     },
     "giftedvisitor": {
       "title": "GIFTEDVISITOR",
@@ -680,17 +832,26 @@
       "confidence": "medium",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "py.wirefire",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/py.wirefire"
+      ]
     },
     "avalanche-xswkit": {
-      "title": "xswkit (Avalanche)",
-      "type": "Malware distributed by the Avalanche crimeware network",
-      "description": "One of the malware families spread through the Avalanche network, a crimeware infrastructure of about twenty botnets used for spam, phishing, ransomware and banking trojans. Avalanche was taken down on 30 November 2016 by German authorities with law enforcement in 30 countries, and more than 800,000 of its domains were sinkholed. A device still contacting those domains carries a family Avalanche distributed, usually on Windows (sometimes Android). Detail on xswkit itself is limited. Source: NCSC Ireland (Sinkhole HTTP Events report guide).",
+      "title": "Gootkit / Xswkit (Avalanche)",
+      "type": "Banking trojan (Windows)",
+      "description": "Xswkit is another name for Gootkit (Malpedia win.gootkit), a Windows banking trojan from about 2014 that steals online-banking and login details, and one of the families the Avalanche crimeware network distributed. Avalanche was taken down in November 2016 and its domains sinkholed; a device still contacting them is infected.",
       "action": "Treat the machine as infected: scan it with up-to-date endpoint protection or reimage it, and reset credentials used on it (Avalanche families often stole banking and login details).",
       "confidence": "medium",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.gootkit",
+        "https://www.shadowserver.org/news/avalanche/"
+      ],
+      "malpedia": "win.gootkit"
     },
     "cobaltstrike": {
       "title": "Cobalt Strike",
@@ -702,7 +863,11 @@
       "aliases": [
         "cobalt-strike"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.cobalt_strike",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.cobalt_strike"
+      ]
     },
     "orchard": {
       "title": "Orchard",
@@ -712,7 +877,11 @@
       "confidence": "medium",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.orchard",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.orchard"
+      ]
     },
     "avalanche-teslacrypt": {
       "title": "TeslaCrypt",
@@ -724,17 +893,25 @@
       "aliases": [
         "teslacrypt"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.teslacrypt",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.teslacrypt",
+        "https://www.shadowserver.org/news/avalanche/"
+      ]
     },
     "dltminer": {
       "title": "DLTMiner",
       "type": "Cryptocurrency miner",
-      "description": "Mining malware spread through vulnerable Microsoft Exchange servers, which matches the msexchange tag, and through weak SMB credentials.",
-      "action": "Check any Exchange server at this address for web shells and missing patches, then remove the miner.",
-      "confidence": "medium",
+      "description": "Cryptocurrency-mining malware: Carbon Black (2019) reported DLTMiner campaigns against companies, mainly in Asia, that got in with the EternalBlue SMB exploit and RDP password guessing. Shadowserver tags these hits 'msexchange', which suggests a Microsoft Exchange server is involved; public detail is limited. Seen only in Shadowserver's Sinkhole DNS report, which lists the DNS resolver that looked up the sinkholed domain, not the infected device itself: the address is usually a resolver (an ISP's, a company's or a router's), with the infected client behind it.",
+      "action": "Check the Windows and Exchange servers behind this address for miners, web shells and missing patches (MS17-010 and Exchange updates), then clean or rebuild them.",
+      "confidence": "low",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://vulners.com/carbonblack/CARBONBLACK:6730D6EB8DF875C002A93DBC78C80B9D"
+      ]
     },
     "avalanche-urlzone": {
       "title": "URLZone (Bebloh)",
@@ -747,7 +924,12 @@
         "urlzone",
         "bebloh"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.urlzone",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.urlzone",
+        "https://www.shadowserver.org/news/avalanche/"
+      ]
     },
     "avalanche-corebot": {
       "title": "CoreBot",
@@ -759,7 +941,12 @@
       "aliases": [
         "corebot"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.corebot",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.corebot",
+        "https://www.shadowserver.org/news/avalanche/"
+      ]
     },
     "avalanche-tinba": {
       "title": "Tinba (Avalanche)",
@@ -772,7 +959,12 @@
         "tinba",
         "avalanche-tiny-banker"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.tinba",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.tinba",
+        "https://www.shadowserver.org/news/avalanche/"
+      ]
     },
     "tinba": {
       "title": "Tinba (Tiny Banker)",
@@ -785,7 +977,11 @@
         "avalanche-tinba",
         "avalanche-tiny-banker"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.tinba",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.tinba"
+      ]
     },
     "virut": {
       "title": "Virut",
@@ -795,7 +991,12 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.virut",
+        "https://www.infosecurity-magazine.com/news/eastern-european-certs-stage-massive-virut-botnet"
+      ],
+      "malpedia": "win.virut"
     },
     "avalanche-vmzeus": {
       "title": "VM Zeus",
@@ -807,7 +1008,12 @@
       "aliases": [
         "vmzeus"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.vmzeus",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.vmzeus",
+        "https://www.shadowserver.org/news/avalanche/"
+      ]
     },
     "socks5systemz": {
       "title": "Socks5Systemz",
@@ -817,7 +1023,11 @@
       "confidence": "medium",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.socks5_systemz",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.socks5_systemz"
+      ]
     },
     "avalanche-rovnix": {
       "title": "Rovnix",
@@ -829,17 +1039,27 @@
       "aliases": [
         "rovnix"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "win.rovnix",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.rovnix",
+        "https://www.shadowserver.org/news/avalanche/"
+      ]
     },
     "sharkbot": {
       "title": "SharkBot",
       "type": "Android banking trojan",
-      "description": "Android banking trojan spread through fake apps. It overlays banking apps and can make fraudulent transfers automatically.",
+      "description": "Android banking trojan first reported in late 2021 and spread through fake apps, including droppers on Google Play. It abuses Android's Accessibility Service to make transfers automatically from banking apps (ATS), and reads and hides SMS messages to intercept one-time codes.",
       "action": "Identify the phone, remove the malicious app or factory reset it, and have the user contact their bank.",
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/apk.sharkbot",
+        "https://www.nccgroup.com/research/sharkbot-a-new-generation-android-banking-trojan-being-distributed-on-google-play-store/"
+      ],
+      "malpedia": "apk.sharkbot"
     },
     "enfal-apt": {
       "title": "Enfal",
@@ -852,7 +1072,12 @@
         "enfal",
         "lurid"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.enfal",
+        "https://documents.trendmicro.com/assets/wp/wp_dissecting-lurid-apt.pdf"
+      ],
+      "malpedia": "win.enfal"
     },
     "xcsset": {
       "title": "XCSSET",
@@ -862,7 +1087,12 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/osx.xcsset",
+        "https://thehackernews.com/2025/02/microsoft-uncovers-new-xcsset-macos.html"
+      ],
+      "malpedia": "osx.xcsset"
     },
     "infy": {
       "title": "Infy (Prince of Persia)",
@@ -874,7 +1104,12 @@
       "aliases": [
         "prince-of-persia"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.infy",
+        "https://unit42.paloaltonetworks.com/prince-of-persia-infy-malware-active-in-decade-of-targeted-attacks/"
+      ],
+      "malpedia": "win.infy"
     },
     "event4_sinkhole_dns": {
       "title": "DNS look-up of a sinkholed domain (resolver, not the infected device)",
@@ -889,17 +1124,20 @@
         "https://www.shadowserver.org/what-we-do/network-reporting/sinkhole-dns-events-report/"
       ],
       "malpedia": "",
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
     },
     "http-scan": {
       "title": "HTTP scanning",
       "type": "Scanning",
-      "description": "This host probed a web honeypot for vulnerable paths and admin pages, a sign of automated exploitation tooling or an infected device.",
+      "description": "This host sent HTTP scans or exploit attempts to a Shadowserver web honeypot: probing for vulnerable paths, admin pages and known flaws (IoT devices, VPN appliances, CMS and application servers). Some HTTP scanning is benign (search engines, research scanners), but scanning that tries exploits usually comes from automated attack tooling or an infected device.",
       "action": "Find out why the host is scanning. Usually it is a compromised server or router, or a bot.",
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://www.shadowserver.org/what-we-do/network-reporting/honeypot-http-scanner-events/"
+      ]
     },
     "ssh-brute-force": {
       "title": "SSH brute force",
@@ -909,7 +1147,10 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://www.shadowserver.org/what-we-do/network-reporting/honeypot-brute-force-events-report/"
+      ]
     },
     "telnet-brute-force": {
       "title": "Telnet brute force",
@@ -919,7 +1160,10 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://www.shadowserver.org/what-we-do/network-reporting/honeypot-brute-force-events-report/"
+      ]
     },
     "smb-scan": {
       "title": "SMB scanning",
@@ -929,17 +1173,23 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://www.shadowserver.org/what-we-do/network-reporting/honeypot-smb-scanner-events-report/"
+      ]
     },
     "rdp-scan": {
       "title": "RDP scanning",
       "type": "Scanning",
-      "description": "This host probed a honeypot for Remote Desktop, often a precursor to credential attacks.",
+      "description": "This host scanned a Shadowserver honeypot for Remote Desktop (RDP), including exploit attempts. Shadowserver advises investigating any address reported for RDP scanning: it may be compromised, and RDP scanning often precedes password attacks.",
       "action": "Find the scanning host and check it for compromise.",
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://www.shadowserver.org/what-we-do/network-reporting/honeypot-rdp-scanner-events-report/"
+      ]
     },
     "adb-scan": {
       "title": "ADB scanning",
@@ -949,27 +1199,37 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://www.shadowserver.org/what-we-do/network-reporting/honeypot-adb-scanner-events-report/",
+        "https://www.shadowserver.org/what-we-do/network-reporting/accessible-adb-report/"
+      ]
     },
     "ddos-participant": {
       "title": "DDoS participant",
       "type": "DDoS",
-      "description": "This host took part in a denial-of-service attack observed by a DDoS protection provider. The detail view shows the attack type and duration.",
+      "description": "Shadowserver's DDoS Participant report lists this address as taking part in an ongoing DDoS attack, sending attack traffic (the application, such as DNS or HTTPS, is in the detail view). It is usually an infected server or IoT device, or a misused open service.",
       "action": "Find the device, which is usually an infected IoT device or server, and clean it.",
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://www.shadowserver.org/what-we-do/network-reporting/ddos-participant-report/"
+      ]
     },
     "ddos-amplification": {
-      "title": "DDoS amplification",
-      "type": "DDoS",
-      "description": "This host answered spoofed requests and sent amplified traffic toward a victim, typically through open DNS, NTP or similar UDP services.",
-      "action": "Close or rate-limit the open UDP service on the host.",
+      "title": "DDoS amplification victim",
+      "type": "DDoS (victim)",
+      "description": "This address was the target of an amplification DDoS attack. The attacker sent requests with this address forged as the sender to amplifiers (open DNS, NTP, memcached and similar UDP services), including Shadowserver's honeypots, so the large replies went to this address. Because the sender is forged, the report names the victim, not the attacker.",
+      "action": "Tell the owner of the address that it was attacked; check the attack's timing against outages and review DDoS protection with the upstream provider. Nothing on this host needs cleaning because of this report.",
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://www.shadowserver.org/what-we-do/network-reporting/honeypot-amplification-ddos-events-report/"
+      ]
     },
     "ddos-target": {
       "title": "DDoS target",
@@ -979,7 +1239,10 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://www.shadowserver.org/what-we-do/network-reporting/honeypot-ddos-target-events-report/"
+      ]
     },
     "mirai": {
       "title": "Mirai",
@@ -989,17 +1252,24 @@
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "malpedia": "elf.mirai",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/elf.mirai"
+      ]
     },
     "ip-spoofer": {
       "title": "IP spoofing possible",
       "type": "IP spoofing",
-      "description": "The network allowed packets with forged source addresses to leave it (failed BCP38 filtering), which enables reflection DDoS attacks.",
+      "description": "CAIDA's Spoofer test, reported by Shadowserver, found that this network lets packets with forged source addresses out (no BCP38 source-address filtering). That is what makes reflection and amplification DDoS attacks possible.",
       "action": "Apply ingress and egress source-address filtering (BCP38) on the network edge.",
       "confidence": "high",
       "status": "reviewed",
       "aliases": [],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://www.shadowserver.org/what-we-do/network-reporting/ip-spoofer-events-report/"
+      ]
     },
     "executed-clearfake-payload": {
       "title": "ClearFake payload executed",
@@ -1011,7 +1281,11 @@
       "aliases": [
         "clearfake"
       ],
-      "updated": "2026-11-06"
+      "updated": "2026-11-09",
+      "references": [
+        "https://www.shadowserver.org/what-we-do/network-reporting/initial-access-broker-report/",
+        "https://www.rapid7.com/blog/post/2023/08/31/fake-update-utilizes-new-idat-loader-to-execute-stealc-and-lumma-infostealers/"
+      ]
     },
     "socks-escort": {
       "title": "SocksEscort (proxy service on AVrecon-infected routers)",
@@ -1026,7 +1300,7 @@
       "status": "reviewed",
       "confidence": "high",
       "updated": "2026-11-07",
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
     },
     "cryptodns-resolver": {
       "title": "Crypto DNS resolver (blockchain domain names, e.g. Namecoin .bit)",
@@ -1041,7 +1315,51 @@
       "status": "reviewed",
       "confidence": "medium",
       "updated": "2026-11-07",
-      "curated_by": "Looking Glass (curated)"
+      "curated_by": "Looking Glass"
+    },
+    "avalanche-trusteer-app": {
+      "aliases": [
+        "trusteer-app"
+      ],
+      "status": "reviewed",
+      "title": "Fake Trusteer app (Avalanche)",
+      "type": "Malware distributed by the Avalanche crimeware network",
+      "confidence": "medium",
+      "description": "Malware posing as Trusteer (IBM's banking-security app), one of the families the Avalanche crimeware network distributed; Shadowserver lists 'Fake Trusteer App' among the Avalanche families it sinkholes. Avalanche was taken down in November 2016 and its domains sinkholed, so a lookup of them points to an infected device. Seen only in Shadowserver's Sinkhole DNS report, which lists the DNS resolver that looked up the sinkholed domain, not the infected device itself: the address is usually a resolver (an ISP's, a company's or a router's), with the infected client behind it.",
+      "action": "Find the device behind the resolver and treat it as infected: remove the fake app (on phones, check installed banking or security apps) or reimage the computer, and reset banking passwords from a clean device.",
+      "references": [
+        "https://www.shadowserver.org/news/avalanche/",
+        "https://www.shadowserver.org/what-we-do/network-reporting/sinkhole-dns-events-report/"
+      ],
+      "updated": "2026-11-09"
+    },
+    "skunkx": {
+      "aliases": [],
+      "status": "reviewed",
+      "title": "SkunkX",
+      "type": "DDoS botnet (Windows)",
+      "confidence": "medium",
+      "description": "SkunkX is a Windows DDoS bot that Arbor Networks described in 2011: UDP, SYN and HTTP floods and Slowloris, spreading through USB drives, instant messengers and torrents, and stealing saved Mozilla passwords. It was sinkholed then; a lookup of its domains points to an old, still-infected machine. Seen only in Shadowserver's Sinkhole DNS report, which lists the DNS resolver that looked up the sinkholed domain, not the infected device itself: the address is usually a resolver (an ISP's, a company's or a router's), with the infected client behind it.",
+      "action": "Find the Windows machine behind the resolver, clean or reimage it, and check USB drives used on it.",
+      "references": [
+        "https://www.infosecurity-magazine.com/news/skunx-botnet-discovered-with-cc-server-in-the-us",
+        "https://www.shadowserver.org/what-we-do/network-reporting/sinkhole-dns-events-report/"
+      ],
+      "updated": "2026-11-09"
+    },
+    "wd": {
+      "aliases": [],
+      "status": "reviewed",
+      "title": "'wd' (generated domains)",
+      "type": "Malware using generated domains (family not publicly identified)",
+      "confidence": "low",
+      "description": "Shadowserver's label for malware that looks up machine-generated domains of the form 'wd' followed by 32 hexadecimal characters under .win, which Shadowserver has sinkholed. Generated domains (DGA) are how malware finds its control servers; the family behind this pattern is not publicly identified. Seen only in Shadowserver's Sinkhole DNS report, which lists the DNS resolver that looked up the sinkholed domain, not the infected device itself: the address is usually a resolver (an ISP's, a company's or a router's), with the infected client behind it.",
+      "action": "Find the device behind the resolver (DNS logs show which client asked for the .win names), then scan or reimage it.",
+      "references": [
+        "https://www.shadowserver.org/what-we-do/network-reporting/sinkhole-dns-events-report/",
+        "https://attack.mitre.org/techniques/T1568/002/"
+      ],
+      "updated": "2026-11-09"
     }
   }
 }

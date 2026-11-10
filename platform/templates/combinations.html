@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0d">
+  <meta name="csrf-token" content="{{ lg_csrf }}">
+  <title>Looking Glass · Combinations</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo-mark.svg') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/settings.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/combos.css') }}" rel="stylesheet">
+</head>
+<body class="settings-page cb-page" data-user="{{ lg_user }}" data-max-days="{{ max_days }}">
+  <header class="hud">
+    <div class="hud-left">
+      <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Combination search · signed in as {{ lg_user }} ({{ lg_role }})</span></div></div>
+    </div>
+    <div class="hud-right">
+      <a class="demo-btn" href="/?intro=1"><span>Overview</span></a>
+      <a class="demo-btn" href="/"><span>Map</span></a>
+      <a class="demo-btn" href="/services"><span>Services</span></a>
+      {% if "settings" in lg_perms or "definitions" in lg_perms %}<a class="demo-btn account-btn" href="/definitions"><span>Definitions</span></a>{% endif %}
+      {% if "definitions" in lg_perms or "management" in lg_perms or "settings" in lg_perms or ("unmasked" in lg_perms and "export" in lg_perms) %}<a class="demo-btn account-btn" href="/findings" title="Findings: researchers' notes the team follows up, from the first look to the advisory"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M5 21V4h11l-1.5 4L16 12H5M5 12"/></svg><span>Findings</span></a>{% endif %}
+      {% if "users" in lg_perms or "audit" in lg_perms %}<a class="demo-btn account-btn" href="/admin"><span>Admin</span></a>{% endif %}
+      <form method="post" action="/logout" class="account-form"><button type="submit" class="demo-btn account-btn" title="Logged in as {{ lg_user }} ({{ lg_role }}). Click to log out." aria-label="Log out">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg><span class="acct-name">Log out</span></button></form>
+    </div>
+  </header>
+  <main class="st-main cb-main">
+    <section class="cb-hero">
+      <div class="cb-eyebrow">Analyst · combination search</div>
+      <h1>Get exactly the devices behind a researcher's finding</h1>
+      <p>A researcher's note or report names a combination by its code (<code>LG-C-…</code> for one report, <code>LG-X-…</code> across reports).
+        Paste it here: Looking Glass finds every device that carried exactly that combination, in the days in memory or in up to {{ max_days }} days
+        of stored history, and gives you a PDF summary with the researchers' notes and two CSV files (devices, records) for enrichment and dashboards.</p>
+    </section>
+
+    <section class="cb-card" aria-labelledby="cbStep1">
+      <h2 id="cbStep1"><span class="cb-n">1</span>The combination</h2>
+      <div class="cb-ac" id="cbAc" hidden>
+        <label class="cb-ac-l" for="cbAcQ">Analysts' codes <span>· made from analysis windows, to revisit or report on again</span></label>
+        <div class="cb-ac-box">
+          <input id="cbAcQ" class="cb-in" type="text" spellcheck="false" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="cbAcList"
+                 placeholder="Find an analyst code: title, network, day, name or LG-A-…">
+          <ul class="cb-ac-list" id="cbAcList" role="listbox" hidden></ul>
+        </div>
+      </div>
+      <form class="cb-code-row" id="cbCodeForm" autocomplete="off">
+        <input id="cbCode" class="cb-in cb-code-in" maxlength="13" spellcheck="false" placeholder="LG-C-1A2B3C4D" aria-label="Combination code">
+        <button class="lg-btn primary" id="cbLook" type="submit">Look up</button>
+      </form>
+      <p class="cb-msg" id="cbCodeMsg" role="status"></p>
+      <div class="cb-entry" id="cbEntry" hidden></div>
+    </section>
+
+    <section class="cb-card" id="cbStep2Box" aria-labelledby="cbStep2" hidden>
+      <h2 id="cbStep2"><span class="cb-n">2</span>Where to look</h2>
+      <div class="cb-range" role="radiogroup" aria-label="Where to look">
+        <label class="cb-opt"><input type="radio" name="cbWhere" value="memory" checked><span><b>The days in memory</b><small id="cbMemDays">exactly the counts the researcher saw</small></span></label>
+        <label class="cb-opt"><input type="radio" name="cbWhere" value="history"><span><b>A date range from the stored history</b><small>up to {{ max_days }} days, read from the database one day at a time</small></span></label>
+      </div>
+      <div class="cb-dates" id="cbDates" hidden>
+        <label>From <input type="date" id="cbFrom" class="cb-in"></label>
+        <label>To <input type="date" id="cbTo" class="cb-in"></label>
+        <span class="cb-hint" id="cbSpan"></span>
+      </div>
+      <div class="cb-go"><button class="lg-btn primary" id="cbSearch" type="button">Search</button><button class="lg-btn ghost" id="cbStop" type="button" hidden>Stop</button></div>
+      <div class="cb-progress" id="cbProgress" hidden><div class="cb-bar"><i id="cbBar"></i></div><ol class="cb-log" id="cbLog"></ol></div>
+    </section>
+
+    <section class="cb-card" id="cbStep3Box" aria-labelledby="cbStep3" hidden>
+      <h2 id="cbStep3"><span class="cb-n">3</span>The devices</h2>
+      <div class="cb-tiles" id="cbTiles"></div>
+      <div class="cb-geo-card" id="cbGeo" hidden>
+        <div class="cb-mapwrap"><svg id="cbMap" role="img" aria-label="Devices per region"></svg><div class="cb-tip" id="cbTip" hidden></div></div>
+        <div class="cb-tree" id="cbTree"></div>
+      </div>
+      <div class="cb-grid" id="cbGrid"></div>
+      <div class="cb-days" id="cbDays"></div>
+      <div class="cb-dl">
+        <label class="cb-net">Report for <select id="cbNet" class="cb-in" aria-label="Report for which network provider"><option value="">All networks</option></select></label>
+        <a class="lg-btn primary" id="cbDownload" href="#" download>Download PDF + CSV (ZIP)</a>
+        <span class="cb-hint">Contains the addresses of affected devices: share only according to your organisation's information-sharing policy.</span></div>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/regions.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/combos.js') }}"></script>
+</body>
+</html>

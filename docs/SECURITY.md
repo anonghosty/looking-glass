@@ -1,7 +1,7 @@
 # Looking Glass — security
 
 This document describes how Looking Glass is secured, what was changed after the penetration test of 2026-11-07
-(`security_testing/SECURITY_REPORT.md`), and how to run it safely. To install it, see `docs/INSTALLATION.md`.
+(`docs/SECURITY_REPORT.md`), and how to run it safely. To install it, see `docs/INSTALLATION.md`.
 
 **Status: hardening is in progress.**
 - **Done:** all application fixes, tested with `security_testing/security_retest.py` (about 120 checks, all passing).
@@ -184,6 +184,16 @@ an OpenID Connect provider can be added later.
 | 10 | Malpedia links not limited to http(s) | Only `http:` / `https:` links; anything else is shown as text | code |
 | 11 | JSON array caused 500 | 400 with a message | retest |
 | 12 | Mapbox token visible | Expected for a public `pk.` token | **operator step:** restrict it to your hostnames in the Mapbox account |
+
+Changes after an external code review (2026-11-09):
+
+| Finding | Fix | Verified by |
+|---|---|---|
+| CSV exports could carry spreadsheet formulas (vendor and product banners come from the scanned hosts) | One guard for every CSV (`csvsafe.py`, the same rule in the browser downloads): formula cells get a leading apostrophe | `tests/check_csv_safety.py`: planted values, the code, every cell of the real downloads |
+| In masked views a real network name or AS number still worked as a filter (a network-presence oracle) | Masked requests accept only the aliases as network filters, as host filters already accepted only opaque references | `tests/test_demo.py`; the check fails with the fix removed |
+| The masking test could never fail | It now fails on any leak, and first proves it detects real values in unmasked answers; unit tests for `privacy.py` and the roles | proven by breaking masking in a throwaway copy |
+| Pinned events (full details) stayed in the browser after logout | Pins are per account, never kept for masked accounts, deleted on the sign-in page | `tests/test_demo.py` |
+| The release was marked publishable before its scan; images and PDFs were not scanned | A separate marker is written only after a clean scan and is required to publish; binaries are scanned for paths, authors, EXIF, GPS and PNG text chunks | deliberate failures in the build |
 
 Other hardening added:
 - **systemd sandbox:** `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=read-only`, writable only `data/`, `PrivateTmp`, `UMask=0077` and more. Check it with `systemd-analyze security threatmap`.

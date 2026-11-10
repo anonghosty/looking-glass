@@ -14,9 +14,9 @@
   const PALETTE = ["#5b8def", "#8b5cf6", "#22c3a6", "#f5b54a", "#ef6f8a", "#38bdf8", "#a3e635", "#f97316", "#c084fc", "#94a3b8"];
   const FILTERS = {
     comms: [["attack", "Attack type"], ["infection", "Infection"], ["report", "Report"], ["region", "Region"], ["sector", "Sector"], ["network", "Network"], ["severity", "Severity"],
-            ["icombo", "Infections on the same device"], ["rcombo", "Reports seeing the same device"]],
+            ["icombo", "Infections on the same device"], ["rcombo", "Reports seeing the same device"], ["code", "Combination code"]],
     services: [["family", "Report family"], ["service", "Service"], ["issue", "Issue"], ["region", "Region"], ["sector", "Sector"], ["network", "Network"], ["severity", "Severity"],
-               ["icombo", "Issues on the same host"], ["scombo", "Services on the same host"]],
+               ["icombo", "Issues on the same host"], ["scombo", "Services on the same host"], ["code", "Combination code"]],
   };
   const state = { plat: "comms", day: "", demo: false, filters: { comms: {}, services: {} }, data: null, shapes: null, shapesFor: "",
     explained: { comms: {}, services: {} }, open: { comms: new Set(), services: new Set() } };
@@ -395,6 +395,11 @@
     if (x.cwes?.length) facts.push(["Weakness", x.cwes.join(", ")]);
     if (x.seen_in?.length) facts.push(["Seen in", x.seen_in.join(", ")]);
     if (facts.length) { const dl = el("dl", "mg-ex-facts"); for (const [k, v] of facts) dl.append(el("dt", null, k), el("dd", null, v)); c.append(dl); }
+    for (const n of x.notes || []) {               // researchers' notes on the name (notes.py)
+      const p = el("p", "mg-ex-desc mp-note"); p.append(el("b", null, `Notes shared by ${n.role || "Researcher"}: ${n.by || "a researcher"}${n.date ? ` (${n.date})` : ""}: `), document.createTextNode(n.text));
+      c.append(p);
+      if (n.codes?.length) c.append(window.LGCodes ? window.LGCodes.line(n.codes) : el("p", "mg-ex-desc mp-note", `Combinations: ${n.codes.map((x) => x.code).join(", ")}`));
+    }
     const refs = [x.url, x.kev_url, ...(x.references || []), ...(x.curated_references || [])].filter(Boolean);
     if (refs.length) { const ul = el("ul", "mg-ex-refs"); for (const u of [...new Set(refs)].slice(0, 8)) { const li = el("li"); li.append(link(u)); ul.append(li); } c.append(el("h4", null, "References"), ul); }
     return c;
@@ -738,5 +743,22 @@
     } catch (e) { toast(e.message, "bad"); }
     finally { b.disabled = false; }
   });
-  load();
+  // opened from a finding (/management?code=LG-C-…): the portal shows exactly that combination, on its platform
+  (async () => {
+    const code = (new URLSearchParams(location.search).get("code") || "").trim().toUpperCase();
+    if (/^LG-[CXA]-[0-9A-F]{8}$/.test(code)) {
+      try {
+        const r = await fetch(`/api/combo-codes/${code}`, { cache: "no-store" });
+        const x = await r.json();
+        if (r.ok) {
+          state.plat = x.section === "issues" ? "services" : "comms";
+          if (x.kind === "a" && x.day) state.day = x.day;      // an analyst's selection is of one day: open that day
+          for (const b of document.querySelectorAll("[data-plat]")) b.setAttribute("aria-pressed", String(b.dataset.plat === state.plat));
+          state.filters[state.plat] = { code };
+          toast(`Showing combination ${code}: ${x.text}`);
+        } else toast(x.error || `Unknown combination code ${code}`, "bad");
+      } catch { /* the portal still opens unfiltered */ }
+    }
+    load(true);
+  })();
 })();

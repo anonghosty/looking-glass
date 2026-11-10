@@ -522,6 +522,13 @@ class Doc:
             alert = (f"Actively exploited since {kv.get('date_added')}" + ("; used in ransomware" if kv.get("ransomware") == "Known" else "") + ". "
                      + (f"Required action: {kv['action']}" if kv.get("action") else ""))
         dl = simpleSplit(self.s(desc), self.F["r"], 8.2, w - 24)[:6]
+        # researchers' notes on this name (notes.py), the newest first, up to three lines
+        nt = " ".join(f"Notes shared by {n.get('role') or 'Researcher'}: {n.get('by') or 'a researcher'}"
+                      f"{' (' + n['date'] + ')' if n.get('date') else ''}: {n.get('text', '')}"
+                      + (f" Combinations: {', '.join(c['code'] for c in n['codes'])}." if n.get("codes") else "")
+                      for n in (x_.get("notes") or [])[:2])
+        if nt:
+            dl += simpleSplit(self.s(nt), self.F["r"], 8.2, w - 24)[:3]
         al = simpleSplit(self.s(alert), self.F["r"], 7.8, w - 36)[:3] if alert else []
         h = 46 + 11 * len(dl) + (20 + 10 * len(al) if al else 0) + (12 if title and title != name else 0)
         if y is None:

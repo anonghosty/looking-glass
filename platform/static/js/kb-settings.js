@@ -22,6 +22,67 @@
   }
   function flash(node, text, kind) { node.className = `dz-status ${kind || ""}`; node.textContent = text; }
   const pill = (text, kind) => el("span", `dz-pill ${kind || ""}`, text);
+  // "Intel gathered": the indicators behind a name, per report (static/js/intel.js)
+  function intelBtn(name, section) {
+    const b = el("button", "lg-btn sm ghost", "Intel gathered"); b.type = "button";
+    b.title = "The indicators the reports carry for it: C2 domains, DNS lookups, URLs, user agents, fingerprints…, and matches with other names";
+    b.hidden = !window.LGIntel;
+    b.addEventListener("click", () => window.LGIntel?.open(name, section));
+    return b;
+  }
+  // "Notes": the researchers' findings on a name and the combinations they point at (static/js/kb-notes.js), apart from Define
+  function notesBtn(name, section) {
+    const b = el("button", "lg-btn sm ghost", "Notes"); b.type = "button";
+    b.title = "Notes: new findings on this name, with the exact combinations they are about (combination codes for the analysts)";
+    b.hidden = !window.LGNotes;
+    b.addEventListener("click", () => window.LGNotes?.open(name, section));
+    return b;
+  }
+
+  // ---------------- sorting (click a column heading: ▲ / ▼ shows the order) and the "Across reports" flag
+  const sortBy = { inf: { key: "", dir: 1 }, iss: { key: "", dir: 1 } };
+  const statusRank = (x, sec) => sec === "iss"
+    ? (x.exploited ? 0 : 1) * 1000 - (x.cvss || 0) * 10 + (x.cve ? 0 : 500) + (x.defined ? 0 : -200)
+    : x.defined ? 2 : x.family_found ? 1 : x.unchecked ? 3 : 0;
+  function sortRows(rows, sec, section) {
+    const s = sortBy[sec]; if (!s.key) return rows;
+    const L = window.LGIntel;
+    const val = (x) => s.key === "name" ? String(x.name).toLowerCase()
+      : s.key === "hosts" ? (x.hosts || 0)
+      : s.key === "seen" ? (L ? L.recordsOf(section, x.name) : 0) || (x.reports?.length || 0)
+      : s.key === "across" ? (L?.acrossOf(section, x.name)?.devices || 0)
+      : statusRank(x, sec);
+    return rows.slice().sort((a, b) => { const va = val(a), vb = val(b); return (va < vb ? -1 : va > vb ? 1 : 0) * s.dir || String(a.name).localeCompare(String(b.name)); });
+  }
+  function sortHeads(table, sec, rerender) {
+    for (const th of $(table).querySelectorAll("th[data-sort]")) {
+      th.tabIndex = 0; th.classList.add("dz-sortable");
+      const go = () => {
+        const s = sortBy[sec];
+        // numbers start from the largest, names from A
+        if (s.key === th.dataset.sort) s.dir = -s.dir; else { s.key = th.dataset.sort; s.dir = th.dataset.sort === "name" || th.dataset.sort === "status" ? 1 : -1; }
+        rerender();
+      };
+      th.addEventListener("click", go); th.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+    }
+  }
+  function markHeads(table, sec) {
+    for (const th of $(table).querySelectorAll("th[data-sort]")) {
+      const on = sortBy[sec].key === th.dataset.sort;
+      th.setAttribute("aria-sort", on ? (sortBy[sec].dir > 0 ? "ascending" : "descending") : "none");
+      th.dataset.ind = on ? (sortBy[sec].dir > 0 ? "▲" : "▼") : "↕";
+      th.title = `Sort by ${th.textContent.trim().toLowerCase()}`;
+    }
+  }
+  function acrossCell(section, name) {
+    const td = el("td", "dz-across"), a = window.LGIntel?.acrossOf(section, name);
+    if (!a) { td.append(el("span", "muted", "–")); td.title = "No device of this name was seen in more than one of its reports"; return td; }
+    const b = el("button", "dz-xflag"); b.type = "button";
+    b.append(el("b", null, "⇄"), el("span", null, `${fmt(a.devices)} ${section === "issues" ? (a.devices === 1 ? "host" : "hosts") : (a.devices === 1 ? "device" : "devices")}`));
+    b.title = `Across reports detected: ${fmt(a.devices)} seen in more than one report (${a.reports.join(", ")}). Open the cross-report view.`;
+    b.addEventListener("click", () => window.LGIntel?.open(name, section, "*across*"));
+    td.append(b); return td;
+  }
 
   async function load() {
     const r = await fetch("/api/kb/unresolved", { cache: "no-store", headers: hdr(false) });
@@ -50,29 +111,39 @@
   function renderInf() {
     for (const b of document.querySelectorAll("[data-inf]")) b.setAttribute("aria-selected", String(b.dataset.inf === infTab));
     const tb = $("infTable").querySelector("tbody"); tb.replaceChildren();
-    const rows = infRows();
+    markHeads("infTable", "inf");
+    const rows = sortRows(infRows(), "inf", "infections");
     if (!rows.length) {
       const msg = $("infSearch").value.trim() ? "Nothing matches the search." : infTab === "unresolved" ? "Nothing to do: every name Malpedia does not know has a definition."
         : infTab === "unchecked" ? "No new names waiting: they are checked with Malpedia every 30 minutes, or now with Look up with Malpedia." : "Nothing here yet.";
-      const tr = el("tr", "dz-empty"), td = el("td", null, msg); td.colSpan = 5; tr.append(td); tb.append(tr); return;
+      const tr = el("tr", "dz-empty"), td = el("td", null, msg); td.colSpan = 6; tr.append(td); tb.append(tr); return;
     }
     for (const x of rows.slice(0, 400)) {
       const tr = el("tr");
       const status = el("td");
-      if (x.defined) status.append(pill(x.malpedia ? "Malpedia (set by you)" : "Defined", "ok"));
+      if (x.defined) status.append(pill(x.malpedia ? "Malpedia" : "Defined", "ok"));
       else if (x.family_found) status.append(pill(x.family_found.startsWith("actor:") ? "Threat actor" : "Malpedia", "info"));
       else if (infTab === "unchecked" || x.unchecked) status.append(pill("Not checked yet", ""));
       else status.append(pill("Needs a definition", "warn"));
       const def = el("td", "dz-def");
-      if (x.defined) def.append(el("b", null, x.malpedia ? x.malpedia : x.title || "Defined"), el("small", null, `${x.references.length} reference${x.references.length === 1 ? "" : "s"}${x.by ? ` · ${x.by}` : ""}${x.updated ? `, ${x.updated}` : ""}`));
+      if (x.defined) def.append(el("b", null, x.title || x.malpedia || "Defined"), el("small", null, `${x.malpedia ? `Malpedia ${x.malpedia} · ` : ""}${x.references.length} reference${x.references.length === 1 ? "" : "s"}${x.by ? ` · ${x.by}` : ""}${x.updated ? `, ${x.updated}` : ""}`));
       else if (x.family_found) def.append(el("b", "mono", x.family_found.replace("actor:", "")), el("small", null, "found in Malpedia"));
       else def.append(el("span", "muted", x.title ? `${x.title} (no references yet)` : x.kinds?.length ? `Seen as: ${x.kinds.join(", ")}` : "—"));
       const act = el("td", "dz-act"), b = el("button", `lg-btn sm${x.defined || x.family_found ? "" : " primary"}`, x.defined ? "Edit" : "Define"); b.type = "button";
       b.addEventListener("click", () => openEditor(x.name, "infections"));
-      act.append(b);
-      tr.append(el("td", "mono dz-name", x.name), el("td", "dz-seen", (x.reports || []).join(", ") || "—"), status, def, act);
+      act.append(intelBtn(x.name, "infections"), notesBtn(x.name, "infections"), b);
+      // seen in the replay day; otherwise where and when it was last seen (seen_index.py); otherwise not recently
+      const seen = el("td", "dz-seen");
+      // seen in the replay day: intel.js turns this into report cards (intel found there, or the name only)
+      if (x.reports?.length) { seen.textContent = x.reports.join(", "); seen.dataset.intelName = x.name; seen.dataset.intelSection = "infections"; }
+      else if (x.last_seen?.length) {
+        seen.append(el("span", "muted", "Last seen in "), document.createTextNode(x.last_seen[0].report), el("span", "muted", ` on ${x.last_seen[0].date}`));
+        if (x.last_seen.length > 1) seen.title = x.last_seen.map((s) => `${s.report}: ${s.date}`).join("\n");
+      } else seen.append(el("span", "muted", x.seen_days ? `Not seen in the last ${x.seen_days} day${x.seen_days === 1 ? "" : "s"}` : "—"));
+      tr.append(el("td", "mono dz-name", x.name), seen, status, def, acrossCell("infections", x.name), act);
       tb.append(tr);
     }
+    window.LGIntel?.decorate(tb);
   }
   for (const b of document.querySelectorAll("[data-inf]")) b.addEventListener("click", () => { infTab = b.dataset.inf; renderInf(); });
   $("infSearch").addEventListener("input", renderInf);
@@ -108,11 +179,12 @@
   function renderIss() {
     for (const b of document.querySelectorAll("[data-iss]")) b.setAttribute("aria-selected", String(b.dataset.iss === issTab));
     const tb = $("issTable").querySelector("tbody"); tb.replaceChildren();
-    const rows = issRows();
+    markHeads("issTable", "iss");
+    const rows = sortRows(issRows(), "iss", "issues");
     if (!rows.length) {
       const msg = $("issSearch").value.trim() ? "Nothing matches the search." : issTab === "needs" ? "Nothing to do: every issue that is not a CVE has a definition."
         : issTab === "kev" ? "None of the CVEs in the data is in CISA's catalog of exploited vulnerabilities." : "Nothing here yet.";
-      const tr = el("tr", "dz-empty"), td = el("td", null, msg); td.colSpan = 5; tr.append(td); tb.append(tr); return;
+      const tr = el("tr", "dz-empty"), td = el("td", null, msg); td.colSpan = 6; tr.append(td); tb.append(tr); return;
     }
     for (const x of rows) {
       const tr = el("tr");
@@ -128,14 +200,21 @@
       const what = el("td", "dz-def");
       what.append(el("b", null, x.title || (x.cve ? "CVE" : "—")));
       if (x.by) what.append(el("small", null, `${x.cve ? "Note" : "Definition"} by ${x.by}${x.updated ? `, ${x.updated}` : ""}`));
-      const act = el("td", "dz-act"), b = el("button", `lg-btn sm${!x.cve && !x.defined ? " primary" : ""}`, x.cve ? (x.defined ? "Edit note" : "Add note") : x.defined ? "Edit" : "Define"); b.type = "button";
+      // a CVE is described by NVD; the organisation adds its context (affected products here…), not a definition
+      const act = el("td", "dz-act"), b = el("button", `lg-btn sm${!x.cve && !x.defined ? " primary" : ""}`, x.cve ? (x.defined ? "Edit context" : "Add context") : x.defined ? "Edit" : "Define"); b.type = "button";
       b.addEventListener("click", () => openEditor(x.name, "issues"));
-      act.append(b);
-      tr.append(el("td", "mono dz-name", x.name), el("td", "dz-seen", `${fmt(x.hosts)} hosts · ${fmt(x.records)} records`), status, what, act);
+      act.append(intelBtn(x.name, "issues"), notesBtn(x.name, "issues"), b);
+      const seenIss = el("td", "dz-seen", `${fmt(x.hosts)} hosts · ${fmt(x.records)} records`);
+      Object.assign(seenIss.dataset, { intelName: x.name, intelSection: "issues", intelMode: "append" });   // + report cards (intel.js)
+      tr.append(el("td", "mono dz-name", x.name), seenIss, status, what, acrossCell("issues", x.name), act);
       tb.append(tr);
     }
+    window.LGIntel?.decorate(tb);
   }
   for (const b of document.querySelectorAll("[data-iss]")) b.addEventListener("click", () => { issTab = b.dataset.iss; renderIss(); });
+  sortHeads("infTable", "inf", renderInf); sortHeads("issTable", "iss", renderIss);
+  // the "Across reports" flags and the "Seen in" figures come with Intel gathered's summary: draw again when it is in
+  window.LGIntel?.summaryReady?.then(() => { if (data) { renderInf(); renderIss(); } });
   $("issSearch").addEventListener("input", renderIss);
 
   $("issLookup").addEventListener("click", async () => {
@@ -176,16 +255,17 @@
       if (r.ok) e = await r.json();
       const row = !isIssue && [...data.unresolved, ...data.unchecked, ...data.defined, ...(data.all || [])].find((x) => x.name === name);
       if (row && row.reports?.length) $("kbSeen").textContent = `Seen in: ${row.reports.join(", ")}${row.kinds?.length ? ` (${row.kinds.join(", ")})` : ""}.`;
+      else if (row && row.last_seen?.length) $("kbSeen").textContent = `Last seen in ${row.last_seen.map((s) => `${s.report} on ${s.date}`).join("; ")}.`;
       const iss = isIssue && (data.issues || []).find((x) => x.name === name);
       if (iss) $("kbSeen").textContent = `Seen on ${fmt(iss.hosts)} hosts (${fmt(iss.records)} records) of the publicly accessible / vulnerable services.`
         + (iss.cve && iss.exploited ? " CISA confirms it is being actively exploited." : "");
     }
-    $("kbTitle").textContent = name ? (cve ? `Note on ${name}` : `Define “${name}”`) : (isIssue ? "Define an issue" : "Define a name");
+    $("kbTitle").textContent = name ? (cve ? `Context for ${name}` : `Define “${name}”`) : (isIssue ? "Define an issue" : "Define a name");
     $("kbName").value = name || ""; $("kbMp").value = e.malpedia || ""; $("kbTitleIn").value = e.title || "";
     $("kbType").value = e.type || ""; $("kbDesc").value = e.description || "";
     for (const u of (e.references.length ? e.references : [""])) refRow(u);
     if (e.by || e.updated) $("kbBy").textContent = `Last changed${e.by ? ` by ${e.by}` : ""}${e.updated ? ` on ${e.updated}` : ""}`;
-    show(true);
+    show(true);                                // the notes have their own window now (Notes button, kb-notes.js)
   }
   $("infAdd").addEventListener("click", () => openEditor("", "infections"));
   $("issAdd").addEventListener("click", () => openEditor("", "issues"));
@@ -229,7 +309,11 @@
     } catch (e) { $("kbMsg").className = "id-msg bad"; $("kbMsg").textContent = e.message; }
     finally { btn.disabled = false; btn.classList.remove("is-busy"); }
   });
-  load().catch((e) => {
+  // the page's first load: the Looking Glass logo (loader.js) until the definitions are in
+  window.LGLoader?.busy("Opening definitions and intel");
+  const loaded = () => { $("kbLoading")?.remove(); window.LGLoader?.ready(); };
+  load().then(loaded).catch((e) => {
+    loaded();
     console.error("Definitions could not be loaded:", e);
     for (const id of ["infStatus", "issStatus"]) flash($(id), `Could not load: ${e.message}`, "bad");
   });

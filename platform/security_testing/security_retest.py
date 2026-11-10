@@ -1,7 +1,7 @@
 #!/bin/sh
 # runs itself with the project's own Python (.venv), from wherever it is called
 ''''exec "$(dirname -- "$0")/../.venv/bin/python" "$0" "$@" # '''
-"""Retest of every finding in security_testing/SECURITY_REPORT.md, plus the login, MFA and session protections, against the running
+"""Retest of every finding in docs/SECURITY_REPORT.md, plus the login, MFA and session protections, against the running
 service. It creates two temporary accounts (lg-selftest-admin, lg-selftest-viewer) with random passwords and
 authenticator secrets that are never printed, and removes them at the end. The only setting it saves is the current
 one, unchanged.

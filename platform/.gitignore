@@ -11,6 +11,7 @@ __pycache__/
 data/*
 !data/infections.json
 !data/service_reports.json
+!data/issues.json
 # rendered by deploy/install.sh for this computer
 deploy/*.service
 # outputs of the tools/ diagnostics

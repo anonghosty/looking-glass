@@ -11,6 +11,9 @@
   const TYPES = {};
   let rows = [], typeList = [], view = "todo", identifying = false;
   if (!$("cardNets")) return;
+  // Settings shows the networks read-only; they are edited on the Definitions page
+  const RO = $("cardNets").dataset.readonly === "1";
+  if (RO) view = "all";                             // for reference: every network, not the review queue
   const pill = (text, kind) => el("span", `dz-pill ${kind || ""}`, text);
   const flash = (node, text, kind) => { node.className = `dz-status ${kind || ""}`; node.textContent = text; };
   function busy(btn, on, label) {
@@ -40,6 +43,8 @@
     const j = await r.json();
     rows = j.networks; identifying = j.identifying; setTypes(j.types);
     $("cardNets").hidden = false; counts();
+    // nothing left to review: open on every network, each still editable (a company renames, rebrands, merges…)
+    if (view === "todo" && !rows.some((x) => !x.reviewed)) view = "all";
     flash($("netStatus"), identifying ? "Networks are being identified right now (Settings → Identify networks): changes can be saved when it has finished."
       : `${fmt(rows.length)} networks · ${fmt(rows.filter((x) => !x.reviewed).length)} to review`, identifying ? "warn" : "");
     render();
@@ -64,14 +69,26 @@
     $("netEdTable").querySelector("thead tr").replaceChildren(...[["AS number"], ["Company name"], ["Type"], ["Note"], ["Registry holder"], ["Events", "num"], ["Status"], ["", "dz-act"]]
       .map(([h, c]) => el("th", c || null, h)));
     const q = $("netEdSearch").value.trim().toLowerCase().replace(/^as/, ""), tf = $("netTypeFilter").value;
-    const shown = rows.filter((x) => (view === "all" || (view === "todo" ? !x.reviewed : x.reviewed)) && (!tf || x.type === tf)
+    // a search looks through every network, whatever the tab: a reviewed one is found and edited the same way
+    const shown = rows.filter((x) => (q || view === "all" || (view === "todo" ? !x.reviewed : x.reviewed)) && (!tf || x.type === tf)
       && (!q || x.asn.includes(q) || x.name.toLowerCase().includes(q) || (x.holder || "").toLowerCase().includes(q) || (TYPES[x.type] || x.type).toLowerCase().includes(q)));
     if (!shown.length) {
-      const tr = el("tr", "dz-empty"), td = el("td", null, q || tf ? "No network matches." : view === "todo" ? "Nothing to review: every network has been checked." : "No networks yet.");
+      const tr = el("tr", "dz-empty"), td = el("td", null, q || tf ? "No network matches." : view === "todo" ? "Nothing to review: every network has been checked. " : "No networks yet.");
+      if (!q && !tf && view === "todo" && rows.length) {
+        td.append(el("span", "muted", "Every network stays editable (a company renames or rebrands): "));
+        const b = el("button", "lg-btn sm", "Show every network"); b.type = "button"; b.addEventListener("click", () => { view = "all"; render(); }); td.append(b);
+      }
       td.colSpan = 8; tr.append(td); tb.append(tr); return;
     }
     for (const x of shown.slice(0, 300)) {
       const tr = el("tr");
+      if (RO) {                                     // read-only: the values, no inputs or Save
+        const st = el("td"); st.append(x.reviewed ? pill("Reviewed", "ok") : pill("Not reviewed", "warn"));
+        if (x.reviewed && (x.by || x.updated)) st.append(el("small", "dz-by", `${x.by || ""}${x.updated ? ` · ${x.updated}` : ""}`));
+        tr.append(el("td", "mono dz-name", `AS${x.asn}`), el("td", "dz-w-name", x.name), el("td", null, TYPES[x.type] || x.type), el("td", "muted", x.note || "—"),
+          el("td", "dz-seen", `${x.holder || "—"}${x.country ? ` (${x.country})` : ""}`), el("td", "num mono", fmt(x.events)), st, el("td", "dz-act"));
+        tb.append(tr); continue;
+      }
       const name = el("input", "dz-input"); name.value = x.name; name.maxLength = 80; name.setAttribute("aria-label", `Company name for AS${x.asn}`);
       const type = el("select", "dz-input lg-enhance"); type.setAttribute("aria-label", `Type of AS${x.asn}`);
       for (const t of typeList) { const o = el("option", null, t.label); o.value = t.key; type.append(o); }
@@ -113,7 +130,7 @@
   $("netTypeFilter").addEventListener("change", render);
 
   // a sector the list does not cover: add it (then it can be chosen for any network, here and in Settings)
-  $("netTypeOpen").addEventListener("click", () => {
+  if (!RO) $("netTypeOpen").addEventListener("click", () => {
     const p = $("netTypePanel"), open = p.hidden;
     p.hidden = !open; $("netTypeOpen").setAttribute("aria-expanded", String(open)); $("netTypeOpen").classList.toggle("active", open);
     if (open) $("netTypeLabel").focus();

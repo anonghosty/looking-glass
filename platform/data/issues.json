@@ -1,0 +1,90 @@
+{
+  "about": "Definitions of the issues found on the publicly accessible / vulnerable services platform that are not CVEs. CVEs are looked up in NVD, CISA KEV and EPSS instead. Definitions written on a site (Definitions page / Settings) go to data/definitions.json and take precedence.",
+  "issues": {
+    "Exposed admin panel": {
+      "title": "Exposed administration panel",
+      "type": "Exposure (management interface reachable from the internet)",
+      "description": "The device's administration (management) web page can be reached by anyone on the internet. Attackers look for these pages to try default or stolen passwords, or to exploit flaws in the management software, and take over the device. Shadowserver flags it when it fingerprints a device and finds its admin interface open to the internet (Device Identification report). It is not an infection in itself, but it is one of the most common ways network devices, cameras and firewalls are compromised.",
+      "action": "Make the admin panel reachable only from the internal network or a VPN, change default passwords, and keep the device's firmware up to date.",
+      "references": ["https://www.shadowserver.org/what-we-do/network-reporting/device-identification-report/"],
+      "status": "reviewed", "confidence": "high", "updated": "2026-11-08", "curated_by": "Looking Glass"
+    },
+    "Expired certificate": {
+      "title": "Expired TLS / SSL certificate",
+      "type": "Weak configuration (encryption)",
+      "description": "The service presents an encryption certificate whose validity period has ended. Browsers and other programs warn about it or refuse to connect, and users get used to clicking through warnings, which makes impersonation (man-in-the-middle) attacks easier. It often also means the service is no longer maintained. Shadowserver reports it from its scans of TLS / SSL services (Accessible SSL report).",
+      "action": "Renew the certificate (or switch the service off if it is no longer used) and check that renewals are automated.",
+      "references": ["https://www.shadowserver.org/what-we-do/network-reporting/accessible-ssl-report/"],
+      "status": "reviewed", "confidence": "high", "updated": "2026-11-08", "curated_by": "Looking Glass"
+    },
+    "POODLE (SSLv3)": {
+      "title": "POODLE: the service still accepts SSL 3.0",
+      "type": "Weak encryption (CVE-2014-3566)",
+      "description": "The service still accepts the obsolete SSL 3.0 protocol. The POODLE attack (2014, CVE-2014-3566) lets an attacker who can see the traffic, for example on the same Wi-Fi, decrypt parts of it such as session cookies. SSL 3.0 has been deprecated for more than ten years; a service that still offers it is usually old and unpatched.",
+      "action": "Disable SSL 3.0 (and TLS 1.0 / 1.1) on the service; allow only TLS 1.2 and 1.3.",
+      "references": ["https://www.cisa.gov/news-events/alerts/2014/10/17/ssl-30-protocol-vulnerability-and-poodle-attack",
+                     "https://nvd.nist.gov/vuln/detail/CVE-2014-3566",
+                     "https://www.shadowserver.org/what-we-do/network-reporting/ssl-poodle-report/"],
+      "status": "reviewed", "confidence": "high", "updated": "2026-11-08", "curated_by": "Looking Glass"
+    },
+    "FREAK": {
+      "title": "FREAK: the service accepts weak export-grade encryption",
+      "type": "Weak encryption (CVE-2015-0204)",
+      "description": "The service still accepts deliberately weakened 'export-grade' RSA encryption from the 1990s. The FREAK attack (2015) lets an attacker in the middle force a connection down to it, break it and read or change the traffic.",
+      "action": "Disable export ciphers and update the TLS library (OpenSSL or equivalent).",
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2015-0204"],
+      "status": "reviewed", "confidence": "high", "updated": "2026-11-08", "curated_by": "Looking Glass"
+    },
+    "Badcandy": {
+      "title": "BADCANDY implant on a Cisco IOS XE device",
+      "type": "Compromise (web-shell implant on a router / switch)",
+      "description": "The device, a Cisco IOS XE router or switch, carries BADCANDY: a small Lua web shell that attackers plant by exploiting CVE-2023-20198 in the device's web interface. It gives them control of the device. It was first seen in October 2023, with renewed activity throughout 2024 and 2025, and criminal and state-sponsored actors may use it. The implant does not survive a reboot, but the Australian Signals Directorate warns that attackers re-exploit devices that remain unpatched and exposed, and may keep access through stolen accounts.",
+      "action": "Patch the device for CVE-2023-20198, disable the HTTP / HTTPS server feature if it is not needed, reboot to remove the implant, then check for new accounts and changed configuration and change all passwords.",
+      "references": ["https://www.cyber.gov.au/advisory/dont-take-badcandy-from-strangers-how-your-devices-could-be-implanted-and-what-to-do-about-it",
+                     "https://nvd.nist.gov/vuln/detail/CVE-2023-20198"],
+      "status": "reviewed", "confidence": "high", "updated": "2026-11-09", "curated_by": "Looking Glass"
+    },
+    "Device implant": {
+      "title": "Implant found on a network device",
+      "type": "Compromise (backdoor on a router, firewall or other device)",
+      "description": "Shadowserver detected an attacker's implant (a backdoor or web shell) on the device, usually after a known vulnerability in its management interface was exploited; in this data it accompanies BADCANDY on Cisco IOS XE devices. The device is compromised: the attacker can read or redirect traffic and use it to reach the internal network.",
+      "action": "Treat the device as compromised: isolate it, patch or replace it, remove the implant (reboot / reflash), reset passwords and keys, and check the network behind it.",
+      "references": ["https://www.cyber.gov.au/advisory/dont-take-badcandy-from-strangers-how-your-devices-could-be-implanted-and-what-to-do-about-it",
+                     "https://www.shadowserver.org/what-we-do/network-reporting/device-identification-report/"],
+      "status": "reviewed", "confidence": "medium", "updated": "2026-11-08", "curated_by": "Looking Glass"
+    },
+    "Cpanel compromised": {
+      "title": "Compromised cPanel hosting server",
+      "type": "Compromise (web hosting control panel)",
+      "description": "A web-hosting server with the cPanel / WHM control panel that Shadowserver believes is compromised: it was seen attacking Shadowserver's honeypots or scanning, most likely after exploitation of CVE-2026-41940 in cPanel (2026). Attackers have used such servers to steal credentials and to deploy ransomware. All websites hosted on it may be affected.",
+      "action": "Update cPanel / WHM, investigate the server (new accounts, web shells, changed files), reset all hosting and database passwords, and restore from a clean backup if needed.",
+      "references": ["https://www.shadowserver.org/what-we-do/network-reporting/compromised-website-report/",
+                     "https://nvd.nist.gov/vuln/detail/CVE-2026-41940"],
+      "status": "reviewed", "confidence": "medium", "updated": "2026-11-08", "curated_by": "Looking Glass"
+    },
+    "Compromised": {
+      "title": "Compromised host or website",
+      "type": "Compromise",
+      "description": "Shadowserver identified and verified this host or website as compromised (for example a hacked website serving malware or phishing, or an infected device), without a more specific label. Someone other than the owner controls it.",
+      "action": "Investigate and clean the host or website, remove what the attacker added, patch it and reset its passwords.",
+      "references": ["https://www.shadowserver.org/what-we-do/network-reporting/compromised-website-report/"],
+      "status": "reviewed", "confidence": "medium", "updated": "2026-11-08", "curated_by": "Looking Glass"
+    },
+    "Open dir": {
+      "title": "Open directory listing",
+      "type": "Exposure (files listed on a web server)",
+      "description": "The web server lists the files of a folder to anyone who asks. Attackers use open directories to find backups, configuration files and documents, and criminals use them to host malware.",
+      "action": "Turn off directory listing on the web server and remove files that should not be public.",
+      "references": ["https://www.shadowserver.org/what-we-do/network-reporting/"],
+      "status": "reviewed", "confidence": "medium", "updated": "2026-11-08", "curated_by": "Looking Glass"
+    },
+    "Vulnerable": {
+      "title": "Vulnerable service (no CVE given)",
+      "type": "Vulnerability",
+      "description": "Shadowserver marked the service as vulnerable without naming a CVE, for example an outdated version with known flaws. Open the host to see which report and product it concerns.",
+      "action": "Update the product to a supported version, or restrict who can reach it.",
+      "references": ["https://www.shadowserver.org/what-we-do/network-reporting/"],
+      "status": "reviewed", "confidence": "medium", "updated": "2026-11-08", "curated_by": "Looking Glass"
+    }
+  }
+}

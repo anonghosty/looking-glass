@@ -15,11 +15,22 @@ for s in srcs:
 t = time.time()
 day = tm.store.get(tm.replay_now())
 print(f"day {day.start.date()}: {len(day.events)} events in {time.time() - t:.1f}s; per source {day.per_source}")
+# every API needs a login: use the local automation key (data/automation.key), as the other check scripts do
+try:
+    with open(os.path.join(tm.BASE_DIR, "data", "automation.key")) as f:
+        KEY = f.read().strip()
+except OSError:
+    sys.exit("data/automation.key not found: start the service once so it is created")
 c = tm.app.test_client()
-st = c.get("/api/stats").get_json()
+c.environ_base.update({"REMOTE_ADDR": "127.0.0.1", "HTTP_X_LG_AUTOMATION": KEY})
+r = c.get("/api/stats")
+if r.status_code != 200:
+    sys.exit(f"/api/stats answered {r.status_code}: {r.get_data(as_text=True)[:200]}")
+st = r.get_json()
 print("stats total", st["total"], "sources", st["unique_sources"], "multi-source hosts", st["multi_source_hosts"])
 print("  attack_class", st["attack_class"])
-for kind, value in (("source", "event4_honeypot_brute_force"), ("attack_class", "Brute force"), ("src_city", "ACCRA")):
+top_city = next((e["src_city"] for e in day.events if e.get("src_city")), "")   # any city of the day, not one country's
+for kind, value in (("source", "event4_honeypot_brute_force"), ("attack_class", "Brute force"), ("src_city", top_city)):
     r = c.get(f"/api/insight?kind={kind}&value={value}").get_json()
     print(f"\ninsight {kind}={value}: total {r['total']} reports {r['reports']} cross {r['cross_report_hosts']}")
     for s in r["insights"]:

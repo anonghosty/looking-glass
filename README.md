@@ -9,8 +9,9 @@ Free and open source (AGPL-3.0) · built in Africa, for African CSIRTs · worldw
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
   <a href="#features">Features</a> ·
+  <a href="docs/USE_CASES.md">Use cases</a> ·
   <a href="docs/COMPARISON.md">Comparison</a> ·
-  <a href="platform/docs/USER_GUIDE.md">User guide</a> ·
+  <a href="docs/USER_GUIDE.md">User guide</a> ·
   <a href="docs/GLOSSARY.md">Glossary</a> ·
   <a href="#security">Security</a>
 </p>
@@ -93,9 +94,15 @@ Went quiet — with plain words on what to do. In the key findings and the execu
 </tr>
 <tr>
 <td><b>Issues and infections explained.</b> CVEs with CISA KEV (actively exploited), CVSS and EPSS; infections with
-Malpedia families and threat actors, or your own researchers' definitions with references.</td>
+Malpedia families and threat actors, or definitions with references, and your researchers' notes on new findings.</td>
 <td><b>Demo mode and masked views.</b> Network names, AS numbers and addresses concealed on the server, for public
 screens, partners and presentations.</td>
+</tr>
+<tr>
+<td colspan="2"><b>Intel for researchers.</b> On the Definitions page, every infection and issue shows what the reports
+carry for it — C2 domains, DNS lookups, URLs, user agents, other CVEs, tags, fingerprints — report by report, with the
+exact combinations and how many hosts keep repeating them. Looking Glass raises matches between names and reports
+("can you look into this?"), and researchers share dated, signed notes that appear on every card and report.</td>
 </tr>
 </table>
 
@@ -159,7 +166,7 @@ No Shadowserver reports yet? [Sign up your CSIRT](https://www.shadowserver.org/w
 
 `./install.sh --text` asks the same questions as plain prompts; `./install.sh --answers FILE` installs unattended
 (see [`install.answers.example`](install.answers.example)). Manual installation:
-[platform/docs/INSTALLATION.md](platform/docs/INSTALLATION.md).
+[docs/INSTALLATION.md](docs/INSTALLATION.md).
 
 ## Using it, step by step
 
@@ -173,7 +180,7 @@ No Shadowserver reports yet? [Sign up your CSIRT](https://www.shadowserver.org/w
 | <img src="docs/media/screens/33-services-host.png" alt="Host details" width="420"> | **6. Follow a host up:** every service, issue and report for it, ready to export. |
 | <img src="docs/media/screens/41-executive-services.png" alt="Executive" width="420"> | **7. Share with management:** the Executive portal and its one-click report. |
 
-The complete guide, with every screen and button: [platform/docs/USER_GUIDE.md](platform/docs/USER_GUIDE.md).
+The complete guide, with every screen and button: [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
 
 ## Roles
 
@@ -181,11 +188,11 @@ The complete guide, with every screen and button: [platform/docs/USER_GUIDE.md](
 |---|---|---|
 | **External** | both platforms, always masked | view only |
 | **Analyst** | everything, unmasked | analyse, export CSV and PDF, Malpedia, Demo mode |
-| **Researcher** | only the Definitions page | define malware names and issues with references, correct network names |
+| **Researcher** | only the Definitions page (no addresses) | define malware names and issues with references, study the intel gathered from the reports, share notes, correct network names |
 | **Management** | only the Executive portal (aggregates, never addresses) | filter, explain, download executive reports |
-| **Admin** | everything | also Settings, accounts, roles, sessions and the audit log |
+| **Admin** | everything | also Settings, the Definitions page, accounts, roles, sessions and the audit log |
 
-Administrators can build custom roles from the permissions. Details: [User guide → Roles](platform/docs/USER_GUIDE.md#roles).
+Administrators can build custom roles from the permissions. Details: [User guide → Roles](docs/USER_GUIDE.md#roles).
 
 ## Security
 
@@ -195,11 +202,12 @@ Administrators can build custom roles from the permissions. Details: [User guide
 - **Sessions** bound to the browser, ended after inactivity; administrators see and end any session.
 - **Roles and permissions** enforced on the server; masking is done **on the server**, so hidden values never reach the browser.
 - **Executive portal** that cannot return an address (checked by an automated test).
-- **Audit log** of sign-ins, failures, settings, accounts, definitions and report downloads.
+- **Audit log** of sign-ins, failures, settings, accounts, definitions, notes and report downloads, naming people as *Full Name (username)*.
+- **Safe exports:** no CSV cell can run as a spreadsheet formula.
 - **Hardened web layer:** HTTPS for remote access, a strict content security policy (per-request nonce, no eval),
   CSRF tokens and same-origin checks, HttpOnly / SameSite=Strict / Secure cookies, frames refused, network allow lists.
 - **Penetration-tested:** every finding fixed, and [`security_retest.py`](platform/security_testing/security_retest.py)
-  checks each protection again on your own installation. See [SECURITY.md](platform/security_testing/SECURITY.md).
+  checks each protection again on your own installation. See [SECURITY.md](docs/SECURITY.md).
 - **No secrets in the code:** credentials live only in `.env` files, which `.gitignore` keeps out of the repository.
 
 Please report security problems **privately** to the maintainers rather than in a public issue.
@@ -234,16 +242,18 @@ Please report security problems **privately** to the maintainers rather than in 
 
 | Topic | Document |
 |---|---|
+| **Use case scenarios: a needle through the haystack** | [docs/USE_CASES.md](docs/USE_CASES.md) |
+| What is new, with dates | [docs/FEATURES.md](docs/FEATURES.md) |
 | Screenshots | [docs/media](docs/media) |
 | Every term, in plain language | [docs/GLOSSARY.md](docs/GLOSSARY.md) |
 | Comparison with IntelMQ and Elastic | [docs/COMPARISON.md](docs/COMPARISON.md) |
-| Installing (Windows/WSL and Linux, HTTPS, firewall) | [platform/docs/INSTALLATION.md](platform/docs/INSTALLATION.md) |
-| Connecting the mailbox (Gmail, Google Workspace, Microsoft 365, IMAP) | [database/docs/MAIL_SETUP.md](database/docs/MAIL_SETUP.md) |
-| Using the platforms, step by step | [platform/docs/USER_GUIDE.md](platform/docs/USER_GUIDE.md) |
-| Every setting | [platform/docs/CONFIGURATION.md](platform/docs/CONFIGURATION.md) |
-| Day-to-day running, backups, checks | [platform/docs/OPERATIONS.md](platform/docs/OPERATIONS.md) |
-| How it works inside | [platform/docs/TECHNICAL_REFERENCE.md](platform/docs/TECHNICAL_REFERENCE.md) |
-| Security and the penetration test | [platform/security_testing/SECURITY.md](platform/security_testing/SECURITY.md) |
+| Installing (Windows/WSL and Linux, HTTPS, firewall) | [docs/INSTALLATION.md](docs/INSTALLATION.md) |
+| Connecting the mailbox (Gmail, Google Workspace, Microsoft 365, IMAP) | [docs/MAIL_SETUP.md](docs/MAIL_SETUP.md) |
+| Using the platforms, step by step | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) |
+| Every setting | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) |
+| Day-to-day running, backups, checks | [docs/OPERATIONS.md](docs/OPERATIONS.md) |
+| How it works inside | [docs/TECHNICAL_REFERENCE.md](docs/TECHNICAL_REFERENCE.md) |
+| Security and the penetration test | [docs/SECURITY.md](docs/SECURITY.md) |
 | The database pipeline | [database/README.md](database/README.md) |
 
 ## Contributing and reporting problems

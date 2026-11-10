@@ -1,6 +1,6 @@
 # Looking Glass: technical reference
 
-![Looking Glass](../static/img/logo.svg)
+![Looking Glass](../platform/static/img/logo.svg)
 
 How the platform works inside: data sources, replay schedule, both platforms, masking, the API and every script.
 Installing: [INSTALLATION.md](INSTALLATION.md). Using it: [USER_GUIDE.md](USER_GUIDE.md). Settings:
@@ -43,6 +43,18 @@ Which collections have rows depends on the day and the country. Typically the si
 - `status`: `reviewed` or `needs-review`
 - `aliases`
 - `updated`: the date of the last change
+- `references`: the evidence (web links); `malpedia`: the Malpedia family id when Malpedia has it (its page is then the
+  first reference)
+- `curated_by`: who wrote it. Entries shipped with Looking Glass are signed `Looking Glass`; entries written on a site
+  record the account's username, shown as the person's registered full name (`people.py`)
+
+Every shipped entry carries evidence: a Malpedia family, or references to the Shadowserver report documentation and
+vendor or CERT research. `data/issues.json` does the same for the services issues that are not CVEs.
+
+**Shipped and site definitions never conflict.** `data/infections.json` and `data/issues.json` belong to Looking Glass
+and are replaced by updates (`git pull`). What researchers write on a site goes to `data/definitions.json`, which is
+not in the repository (`.gitignore` excludes `data/*` except the shipped files) and takes precedence over the shipped
+entry of the same name. A site's own definitions and notes are therefore never overwritten, and never block an update.
 
 The detail and analysis views show the description and recommended action. Entries with low confidence or `needs-review` status are marked **Unverified**, and infections with no entry say so. The server reloads the file whenever it changes, and open pages fetch it again every 10 minutes, so you never need a restart.
 
@@ -54,7 +66,68 @@ The detail and analysis views show the description and recommended action. Entri
 
 This lists every infection seen in those days that has no entry, plus entries still marked `needs-review`, with counts, reports, tags, families and sample C2 domains. It also writes `data/infections_missing.json`, which includes empty stub entries. Research and write the new entries (description, recommended action, confidence), then merge them into `data/infections.json`. While the service is running, `GET /api/infections/missing` gives the same check for the current replay day.
 
-The base covers the infections and categories that Shadowserver's event reports commonly use, including the honeypot, DDoS and access categories. Entries with little public detail are marked needs-review, for example `m0yv`, `android.midnight-mimosa`, `modpack`, `jackskid` and `avalanche-xswkit`.
+The base covers the infections and categories that Shadowserver's event reports commonly use, including the honeypot, DDoS and access categories. Names with little public detail say so and carry `confidence: low` (for example `wd`, a family that looks up generated domains and is not publicly identified). Names seen only in the Sinkhole DNS report explain that the address is usually a DNS resolver, with the infected client behind it.
+
+## Researchers: intel, notes and where a name was seen
+
+The Definitions page (`/definitions`, permissions *definitions* / *networks*, admins too) is the researchers' page. Its
+server side is in small modules called from `app.py`:
+
+- **`intel.py`, Intel gathered.** From the days in memory it collects, per name and per report, the indicators the
+  records carry: C2 domains, destination host names, TLS server names, DNS lookups, URLs, user agents, request patterns,
+  brute-force usernames and passwords; for services issues the other CVEs on the same hosts, associated tags, products,
+  certificate names and fingerprints (SHA-256, JARM, HASSH), server software and web page hashes. For each value and for
+  each **combination** (the exact set on one record: tags and CVEs; for communications also C2 domain and user agent) it
+  counts records, share, hosts and **repeating hosts** (hosts with more than one record). It also raises **leads**: the
+  same indicator under two names, in two reports for one name, or an infection's domain that is a certificate name on a
+  services host; values common to everything are filtered out. No source address, host name or constituent address is
+  ever returned; addresses inside free text are masked. `GET /api/intel?section=infections|issues&name=…`,
+  `GET /api/intel/leads`, `GET /api/intel/summary` (per name and report: how many kinds of indicator, for the
+  *Seen in* cards). Cached for five minutes per set of days.
+- **`notes.py`, researchers' notes.** New findings per name in `data/notes.json` (run-time data: never shipped, never
+  overwritten by an update), each with author, role and date. The look-ups `mp_resolve`, `issue_resolve` and
+  `issues_resolve` attach the notes to every explanation card, so the map, services, Executive and both PDF builders
+  show them ("Notes shared by Researcher: *full name* (*date*)"). `GET /api/notes`, `POST /api/notes` (with
+  optional `codes` and `finding: {title}`), `POST /api/notes/delete` (author or admin); audit events `note_added`,
+  `note_removed`. A note's combination codes must be known to the code book; they are printed with the note.
+- **`combos.py`, combination codes and the analysts' combination search.** `intel.combo_code` / `intel.cross_code` hash
+  the section, name, report(s) and exact indicators into `LG-C-XXXXXXXX` / `LG-X-XXXXXXXX` (SHA-256, 8 hex digits; no
+  address). `intel.record_items` is the one matching rule: Intel gathered counts with it and the search matches with it
+  (`tests/check_combos.py` proves both agree for every name and report). Codes shown to a researcher go to
+  `data/combo_codes.json` (the twenty thousand most recent kept); a code not there is looked for in memory. The search is a background thread per
+  analyst (one at a time): over the days in memory together, or a date range (at most 31 days) read day by day from
+  MongoDB with `app._combo_fetch` (only the name's reports, inside the constituency). For the devices found it also
+  follows them into the name's other reports (cross-report patterns with their codes, sets of reports). The result is a
+  ZIP (PDF from `combo_pdf.py`, drawn with `executive_pdf.Doc`'s parts: tiles, activity, findings, the region map and
+  tree, bars, explanation cards for the name and every CVE in the combination, plus the devices table and note cards;
+  `reports_pdf.build` only as a fallback; devices CSV, records CSV, both through `csvsafe`), kept in memory and in `data/combo_exports/` (0600, one hour) so a restart before the download loses
+  nothing. Routes: `GET /api/combo-codes/<code>` (researchers, management, analysts, admins; no address),
+  `POST /api/combo-codes/new` (researchers, admins: only the name's real indicators), `POST /api/combos/search`,
+  `GET /api/combos/search/<id>`, `POST /api/combos/search/<id>/stop`, `GET /api/combos/search/<id>/download` (analysts,
+  admins: `unmasked` + `export`, never in Demo mode, only the analyst who ran it), page `/combinations`. Audit events
+  `combo_code`, `combo_export`.
+- **`acodes.py`, analyst codes.** `LG-A-XXXXXXXX` (SHA-256 of platform, day and selection). Made from an analysis
+  window's selection (`kind`/`value` on the map, the query arguments on the services platform; `app._slice_on` and
+  `services_api.scope_events` apply them to any day). The exact record IDs of the selection are kept in
+  `data/acodes/<code>.json` (0600), so masked roles (whose filters accept only aliases) see the same records; what
+  the code stands for is in the code book (kind `a`, with the selection described without host addresses). Routes:
+  `POST /api/analyst-codes` (analysts, admins; never in Demo mode) makes the code and a finding,
+  `GET /api/analyst-codes` lists them for analysts, `GET /api/intel/acode/<code>` and page `/intel/<code>` show
+  researchers, management and analysts the names, definitions, combinations and cross-report patterns of exactly
+  those records. The Executive portal's `code` filter and the Combinations search accept analyst codes (the code's
+  day only). Audit event `analyst_code`.
+- **`findings.py`, findings.** A note tracked as a finding: number, title, the note's text and codes (a copy), status and
+  history in `data/findings.json`. Statuses `new`, `management`, `researcher`, `analyst`, `advisory`, `closed`.
+  `GET /api/findings?state=open|all`, `POST /api/findings/<id>/status {status, comment}` (CSRF, a recent sign-in),
+  page `/findings` for researchers, management, analysts (`unmasked` + `export`) and admins; `/findings` and
+  `/api/findings` are in the researcher and management roles' allowed paths. Audit events `finding_created`,
+  `finding_status`.
+- **`seen_index.py`, last seen.** `data/seen_names.json` remembers, for every name, the last date it was seen in each
+  report (readable report names, no hosts). Every replay day is added as it passes; once per installation the last 14
+  days are read from MongoDB in the background by one worker (`seen_names.json.done` marks it done). Kept 30 days.
+- **`people.py`, names.** Definitions, notes and network corrections store the username and are shown with the
+  registered full name, looked up when displayed (a corrected name appears everywhere at once); the audit log shows
+  *Full Name (username)*.
 
 ## Network names (ASN registry)
 
@@ -89,7 +162,9 @@ The **Demo** button in the top bar conceals sensitive details while the data kee
 - Locations stay visible.
 - Pins and "Copy JSON" are hidden.
 
-**The masking happens on the server** (`privacy.py`, `?demo=1`), so concealed values are never sent to the browser. Drill-downs still work through opaque host references (`src_ref`). The aliases are fixed in `data/asns.json` (`demo_alias`), so "Telco 1" means the same network in every presentation.
+**The masking happens on the server** (`privacy.py`, `?demo=1`), so concealed values are never sent to the browser. Drill-downs still work through opaque host references (`src_ref`). While a request is masked (Demo, or a role without *unmasked*), filters accept only what the masked view shows: host filters only the opaque references, network filters only the aliases (`AsnRegistry.strict`); a real address, company name or AS number matches nothing, so a viewer cannot test whether something is in the data.
+
+Pinned events keep full details in the browser, so they are stored per account (`tm.pins:<username>`), never for masked accounts, and deleted on the sign-in page (log out, expired session). The aliases are fixed in `data/asns.json` (`demo_alias`), so "Telco 1" means the same network in every presentation.
 
 For a public deployment where nobody may switch demo off, set `PUBLIC_DEMO=1` in `.env`. Every request is then masked, the button is locked on, and `/api/asns` is refused.
 
@@ -461,9 +536,14 @@ Every page needs a sign-in with a password and an authenticator code. People req
 only), analyst (all data, exports, Malpedia) or admin. "Stay signed in" keeps a session for up to 5 days. Admins manage users,
 sessions, roles and permissions, and read the audit log on the **Admin** page.
 
-- **`security_testing/SECURITY.md`:** how Looking Glass is secured, the changes made after the penetration test, the operator checklist.
+- **`docs/SECURITY.md`:** how Looking Glass is secured, the changes made after the penetration test, the operator checklist.
 - **`docs/INSTALLATION.md`:** installing on Windows with WSL or on a Linux server, HTTPS, firewall, updating, troubleshooting.
-- **`security_testing/SECURITY_REPORT.md`:** the penetration test of 2026-11-07 and its remediation status.
+- **`docs/SECURITY_REPORT.md`:** the penetration test of 2026-11-07 and its remediation status.
+
+Every CSV the platform hands out (report ZIPs, the services host list, Executive tables, and the browser downloads) passes
+through one guard (`csvsafe.py`, the same rule in `app.js` / `services.js`): a cell that a spreadsheet would run as a
+formula (`=`, `+`, `-`, `@`, tab, line breaks, their full-width forms) gets a leading apostrophe; numbers and the `-`
+placeholder are left as they are.
 
 Security scripts:
 - `security_testing/security_retest.py`: about 120 checks of every protection against the running service.
@@ -485,9 +565,18 @@ Security scripts:
   - **services statistics** (`tests/verify_svc_stats.py`): the services platform worked out a second time from the raw MongoDB documents with the check's own code (tags, issues, products, families): the headline figures, every whole-day breakdown with its host counts, every filter (3 most common values and the rarest), combinations, vulnerable only, the *unknown …* labels;
   - **Executive portal** (`tests/verify_management.py`): both portals' figures, hourly chart and lists, the filters, every day of the 7-day baseline and every grade (recomputed), and the clickable "Top findings" combinations (narrowed to one, the portal must count exactly its devices or hosts). The shared reading of MongoDB is `tests/mongo_derive.py`;
   - **reports** (`tests/check_reports.py`): analysis reports of both platforms and both Executive reports are downloaded (ZIP and PDF alone); every PDF opens, every CSV has as many rows as the on-screen list and as MongoDB, the combination CSVs add up to the portal's figures and the 7-day trend CSV matches the portal. Each download is an audit entry of the automation account;
+  - **CSV formula safety** (`tests/check_csv_safety.py`): planted formula values through the guard, the code (no CSV is
+    written without it, the browser rule is run on the same values) and every cell of the real downloads;
   - replayed counts;
   - constituency;
-  - demo masking;
+  - **demo masking** (`tests/test_demo.py`): no real address, AS number, network name or host name in any masked answer
+    of either platform (Demo button and roles without *unmasked*), raw addresses and real network names as filters find
+    nothing, pins never outlive the account. It first proves it finds real values in unmasked answers, so it can fail;
+  - **privacy and roles unit tests** (`tests/test_privacy_roles.py`): IP and text masking, aliases, host references,
+    strict filters, role rules and people's names, on invented values;
+  - **Intel gathered** (`tests/check_intel.py`) and **researchers' notes** (`tests/check_notes.py`, on a throwaway notes
+    file): researchers get them, other roles are refused, no constituent address in any answer, notes reach the cards
+    and the PDF reports;
   - **several reports / multiple issues** (`tests/check_cross_filters.py`): for every report family and the busiest reports, the figure, the analysis table, the filtered view, every bubble, what clicking a bubble shows and the regions map must agree with an independent count straight from MongoDB; it also checks that a filtered stream finds the latest records however long ago.
 - **`.venv/bin/python tests/e2e_test.py all`** is the end-to-end test of report arrivals (about 5 minutes). It copies the project to `~/lg_e2e_app` (its own data files) and the replay day's rows to a throwaway database `lg_e2e`, and starts the copy on port 5055. It then simulates Shadowserver and checks what both platforms and the intro page report, as the browser sees them:
   - late rows for reports already in;
@@ -502,8 +591,9 @@ Security scripts:
 - The "replay paused while this tab was in the background" notice appears only on the platforms, not over the intro page; the replay still pauses and resumes as before.
 
 - `tools/envcheck.sh` checks Python, venv and whether MongoDB (`MONGO_HOST`/`MONGO_PORT` from `.env`) is reachable.
-- `tools/quickcheck.py` checks the connection and indexes, and times a sample query.
-- `tools/daysize.py YYYY-MM-DD` shows the size of one day and its top tags and countries.
+- `tools/quickcheck.py` checks the connection, lists every report collection with its size and filename index, and times the replay day's count.
+- `tools/daysize.py [YYYY-MM-DD]` (default yesterday) shows one day's rows and files per report, its time range, top tags and countries.
+- `tools/list_infections.py [YYYY-MM-DD]` lists every infection of that day (any day, not only the replay day).
 - `tools/discover.py` surveys every collection: size, indexes, src/dst fields, latest document and yesterday's row count. It writes `tools/discovery.json`, and `tools/show_srcdst.py` prints the matching collections from it.
 - `tests/test_sources.py` is a smoke test: it builds the registry, loads the replay day from all collections and calls the APIs.
 - `deploy/reload.sh` restarts the systemd service without sudo. It kills the main process and systemd starts it again; `sudo systemctl restart looking-glass` does the same.

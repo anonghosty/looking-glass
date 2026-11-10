@@ -112,10 +112,29 @@ import cves  # noqa: E402  (NVD, CISA KEV and EPSS for the services platform's i
 from malpedia import MAX_PER_MINUTE as MAX_MP  # noqa: E402
 cve_intel = cves.CveIntel(os.path.join(BASE_DIR, "data", "cve_cache.json"), os.environ.get("NVD_API_KEY", ""), logger=app.logger)
 PUBLIC_DEMO = os.environ.get("PUBLIC_DEMO") == "1"   # force demo masking for every request
-# who may connect, host names, cross-site writes, security headers, request size (security.py, security_testing/SECURITY_REPORT.md)
+# who may connect, host names, cross-site writes, security headers, request size (security.py, docs/SECURITY_REPORT.md)
 security.install(app, app.logger)
 # login, accounts, roles and sessions (auth.py): every page and API needs a login
 AUTH = auth.install(app, BASE_DIR, app.logger)
+# definitions, notes and network corrections name the person by their registered full name, not the username (people.py)
+from people import People  # noqa: E402
+people = People(AUTH["users"])
+
+
+def _by(e, key="curated_by"):
+    """Who defined or changed a record, as shown to people: their full name (people.py)."""
+    return people.name((e or {}).get(key, ""), (e or {}).get(key + "_name", ""))
+
+
+def defined_entry(e):
+    """A definition with evidence (references or a Malpedia family); shipped ones have no author and are Looking Glass's."""
+    return bool(e and (e.get("references") or e.get("malpedia") or e.get("description")))
+
+
+def _me():
+    """The signed-in account's username, and the full name saved with what they change (kept if the account goes)."""
+    u = (getattr(g, "user", None) or {}).get("user", "admin")
+    return u, people.full_name(u)
 
 from pymongo.errors import OperationFailure as _MongoAuthError, PyMongoError as _MongoError  # noqa: E402
 _DB_WARNED = {"at": 0.0}
@@ -148,6 +167,7 @@ def is_demo():
 
 
 host_refs.strict = is_demo    # demo mode: host filters accept only opaque references, never a raw address
+asn_registry.strict = is_demo  # and network filters only the aliases, never a real company name or AS number
 
 
 def utcnow():
@@ -892,13 +912,17 @@ def _fmt_dur(seconds):
 
 def _select_slice(kind, value, rn):
     """(day, all events of the whole replay day, events matching kind=value)."""
-    day = store.get(rn)
+    return _slice_on(store.get(rn), kind, value)
+
+
+def _slice_on(day, kind, value):
+    """The same selection on a given day (also one loaded from the history: analyst codes, combos.py)."""
     sofar = day.events
     if kind == "time":
         start, dur, sk, sv = _parse_time_value(value)
         t0 = day.start.timestamp() + start * 60
         t1 = t0 + dur * 60
-        base = _select_slice(sk, sv, rn)[2] if sk else sofar
+        base = _slice_on(day, sk, sv)[2] if sk else sofar
         return day, sofar, [e for e in base if t0 <= e["_t"] < t1]
     if kind == "filters":
         # the same filter logic as the map, stream and Intel, so the numbers agree everywhere
@@ -1189,12 +1213,12 @@ def _report_response(pdf, base, cols, prow):
     if request.args.get("format") == "pdf":
         return Response(pdf, mimetype="application/pdf",
                         headers={"Content-Disposition": f'attachment; filename="{base}.pdf"', "Cache-Control": "no-store"})
-    safe = lambda v: ("'" + v) if isinstance(v, str) and v[:1] in ("=", "+", "-", "@") else v   # no spreadsheet formulas
+    import csvsafe   # no spreadsheet formulas in any cell
     buf = _io.StringIO()
-    w = csv.writer(buf)
+    w = csvsafe.writer(buf)
     w.writerow([lbl for _, lbl in cols])
     for r in prow:
-        w.writerow([safe(r.get(k, "")) for k, _ in cols])
+        w.writerow([r.get(k, "") for k, _ in cols])
     z = _io.BytesIO()
     with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr(f"{base}.pdf", pdf)
@@ -1743,12 +1767,12 @@ def issue_resolve(name, fetch=True):
         c = cve_intel.card(name, fetch=fetch)
         if cur and (cur.get("references") or cur.get("description")):
             c["curated_references"], c["note"] = cur.get("references", []), cur.get("description", "")
-            c["note_by"], c["note_updated"] = cur.get("curated_by", ""), cur.get("updated", "")
+            c["note_by"], c["note_updated"] = _by(cur), cur.get("updated", "")
         return c
     if cur:
         return {"found": False, "curated": True, "kind": "issue", "title": cur.get("title") or name, "type": cur.get("type", ""),
                 "description": cur.get("description", ""), "references": cur.get("references", []),
-                "updated": cur.get("updated", ""), "by": cur.get("curated_by", "")}
+                "updated": cur.get("updated", ""), "by": _by(cur)}
     return {"found": False, "offline": True, "kind": "issue", "title": "No definition yet",
             "text": f'"{name}" has no definition yet. A security researcher of your organisation can add one, with '
                     "references, on the Definitions page."}
@@ -1767,7 +1791,7 @@ def issues_resolve(names, budget=15.0, progress=None):
             cur = issues_kb().get(n.lower())
             if cur and (cur.get("references") or cur.get("description")):
                 out[n].update(curated_references=cur.get("references", []), note=cur.get("description", ""),
-                              note_by=cur.get("curated_by", ""), note_updated=cur.get("updated", ""))
+                              note_by=_by(cur), note_updated=cur.get("updated", ""))
     others = [n for n in names if n not in out]
     if others and progress:
         progress("step", f"{len(others)} other issue{'s' if len(others) != 1 else ''} (not CVEs): explained from their definitions, never looked up")
@@ -1972,6 +1996,8 @@ _ACTIVITY = {
     "IP spoofing": "sending traffic with a forged sender address",
 }
 _EVIDENCE = {"at": 0.0, "data": {}}
+from seen_index import SeenIndex  # noqa: E402
+SEEN = SeenIndex(os.path.join(BASE_DIR, "data", "seen_names.json"), logger=app.logger)
 
 
 def _name_evidence():
@@ -1984,8 +2010,18 @@ def _name_evidence():
         for e in d.events:
             x = ev.setdefault((e["infection"] or "").lower(), {"classes": set(), "reports": set()})
             x["classes"].add(e["attack_class"]); x["reports"].add(labels.get(e["source"], e["source"]))
+        SEEN.update(d.start.date().isoformat(), d.events, labels)      # where and when, kept beyond this day (seen_index.py)
+    SEEN.refresh()
+    SEEN.backfill(store._load, day_start, utcnow, lambda: {x["name"]: x["label"] for x in registry.get()})
     _EVIDENCE.update(at=time.time(), data=ev)
     return ev
+
+
+def _last_seen(name, now_reports):
+    """For a name not in the replay day: [{report, date}] where it was last seen (newest first), from seen_index.py."""
+    if now_reports:
+        return []
+    return [{"report": r, "date": d} for r, d in SEEN.last_seen(name)[:3]]
 
 
 def malpedia_explain(name):
@@ -2162,7 +2198,7 @@ def mp_resolve(name):
         if e.get("description") or e.get("title"):
             return {"found": False, "curated": True, "offline": True, "title": e.get("title") or name, "type": e.get("type", ""),
                     "description": e.get("description", ""), "references": e.get("references", []),
-                    "updated": e.get("updated", ""), "by": e.get("curated_by", "") or ("Looking Glass knowledge base" if not cur else ""),
+                    "updated": e.get("updated", ""), "by": _by(e) or ("Looking Glass" if not cur else ""),
                     "malpedia_id": e.get("malpedia", ""), "seen_in": malpedia_explain(name)["seen_in"]}, {}
         x = malpedia_explain(name)
         return {"found": False, "offline": True, **x, "reason": f"{x['title']}. {x['text']}"}, {}
@@ -2180,7 +2216,7 @@ def mp_resolve(name):
     if cur:
         return {"found": False, "curated": True, "title": cur.get("title") or name, "type": cur.get("type", ""),
                 "description": cur.get("description", ""), "references": cur.get("references", []),
-                "updated": cur.get("updated", ""), "by": cur.get("curated_by", ""),
+                "updated": cur.get("updated", ""), "by": _by(cur),
                 "seen_in": malpedia_explain(name)["seen_in"]}, r
     x = malpedia_explain(name)
     return {"found": False, **x, "reason": f"{x['title']}. {x['text']}",
@@ -2205,6 +2241,29 @@ def _mp_card(r):
             "alt_names": (fam.get("alt_names") or [])[:8], "attribution": (fam.get("attribution") or [])[:6],
             "updated": fam.get("updated"), "references": (fam.get("references") or [])[:6],
             "reference_count": fam.get("reference_count", 0)}
+
+
+# Every explanation card carries the researchers' notes on its name (notes.py): the map, services, Executive and the PDF
+# reports all use these three look-ups, so the notes are added here once.
+_mp_resolve_plain, _issue_resolve_plain, _issues_resolve_plain = mp_resolve, issue_resolve, issues_resolve
+
+
+def _noted(card, section, name):
+    n = globals().get("NOTES")
+    return n.attach(card, section, name) if n else card
+
+
+def mp_resolve(name):  # noqa: F811
+    card, r = _mp_resolve_plain(name)
+    return _noted(card, "infections", name), r
+
+
+def issue_resolve(name, fetch=True):  # noqa: F811
+    return _noted(_issue_resolve_plain(name, fetch=fetch), "issues", name)
+
+
+def issues_resolve(names, budget=15.0, progress=None):  # noqa: F811
+    return {n: _noted(c, "issues", n) for n, c in _issues_resolve_plain(names, budget=budget, progress=progress).items()}
 
 
 @app.route("/api/malpedia/batch")
@@ -2286,11 +2345,12 @@ def api_kb_unresolved():
         e, x = kb.get(n.lower()) or {}, ev.get(n.lower(), {"classes": set(), "reports": set()})
         return {"name": n, "count": (m or {}).get("count", 0), "last": (m or {}).get("last") or (m or {}).get("checked", ""),
                 "family_found": (names.get(n.lower()) or {}).get("family", ""),
-                "reports": sorted(x["reports"]), "kinds": sorted(x["classes"]), "title": e.get("title", ""),
+                "reports": sorted(x["reports"]), "last_seen": _last_seen(n, x["reports"]), "seen_days": SEEN.covered_days(),
+                "kinds": sorted(x["classes"]), "title": e.get("title", ""),
                 "type": e.get("type", ""), "description": e.get("description", ""), "references": e.get("references", []),
                 "malpedia": e.get("malpedia", ""), "defined": bool(e.get("references") or e.get("malpedia")),
-                "updated": e.get("updated", ""), "by": e.get("curated_by", "")}
-    todo = [row(n, m) for n, m in sorted(misses.items(), key=lambda kv: -kv[1].get("count", 0))
+                "updated": e.get("updated", ""), "by": _by(e) or ("Looking Glass" if defined_entry(e) else "")}
+    todo =[row(n, m) for n, m in sorted(misses.items(), key=lambda kv: -kv[1].get("count", 0))
             if not _curated(n) and malpedia_explain(n)["verdict"] != "activity"]
     done = [row(n) for n, e in sorted(kb.items()) if e.get("references") or e.get("malpedia")]
     new = [row(n) for n in _unchecked_names()]
@@ -2305,7 +2365,7 @@ def api_kb_unresolved():
         e = ikb.get(name.lower()) or {}
         item = {"name": name, "records": x["records"], "hosts": len(x["hosts"]), "cve": cves.is_cve(name),
                 "defined": bool(e.get("description") or e.get("references")), "title": e.get("title", ""),
-                "by": e.get("curated_by", ""), "updated": e.get("updated", "")}
+                "by": _by(e) or ("Looking Glass" if defined_entry(e) else ""), "updated": e.get("updated", "")}
         if item["cve"]:
             c = cve_intel.card(name, fetch=False)
             item.update(found=c["found"], pending=c["pending"], exploited=c["exploited"],
@@ -2361,7 +2421,7 @@ def api_kb_entry():
         e = (issues_kb() if request.args.get("section") == "issues" else knowledge_base()).get(n.lower()) or {}
         return jsonify(name=n, title=e.get("title", ""), type=e.get("type", ""), description=e.get("description", ""),
                        references=e.get("references", []), malpedia=e.get("malpedia", ""), updated=e.get("updated", ""),
-                       by=e.get("curated_by", ""))
+                       by=_by(e))
     if not _kb_change_allowed():
         return jsonify(error="Only researchers and admins can change definitions."), 403
     if not AUTH["fresh"]():
@@ -2419,7 +2479,7 @@ def api_kb_entry():
             e["malpedia"] = mp_id
         e["status"], e["confidence"] = "reviewed", e.get("confidence") or "high"
         e["updated"] = utcnow().date().isoformat()
-        e["curated_by"] = (getattr(g, "user", None) or {}).get("user", "admin")
+        e["curated_by"], e["curated_by_name"] = _me()     # username (stable) and full name (kept if the account goes)
         tmp = LOCAL_DEFS_PATH + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             _json.dump(data, f, indent=2, ensure_ascii=False)
@@ -2498,6 +2558,127 @@ def _kb_change_allowed():
     return _settings_change_allowed() or (AUTH["has_perm"]("definitions") and AUTH["csrf_ok"]())
 
 
+# Intel gathered: indicators per infection / issue and cross-report leads for researchers (intel.py)
+import intel as _intel  # noqa: E402
+
+
+def _defined_titles():
+    out = {("infections", n): (e.get("title") or n) for n, e in knowledge_base().items() if defined_entry(e)}
+    out.update({("issues", n.lower()): (e.get("title") or n) for n, e in issues_kb().items() if defined_entry(e)})
+    return out                                     # names in lower case (intel.py compares them so)
+
+
+# researchers' notes (new findings) on a name, shown on every card and in the PDF reports (notes.py)
+import notes as _notes  # noqa: E402
+NOTES = _notes.install(app, {"people": people, "audit": AUTH["audit"], "allowed": _kb_allowed, "change_allowed": _kb_change_allowed,
+                             "fresh": AUTH["fresh"], "base_dir": BASE_DIR, "logger": app.logger})
+
+INTEL = _intel.install(app, {"store": store, "svc_store": svc["store"], "allowed": _kb_allowed, "defined": _defined_titles,
+                             "labels": lambda: {**{x["name"]: x["label"] for x in registry.get()},
+                                                **{x["name"]: x["label"] for x in svc["registry"].get()}}})
+
+
+# combination codes and the analyst's combination search (combos.py)
+import combos as _combos  # noqa: E402
+
+
+def _combo_fetch(section, cols, start):
+    """One day of the given reports straight from MongoDB, inside the constituency, as the day stores load them."""
+    end = start + timedelta(days=1)
+    out = []
+    if section == "infections":
+        for s in registry.get():
+            if s["name"] not in cols:
+                continue
+            rows, _ = store._fetch_collection(s, start, end)
+            if settings.restricted:
+                rows = [e for e in rows if settings.in_scope(e["src_asn"], e["src_ip"]) or settings.in_scope(e["dst_asn"], e["dst_ip"])]
+            for e in rows:
+                for f, v in list(e.items()):
+                    if isinstance(v, datetime):
+                        e[f] = iso(v)
+            out += rows
+    else:
+        st = svc["store"]
+        for s in svc["registry"].get():
+            if s["name"] not in cols:
+                continue
+            rows, _ = st._fetch(s, start, end)
+            if settings.restricted:
+                rows = [e for e in rows if settings.in_scope(e["asn"], e["ip"])]
+            out += rows
+    return out
+
+
+def _combo_explain(section, name):
+    try:
+        return issue_resolve(name, fetch=False) if section == "issues" else mp_resolve(name)[0]
+    except Exception:                    # noqa: BLE001  (an explanation is a nice-to-have in the PDF)
+        return None
+
+
+def _adm1_shapes():
+    """The country's first-level regions (static/data/adm1/<country>.json), as the Executive report draws them; None if absent."""
+    p = os.path.join(app.static_folder, "data", "adm1", f"{settings.data['country']}.json")
+    try:
+        with open(p, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _combo_pdf(spec):
+    import reports_pdf
+    return reports_pdf.build(spec)
+
+
+COMBOS = _combos.install(app, {
+    "intel": INTEL, "store": store, "svc_store": svc["store"],
+    "labels": lambda: {**{x["name"]: x["label"] for x in registry.get()}, **{x["name"]: x["label"] for x in svc["registry"].get()}},
+    "fetch": _combo_fetch, "network": lambda asn: asn_registry.company(asn, False) if asn else "",
+    "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"], "is_demo": is_demo, "audit": AUTH["audit"], "notes": NOTES,
+    "explain": _combo_explain, "build_pdf": _combo_pdf, "scope_text": lambda: _scope_text(), "base_dir": BASE_DIR,
+    "can_note": _kb_change_allowed, "shapes": lambda: _adm1_shapes(), "country": lambda: settings.data["country"],
+    "logger": app.logger})
+NOTES.codes = COMBOS            # notes carry combination codes; their meaning is read from the code book
+
+# findings: notes the team follows up, researcher -> management -> analyst -> advisory (findings.py, /findings)
+import findings as _findings  # noqa: E402
+FINDINGS = _findings.install(app, {"people": people, "audit": AUTH["audit"], "fresh": AUTH["fresh"], "csrf_ok": AUTH["csrf_ok"],
+                                   "has_perm": AUTH["has_perm"], "describe": COMBOS.describe, "base_dir": BASE_DIR,
+                                   "known": lambda c: bool(COMBOS.resolve_any(c)), "logger": app.logger})
+NOTES.findings = FINDINGS
+
+# analyst codes: an analyst's selection passed to researchers and management without an address (acodes.py)
+import acodes as _acodes  # noqa: E402
+
+
+def _day_for(platform, iso):
+    """A day of either platform: the copy in memory, or loaded from MongoDB (not kept)."""
+    st = store if platform == "comms" else svc["store"]
+    try:
+        start = datetime.fromisoformat(iso).replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
+    d = st.days.get(start)
+    if d is not None:
+        return d
+    try:
+        return st._load(start)
+    except Exception:                    # noqa: BLE001  (an unreadable day: the code has no records)
+        app.logger.exception("Analyst code: day %s could not be loaded", iso)
+        return None
+
+
+ACODES = _acodes.install(app, {
+    "book": COMBOS, "findings": FINDINGS, "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"],
+    "is_demo": is_demo, "audit": AUTH["audit"], "day": _day_for, "slice": _slice_on, "svc_scope": svc["scope_events"],
+    "labels": lambda: {**{x["name"]: x["label"] for x in registry.get()}, **{x["name"]: x["label"] for x in svc["registry"].get()}},
+    "network": lambda asn: asn_registry.company(asn, False) if asn else "", "defined": _defined_titles,
+    "people_name": lambda u: people.name(u, ""), "base_dir": BASE_DIR})
+COMBOS.acode_records = ACODES.records          # the Combinations page searches analyst codes too
+
+
 import netypes  # noqa: E402  (network types: built-in sectors and the ones this site added)
 _NET_LOCK = threading.Lock()
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -2515,9 +2696,9 @@ def api_networks():
     rows = [{"asn": a, "name": v.get("name", ""), "holder": v.get("holder", ""), "country": v.get("country", ""),
              "type": v.get("type", "unknown"), "role": v.get("role", ""), "reviewed": bool(v.get("reviewed")),
              "source": v.get("source", ""), "note": v.get("note", ""), "events": v.get("events_last_check", 0),
-             "updated": v.get("updated", ""), "by": v.get("updated_by", "")} for a, v in asn_registry.all().items()]
+             "updated": v.get("updated", ""), "by": _by(v, "updated_by")} for a, v in asn_registry.all().items()]
     rows.sort(key=lambda r: (r["reviewed"], -r["events"]))
-    return jsonify(networks=rows, types=netypes.all_types(DATA_DIR), identifying=bool(_ASN_JOB and _ASN_JOB.running()))
+    return jsonify(networks=rows, types=people.with_names(netypes.all_types(DATA_DIR)), identifying=bool(_ASN_JOB and _ASN_JOB.running()))
 
 
 @app.route("/api/networks/types", methods=["POST"])
@@ -2534,7 +2715,7 @@ def api_networks_types():
     except ValueError as exc:
         return jsonify(error=security.public_error(exc)), 400
     AUTH["audit"].add("network_type_added", user=who, target=key, detail=f"{b.get('label')} (demo: {b.get('alias') or 'Organisation'})")
-    return jsonify(saved=True, key=key, types=netypes.all_types(DATA_DIR))
+    return jsonify(saved=True, key=key, types=people.with_names(netypes.all_types(DATA_DIR)))
 
 
 @app.route("/api/networks/entry", methods=["POST"])
@@ -2568,7 +2749,7 @@ def api_networks_entry():
             return jsonify(error=f"AS{asn} is not in the registry (it is added when it appears in the reports)."), 404
         before = (e.get("name"), e.get("type"), e.get("note") or "")
         e.update(name=name, type=kind, note=note, reviewed=True, source="edited",
-                 updated=utcnow().date().isoformat(), updated_by=(getattr(g, "user", None) or {}).get("user", "admin"))
+                 updated=utcnow().date().isoformat(), updated_by=_me()[0], updated_by_name=_me()[1])
         tmp = f"{path}.{os.getpid()}.tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             _json.dump(data, f, indent=1, ensure_ascii=False)
@@ -2764,8 +2945,29 @@ def api_settings_public():
 # ------------------------------------------------------------------ the management portal (aggregates only)
 import management  # noqa: E402
 import reports_pdf as _reports_pdf  # noqa: E402
+def _combo_filter(code, section, events, day=None):
+    """The records of a combination code among these events (the Executive portal's code filter); [] when the code is
+    unknown here or belongs to the other platform. Counts only leave the portal, never these records. An analyst code
+    (LG-A) is its selection on its own day: on another day it matches nothing."""
+    code = (code or "").strip().upper()
+    if _acodes.ACODE_RX.match(code):
+        entry = COMBOS.get(code)
+        if not entry or entry.get("kind") != "a" or ("infections" if entry["platform"] == "comms" else "issues") != section:
+            return []
+        if day is None or day.start.date().isoformat() != entry["day"]:
+            return []
+        return ACODES.records(entry, day)
+    if not _combos.CODE_RX.match(code):
+        return []
+    entry = COMBOS.resolve(code)
+    if not entry or entry["section"] != section:
+        return []
+    labels = {**{x["name"]: x["label"] for x in registry.get()}, **{x["name"]: x["label"] for x in svc["registry"].get()}}
+    return _combos.Matcher(entry, labels).match(events)
+
+
 _mgmt = management.register(app, {
-    "data_dir": DATA_DIR,
+    "data_dir": DATA_DIR, "combo_filter": _combo_filter,
     "AUTH": AUTH, "store": store, "svc_store": svc["store"], "registry": registry, "asn_registry": asn_registry,
     "type_labels": lambda: netypes.labels(DATA_DIR), "replay_now": replay_now, "public_demo": lambda: PUBLIC_DEMO,
     "read_names": _read_names, "knowledge_base": knowledge_base, "issues_kb": issues_kb, "cve_intel": cve_intel,

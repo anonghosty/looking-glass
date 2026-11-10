@@ -34,6 +34,10 @@ class AsnRegistry:
         self.asns = {}
         self.company_alias = {}   # name -> alias shared by all ASNs of that company
         self.alias_asns = {}      # alias -> set of ASNs
+        # set by the app: True when the current request is masked (demo mode, or a role without 'unmasked'). Then a
+        # network filter accepts only the demo aliases, never a real company name or AS number, so a viewer cannot test
+        # whether a given network is in the data (as HostRefs.strict does for addresses)
+        self.strict = lambda: False
 
     def _load(self):
         # called for every name lookup (tens of thousands per analysis): check the file at most every 5 seconds
@@ -87,10 +91,17 @@ class AsnRegistry:
         return f"{n} (AS{asn})" if n else f"AS{asn}"
 
     def resolve(self, value):
-        """Turn a displayed value (alias or AS number) back into the set of AS numbers it covers."""
+        """Turn a displayed value (alias, company name or AS number) back into the set of AS numbers it covers.
+        Masked requests (strict): aliases only; anything else matches no network."""
         self._load()
         if value in self.alias_asns:
             return set(self.alias_asns[value])
+        try:
+            strict = self.strict()
+        except Exception:      # outside a request
+            strict = False
+        if strict:
+            return {"\x00unknown-alias"}
         by_name = {a for a, v in self.asns.items() if v.get("name") == value}
         if by_name:
             return by_name

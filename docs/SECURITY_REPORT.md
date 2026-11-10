@@ -5,7 +5,7 @@
 > markup injection and unauthenticated admin access. Since the test, the platform also gained a login with MFA,
 > registration with approval, roles and permissions, an admin page with sessions and an audit log, and password reset.
 > Remaining operator steps: install the hardened service unit, switch MongoDB to the read-only account, review the
-> Windows firewall rules, restrict the Mapbox token. Details: `security_testing/SECURITY.md` (what changed, how it works) and
+> Windows firewall rules, restrict the Mapbox token. Details: `docs/SECURITY.md` (what changed, how it works) and
 > `docs/INSTALLATION.md` (installing on Windows/WSL or Linux).
 
 **Date:** 2026-11-07

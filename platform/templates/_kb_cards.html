@@ -1,5 +1,18 @@
-{# The researchers' work: infections / categories (network communications) and issues (services). Used by Settings and
-   by the Definitions page (standalone=True). Filled by static/js/kb-settings.js. #}
+{# The researchers' work: infections / categories (network communications) and issues (services), on the Definitions
+   page (/definitions; no longer part of Settings). Filled by static/js/kb-settings.js. #}
+    {# matches between names and reports for the researchers to look into (static/js/intel.js, intel.py) #}
+    <section class="st-card dz ig-page-card" id="cardLeads" hidden>
+      <header class="dz-head">
+        <div class="dz-icon dz-icon-inf" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15zM21 21l-4.3-4.3M7.5 10.5h6M10.5 7.5v6"/></svg>
+        </div>
+        <div class="dz-title">
+          <h2>Looking Glass asks: can you look into this?</h2>
+          <p class="dz-sub" id="leadSub">Matches between names and reports.</p>
+        </div>
+      </header>
+      <ul class="ig-leads" id="leadList"></ul>
+    </section>
     <section class="st-card dz" id="cardInf" hidden>
       <header class="dz-head">
         <div class="dz-icon dz-icon-inf" aria-hidden="true">
@@ -17,7 +30,6 @@
           <button class="lg-btn" id="infAdd" type="button">
             <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
             <span>Define a name</span></button>
-          {% if not standalone %}<a class="lg-btn ghost" href="/definitions" title="The same work on a page of its own (what researchers see)">Open as a page</a>{% endif %}
         </div>
       </header>
       <div class="dz-stats" role="tablist" aria-label="Infections and categories">
@@ -30,7 +42,7 @@
         <input type="search" class="dz-search" id="infSearch" placeholder="Search a name, report or definition" autocomplete="off" aria-label="Search the infections and categories">
         <span class="dz-status" id="infStatus" role="status"></span>
       </div>
-      <div class="table-wrap dz-table"><table id="infTable"><thead><tr><th>Name</th><th>Seen in</th><th>Status</th><th>Definition / Malpedia</th><th class="dz-act"></th></tr></thead><tbody></tbody></table></div>
+      <div class="table-wrap dz-table"><table id="infTable"><thead><tr><th data-sort="name">Name</th><th data-sort="seen">Seen in</th><th data-sort="status">Status</th><th>Definition / Malpedia</th><th data-sort="across" class="dz-across-h">Across reports</th><th class="dz-act"></th></tr></thead><tbody></tbody></table></div>
     </section>
 
     <section class="st-card dz" id="cardIss" hidden>
@@ -63,5 +75,5 @@
         <input type="search" class="dz-search" id="issSearch" placeholder="Search an issue, CVE or product" autocomplete="off" aria-label="Search the issues">
         <span class="dz-status" id="issStatus" role="status"></span>
       </div>
-      <div class="table-wrap dz-table"><table id="issTable"><thead><tr><th>Issue</th><th>Hosts</th><th>Status</th><th>What it is</th><th class="dz-act"></th></tr></thead><tbody></tbody></table></div>
+      <div class="table-wrap dz-table"><table id="issTable"><thead><tr><th data-sort="name">Issue</th><th data-sort="hosts">Hosts</th><th data-sort="status">Status</th><th>What it is</th><th data-sort="across" class="dz-across-h">Across reports</th><th class="dz-act"></th></tr></thead><tbody></tbody></table></div>
     </section>

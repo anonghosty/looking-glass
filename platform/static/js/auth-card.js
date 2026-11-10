@@ -5,6 +5,13 @@
      a symbol); the form cannot be sent until they are met and the two passwords match */
 (() => {
   "use strict";
+  // ---------------- signed out (log out and an expired session both land here): pinned events hold full, unmasked
+  // details, so none stay behind in this browser for the next person
+  if (location.pathname.startsWith("/login")) {
+    try {
+      for (const k of Object.keys(localStorage)) if (k === "tm.pins" || k.startsWith("tm.pins:")) localStorage.removeItem(k);
+    } catch { /* private mode: nothing was stored */ }
+  }
   // ---------------- views
   const card = document.getElementById("authCard");
   if (card) {

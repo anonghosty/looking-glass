@@ -9,7 +9,7 @@ Looking Glass is configured in two places:
   and applies at once, without a restart. `COUNTRY`, `CONSTITUENT_ASNS` and `CONSTITUENT_CIDRS` in `.env` are only
   the starting values until Settings is saved.
 
-The database pipeline has its own `.env` in `../database` ([../../database/README.md](../../database/README.md)).
+The database pipeline has its own `.env` in `../database` ([../../database/README.md](../database/README.md)).
 
 ## Database
 
@@ -68,7 +68,7 @@ of …"), then replays the whole day from 00:00 to 24:00. Details: [TECHNICAL_RE
 | `PUBLIC_DEMO` | `0` | `1` masks everything for everyone (public screens): no IP addresses, network names or host names |
 | `CSP_REPORT_ONLY` | `0` | diagnostics: `1` makes the browser report, not block, what the Content-Security-Policy forbids |
 
-What each protection does: [../security_testing/SECURITY.md](../security_testing/SECURITY.md).
+What each protection does: [../docs/SECURITY.md](SECURITY.md).
 
 ## Advanced
 
@@ -93,8 +93,15 @@ Created and kept by the service; private to its user and never committed:
 | `audit.log` | sign-ins, account and settings changes (rotated at 5 MB) |
 | `settings.json`, `schedule.json` | Settings page values, replay schedule |
 | `geocache.json`, `malpedia_cache.json` | look-up caches |
-| `asns.json` | network names for AS numbers (built by `manage/asn_registry.py`, editable) |
+| `asns.json` | network names for AS numbers (built by `manage/asn_registry.py`, editable on the Definitions page) |
+| `definitions.json` | definitions written on this site (take precedence over the shipped ones) |
+| `notes.json` | researchers' notes on names, with author, date and combination codes |
+| `combo_codes.json` | what each combination code shown to a researcher stands for (no address; the twenty thousand most recent are kept) |
+| `acodes/` | the exact record IDs behind each analyst code (one owner-only file per code) |
+| `findings.json` | findings: notes tracked from the first look to the advisory, with their status history |
+| `seen_names.json` (+ `.done`) | where and when each name was last seen (30 days) |
 | `tls/` | HTTPS certificate and key (`deploy/make_tls_cert.sh`) |
 
-Shipped with the code (curated reference data): `infections.json` (what each infection is and what to do about it)
-and `service_reports.json` (plain-language definitions of every Shadowserver report).
+Shipped with the code (curated reference data, replaced by updates): `infections.json` (what each infection is and
+what to do about it, with evidence), `issues.json` (the services issues that are not CVEs) and `service_reports.json`
+(plain-language definitions of every Shadowserver report).

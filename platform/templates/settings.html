@@ -13,7 +13,7 @@
   <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/settings.css') }}" rel="stylesheet">
 </head>
-<body class="settings-page">
+<body class="settings-page" data-user="{{ lg_user }}"{% if "users" in lg_perms %} data-admin="1"{% endif %}>
   <header class="hud">
     <div class="hud-left">
       <button type="button" class="brand-btn" data-go="/?intro=1" aria-label="Open the Looking Glass overview"><img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32"></button>
@@ -21,6 +21,7 @@
     </div>
     <div class="hud-right">
       <button type="button" class="demo-btn" data-go="/?intro=1"><span>Overview</span></button>
+      <a class="demo-btn account-btn" href="/definitions" title="Definitions, Intel gathered, researchers' notes and network names"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15zM21 21l-4.3-4.3M7.5 10.5h6M10.5 7.5v6"/></svg><span>Definitions</span></a>
       {% if "users" in lg_perms or "audit" in lg_perms %}<a class="demo-btn account-btn" href="/admin" title="Users, sessions, roles and audit log"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6zM9 12l2 2 4-4"/></svg><span>Admin</span></a>{% endif %}
       <form method="post" action="/logout" class="account-form"><button type="submit" class="demo-btn account-btn" title="Logged in as {{ lg_user }} ({{ lg_role }}). Click to log out." aria-label="Log out">
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg><span class="acct-name">Log out</span></button></form>
@@ -78,9 +79,18 @@
       <div class="st-preview" id="preview2"></div>
     </section>
 
-{% with standalone=False %}{% include "_kb_cards.html" %}{% endwith %}
+    {# the researchers' work (definitions, Intel gathered, notes, network names) is a page of its own: /definitions #}
+    {% if "settings" in lg_perms or "definitions" in lg_perms or "networks" in lg_perms %}
+    <section class="st-card st-moved">
+      <h2>Definitions, intel and network names <span class="st-for">a page of their own</span></h2>
+      <p class="st-hint">Defining infections and issues, the indicators gathered from the reports (Intel gathered), researchers' notes and the network
+        names now have their own page, the same one researchers use.</p>
+      <a class="intro-cta st-moved-btn" href="/definitions">Open Definitions</a>
+    </section>
+    {% endif %}
 
-{% include "_net_card.html" %}
+    {# the networks (AS numbers) for reference: read-only here, edited on the Definitions page #}
+    {% with readonly=True %}{% include "_net_card.html" %}{% endwith %}
 
     <section class="st-card">
       <h2>For deployment (.env)</h2>
@@ -114,41 +124,11 @@
     <ol class="id-log mono" id="idLog"></ol>
     <p class="id-msg" id="idMsg"></p>
   </section>
-  <!-- Define a malware name: description and references (evidence) -->
-  <div class="st-modal-back" id="kbBack" hidden></div>
-  <section class="st-modal kb-modal" id="kbModal" role="dialog" aria-modal="true" aria-labelledby="kbTitle" hidden>
-    <div class="st-modal-head"><h2 id="kbTitle">Define a name</h2><button class="icon-btn" id="kbClose" type="button" aria-label="Close">
-      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg></button></div>
-    <p class="st-hint" id="kbSeen"></p>
-    <form id="kbForm" class="kb-form" autocomplete="off">
-      <label class="st-field">Name in the reports<input id="kbName" required maxlength="80" placeholder="android.midnight-mimosa"></label>
-      <div class="st-field" id="kbMpBox">
-        <label for="kbMp">Name in Malpedia <span class="muted">(optional: if Malpedia lists it under a different name, or as a threat actor; leave empty if it does not)</span></label>
-        <div class="kb-mp-row"><input id="kbMp" maxlength="90" placeholder="win.lumma, or actor:tick">
-          <input id="kbMpQ" maxlength="60" placeholder="search Malpedia by any name or alias" aria-label="Search Malpedia">
-          <button class="pill-btn" id="kbMpFind" type="button">Find in Malpedia</button></div>
-        <div class="kb-mp-hits" id="kbMpHits"></div>
-        <span class="muted kb-mp-note">When set, future look-ups of this name show that Malpedia family (with your references added).</span>
-      </div>
-      <label class="st-field">Title<input id="kbTitleIn" maxlength="120" placeholder="Midnight Mimosa"></label>
-      <label class="st-field">Type<input id="kbType" maxlength="80" placeholder="Android malware (preinstalled)"></label>
-      <p class="st-hint" id="kbCveHint" hidden>This is a CVE: its description, CVSS score, whether it is actively exploited (CISA KEV) and EPSS are looked up automatically. Add a note for your organisation (for example which products in your constituency are affected) and references.</p>
-      <label class="st-field"><span id="kbDescLbl">Description: what it is</span><textarea id="kbDesc" rows="6" maxlength="2000"></textarea></label>
-      <fieldset class="kb-refs"><legend>References (evidence)</legend>
-        <p class="st-hint">Web links to the reports that support this definition (vendor research, CERT advisories, Malpedia). At least one is needed.</p>
-        <div id="kbRefs"></div>
-        <button class="pill-btn" id="kbRefAdd" type="button">Add a reference</button>
-      </fieldset>
-      <p class="id-msg" id="kbMsg"></p>
-      <div class="kb-actions"><span class="muted" id="kbBy"></span><button class="intro-cta" id="kbSave" type="submit">Save definition</button></div>
-    </form>
-  </section>
   <script src="{{ url_for('static', filename='js/lg-select.js') }}"></script>
   <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
   <script src="{{ url_for('static', filename='js/regions.js') }}"></script>
   <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
   <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/kb-settings.js') }}"></script>
   <script src="{{ url_for('static', filename='js/net-editor.js') }}"></script>
 </body>
 </html>

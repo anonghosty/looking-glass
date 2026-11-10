@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0d">
+  <meta name="csrf-token" content="{{ lg_csrf }}">
+  <title>Looking Glass · Analyst code</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo-mark.svg') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/settings.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/acode.css') }}" rel="stylesheet">
+</head>
+<body class="settings-page ax-page" data-code="{{ code }}" data-user="{{ lg_user }}"{% if "definitions" in lg_perms or "settings" in lg_perms %} data-kb="1"{% endif %}>
+  <header class="hud">
+    <div class="hud-left">
+      <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Analyst code · signed in as {{ lg_user }} ({{ lg_role }})</span></div></div>
+    </div>
+    <div class="hud-right">
+      {% if "settings" in lg_perms or "definitions" in lg_perms %}<a class="demo-btn account-btn" href="/definitions"><span>Definitions</span></a>{% endif %}
+      {% if "management" in lg_perms %}<a class="demo-btn account-btn" href="/management"><span>Executive</span></a>{% endif %}
+      {% if "unmasked" in lg_perms and "export" in lg_perms %}<a class="demo-btn account-btn" href="/combinations"><span>Combinations</span></a>{% endif %}
+      <a class="demo-btn account-btn" href="/findings"><span>Findings</span></a>
+      <form method="post" action="/logout" class="account-form"><button type="submit" class="demo-btn account-btn" title="Logged in as {{ lg_user }} ({{ lg_role }}). Click to log out." aria-label="Log out">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg><span class="acct-name">Log out</span></button></form>
+    </div>
+  </header>
+  <main class="st-main ax-main" id="axMain">
+    <div class="st-loading" id="axLoading">Reading the analyst's selection and the intel behind it…</div>
+  </main>
+  <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/acode.js') }}"></script>
+</body>
+</html>

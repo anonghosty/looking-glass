@@ -761,7 +761,7 @@ No reports yet? Sign up your CSIRT for the free daily reports:
 A dedicated mailbox (e.g. shadowserver@your-csirt.org) keeps them apart.
 
 Next: how your mailbox is reached. Each choice shows how to create its
-credentials (full guide: database/docs/MAIL_SETUP.md)."
+credentials (full guide: docs/MAIL_SETUP.md)."
   IMAP_SERVER=""; IMAP_USER=""; IMAP_PASSWORD=""; IMAP_FOLDER=inbox; IMAP_VERIFY_TLS=true
   GMAIL_KEY_SRC=""; GMAIL_USER=""; GMAIL_LABEL=INBOX
   MS_TENANT_ID=""; MS_CLIENT_ID=""; MS_CLIENT_SECRET=""; MS_MAILBOX=""; MS_FOLDER=inbox
@@ -825,7 +825,7 @@ reads the mailbox through Microsoft Graph with an app registration:
     Mail.Read > Add, then 'Grant admin consent'.
  3. Certificates & secrets > New client secret: copy its VALUE.
  4. Recommended: limit the app to this one mailbox
-    (New-ApplicationAccessPolicy; database/docs/MAIL_SETUP.md, part C4)."
+    (New-ApplicationAccessPolicy; docs/MAIL_SETUP.md, part C4)."
       while :; do
         ask_input MS_TENANT_ID "Tenant ID" "Directory (tenant) ID (or your domain, e.g. your-csirt.org):" "" v_nonempty; MS_TENANT_ID="$REPLY"
         ask_input MS_CLIENT_ID "Client ID" "Application (client) ID:" "" v_guid; MS_CLIENT_ID="$REPLY"
@@ -1147,9 +1147,9 @@ Note: the platform checks need yesterday's reports in the database; they fail un
 [ $WANT_PF = 1 ] && OUT+="
 
 Next: open $PF_URL on this computer and choose \"Let's get started\" to create the
-first administrator (with an authenticator app). Guides: platform/docs/USER_GUIDE.md"
+first administrator (with an authenticator app). Guides: docs/USER_GUIDE.md"
 [ "${ACCESS_MODE:-local}" != local ] && OUT+="
-Other computers: allow port $LG_PORT in the firewall for them only (platform/docs/INSTALLATION.md)."
+Other computers: allow port $LG_PORT in the firewall for them only (docs/INSTALLATION.md)."
 OUT+="
 
 Log of this installation: install-logs/$(basename "$LOG")"

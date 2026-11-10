@@ -1,4 +1,4 @@
-"""Login, accounts, roles and permissions, sessions and the audit log for Looking Glass (security_testing/SECURITY.md).
+"""Login, accounts, roles and permissions, sessions and the audit log for Looking Glass (docs/SECURITY.md).
 
 Every page and API needs a login; /login, /register, /logout, /healthz and the static files do not. Pages without a
 login redirect to /login; API calls get 401.
@@ -71,8 +71,10 @@ PERMS = {
 }
 DEFAULT_ROLES = {"external": ["view"], "analyst": ["view", "unmasked", "export", "malpedia"], "researcher": ["definitions", "networks"], "management": ["management"],
                  "admin": list(PERMS)}
-DEFINITIONS_PATHS = ("/definitions", "/api/kb/", "/api/networks", "/api/lookups")
-MANAGEMENT_PATHS = ("/management", "/api/mgmt/", "/api/lookups")      # all the management role can open
+DEFINITIONS_PATHS = ("/definitions", "/api/kb/", "/api/networks", "/api/lookups", "/api/intel", "/api/notes", "/api/combo-codes/",
+                     "/findings", "/api/findings", "/intel/")
+MANAGEMENT_PATHS = ("/management", "/api/mgmt/", "/api/lookups", "/api/combo-codes/", "/findings", "/api/findings",
+                    "/intel/", "/api/intel/acode/")  # all the management role can open
 MANAGEMENT_ONLY = "management"            # the permission (and role) that cannot be given to any other role   # all a researcher (no 'view') can open
 LOWEST_ROLE = "external"
 # what each built-in role is for (shown on the admin page; custom roles are described by their permissions)
@@ -421,8 +423,9 @@ class Audit:
         return (r.get("user") or "").startswith(TEST_PREFIX) or (r.get("target") or "").startswith(TEST_PREFIX) \
             or (r.get("ua") or "").startswith("LookingGlass-retest")
 
-    def read(self, limit=200, q="", offset=0, selftests=True):
-        """(total shown, rows, self-test events hidden)."""
+    def read(self, limit=200, q="", offset=0, selftests=True, label=None):
+        """(total shown, rows, self-test events hidden). label(username) names accounts "Full Name (username)"
+        (people.py); the search then also finds a person by their name."""
         rows = []
         for p in (self.path + ".1", self.path):
             try:
@@ -435,6 +438,15 @@ class Audit:
             except OSError:
                 pass
         rows.reverse()
+        if label:
+            names = {}
+            for r in rows:
+                for k in ("user", "target"):
+                    v = r.get(k) or ""
+                    if v and v not in names:
+                        names[v] = label(v)
+                    if v and names[v] != v:
+                        r[k + "_label"] = names[v]
         if q:
             ql = q.lower()
             rows = [r for r in rows if ql in json.dumps(r).lower()]
@@ -1199,8 +1211,9 @@ def install(app, base_dir, logger):
             limit = max(1, min(int(request.args.get("limit", 200)), 1000)); offset = max(0, int(request.args.get("offset", 0)))
         except ValueError:
             limit, offset = 200, 0
+        from people import People               # "Full Name (username)" for every account in the log
         total, rows, hidden = audit.read(limit, (request.args.get("q") or "")[:100], offset,
-                                         selftests=request.args.get("selftests") == "1")
+                                         selftests=request.args.get("selftests") == "1", label=People(users).audit)
         return jsonify(total=total, rows=rows, selftests_hidden=hidden)
 
     @app.route("/api/admin/roles", methods=["GET", "POST"])

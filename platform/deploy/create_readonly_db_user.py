@@ -1,7 +1,7 @@
 #!/bin/sh
 # runs itself with the project's own Python (.venv), from wherever it is called
 ''''exec "$(dirname -- "$0")/../.venv/bin/python" "$0" "$@" # '''
-"""Give Looking Glass a read-only MongoDB account instead of the administrator account (security_testing/SECURITY_REPORT.md #3).
+"""Give Looking Glass a read-only MongoDB account instead of the administrator account (docs/SECURITY_REPORT.md #3).
 
 Run it yourself on the server; it uses the administrator account currently in .env once:
   1. creates the user `lookingglass_ro` with only the `read` role on MONGO_DB (or resets its password),

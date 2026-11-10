@@ -20,8 +20,9 @@ from flask import Response, jsonify, render_template, request
 from security import public_error
 
 # icombo / rcombo / scombo: one row of the "Top findings" lists (devices or hosts with exactly that combination)
-COMMS_FILTERS = ("attack", "infection", "report", "region", "sector", "network", "severity", "icombo", "rcombo")
-SVC_FILTERS = ("family", "service", "issue", "region", "sector", "network", "severity", "icombo", "scombo")
+# code: a researcher's combination code (combos.py): the portal shows exactly the devices / hosts that carry it, counted
+COMMS_FILTERS = ("attack", "infection", "report", "region", "sector", "network", "severity", "icombo", "rcombo", "code")
+SVC_FILTERS = ("family", "service", "issue", "region", "sector", "network", "severity", "icombo", "scombo", "code")
 SEV_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4, "": 5}
 
 
@@ -118,6 +119,8 @@ def register(app, ctx):
                     and (not f["severity"] or (e["severity"] or "") == f["severity"])
                     and (not f["sector"] or sector_of(e["src_asn"]) == f["sector"]) and (not f["network"] or net_of(e["src_asn"], d_mask) == f["network"]))
         all_ev = day.events
+        if f["code"]:                     # the records of a combination code, with the same rule as the analysts' search
+            all_ev = ctx["combo_filter"](f["code"], "infections", all_ev, day) or []
         ev = [e for e in all_ev if keep(e)]
         ev = combo_scope(ev, "src_ip", [(lambda e: (e["infection"] or "unknown",), f["icombo"]),
                                         (lambda e: (labels.get(e["source"], e["source"]),), f["rcombo"])])
@@ -270,6 +273,8 @@ def register(app, ctx):
                     and (not f["severity"] or (e["severity"] or "") == f["severity"])
                     and (not f["sector"] or sector_of(e["asn"]) == f["sector"]) and (not f["network"] or net_of(e["asn"], d_mask) == f["network"]))
         all_ev = day.events
+        if f["code"]:
+            all_ev = ctx["combo_filter"](f["code"], "issues", all_ev, day) or []
         ev = [e for e in all_ev if keep(e)]
         # services hosts are counted by address as written (an empty address too), so the combination rule is the same
         ev = combo_scope(ev, "ip", [(lambda e: e["issues"], f["icombo"]), (lambda e: (e["service"],), f["scombo"])], skip_empty=False)
@@ -718,6 +723,11 @@ def register(app, ctx):
         return out
 
     def with_baseline(platform, d, args, d_mask, wait=False):
+        if args.get("code"):
+            # past days keep only the fields the portal counts, not the indicators a combination is made of: no
+            # 7-day comparison for a combination code (the page and the PDF say "no baseline for this selection")
+            d["baseline"] = None
+            return d
         b = baseline(platform, d, args, d_mask, wait=wait)
         d["baseline"] = b
         extra = trend_findings(platform, d, b)
@@ -878,14 +888,14 @@ def register(app, ctx):
         if request.args.get("format") == "pdf":
             return Response(pdf, mimetype="application/pdf",
                             headers={"Content-Disposition": f'attachment; filename="{base}.pdf"', "Cache-Control": "no-store"})
-        import csv as _csv, io as _io, zipfile
+        import csvsafe as _csv, io as _io, zipfile   # every cell spreadsheet-safe (no formulas)
         unit = "Devices" if platform == "comms" else "Hosts"
         def table(rows, what, total):
             buf = _io.StringIO(); w = _csv.writer(buf)
             w.writerow([what, f"Number of {what.split()[0].lower()}", f"{unit} with exactly this combination", f"Share of the {unit.lower()} concerned"])
             for r in rows:
                 lbl = r["label"]
-                w.writerow([("'" + lbl) if lbl[:1] in "=+-@" else lbl, len(lbl.split(" + ")), r["count"], f"{100 * r['share']:.1f}%"])
+                w.writerow([lbl, len(lbl.split(" + ")), r["count"], f"{100 * r['share']:.1f}%"])
             return "\ufeff" + buf.getvalue()
         files = ({"infection-combinations": table(d["multi"]["combos"], "Infections on the same device", d["multi"]["devices"]),
                   "report-combinations": table(d["cross"]["combos"], "Reports seeing the same device", d["cross"]["devices"])} if platform == "comms" else
@@ -904,7 +914,7 @@ def register(app, ctx):
             w.writerow(["Infection / category" if platform == "comms" else "Issue"] + b["days"] + [d["day"]])
             for r in (d["infections"] if platform == "comms" else d["issues"]):
                 lbl = r.get("title") or r["value"]
-                w.writerow([("'" + lbl) if lbl[:1] in "=+-@" else lbl] + ["" if v is None else v for v in b["items"].get(r["value"], [])] + [r["hosts"]])
+                w.writerow([lbl] +["" if v is None else v for v in b["items"].get(r["value"], [])] + [r["hosts"]])
             files["seven-day-trend"] = "﻿" + buf.getvalue()
         z = _io.BytesIO()
         with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as zf:

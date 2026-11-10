@@ -10,7 +10,7 @@ the platform: the **Glossary** tab on the overview page and the **Glossary** but
 - [Threats](#threats) (15 terms)
 - [Numbers and measures](#numbers-and-measures) (12 terms)
 - [Using the platform](#using-the-platform) (11 terms)
-- [Accounts, roles and permissions](#accounts-roles-and-permissions) (16 terms)
+- [Accounts, roles and permissions](#accounts-roles-and-permissions) (30 terms)
 - [Publicly accessible / vulnerable services](#publicly-accessible--vulnerable-services) (13 terms)
 - [Related tools](#related-tools)
 - [A–Z index](#az-index)
@@ -215,7 +215,7 @@ People outside the security team, such as partners or visitors. They see both pl
 The security team's analysts. They see all data unmasked, analyse it, download lists, CSV files and reports (PDF + CSV), look up malware on Malpedia and vulnerabilities (CVEs), and switch Demo mode on for presentations. They cannot change Settings or manage accounts.
 
 **Researcher (role)**  
-The organisation's security researchers. They work on the Definitions page only: they research and define, with references, the malware names Malpedia does not know and the issues that are not CVEs, add notes to CVEs, and correct network names (AS numbers). Their definitions are then shown to every user. They do not see the platforms or host addresses.
+The organisation's security researchers. They work on the Definitions page only: they research and define, with references, the malware names Malpedia does not know and the issues that are not CVEs, study the indicators the reports carry (Intel gathered) and the matches Looking Glass raises, share notes on new findings, and correct network names (AS numbers). Their definitions and notes are then shown to every user, signed with their full name. They do not see the platforms or host addresses.
 
 **Management (role)**  
 Managers and executives. They use the management portal only: a polished dashboard of aggregated figures for both platforms (affected devices, infections, exposed services, actively exploited vulnerabilities, regions, sectors, networks and trends), with filters, explanations of infections and vulnerabilities, and executive PDF reports of what they filtered. They never see individual addresses or host lists. This portal cannot be given to any other role; admins can open it to preview it.
@@ -230,7 +230,49 @@ Administrators. Everything an analyst and a researcher can do, plus Settings (co
 One thing a role allows: view (see the platforms), unmasked (real addresses and names), export (CSV files, complete lists and reports), malpedia (malware and vulnerability look-ups), settings, definitions (the Definitions page), networks (correct network names), users (accounts and roles) and audit (the audit log).
 
 **Looking Glass definition**  
-A description of a malware name or an issue that Malpedia or the vulnerability databases do not cover, written by a security researcher of the organisation that uses this platform, with references (evidence) and the researcher's name. It is shown to every user in look-ups, lists, CSV files and reports.
+A description of a malware name or an issue that Malpedia or the vulnerability databases do not cover, with references (evidence). The definitions that come with Looking Glass are signed Looking Glass; those written by a security researcher of the organisation carry the researcher's full name. It is shown to every user in look-ups, lists, CSV files and reports.
+
+**Intel gathered**  
+On the Definitions page: what the reports carry for an infection or an issue, report by report, as name › report › what comes with it there. For infections: the C2 domains contacted, DNS lookups, TLS server names, URLs, user agents and the usernames brute-force bots tried. For issues: the other CVEs on the same hosts, associated tags, products, certificate names and fingerprints. Indicators only: the hosts themselves are never shown.
+
+**Indicator**  
+A trace of a threat that can be searched for elsewhere: a C2 domain, a URL, a user agent, a file or certificate fingerprint, a username a bot tries. Looking Glass collects them from the reports for researchers (Intel gathered).
+
+**Combination**  
+The exact set of indicators that occur together on one record, for example iot + router-os + winbox, or a C2 domain with a particular user agent. Combinations explain why one indicator counts fewer records than another, and show which variants exist.
+
+**Devices and repeating devices (↻)**  
+In Intel gathered: how many distinct devices carry a value or a combination, and how many of them carry it in more than one record. A combination many devices keep repeating is a pattern (the same malware or campaign behaving the same way), not a one-off. Devices are counted, never shown.
+
+**Looking Glass asks (lead)**  
+A match the platform found in the reports and asks a researcher to look into: the same indicator under two names (possibly one family under two names, or shared infrastructure), in two reports for one name (a probable indicator of that name, worth putting in its notes), or an infection's C2 domain that is also a certificate name on a service in the constituency. Values common to everything (stock browser user agents, usernames such as root) are never raised.
+
+**Note (researcher)**  
+A new finding a researcher records on a name (the C2 moved, seen together with another family…), dated and signed. It appears on every card of that name and in the PDF reports as Notes shared by Researcher: full name (date). Notes are kept apart from the definitions and are never replaced by an update.
+
+**Combination code (LG-C, LG-X)**  
+A short code for one exact combination Intel gathered shows: LG-C-… for one report (the records that carry exactly these indicators), LG-X-… for a cross-report pattern (what a device carried in each of several reports). The same combination always has the same code, and a code carries no address, so researchers and management can pass it on in notes and reports; an analyst pastes it on the Combinations page to get exactly those devices.
+
+**Combination search**  
+The analysts' page (/combinations) that turns a combination code into the devices behind it, over the days in memory or up to 31 days of stored history, with a PDF summary (region map, researchers' notes, across reports) and CSV files of the devices and records. It lists real addresses, so it is only for roles that see them and may export, and is off in Demo mode.
+
+**Analyst code (LG-A)**  
+A code for exactly the records of an analyst's selection on one day (for example a network and one host), made in an analysis window. It becomes a finding: researchers open it without any address and answer with their own codes, management filters the Executive portal by it, and analysts report on it again from the Combinations page.
+
+**Needle through the haystack**  
+The way Looking Glass is meant to be used: instead of forwarding a network operator thousands of reported addresses, narrow the day's reports step by step (actively exploited, seen by several reports, the same exact combination on many devices, repeating) to the few devices most likely to matter, send that operator a short explained report, then take the next. The numbers drop day by day.
+
+**Report per network provider**  
+On the Combinations page, the PDF and CSV files for one operator only (Report for, or a click on the network): every figure, the map and both CSV files cover just that provider's devices, ready to attach to the advisory sent to it.
+
+**Reply (on a finding)**  
+An answer added to a finding's history, with text and codes: a researcher answering an analyst's code with combination codes, or anyone in the loop adding what they found. The status stays as it is.
+
+**Finding**  
+A researcher's note the team follows up, with a number (#1, #2…) and a status: New, With management, Back with the researcher, With the analyst, Advisory sent, Closed. Each move records who, when and a comment. Researchers, management, analysts and admins share the Findings page; no address is shown there.
+
+**Seen in / Last seen**  
+The reports a name appears in. Each report shows whether it carries intel for the name (intel · N kinds) or only the name. A name not in today's reports shows where and when it was last seen (the last 30 days are remembered).
 
 **Malpedia**  
 The malware encyclopedia of Fraunhofer FKIE (malpedia.caad.fkie.fraunhofer.de): malware families and threat actors with descriptions and references. Looking Glass looks infections up there when a Malpedia API token is set; otherwise the Looking Glass definitions answer.
@@ -335,6 +377,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [All of the day's connections (map)](#using-the-platform) · 
 [Analysis view](#using-the-platform) · 
 [Analyst (role)](#accounts-roles-and-permissions) · 
+[Analyst code (LG-A)](#accounts-roles-and-permissions) · 
 [Attack type](#threats) · 
 [Beaconing](#numbers-and-measures) · 
 [Botnet](#threats) · 
@@ -342,6 +385,9 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Brute force](#threats) · 
 [C2 (command and control)](#threats) · 
 [C2 / sinkhole domains](#threats) · 
+[Combination](#accounts-roles-and-permissions) · 
+[Combination code (LG-C, LG-X)](#accounts-roles-and-permissions) · 
+[Combination search](#accounts-roles-and-permissions) · 
 [Constituency (Settings)](#publicly-accessible--vulnerable-services) · 
 [Country (Settings)](#publicly-accessible--vulnerable-services) · 
 [Critical](#threats) · 
@@ -354,6 +400,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Demo mode](#using-the-platform) · 
 [Destination](#who-and-where) · 
 [Destination IPs](#who-and-where) · 
+[Devices and repeating devices (↻)](#accounts-roles-and-permissions) · 
 [Display quality (Auto / Full / Lite)](#using-the-platform) · 
 [DNS Open Resolvers](#publicly-accessible--vulnerable-services) · 
 [EPSS](#accounts-roles-and-permissions) · 
@@ -364,23 +411,29 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Exposed host](#publicly-accessible--vulnerable-services) · 
 [External (role)](#accounts-roles-and-permissions) · 
 [Filters](#using-the-platform) · 
+[Finding](#accounts-roles-and-permissions) · 
 [Follow-up (details lists)](#using-the-platform) · 
 [Honeypot](#threats) · 
 [Hosts in several reports](#publicly-accessible--vulnerable-services) · 
 [Hosts with multiple issues](#publicly-accessible--vulnerable-services) · 
 [Hosts with multiple threats](#numbers-and-measures) · 
+[Indicator](#accounts-roles-and-permissions) · 
 [Infection / category](#threats) · 
 [Intel](#using-the-platform) · 
+[Intel gathered](#accounts-roles-and-permissions) · 
 [IP address](#who-and-where) · 
 [Issue](#publicly-accessible--vulnerable-services) · 
 [Key findings](#using-the-platform) · 
+[Looking Glass asks (lead)](#accounts-roles-and-permissions) · 
 [Looking Glass definition](#accounts-roles-and-permissions) · 
 [Malpedia](#accounts-roles-and-permissions) · 
 [Management (role)](#accounts-roles-and-permissions) · 
 [Management portal (Executive)](#accounts-roles-and-permissions) · 
 [Median](#numbers-and-measures) · 
 [Median repeat interval](#numbers-and-measures) · 
+[Needle through the haystack](#accounts-roles-and-permissions) · 
 [Network (ASN)](#who-and-where) · 
+[Note (researcher)](#accounts-roles-and-permissions) · 
 [Peak](#numbers-and-measures) · 
 [Permission](#accounts-roles-and-permissions) · 
 [Pin](#using-the-platform) · 
@@ -392,15 +445,18 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Replay (minus 24 h)](#the-basics) · 
 [Replay time (UTC)](#the-basics) · 
 [Replayed so far](#numbers-and-measures) · 
+[Reply (on a finding)](#accounts-roles-and-permissions) · 
 [Report](#the-basics) · 
 [Report (PDF + CSV)](#accounts-roles-and-permissions) · 
 [Report family](#publicly-accessible--vulnerable-services) · 
+[Report per network provider](#accounts-roles-and-permissions) · 
 [Reports](#numbers-and-measures) · 
 [Request path](#who-and-where) · 
 [Researcher (role)](#accounts-roles-and-permissions) · 
 [Residential proxy](#threats) · 
 [Role](#accounts-roles-and-permissions) · 
 [Scanning](#threats) · 
+[Seen in / Last seen](#accounts-roles-and-permissions) · 
 [Services constellation](#publicly-accessible--vulnerable-services) · 
 [Severity](#threats) · 
 [Shadowserver](#the-basics) · 

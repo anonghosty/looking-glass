@@ -121,7 +121,7 @@
     user_delete: "Deleted", roles_changed: "Roles changed", settings_changed: "Settings changed", register_limited: "Registration limit",
     reset_requested: "Password reset requested", reset_failed: "Password reset failed", password_reset: "Password reset", user_allow_reset: "Password reset allowed",
     networks_identify: "Networks identified", network_edited: "Network name edited", network_type_added: "Network type added",
-    definition_saved: "Definition saved", report_pdf: "Report downloaded" };
+    definition_saved: "Definition saved", note_added: "Note added", note_removed: "Note removed", report_pdf: "Report downloaded" };
   async function loadAudit(reset) {
     if (reset) auditOffset = 0;
     const q = encodeURIComponent($("auditSearch").value.trim());
@@ -132,7 +132,8 @@
       const tr = el("tr", (/failed|locked|misuse|refused|revoke|delete|limited/.test(r.event) ? "adm-alert" : "") + (r.selftest ? " adm-selftest" : ""));
       if (r.selftest) tr.title = "Made by the built-in security test (temporary lg-selftest accounts)";
       const br = el("td", null, shortUA(r.ua)); br.title = r.ua;
-      tr.append(el("td", "mono", fmtT(r.t)), el("td", null, EVENT_NAMES[r.event] || r.event), el("td", null, r.user || "–"), el("td", null, r.target || "–"),
+      // accounts as "Full Name (username)" (people.py); other targets (AS numbers, issues, reports) as they are
+      tr.append(el("td", "mono", fmtT(r.t)), el("td", null, EVENT_NAMES[r.event] || r.event), el("td", null, r.user_label || r.user || "–"), el("td", null, r.target_label || r.target || "–"),
         el("td", "mono", r.ip || "–"), el("td", null, r.location || "–"), br, el("td", "adm-detail", r.detail || ""));
       tb.append(tr);
     }

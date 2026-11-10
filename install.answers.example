@@ -21,7 +21,7 @@ MONGO_DB=shadowserver
 # local, with the platform on another computer only: this server's address for MongoDB to listen on
 #MONGO_BIND_ADDR=10.0.0.5
 
-# ---- Mailbox (database/docs/MAIL_SETUP.md): google_app | gmail_api | microsoft | imap
+# ---- Mailbox (docs/MAIL_SETUP.md): google_app | gmail_api | microsoft | imap
 MAIL_PROVIDER=imap
 # imap and google_app (google_app: IMAP_USER is the Gmail address, IMAP_PASSWORD the app password)
 IMAP_SERVER=mail.example.org

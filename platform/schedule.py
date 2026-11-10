@@ -53,6 +53,7 @@ class ReplaySchedule:
         self.seen_at = None               # wall time the awaited day's report was first seen (or last grew)
         self.seen_rows = None             # rows of the awaited day at the last check (growth restarts the settle)
         self.on_start = None              # callback(day) when a day starts (used to reload it fully)
+        self._started_day = None          # a day that just started; on_start runs for it once the lock is released
         self._load()
 
     # ------------------------------------------------------------------ state
@@ -121,7 +122,22 @@ class ReplaySchedule:
 
     # ------------------------------------------------------------------ transitions
     def tick(self, now=None):
-        """Advance the schedule. Called every few seconds from a background thread."""
+        """Advance the schedule. Called every few seconds from a background thread.
+
+        The day reload (on_start) runs AFTER the lock is released: loading a day from MongoDB takes seconds, and
+        while the lock is held every page asking for the replay position (position, status) would wait for it."""
+        try:
+            self._tick(now)
+        finally:
+            with self.lock:
+                day, self._started_day = self._started_day, None
+            if day is not None and self.on_start:
+                try:
+                    self.on_start(day)
+                except Exception as e:
+                    self._warn("on_start failed: %s", e)
+
+    def _tick(self, now=None):
         now = now or self._now()
         with self.lock:
             T = self.target(now)
@@ -179,11 +195,7 @@ class ReplaySchedule:
         self.day, self.started, self.seen_at, self.seen_rows = day, started, None, None
         self._save()
         self._warn("Replay of %s from 00:00 started at %s (%s)", day.date(), _iso(started), why)
-        if self.on_start:
-            try:
-                self.on_start(day)
-            except Exception as e:
-                self._warn("on_start failed: %s", e)
+        self._started_day = day           # reloaded by tick() once the lock is released
 
     def _await(self, day, now):
         if self.day != day or self.started is not None:
