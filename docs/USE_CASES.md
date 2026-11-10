@@ -148,7 +148,7 @@ the C2, then report per operator.
 
 ## 7. Writing the advisory
 
-The PDF from the Combinations page is the advisory's attachment. It already holds what the operator needs:
+The PDF from the Combinations page is the advisory's attachment. It already holds what the operator needs, an advisory report becomes optional:
 
 - **Overview**: how many devices, the activity across the day, the key findings in plain words;
 - **Where**: the region map with its cities, networks and cities;
