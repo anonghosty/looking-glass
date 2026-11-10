@@ -63,9 +63,9 @@ teams, especially across Africa. Looking Glass needs **one modest server and a g
 <td width="50%"><a href="docs/media/screens/30-services.png"><img src="docs/media/screens/30-services.png" alt="Publicly accessible / vulnerable services"></a></td>
 </tr>
 <tr>
-<td><b>Reported network communications.</b> Infected and attacking hosts in your country and the servers they reach
-(botnet command and control, sinkholes, honeypots), replayed on a 3D map one day later, with filters, live charts
-and an event stream.</td>
+<td><b>Reported network communications.</b> Infected and attacking hosts in your country and what caught them
+(botnet sinkholes and honeypots), replayed on a 3D map one day later, with filters, live charts and an event
+stream.</td>
 <td><b>Publicly accessible / vulnerable services.</b> What anyone on the internet can reach in your constituency —
 open databases, remote desktop, vulnerable devices, compromised and blocklisted hosts — by service, region, network
 and issue.</td>
@@ -103,6 +103,49 @@ screens, partners and presentations.</td>
 carry for it — C2 domains, DNS lookups, URLs, user agents, other CVEs, tags, fingerprints — report by report, with the
 exact combinations and how many hosts keep repeating them. Looking Glass raises matches between names and reports
 ("can you look into this?"), and researchers share dated, signed notes that appear on every card and report.</td>
+</tr>
+<tr>
+<td><a href="docs/media/screens/62-definitions-leads.png"><img src="docs/media/screens/62-definitions-leads.png" alt="Looking Glass asks"></a></td>
+<td><a href="docs/media/screens/63-issues-across.png"><img src="docs/media/screens/63-issues-across.png" alt="Sorting and the across-reports flag"></a></td>
+</tr>
+<tr>
+<td><b>Looking Glass asks.</b> Every morning it compares every indicator across names, reports and both platforms,
+and puts the matches worth a researcher's eye at the top: a sinkholed domain that is also the certificate name of a
+server in your country, a name with no definition sharing a URL with a known family, a pattern seen in two reports.</td>
+<td><b>Sort, then follow the flag.</b> Every table sorts by hosts, status or name, and the <b>⇄ Across reports</b>
+flag marks names and issues whose devices appear in more than one report, so the buried, serious finding rises
+above the noisy one.</td>
+</tr>
+<tr>
+<td><a href="docs/media/screens/64-intel-combinations.png"><img src="docs/media/screens/64-intel-combinations.png" alt="Combination codes"></a></td>
+<td><a href="docs/media/screens/65-notes-codes.png"><img src="docs/media/screens/65-notes-codes.png" alt="Notes with combination codes"></a></td>
+</tr>
+<tr>
+<td><b>Combination codes.</b> Every exact set of indicators that travels together gets a short code: <code>LG-C-…</code>
+for one report, <code>LG-X-…</code> for a pattern across reports. A code stands for exactly those devices and
+carries no address, so it is safe to pass between roles.</td>
+<td><b>Notes with codes, picked, not typed.</b> A researcher's note attaches the exact combinations from a list (by
+report, or across reports), and can be tracked as a finding with one tick.</td>
+</tr>
+<tr>
+<td><a href="docs/media/screens/66-findings.png"><img src="docs/media/screens/66-findings.png" alt="Findings"></a></td>
+<td><a href="docs/media/screens/67-executive-code.png"><img src="docs/media/screens/67-executive-code.png" alt="Executive filtered by a code"></a></td>
+</tr>
+<tr>
+<td><b>Findings.</b> One page where every finding stands — New, With management, Back with the researcher, With the
+analyst, Advisory sent, Closed — with comments, replies and history. An analyst can ask first: <b>Make analyst
+code</b> turns an analysis selection into an <code>LG-A-…</code> code and a finding the researchers answer.</td>
+<td><b>The Executive, filtered by a code.</b> Management applies a finding's code to its own portal: how many devices,
+where, which networks, the trend — counts only, never an address.</td>
+</tr>
+<tr>
+<td colspan="2"><a href="docs/media/screens/68-combinations.png"><img src="docs/media/screens/68-combinations.png" alt="Combinations: the devices behind a code"></a></td>
+</tr>
+<tr>
+<td colspan="2"><b>Combinations: send the needle, not the haystack.</b> The analyst searches a code (or picks an analyst
+code from a searchable list) and gets exactly those devices: statistics, a regions map that shows the addresses on
+hover, networks, cities and the busiest devices — then <b>one report per network provider</b> (PDF + CSV) to attach
+to the advisory. The two ways it is used are told step by step in <a href="docs/USE_CASES.md">Use cases</a>.</td>
 </tr>
 </table>
 

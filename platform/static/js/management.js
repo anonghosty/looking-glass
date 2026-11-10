@@ -100,8 +100,9 @@
     const defs = sv("defs"), g = sv("linearGradient", { id: "mgAreaG", x1: 0, x2: 0, y1: 0, y2: 1 });
     g.append(sv("stop", { offset: "0%", "stop-color": "#5b8def", "stop-opacity": ".55" }), sv("stop", { offset: "100%", "stop-color": "#5b8def", "stop-opacity": "0" }));
     defs.append(g); svg.append(defs);
-    for (let k = 0; k <= 4; k++) {
-      const v = (max * k) / 4, yy = y(v);
+    const steps = Math.min(4, max);          // small peaks: whole-number ticks only (never "2, 2, 1, 1, 0")
+    for (let k = 0; k <= steps; k++) {
+      const v = (max * k) / steps, yy = y(v);
       svg.append(sv("line", { x1: L, x2: W - 8, y1: yy, y2: yy, class: "grid" }));
       const t = sv("text", { x: L - 6, y: yy + 3, class: "ax", "text-anchor": "end" }); t.textContent = fmt(Math.round(v)); svg.append(t);
     }

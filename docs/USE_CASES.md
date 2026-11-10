@@ -126,7 +126,7 @@ android.badbox2*) shows devices calling several sinkholes. Before sending anythi
 view.
 
 **2. Analyst: ask with a code.** **Make analyst code** in the analysis window. Title and question (*Which of these
-share a C2? Check before I send*). Looking Glass keeps exactly those records and makes `LG-A-…` and **Finding #2**.
+call the same sinkholed C2 domains? Check before I send*). Looking Glass keeps exactly those records and makes `LG-A-…` and **Finding #2**.
 
 **3. Researcher: answer without seeing an address.** **Open as researcher** on the finding: the selection in words
 (the host is "1 host, address held back"), the names in it, their definitions, combinations and cross-report patterns
@@ -135,8 +135,8 @@ with their codes. Tick the codes that answer the question and **Send the reply**
 **4. Management: read both sides.** **Show in Executive** works with the analyst's code too (that day, counts only).
 
 **5. Analyst: report.** The analyst's codes are listed on the Combinations page (*Analysts' codes*, searchable):
-pick it, download its PDF + CSV, or search the researcher's code from the reply for exactly the devices that share
-the C2, then report per operator.
+pick it, download its PDF + CSV, or search the researcher's code from the reply for exactly the devices that call
+the same sinkholed domain, then report per operator.
 
 ## 6. The next days: watching the numbers fall
 

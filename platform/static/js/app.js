@@ -1623,7 +1623,7 @@
   }
   // ================================================================== reusable charts (Intel + analysis)
   const CLASS_INFO = {
-    "Botnet C2": "Infected devices calling sinkholed botnet servers", "Brute force": "Password-guessing attempts against honeypots",
+    "Botnet C2": "Infected devices calling botnet sinkholes", "Brute force": "Password-guessing attempts against honeypots",
     "Scanning": "Hosts probing honeypots for vulnerable services", "DDoS": "Hosts taking part in, or targeted by, denial-of-service attacks",
     "Initial access": "Malware payloads executed on users' machines", "IP spoofing": "Networks that let forged source addresses out",
     "Spam": "Spam campaigns linked to local hosts",
