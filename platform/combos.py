@@ -531,12 +531,15 @@ def install(app, ctx):
                        f"{'its code' if x['patterns_total'] == 1 else 'their codes'} for a follow-up search.")
         elif entry["kind"] == "r":
             pts.append(f"None of these devices was seen in another report of {entry['name']} in this period.")
-        # the researchers' notes on the name: the ones that point at this code first
-        notes = [] if is_a else sorted(ctx["notes"].list(section, entry["name"]), key=lambda n: not any(c["code"] == entry["code"] for c in n.get("codes") or []))
+        # the researchers' notes on the name (an analyst code: on each of its names), the ones that point at this code first
+        note_names = entry.get("names", [])[:8] if is_a else [entry["name"]]
+        notes = sorted(({**n, "name": nm} for nm in note_names for n in ctx["notes"].list(section, nm)),
+                       key=lambda n: not any(c["code"] == entry["code"] for c in n.get("codes") or []))
         note_rows = [[f"{n['role']}: {n['by']}", n.get("date", ""), n["text"][:600],
                       ", ".join(c["code"] for c in n.get("codes") or [])] for n in notes[:12]]
         if notes:
-            pts.append(f"{len(notes)} researcher note{'s' if len(notes) != 1 else ''} on {entry['name']}"
+            pts.append(f"{len(notes)} researcher note{'s' if len(notes) != 1 else ''} on "
+                       + (", ".join(sorted({n['name'] for n in notes})) if is_a else entry['name'])
                        + (f", {sum(1 for n in notes if any(c['code'] == entry['code'] for c in n.get('codes') or []))} of them on this combination"
                           if any(any(c["code"] == entry["code"] for c in n.get("codes") or []) for n in notes) else "")
                        + "; they are on the Explained page, with what the name"
@@ -626,7 +629,8 @@ def install(app, ctx):
             card = ctx["explain"](sec, nm)
             if card:
                 explained.append((nm, card))
-                stats[nm] = f"{len(devs):,} devices in this combination"
+                stats[nm] = (f"Named in this selection of {len(devs):,} devices" if is_a and nm in entry.get("names", [])
+                             else f"{len(devs):,} devices in this combination")
         data = {"section": section, "code": entry["code"], "name": entry["name"], "parts": parts,
                 "headline": (f"{len(devs):,} device{'s' if len(devs) != 1 else ''} in the analyst's selection ({span})" if is_a else
                              f"{len(devs):,} device{'s' if len(devs) != 1 else ''} carried exactly this combination ({span})")

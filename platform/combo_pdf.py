@@ -23,6 +23,8 @@ def _share(n, total):
 
 
 DEVICE_ROWS = 28                   # devices per page on "The devices" (two pages at most; the CSV has all of them)
+REFS_SHOWN = 6                     # references printed per explanation card (the rest: on the Malpedia / source page)
+NOT_GIVEN = "Not given by the report"
 
 
 class AnalystDoc(ex.Doc):
@@ -111,8 +113,48 @@ class AnalystDoc(ex.Doc):
             yy -= rh
         return yy
 
+    def url_lines(self, refs, w, size):
+        """References numbered, one per line; a long address breaks anywhere and goes on (never cut). [(text, url)]"""
+        out = []
+        for i, u in enumerate(refs):
+            line = ""
+            for ch in self.s(f"{i + 1}. {u}"):
+                if line.strip() and self.c.stringWidth(line + ch, self.F["r"], size) > w:
+                    out.append((line, u)); line = "    " + ch
+                else:
+                    line += ch
+            if line.strip():
+                out.append((line, u))
+        return out
+
+    @staticmethod
+    def context_of(name, x_):
+        """What the card itself says about where its explanation comes from: type, how the name was matched, by whom."""
+        bits = []
+        if x_.get("type"):
+            bits.append(str(x_["type"]))
+        if x_.get("found") and x_.get("family") and str(x_.get("family")).lower() != str(name).lower():
+            bits.append(f"{name} is read as Malpedia's {x_['family']}" + (f" ({x_['matched_by']})" if x_.get("matched_by") else ""))
+        who = f"Defined by {x_['by']}" if x_.get("by") else ("Malpedia entry" if x_.get("found") else "")
+        upd = f"updated {x_['updated']}" if x_.get("updated") else ""
+        if who:
+            bits.append(who + (f", {upd}" if upd else ""))
+        elif upd:
+            bits.append(upd.capitalize())
+        return " · ".join(bits)
+
+    @staticmethod
+    def refs_of(x_):
+        """The card's sources: its own page first (Malpedia, NVD), then its references, each once."""
+        seen, out = set(), []
+        for u in [x_.get("url"), x_.get("nvd_url")] + list(x_.get("references") or []) + list(x_.get("curated_references") or []):
+            if isinstance(u, str) and u.startswith(("http://", "https://")) and u not in seen:
+                seen.add(u); out.append(u)
+        return out
+
     def explanation(self, x, y, w, name, x_, stat, comms):
-        """As the Executive card, but nothing is cut: the full title and the whole description, wrapped."""
+        """As the Executive card, but nothing is cut: the full title and the whole description, wrapped, then where it
+        comes from (type, match, author) and its references, each a link."""
         kind = x_.get("kind")
         if kind == "cve":
             tags = ([("Actively exploited · CISA KEV", RED)] if x_.get("exploited") else []) + \
@@ -137,7 +179,16 @@ class AnalystDoc(ex.Doc):
         dl = ex.simpleSplit(self.s(desc), self.F["r"], 8.2, w - 24)
         al = ex.simpleSplit(self.s(alert), self.F["r"], 7.8, w - 36) if alert else []
         sl = ex.simpleSplit(self.s(stat or ""), self.F["r"], 7.6, w - 24) if stat else []
-        h = 46 + 11 * len(dl) + 11 * len(tl) + 10 * len(sl) + (20 + 10 * len(al) if al else 0)
+        ctx = self.context_of(name, x_)
+        cl = ex.simpleSplit(self.s(ctx), self.F["r"], 7.6, w - 24) if ctx else []
+        refs = self.refs_of(x_)
+        shown = refs[:REFS_SHOWN]
+        more = len(refs) - len(shown)
+        rl = self.url_lines(shown, w - 24, 7.2)
+        if more:
+            rl.append((f"and {more} more on the {'Malpedia' if x_.get('found') else 'source'} page", None))
+        h = (46 + 11 * len(dl) + 11 * len(tl) + 10 * len(sl) + (20 + 10 * len(al) if al else 0)
+             + (6 + 10 * len(cl) if cl else 0) + (19 + 9.4 * len(rl) if rl else 0))
         if y is None:
             return h
         self.card(x, y, w, h)
@@ -158,6 +209,19 @@ class AnalystDoc(ex.Doc):
             self.c.roundRect(x + 10, yy - 10 * (len(al) - 1) - 5, w - 20, 10 * len(al) + 6, 6, stroke=1, fill=1)
             for ln in al:
                 self.text(x + 18, yy, ln, 7.8, HexColor("#f6c6cb")); yy -= 10
+        if cl:
+            yy -= 6
+            for ln in cl:
+                self.text(x + 12, yy, ln, 7.6, HexColor("#b9a8ff")); yy -= 10
+        if rl:
+            yy -= 6
+            self.text(x + 12, yy, "REFERENCES", 6.8, MUTE, True); yy -= 13
+            for ln, u in rl:
+                self.text(x + 12, yy, ln, 7.2, HexColor("#8fb4ff") if u else MUTE)
+                if u:
+                    tw = self.c.stringWidth(ln, self.F["r"], 7.2)
+                    self.c.linkURL(u, (x + 12, yy - 2, x + 12 + tw, yy + 7.5), relative=0)
+                yy -= 9.4
         return h
 
     def note_card(self, x, y, w, n, this_code):
@@ -171,7 +235,7 @@ class AnalystDoc(ex.Doc):
             return h
         on = any(cc["code"] == this_code for cc in n.get("codes") or [])
         self.card(x, y, w, h, tone=BLUE if on else AMBER)
-        tx = self.pill(x + 12, y - 17, "Researcher's note", AMBER)
+        tx = self.pill(x + 12, y - 17, f"Researcher's note on {n['name']}" if n.get("name") else "Researcher's note", AMBER)
         if on:
             self.pill(tx, y - 17, "On this combination", BLUE)
         self.text(x + w - 14, y - 17, n.get("date") or "", 7.6, MUTE, anchor="end")
@@ -275,19 +339,45 @@ def build(d, meta):
                        f"{fmt(shown)} of {fmt(d['kpis']['devices'])} shown, the most records first; every device is in {d['csv_devices']}, every record in {d['csv_records']}")
         doc.table(M + 14, top, tw, cols, [row(x) for x in chunk])
 
-    # ---------------- across reports and what the devices are
-    y = doc.new_page("Across reports")
-    lw = (W - 2 * M - 12) * .6
-    hh = y - 30
-    top = doc.card(M, y, lw, hh, "Across reports", "What these devices carried in the name's other reports: each exact pattern, with its code to search next")
-    yy = doc.hero(M + 14, top, lw - 28, [(fmt(d["across"]["multi"]), "devices also in other reports", HexColor("#a9c3ff")),
-                                         (fmt(d["across"]["patterns_total"]), "exact patterns", TXT),
-                                         (_share(d["across"]["multi"], k["devices"]), "of the devices", HexColor("#ffd38a"))])
-    if not d["across"]["patterns"]:
-        doc.wrap(M + 14, yy - 6, ("An analyst code covers the whole selection, with several names: the researchers' view of the code gives each "
-                                  "name's cross-report patterns and their codes." if is_a else
-                                  "None of these devices was seen in another report of this name in this period."), lw - 28, 8.8, DIM)
-    for p in d["across"]["patterns"]:
+    # ---------------- across reports and what the devices are: only the parts that have something to show (an empty
+    # chart is left out, and the page with it when nothing is left; the key findings already say "none")
+    across_on = bool(d["across"]["multi"] or d["across"]["patterns"])
+    side = []                                          # (title, subtitle, rows, bars options, row height)
+    if d["report_sets"]:
+        side.append(("Reports these devices were seen in", "Devices per set of reports", d["report_sets"], {"stack": True}, 47))
+    if any(r["label"] != NOT_GIVEN for r in d["kinds"]):
+        side.append(("What the devices are", f"{unit} per vendor / type, as the reports name them", d["kinds"], {"metric": "count", "stack": True}, 37))
+    if d["ports"]:
+        side.append(("Destination ports" if comms else "Ports", f"{unit} per port / protocol", d["ports"], {"metric": "count"}, 17))
+    after = None                                       # where the explanations may start on this page (charts on their own)
+    top0 = H - M - 44                                  # the first line under a page's header (AnalystDoc.new_page)
+    alone_h = min(top0 - 30, max(110, max((66 + min(len(s[2]), 10) * s[4] for s in side), default=0)))
+    shared = not across_on and bool(d["explained"] or d["notes"]) and top0 - alone_h - 18 > H * .45
+    if across_on or side:
+        y = doc.new_page("Across reports" if across_on else " · ".join([s[0] for s in side] + (["Explained"] if shared else [])))
+        hh = y - 30
+        lw = (W - 2 * M - 12) * .6 if (across_on and side) else W - 2 * M if across_on else 0
+        if side:                                       # beside Across reports, stacked; on their own, side by side
+            if across_on:
+                x2, w2 = M + lw + 12, W - 2 * M - lw - 12
+                h3 = (hh - 12 * (len(side) - 1)) / len(side)
+                spots = [(x2, y - i * (h3 + 12), w2, h3) for i in range(len(side))]
+            else:                                      # as tall as their rows need, no taller
+                w3 = (W - 2 * M - 12 * (len(side) - 1)) / len(side)
+                spots = [(M + i * (w3 + 12), y, w3, alone_h) for i in range(len(side))]
+                after = y - alone_h - 18 if shared else None
+            for (title, sub, rows, opt, rh), (sx, sy, sw, sh) in zip(side, spots):
+                top = doc.card(sx, sy, sw, sh, title, sub)
+                doc.bars(sx + 14, top, sw - 28, rows, n=max(1, int((sh - 56) // rh)), **opt)
+    if across_on:
+        top = doc.card(M, y, lw, hh, "Across reports", "What these devices carried in the name's other reports: each exact pattern, with its code to search next")
+        yy = doc.hero(M + 14, top, lw - 28, [(fmt(d["across"]["multi"]), "devices also in other reports", HexColor("#a9c3ff")),
+                                             (fmt(d["across"]["patterns_total"]), "exact patterns", TXT),
+                                             (_share(d["across"]["multi"], k["devices"]), "of the devices", HexColor("#ffd38a"))])
+        if not d["across"]["patterns"] and is_a:
+            doc.wrap(M + 14, yy - 6, "An analyst code covers the whole selection, with several names: the researchers' view of the code gives each "
+                                     "name's cross-report patterns and their codes.", lw - 28, 8.8, DIM)
+    for p in (d["across"]["patterns"] if across_on else []):
         if yy < y - hh + 70:
             break
         yy -= 6
@@ -299,19 +389,17 @@ def build(d, meta):
             doc.text(M + 22, yy - 9.5, doc.fit(part["report"], 100, 8, True), 8, DIM, True)
             yy = doc.chips(M + 128, yy, lw - 142, part["items"], 7.6) - 2
         doc.c.setStrokeColor(Color(1, 1, 1, .05)); doc.c.line(M + 14, yy + 2, M + lw - 14, yy + 2)
-    x2, w2 = M + lw + 12, W - 2 * M - lw - 12
-    h3 = (hh - 24) / 3
-    top = doc.card(x2, y, w2, h3, "Reports these devices were seen in", "Devices per set of reports")
-    doc.bars(x2 + 14, top, w2 - 28, d["report_sets"], n=max(1, int((h3 - 56) // 47)), stack=True)
-    top = doc.card(x2, y - h3 - 12, w2, h3, "What the devices are", f"{unit} per vendor / type, as the reports name them")
-    doc.bars(x2 + 14, top, w2 - 28, d["kinds"], metric="count", n=max(1, int((h3 - 56) // 37)), stack=True)
-    top = doc.card(x2, y - 2 * (h3 + 12), w2, h3, "Destination ports" if comms else "Ports", f"{unit} per port / protocol")
-    doc.bars(x2 + 14, top, w2 - 28, d["ports"], metric="count", n=max(1, int((h3 - 50) // 17)))
 
     # ---------------- explained: the name and every CVE in the combination, then the researchers' notes
     if d["explained"] or d["notes"]:
-        y = doc.new_page("Explained")
+        if after is not None:                          # room left under the charts: carry on there
+            y = after
+        else:
+            y = doc.new_page("Explained")
         doc.text(M, y - 4, "WHAT THE NAME AND ITS VULNERABILITIES ARE", 8, HexColor("#a9b8ff"), True)
+        if not d["notes"]:                             # say so, rather than leave the reader looking for them
+            doc.text(W - M, y - 4, "No researcher notes on " + ("these names" if len(d["explained"]) > 1 else "this name")
+                     + " yet: notes added on the Definitions page appear in the next report", 7.6, MUTE, anchor="end")
         y -= 14
         col_w, gap = (W - 2 * M - 12) / 2, 12
         cols_y = [y, y]
