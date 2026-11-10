@@ -322,6 +322,9 @@ body {
   .lg-film-poster img { animation: lg-fade-in .8s ease both; }
 }
 
+/* Read the Docs' version picker ("latest"): one version only, so it is not shown */
+readthedocs-flyout { display: none !important; }
+
 /* footer */
 .md-footer { border-top: 1px solid rgba(120, 140, 190, .1); }
 .md-footer-meta { background: #04050a; }
