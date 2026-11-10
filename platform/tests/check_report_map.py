@@ -205,6 +205,14 @@ try:
     os.remove(os.path.join(tmp, "data", "report_map_local.json"))
     m.rebuild()
     ok("…until it is taken back", e("scan_telnet")["section"] == "Services")
+    rules_p = os.path.join(tmp, "data", "report_map_rules.json")
+    r0 = json.load(open(rules_p)); n_ev = len(m.get()["events"])
+    r1 = dict(r0, overrides=dict(r0.get("overrides") or {}, scan_ssh={"section": "Services", "group": "Known vulnerability"}))
+    json.dump(r1, open(rules_p, "w"))
+    ok("an update with new rules regroups the map by itself", e("scan_ssh")["group"] == "Known vulnerability")
+    ok("…quietly: our own regrouping is not news from Shadowserver", len(m.get()["events"]) == n_ev)
+    json.dump(r0, open(rules_p, "w"))
+    ok("…and back", e("scan_ssh")["group"] != "Known vulnerability")
 
     print("5. What arrives in the database")
     cols = list(m.get()["reports"]) + ["files_scan_rdp", "system.views", "scan_brandnew", "leak_mailboxes", "event4_honeypot_newscan"]

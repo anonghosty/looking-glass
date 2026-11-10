@@ -37,5 +37,6 @@ run "analyst codes (analyst → researcher)" $PY tests/check_acodes.py
 run "several reports + filters"       $PY tests/check_cross_filters.py
 run "management portal (no addresses)" $PY tests/check_management.py
 run "report map (Shadowserver schema)" $PY tests/check_report_map.py
+run "services for researchers (no hosts)" $PY tests/check_services_kb.py
 echo; echo "$pass passed, $fail failed${skip:+, $skip skipped}${failed:+: ${failed[*]}}"
 [ "$fail" = 0 ]

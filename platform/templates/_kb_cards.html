@@ -77,3 +77,29 @@
       </div>
       <div class="table-wrap dz-table"><table id="issTable"><thead><tr><th data-sort="name">Issue</th><th data-sort="hosts">Hosts</th><th data-sort="status">Status</th><th>What it is</th><th data-sort="across" class="dz-across-h">Across reports</th><th class="dz-act"></th></tr></thead><tbody></tbody></table></div>
     </section>
+
+    {# the services reports themselves, grouped by what the exposure means (static/js/kb-services.js, services_kb.py) #}
+    <section class="st-card dz" id="cardSvc" hidden>
+      <header class="dz-head">
+        <div class="dz-icon dz-icon-svc" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M4 5h16v5H4zM4 14h16v5H4zM7.5 7.5h.01M7.5 16.5h.01M11 7.5h6M11 16.5h6"/></svg>
+        </div>
+        <div class="dz-title">
+          <h2>Services · what each report is about</h2>
+          <p class="dz-sub">Every publicly accessible / vulnerable services report, grouped by what the exposure means. What
+            Shadowserver says about it, what Looking Glass says, and what the reports show here: how many hosts, their products and the
+            issues found on them. Kept current from Shadowserver's report schema through the Looking Glass report feed.</p>
+        </div>
+      </header>
+      <section class="svc-asks" id="svcAsks" hidden aria-label="Looking Glass asks">
+        <h3>Looking Glass asks: check these</h3>
+        <ul id="svcAskList"></ul>
+      </section>
+      <div class="dz-stats svc-groups" role="tablist" aria-label="Groups of services reports" id="svcTabs"></div>
+      <div class="dz-toolbar">
+        <input type="search" class="dz-search" id="svcSearch" placeholder="Search a report, product, port or issue" autocomplete="off" aria-label="Search the services reports">
+        <label class="svc-only"><input type="checkbox" id="svcSeen" checked> Only reports seen here</label>
+        <span class="dz-status" id="svcStatus" role="status"></span>
+      </div>
+      <div class="table-wrap dz-table"><table id="svcTable"><thead><tr><th>Report</th><th>Seen here</th><th>Severity</th><th>Issues on these hosts</th><th>What it is</th><th class="dz-act"></th></tr></thead><tbody></tbody></table></div>
+    </section>

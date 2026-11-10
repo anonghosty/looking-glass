@@ -2981,6 +2981,13 @@ import report_map as _report_map  # noqa: E402
 REPORT_MAP = _report_map.ReportMap(
     BASE_DIR, collections=db.list_collection_names,
     fields_of=lambda n: list((db[n].find_one(sort=[("_id", -1)]) or {}).keys()), logger=app.logger)
+# the Services section of the Definitions page: each services report as something researchers study (services_kb.py)
+import services_kb as _services_kb  # noqa: E402
+_services_kb.install(app, {
+    "report_map": REPORT_MAP, "svc_store": svc["store"], "load_day": lambda: svc["store"].get(replay_now()),
+    "report_info": report_info, "notes": NOTES, "allowed": _kb_allowed,
+    "cve_card": lambda n: cve_intel.card(n, fetch=False), "issues_kb": issues_kb,
+    "collections": lambda: [n for n in db.list_collection_names() if not n.startswith(_report_map.NO_REPORT)]})
 
 # Not when app.py is merely imported by a script or check: the schedule state file belongs to the server.
 _SERVING = __name__ == "__main__" or "gunicorn" in os.path.basename(sys.argv[0] if sys.argv else "")

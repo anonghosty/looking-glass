@@ -283,9 +283,11 @@
   function open(name, section) {
     opener = document.activeElement;
     cur = { name: name || "", section: section || "infections" }; codes = []; intel = null; tab = "seen"; groupSel = "";
-    title.textContent = cur.name; eyebrow.textContent = `Notes · ${cur.section === "issues" ? "issue" : "infection / category"}`;
+    const svc = cur.section === "services";              // a services report: no combination codes (yet)
+    title.textContent = cur.name; eyebrow.textContent = `Notes · ${svc ? "services report" : cur.section === "issues" ? "issue" : "infection / category"}`;
     ta.value = ""; msg.textContent = ""; msg.className = "kbn-msg";
-    render([]); renderPicked(); renderPane(); load();
+    for (const n of [combosH, picked, tabs, pane]) n.hidden = svc;
+    render([]); if (!svc) { renderPicked(); renderPane(); } load();
     box.hidden = false; back.hidden = false; document.body.classList.add("kbn-open");
     setTimeout(() => ta.focus(), 30);
   }

@@ -17,7 +17,7 @@
   ],
   "service_groups": [
     {"group": "Known vulnerability",
-     "pattern": "_(http_vulnerable|exchange|smtp_vulnerable|imap_vulnerable|pop3_vulnerable|netis_router|synfulknock|badsecrets|ssl_freak|ssl_poodle|isakmp|cisco_smart_install)$"},
+     "pattern": "^scan_(http_vulnerable|exchange|smtp_vulnerable|imap_vulnerable|pop3_vulnerable|netis_router|synfulknock|badsecrets|ssl_freak|ssl_poodle|isakmp|cisco_smart_install)$"},
     {"group": "Can be abused for attacks (amplification, tunnels)",
      "pattern": "_(dns|ntp|ntpmonitor|ssdp|snmp|chargen|qotd|memcached|mdns|portmapper|ddos_middlebox|loop_dos|ws_discovery|ldap_udp|netbios|ubiquiti|dvr_dhcpdiscover|coap|nat_pmp|tftp|stun|slp|mssql|db2|ipp|rdpeudp|ip_tunnel|gtp)$"},
     {"group": "Should not be open to the internet (remote access, databases, management)",

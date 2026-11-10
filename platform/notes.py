@@ -26,11 +26,18 @@ MAX_CODES = 10                 # combination codes on one note (combos.py)
 CODE_RX = re.compile(r"^LG-[CX]-[0-9A-F]{8}$")
 
 
+SECTIONS = ("infections", "issues", "services")       # services: the reports themselves (services_kb.py)
+
+
+def _section(v):
+    return v if v in SECTIONS else "infections"
+
+
 class Notes:
     def __init__(self, path, people, logger=None):
         self.path, self.people, self.log = path, people, logger
         self.lock = threading.Lock()
-        self.mtime, self.data = None, {"infections": {}, "issues": {}}
+        self.mtime, self.data = None, {"infections": {}, "issues": {}, "services": {}}
 
     def _load(self):
         try:
@@ -42,7 +49,7 @@ class Notes:
         try:
             with open(self.path, encoding="utf-8") as f:
                 d = json.load(f)
-            self.data = {"infections": d.get("infections") or {}, "issues": d.get("issues") or {}}
+            self.data = {"infections": d.get("infections") or {}, "issues": d.get("issues") or {}, "services": d.get("services") or {}}
             self.mtime = m
         except (OSError, ValueError) as exc:
             if self.log:
@@ -133,7 +140,7 @@ def install(app, ctx):
         if request.method == "GET":
             if not ctx["allowed"]():
                 return jsonify(error="Notes are for researchers and admins."), 403
-            section = "issues" if request.args.get("section") == "issues" else "infections"
+            section = _section(request.args.get("section"))
             name = (request.args.get("name") or "").strip()[:120]
             return jsonify(notes=notes.list(section, name))
         if not ctx["change_allowed"]():
@@ -141,7 +148,7 @@ def install(app, ctx):
         if not ctx["fresh"]():
             return jsonify(error="Sign in again to make changes (your session is older than 12 hours)."), 403
         b = request.get_json(silent=True) or {}
-        section = "issues" if b.get("section") == "issues" else "infections"
+        section = _section(b.get("section"))
         name = str(b.get("name") or "").strip()[:120]
         text = str(b.get("text") or "").replace("\r", "").strip()[:MAX_LEN]
         if not name or not text:
@@ -156,7 +163,7 @@ def install(app, ctx):
                 return jsonify(error=f"{c} is not a combination code known here."), 400
         user, role, _ = me()
         n = notes.add(section, name, text, user, role, codes)
-        ctx["audit"].add("note_added", user=user, target=f"{'issue:' if section == 'issues' else ''}{name}",
+        ctx["audit"].add("note_added", user=user, target=f"{ {'issues': 'issue:', 'services': 'service:'}.get(section, '') }{name}",
                          detail=text[:120] + (f" · {', '.join(codes)}" if codes else ""))
         fnd = b.get("finding")
         track = getattr(notes, "findings", None)

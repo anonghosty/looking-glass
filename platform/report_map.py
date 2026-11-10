@@ -446,6 +446,7 @@ class ReportMap:
         self.feed_url = feed_url or os.environ.get("REPORT_MAP_FEED_URL") or FEED_URL
         self.lock = threading.RLock()
         self._cache = {"mtime": None, "data": None}
+        self._rebuilding = False
 
     # ---- reading
     def rules(self):
@@ -454,8 +455,31 @@ class ReportMap:
     def local(self):
         return _read(self.paths["local"], {}) or {}
 
+    def rules_hash(self):
+        try:
+            with open(self.paths["rules"], "rb") as f:
+                return hashlib.sha256(f.read()).hexdigest()[:16]
+        except OSError:
+            return ""
+
     def get(self):
-        """The current map: the run-time one, else the shipped snapshot. {reports, facts, status, events}"""
+        """The current map: the run-time one, else the shipped snapshot. {reports, facts, status, events}
+        A map built with other rules (an update shipped new ones) is rebuilt first, quietly: our own regrouping is not
+        news from Shadowserver."""
+        cur = self._get()
+        if not self._rebuilding and os.path.exists(self.paths["map"]) and cur.get("reports") and \
+                (cur.get("status") or {}).get("rules_hash") != self.rules_hash() and self.lock.acquire(blocking=False):
+            # (a map from before rules were recorded has none: rebuilt once too)
+            self._rebuilding = True
+            try:
+                self.rebuild(quiet=True, note="rebuilt with updated rules")
+            finally:
+                self._rebuilding = False
+                self.lock.release()
+            cur = self._get()
+        return cur
+
+    def _get(self):
         for key in ("map", "snapshot"):
             p = self.paths[key]
             try:
@@ -484,7 +508,7 @@ class ReportMap:
 
     # ---- writing
     def _facts(self):
-        cur = self.get()
+        cur = self._get()
         if cur.get("facts"):
             return cur["facts"], (cur.get("status") or {}).get("schema_commit", "")
         snap = _read(self.paths["snapshot"], {}) or {}
@@ -496,20 +520,21 @@ class ReportMap:
         _write(self.paths["map"], data)
         self._cache = {"mtime": None, "data": None}
 
-    def rebuild(self, facts=None, commit=None, note=None, events=None):
-        """Build the map from the facts with the current rules and the administrators' moves; record what changed."""
+    def rebuild(self, facts=None, commit=None, note=None, events=None, quiet=False):
+        """Build the map from the facts with the current rules and the administrators' moves; record what changed
+        (not when quiet: a rebuild for new rules of our own)."""
         with self.lock:
             if facts is None:
                 facts, commit = self._facts()
-            cur = self.get()
+            cur = self._get()
             extra = {k: v for k, v in (cur.get("facts_db") or {}).items() if k not in facts}   # seen only in the database
             reports = build({**facts, **extra}, self.rules(), self.local())
             for k in extra:
                 reports[k].update(in_schema=False, flag="not in Shadowserver's schema: placed from its fields")
             when = _now()
-            ev = (events or []) + (diff(cur.get("reports") or {}, reports, when) if cur.get("reports") else [])
+            ev = (events or []) + (diff(cur.get("reports") or {}, reports, when) if cur.get("reports") and not quiet else [])
             status = dict(cur.get("status") or {}, schema_commit=commit or (cur.get("status") or {}).get("schema_commit", ""),
-                          built=when, reports=len(reports))
+                          built=when, reports=len(reports), rules_hash=self.rules_hash())
             if note:
                 status["note"] = note
             self._save({"status": status, "reports": reports, "facts": facts, "facts_db": extra,
