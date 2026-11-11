@@ -39,6 +39,7 @@ saved = (book.path, book.data, book.loaded, F.path, F.mtime, F.data)
 book.path, book.data, book.loaded = os.path.join(tmp, "codes.json"), {}, True
 F.path, F.mtime, F.data = os.path.join(tmp, "findings.json"), None, {"seq": 0, "items": {}}
 real_ids = A.ACODES.paths["ids"]; A.ACODES.paths["ids"] = os.path.join(tmp, "acodes")
+real_exports = book.export_paths["dir"]; book.export_paths["dir"] = os.path.join(tmp, "combo_exports")   # not data/
 audit = A.AUTH["audit"]; real_add = audit.add; audited = []
 audit.add = lambda *a, **k: audited.append(a[0] if a else "")
 real_people = F.people_of        # the accounts that do each job: test accounts here (findings.py channels)
@@ -128,11 +129,23 @@ try:
     names_in = zipfile.ZipFile(io.BytesIO(z)).namelist()
     ok("the report: PDF + devices CSV + records CSV", len(names_in) == 3 and any(n.endswith(".pdf") for n in names_in), ", ".join(names_in))
     ok("every step is in the audit log", {"analyst_code", "finding_reply", "combo_export"} <= set(audited), ", ".join(sorted(set(audited))))
+    print("The finding says what the analyst asked for")
+    st, fl = call("/api/findings", ANALYST)
+    f1 = next((f for f in fl.get("findings") or [] if f["id"] == "1"), {})
+    ok("a code made with “Everything”: the finding says so", (f1.get("codes") or [{}])[0].get("asked", "").startswith("Everything"),
+       (f1.get("codes") or [{}])[0].get("asked", ""))
+    st, d3 = call("/api/analyst-codes", ANALYST, "POST", {"platform": "comms", "kind": "filters", "value": value, "at": at, "focus": "across",
+                                                          "to": "lg-check-researcher", "title": "Across reports only"})
+    ok("the same selection asked across reports only is a code of its own", st == 200 and d3.get("code") not in (None, code), d3.get("code", ""))
+    st, fl = call("/api/findings", ANALYST)
+    f3 = next((f for f in fl.get("findings") or [] if f["number"] == d3.get("finding")), {})
+    ok("…and its finding says “Just across-report combinations”", (f3.get("codes") or [{}])[0].get("asked", "").startswith("Just across-report"),
+       (f3.get("codes") or [{}])[0].get("asked", ""))
+    st, fr = call("/api/findings", RESEARCHER, role="researcher", user="lg-check-researcher")
+    ok("the researcher it was sent to sees the same", any((f.get("codes") or [{}])[0].get("asked", "").startswith("Just across-report")
+                                                          for f in fr.get("findings") or []))
 finally:
-    for jid in jids:
-        for s in (".zip", ".json"):
-            try: os.remove(os.path.join(A.BASE_DIR, "data", "combo_exports", jid + s))
-            except OSError: pass
+    book.export_paths["dir"] = real_exports
     audit.add = real_add
     F.people_of = real_people
     A.ACODES.paths["ids"] = real_ids

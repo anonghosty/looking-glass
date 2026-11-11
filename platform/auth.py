@@ -619,6 +619,14 @@ class Throttle:
         with self.lock:
             self.fail.pop((ip, (name or "").lower()), None)
 
+    def clear_address(self, ip):
+        """Forget every failure counted for one address (retest_reset.py: this computer's own, after the self-test)."""
+        with self.lock:
+            gone = [k for k in self.fail if ip in (k[0], k[1])]
+            for k in gone:
+                del self.fail[k]
+            return len(gone)
+
     def count(self, key, window, add=False):
         with self.lock:
             r = self._recent(key, window)
@@ -1323,4 +1331,4 @@ def install(app, base_dir, logger):
     threading.Thread(target=prune_loop, daemon=True, name="session-prune").start()
 
     return {"users": users, "sessions": sessions, "roles": roles, "audit": audit, "has_perm": has_perm, "csrf_ok": csrf_ok,
-            "is_admin": lambda: has_perm("settings"), "fresh": fresh}
+            "is_admin": lambda: has_perm("settings"), "fresh": fresh, "throttle": throttle}

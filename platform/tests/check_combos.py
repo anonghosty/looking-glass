@@ -49,7 +49,7 @@ def call(path, perms, method="GET", body=None, role="analyst", raw=False):
         return code, json.loads(r.get_data(as_text=True) or "{}")
 
 
-JIDS = []                                  # the check's searches: their files in data/combo_exports are removed at the end
+JIDS = []                                  # the check's searches (their downloads are kept in its temporary folder)
 
 
 def wait(jid, perms=ANALYST):
@@ -65,6 +65,8 @@ def wait(jid, perms=ANALYST):
 tmp = tempfile.mkdtemp(prefix="lg-combos-")
 book = A.COMBOS
 real_path, real_data, real_loaded = book.path, book.data, book.loaded
+real_exports = book.export_paths["dir"]                  # the check's downloads go to its temporary folder, not data/
+book.export_paths["dir"] = EXPORTS = os.path.join(tmp, "combo_exports")
 book.path, book.data, book.loaded = os.path.join(tmp, "combo_codes.json"), {}, True
 real_notes = A.NOTES
 audit = A.AUTH["audit"]
@@ -145,8 +147,8 @@ try:
        ", ".join(f"{r['label']} {r['devices']}" for r in (s.get("regions") or [])[:3]))
     code, z = call(f"/api/combos/search/{d['id']}/download", ANALYST, raw=True)
     ok("the ZIP is also kept on disk (owner-only), so a service restart before the download loses nothing",
-       os.path.exists(os.path.join(A.BASE_DIR, "data", "combo_exports", d["id"] + ".zip"))
-       and oct(os.stat(os.path.join(A.BASE_DIR, "data", "combo_exports", d["id"] + ".zip")).st_mode & 0o777) == "0o600")
+       os.path.exists(os.path.join(EXPORTS, d["id"] + ".zip"))
+       and oct(os.stat(os.path.join(EXPORTS, d["id"] + ".zip")).st_mode & 0o777) == "0o600")
     zf = zipfile.ZipFile(io.BytesIO(z))
     names = zf.namelist()
     ok("the ZIP holds a PDF, the devices CSV and the records CSV", len(names) == 3 and any(n.endswith(".pdf") for n in names)
@@ -231,12 +233,7 @@ try:
 finally:
     if real_gate:
         A.COMBOS.review_gate = real_gate
-    for jid in JIDS:
-        for sfx in (".zip", ".json"):
-            try:
-                os.remove(os.path.join(A.BASE_DIR, "data", "combo_exports", jid + sfx))
-            except OSError:
-                pass
+    book.export_paths["dir"] = real_exports              # its downloads go with the temporary folder below
     audit.add = real_add
     A.NOTES = real_notes
     book.path, book.data, book.loaded = real_path, real_data, real_loaded

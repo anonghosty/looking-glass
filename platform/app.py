@@ -116,6 +116,9 @@ PUBLIC_DEMO = os.environ.get("PUBLIC_DEMO") == "1"   # force demo masking for ev
 security.install(app, app.logger)
 # login, accounts, roles and sessions (auth.py): every page and API needs a login
 AUTH = auth.install(app, BASE_DIR, app.logger)
+# the security self-test clears this computer's login counters itself, so it never restarts the service (retest_reset.py)
+import retest_reset  # noqa: E402
+retest_reset.install(app, {"throttle": AUTH["throttle"], "audit": AUTH["audit"]})
 # definitions, notes and network corrections name the person by their registered full name, not the username (people.py)
 from people import People  # noqa: E402
 people = People(AUTH["users"])

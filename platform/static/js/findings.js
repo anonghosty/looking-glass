@@ -134,7 +134,13 @@
     for (const x of codes) {
       const isA = x.code.startsWith("LG-A-");
       const row = el("div", `fd-code${isA ? " a" : ""}`);
-      row.append(el("code", null, x.code), el("span", null, x.text || ""));
+      const what = el("span", null, x.text || "");
+      if (x.asked) {                      // what the analyst asked for when making the code (acodes.py)
+        const [head, ...rest] = x.asked.split(": ");
+        const ask = el("span", "fd-asked"); ask.append(el("b", null, "Asked for: "), document.createTextNode(head));
+        ask.title = rest.join(": ") || head; what.append(ask);
+      }
+      row.append(el("code", null, x.code), what);
       const acts = el("div", "fd-code-acts");
       const link = (label, href, title) => { const a = el("a", "lg-btn sm", label); a.href = href; a.title = title; acts.append(a); };
       if (isA && data.can_research) link("Open as researcher", `/intel/${x.code}`, "The names, definitions and intel of exactly these records, never an address; pick codes for your reply");

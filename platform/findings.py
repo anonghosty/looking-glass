@@ -47,6 +47,7 @@ class Findings:
         self.people_of = lambda kind: []          # app.py: the active accounts that do that job (manager, researcher, analyst)
         self.title_of = lambda n: n               # app.py: a services report's readable title
         self.advisories_of = lambda fid: []       # advisory.py: a finding's advisories (no address)
+        self.asked_of = lambda code: ""           # acodes.py: what an analyst's code asks the researchers for
 
     # ---- the channel
     def recipient(self, kind, to):
@@ -368,7 +369,8 @@ class Findings:
         who = lambda u, r: {"by": self.people.name(u, ""), "role": ROLE_LABEL.get(r, "Researcher")}
         day = lambda t: time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(t)) if t else ""
         return {"id": x["id"], "number": f"#{x['id']}", "section": x["section"], "name": x["name"], "title": x["title"], "text": x["text"],
-                "codes": [{"code": c, "text": (describe(c) if describe else "") or ""} for c in x.get("codes") or []],
+                "codes": [{"code": c, "text": (describe(c) if describe else "") or "", "asked": self.asked_of(c) or ""}
+                          for c in x.get("codes") or []],
                 "status": x["status"], "status_label": LABEL.get(x["status"], x["status"]), "open": x["status"] in OPEN,
                 "created": day(x["at"]), **who(x["user"], x["role"]), "origin": x.get("origin", "researcher"),
                 "replies": sum(1 for h in x["history"] if h.get("kind") == "reply"),

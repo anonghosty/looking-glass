@@ -874,11 +874,11 @@ def install(app, ctx):
                          detail=f"{entry['name']} · {span} · {len(devs)} devices, {len(rows)} records")
         # kept on disk for an hour (owner-only files), so a service restart between the search and the download loses nothing
         try:
-            os.makedirs(out_dir, mode=0o700, exist_ok=True)
+            os.makedirs(exports["dir"], mode=0o700, exist_ok=True)
             for suffix, data in ((".zip", z.getvalue()), (".json", json.dumps({"user": job["user"], "name": f"{base}.zip",
                                                                                 "at": time.time(), "summary": job["summary"],
                                                                                 "gated": bool(job.get("needs_review") and not job.get("review_ok"))}).encode())):
-                fd = os.open(os.path.join(out_dir, job["id"] + suffix), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                fd = os.open(os.path.join(exports["dir"], job["id"] + suffix), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
                 with os.fdopen(fd, "wb") as f:
                     f.write(data)
         except OSError as exc:
@@ -886,13 +886,16 @@ def install(app, ctx):
                 ctx["logger"].warning("combination export not kept on disk: %s", exc)
         return {"name": f"{base}.zip", "bytes": z.getvalue()}
 
-    out_dir = os.path.join(ctx["base_dir"], "data", "combo_exports")
+    # where finished downloads are kept for an hour; a setting, so the checks keep theirs in a temporary folder and never
+    # write to (or delete from) the installation's data/combo_exports (external review, 2026-11-11)
+    exports = {"dir": os.path.join(ctx["base_dir"], "data", "combo_exports")}
+    book.export_paths = exports
 
     def from_disk(jid):
         """A finished search after a restart: (meta, zip bytes) if it is still on disk and younger than an hour."""
         if not re.fullmatch(r"[0-9a-f]{16}", jid or ""):
             return None, None
-        base = os.path.realpath(out_dir)
+        base = os.path.realpath(exports["dir"])
         meta_p = os.path.realpath(os.path.join(base, jid + ".json"))
         zip_p = os.path.realpath(os.path.join(base, jid + ".zip"))
         if not (meta_p.startswith(base + os.sep) and zip_p.startswith(base + os.sep)):
@@ -913,8 +916,8 @@ def install(app, ctx):
             for k in [k for k, j in jobs.items() if j["state"] != "running" and now - j["at"] > JOB_TTL]:
                 del jobs[k]
         try:
-            for n in os.listdir(out_dir):
-                p = os.path.join(out_dir, n)
+            for n in os.listdir(exports["dir"]):
+                p = os.path.join(exports["dir"], n)
                 if now - os.path.getmtime(p) > JOB_TTL:
                     os.remove(p)
         except OSError:

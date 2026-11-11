@@ -54,6 +54,10 @@
   .fd-move, .fd-code { grid-template-columns: 1fr; } .fd-h { flex-direction: column; } .fd-hero h1 { font-size: 20px; }
 }
 .fd-code-acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.fd-asked { display: inline-block; margin-top: 6px; padding: 2px 9px; border-radius: 999px; font-size: 12px; cursor: help;
+  color: #f5d08a; background: rgba(245, 181, 74, .1); border: 1px solid rgba(245, 181, 74, .35); }
+.fd-asked b { font-weight: 600; }
+.fd-code > span { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
 /* analysts' findings and replies */
 .fd-origin { padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; color: #f5d9a8; background: rgba(245, 181, 74, .12); border: 1px solid rgba(245, 181, 74, .4); }
 .fd-code.a { background: rgba(245, 181, 74, .06); border-color: rgba(245, 181, 74, .3); } .fd-code.a code { color: #f5d9a8; }

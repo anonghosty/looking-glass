@@ -43,6 +43,9 @@ book.path, book.data, book.loaded = os.path.join(tmp, "codes.json"), {}, True
 F.path, F.mtime, F.data = os.path.join(tmp, "findings.json"), None, {"seq": 0, "items": {}}
 F.people_of = lambda kind: [{"user": f"lg-check-{kind}", "name": f"Check {kind}", "role": kind}]
 real_store = book.review_paths["store"]; book.review_paths["store"] = os.path.join(tmp, "review_searches")
+# downloads too: the check's review<N> files never touch the installation's data/combo_exports (real reviews use the
+# same names), so there is nothing to delete there afterwards
+real_exports = book.export_paths["dir"]; book.export_paths["dir"] = os.path.join(tmp, "combo_exports")
 real_adv, real_org = A.ADVISORIES.dir, A.ORG.path
 A.ADVISORIES.dir, A.ORG.path = os.path.join(tmp, "advisories"), os.path.join(tmp, "organisation.json")
 audit = A.AUTH["audit"]; real_add = audit.add; audited = []
@@ -455,17 +458,10 @@ try:
     ok("one network: a finding for that organisation, no case", st == 200 and not d.get("case") and one.get("network") == s6["networks"][0]["network"]
        and not one.get("parent"), d.get("error", ""))
 finally:
-    for jid in jids:
-        for s_ in (".zip", ".json"):
-            try: os.remove(os.path.join(A.BASE_DIR, "data", "combo_exports", f"{jid}{s_}"))
-            except OSError: pass
     audit.add = real_add
     book.review_paths["store"] = real_store
+    book.export_paths["dir"] = real_exports
     A.ADVISORIES.dir, A.ORG.path = real_adv, real_org
-    for n in (f"review{i}" for i in range(1, 10)):
-        for s_ in (".zip", ".json"):
-            try: os.remove(os.path.join(A.BASE_DIR, "data", "combo_exports", n + s_))
-            except OSError: pass
     book.path, book.data, book.loaded, F.path, F.mtime, F.data, F.people_of = saved
     import shutil; shutil.rmtree(tmp, ignore_errors=True)
 print(f"\n{checks - len(fails)} of {checks} review checks passed" + (f"; FAILED: {fails}" if fails else ""))

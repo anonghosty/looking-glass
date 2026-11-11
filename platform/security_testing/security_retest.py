@@ -31,8 +31,7 @@ users = Users(os.path.join(ROOT, "data", "users.json"))
 
 
 def _restart_service():
-    """The login limits count per address for an hour, in the service's memory; this test fails logins on purpose,
-    so a second run within the hour would be refused. When this user runs the service, restart it first."""
+    """Only for an older service without the reset request below: restart it (a few seconds unreachable)."""
     import subprocess
     try:
         r = subprocess.run([os.path.join(ROOT, "deploy", "reload.sh")], capture_output=True, text=True, timeout=90)
@@ -42,8 +41,34 @@ def _restart_service():
         pass
 
 
+def _clear_login_counters():
+    """The login limits count per address for an hour, in the service's memory; this test fails logins on purpose,
+    so a second run within the hour would be refused. The service clears this computer's own counters on request
+    (retest_reset.py, automation key, this computer only), so the platform stays up for everyone while it runs.
+    Before 2026-11-11 the test restarted the service instead."""
+    import json
+    import urllib.error
+    import urllib.request
+    import lgauth  # noqa: F401  the automation key and this installation's address
+    try:
+        req = urllib.request.Request(f"{B}/api/selftest/reset-login-counters", data=b"{}", method="POST",
+                                     headers={"Content-Type": "application/json"})
+        d = json.load(urllib.request.urlopen(req, timeout=30))
+        print(f"Cleared this computer's login counters first ({d.get('cleared', 0)}); the service keeps running.")
+        return True
+    except urllib.error.HTTPError as e:
+        if e.code == 404 and os.environ.get("LG_RETEST_RESTART") == "1":
+            _restart_service()                # an older service: only when asked, since it interrupts the users
+            return True
+        print(f"Note: could not clear the login counters (HTTP {e.code}); if logins are refused with 429, "
+              "run again after an hour or with LG_RETEST_RESTART=1 (restarts the service).")
+    except (OSError, ValueError) as e:
+        print(f"Note: could not reach the service to clear the login counters: {e}")
+    return False
+
+
 if os.environ.get("LG_RETEST_NO_RESTART") != "1":
-    _restart_service()
+    _clear_login_counters()
 fails = 0
 UA = "LookingGlass-retest/1.0"
 

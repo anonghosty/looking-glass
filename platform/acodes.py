@@ -31,6 +31,9 @@ from flask import g, jsonify, render_template, request
 import intel as I
 
 ACODE_RX = re.compile(r"^LG-A-[0-9A-F]{8}$")
+# what the analyst asked for when making the code (the two choices on "Make an analyst code"), shown on the finding
+ASKED = {"everything": "Everything: every category (infections, CVEs and issues, services, across reports)",
+         "across": "Just across-report combinations: what these hosts carry in each report, with the LG-X codes"}
 HOST_FIELDS = {"src_ip", "ip", "src_ref", "ip_ref", "hostname", "src_hostname"}       # never shown to researchers
 LABELS = {"src_asn": "Source network", "asn": "Network", "dst_asn": "Destination network", "infection": "Infection",
           "source": "Report", "service": "Service", "family": "Report family", "issue": "Issue", "attack_class": "Attack type",
@@ -56,6 +59,14 @@ def install(app, ctx):
     svc_scope(args, day) -> services records, labels() -> {collection: report}, network(asn) -> name, defined() ->
     {(section, name): title}, describe(code) -> text."""
     book, hp = ctx["book"], ctx["has_perm"]
+
+    def asked_of(code):
+        """What an analyst's code asks the researchers for, as the finding shows it: the choice made with the code."""
+        e = book.get(code) if ACODE_RX.match(code or "") else None
+        if not e or e.get("kind") != "a":
+            return ""
+        return ASKED["across"] if e.get("focus") == "across" else ASKED["everything"]
+    ctx["findings"].asked_of = asked_of
 
     def analyst():
         return hp("unmasked") and hp("export")
