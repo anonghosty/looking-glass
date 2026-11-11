@@ -251,8 +251,7 @@ def check():
     ok("intro card / filters list it as not processed yet", any(u.get("name") == "scan_e2e_nogeo" for u in f.get("unsupported", [])))
 
     print("\n9. Constituency change (Settings) reaches both platforms; then back to the whole country")
-    tok = dotenv_values(os.path.join(COPY, ".env")).get("SETTINGS_TOKEN") or ""
-    hdr = {"X-Settings-Token": tok} if tok else {}
+    hdr = {}      # settings are changed through the automation key (lgauth), as an administrator
     cb, sb = get("/api/clock"), get("/api/svc/clock")
     st = get("/api/settings", headers=hdr)["settings"]
     # the busiest source network of the copied day, so the check works for any country

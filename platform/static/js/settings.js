@@ -14,7 +14,7 @@
   const norm = (n) => { let s = String(n || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toUpperCase().trim(); for (const x of SUFFIXES) if (s.endsWith(x)) s = s.slice(0, -x.length).trim(); return s; };
   const FOR = new URLSearchParams(location.search).get("for") || "";
   let data = null, chosen = new Set(), mode = "all", typeFilter = "", shapes = null, saved = null;
-  let token = (() => { try { return sessionStorage.getItem("lg.settingsToken") || ""; } catch { return ""; } })();
+  try { sessionStorage.removeItem("lg.settingsToken"); } catch { /* the settings token is gone (2026-11-11) */ }
 
   // ---------------- which settings this page shows
   if (FOR === "comms") {
@@ -26,7 +26,7 @@
   }
 
   async function load() {
-    data = await (await fetch("/api/settings", { cache: "no-store", headers: token ? { "X-Settings-Token": token } : {} })).json();
+    data = await (await fetch("/api/settings", { cache: "no-store" })).json();
     Object.assign(TYPE_NAMES, data.type_labels || {});          // every network type, the ones this site added included
     const s = data.settings;
     saved = { country: s.country, networks: [...s.networks].map(String).sort(), cidrs: [...s.cidrs] };
@@ -66,7 +66,7 @@
     idShow(true); idRender({ state: "running", total: 0, done: 0, added: 0, known: 0, failed: 0, current: "", log: [], message: "" });
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
     try {
-      const r = await fetch("/api/asns/identify", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf, ...(token ? { "X-Settings-Token": token } : {}) }, body: "{}" });
+      const r = await fetch("/api/asns/identify", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: "{}" });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { idRender({ state: "failed", total: 0, done: 0, added: 0, known: 0, failed: 0, log: [], message: j.error || `Refused (${r.status}).` }); return; }
     } catch (e) { idRender({ state: "failed", total: 0, done: 0, added: 0, known: 0, failed: 0, log: [], message: `Could not start: ${e.message}` }); return; }
@@ -79,13 +79,7 @@
     const box = $("access");
     if (data.writable) { box.hidden = true; return; }
     box.hidden = false; box.replaceChildren();
-    if (data.token_required) {
-      box.append(document.createTextNode("Applying changes needs the settings token (SETTINGS_TOKEN in .env)."));
-      const i = el("input"); i.type = "password"; i.placeholder = "Settings token"; i.autocomplete = "off";
-      const b = el("button", "pill-btn", "Use token"); b.type = "button";
-      b.addEventListener("click", () => { token = i.value; try { sessionStorage.setItem("lg.settingsToken", token); } catch { /* */ } load(); });
-      box.append(i, b);
-    } else box.append(document.createTextNode("Read only: settings can be applied on the server itself (open http://127.0.0.1:5000/settings there), or set SETTINGS_TOKEN in .env to allow it from other computers."));
+    box.append(document.createTextNode("Read only: changing settings needs an account with the Settings permission (administrators)."));
   }
 
   // ---------------- country
@@ -234,7 +228,7 @@
     try {
       // the session's CSRF token (from the page) proves the change comes from this page (auth.py)
       const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
-      const r = await fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf, ...(token ? { "X-Settings-Token": token } : {}) }, body: JSON.stringify(w) });
+      const r = await fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify(w) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || r.statusText);
       saved = { country: j.settings.country, networks: [...j.settings.networks].map(String).sort(), cidrs: [...j.settings.cidrs] };

@@ -69,7 +69,7 @@ These lists are effectively a target list. Traffic is unencrypted, so it can als
 
 **Fix:**
 - Bind to `127.0.0.1:5000` unless other screens need access.
-- If they do, put the app behind a reverse proxy with TLS and a login (or a VPN), and set `SETTINGS_TOKEN`.
+- If they do, put the app behind a reverse proxy with TLS and a login (or a VPN), and set `SETTINGS_TOKEN`. *(Later: every page now needs a login, and `SETTINGS_TOKEN` was removed on 2026-11-11; see the note under #2.)*
 - Remove the Public-profile firewall rules for port 5000, or limit them to the specific display devices.
 - Set the Wi-Fi network to Private.
 
@@ -89,7 +89,10 @@ Requests from a Windows browser to `localhost:5000` arrive as `127.0.0.1`, so th
 DNS rebinding goes further: a malicious site can also read all the data through your browser.
 
 **Fix:**
-- Require `SETTINGS_TOKEN` always (the page already supports it).
+- Require `SETTINGS_TOKEN` always (the page already supports it). *(Done differently since: every page needs a
+  login with two-factor authentication, and settings need an account with the Settings permission plus the page's
+  CSRF token. `SETTINGS_TOKEN` was removed on 2026-11-11: behind the login it never let a script in on its own, and
+  for a signed-in account without the permission it was a way around that permission.)*
 - Accept only `Content-Type: application/json`; a cross-site page can't send that without the server's permission.
 - Reject requests whose `Origin` doesn't match the server's own address.
 - Accept only expected `Host` values (`localhost`, `127.0.0.1`, the configured name).
@@ -186,7 +189,7 @@ A public `pk.` token is expected in a web map. Restrict it to your hostnames in 
 
 ## Recommended order
 
-1. **Settings writes (#2):** set `SETTINGS_TOKEN`, and add the JSON-only, Origin and Host checks.
+1. **Settings writes (#2):** set `SETTINGS_TOKEN`, and add the JSON-only, Origin and Host checks. *(Done: login, Settings permission and CSRF token instead; the token was later removed.)*
 2. **Network exposure (#1):** bind to localhost, or put the app behind TLS + login; tighten the firewall rules.
 3. **Database account (#3):** switch to a read-only MongoDB user.
 4. **Input validation (#4, #5, #7):** clamp `at`, validate Malpedia hashes, limit body size and country codes.

@@ -2531,21 +2531,19 @@ svc = services_api.register(app, {
 
 
 # ---------------------------------------------------------------- settings (both platforms)
-SETTINGS_TOKEN = os.environ.get("SETTINGS_TOKEN") or ""
 ADM1_DIR = os.path.join(BASE_DIR, "static", "data", "adm1")
+# SETTINGS_TOKEN (an X-Settings-Token header) was removed on 2026-11-11: the sign-in check runs first, so it never let
+# a script in on its own, and for a signed-in account without the Settings permission it was a way around that
+# permission. Settings now have one rule: a signed-in account with the 'settings' permission (administrators).
 
 
 def _settings_writable():
-    """Settings need the 'settings' permission (auth.py), or SETTINGS_TOKEN for tools."""
-    if SETTINGS_TOKEN and hmac_compare(request.headers.get("X-Settings-Token", ""), SETTINGS_TOKEN):
-        return True
+    """Settings need the 'settings' permission (auth.py), from a signed-in account."""
     return AUTH["has_perm"]("settings")
 
 
 def _settings_change_allowed():
     """A change also needs the session's CSRF token (sent by the Settings page), on top of the Origin checks."""
-    if SETTINGS_TOKEN and hmac_compare(request.headers.get("X-Settings-Token", ""), SETTINGS_TOKEN):
-        return True
     return AUTH["has_perm"]("settings") and AUTH["csrf_ok"]()
 
 
@@ -2836,11 +2834,6 @@ def definitions_page():
     return render_template("definitions.html")
 
 
-def hmac_compare(a, b):
-    import hmac
-    return hmac.compare_digest(str(a), str(b))
-
-
 _COUNTRY_INDEX = {"mtime": None, "data": {}}
 
 
@@ -2910,7 +2903,7 @@ def api_settings():
         if asn not in asn_registry.all() and asn != "0":
             companies.setdefault(f"AS{asn}", {"name": f"AS{asn}", "type": "unknown", "asns": [asn], "records": n, "demo_alias": ""})
     nets = sorted(companies.values(), key=lambda c: (-c["records"], c["name"]))
-    return jsonify(settings=settings.public(), writable=_settings_writable(), token_required=bool(SETTINGS_TOKEN),
+    return jsonify(settings=settings.public(), writable=_settings_writable(),
                    type_labels=netypes.labels(DATA_DIR),
                    countries=sorted(_country_index().values(), key=lambda c: c["country"]), networks=nets,
                    data_regions=sorted((sday.region_raw if sday is not None else {}).items(), key=lambda kv: -kv[1]),
@@ -2975,7 +2968,7 @@ def api_asns_identify():
 @app.route("/api/settings", methods=["POST"])
 def api_settings_save():
     if not _settings_change_allowed():
-        return jsonify(error="Settings can only be changed by an admin account (or with SETTINGS_TOKEN)."), 403
+        return jsonify(error="Settings can only be changed by an account with the Settings permission (administrators)."), 403
     if not AUTH["fresh"]():
         return jsonify(error="For your security, sign out and sign in again to change Settings (stay-signed-in sessions older than 12 hours can only view).", reauth=True), 403
     # JSON only: a cross-site page can only send text/plain or a form without asking the server first (report #2);

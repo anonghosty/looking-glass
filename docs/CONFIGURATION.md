@@ -50,7 +50,7 @@ of …"), then replays the whole day from 00:00 to 24:00. Details: [TECHNICAL_RE
 | `COUNTRY` | `GH` | the country your CSIRT covers: ISO 3166 two-letter code of any of the 54 African countries (`DZ`, `EG`, `KE`, `MA`, `NG`, `RW`, `SN`, `TZ`, `ZA`...). Sets the regions map and labels of the services platform |
 | `CONSTITUENT_ASNS` | empty | AS numbers your CSIRT is responsible for, comma separated. Empty = the whole country |
 | `CONSTITUENT_CIDRS` | empty | address ranges you are responsible for (for example a government network without its own AS number) |
-| `SETTINGS_TOKEN` | empty | optional: lets a script change settings with the header `X-Settings-Token`. People use an administrator account |
+| `SETTINGS_TOKEN` | (removed) | no longer used: it never let a script in without a signed-in session. Settings are changed by an account with the Settings permission; an old line in `.env` does nothing and can be deleted |
 
 ## Access and security
 

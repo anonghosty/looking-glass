@@ -6,8 +6,7 @@
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
   const fmt = (n) => Number(n || 0).toLocaleString("en-US");
   const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content || "";
-  const token = () => { try { return sessionStorage.getItem("lg.settingsToken") || ""; } catch { return ""; } };
-  const hdr = (json) => ({ ...(json ? { "Content-Type": "application/json", "X-CSRF-Token": csrf() } : {}), ...(token() ? { "X-Settings-Token": token() } : {}) });
+  const hdr = (json) => (json ? { "Content-Type": "application/json", "X-CSRF-Token": csrf() } : {});
   const TYPES = {};
   let rows = [], typeList = [], view = "todo", identifying = false;
   if (!$("cardNets")) return;
