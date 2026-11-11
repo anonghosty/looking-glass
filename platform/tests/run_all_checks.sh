@@ -33,6 +33,8 @@ run "demo masking"                    $PY tests/test_demo.py
 DBDIR=""; for d in ../database ../shadowserver; do [ -f "$d/zip_limits.py" ] && [ -x "$d/.venv/bin/python" ] && DBDIR=$d && break; done
 if [ -n "$DBDIR" ]; then run "pipeline: unzip limits (zip bombs)" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_zip_limits.py"
 else run "pipeline: unzip limits (zip bombs)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
+if [ -n "$DBDIR" ] && [ -f "$DBDIR/report_names.py" ]; then run "pipeline: report names (quarantine)" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_report_names.py"
+else run "pipeline: report names (quarantine)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 run "privacy + roles unit tests"      $PY tests/test_privacy_roles.py
 run "masked viewers: report fields allowlist" $PY tests/check_masked_fields.py
 run "reverse proxy + first administrator" $PY tests/check_first_admin_proxy.py

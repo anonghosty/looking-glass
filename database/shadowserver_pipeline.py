@@ -55,6 +55,7 @@ from urllib.parse import urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import mail_sources  # noqa: E402  IMAP, Gmail API or Microsoft Graph (MAIL_PROVIDER)
 import zip_limits  # noqa: E402  size, ratio and file-count limits for unpacking (zip bombs)
+import report_names  # noqa: E402  which report names may become a folder and a MongoDB collection
 
 log = logging.getLogger("shadowserver")
 
@@ -513,6 +514,11 @@ def _extract_zip(zip_path: Path, unzipped_dir: Path, sorting_dir: Path,
                 staged.append((tmp / f".route-{i}", base, m.group(1)))
         routed = []
         for path, base, service in staged:                 # the whole zip is unpacked: now move the reports in
+            if not report_names.valid(service):            # an unusable report name never reaches MongoDB
+                report_names.quarantine(path.rename(path.with_name(base)), unzipped_dir.parent, service)
+                log.warning("[QUARANTINE] %s (from %s): %s. Moved to quarantine/%s/", base, zip_path.name,
+                            report_names.why(service), report_names.FOLDER)
+                continue
             service_dir = sorting_dir / service
             service_dir.mkdir(parents=True, exist_ok=True)
             existed = (service_dir / base).exists()
@@ -601,6 +607,11 @@ def unzip_and_sort(s: Settings, stats: Counter) -> None:
             for fn in sorted(files):
                 m = SERVICE_RE.match(fn)
                 if not m:
+                    continue
+                if not report_names.valid(m.group(1)):    # an unusable report name never reaches MongoDB
+                    report_names.quarantine(os.path.join(root, fn), s.base_dir, m.group(1))
+                    log.warning("[QUARANTINE] %s: %s. Moved to quarantine/%s/", fn, report_names.why(m.group(1)),
+                                report_names.FOLDER)
                     continue
                 service_dir = s.sorting_dir / m.group(1)
                 service_dir.mkdir(parents=True, exist_ok=True)
@@ -806,6 +817,7 @@ def loaded_filenames(coll) -> set:
 
 def load_into_mongo(s: Settings, stats: Counter) -> None:
     from pymongo import UpdateOne
+    from pymongo.errors import ConnectionFailure
 
     if not s.sorting_dir.is_dir():
         log.warning("Nothing to load: %s does not exist", s.sorting_dir)
@@ -822,42 +834,59 @@ def load_into_mongo(s: Settings, stats: Counter) -> None:
     root = str(s.sorting_dir)
     tasks = []  # (size, category, path, filename)
     known_fields: dict[str, set] = {}
-    categories = [c for c in sorted(os.listdir(root)) if os.path.isdir(os.path.join(root, c))]
+    categories = []
+    for c in sorted(os.listdir(root)):
+        if not os.path.isdir(os.path.join(root, c)):
+            continue
+        if not report_names.valid(c):              # a folder left by an older version: never a collection name
+            report_names.quarantine(os.path.join(root, c), s.base_dir, c)
+            log.warning("[QUARANTINE] folder %s: %s. Moved to quarantine/%s/", c, report_names.why(c), report_names.FOLDER)
+            stats["reports_quarantined"] += 1
+            continue
+        categories.append(c)
 
     for category in categories:
-        cat_path = os.path.join(root, category)
-        coll = db[category]
-        coll.create_index(ROW_INDEX, unique=True)
-        loaded = loaded_filenames(coll)
-        files_coll = db[f"files_{category}"]
-        registered = {d.get("filename") for d in files_coll.find({}, {"filename": 1, "_id": 0})}
-        new_file_docs = []
-        cat_seen = cat_new = 0
-        for r, _, files in os.walk(cat_path):
-            for fn in files:
-                p = os.path.join(r, fn)
-                cat_seen += 1
-                if fn not in registered:
-                    new_file_docs.append({"filename": fn, "category": category, "path": p})
-                    registered.add(fn)
-                if fn in loaded and (category, fn) not in retry:
-                    stats["files_already_loaded"] += 1
-                    continue
-                if fn.endswith((".csv", ".json")):
-                    try:
-                        size = os.path.getsize(p)
-                    except OSError:
-                        size = 0
-                    tasks.append((size, category, p, fn))
-                    cat_new += 1
-        detail("[SCAN] %-40s %5d file(s): %5d already in MongoDB, %5d to load",
-               category, cat_seen, cat_seen - cat_new, cat_new)
-        if new_file_docs:
-            files_coll.insert_many(new_file_docs, ordered=False)
-            stats["files_registered"] += len(new_file_docs)
-        known_fields[category] = {
-            d.get("field_name") for d in db[f"discovered_fields_{category}"].find({}, {"field_name": 1, "_id": 0})
-        }
+        before = len(tasks)
+        try:                                       # one report that fails is logged; the others still load
+            cat_path = os.path.join(root, category)
+            coll = db[category]
+            coll.create_index(ROW_INDEX, unique=True)
+            loaded = loaded_filenames(coll)
+            files_coll = db[f"files_{category}"]
+            registered = {d.get("filename") for d in files_coll.find({}, {"filename": 1, "_id": 0})}
+            new_file_docs = []
+            cat_seen = cat_new = 0
+            for r, _, files in os.walk(cat_path):
+                for fn in files:
+                    p = os.path.join(r, fn)
+                    cat_seen += 1
+                    if fn not in registered:
+                        new_file_docs.append({"filename": fn, "category": category, "path": p})
+                        registered.add(fn)
+                    if fn in loaded and (category, fn) not in retry:
+                        stats["files_already_loaded"] += 1
+                        continue
+                    if fn.endswith((".csv", ".json")):
+                        try:
+                            size = os.path.getsize(p)
+                        except OSError:
+                            size = 0
+                        tasks.append((size, category, p, fn))
+                        cat_new += 1
+            detail("[SCAN] %-40s %5d file(s): %5d already in MongoDB, %5d to load",
+                   category, cat_seen, cat_seen - cat_new, cat_new)
+            if new_file_docs:
+                files_coll.insert_many(new_file_docs, ordered=False)
+                stats["files_registered"] += len(new_file_docs)
+            known_fields[category] = {
+                d.get("field_name") for d in db[f"discovered_fields_{category}"].find({}, {"field_name": 1, "_id": 0})
+            }
+        except ConnectionFailure:                  # MongoDB itself is gone: that stops the run, as before
+            raise
+        except Exception as exc:                   # noqa: BLE001
+            del tasks[before:]
+            stats["reports_failed"] += 1
+            log.error("[SCAN] %s not loaded this run: %s (the other reports carry on)", category, exc)
 
     log.info("Load: %d categories, %d file(s) to load, %d already in MongoDB (scan %.1fs)",
              len(categories), len(tasks), stats["files_already_loaded"], time.monotonic() - t0)
