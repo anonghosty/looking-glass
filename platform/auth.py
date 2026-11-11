@@ -67,7 +67,7 @@ PERMS = {
     "management": "The management portal: aggregated statistics, look-ups and executive reports, never individual addresses. "
                   "Only the management role (and admins, to preview it) can have it",
     "users": "Manage accounts, roles and sessions (approve, revoke, kick)",
-    "audit": "See the audit log",
+    "audit": "The Audit portal: the audit log and who is signed in (Sessions). Ending a session needs 'users'",
     "advisory": "Write and generate advisories: the findings management sends them, the advisory page (description, "
                 "recommended actions) and the final report with the affected devices",
 }
@@ -1227,10 +1227,12 @@ def install(app, base_dir, logger):
 
     @app.route("/api/admin/sessions")
     def admin_sessions():
-        need("users")
+        if not (has_perm("users") or has_perm("audit")):      # the Audit portal reads them; ending one needs 'users'
+            abort(403)
         drop_orphans()
         mine = g.user.get("key", "")[:16]
-        return jsonify(sessions=sorted([dict(s, current=s["id"] == mine) for s in sessions.list()], key=lambda s: -s["seen"]))
+        return jsonify(sessions=sorted([dict(s, current=s["id"] == mine) for s in sessions.list()], key=lambda s: -s["seen"]),
+                       can_end=has_perm("users"))
 
     @app.route("/api/admin/sessions/<sid>/end", methods=["POST"])
     def admin_end_session(sid):

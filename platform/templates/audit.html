@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b0b0d">
   <meta name="csrf-token" content="{{ lg_csrf }}">
   <meta name="referrer" content="same-origin">
-  <title>Looking Glass · Audit log</title>
+  <title>Looking Glass · Audit</title>
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo-mark.svg') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -27,7 +27,7 @@
   <main class="st-main">
     <div class="seg adm-tabs" role="tablist">
       <button type="button" role="tab" data-tab="audit" aria-pressed="true">Audit log</button>
-      {% if "users" in lg_perms %}<button type="button" role="tab" data-tab="sessions" aria-pressed="false">Sessions</button>{% endif %}
+      <button type="button" role="tab" data-tab="sessions" aria-pressed="false">Sessions</button>
     </div>
     <div class="st-banner" id="banner" role="status" hidden></div>
     {% if "users" in lg_perms %}

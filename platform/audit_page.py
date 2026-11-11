@@ -12,5 +12,5 @@ def install(app, ctx):
     @app.route("/audit")
     def audit_page():
         if not hp("audit"):
-            return render_template("denied.html", message="The audit log is for the roles that may read it (permission 'audit')."), 403
+            return render_template("denied.html", message="The Audit portal is for the roles that may read it (permission 'audit')."), 403
         return render_template("audit.html")

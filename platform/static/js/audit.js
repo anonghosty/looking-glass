@@ -72,7 +72,7 @@
       const who = el("td"); who.append(el("b", null, s.user)); if (s.current) who.append(el("span", "adm-you", " (this session)"));
       const br = el("td", null, shortUA(s.browser)); br.title = s.browser || "";
       const end = el("td");
-      if (!s.current) {
+      if (!s.current && d.can_end) {
         const b = el("button", "pill-btn warn", "End session"); b.type = "button";
         b.addEventListener("click", async () => {
           b.disabled = true;

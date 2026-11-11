@@ -234,3 +234,6 @@ body.settings-page .hud { position: sticky; top: 0; }
 .peace-switch input:focus-visible + .peace-track { outline: 2px solid #7c9cff; outline-offset: 2px; }
 .peace-switch b { font-size: 13px; color: var(--text); min-width: 26px; }
 .ov-peace { color: #b9f3dc !important; }
+
+/* the cards wait behind the loading line until the settings arrive */
+.st-main.st-pending > :not(#stLoading):not(#banner) { display: none !important; }

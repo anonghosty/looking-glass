@@ -38,6 +38,7 @@ run "report views, cases and advisories" $PY tests/check_combo_review.py
 run "notifications (per person, channel only)" $PY tests/check_notifications.py
 run "overview of every role" $PY tests/check_overview.py
 run "peace of mind (admins)" $PY tests/check_peace.py
+run "Audit portal permission" $PY tests/check_audit_portal.py
 run "greetings by name" $PY tests/check_greetings.py
 run "several reports + filters"       $PY tests/check_cross_filters.py
 run "management portal (no addresses)" $PY tests/check_management.py

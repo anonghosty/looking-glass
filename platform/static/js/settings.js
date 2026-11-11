@@ -265,6 +265,6 @@
     if (!$("save").disabled && !confirm("You have changes that are not applied yet. Leave without applying them?")) return;
     if (window.LGLoader) window.LGLoader.go(b.dataset.go); else location.href = b.dataset.go;
   });
-  const loaded = () => { $("stLoading")?.remove(); window.LGLoader?.ready(); };
+  const loaded = () => { $("stLoading")?.remove(); $("stMain")?.classList.remove("st-pending"); window.LGLoader?.ready(); };
   load().then(loaded, (err) => { loaded(); throw err; }).catch((err) => { const b = $("banner"); b.className = "st-banner err"; b.hidden = false; b.textContent = `Could not load settings: ${err.message}`; });
 })();
