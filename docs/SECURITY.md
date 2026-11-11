@@ -160,6 +160,12 @@ Malpedia, Settings and the admin APIs answer 403 without the permission.
   evidence exports (CSV, PDF report with the head hash), each check and export itself audited.
   The chain proves integrity against later editing of the file; someone with full control of the server could still
   rewrite the whole chain, which is why the auditor keeps the head hash from each audit outside the server.
+  Entries written before the chain existed (older versions) are **sealed** once: their count, time span and SHA-256 go
+  to `data/audit.seal`, and the seal is recorded in the chain. Changing them afterwards is detected; nothing can prove
+  they were unchanged before the seal, and the evidence says so.
+  The control checks (LG-01…LG-15) are mapped to NIST SP 800-53 Rev. 5, Release 5.2.0 (titles read from NIST's OSCAL
+  catalog): IA-2(1), IA-2(2), AC-2, AC-2(3), AC-2(7), AC-5, AC-6(5), AC-6(9), AC-7, AC-12, SC-23, SC-8, SC-8(1), AU-2,
+  AU-3, AU-6, AU-8, AU-9, AU-9(3), AU-9(4), AU-11, AU-12.
 - **Roles & permissions:** the matrix above, editable.
 
 **Location** is "This computer", "Local network" or "Internet". Addresses are never sent to an online service; to add

@@ -190,6 +190,59 @@ class Chain:
         except (OSError, ValueError):
             return []
 
+    # ------------------------------------------------------------------ the seal of entries written before the chain
+    @property
+    def seal_path(self):
+        return os.path.join(os.path.dirname(self.path), "audit.seal")
+
+    @staticmethod
+    def _pre_chain(lines):
+        """The entries written before the chain started (older versions wrote no link): every line before the first
+        chained one."""
+        for i, ln in enumerate(lines):
+            if '"prev"' in ln:
+                try:
+                    if "prev" in json.loads(ln):
+                        return lines[:i]
+                except ValueError:
+                    pass
+        return []
+
+    def seal(self):
+        """Seal the entries written before the chain started, once: their SHA-256, count and time span go to
+        data/audit.seal. Returns the new seal (the caller records it in the chain, so the seal itself is protected),
+        or None when there is nothing to seal or it is sealed already. From then on, changing any of them is detected;
+        nothing can prove they were unchanged before the seal, and the evidence says so."""
+        import fcntl
+        lock_fd = os.open(self.path + ".lock", os.O_WRONLY | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            if os.path.exists(self.seal_path):
+                return None
+            pre = self._pre_chain(self.lines())
+            if not pre:
+                return None
+            ts = []
+            for ln in (pre[0], pre[-1]):
+                try:
+                    ts.append(json.loads(ln).get("t"))
+                except ValueError:
+                    ts.append(None)
+            s = {"entries": len(pre), "sha256": sha("\n".join(pre)), "first": ts[0], "last": ts[1], "sealed_at": round(time.time(), 3)}
+            fd = os.open(self.seal_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w") as f:
+                json.dump(s, f)
+            return s
+        finally:
+            os.close(lock_fd)
+
+    def read_seal(self):
+        try:
+            with open(self.seal_path) as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return None
+
     # ------------------------------------------------------------------ checking
     def verify(self):
         """Walk every line kept. Returns a dict: ok, entries, chained, before_chain, first/last time, break (where the
@@ -231,7 +284,18 @@ class Chain:
         head_ok = (not saved) or (saved.get("head") == head and saved.get("entries") == len(lines) + gone)
         if saved and not head_ok and not brk:
             brk = {"entry": len(lines), "t": last_t, "what": "the newest entries do not match data/audit.head (entries removed from the end?)"}
-        return {"ok": brk is None, "entries": len(lines), "chained": chained, "before_chain": before, "first": first_t, "last": last_t,
+        # the entries before the chain: unchanged since they were sealed? (retention may since have removed the oldest)
+        seal, seal_state = self.read_seal(), "none"
+        if seal:
+            pre = self._pre_chain(lines)
+            if len(pre) == seal["entries"] and sha("\n".join(pre)) == seal["sha256"]:
+                seal_state = "intact"
+            elif removed and len(pre) < seal["entries"]:
+                seal_state = "partly removed by the retention"
+            else:
+                seal_state = "changed"
+                brk = brk or {"entry": 1, "t": seal.get("first"), "what": "entries written before the chain were changed after they were sealed"}
+        return {"ok": brk is None, "seal": dict(seal, state=seal_state) if seal else None, "entries": len(lines), "chained": chained, "before_chain": before, "first": first_t, "last": last_t,
                 "break": brk, "head": head, "head_file": bool(saved), "archives": len(self.archives()),
                 "removed_archives": len(removed), "retention_days": self.retention_days,
                 "rotate_mb": round(self.rotate_bytes / 1_000_000, 1)}

@@ -138,10 +138,47 @@ try:
     ok("sign-ins by hour", len(o["hours"]) == 24 and sum(o["hours"]) == 1)
     ok("failed sign-ins by address", o["fail_sources"][0]["ip"] == "203.0.113.5" and o["fail_sources"][0]["n"] == 3)
     ids = [x["id"] for x in o["checks"]]
-    ok("13 control checks, in five areas", len(ids) == 13 and len({x["area"] for x in o["checks"]}) == 5, ", ".join(ids))
+    C = {x["id"]: x for x in o["checks"]}
+    ok("15 control checks LG-01 to LG-15, in four NIST families", ids == [f"LG-{i:02d}" for i in range(1, 16)]
+       and {x["area"] for x in o["checks"]} == {"Identification and authentication", "Access control", "System and communications protection",
+                                                 "Audit and accountability"}, ", ".join(ids))
     ok("each with its evidence", all(x["evidence"] for x in o["checks"]))
-    ok("AC-5: the auditor role is fixed", next(x for x in o["checks"] if x["id"] == "AC-5")["ok"])
-    ok("AU-1: the log is unbroken", next(x for x in o["checks"] if x["id"] == "AU-1")["ok"] and o["integrity"]["ok"])
+    import audit_portal as AP
+    ok("every check maps to NIST SP 800-53 Rev. 5 controls, with their official titles", all(x["nist"] and all(n["title"] == AP.NIST[n["id"]]
+       for n in x["nist"]) for x in o["checks"]) and o.get("nist_release") == "NIST SP 800-53 Rev. 5, Release 5.2.0")
+    ok("…the mapping the auditor asked for: MFA → IA-2(1)/(2), lockouts → AC-7, audit protection → AU-9/AU-9(3), retention → AU-11",
+       [n["id"] for n in C["LG-01"]["nist"]] == ["IA-2(1)", "IA-2(2)"] and [n["id"] for n in C["LG-06"]["nist"]] == ["AC-7"]
+       and [n["id"] for n in C["LG-10"]["nist"]] == ["AU-9", "AU-9(3)"] and [n["id"] for n in C["LG-11"]["nist"]] == ["AU-11"])
+    ok("LG-01 states what sign-in enforces, not only enrolment", "requires the password and a one-time code" in C["LG-01"]["evidence"])
+    ok("LG-05: the auditor role is fixed and the portal only reads", C["LG-05"]["ok"] and "only reads" in C["LG-05"]["evidence"])
+    ia1 = C["LG-06"]
+    ok("LG-06 (AC-7): a lockout needs attention, with the address and day that failed most", not ia1["ok"] and "203.0.113.5" in ia1["evidence"], ia1["evidence"])
+    au2 = C["LG-11"]
+    ok("LG-11 (AU-11): judged from when the system started, said in the evidence", "system started" in au2["evidence"], au2["evidence"])
+    ok("every check but HTTPS opens its evidence (tab to show)", all(x["view"] for x in o["checks"] if x["id"] != "LG-14")
+       and C["LG-06"]["view"] == {"tab": "auth", "alerts": True})
+    ok("the overview says when the system started and how long it runs", o.get("started") and o.get("running_days") is not None)
+    for i in range(3):                                   # three typing mistakes from another address: normal
+        audit.add("login_failed", user="grace", ip="10.0.0.40", ua="x")
+    ok("LG-10: the log is unbroken", C["LG-10"]["ok"] and o["integrity"]["ok"])
+
+    print("Details read as sentences (the CSV keeps them as logged too)")
+    import audit_portal as AP
+    for ev, raw, want in (("user_role", "analyst -> management", "Role changed from analyst to management"),
+                          ("settings_changed", "country GH, 0 networks, 0 ranges", "Country set to GH; constituency: the whole country"),
+                          ("settings_changed", "country KE, 2 networks, 1 ranges", "Country set to KE; constituency: 2 networks and 1 address range"),
+                          ("user_approve", "role external", "Approved with the role external"),
+                          ("roles_changed", '{"analyst": ["export", "view"]}', "analyst now: export, view"),
+                          ("roles_changed", "{}", "Saved without changes"),
+                          ("peace_of_mind", "off", "Turned off")):
+        if AP.pretty(ev, raw) != want:
+            ok(f"{ev}: {raw!r}", False, AP.pretty(ev, raw))
+    ok("role changes, settings, approvals, role permissions and Peace of mind read as sentences", True)
+    import people as PE
+    class _U:
+        def get(self, n): return {"profile": {"full_name": "Ghost"}} if n == "ghost" else {"profile": {"full_name": "Grace Mensah"}}
+    ok("a full name that is just the username is not repeated (“Ghost”, not “Ghost (ghost)”)",
+       PE.People(_U()).audit("ghost") == "Ghost" and PE.People(_U()).audit("grace") == "Grace Mensah (grace)")
 
     print("The access review")
     a = c.get("/api/audit/access", headers=H).json
@@ -174,6 +211,7 @@ try:
 
     print("Retention: archives, not deletion")
     before = len(open(audit.path).read().splitlines())
+    auth_before = c.get(f"/api/audit/events?tab=auth&{P}", headers=H).json["total"]
     audit.chain.rotate_bytes = 1                         # the next write rotates
     audit.add("login", user="grace", ip="10.0.0.9", ua="x")
     arch = audit.chain.archives()
@@ -182,7 +220,7 @@ try:
     audit.chain.rotate_bytes = 5_000_000
     v = audit.chain.verify()
     ok("the chain goes on across the archive", v["ok"] and v["entries"] == before + 1 and v["archives"] == 1, json.dumps({k: v[k] for k in ("ok", "entries", "archives")}))
-    ok("the portal still reads the archived entries (4 archived + 1 new)", c.get(f"/api/audit/events?tab=auth&{P}", headers=H).json["total"] == 5)
+    ok("the portal still reads the archived entries (the archived ones + 1 new)", c.get(f"/api/audit/events?tab=auth&{P}", headers=H).json["total"] == auth_before + 1)
     audit.chain.retention_days = 0                       # everything archived is past the retention
     audit.chain.prune(now=time.time() + 10)
     ok("past the retention the archive is removed, and noted", not audit.chain.archives() and audit.chain.removed()[-1]["entries"] == before)
@@ -197,6 +235,23 @@ try:
     ch.append({"t": 2.0, "event": "login", "user": "new"})
     v = ch.verify()
     ok("…entries from before the chain are counted, the chain starts after them", v["ok"] and v["before_chain"] == 1 and v["chained"] == 1)
+
+    print("The seal of entries written before the chain")
+    sd = os.path.join(tmp, "sealed"); os.makedirs(sd)
+    with open(os.path.join(sd, "audit.log"), "w") as f:
+        for i in range(5):
+            f.write(json.dumps({"t": 10.0 + i, "event": "login", "user": f"old{i}"}) + "\n")
+    sc = audit_chain.Chain(os.path.join(sd, "audit.log"))
+    sc.append({"t": 20.0, "event": "login", "user": "first-chained"})
+    s = sc.seal()
+    ok("the older entries are sealed once: count, SHA-256, time span", s and s["entries"] == 5 and len(s["sha256"]) == 64 and s["first"] == 10.0)
+    ok("…not twice", sc.seal() is None)
+    ok("…and the check reports the seal intact", sc.verify()["ok"] and sc.verify()["seal"]["state"] == "intact")
+    ls = open(os.path.join(sd, "audit.log")).read().splitlines()
+    r2 = json.loads(ls[2]); r2["user"] = "rewritten"; ls[2] = json.dumps(r2)
+    open(os.path.join(sd, "audit.log"), "w").write("\n".join(ls) + "\n")
+    vv = sc.verify()
+    ok("an older entry changed after the seal: detected", not vv["ok"] and vv["seal"]["state"] == "changed", json.dumps(vv.get("break")))
 
     print("Evidence exports")
     audit.add("definition_saved", user="daniel", detail="=1+1", ip="10.0.0.3", ua="x")   # a value a spreadsheet would run

@@ -69,10 +69,57 @@ LABEL = {"login": "Signed in", "login_failed": "Failed sign-in", "login_locked":
          "analyst_code": "Analyst code made", "combo_code": "Combination code made",
          "selftest_counters_reset": "Self-test cleared its sign-in counters", "audit_export": "Audit evidence exported",
          "audit_verified": "Audit log integrity checked"}
+LABEL["audit_sealed"] = "Entries before the chain sealed"
+TAB_OF["audit_sealed"] = "system"
+# The NIST SP 800-53 Rev. 5 controls the checks support, with their official titles (Release 5.2.0, read from NIST's
+# OSCAL catalog, usnistgov/oscal-content, on 2026-11-11). The checks' own ids are LG-01…: they are Looking Glass checks,
+# mapped to NIST controls, not NIST control numbers themselves.
+NIST_RELEASE = "NIST SP 800-53 Rev. 5, Release 5.2.0"
+NIST = {"AC-2": "Account Management", "AC-2(3)": "Disable Accounts", "AC-2(7)": "Privileged User Accounts",
+        "AC-5": "Separation of Duties", "AC-6(5)": "Privileged Accounts", "AC-6(9)": "Log Use of Privileged Functions",
+        "AC-7": "Unsuccessful Logon Attempts", "AC-12": "Session Termination", "AU-2": "Event Logging",
+        "AU-3": "Content of Audit Records", "AU-6": "Audit Record Review, Analysis, and Reporting", "AU-8": "Time Stamps",
+        "AU-9": "Protection of Audit Information", "AU-9(3)": "Cryptographic Protection",
+        "AU-9(4)": "Access by Subset of Privileged Users", "AU-11": "Audit Record Retention", "AU-12": "Audit Record Generation",
+        "IA-2(1)": "Multi-factor Authentication to Privileged Accounts",
+        "IA-2(2)": "Multi-factor Authentication to Non-privileged Accounts", "SC-8": "Transmission Confidentiality and Integrity",
+        "SC-8(1)": "Cryptographic Protection", "SC-23": "Session Authenticity"}
 ALERT = re.compile(r"failed|locked|misuse|refused|revoke|delete|limited|wrong")
 PRIVILEGED = {"user_role", "roles_changed", "user_approve", "user_revoke", "user_restore", "user_delete", "user_reset_mfa",
               "user_allow_reset", "settings_changed", "peace_of_mind", "kicked", "user_kick"}
 MAX_DAYS = 800
+
+
+def pretty(event, detail):
+    """An entry's detail as a sentence for the page and the report (the CSV keeps the text as it was logged too)."""
+    d = str(detail or "").strip()
+    if event == "user_role":
+        m = re.fullmatch(r"(\S+)\s*->\s*(\S+)", d)
+        return f"Role changed from {m.group(1)} to {m.group(2)}" if m else d.replace("->", "to")
+    if event == "user_approve":
+        m = re.fullmatch(r"role (\S+)", d)
+        return f"Approved with the role {m.group(1)}" if m else d
+    if event == "settings_changed":
+        m = re.fullmatch(r"country (\S+), (\d+) networks, (\d+) ranges", d)
+        if m:
+            n, r = int(m.group(2)), int(m.group(3))
+            scope = "the whole country" if not n and not r else f"{n} network{'s' if n != 1 else ''} and {r} address range{'s' if r != 1 else ''}"
+            return f"Country set to {m.group(1)}; constituency: {scope}"
+        return d
+    if event == "roles_changed":
+        try:
+            ch = json.loads(d) if d.startswith("{") else None
+        except ValueError:
+            ch = None
+        if ch is not None:
+            return "; ".join(f"{r} now: {', '.join(ps) or 'no permission'}" for r, ps in ch.items()) or "Saved without changes"
+    if event == "peace_of_mind":
+        return {"off": "Turned off"}.get(d, "Turned on: Admin, the Audit portal, Settings and the Overview only" if d.startswith("on") else d)
+    return d.replace(" -> ", " to ")
+
+
+def fmt(n):
+    return f"{n:,}" if isinstance(n, int) else str(n)
 
 
 def _num(name, default):
@@ -100,7 +147,45 @@ def install(app, ctx):
     except ValueError:
         WORK_FROM, WORK_TO = 7, 19
     DORMANT, MAX_ADMINS, PENDING_DAYS = _num("AUDIT_DORMANT_DAYS", 90), _num("AUDIT_MAX_ADMINS", 3), _num("AUDIT_PENDING_DAYS", 7)
+    FAIL_ALERT = _num("AUDIT_FAIL_ALERT", 10)
     verified = {"at": 0.0, "v": None}
+    # where each control check's evidence is (the page opens that tab; "alerts" ticks Alerts only)
+    VIEW = {"LG-01": {"tab": "access"}, "LG-02": {"tab": "access"}, "LG-03": {"tab": "access"}, "LG-04": {"tab": "access"},
+            "LG-05": {"tab": "access"}, "LG-06": {"tab": "auth", "alerts": True}, "LG-07": {"tab": "sessions"},
+            "LG-08": {"tab": "accounts"}, "LG-09": {"tab": "auth"}, "LG-10": {"tab": "evidence"}, "LG-11": {"tab": "evidence"},
+            "LG-12": {"tab": "auth"}, "LG-13": {"tab": "system"}, "LG-14": None, "LG-15": {"tab": "data"}}
+
+    def ntp_synchronised():
+        """True / False from systemd (timedatectl), None when it cannot be read here."""
+        try:
+            import subprocess
+            r = subprocess.run(["timedatectl", "show", "-p", "NTPSynchronized", "--value"], capture_output=True, text=True, timeout=3)
+            v = r.stdout.strip().lower()
+            return True if v == "yes" else False if v == "no" else None
+        except Exception:                  # noqa: BLE001
+            return None
+
+    def last_review():
+        """The newest integrity check or evidence export (an auditor's or administrator's review of the log)."""
+        for r in reversed(audit.records()):
+            if r.get("event") in ("audit_verified", "audit_export") and not audit.is_selftest(r):
+                return {"t": r.get("t"), "by": people.audit(r.get("user", "")), "label": LABEL.get(r["event"], r["event"]).lower()}
+        return None
+
+    # the entries written before the chain started are sealed once (audit_chain.Chain.seal), the seal recorded in the chain
+    try:
+        new_seal = audit.chain.seal()
+        if new_seal:
+            audit.add("audit_sealed", user="Looking Glass", detail=f"{new_seal['entries']} entries written before the chain sealed · "
+                      f"SHA-256 {new_seal['sha256']}", ip="", ua="")
+    except OSError:
+        pass
+
+    def setup_time(oldest):
+        """When this installation started: its first audit entry or its first account, whichever came first."""
+        made = [u.get("created") or (u.get("registered") or {}).get("at") or 0 for n, u in users.all().items() if not n.startswith("lg-selftest-")]
+        made = [t for t in made if t]
+        return min([t for t in (oldest, min(made) if made else 0) if t] or [0])
 
     def allowed():
         return hp("audit")
@@ -131,7 +216,8 @@ def install(app, ctx):
         out = {"t": r.get("t"), "when": _when(r.get("t")), "event": e, "label": LABEL.get(e, e.replace("_", " ").capitalize()),
                "tab": "system" if st else TAB_OF.get(e, "system"), "user": r.get("user", ""), "target": r.get("target", ""),
                "user_label": people.audit(r.get("user", "")), "target_label": people.audit(r.get("target", "")),
-               "ip": r.get("ip", ""), "location": r.get("location", ""), "ua": r.get("ua", ""), "detail": r.get("detail", ""),
+               "ip": r.get("ip", ""), "location": r.get("location", ""), "ua": r.get("ua", ""), "detail": pretty(e, r.get("detail", "")),
+               "detail_logged": r.get("detail", ""),
                "selftest": st, "alert": bool(ALERT.search(e)), "privileged": e in PRIVILEGED, "chained": "prev" in r}
         return out
 
@@ -239,6 +325,7 @@ def install(app, ctx):
         per_day = {x: {"ok": 0, "failed": 0, "locked": 0, "changes": 0, "exports": 0} for x in days}
         hours = [0] * 24
         fail_ip, export_by, active_users = collections.Counter(), collections.Counter(), set()
+        fail_ip_day = collections.Counter()          # (address, day): the brute-force pattern (IA-1)
         after_hours = []
         for r in rows:
             day, h = _day(r["t"]), datetime.fromtimestamp(r["t"], timezone.utc).hour
@@ -262,6 +349,7 @@ def install(app, ctx):
                     slot["exports"] += 1
             if e in ("login_failed", "login_refused", "login_locked"):
                 fail_ip[(r["ip"], r["location"])] += 1
+                fail_ip_day[(r["ip"], day)] += 1
             if r["tab"] == "data":
                 export_by[r["user_label"] or r["user"]] += 1
         ok_n, fail_n = by["login"], by["login_failed"] + by["login_refused"]
@@ -275,6 +363,7 @@ def install(app, ctx):
                 "tabs": [{"key": k, "label": v, "n": tabs[k]} for k, v in TABS if k != "system"],
                 "fail_sources": [{"ip": ip, "location": loc, "n": n} for (ip, loc), n in fail_ip.most_common(8)],
                 "exports_by": [{"who": w, "n": n} for w, n in export_by.most_common(8)],
+                "worst_day": (lambda m: {"ip": m[0][0][0], "day": m[0][0][1], "n": m[0][1]} if m else None)(fail_ip_day.most_common(1)),
                 "privileged_recent": priv, "after_hours_recent": after_hours[-8:][::-1]}
 
     def checks(t0, t1, ov=None):
@@ -290,35 +379,98 @@ def install(app, ctx):
         k = ov["kpis"]
         fixed = sorted(roles.perms(ctx["auditor_role"])) == ["audit"]
         tls = ctx["tls"]()
+        # IA-1: typing mistakes are normal; what needs attention is a lockout, or many failures from one address in one
+        # day (the pattern of password guessing). AUDIT_FAIL_ALERT sets "many" (default 10).
+        worst = ov.get("worst_day")
+        guess = bool(worst and worst["n"] >= FAIL_ALERT)
+        ia1_ok = k["lockouts"] == 0 and not guess
+        ia1 = (f"{k['failed']} failed of {k['signins'] + k['failed']} attempts ({k['failure_rate']} %), {k['lockouts']} lockout(s); "
+               + (f"most from one address in a day: {worst['n']} ({worst['ip']}, {worst['day']})" if worst else "no failure")
+               + (". Within normal typing mistakes." if ia1_ok and k["failed"] else "." if ia1_ok else
+                  f". {k['lockouts']} account lockout(s): review who was locked out and from where." if k["lockouts"] else
+                  f". That is password-guessing level (alert from {FAIL_ALERT} per address per day): review that address."))
+        # AU-2: coverage from the start of the system (no entry can exist before it), and nothing removed
+        started = setup_time(oldest)
+        since = max(t0, started) if started else t0
+        au2_ok = bool(oldest) and oldest <= since + 300 and not v["removed_archives"]
+        au2 = (f"The system started on {_when(started)} ({max(0, int((time.time() - started) // 86400))} days ago); "
+               if started else "") + (f"the log is complete since then: oldest entry {_when(oldest)}, nothing removed by the retention of {v['retention_days']} days."
+               if au2_ok else (f"oldest entry kept {_when(oldest) or 'none'}; {v['removed_archives']} archive(s) removed by the retention of "
+               f"{v['retention_days']} days, so the period is only partly covered." if v["removed_archives"] else
+               f"but the oldest entry kept is from {_when(oldest) or 'none'}: entries from before it are missing (not removed by the "
+               "retention; deleted outside Looking Glass, or kept by an older version that did not archive them).")) + (" The period chosen starts before the system existed." if started and t0 < started else "")
         names = lambda xs: ", ".join(people.audit(a["name"]) for a in xs[:8]) + (f" and {len(xs) - 8} more" if len(xs) > 8 else "")
+        mfa_on = os.environ.get("MFA_REQUIRED", "1") != "0"
+        privileged = [a for a in active if {"users", "settings"} & set(a["permissions"])]
+        not_approved = [a for a in active if not a["approved_by"] and a["role"] != "admin"]
+        idle, max_h = _num("SESSION_IDLE_MINUTES", 60), _num("SESSION_MAX_HOURS", 12)
+        ntp = ntp_synchronised()
+        seal = v.get("seal")
+        review = last_review()
+        REVIEW_DAYS = _num("AUDIT_REVIEW_DAYS", 30)
+        reviewed = bool(review) and time.time() - review["t"] <= REVIEW_DAYS * 86400
+        if seal and seal["state"] == "intact":
+            sealed = (f" The {fmt(seal['entries'])} entries written before the chain started ({_when(seal['first'])} to {_when(seal['last'])}) were "
+                      f"sealed on {_when(seal['sealed_at'])} (SHA-256 {seal['sha256'][:16]}…, recorded in the chain) and are unchanged since; "
+                      "nothing can prove they were unchanged before the seal.")
+        elif seal:
+            sealed = f" The entries written before the chain were sealed on {_when(seal['sealed_at'])}; seal: {seal['state']}."
+        else:
+            sealed = ""
+        au1 = ((f"{fmt(v['entries'])} entries; {fmt(v['chained'])} chained since the chain started, chain whole." + sealed)
+               if v["ok"] else f"Broken at entry {v['break']['entry']}: {v['break']['what']}.")
         c = [
-            ("Access control", "AC-1", "Every active account signs in with an authenticator (two factors)", not no_mfa,
-             f"{len(active)} active accounts, all with an authenticator." if not no_mfa else f"Without an authenticator: {names(no_mfa)}."),
-            ("Access control", "AC-2", f"No active account unused for {DORMANT} days or more", not dormant,
-             "None." if not dormant else f"Dormant: {names(dormant)}. Review whether they still need access."),
-            ("Access control", "AC-3", f"Administrators (every permission) kept to {MAX_ADMINS} or fewer", len(admins) <= MAX_ADMINS,
-             f"{len(admins)} administrator(s): {names(admins) or 'none'}."),
-            ("Access control", "AC-4", f"No registration waiting for approval longer than {PENDING_DAYS} days", not pending,
-             "None." if not pending else f"Waiting: {names(pending)}."),
-            ("Access control", "AC-5", "The auditor role is fixed to read-only audit access", fixed,
-             "auditor = audit only; no one can change it." if fixed else "The auditor role does not have exactly 'audit'."),
-            ("Authentication", "IA-1", "Failed sign-ins in the period", k["failed"] == 0 or k["failure_rate"] < 20,
-             f"{k['failed']} failed of {k['signins'] + k['failed']} attempts ({k['failure_rate']} %), {k['lockouts']} lockout(s)."),
-            ("Authentication", "IA-2", "No session misuse (a session cookie used from another address or browser)", k["misuse"] == 0,
-             f"{k['misuse']} event(s) in the period."),
-            ("Change management", "CM-1", "Every privileged change is logged with who, when and what",
-             True, f"{k['privileged']} privileged change(s) in the period, each with its author, time and detail."),
-            ("Logging and monitoring", "AU-1", "The audit log is unbroken (tamper-evident chain)", v["ok"],
-             (f"{v['entries']} entries, chain whole" + (f"; {v['before_chain']} written before the chain started" if v["before_chain"] else "") + ".")
-             if v["ok"] else f"Broken at entry {v['break']['entry']}: {v['break']['what']}."),
-            ("Logging and monitoring", "AU-2", "The log covers the whole period (retention)", bool(oldest) and oldest <= t0,
-             f"Oldest entry kept: {_when(oldest) or 'none'}; retention {v['retention_days']} days." ),
-            ("Logging and monitoring", "AU-3", "Times are recorded in UTC by the server", True, "Every entry carries a UTC time stamp set by the server."),
-            ("Data protection", "DP-1", "Sign-ins and sessions are encrypted (HTTPS)", tls,
-             "HTTPS is on." if tls else "HTTPS is off: passwords and session cookies travel in clear on the network."),
-            ("Data protection", "DP-2", "Data exports are logged per person", True, f"{k['exports']} export(s) in the period, each with who and what."),
+            ("Identification and authentication", "LG-01", "Multi-factor authentication is enforced for every account",
+             ["IA-2(1)", "IA-2(2)"], mfa_on and not no_mfa,
+             ("Sign-in requires the password and a one-time code from an authenticator app (TOTP, RFC 6238) for every account, "
+              "privileged or not; an account without an authenticator must set one up before its first session, and cannot be "
+              "approved before it has one. " if mfa_on else "MFA_REQUIRED=0 in .env: accounts without an authenticator can sign in with a "
+              "password alone. ") + (f"{len(active)} of {len(active)} active accounts have an authenticator." if not no_mfa
+                                     else f"Without an authenticator: {names(no_mfa)}.")),
+            ("Access control", "LG-02", f"Accounts unused for {DORMANT} days are reviewed or disabled", ["AC-2(3)"], not dormant,
+             "No active account unused that long." if not dormant else f"Unused: {names(dormant)}. Disable them or confirm they still need access."),
+            ("Access control", "LG-03", f"Privileged accounts are few (at most {MAX_ADMINS} administrators)", ["AC-6(5)", "AC-2(7)"],
+             len(admins) <= MAX_ADMINS,
+             f"{len(admins)} administrator(s): {names(admins) or 'none'}. Accounts with privileged permissions (accounts or Settings): "
+             f"{len(privileged)}: {names(privileged) or 'none'}."),
+            ("Access control", "LG-04", "Account requests are approved by an administrator", ["AC-2"], not pending and not not_approved,
+             (f"No request waiting longer than {PENDING_DAYS} days." if not pending else f"Waiting longer than {PENDING_DAYS} days: {names(pending)}.")
+             + (" Every active account was approved by an administrator (administrators: the first one by the one-time setup code)."
+                if not not_approved else f" Active without a recorded approval: {names(not_approved)}.")),
+            ("Access control", "LG-05", "Auditors are separated from the duties they audit", ["AC-5", "AU-9(4)"], fixed,
+             ("The auditor role holds exactly 'audit': fixed in the code, applied again at every start and every save of the roles, so "
+              "no one can widen it. The Audit portal only reads (every request is a GET); the application has no function to edit or "
+              "delete audit entries. Reading the log needs the 'audit' permission (auditors and administrators).") if fixed
+             else "The auditor role does not hold exactly 'audit'."),
+            ("Access control", "LG-06", "Unsuccessful sign-ins are limited and show no password guessing", ["AC-7"], ia1_ok,
+             "Enforced: 5 wrong attempts for an account from one address lock it for 15 minutes; 20 from one address in an hour lock "
+             "the address. In the period: " + ia1),
+            ("System and communications protection", "LG-07", "Sessions cannot be taken over and end on their own", ["SC-23", "AC-12"],
+             k["misuse"] == 0,
+             f"Each session is bound to the address and browser that signed in (used elsewhere, it ends and is logged as misuse); it "
+             f"ends after {idle} minutes idle and {max_h} hours in any case. Misuse events in the period: {k['misuse']}."),
+            ("Audit and accountability", "LG-08", "Use of privileged functions is logged", ["AC-6(9)", "AU-12"], True,
+             f"{k['privileged']} privileged action(s) in the period (roles, accounts, settings, sessions ended), each with who, when, "
+             "from where and what. Approval of changes before they are made (CM-3) is a process outside the application."),
+            ("Audit and accountability", "LG-09", "Audit records hold what an auditor needs", ["AU-3"], True,
+             "Every entry: time (UTC), event, who, the account acted on, address, location, browser and detail."),
+            ("Audit and accountability", "LG-10", "Audit records are protected against change (tamper-evident chain)", ["AU-9", "AU-9(3)"],
+             v["ok"], au1),
+            ("Audit and accountability", "LG-11", "Audit records are kept for the retention period", ["AU-11"], au2_ok, au2),
+            ("Audit and accountability", "LG-12", "Time stamps come from a synchronised clock", ["AU-8"], ntp is True,
+             "Every time stamp is set by the server in UTC. " + ("The server clock is synchronised (NTP)." if ntp is True else
+             "The server clock is NOT synchronised (NTP): set it up on the server." if ntp is False else
+             "The clock's synchronisation could not be read from here: check it on the server (timedatectl).")),
+            ("Audit and accountability", "LG-13", f"The audit log is reviewed (at least every {REVIEW_DAYS} days)", ["AU-6"], reviewed,
+             (f"Last review: {review['label']} by {review['by']} on {_when(review['t'])}." if review else
+              "No integrity check or evidence export recorded yet.") + ("" if reviewed else " Verify the log or export the evidence to record a review.")),
+            ("System and communications protection", "LG-14", "Sign-ins and sessions are encrypted in transit", ["SC-8", "SC-8(1)"], tls,
+             "HTTPS is on (TLS)." if tls else "HTTPS is off: passwords and session cookies cross the network readable."),
+            ("Audit and accountability", "LG-15", "Data exports are logged per person", ["AU-2", "AU-12"], True,
+             f"{k['exports']} export(s) in the period (reports, CSV files, advisories, audit evidence), each with who and what."),
         ]
-        return [{"area": a, "id": i, "control": t, "ok": bool(ok), "evidence": e} for a, i, t, ok, e in c]
+        return [{"area": a, "id": i, "control": t, "nist": [{"id": n, "title": NIST[n]} for n in ns], "ok": bool(ok), "evidence": e,
+                 "view": VIEW.get(i)} for a, i, t, ns, ok, e in c]
 
     @app.route("/api/audit/overview")
     def api_audit_overview():
@@ -327,7 +479,9 @@ def install(app, ctx):
         t0, t1, fr, to = period()
         ov = overview(t0, t1)
         v = integrity()
-        return jsonify(period={"from": fr, "to": to}, checks=checks(t0, t1, ov),
+        started = setup_time(v.get("first") or 0)
+        return jsonify(period={"from": fr, "to": to}, checks=checks(t0, t1, ov), started=_when(started), nist_release=NIST_RELEASE,
+                       running_days=max(0, int((time.time() - started) // 86400)) if started else None,
                        integrity=dict(v, first=_when(v["first"]), last=_when(v["last"])), access_mode=ctx["access_mode"](), **ov)
 
     # ------------------------------------------------------------------ evidence exports
@@ -345,10 +499,11 @@ def install(app, ctx):
             rows = [r for r in rows if r["tab"] == tab]
         buf = io.StringIO()
         w = csvsafe.writer(buf)                        # every cell formula-safe
-        w.writerow(["time_utc", "tab", "event", "by", "account", "address", "location", "browser", "detail", "self_test", "chained"])
+        w.writerow(["time_utc", "tab", "event", "by", "account", "address", "location", "browser", "detail", "detail_as_logged",
+                    "event_code", "self_test", "chained"])
         for r in rows:
             w.writerow([r["when"], r["tab"], r["label"], r["user_label"], r["target_label"], r["ip"], r["location"],
-                        r["ua"], r["detail"], "yes" if r["selftest"] else "", "yes" if r["chained"] else "no"])
+                        r["ua"], r["detail"], r["detail_logged"], r["event"], "yes" if r["selftest"] else "", "yes" if r["chained"] else "no"])
         logged_export("csv", fr, to, f" · {tab} · {len(rows)} entries")
         data = buf.getvalue().encode("utf-8-sig")
         return Response(data, mimetype="text/csv", headers={"Content-Disposition": f'attachment; filename="audit_{tab}_{fr}_{to}.csv"',
@@ -360,12 +515,15 @@ def install(app, ctx):
             return deny()
         t0, t1, fr, to = period()
         import audit_report
+        integrity(fresh=True)                          # one integrity result for the whole report (checks and section)
         ov = overview(t0, t1)
         pdf = audit_report.build({"from": fr, "to": to, "generated": _when(time.time()),
                                   "by": people.audit((g.user or {}).get("user", "")), "kpis": ov["kpis"], "checks": checks(t0, t1, ov),
-                                  "integrity": dict(integrity(fresh=True)), "accounts": access_rows(), "privileged": ov["privileged_recent"],
+                                  "integrity": dict(integrity()), "accounts": access_rows(), "privileged": ov["privileged_recent"],
                                   "fail_sources": ov["fail_sources"], "exports_by": ov["exports_by"], "per_day": ov["per_day"],
-                                  "first": _when(integrity()["first"]), "last": _when(integrity()["last"])})
+                                  "first": _when(integrity()["first"]), "last": _when(integrity()["last"]), "nist_release": NIST_RELEASE,
+                                  "started": _when(setup_time(integrity().get("first") or 0)),
+                                  "sealed_at": _when((integrity().get("seal") or {}).get("sealed_at"))})
         logged_export("pdf", fr, to, " · evidence report")
         return Response(pdf, mimetype="application/pdf", headers={"Content-Disposition": f'attachment; filename="audit_evidence_{fr}_{to}.pdf"',
                                                                   "Cache-Control": "no-store"})

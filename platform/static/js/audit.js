@@ -108,17 +108,32 @@
       kpi("Sign-ins", fmt(k.signins), `${fmt(k.people)} people`), kpi("Failed sign-ins", fmt(k.failed), `${k.failure_rate} % of attempts`, k.failed ? "warn" : ""),
       kpi("Lockouts", fmt(k.lockouts), null, k.lockouts ? "warn" : ""), kpi("Privileged changes", fmt(k.privileged), "roles, accounts, settings"),
       kpi("Exports", fmt(k.exports), "reports, CSV, evidence"), kpi("Outside working hours", fmt(k.after_hours), `sign-ins outside ${String(d.work_hours[0]).padStart(2, "0")}:00–${String(d.work_hours[1]).padStart(2, "0")}:00 UTC`, k.after_hours ? "warn" : ""));
-    body.append(el("p", "au-sub", `${d.period.from} to ${d.period.to} (UTC) · ${fmt(k.events)} events, self-test left out · access mode: ${d.access_mode}`), top);
+    body.append(el("p", "au-sub", `${d.period.from} to ${d.period.to} (UTC) · ${fmt(k.events)} events, self-test left out · access mode: ${d.access_mode}`
+      + (d.started ? ` · system started ${d.started} (running ${fmt(d.running_days)} day${d.running_days === 1 ? "" : "s"})` : "")), top);
 
     // the control checks, by area
-    const cc = card("Control checks", "Grouped like an IT audit (access control, authentication, change management, logging and monitoring, data protection). Each with its evidence; the PDF report carries the same.");
+    const cc = card("Control checks", `Automated checks of Looking Glass's own controls (LG-01…), each mapped to the ${d.nist_release || "NIST SP 800-53 Rev. 5"} controls it supports, with its evidence. Click a check to open the records behind it; the PDF report carries the same, with its scope and limits.`);
     const areas = [...new Set(d.checks.map((c) => c.area))];
     for (const a of areas) {
       const g = el("div", "au-check-g"); g.append(el("h4", null, a));
       for (const c of d.checks.filter((x) => x.area === a)) {
-        const r = el("div", `au-check ${c.ok ? "ok" : "warn"}`);
+        // a check with evidence behind it opens it: the tab with the events or accounts it is about
+        const r = el(c.view ? "button" : "div", `au-check ${c.ok ? "ok" : "warn"}${c.view ? " link" : ""}`);
         r.append(el("span", "au-check-st", c.ok ? "Passed" : "Attention"), el("code", null, c.id));
-        const t = el("div"); t.append(el("b", null, c.control), el("p", null, c.evidence)); r.append(t); g.append(r);
+        const t = el("div"); t.append(el("b", null, c.control));
+        if ((c.nist || []).length) {        // the NIST SP 800-53 Rev. 5 controls this check supports (official titles)
+          const n = el("div", "au-nist");
+          for (const x of c.nist) { const s = el("span", null, x.id); s.title = `${d.nist_release || "NIST SP 800-53 Rev. 5"}: ${x.id} ${x.title}`; n.append(s); }
+          n.append(el("small", null, c.nist.map((x) => x.title).join(" · ")));
+          t.append(n);
+        }
+        t.append(el("p", null, c.evidence)); r.append(t);
+        if (c.view) {
+          r.type = "button"; r.title = `Open the evidence: ${TAB_NAMES[c.view.tab] || c.view.tab}`;
+          r.append(el("span", "au-check-go", "View →"));
+          r.addEventListener("click", () => { $("logAlerts").checked = !!c.view.alerts; show(c.view.tab); window.scrollTo({ top: 0, behavior: "smooth" }); });
+        }
+        g.append(r);
       }
       cc.append(g);
     }

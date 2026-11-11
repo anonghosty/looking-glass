@@ -65,6 +65,16 @@ def build(d):
     v, k = d["integrity"], d["kpis"]
     out = [_p("Audit evidence", st["title"]),
            _p(f"Period {d['from']} to {d['to']} (UTC, both days included) · generated {d['generated']} by {d['by']} · read only", st["sub"]),
+           Spacer(1, 6),
+           _p("Scope and method", st["h"]),
+           _p(f"Automated checks of Looking Glass's own controls (the web application: accounts, roles, sign-in, sessions and the audit "
+              f"log), computed from its records when this report was generated. Each check (LG-01 to LG-15) is mapped to the "
+              f"{d.get('nist_release', 'NIST SP 800-53 Rev. 5')} controls it supports, cited by their official titles; the LG "
+              "identifiers are Looking Glass's own, not NIST control numbers. A passed check supports, but does not on its own "
+              "establish, that a control is implemented and operating effectively: corroborate it with independent testing (for "
+              "example, try to sign in without a second factor) and review what lies outside the application: the server's "
+              "operating system, its clock synchronisation, backups and network. "
+              + (f"The system started on {d['started']}. " if d.get("started") else "") + "All times are UTC.", st["b"]),
            Spacer(1, 8)]
     figs = [("Events", k["events"]), ("Sign-ins", k["signins"]), ("Failed sign-ins", f"{k['failed']} ({k['failure_rate']} %)"),
             ("Lockouts", k["lockouts"]), ("Privileged changes", k["privileged"]), ("Exports", k["exports"]),
@@ -79,15 +89,21 @@ def build(d):
                                             f"from {d['first']} to {d['last']}; {v['archives']} archive file(s); "
                                             f"{v['removed_archives']} removed by the retention of {v['retention_days']} days", st["b"])],
             [_p("Head hash", st["cellb"]), _p(v["head"], st["mono"])],
+            *([[_p("Before the chain", st["cellb"]),
+                _p(f"{v['seal']['entries']} entries written before the chain started were sealed on "
+                   f"{d.get('sealed_at', '')} with SHA-256 {v['seal']['sha256']} (the seal is recorded in the chain). State: "
+                   f"{v['seal']['state']}. Changes after the seal are detected; nothing can prove these entries were unchanged before it.",
+                   st["b"])]] if v.get("seal") else []),
             [_p("How to use it", st["cellb"]), _p("Note the head hash with this report. At the next audit, the chain must still lead to it: "
                                                   "that proves nothing was removed from the end of the log in between.", st["b"])]]
     out += [_table(rows, [38 * mm, W - 38 * mm], head=False)]
     out.append(_p("Control checks", st["h"]))
-    rows = [[_p(h, st["cellb"]) for h in ("Area", "Check", "Control", "Result", "Evidence")]]
+    rows = [[_p(h, st["cellb"]) for h in ("Check", "Control", f"NIST SP 800-53 Rev. 5 (5.2.0)", "Result", "Evidence")]]
     for c in d["checks"]:
-        rows.append([_p(c["area"], st["b"]), _p(c["id"], st["mono"]), _p(c["control"], st["b"]),
-                     _p("Passed" if c["ok"] else "Attention", st["ok"] if c["ok"] else st["bad"]), _p(c["evidence"], st["b"])])
-    out.append(_table(rows, [34 * mm, 14 * mm, 72 * mm, 20 * mm, W - 140 * mm]))
+        nist = Paragraph("<br/>".join(f"<b>{escape(n['id'])}</b> {escape(n['title'])}" for n in c.get("nist") or []) or "–", st["small"])
+        rows.append([_p(c["id"], st["mono"]), Paragraph(f"{escape(c['control'])}<br/><font size='7' color='#5f5f69'>{escape(c['area'])}</font>", st["b"]),
+                     nist, _p("Passed" if c["ok"] else "Attention", st["ok"] if c["ok"] else st["bad"]), _p(c["evidence"], st["b"])])
+    out.append(_table(rows, [16 * mm, 60 * mm, 58 * mm, 19 * mm, W - 153 * mm]))
     out += [PageBreak(), _p("Access review: every account", st["h"]),
             _p("Role, permissions, authenticator, last sign-in and who approved the account. Flags show what needs attention.", st["small"])]
     rows = [[_p(h, st["cellb"]) for h in ("Account", "Role", "Permissions", "Status", "Two factors", "Last sign-in", "Approved", "Flags")]]

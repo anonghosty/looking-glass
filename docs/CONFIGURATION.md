@@ -78,10 +78,12 @@ Set these to what your own audits and laws require; the defaults suit a yearly I
 |---|---|---|
 | `AUDIT_RETENTION_DAYS` | `400` | days archived audit entries are kept (compressed, `data/audit_archive/`) before they are deleted. The last link of each deleted archive is noted, so the integrity check still covers what is left |
 | `AUDIT_ROTATE_MB` | `5` | size at which `data/audit.log` is archived and a new file started; the tamper-evident chain goes on across files |
-| `AUDIT_DORMANT_DAYS` | `90` | control check AC-2: an active account unused this long is flagged as dormant |
-| `AUDIT_MAX_ADMINS` | `3` | control check AC-3: more administrators (every permission) than this need attention |
-| `AUDIT_PENDING_DAYS` | `7` | control check AC-4: a registration waiting longer than this needs attention |
+| `AUDIT_DORMANT_DAYS` | `90` | control check LG-02 (NIST AC-2(3)): an active account unused this long is flagged as dormant |
+| `AUDIT_MAX_ADMINS` | `3` | control check LG-03 (NIST AC-6(5)): more administrators (every permission) than this need attention |
+| `AUDIT_PENDING_DAYS` | `7` | control check LG-04 (NIST AC-2): a registration waiting longer than this needs attention |
 | `AUDIT_WORK_HOURS` | `07-19` | working hours in UTC: sign-ins outside them are counted on the dashboard |
+| `AUDIT_FAIL_ALERT` | `10` | control check LG-06 (NIST AC-7): this many failed sign-ins from one address in one day, or any lockout, looks like password guessing. Fewer are treated as typing mistakes |
+| `AUDIT_REVIEW_DAYS` | `30` | control check LG-13 (NIST AU-6): the log should be reviewed (integrity check or evidence export) at least this often |
 
 ## Advanced
 

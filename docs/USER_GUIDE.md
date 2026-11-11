@@ -635,10 +635,13 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
 
 - **Overview:** the key figures (sign-ins, failed sign-ins and the failure rate, lockouts, privileged changes,
   exports, sign-ins outside working hours), sign-ins per day and by hour, events by kind, failed sign-ins by address,
-  exports by person, the recent privileged changes, and the **control checks**. These are grouped like an IT audit
-  (access control, authentication, change management, logging and monitoring, data protection), each passed or needing
-  attention, with its evidence. For example: every account has an authenticator, no account is dormant, administrators
-  kept few, the auditor role is fixed, the audit log is unbroken, the log covers the period, HTTPS is on.
+  exports by person, the recent privileged changes, and the **control checks** LG-01 to LG-15. Each is an automated
+  check of Looking Glass's own controls, **mapped to the NIST SP 800-53 Rev. 5 (Release 5.2.0) controls** it supports,
+  cited by their official titles (for example LG-01 → IA-2(1), IA-2(2) multi-factor authentication; LG-06 → AC-7
+  unsuccessful logon attempts; LG-10 → AU-9, AU-9(3) protection of audit information; LG-11 → AU-11 retention). The LG
+  numbers are Looking Glass's own, not NIST control numbers. Each check says passed or attention, with its evidence;
+  click it to open the records behind it. The evidence report states the scope and limits: a passed check supports,
+  but does not on its own establish, that a control operates effectively.
 - **One tab per kind of event:** Authentication, Accounts and access, Sessions, Configuration changes, Data access
   and exports, Workflow, and System and self-test. Each has its count, a search, *Alerts only*, and **Export CSV**.
   The built-in security test's events are kept apart in System and self-test.

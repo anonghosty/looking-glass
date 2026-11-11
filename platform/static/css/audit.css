@@ -50,7 +50,16 @@
 .au-check-st { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; text-align: center; }
 .au-check.ok .au-check-st { color: #46c08a; background: rgba(48, 164, 108, .12); border: 1px solid rgba(48, 164, 108, .35); }
 .au-check.warn .au-check-st { color: #f5b54a; background: rgba(245, 181, 74, .1); border: 1px solid rgba(245, 181, 74, .35); }
-@media (max-width: 640px) { .au-check { grid-template-columns: 1fr; gap: 4px; } }
+button.au-check { width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--border); color: inherit; font: inherit;
+  grid-template-columns: 86px 52px minmax(0, 1fr) auto; cursor: pointer; border-radius: 6px; padding: 8px 6px; }
+button.au-check:hover { background: var(--hover); }
+button.au-check:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.au-nist { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 4px; }
+.au-nist span { font-family: var(--mono); font-size: 10.5px; padding: 1px 6px; border-radius: 5px; color: #9fbaf5; background: rgba(91, 141, 239, .1); border: 1px solid rgba(91, 141, 239, .3); }
+.au-nist small { font-size: 11px; color: var(--muted); }
+.au-check code { white-space: nowrap; }
+.au-check-go { font-size: 12px; color: var(--accent); white-space: nowrap; align-self: center; }
+@media (max-width: 640px) { .au-check, button.au-check { grid-template-columns: 1fr; gap: 4px; } }
 .au-table td.adm-detail { max-width: 420px; }
 .au-priv td:nth-child(2) { color: #9fbaf5; }
 .au-flags { color: #f5b54a; }

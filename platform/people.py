@@ -32,7 +32,9 @@ class People:
     def audit(self, username):
         """For the audit log: "Full Name (username)", or the username alone when there is no full name."""
         f = self.full_name(username)
-        return f"{f} ({username})" if f and f != username else (username or "")
+        if f and f.lower() == (username or "").lower():
+            return f                        # "Ghost", not "Ghost (ghost)": the name already is the username
+        return f"{f} ({username})" if f else (username or "")
 
     def with_names(self, rows, key="by", saved_key="by_name"):
         """Copies of the rows with rows[key] shown as the person's name."""
