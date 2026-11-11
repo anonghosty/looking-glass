@@ -1,5 +1,9 @@
-flask>=3.0
-pymongo>=4.8
-python-dotenv>=1.0
-gunicorn>=23.0
-reportlab>=4.0
+# Each library is allowed up to (not including) its next major version: bug and security fixes still arrive on
+# every install, big changes do not. Raise a cap only after tests/run_all_checks.sh passes on the new version
+# (tests/check_libraries.py checks the caps and the parts of each library the platform uses; it needs no data).
+flask>=3.0,<4
+werkzeug>=3.0,<4
+pymongo>=4.8,<5
+python-dotenv>=1.0,<2
+gunicorn>=23.0,<27
+reportlab>=4.0,<6

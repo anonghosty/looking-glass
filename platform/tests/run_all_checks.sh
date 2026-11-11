@@ -14,6 +14,7 @@ run() {
   elif [ $rc = 77 ]; then echo "skipped"; skip=$((skip + 1)); echo "$out" | grep -m1 SKIPPED | sed 's/^/    /'
   else echo "FAILED"; fail=$((fail + 1)); failed+=("$name"); echo "$out" | tail -15 | sed 's/^/    /'; fi
 }
+run "libraries (versions + behaviour)" $PY tests/check_libraries.py
 run "replay schedule"                 $PY tests/test_schedule.py
 run "new communications collections"  $PY tests/test_new_collections.py
 run "new services collections"        $PY tests/test_new_service_collections.py

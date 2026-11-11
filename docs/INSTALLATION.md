@@ -320,9 +320,12 @@ Port 5000 and MongoDB's 27017 stay closed to the network.
 manage/backup.sh
 git pull
 .venv/bin/pip install -r requirements.txt
+.venv/bin/python tests/check_libraries.py   # the libraries: inside the tested versions, and working
 deploy/reload.sh                     # or: sudo systemctl restart looking-glass
 security_testing/security_retest.py && tests/run_all_checks.sh
 ```
+`requirements.txt` lets each library update within its major version only, so an update brings fixes but no big
+changes. If `check_libraries.py` fails, its line names the library.
 If `deploy/looking-glass.service.template` changed, run `deploy/install.sh` again and copy the service file again (A4 / B3).
 
 ## Troubleshooting

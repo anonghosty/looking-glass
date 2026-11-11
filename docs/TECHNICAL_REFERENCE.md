@@ -176,7 +176,11 @@ For a public deployment where nobody may switch demo off, set `PUBLIC_DEMO=1` in
 
 See [INSTALLATION.md](INSTALLATION.md). In short: Ubuntu 24.04 or later, Desktop or Server (or Ubuntu on WSL 2), Python 3.12+ (tested on 3.14),
 MongoDB filled by the Shadowserver pipeline (`../database`), a Mapbox token, and optionally a Malpedia token.
-Python packages (from `requirements.txt`): Flask, pymongo, python-dotenv and gunicorn.
+Python packages (from `requirements.txt`): Flask, Werkzeug, pymongo, python-dotenv, gunicorn and ReportLab. Each is
+allowed up to, not including, its next major version (for example `flask>=3.0,<4`): bug and security fixes still
+install, big changes do not. `tests/check_libraries.py` checks the installed versions against these limits and tries
+the parts of each library the platform uses; it needs no data, and the installer runs it. To allow a new major
+version, raise its limit, reinstall, and keep it only if `tests/run_all_checks.sh` and the security retest pass.
 
 External services:
 - **MongoDB** (database `shadowserver` by default). The app only reads; it never writes to the database.

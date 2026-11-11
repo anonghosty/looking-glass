@@ -1110,6 +1110,8 @@ check() {  # LABEL command...
 if [ "$RUN_CHECKS" = yes ]; then
   if [ $WANT_DB = 1 ]; then gauge 84 "Checking the database pipeline..."; check "database pipeline setup (shadowserver check)" bash -c "cd '$DB_DIR' && ./check.sh"; fi
   if [ $WANT_PF = 1 ]; then
+    gauge 86 "Checking the platform's libraries..."
+    check "platform libraries (tests/check_libraries.py)" bash -c "cd '$PF_DIR' && .venv/bin/python tests/check_libraries.py"
     gauge 88 "Security test of the platform (about 2 minutes)..."
     check "platform security test (security_testing/security_retest.py)" bash -c "cd '$PF_DIR' && security_testing/security_retest.py"
     gauge 94 "Checking both platforms against the database (about 2 minutes)..."
@@ -1144,6 +1146,10 @@ Note: $PF_WARN"
 if printf '%s\n' "${RESULTS[@]}" | grep -q '^FAIL.*run_all_checks'; then OUT+="
 Note: the platform checks need yesterday's reports in the database; they fail until the first
       reports are loaded. Run them again later: platform/tests/run_all_checks.sh"; fi
+if printf '%s\n' "${RESULTS[@]}" | grep -q '^FAIL.*check_libraries'; then OUT+="
+Note: a library the platform uses is missing, outside the versions it was tested with, or behaves
+      differently. This does not depend on reports. See the log, or run: platform/.venv/bin/python
+      platform/tests/check_libraries.py"; fi
 [ $WANT_PF = 1 ] && OUT+="
 
 Next: open $PF_URL on this computer and choose \"Let's get started\" to create the
