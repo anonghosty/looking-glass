@@ -91,8 +91,18 @@ try:
        and d["finding"]["history"][-1]["comment"].startswith("Rising") and d["finding"]["history"][-1]["to"] == "lg-check-analyst")
     st, d = call("/api/findings", ANALYST, role="analyst", user="lg-check-analyst")
     ok("…who now sees it, with its whole trail", st == 200 and d["findings"] and len(d["findings"][0]["history"]) == 2 and len(d["findings"][0]["channel"]) == 3)
+    # moving by hand is management's (finding_rules.py, external review 2026-11-11)
     st, d = call("/api/findings/1/status", ANALYST, "POST", {"status": "advisory", "comment": "Advisory sent to the affected networks."}, role="analyst", user="lg-check-analyst")
-    ok("the analyst marks the advisory sent", st == 200 and len(d["finding"]["history"]) == 3, f"{len(d.get('finding', {}).get('history', []))} steps")
+    ok("the analyst cannot set “Advisory sent” by hand (the advisory sets it)", st == 403 and "management" in d.get("error", ""), f"{st} {d.get('error', '')}")
+    st, d = call("/api/findings/1/status", RESEARCHER, "POST", {"status": "advisor", "to": "lg-check-advisor"}, role="researcher", user="lg-check")
+    ok("the researcher cannot send their own finding to an advisor", st == 403 and A.FINDINGS.get("1")["status"] == "analyst", f"{st} {d.get('error', '')}")
+    st, d = call("/api/findings/1/status", ANALYST, "POST", {"status": "closed"}, role="analyst", user="lg-check-analyst")
+    ok("…nor can the analyst close it by hand", st == 403 and A.FINDINGS.get("1")["status"] == "analyst", str(st))
+    st, d = call("/api/findings/1/status", MGMT, "POST", {"status": "approved"}, role="management", user="lg-check-management")
+    ok("management does not approve through the move bar (that is Decide)", st == 400 and "Decide" in d.get("error", ""), d.get("error", ""))
+    st, d = call("/api/findings/1/status", MGMT, "POST", {"status": "advisory"}, role="management", user="lg-check-management")
+    ok("…and does not set “Advisory sent” by hand either", st == 400, d.get("error", ""))
+    ok("none of the refused moves is in the history", len(A.FINDINGS.get("1")["history"]) == 2)
     st, d = call("/api/findings/1/status", ANALYST, "POST", {"status": "nonsense"}, role="analyst")
     ok("an unknown status is refused", st == 400)
     st, d = call("/api/findings/99/status", ANALYST, "POST", {"status": "closed"}, role="analyst")
@@ -136,6 +146,53 @@ try:
     st, d = call("/api/findings/3/decision", MGMT, "POST", {"decision": "reject", "text": "Not enough evidence."}, role="management", user="lg-check-management")
     ok("rejecting with the reason closes it", st == 200 and d["finding"]["status"] == "closed")
     ok("every step is in the audit log", {"finding_created", "finding_status", "finding_decision"} <= set(audited), ", ".join(sorted(set(audited))))
+
+    print("An advisory needs management's real approval")
+    ADVISOR = {"advisory"}
+    def forged(fid, steps):                              # a finding as an older version could have left it
+        with A.FINDINGS.lock:
+            A.FINDINGS._load()
+            A.FINDINGS.data["items"][fid] = {"id": fid, "note": None, "section": "infections", "name": "android.badbox2", "title": f"F{fid}",
+                                             "text": "", "codes": [], "user": "lg-check", "role": "researcher", "at": 1.0, "status": "advisor",
+                                             "participants": ["lg-check", "lg-check-advisor"], "assignee": "lg-check-advisor",
+                                             "history": [{"status": s, "user": u, "role": r, "at": 1.0, "comment": "", "to": "lg-check-advisor"} for s, u, r in steps]}
+            A.FINDINGS._save()
+    forged("901", [("management", "lg-check", "researcher"), ("advisor", "lg-check", "researcher")])
+    st, d = call("/api/advisory/901", ADVISOR, role="advisor", user="lg-check-advisor")
+    ok("sent to the advisor by its researcher: no advisory can be written", st == 409 and "not approved" in d.get("error", ""), f"{st} {d.get('error', '')}")
+    forged("902", [("management", "lg-check", "researcher"), ("advisor", "lg-check-management", "management")])
+    st, d = call("/api/advisory/902", ADVISOR, role="advisor", user="lg-check-advisor")
+    ok("sent to the advisor by management: the advisory can be written", st == 200, f"{st} {d.get('error', '')}")
+    forged("903", [("management", "lg-check", "researcher")])
+    with A.FINDINGS.lock:
+        A.FINDINGS._load(); A.FINDINGS.data["items"]["903"].update(status="approved", participants=["lg-check", "lg-check-management", "lg-check-advisor"])
+        A.FINDINGS._save()
+    st, d = call("/api/findings/903/status", MGMT, "POST", {"status": "advisor", "to": "lg-check-advisor"}, role="management", user="lg-check-management")
+    ok("management moves an approved finding to the advisor: recorded as its approval", st == 200 and A.FINDINGS.get("903")["history"][-1].get("approval") is True)
+    st, d = call("/api/advisory/903", ADVISOR, role="advisor", user="lg-check-advisor")
+    ok("…and the advisory can be written", st == 200, f"{st} {d.get('error', '')}")
+
+    print("“No combination of interest” closes a request only for the researcher it was sent to")
+    req = A.FINDINGS.create_analyst("LG-A-TEST0001", "infections", "android.badbox2", "Request", "Look at these.", "lg-check-analyst", "analyst",
+                                    to="lg-check-researcher", kind="researcher")
+    rid = req["id"]
+    st, d = call(f"/api/findings/{rid}/reply", ANALYST, "POST", {"none_found": True}, role="analyst", user="lg-check-analyst")
+    ok("the analyst who asked cannot close it this way", st == 403 and A.FINDINGS.get(rid)["status"] == "researcher", f"{st} {d.get('error', '')}")
+    st, d = call(f"/api/findings/{rid}/reply", RESEARCHER, "POST", {"none_found": True}, role="researcher", user="lg-check-researcher")
+    ok("the researcher it was sent to closes it", st == 200 and A.FINDINGS.get(rid)["status"] == "closed", f"{st} {d.get('error', '')}")
+    st, d = call(f"/api/findings/{rid}/reply", RESEARCHER, "POST", {"text": "one more thing"}, role="researcher", user="lg-check-researcher")
+    ok("a closed finding takes no more replies", st == 409, f"{st} {d.get('error', '')}")
+    st, d = call("/api/findings/903/reply", MGMT, "POST", {"none_found": True}, role="management", user="lg-check-management")
+    ok("on a finding that is not an analyst's request it is refused", st == 403 and A.FINDINGS.get("903")["status"] == "advisor", f"{st} {d.get('error', '')}")
+
+    print("A closed review is not decided again")
+    rv = A.FINDINGS.create_review("LG-C-TEST0001", "issues", "x", "Review", "Which views?", "lg-check-analyst", "analyst", "lg-check-management",
+                                  {"source": "LG-C-TEST0001", "codes": ["LG-X-TEST0001"], "researcher": {}, "analyst": {}})
+    call(f"/api/findings/{rv['id']}/status", MGMT, "POST", {"status": "closed", "comment": "Not needed."}, role="management", user="lg-check-management")
+    st, d = call(f"/api/findings/{rv['id']}/review-decision", MGMT, "POST", {"choice": "both", "text": "go", "to": "lg-check-advisor"},
+                 role="management", user="lg-check-management")
+    ok("deciding a review that was closed is refused", st == 400 and "closed" in d.get("error", "") and A.FINDINGS.get(rv["id"])["status"] == "closed",
+       f"{st} {d.get('error', '')}")
 finally:
     audit.add = real_add
     A.FINDINGS.people_of = real_people

@@ -21,6 +21,8 @@ import time
 
 from flask import g, jsonify, render_template, request
 
+import finding_rules
+
 STATUSES = [("new", "New"), ("management", "With management"), ("approved", "Approved by management"),
             ("researcher", "Back with the researcher"), ("analyst", "With the analyst"), ("advisor", "With the advisor"),
             ("advisory", "Advisory sent"), ("closed", "Closed")]
@@ -221,6 +223,8 @@ class Findings:
                 return None, "No such finding."
             if item["review"].get("decision"):
                 return None, "Already decided."
+            if item["status"] not in OPEN:                 # closed some other way: there is nothing left to decide
+                return None, "This finding is closed: there is nothing to decide."
             if choice == "both" and not item["review"].get("codes"):
                 choice = "researcher"          # sent without across-report patterns: there is no analyst's view to add
             item["review"].update(decision="rejected" if choice == "reject" else choice, by=user, at=round(time.time(), 3), comment=text[:MAX_COMMENT])
@@ -286,7 +290,12 @@ class Findings:
             if not item:
                 return None, "No such finding."
             back = None
+            if item.get("status") not in OPEN:
+                return None, "This finding is closed: it takes no more replies."
             if none_found:
+                err = finding_rules.can_close_none_found(item, user)
+                if err:
+                    return None, err
                 item["status"] = "closed"
             elif item.get("origin") == "analyst" and item["status"] == "researcher" and user != item["user"]:
                 # the researcher answers the analyst's code: it goes back to the analyst who asked, with the codes
@@ -325,7 +334,8 @@ class Findings:
             self._save()
             return item, ""
 
-    def set_status(self, fid, status, comment, user, role, to=None):
+    def set_status(self, fid, status, comment, user, role, to=None, is_manager=False):
+        """Moving a finding by hand: management's or an administrator's only (finding_rules.py)."""
         with self.lock:
             self._load()
             item = self.data["items"].get(str(fid))
@@ -333,10 +343,16 @@ class Findings:
                 return None, "No such finding."
             if status not in LABEL:
                 return None, "Unknown status."
+            err = finding_rules.can_move(item, status, is_manager, OPEN)
+            if err:
+                return None, err
             if status == item["status"] and not comment and not to:
                 return None, "It already has that status; add a comment to note something."
             item["status"] = status
-            item["history"].append({"status": status, "user": user, "role": role, "at": round(time.time(), 3), "comment": comment[:MAX_COMMENT], "to": to or ""})
+            h = {"status": status, "user": user, "role": role, "at": round(time.time(), 3), "comment": comment[:MAX_COMMENT], "to": to or ""}
+            if status == "advisor":
+                h["approval"] = True                       # management sent it to the advisor: its approval (finding_rules.py)
+            item["history"].append(h)
             self._join(item, to)
             self._sync_case(item)
             self._save()
@@ -459,9 +475,9 @@ def install(app, ctx):
             if not to:
                 return jsonify(error=err), 400
         user, role = me()
-        item, err = f.set_status(fid, status, comment, user, role, to)
+        item, err = f.set_status(fid, status, comment, user, role, to, is_manager=bool(hp("management") or hp("settings")))
         if not item:
-            return jsonify(error=err), 404 if "No such" in err else 400
+            return jsonify(error=err), 404 if "No such" in err else 403 if err == finding_rules.NOT_YOURS else 400
         ctx["audit"].add("finding_status", user=user, target=f"#{fid} {item['name']}",
                          detail=f"{LABEL.get(status, status)}" + (f" · to {to}" if to else "") + (f" · {comment[:100]}" if comment else ""))
         return jsonify(finding=f.shown(item, ctx["describe"]))
@@ -556,7 +572,7 @@ def install(app, ctx):
         user, role = me()
         item, err = f.reply(fid, text, codes, user, role, none_found)
         if not item:
-            return jsonify(error=err), 404
+            return jsonify(error=err), 404 if "No such" in err else 409 if "closed" in err else 403
         ctx["audit"].add("finding_reply", user=user, target=f"#{fid} {item['name'][:60]}",
                          detail=("no combination of interest, closed · " if none_found else "") + text[:100] + (f" · {', '.join(codes)}" if codes else ""))
         return jsonify(finding=f.shown(item, ctx["describe"]))

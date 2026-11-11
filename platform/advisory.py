@@ -33,6 +33,7 @@ import time
 
 from flask import Response, g, jsonify, render_template, request
 
+import finding_rules
 import issue_tags
 import tlp
 
@@ -227,7 +228,10 @@ def install(app, ctx):
             return False
         if x.get("review"):
             return x["review"].get("decision") in ("both", "researcher")      # a rejected one has no advisory
-        return x["status"] in ("advisor", "advisory") or any(h.get("status") == "advisor" for h in x.get("history") or [])
+        # with the advisor, AND management really approved it: having been "with the advisor" once is not enough
+        # (anyone in the channel could set that before; external review, 2026-11-11, finding_rules.py)
+        with_advisor = x["status"] in ("advisor", "advisory") or any(h.get("status") == "advisor" for h in x.get("history") or [])
+        return with_advisor and finding_rules.management_approved(x)
 
     def kept(x):
         return bool(x.get("review") and hasattr(book, "review_kept") and book.review_kept(x["id"]))
