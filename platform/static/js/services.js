@@ -1057,7 +1057,8 @@
       section("This host yesterday", [["Records", fmt(d.host_records)], ["Reports / services", d.host_services.join(", ")]]),
     );
     const ex = Object.entries(e.extras || {});
-    if (ex.length) body.append(section(`${e.service} specific fields${state.demo ? " (identifying fields hidden in demo mode)" : ""}`, ex.map(([k, v]) => [k.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()), v]), true));
+    const hid = e.extras_hidden ? ` (${e.extras_hidden} identifying or unlisted field${e.extras_hidden === 1 ? "" : "s"} hidden in the masked view)` : "";
+    if (ex.length || hid) body.append(section(`${e.service} specific fields${hid}`, ex.map(([k, v]) => [k.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()), v]), true));
     $("modal").hidden = false; $("modalScrim").hidden = false; $("btnModalClose").focus();
   }
   function closeModal() { $("modal").hidden = true; if ($("insight").hidden && $("glossary").hidden) $("modalScrim").hidden = true; state.modalEv = null; }

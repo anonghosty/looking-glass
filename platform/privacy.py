@@ -185,6 +185,9 @@ def mask_event(ev, asns):
             out[f] = "hidden"
     for f in ("http_url", "http_host", "http_referer", "http_agent", "ssl_servername", "detail", "filename"):
         out[f] = mask_text(out.get(f, ""))
-    out["extras"] = {k: mask_text(v) for k, v in (ev.get("extras") or {}).items()}
+    # report-specific fields: an allowlist (masked_fields.py), so user names, passwords, banners, paths and any field
+    # a report adds later stay hidden; the fields shown are masked for hosts, addresses, e-mails, dates and IDs
+    import masked_fields
+    out["extras"], out["extras_hidden"] = masked_fields.event_extras(ev.get("extras"))
     out["demo"] = True
     return out

@@ -159,6 +159,10 @@ The **Demo** button in the top bar conceals sensitive details while the data kee
 - IP addresses lose their first and third parts (`x.161.x.34`; IPv6 `x:f0f8:x:x:x:x:x:1a2b`), so neither the owning network nor its address range can be looked up.
 - Hostnames and machine names are hidden.
 - IP addresses inside URLs, cookies and other text fields are masked.
+- A report's own fields (map and services details) pass an allowlist (`masked_fields.py`): only technical details
+  (protocol, software, versions, ciphers, flags, malware sample hashes) are shown, with host names, addresses,
+  e-mails, dates and IDs masked inside them; names, MAC addresses, user names, locations, keys, banners and any field
+  not on the list are hidden, and the details window says how many.
 - Locations stay visible.
 - Pins and "Copy JSON" are hidden.
 

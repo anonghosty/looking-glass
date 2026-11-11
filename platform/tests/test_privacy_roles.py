@@ -71,14 +71,15 @@ try:
           "dst_asn_name": "Sample University", "src_hostname": "pc-17.example.net", "dst_hostname": "srv.example.org", "machine_name": "DESKTOP-ABC",
           "http_url": "http://198.51.100.23/x", "http_host": "203.0.113.9", "http_referer": "", "http_agent": "curl 198.51.100.23",
           "ssl_servername": "", "detail": "seen from 203.0.113.9", "filename": "", "src_city": "Example City",
-          "extras": {"banner": "login 198.51.100.23", "n": 3}}
+          "extras": {"banner": "login 198.51.100.23", "count": 3, "url_scheme": "http via gw.example.net"}}
     mv = P.mask_event(ev, R)
     blob = json.dumps(mv)
     ok("no real address anywhere in the masked event", "198.51.100.23" not in blob and "203.0.113.9" not in blob, blob[:120])
     ok("no company name or AS number", "Example Telecom" not in blob and "Sample University" not in blob and "6450" not in blob)
     ok("ASNs and names become aliases", mv["src_asn"] == mv["src_asn_name"] == "Telco 1" and mv["dst_asn"] == "Institution 1")
     ok("host and machine names hidden", mv["src_hostname"] == mv["dst_hostname"] == mv["machine_name"] == "hidden")
-    ok("extras: text masked, numbers kept", mv["extras"]["banner"] == "login x.51.x.23" and mv["extras"]["n"] == 3)
+    ok("extras: a field not on the allowlist is hidden and counted", "banner" not in mv["extras"] and mv["extras_hidden"] == 1)
+    ok("extras: allowed text masked for hosts, numbers kept", mv["extras"]["url_scheme"] == "http via <host>" and mv["extras"]["count"] == 3)
     ok("location kept, marked as demo", mv["src_city"] == "Example City" and mv["demo"] is True)
     ok("the original event is not changed", ev["src_ip"] == "198.51.100.23" and ev["extras"]["banner"] == "login 198.51.100.23")
 

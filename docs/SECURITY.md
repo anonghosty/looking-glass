@@ -114,6 +114,11 @@ Default roles (described on the admin page too):
 inside URLs and banners. Keeping the leading octets would leave the network prefix, which a WHOIS / BGP lookup turns
 into the owner and its address range; without the first and third parts neither can be looked up. Network names
 become aliases (Telco 1, Bank 2...) and host names are removed.
+A report's own fields (the "specific fields" in a details window) are shown to masked viewers only when they are on an
+allowlist of technical details (protocol, software, versions, ciphers, capability flags; `masked_fields.py`), and even
+those values have host names, addresses, e-mail addresses, dates and long IDs masked. Every other field is hidden:
+system and workstation names, DNS and LDAP names, MAC addresses, user names, descriptions, locations, keys,
+fingerprints, serials and banners. A field a report adds later stays hidden until it is added to the allowlist.
 Everything is enforced on the server: an external account gets masked data even if the address asks for `demo=0`, and exports,
 Malpedia, Settings and the admin APIs answer 403 without the permission.
 

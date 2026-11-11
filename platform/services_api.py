@@ -16,14 +16,12 @@ from datetime import timedelta
 from flask import Response, jsonify, render_template, request
 from werkzeug.datastructures import MultiDict
 
-from privacy import mask_ip, mask_text
+import masked_fields
+from privacy import mask_ip
 from respcache import ResultCache, day_key
 from services import (EMPTY, FAMILIES, SEV_ORDER, ServiceRegistry, ServiceStore, matches, parse_filters, parse_time,
                       report_info)
 
-HIDE_EXTRA = ("subject_", "issuer_", "hostname", "banner", "cookie", "url", "server_name", "email", "serial", "fingerprint",
-              "jarm", "hassh", "key", "modulus", "signature", "raw", "cert", "exponent", "spi", "data_", "detail", "source",
-              "www_authenticate", "proxy_authenticate", "reason")
 DRILL_LIMIT = 300
 
 
@@ -80,8 +78,10 @@ def register(app, ctx):
             out["demo"] = True
         if full:
             ex = e.get("extras") or {}
-            out["extras"] = ({k: mask_text(v) for k, v in ex.items() if not any(h in k for h in HIDE_EXTRA)}
-                             if demo else ex)
+            if demo:      # an allowlist (masked_fields.py): unknown and identifying fields are hidden, the rest masked
+                out["extras"], out["extras_hidden"] = masked_fields.service_extras(ex)
+            else:
+                out["extras"] = ex
         return out
 
     def day_for(at=None):

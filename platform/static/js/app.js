@@ -1375,9 +1375,10 @@
       section("TLS / device", [["SSL server name", ev.ssl_servername], ["SSL cipher", ev.ssl_cipher], ["Device vendor", ev.device_vendor], ["Device type", ev.device_type], ["Device model", ev.device_model], ["Machine name", ev.machine_name]]),
     );
     const extras = Object.entries(ev.extras || {});
-    if (extras.length) {
+    const hid = ev.extras_hidden ? ` (${ev.extras_hidden} identifying or unlisted field${ev.extras_hidden === 1 ? "" : "s"} hidden in the masked view)` : "";
+    if (extras.length || hid) {
       const pretty = (k) => k.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
-      const xs = section(`${ev.source_label || "Report"} specific fields`, extras.map(([k, v]) => [pretty(k), v]), true);
+      const xs = section(`${ev.source_label || "Report"} specific fields${hid}`, extras.map(([k, v]) => [pretty(k), v]), true);
       // report fields holding a malware family or a sample hash can be looked up on Malpedia
       for (const [k, v] of extras) {
         const val = String(v ?? "");

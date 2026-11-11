@@ -29,6 +29,7 @@ run "replayed counts"                 $PY tests/verify_replayed.py
 run "constituency"                    $PY tests/verify_constituency.py
 run "demo masking"                    $PY tests/test_demo.py
 run "privacy + roles unit tests"      $PY tests/test_privacy_roles.py
+run "masked viewers: report fields allowlist" $PY tests/check_masked_fields.py
 run "intel gathered (researchers)"    $PY tests/check_intel.py
 run "researchers' notes"              $PY tests/check_notes.py
 run "combination codes + search"      $PY tests/check_combos.py
