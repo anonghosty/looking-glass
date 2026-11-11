@@ -190,7 +190,9 @@ def parse_iso(value, default):
         return default
     try:
         dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        dt = dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        # always UTC: a time with its own offset (+05:37) would start "its" day at a different moment, and every
+        # offset would load another copy of the day into memory (external review, 2026-11-11)
+        dt = dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
     except (ValueError, TypeError, OverflowError):
         return default
     day = day_start(replay_now())
@@ -199,6 +201,8 @@ def parse_iso(value, default):
 
 
 def day_start(dt):
+    if dt.tzinfo and dt.utcoffset():                   # a day always starts at 00:00 UTC (one copy per day in memory)
+        dt = dt.astimezone(timezone.utc)
     return dt.replace(hour=0, minute=0, second=0, microsecond=0)
 
 

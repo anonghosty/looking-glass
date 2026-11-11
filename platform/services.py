@@ -260,6 +260,8 @@ class ServiceStore:
 
     @staticmethod
     def day_start(dt):
+        if dt.tzinfo and dt.utcoffset():               # a day always starts at 00:00 UTC (one copy per day in memory)
+            dt = dt.astimezone(timezone.utc)
         return dt.replace(hour=0, minute=0, second=0, microsecond=0)
 
     def _prefixes(self, start):

@@ -38,6 +38,7 @@ run "masked viewers: report fields allowlist" $PY tests/check_masked_fields.py
 run "reverse proxy + first administrator" $PY tests/check_first_admin_proxy.py
 run "settings: Settings permission only" $PY tests/check_settings_access.py
 run "failed-login counter (locks, clean-up)" $PY tests/check_login_throttle.py
+run "request times in UTC (one day copy)" $PY tests/check_time_offsets.py
 run "intel gathered (researchers)"    $PY tests/check_intel.py
 run "researchers' notes"              $PY tests/check_notes.py
 run "combination codes + search"      $PY tests/check_combos.py
