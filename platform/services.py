@@ -420,6 +420,14 @@ EMPTY = {"vendor": "unknown vendor", "device_type": "unknown type", "product": "
          "city": "unknown city", "sector": "unknown sector"}
 
 
+def _masked(refs):
+    """True in a masked request (external role, demo mode): the same test the IP and network filters use."""
+    try:
+        return bool(refs.strict())
+    except Exception:      # outside a request
+        return False
+
+
 def parse_filters(args, refs, asns):
     out = {}
     for k in SCALAR + LISTS:
@@ -428,6 +436,10 @@ def parse_filters(args, refs, asns):
             continue
         if k == "ip":
             vals = {refs.resolve(v) for v in vals}
+        elif k == "hostname" and _masked(refs):
+            # a masked view shows no host name ("hidden"), so it filters on none: a name typed into the request must
+            # not tell whether that host is in the data (external review, 2026-11-11)
+            vals = {"\x00masked-hostname"}
         elif k == "asn":
             vals = set().union(*(asns.resolve(v) for v in vals))
         out[k] = vals
