@@ -462,7 +462,9 @@ class Doc:
                     tx = self.pill(tx, yy - 21, f"CVSS {r['cvss']}", RED if r["cvss"] >= 9 else AMBER if r["cvss"] >= 7 else BLUE)
                 if r.get("epss") is not None and r["epss"] >= .1:
                     tx = self.pill(tx, yy - 21, f"EPSS {pct(r['epss'])}", AMBER)
-                if not r.get("cve"):
+                if r.get("infection"):
+                    tx = self.pill(tx, yy - 21, "Infection / category · calling botnet sinkholes", RED)
+                elif not r.get("cve"):
                     tx = self.pill(tx, yy - 21, "Configuration / exposure", SLATE)
             elif r.get("family"):
                 tx = self.pill(tx, yy - 21, "Threat actor" if r["family"].startswith("actor:") else "Malpedia", BLUE)
@@ -605,7 +607,8 @@ def build(d, enr, meta):
     # ---------------- page 3: top threats
     y = doc.new_page("Top infections" if comms else "Top issues")
     rw = (W - 2 * M - 12) * .6
-    rows = d["infections"] if comms else sorted(d["issues"], key=lambda r: (-r["hosts"], not r["exploited"], -(r["cvss"] or 0)))
+    rows = d["infections"] if comms else sorted(d["issues"] + (d.get("infections_on") or []),        # with the hosts' infections
+                                                key=lambda r: (-r["hosts"], not r["exploited"], -(r["cvss"] or 0)))
     top = doc.card(M, y, rw, y - 30, "Top infections" if comms else "Top issues",
                    "Devices per infection" if comms else "Hosts per issue, most hosts first")
     doc.ranking(M + 14, top, rw - 28, rows, comms, max_rows=int((top - 40) // 33))

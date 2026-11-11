@@ -16,6 +16,7 @@ data/*
 !data/report_map_snapshot.json
 !data/pattern_fields.json
 !data/product_rules.json
+!data/report_impact.json
 # rendered by deploy/install.sh for this computer
 deploy/*.service
 # outputs of the tools/ diagnostics

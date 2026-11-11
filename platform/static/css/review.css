@@ -1,0 +1,30 @@
+/* Looking Glass · the review page (review.js): management's final look at an analyst's request */
+.rv-main { max-width: none; margin: 0 auto; display: grid; gap: 16px; padding: 0 clamp(12px, 2vw, 32px) 60px; }
+.rv-main > * { width: 100%; box-sizing: border-box; }     /* every section across the full width, like the views */
+.rv-hero { display: grid; gap: 8px; padding: 22px 24px; border-radius: 20px; border: 1px solid rgba(177, 140, 245, .35);
+  background: radial-gradient(circle at 10% 0, rgba(177, 140, 245, .14), transparent 55%), linear-gradient(180deg, #15131c, #111114); }
+.rv-hero h1 { margin: 0; font-size: 22px; color: #fff; }
+.rv-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); }
+.rv-quote { margin: 0; padding: 10px 14px; border-radius: 12px; border-left: 3px solid #b18cf5; background: rgba(177, 140, 245, .07); }
+.rv-quote b { font-size: 12px; color: #e6d9ff; } .rv-quote p { margin: 4px 0 0; font-size: 14px; line-height: 1.55; white-space: pre-line; overflow-wrap: anywhere; }
+.rv-quote small { display: block; margin-top: 4px; color: var(--muted); font-size: 11.5px; }
+.rv-quote.r { border-left-color: #7c9cff; background: rgba(124, 156, 255, .06); } .rv-quote.r b { color: #c5d2ff; }
+.rv-card { display: grid; gap: 10px; padding: 18px 20px; border-radius: 18px; border: 1px solid var(--border); background: var(--surface-1, #121216); min-width: 0; }
+.rv-card h2 { margin: 0; font-size: 16px; color: #fff; }
+.rv-what { margin: 0; font-size: 13px; color: var(--text-2); overflow-wrap: anywhere; }
+.rv-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.rv-tab { display: grid; gap: 2px; text-align: left; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border-strong); background: rgba(255, 255, 255, .02);
+  color: var(--text-2); cursor: pointer; font: inherit; min-width: 220px; }
+.rv-tab b { font-size: 13.5px; color: var(--text); } .rv-tab small { font-size: 11.5px; color: var(--muted); }
+.rv-tab[aria-selected="true"].r { border-color: rgba(124, 156, 255, .6); background: rgba(124, 156, 255, .12); }
+.rv-tab[aria-selected="true"].a { border-color: rgba(177, 140, 245, .6); background: rgba(177, 140, 245, .12); }
+.rv-tab[aria-selected="true"].b { border-color: rgba(43, 176, 127, .6); background: rgba(43, 176, 127, .1); }
+.rv-pats { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; }
+.rv-pat { display: grid; gap: 2px; padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(177, 140, 245, .3); background: rgba(177, 140, 245, .05); font-size: 12.5px; }
+.rv-pat b { color: #e6d9ff; } .rv-pat span { color: var(--text-2); } .rv-pat code { font: 600 11.5px "Geist Mono", ui-monospace, monospace; color: #d2b8ff; }
+.rv-pane { min-width: 0; }
+.rv-frame { display: block; width: 100%; height: 1500px; border: 1px solid var(--border); border-radius: 14px; background: #0b0b0d; overflow: hidden; }
+.rv-views { padding-left: clamp(10px, 1vw, 20px); padding-right: clamp(10px, 1vw, 20px); }
+.rv-frame[hidden] { display: none; }
+.rv-decide .lg-btn { justify-self: start; text-decoration: none; }
+@media (max-width: 700px) { .rv-tab { min-width: 0; flex: 1 1 100%; } .rv-frame { height: 1200px; } }

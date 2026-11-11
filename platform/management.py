@@ -342,6 +342,17 @@ def register(app, ctx):
             issues.append({**row, "cve": i in cards, "exploited": bool(c.get("exploited")), "cvss": (c.get("cvss") or {}).get("score"),
                            "severity": (c.get("cvss") or {}).get("severity", ""), "epss": c.get("epss"),
                            "title": (c.get("kev") or {}).get("name") or d.get("title") or (c.get("description") or "")[:90]})
+        # the infections and categories these hosts also call botnet sinkholes as (the communications reports): they belong
+        # among the top issues of a services selection too
+        infections_on = []                 # kept apart from the issues (those are the reports' own, as MongoDB holds them)
+        if ctx.get("infections_of") and hosts:
+            try:
+                for name, nh in ctx["infections_of"](set(hosts)):
+                    infections_on.append({"value": name, "label": name, "count": nh, "share": nh / max(1, n_hosts), "hosts": nh, "infection": True,
+                                   "cve": False, "exploited": False, "cvss": None, "severity": "", "epss": None,
+                                   "title": "Infection / category: these hosts also call botnet sinkholes"})
+            except Exception:                              # noqa: BLE001  (the portal still shows the issues)
+                pass
         kev_list = [i for i in cve_ids if (cards[i] or {}).get("exploited")]
         crit = [i for i in cve_ids if ((cards[i] or {}).get("cvss") or {}).get("score", 0) and cards[i]["cvss"]["score"] >= 9]
         peak = max(range(24), key=lambda x: hours[x]) if n_ev else None
@@ -377,7 +388,7 @@ def register(app, ctx):
                      "kev_hosts": kev_hosts, "kev_cves": len(kev_list), "critical_cves": len(crit), "cves": len(cve_ids),
                      "issues": len(iss), "services": len(svc), "regions": len([r for r in reg if r != "Unknown region"]),
                      "critical": sev.get("critical", 0), "share_of_day": n_ev / max(1, len(all_ev)), "day_records": len(all_ev)},
-            "hours": hours, "peak_hour": peak, "findings": findings, "issues": issues,
+            "hours": hours, "peak_hour": peak, "findings": findings, "issues": issues, "infections_on": infections_on,
             "item_counts": {k: len(v) for k, v in iss_h.items()},       # hosts per issue (all of them: the baseline)
             "services": top(svc, svc_h, 12, n_ev), "families": top(fam, None, 8, n_ev),
             "regions": top(reg, reg_h, 30, n_ev), "networks": top(net, net_h, 12, n_ev), "sectors": top(sec, sec_h, 15, n_ev),

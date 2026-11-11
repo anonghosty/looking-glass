@@ -34,6 +34,7 @@ run "researchers' notes"              $PY tests/check_notes.py
 run "combination codes + search"      $PY tests/check_combos.py
 run "findings (researcher → advisory)" $PY tests/check_findings.py
 run "analyst codes (analyst → researcher)" $PY tests/check_acodes.py
+run "report views (analyst → management → analyst)" $PY tests/check_combo_review.py
 run "several reports + filters"       $PY tests/check_cross_filters.py
 run "management portal (no addresses)" $PY tests/check_management.py
 run "report map (Shadowserver schema)" $PY tests/check_report_map.py

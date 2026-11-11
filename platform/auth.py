@@ -68,13 +68,16 @@ PERMS = {
                   "Only the management role (and admins, to preview it) can have it",
     "users": "Manage accounts, roles and sessions (approve, revoke, kick)",
     "audit": "See the audit log",
+    "advisory": "Write and generate advisories: the findings management sends them, the advisory page (description, "
+                "recommended actions) and the final report with the affected devices",
 }
 DEFAULT_ROLES = {"external": ["view"], "analyst": ["view", "unmasked", "export", "malpedia"], "researcher": ["definitions", "networks"], "management": ["management"],
-                 "admin": list(PERMS)}
+                 "advisor": ["advisory"], "admin": list(PERMS)}
+ADVISORY_PATHS = ("/findings", "/api/findings", "/advisory", "/api/advisory", "/api/organisation", "/organisation/logo")    # all the advisor role (no 'view') can open
 DEFINITIONS_PATHS = ("/definitions", "/api/kb/", "/api/networks", "/api/lookups", "/api/intel", "/api/notes", "/api/combo-codes/",
                      "/findings", "/api/findings", "/intel/")
 MANAGEMENT_PATHS = ("/management", "/api/mgmt/", "/api/lookups", "/api/combo-codes/", "/findings", "/api/findings",
-                    "/intel/", "/api/intel/acode/")  # all the management role can open
+                    "/intel/", "/api/intel/acode/", "/review/", "/api/review/")  # all the management role can open
 MANAGEMENT_ONLY = "management"            # the permission (and role) that cannot be given to any other role   # all a researcher (no 'view') can open
 LOWEST_ROLE = "external"
 # what each built-in role is for (shown on the admin page; custom roles are described by their permissions)
@@ -92,6 +95,9 @@ ROLE_INFO = {
                   "Malpedia does not know and the issues that are not CVEs, which they research and define with references "
                   "(evidence); the CVEs found, with their NVD / CISA KEV / EPSS status; and the network names (AS-number "
                   "registry), which they correct. They do not see the platforms or the host addresses.",
+    "advisor": "Advisors. They turn a finding management has decided on into the advisory: the organisation's title and logo, "
+               "the affected CVEs, issues and categories, the impact, the recommended actions, and the full report with the "
+               "affected devices underneath. They work on the Findings and advisory pages only.",
     "admin": "Administrators. Everything an analyst can do, plus Settings (country, constituency), malware definitions, accounts, roles and "
              "permissions, sessions and the audit log.",
 }
@@ -352,6 +358,7 @@ class Roles:
         except (OSError, ValueError):
             self.roles = dict(DEFAULT_ROLES)
         self.roles.setdefault("researcher", list(DEFAULT_ROLES["researcher"]))    # added in a later version
+        self.roles.setdefault("advisor", list(DEFAULT_ROLES["advisor"]))          # added later still (advisories)
         # once: researchers also correct network names (added after the role). A marker file makes it run only once, so
         # an administrator who later removes the permission keeps that choice.
         marker = os.path.join(os.path.dirname(path), ".roles_networks_added")
@@ -706,6 +713,13 @@ def install(app, base_dir, logger):
                             return None
                         if p in ("/", "/services", "/definitions", "/settings"):
                             return redirect("/management")
+                        abort(403)
+                    # advisors: their portal, the advisory pages and Findings (the start page sends them to their portal)
+                    if "advisory" in g.user["perms"] and not ({"definitions", "networks"} & g.user["perms"]):
+                        if p.startswith(ADVISORY_PATHS):
+                            return None
+                        if p in ("/", "/services", "/definitions", "/settings", "/management"):
+                            return redirect("/advisory")
                         abort(403)
                     # researchers: only the Definitions page (and the start page sends them there)
                     portal = {"definitions", "networks"} & g.user["perms"]

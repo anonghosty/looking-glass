@@ -302,6 +302,13 @@
         a.textContent = "Running the search again…";
         autoDownload = true; start(); return;
       }
+      if (r.status === 409) {                // across-report data: management decides first (combo_review.py)
+        const d = await r.json().catch(() => ({}));
+        const box = document.querySelector(".ce-review");
+        if (box) { box.scrollIntoView({ behavior: "smooth", block: "start" }); box.classList.add("pulse"); setTimeout(() => box.classList.remove("pulse"), 1600); }
+        const st = box?.querySelector(".ce-state"); if (st && d.error) { st.className = "ce-state todo"; st.textContent = d.error; } else alert(d.error || "Management decides first.");
+        return;
+      }
       if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || `Download failed (HTTP ${r.status})`); return; }
       const name = (r.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/)?.[1] || "looking-glass_combination.zip";
       const url = URL.createObjectURL(await r.blob());

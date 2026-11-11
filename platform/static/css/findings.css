@@ -64,6 +64,40 @@
 .fd-replybox[open] { padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(124, 156, 255, .25); background: rgba(124, 156, 255, .04); }
 .fd-replybox .fd-in { width: 100%; box-sizing: border-box; resize: vertical; }
 .fd-replybox .lg-btn { justify-self: start; text-decoration: none; }
+.fd-global { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 14px; border-radius: 12px;
+  border: 1px solid rgba(124, 156, 255, .3); background: rgba(124, 156, 255, .05); font-size: 13px; color: var(--text-2); }
+.fd-global span { flex: 1; min-width: 220px; } .fd-global .lg-btn { text-decoration: none; }
+.fd-rv-state { font-size: 12.5px; padding: 3px 10px; border-radius: 999px; border: 1px solid rgba(245, 181, 74, .45); color: #f5d9a8; }
+.fd-rv-state.both, .fd-rv-state.researcher { border-color: rgba(43, 176, 127, .45); color: #8ee0bd; }
+/* an analyst's across-report views (combo_review.py) */
+.fd-review { display: grid; gap: 10px; padding: 14px 16px; border-radius: 14px; border: 1px solid rgba(177, 140, 245, .4); background: rgba(177, 140, 245, .05); }
+.fd-review h3 { margin: 0; font-size: 14px; color: #fff; }
+.fd-views { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+.fd-view { display: grid; gap: 8px; align-content: start; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255, 255, 255, .02); min-width: 0; }
+.fd-view.r { border-color: rgba(124, 156, 255, .35); } .fd-view.a { border-color: rgba(177, 140, 245, .45); }
+.fd-view-k { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #c5d2ff; }
+.fd-view.a .fd-view-k { color: #d2b8ff; }
+.fd-view-code { font: 600 12px "Geist Mono", ui-monospace, monospace; color: #a9b8ff; }
+.fd-view-what { margin: 0; font-size: 12.5px; color: var(--text-2); overflow-wrap: anywhere; }
+.fd-view h4 { margin: 4px 0 0; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.fd-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 6px; }
+.fd-kpis > div { display: grid; padding: 6px 8px; border-radius: 8px; background: rgba(255, 255, 255, .03); border: 1px solid var(--border); }
+.fd-kpis b { font-size: 17px; color: #fff; } .fd-kpis span { font-size: 11px; color: var(--muted); }
+.fd-bars { display: grid; gap: 3px; }
+.fd-hbar { display: grid; grid-template-columns: minmax(90px, 160px) minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 12px; }
+.fd-hbar .l { color: var(--text-2); overflow-wrap: anywhere; } .fd-hbar .t { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .06); }
+.fd-hbar .t i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #5b8def, #b18cf5); }
+.fd-pat { display: grid; gap: 4px; padding: 8px 10px; border-radius: 10px; background: rgba(177, 140, 245, .06); border: 1px solid rgba(177, 140, 245, .3); }
+.fd-pat-h { font-size: 12.5px; font-weight: 700; color: #e6d9ff; }
+.fd-pat-r { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 8px; font-size: 12px; }
+.fd-pat-r b { color: var(--text-2); } .fd-pat-r span { color: var(--muted); font-family: "Geist Mono", ui-monospace, monospace; overflow-wrap: anywhere; }
+.fd-src { margin: 0; font-size: 12px; color: var(--text-2); }
+.fd-rv-done { margin: 0; padding: 8px 12px; border-radius: 10px; font-size: 13px; background: rgba(43, 176, 127, .1); border: 1px solid rgba(43, 176, 127, .4); color: #8ee0bd; }
+.fd-rv-done.researcher { background: rgba(124, 156, 255, .1); border-color: rgba(124, 156, 255, .4); color: #c5d2ff; }
+.fd-rv-done.wait { background: rgba(245, 181, 74, .08); border-color: rgba(245, 181, 74, .35); color: #f5d9a8; }
+.fd-rv-hint { font-size: 12px; color: var(--muted); }
+.fd-review .lg-btn { justify-self: start; text-decoration: none; }
+@media (max-width: 700px) { .fd-pat-r, .fd-hbar { grid-template-columns: 1fr; } }
 /* the channel */
 .fd-with { color: #f5d9a8; font-weight: 600; }
 .fd-channel { color: #c5d2ff; }

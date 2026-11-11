@@ -8,7 +8,8 @@
 * Cross-site writes (report #2, CSRF): every request that changes something (POST ...) must come from this site's
   own pages: a foreign Origin, or Sec-Fetch-Site "cross-site", gets 403.
 * Security headers (report #8): Content-Security-Policy with a per-request nonce for the few inline scripts,
-  frame-ancestors 'none' (no clickjacking), nosniff, Referrer-Policy, COOP, Permissions-Policy.
+  frame-ancestors 'none' (no clickjacking; the one exception: /management?embed=1 may be framed by this same site, for
+  the review page), nosniff, Referrer-Policy, COOP, Permissions-Policy.
 * Request size (report #7): MAX_CONTENT_LENGTH 64 KB.
 """
 import ipaddress
@@ -143,9 +144,17 @@ def install(app, logger=None):
         h = resp.headers
         # CSP_REPORT_ONLY=1 (diagnostics): the browser reports what the policy would block instead of blocking it
         csp_header = "Content-Security-Policy-Report-Only" if os.environ.get("CSP_REPORT_ONLY") == "1" else "Content-Security-Policy"
-        h.setdefault(csp_header, CSP.format(nonce=getattr(g, "csp_nonce", "")))
+        csp = CSP.format(nonce=getattr(g, "csp_nonce", ""))
+        # one exception to "never framed": the Executive portal embedded in this site's own review page (combo_review.py),
+        # framed by the same origin only; and the review page may frame this site, nothing else
+        embed = request.path == "/management" and request.args.get("embed") == "1"
+        if embed:
+            csp = csp.replace("frame-ancestors 'none'", "frame-ancestors 'self'")
+        if request.path.startswith("/review/"):
+            csp = csp.replace("child-src blob:;", "child-src blob:; frame-src 'self';")
+        h.setdefault(csp_header, csp)
         h.setdefault("X-Content-Type-Options", "nosniff")
-        h.setdefault("X-Frame-Options", "DENY")
+        h.setdefault("X-Frame-Options", "SAMEORIGIN" if embed else "DENY")
         h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")   # Mapbox URL-restricted tokens need the origin
         h.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         h.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")

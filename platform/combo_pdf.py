@@ -38,7 +38,8 @@ class AnalystDoc(ex.Doc):
         c.setFillColor(Color(.96, .7, .29, .06)); c.circle(W * .85, H + 60, 230, stroke=0, fill=1); c.restoreState()
         self.text(M, H - M - 6, "Looking Glass", 13, TXT, True)
         lw = self.c.stringWidth("Looking Glass", self.F["b"], 13)
-        self.pill(M + lw + 8, H - M - 5, "ANALYST · " + ("SELECTION" if str(self.meta.get("header", "")).find("LG-A-") >= 0 else "COMBINATION"), AMBER, 7)
+        self.pill(M + lw + 8, H - M - 5, "ADVISORY" if self.meta.get("advisory") else
+                  "ANALYST · " + ("SELECTION" if str(self.meta.get("header", "")).find("LG-A-") >= 0 else "COMBINATION"), AMBER, 7)
         self.text(M, H - M - 20, f"{self.meta['platform_label']} · {self.meta['scope']}", 8.5, DIM)
         self.text(W - M, H - M - 6, section, 11, HexColor("#a9b8ff"), True, "end")
         self.text(W - M, H - M - 20, self.fit(self.meta["header"], 420, 8.5), 8.5, DIM, anchor="end")
@@ -254,6 +255,11 @@ def build(d, meta):
     doc = AnalystDoc(meta)
     comms = d["section"] == "infections"
     unit = "Events" if comms else "Records"
+    adv = meta.get("advisory")                         # an advisory (advisory.py): its pages first, the report below unchanged
+    EXPL = "Technical Details" if adv else "Explained"  # …with the definitions under Technical Details
+    if adv:
+        import advisory_pdf
+        advisory_pdf.front(doc, adv)
 
     # ---------------- page 1: overview
     y = doc.new_page("Overview")
@@ -354,7 +360,7 @@ def build(d, meta):
     alone_h = min(top0 - 30, max(110, max((66 + min(len(s[2]), 10) * s[4] for s in side), default=0)))
     shared = not across_on and bool(d["explained"] or d["notes"]) and top0 - alone_h - 18 > H * .45
     if across_on or side:
-        y = doc.new_page("Across reports" if across_on else " · ".join([s[0] for s in side] + (["Explained"] if shared else [])))
+        y = doc.new_page("Across reports" if across_on else " · ".join([s[0] for s in side] + ([EXPL] if shared else [])))
         hh = y - 30
         lw = (W - 2 * M - 12) * .6 if (across_on and side) else W - 2 * M if across_on else 0
         if side:                                       # beside Across reports, stacked; on their own, side by side
@@ -377,17 +383,39 @@ def build(d, meta):
         if not d["across"]["patterns"] and is_a:
             doc.wrap(M + 14, yy - 6, "An analyst code covers the whole selection, with several names: the researchers' view of the code gives each "
                                      "name's cross-report patterns and their codes.", lw - 28, 8.8, DIM)
+    def est(p, width):
+        """About how tall a pattern is: its head, and per report the rows its chips take at this width."""
+        h = 28
+        for part in p["parts"]:
+            line = sum(doc.c.stringWidth(doc.s(str(it)), doc.F["r"], 7.6) + 22 for it in part["items"]) or 40
+            h += 22 * max(1, -(-line // max(60, width - 142)))
+        return h
+
+    bottom = (y - hh) if across_on else 0
     for p in (d["across"]["patterns"] if across_on else []):
-        if yy < y - hh + 70:
-            break
+        if yy - est(p, lw) < bottom + 14:
+            # no room left in this card: the next patterns go on a page of their own, never over the footer
+            y = doc.new_page("Across reports (continued)")
+            hh, lw = y - 30, W - 2 * M
+            yy = doc.card(M, y, lw, hh, "Across reports, continued", "Each exact pattern, with its code to search next")
+            bottom = y - hh
+            if yy - est(p, lw) < bottom + 14:
+                continue                               # taller than a whole page: it is in the CSV
         yy -= 6
         head = f"{fmt(p['devices'])} device{'s' if p['devices'] != 1 else ''}"
         doc.text(M + 14, yy - 10, head, 9.6, TXT, True)
         doc.pill(M + 14 + doc.c.stringWidth(doc.s(head), doc.F["b"], 9.6) + 10, yy - 9.5, p["code"], VIOLET, 7.4)
         yy -= 22
         for part in p["parts"]:
-            doc.text(M + 22, yy - 9.5, doc.fit(part["report"], 100, 8, True), 8, DIM, True)
-            yy = doc.chips(M + 128, yy, lw - 142, part["items"], 7.6) - 2
+            if yy < bottom + 24:
+                break                                  # never past the card (the CSV has every pattern in full)
+            name = part.get("title") or part["report"]
+            from reportlab.lib.utils import simpleSplit
+            name_lines = simpleSplit(doc.s(name), doc.F["b"], 8, 100) or [name]       # wrapped, never cut
+            for i, ln in enumerate(name_lines[:2]):
+                doc.text(M + 22, yy - 9.5 - i * 9.5, ln, 8, DIM, True)
+            yy2 = doc.chips(M + 128, yy, lw - 142, part["items"], 7.6) - 2
+            yy = min(yy2, yy - 9.5 * len(name_lines[:2]) - 6)
         doc.c.setStrokeColor(Color(1, 1, 1, .05)); doc.c.line(M + 14, yy + 2, M + lw - 14, yy + 2)
 
     # ---------------- explained: the name and every CVE in the combination, then the researchers' notes
@@ -395,8 +423,8 @@ def build(d, meta):
         if after is not None:                          # room left under the charts: carry on there
             y = after
         else:
-            y = doc.new_page("Explained")
-        doc.text(M, y - 4, "WHAT THE NAME AND ITS VULNERABILITIES ARE", 8, HexColor("#a9b8ff"), True)
+            y = doc.new_page(EXPL)
+        doc.text(M, y - 4, ("TECHNICAL DETAILS: " if adv else "") + "WHAT THE NAME AND ITS VULNERABILITIES ARE", 8, HexColor("#a9b8ff"), True)
         if not d["notes"]:                             # say so, rather than leave the reader looking for them
             doc.text(W - M, y - 4, "No researcher notes on " + ("these names" if len(d["explained"]) > 1 else "this name")
                      + " yet: notes added on the Definitions page appear in the next report", 7.6, MUTE, anchor="end")
@@ -411,7 +439,7 @@ def build(d, meta):
                 if cols_y[1 - ci] - height >= 30:
                     ci = 1 - ci
                 else:
-                    top_ = doc.new_page("Explained"); cols_y = [top_, top_]; ci = 0
+                    top_ = doc.new_page(EXPL); cols_y = [top_, top_]; ci = 0
             draw(M + ci * (col_w + gap), cols_y[ci])
             cols_y[ci] -= height + 10
         for name, card in d["explained"]:
@@ -421,4 +449,6 @@ def build(d, meta):
         for n in d["notes"]:
             hgt = doc.note_card(0, None, col_w, n, d["code"])
             place(hgt, lambda x, yy, n=n: doc.note_card(x, yy, col_w, n, d["code"]))
+    if adv:
+        advisory_pdf.references(doc, adv)
     return doc.done()

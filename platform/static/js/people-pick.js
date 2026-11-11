@@ -4,7 +4,8 @@
 (() => {
   "use strict";
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
-  const WHO = { management: ["a manager", "Send to (management)"], researcher: ["a researcher", "Send to (researcher)"], analyst: ["an analyst", "Send to (analyst)"] };
+  const WHO = { management: ["a manager", "Send to (management)"], researcher: ["a researcher", "Send to (researcher)"], analyst: ["an analyst", "Send to (analyst)"],
+                advisor: ["an advisor", "Send to (advisor)"] };
   const cache = {};
   const load = (kind) => (cache[kind] ||= fetch(`/api/findings/people?kind=${kind}`, { cache: "no-store" })
     .then((r) => (r.ok ? r.json() : { people: [] })).then((d) => d.people || []).catch(() => []));

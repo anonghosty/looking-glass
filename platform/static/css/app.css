@@ -1039,6 +1039,9 @@ details.mp-mini.kev > summary { color: #ff9a9e; }
 .intro-gear-row .intro-gear > span { display: none; }
 .intro-gear-row > .account-form > .intro-gear { width: 34px; }
 .intro-gear-row .intro-gear svg, .intro-gear-row .intro-gear:hover svg { width: 16px; height: 16px; transform: none; transition: none; }
+/* the row runs the page's width but only its buttons take clicks: the Display switch (top left) lies under it */
+.intro-gear-wrap > .intro-gear-row { pointer-events: none; }
+.intro-gear-row > * { pointer-events: auto; }
 /* Log out is always the last button of a header, on every page of both platforms */
 .hud-right > .account-form, .hud-right > .mg-logout { order: 99; }
 .hud-right > .account-form > button { order: 99; }   /* the form has no box of its own: its button is the header item */

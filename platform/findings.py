@@ -22,16 +22,18 @@ import time
 from flask import g, jsonify, render_template, request
 
 STATUSES = [("new", "New"), ("management", "With management"), ("approved", "Approved by management"),
-            ("researcher", "Back with the researcher"), ("analyst", "With the analyst"), ("advisory", "Advisory sent"), ("closed", "Closed")]
+            ("researcher", "Back with the researcher"), ("analyst", "With the analyst"), ("advisor", "With the advisor"),
+            ("advisory", "Advisory sent"), ("closed", "Closed")]
 LABEL = dict(STATUSES)
-OPEN = {"new", "management", "approved", "researcher", "analyst"}
+OPEN = {"new", "management", "approved", "researcher", "analyst", "advisor"}
 ROLE_LABEL = {"researcher": "Researcher", "admin": "Administrator", "analyst": "Analyst", "management": "Management"}
 MAX_TITLE, MAX_COMMENT = 140, 1000
 # a finding is a channel, like a ticket: whoever sends it on names the person it goes to (a manager, a researcher, an
 # analyst), and only the people who took part see it and its trail (admins too, for oversight). The status a hand-over
 # leads to, per kind of person:
-TO_STATUS = {"management": "management", "researcher": "researcher", "analyst": "analyst"}
-KIND_LABEL = {"management": "a manager", "researcher": "a researcher", "analyst": "an analyst"}
+TO_STATUS = {"management": "management", "researcher": "researcher", "analyst": "analyst", "advisor": "advisor"}
+KIND_LABEL = {"management": "a manager", "researcher": "a researcher", "analyst": "an analyst", "advisor": "an advisor"}
+ROLE_LABEL["advisor"] = "Advisor"
 NONE_FOUND = "Looked into the selection: no combination of interest found. The request is closed."
 
 
@@ -130,6 +132,53 @@ class Findings:
             self._save()
         return item
 
+    # ---- an analyst's across-report views, for management to decide on (combo_review.py)
+    def create_review(self, code, section, label, title, text, user, role, to, review):
+        """A finding asking management which views the report on `code` carries: the researcher's (the combination) or
+        the analyst's too (the ticked cross-report patterns). review: {source, codes, researcher, analyst} (counts only)."""
+        now = round(time.time(), 3)
+        with self.lock:
+            self._load()
+            self.data["seq"] += 1
+            fid = str(self.data["seq"])
+            item = {"id": fid, "note": None, "origin": "analyst", "kind": "review", "section": section, "name": label,
+                    "title": title[:MAX_TITLE], "text": text, "codes": [code] + [c for c in review.get("codes", []) if c != code],
+                    "user": user, "role": role, "at": now, "status": "management", "review": dict(review, decision=None),
+                    "history": [{"status": "management", "user": user, "role": role, "at": now, "to": to,
+                                 "comment": f"Across-report views for {code}: {len(review.get('codes', []))} pattern(s) ticked."}]}
+            self._join(item, to)
+            self.data["items"][fid] = item
+            self._save()
+        return item
+
+    def decide_review(self, fid, choice, text, user, role, to):
+        """Management: add the analyst's views to the report ("both") or use the researcher's view only ("researcher").
+        It goes to the advisor management names (`to`), who writes the advisory and generates the report."""
+        with self.lock:
+            self._load()
+            item = self.data["items"].get(str(fid))
+            if not item or not item.get("review"):
+                return None, "No such finding."
+            if item["review"].get("decision"):
+                return None, "Already decided."
+            item["review"].update(decision=choice, by=user, at=round(time.time(), 3), comment=text[:MAX_COMMENT])
+            item["status"] = "advisor"
+            item["history"].append({"status": "advisor", "kind": "decision", "decision": "accepted", "user": user, "role": role,
+                                    "at": round(time.time(), 3), "to": to,
+                                    "comment": ("Add the analyst's views: " if choice == "both" else "Use the researcher's view only: ") + text[:MAX_COMMENT]})
+            self._join(item, to)
+            self._save()
+            return item, ""
+
+    def review_for(self, code, user, admin):
+        """The latest decided review on `code` this user is in (the report follows it), else the latest pending one, else None."""
+        with self.lock:
+            self._load()
+            mine = [x for x in self.data["items"].values() if (x.get("review") or {}).get("source") == code and self.sees(x, user, admin)]
+        mine.sort(key=lambda x: x["at"])
+        decided = [x for x in mine if x["review"].get("decision")]
+        return (decided or mine or [None])[-1]
+
     def of_code(self, code):
         """The finding a code belongs to (the first one that carries it)."""
         with self.lock:
@@ -211,6 +260,9 @@ class Findings:
                              **who(h["user"], h["role"])} for h in x["history"]],
                 "updated": day(x["history"][-1]["at"]),
                 "display_name": self.title_of(x["name"]) if x.get("section") == "services" else x["name"],
+                # the review without "sent" (the devices' addresses, kept for the analyst's report only: never on this page)
+                "review": ({k: v for k, v in x["review"].items() if k not in ("by", "sent")} | {"by": self.people.name(x["review"]["by"]) if x["review"].get("by") else ""})
+                          if x.get("review") else None,
                 "assignee": self.people.name(x["assignee"]) if x.get("assignee") else "",
                 "channel": [self.people.name(u) for u in x.get("participants") or []]}
 
@@ -231,7 +283,7 @@ def install(app, ctx):
 
     def allowed():
         """Researchers, management, analysts (who see addresses) and admins: no address is ever on the page."""
-        return hp("definitions") or hp("management") or hp("settings") or (hp("unmasked") and hp("export"))
+        return hp("definitions") or hp("management") or hp("settings") or (hp("unmasked") and hp("export")) or hp("advisory")
 
     def me():
         u = getattr(g, "user", None) or {}
@@ -270,7 +322,7 @@ def install(app, ctx):
         items = f.list(request.args.get("state") != "all", ctx["describe"], me()[0], admin())
         return jsonify(findings=items, statuses=[{"key": k, "label": v, "open": k in OPEN} for k, v in STATUSES],
                        can_search=bool(hp("unmasked") and hp("export")), can_portal=bool(hp("management")),
-                       can_decide=bool(hp("management") or hp("settings")),
+                       can_decide=bool(hp("management") or hp("settings")), can_advise=bool(hp("advisory")),
                        can_research=bool(hp("definitions") or hp("settings")))
 
     @app.route("/api/findings/<fid>/status", methods=["POST"])
@@ -325,6 +377,35 @@ def install(app, ctx):
             return jsonify(error=err), 404 if "No such" in err else 400
         ctx["audit"].add("finding_decision", user=user, target=f"#{fid} {item['name'][:60]}",
                          detail=("approved · " if accept else "rejected · ") + text[:100])
+        return jsonify(finding=f.shown(item, ctx["describe"]))
+
+    @app.route("/api/findings/<fid>/review-decision", methods=["POST"])
+    def api_findings_review_decision(fid):
+        """Management decides which views the analyst's report carries; it goes back to the analyst."""
+        if not (hp("management") or hp("settings")):
+            return jsonify(error="Management decides on the report's views."), 403
+        if not ctx["csrf_ok"]():
+            return jsonify(error="Refused (the request did not come from this page)."), 403
+        if not ctx["fresh"]():
+            return jsonify(error="Sign in again to make changes (your session is older than 12 hours)."), 403
+        if not in_channel(fid):
+            return jsonify(error="No such finding."), 404
+        b = request.get_json(silent=True) or {}
+        choice = b.get("choice")
+        if choice not in ("both", "researcher"):
+            return jsonify(error="Add the analyst's views, or use the researcher's view only."), 400
+        text = str(b.get("text") or "").replace("\r", "").strip()[:MAX_COMMENT]
+        if not text:
+            return jsonify(error="Give your comment (the directive for the report)."), 400
+        to, err = f.recipient("advisor", b.get("to"))      # the advisor who writes the advisory and generates the report
+        if not to:
+            return jsonify(error=err), 400
+        user, role = me()
+        item, err = f.decide_review(fid, choice, text, user, role, to)
+        if not item:
+            return jsonify(error=err), 404 if "No such" in err else 400
+        ctx["audit"].add("finding_review_decision", user=user, target=f"#{fid} {item['review'].get('source', '')}",
+                         detail=f"{choice} · to the advisor {to} · {text[:100]}")
         return jsonify(finding=f.shown(item, ctx["describe"]))
 
     @app.route("/api/findings/<fid>/reply", methods=["POST"])

@@ -257,6 +257,9 @@ def enrich_rows(enr):
     for x in enr.get("cross") or []:                   # the exact patterns across reports (LG-X)
         rows.append(["across reports", " | ".join(p["title"] for p in x["parts"]),
                      " | ".join(f"{p['title']}: {' + '.join(p['items']) or 'the report only'}" for p in x["parts"]), x["hosts"], "", x["code"]])
+        for dv in x.get("devices") or []:             # each device of it, as it was sent to management
+            rows.append(["across reports device", " | ".join(p["title"] for p in x["parts"]),
+                         f"{dv['ip']}" + (f" ({dv['network']})" if dv.get("network") else ""), 1, "", x["code"]])
     for i in enr.get("issues") or []:
         rows.append(["cve / issue", "; ".join(f"{r['title']} ({r['hosts']})" for r in i.get("reports") or []), i["name"], i["hosts"], "", ""])
     for i in enr.get("infections") or []:
@@ -454,8 +457,15 @@ def install(app, ctx):
                     per_day.append((day.date().isoformat(), len(hit)))
                     job["done"] = i + 1
                     job["log"].append(f"{day.date()}: {len(hit):,} records" + (" (in memory)" if mem is not None else ""))
-            job["result"] = package(job, entry, found, per_day, days, around, m if svc_code else None)
             job["inputs"] = (entry, found, per_day, days, around, m if svc_code else None)   # for one network's report later
+            pre = getattr(book, "before_package", None)       # combo_review.py: across-report views, management's decision
+            if pre:
+                try:
+                    pre(job)
+                except Exception:                             # noqa: BLE001  (the search still finishes)
+                    if ctx.get("logger"):
+                        ctx["logger"].exception("across-report preview failed")
+            job["result"] = package(job, entry, found, per_day, days, around, m if svc_code else None)
             job["state"] = "done"
         except Exception as exc:                              # noqa: BLE001  (reported to the analyst, logged in full)
             if ctx.get("logger"):
@@ -711,6 +721,23 @@ def install(app, ctx):
         cves = [] if is_a else sorted({i.upper() for _, items in parts for i in items if re.match(r"^CVE-\d{4}-\d{4,7}$", i, re.I)})
         explained, stats = [], {}
         heads = [(nm, section) for nm in entry.get("names", [])[:8]] if is_a else [(entry["name"], section)]
+        if section == "services":
+            # a services name is a report, not malware (Malpedia would call it "probably malware"): its issues (tags) and
+            # the infections its devices call are defined instead, with the across-report views' when the report has them
+            heads = []
+            all_parts = list(parts) + ([(q["report"], q["items"]) for p_ in (enr or {}).get("cross") or [] for q in p_.get("parts") or []]
+                                       if enr else [])
+            for _, items in all_parts:
+                for it in items:
+                    it = str(it)
+                    if it.lower().startswith("tag:") and not re.search(r"CVE-\d{4}-\d{4,7}", it, re.I):
+                        heads.append((it.split(":", 1)[1].strip(), "issues"))
+                    elif it.startswith("Infection:"):
+                        heads.append((it.split(":", 1)[1].strip(), "infections"))
+                    elif re.search(r"CVE-\d{4}-\d{4,7}", it, re.I) and not is_a:
+                        cves.append(re.search(r"CVE-\d{4}-\d{4,7}", it, re.I).group(0).upper())
+            heads = list(dict.fromkeys(heads))[:12]
+            cves = sorted(set(cves))
         for nm, sec in heads + [(c, "issues") for c in cves if c.lower() != entry["name"].lower()]:
             card = ctx["explain"](sec, nm)
             if card:
@@ -734,8 +761,9 @@ def install(app, ctx):
                              "last": (d["last"] or "")[:16].replace("T", " "), "also": ", ".join(sorted(set(per_dev.get(d["ip"], {})) - d["reports"]))}
                             for d in devs[:60]],
                 "csv_devices": f"{base}_devices.csv", "csv_records": f"{base}_records.csv",
-                "across": {"multi": x["multi"], "patterns_total": x["patterns_total"], "patterns": x["patterns"][:8]},
-                "report_sets": [{"label": " + ".join(s_["reports"]), "hosts": s_["devices"]} for s_ in x["sets"]],
+                "across": {"multi": x["multi"], "patterns_total": x["patterns_total"],     # reports by their titles
+                           "patterns": [dict(p, parts=[dict(q, title=T(q["report"])) for q in p["parts"]]) for p in x["patterns"][:8]]},
+                "report_sets": [{"label": " + ".join(T(r) for r in s_["reports"]), "hosts": s_["devices"]} for s_ in x["sets"]],
                 "kinds": [{"label": k_, "count": n} for k_, n in kind.most_common(10)],
                 "ports": [{"label": k_, "count": n} for k_, n in ports.most_common(10)],
                 "explained": explained, "stats": stats, "notes": notes}
@@ -744,8 +772,10 @@ def install(app, ctx):
             pdf = combo_pdf.build(data, {"platform_label": spec["platform_label"], "scope": spec["scope"], "selection": describe(entry)[:120],
                                          "day": span, "header": f"{'Analyst code' if is_a else 'Combination'} {entry['code']} · {span}"
                                                                 + (f" · {network}" if network else ""),
-                                         "generated_by": job["user"]})
+                                         "generated_by": job["user"], "advisory": job.get("advisory")})
         except Exception as exc:                              # noqa: BLE001  (never leave the analyst without a report)
+            if job.get("advisory"):                           # an advisory without its own pages would mislead: say so instead
+                raise
             if ctx.get("logger"):
                 ctx["logger"].warning("combination PDF (Executive design) failed, plain layout used: %s", exc)
             pdf = ctx["build_pdf"](spec)
@@ -796,7 +826,8 @@ def install(app, ctx):
         try:
             os.makedirs(out_dir, mode=0o700, exist_ok=True)
             for suffix, data in ((".zip", z.getvalue()), (".json", json.dumps({"user": job["user"], "name": f"{base}.zip",
-                                                                                "at": time.time(), "summary": job["summary"]}).encode())):
+                                                                                "at": time.time(), "summary": job["summary"],
+                                                                                "gated": bool(job.get("needs_review") and not job.get("review_ok"))}).encode())):
                 fd = os.open(os.path.join(out_dir, job["id"] + suffix), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
                 with os.fdopen(fd, "wb") as f:
                     f.write(data)
@@ -926,6 +957,8 @@ def install(app, ctx):
             return jsonify(error="This search has expired (finished searches are kept for an hour): run it again."), 404
         if not ctx.get("cross"):
             return jsonify(error="The analysis across categories is not available here."), 404
+        if j.get("needs_review"):                 # across-report data: management decides what the report carries
+            return jsonify(error="These devices turn up in other reports: management decides which views the report carries.", needs_review=True), 409
         entry, found = j["inputs"][0], j["inputs"][1]
         m = j["inputs"][5] or Matcher(entry, ctx["labels"]())
         hosts = {m.host(e) for e in found if m.host(e)}
@@ -942,6 +975,12 @@ def install(app, ctx):
             return jsonify(error="The combination search is for analysts."), 403
         _sweep()
         j = own(jid)
+        # across-report data: management decides first which views the report carries (combo_review.py)
+        gate = getattr(book, "review_gate", None)
+        if gate and j and j.get("inputs"):
+            allowed, why = gate(j)
+            if not allowed:
+                return jsonify(error=why, needs_review=True), 409
         network = (request.args.get("network") or "").strip()[:120]
         if network:
             # the report for one network provider: packaged now from the search's records (kept with the search)
@@ -955,6 +994,8 @@ def install(app, ctx):
             meta, data = from_disk(jid)
             if not meta or meta.get("user") != user():
                 return jsonify(error="This search has expired (finished searches are kept for an hour): run it again."), 404
+            if meta.get("gated"):                     # kept before a restart, still waiting for management's decision
+                return jsonify(error="This search has across-report data: run it again once management has decided.", needs_review=True), 409
             name = meta["name"]
         return Response(data, mimetype="application/zip",
                         headers={"Content-Disposition": f'attachment; filename="{name}"', "Content-Length": str(len(data)),
@@ -968,6 +1009,7 @@ def install(app, ctx):
 
     book.resolve = resolve
     book.own_job = own                    # acodes.py: an analyst's request made from a finished search
+    book.package = package                # combo_review.py: the report again, with the views management chose
     book.describe = lambda code: (describe(resolve(code)) if CODE_RX.match(code or "") else
                                   describe(book.get(code)) if ANY_RX.match(code or "") else "")
     book.resolve_any = lambda code: resolve(code) if CODE_RX.match(code or "") else book.get(code) if ANY_RX.match(code or "") else None

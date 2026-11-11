@@ -185,7 +185,7 @@
     const max = Math.max(...rows.map((r) => r.hosts || r.count), 1);
     rows.slice(0, 12).forEach((r, i) => {
       const item = el("div", "mg-rank-item"), row = el("div", "mg-rank-row"), inline = el("div", "mg-inline");
-      const kind = plat === "comms" ? "infection" : "issue";
+      const kind = plat === "comms" || r.infection ? "infection" : "issue";      // a services host's infection explains as one
       const n = el("span", "n", String(i + 1));
       const main = el("div", "m");
       const name = el("button", "nm"); name.type = "button";
@@ -199,7 +199,8 @@
         if (r.exploited) tags.append(el("span", "mg-tag bad", "Actively exploited"));
         if (r.cvss != null) tags.append(el("span", `mg-tag ${r.cvss >= 9 ? "bad" : r.cvss >= 7 ? "warn" : ""}`, `CVSS ${r.cvss}`));
         if (r.epss != null && r.epss >= 0.1) tags.append(el("span", "mg-tag warn", `EPSS ${pct(r.epss)}`));
-        if (!r.cve) tags.append(el("span", "mg-tag", "Configuration / exposure"));
+        if (r.infection) tags.append(el("span", "mg-tag bad", "Infection / category · calling botnet sinkholes"));
+        else if (!r.cve) tags.append(el("span", "mg-tag", "Configuration / exposure"));
       } else if (r.family) tags.append(el("span", "mg-tag info", r.family.startsWith("actor:") ? "Threat actor" : "Malpedia"));
       else if (r.title) tags.append(el("span", "mg-tag ok", "Looking Glass definition"));
       const bar = el("span", "t"), fill = el("i"); bar.append(fill);
@@ -220,7 +221,8 @@
       const f = el("button", "mg-mini", "Focus"); f.type = "button"; f.title = "Show only this in every chart";
       f.addEventListener("click", () => setFilter(kind, r.value));
       const x = el("button", "mg-mini mg-explain-btn"); x.type = "button";
-      const acts = el("div", "acts"); acts.append(x, f);
+      const acts = el("div", "acts"); acts.append(x);
+      if (!(plat === "services" && r.infection)) acts.append(f);           // no infection filter on the services platform
       // the explanation opens under this row (and stays open while the selection changes)
       const openSet = state.open[plat], cache = state.explained[plat];
       const show = async (on) => {
@@ -567,7 +569,7 @@
     donut($("chSectors"), d.sectors, "sector", comms ? "events" : "records");
     $("tTopTitle").textContent = comms ? "Top infections" : "Top issues";
     $("tTop").textContent = comms ? "Devices per infection · Explain shows what each one is, right under it" : "Hosts per issue, most hosts first · Explain shows what each one is";
-    ranking($("chTop"), comms ? d.infections : d.issues.slice().sort((a, b) => b.hosts - a.hosts || Number(b.exploited) - Number(a.exploited) || (b.cvss || 0) - (a.cvss || 0)), d.platform);
+    ranking($("chTop"), comms ? d.infections : d.issues.concat(d.infections_on || []).sort((a, b) => b.hosts - a.hosts || Number(b.exploited) - Number(a.exploited) || (b.cvss || 0) - (a.cvss || 0)), d.platform);
     $("tMixTitle").textContent = comms ? "Attack types" : "Report families";
     donut($("chMix"), comms ? d.attack : d.families, comms ? "attack" : "family", comms ? "events" : "records");
     bars($("chNets"), d.networks.filter((r) => r.value !== "Unknown network"), { key: "network", unit: comms ? "devices" : "hosts" });
@@ -738,7 +740,7 @@
         doneText: "Each explanation is now shown under its name in the list on the dashboard. You can close this window." });
       Object.assign(state.explained[d.platform], res);
       for (const n of names.slice(0, 12)) state.open[d.platform].add(n);
-      ranking($("chTop"), comms ? d.infections : d.issues.slice().sort((a, c) => c.hosts - a.hosts || Number(c.exploited) - Number(a.exploited) || (c.cvss || 0) - (a.cvss || 0)), d.platform);
+      ranking($("chTop"), comms ? d.infections : d.issues.concat(d.infections_on || []).sort((a, c) => c.hosts - a.hosts || Number(c.exploited) - Number(a.exploited) || (c.cvss || 0) - (a.cvss || 0)), d.platform);
       $("cTop").scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
       toast(`${Object.keys(res).length} explained: shown under each name`, "ok");
     } catch (e) { toast(e.message, "bad"); }
@@ -746,13 +748,22 @@
   });
   // opened from a finding (/management?code=LG-C-…): the portal shows exactly that combination, on its platform
   (async () => {
-    const code = (new URLSearchParams(location.search).get("code") || "").trim().toUpperCase();
-    if (/^LG-[CXA]-[0-9A-F]{8}$/.test(code)) {
+    const qs = new URLSearchParams(location.search);
+    const code = (qs.get("code") || "").trim().toUpperCase();
+    // embedded in a review page (review.html): the portal's own figures, without its header
+    if (qs.get("embed") === "1") document.documentElement.classList.add("mg-embed");
+    const many = code.split(",").map((x) => x.trim()).filter((x) => /^LG-[CXA]-[0-9A-F]{8}$/.test(x));
+    if (many.length > 1) {                     // several codes (a review's views): their devices together, on the platform given
+      state.plat = qs.get("plat") === "services" ? "services" : "comms";
+      for (const b of document.querySelectorAll("[data-plat]")) b.setAttribute("aria-pressed", String(b.dataset.plat === state.plat));
+      state.filters[state.plat] = { code: many.join(",") };
+      if (qs.get("embed") !== "1") toast(`Showing ${many.length} combinations together`);
+    } else if (/^LG-[CXA]-[0-9A-F]{8}$/.test(code)) {
       try {
         const r = await fetch(`/api/combo-codes/${code}`, { cache: "no-store" });
         const x = await r.json();
         if (r.ok) {
-          state.plat = x.section === "issues" ? "services" : "comms";
+          state.plat = x.section === "issues" || x.section === "services" ? "services" : "comms";
           if (x.kind === "a" && x.day) state.day = x.day;      // an analyst's selection is of one day: open that day
           for (const b of document.querySelectorAll("[data-plat]")) b.setAttribute("aria-pressed", String(b.dataset.plat === state.plat));
           state.filters[state.plat] = { code };

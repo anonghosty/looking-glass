@@ -49,6 +49,77 @@
     }
     return cs;
   }
+  // ---------------- an analyst's across-report views: the researcher's view and the analyst's, side by side, with the
+  // figures management weighs (counts only), and management's decision; then the analyst generates the report
+  function bars(items, key) {
+    const w = el("div", "fd-bars"), mx = Math.max(1, ...items.map((x) => x[key]));
+    for (const x of items) {
+      const r = el("div", "fd-hbar"), t = el("span", "t"), i = el("i"); i.style.width = `${(100 * x[key]) / mx}%`; t.append(i);
+      r.append(el("span", "l", x.label), t, el("b", null, Number(x[key]).toLocaleString("en-US"))); w.append(r);
+    }
+    return w;
+  }
+  function reviewPanel(f, c) {
+    const rv = f.review, R = rv.researcher || {}, A = rv.analyst || {};
+    const p = el("section", "fd-review");
+    p.append(el("h3", null, "Which views does the report carry?"));
+    const cols = el("div", "fd-views");
+    // the researcher's view
+    const rc = el("article", "fd-view r");
+    rc.append(el("div", "fd-view-k", "The researcher's view"), el("code", "fd-view-code", R.code || rv.source), el("p", "fd-view-what", R.what || ""));
+    const k = el("div", "fd-kpis");
+    for (const [v, l] of [[R.devices, "devices"], [R.records, "records"], [R.networks, "networks"], [R.repeat, "repeating"], [R.multi_day, "on several days"]]) {
+      const t = el("div"); t.append(el("b", null, Number(v || 0).toLocaleString("en-US")), el("span", null, l)); k.append(t);
+    }
+    rc.append(k);
+    if ((R.top_networks || []).length) rc.append(el("h4", null, "Devices per network"), bars(R.top_networks, "devices"));
+    if ((R.regions || []).length) rc.append(el("h4", null, "Devices per region"), bars(R.regions, "devices"));
+    if ((R.per_day || []).length) rc.append(el("h4", null, "Records per day"), bars(R.per_day.map(([d, n]) => ({ label: d, n })), "n"));
+    // the analyst's view
+    const ac = el("article", "fd-view a");
+    ac.append(el("div", "fd-view-k", "The analyst's view: the same devices across reports"));
+    const k2 = el("div", "fd-kpis");
+    for (const [v, l] of [[A.multi_hosts, "devices in 2+ reports"], [(A.patterns || []).length, "patterns sent"], [A.patterns_total, "patterns in all"]]) {
+      const t = el("div"); t.append(el("b", null, Number(v || 0).toLocaleString("en-US")), el("span", null, l)); k2.append(t);
+    }
+    ac.append(k2);
+    for (const x of A.patterns || []) {
+      const b = el("div", "fd-pat");
+      b.append(el("div", "fd-pat-h", `${Number(x.hosts).toLocaleString("en-US")} host${x.hosts === 1 ? " shares" : "s share"} this exact infrastructure · across ${x.parts.length} reports`));
+      for (const pt of x.parts) { const r = el("div", "fd-pat-r"); r.append(el("b", null, pt.title), el("span", null, pt.items.join(" + ") || "the report only")); b.append(r); }
+      b.append(el("code", "fd-view-code", x.code)); ac.append(b);
+    }
+    if ((A.sources || []).length) {
+      ac.append(el("h4", null, "Where these devices were seen"));
+      for (const s of A.sources) ac.append(el("p", "fd-src", `${s.kind} ${s.reports.length}: ${s.reports.map((y) => `${y.title} (${y.hosts})`).join(" · ")}`));
+    }
+    cols.append(rc, ac); p.append(cols);
+    // the decision
+    if (rv.decision) {
+      p.append(el("p", `fd-rv-done ${rv.decision}`, `${rv.decision === "both" ? "Added the analyst's views" : "The researcher's view only"} · ${rv.by}${rv.comment ? `: ${rv.comment}` : ""}`));
+      if (data.can_search) { const a = el("a", "lg-btn sm primary", "Generate the report"); a.href = `/combinations?code=${encodeURIComponent(rv.source)}`; a.title = "Open the code again: the report follows management's decision"; p.append(a); }
+    } else if (data.can_decide && f.open) {
+      const ta = el("textarea", "fd-in"); ta.rows = 2; ta.maxLength = 1000; ta.placeholder = "Your comment: the directive for the report";
+      const both = el("button", "lg-btn sm primary", "Add the analyst's views"); both.type = "button";
+      const only = el("button", "lg-btn sm", "Use the researcher's view only"); only.type = "button";
+      const m = el("span", "fd-msg");
+      const go = async (choice) => {
+        if (!ta.value.trim()) { m.textContent = "Write your comment (the directive) first."; m.className = "fd-msg bad"; ta.focus(); return; }
+        both.disabled = only.disabled = true;
+        try {
+          const r = await fetch(`/api/findings/${f.id}/review-decision`, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() },
+            body: JSON.stringify({ choice, text: ta.value.trim() }) });
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) { m.textContent = d.error || `Not saved (HTTP ${r.status})`; m.className = "fd-msg bad"; return; }
+          Object.assign(f, d.finding); const n = card(f); c.replaceWith(n); n.classList.add("flash");
+        } finally { both.disabled = only.disabled = false; }
+      };
+      both.addEventListener("click", () => go("both")); only.addEventListener("click", () => go("researcher"));
+      const row = el("div", "fd-decide-row"); row.append(m, only, both);
+      p.append(el("small", "fd-rv-hint", "Your decision goes back to the analyst who asked; they then generate the report with the views you chose."), ta, row);
+    } else p.append(el("p", "fd-rv-done wait", "Waiting for management's decision."));
+    return p;
+  }
   function card(f) {
     const c = el("article", `fd-card s-${f.status}`); c.id = `f${f.id}`;
     const h = el("header", "fd-h");
@@ -64,7 +135,20 @@
     if (f.channel?.length) { const ch = el("span", "fd-channel", `Channel: ${f.channel.join(", ")}`); ch.title = "Only these people see this finding and its trail"; meta.append(ch); }
     c.append(h, meta, el("p", "fd-text", f.text));
     if (f.origin === "analyst") meta.prepend(el("span", "fd-origin", "From an analyst"));
-    if (f.codes.length) c.append(el("h3", null, f.origin === "analyst" ? "The analyst's code" : "Combinations"), codesBox(f.codes));
+    if (f.review) {
+      // a review: one global look, not a list of codes (the patterns are summed up in the panel below)
+      const rv = f.review, g = el("div", "fd-global");
+      g.append(el("span", null, `The researcher's combination ${rv.source} and ${(rv.codes || []).length} across-report pattern${(rv.codes || []).length === 1 ? "" : "s"} the analyst ticked.`));
+      g.append(el("b", `fd-rv-state ${rv.decision || "wait"}`, rv.decision ? (rv.decision === "both" ? "Decided: the analyst's views added" : "Decided: the researcher's view only") : "Waiting for management's decision"));
+      if (rv.decision && data.can_advise && f.open) {
+        // the advisor writes the advisory and generates the report on a page of its own
+        const p = el("a", "lg-btn sm primary", "Write the advisory"); p.href = `/advisory/${f.id}`;
+        p.title = "The advisory (title, affected items, impact, recommended actions) over the full report from exactly what was sent"; g.append(p);
+      }
+      if (data.can_decide) { const a = el("a", "lg-btn sm primary", "Open the review"); a.href = `/review/${f.id}`;    // management only
+        a.title = "The final look: what the researcher is saying, and the researcher's and the analyst's views as the Executive portal shows them"; g.append(a); }
+      c.append(g);
+    } else if (f.codes.length) c.append(el("h3", null, f.origin === "analyst" ? "The analyst's code" : "Combinations"), codesBox(f.codes));
     // the reply box: text and codes (researchers answer an analyst's code with combination codes, and the other way round)
     const rp = el("details", "fd-replybox"); rp.append(el("summary", null, f.origin === "analyst" ? "Reply to the analyst" : "Reply"));
     const rta = el("textarea", "fd-in"); rta.rows = 3; rta.maxLength = 1000; rta.placeholder = "Your reply";
@@ -101,7 +185,8 @@
     c.append(det, rp);
     // management decides first: approve with a comment (the directive) → "Approved"; reject with the reason → closed.
     // Who it goes to next is asked when it is moved on.
-    if (data.can_decide && f.open && f.status !== "approved") {
+    // a review: the views and the decision are on the review page (/review/<id>); the card says where it stands
+    if (data.can_decide && f.open && f.status !== "approved" && !f.review) {
       const dec = el("div", "fd-decide");
       dec.append(el("b", null, "Decide"),
         el("small", null, "Approve with your comment (the directive for the report), or reject with the reason (it is closed). After approving, move it on: Looking Glass asks to whom."));
@@ -134,7 +219,7 @@
     const go = el("button", "lg-btn sm primary", "Move it on"); go.type = "button";
     const msg = el("span", "fd-msg");
     // a hand-over (to management, a researcher, an analyst) names the person it goes to (people-pick.js)
-    const KIND = { management: "management", researcher: "researcher", analyst: "analyst" };
+    const KIND = { management: "management", researcher: "researcher", analyst: "analyst", advisor: "advisor" };
     // "Move it on" to a person (management, a researcher, an analyst): Looking Glass asks to whom, then it is sent
     const toBox = el("div", "fd-to"); toBox.hidden = true; let toP = null;
     const send = async (to) => {

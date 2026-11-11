@@ -71,6 +71,9 @@ audit = A.AUTH["audit"]
 real_add = audit.add
 audited = []
 audit.add = lambda *a, **k: audited.append((a, k))     # the check's searches stay out of the real audit log
+# the report itself is checked here; management's decision on across-report views is checked in check_combo_review.py
+real_gate = getattr(A.COMBOS, "review_gate", None)
+A.COMBOS.review_gate = lambda j: (True, "")
 try:
     for d in (A.replay_now(),):
         A.store.get(d); A.svc["store"].get(d)
@@ -226,6 +229,8 @@ try:
     ok("every search and every code made is in the audit log", {a[0] for a, _ in audited} >= {"combo_export", "combo_code"},
        ", ".join(sorted({a[0] for a, _ in audited})))
 finally:
+    if real_gate:
+        A.COMBOS.review_gate = real_gate
     for jid in JIDS:
         for sfx in (".zip", ".json"):
             try:

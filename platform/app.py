@@ -2658,7 +2658,7 @@ NOTES.findings = FINDINGS
 def _people_of(kind):
     """The active accounts that do a job, by what their role may do (roles are configurable): managers (management),
     researchers (definitions), analysts (see addresses and export). Names only, for the "send to" lists."""
-    need = {"management": {"management"}, "researcher": {"definitions"}, "analyst": {"unmasked", "export"}}[kind]
+    need = {"management": {"management"}, "researcher": {"definitions"}, "analyst": {"unmasked", "export"}, "advisor": {"advisory"}}[kind]
     out = []
     for name, u in AUTH["users"].all().items():
         if (u or {}).get("status") != "active" or name.startswith(auth.TEST_PREFIX):
@@ -2701,6 +2701,35 @@ ACODES = _acodes.install(app, {
     "cross": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"])})     # every category for the code's hosts
 COMBOS.acode_records = ACODES.records          # the Combinations page searches analyst codes too
 COMBOS.acode_allowed = ACODES.allowed          # …only those of the channels this user is in (findings.py)
+
+# management decides which views an analyst's report carries: the researcher's, or the across-report views too
+import combo_review as _combo_review  # noqa: E402
+_combo_review.install(app, {"book": COMBOS, "findings": FINDINGS, "notes": NOTES, "describe": COMBOS.describe,
+                            "base_dir": BASE_DIR, "day": _day_for, "svc_matcher": lambda entry: SVC_INTEL.matcher(entry),
+                            "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"],
+                            "fresh": AUTH["fresh"], "is_demo": is_demo, "audit": AUTH["audit"],
+                            "people_name": lambda u: people.name(u, ""),
+                            "network": lambda asn: asn_registry.company(asn, False) if asn else "",
+                            "cross": lambda hosts, with_hosts=False: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"],
+                                                                                         with_hosts=with_hosts)})
+
+# the organisation (name and logo, set in Settings) and the advisor's advisories on decided findings
+import organisation as _organisation  # noqa: E402
+
+
+def _site_demo():
+    """Demo mode for the site (public demo or ?demo=1), not a role without addresses: advisors and admins write here."""
+    return bool(PUBLIC_DEMO or request.args.get("demo") == "1")
+
+
+import advisory as _advisory  # noqa: E402
+ORG = _organisation.install(app, {"base_dir": BASE_DIR, "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"],
+                                  "fresh": AUTH["fresh"], "is_demo": _site_demo, "audit": AUTH["audit"]})
+ADVISORIES = _advisory.install(app, {"base_dir": BASE_DIR, "findings": FINDINGS, "book": COMBOS, "org": ORG,
+                                     "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"],
+                                     "is_demo": _site_demo, "audit": AUTH["audit"], "people_name": lambda u: people.name(u, ""),
+                                     "title_of": lambda n: SVC_KB["title_of"](n), "describe": COMBOS.describe,
+                                     "scope_text": lambda: _scope_text()})
 
 
 import netypes  # noqa: E402  (network types: built-in sectors and the ones this site added)
@@ -2974,6 +3003,13 @@ def _combo_filter(code, section, events, day=None):
     unknown here or belongs to the other platform. Counts only leave the portal, never these records. An analyst code
     (LG-A) is its selection on its own day: on another day it matches nothing."""
     code = (code or "").strip().upper()
+    if "," in code:                           # several codes (a review's views): the records of any of them, once each
+        seen, out = set(), []
+        for c in [x.strip() for x in code.split(",") if x.strip()][:25]:
+            for e in _combo_filter(c, section, events, day) or []:
+                if id(e) not in seen:
+                    seen.add(id(e)); out.append(e)
+        return out
     if _acodes.ACODE_RX.match(code):
         entry = COMBOS.get(code)
         if not entry or entry.get("kind") != "a" or ("infections" if entry["platform"] == "comms" else "issues") != section:
@@ -2986,6 +3022,8 @@ def _combo_filter(code, section, events, day=None):
     if not _combos.CODE_RX.match(code):
         return []
     entry = COMBOS.resolve(code)
+    if entry and entry["section"] == "services" and section == "issues":     # a services pattern code (services_intel.py)
+        return SVC_INTEL.matcher(entry).match(events)
     if not entry or entry["section"] != section:
         return []
     labels = {**{x["name"]: x["label"] for x in registry.get()}, **{x["name"]: x["label"] for x in svc["registry"].get()}}
@@ -2994,6 +3032,7 @@ def _combo_filter(code, section, events, day=None):
 
 _mgmt = management.register(app, {
     "data_dir": DATA_DIR, "combo_filter": _combo_filter,
+    "infections_of": lambda ips: SVC_INTEL.infections_of(ips),       # services hosts also calling botnet sinkholes
     "AUTH": AUTH, "store": store, "svc_store": svc["store"], "registry": registry, "asn_registry": asn_registry,
     "type_labels": lambda: netypes.labels(DATA_DIR), "replay_now": replay_now, "public_demo": lambda: PUBLIC_DEMO,
     "read_names": _read_names, "knowledge_base": knowledge_base, "issues_kb": issues_kb, "cve_intel": cve_intel,

@@ -383,3 +383,9 @@ body.is-loading .mg-grid, body.is-loading .mg-kpis { opacity: 1; }
 .mg-scale-row .m { color: #b9bec8; }
 @media (max-width: 1180px) { .mg-scale-list { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .mg-scale-row { grid-template-columns: 1fr; gap: 4px; } }
+/* no cut-off text: long names (networks, sectors, regions, legends) wrap onto a second line instead of ending in "…" */
+.mg-bar .l, .mg-legend span, .mg-rank-row .nm b, .mg-rank-row .nm small, .mg-tree-row .l, .mg-maptip li span {
+  white-space: normal !important; overflow: visible !important; text-overflow: clip !important; overflow-wrap: anywhere; }
+.mg-bar { align-items: center; }
+/* embedded in a review page (review.html): the portal's figures only, its header and platform switch left out */
+.mg-embed .mg-top, .mg-embed .mg-switch { display: none !important; }

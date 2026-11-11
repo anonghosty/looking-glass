@@ -85,6 +85,27 @@
     </section>
     {% endif %}
 
+    {# the organisation: its name and logo head every advisory (organisation.py, organisation.js); saved on its own #}
+    {% if "settings" in lg_perms %}
+    <section class="st-card org-card" id="cardOrg">
+      <h2>Organisation <span class="st-for">the advisories' title and logo</span></h2>
+      <p class="st-hint">The advisor's advisories carry this name in their title and this logo in their logo section. Saved on its own
+        (not with Apply settings).</p>
+      <div class="org-grid">
+        <label class="st-field"><span>Organisation name</span><input type="text" id="orgName" maxlength="120" autocomplete="organization"></label>
+        <div class="org-logo">
+          <div class="org-logo-box" id="orgLogoBox"><img id="orgLogo" alt="The organisation's logo" hidden><span id="orgNoLogo">No logo yet</span></div>
+          <div class="org-logo-acts">
+            <label class="pill-btn org-file">Choose a logo (PNG or JPEG)<input type="file" id="orgFile" accept="image/png,image/jpeg" hidden></label>
+            <button class="pill-btn" id="orgRemove" type="button" hidden>Remove the logo</button>
+            <small class="muted" id="orgLogoHint"></small>
+          </div>
+        </div>
+      </div>
+      <div class="org-save"><button class="intro-cta" id="orgSave" type="button" disabled>Save the organisation</button><span class="muted" id="orgMsg" role="status"></span></div>
+    </section>
+    {% endif %}
+
     {# the networks (AS numbers) for reference: read-only here, edited on the Definitions page #}
     {% with readonly=True %}{% include "_net_card.html" %}{% endwith %}
 
@@ -126,5 +147,6 @@
   <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
   <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>
   <script src="{{ url_for('static', filename='js/net-editor.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/organisation.js') }}"></script>
 </body>
 </html>

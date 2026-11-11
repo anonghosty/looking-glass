@@ -4,7 +4,7 @@
     nav_go (true on pages that guard unsaved changes: buttons with data-go instead of links). -#}
 {%- set _defs = "settings" in lg_perms or "definitions" in lg_perms -%}
 {%- set _analyst = "unmasked" in lg_perms and "export" in lg_perms -%}
-{%- set _findings = "definitions" in lg_perms or "management" in lg_perms or "settings" in lg_perms or _analyst -%}
+{%- set _findings = "definitions" in lg_perms or "management" in lg_perms or "settings" in lg_perms or _analyst or "advisory" in lg_perms -%}
 {%- set _items = [
   ("overview", "view" in lg_perms or "settings" in lg_perms, "/?intro=1", "Overview", "Back to the overview page",
    "M4 5h7v6H4zM13 5h7v3h-7zM13 10h7v9h-7zM4 13h7v6H4z"),
@@ -18,6 +18,8 @@
    "M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L11.8 5.8M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.4-1.4"),
   ("findings", _findings, "/findings", "Findings", "Findings: researchers' notes the team follows up, from the first look to the advisory",
    "M5 21V4h11l-1.5 4L16 12H5M5 12"),
+  ("advisory", "advisory" in lg_perms, "/advisory", "Advisory", "The advisory portal: advisories written and sent, to whom, and the findings waiting",
+   "M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5"),
   ("executive", "management" in lg_perms, "/management", "Executive", "The management portal (Executive): aggregated dashboard and executive reports",
    "M4 20V10M10 20V4M16 20v-7M22 20H2"),
   ("settings", "settings" in lg_perms, "/settings", "Settings", "Settings for both platforms: country and constituency",

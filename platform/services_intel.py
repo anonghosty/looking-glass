@@ -289,7 +289,7 @@ class ServicesIntel:
         return {"report": base, "items": sorted(items), "records": n, "devices": len(ch), "repeat_devices": _repeat(ch),
                 "days": data["days"]}, None
 
-    def for_hosts(self, hosts, title_of=None, top=8, kind_of=None):
+    def for_hosts(self, hosts, title_of=None, top=8, kind_of=None, with_hosts=False):
         """An analyst's selection (acodes.py) across every category, for a set of host addresses that never leaves this
         module: the services reports the hosts are in, with their exact pattern combinations and codes; the CVEs and
         issues on them; the infections they call sinkholes as, with the sinkhole code per services report. Counts and
@@ -338,12 +338,20 @@ class ServicesIntel:
             infections.append({"name": n, "hosts": len(hs), "reports": sorted(reps, key=lambda r: -r["hosts"])[:6]})
         # across reports: the exact pattern of each host over every report it is in (services reports with their pattern
         # items, sinkhole reports with the infections), counted; LG-X codes keyed on the pattern's first report
-        xp = collections.Counter(p for p in (host_pattern(data, h) for h in hosts) if len(p) > 1)
+        by_pat = collections.defaultdict(list)
+        for h in hosts:
+            p = host_pattern(data, h)
+            if len(p) > 1:
+                by_pat[p].append(h)
+        xp = collections.Counter({p: len(hs) for p, hs in by_pat.items()})
         cross = []
         for pat, n in xp.most_common(top * 2):
             name = pat[0][0]
-            cross.append({"parts": [{"report": r, "title": title_of(r), "items": list(i)} for r, i in pat], "hosts": n,
-                          "code": cross_code(SECTION, name, [(r, list(i)) for r, i in pat]), "name": name})
+            x = {"parts": [{"report": r, "title": title_of(r), "items": list(i)} for r, i in pat], "hosts": n,
+                 "code": cross_code(SECTION, name, [(r, list(i)) for r, i in pat]), "name": name}
+            if with_hosts:                                 # only for the analysts (combo_review.py): the addresses
+                x["ips"] = sorted(by_pat[pat])
+            cross.append(x)
         hook = self.ctx.get("on_codes")
         if hook and cross:
             try:
@@ -390,6 +398,45 @@ class ServicesIntel:
 
     def matcher(self, entry):
         return Matcher(self, entry)
+
+    def infections_of(self, hosts, n=10):
+        """[(infection / category, hosts)] these hosts call botnet sinkholes as (network communications, days in memory)."""
+        inf = self.index()["infected"]
+        c = collections.Counter(name for h in hosts for name in inf.get(h, ()))
+        return c.most_common(n)
+
+    def patterns_of(self, events, m):
+        """(records with a host, {host: its exact cross-report pattern}) for a list of events, computed once and shared by
+        every cross-report code matched against the same list (the Executive portal filters by several at a time)."""
+        key = (id(events), len(events), id(events[0]) if events else 0, id(events[-1]) if events else 0, id(self.index()))
+        with self.lock:
+            hit = self.cache.get("patterns_of")
+            if not (hit and hit["key"] == key):
+                hit = None
+        if hit is None:
+            # once per list: each host's records and set of reports (cheap); patterns are worked out only when asked
+            mine, evs, reps = [], collections.defaultdict(list), collections.defaultdict(set)
+            for e in events:
+                h = m.host(e)
+                if h:
+                    mine.append(e); evs[h].append(e); reps[h].add(m.report(e))
+            for h in reps:                                 # the sinkhole reports each host calls (the days in memory)
+                reps[h] |= set(m.sink_rep.get(h) or {})
+            hit = {"key": key, "mine": mine, "evs": evs, "reps": {h: frozenset(r) for h, r in reps.items()}, "pat": {}}
+            with self.lock:
+                self.cache["patterns_of"] = hit
+        want_reps = frozenset(r for r, _ in m.e.get("parts") or [])
+        pat = hit["pat"]
+        for h, rs in hit["reps"].items():
+            if rs != want_reps or h in pat:
+                continue                                   # another set of reports: never this pattern
+            per = collections.defaultdict(set)
+            for e in hit["evs"][h]:
+                per[m.report(e)].update(m.items(e))
+            for r, names in (m.sink_rep.get(h) or {}).items():
+                per[r] = {f"Infection: {n}" for n in names}
+            pat[h] = tuple(sorted((r, tuple(sorted(i))) for r, i in per.items()))
+        return hit["mine"], {h: p for h, p in pat.items() if hit["reps"][h] == want_reps}
 
     def records_of(self, report, limit=20000):
         """The records of a report (and its twin) in memory, for the field suggestions (never sent out)."""
@@ -450,12 +497,6 @@ class Matcher:
             want = tuple(sorted(self.e["items"]))
             return [e for e in events if self.host(e) and self.report(e) in self.reports and self.items(e) == want]
         want = tuple(sorted((r, tuple(sorted(i))) for r, i in self.e["parts"]))
-        per = collections.defaultdict(lambda: collections.defaultdict(set))
-        mine = [e for e in events if self.host(e)]
-        for e in mine:
-            per[self.host(e)][self.report(e)].update(self.items(e))
-        for h, reps in per.items():                        # the sinkhole reports each host calls (the days in memory)
-            for r, names in (self.sink_rep.get(h) or {}).items():
-                reps[r] = {f"Infection: {n}" for n in names}
-        hit = {h for h, reps in per.items() if tuple(sorted((r, tuple(sorted(i))) for r, i in reps.items())) == want}
+        mine, pat = self.sv.patterns_of(events, self)
+        hit = {h for h, p in pat.items() if p == want}
         return [e for e in mine if self.host(e) in hit]

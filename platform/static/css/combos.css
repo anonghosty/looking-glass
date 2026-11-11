@@ -179,6 +179,35 @@
 .ce-sec.svc { grid-column: 1 / -1; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); column-gap: 14px; }
 .ce-sec.svc > header, .ce-sec.svc > .cb-hint, .ce-sec.svc > .ce-more { grid-column: 1 / -1; }
 .ce-more { justify-self: start; }
+/* across-report data: management decides (combo_review.py) */
+.ce-review { border-color: rgba(245, 181, 74, .45); background: linear-gradient(180deg, rgba(245, 181, 74, .07), rgba(255, 255, 255, .015)); }
+.ce-review.pulse { box-shadow: 0 0 0 4px rgba(245, 181, 74, .35); transition: box-shadow .3s; }
+.ce-state { padding: 9px 12px; border-radius: 10px; font-size: 13px; color: var(--text-2); }
+.ce-state b { color: #fff; }
+.ce-state.todo { background: rgba(229, 72, 77, .1); border: 1px solid rgba(229, 72, 77, .4); }
+.ce-state.wait { background: rgba(245, 181, 74, .1); border: 1px solid rgba(245, 181, 74, .4); }
+.ce-state.ok { background: rgba(43, 176, 127, .1); border: 1px solid rgba(43, 176, 127, .4); }
+.ce-state a { color: #9fbcff; }
+.ce-tick { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #f5d9a8; cursor: pointer; }
+.ce-tick input { accent-color: #f5b54a; width: 15px; height: 15px; }
+.ce-svc.on { border-top-color: rgba(245, 181, 74, .6); background: rgba(245, 181, 74, .05); border-radius: 8px; }
+.cb-dl[hidden] { display: none !important; }
+.ce-intro.hide { display: none; }
+/* the analyst's across reports, by IP address */
+.ce-x { grid-column: 1 / -1; grid-template-columns: 1fr !important; }
+.ce-xreps { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 13px; }
+.ce-xreps b { color: #fff; } .ce-arrow { color: var(--muted); }
+.ce-ips { display: grid; gap: 6px; }
+.ce-iplist { display: flex; flex-wrap: wrap; gap: 5px; }
+.ce-ip { display: inline-flex; align-items: baseline; gap: 6px; padding: 3px 8px; border-radius: 7px; background: rgba(124, 156, 255, .08); border: 1px solid rgba(124, 156, 255, .25); }
+.ce-ip code { font: 600 12px "Geist Mono", ui-monospace, monospace; color: #dbe4ff; } .ce-ip small { font-size: 11px; color: var(--muted); }
+.ce-iptools { display: flex; gap: 6px; }
+.ce-codes { display: inline-flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+.ce-xrow .ce-combo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.ce-xrow .ce-combo .ce-tick { white-space: nowrap; }
+.ce-xrow .ce-combo .ce-codes { margin-left: auto; }
+.ce-req-open { display: grid; gap: 8px; padding: 12px 14px; }
+.ce-req-open > b { color: #f5d9a8; }
 .ce-xpart { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 8px; align-items: start; font-size: 12.5px; }
 .ce-xpart > b { color: var(--text-2); padding-top: 2px; }
 @media (max-width: 700px) { .ce-xpart { grid-template-columns: 1fr; } }
