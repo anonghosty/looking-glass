@@ -41,6 +41,7 @@ run "failed-login counter (locks, clean-up)" $PY tests/check_login_throttle.py
 run "request times in UTC (one day copy)" $PY tests/check_time_offsets.py
 run "masked views: no host-name filter" $PY tests/check_masked_hostname.py
 run "researchers: no code below 5 hosts" $PY tests/check_small_codes.py
+run "masked text: every address labelled" $PY tests/check_host_label_text.py
 run "intel gathered (researchers)"    $PY tests/check_intel.py
 run "researchers' notes"              $PY tests/check_notes.py
 run "combination codes + search"      $PY tests/check_combos.py

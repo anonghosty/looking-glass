@@ -14,8 +14,11 @@ import ipaddress
 import re
 
 PREFIX = "Host "
-_V4 = re.compile(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])")
-_V6 = re.compile(r"(?<![\w:.])(?=[0-9a-fA-F:]*::|(?:[0-9a-fA-F]{1,4}:){2})[0-9a-fA-F:]{3,}[0-9a-fA-F](?![\w:])")
+# An address stands on its own: no letter or digit glued to it (v10.1.2.3, 1.2.3.4a), and no dotted number it is only
+# part of (1.2.3.4.5). An underscore is a separator (ip_41.66.1.2), and a full stop after it ends a sentence unless a
+# digit follows ("from 41.66.1.2." is masked). Before 2026-11-11 both of those were left unmasked (external review).
+_V4 = re.compile(r"(?<![0-9A-Za-z.])(?:\d{1,3}\.){3}\d{1,3}(?![0-9A-Za-z]|\.\d)")
+_V6 = re.compile(r"(?<![0-9A-Za-z:.])(?=[0-9a-fA-F:]*::|(?:[0-9a-fA-F]{1,4}:){2})[0-9a-fA-F:]{3,}[0-9a-fA-F](?![0-9A-Za-z:]|\.\d)")
 _refs = None
 
 
