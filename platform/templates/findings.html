@@ -28,9 +28,10 @@
     <section class="fd-hero">
       <div class="fd-eyebrow">Findings</div>
       <h1>Where every finding stands</h1>
-      <p>A researcher's note tracked as a finding, from the first look to the advisory: the researcher finds it, management weighs it
-        against the trends, an analyst pulls the devices behind its combination codes and writes the advisory. Move a finding on when
-        it is your turn, with a short comment. No address is ever shown here.</p>
+      <p>A finding from the first look to the advisory: the researcher finds it, management decides, an analyst pulls the devices
+        and sends them to management for the organisations they concern (several at once open a case, one sub-finding each),
+        management approves each one to an advisor, who writes the advisory and marks it as sent here. Each step is its own action;
+        the finding closes when its advisory is sent, and its case when all its sub-findings are closed. No address is ever shown here.</p>
       <ol class="fd-flow" aria-label="The steps">
         {% for k, label in statuses %}<li class="s-{{ k }}">{{ label }}</li>{% endfor %}
       </ol>
@@ -43,7 +44,7 @@
       <div class="fd-counts" id="fdCounts"></div>
       <input class="fd-q" id="fdQ" type="text" spellcheck="false" placeholder="Search findings (name, title, code)" aria-label="Search findings">
     </div>
-    <div class="fd-list" id="fdList"><p class="fd-empty">Loading the findings…</p></div>
+    <div class="fd-list" id="fdList"><div class="st-loading">Opening the findings and their trails…</div></div>
   </main>
   <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
   <script src="{{ url_for('static', filename='js/people-pick.js') }}"></script>

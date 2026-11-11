@@ -33,6 +33,7 @@
     const r = await fetch(`/api/review/${encodeURIComponent(fid)}`, { cache: "no-store" });
     const d = await r.json().catch(() => ({}));
     $("rvLoading")?.remove();
+    window.LGLoader?.ready();
     if (!r.ok) { main.append(el("p", "fd-empty", d.error || `Could not open the review (HTTP ${r.status})`)); return; }
     const f = d.finding, rv = f.review, A = rv.analyst || {};
     // the request

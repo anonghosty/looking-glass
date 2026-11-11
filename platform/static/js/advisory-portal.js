@@ -37,6 +37,7 @@
     const r = await fetch("/api/advisory/dashboard", { cache: "no-store" });
     const d = await r.json().catch(() => ({}));
     document.getElementById("apLoading")?.remove();
+    window.LGLoader?.ready();
     if (!r.ok) { main.append(el("p", "fd-empty", d.error || `Could not open the portal (HTTP ${r.status})`)); return; }
     const k = d.kpis;
     const hero = el("section", "av-hero ap-hero");

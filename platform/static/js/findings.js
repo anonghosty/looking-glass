@@ -12,7 +12,7 @@
     const r = await fetch(`/api/findings?state=${state}`, { cache: "no-store" });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { $("fdList").replaceChildren(el("p", "fd-empty", d.error || `Could not load (HTTP ${r.status})`)); return; }
-    data = d; draw();
+    data = d; draw(); window.LGLoader?.ready();
     const want = location.hash.match(/^#f(\d+)$/);
     if (want) { const c = $(`f${want[1]}`); if (c) { c.classList.add("flash"); c.scrollIntoView({ block: "center" }); } }
   }

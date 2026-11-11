@@ -220,8 +220,10 @@
       gen.title = `Saves, then makes ${D.file_base}${D.has_report ? ".zip: the PDF and the devices CSV, what goes to the organisation" : ".pdf"} and keeps it with this advisory`;
       gen.addEventListener("click", async () => {
         gen.disabled = true; say("Saving and generating the report…");
+        window.LGLoader?.busy(`Generating the report for ${NET || "all networks"}`);
         try { await save(); const d = await post(`/api/advisory/${fid}/generate`, { network: NET }); D.advisory = d.advisory; await reloadIndex(); draw(); sayLater(`Generated ${d.file.name}.`); }
         catch (e) { say(e.message, true); gen.disabled = false; }
+        finally { window.LGLoader?.ready(); }
       });
       bar.append(gen);
     }
@@ -289,7 +291,11 @@
     NET = n;
     try { history.replaceState(null, "", `#${encodeURIComponent(n)}`); } catch { /* */ }
     main.querySelectorAll(".av-card:not(:nth-of-type(1))").forEach(() => {});
+    // the organisation's data takes a moment (its records, read again): the searching logo meanwhile
+    if (IDX && main.children.length > 2) [...main.children].slice(2).forEach((x) => x.remove());     // keep the head and the picker
+    const wait = el("div", "st-loading", `Opening ${n || "all networks"}: its IP addresses, reports and impact…`); main.append(wait);
     const r = await fetch(`/api/advisory/${encodeURIComponent(fid)}/net?${q(n)}`, { cache: "no-store" });
+    wait.remove();
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { D = null; draw(); main.append(el("p", "fd-empty", d.error || `Could not open it (HTTP ${r.status})`)); return; }
     D = d; draw(); if (pending) { sayLater(pending); pending = ""; }
@@ -299,6 +305,7 @@
   (async () => {
     try { await reloadIndex(); } catch (e) { $("avLoading")?.remove(); main.append(el("p", "fd-empty", e.message)); return; }
     $("avLoading")?.remove();
+    window.LGLoader?.ready();
     const want = decodeURIComponent(location.hash.slice(1) || "");
     if (IDX.networks.length === 1) return openNet(IDX.networks[0].network);
     if (want && IDX.networks.some((n) => n.network === want)) return openNet(want);

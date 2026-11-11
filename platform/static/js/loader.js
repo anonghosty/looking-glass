@@ -98,7 +98,10 @@
     o.classList.add("leaving");
     setTimeout(() => o.classList.remove("on", "leaving"), calm() ? 0 : 520);
   }
-  const LABELS = { "/services": "Opening publicly accessible / vulnerable services", "/settings": "Opening settings",
+  const LABELS = { "/advisory/": "Opening the advisory", "/advisory": "Opening the advisory portal", "/findings": "Opening the findings",
+    "/review/": "Opening the review", "/combinations": "Opening the combination search", "/management": "Opening the Executive portal",
+    "/intel/": "Opening the analyst's selection",
+    "/services": "Opening publicly accessible / vulnerable services", "/settings": "Opening settings",
     "/definitions": "Opening definitions and intel", "/admin": "Opening administration", "/?intro": "Opening the overview", "/": "Opening reported network communications" };
   const labelFor = (url) => LABELS[Object.keys(LABELS).find((k) => url.startsWith(k) && (k !== "/" || url === "/" || url.startsWith("/?") && !url.startsWith("/?intro")))] || "Opening";
   let arrived = null, arriveTimer = null;
@@ -138,4 +141,14 @@
     hide,
   };
   if (document.body) window.LGLoader.arrive(); else document.addEventListener("DOMContentLoaded", () => window.LGLoader.arrive());
+
+  // the header's page buttons (templates/_page_nav.html) open every page, the new ones included, with the logo animation
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest?.("a.nav-ic[href]");
+    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || a.target === "_blank") return;
+    const href = a.getAttribute("href");
+    if (!href || !href.startsWith("/")) return;
+    e.preventDefault();
+    window.LGLoader.go(href);
+  });
 })();

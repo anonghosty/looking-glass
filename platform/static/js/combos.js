@@ -134,14 +134,14 @@
       const n = sel.value;
       const ns = $("cbNet"); if (ns && [...ns.options].some((o) => o.value === n)) { ns.value = n; ns.onchange && ns.onchange(); }
       if (!n) { figures(full); note.textContent = "The whole search."; bar.classList.remove("on"); return; }
-      note.textContent = "Loading…"; sel.disabled = true;
+      note.textContent = `Reading ${n}'s devices…`; note.classList.add("lg-loading"); sel.disabled = true;
       try {
         const r = await fetch(`/api/combos/search/${job}/summary?network=${encodeURIComponent(n)}`, { cache: "no-store" });
         const x = await r.json().catch(() => ({}));
         if (!r.ok) { note.textContent = x.error || `Could not filter (HTTP ${r.status})`; return; }
         figures(x.summary || {}); bar.classList.add("on");
         note.textContent = `${fmt(x.summary.devices)} of ${fmt(full.devices)} devices, ${fmt(x.summary.records)} of ${fmt(full.records)} records: everything below is ${n} only.`;
-      } finally { sel.disabled = false; }
+      } finally { sel.disabled = false; note.classList.remove("lg-loading"); note.querySelector(".lg-logo-wrap")?.remove(); }
     });
   }
   function show(d) {
