@@ -112,7 +112,7 @@
   function draw() {
     main.replaceChildren(hero(), picker());
     if (NET == null || !D) return;
-    const a = D.advisory, edit = IDX.can_edit;
+    const a = D.advisory, edit = IDX.can_edit && !a.locked;     // sent: read-only, the record of what went out
     // step 2: the organisation's data, as the PDF carries it
     const dc = card(`2 · ${a.network || "All networks"}: its data`, `${fmt(a.affected.devices)} IP address${a.affected.devices === 1 ? "" : "es"} and ${fmt(a.affected.records)} records in ${a.data_title}. This is what the advisory and its report carry.`);
     const g = el("div", "av-aff");
@@ -165,7 +165,9 @@
     main.append(dc);
 
     // step 3: the template
-    const w = card("3 · The advisory", `Your words for ${a.network || "all networks"}: the subject, the Description on the impact, the Recommended Actions. Bold, bullets and numbering carry into the PDF.`);
+    const w = card("3 · The advisory", a.locked
+      ? `As it was sent to ${a.network || "all networks"}. A sent advisory can no longer be changed, so the record of what the organisation received stays exact; a correction goes out as a new message.`
+      : `Your words for ${a.network || "all networks"}: the subject, the Description on the impact, the Recommended Actions. Bold, bullets and numbering carry into the PDF.`);
     const head = el("input", "av-in av-heading"); head.type = "text"; head.maxLength = IDX.limits.subject; head.value = a.heading || "";
     head.placeholder = a.heading_default;          // empty: the CSIRT's name + "Security Advisory"
     const subj = el("input", "av-in"); subj.type = "text"; subj.maxLength = IDX.limits.subject; subj.value = a.subject;
@@ -236,7 +238,9 @@
     main.append(w);
 
     // step 4: the reports generated, and sending
-    const r = card("4 · The report, drafted and sent", "The latest report generated for this organisation, with its download: generating again replaces it (each generation is in the history below).");
+    const r = card("4 · The report, drafted and sent", a.locked
+      ? "The report that was sent, with its download. It is kept as it was sent and is never replaced."
+      : "The latest report generated for this organisation, with its download: generating again replaces it (each generation is in the history below).");
     if (a.generated.length) {
       const ul = el("ul", "av-files");
       a.generated.slice().reverse().forEach((x) => {
@@ -271,7 +275,7 @@
     r.append(sb);
     if (a.sends.length || a.history.length) {
       const ul = el("ul", "av-trail");
-      a.sends.forEach((s) => ul.append(el("li", null, `${s.at}: sent to ${s.to.join(", ")} by ${s.by}`)));
+      a.sends.forEach((s) => ul.append(el("li", null, `${s.at}: sent to ${s.to.join(", ")} by ${s.by}${s.report ? ` (${s.report})` : ""}`)));
       a.history.forEach((h) => ul.append(el("li", "muted", `${h.at}: ${h.what} by ${h.by}`)));
       r.append(ul);
     }

@@ -54,6 +54,14 @@ def _day(t):
 
 
 STATUS_LABEL = {"draft": "Draft", "drafted": "Drafted", "sent": "Sent"}    # being written · ready to go out · sent
+# A sent advisory is the record of what went to the organisation: its text and its report file stay exactly as they
+# were sent (external review, 2026-11-11). Sending it on to more people still works, with the same file.
+SENT_LOCKED = ("This advisory was sent on {day}: it can no longer be changed, so the record of what the organisation "
+               "received stays exact. A correction goes out as a new message.")
+
+
+def sent_day(adv):
+    return _day(max((s["at"] for s in adv.get("sends") or []), default=0)) or "an earlier day"
 
 
 def slug(text, n=60):
@@ -432,7 +440,9 @@ def install(app, ctx):
                             "devices": len(auto["devices"]), "records": sum(d["records"] for d in auto["devices"])},
                "reports": auto["reports"], "impact": auto["impact"], "kinds_line": auto["kinds_line"],
                "description": adv["description"], "recommended_actions": adv["actions"], "recipients": adv["recipients"],
-               "sends": [{"to": s["to"], "at": _day(s["at"]), "by": name_of(s["by"])} for s in adv.get("sends") or []],
+               "sends": [{"to": s["to"], "at": _day(s["at"]), "by": name_of(s["by"]), "report": (s.get("report") or {}).get("name", "")}
+                         for s in adv.get("sends") or []],
+               "locked": adv.get("status") == "sent",    # sent: read-only, the record of what went out
                "generated": [{"n": r["n"], "name": r["name"], "at": time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(r["at"])), "by": name_of(r["by"]),
                               "size": r.get("size", 0)} for r in adv.get("reports") or []],
                "history": [{"at": time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(h["at"])), "by": name_of(h["user"]), "what": h["what"]}
@@ -643,6 +653,8 @@ def install(app, ctx):
             return jsonify(error=rerr), 400
         user = me()[0]
         adv = store.of(x["id"], network)
+        if adv and adv["status"] == "sent":               # what went to the organisation stays as it was sent
+            return jsonify(error=SENT_LOCKED.format(day=sent_day(adv))), 409
         create = adv is None
         adv = adv or blank(x, user, network)
         level = tlp.of(b.get("tlp") or adv.get("tlp") or tlp.DEFAULT)
@@ -739,6 +751,8 @@ def install(app, ctx):
         adv = store.of(x["id"], network)
         if not adv:
             return jsonify(error="Save the advisory first."), 400
+        if adv["status"] == "sent":                       # the file that went out is never replaced or deleted
+            return jsonify(error=SENT_LOCKED.format(day=sent_day(adv))), 409
         if not adv["description"] or not adv["actions"]:
             return jsonify(error="Write the Description and the Recommended Actions first."), 400
         out, err = build(x, adv, network)
@@ -751,7 +765,10 @@ def install(app, ctx):
         old = adv.get("reports") or []
         n = max([r["n"] for r in old] + [0]) + 1
         store.keep_file(adv["ref"], n, data)
+        sent_files = {s.get("report", {}).get("n") for s in adv.get("sends") or []}
         for r in old:
+            if r["n"] in sent_files:                      # (never: a sent advisory is locked above) a sent file is kept
+                continue
             try:
                 os.remove(store.file_path(adv["ref"], r["n"]))
             except (OSError, ValueError):
@@ -812,9 +829,11 @@ def install(app, ctx):
             return jsonify(error="Mark the advisory as drafted first (on its page): then it is marked as sent here."), 400
         user, role = me()
         adv["recipients"] = list(dict.fromkeys(adv["recipients"] + rec))
-        adv.setdefault("sends", []).append({"to": rec, "at": _now(), "by": user})
+        sent_file = adv["reports"][-1]                     # exactly which file went to them
+        adv.setdefault("sends", []).append({"to": rec, "at": _now(), "by": user,
+                                            "report": {"n": sent_file["n"], "name": sent_file["name"], "size": sent_file.get("size")}})
         adv["status"], adv["updated"] = "sent", _now()
-        adv["history"].append({"at": _now(), "user": user, "what": "sent to " + ", ".join(rec)})
+        adv["history"].append({"at": _now(), "user": user, "what": "sent to " + ", ".join(rec) + f" (report {sent_file['name']})"})
         store.save(adv)
         # the finding closes once none of its advisories waits any more (a sub-finding has one: its organisation's);
         # its case follows (findings.py), and every step is in their histories

@@ -285,6 +285,22 @@ try:
     ok("the advisor marks it as sent", st == 200 and d["advisory"]["status"] == "sent", d.get("error", ""))
     ok("…and the finding closes, logged", F.get("1")["status"] == "closed" and F.get("1")["history"][-1].get("kind") == "advisory_sent"
        and ref in F.get("1")["history"][-1]["comment"])
+    # a sent advisory is the record of what the organisation received: locked (external review, 2026-11-11)
+    sent_adv = d["advisory"]
+    ok("the send records exactly which file went out", (sent_adv.get("sends") or [{}])[-1].get("report") == f"{fb}.zip" and sent_adv.get("locked") is True,
+       json.dumps(sent_adv.get("sends")))
+    st_f, sent_bytes = call(f"/advisory/1/file/{ref}/2", ADVISOR, raw=True, **ADV)
+    st, d = call("/api/advisory/1/net", ADVISOR, "POST", dict(body, subject="Changed after sending"), **ADV)
+    ok("once sent, its text can no longer be changed", st == 409 and "can no longer be changed" in d.get("error", ""), f"{st} {d.get('error', '')}")
+    st, d = call("/api/advisory/1/generate", ADVISOR, "POST", {"network": NET}, **ADV)
+    ok("…and its report is not generated again", st == 409 and "can no longer be changed" in d.get("error", ""), f"{st} {d.get('error', '')}")
+    st, again = call(f"/advisory/1/file/{ref}/2", ADVISOR, raw=True, **ADV)
+    ok("…the file that was sent is still there, byte for byte", st_f == 200 and st == 200 and again == sent_bytes, f"{st_f} {st}")
+    st, a3 = call(f"/api/advisory/1/net?network={quote(NET)}", ADVISOR, **ADV)
+    ok("…and the advisory still reads as it was sent", st == 200 and a3["advisory"]["subject"] == body["subject"] and a3["advisory"]["status"] == "sent")
+    st, d = call("/api/advisory/1/send", ADVISOR, "POST", {"network": NET, "recipients": "Team B"}, **ADV)
+    ok("it can still be sent on to more people, with the same file", st == 200 and d["advisory"]["sends"][-1]["report"] == f"{fb}.zip"
+       and len(d["advisory"]["sends"]) == 2, d.get("error", ""))
     st, a2 = call("/api/advisory/1", ADVISOR, **ADV)
     ok("the organisation shows as sent on the list, the others still to do", st == 200 and next(n for n in a2["networks"] if n["network"] == NET)["status"] == "sent")
     st, ex = call(f"/api/advisory/1/export?network={quote(NET)}", ADVISOR, raw=True, **ADV)
