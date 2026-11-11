@@ -27,7 +27,10 @@
   function show(tab) {
     for (const b of tabs) b.setAttribute("aria-pressed", String(b.dataset.tab === tab));
     for (const p of document.querySelectorAll(".adm-pane")) p.hidden = p.id !== `pane-${tab}`;
-    ({ users: loadUsers, roles: loadRoles })[tab]?.();
+    // each tab shows its loading animation while its data comes (the users pane has its own line on the first visit)
+    const fn = ({ users: loadUsers, roles: loadRoles })[tab];
+    const label = { users: "Opening the accounts and their roles…", roles: "Opening the roles and their permissions…" }[tab];
+    if (fn) { if ((tab === "users" && $("adLoading")) || !window.LGLoader?.pane) fn(); else window.LGLoader.pane($(`pane-${tab}`), label, fn); }
     try { history.replaceState(null, "", `#${tab}`); } catch { /* */ }
   }
   for (const b of tabs) b.addEventListener("click", () => show(b.dataset.tab));

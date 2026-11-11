@@ -97,7 +97,9 @@
   function show(tab) {
     for (const b of tabs) b.setAttribute("aria-pressed", String(b.dataset.tab === tab));
     for (const p of document.querySelectorAll(".adm-pane")) p.hidden = p.id !== `pane-${tab}`;
-    if (tab === "sessions") loadSessions();
+    // each tab shows its loading animation while its data comes (the audit log has its own line on the first visit)
+    if (tab === "sessions") { if (window.LGLoader?.pane) window.LGLoader.pane($("pane-sessions"), "Opening who is signed in…", loadSessions); else loadSessions(); }
+    else if (tab === "audit" && !$("auLoading") && window.LGLoader?.pane) window.LGLoader.pane($("pane-audit"), "Opening the audit log…", () => load(true));
     try { history.replaceState(null, "", tab === "audit" ? location.pathname : `#${tab}`); } catch { /* */ }
   }
   for (const b of tabs) b.addEventListener("click", () => show(b.dataset.tab));

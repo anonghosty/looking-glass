@@ -141,6 +141,22 @@
     flash(label, ms = 900) {
       show(label); setTimeout(hide, calm() ? 0 : ms);
     },
+    /** a tab or pane that loads its data: its loading line with the searching logo under the heading, the rest of the
+        pane hidden, until work() settles (at least ~0.45 s, so a quick answer does not just flicker) */
+    async pane(el, label, work) {
+      if (!el) return work();
+      el.querySelector(":scope > .lg-pane-loading")?.remove();
+      const line = document.createElement("div"); line.className = "st-loading lg-pane-loading"; line.setAttribute("role", "status");
+      line.textContent = label || "Loading…";
+      const head = el.querySelector(":scope > h2"); if (head) head.after(line); else el.prepend(line);
+      el.classList.add("lg-pane-busy");
+      const t0 = Date.now();
+      try { return await work(); } finally {
+        const wait = calm() ? 0 : Math.max(0, 450 - (Date.now() - t0));
+        await new Promise((r) => setTimeout(r, wait));
+        line.remove(); el.classList.remove("lg-pane-busy");
+      }
+    },
     hide,
   };
   if (document.body) window.LGLoader.arrive(); else document.addEventListener("DOMContentLoaded", () => window.LGLoader.arrive());

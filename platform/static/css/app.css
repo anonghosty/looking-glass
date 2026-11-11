@@ -1080,3 +1080,6 @@ details.mp-mini.kev > summary { color: #ff9a9e; }
 .ac-msg .pill-btn { justify-self: start; text-decoration: none; }
 .ac-code { font: 600 16px "Geist Mono", ui-monospace, monospace; color: #f5d9a8; letter-spacing: .03em; }
 .ac-sub { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+
+/* LGLoader.pane(): a tab loading its data shows only its heading and the loading line */
+.lg-pane-busy > :not(h2):not(.lg-pane-loading) { display: none !important; }

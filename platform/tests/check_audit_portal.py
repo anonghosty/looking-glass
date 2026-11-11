@@ -50,6 +50,12 @@ try:
     tpl = open(os.path.join(os.path.dirname(A.__file__), "templates", "settings.html"), encoding="utf-8").read()
     js = open(os.path.join(os.path.dirname(A.__file__), "static", "js", "settings.js"), encoding="utf-8").read()
     ok("the cards wait behind the loading line", 'class="st-main st-pending"' in tpl and 'classList.remove("st-pending")' in js)
+    print("Tabs load with the animation")
+    rd = lambda p: open(os.path.join(os.path.dirname(A.__file__), "static", p), encoding="utf-8").read()
+    ok("loader.js has LGLoader.pane", "async pane(el, label, work)" in rd("js/loader.js"))
+    ok("a busy pane hides all but its heading and loading line", ".lg-pane-busy > :not(h2):not(.lg-pane-loading)" in rd("css/app.css"))
+    ok("Admin: Users and Roles tabs use it", 'LGLoader.pane($(`pane-${tab}`)' in rd("js/admin.js") and "Opening the roles and their permissions" in rd("js/admin.js"))
+    ok("Audit: Audit log and Sessions tabs use it", 'LGLoader.pane($("pane-sessions")' in rd("js/audit.js") and 'LGLoader.pane($("pane-audit")' in rd("js/audit.js"))
 finally:
     users.get, roles.perms = real_get, real_perms
     sessions.end(key=auth._h(token)) if hasattr(auth, "_h") else None
