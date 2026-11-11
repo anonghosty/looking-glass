@@ -49,6 +49,8 @@ from urllib.parse import quote, urlsplit
 from flask import abort, g, jsonify, redirect, render_template, request
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import throttle_prune
+
 PUBLIC_PATHS = ("/login", "/register", "/forgot", "/logout", "/healthz", "/static/", "/favicon.ico")
 NAME_RE = re.compile(r"^[a-zA-Z0-9._-]{2,40}$")
 ROLE_RE = re.compile(r"^[a-z][a-z0-9_-]{1,30}$")
@@ -586,11 +588,16 @@ class Sessions:
 class Throttle:
     def __init__(self):
         self.fail, self.lock = {}, threading.Lock()
+        self.sweeper = throttle_prune.Sweeper()     # old records are cleared out (throttle_prune.py)
 
     def _recent(self, key, window):
         now = _now()
-        self.fail[key] = [t for t in self.fail.get(key, []) if now - t < window]
-        return self.fail[key]
+        kept = [t for t in self.fail.get(key, []) if now - t < window]
+        if kept:
+            self.fail[key] = kept
+        else:
+            self.fail.pop(key, None)                # a look-up alone leaves no empty record behind
+        return kept
 
     def locked(self, ip, name):
         with self.lock:
@@ -606,6 +613,7 @@ class Throttle:
             now = _now()
             self.fail.setdefault((ip, (name or "").lower()), []).append(now)
             self.fail.setdefault((ip, None), []).append(now)
+            self.sweeper.maybe(self.fail, now)
 
     def ok(self, ip, name):
         with self.lock:
@@ -615,7 +623,10 @@ class Throttle:
         with self.lock:
             r = self._recent(key, window)
             if add:
-                r.append(_now())
+                now = _now()
+                r.append(now)
+                self.fail[key] = r
+                self.sweeper.maybe(self.fail, now)
             return len(r)
 
 
