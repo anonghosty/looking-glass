@@ -549,6 +549,9 @@ body.admin-page .st-main { max-width: 1560px; }
 .adm-detail { max-width: 340px; color: var(--text-2); font-size: 12px; }
 .adm-matrix td, .adm-matrix th { text-align: center; } .adm-matrix td:first-child, .adm-matrix th:first-child { text-align: left; }
 .adm-matrix td:first-child .muted { font-size: 12px; max-width: 420px; }
+/* a permission's description wraps onto more lines, never cut off mid-word */
+.adm-matrix td:first-child, .adm-matrix td:first-child .muted { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }
+.adm-matrix td:first-child { min-width: 300px; max-width: 440px; }
 .adm-check input { width: 18px; height: 18px; accent-color: var(--accent); }
 .adm-rolehead { text-transform: none; }
 .adm-newrole { max-width: 260px; }

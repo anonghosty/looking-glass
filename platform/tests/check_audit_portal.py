@@ -36,6 +36,8 @@ try:
     page = r.get_data(as_text=True)
     ok("opens the Audit portal", r.status_code == 200, str(r.status_code))
     ok("the page has the Sessions tab", 'data-tab="sessions"' in page)
+    ok("…and its Sessions panel with the table (not only the tab)", 'id="pane-sessions"' in page and 'id="sessionsTable"' in page)
+    ok("…marked read only for a role that cannot end sessions", "Read only: ending a session" in page)
     ok("the page has its loading line", "st-loading" in page)
     ok("reads the audit log", c.get("/api/admin/audit", headers=H).status_code == 200)
     r = c.post("/api/admin/sessions/0000000000000000/end", json={}, headers=dict(H, **{"X-CSRF-Token": csrf}))

@@ -133,9 +133,10 @@ report, or across reports), and can be tracked as a finding with one tick.</td>
 <td><a href="docs/media/screens/67-executive-code.png"><img src="docs/media/screens/67-executive-code.png" alt="Executive filtered by a code"></a></td>
 </tr>
 <tr>
-<td><b>Findings.</b> One page where every finding stands — New, With management, Back with the researcher, With the
-analyst, Advisory sent, Closed — with comments, replies and history. An analyst can ask first: <b>Make analyst
-code</b> turns an analysis selection into an <code>LG-A-…</code> code and a finding the researchers answer.</td>
+<td><b>Findings, with a name on every hand-over.</b> A ticket tree: a case with one sub-finding per organisation, each
+pill naming who holds it. Management approves to a named advisor or rejects with a reason; only the people a finding
+passed through see it. An analyst can ask first: <b>Make analyst code</b> turns a selection into an
+<code>LG-A-…</code> code the researchers answer.</td>
 <td><b>The Executive, filtered by a code.</b> Management applies a finding's code to its own portal: how many devices,
 where, which networks, the trend — counts only, never an address.</td>
 </tr>
@@ -147,6 +148,27 @@ where, which networks, the trend — counts only, never an address.</td>
 code from a searchable list) and gets exactly those devices: statistics, a regions map that shows the addresses on
 hover, networks, cities and the busiest devices — then <b>one report per network provider</b> (PDF + CSV) to attach
 to the advisory. The two ways it is used are told step by step in <a href="docs/USE_CASES.md">Use cases</a>.</td>
+</tr>
+<tr>
+<td><a href="docs/media/screens/72-advisory.png"><img src="docs/media/screens/72-advisory.png" alt="Writing an advisory"></a></td>
+<td><a href="docs/media/screens/73-advisory-report.png"><img src="docs/media/screens/73-advisory-report.png" alt="The advisory report"></a></td>
+</tr>
+<tr>
+<td><b>Advisories, one per organisation.</b> The advisor writes the heading, Description and Recommended Actions
+(bold, bullets, numbering), chooses the TLP 2.0 level (explained on the page), and generates the report. What goes
+to the organisation is two files: the PDF and its devices CSV.</td>
+<td><b>Signed by the CSIRT, never a person.</b> Your CSIRT's name and logo, the TLP on every page, ADVISORY / INSIGHTS /
+TECHNICAL DETAILS / REFERENCES. No internal codes, no notes. Who wrote it is kept in the audit log.</td>
+</tr>
+<tr>
+<td><a href="docs/media/screens/74-advisor-dashboard.png"><img src="docs/media/screens/74-advisor-dashboard.png" alt="The advisor's dashboard"></a></td>
+<td><a href="docs/media/screens/11-overview-roles.png"><img src="docs/media/screens/11-overview-roles.png" alt="Every role has an Overview"></a></td>
+</tr>
+<tr>
+<td><b>Closing the loop.</b> Marked as sent, the sub-finding closes, then the case when all of them are closed, each
+step logged. The advisor's dashboard shows what went out, to whom, and what is still open.</td>
+<td><b>An Overview for every role.</b> A greeting by first name, <i>Your pages</i> for that role only, and a bell that
+says what changed and takes you there. Administrators can tick <b>Peace of mind</b> to step out of the operations.</td>
 </tr>
 </table>
 
@@ -217,7 +239,7 @@ No Shadowserver reports yet? [Sign up your CSIRT](https://www.shadowserver.org/w
 | | |
 |---|---|
 | <img src="docs/media/screens/00-login.png" alt="Sign in" width="420"> | **1. Sign in** with your password and the 6-digit code from your authenticator app. New accounts wait for an administrator's approval. |
-| <img src="docs/media/screens/10-overview.png" alt="Overview" width="420"> | **2. Read the overview:** yesterday at a glance, every monitored report, and the two platforms. The **Glossary** tab explains every term. |
+| <img src="docs/media/screens/10-overview.png" alt="Overview" width="420"> | **2. Read your Overview:** a greeting by your first name, yesterday at a glance, every monitored report, and *Your pages* for your role. The **Glossary** tab explains every term. |
 | <img src="docs/media/screens/20-comms-map.png" alt="Map" width="420"> | **3. Explore the network communications map.** Filter on the left, watch the charts on the right, follow events in the stream. |
 | <img src="docs/media/screens/23-comms-event.png" alt="Event details" width="420"> | **4. Open any event** for its source, destination, infection and the raw request, with Malpedia enrichment. |
 | <img src="docs/media/screens/31-services-view-kenya-regions.png" alt="Regions" width="420"> | **5. Switch to the services platform** and its regions view to see exposure by region and city. |
@@ -233,10 +255,12 @@ The complete guide, with every screen and button: [docs/USER_GUIDE.md](docs/USER
 | **External** | both platforms, always masked | view only |
 | **Analyst** | everything, unmasked | analyse, export CSV and PDF, Malpedia, Demo mode |
 | **Researcher** | only the Definitions page (no addresses) | define malware names and issues with references, study the intel gathered from the reports, share notes, correct network names |
-| **Management** | only the Executive portal (aggregates, never addresses) | filter, explain, download executive reports |
-| **Admin** | everything | also Settings, the Definitions page, accounts, roles, sessions and the audit log |
+| **Management** | the Executive portal (aggregates, never addresses) and the findings it decides | filter, explain, download executive reports; approve findings to a named advisor or reject them |
+| **Advisor** | the Advisory portal and the findings sent to them | write and send one advisory per organisation, signed by the CSIRT |
+| **Admin** | everything | also Settings, the Definitions page, accounts, roles and the Audit portal; Peace of mind to step out of the operations |
 
-Administrators can build custom roles from the permissions. Details: [User guide → Roles](docs/USER_GUIDE.md#roles).
+Every role has an Overview and the Findings it takes part in. Administrators can build custom roles from the
+permissions (an *auditor* with only `audit` reads the audit log and the sessions and changes nothing). Details: [User guide → Roles](docs/USER_GUIDE.md#roles).
 
 ## Security
 
@@ -246,7 +270,11 @@ Administrators can build custom roles from the permissions. Details: [User guide
 - **Sessions** bound to the browser, ended after inactivity; administrators see and end any session.
 - **Roles and permissions** enforced on the server; masking is done **on the server**, so hidden values never reach the browser.
 - **Executive portal** that cannot return an address (checked by an automated test).
-- **Audit log** of sign-ins, failures, settings, accounts, definitions, notes and report downloads, naming people as *Full Name (username)*.
+- **Audit portal** of its own: the audit log (sign-ins, failures, settings, accounts, definitions, notes, findings,
+  decisions, advisories and report downloads, naming people as *Full Name (username)*) and who is signed in, readable
+  by an auditor who can change nothing.
+- **Findings are channels:** only the people a finding passed through (and administrators) can see it.
+- **Peace of mind** for administrators: Admin, Audit, Settings and the Overview only, no findings notifications.
 - **Safe exports:** no CSV cell can run as a spreadsheet formula.
 - **Hardened web layer:** HTTPS for remote access, a strict content security policy (per-request nonce, no eval),
   CSRF tokens and same-origin checks, HttpOnly / SameSite=Strict / Secure cookies, frames refused, network allow lists.

@@ -26,8 +26,10 @@ partners see the country's situation at a glance on a wall screen.
 - [2. The intro page](#2-the-intro-page)
 - [3. Reported network communications (the map)](#3-reported-network-communications-the-map)
 - [4. Publicly accessible / vulnerable services](#4-publicly-accessible--vulnerable-services)
-- [5. Analysis and follow-up](#5-analysis-and-follow-up)
+- [5. Analysis and follow-up](#5-analysis-and-follow-up) · [Findings and cases](#findings-cases-and-who-holds-them)
 - [Management portal (Executive)](#management-portal-executive)
+- [Advisories (the advisor)](#advisories-the-advisor) · [TLP](#tlp-how-far-an-advisory-may-travel)
+- [Notifications (the bell)](#notifications-the-bell)
 - [6. Demo mode and public screens](#6-demo-mode-and-public-screens)
 - [7. Settings (administrators)](#7-settings-administrators)
 - [8. Administration](#8-administration)
@@ -56,6 +58,22 @@ partners see the country's situation at a glance on a wall screen.
 **Give management a report**
 1. A **management** account opens straight into **Executive**; choose the day and any filter.
 2. **Executive report** downloads a PDF in the dashboard's design plus CSV files.
+
+**Send a finding on several networks to management (analyst)**
+1. On **Combinations**, search the code; tick the across-report patterns to send.
+2. Pick the networks it concerns and **Send to management**: one network opens a finding for that organisation,
+   several open a **case** with one sub-finding each.
+
+**Decide a finding (management)**
+1. The bell shows it; open the review from **Findings**.
+2. **Approve** and name the advisor (it goes straight to them), or **Reject** with the reason (it closes).
+
+**Send an advisory to an organisation (advisor)**
+1. Open the finding from the **Advisory portal**; its organisation and that organisation's devices are already there.
+2. Write the heading, **Description** and **Recommended Actions**, choose the **TLP**, then **Generate the report**.
+3. **Mark as drafted**. Download the report, extract it, and mail the PDF and the devices CSV to the organisation
+   (two attachments, never the archive).
+4. On **Findings**, **Mark as sent**: the sub-finding closes, then its case once every sub-finding is closed.
 
 **Add a colleague**
 1. They choose **Create an account** on the sign-in page and link an authenticator app.
@@ -105,11 +123,15 @@ says how many attempts are left.
 | **Analyst** | everything, unmasked | analyse, export CSV, look up Malpedia, switch Demo on for presentations |
 | **Management** | only the **management portal** (Executive, `/management`): aggregated figures of both platforms, never individual addresses | filter, explain infections and vulnerabilities, download executive PDF reports. No other role can be given this portal (admins can preview it) |
 | **Researcher** | only the **Definitions** page (no platforms or addresses) | the organisation's security researchers: define, with references, the malware names Malpedia does not know and the issues that are not CVEs; add notes to CVEs; correct network names and types |
-| **Admin** | everything | also Settings, definitions, accounts, roles, sessions and the audit log |
+| **Advisor** | the **Advisory portal** and the findings management sends them (with the organisation's devices) | write each organisation's advisory, generate its report, mark it drafted and sent; their dashboard shows what went out and to whom |
+| **Admin** | everything | also Settings, definitions, accounts, roles, the Audit portal; **Peace of mind** steps out of the operations |
+
+Every role has an **Overview** and the **Findings** page (only the findings it takes part in).
 
 Administrators can also make custom roles from the permissions (view, unmasked data, export, Malpedia, settings,
-definitions, users, audit). Giving an analyst role the *definitions* permission lets analysts keep the definitions
-too (they reach the page at `/definitions`).
+definitions, networks, users, audit, advisory). Giving an analyst role the *definitions* permission lets analysts keep
+the definitions too (they reach the page at `/definitions`). A role with only **audit** is an auditor: it opens the
+**Audit portal** (the audit log and who is signed in) and can change nothing.
 
 ---
 
@@ -117,16 +139,25 @@ too (they reach the page at `/definitions`).
 
 ![The intro page: yesterday at a glance](media/screens/10-overview.png)
 
-At the top left: **Display** quality (Auto / Full / Lite, see section 6). At the top right: **Executive**, **Admin**
-and **Settings** (as your role allows), then your name and **Log out**; under them, whether both platforms show the
-whole country or your constituency.
+Every role starts on its own **Overview**. The first time you open it, it greets you by your first name: *Greetings,
+Kwame! Welcome to Looking Glass*. After that it picks one of thirty greetings at random each time (some of them for
+fun). It uses the name the administrator entered, never the user name.
 
-After signing in, the intro page shows the replayed day at a glance: totals, the activity over the day, the mix of
-attack types and every monitored report. Two cards lead to the platforms, each with **Explore the platform** and
-**Explore in demo mode**. The **Glossary** tab explains every term and every Shadowserver report in plain language,
-with links to Shadowserver's own report pages.
+![Every role has its own Overview](media/screens/11-overview-roles.png)
 
-Come back to it at any time with **Overview** or the logo in the top bar.
+Below the day at a glance, **Your pages** lists exactly what your role opens, in titled groups: the platforms, your
+work (Findings, Combinations, the Advisory portal, Executive, Definitions, as your role allows) and administration
+(Admin, Audit, Settings). Each card says what the page is for.
+
+At the top left: **Display** quality (Auto / Full / Lite, see section 6). At the top right: your pages as buttons, the
+**bell** (see [Notifications](#notifications-the-bell)), **Settings**, and **Log out** last; under them, whether both
+platforms show the whole country or your constituency.
+
+The day at a glance: totals, the activity over the day, the mix of attack types and every monitored report. The
+**Glossary** tab explains every term and every Shadowserver report in plain language, with links to Shadowserver's own
+report pages.
+
+Come back to it at any time with the **Overview** button, which is in every page's header, or the logo.
 
 ## 3. Reported network communications (the map)
 
@@ -280,9 +311,8 @@ combination always has the same code, and a code carries no address. Click a cod
 The note's codes are printed with it on every card and in the PDFs (Executive reports included).
 
 **Track as a finding.** Tick it in the Notes window (with a short title) to follow the note up on the **Findings** page
-(`/findings`). It gets a number (#1, #2…) and a status: *New → With management → Back with the researcher → With the
-analyst → Advisory sent → Closed*. Whoever's turn it is moves it on with a short comment; the history shows who did what
-and when. Researchers, management, analysts and admins share the page; no address is ever shown there. Management gets
+(`/findings`). It gets a number (#1, #2…) and a status, and goes to the person named (see
+[Findings, cases and who holds them](#findings-cases-and-who-holds-them)); no address is ever shown there. Management gets
 **Show in Executive** on each code: the Executive portal opens filtered to exactly that combination (a *Combination
 code* chip; counts only; no 7-day comparison for a code). Analysts get **Search**, the combination search below.
 
@@ -329,6 +359,11 @@ or the Findings page) is for roles that see addresses and may export:
    next to the download button, or click the network in the *Networks* card. The PDF and both CSV files then cover
    only that provider's devices and records, and its name is in the title and the file names.
 
+6. **Send to management** (when the devices turn up in other reports, the download waits for this): tick the
+   across-report patterns, write a title and a comment, name the manager, and **pick the networks** it concerns. No
+   network: an overview, and the advisor picks the organisations later. One network: a finding for that organisation.
+   Several: a **case** with one sub-finding per organisation, each decided on its own.
+
 "Exactly" means the record carries these indicators and no other indicator of the kinds compared (C2 domain, DNS
 lookup, TLS name, user agent and tags; for services, the associated tags and CVEs). The search is off in Demo mode, a
 search can be downloaded for an hour by the analyst who ran it, and every search is in the audit log.
@@ -374,6 +409,32 @@ In Demo mode the PDF is masked like the page. Each download is recorded in the a
 
 CSV files are safe to open in a spreadsheet: a cell that would start a formula (`=`, `+`, `-`, `@`) gets a leading
 apostrophe, so text that came from scanned devices (a vendor or product banner) can never run as a formula.
+
+### Findings, cases and who holds them
+
+![A case with one sub-finding per organisation](media/screens/70-findings-case.png)
+
+**Every hand-over names a person.** A finding always goes to someone by name: the researcher sends it to a manager,
+the analyst sends a combination to a manager, the manager approves it to a named advisor. Nothing moves on its own, and
+there is no general "move it on".
+
+**Findings are channels.** Only the people a finding has passed through (and administrators) see it. Others never
+learn it exists.
+
+**The flow:**
+1. A researcher (from a note) or an analyst (from the combination search) opens a finding and sends it to a manager.
+2. Management **approves** it and names the analyst or advisor who takes it next, or **rejects** it with a reason (it
+   closes, on the record).
+3. For an advisory: the analyst sends the combination for one or more networks; management decides each organisation
+   on its own and approves it to an advisor.
+4. The advisor writes the organisation's advisory and marks it **sent** on the Findings page. The finding closes. A
+   case closes once every one of its sub-findings is closed. Every step is in the finding's history and the audit
+   log.
+
+**The page is a ticket tree.** A case shows its sub-findings beneath it, one per organisation. Closed sub-findings fold
+into their own group, and every level opens and closes with a click. The **state pill** says where each one stands
+and who holds it (*With management · Efua Owusu*). The filters at the top count each state; **Open** and **All** switch
+between work in progress and everything.
 
 ## Management portal (Executive)
 
@@ -434,8 +495,71 @@ has a **7-day baseline** page and a `seven-day-trend` CSV.
 
 The same scale is printed on the portal under the 7-day baseline card and in the executive report.
 
-The management role has only this portal: it cannot see the platforms, lists, Settings or Definitions, and the
-permission cannot be given to any other role (the roles editor locks it; the server enforces it).
+The management role has this portal, its Overview and the Findings it decides: it cannot see the platforms, lists,
+Settings or Definitions, and the permission cannot be given to any other role (the roles editor locks it; the server
+enforces it).
+
+## Advisories (the advisor)
+
+![The advisor's dashboard](media/screens/74-advisor-dashboard.png)
+
+The **advisor** role turns approved findings into advisories for the organisations concerned. Its **Advisory portal**
+(`/advisory`) is a dashboard showing:
+- **Waiting:** what is waiting for an advisory.
+- **In progress:** drafts and advisories marked drafted.
+- **Sent:** advisories sent, and the recipients.
+- **Findings:** findings still open and findings closed.
+- **Days to send:** on average, from management's decision.
+- **Charts:** sent per recipient, sent per month, and the impacts the advisories carried.
+
+**One advisory per organisation.** Open a finding and its organisation (network) is already chosen, with that
+organisation's IP addresses: the reports they appear in, what the devices are (*Seen as*), their CVEs and weaknesses
+(*issues*), and the **impact** of each report (for example *Unauthorised remote access*, *Botnet recruitment*).
+
+![Writing the advisory: TLP, heading, Description, Recommended Actions](media/screens/72-advisory.png)
+
+**Writing it:**
+1. Choose the **TLP** (see below). It is TLP:AMBER unless you choose otherwise.
+2. Write the **heading**: the advisory's title on the first page. Left empty, it reads *"<your CSIRT> Security
+   Advisory"*.
+3. Write the **Description** (what was found and what it means) and the **Recommended Actions**, with the **B**, **•
+   List** and **1. List** buttons. A preview shows the result.
+4. **Generate the report.** Generating again replaces it: there is only ever one download.
+5. **Mark as drafted** when it is ready to go out.
+
+**The report** is signed by your CSIRT (its name and logo from Settings), never by a person. The person who wrote it is
+kept in the audit log. Its sections are labelled **ADVISORY**, **INSIGHTS** (the analysis behind it), **TECHNICAL
+DETAILS** (definitions and references only) and **REFERENCES** (the Shadowserver report pages). It carries no internal
+code and no researcher's note. Every page shows the TLP at the bottom right, and the header line shows it too.
+
+![The advisory report, signed by the CSIRT](media/screens/73-advisory-report.png)
+
+**What goes to the organisation.** The download is one archive, named `CSIRT_organisation_title_yyyymmdd`. Extract it
+and mail its two files as attachments: the **PDF** and the **devices CSV** (the affected addresses). Never send the
+archive itself: a zipped attachment from outside looks like phishing. **Export JSON** is for your own tools; it is not
+in the archive.
+
+**Mark as sent** on the Findings page once it has gone out. The organisation's sub-finding closes, then its case when
+every sub-finding is closed. Each step is in the history and the audit log, and the dashboard updates.
+
+### TLP: how far an advisory may travel
+
+The Traffic Light Protocol 2.0 (FIRST) is chosen on the advisory page and explained there and on the Definitions page.
+
+| Level | Who may receive it |
+|---|---|
+| **TLP:RED** | the named recipients only, in the meeting or exchange it was given in |
+| **TLP:AMBER+STRICT** | the recipient's own organisation only, those who need to know |
+| **TLP:AMBER** | the recipient's organisation **and its clients** (customers) who need to know: the default, since an advisory lists the organisation's addresses |
+| **TLP:GREEN** | peers and partners in the recipient's community, not published |
+| **TLP:CLEAR** | anyone; may be published |
+
+## Notifications (the bell)
+
+Every role has a **bell** in its header. It counts what changed in the findings you take part in: a finding sent to
+you, a decision, a reply, an advisory sent. Open it to see each one, with what happened and when; click one to go
+straight to it. **Clear all** clears your own list only. With Peace of mind on, an administrator gets no findings
+notifications.
 
 ## 6. Demo mode and public screens
 
@@ -462,6 +586,8 @@ platform full screen. The display adapts to TVs and weaker devices by itself (`?
 - **Constituency:** the whole country, or the networks your CSIRT is responsible for: choose companies (all their
   AS numbers) and add address ranges. Both platforms then show only your constituency.
 
+- **Organisation:** your CSIRT's name and logo (PNG or JPEG, at most 40 KB). Advisories are signed with them.
+
 **Apply settings** saves and applies at once for everyone.
 
 Settings also lists the **network names and types** read-only, for reference; they are corrected on the Definitions
@@ -480,14 +606,25 @@ changed, and failed look-ups are tried again next time. The names then appear ev
 - **Users:** approve new accounts with a role, change roles, revoke or restore, reset an authenticator, allow a
   password reset, end someone's sessions, delete. Each account shows its profile and when it last signed in.
   You cannot remove the last administrator or your own account.
-- **Sessions:** every signed-in session with its address, approximate location, browser, type (normal or 5 days)
-  and expiry; end any of them.
-- **Audit log:** sign-ins, failures, account and settings changes, definitions and notes, with address, location and
-  browser. People are shown as *Full Name (username)*, and the search finds them by either. The table fits the page;
-  on narrow screens location and browser give way.
-- **Roles:** the permissions of each role, and custom roles.
+- **Roles & permissions:** the permissions of each role, and custom roles.
+- **Peace of mind** (just for you): tick it to step out of the platforms and the work on findings. You keep Admin,
+  Audit, Settings and the Overview (to keep an eye on the database), and no findings notification comes in. Untick it
+  to have everything back. It is in the audit log.
 
-![Admin: the audit log](media/screens/52-admin-audit.png)
+![With Peace of mind on: Admin, Settings and the Overview](media/screens/56-peace-of-mind.png)
+
+**Audit** (its own page, `/audit`; permission *audit*), the **Audit portal**:
+- **Audit log:** sign-ins, failures, account and settings changes, definitions and notes, findings, decisions and
+  advisories, with address, location and browser. People are shown as *Full Name (username)*, and the search finds
+  them by either.
+- **Sessions:** every signed-in session with its address, approximate location, browser, type (normal or 5 days) and
+  expiry. Roles that manage accounts (*users*) can end a session; an auditor (*audit* only) reads them.
+
+Every tab shows the loading animation while its data comes.
+
+![The Audit portal: the audit log](media/screens/52-admin-audit.png)
+
+![The Audit portal: who is signed in, read only for an auditor](media/screens/55-audit-sessions.png)
 
 Changes need a recent sign-in: in a 5-day session older than 12 hours, Looking Glass asks you to sign in again
 before changing anything.
@@ -496,5 +633,6 @@ before changing anything.
 
 - Use an **external** account for anything shown to people outside the CSIRT.
 - Treat CSV exports as confidential: they contain unmasked addresses.
+- Send an advisory as two attachments (the PDF and the devices CSV), never the archive, and at the TLP it carries.
 - Never share recovery codes or the authenticator key.
 - Sign out (top bar) on shared computers.

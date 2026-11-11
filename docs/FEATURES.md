@@ -5,12 +5,49 @@ read more. Dates are UTC.
 
 ## Contents
 
+- [2026-11-11: advisories, cases, an Overview for every role, the Audit portal](#2026-11-11-advisories-cases-an-overview-for-every-role-the-audit-portal)
 - [2026-11-10: combination codes, the analyst's combination search and findings](#2026-11-10-combination-codes-the-analysts-combination-search-and-findings)
 - [2026-11-09: researchers' intel, notes and a page of their own](#2026-11-09-researchers-intel-notes-and-a-page-of-their-own)
 - [2026-11-09: security review fixes](#2026-11-09-security-review-fixes)
 - [2026-11-09: faster platforms and a sharper Executive portal](#2026-11-09-faster-platforms-and-a-sharper-executive-portal)
 - [2026-11-08: Executive portal, 7-day baseline, vulnerabilities and network types](#2026-11-08-executive-portal-7-day-baseline-vulnerabilities-and-network-types)
 - [2026-11-07: definitions, the researcher role and PDF reports](#2026-11-07-definitions-the-researcher-role-and-pdf-reports)
+
+## 2026-11-11: advisories, cases, an Overview for every role, the Audit portal
+
+From a finding to the organisation that can act on it, with a name on every hand-over.
+
+**New**
+
+- **The advisor role and advisories.** One advisory per organisation (network), with that organisation's devices, the
+  reports they appear in, what they are (*Seen as*), their weaknesses and the impact of each report. The advisor writes
+  the heading, Description and Recommended Actions (bold, bullets, numbering), chooses the TLP and generates the report.
+  It is signed by the CSIRT (name and logo from Settings), never a person; the person is in the audit log. What goes
+  to the organisation is two files: the PDF and the devices CSV, named `CSIRT_organisation_title_yyyymmdd`. No internal
+  codes or notes travel with it. ([User guide](USER_GUIDE.md#advisories-the-advisor))
+- **TLP 2.0.** Chosen per advisory (TLP:AMBER unless the advisor chooses), explained on the advisory page and on the
+  Definitions page, printed in the header line and at the bottom right of every page.
+  ([User guide](USER_GUIDE.md#tlp-how-far-an-advisory-may-travel))
+- **Cases and sub-findings.** An analyst picks the networks before sending to management: several open a case with one
+  sub-finding per organisation, each decided on its own. Management approves to a named advisor, or rejects with a
+  reason. **Mark as drafted** on the advisory page and **Mark as sent** on the Findings page: the sub-finding closes,
+  then the case when every sub-finding is closed, all logged. ([User guide](USER_GUIDE.md#findings-cases-and-who-holds-them))
+- **The Findings page as a ticket tree**, folding at every level, with closed sub-findings in their own group and
+  state pills that name who holds each one.
+- **The advisor's dashboard:** waiting, drafts, drafted, sent, recipients, open and closed findings and cases, days to
+  send, and the impacts carried.
+- **Notifications.** A bell on every role's pages: what changed in your findings, one click to go there, clear your own.
+- **An Overview for every role.** A greeting by first name (*Greetings, Name! Welcome to Looking Glass* the first time,
+  then one of thirty at random), *Your pages* for that role in titled groups, and the Overview button in every header.
+- **Peace of mind** for administrators: Admin, Audit, Settings and the Overview only, with no findings notifications.
+- **The Audit portal** (`/audit`): the audit log and the sessions on a page of their own. The `audit` permission opens
+  it; an auditor reads the sessions but only `users` can end one.
+- **Loading animations** on every page and every tab that loads data.
+
+**Changed**
+
+- No general "move it on": every step is a decision by the person who holds the finding.
+- Settings comes just before Log out, and Log out is always last in the header.
 
 ## 2026-11-10: combination codes, the analyst's combination search and findings
 

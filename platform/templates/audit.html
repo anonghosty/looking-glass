@@ -30,14 +30,12 @@
       <button type="button" role="tab" data-tab="sessions" aria-pressed="false">Sessions</button>
     </div>
     <div class="st-banner" id="banner" role="status" hidden></div>
-    {% if "users" in lg_perms %}
     <section class="st-card adm-pane" id="pane-sessions" hidden>
       <h2>Active sessions</h2>
-      <p class="st-hint">Who is signed in now, from where and with what; end a session to sign it out at once (it is in the audit log).</p>
+      <p class="st-hint">Who is signed in now, from where and with what.{% if "users" in lg_perms %} End a session to sign it out at once (it is in the audit log).{% else %} Read only: ending a session is for the roles that manage accounts.{% endif %}</p>
       <div class="table-wrap"><table class="hosts adm-table" id="sessionsTable"><thead><tr>
         <th>User</th><th>Address</th><th>Location</th><th>Browser</th><th>Type</th><th>Started</th><th>Last activity</th><th></th></tr></thead><tbody></tbody></table></div>
     </section>
-    {% endif %}
     <section class="st-card adm-pane" id="pane-audit">
       <h2>Audit log</h2>
       <p class="st-hint">Who did what and when: sign-ins, account and role changes, settings, exports, findings, decisions and advisories. Read only.</p>

@@ -122,7 +122,8 @@
       b.append(g);
     }
     const missing = f.children.length - kids.length;
-    if (missing > 0) b.append(el("p", "fd-empty", `${pl(missing, "sub-finding", "sub-findings")} not shown here (closed before this case was opened again).`));
+    // sub-findings of other channels (another organisation's advisor, say) stay out of sight: findings are channels
+    if (missing > 0) b.append(el("p", "fd-empty", `${pl(missing, "other sub-finding", "other sub-findings")} of this case ${missing === 1 ? "is" : "are"} not in your channel, so ${missing === 1 ? "it is" : "they are"} not shown here.`));
     return b;
   }
   const pl = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -263,7 +264,8 @@
       if ((f.advisories || []).length) c.append(advBox(f));
     } else if (f.codes.length) c.append(el("h3", null, f.origin === "analyst" ? "The analyst's code" : "Combinations"), codesBox(f.codes));
     // the reply box: text and codes (researchers answer an analyst's code with combination codes, and the other way round)
-    const rp = el("details", "fd-replybox"); rp.append(el("summary", null, f.origin === "analyst" ? "Reply to the analyst" : "Reply"));
+    // "Reply to the analyst" only for the researchers an analyst's code is for; everyone else just replies
+    const rp = el("details", "fd-replybox"); rp.append(el("summary", null, f.origin === "analyst" && data.can_research ? "Reply to the analyst" : "Reply"));
     const rta = el("textarea", "fd-in"); rta.rows = 3; rta.maxLength = 1000; rta.placeholder = "Your reply";
     const rcodes = el("input", "fd-in"); rcodes.placeholder = "Codes to send with it (LG-C-…, LG-X-…, LG-A-…), separated by commas"; rcodes.spellcheck = false;
     const rgo = el("button", "lg-btn sm primary", "Send the reply"); rgo.type = "button"; const rmsg = el("span", "fd-msg");
@@ -296,7 +298,7 @@
     const det = el("details", "fd-more"); det.append(el("summary", null, `History (${f.history.length})${f.replies ? ` · ${pl(f.replies, "reply", "replies")}` : ""}`), tl);
     if (f.replies) det.open = true;
     c.append(det);
-    if (!f.parent) c.append(rp);          // replies go on the case, not on each organisation's sub-finding
+    if (!f.parent && f.open) c.append(rp);          // replies go on the case, not on each sub-finding; a closed one takes none
     if (f.kind === "case") c.append(c.querySelector(".fd-subs"));     // the case's trail first, its organisations below it
     // management decides first: approve with a comment (the directive) → "Approved"; reject with the reason → closed.
     // Who it goes to next is asked when it is moved on.
