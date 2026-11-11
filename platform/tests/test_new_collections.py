@@ -7,31 +7,18 @@ import os
 import sys
 
 from dotenv import load_dotenv
-from pymongo import MongoClient
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from sources import Registry  # noqa: E402
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
-# This test creates a throwaway database. The platform's own account is read-only on a hardened installation, so use
-# the database pipeline's account (../database/.env, next to the platform) when it is there; otherwise skip (exit 77).
-_db_env = os.path.join(os.path.dirname(__file__), "..", "..", "database", ".env")
-_creds = dict(username=os.environ.get("MONGO_USER"), password=os.environ.get("MONGO_PASSWORD"),
-              authSource=os.environ.get("MONGO_AUTH_SOURCE", "admin"))
-if os.path.isfile(_db_env):
-    from dotenv import dotenv_values
-    _d = dotenv_values(_db_env)
-    if _d.get("MONGO_USER") and _d.get("MONGO_PASSWORD"):
-        _creds = dict(username=_d["MONGO_USER"], password=_d["MONGO_PASSWORD"], authSource=_d.get("MONGO_AUTH_SOURCE") or "admin")
-client = MongoClient(host=os.environ["MONGO_HOST"], port=int(os.environ.get("MONGO_PORT", 27017)),
-                     serverSelectionTimeoutMS=8000, **_creds)
-try:
-    client["lg_write_probe"].command("ping")
-    client["lg_write_probe"]["probe"].insert_one({"probe": 1})
-    client.drop_database("lg_write_probe")
-except Exception as _e:  # noqa: BLE001
-    print(f"SKIPPED: needs a MongoDB account that may create databases (the platform's account is read-only, as it "
-          f"should be; put the pipeline's account in ../database/.env). ({_e.__class__.__name__})")
+# This test creates a throwaway database: an account that may (tests/_throwaway_mongo.py), or skip (exit 77).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _throwaway_mongo  # noqa: E402
+client = _throwaway_mongo.client(os.environ["MONGO_HOST"], os.environ.get("MONGO_PORT", 27017))
+if client is None:
+    print("SKIPPED: needs a MongoDB account that may create databases. The platform's and the pipeline's are limited, "
+          "as they should be; the administrator account is looked for in the pipeline's .env.before-pipeline-account.")
     sys.exit(77)
 real = client[os.environ["MONGO_DB"]]
 name = f"lg_selftest_{os.getpid()}"

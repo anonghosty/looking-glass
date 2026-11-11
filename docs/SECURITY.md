@@ -30,7 +30,7 @@ This document describes how Looking Glass is secured, what was changed after the
 | Browser | Content-Security-Policy with a per-request nonce; no inline handlers and no eval; frames refused; nosniff; Referrer-Policy; integrity hashes on CDN files | `security.py`, templates |
 | Demo mode | Real addresses, AS numbers and network names are masked on the server; host filters accept only opaque references; report fields only from an allowlist; Settings is admin-only | `privacy.py`, `masked_fields.py`, `app.py` |
 | Report zips | Unpacked within limits counted on the real bytes (unpacked size, compression ratio, files per zip, free disk); a zip bomb is quarantined with the reason and nothing of it is loaded; names inside a zip cannot leave its folder. Defaults suit a large country, changeable in `.env` | `database/zip_limits.py` |
-| Database | Read-only MongoDB account (`lookingglass_ro`), MongoDB bound to localhost with authentication | `deploy/create_readonly_db_user.py` |
+| Database | Read-only MongoDB account for the platform (`lookingglass_ro`); the pipeline's own account (`lookingglass_pipeline`: read and write on its database only, no account management); MongoDB bound to localhost with authentication | `deploy/create_readonly_db_user.py`, `database/create_pipeline_db_user.py` |
 | Operating system | systemd sandbox: no privilege gain, read-only system and home folder, writable only in `data/`, private files (umask 077) | `deploy/looking-glass.service.template` |
 | Secrets | `.env` and `data/users.json`, `sessions.json`, `automation.key` and `tls/key.pem` are mode 600; backups are mode 600 in a 700 folder | file system |
 
@@ -250,6 +250,7 @@ Do this on every installation (details in `docs/INSTALLATION.md`):
 - [ ] Create the administrator account: open http://localhost:5000 on the server (or the proxy's HTTPS address), click **Let's get started**, and type the setup code from `cat data/setup_code`.
 - [ ] Approve registered accounts in Admin → Users with the right role (external, analyst, admin or a custom role).
 - [ ] Switch to the read-only MongoDB account: `deploy/create_readonly_db_user.py`, then move `.env.before-readonly` off the server.
+- [ ] Give the pipeline its own account: `database/create_pipeline_db_user.py` (the administrator account stays in `database/.env.before-pipeline-account`: keep it safe).
 - [ ] WSL only: remove the Windows / Hyper-V firewall rules that open port 5000 to the network, unless other screens need it.
 - [ ] Other screens: choose `ACCESS_MODE` (`private` with `VIEWER_NETWORKS`, or `public`), switch on HTTPS, and open the firewall accordingly.
 - [ ] Restrict the Mapbox token to your hostnames in the Mapbox account.

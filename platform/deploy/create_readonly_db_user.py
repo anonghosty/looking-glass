@@ -10,7 +10,10 @@ Run it yourself on the server; it uses the administrator account currently in .e
   3. keeps a copy of .env as .env.before-readonly (mode 600) and puts the new account into .env.
 Then reload the service (deploy/reload.sh). Keep the administrator password somewhere safe outside this server's .env.
 
-Usage: .venv/bin/python deploy/create_readonly_db_user.py
+MongoDB on another server, run by someone else: --print shows the commands for its administrator to run instead
+(Looking Glass never needs their password); they give you the password for .env.
+
+Usage: .venv/bin/python deploy/create_readonly_db_user.py [--print]
 """
 import os
 import re
@@ -33,6 +36,24 @@ def client(user, pw, source):
     return MongoClient(host=E.get("MONGO_HOST", "localhost"), port=int(E.get("MONGO_PORT") or 27017), username=user, password=pw,
                        authSource=source, serverSelectionTimeoutMS=8000)
 
+
+if "--print" in sys.argv[1:]:
+    print(f"""For the administrator of the MongoDB server. In mongosh, signed in as an account that may create users:
+
+  use {DB}
+  db.createUser({{
+    user: "{NEW_USER}",
+    pwd: passwordPrompt(),          // asks for the password; it never appears on the screen or in the history
+    roles: [{{ role: "read", db: "{DB}" }}]
+  }})
+
+Then, in Looking Glass's .env:
+  MONGO_USER={NEW_USER}
+  MONGO_PASSWORD=<the password chosen above>
+  MONGO_AUTH_SOURCE={DB}
+  MONGO_DB={DB}
+and reload: deploy/reload.sh""")
+    sys.exit(0)
 
 admin = client(E.get("MONGO_USER"), E.get("MONGO_PASSWORD"), E.get("MONGO_AUTH_SOURCE") or "admin")
 if E.get("MONGO_USER") == NEW_USER:

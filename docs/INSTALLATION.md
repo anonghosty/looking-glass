@@ -158,6 +158,14 @@ The script uses the administrator account in `.env` once, creates `lookingglass_
 that it cannot write, and puts it in `.env`. It keeps the old file as `.env.before-readonly` (it holds the
 administrator password): move that file off the computer.
 
+The pipeline gets its own account too, with read and write on its database only (in the database folder):
+```bash
+./create_pipeline_db_user.py
+```
+The installer does both. When MongoDB runs on another server, run by someone else, add `--print` to either script:
+it shows the commands for that server's administrator to run, and they give you the password for `.env`. Their own
+account is never needed or changed.
+
 ### A6. The first administrator **(security)**
 On the computer itself (your Windows browser counts), open http://localhost:5000:
 1. Click **Let's get started**. It asks for the one-time **setup code**: in a terminal, in the platform folder, run

@@ -79,22 +79,50 @@ class Folders(unittest.TestCase):
         self.assertFalse(any(p.name.startswith("scan$") for p in self.srt.iterdir()))
 
 
+def _may_create_db(mongo):
+    try:
+        c = sp.mongo_client(mongo, serverSelectionTimeoutMS=4000)
+        c["lg_write_probe"]["probe"].insert_one({"probe": 1})
+        c.drop_database("lg_write_probe")
+        return c
+    except Exception:              # noqa: BLE001
+        return None
+
+
 def throwaway_db():
-    """The real .env's MongoDB, with a database of its own (dropped afterwards); None when MongoDB is not reachable."""
+    """The real .env's MongoDB, with a database of its own (dropped afterwards). The pipeline's own account may only
+    write its database, so the administrator account kept in .env.before-pipeline-account is used when it is there.
+    (None, None) when no account may create a database, or MongoDB is not reachable."""
     try:
         s = sp.load_settings(argparse.Namespace(env_file=os.path.join(HERE, ".env"), workers=2, days=None))
-        c = sp.mongo_client(s.mongo, serverSelectionTimeoutMS=4000)
-        c.admin.command("ping")
-        return s, c
     except Exception:              # noqa: BLE001
         return None, None
+    c = _may_create_db(s.mongo)
+    if c:
+        return s, c
+    kept = os.path.join(HERE, ".env.before-pipeline-account")
+    if os.path.isfile(kept):
+        e = {}
+        for raw in open(kept, encoding="utf-8").read().splitlines():
+            line = raw.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                v = v.strip()
+                e[k.strip()] = v[1:-1] if len(v) >= 2 and v[0] == v[-1] and v[0] in "'\"" else v
+        if e.get("MONGO_USER"):
+            mongo = dict(s.mongo, username=e["MONGO_USER"], password=e.get("MONGO_PASSWORD", ""),
+                         authSource=e.get("MONGO_AUTH_SOURCE") or "admin")
+            c = _may_create_db(mongo)
+            if c:
+                return dataclasses.replace(s, mongo=mongo), c
+    return None, None
 
 
 class Loading(unittest.TestCase):
     def setUp(self):
         self.s0, self.client = throwaway_db()
         if not self.client:
-            self.skipTest("MongoDB not reachable")
+            self.skipTest("MongoDB not reachable, or no account here may create a throwaway database")
         self.base = Path(tempfile.mkdtemp(prefix="reportnames-load-"))
         self.db = f"lg_test_reportnames_{uuid.uuid4().hex[:8]}"
         self.s = dataclasses.replace(self.s0, base_dir=self.base, mongo_db=self.db, workers=2)

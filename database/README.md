@@ -549,8 +549,19 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
 - Passwords are never put on the command line by the scripts. `deploy` passes them through environment variables and temporary mode-600 files, so they don't show up in `ps`.
 - The mail server certificate is **not** verified (`IMAP_VERIFY_TLS=false`), the same as the original script. Set it to `true` if the server has a valid certificate.
 - The mailbox is opened read-only; the pipeline never changes, moves or deletes e-mails.
-- The MongoDB user has the `root` role, matching the original setup. For extra safety you could create a user limited to `readWrite` on `shadowserver`.
-- The Looking Glass platform does not use this account: `platform/deploy/create_readonly_db_user.py` gives it its own read-only account.
+- **The pipeline has its own MongoDB account**, `lookingglass_pipeline`: read and write on its database (`MONGO_DB`) and
+  read-only server status, nothing else. It cannot change any other database, create accounts or change the server.
+  `deploy.sh` creates the administrator (`root`) account the first time; `./create_pipeline_db_user.py` then makes the
+  pipeline's account, checks its rights from MongoDB's own answer, and switches `.env` to it (the installer does this
+  for you). The administrator account stays in `.env.before-pipeline-account` (mode 600): it is the way back
+  (`cp .env.before-pipeline-account .env`) and what you need for administration (backups, restores, `deploy.sh` on a
+  new MongoDB). Keep it safe, or move it off the server.
+- **MongoDB on another server, run by someone else:** `./create_pipeline_db_user.py --print` shows the commands for its
+  administrator to run (they never give you their password); put the account they create into `.env`. The
+  `clusterMonitor` role in those commands only lets `shadowserver check` read the cache size: without it that one check
+  warns and everything else works.
+- The Looking Glass platform does not use this account: `platform/deploy/create_readonly_db_user.py` gives it its own
+  read-only account (`--print` for a remote MongoDB, too).
 
 ---
 

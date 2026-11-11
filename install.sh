@@ -978,7 +978,7 @@ if [ $WANT_PF = 1 ]; then S+="
 Country:          $COUNTRY · map token $([ -n "$MAPBOX_TOKEN" ] && echo given || echo 'NOT given (add later)') · Malpedia $([ -n "$MALPEDIA_TOKEN" ] && echo given || echo skipped)
 Access:           $ACCESS_MODE$([ -n "$VIEWER_NETWORKS" ] && echo " ($VIEWER_NETWORKS)") · HTTPS: $HTTPS · port $LG_PORT · service $SERVICE_NAME
 Accounts:         sign-up on the sign-in page: $([ "$REGISTRATION" = 1 ] && echo on || echo off) · MFA for everyone
-Database account: $([ "$READONLY" = yes ] && echo "read-only account created for the platform" || echo "'$MONGO_ADMIN_USER' used as it is")"; fi
+Database account: $([ "$READONLY" = yes ] && echo "a read-only account for the platform$([ $WANT_DB = 1 ] && echo ", and the pipeline's own (its database only)")" || echo "'$MONGO_ADMIN_USER' used as it is")"; fi
 S+="
 Checks at the end: $(yesno "$RUN_CHECKS")"
 [ "$KEEP_DB_ENV" = yes ] && S+="
@@ -1045,6 +1045,14 @@ if [ $WANT_DB = 1 ]; then
     DB_WARN="The pipeline is installed, but its setup check reported a problem (see the log; often the mailbox login)."
   fi
   [ "$SCHEDULE" = off ] && (cd "$DB_DIR" && bin/shadowserver schedule off >> "$LOG" 2>&1 || true)
+  # the pipeline's own account: read and write on its database only, not the administrator (root). The administrator
+  # account stays in database/.env.before-pipeline-account (mode 600), the one place it is kept on this computer.
+  if [ "$KEEP_DB_ENV" = no ] && [ "$READONLY" = yes ] && [ -x "$DB_DIR/create_pipeline_db_user.py" ]; then
+    gauge 36 "Giving the pipeline its own database account..."
+    if ! (cd "$DB_DIR" && ./create_pipeline_db_user.py >> "$LOG" 2>&1); then
+      DB_WARN="${DB_WARN:+$DB_WARN }The pipeline still uses the administrator account (its own account could not be made; see the log)."
+    fi
+  fi
   if [ "${RUN_PIPELINE_NOW:-no}" = yes ]; then
     gauge 40 "Fetching the reports of the last $FIRST_DAYS days and loading them (can take several minutes)..."
     log "\$ shadowserver run --days $FIRST_DAYS"
@@ -1078,7 +1086,8 @@ if [ $WANT_PF = 1 ]; then
   if [ "$KEEP_PF_ENV" = no ] && [ "$READONLY" = yes ]; then
     gauge 70 "Creating a read-only database account for the platform..."
     run "read-only MongoDB account" bash -c "cd '$PF_DIR' && .venv/bin/python deploy/create_readonly_db_user.py"
-    # the administrator password stays only in database/.env (or nowhere on this computer, for a remote MongoDB)
+    # the administrator password stays only in database/.env.before-pipeline-account (or database/.env, if the pipeline
+    # kept it; or nowhere on this computer, for a remote MongoDB)
     if [ -f "$PF_DIR/.env.before-readonly" ]; then shred -u "$PF_DIR/.env.before-readonly" 2>/dev/null || rm -f "$PF_DIR/.env.before-readonly"; fi
   fi
   if [ "$HTTPS" = selfsigned ]; then
