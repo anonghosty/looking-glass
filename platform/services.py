@@ -15,7 +15,6 @@ server_type, serverid_software, application) or issue markers (CVE tags, ssl_poo
 cert_expired); those are normalised to vendor, device_type, product, version and issues. Everything else is
 kept as `extras` for the details view.
 """
-import bisect
 import hashlib
 import json
 import re
@@ -39,7 +38,7 @@ ACR = {"http": "HTTP", "ssl": "SSL/TLS", "ssh": "SSH", "smtp": "SMTP", "imap": "
        "afp": "AFP", "bgp": "BGP", "isakmp": "ISAKMP (IPsec VPN)", "msmq": "MSMQ", "ntrip": "NTRIP", "ard": "Apple Remote Desktop",
        "dns": "DNS", "ftp": "FTP", "ntp": "NTP", "rdp": "RDP", "smb": "SMB", "snmp": "SNMP", "vnc": "VNC", "mdns": "mDNS",
        "mqtt": "MQTT", "cwmp": "CWMP (TR-069)", "ipp": "IPP printing", "ipmi": "IPMI", "epmd": "EPMD", "gtp": "GTP",
-       "ics": "Industrial control (ICS)", "msrpc": "MS-RPC", "msmq": "MSMQ", "ntrip": "NTRIP", "tftp": "TFTP", "ssdp": "SSDP", "stun": "STUN", "slp": "SLP", "qotd": "QOTD",
+       "ics": "Industrial control (ICS)", "msrpc": "MS-RPC", "tftp": "TFTP", "ssdp": "SSDP", "stun": "STUN", "slp": "SLP", "qotd": "QOTD",
        "chargen": "CharGen", "socks": "SOCKS proxy", "telnet": "Telnet", "redis": "Redis", "mysql": "MySQL",
        "mssql": "MS SQL", "postgres": "PostgreSQL", "mongodb": "MongoDB", "couchdb": "CouchDB", "elasticsearch": "Elasticsearch",
        "kubernetes": "Kubernetes API", "ldap": "LDAP", "netbios": "NetBIOS", "portmapper": "Portmapper", "rsync": "rsync",

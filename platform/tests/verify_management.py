@@ -9,7 +9,7 @@ import os, sys, json, time, urllib.request, urllib.parse
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 import mongo_derive as L  # noqa: E402
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from pymongo import MongoClient
 

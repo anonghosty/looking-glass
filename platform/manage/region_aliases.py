@@ -108,7 +108,7 @@ RENAME = {
     "ET": {"SNNPR": "Southern Nations, Nationalities and Peoples (SNNPR)", "Hareri": "Harari"},
     "DZ": {"Ghardaia": "Ghardaïa", "Bejaia": "Béjaïa"},
 }
-INVISIBLE = re.compile(r"[​-‏‪-‮⁠﻿]")
+INVISIBLE = re.compile(r"[​-‏‪-‮⁠﻿]")   # zero-width, direction marks, word joiner, BOM
 
 
 def norm(name):

@@ -5,7 +5,7 @@
 a researcher adds a note, every card of that name carries it ("Notes shared by Researcher: <full name>"), the PDF
 report prints it, only its author or an admin removes it, other roles cannot add or read.
 Usage: tests/check_notes.py      (the app in-process)"""
-import json, os, sys, tempfile, zlib, re
+import json, os, sys, tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 os.environ.setdefault("THREATMAP_SCHEDULE", "0")
 import app as A  # noqa: E402

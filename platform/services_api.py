@@ -4,7 +4,6 @@ Same replay schedule as the map (one day, replayed from 00:00), same filter mode
 a filter), same demo masking. Registered from app.py with `register(app, ctx)`.
 """
 import bisect
-import csv
 import csvsafe
 import io
 import os

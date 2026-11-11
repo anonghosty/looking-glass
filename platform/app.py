@@ -1209,7 +1209,7 @@ def _file_base(parts):
 
 def _report_response(pdf, base, cols, prow):
     """format=pdf: the PDF alone. Otherwise (default) a ZIP with the PDF and the complete list as CSV."""
-    import csv, io as _io, zipfile
+    import io as _io, zipfile
     if request.args.get("format") == "pdf":
         return Response(pdf, mimetype="application/pdf",
                         headers={"Content-Disposition": f'attachment; filename="{base}.pdf"', "Cache-Control": "no-store"})

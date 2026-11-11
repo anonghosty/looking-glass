@@ -19,7 +19,6 @@ Runs in a throwaway folder with the shipped rules and snapshot, and no network (
 Usage: tests/check_report_map.py"""
 import json
 import os
-import re
 import shutil
 import sys
 import tempfile

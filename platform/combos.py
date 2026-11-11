@@ -25,7 +25,6 @@ POST /api/combos/search {code, from?, to?} (analysts, admins), GET /api/combos/s
 GET /api/combos/search/<id>/download. Page: /combinations. Installed from app.py: combos.install(app, ctx).
 """
 import collections
-import csv
 import io
 import json
 import os

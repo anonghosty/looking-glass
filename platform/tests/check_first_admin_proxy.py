@@ -8,7 +8,7 @@
    a wrong code is refused and audited; from another computer only over HTTPS (through the reverse proxy); the right
    code makes the administrator and deletes the code.
 Run: .venv/bin/python tests/check_first_admin_proxy.py"""
-import io, logging, os, re, stat, sys, tempfile, time, shutil
+import logging, os, re, stat, sys, tempfile, time, shutil
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 import proxy_guard  # noqa: E402

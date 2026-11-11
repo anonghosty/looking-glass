@@ -15,7 +15,7 @@ import re
 from reportlab.lib.colors import Color, HexColor
 from reportlab.lib.utils import ImageReader, simpleSplit
 
-from executive_pdf import AMBER, BLUE, DIM, H, M, MUTE, RED, SLATE, TXT, VIOLET, W
+from executive_pdf import AMBER, BLUE, DIM, M, MUTE, RED, SLATE, TXT, VIOLET, W
 
 LEVEL = {"critical": RED, "high": AMBER, "medium": BLUE, "low": SLATE}
 LEVEL_WORD = {"critical": "Critical", "high": "High", "medium": "Medium", "low": "Low"}
