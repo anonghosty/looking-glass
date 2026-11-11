@@ -264,6 +264,8 @@ body {
 .lg-film--compact .lg-film-title { font-size: .8rem; }
 .lg-films { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; margin: 1rem 0 1.6rem; }
 .lg-films .lg-film { margin: 0; }
+/* an odd last film sits centred on its own row, the same size as the others */
+.lg-films > :last-child:nth-child(odd) { grid-column: 1 / -1; justify-self: center; width: calc(50% - .7rem); }
 .lg-hero-film { max-width: 980px; margin: 1.8rem auto 0; }
 .md-typeset .lg-hero-film .lg-film figcaption { text-align: center; justify-items: center; }
 .md-typeset .lg-hero-film a.lg-film-yt { justify-self: center; }
@@ -333,6 +335,7 @@ readthedocs-flyout { display: none !important; }
 @media screen and (max-width: 44.9375em) {
   .lg-pair p { grid-template-columns: 1fr; }
   .lg-films { grid-template-columns: 1fr; }
+  .lg-films > :last-child:nth-child(odd) { width: auto; justify-self: stretch; }
   .lg-film-play { width: 58px; height: 58px; margin: -29px 0 0 -29px; } .lg-film-play svg { width: 26px; height: 26px; }
   .lg-hero { padding-top: .6rem; }
 }
