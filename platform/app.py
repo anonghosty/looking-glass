@@ -2577,7 +2577,8 @@ NOTES = _notes.install(app, {"people": people, "audit": AUTH["audit"], "allowed"
 
 INTEL = _intel.install(app, {"store": store, "svc_store": svc["store"], "allowed": _kb_allowed, "defined": _defined_titles,
                              "services_view": lambda n: SVC_KB["view"](n),     # Services in Intel gathered (services_kb.py)
-                             "cross": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"]),   # every category
+                             "cross": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"],   # every category
+                                                                        hold_small=True),     # researchers: no code below 5 hosts
                              "labels": lambda: {**{x["name"]: x["label"] for x in registry.get()},
                                                 **{x["name"]: x["label"] for x in svc["registry"].get()}}})
 

@@ -567,7 +567,10 @@
       for (const k of s.combinations.filter((k) => k.items.length).slice(0, 3)) {
         const row = el("div", `ig-every-k${st.focus && !k.items.includes(st.focus) ? " dim" : ""}`);
         const set = el("div", "ig-set"); k.items.forEach((v, j) => { if (j) set.append(el("span", "ig-plus", " + ")); set.append(chipOf(v)); });
-        const cr = el("div", "ig-code-row"); cr.append(el("span", "ig-every-n", plural(k.hosts, "host")), codeChip(k.code, `${s.title}: ${k.items.join(" + ")}`), noteBtn(k.code, `${s.title}: ${k.items.join(" + ")}`));
+        const cr = el("div", "ig-code-row"); cr.append(el("span", "ig-every-n", plural(k.hosts, "host")));
+        // fewer than 5 devices: the pattern is shown, without a lasting code (small_codes.py); an analyst drills into it
+        if (k.code) cr.append(codeChip(k.code, `${s.title}: ${k.items.join(" + ")}`), noteBtn(k.code, `${s.title}: ${k.items.join(" + ")}`));
+        else cr.append(el("span", "ig-held", `Fewer than 5 devices: no lasting code. An analyst can drill into it.`));
         row.append(set, cr); r.append(row);
       }
       bs.append(r);

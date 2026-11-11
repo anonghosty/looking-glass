@@ -28,6 +28,7 @@
   background: rgba(255, 255, 255, .02); border: 1px solid rgba(255, 255, 255, .05); }
 .ax-tick { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
 .ax-tick input { accent-color: #f5b54a; margin: 0; }
+.ax-held { cursor: help; font-size: 11.5px; color: var(--muted, #8b95a7); border: 1px dashed currentColor; border-radius: 6px; padding: 2px 7px; white-space: nowrap; }
 .ax-code { font: 600 11.5px "Geist Mono", ui-monospace, monospace; color: #a9b8ff; } .ax-code.x { color: #d2b8ff; }
 .ax-what { display: grid; gap: 4px; min-width: 0; } .ax-parts { gap: 6px; }
 .ax-part { display: grid; grid-template-columns: minmax(100px, 160px) minmax(0, 1fr); gap: 8px; align-items: start; }

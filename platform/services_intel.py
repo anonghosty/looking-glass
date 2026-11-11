@@ -24,6 +24,7 @@ import collections
 import threading
 import time
 
+import small_codes
 from intel import combo_code, cross_code
 from report_map import sibling
 from svc_patterns import MIN_HOSTS
@@ -266,7 +267,7 @@ class ServicesIntel:
                        "report_sets_total": len(a["report_sets"]), "shared": [], "shared_total": 0},
             "sinkholes": g["sinkholes"],
             # the same hosts in every other category (the window leaves out this report and the sinkholes it shows above)
-            "cross": self.for_hosts(self.index()["hosts"].get(base, set()), title_of, kind_of=kind_of)}
+            "cross": self.for_hosts(self.index()["hosts"].get(base, set()), title_of, kind_of=kind_of, hold_small=True)}
 
     def new_code(self, report, items):
         """A researcher builds a combination for a note from the pattern items Intel gathered shows (MIN_HOSTS hosts or
@@ -289,7 +290,7 @@ class ServicesIntel:
         return {"report": base, "items": sorted(items), "records": n, "devices": len(ch), "repeat_devices": _repeat(ch),
                 "days": data["days"]}, None
 
-    def for_hosts(self, hosts, title_of=None, top=8, kind_of=None, with_hosts=False):
+    def for_hosts(self, hosts, title_of=None, top=8, kind_of=None, with_hosts=False, hold_small=False):
         """An analyst's selection (acodes.py) across every category, for a set of host addresses that never leaves this
         module: the services reports the hosts are in, with their exact pattern combinations and codes; the CVEs and
         issues on them; the infections they call sinkholes as, with the sinkhole code per services report. Counts and
@@ -298,6 +299,9 @@ class ServicesIntel:
         kind_of = kind_of or self.kind_of
         hosts = {h for h in hosts if h}
         data = self.index()
+        # hold_small (Intel gathered): a researcher browsing gets no lasting code for a pattern fewer than MIN_HOSTS hosts
+        # carry (small_codes.py). An analyst's code page keeps every code: there the analyst handed the selection over.
+        full = not hold_small or small_codes.viewer_sees_hosts()
         services = []
         for base, hs in data["hosts"].items():
             mine = hs & hosts
@@ -315,7 +319,7 @@ class ServicesIntel:
             for items, n in pn.most_common(top):
                 labels = [_label(i) for i in items]
                 combos.append({"items": labels, "records": n, "hosts": len(ph[items]), "repeat": _repeat(ph[items]),
-                               "code": combo_code(SECTION, base, base, labels)})
+                               "code": small_codes.code_for(combo_code(SECTION, base, base, labels), len(ph[items]), full)})
             services.append({"report": base, "title": title_of(base), "kind": kind_of(base), "hosts": len(mine), "records": sum(pn.values()),
                              "combinations": combos, "combinations_total": len(pn)})
         services.sort(key=lambda s: -s["hosts"])
@@ -348,7 +352,7 @@ class ServicesIntel:
         for pat, n in xp.most_common(top * 2):
             name = pat[0][0]
             x = {"parts": [{"report": r, "title": title_of(r), "items": list(i)} for r, i in pat], "hosts": n,
-                 "code": cross_code(SECTION, name, [(r, list(i)) for r, i in pat]), "name": name}
+                 "code": small_codes.code_for(cross_code(SECTION, name, [(r, list(i)) for r, i in pat]), n, full), "name": name}
             if with_hosts:                                 # only for the analysts (combo_review.py): the addresses
                 x["ips"] = sorted(by_pat[pat])
             cross.append(x)

@@ -65,7 +65,13 @@
   }
   // one row with a code to tick
   function codeRow(codeText, pickText, what, fig, cross) {
-    const li = el("li"), lab = el("label", "ax-tick"), cb = el("input"); cb.type = "checkbox";
+    const li = el("li");
+    if (!codeText) {                // fewer than 5 devices: shown without a lasting code (small_codes.py); nothing to tick
+      const held = el("span", "ax-tick ax-held", "No code");
+      held.title = "Fewer than 5 devices carry this pattern: it has no lasting code. The analyst can drill into those devices.";
+      li.append(held, what, el("span", "ax-fig", fig)); return li;
+    }
+    const lab = el("label", "ax-tick"), cb = el("input"); cb.type = "checkbox";
     lab.append(cb, el("code", `ax-code${cross ? " x" : ""}`, codeText)); pick(cb, codeText, pickText);
     li.append(lab, what, el("span", "ax-fig", fig)); return li;
   }

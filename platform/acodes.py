@@ -296,6 +296,8 @@ def install(app, ctx):
                 if n in mine and h in mine[n]:
                     per[n]["dev"][h][rep(e)].update(I.record_items(section, e, I._norm(n)))
         out = []
+        # every code stays here, small patterns too: this is a selection an analyst handed to this researcher in the
+        # finding's channel, and the researcher answers with these codes (Intel gathered holds small ones back: small_codes.py)
         for n, p in sorted(per.items(), key=lambda kv: -kv[1]["records"]):
             combos = []
             for (r, items), c in sorted(p["combos"].items(), key=lambda kv: -kv[1]["records"])[:12]:
