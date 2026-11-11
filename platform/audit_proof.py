@@ -60,6 +60,9 @@ What it does not prove
   started are covered from their seal on, not before it. A log rewritten before your first package cannot be told
   apart; from your first package on, it can.
 
+How and why this works, step by step: "How the audit log proves itself" (docs/AUDIT_LOG_PROOF.md) at
+  https://github.com/anonghosty/looking-glass
+
 The log holds names, addresses and browser details of the people who used Looking Glass: keep the package confidential.
 """
 

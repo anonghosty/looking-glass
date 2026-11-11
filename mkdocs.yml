@@ -82,6 +82,7 @@ nav:
       - Technical reference: TECHNICAL_REFERENCE.md
   - Security:
       - Security: SECURITY.md
+      - How the audit log proves itself: AUDIT_LOG_PROOF.md
       - Penetration test report: SECURITY_REPORT.md
   - Comparison with IntelMQ and Elastic: COMPARISON.md
 

@@ -660,7 +660,8 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
   the next audit, **Compare with an earlier audit** (or `python verify_audit_log.py --earlier HASH@ENTRY` on a new
   package): each entry's hash depends on every entry before it, so if the earlier head is still at its entry number,
   the log up to it is unchanged, even against someone able to rewrite the whole log on the server. The package's
-  SHA-256 is written into the log too, so each package carries the receipt of the one before.
+  SHA-256 is written into the log too, so each package carries the receipt of the one before. How and why this works,
+  step by step, and what it does not cover: [How the audit log proves itself](AUDIT_LOG_PROOF.md).
 
 Entries are archived, not deleted, when the log grows (kept `AUDIT_RETENTION_DAYS`, default 400 days); the thresholds
 of the checks are in `.env` ([CONFIGURATION.md](CONFIGURATION.md)).

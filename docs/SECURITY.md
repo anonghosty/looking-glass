@@ -162,7 +162,8 @@ Malpedia, Settings and the admin APIs answer 403 without the permission.
   rewrite the whole chain. Against that, the auditor takes the **proof package** (`audit_proof.py`): the log's files
   as stored, their SHA-256s and an independent verifier (`audit_verifier.py`, standard library only) to run on their
   own computer, and keeps its head (hash@entry) outside the server. At the next audit the earlier head must still be
-  at its entry number (`--earlier`, or the portal's comparison); a rewrite cannot keep it there.
+  at its entry number (`--earlier`, or the portal's comparison); a rewrite cannot keep it there. The full logic:
+  [How the audit log proves itself](AUDIT_LOG_PROOF.md).
   Entries written before the chain existed (older versions) are **sealed** once: their count, time span and SHA-256 go
   to `data/audit.seal`, and the seal is recorded in the chain. Changing them afterwards is detected; nothing can prove
   they were unchanged before the seal, and the evidence says so.
