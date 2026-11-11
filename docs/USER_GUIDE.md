@@ -15,10 +15,6 @@ partners see the country's situation at a glance on a wall screen.
 > Every screenshot in this guide uses **dummy data** (documentation IP ranges, private AS numbers, fictional
 > networks). New terms are explained in the [glossary](GLOSSARY.md).
 
-**Watch first:** the live demo shows every screen and every role in 7½ minutes, narrated, with captions.
-
-[![Watch the live demo (7:38) on YouTube](media/films/live-demo.jpg)](https://www.youtube.com/watch?v=wobiRbg-Lqs) <!-- film: live-demo -->
-
 ## Contents
 
 - [Common tasks, step by step](#common-tasks-step-by-step)

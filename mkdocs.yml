@@ -106,22 +106,6 @@ extra:
         - [85, "Looking Glass"]
         - [130, "The honest comparison"]
         - [146, "Use them together"]
-    live-demo:
-      id: wobiRbg-Lqs
-      title: "Live demo: every screen and every role"
-      length: "7:38"
-      sound: "narrated, with captions"
-      chapters:
-        - [0, "Introduction"]
-        - [32, "Sign-in with two-factor authentication"]
-        - [55, "Network communications: map, analysis, PDF report, demo mode"]
-        - [176, "Publicly accessible / vulnerable services"]
-        - [251, "Administration and settings"]
-        - [284, "Analyst role"]
-        - [302, "Researcher role: definitions, look-ups"]
-        - [338, "Executive portal: 7-day baseline and the executive report"]
-        - [421, "External viewer: always masked"]
-        - [443, "Get Looking Glass"]
     use-cases:
       id: TyIG8su7vNQ
       title: "Use case scenarios: a needle through the haystack"
