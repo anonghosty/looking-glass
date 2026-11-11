@@ -23,7 +23,7 @@ This document describes how Looking Glass is secured, what was changed after the
 | Host names | Only `localhost`, `127.0.0.1`, `::1` and `ALLOWED_HOSTS` are served (stops DNS rebinding) | `security.py` |
 | Login | Every page and API needs a login: password (scrypt) plus a code from an authenticator app (TOTP) | `auth.py`, `templates/login.html` |
 | Accounts | Self-registration with approval, QR authenticator set-up, roles with permissions, admin page, audit log, password reset | `auth.py`, `templates/login.html`, `templates/admin.html` |
-| Password guessing | 5 wrong attempts for an account from one address lock it for 15 minutes; 20 failures from one address in an hour lock the address | `auth.py` |
+| Password guessing | 5 wrong attempts for an account from one address lock it for 15 minutes; 20 failures from one address in an hour lock the address. Failure records older than an hour are cleared out, so the counter cannot grow without end on a public install | `auth.py`, `throttle_prune.py` |
 | Sessions | Server-side; the cookie is HttpOnly, SameSite=Strict, and Secure over HTTPS; bound to address and browser; idle and maximum timeouts | `auth.py` |
 | Changes | Admin role, CSRF token, JSON only, and same-origin checks on `Origin` / `Sec-Fetch-Site` | `app.py`, `security.py` |
 | Input | Times clamped to the replay days; Malpedia values validated; settings limited in size and content; 64 KB request limit | `app.py`, `malpedia.py`, `settings.py`, `security.py` |
