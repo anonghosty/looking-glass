@@ -10,6 +10,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+os.environ["TRUST_PROXY"] = "0"     # the app is called in-process, not through a reverse proxy (proxy_guard.py)
 import app as tm  # noqa: E402
 from flask import g  # noqa: E402
 

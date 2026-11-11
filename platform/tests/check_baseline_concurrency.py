@@ -33,6 +33,7 @@ try:
     shutil.copytree(SRC, os.path.join(tmp, "p"), ignore=shutil.ignore_patterns(".venv", "__pycache__", "backups", "*.log", "mgmt_baseline.json"))
     P = os.path.join(tmp, "p")
     sys.path.insert(0, P); os.chdir(P)
+    os.environ["TRUST_PROXY"] = "0"     # called in-process, not through a reverse proxy (proxy_guard.py)
     import app as tm  # noqa: E402
     logging.getLogger().addHandler(Catch())
     tm.app.logger.addHandler(Catch())

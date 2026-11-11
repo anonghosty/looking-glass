@@ -63,7 +63,7 @@ of …"), then replays the whole day from 00:00 to 24:00. Details: [TECHNICAL_RE
 | `REGISTRATION` | `1` | **Create an account** on the sign-in page (accounts wait for an administrator's approval). `0` = only administrators add people |
 | `SESSION_IDLE_MINUTES` | `60` | a normal session ends after this many minutes without use |
 | `SESSION_MAX_HOURS` | `12` | and after this many hours in any case. "Stay signed in" sessions last up to 5 days (fixed) |
-| `TRUST_PROXY` | `0` | `1` when a reverse proxy on the same computer does HTTPS (Caddy, nginx): the client address and https come from its headers |
+| `TRUST_PROXY` | `0` | `1` when a reverse proxy on the same computer does HTTPS (Caddy, nginx): the client address and https come from its headers. The proxy must send `X-Forwarded-For`; direct requests without it are refused (except `/healthz`) |
 | `ALLOW_INSECURE_REMOTE_LOGIN` | `0` | `1` lets other computers sign in over plain HTTP. Only in a closed lab: passwords cross the network readable |
 | `PUBLIC_DEMO` | `0` | `1` masks everything for everyone (public screens): no IP addresses, network names or host names |
 | `CSP_REPORT_ONLY` | `0` | diagnostics: `1` makes the browser report, not block, what the Content-Security-Policy forbids |

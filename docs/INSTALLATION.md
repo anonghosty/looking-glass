@@ -160,7 +160,9 @@ administrator password): move that file off the computer.
 
 ### A6. The first administrator **(security)**
 On the computer itself (your Windows browser counts), open http://localhost:5000:
-1. Click **Let's get started**.
+1. Click **Let's get started**. It asks for the one-time **setup code**: in a terminal, in the platform folder, run
+   `cat data/setup_code` (the installer printed this command). It proves you can reach the server itself, works
+   once, and is deleted when the administrator exists.
 2. Enter your full name, organisation, email, country, a user name and a strong password.
 3. Scan the QR code with an authenticator app (Google Authenticator, Microsoft Authenticator, Aegis, 2FAS...) and type the code it shows.
 4. Keep the 8 recovery codes offline. Never paste them, or the key, into chat or email.
@@ -240,9 +242,10 @@ systemd-analyze security looking-glass --no-pager | tail -1
 ```bash
 sudo -u lookingglass .venv/bin/python deploy/create_readonly_db_user.py && sudo systemctl restart looking-glass
 ```
-Create the first administrator from the server itself: open http://localhost:5000 in a browser on the server, or
-tunnel to it over SSH (`ssh -L 5000:127.0.0.1:5000 you@server`, then open http://localhost:5000 on your computer)
-and choose **Let's get started**; or on the command line:
+Create the first administrator: read the setup code on the server (`sudo -u lookingglass cat data/setup_code` in the
+platform folder), then open http://localhost:5000 in a browser on the server, or tunnel to it over SSH
+(`ssh -L 5000:127.0.0.1:5000 you@server`, then open http://localhost:5000 on your computer), or, once the reverse
+proxy below is set up, its HTTPS address; choose **Let's get started** and type the code. Or on the command line:
 ```bash
 sudo -u lookingglass manage/manage_users.py add YOURNAME --admin
 ```
@@ -277,7 +280,7 @@ server {
 server { listen 80; server_name lookingglass.example.org; return 301 https://$host$request_uri; }
 ```
 In `.env`:
-- `TRUST_PROXY=1`: the real client address and `https` come from the proxy's headers, so session binding, address checks and Secure cookies work;
+- `TRUST_PROXY=1`: the real client address and `https` come from the proxy's headers, so session binding, address checks and Secure cookies work. The proxy **must** send `X-Forwarded-For` (Caddy does by itself; for nginx keep the `proxy_set_header` lines above): a request without it is refused, because it would look like it came from the server itself. The headers are believed only from a proxy on this computer. With `TRUST_PROXY=1`, an SSH tunnel to port 5000 is refused too (it carries no such header): use the proxy's address;
 - `ALLOWED_HOSTS=lookingglass.example.org`;
 - `ACCESS_MODE=private` with `VIEWER_NETWORKS=` your CSIRT's address ranges, or `ACCESS_MODE=public` for an internet-facing site.
 

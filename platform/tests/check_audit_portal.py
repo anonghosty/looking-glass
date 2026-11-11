@@ -5,6 +5,7 @@ Run: .venv/bin/python tests/check_audit_portal.py"""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("LG_QUIET", "1")
+os.environ["TRUST_PROXY"] = "0"     # the app is called in-process, not through a reverse proxy (proxy_guard.py)
 import app as A
 import auth
 

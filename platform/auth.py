@@ -689,6 +689,11 @@ def install(app, base_dir, logger):
         return [n for n, u in users.all().items() if u.get("status") == "active" and "users" in roles.perms(u.get("role", ""))
                 and not n.startswith(TEST_PREFIX)]
 
+    # the first administrator also needs the one-time setup code from data/setup_code (first_run.py)
+    import first_run
+    setup = first_run.SetupCode(data_dir)
+    setup.sync(not active_admins())
+
     # ---------------- every request
     @app.before_request
     def _require_login():
@@ -798,6 +803,7 @@ def install(app, base_dir, logger):
         kw.setdefault("tls", not remote_needs_tls())
         kw.setdefault("registration", registration_open)
         kw.setdefault("no_admin", not active_admins())
+        setup.sync(kw["no_admin"])          # a code while there is no administrator, none once there is
         kw.setdefault("local", _is_loopback(client()[0]))
         kw.setdefault("view", "choice")
         kw.setdefault("form", {})
@@ -964,7 +970,10 @@ def install(app, base_dir, logger):
             else:
                 if name in users.data["users"]:
                     return page("login.html", 409, view="register", error="That name was taken meanwhile. Choose another.")
-                first_admin = not active_admins() and _is_loopback(ip) and not name.lower().startswith(TEST_PREFIX)
+                # the setup code (checked at the first step) is the proof of access to the server, not "this computer":
+                # behind a reverse proxy the administrator comes through the proxy, over HTTPS (remote_needs_tls)
+                first_admin = (not active_admins() and bool(st.get("setup"))
+                               and not name.lower().startswith(TEST_PREFIX))
                 users.data["users"][name] = {"hash": st["hash"], "role": "admin" if first_admin else LOWEST_ROLE,
                                              "status": "active" if first_admin else "pending", "created": int(_now()),
                                              "profile": st.get("profile", {}),
@@ -972,7 +981,9 @@ def install(app, base_dir, logger):
                                              "registered": {"at": int(_now()), "ip": ip, "location": location(ip),
                                                             "ua": request.headers.get("User-Agent", "")[:200]}}
                 users.save()
-                audit.add("registered", user=name, detail="first admin (this computer)" if first_admin else "awaiting approval")
+                if first_admin:
+                    setup.discard()             # used: an administrator exists now
+                audit.add("registered", user=name, detail="first admin (setup code)" if first_admin else "awaiting approval")
                 status = users.data["users"][name]["status"]
         return page("enrol_done.html", name=name, codes=codes, status=status)
 
@@ -1003,6 +1014,17 @@ def install(app, base_dir, logger):
         test_key_ok = _is_loopback(ip) and hmac.compare_digest(request.headers.get("X-LG-Automation", ""), automation_key)
         if not NAME_RE.match(name) or (is_test and not test_key_ok):
             return fail(400, "User name: 2-40 letters, digits, dot, dash or underscore.")
+        # the first administrator: "this computer" is not proof enough (a reverse proxy set up wrongly makes every
+        # visitor look local), so the one-time setup code from the server is needed too (first_run.py)
+        first = not active_admins() and not is_test
+        if first:
+            if throttle.count(("setup", ip), 3600) >= 10:
+                return fail(429, "Too many wrong setup codes from this address. Try again in an hour.")
+            if not setup.matches(request.form.get("setup_code")):
+                throttle.count(("setup", ip), 3600, add=True)
+                audit.add("setup_code_wrong")
+                return fail(403, "That setup code is not right. Read it on the server: cat data/setup_code "
+                                 "in the platform folder (the installer showed the command).")
         # the local self-tests (reserved test prefix + automation key) use example addresses: format checked, DNS not
         problem = profile_problem(f["full_name"], f["organisation"], f["email"], f["country"], country_codes,
                                   check_domain=not (is_test and test_key_ok))
@@ -1019,7 +1041,7 @@ def install(app, base_dir, logger):
             return fail(400, problem)
         throttle.count(("register", ip), 3600, add=True)     # only registrations that reach the authenticator step count
         secret = totp_new_secret()
-        tok = new_step({"kind": "enrol", "user": name, "secret": secret, "hash": generate_password_hash(pw),
+        tok = new_step({"kind": "enrol", "user": name, "secret": secret, "hash": generate_password_hash(pw), "setup": first,
                         "profile": {"full_name": f["full_name"], "organisation": f["organisation"], "email": f["email"], "country": f["country"]}})
         return step_response(enrol_page(name, secret, "/"), tok)
 

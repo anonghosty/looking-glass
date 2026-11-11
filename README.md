@@ -227,7 +227,7 @@ No Shadowserver reports yet? [Sign up your CSIRT](https://www.shadowserver.org/w
 4. **Let it install.** System packages, MongoDB, Python environments, services and the scheduled fetch; then it runs
    the security test and the platform checks and shows the result.
 5. **Open the address it shows** and choose **Let's get started** to create the first administrator with an
-   authenticator app. On **Ubuntu Server** (no browser on the machine), create the first administrator through an SSH
+   authenticator app. It asks for a one-time setup code: `cat platform/data/setup_code` (the installer shows this). On **Ubuntu Server** (no browser on the machine), create the first administrator through an SSH
    tunnel: `ssh -L 5000:127.0.0.1:5000 user@server`, then open http://localhost:5000 on your own computer (use the
    port you chose in the installer if it is not 5000).
 

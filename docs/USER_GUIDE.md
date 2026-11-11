@@ -86,8 +86,9 @@ partners see the country's situation at a glance on a wall screen.
 ![The sign-in page](media/screens/00-login.png)
 
 ### First time on a new installation
-The very first visit shows only **Let's get started**: it creates the first administrator (name, organisation,
-email, country, user name, password), then links an authenticator app with a QR code. Keep the recovery codes it
+The very first visit shows only **Let's get started**: it asks for the one-time setup code from the server
+(`cat data/setup_code` in the platform folder; the installer shows the command), then creates the first
+administrator (name, organisation, email, country, user name, password) and links an authenticator app with a QR code. Keep the recovery codes it
 shows somewhere safe and offline.
 
 ### Getting an account

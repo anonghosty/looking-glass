@@ -71,5 +71,6 @@ cat <<EOF
      sudo systemctl enable --now $name
 3. Check it:  curl -s localhost:$port/healthz      logs: journalctl -u $name -f
 4. Open http://localhost:$port in a browser and choose "Let's get started" to create the first administrator.
+   It asks for the one-time setup code: cat $(pwd)/data/setup_code
 5. Other screens: deploy/make_tls_cert.sh (HTTPS), ACCESS_MODE in .env, firewall (docs/INSTALLATION.md).
 EOF

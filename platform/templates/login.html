@@ -11,13 +11,13 @@
   <!-- choice -->
   <section class="auth-view" data-v="choice">
     {% if no_admin %}
-      {% if local %}
+      {% if registration %}
       <h1>Welcome to Looking Glass</h1>
-      <p class="auth-sub">Set up the administrator account.</p>
+      <p class="auth-sub">Set up the administrator account. You need the one-time setup code from the server.</p>
       <button type="button" class="auth-btn" data-show="register"><span>Let's get started</span></button>
       {% else %}
       <h1>Not set up yet</h1>
-      <p class="auth-sub">An administrator must create the first account on the server itself.</p>
+      <p class="auth-sub">An administrator must create the first account on the server (manage/manage_users.py).</p>
       {% endif %}
     {% else %}
       <h1>Welcome</h1>
@@ -42,10 +42,16 @@
   {% endif %}
 
   <!-- create an account -->
-  {% if registration and (local or not no_admin) %}
+  {% if registration %}
   <form class="auth-view" data-v="register" method="post" action="/register" autocomplete="off">
     <h1>{% if no_admin %}Administrator account{% else %}Create an account{% endif %}</h1>
     <ol class="auth-steps" aria-label="Steps"><li class="on">Details</li><li>Authenticator</li><li>Recovery codes</li></ol>
+    {% if no_admin %}
+    <p class="auth-sub">First, the setup code: on the server, run <code>cat data/setup_code</code> in the platform
+      folder (the installer showed the command). It proves you can reach the server itself, and works once.</p>
+    <div class="fl wide"><input id="r-setup" name="setup_code" placeholder=" " autocomplete="off" required maxlength="40"
+      spellcheck="false" autocapitalize="characters"><label for="r-setup">Setup code (XXXX-XXXX-XXXX-XXXX)</label></div>
+    {% endif %}
     <div class="auth-grid">
       <div class="fl"><input id="r-name" name="full_name" placeholder=" " autocomplete="name" required minlength="2" maxlength="100" data-person="Full name" value="{{ form.full_name or '' }}"><label for="r-name">Full name</label></div>
       <div class="fl"><input id="r-org" name="organisation" placeholder=" " autocomplete="organization" required minlength="2" maxlength="100" data-person="Organisation" value="{{ form.organisation or '' }}"><label for="r-org">Organisation</label></div>

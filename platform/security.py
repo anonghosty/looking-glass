@@ -103,10 +103,9 @@ def install(app, logger=None):
     app.config["MAX_CONTENT_LENGTH"] = 64 * 1024
     # behind a reverse proxy on this computer (Caddy / nginx doing HTTPS; docs/INSTALLATION.md): take the real client address,
     # scheme and host from its X-Forwarded-* headers, so address checks, session binding and Secure cookies still work.
-    # Only with TRUST_PROXY=1, and gunicorn accepts these headers from 127.0.0.1 only (gunicorn.conf.py).
-    if os.environ.get("TRUST_PROXY") == "1":
-        from werkzeug.middleware.proxy_fix import ProxyFix
-        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+    # Only with TRUST_PROXY=1, only from a proxy on this computer, and never without X-Forwarded-For (proxy_guard.py).
+    import proxy_guard
+    proxy_guard.install(app, os.environ.get("TRUST_PROXY") == "1")
 
     def client_allowed():
         if mode == "public":

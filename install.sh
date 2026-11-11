@@ -1147,7 +1147,9 @@ Note: the platform checks need yesterday's reports in the database; they fail un
 [ $WANT_PF = 1 ] && OUT+="
 
 Next: open $PF_URL on this computer and choose \"Let's get started\" to create the
-first administrator (with an authenticator app). Guides: docs/USER_GUIDE.md"
+first administrator (with an authenticator app). It asks for the one-time setup code; read it with:
+  cat platform/data/setup_code
+Guides: docs/USER_GUIDE.md"
 [ "${ACCESS_MODE:-local}" != local ] && OUT+="
 Other computers: allow port $LG_PORT in the firewall for them only (docs/INSTALLATION.md)."
 OUT+="

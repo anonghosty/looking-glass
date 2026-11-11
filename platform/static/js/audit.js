@@ -16,7 +16,7 @@
   const EVENT_NAMES = { login: "Logged in", login_failed: "Failed login", login_locked: "Locked out", login_refused: "Login refused", logout: "Logged out",
     registered: "Account created", mfa_enrolled: "Authenticator set up", recovery_code_used: "Recovery code used", session_misuse: "Session misuse",
     kicked: "Kicked", user_approve: "Approved", user_role: "Role changed", user_revoke: "Revoked", user_restore: "Restored", user_reset_mfa: "Authenticator reset",
-    user_delete: "Deleted", roles_changed: "Roles changed", settings_changed: "Settings changed", register_limited: "Registration limit",
+    user_delete: "Deleted", roles_changed: "Roles changed", settings_changed: "Settings changed", register_limited: "Registration limit", setup_code_wrong: "Wrong setup code (first administrator)",
     reset_requested: "Password reset requested", reset_failed: "Password reset failed", password_reset: "Password reset", user_allow_reset: "Password reset allowed",
     networks_identify: "Networks identified", network_edited: "Network name edited", network_type_added: "Network type added",
     definition_saved: "Definition saved", note_added: "Note added", note_removed: "Note removed", report_pdf: "Report downloaded",

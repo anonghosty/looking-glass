@@ -40,7 +40,9 @@ if TLS:
     _ctx.check_hostname = False          # the certificate may name the machine, not 127.0.0.1
 
 _opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=_ctx)) if _ctx else urllib.request.build_opener()
-_opener.addheaders = [(k, v) for k, v in HEADERS.items()] + [("User-Agent", "LookingGlass-checks")]
+# X-Forwarded-For: behind a reverse proxy (TRUST_PROXY=1) the app refuses direct requests that do not say who the
+# visitor is (proxy_guard.py); these checks run on this computer. Without TRUST_PROXY the header is ignored.
+_opener.addheaders = [(k, v) for k, v in HEADERS.items()] + [("User-Agent", "LookingGlass-checks"), ("X-Forwarded-For", "127.0.0.1")]
 urllib.request.install_opener(_opener)
 
 _orig = urllib.request.urlopen

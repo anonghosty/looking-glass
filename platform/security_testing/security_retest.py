@@ -82,6 +82,7 @@ def client():
 def req(op, path, data=None, headers=None, method=None, base=B):
     body = None
     h = dict(headers or {})
+    h.setdefault("X-Forwarded-For", "127.0.0.1")   # this computer; needed behind a reverse proxy (proxy_guard.py)
     if isinstance(data, dict):
         body = urllib.parse.urlencode(data).encode(); h.setdefault("Content-Type", "application/x-www-form-urlencoded")
     elif isinstance(data, (bytes, str)):

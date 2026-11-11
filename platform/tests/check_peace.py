@@ -11,6 +11,7 @@ Usage: tests/check_peace.py"""
 import os, re, sys, tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 os.environ.setdefault("THREATMAP_SCHEDULE", "0")
+os.environ["TRUST_PROXY"] = "0"     # the app is called in-process, not through a reverse proxy (proxy_guard.py)
 import app as A  # noqa: E402
 import auth  # noqa: E402
 

@@ -37,9 +37,17 @@ This document describes how Looking Glass is secured, what was changed after the
 ## 2. Accounts, sign-in and administration
 
 ### First run
-When no administrator exists, the sign-in page shows only **Let's get started**, and only on the server itself
-(127.0.0.1). The first account created there becomes the **active administrator**. From any other computer the page
-says that an administrator must set up Looking Glass on the server.
+When no administrator exists, the sign-in page shows only **Let's get started**, and it asks for a **one-time setup
+code** that only someone with access to the server can read: `cat data/setup_code` in the platform folder (mode 600,
+written when the app starts without an administrator, never logged or shown in a page; the installer prints the
+command). The first account created with that code becomes the **active administrator**, and the code is deleted.
+Being on "this computer" is not enough on its own: a reverse proxy set up wrongly can make every visitor look local.
+From another computer (through the reverse proxy) the first administrator is created over HTTPS only. Wrong codes
+are in the audit log, and 10 wrong codes from one address block it for an hour (`first_run.py`, `auth.py`).
+
+Behind a reverse proxy (`TRUST_PROXY=1`), the X-Forwarded-* headers are believed only from the proxy on this
+computer, and a request from it without X-Forwarded-For is refused, except `/healthz` (`proxy_guard.py`). Without
+this, a proxy that forgot the header would make every visitor look like 127.0.0.1.
 
 ### Creating an account (sign-in page → Create an account)
 1. **Details:** full name, organisation, work email (unique), country, user name, and a password (asked twice; see
@@ -210,7 +218,7 @@ Other hardening added:
 
 Do this on every installation (details in `docs/INSTALLATION.md`):
 - [ ] Install the hardened unit: `deploy/install.sh`, then copy `deploy/looking-glass.service` to `/etc/systemd/system/` (needs sudo; docs/INSTALLATION.md).
-- [ ] Create the administrator account: open http://localhost:5000 on the server and click **Let's get started**.
+- [ ] Create the administrator account: open http://localhost:5000 on the server (or the proxy's HTTPS address), click **Let's get started**, and type the setup code from `cat data/setup_code`.
 - [ ] Approve registered accounts in Admin → Users with the right role (external, analyst, admin or a custom role).
 - [ ] Switch to the read-only MongoDB account: `deploy/create_readonly_db_user.py`, then move `.env.before-readonly` off the server.
 - [ ] WSL only: remove the Windows / Hyper-V firewall rules that open port 5000 to the network, unless other screens need it.
