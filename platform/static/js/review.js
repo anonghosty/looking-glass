@@ -63,11 +63,14 @@
     const vs = el("section", "rv-card rv-views");
     vs.append(el("h2", null, "The views, as the Executive portal shows them"));
     const both = d.plat_researcher === d.plat_analyst;
+    const plain = !rv.codes.length;        // sent without across-report data: the researcher's view only
     const views = [
       ["r", "The researcher's view", `the combination ${rv.source}`, [rv.source], d.plat_researcher],
-      ["a", "The analyst's view", `${rv.codes.length} across-report pattern${rv.codes.length === 1 ? "" : "s"}: ${fmt((A.patterns || []).reduce((s, x) => s + x.hosts, 0))} devices`, rv.codes, d.plat_analyst],
-      ...(both ? [["b", "Both together", "the combination and the patterns", [rv.source, ...rv.codes], d.plat_researcher]] : []),
+      ...(plain ? [] : [
+        ["a", "The analyst's view", `${rv.codes.length} across-report pattern${rv.codes.length === 1 ? "" : "s"}: ${fmt((A.patterns || []).reduce((s, x) => s + x.hosts, 0))} devices`, rv.codes, d.plat_analyst],
+        ...(both ? [["b", "Both together", "the combination and the patterns", [rv.source, ...rv.codes], d.plat_researcher]] : [])]),
     ];
+    if (plain) vs.append(el("p", "rv-what", "These devices turn up in no other report: the analyst sends the combination as it is, for the advisory."));
     const tabs = el("div", "rv-tabs"); tabs.setAttribute("role", "tablist");
     const pane = el("div", "rv-pane");
     const frames = {};
@@ -96,28 +99,31 @@
     const dc = el("section", "rv-card rv-decide");
     dc.append(el("h2", null, "The decision"));
     if (rv.decision) {
-      dc.append(el("p", `fd-rv-done ${rv.decision}`, `${rv.decision === "both" ? "Added the analyst's views" : "The researcher's view only"} · ${rv.by}${rv.comment ? `: ${rv.comment}` : ""}`));
+      const said = { both: "Added the analyst's views", researcher: plain ? "Approved" : "The researcher's view only", rejected: "Rejected and closed" }[rv.decision] || rv.decision;
+      dc.append(el("p", `fd-rv-done ${rv.decision}`, `${said} · ${rv.by}${rv.comment ? `: ${rv.comment}` : ""}`));
     } else if (d.can_decide && f.open) {
-      const ta = el("textarea", "fd-in"); ta.rows = 3; ta.maxLength = 1000; ta.placeholder = "Your comment: the directive for the report";
+      const ta = el("textarea", "fd-in"); ta.rows = 3; ta.maxLength = 1000; ta.placeholder = "Your comment: the directive for the report, or the reason for rejecting";
       const toV = window.LGPeople ? window.LGPeople.picker("advisor") : null;      // the advisor who writes the advisory
       const add = el("button", "lg-btn primary", "Add the analyst's views"); add.type = "button";
-      const only = el("button", "lg-btn", "Use the researcher's view only"); only.type = "button";
+      const only = el("button", plain ? "lg-btn primary" : "lg-btn", plain ? "Approve and send to the advisor" : "Use the researcher's view only"); only.type = "button";
+      const rej = el("button", "lg-btn fd-reject", "Reject and close"); rej.type = "button";
       const m = el("span", "fd-msg");
       const go = async (choice) => {
-        if (!ta.value.trim()) { m.textContent = "Write your comment (the directive) first."; m.className = "fd-msg bad"; ta.focus(); return; }
-        if (toV && !toV.check()) { m.textContent = "Choose the advisor who writes the advisory."; m.className = "fd-msg bad"; return; }
-        add.disabled = only.disabled = true;
+        if (!ta.value.trim()) { m.textContent = choice === "reject" ? "Write the reason first." : "Write your comment (the directive) first."; m.className = "fd-msg bad"; ta.focus(); return; }
+        if (choice !== "reject" && toV && !toV.check()) { m.textContent = "Choose the advisor who writes the advisory."; m.className = "fd-msg bad"; return; }
+        add.disabled = only.disabled = rej.disabled = true;
         try {
           const rr = await fetch(`/api/findings/${f.id}/review-decision`, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() },
-            body: JSON.stringify({ choice, text: ta.value.trim(), to: toV ? toV.value() : "" }) });
+            body: JSON.stringify({ choice, text: ta.value.trim(), to: choice !== "reject" && toV ? toV.value() : "" }) });
           const x = await rr.json().catch(() => ({}));
           if (!rr.ok) { m.textContent = x.error || `Not saved (HTTP ${rr.status})`; m.className = "fd-msg bad"; return; }
-          main.replaceChildren(el("p", "fd-empty", "Saved: it goes to the advisor.")); setTimeout(() => location.reload(), 900);
-        } finally { add.disabled = only.disabled = false; }
+          main.replaceChildren(el("p", "fd-empty", choice === "reject" ? "Rejected: the finding is closed." : "Saved: it goes to the advisor.")); setTimeout(() => location.reload(), 900);
+        } finally { add.disabled = only.disabled = rej.disabled = false; }
       };
-      add.addEventListener("click", () => go("both")); only.addEventListener("click", () => go("researcher"));
-      const row = el("div", "fd-decide-row"); row.append(m, only, add);
-      dc.append(el("p", "fd-rv-hint", "It goes to the advisor you choose: they write the advisory and generate the report with the views you chose."),
+      add.addEventListener("click", () => go("both")); only.addEventListener("click", () => go("researcher")); rej.addEventListener("click", () => go("reject"));
+      const row = el("div", "fd-decide-row"); row.append(m, rej, only, ...(plain ? [] : [add]));
+      dc.append(el("p", "fd-rv-hint", plain ? "Approve and it goes to the advisor you choose, who writes the advisory and generates the report; or reject it with the reason (it is closed)."
+                                            : "It goes to the advisor you choose: they write the advisory and generate the report with the views you chose. Or reject it with the reason (it is closed)."),
         ta, ...(toV ? [toV.el] : []), row);
     } else dc.append(el("p", "fd-rv-done wait", "Waiting for management's decision."));
     const back = el("a", `lg-btn ${rv.decision ? "primary" : "sm"}`, "Back to the Findings page"); back.href = `/findings#f${f.id}`; dc.append(back);

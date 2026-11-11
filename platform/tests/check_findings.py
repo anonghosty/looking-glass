@@ -109,11 +109,16 @@ try:
                                                      "finding": {"title": "Second", "to": "lg-check-management"}})
     st, d = call("/api/findings/2/decision", MGMT, "POST", {"decision": "accept", "text": "Generate the advisory for the three operators."},
                  role="management", user="lg-check-management")
-    ok("approving with a comment makes it Approved (no recipient yet)", st == 200 and d["finding"]["status"] == "approved", d.get("error", ""))
-    st, d = call("/api/findings/2/decision", MGMT, "POST", {"decision": "accept", "text": "again"}, role="management", user="lg-check-management")
+    ok("approving needs the analyst it goes to", st == 400, d.get("error", ""))
+    st, d = call("/api/findings/2/decision", MGMT, "POST", {"decision": "accept", "text": "Generate the advisory for the three operators.",
+                                                             "to": "lg-check-analyst"}, role="management", user="lg-check-management")
+    ok("approving with a comment sends it straight to the analyst named", st == 200 and d["finding"]["status"] == "analyst"
+       and A.FINDINGS.get("2").get("assignee") == "lg-check-analyst", d.get("error", ""))
+    st, d = call("/api/findings/2/decision", MGMT, "POST", {"decision": "accept", "text": "again", "to": "lg-check-analyst"},
+                 role="management", user="lg-check-management")
     ok("…once", st == 400)
-    st, d = call("/api/findings/2/status", MGMT, "POST", {"status": "analyst", "comment": "", "to": "lg-check-analyst"}, role="management", user="lg-check-management")
-    ok("moving it on hands it to the analyst named", st == 200 and d["finding"]["status"] == "analyst" and d["finding"]["assignee"] == "lg-check-analyst")
+    st, d = call("/api/findings/2/decision", MGMT, "POST", {"decision": "reject", "text": "x"}, role="management", user="lg-check-management")
+    ok("once it is with the analyst there is nothing left to decide", st == 400 and "not with management" in d.get("error", ""), d.get("error", ""))
     st, d = call("/api/notes", RESEARCHER, "POST", {"section": "infections", "name": "android.badbox2", "text": "Test: third.",
                                                      "finding": {"title": "Third", "to": "lg-check-management"}})
     st, d = call("/api/findings/3/decision", MGMT, "POST", {"decision": "reject", "text": "Not enough evidence."}, role="management", user="lg-check-management")

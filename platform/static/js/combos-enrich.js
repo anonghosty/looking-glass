@@ -145,7 +145,11 @@
     c.classList.add("ce-review");
     // no download here: before the decision it is locked, after it the advisor management chose generates the report
     const dl = document.querySelector(".cb-dl");
-    if (dl) dl.hidden = true;
+    if (dl) dl.hidden = !(rv && rv.decision === "rejected");      // rejected: no advisory, the download is the analyst's again
+    if (rv && rv.decision === "rejected") {
+      c.append(el("h3", null, "Across reports"), el("div", "ce-state todo", `Management rejected finding ${rv.finding}: no advisory. The download is yours again.`));
+      return;
+    }
     c.append(el("h3", null, "Across reports: management decides what the report carries"),
       el("p", rv && rv.decision ? "cb-hint ce-intro hide" : "cb-hint", `These devices also turn up in other reports (${pl(pv.multi_hosts || 0, "device")} in 2+ reports, ${pl(pv.cross_total || 0, "exact pattern")}). ` +
         "The researcher's view is the combination above; the analyst's view is the patterns you tick below. Send them to a manager: they decide whether the report adds your views or uses the researcher's only, and send it to an advisor, who writes the advisory and generates the report."));
@@ -204,12 +208,52 @@
     });
   }
 
+  // no across-report data: the combination still goes to management for the advisory; once sent, the report is the
+  // advisor's (management decides and names them), so the download closes, unless management rejects it
+  function plainSend(job, st, entry, c) {
+    const rv = st.review;
+    const dl = document.querySelector(".cb-dl");
+    const w = el("div", "ce-req ce-req-open ce-plain");
+    w.append(el("b", null, "Send to management for the advisory"));
+    if (rv) {
+      const rejected = rv.decision === "rejected";
+      if (dl) dl.hidden = !rejected;
+      const s = el("div", `ce-state ${rv.decision ? (rejected ? "todo" : "ok") : "wait"}`);
+      if (!rv.decision) { s.append(el("b", null, `Waiting for management's decision on finding ${rv.finding}`), document.createTextNode(" · ")); const a = el("a", null, "Open it"); a.href = `/findings#f${rv.finding.slice(1)}`; s.append(a); }
+      else if (rejected) s.append(el("b", null, `Management rejected finding ${rv.finding}`), document.createTextNode(": no advisory; the download is yours again."));
+      else s.append(el("b", null, "Management approved it"), document.createTextNode(` (finding ${rv.finding}): ${rv.advisor || "the advisor management chose"} writes the advisory and generates the report from exactly this search.`));
+      w.append(s); c.append(w); return;
+    }
+    w.append(el("p", "cb-hint", "These devices turn up in no other report, so there are no across-report views to tick. Send the combination to a manager: they approve it and name the advisor who writes the advisory and generates the report from exactly this search, or reject it."));
+    const toM = window.LGPeople ? window.LGPeople.picker("management") : null;
+    const t = el("input", "ac-in"); t.maxLength = 140; t.placeholder = `Title, e.g. ${entry?.code || "this code"}: exposed devices for an advisory`;
+    const n = el("textarea", "ac-in"); n.rows = 3; n.maxLength = 2000; n.placeholder = "Your final comments: why this needs an advisory";
+    const send = el("button", "lg-btn primary", "Send to management"); send.type = "button";
+    const msg = el("div", "cb-hint");
+    w.append(...(toM ? [toM.el] : []), t, n, send, msg);
+    c.append(w);
+    send.addEventListener("click", async () => {
+      if (toM && !toM.check()) { msg.textContent = "Choose the manager it goes to."; return; }
+      if (!t.value.trim()) { msg.textContent = "Give the finding a short title."; return; }
+      send.disabled = true; msg.textContent = "Sending…";
+      try {
+        const r = await post(`/api/combos/search/${job}/review`, { codes: [], title: t.value.trim(), text: n.value.trim(), to: toM ? toM.value() : "" });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) { msg.textContent = d.error || `Refused (HTTP ${r.status})`; send.disabled = false; return; }
+        msg.replaceChildren(document.createTextNode(`Finding ${d.finding} sent to ${d.to}. Once they approve, the advisor they name generates the report. `));
+        const a = el("a", null, "Open it on the Findings page"); a.href = `/findings#f${d.finding.slice(1)}`; msg.append(a);
+        send.hidden = true; if (dl) dl.hidden = true;
+      } catch { msg.textContent = "The connection was interrupted. Try again."; send.disabled = false; }
+    });
+  }
+
   function box(job, s, entry) {
     const c = el("section", "ce-box");
     // the search's own state: across-report data (needs management's decision) or not
     const dl0 = document.querySelector(".cb-dl"); if (dl0) dl0.hidden = false;
     fetch(`/api/combos/search/${job}`, { cache: "no-store" }).then((r) => r.json()).then((st) => {
       if (st.needs_review) { c.replaceChildren(); reviewBox(job, st, entry, c); }
+      else if (!entry || !String(entry.code || "").startsWith("LG-A-")) plainSend(job, st, entry, c);
     }).catch(() => {});
     c.append(el("h3", null, "Across every category"),
       el("p", "cb-hint", `What these ${pl(s.devices, "device")} show in the other categories: the services reports they are in (with their pattern codes), the CVEs and issues on them, the infections they call sinkholes as. Added to this report for its generation.`));

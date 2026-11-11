@@ -139,7 +139,8 @@
       // a review: one global look, not a list of codes (the patterns are summed up in the panel below)
       const rv = f.review, g = el("div", "fd-global");
       g.append(el("span", null, `The researcher's combination ${rv.source} and ${(rv.codes || []).length} across-report pattern${(rv.codes || []).length === 1 ? "" : "s"} the analyst ticked.`));
-      g.append(el("b", `fd-rv-state ${rv.decision || "wait"}`, rv.decision ? (rv.decision === "both" ? "Decided: the analyst's views added" : "Decided: the researcher's view only") : "Waiting for management's decision"));
+      g.append(el("b", `fd-rv-state ${rv.decision || "wait"}`, rv.decision ? (rv.decision === "both" ? "Decided: the analyst's views added" : rv.decision === "rejected" ? "Rejected and closed"
+        : (rv.codes || []).length ? "Decided: the researcher's view only" : "Approved for the advisory") : "Waiting for management's decision"));
       if (rv.decision && data.can_advise && f.open) {
         // the advisor writes the advisory and generates the report on a page of its own
         const p = el("a", "lg-btn sm primary", "Write the advisory"); p.href = `/advisory/${f.id}`;
@@ -186,29 +187,53 @@
     // management decides first: approve with a comment (the directive) → "Approved"; reject with the reason → closed.
     // Who it goes to next is asked when it is moved on.
     // a review: the views and the decision are on the review page (/review/<id>); the card says where it stands
-    if (data.can_decide && f.open && f.status !== "approved" && !f.review) {
+    // only while it is with management and not decided yet: once it is with an analyst, a researcher or an advisor, the
+    // decision was made (or it was never management's to make), so there is nothing to decide
+    const deciding = data.can_decide && f.open && !f.review && (f.status === "management" || f.status === "new")
+      && !(f.history || []).some((h) => h.kind === "decision");
+    if (deciding) {
       const dec = el("div", "fd-decide");
       dec.append(el("b", null, "Decide"),
-        el("small", null, "Approve with your comment (the directive for the report), or reject with the reason (it is closed). After approving, move it on: Looking Glass asks to whom."));
+        el("small", null, "Approve with your comment (the directive) and it goes straight to the analyst you name; or reject with the reason (it is closed)."));
       const dta = el("textarea", "fd-in"); dta.rows = 2; dta.maxLength = 1000;
       dta.placeholder = "Comment: the directive (e.g. generate the advisory for the three operators), or the reason for rejecting";
       const acc = el("button", "lg-btn sm primary", "Approve with this comment"); acc.type = "button";
       const rej = el("button", "lg-btn sm fd-reject", "Reject and close"); rej.type = "button";
       const dmsg = el("span", "fd-msg");
-      const send = async (decision) => {
-        if (!dta.value.trim()) { dmsg.textContent = decision === "accept" ? "Write your comment (the directive) first." : "Write the reason first."; dmsg.className = "fd-msg bad"; dta.focus(); return; }
+      const toBox = el("div", "fd-to"); toBox.hidden = true;
+      const send = async (decision, to) => {
         acc.disabled = rej.disabled = true;
         try {
           const r = await fetch(`/api/findings/${f.id}/decision`, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() },
-            body: JSON.stringify({ decision, text: dta.value.trim() }) });
+            body: JSON.stringify({ decision, text: dta.value.trim(), to: to || "" }) });
           const d = await r.json().catch(() => ({}));
           if (!r.ok) { dmsg.textContent = d.error || `Not saved (HTTP ${r.status})`; dmsg.className = "fd-msg bad"; return; }
           Object.assign(f, d.finding); const n = card(f); c.replaceWith(n); n.classList.add("flash");
         } finally { acc.disabled = rej.disabled = false; }
       };
-      acc.addEventListener("click", () => send("accept")); rej.addEventListener("click", () => send("reject"));
+      const need = (accept) => {
+        if (dta.value.trim()) return true;
+        dmsg.textContent = accept ? "Write your comment (the directive) first." : "Write the reason first."; dmsg.className = "fd-msg bad"; dta.focus(); return false;
+      };
+      // approving: Looking Glass asks which analyst it goes to, and it is sent to them straight away
+      acc.addEventListener("click", () => {
+        dmsg.textContent = "";
+        if (!need(true)) return;
+        const p = window.LGPeople.picker("analyst");
+        const h = el("div", "fd-ask"); h.append(el("b", null, "Looking Glass asks:"), document.createTextNode(` to whom does it go? (${window.LGPeople.label("analyst")})`));
+        const ok = el("button", "lg-btn sm primary", "Approve and send"); ok.type = "button";
+        const cancel = el("button", "lg-btn sm ghost", "Cancel"); cancel.type = "button";
+        ok.addEventListener("click", () => {
+          if (!p.check()) { dmsg.textContent = `Choose ${window.LGPeople.label("analyst")}.`; dmsg.className = "fd-msg bad"; return; }
+          send("accept", p.value());
+        });
+        cancel.addEventListener("click", () => { toBox.hidden = true; toBox.replaceChildren(); });
+        const r2 = el("div", "fd-decide-row"); r2.append(cancel, ok);
+        toBox.replaceChildren(h, p.el, r2); toBox.hidden = false; p.el.querySelector("select")?.focus();
+      });
+      rej.addEventListener("click", () => { dmsg.textContent = ""; if (need(false)) send("reject"); });
       const row = el("div", "fd-decide-row"); row.append(dmsg, rej, acc);
-      dec.append(dta, row);
+      dec.append(dta, row, toBox);
       c.append(dec);
     }
     // move it on
@@ -250,7 +275,10 @@
       else send("");
     });
     mv.append(sel, com, go, msg);
-    c.append(mv, toBox);
+    // no free "Move it on": the flow moves a finding by its own steps (sent to a manager, management's decision to the
+    // analyst named, the analyst's request, management's decision to the advisor, the advisory sent). Only a finding
+    // approved before that rule, which still waits for its analyst, keeps the bar
+    if (!deciding && f.status === "approved" && data.can_decide) c.append(mv, toBox);
     return c;
   }
   for (const b of document.querySelectorAll(".fd-tabs button")) b.addEventListener("click", () => {

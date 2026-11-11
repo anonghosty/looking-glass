@@ -65,9 +65,16 @@ def install(app, ctx):
                           "advisor": ctx["people_name"](review["assignee"]) if rv.get("decision") and review.get("assignee") else ""}
                          if review else None)
 
+    def sent_review(job):
+        """The review this analyst already sent on this combination (with or without across-report patterns), else None."""
+        return F.review_for(job["inputs"][0]["code"], job["user"], False)
+
     def before_package(job):
         """After the search, before the report is made: the across-report views, and whether management decided."""
         entry = job["inputs"][0]
+        rv0 = sent_review(job) if entry.get("kind") != "a" else None
+        if rv0:                                          # already sent to management: the page shows where it stands
+            apply(job, rv0)
         if entry.get("kind") == "a" or not ctx.get("cross"):
             return
         hs = hosts_of(job)
@@ -89,13 +96,16 @@ def install(app, ctx):
             apply(job, F.review_for(entry["code"], job["user"], False))
 
     def review_gate(job):
-        """(allowed, why) for a download; once management decided, the report is made again with the chosen views."""
-        if not job.get("needs_review"):
-            return True, ""
+        """(allowed, why) for a download: open until the combination is sent to management; then the report is the
+        advisor's, once management decided (a rejected one opens again: there is no advisory)."""
         entry = job["inputs"][0]
         rv = F.review_for(entry["code"], user()[0], False)
+        if not job.get("needs_review") and not rv:
+            return True, ""
         if not rv:
             return False, "These devices also turn up in other reports: tick the across-report patterns that matter and send them to management first."
+        if rv["review"].get("decision") == "rejected":
+            return True, ""
         if not rv["review"].get("decision"):
             return False, f"Waiting for management's decision on finding #{rv['id']}: the report follows it."
         # decided: the advisor management chose writes the advisory and generates the report (advisory.py), from
@@ -143,6 +153,8 @@ def install(app, ctx):
         rv = x["review"]
         if not rv.get("decision"):
             return None, "Management has not decided yet."
+        if rv["decision"] == "rejected":
+            return None, "Management rejected it: there is no report to generate."
         try:
             with open(kept_path(fid), encoding="utf-8") as fh:
                 kept = json.load(fh)
@@ -257,12 +269,16 @@ def install(app, ctx):
             return jsonify(error="This search has expired (finished searches are kept for an hour): run it again."), 404
         prev = j.get("preview") or {}
         avail = {x["code"]: x for x in prev.get("cross") or []}
-        if not avail:
-            return jsonify(error="These devices turn up in no other report: there is nothing for management to decide."), 400
+        if j["inputs"][0].get("kind") == "a":
+            return jsonify(error="An analyst code is already on its own finding."), 400
+        prior = sent_review(j)
+        if prior and (prior["review"].get("decision") or "") != "rejected":
+            return jsonify(error=f"This combination was already sent to management: see finding #{prior['id']}."), 409
         b = request.get_json(silent=True) or {}
         codes = [c for c in dict.fromkeys(str(c).strip().upper() for c in (b.get("codes") or [])) if c in avail][:20]
-        if not codes:
+        if avail and not codes:
             return jsonify(error="Tick at least one across-report pattern to send."), 400
+        # no across-report data: the combination goes to management as it is (the researcher's view), for the advisory
         title = str(b.get("title") or "").strip()[:140]
         text = str(b.get("text") or "").replace("\r", "").strip()[:2000]
         if not title:

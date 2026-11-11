@@ -145,7 +145,8 @@ class Findings:
                     "title": title[:MAX_TITLE], "text": text, "codes": [code] + [c for c in review.get("codes", []) if c != code],
                     "user": user, "role": role, "at": now, "status": "management", "review": dict(review, decision=None),
                     "history": [{"status": "management", "user": user, "role": role, "at": now, "to": to,
-                                 "comment": f"Across-report views for {code}: {len(review.get('codes', []))} pattern(s) ticked."}]}
+                                 "comment": (f"Across-report views for {code}: {len(review.get('codes', []))} pattern(s) ticked." if review.get("codes")
+                                             else f"{code} for the advisory: no across-report data (the researcher's view).")}]}
             self._join(item, to)
             self.data["items"][fid] = item
             self._save()
@@ -161,7 +162,15 @@ class Findings:
                 return None, "No such finding."
             if item["review"].get("decision"):
                 return None, "Already decided."
-            item["review"].update(decision=choice, by=user, at=round(time.time(), 3), comment=text[:MAX_COMMENT])
+            if choice == "both" and not item["review"].get("codes"):
+                choice = "researcher"          # sent without across-report patterns: there is no analyst's view to add
+            item["review"].update(decision="rejected" if choice == "reject" else choice, by=user, at=round(time.time(), 3), comment=text[:MAX_COMMENT])
+            if choice == "reject":             # rejected: closed, with the reason; no advisory
+                item["status"] = "closed"
+                item["history"].append({"status": "closed", "kind": "decision", "decision": "rejected", "user": user, "role": role,
+                                        "at": round(time.time(), 3), "to": "", "comment": text[:MAX_COMMENT]})
+                self._save()
+                return item, ""
             item["status"] = "advisor"
             item["history"].append({"status": "advisor", "kind": "decision", "decision": "accepted", "user": user, "role": role,
                                     "at": round(time.time(), 3), "to": to,
@@ -194,10 +203,16 @@ class Findings:
             item = self.data["items"].get(str(fid))
             if not item:
                 return None, "No such finding."
+            back = None
             if none_found:
                 item["status"] = "closed"
+            elif item.get("origin") == "analyst" and item["status"] == "researcher" and user != item["user"]:
+                # the researcher answers the analyst's code: it goes back to the analyst who asked, with the codes
+                back = item["user"]
+                item["status"] = "analyst"
+                self._join(item, back)
             h = {"status": item["status"], "kind": "reply", "user": user, "role": role, "at": round(time.time(), 3),
-                 "comment": text[:MAX_COMMENT], "codes": list(codes)}
+                 "comment": text[:MAX_COMMENT], "codes": list(codes), "to": back or ""}
             if none_found:
                 h["none_found"] = True
             item["history"].append(h)
@@ -205,8 +220,9 @@ class Findings:
             return item, ""
 
     def decide(self, fid, accept, text, user, role, to=None):
-        """Management's decision on a finding, first: approved, with its comment (the directive; then "Move it on" asks
-        to whom it goes), or rejected, with the reason (it is closed). Kept in the history as a decision."""
+        """Management's decision on a finding: approved, with its comment (the directive), going straight to the analyst
+        named (`to`; status "With the analyst"), or rejected, with the reason (it is closed). Kept in the history as a
+        decision. (Without `to`, an approval stays "Approved", as findings approved before this rule were.)"""
         with self.lock:
             self._load()
             item = self.data["items"].get(str(fid))
@@ -216,7 +232,9 @@ class Findings:
                 return None, "This finding is no longer open."
             if item["status"] == "approved":
                 return None, "It is already approved: move it on to the person it goes to."
-            item["status"] = "approved" if accept else "closed"
+            if item["status"] not in ("new", "management"):
+                return None, "It is not with management: there is nothing to decide."
+            item["status"] = ("analyst" if to else "approved") if accept else "closed"
             item["history"].append({"status": item["status"], "kind": "decision", "decision": "accepted" if accept else "rejected",
                                     "user": user, "role": role, "at": round(time.time(), 3), "comment": text[:MAX_COMMENT], "to": to or ""})
             self._join(item, to if accept else None)
@@ -354,8 +372,8 @@ def install(app, ctx):
 
     @app.route("/api/findings/<fid>/decision", methods=["POST"])
     def api_findings_decision(fid):
-        """Management decides first: approves a finding with a comment (the directive), or rejects it with the reason (it
-        is closed). Who it then goes to is asked when it is moved on."""
+        """Management decides: approves a finding with a comment (the directive) and it goes straight to the analyst named
+        (`to`), or rejects it with the reason (it is closed)."""
         if not (hp("management") or hp("settings")):
             return jsonify(error="Management decides on findings."), 403
         if not ctx["csrf_ok"]():
@@ -371,8 +389,13 @@ def install(app, ctx):
             return jsonify(error="Give your comment (the directive)." if accept else "Give the reason for rejecting it."), 400
         if not in_channel(fid):
             return jsonify(error="No such finding."), 404
+        to = None
+        if accept:
+            to, err = f.recipient("analyst", b.get("to"))
+            if not to:
+                return jsonify(error=err), 400
         user, role = me()
-        item, err = f.decide(fid, accept, text, user, role)
+        item, err = f.decide(fid, accept, text, user, role, to)
         if not item:
             return jsonify(error=err), 404 if "No such" in err else 400
         ctx["audit"].add("finding_decision", user=user, target=f"#{fid} {item['name'][:60]}",
@@ -392,14 +415,16 @@ def install(app, ctx):
             return jsonify(error="No such finding."), 404
         b = request.get_json(silent=True) or {}
         choice = b.get("choice")
-        if choice not in ("both", "researcher"):
-            return jsonify(error="Add the analyst's views, or use the researcher's view only."), 400
+        if choice not in ("both", "researcher", "reject"):
+            return jsonify(error="Add the analyst's views, use the researcher's view only, or reject it."), 400
         text = str(b.get("text") or "").replace("\r", "").strip()[:MAX_COMMENT]
         if not text:
-            return jsonify(error="Give your comment (the directive for the report)."), 400
-        to, err = f.recipient("advisor", b.get("to"))      # the advisor who writes the advisory and generates the report
-        if not to:
-            return jsonify(error=err), 400
+            return jsonify(error="Give the reason for rejecting it." if choice == "reject" else "Give your comment (the directive for the report)."), 400
+        to = None
+        if choice != "reject":
+            to, err = f.recipient("advisor", b.get("to"))      # the advisor who writes the advisory and generates the report
+            if not to:
+                return jsonify(error=err), 400
         user, role = me()
         item, err = f.decide_review(fid, choice, text, user, role, to)
         if not item:

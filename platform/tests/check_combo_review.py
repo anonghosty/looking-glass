@@ -236,6 +236,49 @@ try:
             fh.write(pdf)
     ok("every step is in the audit log", {"combo_review_sent", "finding_review_decision", "advisory_saved", "advisory_sent", "organisation_set"} <= set(audited),
        ", ".join(sorted(set(audited))))
+
+    print("A combination without across-report data still goes to management for the advisory")
+    def plain(jid_, user_):
+        """The search as if its devices turned up in no other report."""
+        with A.app.test_request_context("/"):
+            g.user = {"user": user_, "role": "analyst", "perms": ANALYST}
+            j_ = book.own_job(jid_)
+            j_["preview"], j_["needs_review"], j_["review"] = {"cross": []}, False, None
+    jid3, _ = search(code, user="lg-plain-analyst")
+    plain(jid3, "lg-plain-analyst")
+    PA = dict(user="lg-plain-analyst")
+    st, z3 = call(f"/api/combos/search/{jid3}/download", ANALYST, raw=True, **PA)
+    ok("before it is sent, the analyst's download is open", st == 200)
+    st, d = call(f"/api/combos/search/{jid3}/review", ANALYST, "POST", {"codes": [], "title": "Exposed routers", "text": "Needs an advisory.",
+                                                                       "to": "lg-check-management"}, **PA)
+    fid3 = (d.get("finding") or "#0")[1:]
+    ok("the analyst sends it to the manager named, without patterns", st == 200 and d.get("codes") == [], d.get("error", ""))
+    st, d = call(f"/api/combos/search/{jid3}/review", ANALYST, "POST", {"codes": [], "title": "again", "to": "lg-check-management"}, **PA)
+    ok("…once", st == 409)
+    st, d = call(f"/api/combos/search/{jid3}/download", ANALYST, **PA)
+    ok("…and the download closes while management decides", st == 409 and "Waiting" in d.get("error", ""), d.get("error", ""))
+    st, d = call(f"/api/findings/{fid3}/review-decision", MGMT, "POST", {"choice": "both", "text": "Write it up.", "to": "lg-check-advisor"},
+                 role="management", user="lg-check-management")
+    ok("management approves it to the advisor named (the researcher's view: there is no analyst's view to add)", st == 200
+       and d["finding"]["status"] == "advisor" and d["finding"]["review"]["decision"] == "researcher", d.get("error", ""))
+    st, d = call(f"/api/combos/search/{jid3}/download", ANALYST, **PA)
+    ok("…the analyst's download stays closed: the advisor generates it", st == 409 and "advisory" in d.get("error", ""))
+    st, a = call(f"/api/advisory/{fid3}", ADVISOR, **ADV)
+    ok("the advisor opens its advisory", st == 200, a.get("error", ""))
+    st, pdf = call(f"/advisory/{fid3}/report?as=pdf", ADVISOR, raw=True, **ADV)
+    ok("…and generates its report from the kept search", st == 200 and pdf[:4] == b"%PDF", str(pdf)[:120] if st != 200 else "")
+    jid4, _ = search(code, user="lg-plain2-analyst")
+    plain(jid4, "lg-plain2-analyst")
+    P2 = dict(user="lg-plain2-analyst")
+    st, d = call(f"/api/combos/search/{jid4}/review", ANALYST, "POST", {"codes": [], "title": "Maybe", "to": "lg-check-management"}, **P2)
+    fid4 = (d.get("finding") or "#0")[1:]
+    st, d = call(f"/api/findings/{fid4}/review-decision", MGMT, "POST", {"choice": "reject", "text": "Not for an advisory."},
+                 role="management", user="lg-check-management")
+    ok("management rejects one with the reason: it is closed", st == 200 and d["finding"]["status"] == "closed", d.get("error", ""))
+    st, _ = call(f"/api/combos/search/{jid4}/download", ANALYST, raw=True, **P2)
+    ok("…and the analyst's download opens again", st == 200)
+    st, _ = call(f"/api/advisory/{fid4}", ADVISOR, **ADV)
+    ok("…with no advisory to write", st in (404, 409))
 finally:
     for jid in jids:
         for s_ in (".zip", ".json"):
@@ -244,7 +287,7 @@ finally:
     audit.add = real_add
     book.review_paths["store"] = real_store
     A.ADVISORIES.dir, A.ORG.path = real_adv, real_org
-    for n in ("review1", "review2"):
+    for n in (f"review{i}" for i in range(1, 10)):
         for s_ in (".zip", ".json"):
             try: os.remove(os.path.join(A.BASE_DIR, "data", "combo_exports", n + s_))
             except OSError: pass

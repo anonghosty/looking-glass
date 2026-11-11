@@ -94,9 +94,12 @@ try:
     st, _ = call(f"/api/combo-codes/{code}", ANALYST, user="lg-outsider")
     ok("an analyst outside the channel cannot look the code up", st == 404)
     reply_code = v["names"][0]["combinations"][0]["code"]
-    st, r = call("/api/findings/1/reply", RESEARCHER, "POST", {"text": "Shares the C2 with another family.", "codes": [reply_code]}, role="researcher")
+    st, r = call("/api/findings/1/reply", RESEARCHER, "POST", {"text": "Shares the C2 with another family.", "codes": [reply_code]},
+                 role="researcher", user="lg-check-researcher")
     ok("the researcher replies on the finding with a code", st == 200 and r["finding"]["history"][-1]["kind"] == "reply"
        and r["finding"]["history"][-1]["codes"][0]["code"] == reply_code)
+    ok("…and it goes back to the analyst who asked", r["finding"]["status"] == "analyst"
+       and A.FINDINGS.get("1").get("assignee") == A.FINDINGS.get("1")["user"], r["finding"]["status"])
     st, r = call("/api/findings/1/reply", RESEARCHER, "POST", {"text": "x", "codes": ["LG-C-00000000"]}, role="researcher")
     ok("an unknown code in a reply is refused", st == 400)
     print("Management filters the Executive portal by it")

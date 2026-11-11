@@ -254,7 +254,7 @@
     if (d.finding) {
       const rp = el("section", "ax-reply");
       rp.append(el("h2", null, `Reply on finding ${d.finding.number}`),
-        el("p", "ax-hint", "Your answer goes into the finding's history, with the ticked codes: the analyst pulls exactly those devices, management follows both sides."));
+        el("p", "ax-hint", "Your answer goes into the finding's history, with the ticked codes, and the finding goes back to the analyst who asked: they pull exactly those devices on the Combinations page."));
       pickedBox = el("div", "ax-picked"); rp.append(pickedBox); drawPicked();
       const ta = el("textarea", "ax-in"); ta.rows = 4; ta.maxLength = 1000; ta.placeholder = "What did you find? e.g. both infections share one C2 domain; the user agent is new; definition added";
       // "nothing of interest": answers the request and closes it, so open requests do not pile up

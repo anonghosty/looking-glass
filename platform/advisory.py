@@ -179,7 +179,7 @@ def install(app, ctx):
     def ready(x):
         """An advisory can be written once management decided and sent it to an advisor."""
         if x.get("review"):
-            return bool(x["review"].get("decision"))
+            return x["review"].get("decision") in ("both", "researcher")      # a rejected one has no advisory
         return x["status"] in ("advisor", "advisory") or any(h.get("status") == "advisor" for h in x.get("history") or [])
 
     # ---------------- what fills in on its own
