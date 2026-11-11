@@ -2,7 +2,11 @@
 records per report (extracted_date on the day), total, hosts, and that demo mode hides IP addresses.
 
 Usage: .venv/bin/python tests/verify_services.py [YYYY-MM-DD]   (default: yesterday UTC). Read-only.
+Exit code: 0 everything matches, 1 any mismatch or an address shown in demo mode (so tests/run_all_checks.sh reports
+it), 77 skipped (no services data for the day yet). Before 2026-11-11 it always exited 0, and its demo check still
+expected the old x.161.x.34 masking; masked views now show "Host <reference>" (host_label.py).
 """
+import ipaddress
 import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import lgauth  # noqa: E402,F401  local API login (automation key)
 import json
@@ -51,10 +55,29 @@ for name in sorted(app_rows):
         bad += 1
         print(f"  MISMATCH {name}: MongoDB {n}, platform {app_rows[name]}")
 stats = get(f"/api/svc/stats?at={at}")
+if not total_db and not stats["total"]:
+    print(f"SKIPPED: no services records for {day} yet")
+    sys.exit(77)
 print(f"{day}: {len(app_rows)} reports, {sum(1 for v in app_rows.values() if v)} with data, mismatching reports: {bad}")
-print(f"records: MongoDB {total_db:,} · platform {stats['total']:,} · {'match' if total_db == stats['total'] else 'DIFFERENT'}")
-print(f"hosts:   MongoDB {len(ips - {''}):,} · platform {stats['hosts']:,} · {'match' if len(ips - {''}) == stats['hosts'] else 'DIFFERENT'}")
+rec_ok, host_ok = total_db == stats["total"], len(ips - {""}) == stats["hosts"]
+print(f"records: MongoDB {total_db:,} · platform {stats['total']:,} · {'match' if rec_ok else 'DIFFERENT'}")
+print(f"hosts:   MongoDB {len(ips - {''}):,} · platform {stats['hosts']:,} · {'match' if host_ok else 'DIFFERENT'}")
 demo = get(f"/api/svc/events?from={start.isoformat().replace('+00:00', 'Z')}&to={(start + timedelta(minutes=30)).isoformat().replace('+00:00', 'Z')}&demo=1")
-import re as _re
-leak = [e["ip"] for e in demo["events"] if not _re.fullmatch(r"x\.\d{1,3}\.x\.\d{1,3}|x:[0-9a-f]{4}:x:x:x:x:x:[0-9a-f]{4}", e["ip"])]
-print(f"demo mode: {len(demo['events'])} records checked, unmasked IPs: {len(leak)}")
+
+
+def shows_address(v):
+    """A real address, whole or in part, where demo mode must show only an opaque label."""
+    v = str(v or "")
+    try:
+        ipaddress.ip_address(v)
+        return True
+    except ValueError:
+        return bool(re.search(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b|\bx\.\d{1,3}\.x\.\d{1,3}\b", v))
+
+
+leak = [e for e in demo["events"] if shows_address(e.get("ip"))]
+labels = sum(1 for e in demo["events"] if str(e.get("ip") or "").startswith("Host "))
+print(f"demo mode: {len(demo['events'])} records checked, shown as host labels: {labels}, addresses shown: {len(leak)}")
+problems = bad + (not rec_ok) + (not host_ok) + bool(leak) + (labels != len(demo["events"]))
+print("ALL MATCH" if not problems else f"{problems} PROBLEM(S)")
+sys.exit(1 if problems else 0)

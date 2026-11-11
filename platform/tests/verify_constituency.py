@@ -2,6 +2,8 @@
 not counted here): every count is compared with MongoDB directly. Read-only.
 
 Usage: .venv/bin/python tests/verify_constituency.py [YYYY-MM-DD]   (default: yesterday UTC)
+Exit code: 0 both platforms match MongoDB, 1 either differs (so tests/run_all_checks.sh reports it), 77 skipped (no
+constituency networks set, or no data for the day yet). Before 2026-11-11 it always exited 0.
 """
 import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import lgauth  # noqa: E402,F401  local API login (automation key)
@@ -25,7 +27,10 @@ client = MongoClient(host=os.environ["MONGO_HOST"], port=int(os.environ.get("MON
 db = client[os.environ["MONGO_DB"]]
 st = json.load(open(os.path.join(os.path.dirname(__file__), "..", "data", "settings.json")))
 asns = {str(a) for a in st["networks"]}
-print(f"constituency: {sorted(asns)} ranges {st['cidrs']}")
+if not asns:
+    print("SKIPPED: no constituency networks set in Settings")
+    sys.exit(77)
+print(f"constituency: {len(asns)} network(s), {len(st['cidrs'])} range(s)")
 
 
 def in_day(d):
@@ -59,4 +64,10 @@ for r in get(f"/api/svc/facets?at={at}")["reports"]:
             svc_expected += 1
 svc = get(f"/api/svc/stats?at={at}&n=200")
 print(f"services: MongoDB {svc_expected:,} · platform {svc['total']:,} · {'match' if svc['total'] == svc_expected else 'DIFFERENT'}")
-print("services networks shown:", [r["label"] for r in svc["breakdowns"]["network"]])
+print("services networks shown:", len(svc["breakdowns"]["network"]))
+if not comms_expected and not comms and not svc_expected and not svc["total"]:
+    print(f"SKIPPED: no records for {day} yet")
+    sys.exit(77)
+problems = (comms != comms_expected) + (svc["total"] != svc_expected)
+print("ALL MATCH" if not problems else f"{problems} PLATFORM(S) DIFFERENT")
+sys.exit(1 if problems else 0)

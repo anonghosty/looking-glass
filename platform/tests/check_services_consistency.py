@@ -3,6 +3,8 @@ endpoint must agree (stats, analysis, regions, replayed, stream over the whole d
 demo mode. Read-only; runs against the live service.
 
 Usage: .venv/bin/python tests/check_services_consistency.py [YYYY-MM-DD]   (default: yesterday UTC)
+Exit code: 0 all consistent, 1 any mismatch (so tests/run_all_checks.sh reports it), 77 skipped (no services data
+for the day yet, e.g. a fresh install). Before 2026-11-11 it printed FAIL lines but always exited 0.
 """
 import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import lgauth  # noqa: E402,F401  local API login (automation key)
@@ -69,4 +71,8 @@ for demo in (False, True):
         fails += bool(bad)
         print(f"{status} {'demo ' if demo else '     '}{label:55s} records {s['total']:>6} hosts {s['hosts']:>6} reports {s['services']:>3}"
               + ("" if not bad else f"   mismatch: {bad}"))
+        if not demo and not combo and not s["total"]:
+            print(f"SKIPPED: no services records for {day} yet")
+            sys.exit(77)
 print("\nALL CONSISTENT" if not fails else f"\n{fails} INCONSISTENT")
+sys.exit(1 if fails else 0)
