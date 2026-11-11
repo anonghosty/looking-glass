@@ -18,7 +18,7 @@
   <header class="hud">
     <div class="hud-left">
       <a class="brand-btn" href="/?intro=1" aria-label="Open the Looking Glass overview"><img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32"></a>
-      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Admin · users, sessions, roles and audit</span></div></div>
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Admin · users and roles</span></div></div>
     </div>
     <div class="hud-right">
       {% set nav_here = "admin" %}{% set nav_go = false %}{% include "_page_nav.html" %}
@@ -26,32 +26,29 @@
   </header>
 
   <main class="st-main">
+    {% if "users" in lg_perms %}
+    <section class="st-card peace-card" id="peaceCard">
+      <div class="peace-row">
+        <div class="peace-text"><h2>Peace of mind <span class="st-for">just for you</span></h2>
+          <p class="st-hint">Tick it to step out of the platforms and the work on findings: you keep Admin, the audit log and Settings,
+            and no findings notification comes in. Untick it to have everything back. Only for your own account; it is in the audit log.</p></div>
+        <label class="peace-switch"><input type="checkbox" id="peaceOn"{% if lg_peace %} checked{% endif %}><span class="peace-track"><span class="peace-knob"></span></span>
+          <b id="peaceState">{{ "On" if lg_peace else "Off" }}</b></label>
+      </div>
+      <span class="muted" id="peaceMsg" role="status"></span>
+    </section>
+    {% endif %}
     <div class="seg adm-tabs" role="tablist">
-      {% if "users" in lg_perms %}<button type="button" role="tab" data-tab="users" aria-pressed="true">Users <span class="adm-badge" id="pendingBadge" hidden></span></button>
-      <button type="button" role="tab" data-tab="sessions" aria-pressed="false">Sessions</button>{% endif %}
-      {% if "audit" in lg_perms %}<button type="button" role="tab" data-tab="audit" aria-pressed="{{ 'false' if 'users' in lg_perms else 'true' }}">Audit log</button>{% endif %}
+      {% if "users" in lg_perms %}<button type="button" role="tab" data-tab="users" aria-pressed="true">Users <span class="adm-badge" id="pendingBadge" hidden></span></button>{% endif %}
       {% if "users" in lg_perms %}<button type="button" role="tab" data-tab="roles" aria-pressed="false">Roles &amp; permissions</button>{% endif %}
     </div>
     <div class="st-banner" id="banner" role="status" hidden></div>
 
     <section class="st-card adm-pane" id="pane-users" hidden>
       <h2>Users</h2>
+      <div class="st-loading" id="adLoading">Opening the accounts and their roles…</div>
       <div class="table-wrap"><table class="hosts adm-table" id="usersTable"><thead><tr>
         <th>Name</th><th>Status</th><th>Role</th><th>MFA</th><th>Registered</th><th>Last login</th><th>Sessions</th><th></th></tr></thead><tbody></tbody></table></div>
-    </section>
-
-    <section class="st-card adm-pane" id="pane-sessions" hidden>
-      <h2>Active sessions</h2>
-      <div class="table-wrap"><table class="hosts adm-table" id="sessionsTable"><thead><tr>
-        <th>User</th><th>Address</th><th>Location</th><th>Browser</th><th>Type</th><th>Started</th><th>Last activity</th><th></th></tr></thead><tbody></tbody></table></div>
-    </section>
-
-    <section class="st-card adm-pane" id="pane-audit" hidden>
-      <h2>Audit log</h2>
-      <div class="st-row st-tools"><input type="search" class="search" id="auditSearch" placeholder="Search events, users, addresses" autocomplete="off"><label class="check-row adm-tests" title="The security test (run by the installer and security_testing/security_retest.py) signs in with temporary lg-selftest accounts, fails on purpose and simulates attacks. Its events stay in the log; tick to show them."><input type="checkbox" id="auditTests"> <span>Show self-test events</span></label><span class="muted" id="auditCount"></span></div>
-      <div class="table-wrap"><table class="hosts adm-table" id="auditTable"><thead><tr>
-        <th>Time (UTC)</th><th>Event</th><th>By</th><th>Account</th><th>Address</th><th>Location</th><th>Browser</th><th>Detail</th></tr></thead><tbody></tbody></table></div>
-      <button class="pill-btn" id="auditMore" type="button" hidden>Show more</button>
     </section>
 
     <section class="st-card adm-pane" id="pane-roles" hidden>
@@ -66,6 +63,8 @@
   </main>
   <script src="{{ url_for('static', filename='js/lg-select.js') }}"></script>
   <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/notifications.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/peace.js') }}"></script>
   <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
 </body>
 </html>

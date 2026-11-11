@@ -2723,6 +2723,17 @@ def _site_demo():
 
 
 import advisory as _advisory  # noqa: E402
+import audit_page as _audit_page  # noqa: E402
+_audit_page.install(app, {"has_perm": AUTH["has_perm"]})     # the audit log, a page of its own
+import peace as _peace  # noqa: E402
+PEACE = _peace.install(app, {"base_dir": BASE_DIR, "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"], "audit": AUTH["audit"],
+                             "role_perms": lambda role: AUTH["roles"].perms(role or "")})   # an admin's "Peace of mind"
+import overview as _overview  # noqa: E402
+_overview.install(app, {"has_perm": AUTH["has_perm"]})     # the Overview page of every role
+import notifications as _notifications  # noqa: E402
+NOTIFS = _notifications.install(app, {"base_dir": BASE_DIR, "findings": FINDINGS, "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"],
+                                      "people_name": lambda u: people.name(u, ""),
+                                      "labels": lambda s: _findings.LABEL.get(s, s)})
 import tlp as _tlp  # noqa: E402
 _tlp.install(app)               # the Traffic Light Protocol levels, for the Definitions page's card
 ORG = _organisation.install(app, {"base_dir": BASE_DIR, "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"],

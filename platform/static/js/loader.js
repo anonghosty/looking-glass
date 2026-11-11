@@ -100,7 +100,7 @@
   }
   const LABELS = { "/advisory/": "Opening the advisory", "/advisory": "Opening the advisory portal", "/findings": "Opening the findings",
     "/review/": "Opening the review", "/combinations": "Opening the combination search", "/management": "Opening the Executive portal",
-    "/intel/": "Opening the analyst's selection",
+    "/intel/": "Opening the analyst's selection", "/audit": "Opening the audit log", "/overview": "Opening the overview",
     "/services": "Opening publicly accessible / vulnerable services", "/settings": "Opening settings",
     "/definitions": "Opening definitions and intel", "/admin": "Opening administration", "/?intro": "Opening the overview", "/": "Opening reported network communications" };
   const labelFor = (url) => LABELS[Object.keys(LABELS).find((k) => url.startsWith(k) && (k !== "/" || url === "/" || url.startsWith("/?") && !url.startsWith("/?intro")))] || "Opening";
@@ -119,6 +119,9 @@
       let text = null;
       try { text = sessionStorage.getItem("lg.arrive"); sessionStorage.removeItem("lg.arrive"); } catch { /* */ }
       if (!text) return;
+      // a page with its own loading line (st-loading, i-loading, lg-loading) shows that, with the searching logo: the
+      // opening logo again on top of it would look like a second load
+      if (document.querySelector(".st-loading, .i-loading, .lg-loading")) return;
       arrived = Date.now(); show(text);
       arriveTimer = setTimeout(() => window.LGLoader.ready(), calm() ? 0 : 1600);
     },

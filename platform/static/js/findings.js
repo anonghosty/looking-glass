@@ -9,6 +9,11 @@
   let state = "open", data = { findings: [], statuses: [] };
 
   async function load() {
+    // the searching logo whenever the list is read (first open, Open / All, after an action), not only the first time
+    if (!$("fdList").querySelector(".st-loading")) {
+      const w = el("div", "st-loading fd-loading", state === "open" ? "Reading the open findings…" : "Reading every finding…");
+      if (data.findings.length) $("fdList").prepend(w); else $("fdList").replaceChildren(w);
+    }
     const r = await fetch(`/api/findings?state=${state}`, { cache: "no-store" });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { $("fdList").replaceChildren(el("p", "fd-empty", d.error || `Could not load (HTTP ${r.status})`)); return; }

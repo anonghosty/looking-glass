@@ -73,13 +73,23 @@ PERMS = {
 }
 DEFAULT_ROLES = {"external": ["view"], "analyst": ["view", "unmasked", "export", "malpedia"], "researcher": ["definitions", "networks"], "management": ["management"],
                  "advisor": ["advisory"], "admin": list(PERMS)}
-ADVISORY_PATHS = ("/findings", "/api/findings", "/advisory", "/api/advisory", "/api/organisation", "/organisation/logo")    # all the advisor role (no 'view') can open
+ADVISORY_PATHS = ("/findings", "/api/findings", "/advisory", "/api/advisory", "/api/organisation", "/organisation/logo", "/api/notifications", "/overview")    # all the advisor role (no 'view') can open
 DEFINITIONS_PATHS = ("/definitions", "/api/kb/", "/api/networks", "/api/lookups", "/api/intel", "/api/notes", "/api/combo-codes/",
-                     "/findings", "/api/findings", "/intel/")
+                     "/findings", "/api/findings", "/intel/", "/api/notifications", "/overview")
 MANAGEMENT_PATHS = ("/management", "/api/mgmt/", "/api/lookups", "/api/combo-codes/", "/findings", "/api/findings",
-                    "/intel/", "/api/intel/acode/", "/review/", "/api/review/")  # all the management role can open
+                    "/intel/", "/api/intel/acode/", "/review/", "/api/review/", "/api/notifications", "/overview")  # all the management role can open
 MANAGEMENT_ONLY = "management"            # the permission (and role) that cannot be given to any other role   # all a researcher (no 'view') can open
 LOWEST_ROLE = "external"
+# "Peace of mind" (peace.py): an admin who ticks it keeps only the admin and audit duties and Settings; the platforms,
+# the findings, the portals and their notifications are out of their way. Applied to the permissions on every request.
+PEACE_PERMS = {"users", "audit", "settings", "view"}      # view: the platforms' Overview, to keep an eye on the database
+# the work they step out of, by its addresses: the platforms, the findings and the portals (pages and their data)
+PEACE_CLOSED = ("/services", "/findings", "/api/findings", "/advisory", "/api/advisory", "/management", "/api/mgmt/", "/review/",
+                "/api/review/", "/combinations", "/api/combos", "/definitions", "/api/kb/", "/api/notes", "/intel/", "/api/intel",
+                "/api/analyst-codes", "/api/combo-codes/")
+PEACE_PATHS = ("/settings", "/api/settings", "/api/asns/identify", "/api/networks", "/api/clock", "/api/svc/clock",
+               "/api/organisation", "/organisation/logo", "/overview", "/api/peace", "/api/notifications", "/audit")
+PEACE = {"of": lambda user: False}           # peace.py: whether this admin has Peace of mind on
 # what each built-in role is for (shown on the admin page; custom roles are described by their permissions)
 ROLE_INFO = {
     "external": "People outside the security team, such as partners or visitors. They see both platforms with IP addresses, "
@@ -701,12 +711,24 @@ def install(app, base_dir, logger):
                 sessions.end(key=s["key"])
             else:
                 g.user = dict(s, role=u.get("role", LOWEST_ROLE), perms=roles.perms(u.get("role", LOWEST_ROLE)))
+                if "users" in g.user["perms"] and PEACE["of"](s["user"]):
+                    g.user["perms"], g.user["peace"] = set(g.user["perms"]) & PEACE_PERMS, True
                 # long sessions get a new id every 12 hours: a copied cookie stops working on its own
                 if s.get("persist") and _now() - s.get("rotated", s["created"]) > sessions.ROTATE_EVERY:
                     new_tok = sessions.rotate(s["key"])
                     if new_tok:
                         g.rotated_token, g.user["key"] = new_tok, _h(new_tok)
-                if not p.startswith(("/api/me", "/admin", "/api/admin")) and "view" not in g.user["perms"]:
+                # Peace of mind: Admin, the audit log, Settings and the platforms' Overview (to keep an eye on the database);
+                # the platforms themselves, the findings and the portals are closed, pages and data alike
+                if g.user.get("peace") and not p.startswith(("/api/me", "/admin", "/api/admin", "/audit")):
+                    if p.startswith(PEACE_CLOSED):
+                        if p.startswith("/api/"):
+                            return jsonify(error="Peace of mind is on: Admin, the audit log, Settings and the Overview only."), 403
+                        return redirect("/?intro=1")
+                    if p == "/" and request.args.get("intro") != "1":
+                        return redirect("/?intro=1")           # the Overview, never the map
+                    return None
+                if not p.startswith(("/api/me", "/admin", "/api/admin", "/audit")) and "view" not in g.user["perms"]:
                     # management: only the management portal (the start page sends them there)
                     if MANAGEMENT_ONLY in g.user["perms"] and not ({"definitions", "networks"} & g.user["perms"]):
                         if p.startswith(MANAGEMENT_PATHS):
@@ -737,8 +759,11 @@ def install(app, base_dir, logger):
 
     @app.after_request
     def _no_store(resp):
-        if request.path.startswith(("/api/", "/login", "/register", "/forgot", "/settings", "/admin")):
+        if request.path.startswith(("/api/", "/login", "/register", "/forgot", "/settings", "/admin", "/audit")):
             resp.headers["Cache-Control"] = "no-store"
+        elif resp.mimetype == "text/html" and "Cache-Control" not in resp.headers:
+            # every page: the browser asks again each time, so what it shows is always the page as it is now
+            resp.headers["Cache-Control"] = "no-cache"
         tok = getattr(g, "rotated_token", None)
         if tok:
             s = g.user
@@ -756,7 +781,7 @@ def install(app, base_dir, logger):
     def _user():
         u = getattr(g, "user", None) or {}
         return {"lg_user": u.get("user", ""), "lg_role": u.get("role", ""), "lg_csrf": u.get("csrf") or "",
-                "lg_perms": sorted(u.get("perms", ()))}
+                "lg_perms": sorted(u.get("perms", ())), "lg_peace": bool(u.get("peace"))}
 
     def attempts_msg(base, ip, name):
         n = throttle.left(ip, name)

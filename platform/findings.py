@@ -59,9 +59,10 @@ class Findings:
         return to, ""
 
     @staticmethod
-    def sees(x, user, admin):
-        """Only the people in the channel (and admins); a finding made before channels is open to all, as it was."""
-        return admin or not x.get("participants") or user in x["participants"]
+    def sees(x, user, admin, strict=False):
+        """Only the people in the channel (and admins); a finding made before channels is open to the team roles, as it
+        was, never to the other roles (strict)."""
+        return admin or user in (x.get("participants") or []) or (not x.get("participants") and not strict)
 
     @staticmethod
     def _join(item, to):
@@ -373,10 +374,10 @@ class Findings:
                 # its advisories (advisory.py): reference, organisation, state; the advisor marks a drafted one as sent here
                 "advisories": self.advisories_of(x["id"]) if x.get("review") else []}
 
-    def list(self, open_only, describe=None, user=None, admin=True):
+    def list(self, open_only, describe=None, user=None, admin=True, strict=False):
         with self.lock:
             self._load()
-            items = [x for x in self.data["items"].values() if self.sees(x, user, admin)]
+            items = [x for x in self.data["items"].values() if self.sees(x, user, admin, strict)]
         if open_only:
             # an open case brings all its sub-findings along, the closed ones too: the page folds them into the case
             open_cases = {x["id"] for x in items if x.get("kind") == "case" and x["status"] in OPEN}
@@ -390,9 +391,13 @@ def install(app, ctx):
     f = Findings(os.path.join(ctx["base_dir"], "data", "findings.json"), ctx["people"], ctx.get("logger"))
     hp = ctx["has_perm"]
 
-    def allowed():
-        """Researchers, management, analysts (who see addresses) and admins: no address is ever on the page."""
+    def team():
+        """The roles that work the findings: researchers, management, analysts (who see addresses), advisors and admins."""
         return hp("definitions") or hp("management") or hp("settings") or (hp("unmasked") and hp("export")) or hp("advisory")
+
+    def allowed():
+        """Every role opens the Findings page (the findings whose channel it is in; no address is ever on it)."""
+        return bool((getattr(g, "user", None) or {}).get("user"))
 
     def me():
         u = getattr(g, "user", None) or {}
@@ -404,7 +409,7 @@ def install(app, ctx):
     def in_channel(fid):
         """The finding when this user is in its channel (or an admin), else None: the same answer as an unknown one."""
         x = f.get(fid)
-        return x if x and f.sees(x, me()[0], admin()) else None
+        return x if x and f.sees(x, me()[0], admin(), strict=not team()) else None
 
     @app.route("/api/findings/people")
     def api_findings_people():
@@ -428,7 +433,7 @@ def install(app, ctx):
     def api_findings():
         if not allowed():
             return jsonify(error="Findings are for researchers, management, analysts and admins."), 403
-        items = f.list(request.args.get("state") != "all", ctx["describe"], me()[0], admin())
+        items = f.list(request.args.get("state") != "all", ctx["describe"], me()[0], admin(), strict=not team())
         return jsonify(findings=items, statuses=[{"key": k, "label": v, "open": k in OPEN} for k, v in STATUSES],
                        can_search=bool(hp("unmasked") and hp("export")), can_portal=bool(hp("management")),
                        can_decide=bool(hp("management") or hp("settings")), can_advise=bool(hp("advisory")),

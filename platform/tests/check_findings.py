@@ -78,8 +78,9 @@ try:
         ok(f"{role}: no address anywhere in the answer", not IP_RX.search(json.dumps(d)))
     ok("only roles that see addresses get the Search button", call("/api/findings", ANALYST, role="analyst")[1]["can_search"]
        and not call("/api/findings", MGMT, role="management")[1]["can_search"])
-    st, _ = call("/api/findings", {"view"}, role="external")
-    ok("external: refused", st == 403, f"HTTP {st}")
+    st, d = call("/api/findings", {"view"}, role="external", user="lg-check-external")
+    ok("external opens the Findings page, but sees no finding it is not in (not even one made before channels)",
+       st == 200 and d.get("findings") == [], f"HTTP {st} · {len(d.get('findings') or [])} findings")
     ok("researchers and management can open the page (their allowed paths)", "/findings".startswith(auth.DEFINITIONS_PATHS) and "/api/findings".startswith(auth.MANAGEMENT_PATHS))
     print("Moving it on")
     st, d = call("/api/findings/1/status", MGMT, "POST", {"status": "analyst", "comment": "x"}, role="management", user="lg-check-management")
@@ -96,8 +97,19 @@ try:
     ok("an unknown status is refused", st == 400)
     st, d = call("/api/findings/99/status", ANALYST, "POST", {"status": "closed"}, role="analyst")
     ok("an unknown finding: 404", st == 404)
-    st, d = call("/api/findings/1/status", {"view"}, "POST", {"status": "closed"}, role="external")
-    ok("external cannot move it", st == 403)
+    st, d = call("/api/findings/1/status", {"view"}, "POST", {"status": "closed"}, role="external", user="lg-check-external")
+    ok("external cannot move it (to them it does not exist)", st == 404)
+    with A.FINDINGS.lock:                                 # a finding made before channels: open to the team, never to the others
+        A.FINDINGS._load(); A.FINDINGS.data["items"]["900"] = {"id": "900", "note": None, "section": "infections", "name": "x", "title": "Old",
+                                                               "text": "", "codes": [], "user": "someone", "role": "researcher", "at": 1.0,
+                                                               "status": "new", "history": [{"status": "new", "user": "someone", "role": "researcher",
+                                                                                             "at": 1.0, "comment": ""}]}
+        A.FINDINGS._save()
+    ok("an old finding without a channel: still open to the team", any(f_["id"] == "900" for f_ in call("/api/findings?state=all", MGMT, role="management")[1]["findings"]))
+    ok("…never to the other roles", not call("/api/findings?state=all", {"view"}, role="external", user="lg-check-external")[1]["findings"]
+       and call("/api/findings/900/status", {"view"}, "POST", {"status": "closed"}, role="external", user="lg-check-external")[0] == 404)
+    with A.FINDINGS.lock:
+        A.FINDINGS._load(); A.FINDINGS.data["items"].pop("900", None); A.FINDINGS._save()
     call("/api/findings/1/status", MGMT, "POST", {"status": "closed"}, role="management")
     ok("a closed finding leaves the Open list", not call("/api/findings?state=open", MGMT, role="management")[1]["findings"])
     ok("…and stays in All", len(call("/api/findings?state=all", MGMT, role="management")[1]["findings"]) == 1)

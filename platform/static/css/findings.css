@@ -157,3 +157,4 @@ details.fd-subd > .fd-card.fd-sub > .fd-h { display: none; }          /* the sum
 details.fd-subs-closed { margin-top: 10px; border: 1px dashed var(--border-strong); border-radius: 12px; padding: 2px 6px 6px; }
 details.fd-subs-closed > summary b { font-size: 13px; color: var(--text-2); }
 details.fd-subd[hidden] { display: none; }
+.fd-page { --s-advisor: #5b8def; } .s-advisor { --sc: var(--s-advisor); }

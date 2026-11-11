@@ -13,6 +13,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css" rel="stylesheet" integrity="sha384-GTsgKcJXGSkBp0M68qpxkz9XovzVH0PwSrjYONvkn3tXtySOSq+a14bG2gVJHwQG" crossorigin="anonymous">
   <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/overview.css') }}" rel="stylesheet">
   <script src="{{ url_for('static', filename='js/lg-select.js') }}"></script>
   <script src="{{ url_for('static', filename='js/display.js') }}"></script>
 </head>
@@ -35,9 +36,9 @@
       <div class="intro-nav" role="group" aria-label="Pages">
       {% if "management" in lg_perms %}<a class="intro-gear account-btn" href="/management" title="The management portal (Executive): aggregated dashboard and executive reports"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Executive</span></a>{% endif %}
       {% if "users" in lg_perms or "audit" in lg_perms %}<a class="intro-gear account-btn" href="/admin" title="Users, sessions, roles and audit log"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6zM9 12l2 2 4-4"/></svg><span>Admin</span></a>{% endif %}
-      {% if "settings" in lg_perms or "definitions" in lg_perms %}<a class="intro-gear account-btn" href="/definitions" title="Definitions, Intel gathered, researchers' notes and network names"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15zM21 21l-4.3-4.3M7.5 10.5h6M10.5 7.5v6"/></svg><span>Definitions</span></a>{% endif %}
+      {% if ("settings" in lg_perms or "definitions" in lg_perms) and not lg_peace %}<a class="intro-gear account-btn" href="/definitions" title="Definitions, Intel gathered, researchers' notes and network names"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15zM21 21l-4.3-4.3M7.5 10.5h6M10.5 7.5v6"/></svg><span>Definitions</span></a>{% endif %}
       {% if "unmasked" in lg_perms and "export" in lg_perms %}<a class="intro-gear account-btn" href="/combinations" title="Combination search: paste a researcher's combination code (LG-C-…) to get exactly the devices that carry it, as PDF + CSV"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L11.8 5.8M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.4-1.4"/></svg><span>Combinations</span></a>{% endif %}
-      {% if "definitions" in lg_perms or "management" in lg_perms or "settings" in lg_perms or ("unmasked" in lg_perms and "export" in lg_perms) %}<a class="intro-gear account-btn" href="/findings" title="Findings: researchers' notes the team follows up, from the first look to the advisory"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M5 21V4h11l-1.5 4L16 12H5M5 12"/></svg><span>Findings</span></a>{% endif %}
+      {% if not lg_peace %}<a class="intro-gear account-btn" href="/findings" title="Findings: researchers' notes the team follows up, from the first look to the advisory"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M5 21V4h11l-1.5 4L16 12H5M5 12"/></svg><span>Findings</span></a>{% endif %}
       {% if "settings" in lg_perms %}
       <button type="button" class="intro-gear" id="introSettings" aria-label="Settings: country and constituency for both platforms" title="Settings: country and constituency for both platforms">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
@@ -74,7 +75,7 @@
 
       <div class="intro-tabs" role="tablist" aria-label="Intro sections">
         <button role="tab" aria-selected="true" data-itab="overview">Overview</button>
-        <button role="tab" aria-selected="false" data-itab="glossary">Glossary</button>
+        <button role="tab" aria-selected="false" data-itab="glossary"{% if lg_peace %} hidden{% endif %}>Glossary</button>
       </div>
 
       <div class="intro-pane" id="introOverview">
@@ -111,29 +112,32 @@
           Each platform's own Glossary button shows only its terms and reports. Tip: on a platform, hover over any label with a dotted underline to see its explanation.</p>
       </div>
 
-      <!-- the platform's two tracks: reported communications (available) and exposed services (next phase) -->
-      <div class="intro-tracks">
-        <div class="intro-track live">
-          <div class="it-head"><h2>Reported network communications</h2><span class="it-badge on" id="trackCommsBadge">Available</span></div>
-          <p class="it-desc">Infected devices calling botnet sinkholes, brute-force attempts, scanning and other attacks, as connections from a source to a destination, replayed on the map one day later.</p>
-          <div class="it-meta mono" id="trackCommsMeta"></div>
-          <div class="intro-actions">
-            <button class="intro-cta" id="btnExplore">Explore the platform <span aria-hidden="true">→</span></button>
-            <button class="intro-alt" id="btnExploreDemo">Explore in demo mode</button>
-          </div>
-        </div>
-        <div class="intro-track live">
-          <div class="it-head"><h2>Publicly accessible / vulnerable services</h2><span class="it-badge on" id="trackServicesBadge">Available</span></div>
-          <p class="it-desc">Devices and services in your constituency that anyone on the internet can reach, and the ones with known vulnerabilities: open remote desktop, exposed databases, vulnerable web and SSH servers, routers and misconfigured network services, from Shadowserver's scan reports.</p>
-          <div class="it-meta mono" id="trackServicesMeta"></div>
-          <div class="intro-actions">
-            <a class="intro-cta" id="btnServices" href="/services">Explore the platform <span aria-hidden="true">→</span></a>
-            <a class="intro-alt" id="btnServicesDemo" href="/services?demo=1">Explore in demo mode</a>
-          </div>
-        </div>
-      </div>
-      <div class="intro-foot">Data: The Shadowserver Foundation · all times UTC · demo mode conceals network names, AS numbers and IP addresses
-        · <a class="intro-docs" href="https://looking-glass-gh.readthedocs.io/" target="_blank" rel="noopener">Documentation <span aria-hidden="true">↗</span></a></div>
+      <!-- Your pages: the two platforms first, then every other page this role opens, Findings among them, all alike
+           (_portal_cards.html); the platforms keep their ids (app.js opens the map in place and fills their figures) -->
+      <div class="intro-yours">
+        <h2>Your pages</h2>{% if lg_peace %}<p class="ov-sub ov-peace">Peace of mind is on: Admin, the audit log, Settings and this Overview, to keep an eye on the reports and the database. Turn it off on the Admin page.</p>{% endif %}
+        {% if not lg_peace %}<h3 class="pc-group">The platforms</h3>{% endif %}
+        <div class="portal-cards pc-n2 pc-platforms">
+          <button type="button" class="portal-card pc-map" id="btnExplore"{% if lg_peace %} hidden{% endif %}>
+            <span class="pc-ic"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M3 12h4l3-8 4 16 3-8h4"/></svg></span>
+            <span class="pc-body"><b>Reported network communications</b>
+              <small>Infected devices calling botnet sinkholes and attacks, replayed on the map one day later.</small>
+              <span class="pc-meta mono" id="trackCommsMeta"></span></span>
+            <span class="it-badge on pc-badge" id="trackCommsBadge">Available</span>
+          </button>
+          <a class="portal-card pc-services" id="btnServices" href="/services"{% if lg_peace %} hidden{% endif %}>
+            <span class="pc-ic"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01"/></svg></span>
+            <span class="pc-body"><b>Publicly accessible / vulnerable services</b>
+              <small>What anyone on the internet can reach in the constituency, and what is vulnerable.</small>
+              <span class="pc-meta mono" id="trackServicesMeta"></span></span>
+            <span class="it-badge on pc-badge" id="trackServicesBadge">Available</span>
+          </a>
+        </div>        {#- demo mode is switched on inside each platform (its Demo button); app.js still binds these, so they stay, hidden -#}
+        <div class="pc-demo" hidden><span>Explore in demo mode (network names, AS numbers and addresses concealed):</span>
+          <button type="button" class="intro-alt" id="btnExploreDemo">Network communications</button>
+          <a class="intro-alt" id="btnServicesDemo" href="/services?demo=1">Publicly accessible services</a></div>
+        {% set portal_skip = ["map", "services"] %}{% include "_portal_cards.html" %}
+      </div>      <div class="intro-foot"><a class="intro-docs" href="https://looking-glass-gh.readthedocs.io/" target="_blank" rel="noopener">Documentation <span aria-hidden="true">↗</span></a></div>
     </div>
   </section>
 
@@ -457,6 +461,7 @@
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js" integrity="sha384-Wl62XBVL/js8ZmcbcLnA+s5wPf+GKmdd0ozW/8e1EiW2rTgz4x82hxJCRarBlfMT" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/deck.gl@9.1.14/dist.min.js" integrity="sha384-9Qz9Vg68oxSJ8alpsDVG3eFNLSZ8P16UxKNQyVheKTcnTlbnueGTD7D0MRd6Na0z" crossorigin="anonymous"></script>
   <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/notifications.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/glossary.js') }}"></script>
   <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>

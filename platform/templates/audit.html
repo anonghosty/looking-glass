@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0d">
+  <meta name="csrf-token" content="{{ lg_csrf }}">
+  <meta name="referrer" content="same-origin">
+  <title>Looking Glass · Audit log</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo-mark.svg') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/settings.css') }}" rel="stylesheet">
+</head>
+<body class="settings-page admin-page audit-page" data-perms="{{ lg_perms|join(',') }}">
+  <header class="hud">
+    <div class="hud-left">
+      <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Audit log and sessions · signed in as {{ lg_user }} ({{ lg_role }})</span></div></div>
+    </div>
+    <div class="hud-right">
+      {% set nav_here = "audit" %}{% set nav_go = false %}{% include "_page_nav.html" %}
+    </div>
+  </header>
+  <main class="st-main">
+    <div class="seg adm-tabs" role="tablist">
+      <button type="button" role="tab" data-tab="audit" aria-pressed="true">Audit log</button>
+      {% if "users" in lg_perms %}<button type="button" role="tab" data-tab="sessions" aria-pressed="false">Sessions</button>{% endif %}
+    </div>
+    <div class="st-banner" id="banner" role="status" hidden></div>
+    {% if "users" in lg_perms %}
+    <section class="st-card adm-pane" id="pane-sessions" hidden>
+      <h2>Active sessions</h2>
+      <p class="st-hint">Who is signed in now, from where and with what; end a session to sign it out at once (it is in the audit log).</p>
+      <div class="table-wrap"><table class="hosts adm-table" id="sessionsTable"><thead><tr>
+        <th>User</th><th>Address</th><th>Location</th><th>Browser</th><th>Type</th><th>Started</th><th>Last activity</th><th></th></tr></thead><tbody></tbody></table></div>
+    </section>
+    {% endif %}
+    <section class="st-card adm-pane" id="pane-audit">
+      <h2>Audit log</h2>
+      <p class="st-hint">Who did what and when: sign-ins, account and role changes, settings, exports, findings, decisions and advisories. Read only.</p>
+      <div class="st-row st-tools"><input type="search" class="search" id="auditSearch" placeholder="Search events, users, addresses" autocomplete="off"><label class="check-row adm-tests" title="The security test (run by the installer and security_testing/security_retest.py) signs in with temporary lg-selftest accounts, fails on purpose and simulates attacks. Its events stay in the log; tick to show them."><input type="checkbox" id="auditTests"> <span>Show self-test events</span></label><span class="muted" id="auditCount"></span></div>
+      <div class="st-loading" id="auLoading">Opening the audit log…</div>
+      <div class="table-wrap"><table class="hosts adm-table" id="auditTable"><thead><tr>
+        <th>Time (UTC)</th><th>Event</th><th>By</th><th>Account</th><th>Address</th><th>Location</th><th>Browser</th><th>Detail</th></tr></thead><tbody></tbody></table></div>
+      <button class="pill-btn" id="auditMore" type="button" hidden>Show more</button>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/notifications.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/audit.js') }}"></script>
+</body>
+</html>

@@ -220,3 +220,17 @@ body.settings-page .hud { position: sticky; top: 0; }
 .tlp-level small { font-size: 11.5px; color: var(--muted); line-height: 1.45; }
 .tlp-badge { justify-self: start; padding: 3px 10px; border-radius: 6px; background: #000; font: 700 12.5px "Geist Mono", ui-monospace, monospace; letter-spacing: .02em; }
 .tlp-red { color: #FF2B2B; } .tlp-amber { color: #FFC000; } .tlp-green { color: #33FF00; } .tlp-clear { color: #FFFFFF; }
+
+/* Peace of mind (peace.js), on the Admin page */
+.peace-card { margin-bottom: 14px; }
+.peace-row { display: flex; gap: 16px 24px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.peace-text h2 { margin: 0; } .peace-text .st-hint { margin-bottom: 0; }
+.peace-switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+.peace-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.peace-track { width: 46px; height: 26px; border-radius: 13px; background: #2a2a31; border: 1px solid var(--border-strong); position: relative; transition: background .15s; }
+.peace-knob { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #c9c9d1; transition: transform .15s; }
+.peace-switch input:checked + .peace-track { background: rgba(43, 176, 127, .5); border-color: rgba(43, 176, 127, .8); }
+.peace-switch input:checked + .peace-track .peace-knob { transform: translateX(20px); background: #fff; }
+.peace-switch input:focus-visible + .peace-track { outline: 2px solid #7c9cff; outline-offset: 2px; }
+.peace-switch b { font-size: 13px; color: var(--text); min-width: 26px; }
+.ov-peace { color: #b9f3dc !important; }

@@ -1,0 +1,32 @@
+{#- "Your pages": the pages this role opens, as cards in titled groups (the platforms, the work, administration), each
+    group laid out for its number of cards. Findings is there for every role (not under Peace of mind). Used by the
+    Overview page (overview.html) and the platforms' overview (index.html, which draws the two platform cards itself and
+    sets portal_skip = ["map", "services"]). -#}
+{%- set _skip = portal_skip or [] -%}
+{%- set _cards = [
+  ("platform", "map", "view" in lg_perms and not lg_peace, "/", "Reported network communications", "Infected devices calling botnet sinkholes and attacks, replayed on the map one day later.", "M3 12h4l3-8 4 16 3-8h4"),
+  ("platform", "services", "view" in lg_perms and not lg_peace, "/services", "Publicly accessible / vulnerable services", "What anyone on the internet can reach in the constituency, and what is vulnerable.", "M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01"),
+  ("work", "executive", "management" in lg_perms, "/management", "Executive portal", "The aggregated dashboard and the executive reports: figures, never addresses.", "M4 20V10M10 20V4M16 20v-7M22 20H2"),
+  ("work", "definitions", ("definitions" in lg_perms or "settings" in lg_perms) and not lg_peace, "/definitions", "Definitions", "Names and issues with references, Intel gathered, notes and network names.", "M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15zM21 21l-4.3-4.3M7.5 10.5h6M10.5 7.5v6"),
+  ("work", "combinations", "unmasked" in lg_perms and "export" in lg_perms, "/combinations", "Combinations", "Exactly the devices behind a combination code, sent on to management.", "M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L11.8 5.8M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.4-1.4"),
+  ("work", "advisory", "advisory" in lg_perms, "/advisory", "Advisory portal", "The findings waiting for an advisory, the advisories sent and to whom.", "M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5"),
+  ("work", "findings", not lg_peace, "/findings", "Findings", "Every finding you take part in, from the first look to the advisory.", "M5 21V4h11l-1.5 4L16 12H5M5 12"),
+  ("admin", "settings", "settings" in lg_perms, "/settings", "Settings", "The country, the constituency, the organisation's name and logo.", "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"),
+  ("admin", "admin", "users" in lg_perms, "/admin", "Admin", "Accounts and roles, and your Peace of mind.", "M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6zM9 12l2 2 4-4"),
+  ("admin", "audit", "audit" in lg_perms, "/audit", "Audit log", "Who did what and when, and who is signed in now.", "M8 4h8l3 3v13H5V4h3zM9 10h6M9 14h6M9 18h4"),
+] -%}
+{%- for gkey, gname in [("platform", "The platforms"), ("work", "Your work"), ("admin", "Administration")] %}
+{%- set _g = [] -%}
+{%- for c in _cards if c[0] == gkey and c[2] and c[1] not in _skip %}{% set _ = _g.append(c) %}{% endfor -%}
+{%- if _g %}
+<h3 class="pc-group">{{ gname }}</h3>
+<div class="portal-cards pc-n{{ _g|length }}">
+{%- for g_, key, ok, href, name, text, d in _g %}
+  <a class="portal-card pc-{{ key }}" href="{{ href }}">
+    <span class="pc-ic"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="{{ d }}"/></svg></span>
+    <span class="pc-body"><b>{{ name }}</b><small>{{ text }}</small></span>
+  </a>
+{%- endfor %}
+</div>
+{%- endif %}
+{%- endfor %}

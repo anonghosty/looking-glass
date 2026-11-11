@@ -1,5 +1,5 @@
 /* Looking Glass · admin: users (approve, role, revoke, restore, reset authenticator, kick, delete), live sessions
-   (end one), audit log (search, paging) and roles & permissions. Every change is a JSON POST with the session's CSRF
+   and roles & permissions (the audit log and the live sessions: /audit, audit.js). Every change is a JSON POST with the session's CSRF
    token; the server checks the permission again (auth.py). Data is inserted as text only. */
 (() => {
   "use strict";
@@ -27,7 +27,7 @@
   function show(tab) {
     for (const b of tabs) b.setAttribute("aria-pressed", String(b.dataset.tab === tab));
     for (const p of document.querySelectorAll(".adm-pane")) p.hidden = p.id !== `pane-${tab}`;
-    ({ users: loadUsers, sessions: loadSessions, audit: () => loadAudit(true), roles: loadRoles })[tab]?.();
+    ({ users: loadUsers, roles: loadRoles })[tab]?.();
     try { history.replaceState(null, "", `#${tab}`); } catch { /* */ }
   }
   for (const b of tabs) b.addEventListener("click", () => show(b.dataset.tab));
@@ -36,6 +36,7 @@
   let roleNames = [], ROLE_INFO = {};
   async function loadUsers() {
     let d; try { d = await getJSON("/api/admin/users"); } catch (e) { banner(`Could not load users: ${e.message}`, true); return; }
+    finally { $("adLoading")?.remove(); window.LGLoader?.ready(); }
     roleNames = d.roles; ROLE_INFO = d.info || {};
     drawRoleLegend();
     const pend = d.users.filter((u) => u.status === "pending").length;
@@ -94,57 +95,7 @@
     loadUsers();
   }
 
-  // ---------------- sessions
-  async function loadSessions() {
-    let d; try { d = await getJSON("/api/admin/sessions"); } catch (e) { banner(`Could not load sessions: ${e.message}`, true); return; }
-    const tb = $("sessionsTable").querySelector("tbody"); tb.replaceChildren();
-    if (!d.sessions.length) { const tr = el("tr"); const td = el("td", "muted", "No active sessions."); td.colSpan = 8; tr.append(td); tb.append(tr); }
-    for (const s of d.sessions) {
-      const tr = el("tr");
-      const who = el("td"); who.append(el("b", null, s.user)); if (s.current) who.append(el("span", "adm-you", " (this session)"));
-      const br = el("td", null, shortUA(s.browser)); br.title = s.browser;
-      const end = el("td");
-      if (!s.current) { const b = el("button", "pill-btn warn", "End session"); b.type = "button";
-        b.addEventListener("click", async () => { try { await post(`/api/admin/sessions/${s.id}/end`); banner(`Session of ${s.user} ended.`); } catch (e) { banner(e.message, true); } loadSessions(); });
-        end.append(b); }
-      const type = el("td", "adm-meta"); type.append(el("div", null, s.persist ? "Stay signed in" : "Browser session"), el("div", "muted", `until ${fmtT(s.expires)}`));
-      tr.append(who, el("td", "mono", s.ip), el("td", null, s.location), br, type, el("td", null, fmtT(s.created)), el("td", null, ago(s.idle_s)), end);
-      tb.append(tr);
-    }
-  }
-
-  // ---------------- audit
-  let auditOffset = 0;
-  const EVENT_NAMES = { login: "Logged in", login_failed: "Failed login", login_locked: "Locked out", login_refused: "Login refused", logout: "Logged out",
-    registered: "Account created", mfa_enrolled: "Authenticator set up", recovery_code_used: "Recovery code used", session_misuse: "Session misuse",
-    kicked: "Kicked", user_approve: "Approved", user_role: "Role changed", user_revoke: "Revoked", user_restore: "Restored", user_reset_mfa: "Authenticator reset",
-    user_delete: "Deleted", roles_changed: "Roles changed", settings_changed: "Settings changed", register_limited: "Registration limit",
-    reset_requested: "Password reset requested", reset_failed: "Password reset failed", password_reset: "Password reset", user_allow_reset: "Password reset allowed",
-    networks_identify: "Networks identified", network_edited: "Network name edited", network_type_added: "Network type added",
-    definition_saved: "Definition saved", note_added: "Note added", note_removed: "Note removed", report_pdf: "Report downloaded" };
-  async function loadAudit(reset) {
-    if (reset) auditOffset = 0;
-    const q = encodeURIComponent($("auditSearch").value.trim());
-    const tests = $("auditTests").checked ? 1 : 0;
-    let d; try { d = await getJSON(`/api/admin/audit?limit=200&offset=${auditOffset}&q=${q}&selftests=${tests}`); } catch (e) { banner(`Could not load the audit log: ${e.message}`, true); return; }
-    const tb = $("auditTable").querySelector("tbody"); if (reset) tb.replaceChildren();
-    for (const r of d.rows) {
-      const tr = el("tr", (/failed|locked|misuse|refused|revoke|delete|limited/.test(r.event) ? "adm-alert" : "") + (r.selftest ? " adm-selftest" : ""));
-      if (r.selftest) tr.title = "Made by the built-in security test (temporary lg-selftest accounts)";
-      const br = el("td", null, shortUA(r.ua)); br.title = r.ua;
-      // accounts as "Full Name (username)" (people.py); other targets (AS numbers, issues, reports) as they are
-      tr.append(el("td", "mono", fmtT(r.t)), el("td", null, EVENT_NAMES[r.event] || r.event), el("td", null, r.user_label || r.user || "–"), el("td", null, r.target_label || r.target || "–"),
-        el("td", "mono", r.ip || "–"), el("td", null, r.location || "–"), br, el("td", "adm-detail", r.detail || ""));
-      tb.append(tr);
-    }
-    auditOffset += d.rows.length;
-    $("auditCount").textContent = `${auditOffset.toLocaleString()} of ${d.total.toLocaleString()} events` +
-      (d.selftests_hidden ? ` · ${d.selftests_hidden.toLocaleString()} self-test events hidden` : "");
-    $("auditMore").hidden = auditOffset >= d.total;
-  }
-  let st; $("auditSearch").addEventListener("input", () => { clearTimeout(st); st = setTimeout(() => loadAudit(true), 300); });
-  $("auditMore").addEventListener("click", () => loadAudit(false));
-  $("auditTests").addEventListener("change", () => loadAudit(true));
+  // the audit log and the live sessions are a page of their own (/audit, audit.js)
 
   // ---------------- roles & permissions
   let rolesState = null;
@@ -193,8 +144,9 @@
 
   // ---------------- start
   const first = (location.hash || "").slice(1);
+  if (first === "audit" || first === "sessions") { location.replace(first === "sessions" ? "/audit#sessions" : "/audit"); return; }   // moved to the audit page
   const avail = tabs.map((b) => b.dataset.tab);
   show(avail.includes(first) ? first : avail[0]);
-  setInterval(() => { const t = tabs.find((b) => b.getAttribute("aria-pressed") === "true")?.dataset.tab; if (t === "sessions") loadSessions(); if (t === "users") loadUsers(); }, 30000);
+  setInterval(() => { const t = tabs.find((b) => b.getAttribute("aria-pressed") === "true")?.dataset.tab; if (t === "users") loadUsers(); }, 30000);
   void PERMS;
 })();

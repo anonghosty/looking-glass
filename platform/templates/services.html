@@ -291,6 +291,7 @@
 
   <script nonce="{{ csp_nonce }}">window.SVC_CONFIG = { offsetHours: {{ offset_hours|tojson }}, lookups: {{ ("malpedia" in lg_perms)|tojson }} };</script>
   <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/notifications.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/regions.js') }}"></script>
   <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>
   <script src="{{ url_for('static', filename='js/services.js') }}"></script>

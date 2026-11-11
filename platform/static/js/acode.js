@@ -197,6 +197,7 @@
     const r = await fetch(`/api/intel/acode/${encodeURIComponent(code)}`, { cache: "no-store" });
     const d = await r.json().catch(() => ({}));
     $("axLoading")?.remove();
+    window.LGLoader?.ready();
     if (!r.ok) { main.append(el("p", "ax-empty", d.error || `Could not open ${code} (HTTP ${r.status})`)); return; }
     // the analyst's side
     const hero = el("section", "ax-hero");

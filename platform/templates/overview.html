@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0d">
+  <meta name="csrf-token" content="{{ lg_csrf }}">
+  <title>Looking Glass · Overview</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo-mark.svg') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/settings.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/overview.css') }}" rel="stylesheet">
+</head>
+<body class="settings-page ov-page">
+  <header class="hud">
+    <div class="hud-left">
+      <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Overview · signed in as {{ lg_user }} ({{ lg_role }})</span></div></div>
+    </div>
+    <div class="hud-right">
+      {% set nav_here = "overview" %}{% set nav_go = false %}{% include "_page_nav.html" %}
+    </div>
+  </header>
+  <main class="st-main ov-main">
+    <section class="ov-hero">
+      <img class="ov-logo" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="64" height="64">
+      <div class="ov-kicker">Shadowserver threat intelligence</div>
+      <h1>Welcome to <span>Looking Glass</span></h1>
+      <p>A simplified analysis platform for CSIRTs: the Shadowserver Foundation's daily reports, from the first look at what they
+        show to the advisory sent to the organisation concerned. Researchers define and gather the intel, management decides,
+        analysts pull the devices, advisors write the advisories; every step is a finding the team follows on the Findings page.</p>
+    </section>
+    <section class="ov-yours">
+      <h2>Your pages</h2>
+      {% if lg_peace %}<p class="ov-sub ov-peace">Peace of mind is on: Admin, the audit log and Settings only, and no findings notifications. Turn it off on the Admin page.</p>
+      {% else %}<p class="ov-sub">What your role ({{ lg_role }}) opens. The bell at the top tells you what changed in the findings you take part in.</p>{% endif %}
+      {% set portal_skip = [] %}{% include "_portal_cards.html" %}
+    </section>
+    <p class="ov-foot"><a href="https://looking-glass-gh.readthedocs.io/" target="_blank" rel="noopener noreferrer">Documentation ↗</a></p>
+  </main>
+  <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/notifications.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/overview.js') }}"></script>
+</body>
+</html>

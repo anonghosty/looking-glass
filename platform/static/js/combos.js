@@ -18,9 +18,10 @@
     code = code.trim().toUpperCase(); $("cbCode").value = code;
     $("cbEntry").hidden = true; $("cbStep2Box").hidden = true; $("cbStep3Box").hidden = true; entry = null;
     if (!CODE_RX.test(code)) { say($("cbCodeMsg"), "A code looks like LG-C-1A2B3C4D (one report), LG-X-1A2B3C4D (across reports) or LG-A-1A2B3C4D (an analyst's selection).", "bad"); return; }
-    say($("cbCodeMsg"), "Looking it up…");
+    say($("cbCodeMsg"), `Looking up ${code}…`); $("cbCodeMsg").classList.add("lg-loading");     // the searching logo meanwhile
     const r = await fetch(`/api/combo-codes/${code}`, { cache: "no-store" });
     const d = await r.json().catch(() => ({}));
+    $("cbCodeMsg").classList.remove("lg-loading"); $("cbCodeMsg").querySelector(".lg-logo-wrap")?.remove();
     if (!r.ok) { say($("cbCodeMsg"), d.error || `Not found (HTTP ${r.status})`, "bad"); return; }
     say($("cbCodeMsg"), ""); entry = d;
     try { history.replaceState(null, "", `?code=${code}`); } catch { /* */ }
@@ -364,6 +365,7 @@
       acodes = (await r.json()).codes || [];
       $("cbAc").hidden = !acodes.length;
     } catch { /* the list is a convenience */ }
+    finally { window.LGLoader?.ready(); }
   }
   function acList(show) {
     const ul = $("cbAcList"), q = $("cbAcQ").value.trim().toLowerCase();
