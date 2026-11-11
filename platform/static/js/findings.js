@@ -19,7 +19,7 @@
   function draw() {
     const q = $("fdQ").value.trim().toLowerCase();
     const items = data.findings.filter((f) => !q || [f.number, f.title, f.name, f.text, ...f.codes.map((c) => `${c.code} ${c.text}`)].join(" ").toLowerCase().includes(q));
-    const counts = {}; for (const f of data.findings) counts[f.status] = (counts[f.status] || 0) + 1;
+    const counts = {}; for (const f of data.findings) if (state !== "open" || f.open) counts[f.status] = (counts[f.status] || 0) + 1;
     const cb = $("fdCounts"); cb.replaceChildren();
     for (const s of data.statuses) if (counts[s.key]) { const p = el("span", `fd-pill s-${s.key}`); p.append(el("b", null, String(counts[s.key])), document.createTextNode(` ${s.label}`)); cb.append(p); }
     const list = $("fdList"); list.replaceChildren();
@@ -80,22 +80,44 @@
     return box;
   }
   // the case's sub-findings, one per organisation, inside the case's card
+  // everything folds into the case: the list of organisations, each organisation's sub-finding (its one-line summary:
+  // number, organisation, state and who holds it), and the closed ones in a group of their own. What is folded or
+  // unfolded stays so when the page redraws (after an action, a search).
+  const folds = new Map();
+  function fold(key, cls, summary, open) {
+    const d = el("details", cls);
+    d.open = folds.has(key) ? folds.get(key) : open;
+    d.addEventListener("toggle", () => folds.set(key, d.open));
+    const s = el("summary"); s.append(...summary); d.append(s);
+    return d;
+  }
+  function subLine(k) {
+    const holder = k.open && k.assignee ? ` · ${k.assignee}` : "";
+    return [el("span", "fd-no", k.number), el("b", "fd-sub-org", k.network || "All networks"), el("span", `fd-pill s-${k.status}`, `${k.status_label}${holder}`),
+      ...(k.advisories || []).map((a) => el("span", `fd-adv-st ${a.status}`, `${a.ref} ${a.status_label.toLowerCase()}`))];
+  }
   function subsBlock(f) {
     const kids = (f.children || []).map((id) => byId[id]).filter(Boolean);
-    const b = el("section", "fd-subs");
     const counts = {};
     for (const k of kids) counts[k.status_label] = (counts[k.status_label] || 0) + 1;
-    const h = el("div", "fd-subs-h");
-    h.append(el("b", null, `Organisations · ${f.children.length} sub-finding${f.children.length === 1 ? "" : "s"}`),
-      el("span", null, Object.entries(counts).map(([l, n]) => `${n} ${l.toLowerCase()}`).join(" · ")));
-    b.append(h);
-    for (const k of kids) {
-      const sc = card(k); sc.classList.add("fd-sub");
-      if (matchIds && !matchIds.has(k.id) && !matchIds.has(f.id)) sc.hidden = true;
-      b.append(sc);
+    const b = fold(`case${f.id}`, "fd-subs", [el("b", null, `Organisations · ${pl(f.children.length, "sub-finding", "sub-findings")}`),
+      el("span", "fd-subs-n", Object.entries(counts).map(([l, n]) => `${n} ${l.toLowerCase()}`).join(" · "))], true);
+    const sub = (k) => {
+      const d = fold(`sub${k.id}`, "fd-subd", subLine(k), !!k.open && !matchIds);
+      const sc = card(k); sc.classList.add("fd-sub"); d.append(sc);
+      if (matchIds && !matchIds.has(k.id) && !matchIds.has(f.id)) d.hidden = true;
+      return d;
+    };
+    for (const k of kids.filter((k) => k.open)) b.append(sub(k));
+    const closed = kids.filter((k) => !k.open);
+    if (closed.length) {
+      const g = fold(`closed${f.id}`, "fd-subs-closed", [el("b", null, `${pl(closed.length, "closed sub-finding", "closed sub-findings")}`),
+        el("span", "fd-subs-n", closed.map((k) => `${k.network}: ${(k.advisories || []).some((a) => a.status === "sent") ? "advisory sent" : "rejected"}`).join(" · "))], false);
+      for (const k of closed) g.append(sub(k));
+      b.append(g);
     }
     const missing = f.children.length - kids.length;
-    if (missing > 0) b.append(el("p", "fd-empty", `${missing} more ${missing === 1 ? "is" : "are"} closed: see All.`));
+    if (missing > 0) b.append(el("p", "fd-empty", `${pl(missing, "sub-finding", "sub-findings")} not shown here (closed before this case was opened again).`));
     return b;
   }
   const pl = (n, one, many) => `${n} ${n === 1 ? one : many}`;

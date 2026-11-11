@@ -378,7 +378,9 @@ class Findings:
             self._load()
             items = [x for x in self.data["items"].values() if self.sees(x, user, admin)]
         if open_only:
-            items = [x for x in items if x["status"] in OPEN]
+            # an open case brings all its sub-findings along, the closed ones too: the page folds them into the case
+            open_cases = {x["id"] for x in items if x.get("kind") == "case" and x["status"] in OPEN}
+            items = [x for x in items if x["status"] in OPEN or x.get("parent") in open_cases]
         items.sort(key=lambda x: -x["history"][-1]["at"])
         return [self.shown(x, describe) for x in items]
 

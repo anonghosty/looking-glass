@@ -139,3 +139,21 @@
 .fd-adv-send .fd-in { flex: 1 1 260px; }
 .fd-advs .tlp-badge { padding: 2px 7px; border-radius: 5px; background: #000; font: 700 11px "Geist Mono", ui-monospace, monospace; }
 .tlp-red { color: #FF2B2B; } .tlp-amber { color: #FFC000; } .tlp-green { color: #33FF00; } .tlp-clear { color: #FFFFFF; }
+
+/* everything folds into the case: its organisations, each sub-finding, the closed ones */
+details.fd-subs { margin-top: 12px; padding: 10px 0 0 16px; border-left: 2px solid rgba(124, 156, 255, .35); display: block; }
+details.fd-subs > summary, details.fd-subd > summary, details.fd-subs-closed > summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap;
+  gap: 4px 12px; align-items: center; padding: 6px 10px; border-radius: 10px; }
+details.fd-subs > summary::-webkit-details-marker, details.fd-subd > summary::-webkit-details-marker, details.fd-subs-closed > summary::-webkit-details-marker { display: none; }
+details.fd-subs > summary::before, details.fd-subd > summary::before, details.fd-subs-closed > summary::before { content: "▸"; color: var(--muted); transition: transform .15s; }
+details[open].fd-subs > summary::before, details[open].fd-subd > summary::before, details[open].fd-subs-closed > summary::before { transform: rotate(90deg); }
+details.fd-subs > summary b { font-size: 14px; color: var(--text); }
+.fd-subs-n { font-size: 12.5px; color: var(--muted); }
+details.fd-subd { margin: 8px 0 0; border: 1px solid var(--border); border-radius: 12px; background: rgba(255, 255, 255, .015); }
+details.fd-subd > summary:hover, details.fd-subs-closed > summary:hover { background: rgba(255, 255, 255, .03); }
+.fd-sub-org { font-size: 14px; color: var(--text); }
+details.fd-subd > .fd-card.fd-sub { margin: 0 8px 8px; }
+details.fd-subd > .fd-card.fd-sub > .fd-h { display: none; }          /* the summary line is its head */
+details.fd-subs-closed { margin-top: 10px; border: 1px dashed var(--border-strong); border-radius: 12px; padding: 2px 6px 6px; }
+details.fd-subs-closed > summary b { font-size: 13px; color: var(--text-2); }
+details.fd-subd[hidden] { display: none; }
