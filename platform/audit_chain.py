@@ -296,6 +296,7 @@ class Chain:
                 seal_state = "changed"
                 brk = brk or {"entry": 1, "t": seal.get("first"), "what": "entries written before the chain were changed after they were sealed"}
         return {"ok": brk is None, "seal": dict(seal, state=seal_state) if seal else None, "entries": len(lines), "chained": chained, "before_chain": before, "first": first_t, "last": last_t,
-                "break": brk, "head": head, "head_file": bool(saved), "archives": len(self.archives()),
+                "break": brk, "head": head, "head_entry": len(lines) + gone, "removed_entries": gone,
+                "head_file": bool(saved), "archives": len(self.archives()),
                 "removed_archives": len(removed), "retention_days": self.retention_days,
                 "rotate_mb": round(self.rotate_bytes / 1_000_000, 1)}

@@ -379,16 +379,14 @@ def install(app, ctx):
         k = ov["kpis"]
         fixed = sorted(roles.perms(ctx["auditor_role"])) == ["audit"]
         tls = ctx["tls"]()
-        # IA-1: typing mistakes are normal; what needs attention is a lockout, or many failures from one address in one
-        # day (the pattern of password guessing). AUDIT_FAIL_ALERT sets "many" (default 10).
+        # The checks give facts and evidence only, never a verdict: whether a control is effective is the auditor's judgement.
+        # LG-06: the failures, lockouts and the most failures from one address in one day, against the configured alert level.
         worst = ov.get("worst_day")
         guess = bool(worst and worst["n"] >= FAIL_ALERT)
-        ia1_ok = k["lockouts"] == 0 and not guess
         ia1 = (f"{k['failed']} failed of {k['signins'] + k['failed']} attempts ({k['failure_rate']} %), {k['lockouts']} lockout(s); "
                + (f"most from one address in a day: {worst['n']} ({worst['ip']}, {worst['day']})" if worst else "no failure")
-               + (". Within normal typing mistakes." if ia1_ok and k["failed"] else "." if ia1_ok else
-                  f". {k['lockouts']} account lockout(s): review who was locked out and from where." if k["lockouts"] else
-                  f". That is password-guessing level (alert from {FAIL_ALERT} per address per day): review that address."))
+               + f". Configured alert level (AUDIT_FAIL_ALERT): {FAIL_ALERT} failures from one address in one day, "
+               + ("reached in the period." if guess else "not reached in the period."))
         # AU-2: coverage from the start of the system (no entry can exist before it), and nothing removed
         started = setup_time(oldest)
         since = max(t0, started) if started else t0
@@ -421,56 +419,54 @@ def install(app, ctx):
                if v["ok"] else f"Broken at entry {v['break']['entry']}: {v['break']['what']}.")
         c = [
             ("Identification and authentication", "LG-01", "Multi-factor authentication is enforced for every account",
-             ["IA-2(1)", "IA-2(2)"], mfa_on and not no_mfa,
+             ["IA-2(1)", "IA-2(2)"],
              ("Sign-in requires the password and a one-time code from an authenticator app (TOTP, RFC 6238) for every account, "
               "privileged or not; an account without an authenticator must set one up before its first session, and cannot be "
               "approved before it has one. " if mfa_on else "MFA_REQUIRED=0 in .env: accounts without an authenticator can sign in with a "
               "password alone. ") + (f"{len(active)} of {len(active)} active accounts have an authenticator." if not no_mfa
                                      else f"Without an authenticator: {names(no_mfa)}.")),
-            ("Access control", "LG-02", f"Accounts unused for {DORMANT} days are reviewed or disabled", ["AC-2(3)"], not dormant,
-             "No active account unused that long." if not dormant else f"Unused: {names(dormant)}. Disable them or confirm they still need access."),
+            ("Access control", "LG-02", f"Accounts unused for {DORMANT} days are reviewed or disabled", ["AC-2(3)"],
+             "No active account unused that long." if not dormant else f"Active but unused that long: {names(dormant)}."),
             ("Access control", "LG-03", f"Privileged accounts are few (at most {MAX_ADMINS} administrators)", ["AC-6(5)", "AC-2(7)"],
-             len(admins) <= MAX_ADMINS,
              f"{len(admins)} administrator(s): {names(admins) or 'none'}. Accounts with privileged permissions (accounts or Settings): "
              f"{len(privileged)}: {names(privileged) or 'none'}."),
-            ("Access control", "LG-04", "Account requests are approved by an administrator", ["AC-2"], not pending and not not_approved,
+            ("Access control", "LG-04", "Account requests are approved by an administrator", ["AC-2"],
              (f"No request waiting longer than {PENDING_DAYS} days." if not pending else f"Waiting longer than {PENDING_DAYS} days: {names(pending)}.")
              + (" Every active account was approved by an administrator (administrators: the first one by the one-time setup code)."
                 if not not_approved else f" Active without a recorded approval: {names(not_approved)}.")),
-            ("Access control", "LG-05", "Auditors are separated from the duties they audit", ["AC-5", "AU-9(4)"], fixed,
+            ("Access control", "LG-05", "Auditors are separated from the duties they audit", ["AC-5", "AU-9(4)"],
              ("The auditor role holds exactly 'audit': fixed in the code, applied again at every start and every save of the roles, so "
               "no one can widen it. The Audit portal only reads (every request is a GET); the application has no function to edit or "
               "delete audit entries. Reading the log needs the 'audit' permission (auditors and administrators).") if fixed
              else "The auditor role does not hold exactly 'audit'."),
-            ("Access control", "LG-06", "Unsuccessful sign-ins are limited and show no password guessing", ["AC-7"], ia1_ok,
+            ("Access control", "LG-06", "Unsuccessful sign-ins are limited and show no password guessing", ["AC-7"],
              "Enforced: 5 wrong attempts for an account from one address lock it for 15 minutes; 20 from one address in an hour lock "
              "the address. In the period: " + ia1),
             ("System and communications protection", "LG-07", "Sessions cannot be taken over and end on their own", ["SC-23", "AC-12"],
-             k["misuse"] == 0,
              f"Each session is bound to the address and browser that signed in (used elsewhere, it ends and is logged as misuse); it "
              f"ends after {idle} minutes idle and {max_h} hours in any case. Misuse events in the period: {k['misuse']}."),
-            ("Audit and accountability", "LG-08", "Use of privileged functions is logged", ["AC-6(9)", "AU-12"], True,
+            ("Audit and accountability", "LG-08", "Use of privileged functions is logged", ["AC-6(9)", "AU-12"],
              f"{k['privileged']} privileged action(s) in the period (roles, accounts, settings, sessions ended), each with who, when, "
              "from where and what. Approval of changes before they are made (CM-3) is a process outside the application."),
-            ("Audit and accountability", "LG-09", "Audit records hold what an auditor needs", ["AU-3"], True,
+            ("Audit and accountability", "LG-09", "Audit records hold what an auditor needs", ["AU-3"],
              "Every entry: time (UTC), event, who, the account acted on, address, location, browser and detail."),
-            ("Audit and accountability", "LG-10", "Audit records are protected against change (tamper-evident chain)", ["AU-9", "AU-9(3)"],
-             v["ok"], au1),
-            ("Audit and accountability", "LG-11", "Audit records are kept for the retention period", ["AU-11"], au2_ok, au2),
-            ("Audit and accountability", "LG-12", "Time stamps come from a synchronised clock", ["AU-8"], ntp is True,
+            ("Audit and accountability", "LG-10", "Audit records are protected against change (tamper-evident chain)", ["AU-9", "AU-9(3)"], au1),
+            ("Audit and accountability", "LG-11", "Audit records are kept for the retention period", ["AU-11"], au2),
+            ("Audit and accountability", "LG-12", "Time stamps come from a synchronised clock", ["AU-8"],
              "Every time stamp is set by the server in UTC. " + ("The server clock is synchronised (NTP)." if ntp is True else
-             "The server clock is NOT synchronised (NTP): set it up on the server." if ntp is False else
-             "The clock's synchronisation could not be read from here: check it on the server (timedatectl).")),
-            ("Audit and accountability", "LG-13", f"The audit log is reviewed (at least every {REVIEW_DAYS} days)", ["AU-6"], reviewed,
-             (f"Last review: {review['label']} by {review['by']} on {_when(review['t'])}." if review else
-              "No integrity check or evidence export recorded yet.") + ("" if reviewed else " Verify the log or export the evidence to record a review.")),
-            ("System and communications protection", "LG-14", "Sign-ins and sessions are encrypted in transit", ["SC-8", "SC-8(1)"], tls,
+             "The server clock is not synchronised (NTP)." if ntp is False else
+             "The clock's synchronisation could not be read from the application (check timedatectl on the server).")),
+            ("Audit and accountability", "LG-13", f"The audit log is reviewed (at least every {REVIEW_DAYS} days)", ["AU-6"],
+             (f"Last review: {review['label']} by {review['by']} on {_when(review['t'])}" + ("." if reviewed else
+              f", more than {REVIEW_DAYS} days ago.") if review else "No integrity check or evidence export recorded yet.")),
+            ("System and communications protection", "LG-14", "Sign-ins and sessions are encrypted in transit", ["SC-8", "SC-8(1)"],
              "HTTPS is on (TLS)." if tls else "HTTPS is off: passwords and session cookies cross the network readable."),
-            ("Audit and accountability", "LG-15", "Data exports are logged per person", ["AU-2", "AU-12"], True,
+            ("Audit and accountability", "LG-15", "Data exports are logged per person", ["AU-2", "AU-12"],
              f"{k['exports']} export(s) in the period (reports, CSV files, advisories, audit evidence), each with who and what."),
         ]
-        return [{"area": a, "id": i, "control": t, "nist": [{"id": n, "title": NIST[n]} for n in ns], "ok": bool(ok), "evidence": e,
-                 "view": VIEW.get(i)} for a, i, t, ns, ok, e in c]
+        # no pass or fail: the checks present the evidence, the auditor decides
+        return [{"area": a, "id": i, "control": t, "nist": [{"id": n, "title": NIST[n]} for n in ns], "evidence": e,
+                 "view": VIEW.get(i)} for a, i, t, ns, e in c]
 
     @app.route("/api/audit/overview")
     def api_audit_overview():
@@ -524,6 +520,11 @@ def install(app, ctx):
                                   "first": _when(integrity()["first"]), "last": _when(integrity()["last"]), "nist_release": NIST_RELEASE,
                                   "started": _when(setup_time(integrity().get("first") or 0)),
                                   "sealed_at": _when((integrity().get("seal") or {}).get("sealed_at"))})
-        logged_export("pdf", fr, to, " · evidence report")
+        logged_export("pdf", fr, to, f" · evidence report · head entry {integrity()['head_entry']} {integrity()['head']}")
         return Response(pdf, mimetype="application/pdf", headers={"Content-Disposition": f'attachment; filename="audit_evidence_{fr}_{to}.pdf"',
                                                                   "Cache-Control": "no-store"})
+
+    # ------------------------------------------------------------------ proof the auditor takes away (audit_proof.py)
+    import audit_proof
+    audit_proof.install(app, audit, allowed, deny,
+                        lambda: ((g.user or {}).get("user", ""), people.audit((g.user or {}).get("user", ""))))

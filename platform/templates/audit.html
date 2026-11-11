@@ -91,6 +91,20 @@
           <button type="button" class="lg-btn primary" id="vfRun">Verify the audit log</button>
         </div>
         <div class="au-card">
+          <h3>Proof to take away</h3>
+          <p class="st-hint">The check on the left is Looking Glass checking itself. The proof package lets you check it without trusting Looking Glass: the log's files exactly as stored, the SHA-256 of each, and a short verifier in plain Python (standard library only) that recomputes the whole chain on your own computer. Its README says how.</p>
+          <div class="au-ev-acts">
+            <button type="button" class="lg-btn primary" id="pfZip">Proof package (ZIP)</button>
+          </div>
+          <h4 class="au-sub-h">Compare with an earlier audit</h4>
+          <p class="st-hint">Enter the head noted at an earlier audit (hash@entry, as printed in its report or package). Each entry's hash depends on every entry before it: if the hash is still at that entry number, the log up to it is unchanged since then, even if someone could rewrite the whole file.</p>
+          <form id="ctForm" class="au-ct" autocomplete="off">
+            <input id="ctIn"maxlength="90" placeholder="64-character hash@entry" aria-label="Earlier head: hash@entry" spellcheck="false">
+            <button type="submit" class="lg-btn">Compare</button>
+          </form>
+          <div id="ctOut" hidden></div>
+        </div>
+        <div class="au-card">
           <h3>Evidence for the period</h3>
           <p class="st-hint" id="evPeriod"></p>
           <div class="au-ev-acts">

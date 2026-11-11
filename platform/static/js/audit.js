@@ -101,9 +101,10 @@
   async function loadOverview() {
     const d = await getJSON(`/api/audit/overview?${per()}`);
     const body = $("ovBody"); body.replaceChildren();
-    const k = d.kpis, passed = d.checks.filter((c) => c.ok).length;
+    const k = d.kpis, nistN = new Set(d.checks.flatMap((c) => (c.nist || []).map((x) => x.id))).size;
     const top = el("div", "au-kpis");
-    top.append(kpi("Control checks", `${passed} / ${d.checks.length}`, passed === d.checks.length ? "all passed" : `${d.checks.length - passed} need attention`, passed === d.checks.length ? "good" : "warn"),
+    // the checks carry evidence, not a verdict: the auditor decides
+    top.append(kpi("Control checks", fmt(d.checks.length), `evidence for ${nistN} NIST controls`),
       kpi("Audit log", d.integrity.ok ? "Unbroken" : "Broken", `${fmt(d.integrity.entries)} entries kept`, d.integrity.ok ? "good" : "bad"),
       kpi("Sign-ins", fmt(k.signins), `${fmt(k.people)} people`), kpi("Failed sign-ins", fmt(k.failed), `${k.failure_rate} % of attempts`, k.failed ? "warn" : ""),
       kpi("Lockouts", fmt(k.lockouts), null, k.lockouts ? "warn" : ""), kpi("Privileged changes", fmt(k.privileged), "roles, accounts, settings"),
@@ -112,14 +113,14 @@
       + (d.started ? ` · system started ${d.started} (running ${fmt(d.running_days)} day${d.running_days === 1 ? "" : "s"})` : "")), top);
 
     // the control checks, by area
-    const cc = card("Control checks", `Automated checks of Looking Glass's own controls (LG-01…), each mapped to the ${d.nist_release || "NIST SP 800-53 Rev. 5"} controls it supports, with its evidence. Click a check to open the records behind it; the PDF report carries the same, with its scope and limits.`);
+    const cc = card("Control checks", `Automated checks of Looking Glass's own controls (LG-01…), each mapped to the ${d.nist_release || "NIST SP 800-53 Rev. 5"} controls it supports, with its evidence. They give no pass or fail: the conclusion is the auditor's. Click a check to open the records behind it; the PDF report carries the same, with its scope and limits.`);
     const areas = [...new Set(d.checks.map((c) => c.area))];
     for (const a of areas) {
       const g = el("div", "au-check-g"); g.append(el("h4", null, a));
       for (const c of d.checks.filter((x) => x.area === a)) {
         // a check with evidence behind it opens it: the tab with the events or accounts it is about
-        const r = el(c.view ? "button" : "div", `au-check ${c.ok ? "ok" : "warn"}${c.view ? " link" : ""}`);
-        r.append(el("span", "au-check-st", c.ok ? "Passed" : "Attention"), el("code", null, c.id));
+        const r = el(c.view ? "button" : "div", `au-check${c.view ? " link" : ""}`);
+        r.append(el("code", null, c.id));
         const t = el("div"); t.append(el("b", null, c.control));
         if ((c.nist || []).length) {        // the NIST SP 800-53 Rev. 5 controls this check supports (official titles)
           const n = el("div", "au-nist");
@@ -230,9 +231,9 @@
     row("Entries", `${fmt(v.entries)} kept · ${fmt(v.chained)} chained${v.before_chain ? ` · ${fmt(v.before_chain)} written before the chain started` : ""}`);
     row("From – to", `${v.first || "–"} – ${v.last || "–"}`);
     row("Archives", `${v.archives} file(s) · ${v.removed_archives} removed by the retention of ${v.retention_days} days · rotated at ${v.rotate_mb} MB`);
-    row("Head hash", v.head, true);
+    row("Head", `${v.head}@${v.head_entry ?? v.entries}`, true);
     if (v.checked) row("Checked", v.checked);
-    b.append(st, dl, el("p", "st-hint", "Note the head hash with your evidence. At the next audit the chain must still lead to it: that proves nothing was removed from the end in between."));
+    b.append(st, dl, el("p", "st-hint", "Note the head (hash@entry) with your evidence. At the next audit, compare it (Proof to take away): if it is still at that entry, the log up to it is unchanged."));
   }
   $("vfRun").addEventListener("click", async () => {
     $("vfRun").disabled = true; window.LGLoader?.busy("Verifying the audit log");
@@ -240,7 +241,7 @@
     finally { $("vfRun").disabled = false; window.LGLoader?.ready(); }
   });
   async function sha256hex(buf) { const h = await crypto.subtle.digest("SHA-256", buf); return [...new Uint8Array(h)].map((x) => x.toString(16).padStart(2, "0")).join(""); }
-  async function download(url, label) {
+  async function download(url, label, boxId = "evDone") {
     window.LGLoader?.busy(`Preparing ${label}`);
     try {
       const r = await fetch(url, { cache: "no-store" });
@@ -250,12 +251,33 @@
       const a = el("a"); a.href = URL.createObjectURL(new Blob([buf], { type: r.headers.get("Content-Type") || "application/octet-stream" })); a.download = name;
       document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
       let hex = ""; try { hex = await sha256hex(buf); } catch { /* an old browser without SubtleCrypto */ }
-      const box = $("evDone"); box.hidden = false; box.replaceChildren();
+      const box = $(boxId); box.hidden = false; box.replaceChildren(); box.className = "au-ev-done";
       box.append(el("b", null, `Downloaded ${name}`), el("span", "muted", ` · ${fmt(buf.byteLength)} bytes`));
       if (hex) { const p = el("p"); p.append(el("span", null, "SHA-256 "), el("code", "au-hash", hex)); box.append(p); }
+      const head = r.headers.get("X-Audit-Head");          // the proof package: the head it holds, to keep for the next audit
+      if (head) { const p = el("p"); p.append(el("span", null, "Head "), el("code", "au-hash", head)); box.append(p, el("p", "muted", "Keep both with your working papers.")); }
     } catch (e) { banner(`Could not prepare ${label}: ${e.message}`, true); }
     finally { window.LGLoader?.ready(); }
   }
+  $("pfZip").addEventListener("click", () => download("/api/audit/proof.zip", "the proof package", "ctOut"));
+  // compare with an earlier audit's head (hash@entry): the log up to it must be unchanged
+  $("ctForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const v = $("ctIn").value.trim(); if (!v) return;
+    const out = $("ctOut"); window.LGLoader?.busy("Comparing with the earlier head");
+    try {
+      const d = await getJSON(`/api/audit/continuity?earlier=${encodeURIComponent(v)}`), e = d.earlier;
+      out.hidden = false; out.replaceChildren(); out.className = `au-ct-out ${e.proven ? "ok" : "bad"}`;
+      const msg = !e.found ? "Not found: this hash is not in the log. The log was rewritten since, or the hash was noted wrongly."
+        : e.where !== "kept" ? `Found as ${e.where} (entry ${fmt(e.entry)}): the entries up to it are no longer kept, so they cannot be compared.`
+        : !e.same_entry ? `Found at entry ${fmt(e.entry)}, not at entry ${fmt(e.entry_given)} as noted: entries before it were added or removed.`
+        : !d.chain_ok ? `Found at entry ${fmt(e.entry)}, but the chain is broken (verify the log for where).`
+        : `Found at entry ${fmt(e.entry)}${e.when ? ` (${e.when})` : ""}: the log up to it is exactly the log of that audit.`;
+      out.append(el("b", null, e.proven ? "Unchanged since the earlier audit" : "Not proven"), el("p", null, msg));
+      const p = el("p", "muted"); p.append(el("span", null, "Head now "), el("code", "au-hash", `${d.head}@${d.head_entry}`)); out.append(p);
+    } catch (e) { banner(e.message, true); }
+    finally { window.LGLoader?.ready(); }
+  });
   $("evPdf").addEventListener("click", () => download(`/api/audit/report.pdf?${per()}`, "the evidence report"));
   $("evCsv").addEventListener("click", () => download(`/api/audit/export.csv?tab=all&${per()}`, "the events"));
   $("logCsv").addEventListener("click", () => download(`/api/audit/export.csv?tab=${logTab}&${per()}`, "this tab's events"));

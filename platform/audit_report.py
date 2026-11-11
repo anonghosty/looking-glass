@@ -70,8 +70,8 @@ def build(d):
            _p(f"Automated checks of Looking Glass's own controls (the web application: accounts, roles, sign-in, sessions and the audit "
               f"log), computed from its records when this report was generated. Each check (LG-01 to LG-15) is mapped to the "
               f"{d.get('nist_release', 'NIST SP 800-53 Rev. 5')} controls it supports, cited by their official titles; the LG "
-              "identifiers are Looking Glass's own, not NIST control numbers. A passed check supports, but does not on its own "
-              "establish, that a control is implemented and operating effectively: corroborate it with independent testing (for "
+              "identifiers are Looking Glass's own, not NIST control numbers. The checks present evidence and give no pass or fail: "
+              "whether a control is implemented and operating effectively is the auditor's conclusion. Corroborate the evidence with independent testing (for "
               "example, try to sign in without a second factor) and review what lies outside the application: the server's "
               "operating system, its clock synchronisation, backups and network. "
               + (f"The system started on {d['started']}. " if d.get("started") else "") + "All times are UTC.", st["b"]),
@@ -84,26 +84,36 @@ def build(d):
     out.append(_p("Integrity of the audit log", st["h"]))
     state = "Chain whole: no entry was changed, inserted or removed." if v["ok"] else \
         f"BROKEN at entry {v['break']['entry']}: {v['break']['what']}."
-    rows = [[_p("Result", st["cellb"]), _p(state, st["ok"] if v["ok"] else st["bad"])],
+    rows = [[_p("Hash chain", st["cellb"]), _p(state, st["ok"] if v["ok"] else st["bad"])],
             [_p("Entries", st["cellb"]), _p(f"{v['entries']} kept ({v['chained']} chained, {v['before_chain']} written before the chain started), "
                                             f"from {d['first']} to {d['last']}; {v['archives']} archive file(s); "
                                             f"{v['removed_archives']} removed by the retention of {v['retention_days']} days", st["b"])],
-            [_p("Head hash", st["cellb"]), _p(v["head"], st["mono"])],
+            [_p("Head", st["cellb"]), _p(f"entry {v.get('head_entry', v['entries'])}: {v['head']}", st["mono"])],
             *([[_p("Before the chain", st["cellb"]),
                 _p(f"{v['seal']['entries']} entries written before the chain started were sealed on "
                    f"{d.get('sealed_at', '')} with SHA-256 {v['seal']['sha256']} (the seal is recorded in the chain). State: "
                    f"{v['seal']['state']}. Changes after the seal are detected; nothing can prove these entries were unchanged before it.",
                    st["b"])]] if v.get("seal") else []),
-            [_p("How to use it", st["cellb"]), _p("Note the head hash with this report. At the next audit, the chain must still lead to it: "
-                                                  "that proves nothing was removed from the end of the log in between.", st["b"])]]
+            [_p("Independent proof", st["cellb"]),
+             _p("This section is Looking Glass checking itself. To check it without trusting Looking Glass, take the proof package "
+                "(Audit portal, Integrity and evidence): the log's files exactly as stored, the SHA-256 of each, and a verifier "
+                "in plain Python (standard library only) that recomputes the whole chain on your own computer: "
+                "python verify_audit_log.py", st["b"])],
+            [_p("At the next audit", st["cellb"]),
+             _p(f"Keep the head above with this report. At the next audit, take a new proof package and run "
+                f"python verify_audit_log.py --earlier {v['head']}@{v.get('head_entry', v['entries'])} "
+                "(or enter it in the portal's continuity check). Each entry's hash depends on every entry before it: if this hash "
+                "is still at this entry number, every entry up to it is unchanged since this report, even against someone able "
+                "to rewrite the whole log on the server.", st["b"])]]
     out += [_table(rows, [38 * mm, W - 38 * mm], head=False)]
     out.append(_p("Control checks", st["h"]))
-    rows = [[_p(h, st["cellb"]) for h in ("Check", "Control", f"NIST SP 800-53 Rev. 5 (5.2.0)", "Result", "Evidence")]]
+    # evidence only, no result column: whether a control is effective is the auditor's conclusion
+    rows = [[_p(h, st["cellb"]) for h in ("Check", "Control", f"NIST SP 800-53 Rev. 5 (5.2.0)", "Evidence")]]
     for c in d["checks"]:
         nist = Paragraph("<br/>".join(f"<b>{escape(n['id'])}</b> {escape(n['title'])}" for n in c.get("nist") or []) or "–", st["small"])
         rows.append([_p(c["id"], st["mono"]), Paragraph(f"{escape(c['control'])}<br/><font size='7' color='#5f5f69'>{escape(c['area'])}</font>", st["b"]),
-                     nist, _p("Passed" if c["ok"] else "Attention", st["ok"] if c["ok"] else st["bad"]), _p(c["evidence"], st["b"])])
-    out.append(_table(rows, [16 * mm, 60 * mm, 58 * mm, 19 * mm, W - 153 * mm]))
+                     nist, _p(c["evidence"], st["b"])])
+    out.append(_table(rows, [16 * mm, 60 * mm, 58 * mm, W - 134 * mm]))
     out += [PageBreak(), _p("Access review: every account", st["h"]),
             _p("Role, permissions, authenticator, last sign-in and who approved the account. Flags show what needs attention.", st["small"])]
     rows = [[_p(h, st["cellb"]) for h in ("Account", "Role", "Permissions", "Status", "Two factors", "Last sign-in", "Approved", "Flags")]]

@@ -639,9 +639,9 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
   check of Looking Glass's own controls, **mapped to the NIST SP 800-53 Rev. 5 (Release 5.2.0) controls** it supports,
   cited by their official titles (for example LG-01 → IA-2(1), IA-2(2) multi-factor authentication; LG-06 → AC-7
   unsuccessful logon attempts; LG-10 → AU-9, AU-9(3) protection of audit information; LG-11 → AU-11 retention). The LG
-  numbers are Looking Glass's own, not NIST control numbers. Each check says passed or attention, with its evidence;
-  click it to open the records behind it. The evidence report states the scope and limits: a passed check supports,
-  but does not on its own establish, that a control operates effectively.
+  numbers are Looking Glass's own, not NIST control numbers. Each check gives its evidence and **no pass or fail**:
+  whether a control is implemented and operating effectively is the auditor's conclusion. Click a check to open the
+  records behind it. The evidence report states the scope and limits of the checks.
 - **One tab per kind of event:** Authentication, Accounts and access, Sessions, Configuration changes, Data access
   and exports, Workflow, and System and self-test. Each has its count, a search, *Alerts only*, and **Export CSV**.
   The built-in security test's events are kept apart in System and self-test.
@@ -650,9 +650,17 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
 - **Signed in now:** every session with its address, location, browser and expiry (read only).
 - **Integrity and evidence:** **Verify the audit log** walks every entry. Each one carries the fingerprint (SHA-256)
   of the one before it, so a changed, inserted or removed entry breaks the chain and the check says where. It shows
-  the **head hash**: note it with your evidence, and at the next audit the chain must still lead to it. Then download
-  the **evidence report (PDF)** or **every event (CSV)** for the period. After each download the page shows the file's
-  own SHA-256 to note with it. Every check and every export is itself in the audit log.
+  the **head** (hash@entry). Then download the **evidence report (PDF)** or **every event (CSV)** for the period. After
+  each download the page shows the file's own SHA-256 to note with it. Every check and every export is itself in the
+  audit log.
+- **Proof to take away:** Verify is Looking Glass checking itself. The **proof package (ZIP)** lets the auditor check
+  it without trusting Looking Glass: the log's files exactly as stored, `MANIFEST.json` with the SHA-256 of each, and
+  `verify_audit_log.py`, a short verifier in plain Python (standard library only) that recomputes the whole chain on
+  the auditor's own computer (`python verify_audit_log.py`). The auditor keeps the package's SHA-256 and its head. At
+  the next audit, **Compare with an earlier audit** (or `python verify_audit_log.py --earlier HASH@ENTRY` on a new
+  package): each entry's hash depends on every entry before it, so if the earlier head is still at its entry number,
+  the log up to it is unchanged, even against someone able to rewrite the whole log on the server. The package's
+  SHA-256 is written into the log too, so each package carries the receipt of the one before.
 
 Entries are archived, not deleted, when the log grows (kept `AUDIT_RETENTION_DAYS`, default 400 days); the thresholds
 of the checks are in `.env` ([CONFIGURATION.md](CONFIGURATION.md)).

@@ -156,10 +156,13 @@ Malpedia, Settings and the admin APIs answer 403 without the permission.
   chain, and `data/audit.head` (newest link and entry count) catches entries cut from the end. **Retention:** at
   `AUDIT_ROTATE_MB` the file is compressed into `data/audit_archive/` and kept `AUDIT_RETENTION_DAYS` (default 400);
   the last link of every archive removed by the retention is noted, so the check still covers what is left. Read in the
-  Audit portal (`audit_portal.py`): tabs per kind of event, dashboard, 13 control checks, access review, Verify, and
-  evidence exports (CSV, PDF report with the head hash), each check and export itself audited.
+  Audit portal (`audit_portal.py`): tabs per kind of event, dashboard, 15 control checks (evidence, no pass or fail),
+  access review, Verify, and evidence exports (CSV, PDF report with the head), each check and export itself audited.
   The chain proves integrity against later editing of the file; someone with full control of the server could still
-  rewrite the whole chain, which is why the auditor keeps the head hash from each audit outside the server.
+  rewrite the whole chain. Against that, the auditor takes the **proof package** (`audit_proof.py`): the log's files
+  as stored, their SHA-256s and an independent verifier (`audit_verifier.py`, standard library only) to run on their
+  own computer, and keeps its head (hash@entry) outside the server. At the next audit the earlier head must still be
+  at its entry number (`--earlier`, or the portal's comparison); a rewrite cannot keep it there.
   Entries written before the chain existed (older versions) are **sealed** once: their count, time span and SHA-256 go
   to `data/audit.seal`, and the seal is recorded in the chain. Changing them afterwards is detected; nothing can prove
   they were unchanged before the seal, and the evidence says so.

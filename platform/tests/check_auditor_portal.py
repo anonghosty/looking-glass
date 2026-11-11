@@ -150,9 +150,12 @@ try:
        [n["id"] for n in C["LG-01"]["nist"]] == ["IA-2(1)", "IA-2(2)"] and [n["id"] for n in C["LG-06"]["nist"]] == ["AC-7"]
        and [n["id"] for n in C["LG-10"]["nist"]] == ["AU-9", "AU-9(3)"] and [n["id"] for n in C["LG-11"]["nist"]] == ["AU-11"])
     ok("LG-01 states what sign-in enforces, not only enrolment", "requires the password and a one-time code" in C["LG-01"]["evidence"])
-    ok("LG-05: the auditor role is fixed and the portal only reads", C["LG-05"]["ok"] and "only reads" in C["LG-05"]["evidence"])
+    ok("no check gives a verdict (no pass or fail: the auditor decides)", all("ok" not in x for x in o["checks"])
+       and not any(w in x["evidence"].lower() for x in o["checks"] for w in ("passed", "attention", "within normal")))
+    ok("LG-05: the auditor role is fixed and the portal only reads", "holds exactly 'audit'" in C["LG-05"]["evidence"] and "only reads" in C["LG-05"]["evidence"])
     ia1 = C["LG-06"]
-    ok("LG-06 (AC-7): a lockout needs attention, with the address and day that failed most", not ia1["ok"] and "203.0.113.5" in ia1["evidence"], ia1["evidence"])
+    ok("LG-06 (AC-7): the lockout, the address and day that failed most, against the alert level", " 0 lockout" not in ia1["evidence"]
+       and "203.0.113.5" in ia1["evidence"] and "AUDIT_FAIL_ALERT" in ia1["evidence"], ia1["evidence"])
     au2 = C["LG-11"]
     ok("LG-11 (AU-11): judged from when the system started, said in the evidence", "system started" in au2["evidence"], au2["evidence"])
     ok("every check but HTTPS opens its evidence (tab to show)", all(x["view"] for x in o["checks"] if x["id"] != "LG-14")
@@ -160,7 +163,7 @@ try:
     ok("the overview says when the system started and how long it runs", o.get("started") and o.get("running_days") is not None)
     for i in range(3):                                   # three typing mistakes from another address: normal
         audit.add("login_failed", user="grace", ip="10.0.0.40", ua="x")
-    ok("LG-10: the log is unbroken", C["LG-10"]["ok"] and o["integrity"]["ok"])
+    ok("LG-10: the log is unbroken", "chain whole" in C["LG-10"]["evidence"] and o["integrity"]["ok"])
 
     print("Details read as sentences (the CSV keeps them as logged too)")
     import audit_portal as AP
@@ -266,6 +269,79 @@ try:
     tail = [json.loads(x) for x in open(audit.path).read().splitlines()[-2:]]
     ok("both exports are in the audit log, with who and which period", [x["event"] for x in tail] == ["audit_export", "audit_export"]
        and all(x["user"] == AUD and day in x["detail"] for x in tail))
+    ok("…and the chain is still whole", audit.chain.verify()["ok"])
+
+    print("Proof to take away: the proof package and the independent verifier")
+    import ast, hashlib, subprocess, zipfile
+    r = c.get("/api/audit/proof.zip", headers=H)
+    z = zipfile.ZipFile(io.BytesIO(r.data))
+    names = set(z.namelist())
+    ok("the proof package: the log as stored, a manifest, the verifier and a README", r.status_code == 200
+       and {"MANIFEST.json", "README.txt", "verify_audit_log.py", "log/audit.log", "log/audit.head"} <= names
+       and "attachment" in r.headers.get("Content-Disposition", ""), ", ".join(sorted(names)))
+    man = json.loads(z.read("MANIFEST.json"))
+    ok("…the manifest lists every file with its SHA-256", {f["path"] for f in man["files"]} == names - {"MANIFEST.json", "README.txt"}
+       and all(hashlib.sha256(z.read(f["path"])).hexdigest() == f["sha256"] for f in man["files"]))
+    ok("…the log files are byte for byte the stored ones", z.read("log/audit.log") == open(audit.path, "rb").read()[:len(z.read("log/audit.log"))])
+    last = json.loads(open(audit.path).read().splitlines()[-1])
+    ok("…its download is logged with the package's SHA-256 and the head it holds", last["event"] == "audit_export" and last["target"] == "proof"
+       and hashlib.sha256(r.data).hexdigest() in last["detail"] and man["head"] in last["detail"], last.get("detail", ""))
+    ok("…the head is sent with it (hash@entry) for the auditor to keep", r.headers.get("X-Audit-Head") == f"{man['head']}@{man['head_entry']}")
+    vsrc = z.read("verify_audit_log.py").decode()
+    mods = {a.name.split(".")[0] for n in ast.walk(ast.parse(vsrc)) if isinstance(n, ast.Import) for a in n.names} | \
+           {n.module.split(".")[0] for n in ast.walk(ast.parse(vsrc)) if isinstance(n, ast.ImportFrom) and n.module}
+    ok("the verifier needs the Python standard library only", mods <= {"argparse", "glob", "gzip", "hashlib", "json", "os", "re", "sys", "time"}, ", ".join(sorted(mods)))
+    pkg = os.path.join(tmp, "pkg"); z.extractall(pkg)
+
+    def run(*args):
+        p = subprocess.run([sys.executable, "-I", os.path.join(pkg, "verify_audit_log.py"), "--json", *args], capture_output=True, text=True,
+                           cwd=tempfile.gettempdir(), timeout=60)
+        try:
+            return p.returncode, json.loads(p.stdout)
+        except ValueError:
+            return p.returncode, {"stdout": p.stdout, "stderr": p.stderr}
+    rc, out = run()
+    ok("run on its own (python -I, outside Looking Glass): verified, every file as packaged", rc == 0 and out.get("ok") and out["manifest"]["problems"] == []
+       and out["head"] == man["head"] and out["head_entry"] == man["head_entry"], str(out)[:300])
+    earlier = f"{man['head']}@{man['head_entry']}"
+    rc, out = run("--earlier", earlier)
+    ok("…--earlier with the head it holds: proven", rc == 0 and out["earlier"]["proven"], json.dumps(out.get("earlier")))
+    rc, out = run("--earlier", f"{man['head']}@{man['head_entry'] + 3}")
+    ok("…the right hash at another entry number: not proven", rc == 1 and out["earlier"]["found"] and not out["earlier"]["same_entry"])
+    pl = os.path.join(pkg, "log", "audit.log")
+    orig = open(pl, encoding="utf-8").read().splitlines()
+    t = list(orig); x = json.loads(t[2]); x["user"] = "someone-else"; t[2] = json.dumps(x, ensure_ascii=False)
+    open(pl, "w", encoding="utf-8").write("\n".join(t) + "\n")
+    rc, out = run()
+    ok("an entry changed in the package: chain broken and the file reported changed", rc == 1 and not out["ok"] and out["break"]["entry"]
+       and any("log/audit.log" in p for p in out["manifest"]["problems"]), json.dumps(out.get("break")))
+    # the strongest attack: someone with the server rewrites an entry AND every link after it, the head and the manifest
+    sha = lambda s: hashlib.sha256(s.encode("utf-8")).hexdigest()
+    forged = [t[0], t[1], t[2]]
+    for ln in orig[3:]:
+        y = json.loads(ln); y["prev"] = sha(forged[-1]); forged.append(json.dumps(y, ensure_ascii=False))
+    open(pl, "w", encoding="utf-8").write("\n".join(forged) + "\n")
+    hd = json.load(open(os.path.join(pkg, "log", "audit.head"))); hd["head"] = sha(forged[-1])
+    json.dump(hd, open(os.path.join(pkg, "log", "audit.head"), "w"))
+    for f in man["files"]:
+        f["sha256"] = hashlib.sha256(open(os.path.join(pkg, *f["path"].split("/")), "rb").read()).hexdigest()
+    json.dump(man, open(os.path.join(pkg, "MANIFEST.json"), "w"))
+    rc, out = run()
+    ok("a whole rewrite (entry, every link, head, manifest) looks whole on its own…", rc == 0 and out["ok"], str(out.get("break")))
+    rc, out = run("--earlier", earlier)
+    ok("…but the earlier audit's head exposes it: not found, not verified", rc == 1 and not out["earlier"]["found"], json.dumps(out.get("earlier")))
+
+    print("Compare with an earlier audit (portal)")
+    d = c.get(f"/api/audit/continuity?earlier={earlier}", headers=H).json
+    ok("the earlier head at its entry: proven, with the head now", d["earlier"]["proven"] and d["earlier"]["entry"] == man["head_entry"]
+       and d["head_entry"] > man["head_entry"], json.dumps(d)[:300])
+    ok("…and the comparison is logged", (lambda l: l["event"] == "audit_verified" and l["target"] == "continuity" and "proven" in l["detail"])(
+        json.loads(open(audit.path).read().splitlines()[-1])))
+    d = c.get(f"/api/audit/continuity?earlier={'ab' * 32}@5", headers=H).json
+    ok("a hash that is not in the log: not found, not proven", not d["earlier"]["found"] and not d["earlier"]["proven"])
+    ok("a malformed value: refused", c.get("/api/audit/continuity?earlier=xyz", headers=H).status_code == 400)
+    ok("both need the audit permission", A.app.test_client().get("/api/audit/proof.zip").status_code in (302, 401, 403)
+       and A.app.test_client().get(f"/api/audit/continuity?earlier={earlier}").status_code in (302, 401, 403))
     ok("…and the chain is still whole", audit.chain.verify()["ok"])
 
     print("The admin page and the nav")
