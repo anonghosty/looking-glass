@@ -28,7 +28,8 @@ This document describes how Looking Glass is secured, what was changed after the
 | Changes | Admin role, CSRF token, JSON only, and same-origin checks on `Origin` / `Sec-Fetch-Site` | `app.py`, `security.py` |
 | Input | Times clamped to the replay days; Malpedia values validated; settings limited in size and content; 64 KB request limit | `app.py`, `malpedia.py`, `settings.py`, `security.py` |
 | Browser | Content-Security-Policy with a per-request nonce; no inline handlers and no eval; frames refused; nosniff; Referrer-Policy; integrity hashes on CDN files | `security.py`, templates |
-| Demo mode | Real addresses, AS numbers and network names are masked on the server; host filters accept only opaque references; Settings is admin-only | `privacy.py`, `app.py` |
+| Demo mode | Real addresses, AS numbers and network names are masked on the server; host filters accept only opaque references; report fields only from an allowlist; Settings is admin-only | `privacy.py`, `masked_fields.py`, `app.py` |
+| Report zips | Unpacked within limits counted on the real bytes (unpacked size, compression ratio, files per zip, free disk); a zip bomb is quarantined with the reason and nothing of it is loaded; names inside a zip cannot leave its folder. Defaults suit a large country, changeable in `.env` | `database/zip_limits.py` |
 | Database | Read-only MongoDB account (`lookingglass_ro`), MongoDB bound to localhost with authentication | `deploy/create_readonly_db_user.py` |
 | Operating system | systemd sandbox: no privilege gain, read-only system and home folder, writable only in `data/`, private files (umask 077) | `deploy/looking-glass.service.template` |
 | Secrets | `.env` and `data/users.json`, `sessions.json`, `automation.key` and `tls/key.pem` are mode 600; backups are mode 600 in a 700 folder | file system |

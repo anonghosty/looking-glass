@@ -28,6 +28,10 @@ run "CSV formula safety"              $PY tests/check_csv_safety.py
 run "replayed counts"                 $PY tests/verify_replayed.py
 run "constituency"                    $PY tests/verify_constituency.py
 run "demo masking"                    $PY tests/test_demo.py
+# the database pipeline beside the platform (database/ in a release install)
+DBDIR=""; for d in ../database ../shadowserver; do [ -f "$d/zip_limits.py" ] && [ -x "$d/.venv/bin/python" ] && DBDIR=$d && break; done
+if [ -n "$DBDIR" ]; then run "pipeline: unzip limits (zip bombs)" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_zip_limits.py"
+else run "pipeline: unzip limits (zip bombs)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 run "privacy + roles unit tests"      $PY tests/test_privacy_roles.py
 run "masked viewers: report fields allowlist" $PY tests/check_masked_fields.py
 run "intel gathered (researchers)"    $PY tests/check_intel.py

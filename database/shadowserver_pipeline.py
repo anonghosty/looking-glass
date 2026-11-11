@@ -54,6 +54,7 @@ from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import mail_sources  # noqa: E402  IMAP, Gmail API or Microsoft Graph (MAIL_PROVIDER)
+import zip_limits  # noqa: E402  size, ratio and file-count limits for unpacking (zip bombs)
 
 log = logging.getLogger("shadowserver")
 
@@ -136,6 +137,7 @@ class Settings:
     download_threads: int
     fetch_batch: int
     days: int
+    zip_limits: zip_limits.Limits = zip_limits.Limits()
 
     @property
     def attachments_dir(self) -> Path:
@@ -183,6 +185,7 @@ def load_settings(args: argparse.Namespace) -> Settings:
         download_threads=int(_env("DOWNLOAD_THREADS", "4")),
         fetch_batch=int(_env("IMAP_FETCH_BATCH", "25")),
         days=args.days if args.days is not None else int(_env("EMAIL_DAYS", "1")),
+        zip_limits=zip_limits.Limits.from_env(_env),
     )
 
 
@@ -480,9 +483,12 @@ def pull_emails(s: Settings, stats: Counter, refetch: bool = False) -> None:
 
 # --------------------------------------------------------------------------- stage 1b: unzip + sort
 
-def _extract_zip(zip_path: Path, unzipped_dir: Path, sorting_dir: Path) -> str:
-    """Extract one zip. Report CSVs go straight to sorting_backup/<service>/ (overwrite),
-    everything else to unzipped_backup/<zipname>/ like before."""
+def _extract_zip(zip_path: Path, unzipped_dir: Path, sorting_dir: Path,
+                 limits: zip_limits.Limits = zip_limits.Limits()) -> str:
+    """Extract one zip. Report CSVs go to sorting_backup/<service>/ (overwrite), everything else to
+    unzipped_backup/<zipname>/ like before. Everything is unpacked into a .partial folder first, within the limits of
+    zip_limits.py (real bytes counted), and only moved into place once the whole zip is unpacked: a zip that breaks
+    a limit halfway leaves nothing behind, and is quarantined."""
     target = unzipped_dir / zip_path.name
     if target.exists():
         return "zips_skipped", []
@@ -490,31 +496,39 @@ def _extract_zip(zip_path: Path, unzipped_dir: Path, sorting_dir: Path) -> str:
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True)
     try:
-        routed = []
+        staged = []
         with zipfile.ZipFile(zip_path) as zf:
-            for i, info in enumerate(zf.infolist()):
+            infos = zf.infolist()
+            zip_limits.check_listing(infos, limits)
+            budget = zip_limits.Budget(limits, unzipped_dir)
+            for i, info in enumerate(infos):
                 if info.is_dir():
                     continue
                 base = os.path.basename(info.filename)
                 m = SERVICE_RE.match(base)
                 if not m:
-                    zf.extract(info, tmp)
+                    zip_limits.copy_member(zf, info, zip_limits.safe_path(tmp, info.filename), budget)
                     continue
-                service_dir = sorting_dir / m.group(1)
-                service_dir.mkdir(parents=True, exist_ok=True)
-                staged = tmp / f".route-{i}"
-                with zf.open(info) as src, open(staged, "wb") as dst:
-                    shutil.copyfileobj(src, dst, 1 << 20)
-                existed = (service_dir / base).exists()
-                move_replace(staged, service_dir / base)
-                routed.append((base, m.group(1), existed))
+                zip_limits.copy_member(zf, info, tmp / f".route-{i}", budget)
+                staged.append((tmp / f".route-{i}", base, m.group(1)))
+        routed = []
+        for path, base, service in staged:                 # the whole zip is unpacked: now move the reports in
+            service_dir = sorting_dir / service
+            service_dir.mkdir(parents=True, exist_ok=True)
+            existed = (service_dir / base).exists()
+            move_replace(path, service_dir / base)
+            routed.append((base, service, existed))
         os.replace(tmp, target)
         return "zips_extracted", routed
+    except zip_limits.ZipRefused as exc:
+        shutil.rmtree(tmp, ignore_errors=True)
+        where = zip_limits.quarantine(zip_path, unzipped_dir.parent, str(exc))
+        return "zips_refused", [str(exc), where.name]
     except zipfile.BadZipFile:
         shutil.rmtree(tmp, ignore_errors=True)
         zip_path.unlink(missing_ok=True)
         return "zips_bad_deleted", []
-    except Exception as exc:  # noqa: BLE001  (left in place, retried next run)
+    except Exception as exc:  # noqa: BLE001  (left in place, retried next run; also zip_limits.LowDisk)
         shutil.rmtree(tmp, ignore_errors=True)
         return "zips_failed", [str(exc)]
 
@@ -558,7 +572,7 @@ def unzip_and_sort(s: Settings, stats: Counter) -> None:
         threads = max(2, min(8, s.workers))
         total = len(todo)
         with ThreadPoolExecutor(max_workers=threads) as pool:
-            futures = {pool.submit(_extract_zip, z, s.unzipped_dir, s.sorting_dir): z for z in todo}
+            futures = {pool.submit(_extract_zip, z, s.unzipped_dir, s.sorting_dir, s.zip_limits): z for z in todo}
             for i, fut in enumerate(futures_completed(futures), 1):
                 z = futures[fut]
                 result, items = fut.result()
@@ -573,6 +587,9 @@ def unzip_and_sort(s: Settings, stats: Counter) -> None:
                     log.warning("[UNZIP %d/%d] [DELETE] corrupt or mislabeled zip: %s%s", i, total, z.name,
                                 " (its e-mail/link is fetched again next run)" if reopened else
                                 " (not in the mail record: run with --days N --all to fetch it again)")
+                elif result == "zips_refused":
+                    log.warning("[UNZIP %d/%d] [QUARANTINE] %s not unpacked: it %s. Moved to quarantine/%s",
+                                i, total, z.name, items[0], items[1])
                 elif result == "zips_failed":
                     log.error("[UNZIP %d/%d] FAILED %s: %s (will retry next run)", i, total, z.name,
                               items[0] if items else "")
@@ -592,9 +609,9 @@ def unzip_and_sort(s: Settings, stats: Counter) -> None:
                 stats["csv_moved"] += 1
                 detail("[%s] %s -> %s", "OVERWRITE" if existed else "MOVE", fn, m.group(1))
 
-    log.info("Unzip: %d extracted (%d report CSVs sorted), %d already done, %d bad deleted, %d failed | "
-             "%d loose CSV moved (%.1fs)", stats["zips_extracted"], stats["csv_sorted"], stats["zips_skipped"],
-             stats["zips_bad_deleted"], stats["zips_failed"], stats["csv_moved"], time.monotonic() - t0)
+    log.info("Unzip: %d extracted (%d report CSVs sorted), %d already done, %d bad deleted, %d quarantined (limits), "
+             "%d failed | %d loose CSV moved (%.1fs)", stats["zips_extracted"], stats["csv_sorted"], stats["zips_skipped"],
+             stats["zips_bad_deleted"], stats["zips_refused"], stats["zips_failed"], stats["csv_moved"], time.monotonic() - t0)
     services = [(d.name, sum(1 for f in os.scandir(d) if f.name.endswith(".csv")))
                 for d in sorted(os.scandir(s.sorting_dir), key=lambda e: e.name) if d.is_dir()]
     log.info("Service folders populated: %d (%d CSV files)", len(services), sum(c for _, c in services))

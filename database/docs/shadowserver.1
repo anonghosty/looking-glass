@@ -325,6 +325,13 @@ Folder holding attachments_backup/, unzipped_backup/ and sorting_backup/
 .BR WORKERS ", " INSERT_CHUNK ", " DOWNLOAD_THREADS ", " IMAP_FETCH_BATCH
 Tuning: loader processes (6), rows per bulk insert (2000), parallel link
 downloads (4), e\-mails per IMAP round trip (25).
+.TP
+.BR ZIP_MAX_UNPACKED_MB ", " ZIP_MAX_RATIO ", " ZIP_MAX_FILES ", " ZIP_KEEP_FREE_MB
+Unpacking limits against zip bombs: unpacked size of one zip (2048 MB),
+compression ratio of one file (200), files per zip (100), disk space kept
+free (1024 MB). Real bytes are counted while unpacking; a zip that breaks a
+limit is moved to quarantine/ with a .reason.txt and is not retried. Low disk
+space is not the zip's fault: that zip is tried again next run.
 .SH FILES
 .TP
 .I .env

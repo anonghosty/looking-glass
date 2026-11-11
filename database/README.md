@@ -276,6 +276,18 @@ All settings live in `.env` in the project folder. Its permissions are `600`, so
 | `DOWNLOAD_THREADS` | parallel link downloads | `4` |
 | `IMAP_FETCH_BATCH` | e-mails fetched per IMAP round trip | `25` |
 | `REPORT_SUFFIX` | regular expression for the part of report file names after the service (`<country>-geo`) | any `<name>-geo` |
+| `ZIP_MAX_UNPACKED_MB` | largest unpacked size of one report zip, all files together | `2048` |
+| `ZIP_MAX_RATIO` | most a file may be compressed (unpacked / packed); report CSVs stay well under 50, zip bombs go past 1000 | `200` |
+| `ZIP_MAX_FILES` | most files in one zip (Shadowserver sends one CSV per zip) | `100` |
+| `ZIP_KEEP_FREE_MB` | disk space that must stay free while unpacking; when it runs out the zip is tried again next run | `1024` |
+
+**Unpacking limits (zip bombs).** The real bytes are counted while a zip is unpacked (the sizes a zip states about
+itself can be forged), and unpacking stops the moment a limit is passed. Everything is unpacked into a `.partial`
+folder first and only moved into `sorting_backup/` once the whole zip is done, so a refused zip leaves nothing behind.
+A refused zip is moved to `quarantine/` in the data folder with a `.reason.txt` saying which limit it broke; it is
+not deleted and not retried. If it is a genuine report, raise that limit in `.env` and move the zip back into
+`attachments_backup/`. The defaults are generous on purpose: a large country's report can unpack to hundreds of MB.
+File names inside a zip can never place a file outside its folder.
 
 ---
 
