@@ -1,10 +1,12 @@
-/* Looking Glass · the audit log (/audit, audit_page.py): every sign-in, change, export, decision and advisory, newest
-   first, with search, paging and the built-in security test's events hidden unless asked for. Read only; data is
-   inserted as text only. The data: GET /api/admin/audit (permission 'audit', checked on the server). */
+/* Looking Glass · the Audit portal (/audit, audit_portal.py). Read only: the audit log split into tabs, the dashboard
+   with the control checks, the access review, who is signed in, and the log's integrity with the evidence exports.
+   Every value is inserted as text. Data: /api/audit/* (permission 'audit', checked on the server). */
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
+  const svgEl = (t, a) => { const e = document.createElementNS("http://www.w3.org/2000/svg", t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+  const fmt = (n) => (n == null ? "–" : Number(n).toLocaleString("en-GB"));
   const fmtT = (t) => (t ? new Date(t * 1000).toISOString().replace("T", " ").slice(0, 16) : "–");
   const shortUA = (ua) => {
     if (!ua) return "–";
@@ -13,98 +15,264 @@
     return os ? `${b} · ${os}` : b;
   };
   function banner(msg, bad) { const b = $("banner"); b.className = "st-banner" + (bad ? " err" : ""); b.textContent = msg; b.hidden = false; }
-  const EVENT_NAMES = { login: "Logged in", login_failed: "Failed login", login_locked: "Locked out", login_refused: "Login refused", logout: "Logged out",
-    registered: "Account created", mfa_enrolled: "Authenticator set up", recovery_code_used: "Recovery code used", session_misuse: "Session misuse",
-    kicked: "Kicked", user_approve: "Approved", user_role: "Role changed", user_revoke: "Revoked", user_restore: "Restored", user_reset_mfa: "Authenticator reset",
-    user_delete: "Deleted", roles_changed: "Roles changed", settings_changed: "Settings changed", register_limited: "Registration limit", setup_code_wrong: "Wrong setup code (first administrator)",
-    reset_requested: "Password reset requested", reset_failed: "Password reset failed", password_reset: "Password reset", user_allow_reset: "Password reset allowed",
-    networks_identify: "Networks identified", network_edited: "Network name edited", network_type_added: "Network type added",
-    definition_saved: "Definition saved", note_added: "Note added", note_removed: "Note removed", report_pdf: "Report downloaded",
-    finding_created: "Finding opened", finding_status: "Finding moved", finding_decision: "Finding decided", finding_reply: "Finding replied",
-    finding_review_decision: "Review decided", combo_review_sent: "Sent to management", combo_export: "Combination report",
-    advisory_saved: "Advisory saved", advisory_report: "Advisory report generated", advisory_drafted: "Advisory drafted", advisory_sent: "Advisory sent",
-    advisory_export: "Advisory exported", advisory_download: "Advisory report downloaded", organisation_set: "Organisation set", peace_of_mind: "Peace of mind" };
-  let offset = 0;
-  async function load(reset) {
-    if (reset) offset = 0;
-    const q = encodeURIComponent($("auditSearch").value.trim());
-    const tests = $("auditTests").checked ? 1 : 0;
-    let d;
-    try {
-      const r = await fetch(`/api/admin/audit?limit=200&offset=${offset}&q=${q}&selftests=${tests}`, { cache: "no-store" });
-      d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.error || r.statusText);
-    } catch (e) { banner(`Could not load the audit log: ${e.message}`, true); return; }
-    finally { $("auLoading")?.remove(); window.LGLoader?.ready(); }
-    const tb = $("auditTable").querySelector("tbody"); if (reset) tb.replaceChildren();
+  async function getJSON(url) {
+    const r = await fetch(url, { cache: "no-store" });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    return d;
+  }
+  const HINTS = {
+    auth: "Sign-ins and sign-outs, failed sign-ins and lockouts, authenticator set-ups, recovery codes and password resets.",
+    accounts: "Registrations, approvals, role changes, revocations, restores, deletions, authenticator resets and changes to what a role may do.",
+    sessions: "Sessions ended by an administrator, and session misuse (a session used from another address or browser).",
+    config: "Settings (country, constituency), network names and types, definitions, the organisation, and Peace of mind.",
+    data: "Report and CSV downloads, combination reports, advisory files, and the audit evidence exported here.",
+    workflow: "Findings, reviews and decisions, analyst and combination codes, notes, and advisories from saved to sent.",
+    system: "The built-in security self-test (temporary lg-selftest accounts, attacks simulated on purpose), the checks on this computer, and integrity checks.",
+  };
+  const TAB_NAMES = {};
+  document.querySelectorAll(".au-tabs [data-tab]").forEach((b) => { TAB_NAMES[b.dataset.tab] = b.firstChild.textContent.trim(); });
+
+  // ---------------- the period, shared by every tab
+  const today = new Date().toISOString().slice(0, 10);
+  const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+  $("auTo").value = today; $("auFrom").value = daysAgo(29); $("auTo").max = today; $("auFrom").max = today;
+  const per = () => `from=${encodeURIComponent($("auFrom").value)}&to=${encodeURIComponent($("auTo").value)}`;
+  const presets = [...document.querySelectorAll(".au-presets button")];
+  presets.forEach((b) => b.addEventListener("click", () => {
+    presets.forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    $("auTo").value = today; $("auFrom").value = daysAgo(+b.dataset.days - 1); reloadCurrent();
+  }));
+  ["auFrom", "auTo"].forEach((id) => $(id).addEventListener("change", () => { presets.forEach((x) => x.setAttribute("aria-pressed", "false")); reloadCurrent(); }));
+
+  // ---------------- small drawing helpers
+  function kpi(label, value, note, tone) {
+    const k = el("div", `au-kpi${tone ? " " + tone : ""}`); k.append(el("span", "au-kpi-k", label), el("b", null, value));
+    if (note) k.append(el("small", null, note)); return k;
+  }
+  function card(title, sub) { const c = el("div", "au-card"); c.append(el("h3", null, title)); if (sub) c.append(el("p", "au-sub", sub)); return c; }
+  function bars(rows, key, fmtv) {                 // horizontal bars: [{label, n}]
+    const box = el("div", "au-bars"); const max = Math.max(1, ...rows.map((r) => r[key]));
+    if (!rows.length) { box.append(el("p", "muted", "None in the period.")); return box; }
+    for (const r of rows) {
+      const row = el("div", "au-bar"); const b = el("span", "au-bar-f"); b.style.width = `${Math.max(2, (100 * r[key]) / max)}%`;
+      const t = el("span", "au-bar-l", r.label); t.title = r.label;
+      row.append(t, el("span", "au-bar-t", "")); row.lastChild.append(b); row.append(el("span", "au-bar-n", fmtv ? fmtv(r[key]) : fmt(r[key]))); box.append(row);
+    }
+    return box;
+  }
+  function dayChart(days) {                       // sign-ins per day: successful, failed and lockouts stacked
+    const W = 720, H = 180, P = 24, n = Math.max(1, days.length), bw = (W - P * 2) / n;
+    const max = Math.max(1, ...days.map((d) => d.ok + d.failed + d.locked));
+    const s = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, class: "au-chart", role: "img", "aria-label": "Sign-ins per day" });
+    for (let i = 0; i <= 4; i++) { const y = H - P - ((H - P * 2) * i) / 4; s.append(svgEl("line", { x1: P, x2: W - P, y1: y, y2: y, class: "au-grid" })); }
+    days.forEach((d, i) => {
+      let y = H - P; const x = P + i * bw + bw * 0.15, w = Math.max(1, bw * 0.7);
+      for (const [k, cls] of [["ok", "au-c-ok"], ["failed", "au-c-fail"], ["locked", "au-c-lock"]]) {
+        const h = ((H - P * 2) * d[k]) / max; if (!h) continue; y -= h;
+        const r = svgEl("rect", { x, y, width: w, height: h, class: cls }); const t = svgEl("title", {}); t.textContent = `${d.day}: ${d.ok} signed in, ${d.failed} failed, ${d.locked} locked out`; r.append(t); s.append(r);
+      }
+    });
+    const lab = (x, t, a) => { const e = svgEl("text", { x, y: H - 6, class: "au-ax", "text-anchor": a }); e.textContent = t; s.append(e); };
+    lab(P, days[0]?.day || "", "start"); lab(W - P, days[days.length - 1]?.day || "", "end");
+    const top = svgEl("text", { x: P, y: P - 8, class: "au-ax" }); top.textContent = `${max} per day`; s.append(top);
+    return s;
+  }
+  function hourChart(hours, work) {
+    const W = 720, H = 150, P = 22, bw = (W - P * 2) / 24, max = Math.max(1, ...hours);
+    const s = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, class: "au-chart", role: "img", "aria-label": "Sign-ins by hour of the day (UTC)" });
+    s.append(svgEl("rect", { x: P + work[0] * bw, y: P - 6, width: (work[1] - work[0]) * bw, height: H - P * 2 + 6, class: "au-work" }));
+    hours.forEach((v, h) => {
+      const hh = ((H - P * 2) * v) / max, r = svgEl("rect", { x: P + h * bw + bw * 0.15, y: H - P - hh, width: bw * 0.7, height: hh, class: h >= work[0] && h < work[1] ? "au-c-ok" : "au-c-late" });
+      const t = svgEl("title", {}); t.textContent = `${String(h).padStart(2, "0")}:00–${String(h + 1).padStart(2, "0")}:00 UTC: ${v} sign-in(s)`; r.append(t); s.append(r);
+      if (h % 3 === 0) { const e = svgEl("text", { x: P + h * bw, y: H - 6, class: "au-ax" }); e.textContent = String(h).padStart(2, "0"); s.append(e); }
+    });
+    return s;
+  }
+  function legend(items) { const l = el("div", "au-legend"); for (const [cls, t] of items) { const i = el("span"); i.append(el("i", cls), document.createTextNode(t)); l.append(i); } return l; }
+  function eventTable(rows, cols) {
+    const t = el("table", "hosts adm-table au-table"); const h = el("tr"); cols.forEach(([n]) => h.append(el("th", null, n)));
+    const th = el("thead"); th.append(h); t.append(th); const tb = el("tbody");
+    for (const r of rows) { const tr = el("tr", r.alert ? "adm-alert" : ""); cols.forEach(([, f, cls]) => tr.append(el("td", (typeof cls === "function" ? cls(r) : cls) || null, f(r)))); tb.append(tr); }
+    t.append(tb); const w = el("div", "table-wrap"); w.append(t); return w;
+  }
+
+  // ---------------- Overview: the figures, the charts and the control checks
+  async function loadOverview() {
+    const d = await getJSON(`/api/audit/overview?${per()}`);
+    const body = $("ovBody"); body.replaceChildren();
+    const k = d.kpis, passed = d.checks.filter((c) => c.ok).length;
+    const top = el("div", "au-kpis");
+    top.append(kpi("Control checks", `${passed} / ${d.checks.length}`, passed === d.checks.length ? "all passed" : `${d.checks.length - passed} need attention`, passed === d.checks.length ? "good" : "warn"),
+      kpi("Audit log", d.integrity.ok ? "Unbroken" : "Broken", `${fmt(d.integrity.entries)} entries kept`, d.integrity.ok ? "good" : "bad"),
+      kpi("Sign-ins", fmt(k.signins), `${fmt(k.people)} people`), kpi("Failed sign-ins", fmt(k.failed), `${k.failure_rate} % of attempts`, k.failed ? "warn" : ""),
+      kpi("Lockouts", fmt(k.lockouts), null, k.lockouts ? "warn" : ""), kpi("Privileged changes", fmt(k.privileged), "roles, accounts, settings"),
+      kpi("Exports", fmt(k.exports), "reports, CSV, evidence"), kpi("Outside working hours", fmt(k.after_hours), `sign-ins outside ${String(d.work_hours[0]).padStart(2, "0")}:00–${String(d.work_hours[1]).padStart(2, "0")}:00 UTC`, k.after_hours ? "warn" : ""));
+    body.append(el("p", "au-sub", `${d.period.from} to ${d.period.to} (UTC) · ${fmt(k.events)} events, self-test left out · access mode: ${d.access_mode}`), top);
+
+    // the control checks, by area
+    const cc = card("Control checks", "Grouped like an IT audit (access control, authentication, change management, logging and monitoring, data protection). Each with its evidence; the PDF report carries the same.");
+    const areas = [...new Set(d.checks.map((c) => c.area))];
+    for (const a of areas) {
+      const g = el("div", "au-check-g"); g.append(el("h4", null, a));
+      for (const c of d.checks.filter((x) => x.area === a)) {
+        const r = el("div", `au-check ${c.ok ? "ok" : "warn"}`);
+        r.append(el("span", "au-check-st", c.ok ? "Passed" : "Attention"), el("code", null, c.id));
+        const t = el("div"); t.append(el("b", null, c.control), el("p", null, c.evidence)); r.append(t); g.append(r);
+      }
+      cc.append(g);
+    }
+    const grid = el("div", "au-grid2");
+    const c1 = card("Sign-ins per day"); c1.append(dayChart(d.per_day), legend([["au-c-ok", "signed in"], ["au-c-fail", "failed"], ["au-c-lock", "locked out"]]));
+    const c2 = card("Sign-ins by hour of the day (UTC)", "The shaded band is working hours (AUDIT_WORK_HOURS)."); c2.append(hourChart(d.hours, d.work_hours), legend([["au-c-ok", "within working hours"], ["au-c-late", "outside"]]));
+    const c3 = card("Events by kind"); c3.append(bars(d.tabs.map((t) => ({ label: t.label, n: t.n })), "n"));
+    const c4 = card("Failed sign-ins by address", "Failed sign-ins, refusals and lockouts."); c4.append(bars(d.fail_sources.map((s) => ({ label: `${s.ip} · ${s.location}`, n: s.n })), "n"));
+    const c5 = card("Exports by person"); c5.append(bars(d.exports_by.map((s) => ({ label: s.who, n: s.n })), "n"));
+    const c6 = card("Recent privileged changes", "Roles, accounts, settings, Peace of mind, sessions ended.");
+    c6.append(d.privileged_recent.length ? eventTable(d.privileged_recent, [["Time", (r) => r.when, "mono"], ["Change", (r) => r.label], ["By", (r) => r.user_label || r.user], ["Account", (r) => r.target_label || r.target || "–"], ["Detail", (r) => r.detail, "adm-detail"]]) : el("p", "muted", "None in the period."));
+    grid.append(c1, c2, c3, c4, c5, c6);
+    body.append(cc, grid);
+  }
+
+  // ---------------- one tab of the log
+  let logTab = "auth", logOffset = 0;
+  async function loadLog(reset) {
+    if (reset) logOffset = 0;
+    const q = encodeURIComponent($("logSearch").value.trim());
+    const d = await getJSON(`/api/audit/events?tab=${logTab}&${per()}&q=${q}&limit=200&offset=${logOffset}&alerts=${$("logAlerts").checked ? 1 : 0}&selftests=${$("logTests").checked ? 1 : 0}`);
+    for (const [key, n] of Object.entries(d.counts || {})) { const s = document.querySelector(`[data-n="${key}"]`); if (s) s.textContent = fmt(n); }
+    document.querySelectorAll("[data-n]").forEach((s) => { if (!(s.dataset.n in (d.counts || {}))) s.textContent = "0"; });
+    const tb = $("logTable").querySelector("tbody"); if (reset) tb.replaceChildren();
+    if (reset && !d.rows.length) { const tr = el("tr"); const td = el("td", "muted", "No events of this kind in the period."); td.colSpan = 8; tr.append(td); tb.append(tr); }
     for (const r of d.rows) {
-      const tr = el("tr", (/failed|locked|misuse|refused|revoke|delete|limited/.test(r.event) ? "adm-alert" : "") + (r.selftest ? " adm-selftest" : ""));
-      if (r.selftest) tr.title = "Made by the built-in security test (temporary lg-selftest accounts)";
+      const tr = el("tr", (r.alert ? "adm-alert" : "") + (r.selftest ? " adm-selftest" : "") + (r.privileged ? " au-priv" : ""));
+      if (r.selftest) tr.title = "Made by the built-in security self-test or a check on this computer";
       const br = el("td", null, shortUA(r.ua)); br.title = r.ua || "";
-      tr.append(el("td", "mono", fmtT(r.t)), el("td", null, EVENT_NAMES[r.event] || r.event), el("td", null, r.user_label || r.user || "–"),
+      tr.append(el("td", "mono", fmtT(r.t)), el("td", null, r.label), el("td", null, r.user_label || r.user || "–"),
         el("td", null, r.target_label || r.target || "–"), el("td", "mono", r.ip || "–"), el("td", null, r.location || "–"), br, el("td", "adm-detail", r.detail || ""));
       tb.append(tr);
     }
-    offset += d.rows.length;
-    $("auditCount").textContent = `${offset.toLocaleString()} of ${d.total.toLocaleString()} events` +
-      (d.selftests_hidden ? ` · ${d.selftests_hidden.toLocaleString()} self-test events hidden` : "");
-    $("auditMore").hidden = offset >= d.total;
+    logOffset += d.rows.length;
+    $("logCount").textContent = `${fmt(logOffset)} of ${fmt(d.total)} events`;
+    $("logMore").hidden = logOffset >= d.total;
   }
-  let st; $("auditSearch").addEventListener("input", () => { clearTimeout(st); st = setTimeout(() => load(true), 300); });
-  $("auditMore").addEventListener("click", () => load(false));
-  $("auditTests").addEventListener("change", () => load(true));
+  let lst; $("logSearch").addEventListener("input", () => { clearTimeout(lst); lst = setTimeout(() => loadLog(true).catch((e) => banner(e.message, true)), 300); });
+  $("logAlerts").addEventListener("change", () => loadLog(true).catch((e) => banner(e.message, true)));
+  $("logTests").addEventListener("change", () => loadLog(true).catch((e) => banner(e.message, true)));
+  $("logMore").addEventListener("click", () => loadLog(false).catch((e) => banner(e.message, true)));
 
-  // ---------------- the live sessions (roles that manage users): who is signed in now; end one to sign it out
-  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
+  // ---------------- access review
+  async function loadAccess() {
+    const d = await getJSON("/api/audit/access");
+    const body = $("accBody"); body.replaceChildren();
+    const a = d.accounts, act = a.filter((x) => x.status === "active");
+    const k = el("div", "au-kpis");
+    k.append(kpi("Accounts", fmt(a.length), `${fmt(act.length)} active`), kpi("Administrators", fmt(act.filter((x) => x.role === "admin").length), `limit ${d.thresholds.max_admins}`, act.filter((x) => x.role === "admin").length > d.thresholds.max_admins ? "warn" : ""),
+      kpi("Without an authenticator", fmt(act.filter((x) => !x.mfa).length), null, act.some((x) => !x.mfa) ? "bad" : "good"),
+      kpi("Dormant", fmt(act.filter((x) => x.flags.some((f) => f.startsWith("no sign-in"))).length), `no sign-in for ${d.thresholds.dormant_days}+ days`),
+      kpi("Waiting for approval", fmt(a.filter((x) => x.status === "pending").length)), kpi("Revoked", fmt(a.filter((x) => x.status === "disabled").length)));
+    body.append(k);
+    const c1 = card("Accounts", "Sorted by name. Flags: no authenticator, dormant, pending too long, every permission (administrators).");
+    c1.append(eventTable(a, [["Account", (x) => (x.full_name ? `${x.full_name} (${x.name})` : x.name)], ["Organisation", (x) => x.organisation || "–"], ["Role", (x) => x.role],
+      ["Status", (x) => ({ active: "Active", pending: "Pending", disabled: "Revoked" }[x.status] || x.status)], ["Authenticator", (x) => (x.mfa ? `yes · ${x.recovery_left} recovery codes` : "NO")],
+      ["Last sign-in", (x) => (x.last_login ? `${x.last_login} · ${x.last_login_location}` : "never"), "mono"], ["Approved", (x) => [x.approved_by, x.approved_at].filter(Boolean).join(" · ") || "–"],
+      ["Signed in now", (x) => (x.sessions ? `${x.sessions} session(s)` : "–")], ["Flags", (x) => x.flags.join("; ") || "–", (x) => (x.flags.length ? "au-flags" : "muted")]]));
+    const c2 = card("Roles and what they may do", "Fixed roles cannot be changed by anyone: admin (every permission), management (the Executive portal only), auditor (this portal only, read only).");
+    const perms = Object.keys(d.perms);
+    const t = el("table", "hosts adm-table au-roles"); const h = el("tr"); h.append(el("th", null, "Permission"));
+    for (const r of d.roles) { const th = el("th"); th.append(el("div", null, r.role), el("small", "muted", `${r.accounts} account(s)${r.fixed ? " · fixed" : ""}`)); h.append(th); }
+    const th0 = el("thead"); th0.append(h); t.append(th0); const tb = el("tbody");
+    for (const p of perms) {
+      const tr = el("tr"); const d0 = el("td"); d0.append(el("b", null, p), el("div", "muted", d.perms[p])); tr.append(d0);
+      for (const r of d.roles) tr.append(el("td", "au-dot", r.permissions.includes(p) ? "●" : ""));
+      tb.append(tr);
+    }
+    t.append(tb); const w = el("div", "table-wrap"); w.append(t); c2.append(w);
+    body.append(c1, c2);
+  }
+
+  // ---------------- signed in now
   const fmtAgo = (s) => (s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`);
   async function loadSessions() {
-    if (!$("sessionsTable")) return;
-    let d;
-    try {
-      const r = await fetch("/api/admin/sessions", { cache: "no-store" });
-      d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.error || r.statusText);
-    } catch (e) { banner(`Could not load sessions: ${e.message}`, true); return; }
+    const d = await getJSON("/api/admin/sessions");
     const tb = $("sessionsTable").querySelector("tbody"); tb.replaceChildren();
-    if (!d.sessions.length) { const tr = el("tr"); const td = el("td", "muted", "No active sessions."); td.colSpan = 8; tr.append(td); tb.append(tr); }
+    if (!d.sessions.length) { const tr = el("tr"); const td = el("td", "muted", "No active sessions."); td.colSpan = 7; tr.append(td); tb.append(tr); }
     for (const s of d.sessions) {
-      const tr = el("tr");
-      const who = el("td"); who.append(el("b", null, s.user)); if (s.current) who.append(el("span", "adm-you", " (this session)"));
+      const tr = el("tr"); const who = el("td"); who.append(el("b", null, s.user)); if (s.current) who.append(el("span", "adm-you", " (this session)"));
       const br = el("td", null, shortUA(s.browser)); br.title = s.browser || "";
-      const end = el("td");
-      if (!s.current && d.can_end) {
-        const b = el("button", "pill-btn warn", "End session"); b.type = "button";
-        b.addEventListener("click", async () => {
-          b.disabled = true;
-          try {
-            const r = await fetch(`/api/admin/sessions/${encodeURIComponent(s.id)}/end`, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: "{}" });
-            const j = await r.json().catch(() => ({}));
-            if (!r.ok) throw new Error(j.error || r.statusText);
-            banner(`Session of ${s.user} ended.`);
-          } catch (e) { banner(e.message, true); }
-          loadSessions();
-        });
-        end.append(b);
-      }
       const type = el("td", "adm-meta"); type.append(el("div", null, s.persist ? "Stay signed in" : "Browser session"), el("div", "muted", `until ${fmtT(s.expires)}`));
-      tr.append(who, el("td", "mono", s.ip), el("td", null, s.location), br, type, el("td", null, fmtT(s.created)), el("td", null, fmtAgo(s.idle_s)), end);
+      tr.append(who, el("td", "mono", s.ip), el("td", null, s.location), br, type, el("td", null, fmtT(s.created)), el("td", null, fmtAgo(s.idle_s)));
       tb.append(tr);
     }
   }
 
-  // ---------------- tabs: the audit log, and the sessions where this role may see them
-  const tabs = [...document.querySelectorAll(".adm-tabs [data-tab]")];
-  function show(tab) {
-    for (const b of tabs) b.setAttribute("aria-pressed", String(b.dataset.tab === tab));
-    for (const p of document.querySelectorAll(".adm-pane")) p.hidden = p.id !== `pane-${tab}`;
-    // each tab shows its loading animation while its data comes (the audit log has its own line on the first visit)
-    if (tab === "sessions") { if (window.LGLoader?.pane) window.LGLoader.pane($("pane-sessions"), "Opening who is signed in…", loadSessions); else loadSessions(); }
-    else if (tab === "audit" && !$("auLoading") && window.LGLoader?.pane) window.LGLoader.pane($("pane-audit"), "Opening the audit log…", () => load(true));
-    try { history.replaceState(null, "", tab === "audit" ? location.pathname : `#${tab}`); } catch { /* */ }
+  // ---------------- integrity and evidence
+  function showVerify(v) {
+    const b = $("vfBody"); b.replaceChildren(); b.className = "";
+    const st = el("p", `au-vf ${v.ok ? "ok" : "bad"}`, v.ok ? "The chain is whole: no entry was changed, inserted or removed." : `BROKEN at entry ${v.break.entry}${v.break.t ? ` (${fmtT(v.break.t)})` : ""}: ${v.break.what}.`);
+    const dl = el("dl", "au-dl");
+    const row = (k, x, mono) => { dl.append(el("dt", null, k), el("dd", mono ? "mono" : null, x)); };
+    row("Entries", `${fmt(v.entries)} kept · ${fmt(v.chained)} chained${v.before_chain ? ` · ${fmt(v.before_chain)} written before the chain started` : ""}`);
+    row("From – to", `${v.first || "–"} – ${v.last || "–"}`);
+    row("Archives", `${v.archives} file(s) · ${v.removed_archives} removed by the retention of ${v.retention_days} days · rotated at ${v.rotate_mb} MB`);
+    row("Head hash", v.head, true);
+    if (v.checked) row("Checked", v.checked);
+    b.append(st, dl, el("p", "st-hint", "Note the head hash with your evidence. At the next audit the chain must still lead to it: that proves nothing was removed from the end in between."));
   }
+  $("vfRun").addEventListener("click", async () => {
+    $("vfRun").disabled = true; window.LGLoader?.busy("Verifying the audit log");
+    try { showVerify(await getJSON("/api/audit/verify")); } catch (e) { banner(e.message, true); }
+    finally { $("vfRun").disabled = false; window.LGLoader?.ready(); }
+  });
+  async function sha256hex(buf) { const h = await crypto.subtle.digest("SHA-256", buf); return [...new Uint8Array(h)].map((x) => x.toString(16).padStart(2, "0")).join(""); }
+  async function download(url, label) {
+    window.LGLoader?.busy(`Preparing ${label}`);
+    try {
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || r.statusText); }
+      const buf = await r.arrayBuffer();
+      const name = (/filename="([^"]+)"/.exec(r.headers.get("Content-Disposition") || "") || [])[1] || "audit-evidence";
+      const a = el("a"); a.href = URL.createObjectURL(new Blob([buf], { type: r.headers.get("Content-Type") || "application/octet-stream" })); a.download = name;
+      document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      let hex = ""; try { hex = await sha256hex(buf); } catch { /* an old browser without SubtleCrypto */ }
+      const box = $("evDone"); box.hidden = false; box.replaceChildren();
+      box.append(el("b", null, `Downloaded ${name}`), el("span", "muted", ` · ${fmt(buf.byteLength)} bytes`));
+      if (hex) { const p = el("p"); p.append(el("span", null, "SHA-256 "), el("code", "au-hash", hex)); box.append(p); }
+    } catch (e) { banner(`Could not prepare ${label}: ${e.message}`, true); }
+    finally { window.LGLoader?.ready(); }
+  }
+  $("evPdf").addEventListener("click", () => download(`/api/audit/report.pdf?${per()}`, "the evidence report"));
+  $("evCsv").addEventListener("click", () => download(`/api/audit/export.csv?tab=all&${per()}`, "the events"));
+  $("logCsv").addEventListener("click", () => download(`/api/audit/export.csv?tab=${logTab}&${per()}`, "this tab's events"));
+  const evPeriod = () => { $("evPeriod").textContent = `For ${$("auFrom").value} to ${$("auTo").value} (UTC, both days included), as chosen above.`; };
+
+  // ---------------- tabs
+  const tabs = [...document.querySelectorAll(".au-tabs [data-tab]")];
+  const LOG_TABS = new Set(Object.keys(HINTS));
+  let current = "overview";
+  const work = (tab) => tab === "overview" ? loadOverview : tab === "access" ? loadAccess : tab === "live" ? loadSessions
+    : tab === "evidence" ? async () => evPeriod() : () => loadLog(true);
+  function show(tab, first) {
+    current = tab;
+    for (const b of tabs) b.setAttribute("aria-selected", String(b.dataset.tab === tab));
+    const pane = LOG_TABS.has(tab) ? "log" : tab;
+    for (const p of document.querySelectorAll(".au-pane")) p.hidden = p.id !== `pane-${pane}`;
+    if (LOG_TABS.has(tab)) {
+      logTab = tab; $("logTitle").textContent = TAB_NAMES[tab]; $("logHint").textContent = HINTS[tab];
+      $("logTestsBox").hidden = tab === "system";
+    }
+    try { history.replaceState(null, "", tab === "overview" ? location.pathname : `#${tab}`); } catch { /* */ }
+    const run = () => work(tab)().catch((e) => banner(`Could not load: ${e.message}`, true));
+    if (first) return run().finally(() => { $("auLoading")?.remove(); window.LGLoader?.ready(); });
+    if (window.LGLoader?.pane) window.LGLoader.pane($(`pane-${pane}`), `Opening ${TAB_NAMES[tab] || tab}…`, run); else run();
+  }
+  function reloadCurrent() { show(current); }
   for (const b of tabs) b.addEventListener("click", () => show(b.dataset.tab));
   const want = (location.hash || "").slice(1);
-  show(tabs.some((b) => b.dataset.tab === want) ? want : "audit");
-  load(true);
-  setInterval(() => { if (tabs.find((b) => b.getAttribute("aria-pressed") === "true")?.dataset.tab === "sessions") loadSessions(); }, 30000);
+  show(tabs.some((b) => b.dataset.tab === want) ? want : "overview", true);
+  // the tab counts appear from the start (the overview does not load the log)
+  getJSON(`/api/audit/events?tab=none&${per()}&limit=1`).then((d) => {
+    document.querySelectorAll("[data-n]").forEach((s) => { s.textContent = fmt((d.counts || {})[s.dataset.n] || 0); });
+  }).catch(() => {});
+  setInterval(() => { if (current === "live") loadSessions().catch(() => {}); }, 30000);
 })();

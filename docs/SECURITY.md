@@ -107,7 +107,7 @@ can be added; roles in use cannot be removed; `admin` always has everything).
 | `malpedia` | look up malware families and samples on Malpedia |
 | `settings` | change Settings (country, constituency) |
 | `users` | manage accounts, roles and sessions |
-| `audit` | see the audit log |
+| `audit` | the Audit portal, read only: the audit log by tab, dashboard and control checks, access review, integrity, evidence exports |
 
 Default roles (described on the admin page too):
 - **external** (`view`): people outside the security team, such as partners or visitors. They see both platforms with IP
@@ -115,7 +115,14 @@ Default roles (described on the admin page too):
   export, use Malpedia or change anything. New accounts start here until an administrator chooses their role.
 - **analyst** (`view`, `unmasked`, `export`, `malpedia`): CSIRT analysts. All data unmasked for analysis, exports,
   Malpedia, and the Demo switch for presentations. No Settings, no account management.
+- **auditor** (`audit`, fixed): the Audit portal only, read only; never the platforms or host data. Its permission
+  cannot be changed by anyone, so what an auditor may do never depends on the people being audited.
 - **admin** (all): everything, including Settings, accounts, roles and permissions, sessions and the audit log.
+
+Permanent roles (`auth.FIXED_ROLES`): management, researcher, advisor, auditor and external keep exactly their permissions and
+cannot be removed; admin always has every permission. Exclusive permissions (`auth.EXCLUSIVE_PERMS`): *management*,
+*definitions*, *advisory* and *users* belong to their own role (and admin) only. Both are enforced on the server when
+roles are loaded and saved; the Roles page shows them locked.
 
 (The lowest role was called "viewer" before 2026-11-07; existing roles and accounts were renamed automatically.)
 
@@ -144,7 +151,15 @@ Malpedia, Settings and the admin APIs answer 403 without the permission.
 - **Sessions:** every live session with user, address, location, browser, start and last activity; **End session**.
 - **Audit log:** searchable; sign-ins and failures, lockouts, registrations, approvals, role and permission changes,
   revocations, kicks, session misuse, password resets, recovery-code use and Settings changes, each with time,
-  account, address, location and browser. Stored in `data/audit.log` (mode 600, rotated at 5 MB).
+  account, address, location and browser. Stored in `data/audit.log` (mode 600). **Tamper evident:** each entry
+  carries the SHA-256 of the entry before it (`audit_chain.py`); changing, inserting or removing an entry breaks the
+  chain, and `data/audit.head` (newest link and entry count) catches entries cut from the end. **Retention:** at
+  `AUDIT_ROTATE_MB` the file is compressed into `data/audit_archive/` and kept `AUDIT_RETENTION_DAYS` (default 400);
+  the last link of every archive removed by the retention is noted, so the check still covers what is left. Read in the
+  Audit portal (`audit_portal.py`): tabs per kind of event, dashboard, 13 control checks, access review, Verify, and
+  evidence exports (CSV, PDF report with the head hash), each check and export itself audited.
+  The chain proves integrity against later editing of the file; someone with full control of the server could still
+  rewrite the whole chain, which is why the auditor keeps the head hash from each audit outside the server.
 - **Roles & permissions:** the matrix above, editable.
 
 **Location** is "This computer", "Local network" or "Internet". Addresses are never sent to an online service; to add

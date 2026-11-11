@@ -2729,8 +2729,13 @@ def _site_demo():
 
 
 import advisory as _advisory  # noqa: E402
-import audit_page as _audit_page  # noqa: E402
-_audit_page.install(app, {"has_perm": AUTH["has_perm"]})     # the audit log, a page of its own
+import audit_portal as _audit_portal  # noqa: E402
+# the Audit portal (auditor role and admins, read only): the log by tab, dashboard and control checks, access review,
+# the log's integrity and evidence exports (audit_portal.py, audit_chain.py, audit_report.py)
+_audit_portal.install(app, {"has_perm": AUTH["has_perm"], "users": AUTH["users"], "roles": AUTH["roles"], "sessions": AUTH["sessions"],
+                            "audit": AUTH["audit"], "people": people, "perms_catalog": auth.PERMS, "auditor_role": auth.AUDITOR_ROLE,
+                            "access_mode": security.access_mode,
+                            "tls": lambda: os.path.exists(os.path.join(BASE_DIR, "data", "tls", "cert.pem")) or os.environ.get("TRUST_PROXY") == "1"})
 import peace as _peace  # noqa: E402
 PEACE = _peace.install(app, {"base_dir": BASE_DIR, "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"], "audit": AUTH["audit"],
                              "role_perms": lambda role: AUTH["roles"].perms(role or "")})   # an admin's "Peace of mind"

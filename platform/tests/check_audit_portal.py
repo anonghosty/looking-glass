@@ -36,8 +36,8 @@ try:
     r = c.get("/audit", headers=H)
     page = r.get_data(as_text=True)
     ok("opens the Audit portal", r.status_code == 200, str(r.status_code))
-    ok("the page has the Sessions tab", 'data-tab="sessions"' in page)
-    ok("…and its Sessions panel with the table (not only the tab)", 'id="pane-sessions"' in page and 'id="sessionsTable"' in page)
+    ok("the page has the Signed in now tab", 'data-tab="live"' in page)
+    ok("…and its panel with the sessions table (not only the tab)", 'id="pane-live"' in page and 'id="sessionsTable"' in page)
     ok("…marked read only for a role that cannot end sessions", "Read only: ending a session" in page)
     ok("the page has its loading line", "st-loading" in page)
     ok("reads the audit log", c.get("/api/admin/audit", headers=H).status_code == 200)
@@ -58,7 +58,7 @@ try:
     ok("loader.js has LGLoader.pane", "async pane(el, label, work)" in rd("js/loader.js"))
     ok("a busy pane hides all but its heading and loading line", ".lg-pane-busy > :not(h2):not(.lg-pane-loading)" in rd("css/app.css"))
     ok("Admin: Users and Roles tabs use it", 'LGLoader.pane($(`pane-${tab}`)' in rd("js/admin.js") and "Opening the roles and their permissions" in rd("js/admin.js"))
-    ok("Audit: Audit log and Sessions tabs use it", 'LGLoader.pane($("pane-sessions")' in rd("js/audit.js") and 'LGLoader.pane($("pane-audit")' in rd("js/audit.js"))
+    ok("Audit portal: every tab opens with it", "window.LGLoader.pane($(`pane-${pane}`)" in rd("js/audit.js"))
 finally:
     users.get, roles.perms = real_get, real_perms
     sessions.end(key=auth._h(token)) if hasattr(auth, "_h") else None

@@ -4,7 +4,7 @@
     nav_go (true on pages that guard unsaved changes: buttons with data-go instead of links). -#}
 {%- set _defs = ("settings" in lg_perms or "definitions" in lg_perms) and not lg_peace -%}
 {%- set _analyst = "unmasked" in lg_perms and "export" in lg_perms -%}
-{%- set _findings = not lg_peace -%}{#- every role: the findings it takes part in (findings.py) -#}
+{%- set _findings = not lg_peace and lg_role != "auditor" -%}{#- every role but the auditor: the findings it takes part in (findings.py) -#}
 {%- set _items = [
   ("overview", true, "/?intro=1" if "view" in lg_perms else "/overview", "Overview", "Back to the overview: your pages",
    "M4 5h7v6H4zM13 5h7v3h-7zM13 10h7v9h-7zM4 13h7v6H4z"),
@@ -22,7 +22,7 @@
    "M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5"),
   ("executive", "management" in lg_perms, "/management", "Executive", "The management portal (Executive): aggregated dashboard and executive reports",
    "M4 20V10M10 20V4M16 20v-7M22 20H2"),
-  ("audit", "audit" in lg_perms, "/audit", "Audit log", "The audit log: who did what and when",
+  ("audit", "audit" in lg_perms, "/audit", "Audit portal", "The Audit portal: the audit log by tab, the dashboard and control checks, access review, integrity and evidence exports",
    "M8 4h8l3 3v13H5V4h3zM9 10h6M9 14h6M9 18h4"),
   ("admin", "users" in lg_perms, "/admin", "Admin", "Users, sessions, roles and Peace of mind",
    "M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6zM9 12l2 2 4-4"),

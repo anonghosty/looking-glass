@@ -26,7 +26,8 @@ the address and browser it was created on; idle and absolute timeouts; logout, p
 change or an admin "kick" end sessions on the server; a per-session CSRF token for every change; other computers can
 only log in over HTTPS.
 
-Audit (data/audit.log, JSON lines, mode 600, rotated at 5 MB): registrations, approvals, logins and failures, lockouts,
+Audit (data/audit.log, JSON lines, mode 600, each line chained to the one before by its SHA-256 and archived, never
+deleted early: audit_chain.py; read in the Audit portal, audit_portal.py): registrations, approvals, logins and failures, lockouts,
 logouts, kicks, sessions ended for misuse, role / permission / status changes, MFA resets, settings changes; each with
 time, account, address, location and browser.
 
@@ -69,12 +70,23 @@ PERMS = {
     "management": "The management portal: aggregated statistics, look-ups and executive reports, never individual addresses. "
                   "Only the management role (and admins, to preview it) can have it",
     "users": "Manage accounts, roles and sessions (approve, revoke, kick)",
-    "audit": "The Audit portal: the audit log and who is signed in (Sessions). Ending a session needs 'users'",
+    "audit": "The Audit portal, read only: the audit log by tab, the dashboard and control checks, the access review, who is "
+             "signed in, the log's integrity and evidence exports. Ending a session needs 'users'",
     "advisory": "Write and generate advisories: the findings management sends them, the advisory page (description, "
                 "recommended actions) and the final report with the affected devices",
 }
 DEFAULT_ROLES = {"external": ["view"], "analyst": ["view", "unmasked", "export", "malpedia"], "researcher": ["definitions", "networks"], "management": ["management"],
-                 "advisor": ["advisory"], "admin": list(PERMS)}
+                 "advisor": ["advisory"], "auditor": ["audit"], "admin": list(PERMS)}
+# the auditor role (audit_portal.py): exactly 'audit', fixed like the management role. No one can widen, narrow or remove
+# it, so what an auditor may do never depends on the people being audited. Administrators only give people the role.
+AUDITOR_ROLE, AUDITOR_PERMS = "auditor", ["audit"]
+# Permanent roles with fixed permissions (2026-11-11): no one can remove them or change what they may do; administrators
+# only give people these roles. admin always has every permission (handled apart).
+FIXED_ROLES = {"management": ["management"], AUDITOR_ROLE: list(AUDITOR_PERMS), "advisor": ["advisory"],
+               "researcher": ["definitions", "networks"], "external": ["view"]}   # external: masked viewing only, never more
+# Permissions that belong to one role only (and admin): they cannot be ticked onto any other role.
+EXCLUSIVE_PERMS = {"management": "management", "definitions": "researcher", "advisory": "advisor", "users": "admin"}
+AUDIT_PATHS = ("/audit", "/api/audit/", "/api/admin/audit", "/api/admin/sessions", "/overview", "/api/notifications")   # all an auditor opens
 ADVISORY_PATHS = ("/findings", "/api/findings", "/advisory", "/api/advisory", "/api/organisation", "/organisation/logo", "/api/notifications", "/overview")    # all the advisor role (no 'view') can open
 DEFINITIONS_PATHS = ("/definitions", "/api/kb/", "/api/networks", "/api/lookups", "/api/intel", "/api/notes", "/api/combo-codes/",
                      "/findings", "/api/findings", "/intel/", "/api/notifications", "/overview")
@@ -110,6 +122,10 @@ ROLE_INFO = {
     "advisor": "Advisors. They turn a finding management has decided on into the advisory: the organisation's title and logo, "
                "the affected CVEs, issues and categories, the impact, the recommended actions, and the full report with the "
                "affected devices underneath. They work on the Findings and advisory pages only.",
+    "auditor": "Auditors (internal or external, e.g. a CISA-certified auditor). They use the Audit portal only, read only: the "
+               "audit log in its tabs, the dashboard and control checks, the access review of every account, the log's "
+               "integrity check and exports for a period. They never see the platforms or any host data, and cannot change "
+               "anything. The role's permissions are fixed: no one can change them.",
     "admin": "Administrators. Everything an analyst can do, plus Settings (country, constituency), malware definitions, accounts, roles and "
              "permissions, sessions and the audit log.",
 }
@@ -386,14 +402,17 @@ class Roles:
                     f.write("researcher role given the 'networks' permission\n")
             except OSError:
                 pass
-        self.roles["management"] = [MANAGEMENT_ONLY]
+        for r, ps in FIXED_ROLES.items():                # fixed: whatever roles.json says
+            self.roles[r] = list(ps)
         self._exclusive()
         self.roles["admin"] = list(PERMS)
 
     def _exclusive(self):
+        """Exclusive permissions stay on their own role (and admin) only; fixed roles keep exactly their permissions."""
         for r in list(self.roles):
-            if r not in ("admin", "management") and MANAGEMENT_ONLY in self.roles[r]:
-                self.roles[r] = [p for p in self.roles[r] if p != MANAGEMENT_ONLY]
+            if r == "admin" or r in FIXED_ROLES:
+                continue
+            self.roles[r] = [p for p in self.roles[r] if EXCLUSIVE_PERMS.get(p, r) == r]
 
     def perms(self, role):
         if role == "admin":
@@ -404,9 +423,10 @@ class Roles:
         with self.lock:
             clean = {"admin": list(PERMS)}
             for r, ps in roles.items():
-                if r != "admin":
-                    clean[r] = sorted({p for p in ps if p in PERMS and (p != MANAGEMENT_ONLY or r == "management")})
-            clean["management"] = [MANAGEMENT_ONLY]          # the portal role: always exactly this, never removed
+                if r != "admin":                         # exclusive permissions only on their own role
+                    clean[r] = sorted({p for p in ps if p in PERMS and EXCLUSIVE_PERMS.get(p, r) == r})
+            for r, ps in FIXED_ROLES.items():            # permanent roles: always exactly these, never removed
+                clean[r] = list(ps)
             self.roles = clean
             _secure_write(self.path, clean)
 
@@ -414,6 +434,8 @@ class Roles:
 class Audit:
     def __init__(self, path, logger=None):
         self.path, self.log, self.lock = path, logger, threading.Lock()
+        import audit_chain                      # tamper-evident lines, archives kept for the retention (audit_chain.py)
+        self.chain = audit_chain.Chain(path)
 
     def add(self, event, user="", target="", detail="", ip=None, ua=None):
         try:
@@ -425,15 +447,21 @@ class Audit:
                "ip": ip, "location": location(ip), "ua": (ua or "")[:200]}
         with self.lock:
             try:
-                if os.path.exists(self.path) and os.path.getsize(self.path) > 5_000_000:
-                    os.replace(self.path, self.path + ".1")
-                fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
-                with os.fdopen(fd, "a", encoding="utf-8") as f:
-                    f.write(json.dumps(rec) + "\n")
+                self.chain.append(rec)          # chained to the line before; rotated into the archive, never deleted early
             except OSError:
                 pass
         if self.log:
             self.log.warning("audit %s user=%s target=%s ip=%s %s", event, user, target, ip, rec["detail"])
+
+    def records(self):
+        """Every entry kept (the archives within the retention, then the current file), oldest first."""
+        rows = []
+        for line in self.chain.lines():
+            try:
+                rows.append(json.loads(line))
+            except ValueError:
+                pass
+        return rows
 
     @staticmethod
     def is_selftest(r):
@@ -445,17 +473,7 @@ class Audit:
     def read(self, limit=200, q="", offset=0, selftests=True, label=None):
         """(total shown, rows, self-test events hidden). label(username) names accounts "Full Name (username)"
         (people.py); the search then also finds a person by their name."""
-        rows = []
-        for p in (self.path + ".1", self.path):
-            try:
-                with open(p, encoding="utf-8") as f:
-                    for line in f:
-                        try:
-                            rows.append(json.loads(line))
-                        except ValueError:
-                            pass
-            except OSError:
-                pass
+        rows = self.records()
         rows.reverse()
         if label:
             names = {}
@@ -766,6 +784,13 @@ def install(app, base_dir, logger):
                             return None
                         if p in ("/", "/services", "/definitions", "/settings", "/management"):
                             return redirect("/advisory")
+                        abort(403)
+                    # auditors: the Audit portal only, read only (the start page sends them there)
+                    if g.user.get("role") == AUDITOR_ROLE:
+                        if p.startswith(AUDIT_PATHS):
+                            return None
+                        if p in ("/", "/services", "/definitions", "/settings", "/management", "/findings", "/advisory"):
+                            return redirect("/audit")
                         abort(403)
                     # researchers: only the Definitions page (and the start page sends them there)
                     portal = {"definitions", "networks"} & g.user["perms"]
@@ -1176,6 +1201,8 @@ def install(app, base_dir, logger):
     def admin_page():
         if not (has_perm("users") or has_perm("audit")):
             return render_template("denied.html", message="The admin pages are for accounts with the 'users' or 'audit' permission."), 403
+        if not has_perm("users"):                    # audit only (the auditor): their portal is /audit
+            return redirect("/audit")
         return render_template("admin.html", perms_catalog=PERMS)
 
     @app.route("/api/admin/users")
@@ -1302,7 +1329,8 @@ def install(app, base_dir, logger):
     def admin_roles():
         need("users", change=request.method == "POST")
         if request.method == "GET":
-            return jsonify(roles=roles.roles, perms=PERMS, info=ROLE_INFO, in_use={r: sum(1 for u in users.all().values() if u.get("role") == r) for r in roles.roles})
+            return jsonify(roles=roles.roles, perms=PERMS, info=ROLE_INFO, in_use={r: sum(1 for u in users.all().values() if u.get("role") == r) for r in roles.roles},
+                           fixed=sorted(["admin", *FIXED_ROLES]), exclusive=EXCLUSIVE_PERMS)
         body = request.get_json(silent=True)
         if not isinstance(body, dict) or not isinstance(body.get("roles"), dict) or len(body["roles"]) > 30:
             return jsonify(error="JSON {roles: {name: [permissions]}} expected"), 400

@@ -553,8 +553,7 @@ body.admin-page .st-main { max-width: 1560px; }
 .adm-matrix td:first-child, .adm-matrix td:first-child .muted { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }
 .adm-matrix td:first-child { min-width: 300px; max-width: 440px; }
 .adm-check input { width: 18px; height: 18px; accent-color: var(--accent); }
-.adm-rolehead { text-transform: none; }
-.adm-newrole { max-width: 260px; }
+.adm-rolehead { text-transform: none; }.adm-newrole { max-width: 260px; }
 .account-btn { display: inline-flex; align-items: center; gap: 6px; }
 .account-btn .acct-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

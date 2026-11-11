@@ -30,8 +30,10 @@
     <section class="st-card peace-card" id="peaceCard">
       <div class="peace-row">
         <div class="peace-text"><h2>Peace of mind <span class="st-for">just for you</span></h2>
-          <p class="st-hint">Tick it to step out of the platforms and the work on findings: you keep Admin, the audit log and Settings,
-            and no findings notification comes in. Untick it to have everything back. Only for your own account; it is in the audit log.</p></div>
+          <p class="st-hint">Turn it on to step out of the day-to-day work: the two platforms, Findings, Definitions, Combinations and the
+            Executive and Advisory portals close for you, and no findings notification comes in. You keep Admin, the Audit portal, Settings
+            and the Overview (to keep an eye on the database). Turn it off to have everything back. It changes only your own account, and
+            each switch is in the audit log.</p></div>
         <label class="peace-switch"><input type="checkbox" id="peaceOn"{% if lg_peace %} checked{% endif %}><span class="peace-track"><span class="peace-knob"></span></span>
           <b id="peaceState">{{ "On" if lg_peace else "Off" }}</b></label>
       </div>
@@ -55,7 +57,7 @@
       <h2>Roles &amp; permissions</h2>
       <div class="table-wrap"><table class="hosts adm-table adm-matrix" id="rolesTable"><thead></thead><tbody></tbody></table></div>
       <div class="st-row st-tools">
-        <input class="search adm-newrole" id="newRole" placeholder="New role name, e.g. auditor" maxlength="30" autocomplete="off">
+        <input class="search adm-newrole" id="newRole" placeholder="New role name, e.g. partner-viewer" maxlength="30" autocomplete="off">
         <button class="pill-btn" id="addRole" type="button">Add role</button>
         <button class="intro-cta" id="saveRoles" type="button">Save roles</button>
       </div>

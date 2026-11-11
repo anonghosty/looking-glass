@@ -70,6 +70,19 @@ of …"), then replays the whole day from 00:00 to 24:00. Details: [TECHNICAL_RE
 
 What each protection does: [../docs/SECURITY.md](SECURITY.md).
 
+## Audit portal and the audit log
+
+Set these to what your own audits and laws require; the defaults suit a yearly IT audit.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `AUDIT_RETENTION_DAYS` | `400` | days archived audit entries are kept (compressed, `data/audit_archive/`) before they are deleted. The last link of each deleted archive is noted, so the integrity check still covers what is left |
+| `AUDIT_ROTATE_MB` | `5` | size at which `data/audit.log` is archived and a new file started; the tamper-evident chain goes on across files |
+| `AUDIT_DORMANT_DAYS` | `90` | control check AC-2: an active account unused this long is flagged as dormant |
+| `AUDIT_MAX_ADMINS` | `3` | control check AC-3: more administrators (every permission) than this need attention |
+| `AUDIT_PENDING_DAYS` | `7` | control check AC-4: a registration waiting longer than this needs attention |
+| `AUDIT_WORK_HOURS` | `07-19` | working hours in UTC: sign-ins outside them are counted on the dashboard |
+
 ## Advanced
 
 | Setting | Default | Meaning |
@@ -90,7 +103,7 @@ Created and kept by the service; private to its user and never committed:
 |---|---|
 | `users.json`, `roles.json` | accounts (scrypt password hashes, authenticator keys, recovery code hashes), roles and permissions |
 | `sessions.json`, `automation.key` | signed-in sessions (only hashes of the cookies), the key the local check scripts use |
-| `audit.log` | sign-ins, account and settings changes (rotated at 5 MB) |
+| `audit.log`, `audit.head`, `audit_archive/` | sign-ins, account and settings changes, exports, findings and advisories; each entry chained to the one before by its SHA-256 (tamper evident). Archived at `AUDIT_ROTATE_MB`, kept for `AUDIT_RETENTION_DAYS`; `audit.head` holds the newest link and the number of entries |
 | `settings.json`, `schedule.json` | Settings page values, replay schedule |
 | `geocache.json`, `malpedia_cache.json` | look-up caches |
 | `asns.json` | network names for AS numbers (built by `manage/asn_registry.py`, editable on the Definitions page) |

@@ -55,6 +55,7 @@ run "notifications (per person, channel only)" $PY tests/check_notifications.py
 run "overview of every role" $PY tests/check_overview.py
 run "peace of mind (admins)" $PY tests/check_peace.py
 run "Audit portal permission" $PY tests/check_audit_portal.py
+run "auditor role + Audit portal (evidence)" $PY tests/check_auditor_portal.py
 run "Findings page wording" $PY tests/check_findings_ui.py
 run "greetings by name" $PY tests/check_greetings.py
 run "several reports + filters"       $PY tests/check_cross_filters.py

@@ -6,44 +6,101 @@
   <meta name="theme-color" content="#0b0b0d">
   <meta name="csrf-token" content="{{ lg_csrf }}">
   <meta name="referrer" content="same-origin">
-  <title>Looking Glass · Audit</title>
+  <title>Looking Glass · Audit portal</title>
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo-mark.svg') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/settings.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/audit.css') }}" rel="stylesheet">
 </head>
-<body class="settings-page admin-page audit-page" data-perms="{{ lg_perms|join(',') }}">
+<body class="settings-page admin-page audit-page" data-perms="{{ lg_perms|join(',') }}" data-can-end="{{ '1' if can_end else '0' }}">
   <header class="hud">
     <div class="hud-left">
       <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
-      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Audit log and sessions · signed in as {{ lg_user }} ({{ lg_role }})</span></div></div>
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Audit portal · read only · signed in as {{ lg_user }} ({{ lg_role }})</span></div></div>
     </div>
     <div class="hud-right">
       {% set nav_here = "audit" %}{% set nav_go = false %}{% include "_page_nav.html" %}
     </div>
   </header>
-  <main class="st-main">
-    <div class="seg adm-tabs" role="tablist">
-      <button type="button" role="tab" data-tab="audit" aria-pressed="true">Audit log</button>
-      <button type="button" role="tab" data-tab="sessions" aria-pressed="false">Sessions</button>
-    </div>
-    <div class="st-banner" id="banner" role="status" hidden></div>
-    <section class="st-card adm-pane" id="pane-sessions" hidden>
-      <h2>Active sessions</h2>
-      <p class="st-hint">Who is signed in now, from where and with what.{% if "users" in lg_perms %} End a session to sign it out at once (it is in the audit log).{% else %} Read only: ending a session is for the roles that manage accounts.{% endif %}</p>
-      <div class="table-wrap"><table class="hosts adm-table" id="sessionsTable"><thead><tr>
-        <th>User</th><th>Address</th><th>Location</th><th>Browser</th><th>Type</th><th>Started</th><th>Last activity</th><th></th></tr></thead><tbody></tbody></table></div>
+  <main class="st-main au-main">
+    <section class="au-top">
+      <div class="au-period" role="group" aria-label="Period">
+        <span class="au-period-k">Period (UTC)</span>
+        <div class="seg au-presets">
+          <button type="button" data-days="7">7 days</button><button type="button" data-days="30" aria-pressed="true">30 days</button>
+          <button type="button" data-days="90">90 days</button><button type="button" data-days="365">12 months</button>
+        </div>
+        <label class="au-date">From <input type="date" id="auFrom"></label>
+        <label class="au-date">To <input type="date" id="auTo"></label>
+      </div>
+      <p class="au-read" title="The auditor role is fixed to read-only audit access: nothing on these pages changes anything.">Read only · nothing here changes anything</p>
     </section>
-    <section class="st-card adm-pane" id="pane-audit">
-      <h2>Audit log</h2>
-      <p class="st-hint">Who did what and when: sign-ins, account and role changes, settings, exports, findings, decisions and advisories. Read only.</p>
-      <div class="st-row st-tools"><input type="search" class="search" id="auditSearch" placeholder="Search events, users, addresses" autocomplete="off"><label class="check-row adm-tests" title="The security test (run by the installer and security_testing/security_retest.py) signs in with temporary lg-selftest accounts, fails on purpose and simulates attacks. Its events stay in the log; tick to show them."><input type="checkbox" id="auditTests"> <span>Show self-test events</span></label><span class="muted" id="auditCount"></span></div>
-      <div class="st-loading" id="auLoading">Opening the audit log…</div>
-      <div class="table-wrap"><table class="hosts adm-table" id="auditTable"><thead><tr>
+    <nav class="au-tabs" role="tablist" aria-label="Audit portal">
+      <button type="button" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+      {% for key, label in tabs %}<button type="button" role="tab" data-tab="{{ key }}" aria-selected="false">{{ label }} <span class="au-n" data-n="{{ key }}"></span></button>{% endfor %}
+      <button type="button" role="tab" data-tab="access" aria-selected="false">Access review</button>
+      <button type="button" role="tab" data-tab="live" aria-selected="false">Signed in now</button>
+      <button type="button" role="tab" data-tab="evidence" aria-selected="false">Integrity and evidence</button>
+    </nav>
+    <div class="st-banner" id="banner" role="status" hidden></div>
+
+    <section class="st-card adm-pane au-pane" id="pane-overview">
+      <h2>Overview</h2>
+      <div class="st-loading" id="auLoading">Opening the Audit portal…</div>
+      <div id="ovBody"></div>
+    </section>
+
+    <section class="st-card adm-pane au-pane" id="pane-log" hidden>
+      <h2 id="logTitle">Events</h2>
+      <p class="st-hint" id="logHint"></p>
+      <div class="st-row st-tools au-tools">
+        <input type="search" class="search" id="logSearch" placeholder="Search this tab: people, addresses, details" autocomplete="off">
+        <label class="check-row"><input type="checkbox" id="logAlerts"> <span>Alerts only</span></label>
+        <label class="check-row" id="logTestsBox" title="The security self-test signs in with temporary lg-selftest accounts, fails on purpose and simulates attacks. Its events are kept, and shown in System and self-test."><input type="checkbox" id="logTests"> <span>Include self-test events</span></label>
+        <span class="muted" id="logCount"></span>
+        <button type="button" class="pill-btn" id="logCsv" title="This tab's events in the period, as CSV (the export is in the audit log)">Export CSV</button>
+      </div>
+      <div class="table-wrap"><table class="hosts adm-table au-table" id="logTable"><thead><tr>
         <th>Time (UTC)</th><th>Event</th><th>By</th><th>Account</th><th>Address</th><th>Location</th><th>Browser</th><th>Detail</th></tr></thead><tbody></tbody></table></div>
-      <button class="pill-btn" id="auditMore" type="button" hidden>Show more</button>
+      <button class="pill-btn" id="logMore" type="button" hidden>Show more</button>
+    </section>
+
+    <section class="st-card adm-pane au-pane" id="pane-access" hidden>
+      <h2>Access review</h2>
+      <p class="st-hint">Every account: its role and what that role may do, its authenticator, its last sign-in and who approved it. Flags show what needs attention. Read only: accounts are changed by administrators on Admin.</p>
+      <div id="accBody"></div>
+    </section>
+
+    <section class="st-card adm-pane au-pane" id="pane-live" hidden>
+      <h2>Signed in now</h2>
+      <p class="st-hint">Who is signed in now, from where and with what. {% if can_end %}Ending a session is on Admin.{% else %}Read only: ending a session is for the roles that manage accounts.{% endif %}</p>
+      <div class="table-wrap"><table class="hosts adm-table" id="sessionsTable"><thead><tr>
+        <th>User</th><th>Address</th><th>Location</th><th>Browser</th><th>Type</th><th>Started</th><th>Last activity</th></tr></thead><tbody></tbody></table></div>
+    </section>
+
+    <section class="st-card adm-pane au-pane" id="pane-evidence" hidden>
+      <h2>Integrity and evidence</h2>
+      <p class="st-hint">Each entry of the audit log carries the fingerprint (SHA-256) of the entry before it, so changing, inserting or removing any entry breaks the chain. Check it here, then take the evidence for the period. Every check and export is itself in the audit log.</p>
+      <div class="au-ev-grid">
+        <div class="au-card">
+          <h3>The log's integrity</h3>
+          <div id="vfBody" class="muted">Not checked yet in this visit.</div>
+          <button type="button" class="lg-btn primary" id="vfRun">Verify the audit log</button>
+        </div>
+        <div class="au-card">
+          <h3>Evidence for the period</h3>
+          <p class="st-hint" id="evPeriod"></p>
+          <div class="au-ev-acts">
+            <button type="button" class="lg-btn primary" id="evPdf">Evidence report (PDF)</button>
+            <button type="button" class="lg-btn" id="evCsv">Every event (CSV)</button>
+          </div>
+          <div id="evDone" class="au-ev-done" hidden></div>
+          <p class="st-hint">The fingerprint shown after a download is the SHA-256 of exactly the file you received: note it with the file, and anyone can check later that the file was not altered.</p>
+        </div>
+      </div>
     </section>
   </main>
   <script src="{{ url_for('static', filename='js/loader.js') }}"></script>

@@ -112,7 +112,10 @@
     const th = el("tr"); th.append(el("th", null, "Permission"));
     for (const r of names) {
       const h = el("th", "adm-rolehead"); h.append(el("div", null, r), el("div", "muted", `${used[r] || 0} account(s)`)); h.title = (rolesState.info || {})[r] || "";
-      if (r !== "admin" && !(used[r] > 0) && !["external", "analyst", "researcher", "management"].includes(r)) { const x = el("button", "pill-btn danger", "Remove"); x.type = "button";
+      // permanent roles (auth.FIXED_ROLES and admin): no Remove, permissions locked; the server enforces both
+      const fixedRoles = new Set(rolesState.fixed || ["admin", "management", "auditor", "advisor", "researcher", "external"]);
+      if (fixedRoles.has(r)) h.title = `${h.title} · A permanent role: no one can remove it or change its permissions.`;
+      if (!fixedRoles.has(r) && !(used[r] > 0) && !["external", "analyst"].includes(r)) { const x = el("button", "pill-btn danger", "Remove"); x.type = "button";
         x.addEventListener("click", () => { delete rolesState.roles[r]; drawRoles(); }); h.append(x); }
       th.append(h);
     }
@@ -123,11 +126,14 @@
       for (const r of names) {
         const td = el("td", "adm-check"); const cb = el("input"); cb.type = "checkbox"; cb.checked = (roles[r] || []).includes(p);
         // the management portal belongs to the management role only (the server enforces it too)
-        const locked = r === "admin" || r === "management" || p === "management";
+        // fixed roles keep exactly their permissions; an exclusive permission belongs to one role only (and admin)
+        const fixedRoles = new Set(rolesState.fixed || ["admin", "management", "auditor", "advisor", "researcher", "external"]);
+        const owner = (rolesState.exclusive || { management: "management", definitions: "researcher", advisory: "advisor", users: "admin" })[p];
+        const locked = fixedRoles.has(r) || (owner && owner !== r);
         cb.disabled = locked;
         cb.title = r === "admin" ? "Admins always have every permission"
-          : r === "management" ? "The management role has the management portal only; it cannot be changed"
-          : p === "management" ? "Only the management role has the management portal" : `${p} for ${r}`;
+          : fixedRoles.has(r) ? `The ${r} role is permanent: its permissions are fixed and cannot be changed`
+          : owner ? `Only the ${owner} role has '${p}'; it cannot be given to another role` : `${p} for ${r}`;
         cb.addEventListener("change", () => { const s = new Set(rolesState.roles[r]); cb.checked ? s.add(p) : s.delete(p); rolesState.roles[r] = [...s]; });
         td.append(cb); tr.append(td);
       }

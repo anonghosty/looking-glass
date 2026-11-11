@@ -121,14 +121,19 @@ says how many attempts are left.
 | **Management** | only the **management portal** (Executive, `/management`): aggregated figures of both platforms, never individual addresses | filter, explain infections and vulnerabilities, download executive PDF reports. No other role can be given this portal (admins can preview it) |
 | **Researcher** | only the **Definitions** page (no platforms or addresses) | the organisation's security researchers: define, with references, the malware names Malpedia does not know and the issues that are not CVEs; add notes to CVEs; correct network names and types |
 | **Advisor** | the **Advisory portal** and the findings management sends them (with the organisation's devices) | write each organisation's advisory, generate its report, mark it drafted and sent; their dashboard shows what went out and to whom |
+| **Auditor** | only the **Audit portal** (`/audit`): the audit log by tab, the dashboard and control checks, the access review, the log's integrity | read and export evidence for a period. Read only everywhere; never the platforms or any host data |
 | **Admin** | everything | also Settings, definitions, accounts, roles, the Audit portal; **Peace of mind** steps out of the operations |
 
-Every role has an **Overview** and the **Findings** page (only the findings it takes part in).
+Every role has an **Overview**, and every role but the auditor the **Findings** page (only the findings it takes part in).
 
-Administrators can also make custom roles from the permissions (view, unmasked data, export, Malpedia, settings,
-definitions, networks, users, audit, advisory). Giving an analyst role the *definitions* permission lets analysts keep
-the definitions too (they reach the page at `/definitions`). A role with only **audit** is an auditor: it opens the
-**Audit portal** (the audit log and who is signed in) and can change nothing.
+**Permanent roles.** Admin, Management, Researcher, Advisor, Auditor and External are permanent: no one can remove them or change
+their permissions (on the Roles page they have no Remove button and their boxes cannot be changed). Administrators
+only give people these roles. Three permissions
+belong to one role only and cannot be given to any other: *definitions* (Researcher), *advisory* (Advisor) and
+*users* (Admin), as *management* belongs to Management.
+
+Administrators can make custom roles from the other permissions (view, unmasked data, export, Malpedia, settings,
+networks, audit).
 
 ---
 
@@ -615,20 +620,39 @@ changed, and failed look-ups are tried again next time. The names then appear ev
   password reset, end someone's sessions, delete. Each account shows its profile and when it last signed in.
   You cannot remove the last administrator or your own account.
 - **Roles & permissions:** the permissions of each role, and custom roles.
-- **Peace of mind** (just for you): tick it to step out of the platforms and the work on findings. You keep Admin,
-  Audit, Settings and the Overview (to keep an eye on the database), and no findings notification comes in. Untick it
-  to have everything back. It is in the audit log.
+- **Peace of mind** (just for you): turn it on to step out of the day-to-day work. The two platforms, Findings,
+  Definitions, Combinations and the Executive and Advisory portals close for you, and no findings notification comes
+  in. You keep Admin, the Audit portal, Settings and the Overview (to keep an eye on the database). Turn it off to have
+  everything back. It changes only your own account, and each switch is in the audit log.
 
 ![With Peace of mind on: Admin, Settings and the Overview](media/screens/56-peace-of-mind.png)
 
-**Audit** (its own page, `/audit`; permission *audit*), the **Audit portal**:
-- **Audit log:** sign-ins, failures, account and settings changes, definitions and notes, findings, decisions and
-  advisories, with address, location and browser. People are shown as *Full Name (username)*, and the search finds
-  them by either.
-- **Sessions:** every signed-in session with its address, approximate location, browser, type (normal or 5 days) and
-  expiry. Roles that manage accounts (*users*) can end a session; an auditor (*audit* only) reads them.
+### The Audit portal (`/audit`)
 
-Every tab shows the loading animation while its data comes.
+For the **Auditor** role and administrators (permission *audit*). It is built for an IT audit (for example by a
+CISA-certified auditor) and is **read only**: nothing on it changes anything. Choose the **period** at the top
+(7 days, 30 days, 90 days, 12 months, or any two dates, in UTC); every tab follows it.
+
+- **Overview:** the key figures (sign-ins, failed sign-ins and the failure rate, lockouts, privileged changes,
+  exports, sign-ins outside working hours), sign-ins per day and by hour, events by kind, failed sign-ins by address,
+  exports by person, the recent privileged changes, and the **control checks**. These are grouped like an IT audit
+  (access control, authentication, change management, logging and monitoring, data protection), each passed or needing
+  attention, with its evidence. For example: every account has an authenticator, no account is dormant, administrators
+  kept few, the auditor role is fixed, the audit log is unbroken, the log covers the period, HTTPS is on.
+- **One tab per kind of event:** Authentication, Accounts and access, Sessions, Configuration changes, Data access
+  and exports, Workflow, and System and self-test. Each has its count, a search, *Alerts only*, and **Export CSV**.
+  The built-in security test's events are kept apart in System and self-test.
+- **Access review:** every account with its role and what that role may do, its authenticator, last sign-in, who
+  approved it and flags (no authenticator, dormant, pending too long, every permission), and the roles matrix.
+- **Signed in now:** every session with its address, location, browser and expiry (read only).
+- **Integrity and evidence:** **Verify the audit log** walks every entry. Each one carries the fingerprint (SHA-256)
+  of the one before it, so a changed, inserted or removed entry breaks the chain and the check says where. It shows
+  the **head hash**: note it with your evidence, and at the next audit the chain must still lead to it. Then download
+  the **evidence report (PDF)** or **every event (CSV)** for the period. After each download the page shows the file's
+  own SHA-256 to note with it. Every check and every export is itself in the audit log.
+
+Entries are archived, not deleted, when the log grows (kept `AUDIT_RETENTION_DAYS`, default 400 days); the thresholds
+of the checks are in `.env` ([CONFIGURATION.md](CONFIGURATION.md)).
 
 ![The Audit portal: the audit log](media/screens/52-admin-audit.png)
 

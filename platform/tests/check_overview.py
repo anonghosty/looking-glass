@@ -53,11 +53,12 @@ for role in ("researcher", "management", "advisor"):
 for role in ("analyst", "external", "admin"):
     st, loc = view(role)
     ok(f"{role}: sent to the platforms' overview", st in (301, 302) and loc.endswith("/?intro=1"), f"{st} {loc}")
-print("Every header has the Overview icon and Findings")
+print("Every header has the Overview icon, and Findings for every role but the auditor")
 for role in ROLES:
     nav = render("_page_nav.html", role, nav_here="x", nav_go=False)
     ov = re.search(r'href="([^"]+)"[^>]*aria-label="Overview"', nav)
-    ok(f"{role}: Overview icon → {ov.group(1) if ov else '-'}, Findings icon", ov and ov.group(1) == ("/?intro=1" if "view" in ROLES[role] else "/overview")
-       and 'aria-label="Findings"' in nav)
+    findings = role != "auditor"              # the auditor reads the Audit portal only: findings are not theirs
+    ok(f"{role}: Overview icon → {ov.group(1) if ov else '-'}, Findings icon {'shown' if findings else 'not shown'}",
+       ov and ov.group(1) == ("/?intro=1" if "view" in ROLES[role] else "/overview") and ('aria-label="Findings"' in nav) == findings)
 print(f"\n{checks - len(fails)} of {checks} overview checks passed" + (f"; FAILED: {fails}" if fails else ""))
 sys.exit(1 if fails else 0)
