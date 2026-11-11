@@ -101,10 +101,12 @@ the few devices that matter, and reports you can send. One modest server and a g
 <div class="lg-films" markdown>
 <!-- film: live-demo compact -->
 <!-- film: use-cases compact -->
+<!-- film: finding-to-advisory compact -->
 </div>
 
 The chapters of each film are on its page: the live demo at the top of the [user guide](USER_GUIDE.md), the use cases
-at the top of [Use cases](USE_CASES.md).
+at the top of [Use cases](USE_CASES.md), and From finding to advisory under
+[Advisories](USER_GUIDE.md#advisories-the-advisor) in the user guide.
 
 ## How it works
 

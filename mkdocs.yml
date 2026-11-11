@@ -134,6 +134,19 @@ extra:
         - [326, "Part 2: Looking Glass asks"]
         - [507, "Part 3: the researcher's own find"]
         - [655, "Then tomorrow, again"]
+    finding-to-advisory:
+      id: BUv13KMQSEM
+      title: "From finding to advisory: a new role, the advisor"
+      length: "5:32"
+      sound: "narrated, with captions"
+      chapters:
+        - [0, "A finding that belongs to nobody"]
+        - [29, "Part 1: every finding has a name"]
+        - [111, "Part 2: management decides"]
+        - [157, "Part 3: a new role, the advisor"]
+        - [224, "Part 4: separation of duties"]
+        - [280, "The loop closes"]
+        - [324, "Free and open source"]
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/anonghosty/looking-glass

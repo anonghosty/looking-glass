@@ -501,6 +501,8 @@ enforces it).
 
 ## Advisories (the advisor)
 
+[![Watch From finding to advisory (5:32) on YouTube](media/films/finding-to-advisory.jpg)](https://www.youtube.com/watch?v=BUv13KMQSEM) <!-- film: finding-to-advisory -->
+
 ![The advisor's dashboard](media/screens/74-advisor-dashboard.png)
 
 The **advisor** role turns approved findings into advisories for the organisations concerned. Its **Advisory portal**
