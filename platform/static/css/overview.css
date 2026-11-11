@@ -98,3 +98,8 @@ html.lite .portal-card, html.lite .portal-card .pc-ic { transition: none; box-sh
   .portal-cards > .portal-card:last-child:nth-child(odd) { grid-column: span 6; }
 }
 @media (max-width: 600px) { .portal-cards > .portal-card, .portal-cards[class*="pc-n"] > .portal-card { grid-column: span 6; } }
+
+/* the greeting (greetings.py): by first name, sized to fit, wrapping evenly, never cut */
+h1.lg-greet { font-size: clamp(24px, 4.2vw, 42px) !important; line-height: 1.15; max-width: 960px; margin-left: auto; margin-right: auto;
+  text-wrap: balance; overflow-wrap: anywhere; }
+h1.lg-greet .lg-greet-name { background: linear-gradient(90deg, #9db8f5, #c9a8f5 60%, #f1a2a5); -webkit-background-clip: text; background-clip: text; color: transparent; }

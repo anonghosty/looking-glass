@@ -70,8 +70,8 @@
         <path class="il-handle" d="M21.4 21.4 L27.6 27.6" stroke="#ededef" stroke-width="3" stroke-linecap="round" pathLength="100"/>
       </svg>
       <div class="intro-kicker" id="introKicker">Shadowserver threat intelligence</div>
-      <h1 id="introTitle">Welcome to <span>Looking Glass</span></h1>
-      <p class="intro-lead">A simplified analysis platform for CSIRTs. Looking Glass turns the Shadowserver Foundation's daily reports into a moving picture, replayed in real time exactly one day later. <b>Reported network communications</b> shows infected devices calling botnet sinkholes, brute-force attempts, scanning and other attacks on a map. <b>Publicly accessible / vulnerable services</b> shows the devices and services in your constituency that anyone on the internet can reach, and the ones with known vulnerabilities, by service and by region of your country.</p>
+{%- set gr = lg_greeting() -%}
+      <h1 id="introTitle" class="lg-greet">{{ gr[0] }}<span class="lg-greet-name">{{ gr[1] }}</span>{% if "Looking Glass" in gr[2] %}{{ gr[2].split("Looking Glass")[0] }}<span>Looking Glass</span>{{ gr[2].split("Looking Glass")[1] }}{% else %}{{ gr[2] }}{% endif %}</h1>
 
       <div class="intro-tabs" role="tablist" aria-label="Intro sections">
         <button role="tab" aria-selected="true" data-itab="overview">Overview</button>

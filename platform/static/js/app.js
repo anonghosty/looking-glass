@@ -2513,7 +2513,9 @@
         introSvcVersion = v;
       } catch { /* next time */ }
     }, 15000);
-    setTimeout(() => $("btnExplore").focus(), 50);
+    // the keyboard starts on the first platform, but the Overview opens at its top (the platforms are further down, in
+    // "Your pages": focusing them must not scroll the page there)
+    setTimeout(() => { $("btnExplore").focus({ preventScroll: true }); $("intro").scrollTop = 0; window.scrollTo(0, 0); }, 50);
   }
   function closeIntro(demo) {
     clearInterval(introTimer); clearInterval(introSvcTimer);

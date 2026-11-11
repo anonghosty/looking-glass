@@ -2728,6 +2728,8 @@ _audit_page.install(app, {"has_perm": AUTH["has_perm"]})     # the audit log, a 
 import peace as _peace  # noqa: E402
 PEACE = _peace.install(app, {"base_dir": BASE_DIR, "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"], "audit": AUTH["audit"],
                              "role_perms": lambda role: AUTH["roles"].perms(role or "")})   # an admin's "Peace of mind"
+import greetings as _greetings  # noqa: E402
+GREETED = _greetings.install(app, {"base_dir": BASE_DIR, "people_name": lambda u: people.name(u, "")})   # the Overview's greeting
 import overview as _overview  # noqa: E402
 _overview.install(app, {"has_perm": AUTH["has_perm"]})     # the Overview page of every role
 import notifications as _notifications  # noqa: E402
