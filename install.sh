@@ -537,7 +537,8 @@ need_useradmin, need_write = sys.argv[6] == "yes", sys.argv[7] == "yes"
 kw = dict(host=host, port=port, serverSelectionTimeoutMS=8000)
 if user:
     if not os.environ.get("MPW"):
-        print(f"No password was given for the MongoDB account {user} (it is in database/.env of the first installation)."); sys.exit(1)
+        print(f"No password was given for the MongoDB account {user} (the first installation kept it in "
+              "database/.env.before-pipeline-account, or in database/.env)."); sys.exit(1)
     kw.update(username=user, password=os.environ["MPW"], authSource=src)
 try:
     c = MongoClient(**kw)
@@ -675,16 +676,22 @@ if [ "$MONGO_MODE" = local ]; then
   MONGO_HOST=127.0.0.1
   if [ "$MDB_MANAGED" = 1 ]; then
     MONGO_PORT="$MDB_PORT"; passed "Re-install: MongoDB keeps port $MONGO_PORT and its data."
-    ask_input MONGO_ADMIN_USER "MongoDB administrator" "Name of the MongoDB administrator account (as created the first time):" "$(env_get "$DB_DIR/.env" MONGO_USER | grep . || echo shadowserver_admin)" v_user; MONGO_ADMIN_USER="$REPLY"
-    # the first installation stored it in database/.env: use it, unless another one is given (an empty answer = use it)
-    OLD_MPW="$(env_get "$DB_DIR/.env" MONGO_PASSWORD)"
+    # Where the first installation left the administrator account: database/.env, or, once the pipeline got its own
+    # account (create_pipeline_db_user.py), database/.env.before-pipeline-account. The pipeline's own account is never
+    # taken for the administrator: it cannot create the platform's read-only account.
+    ADMIN_ENV="$DB_DIR/.env"; [ -f "$DB_DIR/.env.before-pipeline-account" ] && ADMIN_ENV="$DB_DIR/.env.before-pipeline-account"
+    OLD_MUSER="$(env_get "$ADMIN_ENV" MONGO_USER)"; OLD_MPW="$(env_get "$ADMIN_ENV" MONGO_PASSWORD)"
+    if [ "$OLD_MUSER" = lookingglass_pipeline ] || [ "$OLD_MUSER" = lookingglass_ro ]; then OLD_MUSER=""; OLD_MPW=""; fi
+    ask_input MONGO_ADMIN_USER "MongoDB administrator" "Name of the MongoDB administrator account (as created the first time):" "${OLD_MUSER:-shadowserver_admin}" v_user; MONGO_ADMIN_USER="$REPLY"
+    # use the stored password, unless another one is given (an empty answer = use it) or another account was named
+    [ "$MONGO_ADMIN_USER" = "$OLD_MUSER" ] || OLD_MPW=""
     if [ -n "${ANS[MONGO_ADMIN_PASSWORD]:-}" ] || [ -z "$OLD_MPW" ]; then
-      ask_secret MONGO_ADMIN_PASSWORD "MongoDB administrator password" "Password of '$MONGO_ADMIN_USER' (it is in database/.env of the first installation):"
+      ask_secret MONGO_ADMIN_PASSWORD "MongoDB administrator password" "Password of '$MONGO_ADMIN_USER' (the first installation kept it in database/.env.before-pipeline-account, or in database/.env):"
       MONGO_ADMIN_PASSWORD="$REPLY"
     else
-      MONGO_ADMIN_PASSWORD="$OLD_MPW"; log "MongoDB password: taken from the existing database/.env"
+      MONGO_ADMIN_PASSWORD="$OLD_MPW"; log "MongoDB password: taken from the existing ${ADMIN_ENV#"$ROOT/"}"
     fi
-    unset OLD_MPW
+    unset OLD_MPW OLD_MUSER
   else
     ask_input MONGO_PORT "MongoDB port" "Port for MongoDB on this computer (27017 unless something else uses it):" "$(for q in 27017 27018 27019 27020; do in_use $q || { echo $q; break; }; done)" v_mongo_port; MONGO_PORT="$REPLY"
     passed "Port $MONGO_PORT is free for MongoDB."
@@ -710,7 +717,7 @@ server's network address too. Which address should it listen on?
       after_failure MONGO_ADMIN_USER "MongoDB" "$reason" MONGO_ADMIN_USER MONGO_ADMIN_PASSWORD MONGO_AUTH_SOURCE || break
     done
     # never go on with an empty password: it would be written into both .env files and cut them off the database
-    [ -n "$MONGO_ADMIN_PASSWORD" ] || { echo "The MongoDB password of '$MONGO_ADMIN_USER' is needed for a re-install (it is in database/.env of the first installation; a copy is in database/.env.before-install-*)." >&2; exit 1; }
+    [ -n "$MONGO_ADMIN_PASSWORD" ] || { echo "The MongoDB password of '$MONGO_ADMIN_USER' is needed for a re-install (the first installation kept it in database/.env.before-pipeline-account, or in database/.env; copies are in database/.env.before-install-*)." >&2; exit 1; }
   fi
 else
   if [ "$MONGO_MODE" = existing ] && [ "$MDB_INSTALLED" = 1 ] && [ "$MDB_ACTIVE" = 0 ]; then
