@@ -194,8 +194,9 @@ def front(doc, a):
     f.y = _logo_section(doc, a, f.y)
     # the reference line
     x = M
+    # no workflow status in the report: what the organisation receives is the advisory, not "Draft"
     for label, val in (("Organisation", a.get("network") or ""), ("TLP", a.get("tlp") or ""), ("Reference", a["ref"]), ("Date", a.get("date") or ""),
-                       ("Status", a.get("status_label") or ""), ("Prepared by", a.get("by") or ""), ("Finding", a.get("finding") or "")):
+                       ("Prepared by", a.get("by") or ""), ("Finding", a.get("finding") or "")):
         if not val:
             continue
         w = max(doc.c.stringWidth(doc.s(val), doc.F["b"], 10), doc.c.stringWidth(label, doc.F["r"], 7.6)) + 26

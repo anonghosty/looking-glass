@@ -20,8 +20,10 @@ From a finding to the organisation that can act on it, with a name on every hand
 **New**
 
 - **The advisor role and advisories.** One advisory per organisation (network), with that organisation's devices, the
-  reports they appear in, what they are (*Seen as*), their weaknesses and the impact of each report. The advisor writes
-  the heading, Description and Recommended Actions (bold, bullets, numbering), chooses the TLP and generates the report.
+  reports they appear in, what they are (*Seen as*), their weaknesses and the impact of each report. Never from a blank
+  page: the advisor writes a short description and the actions, and the report carries the **insights** (the analysis
+  behind the finding) and the **technical details** (every weakness and tag defined from the researchers' definitions,
+  with references). The advisor chooses the TLP and generates the report.
   It is signed by the CSIRT (name and logo from Settings), never a person; the person is in the audit log. What goes
   to the organisation is two files: the PDF and the devices CSV, named `CSIRT_organisation_title_yyyymmdd`. No internal
   codes or notes travel with it. ([User guide](USER_GUIDE.md#advisories-the-advisor))

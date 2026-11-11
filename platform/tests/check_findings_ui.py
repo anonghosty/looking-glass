@@ -17,5 +17,8 @@ def ok(label, cond):
 ok("a closed finding shows no reply box", "if (!f.parent && f.open) c.append(rp)" in js)
 ok("'Reply to the analyst' only for researchers", 'f.origin === "analyst" && data.can_research ? "Reply to the analyst" : "Reply"' in js)
 ok("hidden sub-findings are explained as other channels", "not in your channel" in js and "opened again" not in js)
+pdf = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "advisory_pdf.py"), encoding="utf-8").read()
+front = pdf[pdf.index("def front("):pdf.index("def front(") + 1200]
+ok("the advisory report shows no workflow status (no 'Draft')", '("Status"' not in front and "status_label" not in front)
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))
 sys.exit(1 if fails else 0)

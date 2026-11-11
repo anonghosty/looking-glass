@@ -516,6 +516,15 @@ The **advisor** role turns approved findings into advisories for the organisatio
 organisation's IP addresses: the reports they appear in, what the devices are (*Seen as*), their CVEs and weaknesses
 (*issues*), and the **impact** of each report (for example *Unauthorised remote access*, *Botnet recruitment*).
 
+**Never from a blank page.** The advisor writes only the short part: a description and the actions to take. The
+report brings the rest by itself:
+- **INSIGHTS:** the analysis behind the finding, the analyst's report on this organisation's devices. It shows the
+  pattern across reports, the networks, regions and cities, and the busiest devices, so the organisation sees why it
+  matters, not just a list.
+- **TECHNICAL DETAILS:** every weakness and every tag in it defined, from the researchers' definitions and the CVE
+  look-ups, each with its references.
+- **REFERENCES:** the Shadowserver report pages for each report involved.
+
 ![Writing the advisory: TLP, heading, Description, Recommended Actions](media/screens/72-advisory.png)
 
 **Writing it:**
@@ -527,10 +536,10 @@ organisation's IP addresses: the reports they appear in, what the devices are (*
 4. **Generate the report.** Generating again replaces it: there is only ever one download.
 5. **Mark as drafted** when it is ready to go out.
 
-**The report** is signed by your CSIRT (its name and logo from Settings), never by a person. The person who wrote it is
-kept in the audit log. Its sections are labelled **ADVISORY**, **INSIGHTS** (the analysis behind it), **TECHNICAL
-DETAILS** (definitions and references only) and **REFERENCES** (the Shadowserver report pages). It carries no internal
-code and no researcher's note. Every page shows the TLP at the bottom right, and the header line shows it too.
+**The report** opens with the **ADVISORY** pages (the organisation's devices, the impact, the description and the
+actions), then **INSIGHTS**, **TECHNICAL DETAILS** and **REFERENCES**, each with its label. It is signed by your CSIRT
+(its name and logo from Settings), never by a person; who wrote it is kept in the audit log. It carries no internal code
+and no researcher's note, and every page shows the TLP at the bottom right and in the header line.
 
 ![The advisory report, signed by the CSIRT](media/screens/73-advisory-report.png)
 

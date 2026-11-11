@@ -154,11 +154,12 @@ to the advisory. The two ways it is used are told step by step in <a href="docs/
 <td><a href="docs/media/screens/73-advisory-report.png"><img src="docs/media/screens/73-advisory-report.png" alt="The advisory report"></a></td>
 </tr>
 <tr>
-<td><b>Advisories, one per organisation.</b> The advisor writes the heading, Description and Recommended Actions
-(bold, bullets, numbering), chooses the TLP 2.0 level (explained on the page), and generates the report. What goes
-to the organisation is two files: the PDF and its devices CSV.</td>
-<td><b>Signed by the CSIRT, never a person.</b> Your CSIRT's name and logo, the TLP on every page, ADVISORY / INSIGHTS /
-TECHNICAL DETAILS / REFERENCES. No internal codes, no notes. Who wrote it is kept in the audit log.</td>
+<td><b>Advisories that carry the analysis.</b> One per organisation, never from a blank page: the advisor adds a short
+description and the actions, and the report brings the <b>insights</b> (the analysis behind the finding: the pattern
+across reports, networks and regions) and the organisation's devices.</td>
+<td><b>Every weakness defined.</b> <b>Technical details</b> carry the researchers' definitions of each weakness and tag,
+with their references, then the Shadowserver report references. Signed by your CSIRT, at the TLP the advisor
+chooses; no internal codes or notes.</td>
 </tr>
 <tr>
 <td><a href="docs/media/screens/74-advisor-dashboard.png"><img src="docs/media/screens/74-advisor-dashboard.png" alt="The advisor's dashboard"></a></td>
