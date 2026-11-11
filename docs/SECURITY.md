@@ -119,10 +119,14 @@ Default roles (described on the admin page too):
 
 (The lowest role was called "viewer" before 2026-11-07; existing roles and accounts were renamed automatically.)
 
-**Masking** hides the first and third parts of every IP address (`x.161.x.34`; IPv6 `x:f0f8:x:x:x:x:x:1a2b`), also
-inside URLs and banners. Keeping the leading octets would leave the network prefix, which a WHOIS / BGP lookup turns
-into the owner and its address range; without the first and third parts neither can be looked up. Network names
-become aliases (Telco 1, Bank 2...) and host names are removed.
+**Masking** shows no part of an IP address: every address becomes an opaque label such as `Host 3f9a2c41b07e`, also
+inside URLs and banners (`host_label.py`). The label is an HMAC of the address under the server's `REF_SECRET`: the
+same address always gets the same label on one server, so a viewer can follow one host across the screens and
+"analyse this host" still works, but the address cannot be read or computed back from the label without the
+server's secret. (Earlier versions kept two of the four parts, `x.161.x.34`; in a constituency of a few address
+blocks, with the network alias, region and port next to it, that left too few candidates.) Network names become
+aliases (Telco 1, Bank 2...) and host names are removed. Set `REF_SECRET` in `.env` (the installer does) so labels
+stay the same across restarts.
 A report's own fields (the "specific fields" in a details window) are shown to masked viewers only when they are on an
 allowlist of technical details (protocol, software, versions, ciphers, capability flags; `masked_fields.py`), and even
 those values have host names, addresses, e-mail addresses, dates and long IDs masked. Every other field is hidden:

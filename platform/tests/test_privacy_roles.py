@@ -28,14 +28,22 @@ def ok(label, cond, info=""):
 tmp = tempfile.mkdtemp(prefix="lg-unit-")
 try:
     print("1. IP masking")
-    ok("IPv4: first and third parts hidden", P.mask_ip("198.51.100.23") == "x.51.x.23", P.mask_ip("198.51.100.23"))
-    ok("IPv4: the network prefix is gone (no lookup possible)", not P.mask_ip("203.0.113.9").startswith("203.0"))
+    import re as _re
+    REFS = P.HostRefs("unit-test-label-secret")            # the app's references label the addresses (host_label.py)
+    m4 = P.mask_ip("198.51.100.23")
+    ok("IPv4: an opaque label, no part of the address", _re.fullmatch(r"Host [0-9a-f]{12}", m4) is not None
+       and not any(p in m4 for p in ("198", "51", "100", "23")), m4)
+    ok("the same address gets the same label; another address another", P.mask_ip("198.51.100.23") == m4 and P.mask_ip("198.51.100.24") != m4)
+    ok("the label is the host reference (works for 'analyse this host')", REFS.resolve(m4) == "198.51.100.23" and REFS.resolve(m4[5:]) == "198.51.100.23")
     m6 = P.mask_ip("2001:db8:abcd:12::1")
-    ok("IPv6: only the 2nd and last groups kept", m6 == "x:0db8:x:x:x:x:x:0001", m6)
+    ok("IPv6: an opaque label too", _re.fullmatch(r"Host [0-9a-f]{12}", m6) is not None and "db8" not in m6, m6)
     ok("empty and None give an empty string", P.mask_ip("") == "" and P.mask_ip(None) == "")
-    ok("a non-address is treated as text (IPs inside masked)", P.mask_ip("host 198.51.100.23") == "host x.51.x.23")
+    ok("a non-address is treated as text (IPs inside labelled)", P.mask_ip("host 198.51.100.23") == f"host {m4}")
     t = P.mask_text("GET http://198.51.100.23:8080/a?b=203.0.113.9 from 2001:db8:abcd:12::1")
-    ok("text: every IPv4 and IPv6 inside masked", "198.51.100.23" not in t and "203.0.113.9" not in t and "2001:db8:abcd" not in t, t)
+    ok("text: every IPv4 and IPv6 inside replaced by its label", "198.51.100.23" not in t and "203.0.113.9" not in t
+       and "2001:db8:abcd" not in t and t.startswith(f"GET http://{m4}:8080/a?b=Host "), t)
+    ok("text: times, versions and ratios are not addresses", P.mask_text("at 10:22:31, v1.2.3.4567 ratio 3:1") == "at 10:22:31, v1.2.3.4567 ratio 3:1")
+    ok("researchers' threat values keep the older partial form (no stable host ID)", P.partial_mask_text("http://198.51.100.23/x") == "http://x.51.x.23/x")
     ok("text: non-strings and empty pass through", P.mask_text(None) is None and P.mask_text("") == "" and P.mask_text(5) == 5)
     ok("text without addresses unchanged", P.mask_text("RouterOS 6.49 (stable)") == "RouterOS 6.49 (stable)")
 

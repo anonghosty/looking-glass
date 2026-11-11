@@ -156,9 +156,9 @@ Each CSIRT builds its own registry: the file is not shipped, and `manage/asn_reg
 
 The **Demo** button in the top bar conceals sensitive details while the data keeps playing live:
 - Company names and AS numbers become stable aliases by type: "Telco 1", "Institution 3", "Provider 2", "Exchange 1".
-- IP addresses lose their first and third parts (`x.161.x.34`; IPv6 `x:f0f8:x:x:x:x:x:1a2b`), so neither the owning network nor its address range can be looked up.
+- IP addresses (IPv4 and IPv6) become an opaque label, `Host 3f9a2c41b07e` (`host_label.py`): an HMAC of the address under `REF_SECRET`, the same for one address on one server, with no part of the address in it.
 - Hostnames and machine names are hidden.
-- IP addresses inside URLs, cookies and other text fields are masked.
+- IP addresses inside URLs, cookies and other text fields get the same label.
 - A report's own fields (map and services details) pass an allowlist (`masked_fields.py`): only technical details
   (protocol, software, versions, ciphers, flags, malware sample hashes) are shown, with host names, addresses,
   e-mails, dates and IDs masked inside them; names, MAC addresses, user names, locations, keys, banners and any field

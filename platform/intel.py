@@ -26,7 +26,7 @@ import time
 
 from flask import jsonify, request
 
-from privacy import mask_text
+from privacy import partial_mask_text
 import hostmask
 
 # Researchers never see what identifies a constituent host (a host name, address, e-mail, date or ID). What the services
@@ -109,7 +109,7 @@ def _values(e, key, kind, svc=False, raw=False):
             if not s or hostmask.looks_like_host(s):
                 continue                          # nothing left but "<host>": it named a host and nothing else
         elif kind not in KEEP_AS_IS and kind not in EXACT_KINDS:
-            s = mask_text(s)
+            s = partial_mask_text(s)       # attacker infrastructure, never a stable host ID (privacy.py)
         if s:
             yield s[:300]
 

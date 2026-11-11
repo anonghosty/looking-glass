@@ -4,9 +4,9 @@
   ("Telco 1", "Institution 3", "Provider 2", ...). It is re-read automatically when it changes.
   ASNs that belong to the same company (same name) share one alias, e.g. an operator's AS64500 and AS64501.
 * Demo mode is applied on the server, so concealed values never reach the browser:
-  AS numbers and company names become aliases, IP addresses lose their first and third parts
-  (x.161.x.34, so neither the owner nor the network range can be looked up), hostnames and machine names are removed, and IP addresses inside any other text
-  field (URLs, cookies, banners ...) are masked. Locations are kept.
+  AS numbers and company names become aliases, IP addresses become an opaque label ("Host 3f9a2c41b07e",
+  host_label.py: no part of the address is shown), hostnames and machine names are removed, and IP addresses inside
+  any other text field (URLs, cookies, banners ...) get the same label. Locations are kept.
 * Every source host gets an opaque reference (src_ref) so drill-downs ("analyse this host") still work
   in demo mode without exposing the IP.
 """
@@ -127,6 +127,8 @@ class HostRefs:
         # set by the app: True when the current request is in demo mode. Then only references this server issued are
         # accepted, never a raw address, so a viewer cannot test whether a given IP is in the data (security report #6)
         self.strict = lambda: False
+        import host_label
+        host_label.use(self)               # masked views label addresses with these references
 
     def ref(self, ip):
         if not ip:
@@ -138,6 +140,8 @@ class HostRefs:
         return r
 
     def resolve(self, value):
+        if isinstance(value, str) and value.startswith("Host ") and value[5:] in self.to_ip:
+            value = value[5:]              # a label copied from a masked view (host_label.py)
         if value in self.to_ip:
             return self.to_ip[value]
         try:
@@ -148,25 +152,28 @@ class HostRefs:
 
 
 def mask_ip(ip):
-    """Demo / external masking. The FIRST and THIRD parts are hidden: x.161.x.34. Keeping the leading octets
-    (154.161.x.x) would leave the network prefix, which a WHOIS / BGP lookup turns into the owner and its range;
-    without the first and third octets neither the owner nor the CIDR range can be looked up.
-    IPv6: x:f0f8:x:x:x:x:x:1a2b (first and third groups hidden, and the middle of the address)."""
+    """Demo / external masking: an opaque label, "Host 3f9a2c41b07e" (host_label.py). Earlier versions kept the
+    2nd and 4th parts (x.161.x.34); in a constituency of a few address blocks that left too few candidates."""
     if not ip:
         return ""
     try:
-        a = ipaddress.ip_address(ip)
+        ipaddress.ip_address(ip)
     except ValueError:
         return mask_text(ip)
-    if a.version == 4:
-        p = str(a).split(".")
-        return f"x.{p[1]}.x.{p[3]}"
-    p = a.exploded.split(":")
-    return f"x:{p[1]}:x:x:x:x:x:{p[7]}"
+    import host_label
+    return host_label.label(ip)
 
 
 def mask_text(s):
-    """IP addresses inside free text (URLs, banners, cookies...) masked the same way."""
+    """IP addresses inside free text (URLs, banners, cookies...) replaced by the same opaque label."""
+    import host_label
+    return host_label.label_text(s)
+
+
+def partial_mask_text(s):
+    """The researchers' threat values only (intel.py: C2 URLs and other attacker infrastructure, never a
+    constituent's host): addresses keep their 2nd and 4th parts (x.161.x.34), so different C2 servers still tell
+    apart without a stable per-host ID, which researchers must never get."""
     if not s or not isinstance(s, str):
         return s
     s = IPV4_FULL.sub(lambda m: f"x.{m.group(2)}.x.{m.group(4)}", s)

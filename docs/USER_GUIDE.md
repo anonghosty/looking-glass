@@ -120,7 +120,7 @@ says how many attempts are left.
 ### Roles
 | Role | Sees | Can |
 |---|---|---|
-| **External** | both platforms, always masked: IP addresses show only their 2nd and 4th parts (`x.161.x.34`), network names become aliases ("Telco 1"), host names are hidden | view only. No Demo switch, exports or Malpedia |
+| **External** | both platforms, always masked: IP addresses become an opaque label (`Host 3f9a2c41b07e`, no part of the address), network names become aliases ("Telco 1"), host names are hidden | view only. No Demo switch, exports or Malpedia |
 | **Analyst** | everything, unmasked | analyse, export CSV, look up Malpedia, switch Demo on for presentations |
 | **Management** | only the **management portal** (Executive, `/management`): aggregated figures of both platforms, never individual addresses | filter, explain infections and vulnerabilities, download executive PDF reports. No other role can be given this portal (admins can preview it) |
 | **Researcher** | only the **Definitions** page (no platforms or addresses) | the organisation's security researchers: define, with references, the malware names Malpedia does not know and the issues that are not CVEs; add notes to CVEs; correct network names and types |

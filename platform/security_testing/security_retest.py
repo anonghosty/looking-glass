@@ -152,9 +152,9 @@ ADMIN, VIEWER = "lg-selftest-admin", "lg-selftest-viewer"
 
 
 def masked(ip):
-    """Masked: first and third parts hidden: x.161.x.34 (IPv4) or x:f0f8:x:x:x:x:x:1a2b (IPv6)."""
+    """Masked: an opaque label with no part of the address, "Host 3f9a2c41b07e" (host_label.py)."""
     import re as _re
-    return bool(_re.fullmatch(r"x\.\d{1,3}\.x\.\d{1,3}|x:[0-9a-f]{4}:x:x:x:x:x:[0-9a-f]{4}", ip or ""))
+    return bool(_re.fullmatch(r"Host [0-9a-f]{12}", ip or ""))
 
 
 def strong():
