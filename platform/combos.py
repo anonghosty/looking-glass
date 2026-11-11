@@ -39,6 +39,7 @@ from datetime import datetime, timedelta, timezone
 from flask import Response, g, jsonify, render_template, request
 
 import csvsafe
+import issue_tags
 import intel as I
 
 CODE_RX = re.compile(r"^LG-[CX]-[0-9A-F]{8}$")          # the researchers' codes (this module)
@@ -134,6 +135,10 @@ _TITLE = {"of": lambda n: n}     # a services report's readable title (install: 
 def items_of(m, section, e):
     """What a record carries for a code's matcher: a services matcher reads its pattern items (services_intel.py)."""
     return m.items(e) if hasattr(m, "items") else I.record_items(section, e, m.me)
+
+
+class _SummaryOnly(Exception):
+    """package(summary_only=True): skip the PDF."""
 
 
 def describe(entry):
@@ -482,11 +487,15 @@ def install(app, ctx):
         sets = collections.Counter(tuple(sorted(r)) for r in per.values())
         pats = collections.Counter(tuple(sorted((r, tuple(sorted(i))) for r, i in reps.items())) for reps in per.values() if len(reps) > 1)
         top = pats.most_common(15)
+        hosts_of = collections.defaultdict(list)          # each pattern's devices (analysts' report: an advisory names them)
+        for h, reps in per.items():
+            if len(reps) > 1:
+                hosts_of[tuple(sorted((r, tuple(sorted(i))) for r, i in reps.items()))].append(h)
         if top:
             book.record(entry["section"], entry["name"], None, [p for p, _ in top])     # so the analyst can pass the codes on
         return {"devices": len(per), "multi": sum(n for r, n in sets.items() if len(r) > 1),
                 "sets": [{"reports": list(r), "devices": n} for r, n in sets.most_common(10)],
-                "patterns": [{"code": I.cross_code(entry["section"], entry["name"], p), "devices": n,
+                "patterns": [{"code": I.cross_code(entry["section"], entry["name"], p), "devices": n, "ips": sorted(hosts_of[p]),
                               "parts": [{"report": r, "items": list(i)} for r, i in p]} for p, n in top],
                 "patterns_total": len(pats)}
 
@@ -508,7 +517,7 @@ def install(app, ctx):
                 city_rows[(c, title(r) if r != "Unknown region" else "")] += n
         return countries, rows, details, city_rows
 
-    def package(job, entry, found, per_day, days, around=(), m=None, network=None):
+    def package(job, entry, found, per_day, days, around=(), m=None, network=None, summary_only=False):
         """The ZIP (PDF + devices CSV + records CSV). network: the report for one network provider only (an advisory to
         that operator): the same report on its devices and records; the search's own result and summary stay as they are."""
         section = entry["section"]
@@ -579,6 +588,8 @@ def install(app, ctx):
         base = "looking-glass_" + entry["code"] + "_" + (d0 if is_a else f"{d0}_{d1}" if days else "memory")
         if network:
             base += "_" + (re.sub(r"[^\w.-]+", "-", network).strip("-")[:40] or "network")
+        if job.get("file_base"):                  # an advisory names its files itself (advisory.py: CSIRT_network_title_date)
+            base = job["file_base"]
         nets = collections.Counter(d["network"] or "Unknown" for d in devs)
         repeat = sum(1 for d in devs if d["records"] > 1)
         multi_day = sum(1 for d in devs if len(d["days"]) > 1)
@@ -627,6 +638,8 @@ def install(app, ctx):
         note_names = entry.get("names", [])[:8] if is_a else [entry["name"]]
         notes = sorted(({**n, "name": nm} for nm in note_names for n in ctx["notes"].list(section, nm)),
                        key=lambda n: not any(c["code"] == entry["code"] for c in n.get("codes") or []))
+        if job.get("advisory"):                   # an advisory goes to an organisation: definitions and references only,
+            notes = []                            # never the team's own notes
         note_rows = [[f"{n['role']}: {n['by']}", n.get("date", ""), n["text"][:600],
                       ", ".join(c["code"] for c in n.get("codes") or [])] for n in notes[:12]]
         if notes:
@@ -637,9 +650,29 @@ def install(app, ctx):
                        + "; they are on the Explained page, with what the name"
                        + (" and its vulnerabilities are." if section == "issues" else " is."))
         # the analyst added the analysis across every category (enrich): what these devices show in the other categories
+        if job.get("advisory"):
+            # an advisory goes to an organisation: Looking Glass's codes stay out of its words (the patterns are named
+            # by their devices' IP addresses, under Across reports)
+            def no_codes(t):
+                t = (t.replace(f"listed under Across reports with {'its code' if x['patterns_total'] == 1 else 'their codes'} for a follow-up search",
+                               "listed under Across reports with their devices by IP address")
+                     .replace("For a cross-report code,", "For a pattern across reports,")
+                     .replace("both CSV files are limited to its devices and records", "the devices CSV is limited to its devices"))
+                t = re.sub(r"\bLG-[ACX]-[0-9A-F]{8}\s*", "", t)
+                return re.sub(r"\s{2,}", " ", t).strip()
+            pts = [no_codes(p_) for p_ in pts]
         enr = job.get("enrich")
+        if enr and network and enr.get("cross"):
+            # one organisation's report: only the across-report patterns of its own devices, with only those devices
+            hs_net = {d["ip"] for d in devs}
+            cross_net = []
+            for p_ in enr["cross"]:
+                dv_ = [d for d in p_.get("devices") or [] if d.get("ip") in hs_net]
+                if dv_:
+                    cross_net.append(dict(p_, devices=dv_, hosts=len(dv_)))
+            enr = dict(enr, cross=cross_net, cross_total=len(cross_net), multi_hosts=sum(p_["hosts"] for p_ in cross_net))
         if enr:
-            pts.extend(enrich_points(enr))
+            pts.extend([no_codes(p_) for p_ in enrich_points(enr)] if job.get("advisory") else enrich_points(enr))
         # activity by hour of the day (network communications carry the event time)
         hours = None
         if section == "infections":
@@ -731,7 +764,8 @@ def install(app, ctx):
                 for it in items:
                     it = str(it)
                     if it.lower().startswith("tag:") and not re.search(r"CVE-\d{4}-\d{4,7}", it, re.I):
-                        heads.append((it.split(":", 1)[1].strip(), "issues"))
+                        if issue_tags.issue_of(it):           # an issue; a product / protocol tag is not defined here
+                            heads.append((issue_tags.issue_of(it), "issues"))
                     elif it.startswith("Infection:"):
                         heads.append((it.split(":", 1)[1].strip(), "infections"))
                     elif re.search(r"CVE-\d{4}-\d{4,7}", it, re.I) and not is_a:
@@ -768,24 +802,38 @@ def install(app, ctx):
                 "ports": [{"label": k_, "count": n} for k_, n in ports.most_common(10)],
                 "explained": explained, "stats": stats, "notes": notes}
         try:
+            if summary_only:                                  # the page's figures for one network: no PDF needed
+                raise _SummaryOnly()
             import combo_pdf
             pdf = combo_pdf.build(data, {"platform_label": spec["platform_label"], "scope": spec["scope"], "selection": describe(entry)[:120],
-                                         "day": span, "header": f"{'Analyst code' if is_a else 'Combination'} {entry['code']} · {span}"
-                                                                + (f" · {network}" if network else ""),
-                                         "generated_by": job["user"], "advisory": job.get("advisory")})
+                                         "day": span, "header": ((job.get("advisory") or {}).get("header") or
+                                                                 f"{'Analyst code' if is_a else 'Combination'} {entry['code']} · {span}"
+                                                                 + (f" · {network}" if network else "")),
+                                         # an advisory is signed by the CSIRT (the person is in the audit log)
+                                         "generated_by": (job.get("advisory") or {}).get("org") or job["user"], "advisory": job.get("advisory")})
+        except _SummaryOnly:
+            pdf = b""
         except Exception as exc:                              # noqa: BLE001  (never leave the analyst without a report)
             if job.get("advisory"):                           # an advisory without its own pages would mislead: say so instead
                 raise
             if ctx.get("logger"):
                 ctx["logger"].warning("combination PDF (Executive design) failed, plain layout used: %s", exc)
             pdf = ctx["build_pdf"](spec)
+        def without(head, body, drop):
+            """An advisory's files go to an organisation: Looking Glass's own codes (combination, cross-report) stay out."""
+            if not job.get("advisory"):
+                return head, body
+            keep = [i for i, h in enumerate(head) if h not in drop]
+            return [head[i] for i in keep], [[r[i] for i in keep] for r in body]
+        CODES = {"combination_code", "cross_report_code", "code"}
         z = io.BytesIO()
         with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr(f"{base}.pdf", pdf)
-            zf.writestr(f"{base}_devices.csv", csv_text(dev_cols, dev_rows))
-            zf.writestr(f"{base}_records.csv", csv_text([c for c, _ in cols], rows))
+            zf.writestr(f"{base}_devices.csv", csv_text(*without(dev_cols, dev_rows, CODES)))
+            zf.writestr(f"{base}_records.csv", csv_text(*without([c for c, _ in cols], rows, CODES)))
             if enr:                                   # the analysis across every category, one row per finding
-                zf.writestr(f"{base}_other_categories.csv", csv_text(["category", "report", "value", "hosts", "records", "code"], enrich_rows(enr)))
+                zf.writestr(f"{base}_other_categories.csv",
+                            csv_text(*without(["category", "report", "value", "hosts", "records", "code"], enrich_rows(enr), CODES)))
         # for the page: the key analytics, and per region what the map shows on hover (with the devices' addresses: this
         # page is for analysts only)
         reg_det = {}
@@ -798,11 +846,11 @@ def install(app, ctx):
             if len(x_["ips"]) < 12:
                 x_["ips"].append([d["ip"], d["records"]])
         tot = max(1, len(devs))
-        if network:                               # one network's report: a file of its own, nothing else changes
+        if network and not summary_only:          # one network's report: a file of its own, nothing else changes
             ctx["audit"].add("combo_export", user=job["user"], target=entry["code"],
                              detail=f"{entry['name']} · {span} · network {network} · {len(devs)} devices, {len(rows)} records")
             return {"name": f"{base}.zip", "bytes": z.getvalue()}
-        job["summary"] = {"devices": len(devs), "records": len(rows), "repeat": repeat, "multi_day": multi_day,
+        summ = {"devices": len(devs), "records": len(rows), "repeat": repeat, "multi_day": multi_day,
                           "networks_all": [{"label": k, "asn": v["asn"], "devices": v["devices"], "records": v["records"]}
                                            for k, v in sorted(per_net.items(), key=lambda kv: -kv[1]["devices"])],
                           "per_day": per_day, "networks": len(nets), "country": ctx["country"](),
@@ -820,6 +868,9 @@ def install(app, ctx):
                                            "also": sorted(set(per_dev.get(d["ip"], {})) - d["reports"])} for d in devs[:15]],
                           "across": {"multi": x["multi"], "patterns": x["patterns"][:10], "patterns_total": x["patterns_total"], "sets": x["sets"][:6]},
                           "enrich": enr or None}
+        if summary_only:                          # the figures only (the page filtered to one network)
+            return {"summary": summ}
+        job["summary"] = summ
         ctx["audit"].add("combo_export", user=job["user"], target=entry["code"],
                          detail=f"{entry['name']} · {span} · {len(devs)} devices, {len(rows)} records")
         # kept on disk for an hour (owner-only files), so a service restart between the search and the download loses nothing
@@ -968,6 +1019,23 @@ def install(app, ctx):
         j["result"] = package(j, *j["inputs"][:5], m=j["inputs"][5])     # the report again, with the analysis in it
         ctx["audit"].add("combo_enrich", user=user(), target=entry.get("code", ""), detail=f"{len(hosts)} devices across every category")
         return jsonify(enrich=j["enrich"], summary=j.get("summary"), file=j["result"]["name"])
+
+    @app.route("/api/combos/search/<jid>/summary")
+    def api_combos_summary(jid):
+        """The page's figures for one network (organisation) of a finished search: the same summary as the whole search
+        (devices, records, map, networks, cities, the busiest devices, across reports), on that network's devices only."""
+        if not can_export():
+            return jsonify(error="The combination search is for analysts."), 403
+        j = own(jid)
+        if not j or not j.get("inputs"):
+            return jsonify(error="This search has expired (finished searches are kept for an hour): run it again."), 404
+        network = (request.args.get("network") or "").strip()[:120]
+        if not network:
+            return jsonify(summary=j.get("summary"), network="")
+        s = package(j, *j["inputs"][:5], m=j["inputs"][5], network=network, summary_only=True)["summary"]
+        if not s["devices"]:
+            return jsonify(error=f"No device of this search is on {network}."), 404
+        return jsonify(summary=s, network=network)
 
     @app.route("/api/combos/search/<jid>/download")
     def api_combos_download(jid):

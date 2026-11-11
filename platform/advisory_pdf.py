@@ -10,6 +10,7 @@ its address on shadowserver.org (a link).
 alone(adv, meta): the advisory's pages on their own, for a finding without a kept search (no report to put below).
 """
 import io
+import re
 
 from reportlab.lib.colors import Color, HexColor
 from reportlab.lib.utils import ImageReader, simpleSplit
@@ -20,6 +21,19 @@ LEVEL = {"critical": RED, "high": AMBER, "medium": BLUE, "low": SLATE}
 LEVEL_WORD = {"critical": "Critical", "high": "High", "medium": "Medium", "low": "Low"}
 ACCENT = HexColor("#a9b8ff")
 BOTTOM = 40                                   # nothing below this line: the footer's room
+
+
+def _hard(doc, lines, font, size, width):
+    """Lines still wider than the column (an IPv6 address, a long name without spaces) broken by characters: never cut."""
+    out = []
+    for ln in lines:
+        while ln and doc.c.stringWidth(ln, font, size) > width:
+            k = len(ln)
+            while k > 1 and doc.c.stringWidth(ln[:k], font, size) > width:
+                k -= 1
+            out.append(ln[:k]); ln = ln[k:]
+        out.append(ln)
+    return out
 
 
 class Flow:
@@ -52,6 +66,74 @@ class Flow:
                 d.text(x, self.y - size, ln, size, color, bold)
                 self.y -= lead
         self.y -= 4
+
+    def rich(self, text, size=9.6, color=TXT):
+        """The advisor's text with its light markup: "- " bullets, "1. " numbers, **bold**; wrapped, never cut."""
+        d = self.doc
+        lead = size * 1.42
+        for raw in str(text or "").replace("\r", "").split("\n"):
+            if not raw.strip():
+                self.y -= lead * .5
+                continue
+            mb = re.match(r"^\s*[-*•]\s+(.*)$", raw)
+            mn = re.match(r"^\s*(\d{1,3})[.)]\s+(.*)$", raw)
+            mark, body = ("•", mb.group(1)) if mb else (f"{mn.group(1)}.", mn.group(2)) if mn else ("", raw.strip())
+            x0 = M + (16 if mark else 0)
+            width = W - M - x0
+            words = []                                   # (word, bold), the ** pairs switching bold on and off
+            for i, seg in enumerate(body.split("**")):
+                words += [(w, i % 2 == 1) for w in seg.split()]
+            lines, cur, cw = [], [], 0
+            for w, b in words:
+                ww = d.c.stringWidth(d.s(w), d.F["b"] if b else d.F["r"], size)
+                sp = d.c.stringWidth(" ", d.F["r"], size) if cur else 0
+                if cur and cw + sp + ww > width:
+                    lines.append(cur); cur, cw, sp = [], 0, 0
+                cur.append((w, b, ww)); cw += sp + ww
+            lines.append(cur)
+            for li, ln in enumerate(lines):
+                self.need(lead + 2)
+                if li == 0 and mark:
+                    d.text(M + 2, self.y - size, mark, size, ACCENT, True)
+                x = x0
+                for w, b, ww in ln:
+                    d.text(x, self.y - size, w, size, color, b)
+                    x += ww + d.c.stringWidth(" ", d.F["r"], size)
+                self.y -= lead
+        self.y -= 4
+
+    def table(self, cols, rows, size=8.2):
+        """A table that wraps every cell (never cut) and carries on over pages, its head on each.
+        cols [(label, fraction, mono)]."""
+        d = self.doc
+        w = W - 2 * M
+        xs, acc = [], M
+        for _, fr, _ in cols:
+            xs.append(acc); acc += w * fr
+        lead = size + 2.2
+
+        def head():
+            for (lbl, fr, _), cx in zip(cols, xs):
+                d.text(cx + 4, self.y - 9, lbl.upper(), 6.8, MUTE, True)
+            d.c.setStrokeColor(Color(1, 1, 1, .1)); d.c.setLineWidth(.6); d.c.line(M, self.y - 14, M + w, self.y - 14)
+            self.y -= 14
+        self.need(40)
+        head()
+        for i, r in enumerate(rows):
+            cells = [_hard(d, simpleSplit(d.s(str(v)), d.F["m"] if mono else d.F["r"], size, w * fr - 10) or [""],
+                           d.F["m"] if mono else d.F["r"], size, w * fr - 10)
+                     for v, (_, fr, mono) in zip(r, cols)]
+            rh = max(len(c) for c in cells) * lead + 5
+            if self.y - rh < BOTTOM:
+                self.y = self.doc.new_page(f"{self.title} (continued)")
+                head()
+            if i % 2:
+                d.c.setFillColor(Color(1, 1, 1, .025)); d.c.rect(M, self.y - rh, w, rh, stroke=0, fill=1)
+            for (lbl, fr, mono), cx, lines in zip(cols, xs, cells):
+                for j, t in enumerate(lines):
+                    d.text(cx + 4, self.y - 10 - lead * j, t, size, HexColor("#e3e9ff") if mono else HexColor("#d6ddee"), False, "start", mono)
+            self.y -= rh
+        self.y -= 8
 
     def chips(self, label, items, color=ACCENT):
         """A label and its values as chips, wrapping onto as many lines (and pages) as they need."""
@@ -112,8 +194,8 @@ def front(doc, a):
     f.y = _logo_section(doc, a, f.y)
     # the reference line
     x = M
-    for label, val in (("Reference", a["ref"]), ("Date", a.get("date") or ""), ("Status", a.get("status_label") or ""),
-                       ("Prepared by", a.get("by") or ""), ("Finding", a.get("finding") or "")):
+    for label, val in (("Organisation", a.get("network") or ""), ("TLP", a.get("tlp") or ""), ("Reference", a["ref"]), ("Date", a.get("date") or ""),
+                       ("Status", a.get("status_label") or ""), ("Prepared by", a.get("by") or ""), ("Finding", a.get("finding") or "")):
         if not val:
             continue
         w = max(doc.c.stringWidth(doc.s(val), doc.F["b"], 10), doc.c.stringWidth(label, doc.F["r"], 7.6)) + 26
@@ -125,6 +207,9 @@ def front(doc, a):
     f.y -= 32
     if a.get("recipients"):
         f.para("Distribution: " + ", ".join(a["recipients"]), 9, DIM)
+    if a.get("tlp"):                              # how far it may go (TLP 2.0), in words, under the label
+        f.para(f"{a['tlp']} ({a.get('tlp_short', '')}): {a.get('tlp_text', '')} Traffic Light Protocol 2.0, FIRST.", 8.8,
+               HexColor(a.get("tlp_colour") or "#FFC000"))
 
     # affected: only the kinds that hold something
     rows = [(k, a.get(key) or []) for k, key in (("CVEs", "cves"), ("Issues", "issues"), ("Categories", "categories"))]
@@ -133,12 +218,25 @@ def front(doc, a):
         for label, vals in rows:
             if vals:
                 f.chips(label, vals)
+        if a.get("labels"):                      # what the devices are (product / protocol tags): context, not issues
+            f.chips("Seen as", a["labels"], SLATE)
         if a.get("reports"):
             f.chips("Reports", [r["title"] for r in a["reports"]], SLATE)
 
+    # the organisation's IP addresses: what the advisory is about
+    devs = a.get("devices") or []
+    if devs:
+        f.heading(f"Affected IP addresses ({len(devs):,})")
+        f.table([("IP address", .14, True), ("Host name", .14, False), ("Ports", .07, True), ("Reports", .24, False),
+                 ("CVEs and issues", .29, False), ("Last seen (UTC)", .12, True)],
+                [[d["ip"], d.get("hostname") or "–", ", ".join(d.get("ports") or []) or "–", ", ".join(d.get("reports") or []) or "–",
+                  ", ".join((d.get("cves") or []) + (d.get("issues") or []) + (d.get("categories") or [])) or "–", d.get("last") or "–"] for d in devs])
+
     f.heading("Description")
-    f.para(a.get("description") or "(The advisor has not written the description yet.)",
-           color=TXT if a.get("description") else MUTE)
+    if a.get("description"):
+        f.rich(a["description"])
+    else:
+        f.para("(The advisor has not written the description yet.)", color=MUTE)
     if a.get("kinds_line"):
         f.para(a["kinds_line"], 9.2, ACCENT, True)
 
@@ -161,8 +259,10 @@ def front(doc, a):
             f.y = yy - 9
 
     f.heading("Recommended Actions")
-    f.para(a.get("actions") or "(The advisor has not written the recommended actions yet.)",
-           color=TXT if a.get("actions") else MUTE)
+    if a.get("actions"):
+        f.rich(a["actions"])
+    else:
+        f.para("(The advisor has not written the recommended actions yet.)", color=MUTE)
     if a.get("has_report"):
         f.y -= 6
         f.para("See below for further insight into the activity.", 10.5, ACCENT, True)
@@ -204,9 +304,10 @@ def alone(a, meta):
         def footer(self):
             from datetime import datetime, timezone
             now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-            self.text(M, 14, f"Advisory {a['ref']}. Share only according to your organisation's information-sharing policy. "
-                             f"Generated {now}. Data: Shadowserver Foundation.", 7.2, MUTE)
-            self.text(W - M, 14, f"Page {self.page}", 7.2, MUTE, anchor="end")
+            page = f"Page {self.page}"
+            self.text(W - M, 14, page, 7.2, MUTE, anchor="end")
+            self.tlp_mark(14, W - M - self.c.stringWidth(page, self.F["r"], 7.2) - 10)
+            self.text(M, 14, f"Advisory {a['ref']}. Generated {now} by {a.get('org') or 'the CSIRT'}.", 7.2, MUTE)
 
     doc = Doc(dict(meta, advisory=a))
     doc.c.setTitle(f"{a['title']} · {a['ref']}")

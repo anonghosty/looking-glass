@@ -8,6 +8,7 @@ download stays locked while it waits; the manager sees both views (counts only, 
 views; it goes back to the analyst; the report then carries exactly the ticked patterns.
 Usage: tests/check_combo_review.py"""
 import csv, io, json, os, re, sys, tempfile, time, zipfile
+from urllib.parse import quote
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 os.environ.setdefault("THREATMAP_SCHEDULE", "0")
 import app as A  # noqa: E402
@@ -169,53 +170,133 @@ try:
     st, _ = call("/api/review/1", ANALYST)
     ok("the analyst does not (the review is management's)", st == 403)
 
-    print("The advisor writes the advisory")
+    print("The advisor writes one advisory per organisation (network)")
     ADV = dict(role="advisor", user="lg-check-advisor")
     st, a = call("/api/advisory/1", ADVISOR, **ADV)
+    nets = a.get("networks") or []
+    ok("the advisor opens the decided finding: its organisations (networks) to pick from", st == 200 and nets and all(n["network"] and n["devices"] for n in nets),
+       f"{len(nets)} networks" if st == 200 else a.get("error", ""))
+    ok("…with no address on that list", not IP_RX.search(json.dumps(a)))
+    NET = nets[0]["network"] if nets else ""
+    st, a = call(f"/api/advisory/1/net?network={quote(NET)}", ADVISOR, **ADV)
     av = a.get("advisory") or {}
-    ok("the advisor opens the advisory of the decided finding", st == 200 and av.get("title", "").endswith("Security Advisory"), a.get("error", ""))
-    ok("…with the reports filled in on their own, each with its impact flags", av.get("reports") and all(r["flags"] and r["url"].startswith("https://")
+    devs = av.get("devices") or []
+    ok("picking one shows its data: its IP addresses only", st == 200 and devs and all(d["network"] == NET for d in devs)
+       and len(devs) == nets[0]["devices"], f"{len(devs)} of {nets[0]['devices'] if nets else 0} on {NET}")
+    ok("…each with its ports, reports, and what the records say (CVEs, issues, what it is)", devs and all(d["reports"] for d in devs)
+       and any(d["cves"] or d["issues"] or d["labels"] for d in devs))
+    import issue_tags
+    ok("…issues are weaknesses only: product and protocol tags are apart, as what the devices are",
+       all(i.startswith(("End of life", "Exposed", "Device implant", "Badcandy", "Cpanel", "Open dir", "Vulnerable", "Expired", "POODLE", "FREAK", "Compromised"))
+           for d in devs for i in d["issues"]) and not any(issue_tags.issue_of(lb) for d in devs for lb in d["labels"]),
+       f"issues {sorted({i for d in devs for i in d['issues']})[:6]} · seen as {sorted({lb for d in devs for lb in d['labels']})[:6]}")
+    ok("…the reports filled in on their own, each with its impact flags", av.get("reports") and all(r["flags"] and r["url"].startswith("https://")
        for r in av["reports"]), ", ".join(r["title"] for r in av.get("reports") or []))
     ok("…the impacts gathered, the most severe first", av.get("impact") and [f["level"] for f in av["impact"]] ==
        sorted([f["level"] for f in av["impact"]], key=["critical", "high", "medium", "low"].index))
+    kinds = [w for w, k_ in (("CVEs", "cves"), ("issues", "issues"), ("categories", "categories")) if av.get("affected", {}).get(k_)]
     ok("…the Technical Details line naming only the kinds present, never their values",
-       (av.get("kinds_line") or "").startswith("See Technical Details") if any(av.get("affected", {}).values()) else not av.get("kinds_line"),
-       av.get("kinds_line", ""))
-    ok("…and no address anywhere", not IP_RX.search(json.dumps(a)))
+       (all(w in av.get("kinds_line", "") for w in kinds) and av["kinds_line"].startswith("See Technical Details")) if kinds else not av.get("kinds_line"),
+       av.get("kinds_line", "") or "(none: no CVE, issue or category on this organisation)")
+    ok("…and the product / protocol tags listed apart as Seen as", isinstance(av.get("affected", {}).get("labels"), list))
+    ok("…the recipients start with the organisation", av.get("recipients") == [NET])
+    fb = a.get("file_base") or ""
+    ok("…and its files named CSIRT_organisation_data-title_yyyymmdd", re.fullmatch(r"[A-Za-z0-9-]+_[A-Za-z0-9-]+_[A-Za-z0-9-]+_\d{8}", fb)
+       and fb.endswith(time.strftime("%Y%m%d", time.gmtime())), fb)
+    st, _ = call("/api/advisory/1/net?network=Not-a-network", ADVISOR, **ADV)
+    ok("a network not in the finding is refused", st == 404)
     st, _ = call("/api/advisory/1", ADVISOR, role="advisor", user="lg-other-advisor")
     ok("an advisor outside the channel does not see it", st == 404)
     st, _ = call("/api/advisory/1", MGMT, role="management", user="lg-check-management")
     ok("management does not write advisories", st == 403)
-    st, d = call("/api/advisory/1", ADVISOR, "POST", {"subject": ""}, **ADV)
+    st, d = call("/api/advisory/1/net", ADVISOR, "POST", {"network": NET, "subject": ""}, **ADV)
     ok("an advisory needs a subject", st == 400)
-    st, d = call("/api/advisory/1", ADVISOR, "POST", {"subject": "Exposed MikroTik services", "description": "", "actions": "",
-                                                       "recipients": "Team A, Team B"}, **ADV)
+    st, d = call("/api/advisory/1/net", ADVISOR, "POST", {"subject": "x"}, **ADV)
+    ok("…and its organisation", st == 400)
+    body = {"network": NET, "subject": "Exposed VMware ESXi hosts", "description": "", "actions": "", "recipients": f"{NET}, Team B"}
+    st, d = call("/api/advisory/1/net", ADVISOR, "POST", body, **ADV)
     ref = (d.get("advisory") or {}).get("ref") or ""
     ok("the advisor saves it: it gets its reference", st == 200 and re.fullmatch(r"ADV-\d{4}-001", ref), d.get("error", ref))
     ok("…kept as JSON", os.path.exists(os.path.join(A.ADVISORIES.dir, f"{ref}.json")))
-    st, d = call("/api/advisory/1/send", ADVISOR, "POST", {}, **ADV)
-    ok("it cannot be sent without the Description and the Recommended Actions", st == 400)
-    st, d = call("/api/advisory/1", ADVISOR, "POST", {"subject": "Exposed MikroTik services", "description": "Routers answer on management ports.",
-                                                       "actions": "Close the ports to the internet.", "recipients": "Team A, Team B"}, **ADV)
+    ok("…at TLP:AMBER unless the advisor chooses (it lists the organisation's addresses)", (d.get("advisory") or {}).get("tlp") == "TLP:AMBER")
+    st, _ = call("/api/advisory/1/net", ADVISOR, "POST", dict(body, tlp="TLP:PURPLE"), **ADV)
+    ok("a TLP level that does not exist is refused", st == 400)
+    st, a_ = call("/api/advisory/1", ADVISOR, **ADV)
+    ok("the page gets the five TLP 2.0 levels with what each allows", [x["key"] for x in a_.get("tlp_levels") or []] ==
+       ["TLP:RED", "TLP:AMBER+STRICT", "TLP:AMBER", "TLP:GREEN", "TLP:CLEAR"] and all(x["text"] for x in a_["tlp_levels"]))
+    body["tlp"] = "TLP:RED"
+    ok("the heading is the CSIRT's name + Security Advisory until the advisor writes one", (d.get("advisory") or {}).get("title", "").endswith("Security Advisory")
+       and not d["advisory"]["heading"])
+    body["heading"] = "Exposed MikroTik routers on Dimension Data"
+    st, d = call("/api/advisory/1/generate", ADVISOR, "POST", {"network": NET}, **ADV)
+    ok("no report without the Description and the Recommended Actions", st == 400)
+    body.update(description="These hosts run an **end-of-life** hypervisor:\n- reachable from the internet\n- with known CVEs",
+                actions="1. Patch to a supported version\n2. Close the management ports\n3. Check for signs of compromise")
+    st, d = call("/api/advisory/1/net", ADVISOR, "POST", body, **ADV)
     ok("…saved again under the same reference", st == 200 and d["advisory"]["ref"] == ref)
-    st, pdf = call("/advisory/1/report?as=pdf", ADVISOR, raw=True, **ADV)
-    ok("the advisory's report: its pages on top of the analyst's report", st == 200 and pdf[:4] == b"%PDF" and len(pdf) > 20000,
+    ok("…with the advisor's own heading and the TLP chosen", d["advisory"]["title"] == body["heading"] and d["advisory"]["tlp"] == "TLP:RED")
+    st, d = call("/api/advisory/1/send", ADVISOR, "POST", {"network": NET}, **ADV)
+    ok("it cannot be marked as sent before a report is generated", st == 400)
+    st, pdf = call(f"/advisory/1/preview?network={quote(NET)}", ADVISOR, raw=True, **ADV)
+    ok("the preview: its pages on top of the analyst's report on this organisation", st == 200 and pdf[:4] == b"%PDF" and len(pdf) > 20000,
        f"{len(pdf) if isinstance(pdf, bytes) else pdf}")
-    st, zz = call("/advisory/1/report", ADVISOR, raw=True, **ADV)
-    zn = zipfile.ZipFile(io.BytesIO(zz)).namelist() if st == 200 else []
-    ok("…and its ZIP: the PDF, the CSV files and the advisory as JSON", f"{ref}.pdf" in zn and f"{ref}.json" in zn and any(n.endswith(".csv") for n in zn),
-       ", ".join(zn))
-    st, d = call("/api/advisory/1/send", ADVISOR, "POST", {"recipients": "Team A, Team B"}, **ADV)
+    if os.environ.get("LG_SAVE_PDF") and st == 200:      # to look at the pages
+        with open(os.environ["LG_SAVE_PDF"], "wb") as fh:
+            fh.write(pdf)
+    import combo_pdf as _cp
+    real_b, seen_b = _cp.build, []
+    _cp.build = lambda d_, m_: (seen_b.append(d_), real_b(d_, m_))[1]
+    try:
+        st, d = call("/api/advisory/1/generate", ADVISOR, "POST", {"network": NET}, **ADV)
+    finally:
+        _cp.build = real_b
+    fname = (d.get("file") or {}).get("name") or ""
+    ok("the advisor generates the report: named as the CSIRT names it", st == 200 and fname == f"{fb}.zip", d.get("error", fname))
+    words = json.dumps([seen_b[-1].get("findings"), seen_b[-1].get("headline")]) if seen_b else ""
+    ok("…its words name no Looking Glass code (the patterns go by their devices' IP addresses)", seen_b and not re.search(r"LG-[ACX]-", words),
+       (re.findall(r"[^.]*LG-[ACX]-[^.]*", words) or [""])[0][:160])
+    st, zz = call(f"/advisory/1/file/{ref}/1", ADVISOR, raw=True, **ADV)
+    zf_ = zipfile.ZipFile(io.BytesIO(zz)) if st == 200 else None
+    zn = zf_.namelist() if zf_ else []
+    ok("…kept with its download: just the PDF and the devices CSV, what is mailed to the organisation",
+       sorted(zn) == sorted([f"{fb}.pdf", f"{fb}_devices.csv"]), ", ".join(zn))
+    if zf_ and f"{fb}_devices.csv" in zn:
+        rows = list(csv.reader(io.StringIO(zf_.read(f"{fb}_devices.csv").decode("utf-8-sig"))))
+        ok("…its devices are this organisation's only", rows[1:] and all(r[2] == NET for r in rows[1:]), f"{len(rows) - 1} devices")
+        ok("…and the devices CSV carries no Looking Glass code", not {"combination_code", "cross_report_code", "code"} & set(rows[0])
+           and not re.search(r"LG-[ACX]-", zf_.read(f"{fb}_devices.csv").decode("utf-8", "replace")), ", ".join(h for h in rows[0] if "code" in h))
+    st, d = call("/api/advisory/1/generate", ADVISOR, "POST", {"network": NET}, **ADV)
+    gen = (d.get("advisory") or {}).get("generated") or []
+    st2, _ = call(f"/advisory/1/file/{ref}/1", ADVISOR, raw=True, **ADV)
+    st3, _ = call(f"/advisory/1/file/{ref}/2", ADVISOR, raw=True, **ADV)
+    ok("generating again replaces the report: one download, the latest", st == 200 and len(gen) == 1 and gen[0]["n"] == 2 and st2 == 404 and st3 == 200,
+       f"{len(gen)} kept, old link {st2}, new link {st3}")
+    st, d = call("/api/advisory/1/send", ADVISOR, "POST", {"network": NET, "recipients": f"{NET}, Team B"}, **ADV)
+    ok("it is not marked as sent before it is drafted", st == 400 and "drafted" in d.get("error", ""), d.get("error", ""))
+    st, d = call("/api/advisory/1/drafted", ADVISOR, "POST", {"network": NET}, **ADV)
+    ok("the advisor marks it as drafted on its page", st == 200 and d["advisory"]["status"] == "drafted" and d["advisory"]["status_label"] == "Drafted",
+       d.get("error", ""))
+    st, fl = call("/api/findings", ADVISOR, role="advisor", user="lg-check-advisor")
+    f1 = next((f_ for f_ in fl.get("findings") or [] if f_["id"] == "1"), {})
+    ok("the Findings page shows it drafted, with its organisation and TLP, to mark as sent there",
+       [(a_["ref"], a_["network"], a_["status"], a_["tlp"]) for a_ in f1.get("advisories") or []] == [(ref, NET, "drafted", "TLP:RED")]
+       and not IP_RX.search(json.dumps(f1.get("advisories"))))
+    st, d = call("/api/advisory/1/send", ADVISOR, "POST", {"network": NET, "recipients": f"{NET}, Team B"}, **ADV)
     ok("the advisor marks it as sent", st == 200 and d["advisory"]["status"] == "sent", d.get("error", ""))
-    ok("…and the finding moves to Advisory sent", F.get("1")["status"] == "advisory")
-    st, ex = call("/api/advisory/1/export", ADVISOR, raw=True, **ADV)
+    ok("…and the finding closes, logged", F.get("1")["status"] == "closed" and F.get("1")["history"][-1].get("kind") == "advisory_sent"
+       and ref in F.get("1")["history"][-1]["comment"])
+    st, a2 = call("/api/advisory/1", ADVISOR, **ADV)
+    ok("the organisation shows as sent on the list, the others still to do", st == 200 and next(n for n in a2["networks"] if n["network"] == NET)["status"] == "sent")
+    st, ex = call(f"/api/advisory/1/export?network={quote(NET)}", ADVISOR, raw=True, **ADV)
     exj = json.loads(ex) if st == 200 else {}
-    ok("the JSON export describes itself, with the reports and their impact", exj.get("schema") == "looking-glass/advisory"
-       and exj.get("reference") == ref and exj.get("shadowserver_reports") and exj.get("recipients") == ["Team A", "Team B"])
+    ok("the JSON export describes itself, with the organisation, the reports and their impact", exj.get("schema") == "looking-glass/advisory"
+       and exj.get("reference") == ref and exj.get("network") == NET and exj.get("shadowserver_reports") and exj.get("generated"))
     ok("…without any address", st == 200 and not IP_RX.search(ex.decode()))
+    ok("…with its TLP level and what it means", (exj.get("tlp") or {}).get("level") == "TLP:RED" and exj["tlp"].get("meaning"))
     st, db = call("/api/advisory/dashboard", ADVISOR, **ADV)
-    ok("the advisor's portal counts it: sent, to whom", st == 200 and db["kpis"]["sent"] == 1 and db["kpis"]["recipients"] == 2
-       and {r["name"] for r in db["recipients"]} == {"Team A", "Team B"} and db["impacts"], json.dumps(db.get("kpis")))
+    ok("the advisor's portal counts it: sent, to whom, reports generated, the finding closed", st == 200 and db["kpis"]["sent"] == 1
+       and db["kpis"]["recipients"] == 2 and db["kpis"]["reports"] == 1 and db["kpis"]["drafted"] == 0 and db["kpis"]["closed_findings"] == 1
+       and db["advisories"][0]["network"] == NET and db["impacts"], json.dumps(db.get("kpis")))
     st, db2 = call("/api/advisory/dashboard", ADVISOR, role="advisor", user="lg-other-advisor")
     ok("…another advisor's portal does not", st == 200 and db2["kpis"]["sent"] == 0 and not db2["advisories"])
     print("The organisation in Settings")
@@ -227,14 +308,22 @@ try:
     ok("only admins set the organisation", st == 403)
     st, d = call("/api/organisation", {"settings"}, "POST", {"name": "Example CSIRT", "logo": png}, **ADM)
     ok("the admin sets the name and logo", st == 200 and d.get("has_logo"), d.get("error", ""))
-    st, a = call("/api/advisory/1", ADVISOR, **ADV)
-    ok("…and the advisory's title carries the name", st == 200 and a["advisory"]["title"] == "Example CSIRT Security Advisory" and a["has_logo"])
-    st, pdf = call("/advisory/1/report?as=pdf", ADVISOR, raw=True, **ADV)
+    st, a = call(f"/api/advisory/1/net?network={quote(NET)}", ADVISOR, **ADV)
+    ok("…the advisory's title carries the name, and its files start with it", st == 200 and a["advisory"]["heading_default"] == "Example CSIRT Security Advisory"
+       and a["file_base"].startswith("Example-CSIRT_"), a.get("file_base", ""))
+    import combo_pdf
+    real_build, seen = combo_pdf.build, []
+    combo_pdf.build = lambda d_, m_: (seen.append((d_, m_)), real_build(d_, m_))[1]
+    try:
+        st, pdf = call(f"/advisory/1/preview?network={quote(NET)}", ADVISOR, raw=True, **ADV)
+    finally:
+        combo_pdf.build = real_build
     ok("…the report with the logo is made", st == 200 and pdf[:4] == b"%PDF")
-    if os.environ.get("LG_SAVE_PDF") and st == 200:      # to look at the pages
-        with open(os.environ["LG_SAVE_PDF"], "wb") as fh:
-            fh.write(pdf)
-    ok("every step is in the audit log", {"combo_review_sent", "finding_review_decision", "advisory_saved", "advisory_sent", "organisation_set"} <= set(audited),
+    d_, m_ = seen[-1] if seen else ({}, {})
+    ok("it goes to an organisation: signed by the CSIRT (the person is in the audit log), without the team's notes",
+       m_.get("generated_by") == "Example CSIRT" and d_.get("notes") == [] and not any("researcher note" in str(p_) for p_ in d_.get("findings") or [])
+       and not any(c_.get("note") or c_.get("by") for _, c_ in d_.get("explained") or []), m_.get("generated_by", ""))
+    ok("every step is in the audit log", {"combo_review_sent", "finding_review_decision", "advisory_saved", "advisory_report", "advisory_sent", "organisation_set"} <= set(audited),
        ", ".join(sorted(set(audited))))
 
     print("A combination without across-report data still goes to management for the advisory")
@@ -264,8 +353,9 @@ try:
     st, d = call(f"/api/combos/search/{jid3}/download", ANALYST, **PA)
     ok("…the analyst's download stays closed: the advisor generates it", st == 409 and "advisory" in d.get("error", ""))
     st, a = call(f"/api/advisory/{fid3}", ADVISOR, **ADV)
-    ok("the advisor opens its advisory", st == 200, a.get("error", ""))
-    st, pdf = call(f"/advisory/{fid3}/report?as=pdf", ADVISOR, raw=True, **ADV)
+    ok("the advisor opens its advisory, with its organisations", st == 200 and a.get("networks"), a.get("error", ""))
+    n3 = (a.get("networks") or [{}])[0].get("network", "")
+    st, pdf = call(f"/advisory/{fid3}/preview?network={quote(n3)}", ADVISOR, raw=True, **ADV)
     ok("…and generates its report from the kept search", st == 200 and pdf[:4] == b"%PDF", str(pdf)[:120] if st != 200 else "")
     jid4, _ = search(code, user="lg-plain2-analyst")
     plain(jid4, "lg-plain2-analyst")
@@ -279,6 +369,75 @@ try:
     ok("…and the analyst's download opens again", st == 200)
     st, _ = call(f"/api/advisory/{fid4}", ADVISOR, **ADV)
     ok("…with no advisory to write", st in (404, 409))
+
+    print("Several organisations: a case with one sub-finding each")
+    jid5, s5 = search(code, user="lg-case-analyst")
+    CA = dict(user="lg-case-analyst")
+    nets5 = s5.get("networks") or []
+    ok("the analyst sees the organisations (networks) of the search to pick from", len(nets5) >= 2 and all(n["network"] and n["devices"] for n in nets5),
+       f"{len(nets5)} networks")
+    pick = [n["network"] for n in nets5[:2]]
+    st, sm = call(f"/api/combos/search/{jid5}/summary?network={quote(pick[0])}", ANALYST, **CA)
+    ok("the page filters to one network: its own figures", st == 200 and sm["summary"]["devices"] == nets5[0]["devices"]
+       and sm["summary"]["records"] == nets5[0]["records"] and all(n["label"] == pick[0] for n in sm["summary"]["networks_all"]),
+       f"{sm.get('summary', {}).get('devices')} of {nets5[0]['devices']}" if st == 200 else sm.get("error", ""))
+    st, _ = call(f"/api/combos/search/{jid5}/summary?network=Not-a-network", ANALYST, **CA)
+    ok("…and says so for a network that is not in it", st == 404)
+    tick5 = [s5["preview"]["cross"][0]["code"]]
+    st, d = call(f"/api/combos/search/{jid5}/review", ANALYST, "POST", {"codes": tick5, "networks": ["Not a network"], "title": "x", "to": "lg-check-management"}, **CA)
+    ok("a network not in the search is refused", st == 400)
+    st, d = call(f"/api/combos/search/{jid5}/review", ANALYST, "POST", {"codes": tick5, "networks": pick, "title": "Two operators", "text": "One advisory each.",
+                                                                       "to": "lg-check-management"}, **CA)
+    ok("submitting several networks opens a case with one sub-finding each", st == 200 and d.get("case") and [s_["network"] for s_ in d.get("subs") or []] == pick,
+       d.get("error", ""))
+    cid = (d.get("finding") or "#0")[1:]
+    sids = [s_["finding"][1:] for s_ in d.get("subs") or []]
+    case = F.get(cid) or {}
+    ok("…the case is the overview, its sub-findings under it", case.get("kind") == "case" and case.get("children") == sids
+       and all(F.get(k)["parent"] == cid and F.get(k)["network"] == n for k, n in zip(sids, pick)))
+    sub0 = F.get(sids[0]) if sids else {}
+    p0 = {x["ip"] for x in sub0.get("review", {}).get("sent", []) for x in x.get("devices") or []}
+    ok("…each carrying only its organisation's devices", sub0.get("review", {}).get("researcher", {}).get("devices") == nets5[0]["devices"]
+       and all(any(dv["ip"] == ip and dv.get("network") == pick[0] for x in sub0["review"]["sent"] for dv in x["devices"]) for ip in p0))
+    st, fl = call("/api/findings", MGMT, role="management", user="lg-check-management")
+    ok("management sees the case and its sub-findings", st == 200 and {cid, *sids} <= {f_["id"] for f_ in fl["findings"]})
+    st, d = call(f"/api/findings/{cid}/decision", MGMT, "POST", {"decision": "accept", "text": "x", "to": "lg-check-analyst"}, role="management", user="lg-check-management")
+    ok("the case itself is not decided: each sub-finding is", st == 400)
+    st, d = call(f"/api/findings/{sids[0]}/review-decision", MGMT, "POST", {"choice": "both", "text": "Go.", "to": "lg-check-advisor"},
+                 role="management", user="lg-check-management")
+    ok("management approves one organisation's sub-finding to the advisor", st == 200 and d["finding"]["status"] == "advisor", d.get("error", ""))
+    ok("…the case still waits for the other", F.get(cid)["status"] == "management")
+    st, d = call(f"/api/combos/search/{jid5}/download", ANALYST, **CA)
+    ok("…and the analyst's download waits for it too", st == 409 and f"#{sids[1]}" in d.get("error", ""), d.get("error", ""))
+    st, d = call(f"/api/findings/{sids[1]}/review-decision", MGMT, "POST", {"choice": "reject", "text": "Not this one."},
+                 role="management", user="lg-check-management")
+    ok("management rejects the other: the case follows (with the advisor)", st == 200 and F.get(cid)["status"] == "advisor", F.get(cid)["status"])
+    st, d = call(f"/api/advisory/{cid}", ADVISOR, **ADV)
+    ok("the advisor writes no advisory on the case itself", st == 409 and d.get("case"))
+    st, d = call(f"/api/advisory/{sids[0]}", ADVISOR, **ADV)
+    ok("…but on the approved sub-finding, for its organisation only", st == 200 and [n["network"] for n in d.get("networks") or []] == [pick[0]],
+       json.dumps([n["network"] for n in d.get("networks") or []]))
+    st, d = call(f"/api/combos/search/{jid5}/download", ANALYST, **CA)
+    ok("…and the analyst's download stays the advisor's", st == 409 and "advisory" in d.get("error", ""), d.get("error", ""))
+    s0 = sids[0]
+    call(f"/api/advisory/{s0}/net", ADVISOR, "POST", {"network": pick[0], "subject": "Exposed routers", "description": "Exposed.", "actions": "- Close the port",
+                                                     "recipients": pick[0]}, **ADV)
+    st, d = call(f"/api/advisory/{s0}/generate", ADVISOR, "POST", {"network": pick[0]}, **ADV)
+    st2, d2 = call(f"/api/advisory/{s0}/drafted", ADVISOR, "POST", {"network": pick[0]}, **ADV)
+    ok("the advisor writes, generates and drafts the sub-finding's advisory", st == 200 and st2 == 200, d.get("error", "") or d2.get("error", ""))
+    ok("…the case stays open meanwhile", F.get(cid)["status"] != "closed")
+    st, d = call(f"/api/advisory/{s0}/send", ADVISOR, "POST", {"network": pick[0], "recipients": pick[0]}, **ADV)
+    ok("marked as sent: the sub-finding closes", st == 200 and F.get(s0)["status"] == "closed", d.get("error", ""))
+    ok("…and, its other sub-finding rejected, the case closes, logged", F.get(cid)["status"] == "closed"
+       and "the case is closed" in F.get(cid)["history"][-1]["comment"], F.get(cid)["history"][-1]["comment"])
+    st, db = call("/api/advisory/dashboard", ADVISOR, **ADV)
+    ok("the advisor's portal counts the closed case", st == 200 and db["kpis"]["closed_cases"] >= 1, json.dumps(db.get("kpis")))
+    jid6, s6 = search(code, user="lg-one-analyst")
+    st, d = call(f"/api/combos/search/{jid6}/review", ANALYST, "POST", {"codes": [s6["preview"]["cross"][0]["code"]], "networks": [s6["networks"][0]["network"]],
+                                                                       "title": "One operator", "to": "lg-check-management"}, user="lg-one-analyst")
+    one = F.get((d.get("finding") or "#0")[1:]) or {}
+    ok("one network: a finding for that organisation, no case", st == 200 and not d.get("case") and one.get("network") == s6["networks"][0]["network"]
+       and not one.get("parent"), d.get("error", ""))
 finally:
     for jid in jids:
         for s_ in (".zip", ".json"):

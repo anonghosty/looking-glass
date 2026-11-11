@@ -60,3 +60,41 @@
 .ap-st { padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; border: 1px solid var(--border-strong); }
 .ap-st.sent { color: #b9f3dc; border-color: rgba(43, 176, 127, .6); } .ap-st.draft { color: #e6d9ff; border-color: rgba(177, 140, 245, .5); }
 @media (max-width: 700px) { .av-row { grid-template-columns: 1fr; } .av-imp { grid-template-columns: 1fr; } .av-imp small { grid-column: 1; } .ap-grid { grid-template-columns: 1fr; } }
+
+/* one advisory per organisation (network): the picker, its data, the text tools */
+.av-netrow { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.av-netsel { max-width: 640px; }
+.av-nets { display: flex; flex-wrap: wrap; gap: 8px; }
+.av-net { display: grid; gap: 2px; text-align: left; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border-strong); background: rgba(255, 255, 255, .02);
+  color: var(--text-2); cursor: pointer; font: inherit; min-width: 180px; }
+.av-net b { font-size: 13px; color: var(--text); } .av-net small { font-size: 11.5px; color: var(--muted); }
+.av-net.sent { border-color: rgba(43, 176, 127, .5); } .av-net.draft { border-color: rgba(177, 140, 245, .5); }
+.av-net.on { background: rgba(124, 156, 255, .14); border-color: rgba(124, 156, 255, .7); }
+.av-ipwrap { max-height: 420px; overflow: auto; }
+.av-ips td { overflow-wrap: anywhere; font-size: 12.5px; vertical-align: top; } .av-ips td.num { text-align: right; }
+.av-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.av-tool { padding: 4px 10px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text-2); font: 600 12px Inter, sans-serif; cursor: pointer; }
+.av-tool.b { font-weight: 800; } .av-tool:hover { color: var(--text); background: #232328; } .av-tool:disabled { opacity: .5; cursor: default; }
+.av-preview { padding: 8px 12px; border-radius: 10px; border: 1px dashed var(--border-strong); font-size: 13px; color: var(--text-2); background: rgba(255, 255, 255, .015); }
+.av-preview p { margin: 2px 0; } .av-preview ul, .av-preview ol { margin: 4px 0; padding-left: 22px; }
+.av-fname { font-family: "Geist Mono", ui-monospace, monospace; font-size: 11.5px; overflow-wrap: anywhere; }
+.av-files { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; } .av-files a { color: #9cb7ff; overflow-wrap: anywhere; }
+.av-chip.lbl { border-color: var(--border-strong); background: rgba(255, 255, 255, .03); color: var(--text-2); font-weight: 500; }
+
+/* the TLP level of an advisory (TLP 2.0): the five levels, each with what it allows */
+.av-tlp { display: grid; gap: 6px; }
+.av-field-h { font-weight: 600; color: var(--text-2); font-size: 13px; }
+.av-tlp-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.av-tlp-opt { display: grid; gap: 4px; align-content: start; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border-strong);
+  background: rgba(255, 255, 255, .02); color: var(--text-2); font: inherit; cursor: pointer; }
+.av-tlp-opt b { font-size: 12.5px; color: var(--text); } .av-tlp-opt small { font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+.av-tlp-opt.on { border-color: rgba(255, 255, 255, .7); background: rgba(255, 255, 255, .07); box-shadow: 0 0 0 1px rgba(255, 255, 255, .25) inset; }
+.av-tlp-opt:disabled { cursor: default; }
+.av-tlp .tlp-badge, .av-tlp-opt .tlp-badge { justify-self: start; padding: 3px 9px; border-radius: 6px; background: #000; font: 700 12px "Geist Mono", ui-monospace, monospace; }
+.tlp-red { color: #FF2B2B; } .tlp-amber { color: #FFC000; } .tlp-green { color: #33FF00; } .tlp-clear { color: #FFFFFF; }
+.ap-table .tlp-badge { display: inline-block; padding: 2px 7px; border-radius: 5px; background: #000; font: 700 11px "Geist Mono", ui-monospace, monospace; white-space: nowrap; }
+.av-state { margin: 0; padding: 8px 12px; border-radius: 10px; font-size: 13px; color: var(--text-2); }
+.av-state.drafted { border: 1px solid rgba(124, 156, 255, .5); background: rgba(124, 156, 255, .08); }
+.av-state.sent { border: 1px solid rgba(43, 176, 127, .55); background: rgba(43, 176, 127, .08); }
+.av-state a { color: #9cb7ff; }
+.av-net.drafted { border-color: rgba(124, 156, 255, .6); }

@@ -113,3 +113,29 @@
 .fd-reject { border-color: rgba(229, 72, 77, .5) !important; color: #ffb4b6 !important; }
 .fd-hist li.decision.accepted b { color: #8ff0c4; } .fd-hist li.decision.accepted::before { background: #2bb07f; }
 .fd-hist li.decision.rejected b { color: #ffb4b6; } .fd-hist li.decision.rejected::before { background: #e5484d; }
+
+/* a case: the overview on top, its sub-findings (one per organisation) inside it, like a ticket and its sub-tickets */
+.fd-org { display: inline-block; margin-left: 8px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  border: 1px solid rgba(124, 156, 255, .55); background: rgba(124, 156, 255, .12); color: #cfdcff; vertical-align: middle; }
+.fd-org.all { border-color: var(--border-strong); background: rgba(255, 255, 255, .04); color: var(--text-2); }
+.fd-case { border-color: rgba(124, 156, 255, .45); }
+.fd-subs { display: grid; gap: 10px; margin-top: 12px; padding: 12px 0 0 16px; border-left: 2px solid rgba(124, 156, 255, .35); }
+.fd-subs-h { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; font-size: 13px; color: var(--muted); }
+.fd-subs-h b { color: var(--text); font-size: 14px; }
+.fd-card.fd-sub { padding: 12px 14px; border-radius: 12px; background: rgba(255, 255, 255, .02); box-shadow: none; }
+.fd-card.fd-sub h2 { font-size: 15px; }
+.fd-card.fd-sub[hidden] { display: none; }
+
+/* a finding's advisories: drafted on the advisory page, marked as sent here */
+.fd-advs { display: grid; gap: 6px; margin-top: 8px; }
+.fd-adv { display: grid; gap: 6px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: rgba(255, 255, 255, .015); }
+.fd-adv.drafted { border-color: rgba(124, 156, 255, .55); } .fd-adv.sent { border-color: rgba(43, 176, 127, .45); }
+.fd-adv-h { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 12.5px; }
+.fd-adv-h code { font: 600 12px "Geist Mono", ui-monospace, monospace; color: #cfdcff; }
+.fd-adv-h .lg-btn { text-decoration: none; }
+.fd-adv-st { padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--text-2); font-size: 11.5px; }
+.fd-adv-st.drafted { color: #cfdcff; border-color: rgba(124, 156, 255, .6); } .fd-adv-st.sent { color: #b9f3dc; border-color: rgba(43, 176, 127, .6); }
+.fd-adv-send { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.fd-adv-send .fd-in { flex: 1 1 260px; }
+.fd-advs .tlp-badge { padding: 2px 7px; border-radius: 5px; background: #000; font: 700 11px "Geist Mono", ui-monospace, monospace; }
+.tlp-red { color: #FF2B2B; } .tlp-amber { color: #FFC000; } .tlp-green { color: #33FF00; } .tlp-clear { color: #FFFFFF; }

@@ -44,6 +44,7 @@ class Findings:
         self.mtime, self.data = None, {"seq": 0, "items": {}}
         self.people_of = lambda kind: []          # app.py: the active accounts that do that job (manager, researcher, analyst)
         self.title_of = lambda n: n               # app.py: a services report's readable title
+        self.advisories_of = lambda fid: []       # advisory.py: a finding's advisories (no address)
 
     # ---- the channel
     def recipient(self, kind, to):
@@ -152,6 +153,63 @@ class Findings:
             self._save()
         return item
 
+    def create_case(self, code, section, label, title, text, user, role, to, subs):
+        """A case: the analyst's request on several organisations (networks) at once. The case is the overview; under
+        it one sub-finding per network (a review of its own, which management decides and sends to an advisor).
+        subs: [(network, review)]. Returns (case, [sub-findings])."""
+        now = round(time.time(), 3)
+        with self.lock:
+            self._load()
+            self.data["seq"] += 1
+            pid = str(self.data["seq"])
+            case = {"id": pid, "note": None, "origin": "analyst", "kind": "case", "section": section, "name": label,
+                    "title": title[:MAX_TITLE], "text": text, "codes": [code], "user": user, "role": role, "at": now,
+                    "status": "management", "children": [],
+                    "history": [{"status": "management", "user": user, "role": role, "at": now, "to": to,
+                                 "comment": f"A case on {code}: {len(subs)} organisation(s), one sub-finding each."}]}
+            self._join(case, to)
+            kids = []
+            for net, review in subs:
+                self.data["seq"] += 1
+                fid = str(self.data["seq"])
+                item = {"id": fid, "note": None, "origin": "analyst", "kind": "review", "parent": pid, "network": net, "section": section,
+                        "name": label, "title": f"{title[:MAX_TITLE - 40]} · {net}"[:MAX_TITLE], "text": text,
+                        "codes": [code] + [c for c in review.get("codes", []) if c != code], "user": user, "role": role, "at": now,
+                        "status": "management", "review": dict(review, decision=None),
+                        "history": [{"status": "management", "user": user, "role": role, "at": now, "to": to,
+                                     "comment": f"Sub-finding of case #{pid} for {net}: "
+                                                + (f"{len(review.get('codes', []))} across-report pattern(s)." if review.get("codes") else "the researcher's view.")}]}
+                self._join(item, to)
+                self.data["items"][fid] = item
+                case["children"].append(fid)
+                kids.append(item)
+            self.data["items"][pid] = case
+            self._save()
+        return case, kids
+
+    def _sync_case(self, item):
+        """A case follows its sub-findings: with management while any is; with the advisor while any is; closed once
+        every one is closed (its advisory sent, or rejected), which is logged on the case. Call under the lock."""
+        pid = item.get("parent")
+        case = self.data["items"].get(str(pid)) if pid else None
+        if not case:
+            return
+        kids = [self.data["items"][k] for k in case.get("children") or [] if k in self.data["items"]]
+        sts = {k["status"] for k in kids}
+        new = ("management" if "management" in sts else "advisor" if "advisor" in sts else
+               "analyst" if sts & {"analyst", "researcher", "approved", "new"} else "closed")
+        if new != case["status"]:
+            case["status"] = new
+            sent = sum(1 for k in kids if any(h.get("kind") == "advisory_sent" for h in k["history"]))
+            note = (f"Every sub-finding is closed ({sent} with its advisory sent, {len(kids) - sent} without): the case is closed."
+                    if new == "closed" else f"Follows its sub-findings ({len(kids)}).")
+            case["history"].append({"status": new, "kind": "case", "user": item["history"][-1]["user"], "role": item["history"][-1]["role"],
+                                    "at": round(time.time(), 3), "to": "", "comment": note})
+        for u in item.get("participants") or []:          # whoever joins a sub-finding sees the case too
+            case.setdefault("participants", [case["user"]])
+            if u not in case["participants"]:
+                case["participants"].append(u)
+
     def decide_review(self, fid, choice, text, user, role, to):
         """Management: add the analyst's views to the report ("both") or use the researcher's view only ("researcher").
         It goes to the advisor management names (`to`), who writes the advisory and generates the report."""
@@ -169,6 +227,7 @@ class Findings:
                 item["status"] = "closed"
                 item["history"].append({"status": "closed", "kind": "decision", "decision": "rejected", "user": user, "role": role,
                                         "at": round(time.time(), 3), "to": "", "comment": text[:MAX_COMMENT]})
+                self._sync_case(item)
                 self._save()
                 return item, ""
             item["status"] = "advisor"
@@ -176,15 +235,37 @@ class Findings:
                                     "at": round(time.time(), 3), "to": to,
                                     "comment": ("Add the analyst's views: " if choice == "both" else "Use the researcher's view only: ") + text[:MAX_COMMENT]})
             self._join(item, to)
+            self._sync_case(item)
             self._save()
             return item, ""
 
-    def review_for(self, code, user, admin):
-        """The latest decided review on `code` this user is in (the report follows it), else the latest pending one, else None."""
+    def advisory_sent(self, fid, comment, close, user, role):
+        """The advisor marked an advisory of this finding as sent: logged; the finding closes when nothing else of it is
+        waiting (close), and its case follows."""
+        with self.lock:
+            self._load()
+            item = self.data["items"].get(str(fid))
+            if not item:
+                return None, "No such finding."
+            if close:
+                item["status"] = "closed"
+            item["history"].append({"status": item["status"], "kind": "advisory_sent", "user": user, "role": role,
+                                    "at": round(time.time(), 3), "to": "", "comment": comment[:MAX_COMMENT]
+                                    + (" The finding is closed." if close else "")})
+            self._sync_case(item)
+            self._save()
+            return item, ""
+
+    def reviews_for(self, code, user, admin):
+        """Every review on `code` this user is in (sub-findings of a case each count), oldest first."""
         with self.lock:
             self._load()
             mine = [x for x in self.data["items"].values() if (x.get("review") or {}).get("source") == code and self.sees(x, user, admin)]
-        mine.sort(key=lambda x: x["at"])
+        return sorted(mine, key=lambda x: x["at"])
+
+    def review_for(self, code, user, admin):
+        """The latest decided review on `code` this user is in (the report follows it), else the latest pending one, else None."""
+        mine = self.reviews_for(code, user, admin)
         decided = [x for x in mine if x["review"].get("decision")]
         return (decided or mine or [None])[-1]
 
@@ -234,6 +315,8 @@ class Findings:
                 return None, "It is already approved: move it on to the person it goes to."
             if item["status"] not in ("new", "management"):
                 return None, "It is not with management: there is nothing to decide."
+            if item.get("kind") == "case":
+                return None, "A case is decided organisation by organisation: decide each of its sub-findings."
             item["status"] = ("analyst" if to else "approved") if accept else "closed"
             item["history"].append({"status": item["status"], "kind": "decision", "decision": "accepted" if accept else "rejected",
                                     "user": user, "role": role, "at": round(time.time(), 3), "comment": text[:MAX_COMMENT], "to": to or ""})
@@ -254,6 +337,7 @@ class Findings:
             item["status"] = status
             item["history"].append({"status": status, "user": user, "role": role, "at": round(time.time(), 3), "comment": comment[:MAX_COMMENT], "to": to or ""})
             self._join(item, to)
+            self._sync_case(item)
             self._save()
             return item, ""
 
@@ -282,7 +366,12 @@ class Findings:
                 "review": ({k: v for k, v in x["review"].items() if k not in ("by", "sent")} | {"by": self.people.name(x["review"]["by"]) if x["review"].get("by") else ""})
                           if x.get("review") else None,
                 "assignee": self.people.name(x["assignee"]) if x.get("assignee") else "",
-                "channel": [self.people.name(u) for u in x.get("participants") or []]}
+                "channel": [self.people.name(u) for u in x.get("participants") or []],
+                # a case and its sub-findings (one per organisation): the page shows them as one ticket
+                "kind": x.get("kind") or "", "parent": x.get("parent") or "", "network": x.get("network") or "",
+                "children": list(x.get("children") or []),
+                # its advisories (advisory.py): reference, organisation, state; the advisor marks a drafted one as sent here
+                "advisories": self.advisories_of(x["id"]) if x.get("review") else []}
 
     def list(self, open_only, describe=None, user=None, admin=True):
         with self.lock:

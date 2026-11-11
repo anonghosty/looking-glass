@@ -2723,12 +2723,15 @@ def _site_demo():
 
 
 import advisory as _advisory  # noqa: E402
+import tlp as _tlp  # noqa: E402
+_tlp.install(app)               # the Traffic Light Protocol levels, for the Definitions page's card
 ORG = _organisation.install(app, {"base_dir": BASE_DIR, "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"],
                                   "fresh": AUTH["fresh"], "is_demo": _site_demo, "audit": AUTH["audit"]})
 ADVISORIES = _advisory.install(app, {"base_dir": BASE_DIR, "findings": FINDINGS, "book": COMBOS, "org": ORG,
                                      "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"],
                                      "is_demo": _site_demo, "audit": AUTH["audit"], "people_name": lambda u: people.name(u, ""),
                                      "title_of": lambda n: SVC_KB["title_of"](n), "describe": COMBOS.describe,
+                                     "network": lambda asn: asn_registry.company(asn, False) if asn else "",
                                      "scope_text": lambda: _scope_text()})
 
 

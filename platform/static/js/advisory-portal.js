@@ -47,10 +47,14 @@
 
     const tiles = el("div", "ap-kpis");
     [["Waiting for you", k.waiting, "decided by management, sent to you", "amber"],
-     ["Drafts", k.drafts, "saved, not sent yet", "violet"],
+     ["Drafts", k.drafts, "being written", "violet"],
+     ["Drafted", k.drafted, "ready to go out: mark as sent on Findings", "blue"],
      ["Advisories sent", k.sent, `${fmt(k.sends)} sending${k.sends === 1 ? "" : "s"} in all`, "teal"],
      ["Recipients", k.recipients, "organisations, teams or people", "blue"],
+     ["Reports ready", k.reports, `advisories with their report · ${fmt(k.generations)} generated in all`, "violet"],
      ["Open findings", k.open_findings, "in your channels", "slate"],
+     ["Findings closed", k.closed_findings, "by their advisory sent", "teal"],
+     ["Cases closed", k.closed_cases, `${fmt(k.open_cases)} still open`, "teal"],
      ["Days to send", k.days_to_send == null ? "–" : k.days_to_send, "on average, from management's decision", "red"]].forEach(([l, v, s, c]) => {
       const t = el("div", `ap-kpi ${c}`); t.append(el("b", null, typeof v === "number" ? fmt(v) : v), el("span", null, l), el("small", null, s)); tiles.append(t);
     });
@@ -58,10 +62,12 @@
 
     const w = card("Waiting for an advisory", "Findings management decided and sent to you. Open one to write its advisory.");
     if (d.waiting.length) {
-      w.append(table(["Finding", "Title", "Since", "Advisory"], d.waiting.map((x) => {
+      w.append(table(["Finding", "Title", "Since", "Advisories"], d.waiting.map((x) => {
         const tr = el("tr"), td = el("td"); td.append(link(`/advisory/${x.fid}`, x.number));
         const t2 = el("td"); t2.append(link(`/advisory/${x.fid}`, x.title));
-        tr.append(td, t2, el("td", null, x.since), el("td", null, x.has_advisory ? `Draft ${x.ref}` : "Not started"));
+        if (x.case) t2.append(el("small", "muted", ` · case #${x.case}`));
+        tr.append(td, t2, el("td", null, x.since),
+                  el("td", null, [x.networks ? `${x.sent_networks} of ${x.networks} sent` : "", x.drafted ? `${x.drafted} drafted` : "", x.drafts ? `${x.drafts} draft${x.drafts === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ") || "Not started"));
         return tr;
       })));
     } else w.append(el("p", "fd-empty", "Nothing waiting: management's next decision sent to you appears here."));
@@ -85,11 +91,13 @@
 
     const ac = card("Advisories", "Every advisory, the latest change first");
     if (d.advisories.length) {
-      ac.append(table(["Reference", "Subject", "Finding", "Status", "Recipients", "Last sent", "Updated", "By"], d.advisories.map((a) => {
-        const tr = el("tr"), r0 = el("td"); r0.append(link(`/advisory/${a.fid}`, a.ref)); r0.className = "mono";
+      ac.append(table(["Reference", "TLP", "Organisation", "Subject", "Finding", "Status", "Reports", "Recipients", "Last sent", "Updated", "By"], d.advisories.map((a) => {
+        const tr = el("tr"), r0 = el("td"); r0.append(link(`/advisory/${a.fid}#${encodeURIComponent(a.network === "All networks" ? "" : a.network)}`, a.ref)); r0.className = "mono";
         const st = el("td"); st.append(el("span", `ap-st ${a.status}`, a.status_label));
-        tr.append(r0, el("td", null, a.subject), el("td", null, a.finding), st, el("td", null, a.recipients.join(", ") || "–"),
-                  el("td", null, a.sent || "–"), el("td", null, a.updated), el("td", null, a.by));
+        const tl = el("td"); const tk = a.tlp || "TLP:AMBER";
+        tl.append(el("span", `tlp-badge ${tk === "TLP:RED" ? "tlp-red" : tk.startsWith("TLP:AMBER") ? "tlp-amber" : tk === "TLP:GREEN" ? "tlp-green" : "tlp-clear"}`, tk));
+        tr.append(r0, tl, el("td", null, a.network), el("td", null, a.subject), el("td", null, a.finding), st, el("td", null, fmt(a.reports)),
+                  el("td", null, a.recipients.join(", ") || "–"), el("td", null, a.sent || "–"), el("td", null, a.updated), el("td", null, a.by));
         return tr;
       })));
     } else ac.append(el("p", "fd-empty", "No advisory written yet."));

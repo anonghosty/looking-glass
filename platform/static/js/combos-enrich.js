@@ -187,8 +187,9 @@
     const n = el("textarea", "ac-in"); n.rows = 3; n.maxLength = 2000; n.placeholder = "Why these patterns matter for the report (e.g. the same hosts expose CWMP and call the same sinkhole)";
     const cnt = el("span", "cb-hint", "No pattern ticked yet.");
     const send = el("button", "lg-btn primary", "Send the ticked patterns to management"); send.type = "button";
+    const np = netPicker(st, () => { send.textContent = sendLabel(np.values(), "Send the ticked patterns to management"); });
     const rmsg = el("div", "cb-hint");
-    req.append(el("b", null, "Send to management"), cnt, ...(toM ? [toM.el] : []), t, n, send, rmsg);
+    req.append(el("b", null, "Send to management"), cnt, np.el, ...(toM ? [toM.el] : []), t, n, send, rmsg);
     c.append(req);
     out.addEventListener("change", () => { cnt.textContent = ticked.size ? `${pl(ticked.size, "pattern")} ticked.` : "Nothing ticked yet."; });
     send.addEventListener("click", async () => {
@@ -197,16 +198,47 @@
       if (!t.value.trim()) { rmsg.textContent = "Give the finding a short title."; return; }
       send.disabled = true; rmsg.textContent = "Sending…";
       try {
-        const r = await post(`/api/combos/search/${job}/review`, { codes: [...ticked], title: t.value.trim(), text: n.value.trim(), to: toM ? toM.value() : "" });
+        const r = await post(`/api/combos/search/${job}/review`, { codes: [...ticked], networks: np.values(), title: t.value.trim(), text: n.value.trim(), to: toM ? toM.value() : "" });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) { rmsg.textContent = d.error || `Refused (HTTP ${r.status})`; send.disabled = false; return; }
-        rmsg.replaceChildren(document.createTextNode(`Finding ${d.finding} sent to ${d.to} with ${pl(d.codes.length, "pattern")}. The report unlocks once they decide. `));
+        rmsg.replaceChildren(document.createTextNode(`${sentText(d)}With ${pl(d.codes.length, "pattern")}. Once management decides, the advisor they name generates the report. `));
         const a = el("a", null, "Open it on the Findings page"); a.href = `/findings#f${d.finding.slice(1)}`; rmsg.append(a);
         send.hidden = true; state.className = "ce-state wait"; state.replaceChildren(el("b", null, `Waiting for management's decision on finding ${d.finding}`));
         out.querySelectorAll("input[type=checkbox]").forEach((x) => { x.disabled = true; });
       } catch { rmsg.textContent = "The connection was interrupted. Try again."; send.disabled = false; }
     });
   }
+
+  // the organisations (networks) it is sent for: none ticked = the whole combination (one overview finding); one = a
+  // finding for that organisation; several = a case with one sub-finding per organisation, each decided on its own
+  function netPicker(st, onChange) {
+    const nets = st.networks || [];
+    const w = el("div", "ce-nets");
+    const head = el("div", "ce-nets-head");
+    head.append(el("b", null, "The organisations (networks) it is for"),
+      el("span", "cb-hint", "Tick one to send it for that organisation, several to open a case with one sub-finding each (management reviews each one), or none for the whole combination."));
+    const tools = el("div", "ce-nets-tools");
+    const all = el("button", "lg-btn sm ghost", "Tick all"); all.type = "button";
+    const none = el("button", "lg-btn sm ghost", "Clear"); none.type = "button";
+    const find = el("input", "ac-in ce-nets-find"); find.placeholder = "Find a network"; find.type = "search";
+    tools.append(find, all, none);
+    const list = el("div", "ce-nets-list");
+    const boxes = [];
+    for (const n of nets) {
+      const lab = el("label", "ce-net"), cb = el("input"); cb.type = "checkbox"; cb.value = n.network;
+      lab.append(cb, el("span", null, n.network), el("small", null, `${fmt(n.devices)} IP · ${fmt(n.records)} records`));
+      cb.addEventListener("change", () => { lab.classList.toggle("on", cb.checked); onChange(); });
+      boxes.push([cb, lab]); list.append(lab);
+    }
+    all.addEventListener("click", () => { for (const [cb, lab] of boxes) if (!lab.hidden) { cb.checked = true; lab.classList.add("on"); } onChange(); });
+    none.addEventListener("click", () => { for (const [cb, lab] of boxes) { cb.checked = false; lab.classList.remove("on"); } onChange(); });
+    find.addEventListener("input", () => { const t = find.value.trim().toLowerCase(); for (const [cb, lab] of boxes) lab.hidden = !!t && !cb.value.toLowerCase().includes(t); });
+    w.append(head, ...(nets.length > 8 ? [tools] : [tools]), list);
+    return { el: w, values: () => boxes.filter(([cb]) => cb.checked).map(([cb]) => cb.value) };
+  }
+  const sendLabel = (nets, base) => (nets.length > 1 ? `Submit ${nets.length} networks (a case, one sub-finding each)` : nets.length === 1 ? `Send for ${nets[0]}` : base);
+  const sentText = (d) => (d.case ? `Case ${d.finding} sent to ${d.to}, with ${d.subs.length} sub-findings: ${d.subs.map((s) => `${s.finding} ${s.network}`).join(", ")}. Management reviews each one. `
+    : `Finding ${d.finding}${d.network ? ` (${d.network})` : ""} sent to ${d.to}. `);
 
   // no across-report data: the combination still goes to management for the advisory; once sent, the report is the
   // advisor's (management decides and names them), so the download closes, unless management rejects it
@@ -229,18 +261,20 @@
     const t = el("input", "ac-in"); t.maxLength = 140; t.placeholder = `Title, e.g. ${entry?.code || "this code"}: exposed devices for an advisory`;
     const n = el("textarea", "ac-in"); n.rows = 3; n.maxLength = 2000; n.placeholder = "Your final comments: why this needs an advisory";
     const send = el("button", "lg-btn primary", "Send to management"); send.type = "button";
+    const np = netPicker(st, () => { send.textContent = sendLabel(np.values(), "Send to management (the whole combination)"); });
+    send.textContent = sendLabel([], "Send to management (the whole combination)");
     const msg = el("div", "cb-hint");
-    w.append(...(toM ? [toM.el] : []), t, n, send, msg);
+    w.append(np.el, ...(toM ? [toM.el] : []), t, n, send, msg);
     c.append(w);
     send.addEventListener("click", async () => {
       if (toM && !toM.check()) { msg.textContent = "Choose the manager it goes to."; return; }
       if (!t.value.trim()) { msg.textContent = "Give the finding a short title."; return; }
       send.disabled = true; msg.textContent = "Sending…";
       try {
-        const r = await post(`/api/combos/search/${job}/review`, { codes: [], title: t.value.trim(), text: n.value.trim(), to: toM ? toM.value() : "" });
+        const r = await post(`/api/combos/search/${job}/review`, { codes: [], networks: np.values(), title: t.value.trim(), text: n.value.trim(), to: toM ? toM.value() : "" });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) { msg.textContent = d.error || `Refused (HTTP ${r.status})`; send.disabled = false; return; }
-        msg.replaceChildren(document.createTextNode(`Finding ${d.finding} sent to ${d.to}. Once they approve, the advisor they name generates the report. `));
+        msg.replaceChildren(document.createTextNode(`${sentText(d)}Once management approves, the advisor they name generates the report. `));
         const a = el("a", null, "Open it on the Findings page"); a.href = `/findings#f${d.finding.slice(1)}`; msg.append(a);
         send.hidden = true; if (dl) dl.hidden = true;
       } catch { msg.textContent = "The connection was interrupted. Try again."; send.disabled = false; }

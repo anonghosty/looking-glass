@@ -1,0 +1,17 @@
+{#- The Traffic Light Protocol (tlp.py): what each colour allows. Used on the Definitions page. -#}
+<section class="st-card tlp-card" id="cardTlp">
+  <h2>Traffic Light Protocol (TLP) <span class="st-for">how far an advisory may be shared</span></h2>
+  <p class="st-hint">Every advisory carries a TLP level, chosen by the advisor: it is printed at the top and bottom of every page of the
+    report and kept in its JSON. It tells the recipients how far they may pass it on. Looking Glass follows TLP 2.0 by FIRST
+    (<a href="{{ TLP_URL }}" target="_blank" rel="noopener noreferrer">first.org/tlp</a>); the summaries below are ours.</p>
+  <div class="tlp-grid">
+    {% for x in TLP_LEVELS %}
+    <article class="tlp-level">
+      <span class="tlp-badge {{ x.cls }}">{{ x.key }}</span>
+      <b>{{ x.short }}</b>
+      <p>{{ x.text }}</p>
+      <small>When: {{ x.when }}</small>
+    </article>
+    {% endfor %}
+  </div>
+</section>

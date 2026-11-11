@@ -38,21 +38,54 @@ class AnalystDoc(ex.Doc):
         c.setFillColor(Color(.96, .7, .29, .06)); c.circle(W * .85, H + 60, 230, stroke=0, fill=1); c.restoreState()
         self.text(M, H - M - 6, "Looking Glass", 13, TXT, True)
         lw = self.c.stringWidth("Looking Glass", self.F["b"], 13)
-        self.pill(M + lw + 8, H - M - 5, "ADVISORY" if self.meta.get("advisory") else
+        self.pill(M + lw + 8, H - M - 5, self.label_of(section) if self.meta.get("advisory") else
                   "ANALYST · " + ("SELECTION" if str(self.meta.get("header", "")).find("LG-A-") >= 0 else "COMBINATION"), AMBER, 7)
         self.text(M, H - M - 20, f"{self.meta['platform_label']} · {self.meta['scope']}", 8.5, DIM)
         self.text(W - M, H - M - 6, section, 11, HexColor("#a9b8ff"), True, "end")
         self.text(W - M, H - M - 20, self.fit(self.meta["header"], 420, 8.5), 8.5, DIM, anchor="end")
         c.setStrokeColor(Color(1, 1, 1, .08)); c.setLineWidth(.6); c.line(M, H - M - 30, W - M, H - M - 30)
-        return H - M - 44
+        return H - M - 44         # an advisory's TLP label: in the header line (top right) and beside the page number
+
+    @staticmethod
+    def label_of(section):
+        """An advisory's parts, each with its own label: the advisory, the insights into the activity (the analyst's
+        report), its technical details (the definitions) and the report references."""
+        s = str(section or "")
+        if s.startswith("Advisory"):
+            return "ADVISORY"
+        if s.startswith("Technical Details"):
+            return "TECHNICAL DETAILS"
+        if s.startswith("Shadowserver Report References"):
+            return "REFERENCES"
+        return "INSIGHTS"
+
+    def tlp_mark(self, y, right=None):
+        """An advisory's TLP label (TLP 2.0: a black box, the level's own colour): centred at the top of every page, and at
+        the bottom right (right = its right edge), beside the page number."""
+        adv = self.meta.get("advisory") or {}
+        if not adv.get("tlp"):
+            return 0
+        t = self.s(adv["tlp"])
+        w = self.c.stringWidth(t, self.F["b"], 8.5) + 14
+        x0 = (right - w) if right is not None else W / 2 - w / 2
+        self.c.setFillColor(HexColor("#000000")); self.c.roundRect(x0, y - 4, w, 14, 3, stroke=0, fill=1)
+        self.text(x0 + w / 2, y, t, 8.5, HexColor(adv.get("tlp_colour") or "#FFC000"), True, "middle")
+        return w
 
     def footer(self):
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         who = f" by {self.meta['generated_by']}" if self.meta.get("generated_by") else ""
+        adv = self.meta.get("advisory") or {}
+        page = f"Page {self.page}"
+        self.text(W - M, 14, page, 7.2, MUTE, anchor="end")
+        if adv.get("tlp"):                         # an advisory: its TLP rule, and the label beside the page number
+            self.tlp_mark(14, W - M - self.c.stringWidth(page, self.F["r"], 7.2) - 10)
+            # short, so it never runs into the TLP label: the label itself says how far it may go
+            self.text(M, 14, f"Contains the addresses of affected devices. Generated {now}{who}.", 7.2, MUTE)
+            return
         self.text(M, 14, f"Contains the addresses of affected devices: share only according to your organisation's information-sharing policy. "
                          f"Generated {now}{who}. Data: Shadowserver Foundation.", 7.2, MUTE)
-        self.text(W - M, 14, f"Page {self.page}", 7.2, MUTE, anchor="end")
 
     # ---------------- parts of this report
     def chips(self, x, y, w, items, size=8.2):
@@ -264,7 +297,8 @@ def build(d, meta):
     # ---------------- page 1: overview
     y = doc.new_page("Overview")
     is_a = d["code"].startswith("LG-A-")
-    doc.text(M, y - 4, (f"ANALYST CODE {d['code']}" if is_a else f"COMBINATION {d['code']} · {d['name']}").upper(), 8, HexColor("#a9b8ff"), True)
+    doc.text(M, y - 4, (d["name"] if adv else f"ANALYST CODE {d['code']}" if is_a else f"COMBINATION {d['code']} · {d['name']}").upper(),
+             8, HexColor("#a9b8ff"), True)                # an advisory: what it is about, never Looking Glass's codes
     y = doc.wrap(M, y - 22, d["headline"], W - 2 * M - 40, 16, TXT, True, 20, 2) - 2
     # what the combination is: per report, its indicators
     for rep, items in d["parts"]:
@@ -342,7 +376,8 @@ def build(d, meta):
         y = doc.new_page("The devices")
         top = doc.card(M, y, W - 2 * M, min(y - 30, 56 + doc.table_height(cols, tw, [row(x) for x in chunk])),
                        "The devices with the most records" if pi == 0 else "The devices (continued)",
-                       f"{fmt(shown)} of {fmt(d['kpis']['devices'])} shown, the most records first; every device is in {d['csv_devices']}, every record in {d['csv_records']}")
+                       f"{fmt(shown)} of {fmt(d['kpis']['devices'])} shown, the most records first; every device is in {d['csv_devices']}"
+                       + ("" if adv else f", every record in {d['csv_records']}"))      # an advisory sends the devices CSV only
         doc.table(M + 14, top, tw, cols, [row(x) for x in chunk])
 
     # ---------------- across reports and what the devices are: only the parts that have something to show (an empty
@@ -358,7 +393,8 @@ def build(d, meta):
     after = None                                       # where the explanations may start on this page (charts on their own)
     top0 = H - M - 44                                  # the first line under a page's header (AnalystDoc.new_page)
     alone_h = min(top0 - 30, max(110, max((66 + min(len(s[2]), 10) * s[4] for s in side), default=0)))
-    shared = not across_on and bool(d["explained"] or d["notes"]) and top0 - alone_h - 18 > H * .45
+    # an advisory keeps its insights and its Technical Details on pages of their own, each part with its own label
+    shared = not adv and not across_on and bool(d["explained"] or d["notes"]) and top0 - alone_h - 18 > H * .45
     if across_on or side:
         y = doc.new_page("Across reports" if across_on else " · ".join([s[0] for s in side] + ([EXPL] if shared else [])))
         hh = y - 30
@@ -376,16 +412,29 @@ def build(d, meta):
                 top = doc.card(sx, sy, sw, sh, title, sub)
                 doc.bars(sx + 14, top, sw - 28, rows, n=max(1, int((sh - 56) // rh)), **opt)
     if across_on:
-        top = doc.card(M, y, lw, hh, "Across reports", "What these devices carried in the name's other reports: each exact pattern, with its code to search next")
+        top = doc.card(M, y, lw, hh, "Across reports", ("What these devices carried in the name's other reports: each exact pattern, with its devices by IP address" if adv else
+                                              "What these devices carried in the name's other reports: each exact pattern, with its code to search next"))
         yy = doc.hero(M + 14, top, lw - 28, [(fmt(d["across"]["multi"]), "devices also in other reports", HexColor("#a9c3ff")),
                                              (fmt(d["across"]["patterns_total"]), "exact patterns", TXT),
                                              (_share(d["across"]["multi"], k["devices"]), "of the devices", HexColor("#ffd38a"))])
         if not d["across"]["patterns"] and is_a:
             doc.wrap(M + 14, yy - 6, "An analyst code covers the whole selection, with several names: the researchers' view of the code gives each "
                                      "name's cross-report patterns and their codes.", lw - 28, 8.8, DIM)
+    IPS_SHOWN = 40
+
+    def ip_lines(p, width):
+        """An advisory names a pattern by its devices (their IP addresses), not its code: the lines they take, wrapped."""
+        if not (adv and p.get("ips")):
+            return []
+        ips = p["ips"][:IPS_SHOWN]
+        more = len(p["ips"]) - len(ips)
+        text = ", ".join(ips) + (f" and {more} more (every one in the devices CSV)" if more > 0 else "")
+        from reportlab.lib.utils import simpleSplit
+        return simpleSplit(doc.s(text), doc.F["m"], 8, width - 28)
+
     def est(p, width):
         """About how tall a pattern is: its head, and per report the rows its chips take at this width."""
-        h = 28
+        h = 28 + 11 * len(ip_lines(p, width))
         for part in p["parts"]:
             line = sum(doc.c.stringWidth(doc.s(str(it)), doc.F["r"], 7.6) + 22 for it in part["items"]) or 40
             h += 22 * max(1, -(-line // max(60, width - 142)))
@@ -397,15 +446,23 @@ def build(d, meta):
             # no room left in this card: the next patterns go on a page of their own, never over the footer
             y = doc.new_page("Across reports (continued)")
             hh, lw = y - 30, W - 2 * M
-            yy = doc.card(M, y, lw, hh, "Across reports, continued", "Each exact pattern, with its code to search next")
+            yy = doc.card(M, y, lw, hh, "Across reports, continued", ("Each exact pattern, with its devices by IP address" if adv else "Each exact pattern, with its code to search next"))
             bottom = y - hh
             if yy - est(p, lw) < bottom + 14:
                 continue                               # taller than a whole page: it is in the CSV
         yy -= 6
         head = f"{fmt(p['devices'])} device{'s' if p['devices'] != 1 else ''}"
         doc.text(M + 14, yy - 10, head, 9.6, TXT, True)
-        doc.pill(M + 14 + doc.c.stringWidth(doc.s(head), doc.F["b"], 9.6) + 10, yy - 9.5, p["code"], VIOLET, 7.4)
-        yy -= 22
+        ipl = ip_lines(p, lw)
+        if ipl:                                        # an advisory: the devices themselves, by IP address
+            yy -= 22
+            for ln in ipl:
+                doc.text(M + 14, yy - 2, ln, 8, HexColor("#e3e9ff"), mono=True)
+                yy -= 11
+            yy -= 2
+        else:
+            doc.pill(M + 14 + doc.c.stringWidth(doc.s(head), doc.F["b"], 9.6) + 10, yy - 9.5, p["code"], VIOLET, 7.4)
+            yy -= 22
         for part in p["parts"]:
             if yy < bottom + 24:
                 break                                  # never past the card (the CSV has every pattern in full)
@@ -425,7 +482,7 @@ def build(d, meta):
         else:
             y = doc.new_page(EXPL)
         doc.text(M, y - 4, ("TECHNICAL DETAILS: " if adv else "") + "WHAT THE NAME AND ITS VULNERABILITIES ARE", 8, HexColor("#a9b8ff"), True)
-        if not d["notes"]:                             # say so, rather than leave the reader looking for them
+        if not d["notes"] and not adv:                 # say so, rather than leave the reader looking for them
             doc.text(W - M, y - 4, "No researcher notes on " + ("these names" if len(d["explained"]) > 1 else "this name")
                      + " yet: notes added on the Definitions page appear in the next report", 7.6, MUTE, anchor="end")
         y -= 14
@@ -444,6 +501,8 @@ def build(d, meta):
             cols_y[ci] -= height + 10
         for name, card in d["explained"]:
             card = {kk: v for kk, v in card.items() if kk != "notes"}          # the notes have their own cards below
+            if adv:                                    # an advisory: the definition and its references, never the team's notes
+                card = {kk: v for kk, v in card.items() if kk not in ("note", "note_by", "note_updated", "by")}
             hgt = doc.explanation(0, None, col_w, name, card, d["stats"].get(name), comms)
             place(hgt, lambda x, yy, n=name, c=card: doc.explanation(x, yy, col_w, n, c, d["stats"].get(n), comms))
         for n in d["notes"]:

@@ -118,9 +118,47 @@
     if (d.state === "failed") { log.append(el("li", "bad", d.error)); return; }
     show(d);
   }
+  // ---------------- the filter at the top: the whole search, or one network (organisation) of it; the figures, map,
+  // devices and Across reports below follow it (the request to management and the analysis stay on the whole search)
+  let full = null;
+  function filterBar(s) {
+    let bar = $("cbFilter");
+    if (!bar) { bar = el("div", "cb-filter"); bar.id = "cbFilter"; $("cbTiles").before(bar); }
+    bar.replaceChildren();
+    const sel = el("select", "cb-filter-sel"); sel.setAttribute("aria-label", "Show the devices of");
+    sel.append(new Option(`All networks · ${fmt(s.devices)} device${s.devices === 1 ? "" : "s"} on ${fmt((s.networks_all || []).length)} network${(s.networks_all || []).length === 1 ? "" : "s"}`, ""));
+    for (const n of s.networks_all || []) sel.append(new Option(`${n.label || "Unknown"}${n.asn ? ` (AS${n.asn})` : ""} · ${fmt(n.devices)} device${n.devices === 1 ? "" : "s"}, ${fmt(n.records)} records`, n.label || "Unknown"));
+    const note = el("span", "cb-filter-note", "The whole search.");
+    bar.append(el("b", null, "Showing"), sel, note);
+    sel.addEventListener("change", async () => {
+      const n = sel.value;
+      const ns = $("cbNet"); if (ns && [...ns.options].some((o) => o.value === n)) { ns.value = n; ns.onchange && ns.onchange(); }
+      if (!n) { figures(full); note.textContent = "The whole search."; bar.classList.remove("on"); return; }
+      note.textContent = "Loading…"; sel.disabled = true;
+      try {
+        const r = await fetch(`/api/combos/search/${job}/summary?network=${encodeURIComponent(n)}`, { cache: "no-store" });
+        const x = await r.json().catch(() => ({}));
+        if (!r.ok) { note.textContent = x.error || `Could not filter (HTTP ${r.status})`; return; }
+        figures(x.summary || {}); bar.classList.add("on");
+        note.textContent = `${fmt(x.summary.devices)} of ${fmt(full.devices)} devices, ${fmt(x.summary.records)} of ${fmt(full.records)} records: everything below is ${n} only.`;
+      } finally { sel.disabled = false; }
+    });
+  }
   function show(d) {
     const s = d.summary || {};
+    full = s;
     $("cbStep3Box").hidden = false;
+    filterBar(s);
+    figures(s);
+    const days = $("cbDays");
+    let host = $("cbEnrichHost");
+    if (!host) { host = el("div"); host.id = "cbEnrichHost"; days.after(host); }
+    host.replaceChildren();
+    // the analysis across every category, added to this report, and the request to management (combos-enrich.js)
+    if (s.devices && window.LGEnrich) host.append(window.LGEnrich.box(job, s, entry));
+    afterShow(s);
+  }
+  function figures(s) {
     const tiles = $("cbTiles"); tiles.replaceChildren();
     const known = (s.regions || []).filter((r) => r.value !== "Unknown region");
     for (const [v, l, sub] of [[s.devices, "devices", "carry exactly this"], [s.records, "records", s.devices ? `${(s.records / s.devices).toFixed(1)} per device` : ""],
@@ -155,8 +193,8 @@
       if (x.patterns_total > x.patterns.length) days.append(el("p", "cb-hint", `The ${x.patterns.length} most frequent of ${fmt(x.patterns_total)} patterns; the devices CSV gives each device's pattern code.`));
     } else if (s.devices && entry?.kind === "r") days.append(el("p", "cb-hint", "Across reports: none of these devices was seen in another report of this name in this period."));
     if (!s.devices) days.append(el("p", "cb-hint", "No device carried exactly this combination in this period. Try the stored history over a longer range."));
-    // the analysis across every category, added to this report, and the request to management (combos-enrich.js)
-    if (s.devices && window.LGEnrich) days.append(window.LGEnrich.box(job, s, entry));
+  }
+  function afterShow(s) {
     // the report for one network provider (to attach to the advisory sent to that operator), or for all of them
     const ns = $("cbNet"), keep = ns.value;
     ns.replaceChildren(new Option("All networks", ""));

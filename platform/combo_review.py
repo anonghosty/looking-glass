@@ -69,9 +69,26 @@ def install(app, ctx):
         """The review this analyst already sent on this combination (with or without across-report patterns), else None."""
         return F.review_for(job["inputs"][0]["code"], job["user"], False)
 
+    def per_network(job):
+        """{network: {ips, records}} of a search's devices: the organisations it can be sent for."""
+        entry, found = job["inputs"][0], job["inputs"][1]
+        comms = entry.get("section") == "infections" or entry.get("platform") == "comms"
+        out, names = {}, {}
+        for e in found:
+            ip = (e.get("src_ip") if comms else e.get("ip")) or ""
+            asn = e.get("src_asn") if comms else e.get("asn")
+            if asn not in names:
+                names[asn] = (ctx["network"](asn) if asn else "") or "Unknown"
+            p = out.setdefault(names[asn], {"ips": set(), "records": 0})
+            p["ips"].add(ip); p["records"] += 1
+        return out
+
     def before_package(job):
         """After the search, before the report is made: the across-report views, and whether management decided."""
         entry = job["inputs"][0]
+        if entry.get("kind") != "a":                     # the organisations the analyst can send it for
+            job["networks"] = sorted(({"network": n, "devices": len(p["ips"]), "records": p["records"]} for n, p in per_network(job).items()),
+                                     key=lambda p: (-p["devices"], p["network"]))
         rv0 = sent_review(job) if entry.get("kind") != "a" else None
         if rv0:                                          # already sent to management: the page shows where it stands
             apply(job, rv0)
@@ -99,15 +116,18 @@ def install(app, ctx):
         """(allowed, why) for a download: open until the combination is sent to management; then the report is the
         advisor's, once management decided (a rejected one opens again: there is no advisory)."""
         entry = job["inputs"][0]
-        rv = F.review_for(entry["code"], user()[0], False)
-        if not job.get("needs_review") and not rv:
+        revs = F.reviews_for(entry["code"], user()[0], False)
+        active = [r for r in revs if r["review"].get("decision") != "rejected"]
+        if not job.get("needs_review") and not revs:
             return True, ""
-        if not rv:
+        if not revs:
             return False, "These devices also turn up in other reports: tick the across-report patterns that matter and send them to management first."
-        if rv["review"].get("decision") == "rejected":
+        if not active:                                   # every one rejected: no advisory, the download is the analyst's again
             return True, ""
-        if not rv["review"].get("decision"):
-            return False, f"Waiting for management's decision on finding #{rv['id']}: the report follows it."
+        waiting = [r for r in active if not r["review"].get("decision")]
+        if waiting:
+            return False, f"Waiting for management's decision on finding{'s' if len(waiting) > 1 else ''} {', '.join('#' + r['id'] for r in waiting)}: the report follows it."
+        rv = active[-1]
         # decided: the advisor management chose writes the advisory and generates the report (advisory.py), from
         # exactly what was sent; the analyst's part is done (their page shows what was sent and the decision)
         if not job.get("review_ok") or (job.get("review") or {}).get("finding") != f"#{rv['id']}":
@@ -144,17 +164,12 @@ def install(app, ctx):
             json.dump({"code": entry["code"], "section": entry.get("section"), "per_day": per_day, "by_day": by_day}, fh)
         os.replace(tmp, kept_path(fid))
 
-    def report_of(fid, me, advisory=None):
-        """(zip name, zip bytes, pdf name, pdf bytes) of a decided review's report, from its kept records; (None, error).
-        advisory: the advisory's pages go first (advisory.py), the report below them unchanged."""
+    def records_of(fid):
+        """The kept search of a review, loaded again: {entry, found, around, per_day, m, plat}; (None, error)."""
         x = F.get(fid)
-        if not x or not x.get("review") or not F.sees(x, me, hp("settings")):
+        rv = (x or {}).get("review") or {}
+        if not rv:
             return None, "No such review."
-        rv = x["review"]
-        if not rv.get("decision"):
-            return None, "Management has not decided yet."
-        if rv["decision"] == "rejected":
-            return None, "Management rejected it: there is no report to generate."
         try:
             with open(kept_path(fid), encoding="utf-8") as fh:
                 kept = json.load(fh)
@@ -176,14 +191,32 @@ def install(app, ctx):
                 if e.get("id") in ai:
                     around.append(e)
         m = ctx["svc_matcher"](entry) if entry.get("section") == "services" and ctx.get("svc_matcher") else None
-        job = {"id": f"review{fid}", "user": me, "log": [], "state": "done", "advisory": advisory}
+        return {"entry": entry, "found": found, "around": around, "per_day": [tuple(p) for p in kept["per_day"]], "m": m, "plat": plat}, ""
+
+    def report_of(fid, me, advisory=None, network=None, file_base=None):
+        """(zip name, zip bytes, pdf name, pdf bytes) of a decided review's report, from its kept records; (None, error).
+        advisory: the advisory's pages go first (advisory.py), the report below them unchanged; network: the report for
+        that organisation's devices only; file_base: the files' name (without extension)."""
+        x = F.get(fid)
+        if not x or not x.get("review") or not F.sees(x, me, hp("settings")):
+            return None, "No such review."
+        rv = x["review"]
+        if not rv.get("decision"):
+            return None, "Management has not decided yet."
+        if rv["decision"] == "rejected":
+            return None, "Management rejected it: there is no report to generate."
+        k, err = records_of(fid)
+        if not k:
+            return None, err
+        job = {"id": f"review{fid}", "user": me, "log": [], "state": "done", "advisory": advisory, "file_base": file_base}
         apply(job, x)
-        res = book.package(job, entry, found, [tuple(p) for p in kept["per_day"]], None, around, m)
+        res = book.package(job, k["entry"], k["found"], k["per_day"], None, k["around"], k["m"], network=network or None)
         z = zipfile.ZipFile(io.BytesIO(res["bytes"]))
         pdf = next(n for n in z.namelist() if n.endswith(".pdf"))
         return (res["name"], res["bytes"], pdf, z.read(pdf)), ""
 
     book.review_report_of = report_of            # advisory.py makes the advisory's report with it
+    book.review_records = records_of             # …and lists the organisations (networks) in it
     book.review_kept = lambda fid: os.path.exists(kept_path(fid))
 
     @app.route("/review/<fid>/report")
@@ -271,9 +304,9 @@ def install(app, ctx):
         avail = {x["code"]: x for x in prev.get("cross") or []}
         if j["inputs"][0].get("kind") == "a":
             return jsonify(error="An analyst code is already on its own finding."), 400
-        prior = sent_review(j)
-        if prior and (prior["review"].get("decision") or "") != "rejected":
-            return jsonify(error=f"This combination was already sent to management: see finding #{prior['id']}."), 409
+        prior = [r for r in F.reviews_for(j["inputs"][0]["code"], j["user"], False) if r["review"].get("decision") != "rejected"]
+        if prior:
+            return jsonify(error=f"This combination was already sent to management: see finding #{prior[-1].get('parent') or prior[-1]['id']}."), 409
         b = request.get_json(silent=True) or {}
         codes = [c for c in dict.fromkeys(str(c).strip().upper() for c in (b.get("codes") or [])) if c in avail][:20]
         if avail and not codes:
@@ -304,10 +337,46 @@ def install(app, ctx):
         section = entry.get("section") or "infections"
         # exactly what was sent, with the devices' addresses: for the analyst's report later (never shown to management)
         sent = [{"code": c, "hosts": avail[c]["hosts"], "parts": avail[c]["parts"], "devices": avail[c].get("devices") or []} for c in codes]
-        item = F.create_review(entry["code"], section, researcher["what"][:200], title, text, me, role, to,
-                               {"source": entry["code"], "codes": codes, "researcher": researcher, "analyst": analyst, "requested_by": me,
-                                "sent": sent})
+        base = {"source": entry["code"], "codes": codes, "researcher": researcher, "analyst": analyst, "requested_by": me, "sent": sent}
+        # the organisations (networks) it is for: none named = the whole combination (an overview, the advisor picks the
+        # organisations later); one = a finding for that organisation; several = a case with one sub-finding each
+        per_net = per_network(j)
+        nets = [n for n in dict.fromkeys(str(x).strip() for x in (b.get("networks") or []) if str(x).strip())][:60]
+        bad = [n for n in nets if n not in per_net]
+        if bad:
+            return jsonify(error=f"Not a network of this search: {bad[0]}."), 400
+
+        def for_net(net):
+            """The review narrowed to one organisation: its figures, and the ticked patterns its devices are in."""
+            p = per_net[net]
+            sent_n = []
+            for x in sent:
+                dv = [d for d in x["devices"] if d.get("ip") in p["ips"]]
+                if dv:
+                    sent_n.append(dict(x, devices=dv, hosts=len(dv)))
+            pats = [dict(pt, hosts=next(s_["hosts"] for s_ in sent_n if s_["code"] == pt["code"]))
+                    for pt in analyst["patterns"] if any(s_["code"] == pt["code"] for s_ in sent_n)]
+            return dict(base, network=net, codes=[s_["code"] for s_ in sent_n], sent=sent_n,
+                        researcher=dict(researcher, devices=len(p["ips"]), records=p["records"], networks=1,
+                                        top_networks=[{"label": net, "devices": len(p["ips"])}]),
+                        analyst=dict(analyst, patterns=pats, multi_hosts=sum(s_["hosts"] for s_ in sent_n)))
+        if len(nets) > 1:
+            case, kids = F.create_case(entry["code"], section, researcher["what"][:200], title, text, me, role, to,
+                                       [(n, for_net(n)) for n in nets])
+            for k in kids:
+                keep_search(k["id"], j)                    # each organisation's report is made later from these records
+            j["review"] = {"finding": f"#{case['id']}", "decision": None, "status": case["status"]}
+            ctx["audit"].add("combo_review_sent", user=me, target=entry["code"],
+                             detail=f"case #{case['id']} to {to} · {len(kids)} organisations · {len(codes)} pattern(s)")
+            return jsonify(finding=f"#{case['id']}", case=True, subs=[{"finding": f"#{k['id']}", "network": k["network"]} for k in kids],
+                           to=ctx["people_name"](to), codes=codes)
+        review = for_net(nets[0]) if nets else base
+        item = F.create_review(entry["code"], section, researcher["what"][:200], (f"{title} · {nets[0]}" if nets else title)[:140], text, me, role, to, review)
+        if nets:
+            with F.lock:                                   # a finding for one organisation says so
+                F._load(); F.data["items"][item["id"]]["network"] = nets[0]; F._save()
         j["review"] = {"finding": f"#{item['id']}", "decision": None, "status": item["status"]}
         keep_search(item["id"], j)                         # the report is made later from exactly these records
-        ctx["audit"].add("combo_review_sent", user=me, target=entry["code"], detail=f"#{item['id']} to {to} · {len(codes)} pattern(s)")
-        return jsonify(finding=f"#{item['id']}", to=ctx["people_name"](to), codes=codes)
+        ctx["audit"].add("combo_review_sent", user=me, target=entry["code"],
+                         detail=f"#{item['id']} to {to} · {len(review['codes'])} pattern(s)" + (f" · {nets[0]}" if nets else ""))
+        return jsonify(finding=f"#{item['id']}", to=ctx["people_name"](to), codes=review["codes"], network=nets[0] if nets else "")

@@ -40,6 +40,8 @@
     hero.append(el("div", "fd-eyebrow", `Review · finding ${f.number} · ${f.status_label}`), el("h1", null, f.title));
     const meta = el("div", "rv-meta");
     meta.append(el("span", null, f.created));            // the date and the channel only
+    if (f.network) meta.append(el("b", "rv-org", `Organisation: ${f.network}`));
+    if (f.parent) { const a = el("a", null, `Sub-finding of case #${f.parent}`); a.href = `/findings#f${f.parent}`; meta.append(a); }
     if (f.channel?.length) meta.append(el("span", "fd-channel", `Channel: ${f.channel.join(", ")}`));
     hero.append(meta);
     if (f.text) { const q = el("blockquote", "rv-quote"); q.append(el("b", null, `Final comments by the analyst, ${f.by}`), el("p", null, f.text)); hero.append(q); }

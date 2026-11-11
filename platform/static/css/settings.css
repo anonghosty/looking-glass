@@ -211,3 +211,12 @@ body.settings-page .hud { position: sticky; top: 0; }
 .org-logo-acts { display: grid; gap: 6px; justify-items: start; }
 .org-file { cursor: pointer; }
 .org-save { display: flex; gap: 12px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+
+/* the Traffic Light Protocol card (Definitions page) and the badges it shares with the advisory page */
+.tlp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.tlp-level { display: grid; gap: 6px; align-content: start; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255, 255, 255, .015); }
+.tlp-level b { font-size: 13.5px; color: var(--text); }
+.tlp-level p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-2); }
+.tlp-level small { font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+.tlp-badge { justify-self: start; padding: 3px 10px; border-radius: 6px; background: #000; font: 700 12.5px "Geist Mono", ui-monospace, monospace; letter-spacing: .02em; }
+.tlp-red { color: #FF2B2B; } .tlp-amber { color: #FFC000; } .tlp-green { color: #33FF00; } .tlp-clear { color: #FFFFFF; }

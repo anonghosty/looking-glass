@@ -217,3 +217,25 @@
 .ce-req > summary { cursor: pointer; padding: 9px 0; font-weight: 600; color: #f5d9a8; }
 .ce-req[open] { display: grid; gap: 8px; padding-bottom: 14px; }
 .ce-req .lg-btn { justify-self: start; }
+
+/* the organisations (networks) a request is sent for (combos-enrich.js netPicker) */
+.ce-nets { display: grid; gap: 8px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255, 255, 255, .015); }
+.ce-nets-head { display: grid; gap: 2px; }
+.ce-nets-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ce-nets-find { max-width: 260px; }
+.ce-nets-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px; max-height: 260px; overflow: auto; }
+.ce-net { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; align-items: center; padding: 6px 10px; border-radius: 9px; border: 1px solid var(--border-strong);
+  cursor: pointer; font-size: 12.5px; color: var(--text-2); }
+.ce-net small { grid-column: 2; color: var(--muted); font-size: 11px; }
+.ce-net span { overflow-wrap: anywhere; color: var(--text); }
+.ce-net.on { border-color: rgba(124, 156, 255, .7); background: rgba(124, 156, 255, .1); }
+.ce-net[hidden] { display: none; }
+
+/* the filter at the top of The devices: the whole search or one network; stays in view while scrolling the figures */
+.cb-filter { position: sticky; top: 8px; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 0 0 14px;
+  padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border-strong); background: rgba(18, 19, 24, .96); backdrop-filter: blur(6px); }
+.cb-filter b { font-size: 13px; color: var(--text); }
+.cb-filter-sel { min-width: 280px; max-width: 100%; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: inherit; font-size: 13px; }
+.cb-filter-note { font-size: 12.5px; color: var(--muted); }
+.cb-filter.on { border-color: rgba(124, 156, 255, .7); box-shadow: 0 0 0 1px rgba(124, 156, 255, .25) inset; }
+.cb-filter.on .cb-filter-note { color: #cfdcff; }

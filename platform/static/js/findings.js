@@ -28,7 +28,75 @@
         ? "No open finding. A researcher starts one from a name's Notes window on the Definitions page: “Track as a finding”." : "No finding yet."));
       return;
     }
-    for (const f of items) list.append(card(f));
+    // a ticket tree: a case on top, its sub-findings (one per organisation) inside it; a sub-finding that matches the
+    // search brings its case along
+    byId = Object.fromEntries(data.findings.map((f) => [f.id, f]));
+    const shown = new Set(items.map((f) => f.id));
+    const top = [];
+    for (const f of items) {
+      const p = f.parent && byId[f.parent];
+      const t = p || f;
+      if (!top.includes(t)) top.push(t);
+      if (p) shown.add(p.id);
+    }
+    matchIds = q ? new Set(items.map((f) => f.id)) : null;
+    for (const f of top) list.append(card(f));
+  }
+  let byId = {}, matchIds = null;
+  // a finding's advisories (advisory.py): written and drafted on the advisory page, marked as sent here by the advisor;
+  // once none waits, the finding closes, and its case once all its sub-findings have
+  const TLPC = (k) => (k === "TLP:RED" ? "tlp-red" : String(k).startsWith("TLP:AMBER") ? "tlp-amber" : k === "TLP:GREEN" ? "tlp-green" : "tlp-clear");
+  function advBox(f) {
+    const box = el("div", "fd-advs");
+    for (const a of f.advisories || []) {
+      const r = el("div", `fd-adv ${a.status}`);
+      const head = el("div", "fd-adv-h");
+      head.append(el("code", null, a.ref || "(not saved)"), el("span", `tlp-badge ${TLPC(a.tlp)}`, a.tlp), el("b", null, a.network || "All networks"),
+        el("span", `fd-adv-st ${a.status}`, a.status === "sent" ? `Sent ${a.sent} to ${a.recipients.join(", ")}` : a.status_label));
+      if (data.can_advise && a.report) { const dl = el("a", "lg-btn sm ghost", "Report"); dl.href = `/advisory/${f.id}/file/${a.ref}/${a.report.n}`; dl.title = a.report.name; head.append(dl); }
+      if (data.can_advise) { const op = el("a", "lg-btn sm ghost", "Open"); op.href = `/advisory/${f.id}#${encodeURIComponent(a.network || "")}`; head.append(op); }
+      r.append(head);
+      if (a.status === "drafted" && data.can_advise) {
+        const row = el("div", "fd-adv-send");
+        const rec = el("input", "fd-in"); rec.value = a.recipients.join(", "); rec.placeholder = "Sent to: the organisation, teams or people";
+        const go = el("button", "lg-btn sm primary", "Mark as sent"); go.type = "button";
+        const m = el("span", "fd-msg");
+        go.title = "Record that the advisory went out: this finding closes when none of its advisories waits, and its case when all its sub-findings are closed";
+        go.addEventListener("click", async () => {
+          if (!rec.value.trim()) { m.textContent = "Name whom it went to."; m.className = "fd-msg bad"; return; }
+          go.disabled = true;
+          try {
+            const rr = await fetch(`/api/advisory/${f.id}/send`, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() },
+              body: JSON.stringify({ network: a.network, recipients: rec.value }) });
+            const d = await rr.json().catch(() => ({}));
+            if (!rr.ok) { m.textContent = d.error || `Not saved (HTTP ${rr.status})`; m.className = "fd-msg bad"; return; }
+            load();
+          } finally { go.disabled = false; }
+        });
+        row.append(rec, go, m); r.append(row);
+      }
+      box.append(r);
+    }
+    return box;
+  }
+  // the case's sub-findings, one per organisation, inside the case's card
+  function subsBlock(f) {
+    const kids = (f.children || []).map((id) => byId[id]).filter(Boolean);
+    const b = el("section", "fd-subs");
+    const counts = {};
+    for (const k of kids) counts[k.status_label] = (counts[k.status_label] || 0) + 1;
+    const h = el("div", "fd-subs-h");
+    h.append(el("b", null, `Organisations · ${f.children.length} sub-finding${f.children.length === 1 ? "" : "s"}`),
+      el("span", null, Object.entries(counts).map(([l, n]) => `${n} ${l.toLowerCase()}`).join(" · ")));
+    b.append(h);
+    for (const k of kids) {
+      const sc = card(k); sc.classList.add("fd-sub");
+      if (matchIds && !matchIds.has(k.id) && !matchIds.has(f.id)) sc.hidden = true;
+      b.append(sc);
+    }
+    const missing = f.children.length - kids.length;
+    if (missing > 0) b.append(el("p", "fd-empty", `${missing} more ${missing === 1 ? "is" : "are"} closed: see All.`));
+    return b;
   }
   const pl = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   // a code and what each role can do with it: researchers open an analyst's selection, management filters the
@@ -124,21 +192,37 @@
     const c = el("article", `fd-card s-${f.status}`); c.id = `f${f.id}`;
     const h = el("header", "fd-h");
     const t = el("div", "fd-t");
-    t.append(el("span", "fd-no", f.number), el("h2", null, f.title));
-    h.append(t, el("span", `fd-pill s-${f.status}`, f.status_label));
+    // a sub-finding is named by its organisation: the rest (title, name, who sent it, the text) is the case's, said once
+    t.append(el("span", "fd-no", f.kind === "case" ? `Case ${f.number}` : f.number), el("h2", null, f.parent ? f.network : f.title));
+    if (f.network && !f.parent) t.append(el("span", "fd-org", f.network));
+    else if (f.review && !f.parent) t.append(el("span", "fd-org all", "Overview: every organisation"));
+    // the state names who holds it: "With management · <the manager>", not only the role
+    const holder = f.open && f.assignee && f.kind !== "case" ? f.assignee : "";     // a case: each sub-finding names its own
+    const pill = el("span", `fd-pill s-${f.status}`, holder ? `${f.status_label} · ${holder}` : f.status_label);
+    if (holder) pill.title = `${f.status_label}: ${holder} holds it now`;
+    h.append(t, pill);
     const meta = el("div", "fd-meta");
-    meta.append(el(f.section === "services" ? "b" : "code", "fd-name", f.display_name || f.name),
-      el("span", null, f.section === "issues" ? "issue" : f.section === "services" ? "services report" : "infection / category"),
-      el("span", null, `${f.role}: ${f.by} · ${f.created}`), el("span", null, `updated ${f.updated}`));
+    if (!f.parent) {
+      meta.append(el(f.section === "services" ? "b" : "code", "fd-name", f.display_name || f.name),
+        el("span", null, f.section === "issues" ? "issue" : f.section === "services" ? "services report" : "infection / category"),
+        el("span", null, `${f.role}: ${f.by} · ${f.created}`));
+    }
+    meta.append(el("span", null, `updated ${f.updated}`));
     // the channel: who holds it now, and everyone in it (only they see this finding)
-    if (f.assignee) meta.append(el("span", "fd-with", `With ${f.assignee}`));
-    if (f.channel?.length) { const ch = el("span", "fd-channel", `Channel: ${f.channel.join(", ")}`); ch.title = "Only these people see this finding and its trail"; meta.append(ch); }
-    c.append(h, meta, el("p", "fd-text", f.text));
-    if (f.origin === "analyst") meta.prepend(el("span", "fd-origin", "From an analyst"));
-    if (f.review) {
+    if (f.assignee && !f.open) meta.append(el("span", "fd-with", `Last with ${f.assignee}`));    // open: the state says who
+    if (f.channel?.length && !f.parent) { const ch = el("span", "fd-channel", `Channel: ${f.channel.join(", ")}`); ch.title = "Only these people see this finding and its trail"; meta.append(ch); }
+    c.append(h, meta);
+    if (!f.parent) c.append(el("p", "fd-text", f.text));       // a sub-finding carries its case's text: said once, on the case
+    if (f.origin === "analyst" && !f.parent) meta.prepend(el("span", "fd-origin", "From an analyst"));
+    if (f.kind === "case") {
+      c.classList.add("fd-case");
+      c.append(subsBlock(f));
+    } else if (f.review) {
       // a review: one global look, not a list of codes (the patterns are summed up in the panel below)
       const rv = f.review, g = el("div", "fd-global");
-      g.append(el("span", null, `The researcher's combination ${rv.source} and ${(rv.codes || []).length} across-report pattern${(rv.codes || []).length === 1 ? "" : "s"} the analyst ticked.`));
+      const nc = (rv.codes || []).length;
+      g.append(el("span", null, f.parent ? (nc ? `${nc} across-report pattern${nc === 1 ? "" : "s"} on this organisation's devices.` : "The combination on this organisation's devices.")
+        : nc ? `The researcher's combination ${rv.source} and ${nc} across-report pattern${nc === 1 ? "" : "s"} the analyst ticked.` : `The researcher's combination ${rv.source}, as it is.`));
       g.append(el("b", `fd-rv-state ${rv.decision || "wait"}`, rv.decision ? (rv.decision === "both" ? "Decided: the analyst's views added" : rv.decision === "rejected" ? "Rejected and closed"
         : (rv.codes || []).length ? "Decided: the researcher's view only" : "Approved for the advisory") : "Waiting for management's decision"));
       if (rv.decision && data.can_advise && f.open) {
@@ -149,6 +233,7 @@
       if (data.can_decide) { const a = el("a", "lg-btn sm primary", "Open the review"); a.href = `/review/${f.id}`;    // management only
         a.title = "The final look: what the researcher is saying, and the researcher's and the analyst's views as the Executive portal shows them"; g.append(a); }
       c.append(g);
+      if ((f.advisories || []).length) c.append(advBox(f));
     } else if (f.codes.length) c.append(el("h3", null, f.origin === "analyst" ? "The analyst's code" : "Combinations"), codesBox(f.codes));
     // the reply box: text and codes (researchers answer an analyst's code with combination codes, and the other way round)
     const rp = el("details", "fd-replybox"); rp.append(el("summary", null, f.origin === "analyst" ? "Reply to the analyst" : "Reply"));
@@ -183,13 +268,15 @@
     }
     const det = el("details", "fd-more"); det.append(el("summary", null, `History (${f.history.length})${f.replies ? ` · ${pl(f.replies, "reply", "replies")}` : ""}`), tl);
     if (f.replies) det.open = true;
-    c.append(det, rp);
+    c.append(det);
+    if (!f.parent) c.append(rp);          // replies go on the case, not on each organisation's sub-finding
+    if (f.kind === "case") c.append(c.querySelector(".fd-subs"));     // the case's trail first, its organisations below it
     // management decides first: approve with a comment (the directive) → "Approved"; reject with the reason → closed.
     // Who it goes to next is asked when it is moved on.
     // a review: the views and the decision are on the review page (/review/<id>); the card says where it stands
     // only while it is with management and not decided yet: once it is with an analyst, a researcher or an advisor, the
     // decision was made (or it was never management's to make), so there is nothing to decide
-    const deciding = data.can_decide && f.open && !f.review && (f.status === "management" || f.status === "new")
+    const deciding = data.can_decide && f.open && !f.review && f.kind !== "case" && (f.status === "management" || f.status === "new")
       && !(f.history || []).some((h) => h.kind === "decision");
     if (deciding) {
       const dec = el("div", "fd-decide");
