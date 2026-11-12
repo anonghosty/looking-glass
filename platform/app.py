@@ -2749,7 +2749,7 @@ import pipeline_settings as _pipeline_settings  # noqa: E402
 _sender_audit.install(app, {"base_dir": BASE_DIR, "has_perm": AUTH["has_perm"], "audit": AUTH["audit"],
                             # the report map (REPORT_MAP, made further down) says whether a new report type is defined
                             "report_entry": lambda name: REPORT_MAP.entry(name)})
-PIPELINE_SETTINGS = _pipeline_settings.install(app, {
+PIPELINE_SETTINGS = _pipeline_settings.install(app, {   # it writes requests only into its own data/ (the pipeline applies them)
     "base_dir": BASE_DIR, "data_dir": os.path.join(BASE_DIR, "data"), "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"],
     "fresh": AUTH["fresh"], "audit": AUTH["audit"], "users": AUTH["users"], "throttle": AUTH["throttle"],
     "client": lambda: (request.remote_addr or "", request.headers.get("User-Agent", ""))})

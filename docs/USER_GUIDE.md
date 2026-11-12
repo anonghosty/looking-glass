@@ -618,7 +618,10 @@ changed, and failed look-ups are tried again next time. The names then appear ev
 
 The **Workers** tab of Settings holds the pipeline's own settings, so they need not be edited in its `.env`. It is
 **locked**: **Edit** asks for *your own* password (the one you sign in with) and unlocks it for 10 minutes, in this
-session only. **Save the settings** locks it again. A wrong password counts like a failed sign-in, and every unlock,
+session only. **Save the settings** locks it again. The web app never writes the pipeline's files itself: a save is a
+**request** that the pipeline checks again and applies at the start of its next run (within about 30 minutes with the
+usual schedule). The tab shows what is **waiting for the pipeline's next run** and what the pipeline **applied** or
+**refused**, and each result is in the audit log. A wrong password counts like a failed sign-in, and every unlock,
 change (old → new value), key and release is in the audit log. Mailbox and database **passwords are never shown or
 changed here**: they stay in the pipeline's `.env`, set by the installer.
 

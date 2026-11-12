@@ -38,6 +38,9 @@ def ok(label, cond, info=""):
 # the throwaway pipeline: its .env (with passwords that must never come out), mail_auth.py, a held-back report, results
 real_pipe = next(p for p in (Path(A.BASE_DIR).parent / "database", Path(A.BASE_DIR).parent / "shadowserver") if (p / "mail_auth.py").exists())
 shutil.copy(real_pipe / "mail_auth.py", PIPE / "mail_auth.py")
+shutil.copy(real_pipe / "worker_settings.py", PIPE / "worker_settings.py")
+PLAT = tmp / "platform-data"                        # the platform's data folder for this check (requests go here)
+PLAT.mkdir()
 (PIPE / "shadowserver_pipeline.py").write_text("# stand-in\n")
 ENV0 = ("# Shadowserver pipeline\nMAIL_PROVIDER=imap\nIMAP_SERVER=mail.example.org\nIMAP_USER=csirt@example.org\n"
         "IMAP_PASSWORD=Very-Secret-Mailbox-9\nIMAP_FOLDER=inbox\nIMAP_VERIFY_TLS=false\nEMAIL_DAYS=7\n"
@@ -46,6 +49,14 @@ ENV0 = ("# Shadowserver pipeline\nMAIL_PROVIDER=imap\nIMAP_SERVER=mail.example.o
 os.chmod(PIPE / ".env", 0o600)
 sys.path.insert(0, str(PIPE))
 import mail_auth as MA  # noqa: E402
+import worker_settings as WS  # noqa: E402
+import logging  # noqa: E402
+A.PIPELINE_SETTINGS["ctx"]["data_dir"] = str(PLAT)
+
+
+def apply_now():
+    """What the pipeline does at the start of its next run (shadowserver_pipeline.main)."""
+    return WS.apply_requests(PLAT, PIPE / ".env", PIPE, logging.getLogger("lg-check-workers"))
 log = MA.Log(PIPE / ".mail_state.sqlite")
 base = {"from_domain": "shadowserver.org", "signer": "shadowserver.org", "selector": "mail", "alg": "rsa-sha256", "bits": 1024, "reason": ""}
 for i in range(20):
@@ -113,26 +124,50 @@ try:
     ok("…for this session only (another session of the same person stays locked)",
        other.get("/api/pipeline/settings", headers=H2).json.get("unlocked") is False)
 
-    print("Saving: listed settings only, validated, the rest of the .env untouched")
+    print("Saving: a request in the platform's own data folder, the pipeline's .env untouched until the pipeline applies it")
     for bad, why in (({"IMAP_PASSWORD": "x"}, "a password"), ({"MONGO_PASSWORD": "x"}, "the database password"),
                      ({"WORKERS": "0"}, "below the minimum"), ({"WORKERS": "6\nIMAP_PASSWORD=x"}, "a second line"),
                      ({"MAIL_AUTH_DOMAIN": "not a domain"}, "a bad domain"), ({"MAIL_AUTH": "maybe"}, "an unknown mode"),
                      ({"GMAIL_LABEL": "x"}, "another provider's setting")):
         r = c.post("/api/pipeline/settings", json={"values": bad}, headers=H)
         ok(f"refused: {why}", r.status_code == 400, str(r.status_code))
-    ok("…nothing was written by any refused save", (PIPE / ".env").read_text() == ENV0)
+    ok("…no request was made by any refused save", not WS.pending(PLAT))
     r = c.post("/api/pipeline/settings", json={"values": {"EMAIL_DAYS": "3", "MAIL_AUTH": "enforce", "IMAP_VERIFY_TLS": "true",
                                                            "WORKERS": "6", "ZIP_MAX_RATIO": "500"}}, headers=H)
-    env = (PIPE / ".env").read_text()
-    ok("a valid save changes exactly what changed", r.status_code == 200 and sorted(r.json["changed"]) == ["EMAIL_DAYS", "IMAP_VERIFY_TLS", "MAIL_AUTH", "ZIP_MAX_RATIO"],
-       str(r.json))
-    ok("…the .env has the new values, passwords and comments exactly as before, mode 600",
-       "EMAIL_DAYS=3" in env and "MAIL_AUTH=enforce" in env and "IMAP_VERIFY_TLS=true" in env and "ZIP_MAX_RATIO=500" in env
-       and "IMAP_PASSWORD=Very-Secret-Mailbox-9" in env and "MONGO_PASSWORD=Very-Secret-Mongo-7" in env
-       and "# a comment that must stay" in env and oct(os.stat(PIPE / ".env").st_mode & 0o777) == "0o600", oct(os.stat(PIPE / ".env").st_mode & 0o777))
-    det = next((d_ for e, d_, _ in logged if e == "pipeline_settings_saved"), "")
+    ok("a valid save requests exactly what changed", r.status_code == 200 and sorted(r.json["changed"]) == ["EMAIL_DAYS", "IMAP_VERIFY_TLS", "MAIL_AUTH", "ZIP_MAX_RATIO"]
+       and "next run" in r.json.get("note", ""), str(r.json))
+    reqs = list((PLAT / "pipeline_requests").glob("*.json"))
+    ok("…written only into the platform's data folder (mode 600), the pipeline's .env not touched by the platform",
+       len(reqs) == 1 and oct(os.stat(reqs[0]).st_mode & 0o777) == "0o600" and (PIPE / ".env").read_text() == ENV0, str(reqs))
+    det = next((d_ for e, d_, _ in logged if e == "pipeline_change_requested"), "")
     ok("…logged old → new, without any password", "EMAIL_DAYS: 7 → 3" in det and "MAIL_AUTH: log → enforce" in det and "Secret" not in det, det[:160])
-    ok("…and locked again", c.get("/api/pipeline/settings", headers=H).json.get("unlocked") is False)
+    g_ = c.get("/api/pipeline/settings", headers=H).json
+    ok("…locked again, and the page shows it waiting for the pipeline's next run", g_.get("unlocked") is False and len(g_.get("pending") or []) == 1)
+    n = apply_now()
+    env = (PIPE / ".env").read_text()
+    ok("the pipeline's next run checks the request again and applies it to its own .env", n == 1 and "EMAIL_DAYS=3" in env and "MAIL_AUTH=enforce" in env
+       and "IMAP_VERIFY_TLS=true" in env and "ZIP_MAX_RATIO=500" in env, env[-200:])
+    ok("…passwords and comments exactly as before, mode 600; the request is gone",
+       "IMAP_PASSWORD=Very-Secret-Mailbox-9" in env and "MONGO_PASSWORD=Very-Secret-Mongo-7" in env and "# a comment that must stay" in env
+       and oct(os.stat(PIPE / ".env").st_mode & 0o777) == "0o600" and not WS.pending(PLAT))
+    g_ = c.get("/api/pipeline/settings", headers=H).json
+    ok("…the page shows it applied, and the result goes into the audit log", (g_.get("results") or [{}])[0].get("status") == "applied"
+       and any(e == "pipeline_request_applied" and "EMAIL_DAYS: 7 → 3" in d_ for e, d_, _ in logged))
+    c.get("/api/pipeline/settings", headers=H)
+    ok("…once (looking again does not log it again)", sum(1 for e, *_ in logged if e == "pipeline_request_applied") == 1)
+
+    print("A request file is never trusted as it is: the pipeline checks it again")
+    WS.make_request(PLAT, "settings", {"values": {"IMAP_PASSWORD": "stolen", "IMAP_SERVER": "evil.example"}}, "someone")
+    WS.make_request(PLAT, "settings", {"values": {"WORKERS": "4\nIMAP_PASSWORD=stolen"}}, "someone")
+    (PLAT / "pipeline_requests" / "made-up.json").write_text(json.dumps({"id": "made-up", "kind": "settings", "values": {"WORKERS": "2"}}))
+    WS.make_request(PLAT, "release", {"qid": "../../etc/passwd"}, "someone")
+    before = (PIPE / ".env").read_text()
+    n = apply_now()
+    res = WS.results(PLAT, limit=10)
+    ok("a password, a second line, a forged request file and a made-up release are all refused; the .env is unchanged",
+       n == 0 and (PIPE / ".env").read_text() == before and sum(1 for r_ in res if r_.get("status") == "refused") == 4, str([r_.get("reason") for r_ in res][:4]))
+    c.get("/api/pipeline/settings", headers=H)
+    ok("…each refusal goes into the audit log (as an alert)", sum(1 for e, *_ in logged if e == "pipeline_request_refused") == 4)
 
     print("Shadowserver API key")
     sent = {}
@@ -161,15 +196,20 @@ try:
     c.post("/api/pipeline/unlock", json={"password": PW}, headers=H)
     PS.ping = lambda k, s, url=None, timeout=15: (False, "Invalid API key")
     r = c.post("/api/pipeline/apikey", json={"key": "KEY12345678", "secret": "SECRET-abc-123"}, headers=H)
-    ok("a key Shadowserver refuses is not saved", r.status_code == 400 and "SHADOWSERVER_API_KEY" not in (PIPE / ".env").read_text(), str(r.json))
+    ok("a key Shadowserver refuses is not requested", r.status_code == 400 and not WS.pending(PLAT), str(r.json))
     PS.ping = lambda k, s, url=None, timeout=15: (True, "Shadowserver accepted the key and secret")
     r = c.post("/api/pipeline/apikey", json={"key": "KEY12345678", "secret": "SECRET-abc-123"}, headers=H)
-    env = (PIPE / ".env").read_text()
-    ok("a key Shadowserver accepts is saved in the pipeline's .env", r.status_code == 200 and "SHADOWSERVER_API_KEY=KEY12345678" in env
-       and "SHADOWSERVER_API_SECRET=SECRET-abc-123" in env, str(r.status_code))
     g_ = c.get("/api/pipeline/settings", headers=H)
-    ok("…afterwards the page only says it is set, never the values", g_.json["api"]["key_set"] and "KEY12345678" not in g_.get_data(as_text=True)
-       and "SECRET-abc" not in g_.get_data(as_text=True))
+    ok("a key Shadowserver accepts waits for the pipeline, and the page never shows it", r.status_code == 200 and g_.json["api"]["key_waiting"]
+       and "KEY12345678" not in g_.get_data(as_text=True) and "SECRET-abc" not in g_.get_data(as_text=True), str(r.status_code))
+    apply_now()
+    env = (PIPE / ".env").read_text()
+    ok("the pipeline saves it in its own .env; the request (the only copy outside it) is deleted",
+       "SHADOWSERVER_API_KEY=KEY12345678" in env and "SHADOWSERVER_API_SECRET=SECRET-abc-123" in env and not WS.pending(PLAT))
+    g_ = c.get("/api/pipeline/settings", headers=H)
+    every_file = "".join(p.read_text() for p in PLAT.rglob("*.json"))
+    ok("…afterwards the page only says it is set; no result or log holds the key or secret", g_.json["api"]["key_set"]
+       and "KEY12345678" not in g_.get_data(as_text=True) and "SECRET-abc" not in every_file and "KEY12345678" not in every_file)
     ok("…and the audit log never holds them", not any("KEY12345678" in d_ or "SECRET-abc" in d_ for _, d_, _ in logged))
 
     print("How the reports are fetched: e-mail or the API")
@@ -178,12 +218,17 @@ try:
        and [x["label"] for x in src["choices"]] == ["By e-mail (the mailbox)", "Shadowserver report API"], str(src["choices"]))
     c.post("/api/pipeline/unlock", json={"password": PW}, headers=H)
     r = c.post("/api/pipeline/settings", json={"values": {"REPORT_SOURCE": "api"}}, headers=H)
+    apply_now()
     ok("the API can be chosen once a key is saved", r.status_code == 200 and "REPORT_SOURCE=api" in (PIPE / ".env").read_text(), str(r.json))
     keep_env = (PIPE / ".env").read_text()
     (PIPE / ".env").write_text("\n".join(l for l in keep_env.splitlines() if not l.startswith("SHADOWSERVER_API")) + "\n")
     c.post("/api/pipeline/unlock", json={"password": PW}, headers=H)
     r = c.post("/api/pipeline/settings", json={"values": {"REPORT_SOURCE": "api", "EMAIL_DAYS": "4"}}, headers=H)
-    ok("…but not without a saved key (nothing written)", r.status_code == 400 and "API key" in r.json.get("error", "") and "EMAIL_DAYS=3" in (PIPE / ".env").read_text(), str(r.json))
+    ok("…but not without a saved key (nothing requested)", r.status_code == 400 and "API key" in r.json.get("error", "") and not WS.pending(PLAT), str(r.json))
+    WS.make_request(PLAT, "settings", {"values": {"REPORT_SOURCE": "api"}}, "someone")
+    apply_now()
+    last = WS.results(PLAT, 1)[0]
+    ok("…and the pipeline itself refuses the API without a key, too", last["status"] == "refused" and "no API key" in last["reason"], str(last))
     (PIPE / ".env").write_text(keep_env)
     c.post("/api/pipeline/lock", json={}, headers=H)            # a refused save leaves it unlocked: lock it now
 
@@ -192,13 +237,16 @@ try:
     ok("listed for administrators, with result and reason", len(h["held"]) == 1 and h["held"][0]["result"] == "fail" and h["mode"] == "enforce", str(h)[:160])
     qid = h["held"][0]["id"]
     r = c.post("/api/pipeline/release", json={"id": qid}, headers=H)
-    ok("releasing while locked is refused", r.status_code == 403 and not (qdir / MA.RELEASE_FILE).exists())
+    ok("releasing while locked is refused", r.status_code == 403 and not WS.pending(PLAT))
     c.post("/api/pipeline/unlock", json={"password": PW}, headers=H)
     r = c.post("/api/pipeline/release", json={"id": "../../etc"}, headers=H)
     ok("a made-up id is refused", r.status_code == 404)
     r = c.post("/api/pipeline/release", json={"id": qid}, headers=H)
-    ok("unlocked, the release is asked for the pipeline's next run, logged", r.status_code == 200 and (qdir / MA.RELEASE_FILE).exists()
-       and any(e == "sender_release" for e, *_ in logged), str(r.status_code))
+    ok("unlocked, the release is requested (nothing written in the pipeline's folder by the platform), logged",
+       r.status_code == 200 and not (qdir / MA.RELEASE_FILE).exists() and any(e == "sender_release" for e, *_ in logged)
+       and c.get("/api/pipeline/held", headers=H).json["held"][0]["release_asked"], str(r.status_code))
+    apply_now()
+    ok("…the pipeline's next run marks it released (its fetch step then lets it through)", (qdir / MA.RELEASE_FILE).exists())
 
     print("Audit portal → Sender check")
     a, HA = client(AUDITOR)
@@ -229,6 +277,7 @@ finally:
     audit.add = real_add
     PS.ping = real_ping
     A.REPORT_MAP.entry = real_entry
+    A.PIPELINE_SETTINGS["ctx"]["data_dir"] = os.path.join(A.BASE_DIR, "data")
     for t in MADE:
         sessions.end(token=t)
     A.AUTH["throttle"].clear_address("127.0.0.1")

@@ -303,8 +303,10 @@ Mailbox to read (folder default
 .BR inbox ).
 .TP
 .B IMAP_VERIFY_TLS
+.B true
+(default) verifies the mail server's certificate;
 .B false
-(default, as before) skips verification of the mail server certificate.
+skips it, only for a server with a self-signed certificate.
 .TP
 .B EMAIL_DAYS
 Default for

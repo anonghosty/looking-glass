@@ -58,6 +58,7 @@ import report_names  # noqa: E402  which report names may become a folder and a 
 import mail_auth  # noqa: E402  who signed each report e-mail (DKIM), recorded; log only
 import report_api  # noqa: E402  the reports from Shadowserver's report API (REPORT_SOURCE=api)
 import report_types  # noqa: E402  a report type that never arrived before is logged as new
+import worker_settings  # noqa: E402  Settings → Workers: the platform's requests, checked and applied here
 
 log = logging.getLogger("shadowserver")
 
@@ -178,7 +179,7 @@ def load_settings(args: argparse.Namespace) -> Settings:
         imap_user=_env("IMAP_USER"),
         imap_password=_env("IMAP_PASSWORD"),
         imap_folder=_env("IMAP_FOLDER", "inbox"),
-        imap_verify_tls=_env("IMAP_VERIFY_TLS", "false").lower() in ("1", "true", "yes"),
+        imap_verify_tls=_env("IMAP_VERIFY_TLS", "true").lower() in ("1", "true", "yes", "on"),
         mongo=mongo,
         mongo_db=_env("MONGO_DB", "shadowserver"),
         mongo_cache_gb=float(_env("MONGO_CACHE_GB", "1.5")),
@@ -1258,6 +1259,16 @@ def main(argv=None) -> int:
                         format="%(asctime)s %(levelname)-7s %(message)s")
     logging.getLogger("pymongo").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
+    if args.stage in ("all", "email") and not (args.check or args.test_mail):
+        # Settings → Workers: the platform's requests (settings, API key, releases), checked again and applied to this
+        # pipeline's own .env and quarantine before anything else, so this run already uses them (worker_settings.py)
+        try:
+            env_file = Path(args.env_file).expanduser().resolve()
+            pre = worker_settings.read_env(env_file)
+            base = Path(pre.get("DATA_DIR") or PROJECT_DIR).expanduser().resolve()
+            worker_settings.apply_requests(worker_settings.find_platform_data(PROJECT_DIR, pre), env_file, base, log)
+        except Exception as exc:  # noqa: BLE001  (never stops the run)
+            log.warning("Settings → Workers requests could not be applied this run: %s", exc)
     s = load_settings(args)
 
     if args.check:

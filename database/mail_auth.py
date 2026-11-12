@@ -129,10 +129,16 @@ class Checker:
         bc = bc or "simple"
         cb = _canon_body(body, bc)
         if "l" in t:
+            # l= signs only the first l bytes of the body: anything appended after them would still pass. Such a
+            # signature does not vouch for the whole report, so it counts as a fail (external review, 2026-11-12;
+            # RFC 6376 8.2 warns about it). Shadowserver does not use l=.
             try:
-                cb = cb[:int(t["l"])]
+                n = int(t["l"])
             except ValueError:
                 return "permerror", d, s, "unreadable l= tag"
+            if n < len(cb):
+                return "fail", d, s, f"the signature covers only the first {n} of {len(cb)} body bytes (l= tag)"
+            cb = cb[:n]
         if base64.b64encode(hashlib.sha256(cb).digest()).decode() != t["bh"]:
             return "fail", d, s, "the body was changed after it was signed (body hash differs)"
         data, used = b"", {}

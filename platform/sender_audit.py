@@ -148,8 +148,9 @@ def install(app, ctx):
         changes = [{"at": datetime.fromtimestamp(e.get("t") or 0, timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
                     "event": e.get("event"), "user": e.get("user", ""), "detail": e.get("detail", "")}
                    for e in audit.records() if t0 <= (e.get("t") or 0) < t1 and (
-                       e.get("event") in ("sender_release", "pipeline_apikey_saved", "pipeline_unlock_failed")
-                       or (e.get("event") == "pipeline_settings_saved" and "MAIL_AUTH" in (e.get("detail") or "")))]
+                       e.get("event") in ("sender_release", "pipeline_apikey_saved", "pipeline_unlock_failed", "pipeline_request_refused")
+                       or (e.get("event") in ("pipeline_settings_saved", "pipeline_change_requested", "pipeline_request_applied")
+                           and any(k in (e.get("detail") or "") for k in ("MAIL_AUTH", "REPORT_SOURCE", "API key", "released"))))]
         n = len(rows)
         source_now = "api" if (env.get("REPORT_SOURCE") or "").strip().lower() == "api" else "email"
         # new report types: arrived for the first time after the starting point; does the report map (definitions,

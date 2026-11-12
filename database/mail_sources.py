@@ -67,7 +67,9 @@ class ImapSource:
         self.user = env.get("IMAP_USER", "")
         self.password = env.get("IMAP_PASSWORD", "")
         self.folder = env.get("IMAP_FOLDER", "inbox") or "inbox"
-        self.verify = _truthy(env.get("IMAP_VERIFY_TLS", "false"))
+        # the certificate is checked unless .env turns it off (only for a self-signed certificate); external review,
+        # 2026-11-12: the default used to be off
+        self.verify = _truthy(env.get("IMAP_VERIFY_TLS", "true"))
         self.batch = int(env.get("IMAP_FETCH_BATCH", "25") or 25)
         self.timeout = int(env.get("MAIL_TIMEOUT", "120") or 120)
         self.imap = None

@@ -264,6 +264,7 @@ All settings live in `.env` in the project folder. Its permissions are `600`, so
 | `IMAP_VERIFY_TLS` | verify the mail server certificate (`false` only for a self-signed certificate) | `true` in `.env.example` |
 | `MAIL_AUTH` | sender check: `log` verifies and records each report e-mail's DKIM signature without holding anything back; `enforce` also holds back reports that do not pass; `off` switches it off | `log` |
 | `SHADOWSERVER_API_KEY` / `SHADOWSERVER_API_SECRET` | Shadowserver report API key and secret, saved from the platform's Settings → Workers after Shadowserver accepted them | – |
+| `PLATFORM_DIR` | where the platform is, when not beside the pipeline (`../platform` or `../threatmap`): each run applies the changes requested in its Settings → Workers (`worker_settings.py`) | – |
 | `MAIL_AUTH_DOMAIN` | the domain that must have signed a genuine report | `shadowserver.org` |
 | `EMAIL_DAYS` | default for `--days`: how many days back every run (also the scheduled ones) looks | `7` in `.env.example` (asked by the installer); `1` when unset |
 | `MONGO_HOST` / `MONGO_PORT` | MongoDB address | `127.0.0.1` / `27017` |
@@ -552,7 +553,9 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
 - `.env` holds the mailbox and database passwords. It is mode `600`, listed in `.gitignore`, and should never be shared or committed.
 - MongoDB listens on `127.0.0.1` only (not reachable from the network) and requires a login.
 - Passwords are never put on the command line by the scripts. `deploy` passes them through environment variables and temporary mode-600 files, so they don't show up in `ps`.
-- The mail server certificate is **not** verified (`IMAP_VERIFY_TLS=false`), the same as the original script. Set it to `true` if the server has a valid certificate.
+- The mail server's certificate is verified (`IMAP_VERIFY_TLS=true`, also when the setting is missing). Set it to
+  `false` only for a mail server with a self-signed certificate: without the check, someone on the network path could
+  read the mailbox and its password.
 - The mailbox is opened read-only; the pipeline never changes, moves or deletes e-mails.
 - **Reports by API instead of e-mail** (`REPORT_SOURCE=api`). With an API key and secret from Shadowserver, every run
   asks Shadowserver's report API for the reports of the last `EMAIL_DAYS` days (`reports/list`, each request signed
@@ -566,6 +569,13 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
   a run that cannot read the mailbox uses the API. Tests: `tests/test_report_api.py`.
   The list of reports comes from Shadowserver itself (`reports/list`), not from a list kept here, so a report type
   Shadowserver starts tomorrow is downloaded and loaded like any other.
+- **Settings from the platform** (`worker_settings.py`). The platform's Settings → Workers never writes this folder
+  (its service may only write its own `data/`). A change there is a request in the platform's
+  `data/pipeline_requests/`; at the start of each run, before anything is fetched, the pipeline checks every request
+  again with the same rules (which settings may change and to what; never a password, the mailbox or the server; one
+  line each) and applies the valid ones to its own `.env` (or releases a held-back report), then writes the result to
+  `data/pipeline_requests/done/` and deletes the request, so the API secret in a key request lives no longer than
+  that. A request that fails the checks changes nothing and its result says why.
 - **New report types are noticed** (`report_types.py`), however they arrive. After each run's sorting, the report types
   present (the folders in `sorting_backup/`) are compared with every type that arrived before (`.mail_state.sqlite`,
   table `report_types`); one arriving for the first time is logged as `NEW REPORT TYPE`, and the platform's Audit portal

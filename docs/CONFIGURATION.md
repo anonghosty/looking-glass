@@ -72,8 +72,11 @@ What each protection does: [../docs/SECURITY.md](SECURITY.md).
 
 ## The database pipeline from the platform
 
-Settings → Workers edits the pipeline's own `.env`, and the Audit portal's Sender check reads its results. Both find the
-pipeline beside the platform (`../database` or `../shadowserver`).
+Settings → Workers shows the pipeline's settings and the Audit portal's Sender check reads its results; both find the
+pipeline beside the platform (`../database` or `../shadowserver`) and only read it. A change made in Settings → Workers
+is a request in the platform's own `data/pipeline_requests/`; the pipeline checks it again and applies it to its own
+`.env` at the start of its next run. The pipeline finds the platform beside it (`../platform` or `../threatmap`), or
+by `PLATFORM_DIR` in the pipeline's `.env`.
 
 | Setting | Default | Meaning |
 |---|---|---|

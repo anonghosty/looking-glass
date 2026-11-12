@@ -85,7 +85,10 @@ for _e, _l in (("pipeline_unlock", "Workers settings unlocked (password)"),
                ("pipeline_settings_saved", "Workers (pipeline) settings changed"),
                ("pipeline_apikey_saved", "Shadowserver API key saved"),
                ("pipeline_apikey_checked", "Shadowserver API key checked"),
-               ("sender_release", "Held-back report released")):
+               ("sender_release", "Held-back report released"),
+               ("pipeline_change_requested", "Workers (pipeline) change requested"),
+               ("pipeline_request_applied", "Workers change applied by the pipeline"),
+               ("pipeline_request_refused", "Workers change refused by the pipeline")):
     LABEL[_e], TAB_OF[_e] = _l, "config"
 # The NIST SP 800-53 Rev. 5 controls the checks support, with their official titles (Release 5.2.0, read from NIST's
 # OSCAL catalog, usnistgov/oscal-content, on 2026-11-11). The checks' own ids are LG-01…: they are Looking Glass checks,
@@ -103,7 +106,8 @@ NIST = {"AC-2": "Account Management", "AC-2(3)": "Disable Accounts", "AC-2(7)": 
 ALERT = re.compile(r"failed|locked|misuse|refused|revoke|delete|limited|wrong")
 PRIVILEGED = {"user_role", "roles_changed", "user_approve", "user_revoke", "user_restore", "user_delete", "user_reset_mfa",
               "user_allow_reset", "settings_changed", "peace_of_mind", "kicked", "user_kick",
-              "pipeline_unlock", "pipeline_settings_saved", "pipeline_apikey_saved", "sender_release"}
+              "pipeline_unlock", "pipeline_settings_saved", "pipeline_apikey_saved", "sender_release",
+              "pipeline_change_requested", "pipeline_request_applied"}
 MAX_DAYS = 800
 
 

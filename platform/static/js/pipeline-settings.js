@@ -121,6 +121,25 @@
       grid.append(box);
     }
     body.append(grid);
+    // changes go to the pipeline as requests: what waits for its next run, and what it did with the last ones
+    const pend = S.pending || [], res = S.results || [];
+    if (pend.length || res.length) {
+      const box = el("div", "wk-requests");
+      if (pend.length) {
+        box.append(el("h4", null, `Waiting for the pipeline's next run (${pend.length})`));
+        const ul = el("ul");
+        pend.forEach((r) => ul.append(el("li", null, `${r.at.replace("T", " ").slice(0, 16)} UTC · ${r.by} · ${r.kind === "settings" ? Object.entries(r.values || {}).map(([k, v]) => `${k} → ${v}`).join(", ") : r.kind === "release" ? `release ${r.qid}` : r.values}`)));
+        box.append(ul);
+      }
+      if (res.length) {
+        box.append(el("h4", null, "Done by the pipeline"));
+        const ul = el("ul");
+        res.slice(0, 5).forEach((r) => ul.append(el("li", r.status === "applied" ? null : "bad",
+          `${(r.applied_at || "").replace("T", " ").slice(0, 16)} UTC · ${r.status === "applied" ? "applied" : "REFUSED"} · ${r.by} · ${(r.changed || []).join("; ") || r.reason || "nothing changed"}`)));
+        box.append(ul);
+      }
+      body.append(box);
+    }
     if (!locked) {
       const acts = el("div", "wk-acts");
       const sv = el("button", "lg-btn primary", "Save the settings"); sv.type = "button"; sv.addEventListener("click", () => save(sv));
@@ -150,7 +169,7 @@
       const d = await api("/api/pipeline/settings", { values: v });
       S._until = 0; clearInterval(timer);
       await load(true);
-      say(d.changed.length ? `Saved and locked: ${d.changed.join(", ")}. ${d.note}` : "Nothing had changed. Locked again.");
+      say(d.changed.length ? `${d.changed.join(", ")}: ${d.note}` : d.note);
     } catch (e) { say(e.message, true); btn.disabled = false; if (e.locked) load(true); }
   }
 
@@ -180,12 +199,14 @@
     c.append(el("h3", null, "Shadowserver report API"));
     const a = S.api || {};
     const st = el("p", "st-hint");
-    st.textContent = a.key_set && a.secret_set
+    st.textContent = a.key_waiting
+      ? `A new key and secret, accepted by Shadowserver ${a.checked_at || ""}, wait for the pipeline's next run to be saved (never shown again).`
+      : a.key_set
       ? `Key and secret saved (never shown again). Last checked ${a.checked_at || "not yet"}${a.checked_at ? `: ${a.ok ? "accepted" : "NOT accepted"}${a.message ? ` (${a.message})` : ""}` : ""}.`
       : "No key saved. Shadowserver gives each organisation an API key and a secret for its report API.";
     c.append(st);
     const acts = el("div", "wk-acts");
-    if (a.key_set && a.secret_set) {
+    if (a.key_set) {
       const chk = el("button", "pill-btn", "Check with Shadowserver now"); chk.type = "button";
       chk.addEventListener("click", async () => { chk.disabled = true; try { const d = await api("/api/pipeline/apikey/check", {}); say(d.ok ? d.message : `Not accepted: ${d.message}`, !d.ok); await load(true); } catch (e) { say(e.message, true); chk.disabled = false; } });
       acts.append(chk);
@@ -199,10 +220,10 @@
     f.append(k, s, go);
     f.addEventListener("submit", async (ev) => {
       ev.preventDefault(); go.disabled = true; say("Asking Shadowserver…");
-      try { const d = await api("/api/pipeline/apikey", { key: k.value, secret: s.value }); k.value = s.value = ""; S._until = 0; clearInterval(timer); await load(true); say(`${d.message}. Saved and locked.`); }
+      try { const d = await api("/api/pipeline/apikey", { key: k.value, secret: s.value }); k.value = s.value = ""; S._until = 0; clearInterval(timer); await load(true); say(`${d.message}. ${d.note} Locked again.`); }
       catch (e) { say(e.message, true); go.disabled = false; }
     });
-    c.append(f, el("small", "muted", "Saved only if Shadowserver accepts it. Only the key and a signature made with the secret are sent to Shadowserver."));
+    c.append(f, el("small", "muted", "Kept only if Shadowserver accepts it; the pipeline then saves it at its next run. Only the key and a signature made with the secret are sent to Shadowserver."));
   }
 
   // ---------------- held-back reports
@@ -217,7 +238,7 @@
       const tr = el("tr");
       [`${String(h.at || "").replace("T", " ").slice(0, 16)} UTC`, h.result, h.reason, h.from_domain || "?", h.subject, `${h.files} file(s), ${h.links} link(s)`].forEach((x) => tr.append(el("td", null, x)));
       const td = el("td");
-      if (h.release_asked) td.append(el("span", "muted", "Released: goes through at the next run"));
+      if (h.release_asked) td.append(el("span", "muted", "Release requested: goes through at the pipeline's next run"));
       else {
         const b = el("button", "pill-btn", "Release"); b.type = "button";
         b.addEventListener("click", async () => {

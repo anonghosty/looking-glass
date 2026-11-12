@@ -23,6 +23,10 @@
 .wk-msg { min-height: 1.4em; margin: 10px 0 0; }
 .wk-msg.bad, .wk-err { color: #ff8f8f; }
 .wk-card { margin-top: 14px; }
+.wk-requests { margin: 14px 0 0; padding: 10px 14px; border: 1px dashed rgba(255,255,255,.15); border-radius: 10px; font-size: 13px; }
+.wk-requests h4 { margin: 6px 0 4px; font-size: 13px; }
+.wk-requests ul { margin: 0 0 6px; padding-left: 18px; }
+.wk-requests li.bad { color: #ff8f8f; }
 .wk-api { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 4px; }
 .wk-api .wk-in { flex: 1 1 220px; }
 .wk-modal { max-width: 440px; }

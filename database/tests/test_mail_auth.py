@@ -114,6 +114,24 @@ RSA = real
 r = C.check(fake)
 ok("a signature made with someone else's key fails", r["result"] == "fail", r["reason"])
 
+def sign_l(head, body, cut):
+    """A signature with an l= tag covering only the first `cut` bytes of the canonical body."""
+    cb = mail_auth._canon_body(body, "simple")[:cut]
+    bh = base64.b64encode(hashlib.sha256(cb).digest()).decode()
+    sig = f"DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=shadowserver.org; s=mail; l={cut}; h=From:To:Subject:Date:Message-ID; bh={bh}; b="
+    data = b"".join(mail_auth._canon_header(next(x for x in head if x.lower().startswith(n.lower() + b":")), "relaxed") + b"\r\n"
+                    for n in (b"From", b"To", b"Subject", b"Date", b"Message-ID")) + mail_auth._canon_header(sig.encode(), "relaxed")
+    return (sig + base64.b64encode(RSA.sign(data, padding.PKCS1v15(), hashes.SHA256())).decode()).encode()
+
+
+full = len(mail_auth._canon_body(BODY, "simple"))
+r = C.check(message(sig=sign_l(HEAD, BODY, full)))
+ok("an l= tag covering the whole body still passes", r["result"] == "pass", r["reason"])
+r = C.check(message(sig=sign_l(HEAD, BODY, full)) + b"Injected rows appended after signing\r\n")
+ok("content appended after the l= length fails (the reviewer's attack)", r["result"] == "fail" and "l= tag" in r["reason"], r["reason"])
+r = C.check(message(sig=sign_l(HEAD, BODY, 20)))
+ok("a signature covering only part of the body fails", r["result"] == "fail" and "first 20" in r["reason"], r["reason"])
+
 print("Keys and DNS")
 r = C.check(message(s="missing"))
 ok("no key published for the selector: permerror", r["result"] == "permerror" and "no key" in r["reason"], r["reason"])
