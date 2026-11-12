@@ -84,6 +84,16 @@
       d.keys.length ? table(["Signing domain", "Selector", "Algorithm", "Key size", "Reports"], d.keys.map((x) => [x.signer, x.selector, x.alg, x.bits ? `${x.bits} bits` : "–", fmt(x.reports)]))
         : el("p", "muted", "No valid signature in the period."));
 
+    // new report types (report_types.py): a type that arrived for the first time, by e-mail or by API
+    const ty = d.types || { new: [], recorded: 0 };
+    box.append(el("h3", "au-sub-h", `New report types${ty.new_without_definition ? ` (${fmt(ty.new_without_definition)} without a definition yet)` : ""}`));
+    box.append(el("p", "st-hint", ty.recorded
+      ? `${fmt(ty.recorded)} report types have arrived since ${ty.since}. A type that arrives for the first time after that is listed here (and logged by the pipeline). It is loaded like any other; its definition comes when the report definitions, kept current from Shadowserver's schema, know it.`
+      : "No report has been sorted yet, so there is no starting point."));
+    if (ty.new.length) box.append(table(["Report type", "First arrived", "Report definitions"],
+      ty.new.map((x) => [x.name, x.first_seen, x.known ? `${x.note}${x.title ? `: ${x.title}` : ""}` : `NEW: ${x.note}`])));
+    else if (ty.recorded) box.append(el("p", "muted", "No new report type since then."));
+
     box.append(el("h3", "au-sub-h", "What the standards ask, and what the evidence shows"));
     const st = el("div", "sn-std");
     for (const s of d.standards) {

@@ -57,6 +57,7 @@ import zip_limits  # noqa: E402  size, ratio and file-count limits for unpacking
 import report_names  # noqa: E402  which report names may become a folder and a MongoDB collection
 import mail_auth  # noqa: E402  who signed each report e-mail (DKIM), recorded; log only
 import report_api  # noqa: E402  the reports from Shadowserver's report API (REPORT_SOURCE=api)
+import report_types  # noqa: E402  a report type that never arrived before is logged as new
 
 log = logging.getLogger("shadowserver")
 
@@ -710,6 +711,8 @@ def unzip_and_sort(s: Settings, stats: Counter) -> None:
     for name, count in services:
         if count:
             detail("  - %s: %d file(s)", name, count)
+    # a report type that never arrived before (by e-mail or by API) is logged as new (report_types.py)
+    stats["new_report_types"] += len(report_types.note_new(s.base_dir, [n for n, c in services if c], log))
 
 
 # --------------------------------------------------------------------------- stage 2: documents

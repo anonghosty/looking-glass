@@ -564,6 +564,12 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
   failed download is tried again next run. If the API cannot be used on a run (no key, key refused, Shadowserver
   unreachable) and a mailbox is set up, that run reads the mailbox instead; with `REPORT_SOURCE=email` and a saved key,
   a run that cannot read the mailbox uses the API. Tests: `tests/test_report_api.py`.
+  The list of reports comes from Shadowserver itself (`reports/list`), not from a list kept here, so a report type
+  Shadowserver starts tomorrow is downloaded and loaded like any other.
+- **New report types are noticed** (`report_types.py`), however they arrive. After each run's sorting, the report types
+  present (the folders in `sorting_backup/`) are compared with every type that arrived before (`.mail_state.sqlite`,
+  table `report_types`); one arriving for the first time is logged as `NEW REPORT TYPE`, and the platform's Audit portal
+  (Sender check) lists it with whether the report definitions know it yet. The first run records the starting point.
 - **Who sent a report.** Anyone who knows the mailbox address can send it an e-mail. Shadowserver signs its report
   e-mails with DKIM, so `mail_auth.py` checks each one's signature, on the message exactly as it was downloaded, with
   Shadowserver's public key from DNS (your own mail server does not need to support DKIM). For now it **only records**

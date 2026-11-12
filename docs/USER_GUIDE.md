@@ -687,7 +687,11 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
   tab shows, for the period: the mode (record only or blocking), how many reports were checked and the share validly
   signed by the expected domain, how many did not pass (signature fails, not signed, another signer, cannot be checked)
   and how many were held back or released; results per day; the signing keys seen (domain, selector, algorithm, key
-  size); every report that did not pass and what happened to it; and the settings changes and releases. Next to the
+  size); every report that did not pass and what happened to it; and the settings changes and releases.
+  **New report types:** a report type that arrives for the first time (by e-mail or API; Shadowserver adds reports
+  from time to time) is listed with the day it first arrived and whether the report definitions know it yet (*new
+  report, no definition yet* until the definitions, kept current from Shadowserver's schema, carry it). It is loaded
+  like any other in the meantime. Next to the
   evidence, what the current standards ask: RFC 6376 (DKIM), RFC 8301 (algorithms and key sizes), RFC 8463 (Ed25519),
   RFC 7489 (DMARC alignment), NIST SP 800-177 Rev. 1 (Trustworthy Email) and NIST SP 800-53 Rev. 5 SI-7 (information
   integrity). Evidence only, no verdict.

@@ -52,6 +52,11 @@ for i in range(20):
     log.add(f"k{i}", dict(base, result="pass"), f"Report {i}", [f"r{i}.zip"])
 log.add("kf", dict(base, result="fail", reason="the body was changed after it was signed (body hash differs)", alg="", bits=0), "Forged", ["f.zip"], "quarantined")
 log.add("kn", dict(base, result="none", signer="", reason="no DKIM signature", alg="", bits=0), "Unsigned", ["n.zip"], "kept")
+log.db.execute("CREATE TABLE IF NOT EXISTS report_types (name TEXT PRIMARY KEY, first_seen TEXT, baseline INTEGER)")
+log.db.executemany("INSERT INTO report_types VALUES (?, ?, ?)", [("scan_http", "2026-11-01T06:00:00+00:00", 1),
+                   ("scan_ssh", "2026-11-01T06:00:00+00:00", 1), ("scan_known_new", "2026-11-10T08:00:00+00:00", 0),
+                   ("scan_brandnew", "2026-11-12T09:00:00+00:00", 0)])
+log.db.commit()
 log.close()
 qdir = MA.quarantine_dir(PIPE, "kf")
 MA.write_meta(qdir, "kf", dict(base, result="fail", reason="body changed"), "Forged report", ["f.zip"], set())
@@ -69,6 +74,8 @@ roles.perms = lambda role: ({"view", "settings", "audit", "users"} if role == "l
 audit = A.AUTH["audit"]; real_add = audit.add; logged = []
 audit.add = lambda ev, **k: logged.append((ev, k.get("detail", ""), k.get("target", "")))
 real_ping = PS.ping
+real_entry = A.REPORT_MAP.entry          # the report map: one new type it knows, one it does not
+A.REPORT_MAP.entry = lambda n: {"title": "A Known New Report", "in_schema": True} if n in ("scan_known_new", "scan_http", "scan_ssh") else None
 MADE = []
 
 
@@ -208,6 +215,11 @@ try:
     ok("…evidence only, no verdict words", not any(w in json.dumps(d["standards"]).lower() for w in ("compliant", "non-compliant", "passed the control", "verdict")))
     ok("…the key size evidence says what was seen", any("1024 bits (20)" in s["shows"] for s in d["standards"]))
     ok("reports that did not pass are listed with what happened", {x["result"]: x["action_label"] for x in d.get("odd", [])} == {"fail": "held back", "none": "processed"}, str(d.get("odd"))[:200])
+    ty = d.get("types") or {}
+    ok("new report types: the starting point counted, the two that arrived later listed, newest first",
+       ty.get("recorded") == 4 and ty.get("since") == "2026-11-01" and [x["name"] for x in ty.get("new", [])] == ["scan_brandnew", "scan_known_new"], str(ty)[:220])
+    ok("…each says whether the report definitions know it yet", {x["name"]: x["known"] for x in ty.get("new", [])} == {"scan_brandnew": False, "scan_known_new": True}
+       and ty.get("new_without_definition") == 1 and next(x for x in ty["new"] if x["name"] == "scan_brandnew")["note"] == "new report, no definition yet")
     n_, HN = client(ANALYST)
     ok("an account without the audit permission cannot read it", n_.get("/api/audit/sender", headers=HN).status_code == 403)
     ok("…nor open the Workers settings", n_.get("/api/pipeline/settings", headers=HN).status_code == 403)
@@ -216,6 +228,7 @@ finally:
     users.get, roles.perms = real_get, real_perms
     audit.add = real_add
     PS.ping = real_ping
+    A.REPORT_MAP.entry = real_entry
     for t in MADE:
         sessions.end(token=t)
     A.AUTH["throttle"].clear_address("127.0.0.1")

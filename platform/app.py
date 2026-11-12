@@ -2746,7 +2746,9 @@ _audit_portal.install(app, {"has_perm": AUTH["has_perm"], "users": AUTH["users"]
 # DKIM sender check, its quarantine and its settings; mailbox and database passwords are never shown or edited
 import sender_audit as _sender_audit  # noqa: E402
 import pipeline_settings as _pipeline_settings  # noqa: E402
-_sender_audit.install(app, {"base_dir": BASE_DIR, "has_perm": AUTH["has_perm"], "audit": AUTH["audit"]})
+_sender_audit.install(app, {"base_dir": BASE_DIR, "has_perm": AUTH["has_perm"], "audit": AUTH["audit"],
+                            # the report map (REPORT_MAP, made further down) says whether a new report type is defined
+                            "report_entry": lambda name: REPORT_MAP.entry(name)})
 PIPELINE_SETTINGS = _pipeline_settings.install(app, {
     "base_dir": BASE_DIR, "data_dir": os.path.join(BASE_DIR, "data"), "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"],
     "fresh": AUTH["fresh"], "audit": AUTH["audit"], "users": AUTH["users"], "throttle": AUTH["throttle"],

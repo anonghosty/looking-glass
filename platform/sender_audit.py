@@ -87,7 +87,7 @@ def standards(rows, mode_now):
 
 
 def install(app, ctx):
-    """ctx: base_dir, has_perm, audit."""
+    """ctx: base_dir, has_perm, audit, report_entry(name) -> the report map's entry or None (optional)."""
     hp, audit = ctx["has_perm"], ctx["audit"]
 
     @app.route("/api/audit/sender")
@@ -102,7 +102,7 @@ def install(app, ctx):
         ma = pipeline_link.mail_auth(d)
         mode_now = ma.mode(env) if ma else "off"
         lo, hi = fr.isoformat(), (to + timedelta(days=1)).isoformat()
-        rows, api_rows = [], []
+        rows, api_rows, type_rows = [], [], []
         db = d / ".mail_state.sqlite"
         if db.exists():
             con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
@@ -117,6 +117,10 @@ def install(app, ctx):
                 # requests are signed with the API secret (HMAC2) and the files come from Shadowserver over HTTPS
                 if con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='api_files'").fetchone():
                     api_rows = [dict(r) for r in con.execute("SELECT at, file, bytes FROM api_files WHERE at >= ? AND at < ?", (lo, hi))]
+                # report types (report_types.py): every type that ever arrived, by e-mail or API; the starting point is
+                # marked baseline, the others arrived for the first time later
+                if con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='report_types'").fetchone():
+                    type_rows = [dict(r) for r in con.execute("SELECT name, first_seen, baseline FROM report_types ORDER BY first_seen DESC")]
             finally:
                 con.close()
         for r in rows:
@@ -148,7 +152,22 @@ def install(app, ctx):
                        or (e.get("event") == "pipeline_settings_saved" and "MAIL_AUTH" in (e.get("detail") or "")))]
         n = len(rows)
         source_now = "api" if (env.get("REPORT_SOURCE") or "").strip().lower() == "api" else "email"
+        # new report types: arrived for the first time after the starting point; does the report map (definitions,
+        # from Shadowserver's schema through the feed) know each one yet?
+        entry = ctx.get("report_entry") or (lambda n: None)
+        new_types = []
+        for t in type_rows:
+            if t["baseline"]:
+                continue
+            e = entry(t["name"]) or {}
+            known = bool(e) and e.get("in_schema", True) is not False
+            new_types.append({"name": t["name"], "first_seen": (t["first_seen"] or "").replace("T", " ")[:16] + " UTC",
+                              "known": known, "title": e.get("title") or e.get("name") or "" if known else "",
+                              "note": "in the report definitions" if known else "new report, no definition yet"})
+        types = {"recorded": len(type_rows), "since": min((t["first_seen"] for t in type_rows), default="")[:10],
+                 "new": new_types, "new_without_definition": sum(1 for t in new_types if not t["known"])}
         return jsonify(found=True, period={"from": fr.isoformat(), "to": to.isoformat()}, mode=mode_now, source=source_now,
+                       types=types,
                        api={"files": len(api_rows), "bytes": sum(int(r["bytes"] or 0) for r in api_rows)},
                        domain=env.get("MAIL_AUTH_DOMAIN") or "shadowserver.org",
                        kpis={"checked": n, **{r: c[r] for r in RESULTS}, "pass_rate": (c["pass"] / n) if n else None,
