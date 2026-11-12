@@ -174,6 +174,23 @@
     }
     refresh();
   }
+  // the network list further down (Network names & types, net-editor.js) picks constituents too: the same selection and
+  // the same Apply settings. Ticking a network there switches this card to "Only selected networks".
+  window.LGConstituency = {
+    _l: [],
+    has: (asn) => mode === "some" && chosen.has(String(asn)),
+    isSome: () => mode === "some",
+    count: () => chosen.size,
+    key: () => `${mode}|${[...chosen].sort().join(",")}`,
+    set(asn, on) {
+      if (!data) return;
+      if (mode !== "some") setMode("some");
+      if (on) chosen.add(String(asn)); else chosen.delete(String(asn));
+      renderNets();
+    },
+    onChange(fn) { this._l.push(fn); },
+  };
+  function tell() { for (const f of (window.LGConstituency && window.LGConstituency._l) || []) { try { f(); } catch { /* the other card */ } } }
   $("netSearch").addEventListener("input", renderNets);
   $("selShown").addEventListener("click", () => { for (const n of shown()) for (const a of n.asns) chosen.add(String(a)); renderNets(); });
   $("clearShown").addEventListener("click", () => { for (const n of shown()) for (const a of n.asns) chosen.delete(String(a)); renderNets(); });
@@ -207,6 +224,7 @@
         : "Nothing selected yet: choose networks or enter address ranges (applying with nothing selected means the whole country).";
     }
     $("envLines").textContent = `COUNTRY=${w.country}\nCONSTITUENT_ASNS=${w.networks.join(",")}\nCONSTITUENT_CIDRS=${w.cidrs.join(",")}`;
+    tell();                                       // the network list further down shows the same ticks
     // apply bar
     const dirty = JSON.stringify(w) !== JSON.stringify(saved);
     const bar = $("applyBar"); bar.classList.toggle("dirty", dirty);

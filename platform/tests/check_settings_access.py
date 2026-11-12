@@ -79,6 +79,13 @@ try:
     ok("no token box or token header in the page's scripts", "X-Settings-Token" not in js and "Use token" not in js)
     ok("the read-only line names the Settings permission", "needs an account with the Settings permission" in rd("static/js/settings.js"))
     ok("the page no longer tells people to set SETTINGS_TOKEN", "SETTINGS_TOKEN" not in rd("templates/settings.html"))
+    # the network list picks constituents too (2026-11-12, the user's request): the same selection as the
+    # Constituency card, applied with the same Apply settings (LG_SETTINGS_JS / LG_NETED_JS: held-back copies)
+    sj = open(os.environ.get("LG_SETTINGS_JS") or os.path.join(root, "static/js/settings.js"), encoding="utf-8").read()
+    nj = open(os.environ.get("LG_NETED_JS") or os.path.join(root, "static/js/net-editor.js"), encoding="utf-8").read()
+    ok("Settings' network list has a Constituent tick box bound to the Constituency card's selection",
+       "window.LGConstituency" in sj and "set(asn, on)" in sj and 'setMode("some")' in sj and "C.set(x.asn, cb.checked)" in nj
+       and '"Constituent"' in nj and "onChange(" in nj)
 finally:
     users.get, roles.perms = real_get, real_perms
     for t in MADE:                                  # the test's own sessions end with it

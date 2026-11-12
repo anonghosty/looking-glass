@@ -8,7 +8,7 @@
   const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content || "";
   const hdr = (json) => (json ? { "Content-Type": "application/json", "X-CSRF-Token": csrf() } : {});
   const TYPES = {};
-  let rows = [], typeList = [], view = "todo", identifying = false;
+  let rows = [], typeList = [], view = "todo", identifying = false, lastKey = "";
   if (!$("cardNets")) return;
   // Settings shows the networks read-only; they are edited on the Definitions page
   const RO = $("cardNets").dataset.readonly === "1";
@@ -65,8 +65,10 @@
     const tb = $("netEdTable").querySelector("tbody"); tb.replaceChildren();
     $("netTypeFilter").hidden = view === "types";
     if (view === "types") { renderTypes(tb); return; }
-    $("netEdTable").querySelector("thead tr").replaceChildren(...[["AS number"], ["Company name"], ["Type"], ["Note"], ["Registry holder"], ["Events", "num"], ["Status"], ["", "dz-act"]]
-      .map(([h, c]) => el("th", c || null, h)));
+    const C = RO ? window.LGConstituency : null;      // Settings: this list also picks the constituency (settings.js)
+    $("netEdTable").querySelector("thead tr").replaceChildren(...[["AS number"], ["Company name"], ["Type"], ["Note"], ["Registry holder"], ["Events", "num"], ["Status"],
+      [C ? "Constituent" : "", "dz-act"]].map(([h, c]) => el("th", c || null, h)));
+    lastKey = C ? C.key() : "";
     const q = $("netEdSearch").value.trim().toLowerCase().replace(/^as/, ""), tf = $("netTypeFilter").value;
     // a search looks through every network, whatever the tab: a reviewed one is found and edited the same way
     const shown = rows.filter((x) => (q || view === "all" || (view === "todo" ? !x.reviewed : x.reviewed)) && (!tf || x.type === tf)
@@ -84,8 +86,17 @@
       if (RO) {                                     // read-only: the values, no inputs or Save
         const st = el("td"); st.append(x.reviewed ? pill("Reviewed", "ok") : pill("Not reviewed", "warn"));
         if (x.reviewed && (x.by || x.updated)) st.append(el("small", "dz-by", `${x.by || ""}${x.updated ? ` · ${x.updated}` : ""}`));
+        const pick = el("td", "dz-act");
+        if (C) {                                    // tick = part of the constituency (applied for everyone with Apply settings)
+          const cb = el("input"); cb.type = "checkbox"; cb.checked = C.has(x.asn);
+          cb.setAttribute("aria-label", `AS${x.asn} ${x.name} is a constituent`);
+          cb.title = "Part of your constituency: both platforms then show only your constituents' networks (Apply settings, at the bottom)";
+          cb.addEventListener("change", () => C.set(x.asn, cb.checked));
+          tr.classList.toggle("dz-constituent", cb.checked);
+          pick.append(cb);
+        }
         tr.append(el("td", "mono dz-name", `AS${x.asn}`), el("td", "dz-w-name", x.name), el("td", null, TYPES[x.type] || x.type), el("td", "muted", x.note || "—"),
-          el("td", "dz-seen", `${x.holder || "—"}${x.country ? ` (${x.country})` : ""}`), el("td", "num mono", fmt(x.events)), st, el("td", "dz-act"));
+          el("td", "dz-seen", `${x.holder || "—"}${x.country ? ` (${x.country})` : ""}`), el("td", "num mono", fmt(x.events)), st, pick);
         tb.append(tr); continue;
       }
       const name = el("input", "dz-input"); name.value = x.name; name.maxLength = 80; name.setAttribute("aria-label", `Company name for AS${x.asn}`);
@@ -151,4 +162,8 @@
   $("netTypeLabel").addEventListener("keydown", (e) => { if (e.key === "Enter") $("netTypeAdd").click(); });
   $("netTypeAlias").addEventListener("keydown", (e) => { if (e.key === "Enter") $("netTypeAdd").click(); });
   load().catch((e) => { console.error("Network names could not be loaded:", e); flash($("netStatus"), `Could not load: ${e.message}`, "bad"); });
+  // Settings: redraw the ticks when the constituency changes in the Constituency card (or here), only when it did
+  if (RO && window.LGConstituency) window.LGConstituency.onChange(() => {
+    if (rows.length && view !== "types" && window.LGConstituency.key() !== lastKey) render();
+  });
 })();

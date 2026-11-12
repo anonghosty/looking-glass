@@ -4,6 +4,9 @@
   padding: 10px 14px; font: inherit; font-weight: 600; cursor: pointer; }
 .st-tabs button[aria-selected="true"] { opacity: 1; border-bottom-color: var(--accent, #8ee0bd); }
 .st-tab-off { display: none !important; }
+/* Settings → network list: the networks ticked as constituents */
+#cardNets tr.dz-constituent td { background: rgba(142, 224, 189, .07); }
+#cardNets td.dz-act input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; }
 .wk-lock { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border-radius: 10px; margin: 0 0 12px; }
 .wk-lock.is-locked { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); }
 .wk-lock.is-open { background: rgba(142,224,189,.08); border: 1px solid rgba(142,224,189,.35); }
