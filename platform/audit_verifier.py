@@ -18,6 +18,8 @@ The format it checks
   log/audit.head                     {"head": hash of the last line, "entries": number of entries, archives removed included}
   log/audit.seal                     the entries written before the chain started: their number and the SHA-256 of
                                      those lines joined by "\n"
+  log/audit_archive/removed.jsonl    one note per archive the retention removed; each must also be an entry in the
+                                     chain (event "audit_archive_removed"); removed.recorded counts those recorded
   MANIFEST.json                      the SHA-256 of every file in the package when it was made
 
 What a whole chain proves: no entry was changed, inserted or removed after it was written, and nothing was cut from the
@@ -147,7 +149,31 @@ def check(folder, earlier=None):
             seal_state = "changed"
             brk = brk or {"entry": gone + 1, "t": seal.get("first"), "what": "entries written before the chain were changed after they were sealed"}
 
-    out = {"ok": brk is None, "entries": head_entry, "kept": len(lines), "removed_by_retention": gone, "chained": chained,
+    # Every archive the retention removed must also be recorded in the chain itself (an entry with event
+    # "audit_archive_removed", its "target" the archive and "removed"."last_hash" its last link), not only in the notes
+    # file. audit_archive/removed.recorded says how many notes are recorded so far (the rest go in with the next entry).
+    # A recorded note may lack its entry only when that entry is older than the oldest entry kept.
+    try:
+        recorded = min(int(open(os.path.join(folder, "audit_archive", "removed.recorded")).read().strip() or 0), len(removed))
+    except (OSError, ValueError):
+        recorded = 0
+    seen, oldest_t = {}, None
+    for ln in lines:
+        try:
+            rec = json.loads(ln)
+        except ValueError:
+            continue
+        oldest_t = rec.get("t") if oldest_t is None else oldest_t
+        if rec.get("event") == "audit_archive_removed":
+            seen[rec.get("target")] = (rec.get("removed") or {}).get("last_hash")
+    unaccounted = [n.get("archive") for n in removed[:recorded] if seen.get(n.get("archive")) != n.get("last_hash")
+                   and not (oldest_t is not None and (n.get("removed_at") or 0) < oldest_t)]
+    if unaccounted and not brk:
+        brk = {"entry": gone + 1, "t": first_t, "what": f"retention notes with no entry in the chain ({', '.join(unaccounted[:3])}): "
+                                                        "an archive was removed or noted outside Looking Glass"}
+
+    out = {"ok": brk is None, "entries": head_entry, "removals_recorded": recorded - len(unaccounted),
+           "removals_pending": len(removed) - recorded, "kept": len(lines), "removed_by_retention": gone, "chained": chained,
            "before_chain": before, "first": first_t, "last": last_t, "head": head, "head_entry": head_entry,
            "head_file": head_file, "seal": dict(seal, state=seal_state) if seal else None, "archives": len(archives), "break": brk}
 
@@ -222,6 +248,9 @@ def main():
     print(f"  head              entry {r['head_entry']}: {r['head']}  (audit.head: {r['head_file']})")
     if r["seal"]:
         print(f"  seal              {r['seal']['entries']} entries before the chain, sealed {when(r['seal'].get('sealed_at'))}: {r['seal']['state']}")
+    if r["removed_by_retention"] or r["removals_pending"]:
+        print(f"  retention         {r['removals_recorded']} removed archive(s) recorded in the chain"
+              + (f", {r['removals_pending']} to be recorded with the next entry" if r["removals_pending"] else ""))
     if r["ok"]:
         print("  chain             WHOLE: no entry was changed, inserted or removed, and nothing was cut from the end")
     else:

@@ -229,6 +229,29 @@ try:
     ok("past the retention the archive is removed, and noted", not audit.chain.archives() and audit.chain.removed()[-1]["entries"] == before)
     v = audit.chain.verify()
     ok("…and the chain still checks out from the removed archive's last link", v["ok"] and v["removed_archives"] == 1, json.dumps(v.get("break")))
+    ok("…the removal is waiting to be recorded in the chain with the next entry", v["removals_pending"] == 1 and v["removals_recorded"] == 0)
+    audit.add("login", user="grace", ip="10.0.0.9", ua="x")
+    lines_now = [json.loads(x) for x in open(audit.path).read().splitlines()]
+    rm = [x for x in lines_now if x["event"] == "audit_archive_removed"]
+    note = audit.chain.removed()[-1]
+    ok("the removal is recorded in the chain itself: which archive, how many entries, its last link",
+       len(rm) == 1 and rm[0]["target"] == note["archive"] and rm[0]["removed"]["last_hash"] == note["last_hash"]
+       and rm[0]["removed"]["entries"] == before and lines_now[-1]["event"] == "login", json.dumps(rm[:1])[:200])
+    v = audit.chain.verify()
+    ok("…and the check counts it as recorded", v["ok"] and v["removals_recorded"] == 1 and v["removals_pending"] == 0, json.dumps(v.get("break")))
+    audit.add("login", user="grace", ip="10.0.0.9", ua="x")
+    ok("…once only", sum(1 for x in open(audit.path).read().splitlines() if '"audit_archive_removed"' in x) == 1)
+    rj, rc = os.path.join(audit.chain.dir, "removed.jsonl"), os.path.join(audit.chain.dir, "removed.recorded")
+    saved_rj, saved_rc = open(rj).read(), open(rc).read()
+    # someone notes a removal outside Looking Glass, before the real one and with no entries, so the link to the entries
+    # kept and the head's count still hold: only the missing chain entry gives it away (the other checks catch the rest)
+    forged = json.dumps(dict(note, archive="audit-20260101-000000.log.gz", last_hash="e" * 64, removed_at=time.time(), entries=0))
+    open(rj, "w").write(forged + "\n" + saved_rj)
+    open(rc, "w").write("2")
+    v = audit.chain.verify()
+    ok("a retention note with no entry in the chain: detected", not v["ok"] and "no entry in the chain" in v["break"]["what"], json.dumps(v.get("break")))
+    open(rj, "w").write(saved_rj); open(rc, "w").write(saved_rc)
+    ok("…and whole again without it", audit.chain.verify()["ok"])
     audit.chain.retention_days = 400
     old_dir = os.path.join(tmp, "old"); os.makedirs(old_dir)
     with open(os.path.join(old_dir, "audit.log.1"), "w") as f:
@@ -290,6 +313,8 @@ try:
     vsrc = z.read("verify_audit_log.py").decode()
     mods = {a.name.split(".")[0] for n in ast.walk(ast.parse(vsrc)) if isinstance(n, ast.Import) for a in n.names} | \
            {n.module.split(".")[0] for n in ast.walk(ast.parse(vsrc)) if isinstance(n, ast.ImportFrom) and n.module}
+    ok("the README gives the verifier's own SHA-256, to compare with the one published on GitHub",
+       hashlib.sha256(z.read("verify_audit_log.py")).hexdigest() in z.read("README.txt").decode() and "github.com" in z.read("README.txt").decode())
     ok("the verifier needs the Python standard library only", mods <= {"argparse", "glob", "gzip", "hashlib", "json", "os", "re", "sys", "time"}, ", ".join(sorted(mods)))
     pkg = os.path.join(tmp, "pkg"); z.extractall(pkg)
 
@@ -303,6 +328,8 @@ try:
     rc, out = run()
     ok("run on its own (python -I, outside Looking Glass): verified, every file as packaged", rc == 0 and out.get("ok") and out["manifest"]["problems"] == []
        and out["head"] == man["head"] and out["head_entry"] == man["head_entry"], str(out)[:300])
+    ok("…and it checks the retention's removal against its entry in the chain", out.get("removals_recorded") == 1 and out.get("removals_pending") == 0
+       and "log/audit_archive/removed.recorded" in names)
     earlier = f"{man['head']}@{man['head_entry']}"
     rc, out = run("--earlier", earlier)
     ok("…--earlier with the head it holds: proven", rc == 0 and out["earlier"]["proven"], json.dumps(out.get("earlier")))

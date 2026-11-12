@@ -87,7 +87,10 @@ def build(d):
     rows = [[_p("Hash chain", st["cellb"]), _p(state, st["ok"] if v["ok"] else st["bad"])],
             [_p("Entries", st["cellb"]), _p(f"{v['entries']} kept ({v['chained']} chained, {v['before_chain']} written before the chain started), "
                                             f"from {d['first']} to {d['last']}; {v['archives']} archive file(s); "
-                                            f"{v['removed_archives']} removed by the retention of {v['retention_days']} days", st["b"])],
+                                            f"{v['removed_archives']} removed by the retention of {v['retention_days']} days"
+                                            + (f", each recorded in the chain" if v['removed_archives'] and not v.get('removals_pending') else
+                                               f", {v.get('removals_pending')} to be recorded in the chain with the next entry" if v.get('removals_pending') else ""),
+                                            st["b"])],
             [_p("Head", st["cellb"]), _p(f"entry {v.get('head_entry', v['entries'])}: {v['head']}", st["mono"])],
             *([[_p("Before the chain", st["cellb"]),
                 _p(f"{v['seal']['entries']} entries written before the chain started were sealed on "
@@ -98,7 +101,9 @@ def build(d):
              _p("This section is Looking Glass checking itself. To check it without trusting Looking Glass, take the proof package "
                 "(Audit portal, Integrity and evidence): the log's files exactly as stored, the SHA-256 of each, and a verifier "
                 "in plain Python (standard library only) that recomputes the whole chain on your own computer: "
-                "python verify_audit_log.py", st["b"])],
+                "python verify_audit_log.py. The verifier comes from this server: before relying on it, compare its SHA-256 "
+                f"({d.get('verifier_sha256', '')}) with the one published in \"How the audit log proves itself\" on GitHub "
+                "(github.com/anonghosty/looking-glass), or use the copy from there.", st["b"])],
             [_p("At the next audit", st["cellb"]),
              _p(f"Keep the head above with this report. At the next audit, take a new proof package and run "
                 f"python verify_audit_log.py --earlier {v['head']}@{v.get('head_entry', v['entries'])} "

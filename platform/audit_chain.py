@@ -10,8 +10,10 @@ before the chain started (older versions) are counted, shown as "before the chai
 Retention. When data/audit.log reaches AUDIT_ROTATE_MB (default 5) it is compressed into data/audit_archive/
 (audit-<time>.log.gz, owner-only) and a new file goes on with the same chain. Archives older than AUDIT_RETENTION_DAYS
 (default 400: a yearly audit and some margin) are deleted, and the last hash of each deleted archive is noted in
-data/audit_archive/removed.jsonl, so the chain still checks out after the oldest entries are gone. Before this, the
-log kept one older copy and deleted the rest.
+data/audit_archive/removed.jsonl, so the chain still checks out after the oldest entries are gone. Each removal is
+also recorded as an entry in the chain itself (event audit_archive_removed, with the archive's last link), so it
+cannot be hidden or changed afterwards; verify() reports a note without its chain entry. Before this, the log kept
+one older copy and deleted the rest.
 
 Every value is in .env, so each CSIRT sets the retention its own audits and laws require.
 """
@@ -27,6 +29,45 @@ ZERO = "0" * 64
 
 def sha(line):
     return hashlib.sha256(line.encode("utf-8")).hexdigest()
+
+
+def removal_record(note):
+    """The chain entry for an archive the retention removed (its note in removed.jsonl): which archive, how many
+    entries, its last link and newest time. Recorded in the chain itself, so the removal cannot be hidden or changed
+    later; the notes file alone could be."""
+    when = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(note.get("newest") or 0))
+    return {"t": round(time.time(), 3), "event": "audit_archive_removed", "user": "Looking Glass", "target": note.get("archive", ""),
+            "detail": f"{note.get('entries')} entries up to {when} removed by the retention of {note.get('retention_days')} days "
+                      f"· last link {note.get('last_hash')}",
+            "removed": {"entries": note.get("entries"), "last_hash": note.get("last_hash"), "newest": note.get("newest"),
+                        "removed_at": note.get("removed_at"), "retention_days": note.get("retention_days")},
+            "ip": "", "location": "", "ua": ""}
+
+
+def removals_unrecorded(lines, notes, recorded):
+    """Retention notes the chain does not account for. `recorded`: how many notes the chain says it has recorded (the
+    rest are recorded with the next entry). A recorded note needs its entry in the lines kept, unless that entry may
+    itself be gone by the retention (the note is older than the oldest entry kept)."""
+    seen, oldest = {}, None
+    for ln in lines:
+        if '"audit_archive_removed"' not in ln and oldest is not None:
+            continue
+        try:
+            rec = json.loads(ln)
+        except ValueError:
+            continue
+        if oldest is None:
+            oldest = rec.get("t")
+        if rec.get("event") == "audit_archive_removed":
+            seen[rec.get("target")] = (rec.get("removed") or {}).get("last_hash")
+    bad = []
+    for n in notes[:recorded]:
+        if seen.get(n.get("archive")) == n.get("last_hash"):
+            continue
+        if oldest is not None and (n.get("removed_at") or 0) < oldest:
+            continue                          # its entry was in an archive the retention removed later
+        bad.append(n.get("archive"))
+    return bad
 
 
 def _env_num(name, default):
@@ -125,29 +166,57 @@ class Chain:
         return None
 
     def append(self, rec):
-        """Add one record (a dict) as a chained line, under a lock shared by every process; returns the line."""
+        """Add one record (a dict) as a chained line, under a lock shared by every process; returns the line.
+        Archives the retention removed since the last write are recorded first, each as its own chained entry."""
         import fcntl
         lock_fd = os.open(self.path + ".lock", os.O_WRONLY | os.O_CREAT, 0o600)
         try:
             fcntl.flock(lock_fd, fcntl.LOCK_EX)
             if os.path.exists(self.path) and os.path.getsize(self.path) > self.rotate_bytes:
                 self.rotate()
-            last = self._tail()
-            rec = dict(rec, prev=sha(last) if last else (self.removed()[-1]["last_hash"] if self.removed() else ZERO))
-            line = json.dumps(rec, ensure_ascii=False)
-            fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
-            with os.fdopen(fd, "a", encoding="utf-8") as f:
-                f.write(line + "\n")
-            try:
-                with open(self.head_path) as f:
-                    count = int(json.load(f).get("entries", 0)) + 1
-            except (OSError, ValueError):
-                count = len(self.lines())
-            self.last, self.count = sha(line), count
-            self._write_head()
-            return line
+            notes = self.removed()
+            done = self._recorded_count()
+            if len(notes) > done:             # archives removed by the retention since the last write
+                for note in notes[done:]:
+                    self._write(removal_record(note))
+                self._set_recorded_count(len(notes))
+            return self._write(rec)
         finally:
             os.close(lock_fd)                 # releases the lock
+
+    def _write(self, rec):
+        """One chained line (the caller holds the lock)."""
+        last = self._tail()
+        rec = dict(rec, prev=sha(last) if last else (self.removed()[-1]["last_hash"] if self.removed() else ZERO))
+        line = json.dumps(rec, ensure_ascii=False)
+        fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        with os.fdopen(fd, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+        try:
+            with open(self.head_path) as f:
+                count = int(json.load(f).get("entries", 0)) + 1
+        except (OSError, ValueError):
+            count = len(self.lines())
+        self.last, self.count = sha(line), count
+        self._write_head()
+        return line
+
+    # how many retention notes (removed.jsonl, append-only) are already recorded in the chain: only to know which are
+    # new. The check does not trust it: verify() looks for a chain entry for every note.
+    def _recorded_count(self):
+        try:
+            with open(os.path.join(self.dir, "removed.recorded")) as f:
+                return int(f.read().strip() or 0)
+        except (OSError, ValueError):
+            return 0
+
+    def _set_recorded_count(self, n):
+        os.makedirs(self.dir, mode=0o700, exist_ok=True)
+        tmp = os.path.join(self.dir, "removed.recorded.tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(str(n))
+        os.replace(tmp, os.path.join(self.dir, "removed.recorded"))
 
     def _write_head(self):
         tmp = self.head_path + ".tmp"
@@ -295,7 +364,14 @@ class Chain:
             else:
                 seal_state = "changed"
                 brk = brk or {"entry": 1, "t": seal.get("first"), "what": "entries written before the chain were changed after they were sealed"}
-        return {"ok": brk is None, "seal": dict(seal, state=seal_state) if seal else None, "entries": len(lines), "chained": chained, "before_chain": before, "first": first_t, "last": last_t,
+        # every archive the retention removed is recorded in the chain itself (removal_record), not only in the notes file
+        recorded = min(self._recorded_count(), len(removed))
+        missing = removals_unrecorded(lines, removed, recorded)
+        if missing and not brk:
+            brk = {"entry": 1, "t": first_t, "what": f"retention notes with no entry in the chain ({', '.join(missing[:3])}): "
+                                                    "an archive was removed or noted outside Looking Glass"}
+        return {"ok": brk is None, "seal": dict(seal, state=seal_state) if seal else None,
+                "removals_recorded": recorded - len(missing), "removals_pending": len(removed) - recorded, "entries": len(lines), "chained": chained, "before_chain": before, "first": first_t, "last": last_t,
                 "break": brk, "head": head, "head_entry": len(lines) + gone, "removed_entries": gone,
                 "head_file": bool(saved), "archives": len(self.archives()),
                 "removed_archives": len(removed), "retention_days": self.retention_days,

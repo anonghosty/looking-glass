@@ -71,6 +71,8 @@ LABEL = {"login": "Signed in", "login_failed": "Failed sign-in", "login_locked":
          "audit_verified": "Audit log integrity checked"}
 LABEL["audit_sealed"] = "Entries before the chain sealed"
 TAB_OF["audit_sealed"] = "system"
+LABEL["audit_archive_removed"] = "Old audit archive removed by the retention"
+TAB_OF["audit_archive_removed"] = "system"
 # The NIST SP 800-53 Rev. 5 controls the checks support, with their official titles (Release 5.2.0, read from NIST's
 # OSCAL catalog, usnistgov/oscal-content, on 2026-11-11). The checks' own ids are LG-01…: they are Looking Glass checks,
 # mapped to NIST controls, not NIST control numbers themselves.
@@ -519,7 +521,8 @@ def install(app, ctx):
                                   "fail_sources": ov["fail_sources"], "exports_by": ov["exports_by"], "per_day": ov["per_day"],
                                   "first": _when(integrity()["first"]), "last": _when(integrity()["last"]), "nist_release": NIST_RELEASE,
                                   "started": _when(setup_time(integrity().get("first") or 0)),
-                                  "sealed_at": _when((integrity().get("seal") or {}).get("sealed_at"))})
+                                  "sealed_at": _when((integrity().get("seal") or {}).get("sealed_at")),
+                                  "verifier_sha256": __import__("audit_proof").verifier_sha256()})
         logged_export("pdf", fr, to, f" · evidence report · head entry {integrity()['head_entry']} {integrity()['head']}")
         return Response(pdf, mimetype="application/pdf", headers={"Content-Disposition": f'attachment; filename="audit_evidence_{fr}_{to}.pdf"',
                                                                   "Cache-Control": "no-store"})

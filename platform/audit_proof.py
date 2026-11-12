@@ -39,6 +39,11 @@ What is in it
   verify_audit_log.py   an independent verifier: Python 3.8 or newer, standard library only. Read it: it is short.
   README.txt            this file
 
+First, check the verifier itself: it came from the server it checks.
+  Its SHA-256: {verifier_sha}
+  Compare with the one published in "How the audit log proves itself" (docs/AUDIT_LOG_PROOF.md) at
+  https://github.com/anonghosty/looking-glass , or use platform/audit_verifier.py from there instead.
+
 Check it on your own computer (no Looking Glass, no network needed)
   python verify_audit_log.py
   It recomputes every link of the chain, the seal of the entries written before the chain started, and the head,
@@ -67,6 +72,12 @@ The log holds names, addresses and browser details of the people who used Lookin
 """
 
 
+def verifier_sha256():
+    """SHA-256 of the verifier this server hands out (printed in the evidence report and the package, to compare with
+    the one published on GitHub)."""
+    return hashlib.sha256(open(os.path.join(HERE, "audit_verifier.py"), "rb").read()).hexdigest()
+
+
 def snapshot(chain, dest):
     """Copy the log's files into dest/ at one moment: under the same lock every writer takes."""
     import fcntl
@@ -79,7 +90,7 @@ def snapshot(chain, dest):
             p = os.path.join(src, name)
             if os.path.exists(p):
                 shutil.copyfile(p, os.path.join(dest, name))
-        for p in chain.archives() + [os.path.join(chain.dir, "removed.jsonl")]:
+        for p in chain.archives() + [os.path.join(chain.dir, "removed.jsonl"), os.path.join(chain.dir, "removed.recorded")]:
             if os.path.exists(p):
                 shutil.copyfile(p, os.path.join(dest, "audit_archive", os.path.basename(p)))
     finally:
@@ -105,7 +116,8 @@ def build(chain, generated_by):
         manifest = {"what": "Looking Glass audit log proof package", "generated": generated, "generated_by": generated_by,
                     "head": r["head"], "head_entry": r["head_entry"], "entries_kept": r["kept"],
                     "removed_by_retention": r["removed_by_retention"], "chain_whole_when_made": r["ok"], "files": files}
-        readme = README.format(generated=generated, by=generated_by, head=r["head"], head_entry=r["head_entry"])
+        readme = README.format(generated=generated, by=generated_by, head=r["head"], head_entry=r["head_entry"],
+                               verifier_sha=hashlib.sha256(verifier).hexdigest())
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
             for f in files:

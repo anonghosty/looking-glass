@@ -26,15 +26,19 @@ CSV = ('"timestamp","ip","port","asn","geo","region","city","hostname","tag"\n'
        '"2026-11-10 04:05:06","198.51.100.8",22,64501,"XX","REGION 2","CITY 2","host-2.example.net","tag-2"\n')
 GOOD = "2026-11-10-scan_example-example-geo.csv"
 BAD = ["2026-11-10-scan$x-example-geo.csv", "2026-11-10-system.users-example-geo.csv",
-       "2026-11-10-Scan_Http-example-geo.csv", f"2026-11-10-{'a' * 70}-example-geo.csv"]
+       "2026-11-10-Scan_Http-example-geo.csv", f"2026-11-10-{'a' * 70}-example-geo.csv",
+       "2026-11-10-files_scan_example-example-geo.csv", "2026-11-10-discovered_fields_scan_example-example-geo.csv"]
 
 
 class Names(unittest.TestCase):
     def test_rule(self):
         for ok in ("scan_http", "event4_sinkhole_http", "device_id6", "blocklist", "scan6_ssl"):
             self.assertTrue(rn.valid(ok), ok)
-        for bad in ("scan$x", "system.users", "", "a" * 65, "Scan_Http", "scan-http", "../x", "_x", "x y"):
+        for bad in ("scan$x", "system.users", "", "a" * 65, "Scan_Http", "scan-http", "../x", "_x", "x y",
+                    "files_scan_http", "discovered_fields_scan_http"):     # the pipeline's own bookkeeping collections
             self.assertFalse(rn.valid(bad), bad)
+        self.assertIn("bookkeeping", rn.why("files_scan_http"))
+        self.assertTrue(rn.valid("filesystem_scan"), "only the exact prefixes are reserved")
 
 
 class Folders(unittest.TestCase):

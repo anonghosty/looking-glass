@@ -15,14 +15,21 @@ import time
 from pathlib import Path
 
 VALID = re.compile(r"^[a-z0-9][a-z0-9_]{0,63}$")
+# The pipeline's own bookkeeping collections: files_<report> (the files loaded) and discovered_fields_<report> (the
+# columns seen). A report named like them would be loaded on top of them and mistaken for them (external review,
+# 2026-11-11), so such a name is refused too. No Shadowserver report is named like that.
+RESERVED = ("files_", "discovered_fields_")
 FOLDER = "report-names"
 
 
 def valid(name: str) -> bool:
-    return bool(VALID.match(name or ""))
+    return bool(VALID.match(name or "")) and not (name or "").startswith(RESERVED)
 
 
 def why(name: str) -> str:
+    if (name or "").startswith(RESERVED):
+        return (f"its report name {name!r} starts with {next(p for p in RESERVED if name.startswith(p))!r}, the name of "
+                "the pipeline's own bookkeeping collections, so loading it would mix with them")
     return (f"its report name {name!r} is not a Shadowserver report name (lowercase letters, digits and underscores, "
             "at most 64 characters), so it cannot become a folder and a MongoDB collection")
 

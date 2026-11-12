@@ -80,6 +80,27 @@ After the download the page shows two values to keep in the working papers: the 
 (`hash@entry`). Looking Glass also writes both into the audit log, so every later package carries the receipt of this
 one.
 
+### Check the verifier itself
+
+The verifier comes in the package, from the server it checks. A tampered server could hand out a tampered verifier
+that always says "verified". So do not take it on trust:
+
+- **Compare its SHA-256** (`sha256sum verify_audit_log.py`, or `Get-FileHash verify_audit_log.py` in Windows
+  PowerShell) with the one published here, outside the server:
+
+  ```text
+  699a111c45fd0c38d9d9f384a36d31e6efe3d4ad6286972d3e314725309887bf
+  ```
+
+  This is the verifier of the current release on GitHub. An installation of an older release ships the verifier of
+  that release: compare with this guide in the repository's history at that release.
+- **Or use the copy from GitHub** instead of the one in the package: `platform/audit_verifier.py` in
+  [the repository](https://github.com/anonghosty/looking-glass), saved as `verify_audit_log.py` next to `log/`.
+- **Or read it:** it is short, uses the Python standard library only, and this guide describes everything it checks.
+
+The evidence report and the package's `README.txt` print the SHA-256 of the verifier the server handed out, to compare
+with the one above.
+
 ## 5. What a whole chain cannot prove on its own
 
 Someone with full control of the server could change entry 500, then recompute every `prev` from entry 501 to the end,
@@ -122,7 +143,10 @@ server could be replaced along with the log.
 **Retention.** When `data/audit.log` reaches `AUDIT_ROTATE_MB` it is compressed into `data/audit_archive/` and the
 chain goes on in a new file. Archives older than `AUDIT_RETENTION_DAYS` (default 400) are deleted; the last hash and
 the number of entries of each deleted archive are noted in `removed.jsonl` first, so the chain still checks out from
-there, and entry numbers still count from the start of the log. An earlier head that falls in a removed archive can no
+there, and entry numbers still count from the start of the log. Each removal is also **recorded as an entry in the
+chain itself** ("Old audit archive removed by the retention": the archive, its number of entries, its newest time and
+its last link), so a removal cannot be hidden or its note changed afterwards: the check reports any note without its
+chain entry. A removal made between two writes is recorded with the next entry. An earlier head that falls in a removed archive can no
 longer be compared entry by entry; the check says so. Set the retention to cover the time between audits
 ([CONFIGURATION.md](CONFIGURATION.md#audit-portal-and-the-audit-log)).
 
