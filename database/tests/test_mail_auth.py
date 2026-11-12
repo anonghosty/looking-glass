@@ -58,15 +58,15 @@ HEAD = [b"From: Shadowserver <autoreports@shadowserver.org>", b"To: csirt@exampl
         b"Message-ID: <test-1@shadowserver.org>"]
 
 
-def sign(head, body, d="shadowserver.org", s="mail", c="relaxed/simple", alg="rsa"):
+def sign(head, body, d="shadowserver.org", s="mail", c="relaxed/simple", alg="rsa",
+         hs=(b"From", b"To", b"Subject", b"Date", b"Message-ID")):
     """A DKIM-Signature made here, the way a sender makes one (RFC 6376 5)."""
     hc, bc = c.split("/")
     bh = base64.b64encode(hashlib.sha256(mail_auth._canon_body(body, bc)).digest()).decode()
     a = "ed25519-sha256" if alg == "ed" else "rsa-sha256"
-    sig = f"DKIM-Signature: v=1; a={a}; c={c}; d={d}; s={s}; h=From:To:Subject:Date:Message-ID; bh={bh}; b="
+    sig = f"DKIM-Signature: v=1; a={a}; c={c}; d={d}; s={s}; h={b':'.join(hs).decode()}; bh={bh}; b="
     data = b"".join(mail_auth._canon_header(f, hc) + b"\r\n"
-                    for f in [next(x for x in head if x.lower().startswith(n.lower() + b":"))
-                              for n in (b"From", b"To", b"Subject", b"Date", b"Message-ID")])
+                    for f in [next(x for x in head if x.lower().startswith(n.lower() + b":")) for n in hs])
     data += mail_auth._canon_header(sig.encode(), hc)
     b = ED.sign(hashlib.sha256(data).digest()) if alg == "ed" else RSA.sign(data, padding.PKCS1v15(), hashes.SHA256())
     return (sig + base64.b64encode(b).decode()).encode()
@@ -131,6 +131,47 @@ r = C.check(message(sig=sign_l(HEAD, BODY, full)) + b"Injected rows appended aft
 ok("content appended after the l= length fails (the reviewer's attack)", r["result"] == "fail" and "l= tag" in r["reason"], r["reason"])
 r = C.check(message(sig=sign_l(HEAD, BODY, 20)))
 ok("a signature covering only part of the body fails", r["result"] == "fail" and "first 20" in r["reason"], r["reason"])
+
+print("One reading of the message: lines added above a signed message's headers (external review, 2026-11-12)")
+import email as _email  # noqa: E402
+genuine = message()
+ZIP = base64.b64encode(b"PK\x05\x06" + b"\x00" * 18)
+attack = (b"Content-Type: multipart/mixed; boundary=\"XX\"\r\n"
+          b"this line has no colon\r\n"
+          b"--XX\r\nContent-Type: application/zip; name=forged.zip\r\n"
+          b"Content-Disposition: attachment; filename=forged.zip\r\nContent-Transfer-Encoding: base64\r\n"
+          + ZIP + b"\r\n--XX--\r\n" + genuine)
+parsed = _email.message_from_bytes(attack)
+ok("(the attack is real: Python's parser, as the pipeline uses it, finds forged.zip in it)",
+   any(p.get_filename() == "forged.zip" for p in parsed.walk()))
+r = C.check(attack)
+ok("…and the check no longer passes it: the header block is ambiguous (permerror, held back in Block mode)",
+   r["result"] == "permerror" and "ambiguous" in r["reason"] and r["result"] in mail_auth.BLOCK, r["reason"])
+r = C.check(b"just a line\r\n" + genuine)
+ok("a single line without a colon above the headers: permerror", r["result"] == "permerror", r["reason"])
+r = C.check(genuine.replace(b"To: csirt@example.org", b"To: csirt@example.org\rX-Injected: 1", 1))
+ok("a lone carriage return inside the headers (the parser splits there, a blank-line split does not): permerror",
+   r["result"] == "permerror", r["reason"])
+r = C.check(b" folded first line\r\n" + genuine)
+ok("a header block that starts with a continuation line: permerror", r["result"] == "permerror", r["reason"])
+r = C.check(genuine)
+ok("…while the genuine message still passes", r["result"] == "pass", r["reason"])
+
+print("A pass vouches for the sender: From signed, one From, from the signer's domain")
+r = C.check(message(hs=(b"To", b"Subject", b"Date", b"Message-ID")))
+ok("a valid shadowserver.org signature that does not sign From: not a pass ('other', held back in Block mode)",
+   r["result"] == "other" and "not signed" in r["reason"], r["reason"])
+other_from = [h.replace(b"autoreports@shadowserver.org", b"reports@attacker.example") if h.startswith(b"From") else h for h in HEAD]
+r = C.check(message(head=other_from))
+ok("a From of another domain under a shadowserver.org signature: 'other' (From and signer must match)",
+   r["result"] == "other" and "does not match" in r["reason"], r["reason"])
+two = message()
+two = two.replace(b"\r\n\r\n", b"\r\nFrom: Someone <x@attacker.example>\r\n\r\n", 1)
+r = C.check(two)
+ok("a second From header added: not a pass", r["result"] != "pass", r["reason"])
+sub = [h.replace(b"autoreports@shadowserver.org", b"autoreports@mail.shadowserver.org") if h.startswith(b"From") else h for h in HEAD]
+r = C.check(message(head=sub))
+ok("a From in a subdomain of the signer still passes (aligned)", r["result"] == "pass", r["reason"])
 
 print("Keys and DNS")
 r = C.check(message(s="missing"))

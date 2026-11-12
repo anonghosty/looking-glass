@@ -271,6 +271,54 @@ try:
     apply_now()
     ok("…and the pipeline holds a loosened limit for confirmation", "ZIP_MAX_RATIO=100000" not in (PIPE / ".env").read_text()
        and (rd / f"{loose}.json").exists())
+    for p_ in rd.glob("*.json"):
+        p_.unlink()
+
+    print("Files the web app can rewrite are never trusted (external review, 2026-11-12)")
+    real_off = WS.make_request(PLAT, "settings", {"values": {"MAIL_AUTH": "off"}}, "a compromised web app")
+    sha_off = WS.request_sha(rd / f"{real_off}.json")
+    (PIPE / "confirmed_requests").mkdir(exist_ok=True)
+    os.rename(rd / "done", rd / "done.real")
+    os.symlink(PIPE / "confirmed_requests", rd / "done")             # the reviewer's attack: done/ → confirmed_requests/
+    (rd / "0000-decoy.json").write_text(json.dumps({"id": real_off, "kind": "settings", "sha256": sha_off, "by": "root", "at": "now"}))
+    apply_now()
+    ok("done/ replaced by a symlink to confirmed_requests/: nothing read or written, no forged confirmation, MAIL_AUTH unchanged",
+       not any((PIPE / "confirmed_requests").iterdir()) and "MAIL_AUTH=enforce" in (PIPE / ".env").read_text()
+       and (rd / f"{real_off}.json").exists(), str(list((PIPE / "confirmed_requests").iterdir())))
+    os.unlink(rd / "done"); os.rename(rd / "done.real", rd / "done")
+    apply_now()                                                      # done/ is a folder again: the decoy is refused...
+    res = WS.results(PLAT, limit=100)
+    decoy = [r_ for r_ in res if r_.get("by") == "root"]
+    ok("…with done/ a folder again, the decoy is refused under a name of its own, never the id it claims",
+       decoy and decoy[0]["status"] == "refused" and decoy[0]["id"].startswith("refused-") and not (rd / "done" / f"{real_off}.json").exists()
+       and "sha256" not in decoy[0], str(decoy[:1])[:200])
+    ok("…and the real 'sender check off' still waits (no confirmation was made)", (rd / f"{real_off}.json").exists()
+       and WS.confirmation(PIPE, real_off) is None and "MAIL_AUTH=enforce" in (PIPE / ".env").read_text())
+    (rd / f"{real_off}.json").unlink()
+    keyfile = tmp / "gmail-service-account.json"
+    keyfile.write_text(json.dumps({"type": "service_account", "private_key": "stand-in-for-a-key-TOPSECRET", "id": "x"}))
+    os.symlink(keyfile, rd / "20261112T000000Z-aaaaaaaaaaaa.json")
+    apply_now()
+    every = "".join(p_.read_text() for p_ in (rd / "done").glob("*.json"))
+    ok("a request file that is a symlink (to a key file) is not read: nothing of it reaches a result",
+       "TOPSECRET" not in every and "private_key" not in every and not (rd / "20261112T000000Z-aaaaaaaaaaaa.json").exists())
+    ok("…results hold a fixed list of fields only", all(set(r_) <= {"id", "kind", "by", "at", "values", "qid", "status", "reason",
+                                                                       "changed", "applied_at", "confirmed_on_server"} for r_ in WS.results(PLAT, 100)))
+    os.rename(rd, tmp / "requests-real"); os.symlink(tmp / "requests-real", rd)
+    WS.make_request(PLAT, "settings", {"values": {"WORKERS": "3"}}, "someone")
+    n = apply_now()
+    ok("the requests folder itself a symlink: nothing read or applied", n == 0 and "WORKERS=3" not in (PIPE / ".env").read_text())
+    os.unlink(rd); os.rename(tmp / "requests-real", rd)
+    for p_ in rd.glob("*.json"):
+        p_.unlink()
+    print("Compared by what a value means to the pipeline, not as text")
+    for word in ("block", "on", "Enforce"):
+        ok(f"MAIL_AUTH={word} (Block) → log counts as weakening", WS.weakens({"kind": "settings", "values": {"MAIL_AUTH": "log"}}, {"MAIL_AUTH": word}))
+    ok("MAIL_AUTH unset (Record only) → log is no change", not WS.weakens({"kind": "settings", "values": {"MAIL_AUTH": "log"}}, {}))
+    ok("ZIP_KEEP_FREE_MB=0 means the default 1024: lowering it to 512 counts as loosening",
+       WS.weakens({"kind": "settings", "values": {"ZIP_KEEP_FREE_MB": "512"}}, {"ZIP_KEEP_FREE_MB": "0"}))
+    ok("IMAP_VERIFY_TLS=yes (on) → false counts as turning the check off",
+       WS.weakens({"kind": "settings", "values": {"IMAP_VERIFY_TLS": "false"}}, {"IMAP_VERIFY_TLS": "yes"}))
     for p_ in rd.glob("*.json"):                       # not confirmed: drop it, and put the certificate check back on
         p_.unlink()
     WS.write_env(PIPE / ".env", {"IMAP_VERIFY_TLS": "true", "WORKERS": "6"})

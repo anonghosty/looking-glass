@@ -12,9 +12,12 @@ report is held back. Running it this way first shows whether every genuine repor
 blocked: a footer or a forwarding rule added on the way breaks a valid signature (Shadowserver signs the body in
 "simple" mode). MAIL_AUTH=off switches it off. MAIL_AUTH_DOMAIN (default shadowserver.org) is the signer expected.
 
-Results: pass (a valid signature by the expected domain), other (valid, but signed by another domain only), fail (a
-signature that does not verify: changed on the way, or forged), none (no signature at all), temperror (DNS did not
-answer: not held against the message), permerror (a signature that cannot be checked: no key, unsupported algorithm).
+Results: pass (a valid signature by the expected domain that signs the one From header, and From is that domain or a
+subdomain of it), other (valid, but signed by another domain only, or From unsigned, doubled or of another domain),
+fail (a signature that does not verify: changed on the way, or forged), none (no signature at all), temperror (DNS did
+not answer: not held against the message), permerror (a signature that cannot be checked: no key, unsupported
+algorithm; or a header block that Python's email parser, which the pipeline uses, would read differently from this
+check, such as a line without a colon or a lone carriage return: then nothing is vouched for).
 
 Report: python3 mail_auth.py [days]   (counts per result, and the messages that did not pass)
 """
@@ -41,6 +44,31 @@ def _fields(head: bytes):
         elif line:
             out.append(line)
     return out
+
+
+_FIELD_NAME = re.compile(rb"^[\x21-\x39\x3b-\x7e]+:")    # RFC 5322 2.2: printable US-ASCII except ":", then ":"
+
+
+def _head_problem(head: bytes):
+    """Why this header block is not plainly a list of header fields (None: it is). The check and the pipeline's
+    parser must see the same headers (external review, 2026-11-12: a line without a colon ends the headers for
+    Python's email parser but not for a split at the first blank line, so a signed message with lines added above
+    its headers passed the check while the pipeline read the added lines as the message)."""
+    if re.search(rb"\r(?!\n)", head):
+        return "a carriage return inside a header line"
+    for i, line in enumerate(head.split(b"\r\n")):
+        if line[:1] in (b" ", b"\t"):
+            if i == 0:
+                return "the first header line is a continuation"
+            continue
+        if not _FIELD_NAME.match(line):
+            return f"header line {i + 1} is not a header field"
+    return None
+
+
+def _from_aligned(from_domain: str, signer: str) -> bool:
+    """The From domain and the signing domain belong together (one is the other, or a subdomain of it)."""
+    return bool(from_domain) and (from_domain == signer or from_domain.endswith("." + signer) or signer.endswith("." + from_domain))
 
 
 def _tags(value: str) -> dict:
@@ -174,22 +202,52 @@ class Checker:
         self.last_key = ("", 0)
         try:
             raw = raw.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
-            head, _, body = raw.partition(b"\r\n\r\n")
+            head, sep, body = raw.partition(b"\r\n\r\n")
             fields = _fields(head)
             msg = email.message_from_bytes(raw)
             out["from_domain"] = (email.utils.parseaddr(msg.get("From") or "")[1].rpartition("@")[2]).lower()
+            # one reading of the message: the fields checked here must be exactly the headers the pipeline's parser
+            # sees (same names, same order, nothing it read as a broken header), or nothing is vouched for
+            problem = _head_problem(head) if sep else "no blank line between the headers and the body"
+            if not problem and [k.lower() for k in msg.keys()] != \
+                    [f.split(b":", 1)[0].strip().lower().decode("latin-1") for f in fields]:
+                problem = "the headers read differently by the parser"
+            if not problem and any(type(d).__name__ in ("MissingHeaderBodySeparatorDefect", "FirstHeaderLineIsContinuationDefect",
+                                                        "MisplacedEnvelopeHeaderDefect", "InvalidHeaderDefect")
+                                   for d in msg.defects):
+                problem = "the parser found a broken header"
+            if problem:
+                out.update(result="permerror", reason=f"the message's header block is ambiguous ({problem}): not checked")
+                return out
             sigs = [f for f in fields if f.split(b":", 1)[0].strip().lower() == b"dkim-signature"]
             if not sigs:
                 out.update(result="none", reason="no DKIM signature")
                 return out
-            results = []
+            results = []                     # (result, domain, selector, reason, (alg, bits), From signed)
             for f in sigs:
                 r = self._verify_one(f, fields, body)
-                results.append(r + ((self.last_key if r[0] == "ok" else ("", 0)),))
+                h = _tags(f.split(b":", 1)[1].decode("ascii", "replace")).get("h", "")
+                results.append(r + ((self.last_key if r[0] == "ok" else ("", 0)),
+                                    "from" in [x.strip().lower() for x in h.split(":")]))
             good = [r for r in results if r[0] == "ok"]
             mine = [r for r in good if r[1] == self.expect or r[1].endswith("." + self.expect)]
+            # a pass vouches for who SENT it: exactly one From header, signed (in h=), from the signer's domain
+            # (external review, 2026-11-12; RFC 6376 5.4 requires From to be signed; DMARC-style alignment)
+            froms = msg.get_all("From") or []
+            why_not = None
+            if mine:
+                ok_from = [r for r in mine if r[5] and len(froms) == 1 and _from_aligned(out["from_domain"], r[1])]
+                if not ok_from:
+                    why_not = ("the message has %d From headers" % len(froms) if len(froms) != 1 else
+                               "the From header is not signed" if not any(r[5] for r in mine) else
+                               f"From ({out['from_domain'] or 'none'}) does not match the signer ({mine[0][1]})")
+                mine = ok_from
             if mine:
                 out.update(result="pass", signer=mine[0][1], selector=mine[0][2], alg=mine[0][4][0], bits=mine[0][4][1])
+            elif why_not:
+                r = next(r for r in good if r[1] == self.expect or r[1].endswith("." + self.expect))
+                out.update(result="other", signer=r[1], selector=r[2], alg=r[4][0], bits=r[4][1],
+                           reason=f"a valid signature by {r[1]}, but {why_not}")
             elif good:
                 out.update(result="other", signer=good[0][1], selector=good[0][2], alg=good[0][4][0], bits=good[0][4][1],
                            reason=f"signed by {good[0][1]}, not {self.expect}")

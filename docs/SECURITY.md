@@ -214,7 +214,10 @@ account (`./confirm_request.sh <id>` in the pipeline's folder). The confirmation
 the hardened web service cannot write, and is bound to the request's SHA-256, so a request changed afterwards is
 refused; unconfirmed ones are refused after 7 days. The confirmation screen and the pipeline's log print every field
 of a request with its control characters removed, and a malformed request cannot be confirmed, so a forged request
-cannot redraw the screen to look harmless; what is shown is read once and is exactly what is hashed. So a bug in the web app or a takeover of its account cannot use
+cannot redraw the screen to look harmless; what is shown is read once and is exactly what is hashed. Nothing in the
+web app's request folder is trusted: it and its `done/` are never followed through a symlink, a request must be a
+plain file, results carry a fixed list of fields and are never named after an id a refused file claims (so a forged
+"result" cannot become a confirmation), and each change is judged by what its value means to the pipeline. So a bug in the web app or a takeover of its account cannot use
 this route to switch the pipeline's checks off or reach the mailbox password.
 
 ### Why TOTP, and what about OAuth / single sign-on

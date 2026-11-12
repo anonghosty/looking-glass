@@ -39,6 +39,8 @@ if [ -n "$DBDIR" ] && [ -f "$DBDIR/mail_auth.py" ]; then run "pipeline: sender c
 else run "pipeline: sender check (DKIM)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/tests/test_mail_auth_pipeline.py" ]; then run "pipeline: sender check blocks and releases" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_mail_auth_pipeline.py"
 else run "pipeline: sender check blocks and releases" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
+if [ -n "$DBDIR" ] && [ -f "$DBDIR/tests/test_worker_settings_effective.py" ]; then run "pipeline: Workers rules read values as the pipeline does" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_worker_settings_effective.py"
+else run "pipeline: Workers rules read values as the pipeline does" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/report_api.py" ]; then run "pipeline: reports by Shadowserver API or e-mail" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_report_api.py"
 else run "pipeline: reports by Shadowserver API or e-mail" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/report_types.py" ]; then run "pipeline: new report types noticed" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_report_types.py"

@@ -597,7 +597,11 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
   only → Block, certificate check on, e-mail → API, stricter unzip limits), folders and performance are applied at the
   next run as before.
   This protection relies on the web app not being able to write this folder (the hardened service unit, or the two
-  running as different users).
+  running as different users). The requests folder itself is the web app's, so the pipeline trusts nothing in it: the
+  folder and its `done/` are opened without following symlinks (a symlink there stops the step and is logged), a
+  request must be a plain, small file, results are built from a fixed list of fields and named after the request only
+  when it is genuine, and a change is judged by what the value means to the pipeline (`MAIL_AUTH=block` is Block, a
+  `0` unzip limit is its default), checked against the pipeline's own modules by `tests/test_worker_settings_effective.py`.
 - **New report types are noticed** (`report_types.py`), however they arrive. After each run's sorting, the report types
   present (the folders in `sorting_backup/`) are compared with every type that arrived before (`.mail_state.sqlite`,
   table `report_types`); one arriving for the first time is logged as `NEW REPORT TYPE`, and the platform's Audit portal
@@ -607,7 +611,11 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
   Shadowserver's public key from DNS (your own mail server does not need to support DKIM). For now it **only records**
   (`MAIL_AUTH=log`): every message gets a result (`pass`, `other` = signed by another domain, `fail` = changed or
   forged, `none` = not signed, `temperror` = DNS did not answer, `permerror` = cannot be checked) in
-  `.mail_state.sqlite`, and anything but `pass` is a warning in the run log. No report is held back yet: a footer or a
+  `.mail_state.sqlite`, and anything but `pass` is a warning in the run log. A **pass** needs a valid signature by
+  `MAIL_AUTH_DOMAIN` that signs the message's single From header, with From in that domain (or a subdomain); a valid
+  signature without that is `other`. A message whose header block Python's e-mail parser (which the pipeline uses to
+  read attachments) would read differently from the check, for example a line without a colon above the headers, is
+  `permerror`: the check and the pipeline must see the same message, or nothing is vouched for. No report is held back yet: a footer or a
   forwarding rule added on the way also breaks a genuine signature, so the record shows first whether every genuine
   report passes. See the results: `python3 mail_auth.py 7` (the last 7 days).
 - **Blocking** (`MAIL_AUTH=enforce`, asked by the installer, or Settings → Workers in the platform): a report that is

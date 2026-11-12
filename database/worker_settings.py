@@ -33,6 +33,7 @@ import json
 import os
 import re
 import secrets
+import stat
 import tempfile
 from pathlib import Path
 
@@ -147,16 +148,43 @@ def problems(req, env):
     return [f"unknown request {clean(kind, 40)!r}"]
 
 
-def _int(v):
+# What a value MEANS to the pipeline: the same rules its own modules apply (mail_auth.mode, mail_sources._truthy,
+# report_api.source, zip_limits.Limits.from_env, the MAIL_AUTH_DOMAIN default), so "block" counts as Block and a 0
+# unzip limit as its default (external review, 2026-11-12: raw strings let MAIL_AUTH=block → log pass unconfirmed).
+# tests/test_worker_settings_effective.py checks these against those modules.
+def eff_auth(v):
+    v = str(v if v is not None else "log").strip().lower() or "log"
+    return "off" if v in ("off", "0", "false", "no") else "enforce" if v in ("enforce", "block", "on") else "log"
+
+
+def eff_tls(v):
+    return str(v if v is not None else "true").strip().lower() in ("1", "true", "yes", "on")
+
+
+def eff_source(v):
+    return "api" if str(v or "email").strip().lower() == "api" else "email"
+
+
+def eff_domain(v):
+    return str(v or "shadowserver.org").strip().lower()
+
+
+ZIP_DEFAULTS = {"ZIP_MAX_UNPACKED_MB": (2048, int), "ZIP_MAX_RATIO": (200, float), "ZIP_MAX_FILES": (100, int),
+                "ZIP_KEEP_FREE_MB": (1024, int)}
+
+
+def eff_zip(name, v):
+    default, kind = ZIP_DEFAULTS[name]
     try:
-        return int(str(v).strip())
-    except (TypeError, ValueError):
-        return None
+        x = kind(str(v or default).strip())
+        return x if x > 0 else kind(default)
+    except ValueError:
+        return kind(default)
 
 
 def weakens(req, env):
     """Why this request would make the pipeline less strict (empty: it may be applied without confirmation).
-    env: the pipeline's current .env values (a value already in force is no change)."""
+    env: the pipeline's current .env values. Compared by what each value MEANS to the pipeline, not as text."""
     kind = req.get("kind")
     if kind == "apikey":
         return ["a new Shadowserver API key (the pipeline would fetch whatever that account receives)"]
@@ -164,22 +192,24 @@ def weakens(req, env):
         return ["releasing a report the sender check held back"]
     if kind != "settings":
         return []
-    out, vals = [], req.get("values") or {}
-    cur = lambda k: str(env.get(k, SPEC[k][4]) if k in SPEC else env.get(k, "")).strip().lower()
-    new = lambda k: clean(vals[k], 80).strip().lower()
-    if "MAIL_AUTH" in vals and MAIL_AUTH_RANK.get(new("MAIL_AUTH"), -1) < MAIL_AUTH_RANK.get(cur("MAIL_AUTH"), 1):
-        out.append(f"the sender check lowered: {cur('MAIL_AUTH')} → {new('MAIL_AUTH')}")
-    if "MAIL_AUTH_DOMAIN" in vals and new("MAIL_AUTH_DOMAIN") != cur("MAIL_AUTH_DOMAIN"):
-        out.append(f"a different expected signer: {cur('MAIL_AUTH_DOMAIN')} → {new('MAIL_AUTH_DOMAIN')}")
-    if "IMAP_VERIFY_TLS" in vals and new("IMAP_VERIFY_TLS") == "false" and cur("IMAP_VERIFY_TLS") != "false":
+    out = []
+    vals = req.get("values") if isinstance(req.get("values"), dict) else {}
+    new = lambda k: clean(vals[k], 80)
+    if "MAIL_AUTH" in vals:
+        a, b = eff_auth(env.get("MAIL_AUTH")), eff_auth(new("MAIL_AUTH"))
+        if MAIL_AUTH_RANK[b] < MAIL_AUTH_RANK[a]:
+            out.append(f"the sender check lowered: {a} → {b}")
+    if "MAIL_AUTH_DOMAIN" in vals and eff_domain(new("MAIL_AUTH_DOMAIN")) != eff_domain(env.get("MAIL_AUTH_DOMAIN")):
+        out.append(f"a different expected signer: {eff_domain(env.get('MAIL_AUTH_DOMAIN'))} → {eff_domain(new('MAIL_AUTH_DOMAIN'))}")
+    if "IMAP_VERIFY_TLS" in vals and eff_tls(env.get("IMAP_VERIFY_TLS")) and not eff_tls(new("IMAP_VERIFY_TLS")):
         out.append("the mail server's certificate check turned off")
-    if "REPORT_SOURCE" in vals and new("REPORT_SOURCE") == "email" and cur("REPORT_SOURCE") == "api":
+    if "REPORT_SOURCE" in vals and eff_source(env.get("REPORT_SOURCE")) == "api" and eff_source(new("REPORT_SOURCE")) == "email":
         out.append("from Shadowserver's signed API back to the mailbox (where a forged e-mail can arrive)")
     for k in ZIP_HIGHER_IS_LOOSER + ZIP_LOWER_IS_LOOSER:
         if k in vals:
-            a, b = _int(cur(k)), _int(new(k))
-            if a is not None and b is not None and (b > a if k in ZIP_HIGHER_IS_LOOSER else b < a):
-                out.append(f"an unzip limit loosened: {k} {a} → {b}")
+            a, b = eff_zip(k, env.get(k)), eff_zip(k, new(k))
+            if b > a if k in ZIP_HIGHER_IS_LOOSER else b < a:
+                out.append(f"an unzip limit loosened: {k} {a:g} → {b:g}")
     return out
 
 
@@ -188,12 +218,18 @@ def request_sha(path) -> str:
 
 
 def confirmation(base_dir, rid):
-    """The confirmation written on the server for this request, or None."""
-    try:
-        c = json.loads((Path(base_dir) / CONFIRM_DIR / f"{rid}.json").read_text(encoding="utf-8"))
-        return c if isinstance(c, dict) else None
-    except (OSError, ValueError):
+    """The confirmation written on the server for this request, or None (never read through a symlink)."""
+    if not REQ_ID_RX.match(str(rid or "")):
         return None
+    try:
+        cfd = open_dir(str(Path(base_dir) / CONFIRM_DIR))
+    except OSError:
+        return None
+    try:
+        c = read_request(cfd, f"{rid}.json")[1]
+    finally:
+        os.close(cfd)
+    return c or None
 
 
 def confirm_command(rid):
@@ -270,26 +306,78 @@ def make_request(platform_data_dir, kind: str, payload: dict, by: str) -> str:
     return rid
 
 
-def public(req: dict) -> dict:
-    """A request as it may be shown or kept: never the key or secret."""
-    out = {k: v for k, v in req.items() if k not in ("key", "secret")}
-    if req.get("kind") == "apikey":
+KINDS = ("settings", "apikey", "release")
+MAX_REQUEST_BYTES = 64 * 1024
+_DIR_FLAGS = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+
+
+def public(req: dict, provider="imap") -> dict:
+    """A request as it may be shown or kept, built from a FIXED list of fields (external review, 2026-11-12: copying
+    every key let a file that was not a request, a key file say, end up in a result the web app reads). Never the
+    API key or secret; settings only as validated values; everything else cleaned of control codes."""
+    kind = req.get("kind") if req.get("kind") in KINDS else "?"
+    out = {"id": clean(req.get("id"), 40), "kind": kind, "by": clean(req.get("by"), 120), "at": clean(req.get("at"), 40)}
+    if kind == "settings":
+        vals = req.get("values") if isinstance(req.get("values"), dict) else {}
+        out["values"] = validate(vals, provider)[0]
+    elif kind == "apikey":
         out["values"] = "Shadowserver API key and secret (not shown)"
+    elif kind == "release" and QID_RX.match(str(req.get("qid") or "")):
+        out["qid"] = str(req["qid"])
     return out
+
+
+def open_dir(path, dir_fd=None, create=False):
+    """A directory, opened without following a symlink at its last component (a symlink is refused: OSError)."""
+    if create:
+        try:
+            os.mkdir(path, 0o700, dir_fd=dir_fd)
+        except FileExistsError:
+            pass
+    return os.open(path, _DIR_FLAGS, dir_fd=dir_fd)
+
+
+def read_request(dir_fd, name):
+    """(bytes, request dict or {}) of one request file in an open directory: never through a symlink, only a regular
+    file, at most MAX_REQUEST_BYTES. Anything else reads as empty (and is refused)."""
+    try:
+        fd = os.open(name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0), dir_fd=dir_fd)
+    except OSError:
+        return b"", {}
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_size > MAX_REQUEST_BYTES:
+            return b"", {}
+        raw = os.read(fd, MAX_REQUEST_BYTES + 1)
+    finally:
+        os.close(fd)
+    try:
+        req = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return raw, {}
+    return raw, req if isinstance(req, dict) else {}
+
+
+def request_names(dir_fd):
+    return sorted(n for n in os.listdir(dir_fd) if n.endswith(".json") and not n.startswith("."))
 
 
 def pending(platform_data_dir, env=None, base_dir=None):
     """The requests not yet handled. With env (the pipeline's .env): each says whether it waits for confirmation on
     the server (weakens, confirm: the command), and with base_dir whether that confirmation was given."""
-    d = req_dir(platform_data_dir)
     out = []
-    for p in sorted(d.glob("*.json")) if d.exists() else []:
-        try:
-            req = json.loads(p.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        if isinstance(req, dict):
-            row = public(req)
+    try:
+        dfd = open_dir(str(req_dir(platform_data_dir)))
+    except OSError:
+        return out
+    try:
+        reqs = [read_request(dfd, n)[1] for n in request_names(dfd)]
+    finally:
+        os.close(dfd)
+    provider = ((env or {}).get("MAIL_PROVIDER") or "imap").lower()
+    for req in reqs:
+        if req:
+            row = public(req, provider)
             if env is not None:
                 w = weakens(req, env)
                 if w:
@@ -302,7 +390,10 @@ def pending(platform_data_dir, env=None, base_dir=None):
 def results(platform_data_dir, limit=20):
     d = req_dir(platform_data_dir) / "done"
     out = []
-    for p in sorted(d.glob("*.json"), key=lambda q: q.stat().st_mtime, reverse=True)[:limit] if d.exists() else []:
+    if d.is_symlink():
+        return out
+    files = [p for p in d.glob("*.json") if not p.is_symlink()] if d.exists() else []
+    for p in sorted(files, key=lambda q: q.stat().st_mtime, reverse=True)[:limit]:
         try:
             r = json.loads(p.read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -327,26 +418,56 @@ def apply_requests(platform_data_dir, env_file, base_dir, log):
     A request that fails the checks is refused (its result says why) and changes nothing."""
     if not platform_data_dir:
         return 0
-    d = req_dir(platform_data_dir)
-    files = sorted(d.glob("*.json")) if d.exists() else []
-    if not files:
+    # The requests folder is in the WEB APP's data/, which a fault in or break-in to the web app can rewrite (external
+    # review, 2026-11-12: done/ replaced by a symlink to confirmed_requests/ turned a refused decoy's "result" into a
+    # forged confirmation). So: the folder and done/ are opened once, never through a symlink, and every file is read
+    # and written through those handles; a request file must be a regular file; results are new files built from a
+    # fixed list of fields, named after the request only when it is genuine.
+    try:
+        dfd = open_dir(str(req_dir(platform_data_dir)))
+    except FileNotFoundError:
         return 0
-    done = d / "done"
-    done.mkdir(mode=0o700, exist_ok=True)
+    except OSError as exc:
+        log.error("Settings → Workers requests NOT read: %s is not a plain folder (%s)", req_dir(platform_data_dir), exc)
+        return 0
+    try:
+        names = request_names(dfd)
+        if not names:
+            return 0
+        try:
+            done_fd = open_dir("done", dir_fd=dfd, create=True)
+        except OSError as exc:
+            log.error("Settings → Workers requests NOT applied: their done/ folder is not a plain folder (%s)", exc)
+            return 0
+        try:
+            return _apply_all(dfd, done_fd, names, env_file, base_dir, log)
+        finally:
+            os.close(done_fd)
+    finally:
+        os.close(dfd)
+
+
+def _write_result(done_fd, name, result):
+    tmp = f".{name}.{secrets.token_hex(4)}.tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600, dir_fd=done_fd)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        json.dump(result, fh)
+    os.replace(tmp, name, src_dir_fd=done_fd, dst_dir_fd=done_fd)
+
+
+def _apply_all(dfd, done_fd, names, env_file, base_dir, log):
     applied = 0
-    for p in files:
-        try:
-            raw = p.read_bytes()
-            req = json.loads(raw.decode("utf-8"))
-        except (OSError, ValueError):
-            raw, req = b"", {}
-        req = req if isinstance(req, dict) else {}
+    for name in names:
+        raw, req = read_request(dfd, name)
         rid = str(req.get("id") or "")
+        genuine = bool(REQ_ID_RX.match(rid)) and name == f"{rid}.json"
         status, why, changed, confirmed_by = "refused", "", [], ""
+        provider = "imap"
         try:
-            if not REQ_ID_RX.match(rid) or p.name != f"{rid}.json":
+            if not genuine:
                 raise ValueError("not a request made by the platform")
             env = read_env(env_file)
+            provider = (env.get("MAIL_PROVIDER") or "imap").lower()
             kind = req.get("kind")
             bad = problems(req, env)         # malformed requests are refused at once, before any wait for confirmation
             if bad:
@@ -396,26 +517,25 @@ def apply_requests(platform_data_dir, env_file, base_dir, log):
             applied += 1
         except Exception as exc:  # noqa: BLE001  (a bad request is refused, the run goes on)
             why = clean(exc, 300)
-        result = dict(public(req), id=rid or p.stem, status=status, reason=why, changed=changed,
-                      applied_at=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"))
+        now = dt.datetime.now(dt.timezone.utc)
+        result = dict(public(req, provider), status=status, reason=why, changed=changed,
+                      applied_at=now.isoformat(timespec="seconds"))
+        if not genuine:                      # never named after an id it merely claims
+            result["id"] = f"refused-{now:%Y%m%dT%H%M%SZ}-{secrets.token_hex(6)}"
         if confirmed_by:
             result["confirmed_on_server"] = confirmed_by
-        if REQ_ID_RX.match(rid):
+        if genuine:
             try:
                 (Path(base_dir) / CONFIRM_DIR / f"{rid}.json").unlink()     # used once
             except OSError:
                 pass
-        out = done / f"{(rid or p.stem)[:40]}.json"
-        tmp = done / f".{out.name}.tmp"
-        tmp.write_text(json.dumps(result), encoding="utf-8")
-        os.chmod(tmp, 0o600)
-        os.replace(tmp, out)
+        _write_result(done_fd, f"{result['id']}.json", result)
         try:
-            p.unlink()                       # the request (and any secret in it) is gone once handled
+            os.unlink(name, dir_fd=dfd)      # the request (and any secret in it) is gone once handled
         except OSError:
             pass
         (log.warning if status != "applied" else log.info)(
-            "Settings → Workers request %s (%s, by %s%s): %s%s", clean(rid or p.name, 80), clean(req.get("kind", "?"), 20),
+            "Settings → Workers request %s (%s, by %s%s): %s%s", clean(rid or name, 80), clean(req.get("kind", "?"), 20),
             clean(req.get("by", "?"), 120),
             f", confirmed on the server by {confirmed_by}" if confirmed_by else "",
             status, f": {why}" if why else (f": {'; '.join(changed)}" if changed else ": nothing changed"))
@@ -450,15 +570,22 @@ def cli(argv=None):
     if not pdata:
         print("The platform's data folder was not found (PLATFORM_DIR in .env).")
         return 2
-    d = req_dir(pdata)
     waiting, malformed = [], []
-    for p in sorted(d.glob("*.json")) if d.exists() else []:
-        try:
-            raw = p.read_bytes()             # read ONCE: what is shown is exactly what is hashed and confirmed
-            req = json.loads(raw.decode("utf-8"))
-        except (OSError, ValueError):
-            continue
-        if isinstance(req, dict) and REQ_ID_RX.match(str(req.get("id") or "")) and p.name == f"{req['id']}.json":
+    try:
+        dfd = open_dir(str(req_dir(pdata)))
+    except FileNotFoundError:
+        dfd = None
+    except OSError:
+        print(f"{req_dir(pdata)} is not a plain folder (a symlink?): nothing is shown or confirmed.")
+        return 2
+    files = []
+    if dfd is not None:
+        try:                                 # read ONCE, never through a symlink: what is shown is what is hashed
+            files = [(n,) + read_request(dfd, n) for n in request_names(dfd)]
+        finally:
+            os.close(dfd)
+    for name, raw, req in files:
+        if req and REQ_ID_RX.match(str(req.get("id") or "")) and name == f"{req['id']}.json":
             bad = problems(req, env)
             if bad:                          # never shown as a change, never confirmable: the next run refuses it
                 malformed.append((req["id"], bad))

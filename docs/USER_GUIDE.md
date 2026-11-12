@@ -664,7 +664,9 @@ holds). Making the pipeline stricter (including stricter unzip limits), folders 
 - **Sender check (DKIM):** applies to reports that come by e-mail. *Check the sender of every report* verifies each report e-mail's signature with the sender's
   public key from DNS and records the result (Audit portal → Sender check). *Block reports that do not pass* also holds
   back a report that is not validly signed by the expected domain (*Expected signer*, `shadowserver.org`): it is kept
-  apart and not loaded until an administrator releases it. Start with blocking off: a footer or forwarding rule added
+  apart and not loaded until an administrator releases it. A report passes only when the signature covers its sender
+  (the From line) and the sender is in the signer's domain, and when its headers can be read only one way; a message
+  with lines added above its headers is held back, not trusted. Start with blocking off: a footer or forwarding rule added
   on the way breaks a genuine signature too, so check first that every genuine report passes.
 - **E-mail settings** (in the same group): the mailbox folder (or Gmail label), messages per fetch, the mail server's
   certificate check, the timeout.
