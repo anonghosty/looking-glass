@@ -18,6 +18,18 @@ from datetime import timedelta
 from flask import Response, jsonify, render_template, request
 
 from security import public_error
+import timezones
+
+
+def item_count(e, n):
+    """An infection's or issue's count on a past day of the 7-day baseline: None when unknown (no summary, no reports
+    that day, or a summary from before 2026-11-12 that kept only the day's top 80, where a missing item may simply have
+    ranked lower); else the count, 0 meaning it was absent that day."""
+    if not e or e.get("none"):
+        return None
+    if n in e["items"]:
+        return e["items"][n]
+    return 0 if e.get("all") or len(e["items"]) < 80 else None
 
 # icombo / rcombo / scombo: one row of the "Top findings" lists (devices or hosts with exactly that combination)
 # code: a researcher's combination code (combos.py): the portal shows exactly the devices / hosts that carry it, counted
@@ -90,10 +102,26 @@ def register(app, ctx):
             return r
         return t, sec, net
 
+    def tz_of(day):
+        """The display time zone on that day (Settings > Country): the day and the hours stay UTC, as Shadowserver's."""
+        return ctx["tz"](day.start + timedelta(hours=12)) if ctx.get("tz") else None
+
+    def local_hours(hour_utc, day):
+        """'15:00 to 16:00 Nairobi time' for a UTC hour slot of the day; '' when the zone is UTC that day."""
+        z = tz_of(day)
+        return timezones.hour_range(hour_utc, z["zone"], day.start) if z else ""
+
     def top(counter, hosts=None, n=10, total=None, label=None):
+        """The first n, ranked by DEVICES (distinct addresses) when they are known, records breaking ties; by records
+        otherwise. One chatty device calling a sinkhole thousands of times must not put its network, region or report at
+        the top (review, 2026-11-12). n=None: all of them."""
         tot = total or sum(counter.values()) or 1
+        if hosts is not None:
+            ranked = sorted(counter.items(), key=lambda kv: (-len(hosts.get(kv[0], ())), -kv[1], str(kv[0])))[:n]
+        else:
+            ranked = counter.most_common(n)
         return [{"value": k, "label": label(k) if label else k, "count": c, "share": c / tot,
-                 **({"hosts": len(hosts[k])} if hosts is not None else {})} for k, c in counter.most_common(n) if k not in (None, "")]
+                 **({"hosts": len(hosts.get(k, ()))} if hosts is not None else {})} for k, c in ranked if k not in (None, "")]
 
     def day_of(store):
         days = sorted(store.days)
@@ -195,10 +223,9 @@ def register(app, ctx):
             e = kb.get(i.lower()) or {}
             fam = (names.get(i.lower()) or {}).get("family", "")
             return {"title": e.get("title") or (fam.replace("actor:", "") if fam else ""), "family": fam, "type": e.get("type", "")}
-        infections = []
-        for row in top(inf, inf_h, 40, len(ev)):
-            infections.append({**row, **friendly(row["value"])})
-        infections = sorted(infections, key=lambda r: (-r["hosts"], -r["count"]))[:15]     # ranked by devices, as shown
+        # ranked by devices over ALL infections (it used to pick the 40 with the most records first, which could leave out
+        # an infection on many devices that each called rarely)
+        infections = [{**row, **friendly(row["value"])} for row in top(inf, inf_h, 15, len(ev))]
         n_ev, n_hosts = len(ev), len(hosts)
         peak = max(range(24), key=lambda x: hours[x]) if n_ev else None
         findings = []
@@ -218,14 +245,16 @@ def register(app, ctx):
             if multi_inf:
                 findings.append(f"{multi_inf:,} devices carry more than one infection: they are the priority for clean-up.")
             if peak is not None:
-                findings.append(f"Activity peaked between {peak:02d}:00 and {(peak + 1) % 24:02d}:00 UTC.")
+                lp = local_hours(peak, day)
+                findings.append(f"Activity peaked between {peak:02d}:00 and {(peak + 1) % 24:02d}:00 UTC" + (f" ({lp})." if lp else "."))
         facets = {
             "attack": sorted({e["attack_class"] for e in all_ev}),
-            "infection": [k for k, _ in Counter((e["infection"] or "unknown") for e in all_ev).most_common(80)],
+            # every value of the day in the filter menus (they used to stop at 80 infections and 40 networks)
+            "infection": [k for k, _ in Counter((e["infection"] or "unknown") for e in all_ev).most_common()],
             "report": [{"value": k, "label": labels.get(k, k)} for k, _ in Counter(e["source"] for e in all_ev).most_common()],
             "region": [k for k, _ in Counter(title(e["src_region"]) for e in all_ev if e["src_region"]).most_common()],
             "sector": [k for k, _ in Counter(sector_of(e["src_asn"]) for e in all_ev).most_common()],
-            "network": [k for k, _ in Counter(net_of(e["src_asn"], d_mask) for e in all_ev if e["src_asn"]).most_common(40)],
+            "network": [k for k, _ in Counter(net_of(e["src_asn"], d_mask) for e in all_ev if e["src_asn"]).most_common()],
             "severity": sorted({e["severity"] or "" for e in all_ev} - {""}, key=lambda s: SEV_ORDER.get(s, 9)),
         }
         return {
@@ -233,7 +262,7 @@ def register(app, ctx):
             "kpis": {"events": n_ev, "devices": n_hosts, "infections": len(inf), "reports": len(rep), "regions": len([r for r in reg if r != "Unknown region"]),
                      "networks": len(net), "multi_infected": multi_inf, "cross_report": cross,
                      "critical": sev.get("critical", 0), "share_of_day": n_ev / max(1, len(all_ev)), "day_events": len(all_ev)},
-            "hours": hours, "peak_hour": peak, "findings": findings,
+            "hours": hours, "peak_hour": peak, "findings": findings, "tz": tz_of(day),
             "item_counts": {k: len(v) for k, v in inf_h.items()},       # devices per infection (all of them: the baseline)
             "infections": infections, "attack": top(att, None, 10, n_ev),
             "reports": top(rep, rep_h, 12, n_ev, label=lambda k: labels.get(k, k)),
@@ -372,18 +401,18 @@ def register(app, ctx):
             if multi:
                 findings.append(f"{multi:,} hosts carry more than one issue: the largest attack surface.")
             if svc:
-                s0, c0 = svc.most_common(1)[0]
+                s0 = top(svc, svc_h, 1, n_ev)[0]["value"]          # by hosts, the figure the sentence gives
                 findings.append(f"Most visible: {s0} ({len(svc_h[s0]):,} hosts).")
             if reg:
                 r0, c0 = reg.most_common(1)[0]
                 findings.append(f"{r0} accounts for {c0 / n_ev:.0%} of the records.")
         facets = {
             "family": sorted({e["family"] for e in all_ev}),
-            "service": [k for k, _ in Counter(e["service"] for e in all_ev).most_common(80)],
-            "issue": [k for k, _ in Counter(i for e in all_ev for i in e["issues"]).most_common(80)],
+            "service": [k for k, _ in Counter(e["service"] for e in all_ev).most_common()],
+            "issue": [k for k, _ in Counter(i for e in all_ev for i in e["issues"]).most_common()],
             "region": [k for k, _ in Counter(title(e["region"]) for e in all_ev if e["region"]).most_common()],
             "sector": [k for k, _ in Counter(sector_of(e["asn"]) for e in all_ev).most_common()],
-            "network": [k for k, _ in Counter(net_of(e["asn"], d_mask) for e in all_ev if e["asn"]).most_common(40)],
+            "network": [k for k, _ in Counter(net_of(e["asn"], d_mask) for e in all_ev if e["asn"]).most_common()],
             "severity": sorted({e["severity"] or "" for e in all_ev} - {""}, key=lambda s: SEV_ORDER.get(s, 9)),
         }
         return {
@@ -392,7 +421,7 @@ def register(app, ctx):
                      "kev_hosts": kev_hosts, "kev_cves": len(kev_list), "critical_cves": len(crit), "cves": len(cve_ids),
                      "issues": len(iss), "services": len(svc), "regions": len([r for r in reg if r != "Unknown region"]),
                      "critical": sev.get("critical", 0), "share_of_day": n_ev / max(1, len(all_ev)), "day_records": len(all_ev)},
-            "hours": hours, "peak_hour": peak, "findings": findings, "issues": issues, "infections_on": infections_on,
+            "hours": hours, "peak_hour": peak, "findings": findings, "tz": tz_of(day), "issues": issues, "infections_on": infections_on,
             "item_counts": {k: len(v) for k, v in iss_h.items()},       # hosts per issue (all of them: the baseline)
             "services": top(svc, svc_h, 12, n_ev), "families": top(fam, None, 8, n_ev),
             "regions": top(reg, reg_h, 30, n_ev), "networks": top(net, net_h, 12, n_ev), "sectors": top(sec, sec_h, 15, n_ev),
@@ -492,8 +521,12 @@ def register(app, ctx):
         return s
 
     def summarise(platform, d):
-        items = sorted(d.get("item_counts", {}).items(), key=lambda kv: -kv[1])[:80]
-        return {"kpis": {k: d["kpis"].get(k, 0) for k in KPI_KEYS[platform]}, "items": dict(items)}
+        # EVERY infection / issue of the day (a few hundred numbers at most). Keeping only the top 80 made an item ranked
+        # lower all week read as 0 on those days, so it could be graded "New this week" (red at 20 or more) the day it moved
+        # up (review, 2026-11-12). "all" marks a complete summary.
+        return {"kpis": {k: d["kpis"].get(k, 0) for k in KPI_KEYS[platform]}, "items": dict(d.get("item_counts", {})), "all": True}
+
+    item_of = item_count
 
     # ------------------------------------------------------------------ compact past days
     # A selection's baseline needs the 7 previous days under the same filters. Loading a past day from MongoDB reads its
@@ -639,7 +672,7 @@ def register(app, ctx):
         entries = [bl["mem"].get(f"{platform}|{s.date()}|{fk}") for s in starts]
         names = [r["value"] for r in (d.get("infections") if platform == "comms" else d.get("issues")) or []]
         kpis = {k: [None if not e or e.get("none") else e["kpis"].get(k, 0) for e in entries] for k in KPI_KEYS[platform]}
-        items = {n: [None if not e or e.get("none") else e["items"].get(n, 0) for e in entries] for n in names}
+        items = {n: [item_of(e, n) for e in entries] for n in names}
         job = bl["jobs"].get(jk)
         unit = "devices" if platform == "comms" else "hosts"
         rows = {r["value"]: r for r in ((d.get("infections") if platform == "comms" else d.get("issues")) or [])}

@@ -7,6 +7,9 @@ https://www.cisecurity.org/insights/white-papers/cis-controls-v8-1-mapping-to-ni
 2026-11-12 for exactly the NIST controls the checks use. Each safeguard keeps CIS's relationship (Equivalent, Subset,
 Superset) and the NIST control it came through, so an auditor sees why it is listed. A NIST control CIS does not map
 (AU-9, AC-2(7)) is said so, never filled in by us. CIS says its mappings lean "towards under-mapping".
+Next to CIS's rows, and kept apart from them, Looking Glass's own reading of each (check, safeguard) pair: backed,
+related or not backed (BACKED, NOT_BACKED, lg_reading). This is evidence for an organisation's own assessment of the
+CIS Controls, not a certification: The CIS Controls are a map here, to guide security and help the auditor: voluntary best practice, with no CIS certificate for meeting them, and they apply to the whole environment.
 
 CIS Controls content (the safeguard numbers and titles below, unchanged): CIS Critical Security Controls® v8.1
 © Center for Internet Security, Inc., used under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0
@@ -83,12 +86,59 @@ NIST_TO_CIS = {
 }
 RELATION = {"Equivalent": "same scope", "Subset": "the CIS safeguard covers part of the NIST control",
             "Superset": "the CIS safeguard covers more than the NIST control"}
+
+# ---------------------------------------------------------------- Looking Glass's OWN reading (not CIS's)
+# Everything above is CIS's, shown exactly as CIS publishes it (its licence allows no changes). What follows is Looking
+# Glass's judgment, kept apart and always shown as ours ("Looking Glass: ..."), never mixed into CIS's text (review,
+# 2026-11-12). The one place the portal, the PDF report and the tests read it from.
+#
+#   backed      the check produces evidence for the safeguard AS CIS WORDS IT (for Looking Glass itself). Opt-in, and
+#               conservative: a pair is backed only when it is listed here.
+#   not backed  the mapping reaches it, but the check does not look at its subject: NOT_BACKED says why.
+#   related     everything else: CIS's mapping relates it to the check's NIST controls; Looking Glass claims no more.
+# When in doubt: related. One overclaim would make an auditor distrust the rest. The CIS Controls are a map
+# here, voluntary best practice with no CIS certificate: these checks are evidence for the organisation's own assessment.
+BACKED = {
+    "LG-01": {"6.3", "6.5"},          # sign-in to Looking Glass (an externally exposed application) needs MFA, admins too
+    "LG-02": {"5.3"},                 # dormant Looking Glass accounts listed and disabled
+    "LG-04": {"6.1"},                 # every account is granted through an administrator's approval
+    "LG-08": {"8.2"},                 # the audit log is collected
+    "LG-09": {"8.5"},                 # audit records hold who, what, when, where
+    "LG-11": {"8.10"},                # audit records kept for the retention period
+    "LG-12": {"8.4"},                 # the server's clock synchronisation is reported
+    "LG-13": {"8.11"},                # audit log reviews are recorded
+    "LG-14": {"3.10"},                # HTTPS for sign-in and sessions
+    "LG-15": {"8.2"},                 # exports are logged
+}
+NOT_BACKED = {
+    "3.11": "it protects the audit log's integrity but encrypts nothing: MongoDB and the data folder are plain files "
+            "(use disk encryption)",
+    "4.3": "it ends Looking Glass's own sessions; locking enterprise devices is outside Looking Glass",
+    "4.10": "it limits sign-in attempts to Looking Glass; lockout on portable end-user devices is outside Looking Glass",
+    "6.4": "it covers sign-in to Looking Glass; MFA for remote network access (VPN and the like) is outside Looking Glass",
+    "8.6": "DNS query logs are outside Looking Glass",
+    "8.7": "URL request logs (proxies, web gateways) are outside Looking Glass",
+    "8.8": "command-line audit logs of the servers are outside Looking Glass",
+    "8.12": "service provider logs are outside Looking Glass",
+    "12.3": "managing network infrastructure is outside Looking Glass",
+}
+CERTIFICATION_NOTE = ("The CIS Controls are used here as a map, to guide Looking Glass's security and make the auditor's work easier. They are voluntary best practice, not a law or a requirement, and CIS issues no certificate for meeting them: organisations measure themselves with CIS's free Self Assessment Tool (CSAT) or with an auditor, and those that need a formal certificate usually go for ISO 27001 or SOC 2, with the CIS Controls as a guide.")
+
+
+def lg_reading(check, safeguard):
+    """Looking Glass's own reading of one (check, safeguard) pair: {"status": backed | not backed | related, "note"}."""
+    if safeguard in BACKED.get(check, ()):
+        return {"status": "backed", "note": f"backed by {check}, which produces evidence for it"}
+    if safeguard in NOT_BACKED:
+        return {"status": "not backed", "note": f"not backed by {check}: {NOT_BACKED[safeguard]}"}
+    return {"status": "related", "note": f"related to {check} by CIS's mapping only"}
 _ORDER = lambda s: tuple(int(x) for x in s.split("."))
 
 
-def cis_for(nist_ids):
+def cis_for(nist_ids, check=None):
     """(safeguards, unmapped NIST ids) for a check's NIST controls, by CIS's own mapping. A safeguard reached through
-    several NIST controls is listed once, with each of them and its relationship to each."""
+    several NIST controls is listed once, with each of them and its relationship to each. "id", "title" and "via" are
+    CIS's, unchanged; "lg" is Looking Glass's own reading (lg_reading), kept apart."""
     out, unmapped = {}, []
     for n in nist_ids:
         pairs = NIST_TO_CIS.get(n)
@@ -96,6 +146,6 @@ def cis_for(nist_ids):
             unmapped.append(n)
             continue
         for sg, rel in pairs:
-            e = out.setdefault(sg, {"id": sg, "title": CIS_TITLES[sg], "via": []})
+            e = out.setdefault(sg, {"id": sg, "title": CIS_TITLES[sg], "via": [], "lg": lg_reading(check, sg)})
             e["via"].append({"nist": n, "relation": rel})
     return [out[k] for k in sorted(out, key=_ORDER)], unmapped

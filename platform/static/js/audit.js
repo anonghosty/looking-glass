@@ -102,10 +102,13 @@
     const d = await getJSON(`/api/audit/overview?${per()}`);
     const body = $("ovBody"); body.replaceChildren();
     const k = d.kpis, nistN = new Set(d.checks.flatMap((c) => (c.nist || []).map((x) => x.id))).size;
-    const cisN = new Set(d.checks.flatMap((c) => (c.cis || []).map((x) => x.id))).size;
+    // the count says what it counts: safeguards BACKED by a check (Looking Glass's own, conservative reading in
+    // control_map.BACKED), and how many more CIS's mapping only relates. Never "evidence for N CIS safeguards".
+    const cisAll = new Set(d.checks.flatMap((c) => (c.cis || []).map((x) => x.id)));
+    const cisBacked = new Set(d.checks.flatMap((c) => (c.cis || []).filter((x) => x.lg && x.lg.status === "backed").map((x) => x.id)));
     const top = el("div", "au-kpis");
     // the checks carry evidence, not a verdict: the auditor decides
-    top.append(kpi("Control checks", fmt(d.checks.length), `evidence for ${nistN} NIST controls · ${cisN} CIS safeguards`),
+    top.append(kpi("Control checks", fmt(d.checks.length), `evidence for ${nistN} NIST controls · ${cisBacked.size} CIS safeguards backed by a check (${cisAll.size - cisBacked.size} more related by CIS's mapping)`),
       kpi("Audit log", d.integrity.ok ? "Unbroken" : "Broken", `${fmt(d.integrity.entries)} entries kept`, d.integrity.ok ? "good" : "bad"),
       kpi("Sign-ins", fmt(k.signins), `${fmt(k.people)} people`), kpi("Failed sign-ins", fmt(k.failed), `${k.failure_rate} % of attempts`, k.failed ? "warn" : ""),
       kpi("Lockouts", fmt(k.lockouts), null, k.lockouts ? "warn" : ""), kpi("Privileged changes", fmt(k.privileged), "roles, accounts, settings"),
@@ -114,7 +117,7 @@
       + (d.started ? ` · system started ${d.started} (running ${fmt(d.running_days)} day${d.running_days === 1 ? "" : "s"})` : "")), top);
 
     // the control checks, by area
-    const cc = card("Control checks", `Automated checks of Looking Glass's own controls (LG-01…), each mapped to the ${d.nist_release || "NIST SP 800-53 Rev. 5"} controls it supports and, through them, to the ${d.cis_release || "CIS Controls v8.1"} safeguards of CIS's own official mapping (each with the NIST control it comes through and CIS's relationship: equivalent, subset or superset), with its evidence. They give no pass or fail: the conclusion is the auditor's. Click a check to open the records behind it; the PDF report carries the same, with its scope and limits.`);
+    const cc = card("Control checks", `Automated checks of Looking Glass's own controls (LG-01…), each mapped to the ${d.nist_release || "NIST SP 800-53 Rev. 5"} controls it supports and, through them, to the ${d.cis_release || "CIS Controls v8.1"} safeguards of CIS's own official mapping (each with the NIST control it comes through and CIS's relationship: equivalent, subset or superset), with its evidence. Next to CIS's safeguards, and kept apart from them, Looking Glass's own reading of each: backed (the check produces evidence for the safeguard as CIS words it), related (CIS's mapping relates it; nothing more is claimed) or not backed (with the reason). ${d.cis_note || "The CIS Controls are used here as a map, to guide Looking Glass's security and make the auditor's work easier. They are voluntary best practice, not a law or a requirement, and CIS issues no certificate for meeting them: organisations measure themselves with CIS's free Self Assessment Tool (CSAT) or with an auditor, and those that need a formal certificate usually go for ISO 27001 or SOC 2, with the CIS Controls as a guide."} They give no pass or fail: the conclusion is the auditor's. Click a check to open the records behind it; the PDF report carries the same, with its scope and limits.`);
     const areas = [...new Set(d.checks.map((c) => c.area))];
     for (const a of areas) {
       const g = el("div", "au-check-g"); g.append(el("h4", null, a));
@@ -132,12 +135,23 @@
         if ((c.cis || []).length || (c.cis_unmapped || []).length) {   // CIS's own mapping of those NIST controls (control_map.py)
           const n = el("div", "au-nist au-cis");
           n.append(el("em", null, "CIS v8.1"));
+          // CIS's number, title and relationship as CIS publishes them; Looking Glass's reading as a separate badge
+          const BADGE = { backed: ["LG: backed", "#3fb37f"], related: ["LG: related", "#8b8d98"], "not backed": ["LG: not backed", "#e5484d"] };
           for (const x of c.cis || []) {
             const s = el("span", null, x.id);
-            s.title = `${d.cis_release || "CIS Controls v8.1"} safeguard ${x.id}: ${x.title}\n` + x.via.map((v) => `via NIST ${v.nist}: ${v.relation}`).join("\n");
+            s.title = `${d.cis_release || "CIS Controls v8.1"} safeguard ${x.id}: ${x.title}\n` + x.via.map((v) => `via NIST ${v.nist}: ${v.relation}`).join("\n")
+              + (x.lg ? `\n\nLooking Glass (our reading, not CIS's): ${x.lg.note}` : "");
             n.append(s);
+            if (x.lg) {
+              const [txt, col] = BADGE[x.lg.status] || [`LG: ${x.lg.status}`, "#8b8d98"];
+              const b = el("i", "au-lg", txt);
+              b.style.cssText = `font-style:normal;font-size:10px;margin:0 8px 0 2px;color:${col}`;
+              b.title = `Looking Glass's own reading, not CIS's: ${x.lg.note}`;
+              n.append(b);
+            }
           }
-          const words = (c.cis || []).map((x) => `${x.title} (${x.via.map((v) => `${v.nist} ${v.relation.toLowerCase()}`).join(", ")})`);
+          const words = (c.cis || []).map((x) => `${x.title} (${x.via.map((v) => `${v.nist} ${v.relation.toLowerCase()}`).join(", ")})`
+            + (x.lg && x.lg.status !== "related" ? ` · Looking Glass: ${x.lg.note}` : ""));
           for (const u of c.cis_unmapped || []) words.push(`${u}: no safeguard in CIS's mapping`);
           n.append(el("small", null, words.join(" · ")));
           t.append(n);

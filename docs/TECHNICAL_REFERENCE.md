@@ -594,6 +594,20 @@ Security scripts:
   separator (`version 2.0.1.3`, `Build: 1.2.3.4`, `firmware=10.4.0.12`) or after a product name and a slash
   (`Apache/2.0.1.3`; a path such as `/api/41.66.1.2` stays masked). A five-part number such as `1.2.3.4.5` is never
   an address, in either masker.
+- Display time zone (`timezones.py`, Settings > Country, `TIMEZONE`): every time is UTC as Shadowserver writes it,
+  and a day is 00:00 to 24:00 UTC; nothing is converted when loading or counting. `/api/clock`, `/api/svc/clock`,
+  `/api/overview`, `/api/settings/public` and the Executive data carry `tz` ({zone, city, offset, same_as_utc}) for
+  the replay day, and the pages show the same moment in that zone beside UTC with `static/js/localtime.js` (the
+  browser's own time-zone database, so daylight saving is right). The Executive PDF does the same with `timezones.py`.
+  `tests/check_timezones.py` checks all 54 countries' zones and the conversions.
+- CIS in the Audit portal (`control_map.py`): `NIST_TO_CIS` and `CIS_TITLES` are CIS's mapping, unchanged (CC BY-NC-ND
+  4.0). Looking Glass's own reading is kept apart in the same file: `BACKED` (check → safeguards it produces evidence
+  for, opt-in), `NOT_BACKED` (safeguard → reason), `lg_reading()`; every other pair is "related". `cis_for(nist, check)`
+  returns CIS's fields plus an `lg` field, which the portal shows as a separate badge and the PDF as a line marked
+  "Looking Glass:". `CERTIFICATION_NOTE` ("The CIS Controls are used here as a map...") goes with the data.
+- Executive portal figures (`management.py`): lists are ranked by distinct devices (IP addresses) when they are known,
+  records breaking ties; the 7-day baseline keeps every infection and issue of each past day (`item_count` reads a
+  missing item in an old top-80 summary as unknown, never 0).
 - Checks that read the reports database call `tests/needs_db.py` first: without a reachable MongoDB they report
   SKIPPED (exit 77) instead of a connection error.
 

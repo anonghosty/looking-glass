@@ -401,7 +401,8 @@ body.is-paused #replayDate, body.is-paused #clockDate, body.is-waiting #replayDa
 .ic-head span { font-size: 12px; }
 #introTimeline { width: 100%; height: 70px; display: block; cursor: crosshair; }
 .intro-classbar { margin-top: 14px; height: 12px; }
-.intro-reports { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; max-height: 236px; overflow-y: auto; scrollbar-width: thin; }
+/* every report shown, none hidden behind a scroll box (a wall screen never scrolls): as many columns as fit */
+.intro-reports { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 12px; }
 .intro-reports li { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 6px; font-size: 12px; }
 .intro-reports li .swatch { width: 8px; height: 8px; }
 .intro-reports li .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

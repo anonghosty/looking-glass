@@ -162,6 +162,30 @@ try:
        and "AU-9" in C["LG-10"]["cis_unmapped"] and [s["id"] for s in C["LG-10"]["cis"]] == ["3.11"])
     ok("…every NIST control a check uses is in CIS's table (none silently dropped)",
        all(n["id"] in CM.NIST_TO_CIS for x in o["checks"] for n in x["nist"]))
+    # review, 2026-11-12: Looking Glass's own reading (backed / related / not backed) kept apart from CIS's content,
+    # conservative, its reasons in one table (control_map.BACKED, NOT_BACKED)
+    pair = {(x["id"], s["id"]): s for x in o["checks"] for s in x["cis"]}
+    st_ = lambda chk, sg: (pair.get((chk, sg)) or {}).get("lg", {}).get("status")
+    ok("…the reviewer's reading: LG-01 backs 6.3 and 6.5, not 6.4 (remote network access); LG-09 backs 8.5",
+       (st_("LG-01", "6.3"), st_("LG-01", "6.5"), st_("LG-01", "6.4"), st_("LG-09", "8.5")) == ("backed", "backed", "not backed", "backed"))
+    ok("…LG-10 does not back 3.11 (it protects the log's integrity, encrypts nothing); LG-06 does not back 4.10",
+       st_("LG-10", "3.11") == "not backed" and "encrypts nothing" in pair[("LG-10", "3.11")]["lg"]["note"] and st_("LG-06", "4.10") == "not backed")
+    ok("…the AU-2 rows 8.6, 8.7, 8.8, 8.12 are not backed", all(st_("LG-15", s) == "not backed" for s in ("8.6", "8.7", "8.8", "8.12")))
+    ok("…backed is opt-in: every backed pair is listed in BACKED, everything unlisted and unexplained is 'related'",
+       all((s["lg"]["status"] == "backed") == (sg in CM.BACKED.get(chk, ())) for (chk, sg), s in pair.items())
+       and all(s["lg"]["status"] == "related" for (chk, sg), s in pair.items() if sg not in CM.BACKED.get(chk, ()) and sg not in CM.NOT_BACKED))
+    ok("…every backed pair in the table is one CIS's mapping really reaches for that check (no invented pair)",
+       all((chk, sg) in pair for chk, sgs in CM.BACKED.items() for sg in sgs))
+    ok("…every not-backed row has a reason, read from the one table", all(s["lg"]["note"].endswith(CM.NOT_BACKED[sg]) for (chk, sg), s in pair.items()
+                                                                       if s["lg"]["status"] == "not backed"))
+    ok("…the reading is labelled as Looking Glass's, apart from CIS's fields", all(set(s) == {"id", "title", "via", "lg"} for s in pair.values()))
+    ok("…CIS's titles and relationships unchanged from the published table",
+       all(s["title"] == CM.CIS_TITLES[s["id"]] and all((s["id"], v["relation"]) in CM.NIST_TO_CIS[v["nist"]] for v in s["via"]) for s in pair.values())
+       and CM.NIST_TO_CIS["AU-9(3)"] == [("3.11", "Superset")] and CM.CIS_TITLES["3.11"] == "Encrypt Sensitive Data at Rest")
+    backed = {s["id"] for s in pair.values() if s["lg"]["status"] == "backed"}
+    ok(f"…the overview count is the number of backed safeguards ({len(backed)}), the rest 'related by CIS's mapping'",
+       len(backed) == len({sg for sgs in CM.BACKED.values() for sg in sgs}) and 0 < len(backed) < len({s["id"] for s in pair.values()}))
+    ok("…the certification note travels with the data", "issues no certificate" in (o.get("cis_note") or ""))
     ok("LG-01 states what sign-in enforces, not only enrolment", "requires the password and a one-time code" in C["LG-01"]["evidence"])
     ok("no check gives a verdict (no pass or fail: the auditor decides)", all("ok" not in x for x in o["checks"])
        and not any(w in x["evidence"].lower() for x in o["checks"] for w in ("passed", "attention", "within normal")))

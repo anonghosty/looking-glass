@@ -20,6 +20,8 @@ import os
 import threading
 import time
 
+import timezones
+
 
 def _csv(v):
     return [x.strip() for x in (v or "").split(",") if x.strip()]
@@ -36,7 +38,10 @@ class Settings:
 
     @staticmethod
     def _defaults():
-        return {"country": (os.environ.get("COUNTRY") or "GH").upper(),
+        country = (os.environ.get("COUNTRY") or "GH").upper()
+        zone = os.environ.get("TIMEZONE") or timezones.default_zone(country)
+        return {"country": country,
+                "timezone": zone if timezones.valid(country, zone) else timezones.default_zone(country),
                 "networks": [a.upper().replace("AS", "") for a in _csv(os.environ.get("CONSTITUENT_ASNS"))],
                 "cidrs": _csv(os.environ.get("CONSTITUENT_CIDRS")),
                 "updated_at": None, "source": "environment (.env)"}
@@ -47,10 +52,13 @@ class Settings:
         try:
             with open(self.path, encoding="utf-8") as f:
                 saved = json.load(f)
-            self.data.update({k: saved[k] for k in ("country", "networks", "cidrs", "updated_at") if k in saved})
+            self.data.update({k: saved[k] for k in ("country", "timezone", "networks", "cidrs", "updated_at") if k in saved})
             self.data["source"] = "settings page (data/settings.json)"
         except (OSError, ValueError):
             pass
+        # a file saved before time zones existed, or a zone not (or no longer) offered: the country's usual zone
+        if not timezones.valid(self.data["country"], self.data.get("timezone")):
+            self.data["timezone"] = timezones.default_zone(self.data["country"])
 
     def _compile(self):
         self.asns = {str(a) for a in self.data["networks"]}
@@ -74,15 +82,23 @@ class Settings:
             errors.append("country must be a two-letter code")
         elif countries and country not in countries:
             errors.append(f"country {country} is not one of the {len(countries)} countries with region maps")
+        # the time zone: one of the country's own (or UTC); not given = the country's usual zone
+        zone = d.get("timezone")
+        if zone in (None, ""):
+            zone = timezones.default_zone(country)
+        elif not isinstance(zone, str) or not timezones.valid(country, zone):
+            errors.append(f"time zone must be one of {', '.join(timezones.choices(country))} for {country}")
+            zone = timezones.default_zone(country)
+        base = {"country": country, "timezone": zone, "networks": [], "cidrs": []}
         if not isinstance(d.get("networks") or [], list) or not isinstance(d.get("cidrs") or [], list):
             errors.append("networks and cidrs must be lists")
-            return {"country": country, "networks": [], "cidrs": []}, errors
+            return base, errors
         if len(d.get("networks") or []) > Settings.MAX_NETWORKS:
             errors.append(f"at most {Settings.MAX_NETWORKS} AS numbers")
         if len(d.get("cidrs") or []) > Settings.MAX_CIDRS:
             errors.append(f"at most {Settings.MAX_CIDRS} address ranges")
         if errors:
-            return {"country": country, "networks": [], "cidrs": []}, errors
+            return base, errors
         networks = []
         for a in d.get("networks") or []:
             a = str(a).upper().replace("AS", "").strip()
@@ -99,14 +115,14 @@ class Settings:
                 cidrs.append(str(ipaddress.ip_network(c, strict=False)))
             except ValueError:
                 errors.append(f"not an address range: {c}")
-        return {"country": country, "networks": sorted(set(networks), key=int), "cidrs": cidrs}, errors
+        return {"country": country, "timezone": zone, "networks": sorted(set(networks), key=int), "cidrs": cidrs}, errors
 
     def save(self, clean):
         with self.lock:
             self.data.update(clean, updated_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), source="settings page (data/settings.json)")
             tmp = self.path + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
-                json.dump({k: self.data[k] for k in ("country", "networks", "cidrs", "updated_at")}, f, indent=2)
+                json.dump({k: self.data[k] for k in ("country", "timezone", "networks", "cidrs", "updated_at")}, f, indent=2)
             os.replace(tmp, self.path)
             self._compile()
             self.version += 1
@@ -127,3 +143,7 @@ class Settings:
 
     def public(self):
         return {**self.data, "restricted": self.restricted, "version": self.version}
+
+    def tz(self, at=None):
+        """The display time zone at a moment (timezones.info): {"zone", "city", "offset", "same_as_utc", ...}."""
+        return timezones.info(self.data.get("timezone") or timezones.UTC_NAME, at)

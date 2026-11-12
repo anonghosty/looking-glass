@@ -48,6 +48,7 @@ run "constituency"                    $PY tests/verify_constituency.py
 run "demo masking"                    $PY tests/test_demo.py
 # the database pipeline beside the platform (database/ in a release install)
 run "one address finder for every masker" $PY tests/check_ip_find.py
+run "display time zones (all 54 countries)" $PY tests/check_timezones.py
 run "CVE look-ups: KEV backoff, time budget" $PY tests/check_cve_backoff.py
 run "constituency change beats a running day load" $PY tests/check_scope_reload.py
 run "CSRF on every write route (real sign-in)" $PY tests/check_csrf_routes.py

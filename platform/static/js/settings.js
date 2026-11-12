@@ -29,13 +29,14 @@
     data = await (await fetch("/api/settings", { cache: "no-store" })).json();
     Object.assign(TYPE_NAMES, data.type_labels || {});          // every network type, the ones this site added included
     const s = data.settings;
-    saved = { country: s.country, networks: [...s.networks].map(String).sort(), cidrs: [...s.cidrs] };
+    saved = { country: s.country, timezone: s.timezone || "", networks: [...s.networks].map(String).sort(), cidrs: [...s.cidrs] };
     chosen = new Set(s.networks.map(String));
     mode = s.restricted ? "some" : "all";
     $("cidrs").value = s.cidrs.join("\n");
     const sel = $("country"); sel.replaceChildren();
     for (const c of data.countries) { const o = el("option", null, `${c.country}${c.regions ? ` · ${c.regions} regions` : " · no region map"}`); o.value = c.iso2; sel.append(o); }
     sel.value = s.country;
+    fillZones(s.timezone);
     access();
     setMode(mode); buildTypes(); renderNets(); await renderCountry(); refresh();
     const unknown = data.networks.filter((n) => /^AS\d+$/.test(n.name)).length;
@@ -138,7 +139,22 @@
     }
     $("countryMeta").textContent = `${keys.length} first-level regions · geoBoundaries ADM1 · ${L.length} labelled here, hover a region for any name`;
   }
-  $("country").addEventListener("change", () => { renderCountry(); refresh(); });
+  $("country").addEventListener("change", () => { fillZones(""); renderCountry(); refresh(); });
+  // ---------------- time zone: the country's own zones (DR Congo has two), then UTC; a new country takes its usual zone
+  function fillZones(pick) {
+    const zs = (data.zones || {})[$("country").value] || [];
+    const sel = $("tzone"); sel.replaceChildren();
+    for (const z of zs) { const o = el("option", null, z.label); o.value = z.zone; sel.append(o); }
+    sel.value = zs.some((z) => z.zone === pick) ? pick : (zs[0] || {}).zone || "UTC";
+    window.LGSelect?.sync(sel);
+    zoneMeta();
+  }
+  function zoneMeta() {
+    const z = ((data.zones || {})[$("country").value] || []).find((x) => x.zone === $("tzone").value);
+    $("tzoneMeta").textContent = !z ? "" : z.same_as_utc ? "Same as UTC today: times are shown in UTC only"
+      : `Today ${z.offset}: 12:00 UTC is shown as ${String((12 + Math.floor(z.offset_minutes / 60) + 24) % 24).padStart(2, "0")}:${String(((z.offset_minutes % 60) + 60) % 60).padStart(2, "0")}, beside the UTC time`;
+  }
+  $("tzone").addEventListener("change", () => { zoneMeta(); refresh(); });
 
   // ---------------- constituency
   function setMode(m) {
@@ -199,7 +215,7 @@
 
   // ---------------- what would be applied, and whether it differs from what is in force
   function wanted() {
-    return { country: $("country").value, networks: mode === "some" ? [...chosen].sort() : [], cidrs: mode === "some" ? cidrList() : [] };
+    return { country: $("country").value, timezone: $("tzone").value, networks: mode === "some" ? [...chosen].sort() : [], cidrs: mode === "some" ? cidrList() : [] };
   }
   function describe(w) {
     const nets = data.networks.filter((n) => n.asns.some((a) => w.networks.includes(String(a))));
@@ -207,7 +223,8 @@
     const scope = w.networks.length || w.cidrs.length
       ? `constituency of ${nets.length} network${nets.length === 1 ? "" : "s"}${nets.length ? ` (${nets.slice(0, 3).map((n) => n.name).join(", ")}${nets.length > 3 ? ", …" : ""})` : ""}${w.cidrs.length ? ` and ${w.cidrs.length} address range${w.cidrs.length > 1 ? "s" : ""}` : ""}`
       : "whole country";
-    return FOR === "comms" ? scope : `${c} · ${scope}`;
+    const z = (((data.zones || {})[w.country] || []).find((x) => x.zone === w.timezone) || {}).label || w.timezone || "UTC";
+    return FOR === "comms" ? scope : `${c} · times also in ${z} · ${scope}`;
   }
   function refresh() {
     if (!data) return;
@@ -223,7 +240,7 @@
         ? `Selected networks account for about ${fmt(recs)} of yesterday's records on both platforms together${w.cidrs.length ? `, plus the records in ${w.cidrs.length} address range${w.cidrs.length > 1 ? "s" : ""}` : ""}.`
         : "Nothing selected yet: choose networks or enter address ranges (applying with nothing selected means the whole country).";
     }
-    $("envLines").textContent = `COUNTRY=${w.country}\nCONSTITUENT_ASNS=${w.networks.join(",")}\nCONSTITUENT_CIDRS=${w.cidrs.join(",")}`;
+    $("envLines").textContent = `COUNTRY=${w.country}\nTIMEZONE=${w.timezone}\nCONSTITUENT_ASNS=${w.networks.join(",")}\nCONSTITUENT_CIDRS=${w.cidrs.join(",")}`;
     tell();                                       // the network list further down shows the same ticks
     // apply bar
     const dirty = JSON.stringify(w) !== JSON.stringify(saved);
@@ -234,7 +251,7 @@
     $("revert").hidden = !dirty;
   }
   $("revert").addEventListener("click", () => {
-    chosen = new Set(saved.networks); $("cidrs").value = saved.cidrs.join("\n"); $("country").value = saved.country;
+    chosen = new Set(saved.networks); $("cidrs").value = saved.cidrs.join("\n"); $("country").value = saved.country; fillZones(saved.timezone);
     setMode(saved.networks.length || saved.cidrs.length ? "some" : "all"); renderNets(); renderCountry();
   });
 
@@ -249,7 +266,7 @@
       const r = await fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify(w) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || r.statusText);
-      saved = { country: j.settings.country, networks: [...j.settings.networks].map(String).sort(), cidrs: [...j.settings.cidrs] };
+      saved = { country: j.settings.country, timezone: j.settings.timezone || "", networks: [...j.settings.networks].map(String).sort(), cidrs: [...j.settings.cidrs] };
       // wait until both platforms have reloaded their data with the new settings
       $("applyState").textContent = "Applied · both platforms are reloading…";
       let ok = false;

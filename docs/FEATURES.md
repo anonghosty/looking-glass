@@ -5,6 +5,8 @@ read more. Dates are UTC.
 
 ## Contents
 
+- [2026-11-12 (night): local times, Executive figures by devices, every report on the Overview](#2026-11-12-night-local-times-executive-figures-by-devices-every-report-on-the-overview)
+- [2026-11-12 (evening): uninstaller](#2026-11-12-evening-uninstaller)
 - [2026-11-12 (later): security review fixes](#2026-11-12-later-security-review-fixes)
 - [2026-11-12: audit evidence (NIST and CIS), report intake checks, the pipeline from Settings, password expiry](#2026-11-12-audit-evidence-nist-and-cis-report-intake-checks-the-pipeline-from-settings-password-expiry)
 - [2026-11-11: advisories, cases, an Overview for every role, the Audit portal](#2026-11-11-advisories-cases-an-overview-for-every-role-the-audit-portal)
@@ -14,6 +16,27 @@ read more. Dates are UTC.
 - [2026-11-09: faster platforms and a sharper Executive portal](#2026-11-09-faster-platforms-and-a-sharper-executive-portal)
 - [2026-11-08: Executive portal, 7-day baseline, vulnerabilities and network types](#2026-11-08-executive-portal-7-day-baseline-vulnerabilities-and-network-types)
 - [2026-11-07: definitions, the researcher role and PDF reports](#2026-11-07-definitions-the-researcher-role-and-pdf-reports)
+
+## 2026-11-12 (night): local times, Executive figures by devices, every report on the Overview
+
+- **Time zone (Settings > Country).** Shadowserver's times are UTC and stay UTC (days, storage, totals), and each
+  time is now **also shown in your zone**: the clocks, the record stream, details, chart hours, messages and the
+  Executive report ("12:15:41 UTC (15:15:41 Nairobi time)"). All 54 countries have their zone (DR Congo two),
+  daylight saving included; for a UTC zone such as Ghana's nothing changes.
+- **Executive portal ranked by devices.** Networks, regions, reports, services, sectors, infections and issues are
+  ranked by distinct devices (IP addresses), records breaking ties, so one chatty device can no longer put its network
+  on top. Every infection, issue, service and network of the day is in the filter menus (they stopped at 80 or 40).
+- **7-day baseline complete.** Each past day keeps every infection and issue (it kept the top 80, so one ranked lower
+  all week could be flagged red "New this week"); older summaries count a missing item as unknown, never as zero.
+- **Devices are counted by IP address:** said on the Executive page and in its report (one address can hide several
+  devices on shared mobile connections; one device can use several addresses in a day).
+- **Every report on the Overview:** the two report lists show all reports, in as many columns as fit, instead of a
+  small scroll box.
+- **CIS wording made exact (Audit portal and report).** CIS's safeguards stay exactly as CIS publishes them; beside
+  each, as a separate badge marked as ours, Looking Glass's own conservative reading: backed (the check produces
+  evidence for the safeguard as CIS words it), related, or not backed with the reason (LG-10 → 3.11 encryption at rest,
+  LG-15 → DNS, URL, command-line and service provider logs, LG-01 → 6.4 VPN MFA...). The overview counts what it says:
+  "M CIS safeguards backed by a check (K more related by CIS's mapping)". The CIS Controls are used here as a map, to guide Looking Glass's security and make the auditor's work easier. They are voluntary best practice, not a law or a requirement, and CIS issues no certificate for meeting them: organisations measure themselves with CIS's free Self Assessment Tool (CSAT) or with an auditor, and those that need a formal certificate usually go for ISO 27001 or SOC 2, with the CIS Controls as a guide.
 
 ## 2026-11-12 (evening): uninstaller
 

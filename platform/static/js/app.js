@@ -8,6 +8,8 @@
   const MP_NAME = CFG.malpedia ? "Malpedia" : "definitions";
   const MP_SRC = CFG.malpedia ? "on Malpedia" : "in the Looking Glass definitions";
   const mq = (q) => window.matchMedia(q).matches;
+  // local times beside UTC (static/js/localtime.js, Settings > Country > Time zone); without it, UTC only
+  const LT = () => window.LGTime || { on: () => false, also: () => "", slot: () => "", tag: () => "UTC", place: () => "UTC" };
   const isPhone = () => mq("(max-width: 700px)");
   const reducedMotion = mq("(prefers-reduced-motion: reduce)");
   if (window.LG_UNSUPPORTED) return;   // the page already explains that this browser is too old
@@ -665,7 +667,7 @@
       const from = [titleCase(ev.src_city), countryName(ev.src_geo)].filter(Boolean).join(", ");
       const to = [titleCase(ev.dst_city), ev.dst_geo ? countryName(ev.dst_geo) : ""].filter(Boolean).join(", ") || "unknown destination";
       const fromTxt = ev.src_ip || from ? `${esc(ev.src_ip || "")}${from ? ` (${esc(from)})` : ""}` : "source not reported";
-      html = `<b>${esc(infName(ev))}</b> · ${esc(ev.attack_class || "")}<br>${fromTxt} → ${ev.dst_ip && !ev.src_ip ? esc(ev.dst_ip) + " " : ""}${esc(to)}${ev.dst_port ? ":" + esc(ev.dst_port) : ""}<br>${t} UTC`
+      html = `<b>${esc(infName(ev))}</b> · ${esc(ev.attack_class || "")}<br>${fromTxt} → ${ev.dst_ip && !ev.src_ip ? esc(ev.dst_ip) + " " : ""}${esc(to)}${ev.dst_port ? ":" + esc(ev.dst_port) : ""}<br>${t} UTC${esc(LT().also(ev.extracted_date))}`
         + '<div class="tt-hint">Click for the full details and analysis</div>';
     }
     return html ? { html } : null;
@@ -799,6 +801,9 @@
     const switched = state.schedState !== null && (c.replay_day !== state.replayDay || c.state !== state.schedState);
     state.sched = c; state.replayDay = c.replay_day; state.schedState = c.state;
     state.dayStart = Date.parse(c.day_start); state.dayEnd = Date.parse(c.day_end);
+    window.LGTime?.set(c.tz);              // the CSIRT's time zone (Settings > Country): local times beside UTC
+    const sth = document.getElementById("streamTimeHead");
+    if (sth) sth.textContent = `Replay time (${LT().on() ? LT().tag() : "UTC"})`;
     state.waiting = c.state !== "playing";
     if (switched) {
       // a new day started (or its report arrived): everyone jumps to the server's position, from 00:00
@@ -850,7 +855,7 @@
     if (fresh.length) {
       const parts = fresh.map((r) => `${r.label} (${r.new ? "" : "+"}${fmt(r.added)} event${r.added === 1 ? "" : "s"})`);
       const when = fresh[fresh.length - 1].arrived_at;
-      msg = `New report data for ${c.replay_day}: ${parts.join(", ")}${when ? `, received ${hhmmUtc(when)} UTC` : ""}. `
+      msg = `New report data for ${c.replay_day}: ${parts.join(", ")}${when ? `, received ${hhmmUtc(when)} UTC${LT().also(when, false)}` : ""}. `
         + (c.state === "playing" ? "Totals, analysis and the map now include it. " : "It will be part of the replay. ");
     }
     const ok = newTypes.filter((s) => s.compatible !== false), bad = newTypes.filter((s) => s.compatible === false);
@@ -878,7 +883,8 @@
   function clockLabel() {
     if (state.schedState === "waiting") return "Waiting for the report of";
     if (state.schedState === "settling") return "Report arriving · replay starts soon";
-    return state.paused ? "Replay time (UTC) · paused" : "Replay time (UTC)";
+    const zone = LT().on() ? LT().tag() : "UTC";
+    return state.paused ? `Replay time (${zone}) · paused` : `Replay time (${zone})`;
   }
   function renderWaiting() {
     const c = state.sched; if (!c) return;
@@ -888,7 +894,7 @@
       : c.state === "settling"
         ? `Reports for ${c.replay_day} are arriving: ${(c.reports || []).length} so far with ${fmt(c.day_total || 0)} events`
           + `${(c.reports || []).length ? ` (${c.reports.map((r) => `${r.label} ${fmt(r.rows)}`).join(", ")})` : ""}. `
-          + `The replay starts from 00:00 at about ${hhmmUtc(c.settle_until)} UTC, ${Math.round((c.settle_seconds || 600) / 60)} minutes after the last report arrived; later reports are still added.`
+          + `The replay starts from 00:00 at about ${hhmmUtc(c.settle_until)} UTC${LT().also(c.settle_until, false)},${Math.round((c.settle_seconds || 600) / 60)} minutes after the last report arrived; later reports are still added.`
         : (state.emptyMsg || "Waiting for attacks in the replay window…");
     $("streamEmpty").textContent = msg;
     if (state.waiting) $("streamEmpty").hidden = false;
@@ -1000,7 +1006,7 @@
       const head = !filtered ? `No event of ${r.day} has been replayed yet: the first`
         : r.total === 1 ? `The only matching event of ${r.day} has not been replayed yet: it`
           : `None of the ${fmt(r.total)} matching events of ${r.day} has been replayed yet: the first`;
-      msg = `${head} is at ${first} UTC and the replay is at ${now} UTC`
+      msg = `${head} is at ${first} UTC${LT().also(r.next_at)} and the replay is at ${now} UTC`
         + (state.paused ? " (paused)." : `, so it appears in ${waitText((Date.parse(r.next_at) - at) / Math.max(1, state.speed))}.`)
         + (!filtered || !r.hosts ? ""
           : r.hosts === 1 ? " Its IP address is already in the charts and statistics: click them to analyse it, or find it on the map."
@@ -1109,12 +1115,15 @@
     const rIso = r.toISOString();
     // replay time = the extracted_date of the events being played now; current time = the real clock.
     // They differ by at least a day (more when a report arrived late), so both show their full date.
-    $("replayDate").textContent = state.waiting ? (state.replayDay || rIso.slice(0, 10)) : `${rIso.slice(0, 10)} ${rIso.slice(11, 19)}`;
+    // in the CSIRT's time zone when it is not UTC (Settings > Country); the tooltip keeps the UTC time
+    const loc = LT().on();
+    $("replayDate").textContent = state.waiting ? (state.replayDay || rIso.slice(0, 10))
+      : loc ? LT().dateTime(r) : `${rIso.slice(0, 10)} ${rIso.slice(11, 19)}`;
     const c = state.sched;
     $("replayDate").title = state.waiting
       ? `${$("streamEmpty").textContent}`
       : `The event time (extracted_date) being replayed now: ${dayWord(rIso).toLowerCase() === "yesterday" ? "yesterday, " : ""}${rIso.slice(0, 10)} ${rIso.slice(11, 19)} UTC`
-        + (c && c.delay_seconds > 300 ? `. This day's replay started at ${hhmmUtc(c.started_at)} UTC when its report arrived.` : "");
+        + LT().also(r) + (c && c.delay_seconds > 300 ? `. This day's replay started at ${hhmmUtc(c.started_at)} UTC${LT().also(c.started_at, false)} when its report arrived.` : "");
     $("clockDate").textContent = clockLabel();
     // faster speeds (demos) loop the day instead of running past its end
     if (state.speed > 1 && state.dayEnd && !state.paused && state.anchorReplay + (Date.now() - state.anchorWall) * state.speed >= state.dayEnd) {
@@ -1127,7 +1136,9 @@
     if (state.speed === 1 && state.dayEnd && r.getTime() >= state.dayEnd - 1000 && Date.now() - state.lastSync > 10000
         && Date.now() - (state.lastSyncTry || 0) > 10000) { state.lastSyncTry = Date.now(); syncClock().catch(() => {}); }
     const nIso = new Date().toISOString();
-    $("nowClock").textContent = `${nIso.slice(0, 10)} ${nIso.slice(11, 19)}`;
+    $("nowClock").textContent = loc ? LT().dateTime(nIso) : `${nIso.slice(0, 10)} ${nIso.slice(11, 19)}`;
+    $("nowClock").title = `${nIso.slice(0, 10)} ${nIso.slice(11, 19)} UTC${LT().also(nIso)}`;
+    const nl = document.querySelector(".now-clock"); if (nl) nl.textContent = `Current time (${loc ? LT().tag() : "UTC"})`;
     const s = state.stats;
     if (s) {
       // whole-day totals from the server; the replayed stream never changes them
@@ -1164,8 +1175,9 @@
     // replay time: the report's own extracted_date (when the event happened), never the wall clock
     const t = (ev.extracted_date || ev.timestamp || "").replace("T", " ");
     const time = el("span", "r-time mono");
-    time.append(el("span", "r-clock", t.slice(11, 19)), el("span", "r-date", t.slice(0, 10)));
-    time.title = `Replay time: the event happened at ${t.slice(0, 19)} UTC (extracted_date)`;
+    const lt = LT().on() ? LT().dateTime(t) : "";          // the CSIRT's time zone when it is not UTC
+    time.append(el("span", "r-clock", (lt || t).slice(11, 19)), el("span", "r-date", (lt || t).slice(0, 10)));
+    time.title = `Replay time: the event happened at ${t.slice(0, 19)} UTC${LT().also(t)} (extracted_date)`;
     const sev = el("span", "r-sev"); const sb = el("span", "sev", ev.severity || "n/a"); sev.append(sb);
     const inf = el("span", "r-inf"); const sw = el("span", "swatch"); sw.style.background = infColor(infName(ev)); sw.style.color = infColor(infName(ev));
     const ib = el("b", null, infName(ev)); ib.title = `${infName(ev)}${ev.tag && ev.tag !== ev.infection ? ` · tag: ${ev.tag}` : ""}`;
@@ -1356,7 +1368,7 @@
     $("mHost").hidden = !ev.src_ip;
     const sev = $("mSev"); sev.textContent = ev.severity || "n/a"; sev.style.setProperty("--sevc", sevColor(ev.severity));
     $("mTag").textContent = `tag: ${ev.tag || "n/a"}`;
-    $("mTime").textContent = `Event time ${(ev.extracted_date || ev.timestamp || "").replace("T", " ").slice(0, 19)} UTC`;
+    $("mTime").textContent = `Event time ${(ev.extracted_date || ev.timestamp || "").replace("T", " ").slice(0, 19)} UTC${LT().also(ev.extracted_date || ev.timestamp)}`;
     renderKb($("mKb"), ev.infection, ev.tag);
     setPlace("mSrcPlace", ev.src_geo, [titleCase(ev.src_city), titleCase(ev.src_region), countryName(ev.src_geo)]);
     setPlace("mDstPlace", ev.dst_geo, [titleCase(ev.dst_city), titleCase(ev.dst_region), countryName(ev.dst_geo)]);
@@ -1403,7 +1415,7 @@
         const r = await getJSON(`/api/related?ref=${encodeURIComponent(ev.src_ref || ev.src_ip)}&at=${encodeURIComponent(new Date(replayNow()).toISOString())}`);
         if (state.modalEv !== ev) return;
         related.replaceWith(section("This host yesterday", [
-          ["Events", fmt(r.count)], ["First seen", r.first && `${r.first.replace("T", " ").slice(0, 19)} UTC`], ["Last seen", r.last && `${r.last.replace("T", " ").slice(0, 19)} UTC`],
+          ["Events", fmt(r.count)], ["First seen", r.first && `${r.first.replace("T", " ").slice(0, 19)} UTC${LT().also(r.first)}`], ["Last seen", r.last && `${r.last.replace("T", " ").slice(0, 19)} UTC${LT().also(r.last)}`],
           ["Seen in reports", (r.sources || []).map((s) => `${s.label} (${fmt(s.count)}, ${Math.round((s.count / Math.max(1, r.count)) * 100)}%)`).join(", ")],
           ["Infections / categories", r.infections.join(", ")], ["Contacted hosts", r.hosts.join(", ")], ["Destinations", r.dst_ips.join(", ")],
         ]));
@@ -1721,7 +1733,8 @@
         const i = Math.min(23, Math.max(0, Math.floor(((e.clientX - rect.left) / rect.width) * 24)));
         const rows = Object.entries(d.byClass).map(([k, v]) => [k, v[i]]).filter(([, v]) => v);
         const tot = rows.reduce((a, [, v]) => a + v, 0);
-        return [tipLine(`${String(i).padStart(2, "0")}:00 to ${String((i + 1) % 24).padStart(2, "0")}:00 UTC`), tipLine(null, `${fmt(tot)} events${i === d.curHour ? " · the replay is in this hour" : ""}`),
+        const h0 = (state.dayStart || 0) + i * 3600000;
+        return [tipLine(`${String(i).padStart(2, "0")}:00 to ${String((i + 1) % 24).padStart(2, "0")}:00 UTC${state.dayStart ? LT().slot(h0, h0 + 3600000) : ""}`), tipLine(null, `${fmt(tot)} events${i === d.curHour ? " · the replay is in this hour" : ""}`),
           ...rows.map(([k, v]) => { const dv = el("div"); const sw = el("span", "swatch"); sw.style.cssText = `background:${classColor(k)};margin-right:6px`; dv.append(sw, document.createTextNode(`${k}: ${fmt(v)} (${pct(v, tot)})`)); return dv; }),
           ...(tot ? [tipLine(null, "Click to analyse this hour")] : [])];
       });
@@ -1743,7 +1756,8 @@
         const rect = canvas.getBoundingClientRect();
         const i = Math.min(95, Math.max(0, Math.floor(((e.clientX - rect.left) / rect.width) * 96)));
         const v = b[i], peak = Math.max(...b.map((x) => x ?? 0));
-        return [tipLine(`${hhmm(i * 15)} to ${hhmm(i * 15 + 15)} UTC`),
+        const q0 = (state.dayStart || 0) + i * 900000;
+        return [tipLine(`${hhmm(i * 15)} to ${hhmm(i * 15 + 15)} UTC${state.dayStart ? LT().slot(q0, q0 + 900000) : ""}`),
           tipLine(null, `${fmt(v ?? 0)} events${v === peak && v ? " · busiest 15 minutes of the day" : ""}${i === canvas._mark ? " · the replay is here" : ""}`),
           ...(canvas._clickable && v ? [tipLine(null, "Click to analyse these 15 minutes")] : [])];
       });
@@ -1904,7 +1918,8 @@
       // minutes may carry seconds (a window ending exactly at the replay position)
       const hms = (x) => { if (x >= 1440) return "24:00"; const tot = Math.round(x * 60), h = Math.floor(tot / 3600), mi = Math.floor(tot / 60) % 60, se = tot % 60;
         return `${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}${se ? ":" + String(se).padStart(2, "0") : ""}`; };
-      return `${hms(s || 0)} to ${hms((s || 0) + (m || 60))} UTC`;
+      const a0 = (state.dayStart || 0) + (s || 0) * 60000;
+      return `${hms(s || 0)} to ${hms((s || 0) + (m || 60))} UTC${state.dayStart ? LT().slot(a0, a0 + (m || 60) * 60000) : ""}`;
     }
     if (kind === "severity") return titleCase(v);
     if (kind === "route" || kind === "dst_place") {
@@ -2381,6 +2396,7 @@
     let o;
     try { o = await getJSON("/api/overview"); } catch { return; }
     window.__lgIntroData = o;
+    window.LGTime?.set(o.tz);              // the intro can open before the first clock sync
     window.LGLoader?.ready();   // arriving from another page: the logo hands over once the overview has its figures
     const dayTxt = new Date(o.day + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
     const sst = o.schedule && o.schedule.state;
@@ -2410,7 +2426,8 @@
     // full-day activity + attack type mix
     setTimeout(() => {
       quarterHours($("introTimeline"), o.timeline, null, undefined, undefined, undefined, false);
-      if (o.peak_quarter !== null) $("introPeak").textContent = `busiest: ${hhmm(o.peak_quarter * 15)} UTC`;
+      if (o.peak_quarter !== null) $("introPeak").textContent = `busiest: ${hhmm(o.peak_quarter * 15)} UTC`
+        + LT().also(Date.parse(`${o.day}T00:00:00Z`) + o.peak_quarter * 900000, false);
     }, 0);
     const bar = $("introClassBar"), leg = $("introClassLegend"); bar.replaceChildren(); leg.replaceChildren();
     for (const c of o.classes) {

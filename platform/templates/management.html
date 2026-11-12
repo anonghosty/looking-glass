@@ -140,6 +140,8 @@
       </article>
     </section>
     <p class="mg-foot">Aggregated figures for the constituency from the Shadowserver Foundation's daily reports. No individual addresses are shown.
+      Devices are counted by IP address, as Shadowserver reports them: one address can stand for several devices (shared
+      mobile connections), and one device can use several addresses in a day. Days and hours are UTC, as Shadowserver's reports.
       <span id="mgTook"></span></p>
   </main>
 
@@ -158,6 +160,7 @@
 
   <script src="{{ url_for('static', filename='js/regions.js') }}"></script>
   <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/localtime.js') }}"></script>
   <script src="{{ url_for('static', filename='js/management.js') }}"></script>
 </body>
 </html>

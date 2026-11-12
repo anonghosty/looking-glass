@@ -504,7 +504,7 @@ def install(app, ctx):
         # CIS's own mapping of the check's NIST controls (control_map.py), each with the NIST control it came through
         out = []
         for a, i, t, ns, e in c:
-            cis, unmapped = control_map.cis_for(ns)
+            cis, unmapped = control_map.cis_for(ns, i)
             out.append({"area": a, "id": i, "control": t, "nist": [{"id": n, "title": NIST[n]} for n in ns], "evidence": e,
                         "cis": cis, "cis_unmapped": unmapped, "view": VIEW.get(i)})
         return out
@@ -519,6 +519,7 @@ def install(app, ctx):
         started = setup_time(v.get("first") or 0)
         return jsonify(period={"from": fr, "to": to}, checks=checks(t0, t1, ov), started=_when(started), nist_release=NIST_RELEASE,
                        cis_release=control_map.CIS_RELEASE, cis_source=control_map.CIS_SOURCE, cis_attribution=control_map.CIS_ATTRIBUTION,
+                       cis_note=control_map.CERTIFICATION_NOTE,
                        running_days=max(0, int((time.time() - started) // 86400)) if started else None,
                        integrity=dict(v, first=_when(v["first"]), last=_when(v["last"])), access_mode=ctx["access_mode"](), **ov)
 
@@ -568,7 +569,7 @@ def install(app, ctx):
                                   "fail_sources": ov["fail_sources"], "exports_by": ov["exports_by"], "per_day": ov["per_day"],
                                   "first": _when(integrity()["first"]), "last": _when(integrity()["last"]), "nist_release": NIST_RELEASE,
                                   "cis_release": control_map.CIS_RELEASE, "cis_source": control_map.CIS_SOURCE,
-                                  "cis_attribution": control_map.CIS_ATTRIBUTION,
+                                  "cis_attribution": control_map.CIS_ATTRIBUTION, "cis_note": control_map.CERTIFICATION_NOTE,
                                   "started": _when(setup_time(integrity().get("first") or 0)),
                                   "sealed_at": _when((integrity().get("seal") or {}).get("sealed_at")),
                                   "verifier_sha256": __import__("audit_proof").verifier_sha256()})

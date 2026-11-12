@@ -16,6 +16,8 @@ from reportlab.lib.units import mm
 from reportlab.platypus import KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from xml.sax.saxutils import escape
 
+from control_map import CERTIFICATION_NOTE as CERT_NOTE
+
 INK, MUTED, LINE, OK, BAD, ACCENT = (colors.HexColor(c) for c in ("#16161a", "#5f5f69", "#d9d9df", "#1f7a4d", "#b42318", "#3b6fd8"))
 
 
@@ -75,7 +77,12 @@ def build(d):
               f"{d.get('cis_release', 'CIS Critical Security Controls')} safeguards that CIS's own official mapping relates to those "
               f"NIST controls ({d.get('cis_source', 'CIS mapping to NIST SP 800-53 Rev. 5')}), each with the NIST control it comes "
               "through and CIS's relationship (Equivalent, Subset: the safeguard covers part of the NIST control, Superset: it "
-              "covers more); a NIST control CIS does not map is said so. The checks present evidence and give no pass or fail: "
+              "covers more); a NIST control CIS does not map is said so. Under each safeguard, kept apart from CIS's text and "
+              "marked as ours, Looking Glass's own reading: <i>backed</i> (the check produces evidence for the safeguard as CIS "
+              "words it), <i>not backed</i> (the mapping reaches it but the check does not look at its subject, with the reason) "
+              "or <i>related</i> (CIS's mapping relates it; nothing more is claimed). "
+              f"{d.get('cis_note') or CERT_NOTE} "
+              "The checks present evidence and give no pass or fail: "
               "whether a control is implemented and operating effectively is the auditor's conclusion. Corroborate the evidence with independent testing (for "
               "example, try to sign in without a second factor) and review what lies outside the application: the server's "
               "operating system, its clock synchronisation, backups and network. "
@@ -143,8 +150,13 @@ def build(d):
     rows = [[_p(h, st["cellb"]) for h in ("Check", "Control", "NIST SP 800-53 Rev. 5 (5.2.0)", "CIS Controls v8.1 (CIS's mapping)", "Evidence")]]
     for c in d["checks"]:
         nist = Paragraph("<br/>".join(f"<b>{escape(n['id'])}</b> {escape(n['title'])}" for n in c.get("nist") or []) or "–", st["small"])
+        # CIS's safeguard, title and relationship exactly as CIS publishes them; under it, apart and in Looking Glass's
+        # name, our own reading of the pair (control_map.lg_reading): backed, related or not backed, with the reason
+        tone = {"backed": "#1f7a4d", "not backed": "#9a3b3b", "related": "#5f5f69"}
         cis_lines = [f"<b>{escape(s['id'])}</b> {escape(s['title'])} <font color='#5f5f69'>("
                      + ", ".join(f"via {escape(v['nist'])}: {escape(v['relation'])}" for v in s["via"]) + ")</font>"
+                     + (f"<br/><font size='6.5' color='{tone.get(s['lg']['status'], '#5f5f69')}'><i>Looking Glass: "
+                        f"{escape(s['lg']['note'])}</i></font>" if s.get("lg") else "")
                      for s in c.get("cis") or []]
         cis_lines += [f"<font color='#5f5f69'>{escape(n)}: no safeguard in CIS's mapping</font>" for n in c.get("cis_unmapped") or []]
         cis = Paragraph("<br/>".join(cis_lines) or "–", st["small"])

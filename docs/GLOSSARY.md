@@ -12,7 +12,7 @@ the platform: the **Glossary** tab on the overview page and the **Glossary** but
 - [Using the platform](#using-the-platform) (11 terms)
 - [Accounts, roles and permissions](#accounts-roles-and-permissions) (34 terms)
 - [Publicly accessible / vulnerable services](#publicly-accessible--vulnerable-services) (13 terms)
-- [Security, audit and the pipeline](#security-audit-and-the-pipeline) (18 terms)
+- [Security, audit and the pipeline](#security-audit-and-the-pipeline) (20 terms)
 - [Related tools](#related-tools)
 - [A–Z index](#az-index)
 
@@ -364,6 +364,12 @@ Every account signs in with its password and a six-digit code from an authentica
 **Password expiry**  
 An optional policy an administrator sets in Settings: passwords expire after a number of days, and turning it on (or Every account now) makes every account choose a new password at its next sign-in. After the password and the authenticator code, the person sets a new password and goes straight in. Off by default, as NIST SP 800-63B advises against forced periodic changes.
 
+**CIS mapping (not a certification)**  
+Looking Glass uses the CIS Controls v8.1 as a map, to guide its security and make the auditor's work easier. The CIS safeguards next to each control check come from CIS's own mapping of the check's NIST controls and are shown exactly as CIS publishes them; beside each, as a separate badge, Looking Glass's own reading: backed (the check produces evidence for the safeguard as CIS words it), related (CIS's mapping relates it; nothing more is claimed) or not backed (the check does not look at its subject, with the reason). The CIS Controls are voluntary best practice, not a law or a requirement, and CIS issues no certificate for meeting them: organisations measure themselves with CIS's free Self Assessment Tool (CSAT) or with an auditor, and those that need a formal certificate usually go for ISO 27001 or SOC 2, with the CIS Controls as a guide.
+
+**Time zone (display)**  
+Chosen in Settings next to the country: the zone the CSIRT reads its times in (for example Nairobi, UTC+3; DR Congo offers Kinshasa and Lubumbashi). Shadowserver writes every time in UTC and a day runs 00:00 to 24:00 UTC, as its reports do, so the platform keeps that and also shows each time in this zone: the replay clock, the record stream, details, chart hours, messages and the Executive report. Daylight saving is taken into account. For a zone at UTC (Ghana, for example) only UTC is shown.
+
 **Audit portal**  
 The auditor's page (/audit), read only: the audit log by tab (sign-ins, accounts, sessions, configuration, data access and exports, workflow, system), a dashboard of key figures, the control checks, the access review, the log's integrity, the sender check, and evidence to take away (CSV, the evidence report, the proof package).
 
@@ -463,6 +469,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [C2 (command and control)](#threats) · 
 [C2 / sinkhole domains](#threats) · 
 [CIS Controls (safeguard)](#security-audit-and-the-pipeline) · 
+[CIS mapping (not a certification)](#security-audit-and-the-pipeline) · 
 [Combination](#accounts-roles-and-permissions) · 
 [Combination code (LG-C, LG-X)](#accounts-roles-and-permissions) · 
 [Combination search](#accounts-roles-and-permissions) · 
@@ -558,6 +565,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Target country](#who-and-where) · 
 [Target port](#who-and-where) · 
 [Threat actor](#accounts-roles-and-permissions) · 
+[Time zone (display)](#security-audit-and-the-pipeline) · 
 [TLP (Traffic Light Protocol)](#accounts-roles-and-permissions) · 
 [User agent](#who-and-where) · 
 [Workers (Settings)](#security-audit-and-the-pipeline)

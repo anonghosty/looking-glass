@@ -8,6 +8,8 @@
   // ------------------------------------------------------------------ basics (same helpers as app.js)
   const $ = (id) => document.getElementById(id);
   const mq = (q) => window.matchMedia(q).matches;
+  // local times beside UTC (static/js/localtime.js, Settings > Country > Time zone); without it, UTC only
+  const LT = () => window.LGTime || { on: () => false, also: () => "", slot: () => "", tag: () => "UTC", place: () => "UTC" };
   const reducedMotion = mq("(prefers-reduced-motion: reduce)");
   // Display quality chosen on any page (Auto / Full / Lite; static/js/display.js): Lite = fewer stars and particles, no glow
   const LITE = window.LGDisplay ? window.LGDisplay.lite
@@ -167,7 +169,10 @@
   const FLAG_TITLE = { vulnerable: "Hosts with issues", multi: "Hosts with multiple issues", cross: "Hosts in several reports" };
   const refLabels = new Map();
   function valueLabel(k, v) {
-    if (k === "time") { const [a, m] = String(v).split("+").map(Number); return `${hhmm(a)} to ${hhmm(a + m)} UTC`; }
+    if (k === "time") {
+      const [a, m] = String(v).split("+").map(Number), a0 = (state.dayStart || 0) + a * 60000;
+      return `${hhmm(a)} to ${hhmm(a + m)} UTC${state.dayStart ? LT().slot(a0, a0 + m * 60000) : ""}`;
+    }
     if (k === "ip") return refLabels.get(v) || v;
     if (WIDEN.includes(k)) return "yes, with all their reports";
     if (FLAGS.includes(k)) return "yes";
@@ -188,6 +193,9 @@
     const switched = state.schedState !== null && (c.replay_day !== state.replayDay || c.state !== state.schedState);
     state.sched = c; state.replayDay = c.replay_day; state.schedState = c.state;
     state.dayStart = Date.parse(c.day_start); state.dayEnd = Date.parse(c.day_end);
+    window.LGTime?.set(c.tz);              // the CSIRT's time zone (Settings > Country): local times beside UTC
+    const sth = document.getElementById("streamTimeHead");
+    if (sth) sth.textContent = `Replay time (${LT().on() ? LT().tag() : "UTC"})`;
     state.waiting = c.state !== "playing";
     if (switched) {
       setPaused(false); state.behind = false; $("btnCatchUp").hidden = true;
@@ -204,7 +212,7 @@
     const w = $("waiting"); w.hidden = !state.waiting;
     if (state.waiting) w.textContent = c.state === "waiting"
       ? `Waiting for Shadowserver's reports for ${c.replay_day}. The replay starts from 00:00 once they arrive (checked every 15 seconds).`
-      : `Reports for ${c.replay_day} are arriving (${fmt(c.day_total)} records so far). The replay starts at about ${hm(c.settle_until)} UTC.`;
+      : `Reports for ${c.replay_day} are arriving (${fmt(c.day_total)} records so far). The replay starts at about ${hm(c.settle_until)} UTC${LT().also(c.settle_until, false)}.`;
   }
   const announced = new Set(); let primed = false;
   function announce(c) {
@@ -213,7 +221,7 @@
     for (const s of c.new_sources || []) { const k = `t|${s.name}`; if (announced.has(k)) continue; announced.add(k); if (primed) types.push(s); }
     primed = true;
     let msg = "";
-    if (fresh.length) msg += `New report data for ${c.replay_day}: ${fresh.map((r) => `${r.label} (${r.new ? "" : "+"}${fmt(r.added)} records${r.arrived_at ? `, received ${hm(r.arrived_at)} UTC` : ""})`).join(", ")}. Totals and analysis now include it. `;
+    if (fresh.length) msg += `New report data for ${c.replay_day}: ${fresh.map((r) => `${r.label} (${r.new ? "" : "+"}${fmt(r.added)} records${r.arrived_at ? `, received ${hm(r.arrived_at)} UTC${LT().also(r.arrived_at, false)}` : ""})`).join(", ")}. Totals and analysis now include it. `;
     for (const s of types) {
       const score = s.required_total ? ` (${s.required_ok}/${s.required_total} required fields)` : "";
       msg += s.compatible === false
@@ -269,8 +277,9 @@
     const li = el("li", "row" + (flash && !reducedMotion ? " flash" : "")); li.dataset.id = ev.id; li.tabIndex = -1;
     li.style.setProperty("--sevc", sevColor(ev.severity));
     const t = (ev.extracted_date || "").replace("T", " ");
-    const time = el("span", "r-time mono"); time.append(el("span", "r-clock", t.slice(11, 19)), el("span", "r-date", t.slice(0, 10)));
-    time.title = `Replay time: the record is from ${t.slice(0, 19)} UTC (extracted_date)`;
+    const lt = LT().on() ? LT().dateTime(t) : "";          // the CSIRT's time zone when it is not UTC
+    const time = el("span", "r-time mono"); time.append(el("span", "r-clock", (lt || t).slice(11, 19)), el("span", "r-date", (lt || t).slice(0, 10)));
+    time.title = `Replay time: the record is from ${t.slice(0, 19)} UTC${LT().also(t)} (extracted_date)`;
     const sev = el("span", "r-sev"); const sb = el("span", "sev", ev.severity || "n/a"); sb.style.setProperty("--sevc", sevColor(ev.severity)); sev.append(sb);
     const inf = el("span", "r-inf"); const sw = el("span", "swatch"); sw.style.background = famColor(ev.family);
     const txt = el("span", "r-inf-txt"); const b = el("b", null, ev.service); b.title = defOf(ev.service)?.def || ev.service;
@@ -401,7 +410,7 @@
       const head = !filtered ? `No record of ${r.day} has been replayed yet: the first`
         : r.total === 1 ? `The only matching record of ${r.day} has not been replayed yet: it`
           : `None of the ${fmt(r.total)} matching records of ${r.day} has been replayed yet: the first`;
-      msg = `${head} is at ${r.next_at.slice(11, 19)} UTC and the replay is at ${new Date(at).toISOString().slice(11, 19)} UTC`
+      msg = `${head} is at ${r.next_at.slice(11, 19)} UTC${LT().also(r.next_at)} and the replay is at ${new Date(at).toISOString().slice(11, 19)} UTC`
         + (state.paused ? " (paused)." : `, so it appears in ${waitText((Date.parse(r.next_at) - at) / Math.max(1, state.speed))}.`)
         + (!filtered || !r.hosts ? ""
           : r.hosts === 1 ? " Its host (IP address) is already in the charts and statistics: click them to analyse it."
@@ -430,9 +439,14 @@
     if (box && box.scrollWidth > box.clientWidth + 1) fitKpis();
     else if (box && box.querySelector(".kpi-off") && Date.now() - (fitKpis._last || 0) > 2000) { fitKpis._last = Date.now(); fitKpis(); }
     const r = new Date(replayNow()).toISOString(), n = new Date().toISOString();
-    $("replayDate").textContent = state.waiting ? (state.replayDay || r.slice(0, 10)) : `${r.slice(0, 10)} ${r.slice(11, 19)}`;
-    $("nowClock").textContent = `${n.slice(0, 10)} ${n.slice(11, 19)}`;
-    $("clockDate").textContent = state.schedState === "waiting" ? "Waiting for the reports of" : state.schedState === "settling" ? "Reports arriving · replay starts soon" : state.paused ? "Replay time (UTC) · paused" : "Replay time (UTC)";
+    // in the CSIRT's time zone when it is not UTC (Settings > Country); the tooltips keep the UTC time
+    const loc = LT().on(), zone = loc ? LT().tag() : "UTC";
+    $("replayDate").textContent = state.waiting ? (state.replayDay || r.slice(0, 10)) : loc ? LT().dateTime(r) : `${r.slice(0, 10)} ${r.slice(11, 19)}`;
+    if (!state.waiting) $("replayDate").title = `${r.slice(0, 10)} ${r.slice(11, 19)} UTC${LT().also(r)}`;
+    $("nowClock").textContent = loc ? LT().dateTime(n) : `${n.slice(0, 10)} ${n.slice(11, 19)}`;
+    $("nowClock").title = `${n.slice(0, 10)} ${n.slice(11, 19)} UTC${LT().also(n)}`;
+    const nl = document.querySelector(".now-clock"); if (nl) nl.textContent = `Current time (${zone})`;
+    $("clockDate").textContent = state.schedState === "waiting" ? "Waiting for the reports of" : state.schedState === "settling" ? "Reports arriving · replay starts soon" : state.paused ? `Replay time (${zone}) · paused` : `Replay time (${zone})`;
     const cut = replayNow() - 5 * 60000;
     state.recent = state.recent.filter((x) => x[0] >= cut - 60000);
     const recent = state.recent.filter((x) => x[0] >= cut).reduce((a, x) => a + x[1], 0) / 5;
@@ -517,7 +531,8 @@
         const d = canvas._data; if (!d) return null;
         const rect = canvas.getBoundingClientRect(), i = Math.min(23, Math.max(0, Math.floor(((e.clientX - rect.left) / rect.width) * 24)));
         const rows = Object.entries(d.byFam).map(([k, v]) => [k, v[i]]).filter(([, v]) => v), tot = rows.reduce((a, [, v]) => a + v, 0);
-        return [tipLine(`${String(i).padStart(2, "0")}:00 to ${String((i + 1) % 24).padStart(2, "0")}:00 UTC`), tipLine(null, `${fmt(tot)} records${i === d.curHour ? " · the replay is in this hour" : ""}`),
+        const h0 = (state.dayStart || 0) + i * 3600000;
+        return [tipLine(`${String(i).padStart(2, "0")}:00 to ${String((i + 1) % 24).padStart(2, "0")}:00 UTC${state.dayStart ? LT().slot(h0, h0 + 3600000) : ""}`), tipLine(null, `${fmt(tot)} records${i === d.curHour ? " · the replay is in this hour" : ""}`),
           ...rows.map(([k, v]) => { const dv = el("div"); const sw = el("span", "swatch"); sw.style.cssText = `background:${famColor(k)};margin-right:6px`; dv.append(sw, document.createTextNode(`${k}: ${fmt(v)} (${pct(v, tot)})`)); return dv; }),
           ...(tot ? [tipLine(null, "Click to analyse this hour")] : [])];
       });
@@ -548,7 +563,8 @@
         const b = canvas._data; if (!b || !b.length) return null;
         const rect = canvas.getBoundingClientRect(), i = Math.min(95, Math.max(0, Math.floor(((e.clientX - rect.left) / rect.width) * 96)));
         const v = b[i], peak = Math.max(...b);
-        return [tipLine(`${hhmm(i * 15)} to ${hhmm(i * 15 + 15)} UTC`), tipLine(null, `${fmt(v)} records${v === peak && v ? " · busiest 15 minutes of the day" : ""}${i === canvas._mark ? " · the replay is here" : ""}`),
+        const q0 = (state.dayStart || 0) + i * 900000;
+        return [tipLine(`${hhmm(i * 15)} to ${hhmm(i * 15 + 15)} UTC${state.dayStart ? LT().slot(q0, q0 + 900000) : ""}`), tipLine(null, `${fmt(v)} records${v === peak && v ? " · busiest 15 minutes of the day" : ""}${i === canvas._mark ? " · the replay is here" : ""}`),
           ...(v ? [tipLine(null, "Click to analyse these 15 minutes")] : [])];
       });
     }
@@ -1037,7 +1053,7 @@
     $("mTitle").replaceChildren(sw, document.createTextNode(e.service));
     const sev = $("mSev"); sev.textContent = e.severity || "n/a"; sev.style.setProperty("--sevc", sevColor(e.severity));
     $("mTag").textContent = `tag: ${e.tag || "n/a"}`;
-    $("mTime").textContent = `Record time ${(e.extracted_date || "").replace("T", " ").slice(0, 19)} UTC`;
+    $("mTime").textContent = `Record time ${(e.extracted_date || "").replace("T", " ").slice(0, 19)} UTC${LT().also(e.extracted_date)}`;
     defBox($("mKb"), e.service);
     $("mPlace").replaceChildren(flagImg(e.geo), el("span", null, [titleCase(e.city), regionUnknown(e.region) ? "" : titleCase(e.region), COUNTRY.name].filter(Boolean).join(", ")));
     $("mIp").textContent = `${e.ip}${e.port ? ":" + e.port : ""}`;

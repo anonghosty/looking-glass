@@ -119,7 +119,11 @@
       const t = sv("text", { x: anchor === "start" ? px + 8 : anchor === "end" ? px - 8 : px, y: Math.max(py - 10, 12), class: "peaktxt", "text-anchor": anchor });
       t.textContent = `Peak ${String(peak).padStart(2, "0")}:00 · ${fmt(hours[peak])}`; svg.append(t);
     }
-    pts.forEach((p, i) => { const c = sv("circle", { cx: p[0], cy: p[1], r: 9, class: "hit" }); const tt = sv("title"); tt.textContent = `${String(i).padStart(2, "0")}:00–${String((i + 1) % 24).padStart(2, "0")}:00 UTC: ${fmt(hours[i])}`; c.append(tt); svg.append(c); });
+    // the UTC hours of the day, as Shadowserver's; the same hour in the CSIRT's time zone beside it (localtime.js)
+    const d0 = state.data ? Date.parse(`${state.data.day}T00:00:00Z`) : NaN, LT = window.LGTime;
+    pts.forEach((p, i) => { const c = sv("circle", { cx: p[0], cy: p[1], r: 9, class: "hit" }); const tt = sv("title");
+      tt.textContent = `${String(i).padStart(2, "0")}:00–${String((i + 1) % 24).padStart(2, "0")}:00 UTC${LT && Number.isFinite(d0) ? LT.slot(d0 + i * 3600000, d0 + (i + 1) * 3600000) : ""}: ${fmt(hours[i])}`;
+      c.append(tt); svg.append(c); });
     box.append(svg);
     if (!reduced) { const len = stroke.getTotalLength(); stroke.style.strokeDasharray = len; stroke.style.strokeDashoffset = len; requestAnimationFrame(() => { stroke.style.transition = "stroke-dashoffset 1.1s ease"; stroke.style.strokeDashoffset = 0; }); }
   }
@@ -551,6 +555,7 @@
   }
   function render() {
     const d = state.data, comms = d.platform === "comms";
+    window.LGTime?.set(d.tz);              // the CSIRT's time zone that day (Settings > Country)
     document.body.dataset.plat = d.platform;
     for (const b of document.querySelectorAll("[data-plat]")) b.setAttribute("aria-selected", String(b.dataset.plat === d.platform));
     $("mgScope").textContent = `${d.scope}${d.demo ? " · Demo mode" : ""}`;
@@ -563,7 +568,8 @@
     if (!findings.children.length) findings.append(el("li", null, "No further findings for this selection."));
     areaChart($("chTrend"), d.hours, d.peak_hour);
     baselineCard(d); pollBaseline(d);
-    $("tTrend").textContent = `${comms ? "Events" : "Records"} per hour (UTC)${d.peak_hour != null ? ` · peak ${String(d.peak_hour).padStart(2, "0")}:00` : ""}`;
+    const pk = d.peak_hour != null ? Date.parse(`${d.day}T00:00:00Z`) + d.peak_hour * 3600000 : null;
+    $("tTrend").textContent = `${comms ? "Events" : "Records"} per hour (UTC)${d.peak_hour != null ? ` · peak ${String(d.peak_hour).padStart(2, "0")}:00 UTC${window.LGTime ? window.LGTime.also(pk, false) : ""}` : ""}`;
     regionMap($("chMap"), d.regions, d.country);
     regionTree($("chRegions"), d);
     donut($("chSectors"), d.sectors, "sector", comms ? "events" : "records");

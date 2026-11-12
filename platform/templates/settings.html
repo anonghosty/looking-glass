@@ -45,6 +45,13 @@
         <label class="st-field"><span>Country</span><select id="country" class="lg-enhance"></select></label>
         <div class="st-meta" id="countryMeta"></div>
       </div>
+      <div class="st-row">
+        <label class="st-field"><span>Time zone</span><select id="tzone" class="lg-enhance"></select></label>
+        <div class="st-meta" id="tzoneMeta"></div>
+      </div>
+      <p class="st-hint">Shadowserver writes every time in UTC, and a day runs 00:00 to 24:00 UTC as its reports do. Both
+        platforms and the Executive portal keep that, and also show each time in this zone (the replay clock, the record
+        stream, details, chart hours and messages). Daylight saving is taken into account. Choosing UTC shows UTC only.</p>
       <div class="st-country">
         <svg id="preview" aria-label="Regions of the selected country"></svg>
         <div class="st-match">

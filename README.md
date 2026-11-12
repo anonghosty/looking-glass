@@ -289,7 +289,12 @@ from the other permissions. Details: [User guide → Roles](docs/USER_GUIDE.md#r
   trusting Looking Glass.
 - **Control checks LG-01 to LG-15**, each mapped to the **NIST SP 800-53 Rev. 5** controls it supports and, through
   CIS's official mapping, to the **CIS Controls v8.1** safeguards (LG → NIST → CIS), with evidence and no verdict: the
-  conclusion is the auditor's. In the portal and in the evidence report (PDF).
+  conclusion is the auditor's. In the portal and in the evidence report (PDF). Next to CIS's safeguards, shown exactly
+  as CIS publishes them, Looking Glass gives its own reading, labelled as ours: **backed** (the check produces evidence
+  for the safeguard as CIS words it), **related** (CIS's mapping relates it; nothing more is claimed) or **not backed**
+  (with the reason, for example DNS query logs or encryption at rest). **The CIS Controls are used here as a map, to guide Looking Glass's security and make the auditor's work easier. They are voluntary best practice, not a law or a requirement, and CIS issues no certificate for meeting them: organisations measure themselves with CIS's free Self Assessment Tool (CSAT) or with an auditor, and those that need a formal certificate usually go for ISO 27001 or SOC 2, with the CIS Controls as a guide.** The CIS Controls apply to your whole environment, not to one
+  application. (The CIS Benchmarks, hardening guides for Ubuntu, MongoDB and so on, are a different thing; Looking
+  Glass's servers have not been scored against one.)
 - **Report intake checked:** report e-mails are checked for Shadowserver's DKIM signature (record, or hold back what
   does not pass), or reports come straight from Shadowserver's report API; zip bombs are refused.
 - **The web app cannot weaken the pipeline:** a Workers change that would make it less strict also needs someone to

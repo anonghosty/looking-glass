@@ -56,6 +56,27 @@ for platform, filt in (("comms", {}), ("comms", {"attack": "Botnet C2"}), ("serv
         top = (d.get("c2") or {}).get("top") or []
         ok(f"{platform} {filt or 'everything'}: C2 domains as numbers only (Domain 1, 2…), never the host",
            all(re.fullmatch(r"Domain \d+", str(x.get("value"))) and x.get("value") == x.get("label") for x in top), json.dumps(top[:2])[:200])
+print("Ranked by devices, every value in the menus, the 7-day memory complete, the time zone (review, 2026-11-12)")
+nonincr = lambda rows: all(a.get("hosts", 0) >= b.get("hosts", 0) for a, b in zip(rows, rows[1:]))
+for platform in ("comms", "services"):
+    d = json.loads(call(f"/api/mgmt/{platform}", {})[0].get_data(as_text=True))
+    items = d["infections"] if platform == "comms" else d["issues"]
+    ok(f"{platform}: {'infections' if platform == 'comms' else 'issues'} ranked by devices", nonincr(items), str([r.get("hosts") for r in items][:8]))
+    for key in ("networks", "regions") + (("reports",) if platform == "comms" else ("services", "sectors")):
+        rows = [r for r in (d.get(key) or []) if "hosts" in r]
+        ok(f"{platform}: {key} ranked by devices, not records", nonincr(rows), str([(r.get('hosts'), r.get('count')) for r in rows][:6]))
+    fac = d["facets"]["infection" if platform == "comms" else "issue"]
+    ok(f"{platform}: the filter menu lists every value of the day ({len(fac)})", len(fac) >= d["kpis"]["infections" if platform == "comms" else "issues"],
+       f"{len(fac)} vs {d['kpis']['infections' if platform == 'comms' else 'issues']}")
+    ok(f"{platform}: the display time zone comes with the data", isinstance(d.get("tz"), dict) and bool(d["tz"].get("zone")), str(d.get("tz")))
+from management import item_count  # noqa: E402
+full = {"items": {"a": 30}, "all": True}
+old80 = {"items": {f"x{i}": 100 - i for i in range(80)}}
+ok("baseline: an item a complete day did not have counts as 0", item_count(full, "b") == 0)
+ok("baseline: an item missing from an old top-80 summary is unknown, not 0 (no false 'New this week')", item_count(old80, "b") is None)
+ok("baseline: an item present counts its devices", item_count(old80, "x3") == 97 and item_count(full, "a") == 30)
+ok("baseline: a day without reports is unknown", item_count({"none": True, "items": {}}, "a") is None and item_count(None, "a") is None)
+ok("baseline: a short old summary (under 80) was complete: 0", item_count({"items": {"a": 1}}, "b") == 0)
 import io, zipfile  # noqa: E401,E402
 for label, args in (("services", {"platform": "services"}), ("communications, filtered", {"platform": "comms", "attack": "Botnet C2"})):
     r, code = call("/api/mgmt/report", args)

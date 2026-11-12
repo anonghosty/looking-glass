@@ -317,7 +317,9 @@ def register(app, ctx):
         return jsonify(server_now=iso(utcnow()), sources=len(registry.items), data_version=day.version if day else "0",
                        day_total=len(day.events) if day else 0, reports=reports,
                        report_changes=store.changes.get(start, [])[-20:], sources_version=registry.version,
-                       new_sources=registry.added[-10:], unsupported=len(registry.unsupported), **st)
+                       new_sources=registry.added[-10:], unsupported=len(registry.unsupported),
+                       # the display time zone on the replay day (Settings > Country; timezones.py)
+                       tz=(ctx["settings"].tz(start + timedelta(hours=12)) if ctx.get("settings") else None), **st)
 
     @app.route("/api/svc/events")
     def svc_events():

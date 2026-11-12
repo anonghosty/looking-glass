@@ -347,7 +347,7 @@
     </div>
     <div class="filter-bar" id="filterBar" hidden></div>
     <div class="stream-cols" aria-hidden="true">
-      <span>Replay time (UTC)</span><span>Severity</span><span>Infection / category</span><span>Source host</span><span></span><span>Destination</span><span>Proto</span><span>Request</span><span></span>
+      <span id="streamTimeHead">Replay time (UTC)</span><span>Severity</span><span>Infection / category</span><span>Source host</span><span></span><span>Destination</span><span>Proto</span><span>Request</span><span></span>
     </div>
     <div class="stream-body" id="streamBody" tabindex="0" aria-label="Event list: arrow keys to move, Enter to open">
       <div class="pinned-wrap" id="pinnedWrap" hidden>
@@ -464,6 +464,7 @@
   <script src="{{ url_for('static', filename='js/notifications.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/glossary.js') }}"></script>
   <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/localtime.js') }}"></script>
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
   <script src="{{ url_for('static', filename='js/people-pick.js') }}"></script>
   <script src="{{ url_for('static', filename='js/acode-make.js') }}"></script>

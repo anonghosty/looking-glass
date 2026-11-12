@@ -135,7 +135,7 @@ SUMMARY = [{"$facet": {
     "src": [{"$match": {"src_ip": {"$ne": ""}}}, {"$group": {"_id": "$src_ip", "s": {"$addToSet": "$source"}}},
             {"$group": {"_id": None, "n": {"$sum": 1}, "multi": {"$sum": {"$cond": [{"$gt": [{"$size": "$s"}, 1]}, 1, 0]}}}}],
     "dst": [{"$match": {"dst_ip": {"$ne": ""}}}, {"$group": {"_id": "$dst_ip"}}, {"$count": "n"}],
-    "inf": [{"$group": {"_id": "$infection"}}, {"$count": "n"}],
+    "inf": [{"$match": {"infection": {"$nin": ["", None]}}}, {"$group": {"_id": "$infection"}}, {"$count": "n"}],
     "srcs": [{"$group": {"_id": "$source"}}, {"$count": "n"}],
 }}]
 KEYS = ["total", "critical", "unique_src_ip", "multi_source_hosts", "unique_dst_ip", "unique_infection", "unique_sources"]

@@ -15,6 +15,7 @@ from reportlab.lib.utils import simpleSplit
 from reportlab.pdfgen import canvas as rl_canvas
 
 import reports_pdf as rp
+import timezones
 
 W, H = landscape(A4)
 M = 26                                         # page margin
@@ -131,10 +132,18 @@ class Doc:
         return H - M - 44
 
     def footer(self):
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        t = datetime.now(timezone.utc)
+        now = t.strftime("%Y-%m-%d %H:%M UTC")
+        tz = self.meta.get("tz") or {}
+        if tz.get("zone") and not timezones.info(tz["zone"], t)["same_as_utc"]:
+            now += f" ({timezones.local(t, tz['zone']):%H:%M} {timezones.city(tz['zone'])} time)"
         who = f" by {self.meta['generated_by']}" if self.meta.get("generated_by") else ""
         note = "Demo mode: network names are aliases. " if self.meta.get("demo") else ""
-        self.text(M, 14, f"{note}Aggregated figures only: no individual addresses. Generated {now}{who}. Data: Shadowserver Foundation.", 7.2, MUTE)
+        # devices are counted by IP address (review, 2026-11-12): one address can hide many devices behind carrier-grade
+        # NAT, and one device can use several addresses in a day
+        self.text(M, 22, "Devices are counted by IP address, as Shadowserver reports them: one address can stand for several "
+                         "devices (shared mobile connections), and one device can use several addresses in a day.", 6.6, MUTE)
+        self.text(M, 12, f"{note}Aggregated figures only: no individual addresses. Generated {now}{who}. Data: Shadowserver Foundation.", 7.2, MUTE)
         self.text(W - M, 14, f"Page {self.page}", 7.2, MUTE, anchor="end")
 
     def done(self):
@@ -268,7 +277,14 @@ class Doc:
         return y - 66 - 12
 
     def area(self, x, y, w, h, hours, peak, unit):
-        top = self.card(x, y, w, h, "Activity across the day", f"{unit} per hour (UTC)" + (f" · peak {peak:02d}:00" if peak is not None else ""))
+        # the hours are the UTC day's (as Shadowserver's); the local time of the peak beside it (Settings > Country)
+        tz = self.meta.get("tz") or {}
+        off = 0 if tz.get("same_as_utc", True) else tz.get("offset_minutes", 0)
+        loc = (lambda hh: f"{(hh * 60 + off) // 60 % 24:02d}:{(hh * 60 + off) % 60:02d}")
+        sub = f"{unit} per hour (UTC)" + (f" · peak {peak:02d}:00 UTC" if peak is not None else "")
+        if off and peak is not None:
+            sub += f" ({loc(peak)} {tz.get('city', '')} time)"
+        top = self.card(x, y, w, h, "Activity across the day", sub)
         c = self.c
         L, B, R = x + 40, y - h + 26, x + w - 16
         T = top - 6
@@ -559,7 +575,7 @@ class Doc:
 def build(d, enr, meta):
     comms = d["platform"] == "comms"
     k = d["kpis"]
-    doc = Doc({**meta, "day": d["day"], "cities": d.get("cities_map") or []})
+    doc = Doc({**meta, "day": d["day"], "cities": d.get("cities_map") or [], "tz": d.get("tz")})
     unit = "Events" if comms else "Records"
 
     # ---------------- page 1: overview

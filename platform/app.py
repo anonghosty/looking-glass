@@ -36,6 +36,7 @@ from respcache import ResultCache, day_key, filters_key
 
 RCACHE = ResultCache()      # whole-day results shared by every viewer, keyed on the loaded day (see respcache.py)
 from settings import Settings
+import timezones  # noqa: E402  (display time zone: Settings > Country)
 import auth
 import security
 import services_api
@@ -525,7 +526,7 @@ def api_clock():
                    day_total=len(day.events) if day else 0, reports=reports,
                    report_changes=store.changes.get(start, [])[-20:],
                    sources_version=registry.version, new_sources=registry.added[-10:],
-                   unsupported=len(registry.unsupported), **st)
+                   unsupported=len(registry.unsupported), tz=settings.tz(start + timedelta(hours=12)), **st)
 
 
 @app.route("/api/sources")
@@ -624,7 +625,8 @@ def _stats_core(day, flt, demo):
         # reports without a source (or destination) side must not count an empty value as a host
         "unique_src_ip": len({e["src_ip"] for e in sofar if e["src_ip"]}),
         "unique_dst_ip": len({e["dst_ip"] for e in sofar if e["dst_ip"]}),
-        "unique_infection": len({e["infection"] for e in sofar}),
+        # (every event gets a name from sources.py, but an empty one must never count as a type: review, 2026-11-12)
+        "unique_infection": len({e["infection"] for e in sofar if e["infection"]}),
         "critical": sum(1 for e in sofar if e["severity"] == "critical"),
         "day_total": len(day.events),
         "unique_sources": len({e["source"] for e in sofar}),
@@ -804,7 +806,7 @@ def api_overview():
         unsupported=[_unsupported_public(s) for s in registry.unsupported],
         # next phase (publicly accessible / vulnerable services): scan / population reports already in MongoDB
         services_reports=len([n for n in registry.names if re.match(r"(scan6?|population6?)_", n)]),
-        schedule=schedule.status(),
+        schedule=schedule.status(), tz=settings.tz(day.start + timedelta(hours=12)),
     )
 
 
@@ -2963,6 +2965,9 @@ def api_settings():
     return jsonify(settings=settings.public(), writable=_settings_writable(),
                    type_labels=netypes.labels(DATA_DIR),
                    countries=sorted(_country_index().values(), key=lambda c: c["country"]), networks=nets,
+                   # the time zones each country offers (its own, then UTC), with today's offset: Settings > Country
+                   zones={c: [{**timezones.info(z), "label": f"{timezones.city(z)} ({timezones.info(z)['offset']})"}
+                              for z in timezones.choices(c)] for c in _country_index()},
                    data_regions=sorted((sday.region_raw if sday is not None else {}).items(), key=lambda kv: -kv[1]),
                    totals={"communications": getattr(cday, "raw_total", 0), "services": getattr(sday, "raw_total", 0)},
                    day=day_start(rn).date().isoformat())
@@ -3044,9 +3049,11 @@ def api_settings_save():
         store.reset(); svc["store"].reset()
         rn = replay_now()
         threading.Thread(target=lambda: (store.get(rn), svc["store"].get(rn)), daemon=True, name="settings-reload").start()
-    app.logger.warning("Settings saved: country %s, %d networks, %d ranges", clean["country"], len(clean["networks"]), len(clean["cidrs"]))
+    app.logger.warning("Settings saved: country %s, time zone %s, %d networks, %d ranges", clean["country"], clean["timezone"],
+                       len(clean["networks"]), len(clean["cidrs"]))
     AUTH["audit"].add("settings_changed", user=(getattr(g, "user", None) or {}).get("user", "token"),
-                      detail=f"country {clean['country']}, {len(clean['networks'])} networks, {len(clean['cidrs'])} ranges")
+                      detail=f"country {clean['country']}, time zone {clean['timezone']}, {len(clean['networks'])} networks, "
+                             f"{len(clean['cidrs'])} ranges")
     return jsonify(settings=settings.public())
 
 
@@ -3057,6 +3064,7 @@ def api_settings_public():
     out = {"country": settings.data["country"], "country_name": idx.get("country", settings.data["country"]),
            "restricted": settings.restricted, "networks": len(settings.data["networks"]), "cidrs": len(settings.data["cidrs"]),
            "has_regions": bool(idx.get("regions")), "bbox": _country_bbox(settings.data["country"]),
+           "tz": settings.tz(),                       # the display time zone today (timezones.py)
            # changes when settings are saved, and stays the same across service restarts
            "version": settings.data.get("updated_at") or "env"}
     return jsonify(out)
@@ -3105,6 +3113,7 @@ _mgmt = management.register(app, {
     "mp_resolve": mp_resolve, "issues_resolve": issues_resolve, "scope_text": _scope_text, "build_pdf": _reports_pdf.build,
     "sources_text": SOURCES_TEXT, "user": lambda: getattr(g, "user", None), "country": lambda: settings.data["country"],
     "geocode": lambda cc, region, city: geocoder.lookup(cc or settings.data["country"], region, city),
+    "tz": lambda at=None: settings.tz(at),                 # the display time zone (Settings > Country; timezones.py)
 })
 
 # where each Shadowserver report type belongs (researchers' page): kept current from Shadowserver's schema (report_map.py)

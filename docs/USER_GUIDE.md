@@ -601,6 +601,12 @@ platform full screen. The display adapts to TVs and weaker devices by itself (`?
 
 **Settings** (gear on the intro page, or the button in the top bar):
 - **Country:** any of the 54 African countries. The services platform shows its regions and uses its name.
+- **Time zone:** the zone your team reads its times in, next to the country (it starts at the country's usual zone;
+  DR Congo offers Kinshasa and Lubumbashi; UTC can always be chosen). Shadowserver writes every time in UTC and a day
+  runs 00:00 to 24:00 UTC, as its reports do, so Looking Glass keeps that and **also** shows each time in this zone:
+  the replay and current clocks, the record stream, event details, chart hours, messages and the Executive report (for
+  example "12:15:41 UTC (15:15:41 Nairobi time)"). Daylight saving (Egypt, Morocco) is taken into account. For a zone
+  that is UTC, as in Ghana, only UTC is shown. Changing it reloads nothing.
 - **Constituency:** the whole country, or the networks your CSIRT is responsible for: choose companies (all their
   AS numbers) and add address ranges. Both platforms then show only your constituency.
 
@@ -719,7 +725,20 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
   NIST SP 800-53 Rev 5", July 2026) relates to them, with the NIST control each comes through and CIS's relationship
   (Equivalent; Subset: the safeguard covers part of the NIST control; Superset: it covers more), so one chain reads
   **LG → NIST → CIS** (for example LG-09 → AU-3 → 8.5 *Collect Detailed Audit Logs*, Equivalent). Looking Glass does
-  not choose these safeguards; a NIST control CIS does not map (AU-9, AC-2(7)) is shown as such. The CIS Controls are
+  not choose these safeguards; a NIST control CIS does not map (AU-9, AC-2(7)) is shown as such. CIS's number, title
+  and relationship are shown exactly as CIS publishes them; next to each, as a separate badge marked as ours, **Looking
+  Glass's own reading**:
+  - **backed**: the check produces evidence for the safeguard as CIS words it (for example LG-01 → 6.3 and 6.5 MFA,
+    LG-09 → 8.5 detailed audit logs, LG-11 → 8.10 retain audit logs). Conservative: only the pairs listed in
+    `control_map.py` (BACKED) are backed.
+  - **not backed**: the mapping reaches it but the check does not look at its subject, with the reason: LG-01 → 6.4
+    MFA for remote network access; LG-06 → 4.10 lockout on portable devices; LG-07 → 4.3 and 12.3; LG-10 → 3.11
+    encryption at rest (LG-10 protects the audit log's integrity but encrypts nothing); LG-15 → 8.6 DNS, 8.7 URL,
+    8.8 command-line and 8.12 service provider logs.
+  - **related**: everything else; CIS's mapping relates it, and nothing more is claimed.
+  The overview counts what it says: "evidence for N NIST controls · M CIS safeguards backed by a check (K more related
+  by CIS's mapping)". **The CIS Controls are used here as a map, to guide Looking Glass's security and make the auditor's work easier. They are voluntary best practice, not a law or a requirement, and CIS issues no certificate for meeting them: organisations measure themselves with CIS's free Self Assessment Tool (CSAT) or with an auditor, and those that need a formal certificate usually go for ISO 27001 or SOC 2, with the CIS Controls as a guide.** The CIS Controls apply to the whole environment (accounts, assets, backups, incident response...), and
+  Looking Glass supports only part of Controls 3, 5, 6 and 8. The CIS Controls are
   © Center for Internet Security, Inc., cited unchanged under CC BY-NC-ND 4.0 (not under Looking Glass's licence);
   the portal and the report carry that notice. Each check gives its evidence and **no pass or fail**:
   whether a control is implemented and operating effectively is the auditor's conclusion. Click a check to open the
