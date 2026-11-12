@@ -137,10 +137,30 @@ def install(app, logger=None):
                 abort(403, description="Cross-site requests are not accepted.")
             if (fetch_site or "same-origin") not in ("same-origin", "none"):
                 abort(403, description="Cross-site requests are not accepted.")
+            # every route takes a JSON object: an array (or a bare value) is refused here, once, instead of failing
+            # inside a route with a 500 (external review, 2026-11-12)
+            if request.mimetype == "application/json" and request.content_length:
+                body = request.get_json(silent=True)
+                if body is not None and not isinstance(body, dict):
+                    abort(400, description="Send the data as a JSON object.")
 
     @app.after_request
     def _headers(resp):
         h = resp.headers
+        # a download named with letters outside Latin-1 (an organisation's name in an advisory, say) cannot go in the
+        # header as it is and failed with a 500: an ASCII name for old browsers, the real one as filename* (RFC 6266,
+        # external review, 2026-11-12)
+        cd = h.get("Content-Disposition")
+        if cd and not cd.isascii():
+            import re as _re
+            import unicodedata
+            from urllib.parse import quote as _quote
+            m = _re.match(r'\s*(\w+)\s*;\s*filename="([^"]*)"', cd)
+            if m:
+                disp, name = m.group(1), m.group(2)
+                plain = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+                plain = _re.sub(r'[^\w.\- ]+', "_", plain).strip() or "download"
+                h["Content-Disposition"] = f'{disp}; filename="{plain}"; filename*=UTF-8\'\'{_quote(name, safe="")}'
         # CSP_REPORT_ONLY=1 (diagnostics): the browser reports what the policy would block instead of blocking it
         csp_header = "Content-Security-Policy-Report-Only" if os.environ.get("CSP_REPORT_ONLY") == "1" else "Content-Security-Policy"
         csp = CSP.format(nonce=getattr(g, "csp_nonce", ""))

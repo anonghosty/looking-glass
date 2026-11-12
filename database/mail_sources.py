@@ -22,6 +22,7 @@ import hashlib
 import imaplib
 import json
 import os
+import re
 import socket
 import sqlite3
 import ssl
@@ -111,19 +112,28 @@ class ImapSource:
             typ, _ = self.imap.select(imap_quote(self.folder), readonly=True)
         except imaplib.IMAP4.error as exc:
             raise MailSourceError(f"the mail server refused the folder '{self.folder}' ({exc})") from exc
+        try:                                          # the server's own numbering of this folder (with UID: the message key)
+            _, dat = self.imap.response("UIDVALIDITY")
+            self.uidvalidity = (dat[0].decode() if dat and dat[0] else "0").strip()
+        except Exception:  # noqa: BLE001
+            self.uidvalidity = "0"
         if typ != "OK":
             raise MailSourceError(f"folder '{self.folder}' not found in {self.user}")
 
     def list(self, days: int):
-        """[(key, seq id)] for messages since the date, newest last."""
+        """[(key, seq id)] for messages since the date, newest last. The key is the SERVER's identity of the message
+        (UIDVALIDITY and UID), never its Message-ID header, which the sender writes: a forged mail reusing a coming
+        report's Message-ID could get that report skipped as already handled (external review, 2026-11-12).
+        self.legacy maps each key to the Message-ID key earlier versions used, so mail already handled is not
+        handled again after the update."""
         self._connect()
         d = since_date(days)
         typ, data = self.imap.search(None, f'SINCE "{d.day:02d}-{_MONTHS[d.month - 1]}-{d.year}"')
         ids = data[0].split() if typ == "OK" and data and data[0] else []
-        out = []
+        out, self.legacy = [], {}
         for chunk in _batched(ids, 200):
             typ, data = self.imap.fetch(b",".join(chunk).decode(),
-                                        "(BODY.PEEK[HEADER.FIELDS (MESSAGE-ID DATE SUBJECT FROM)])")
+                                        "(UID BODY.PEEK[HEADER.FIELDS (MESSAGE-ID DATE SUBJECT FROM)])")
             if typ != "OK":
                 continue
             for item in data:
@@ -132,7 +142,10 @@ class ImapSource:
                 seq = item[0].split()[0]
                 hdr = email.message_from_bytes(item[1])
                 mid = (hdr.get("Message-ID") or "").strip()
-                key = "imap:" + (mid or hashlib.sha1(item[1]).hexdigest())
+                old = "imap:" + (mid or hashlib.sha1(item[1]).hexdigest())
+                m = re.search(rb"\bUID (\d+)", item[0])
+                key = f"imap:{getattr(self, 'uidvalidity', '0')}:{m.group(1).decode()}" if m else old
+                self.legacy[key] = old
                 out.append((key, seq))
         return out
 
@@ -377,9 +390,14 @@ class GraphSource:
         params = {"$filter": f"receivedDateTime ge {d.isoformat()}T00:00:00Z", "$select": "id,internetMessageId",
                   "$orderby": "receivedDateTime asc", "$top": "100"}
         url, out = f"/mailFolders/{self._folder()}/messages", []
+        self.legacy = {}
         while url:
             j = self._get(url, "Message list", params=params)
-            out += [("graph:" + (m.get("internetMessageId") or m["id"]), m["id"]) for m in j.get("value", [])]
+            for m in j.get("value", []):
+                # the mailbox's own id, never the sender-written internetMessageId (external review, 2026-11-12)
+                key = "graph:id:" + m["id"]
+                self.legacy[key] = "graph:" + (m.get("internetMessageId") or m["id"])
+                out.append((key, m["id"]))
             url, params = j.get("@odata.nextLink"), None
         return out
 

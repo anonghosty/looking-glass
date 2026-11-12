@@ -79,8 +79,8 @@ def install(app, ctx):
             asn = e.get("src_asn") if comms else e.get("asn")
             if asn not in names:
                 names[asn] = (ctx["network"](asn) if asn else "") or "Unknown"
-            p = out.setdefault(names[asn], {"ips": set(), "records": 0})
-            p["ips"].add(ip); p["records"] += 1
+            p = out.setdefault(names[asn], {"ips": set(), "records": 0, "asns": set()})
+            p["ips"].add(ip); p["records"] += 1; p["asns"].add(str(asn or ""))
         return out
 
     def before_package(job):
@@ -117,7 +117,10 @@ def install(app, ctx):
         advisor's, once management decided (a rejected one opens again: there is no advisory)."""
         entry = job["inputs"][0]
         revs = F.reviews_for(entry["code"], user()[0], False)
-        active = [r for r in revs if r["review"].get("decision") != "rejected"]
+        # rejected or withdrawn (closed by hand while undecided): no advisory comes, the report is the analyst's again
+        # (a review closed undecided before this rule counts as withdrawn too)
+        active = [r for r in revs if r["review"].get("decision") not in ("rejected", "withdrawn")
+                  and not (r.get("status") == "closed" and not r["review"].get("decision"))]
         if not job.get("needs_review") and not revs:
             return True, ""
         if not revs:
@@ -193,24 +196,62 @@ def install(app, ctx):
         m = ctx["svc_matcher"](entry) if entry.get("section") == "services" and ctx.get("svc_matcher") else None
         return {"entry": entry, "found": found, "around": around, "per_day": [tuple(p) for p in kept["per_day"]], "m": m, "plat": plat}, ""
 
-    def report_of(fid, me, advisory=None, network=None, file_base=None):
+    def org_asns(x, k):
+        """A sub-finding's organisation as AS numbers: stored when it was made; for one made before that, the AS
+        numbers whose network name is still its name (then stored, so a later rename cannot change it). An empty set:
+        none of its devices are in the kept records any more. None for a finding not tied to one organisation."""
+        if not x.get("network"):
+            return None
+        if isinstance(x.get("network_asns"), list):
+            return {str(a) for a in x["network_asns"]}
+        comms = k["entry"].get("section") == "infections"
+        asn = (lambda e: e.get("src_asn")) if comms else (lambda e: e.get("asn"))
+        found = {str(asn(e) or "") for e in k["found"] if ((ctx["network"](asn(e)) if asn(e) else "") or "Unknown") == x["network"]}
+        if found:
+            with F.lock:
+                F._load()
+                if x["id"] in F.data["items"]:
+                    F.data["items"][x["id"]]["network_asns"] = sorted(found)
+                    F._save()
+        return found
+
+    def org_records(x, k, asns):
+        comms = k["entry"].get("section") == "infections"
+        asn = (lambda e: e.get("src_asn")) if comms else (lambda e: e.get("asn"))
+        return [e for e in k["found"] if str(asn(e) or "") in asns]
+
+    book.review_org_asns = org_asns             # advisory.py scopes its pages with the same rule
+
+    def report_of(fid, me, advisory=None, network=None, file_base=None, asns=None):
         """(zip name, zip bytes, pdf name, pdf bytes) of a decided review's report, from its kept records; (None, error).
         advisory: the advisory's pages go first (advisory.py), the report below them unchanged; network: the report for
-        that organisation's devices only; file_base: the files' name (without extension)."""
+        that organisation's devices only; asns: that organisation's AS numbers; file_base: the files' name (without
+        extension). A sub-finding (one organisation) is ALWAYS scoped to its own AS numbers, whoever asks: never
+        everyone's devices (external review, 2026-11-12), and refused when none of its devices are left."""
         x = F.get(fid)
         if not x or not x.get("review") or not F.sees(x, me, hp("settings")):
             return None, "No such review."
         rv = x["review"]
         if not rv.get("decision"):
             return None, "Management has not decided yet."
-        if rv["decision"] == "rejected":
-            return None, "Management rejected it: there is no report to generate."
+        if rv["decision"] in ("rejected", "withdrawn"):
+            return None, ("Management rejected it" if rv["decision"] == "rejected" else "It was withdrawn") + \
+                ": there is no report to generate."
         k, err = records_of(fid)
         if not k:
             return None, err
+        own = org_asns(x, k)
+        if own is not None:                              # one organisation's finding: only its devices, by AS number
+            if asns is not None and not {str(a) for a in asns} <= own:
+                return None, "That organisation is not this finding's."
+            asns, network = own, x["network"]
+        if asns is not None and not org_records(x, k, {str(a) for a in asns}):
+            return None, (f"None of {network or 'this organisation'}'s devices are in the finding's records any more: "
+                          "no report is made (it would not be about them).")
         job = {"id": f"review{fid}", "user": me, "log": [], "state": "done", "advisory": advisory, "file_base": file_base}
         apply(job, x)
-        res = book.package(job, k["entry"], k["found"], k["per_day"], None, k["around"], k["m"], network=network or None)
+        res = book.package(job, k["entry"], k["found"], k["per_day"], None, k["around"], k["m"], network=network or None,
+                           asns=asns)
         z = zipfile.ZipFile(io.BytesIO(res["bytes"]))
         pdf = next(n for n in z.namelist() if n.endswith(".pdf"))
         return (res["name"], res["bytes"], pdf, z.read(pdf)), ""
@@ -304,7 +345,8 @@ def install(app, ctx):
         avail = {x["code"]: x for x in prev.get("cross") or []}
         if j["inputs"][0].get("kind") == "a":
             return jsonify(error="An analyst code is already on its own finding."), 400
-        prior = [r for r in F.reviews_for(j["inputs"][0]["code"], j["user"], False) if r["review"].get("decision") != "rejected"]
+        prior = [r for r in F.reviews_for(j["inputs"][0]["code"], j["user"], False)
+                 if r["review"].get("decision") not in ("rejected", "withdrawn")]
         if prior:
             return jsonify(error=f"This combination was already sent to management: see finding #{prior[-1].get('parent') or prior[-1]['id']}."), 409
         b = request.get_json(silent=True) or {}
@@ -363,6 +405,11 @@ def install(app, ctx):
         if len(nets) > 1:
             case, kids = F.create_case(entry["code"], section, researcher["what"][:200], title, text, me, role, to,
                                        [(n, for_net(n)) for n in nets])
+            with F.lock:                                   # each organisation by its AS numbers, not only its name
+                F._load()
+                for k in kids:
+                    F.data["items"][k["id"]]["network_asns"] = sorted(per_net[k["network"]]["asns"])
+                F._save()
             for k in kids:
                 keep_search(k["id"], j)                    # each organisation's report is made later from these records
             j["review"] = {"finding": f"#{case['id']}", "decision": None, "status": case["status"]}
@@ -373,8 +420,11 @@ def install(app, ctx):
         review = for_net(nets[0]) if nets else base
         item = F.create_review(entry["code"], section, researcher["what"][:200], (f"{title} · {nets[0]}" if nets else title)[:140], text, me, role, to, review)
         if nets:
-            with F.lock:                                   # a finding for one organisation says so
-                F._load(); F.data["items"][item["id"]]["network"] = nets[0]; F._save()
+            with F.lock:                                   # a finding for one organisation says so, and holds its AS numbers
+                F._load()
+                F.data["items"][item["id"]]["network"] = nets[0]
+                F.data["items"][item["id"]]["network_asns"] = sorted(per_net[nets[0]]["asns"])
+                F._save()
         j["review"] = {"finding": f"#{item['id']}", "decision": None, "status": item["status"]}
         keep_search(item["id"], j)                         # the report is made later from exactly these records
         ctx["audit"].add("combo_review_sent", user=me, target=entry["code"],

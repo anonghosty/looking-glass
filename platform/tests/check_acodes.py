@@ -73,7 +73,13 @@ try:
     ok("its exact records are kept (owner-only file), so every role sees the same records", os.path.exists(p_ids)
        and oct(os.stat(p_ids).st_mode & 0o777) == "0o600" and len(json.load(open(p_ids))) == len(want))
     st, d2 = call("/api/analyst-codes", ANALYST, "POST", {"platform": "comms", "kind": "filters", "value": value, "at": at, "title": "again", "to": "lg-check-researcher"})
-    ok("the same selection on the same day gives the same code", d2.get("code") == code)
+    # (external review, 2026-11-12: the same code overwrote the first one's records and the second finding's page was 404)
+    code2 = d2.get("code") or ""
+    ok("the same selection asked for again gets a code of its own, with its own finding",
+       st == 200 and re.match(r"^LG-A-[0-9A-F]{8}$", code2) and code2 != code and d2.get("finding") == "#2", f"{code} / {code2} {d2.get('finding')}")
+    st2, v2 = call(f"/api/intel/acode/{code2}", RESEARCHER, role="researcher")
+    ok("…its page opens on its own finding, and the first code still has its records",
+       st2 == 200 and v2["finding"]["number"] == "#2" and len(json.load(open(p_ids))) == len(want), f"HTTP {st2}")
     print("The researcher opens it")
     st, v = call(f"/api/intel/acode/{code}", RESEARCHER, role="researcher")
     blob = json.dumps(v)

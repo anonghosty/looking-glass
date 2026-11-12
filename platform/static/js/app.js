@@ -1122,7 +1122,10 @@
       state.generation++; state.pending = []; state.cursor = state.dayStart;
     }
     // Speed 1x reached the end of the day: ask the server what comes next
-    if (state.speed === 1 && state.dayEnd && r.getTime() >= state.dayEnd - 1000 && Date.now() - state.lastSync > 10000) syncClock().catch(() => {});
+    // at most one try every 10 s, successful or not: with an expired session (a wall screen left on) every try failed,
+    // the last success never moved, and the clock was asked for 4 times a second (external review, 2026-11-12)
+    if (state.speed === 1 && state.dayEnd && r.getTime() >= state.dayEnd - 1000 && Date.now() - state.lastSync > 10000
+        && Date.now() - (state.lastSyncTry || 0) > 10000) { state.lastSyncTry = Date.now(); syncClock().catch(() => {}); }
     const nIso = new Date().toISOString();
     $("nowClock").textContent = `${nIso.slice(0, 10)} ${nIso.slice(11, 19)}`;
     const s = state.stats;

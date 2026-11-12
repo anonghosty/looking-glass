@@ -32,7 +32,10 @@ _HOSTISH = re.compile(r"^\s*(?:<host>|<ip>|<email>)\s*$")
 def mask(text):
     if text is None:
         return ""
-    t = str(text)
+    import ip_find
+    # addresses first, by the finder every masker shares (ip_find.py); the patterns below still catch the rest
+    # (hardware addresses, host names, e-mail addresses, dates, IDs)
+    t = ip_find.sub(str(text), lambda ip: "<ip>")
     for rx, rep in MASKS:
         t = rx.sub(rep, t)
     return re.sub(r"\s+", " ", t).strip()

@@ -33,9 +33,13 @@ MASKED = [   # (text, the address in it)
     ("addr_2001:db8::1", "2001:db8::1"),
     ("[2001:db8::1]:443", "2001:db8::1"),
     ("from fe80::1ff:fe23:4567:890a done", "fe80::1ff:fe23:4567:890a"),
+    # a letter glued on does not make it a version (external review, 2026-11-12: v41.66.1.2 leaked); over-masking a
+    # four-part version number is the price
+    ("v41.66.1.2", "41.66.1.2"), ("build 41.66.1.2a", "41.66.1.2"), ("app.41.66.1.2.nip.io", "41.66.1.2"),
+    ("ip:2001:db8::1", "2001:db8::1"),
 ]
 LEFT = [     # nothing in these is an address
-    "OpenSSH 1.2.3.4.5", "v10.1.2.3", "build 1.2.3.4a", "OpenSSH_8.2p1", "Date 10:22:31 GMT", "ratio 3:2",
+    "OpenSSH 1.2.3.4.5", "OpenSSH_8.2p1", "Date 10:22:31 GMT", "ratio 3:2",
     "MikroTik 7.24.4", "999.1.1.1", "port 8291", "id 4f9a1c2b3d4e5f60", "version 2.4.6.10.12",
 ]
 

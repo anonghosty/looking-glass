@@ -75,6 +75,41 @@ def _json(path, many=False):
         return [] if many else None
 
 
+def _notes(path):
+    """The retention notes, one per line: (valid notes, how many lines were not a note). A bad line never stops the
+    check (external review, 2026-11-12: one crashed both checks); it is reported as a break."""
+    good, bad = [], 0
+    try:
+        with open(path, encoding="utf-8") as f:
+            for ln in f:
+                if not ln.strip():
+                    continue
+                try:
+                    n = json.loads(ln)
+                except ValueError:
+                    n = None
+                # a real archive holds at least one entry: a note for an empty one can only be made up (it would add a
+                # removal without changing the entry count audit.head is checked against)
+                if isinstance(n, dict) and isinstance(n.get("archive"), str) and isinstance(n.get("last_hash"), str) \
+                        and _int(n.get("entries")) >= 1:
+                    good.append(n)
+                else:
+                    bad += 1
+    except OSError:
+        pass
+    return good, bad
+
+
+def _int(x):
+    try:
+        return int(x)
+    except (TypeError, ValueError):
+        return 0
+
+
+_SEAL_RX = re.compile(r"(\d+) entries written before the chain sealed.*SHA-256 ([0-9a-f]{64})")
+
+
 def when(t):
     return time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(t)) if isinstance(t, (int, float)) and t else ""
 
@@ -105,18 +140,22 @@ def check(folder, earlier=None, gap_days=30):
     for p in archives:
         lines.extend(_lines(p))
     lines.extend(_lines(os.path.join(folder, "audit.log")))
-    removed = _json(os.path.join(folder, "audit_archive", "removed.jsonl"), many=True)
-    gone = sum(int(r.get("entries") or 0) for r in removed)       # entries of archives the retention removed
+    removed, bad_notes = _notes(os.path.join(folder, "audit_archive", "removed.jsonl"))
+    gone = sum(_int(r.get("entries")) for r in removed)            # entries of archives the retention removed
 
     prev = removed[-1]["last_hash"] if removed else None
     before = chained = 0
     first_t = last_t = None
     brk, started = None, False
+    if bad_notes:
+        brk = {"entry": gone + 1, "what": f"{bad_notes} line(s) in the retention notes (removed.jsonl) that are not a note"}
     hashes = []
     for i, ln in enumerate(lines):
         n = gone + i + 1                                           # the entry's number since the log began
         try:
             rec = json.loads(ln)
+            if not isinstance(rec, dict):
+                raise ValueError("not an object")
         except ValueError:
             brk = brk or {"entry": n, "what": "a line that is not a valid entry"}
             prev = sha(ln); hashes.append(prev)
@@ -138,13 +177,36 @@ def check(folder, earlier=None, gap_days=30):
     head = hashes[-1] if hashes else ZERO
     head_entry = gone + len(lines)
     saved = _json(os.path.join(folder, "audit.head"))
+    saved = saved if isinstance(saved, dict) else None
     head_file = "missing"
     if saved:
         head_file = "matches" if saved.get("head") == head and saved.get("entries") == head_entry else "differs"
         if head_file == "differs" and not brk:
             brk = {"entry": head_entry, "t": last_t, "what": "the last entries do not match audit.head (entries removed from the end?)"}
+    elif chained and not brk:
+        # Looking Glass writes audit.head with every chained entry: without it, entries cut from the end would not show
+        # (external review, 2026-11-12)
+        brk = {"entry": head_entry, "t": last_t, "what": "audit.head is missing (entries may have been cut from the end)"}
 
-    seal, seal_state = _json(os.path.join(folder, "audit.seal")), "none"
+    # the seal of the entries written before the chain: its values come from its own chain entry ("audit_sealed"),
+    # written when it was made, so deleting or rewriting audit.seal changes nothing (external review, 2026-11-12)
+    seal = _json(os.path.join(folder, "audit.seal"))
+    seal = seal if isinstance(seal, dict) else None
+    chain_seal = None
+    for ln in lines:
+        if '"audit_sealed"' in ln:
+            try:
+                rec = json.loads(ln)
+            except ValueError:
+                continue
+            m = _SEAL_RX.search(str(rec.get("detail") or "")) if rec.get("event") == "audit_sealed" else None
+            if m:
+                chain_seal = {"entries": int(m.group(1)), "sha256": m.group(2)}
+    if chain_seal:
+        if seal and (seal.get("entries") != chain_seal["entries"] or seal.get("sha256") != chain_seal["sha256"]) and not brk:
+            brk = {"entry": gone + 1, "t": seal.get("first"), "what": "audit.seal differs from the seal recorded in the chain"}
+        seal = dict(seal or {}, **chain_seal)
+    seal_state = "none"
     if seal:
         pre = _pre_chain(lines)
         if len(pre) == seal.get("entries") and sha("\n".join(pre)) == seal.get("sha256"):
@@ -163,17 +225,35 @@ def check(folder, earlier=None, gap_days=30):
         recorded = min(int(open(os.path.join(folder, "audit_archive", "removed.recorded")).read().strip() or 0), len(removed))
     except (OSError, ValueError):
         recorded = 0
-    seen, oldest_t = {}, None
+    # an archive is known by its name AND its last link: two archives can share a name (made in the same second, the
+    # first already removed when the second is written)
+    seen, archived = set(), set()
     for ln in lines:
         try:
             rec = json.loads(ln)
         except ValueError:
             continue
-        oldest_t = rec.get("t") if oldest_t is None else oldest_t
-        if rec.get("event") in ("audit_archive_removed", "audit_archive_deleted_early"):
-            seen[rec.get("target")] = (rec.get("removed") or {}).get("last_hash")
-    unaccounted = [n.get("archive") for n in removed[:recorded] if seen.get(n.get("archive")) != n.get("last_hash")
-                   and not (oldest_t is not None and (n.get("removed_at") or 0) < oldest_t)]
+        if not isinstance(rec, dict):
+            continue
+        if rec.get("event") in ("audit_archive_removed", "audit_archive_deleted_early") and isinstance(rec.get("removed"), dict):
+            seen.add((rec.get("target"), rec["removed"].get("last_hash")))
+        elif rec.get("event") == "audit_archived" and isinstance(rec.get("archived"), dict):
+            archived.add((rec.get("target"), rec["archived"].get("last_hash")))
+
+    # A note may lack its removal entry only when a LATER removal took that entry with it (so it is never the newest
+    # note), and then the archive's own rotation entry ("audit_archived", written into the next file) is gone as well.
+    # While the rotation entry is kept, so must the removal entry be; the note's own times do not decide (external
+    # review, 2026-11-12: two crafted notes with old removal times excused a young archive deleted outside Looking Glass).
+    def excused(i, n):
+        return i < len(removed) - 1 and (n.get("archive"), n.get("last_hash")) not in archived
+
+    def num(x, default=0.0):
+        try:
+            return float(x)
+        except (TypeError, ValueError):
+            return default
+    unaccounted = [n.get("archive") for i, n in enumerate(removed[:recorded])
+                   if (n.get("archive"), n.get("last_hash")) not in seen and not excused(i, n)]
     if unaccounted and not brk:
         brk = {"entry": gone + 1, "t": first_t, "what": f"retention notes with no entry in the chain ({', '.join(unaccounted[:3])}): "
                                                         "an archive was removed or noted outside Looking Glass"}
@@ -186,11 +266,6 @@ def check(folder, earlier=None, gap_days=30):
     # is all there is: such a removal is marked "retention not recorded". A note's dates of its own entries could be
     # faked to look old too, so the time from a removed archive's newest entry to the next archive's oldest (or the
     # first entry still kept, whose time is inside the chain) should not jump by more than gap_days.
-    def num(x, default=0.0):
-        try:
-            return float(x)
-        except (TypeError, ValueError):
-            return default
     # Each rotation writes an entry into the new file ("audit_archived": the archive's name, entries, oldest and newest
     # times, last link). It stays in the kept log after the archive is deleted: a note must agree with it, and the age
     # of the entries is judged by it, not by the note.
@@ -202,23 +277,27 @@ def check(folder, earlier=None, gap_days=30):
             rec = json.loads(ln)
         except ValueError:
             continue
-        if rec.get("event") == "audit_archived":
-            rotations[rec.get("target")] = rec.get("archived") or {}
+        if not isinstance(rec, dict):
+            continue
+        if rec.get("event") == "audit_archived" and isinstance(rec.get("archived"), dict):
+            rotations[(rec.get("target"), rec["archived"].get("last_hash"))] = rec["archived"]
+            rotations.setdefault(rec.get("target"), rec["archived"])    # by name too, for a note whose last link lies
         elif rec.get("event") == "audit_retention_set":
             try:
                 history.append((num(rec.get("t")), int(rec.get("target"))))
             except (TypeError, ValueError):
                 pass
         elif rec.get("event") in ("audit_archive_removed", "audit_archive_deleted_early"):
-            rec_at[(rec.get("target"), (rec.get("removed") or {}).get("last_hash"))] = num(rec.get("t"))
+            rm = rec.get("removed") if isinstance(rec.get("removed"), dict) else {}
+            rec_at[(rec.get("target"), rm.get("last_hash"))] = num(rec.get("t"))
     removals = []
     for i, n in enumerate(removed):
         key = (n.get("archive"), n.get("last_hash"))
         pending = False
         if key in rec_at:
             at = rec_at[key]
-        elif i < len(removed) - 1 and first_t is not None and num(n.get("removed_at")) < num(first_t):
-            continue                          # its chain entry went with a later removal (judged when it was recorded)
+        elif excused(i, n):
+            continue                          # its chain entry went with a later removal, its rotation entry too (judged then)
         else:
             at, pending = time.time(), True
         days = None
@@ -238,7 +317,7 @@ def check(folder, earlier=None, gap_days=30):
             why.append(f"its note claims a removal time ({when(num(n.get('removed_at')))}) later than the removal was recorded ({when(at)})")
         if recorded_setting and n.get("retention_days") is not None and num(n.get("retention_days")) < days:
             why.append(f"its note claims a retention of {n.get('retention_days')} days, the setting was {days} days")
-        rot = rotations.get(n.get("archive"))
+        rot = rotations.get((n.get("archive"), n.get("last_hash"))) or rotations.get(n.get("archive"))
         if rot:
             diff = []
             if rot.get("last_hash") != n.get("last_hash"):
@@ -265,10 +344,11 @@ def check(folder, earlier=None, gap_days=30):
                                                         "entries were deleted outside the retention"}
     gaps = []
     for i, n in enumerate(removed):
-        nxt = (rotations.get(removed[i + 1].get("archive")) or removed[i + 1]).get("oldest") if i + 1 < len(removed) else first_t
-        n = dict(n, newest=(rotations.get(n.get("archive")) or n).get("newest"))
-        if n.get("newest") and nxt and float(nxt) - float(n["newest"]) > gap_days * 86400:
-            gaps.append({"after": n.get("archive"), "from": n["newest"], "to": nxt, "days": int((float(nxt) - float(n["newest"])) // 86400)})
+        rk = lambda x: rotations.get((x.get("archive"), x.get("last_hash"))) or rotations.get(x.get("archive"))
+        nxt = (rk(removed[i + 1]) or removed[i + 1]).get("oldest") if i + 1 < len(removed) else first_t
+        n = dict(n, newest=(rk(n) or n).get("newest"))
+        if n.get("newest") and nxt and num(nxt) - num(n["newest"]) > gap_days * 86400:
+            gaps.append({"after": n.get("archive"), "from": n["newest"], "to": nxt, "days": int((num(nxt) - num(n["newest"])) // 86400)})
 
     out = {"ok": brk is None, "entries": head_entry, "removals_recorded": recorded - len(unaccounted),
            "removals_pending": len(removed) - recorded, "removed_early": removed_early, "removal_gaps": gaps,

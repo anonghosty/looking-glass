@@ -6,10 +6,27 @@
 cd "$(dirname "$0")/.." || exit 1
 PY=.venv/bin/python
 pass=0; fail=0; skip=0; failed=()
+# Is MongoDB reachable? Without it (a fresh clone, CI, a machine without the database) a check that needs the data is
+# reported as skipped, not failed; with it, a database error is a failure like any other (external review, 2026-11-12)
+DB_UP=1
+$PY - <<'PY' >/dev/null 2>&1 || DB_UP=0
+import os
+from dotenv import dotenv_values
+from pymongo import MongoClient
+e = {**dotenv_values(".env"), **os.environ}
+MongoClient(host=e.get("MONGO_HOST", "localhost"), port=int(e.get("MONGO_PORT") or 27017), username=e.get("MONGO_USER") or None,
+            password=e.get("MONGO_PASSWORD") or None, authSource=e.get("MONGO_AUTH_SOURCE") or "admin",
+            serverSelectionTimeoutMS=3000).admin.command("ping")
+PY
+[ $DB_UP = 1 ] || echo "MongoDB is not reachable: checks that need the data are reported as skipped."
 run() {
   local name="$1"; shift
   printf '%-34s ' "$name"
   out=$("$@" 2>&1); rc=$?
+  if [ $rc != 0 ] && [ $rc != 77 ] && [ $DB_UP = 0 ] \
+     && echo "$out" | grep -qE 'ServerSelectionTimeoutError|pymongo\.errors|Connection refused|No servers found'; then
+    echo "skipped"; skip=$((skip + 1)); echo "    SKIPPED: needs MongoDB, which is not reachable"; return
+  fi
   if [ $rc = 0 ]; then echo "passed"; pass=$((pass + 1))
   elif [ $rc = 77 ]; then echo "skipped"; skip=$((skip + 1)); echo "$out" | grep -m1 SKIPPED | sed 's/^/    /'
   else echo "FAILED"; fail=$((fail + 1)); failed+=("$name"); echo "$out" | tail -15 | sed 's/^/    /'; fi
@@ -30,6 +47,10 @@ run "replayed counts"                 $PY tests/verify_replayed.py
 run "constituency"                    $PY tests/verify_constituency.py
 run "demo masking"                    $PY tests/test_demo.py
 # the database pipeline beside the platform (database/ in a release install)
+run "one address finder for every masker" $PY tests/check_ip_find.py
+run "CVE look-ups: KEV backoff, time budget" $PY tests/check_cve_backoff.py
+run "constituency change beats a running day load" $PY tests/check_scope_reload.py
+run "CSRF on every write route (real sign-in)" $PY tests/check_csrf_routes.py
 DBDIR=""; for d in ../database ../shadowserver; do [ -f "$d/zip_limits.py" ] && [ -x "$d/.venv/bin/python" ] && DBDIR=$d && break; done
 if [ -n "$DBDIR" ]; then run "pipeline: unzip limits (zip bombs)" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_zip_limits.py"
 else run "pipeline: unzip limits (zip bombs)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
@@ -39,6 +60,8 @@ if [ -n "$DBDIR" ] && [ -f "$DBDIR/mail_auth.py" ]; then run "pipeline: sender c
 else run "pipeline: sender check (DKIM)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/tests/test_mail_auth_pipeline.py" ]; then run "pipeline: sender check blocks and releases" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_mail_auth_pipeline.py"
 else run "pipeline: sender check blocks and releases" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
+if [ -n "$DBDIR" ] && [ -f "$DBDIR/tests/test_link_downloads.py" ]; then run "pipeline: link size cap, Block fails closed" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_link_downloads.py"
+else run "pipeline: link size cap, Block fails closed" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/tests/test_worker_settings_effective.py" ]; then run "pipeline: Workers rules read values as the pipeline does" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_worker_settings_effective.py"
 else run "pipeline: Workers rules read values as the pipeline does" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/report_api.py" ]; then run "pipeline: reports by Shadowserver API or e-mail" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_report_api.py"

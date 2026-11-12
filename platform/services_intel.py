@@ -139,8 +139,11 @@ class ServicesIntel:
     def sink_code(base, name):
         return cross_code(SECTION, base, [(base, []), (SINK, [f"Infection: {name}"])])
 
-    def sinkholes_of(self, base, data=None):
+    def sinkholes_of(self, base, data=None, full=None):
+        """full: whether the viewer sees hosts (small_codes); None works it out. An infection fewer than MIN_HOSTS hosts
+        carry gets no lasting code for a viewer who does not (external review, 2026-11-12)."""
         data = data or self.index()
+        full = small_codes.viewer_sees_hosts() if full is None else full
         hs = data["hosts"].get(base, set())
         inf_hosts = [h for h in hs if h in data["infected"]]
         names = collections.Counter(n for h in inf_hosts for n in data["infected"][h])
@@ -152,7 +155,7 @@ class ServicesIntel:
         return {"hosts": len(inf_hosts), "share": round(len(inf_hosts) / max(1, len(hs)), 4),
                 "reports": [{"report": r, "hosts": c} for r, c in collections.Counter(
                     r for h in inf_hosts for r in (data["sink_rep"].get(h) or {})).most_common()],
-                "names": [{"name": n, "hosts": c, "code": self.sink_code(base, n),
+                "names": [{"name": n, "hosts": c, "code": small_codes.code_for(self.sink_code(base, n), c, full),
                            "reports": [{"report": r, "hosts": k} for r, k in where[n].most_common()],
                            # every report that led to it: the sinkhole reports, and the services / vulnerability reports
                            # these hosts are in, grouped by kind
@@ -338,7 +341,8 @@ class ServicesIntel:
         infections = []
         for n, hs in sorted(names.items(), key=lambda kv: -len(kv[1])):
             reps = [{"report": s["report"], "title": s["title"], "hosts": len(hs & data["hosts"][s["report"]]),
-                     "code": self.sink_code(s["report"], n)} for s in services if hs & data["hosts"][s["report"]]]
+                     "code": small_codes.code_for(self.sink_code(s["report"], n), len(hs & data["hosts"][s["report"]]), full)}
+                    for s in services if hs & data["hosts"][s["report"]]]
             infections.append({"name": n, "hosts": len(hs), "reports": sorted(reps, key=lambda r: -r["hosts"])[:6]})
         # across reports: the exact pattern of each host over every report it is in (services reports with their pattern
         # items, sinkhole reports with the infections), counted; LG-X codes keyed on the pattern's first report
@@ -430,17 +434,24 @@ class ServicesIntel:
             with self.lock:
                 self.cache["patterns_of"] = hit
         want_reps = frozenset(r for r, _ in m.e.get("parts") or [])
-        pat = hit["pat"]
+        pat = hit["pat"]                                   # shared by every request on the same list
+        with self.lock:
+            done = set(pat)
+        new = {}
         for h, rs in hit["reps"].items():
-            if rs != want_reps or h in pat:
+            if rs != want_reps or h in done:
                 continue                                   # another set of reports: never this pattern
             per = collections.defaultdict(set)
             for e in hit["evs"][h]:
                 per[m.report(e)].update(m.items(e))
             for r, names in (m.sink_rep.get(h) or {}).items():
                 per[r] = {f"Infection: {n}" for n in names}
-            pat[h] = tuple(sorted((r, tuple(sorted(i))) for r, i in per.items()))
-        return hit["mine"], {h: p for h, p in pat.items() if hit["reps"][h] == want_reps}
+            new[h] = tuple(sorted((r, tuple(sorted(i))) for r, i in per.items()))
+        # written and read under the lock: another request walking the same dictionary while this one added to it
+        # could fail (external review, 2026-11-12)
+        with self.lock:
+            pat.update(new)
+            return hit["mine"], {h: p for h, p in pat.items() if hit["reps"][h] == want_reps}
 
     def records_of(self, report, limit=20000):
         """The records of a report (and its twin) in memory, for the field suggestions (never sent out)."""

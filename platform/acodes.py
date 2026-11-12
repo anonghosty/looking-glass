@@ -53,6 +53,16 @@ def acode(platform, day, sel):
     return "LG-A-" + hashlib.sha256(raw.encode()).hexdigest()[:8].upper()
 
 
+def new_acode(book, platform, day, sel):
+    """A code not in use yet: the same selection asked for twice gets two codes, one per finding (external review,
+    2026-11-12: the second request overwrote the first code's records, and the second finding's page answered 404)."""
+    code, n = acode(platform, day, sel), 1
+    while book.get(code) and n < 1000:
+        n += 1
+        code = acode(platform, day, dict(sel, request=n))
+    return code
+
+
 def install(app, ctx):
     """ctx: book (combos.CodeBook), findings (findings.Findings), has_perm(p), csrf_ok(), fresh(), is_demo(), audit,
     day(platform, iso) -> a Day (memory, or loaded from MongoDB), slice(day, kind, value) -> comms records,
@@ -197,7 +207,7 @@ def install(app, ctx):
             sel = {"query": sorted(q)}
         # the analyst may ask about the combinations across reports only: the researchers' page then leads with them
         focus = "across" if b.get("focus") == "across" else ""
-        code = acode(platform, day_iso, dict(sel, focus=focus) if focus else sel)
+        code = new_acode(book, platform, day_iso, dict(sel, focus=focus) if focus else sel)
         entry = {"kind": "a", "platform": platform, "day": day_iso, "sel": sel, "code": "-"}     # "-": apply the selection
         if focus:
             entry["focus"] = focus
@@ -253,7 +263,7 @@ def install(app, ctx):
         if not days:
             return jsonify(error="The records carry no day."), 400
         sel = {"from_code": src["code"], "days": days}
-        code = acode(platform, days[-1], dict(sel, focus=focus) if focus else sel)
+        code = new_acode(book, platform, days[-1], dict(sel, focus=focus) if focus else sel)
         host = (lambda e: e.get("src_ip")) if platform == "comms" else (lambda e: e.get("ip"))
         names = collections.Counter(n for e in found for n in ([(e.get("infection") or "").lower()] if platform == "comms" else (e.get("issues") or [])) if n)
         what = book.describe(src["code"]) if hasattr(book, "describe") else src["code"]

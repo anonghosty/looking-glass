@@ -240,7 +240,11 @@
   }
   function show(on) { $("kbModal").hidden = !on; $("kbBack").hidden = !on; if (on) ($("kbName").value ? $("kbTitleIn") : $("kbName")).focus(); }
   let section = "infections";
+  // only the latest Define/Edit click fills the form: two quick clicks used to merge both names' reference lists, and
+  // a save then wrote the wrong references (external review, 2026-11-12)
+  let openSeq = 0;
   async function openEditor(name, sec) {
+    const mine = ++openSeq;
     section = sec || "infections";
     const isIssue = section === "issues", cve = isIssue && isCve(name);
     $("kbMpBox").hidden = isIssue; $("kbCveHint").hidden = !cve;
@@ -252,6 +256,7 @@
     if (name) {
       const r = await fetch(`/api/kb/entry?name=${encodeURIComponent(name)}&section=${section}`, { cache: "no-store", headers: hdr(false) });
       if (r.ok) e = await r.json();
+      if (mine !== openSeq) return;           // another name was opened meanwhile: its own call fills the form
       const row = !isIssue && [...data.unresolved, ...data.unchecked, ...data.defined, ...(data.all || [])].find((x) => x.name === name);
       if (row && row.reports?.length) $("kbSeen").textContent = `Seen in: ${row.reports.join(", ")}${row.kinds?.length ? ` (${row.kinds.join(", ")})` : ""}.`;
       else if (row && row.last_seen?.length) $("kbSeen").textContent = `Last seen in ${row.last_seen.map((s) => `${s.report} on ${s.date}`).join("; ")}.`;

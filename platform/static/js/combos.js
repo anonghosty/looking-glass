@@ -102,21 +102,27 @@
     }
     $("cbSearch").disabled = true; $("cbStop").hidden = false; $("cbStep3Box").hidden = true;
     $("cbProgress").hidden = false; $("cbLog").replaceChildren(); $("cbBar").style.width = "2%";
-    const r = await fetch("/api/combos/search", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() }, body: JSON.stringify(body) });
+    let r;
+    try {
+      r = await fetch("/api/combos/search", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() }, body: JSON.stringify(body) });
+    } catch { $("cbLog").append(el("li", "bad", "The connection was interrupted. Try again.")); failed(); return; }
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) { $("cbLog").append(el("li", "bad", d.error || `Refused (HTTP ${r.status})`)); done(); return; }
+    if (!r.ok) { $("cbLog").append(el("li", "bad", d.error || `Refused (HTTP ${r.status})`)); failed(); return; }
     job = d.id; poll();
   }
   function done() { $("cbSearch").disabled = false; $("cbStop").hidden = true; clearTimeout(timer); }
+  // a re-run for an expired download that does not finish leaves no download waiting: a later search would otherwise
+  // download a ZIP on its own (external review, 2026-11-12)
+  function failed() { autoDownload = false; $("cbDownload").textContent = "Download PDF + CSV (ZIP)"; done(); }
   async function poll() {
     const r = await fetch(`/api/combos/search/${job}`, { cache: "no-store" });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) { $("cbLog").append(el("li", "bad", d.error || "The search was lost.")); done(); return; }
+    if (!r.ok) { $("cbLog").append(el("li", "bad", d.error || "The search was lost.")); failed(); return; }
     $("cbBar").style.width = `${Math.max(2, Math.round((d.done / Math.max(1, d.total)) * 100))}%`;
     const log = $("cbLog"); log.replaceChildren(); for (const l of d.log.slice(-12)) log.append(el("li", null, l));
     if (d.state === "running") { timer = setTimeout(poll, 700); return; }
     done();
-    if (d.state === "failed") { log.append(el("li", "bad", d.error)); return; }
+    if (d.state === "failed") { log.append(el("li", "bad", d.error)); failed(); return; }
     show(d);
   }
   // ---------------- the filter at the top: the whole search, or one network (organisation) of it; the figures, map,
@@ -402,7 +408,7 @@
   });
   loadAcodes();
   $("cbCodeForm").addEventListener("submit", (e) => { e.preventDefault(); look($("cbCode").value); });
-  $("cbSearch").addEventListener("click", start);
+  $("cbSearch").addEventListener("click", () => { autoDownload = false; start(); });   // a search the analyst starts never downloads on its own
   $("cbStop").addEventListener("click", () => job && fetch(`/api/combos/search/${job}/stop`, { method: "POST", headers: { "X-CSRF-Token": csrf() } }));
   const q = new URLSearchParams(location.search).get("code");
   if (q) look(q);

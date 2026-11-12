@@ -19,10 +19,17 @@ import masked_fields
 from privacy import mask_ip
 from respcache import ResultCache, day_key
 from replay_counts import ReplayCounts
-from services import (EMPTY, FAMILIES, SEV_ORDER, ServiceRegistry, ServiceStore, matches, parse_filters, parse_time,
-                      report_info)
+from services import (EMPTY, FAMILIES, FILTER_KEYS, SEV_ORDER, ServiceRegistry, ServiceStore, matches, parse_filters,
+                       parse_time, report_info)
 
 DRILL_LIMIT = 300
+# the request parameters that can change an answer: the filters and the view's own. Cache keys are built from these
+# only, so a parameter nothing reads (&x=random) cannot make every request a new cache entry (external review, 2026-11-12)
+KEY_PARAMS = frozenset(FILTER_KEYS) | {"cross", "multi", "time", "metric", "kind", "from", "to", "limit", "latest", "all", "id"}
+
+
+def cache_args(args, drop=()):
+    return tuple(sorted((k, v) for k, v in args.items(multi=True) if k in KEY_PARAMS and k not in drop))
 
 
 def register(app, ctx):
@@ -368,7 +375,7 @@ def register(app, ctx):
         if pred:      # a selection: its records found once per loaded day and kept (replay_counts.py), then a binary search
             # masked or not is part of the key: a masked viewer's filters resolve differently (a real network name
             # matches nothing for them), so the same words are a different selection
-            sel_key = (is_demo(), tuple(sorted((k, v) for k, v in request.args.items(multi=True) if k not in ("at", "demo"))))
+            sel_key = (is_demo(), cache_args(request.args))
             m = replay_counts.of(day, sel_key, pred, lambda e: e["ip"])
             done, nxt = replay_counts.at(m, at)
             total, hosts = len(m["keys"]), m["hosts"]
@@ -388,7 +395,7 @@ def register(app, ctx):
             n = 8
         day = day_for(request.args.get("at"))
         # shared by every viewer of the same selection, until the day is reloaded (see respcache.py)
-        args = tuple(sorted((k, v) for k, v in request.args.items(multi=True) if k not in ("at", "demo", "n")))
+        args = cache_args(request.args)
         key = ("svc_stats", day_key(day), demo, n, registry.version, asns.mtime, args)
         return jsonify(svc_cache.get(key, lambda: svc_stats_core(request.args, demo, n)))
 
@@ -428,8 +435,7 @@ def register(app, ctx):
 
     def view_key(name, args, demo):
         day = day_for(args.get("at"))
-        rest = tuple(sorted((k, v) for k, v in args.items(multi=True) if k not in ("at", "demo")))
-        return (name, day_key(day), demo, registry.version, asns.mtime, ctx["country_name"](), rest)
+        return (name, day_key(day), demo, registry.version, asns.mtime, ctx["country_name"](), cache_args(args))
 
     @app.route("/api/svc/insight")
     def svc_insight():

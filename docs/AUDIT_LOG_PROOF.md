@@ -52,9 +52,13 @@ Checking means reading every line and, for each one:
 | An entry was changed | its hash changes, so the next entry's `prev` no longer matches: broken right after it |
 | An entry was inserted or removed | the `prev` links no longer line up: broken at that point |
 | Entries were cut from the end | the last line and the number of entries no longer match `audit.head` |
+| Entries cut from the end and `audit.head` deleted | a break: `audit.head` is written with every chained entry, so its absence is not excused |
+| `audit.seal` deleted or rewritten, then an entry from before the chain changed | a break: the seal's count and SHA-256 are taken from its own entry in the chain (`audit_sealed`) |
+| An archive deleted, with hand-written retention notes | a break unless each note is backed by the chain: its removal entry, or (for a note whose entry went with a later removal) no rotation entry of its archive left either. Archives are known by name and last link together; a note for an empty archive, or a line that is not a note, is a break |
 
-The portal's **Verify the audit log** does this on the server. That is Looking Glass checking itself, which is why the
-next step exists.
+The portal's **Verify the audit log** runs exactly the same code as the verifier in the proof package
+(`audit_verifier.py`): one implementation, so the two can never disagree. That is still Looking Glass checking itself,
+which is why the next step exists.
 
 ## 4. Checking it without Looking Glass: the proof package
 
@@ -90,7 +94,7 @@ that always says "verified". So do not take it on trust:
   PowerShell) with the one published here, outside the server:
 
   ```text
-  3bfa79b38fb1d730912d8f3cd86d7240eb07e451aff686333c7ecfd57fb41008
+  3ea69b61a70432aced7a85fcbb7b8e1c7339f18728432594d96eaeabda1cc0cc
   ```
 
   This is the verifier of the current release on GitHub. An installation of an older release ships the verifier of

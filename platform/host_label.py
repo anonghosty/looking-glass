@@ -51,6 +51,9 @@ def _sub(m):
 
 
 def label_text(s):
+    """Every IPv4/IPv6 address inside the text as its label, found by ip_find (the one finder every masker shares:
+    v41.66.1.2, id_41.66.1.2, ip:2001:db8::1, 041.066.001.002, app.41.66.1.2.nip.io are all addresses)."""
     if not s or not isinstance(s, str):
         return s
-    return _V6.sub(_sub, _V4.sub(_sub, s))
+    import ip_find
+    return ip_find.sub(s, label)

@@ -55,8 +55,10 @@ class GraphTest(unittest.TestCase):
         with mock.patch.object(ms._Http, "__init__", lambda self_: None), mock.patch.object(ms._Http, "call", call):
             src = ms.make_source(self.ENV)
             items = src.list(1)
-            self.assertEqual(items, [("graph:<a@b>", "m1"), ("graph:m2", "m2")])
-            self.assertEqual(list(src.fetch(items[:1])), [("graph:<a@b>", RAW)])
+            # keyed by the mailbox's own id, never the sender-written internetMessageId; the old key kept as legacy
+            self.assertEqual(items, [("graph:id:m1", "m1"), ("graph:id:m2", "m2")])
+            self.assertEqual(src.legacy, {"graph:id:m1": "graph:<a@b>", "graph:id:m2": "graph:m2"})
+            self.assertEqual(list(src.fetch(items[:1])), [("graph:id:m1", RAW)])
             self.assertEqual(sum(1 for c in calls if "oauth2" in c[1]), 1, "token is reused")
             self.assertIn("csirt%40example.org", calls[1][1])
 
@@ -160,6 +162,25 @@ class ImapAndStateTest(unittest.TestCase):
             ms.make_source({"MAIL_PROVIDER": "imap", "IMAP_SERVER": "mail.example.org", "IMAP_USER": "u"})
         with self.assertRaisesRegex(ms.MailSourceError, "MAIL_PROVIDER must be"):
             ms.make_source({"MAIL_PROVIDER": "pigeon"})
+
+    def test_imap_key_is_the_servers_not_the_senders(self):
+        """Two messages with the SAME Message-ID (a forger copying a coming report's) get different keys: the server's
+        UIDVALIDITY:UID, never the Message-ID header (external review, 2026-11-12). The old key is kept as legacy."""
+        hdr = b"Message-ID: <same@shadowserver.org>\r\nSubject: x\r\n\r\n"
+
+        class FakeImap:
+            def search(self, *a):
+                return "OK", [b"1 2"]
+
+            def fetch(self, ids, what):
+                assert "UID" in what and "BODY.PEEK" in what
+                return "OK", [(b"1 (UID 101 BODY[HEADER.FIELDS (MESSAGE-ID DATE SUBJECT FROM)] {50}", hdr), b")",
+                              (b"2 (BODY[HEADER.FIELDS (MESSAGE-ID DATE SUBJECT FROM)] {50} UID 102", hdr), b")"]
+        src = ms.ImapSource({"IMAP_SERVER": "mail.example.org", "IMAP_USER": "u", "IMAP_PASSWORD": "p"})
+        src.imap, src.uidvalidity = FakeImap(), "7"
+        items = src.list(1)
+        self.assertEqual(items, [("imap:7:101", b"1"), ("imap:7:102", b"2")])
+        self.assertEqual(set(src.legacy.values()), {"imap:<same@shadowserver.org>"})
 
     def test_folder_names_quoted(self):
         """imaplib sends arguments as they are: a folder name with a space must be quoted or the server refuses it."""

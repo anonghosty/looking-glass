@@ -239,6 +239,7 @@ try:
        v["ok"] and v["entries"] == before + 2 and v["archives"] == 1, json.dumps({k: v[k] for k in ("ok", "entries", "archives")}))
     ok("the portal still reads the archived entries (the archived ones + 1 new)", c.get(f"/api/audit/events?tab=auth&{P}", headers=H).json["total"] == auth_before + 1)
     audit.chain.retention_days = 0                       # everything archived is past the retention
+    audit.chain.record_retention_setting()               # as the restart that applies a new setting records it
     audit.chain.prune(now=time.time() + 10)
     ok("past the retention the archive is removed, and noted", not audit.chain.archives() and audit.chain.removed()[-1]["entries"] == before)
     v = audit.chain.verify()
@@ -263,7 +264,8 @@ try:
     open(rj, "w").write(forged + "\n" + saved_rj)
     open(rc, "w").write("2")
     v = audit.chain.verify()
-    ok("a retention note with no entry in the chain: detected", not v["ok"] and "no entry in the chain" in v["break"]["what"], json.dumps(v.get("break")))
+    ok("a retention note with no entry in the chain: detected", not v["ok"] and ("no entry in the chain" in v["break"]["what"]
+       or "not a note" in v["break"]["what"]), json.dumps(v.get("break")))
     open(rj, "w").write(saved_rj); open(rc, "w").write(saved_rc)
     ok("…and whole again without it", audit.chain.verify()["ok"])
     audit.chain.retention_days = 400
@@ -408,6 +410,71 @@ try:
     ok("the standalone verifier fails both too: the early removal, and the faked dates",
        not out_a["ok"] and out_a["removed_early"] == [note["archive"]] and not out_f["ok"]
        and "disagrees with the rotation" in out_f["removals"][0]["why"], out_f["removals"][0]["why"][:120])
+
+    print("Side files can no longer vouch for the chain (external review, 2026-11-12)")
+    import audit_verifier as AV
+
+    def fresh(name, n=4, rotate=True):
+        d = os.path.join(tmp, name); os.makedirs(d)
+        c = audit_chain.Chain(os.path.join(d, "audit.log")); c.record_retention_setting()
+        c.rotate_bytes = 1 if rotate else 5_000_000
+        for i in range(n):
+            c.append({"t": time.time(), "event": "login", "user": f"{name}{i}"})
+        c.rotate_bytes = 5_000_000
+        return c, d
+    # the reviewer's attack: the oldest (seconds-old) archive deleted, two crafted notes with old removal times, and the
+    # recorded count raised so both count as recorded
+    xc, xd = fresh("crafted")
+    victim = xc.archives()[0]
+    vl = [x for x in gzip.open(victim, "rt").read().splitlines() if x]
+    old = time.time() - 900 * 86400
+    os.remove(victim)
+    with open(os.path.join(xc.dir, "removed.jsonl"), "a") as f:
+        f.write(json.dumps({"archive": os.path.basename(victim), "entries": len(vl), "last_hash": audit_chain.sha(vl[-1]),
+                            "oldest": old, "newest": old, "removed_at": old, "retention_days": 400}) + "\n")
+        f.write(json.dumps({"archive": "audit-20240101-000000.log.gz", "entries": 1, "last_hash": audit_chain.sha(vl[-1]),
+                            "oldest": old, "newest": old, "removed_at": old, "retention_days": 400}) + "\n")
+    open(os.path.join(xc.dir, "removed.recorded"), "w").write("2")
+    xv, xo = xc.verify(), alone(xd)
+    ok("a young archive deleted with two crafted notes (old times, count raised): NOT whole, portal and standalone alike",
+       not xv["ok"] and not xo["ok"], f"{xv.get('break')} | {xo.get('break')}")
+    ok("…the portal and the standalone verifier are one implementation: same verdict, same break",
+       xv["ok"] == xo["ok"] and xv["break"] == xo["break"] and xv["head"] == xo["head"])
+    sd2 = os.path.join(tmp, "unsealed"); os.makedirs(sd2)
+    with open(os.path.join(sd2, "audit.log"), "w") as f:   # entries from before the chain, then the chain starts
+        for i in range(3):
+            f.write(json.dumps({"t": 10.0 + i, "event": "login", "user": f"pre{i}"}) + "\n")
+    sc2 = audit_chain.Chain(os.path.join(sd2, "audit.log"))
+    sc2.append({"t": 20.0, "event": "login", "user": "first-chained"})
+    s2 = sc2.seal()
+    sc2.append({"t": 21.0, "event": "audit_sealed", "user": "Looking Glass",
+                "detail": f"{s2['entries']} entries written before the chain sealed · SHA-256 {s2['sha256']}"})
+    ok("(a sealed log is whole)", sc2.verify()["ok"])
+    os.remove(sc2.seal_path)                             # the seal file deleted, then an older entry rewritten
+    ls2 = open(sc2.path).read().splitlines()
+    r1 = json.loads(ls2[1]); r1["user"] = "rewritten"; ls2[1] = json.dumps(r1)
+    open(sc2.path, "w").write("\n".join(ls2) + "\n")
+    v2 = sc2.verify()
+    ok("audit.seal deleted, then an entry from before the chain rewritten: detected from the seal's own chain entry",
+       not v2["ok"] and v2["seal"] and v2["seal"]["state"] == "changed", json.dumps(v2.get("break")))
+    hc, hd = fresh("headless", rotate=False)
+    keep = open(hc.path).read().splitlines()
+    open(hc.path, "w").write("\n".join(keep[:-2]) + "\n")              # the newest two entries cut
+    os.remove(hc.head_path)                                            # and audit.head deleted
+    vh = hc.verify()
+    ok("entries cut from the end and audit.head deleted: a break", not vh["ok"] and "audit.head is missing" in vh["break"]["what"],
+       json.dumps(vh.get("break")))
+    mc, md = fresh("malformed")
+    with open(os.path.join(mc.dir, "removed.jsonl"), "a") as f:
+        f.write("this is not json\n[1, 2]\n" + json.dumps({"archive": 5}) + "\n")
+    with open(mc.path, "a") as f:
+        f.write("[\"not\", \"an\", \"entry\"]\n")
+    try:
+        vm, crashed = mc.verify(), None
+    except Exception as exc:                                           # noqa: BLE001
+        vm, crashed = None, exc
+    ok("malformed notes and a non-object line: reported as a break, never a crash", crashed is None and vm and not vm["ok"], str(crashed or vm.get("break")))
+    ok("…the standalone verifier too", not alone(md)["ok"])
 
     print("Evidence exports")
     audit.add("definition_saved", user="daniel", detail="=1+1", ip="10.0.0.3", ua="x")   # a value a spreadsheet would run

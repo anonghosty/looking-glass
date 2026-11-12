@@ -64,7 +64,7 @@ button.portal-card { font: inherit; text-align: left; cursor: pointer; width: 10
 .pc-map .pc-ic, .pc-services .pc-ic, .pc-executive .pc-ic, .pc-findings .pc-ic, .pc-advisory .pc-ic { color: #fff; }
 html.lite .portal-card, html.lite .portal-card .pc-ic { transition: none; box-shadow: none; } html.lite .portal-card::after { display: none; }
 @media (prefers-reduced-motion: reduce) { .portal-card, .portal-card .pc-ic { transition: none; } .portal-card:hover { transform: none; } .portal-card::after { display: none; } }
-.intro-tabs [hidden] { display: none !important; }    /* Peace of mind: no Glossary, the Overview only
+.intro-tabs [hidden] { display: none !important; }    /* Peace of mind: no Glossary, the Overview only */
 
 /* structured: titled groups, each laid out for its number of cards (no lone card), equal heights in a row */
 .pc-group { margin: 18px 0 10px; font: 600 12px Inter, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #8f9bb8; text-align: left; }

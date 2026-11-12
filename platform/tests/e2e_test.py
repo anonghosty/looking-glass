@@ -50,9 +50,27 @@ def ok(label, cond, info=""):
     return cond
 
 
+import secrets  # noqa: E402
+COPY_KEY = secrets.token_hex(32)           # the copy's own automation key (never the real one)
+# what the copy leaves out: everything that names people or holds a secret (the real service's, not the copy's)
+_NO_COPY = {".venv", "__pycache__", "backups", "users.json", "sessions.json", "automation.key", "tls", "findings.json",
+            "notifications.json", "notes.json", "peace_of_mind.json", "advisories", "acodes", "review_searches",
+            "combo_exports", "pipeline_requests", "pipeline_requests.logged.json", "password_policy.json",
+            "throttle.json", "setup_code", "e2e_server.log"}
+
+
+def _copy_ignore(folder, names):
+    out = {n for n in names if n in (".venv", "__pycache__", "backups") or n.endswith((".log", ".key", ".pem"))
+           or n.startswith(".env.")}
+    if os.path.abspath(folder) == os.path.join(SRC, "data"):          # the data folder only (not audit_portal.py!)
+        out |= {n for n in names if n in _NO_COPY or n.startswith(("audit", "cleared_findings"))}
+    return out
+
+
 def get(path, method="GET", body=None, headers=None):
+    # the copy's own key (it overrides the real key lgauth adds to every request)
     req = urllib.request.Request(BASE + path, method=method, data=json.dumps(body).encode() if body is not None else None,
-                                 headers={"Content-Type": "application/json", **(headers or {})})
+                                 headers={"Content-Type": "application/json", "X-LG-Automation": COPY_KEY, **(headers or {})})
     with urllib.request.urlopen(req, timeout=120) as r:
         return json.load(r)
 
@@ -81,10 +99,15 @@ def setup():
     day = replay_day()
     nxt = (datetime.fromisoformat(day) + timedelta(days=1)).date().isoformat()
     print(f"setup: replay day {day} (rows with filenames {day}* and {nxt}*, as the app loads them)")
-    # 1. project copy (own data files: schedule, settings, caches), using the real virtualenv
+    # 1. project copy (own data files: schedule, settings, caches), using the real virtualenv. Reference data only: no
+    #    accounts, sessions, keys, certificates, audit log, findings, notes, advisories or kept searches (external
+    #    review, 2026-11-12: the copy held the real accounts and keys). It gets an automation key of its own.
     if os.path.exists(COPY):
         shutil.rmtree(COPY)
-    shutil.copytree(SRC, COPY, ignore=shutil.ignore_patterns(".venv", "__pycache__", "*.log", "backups"))
+    shutil.copytree(SRC, COPY, ignore=_copy_ignore)
+    os.chmod(COPY, 0o700)
+    open(os.path.join(COPY, "data", "automation.key"), "w").write(COPY_KEY)
+    os.chmod(os.path.join(COPY, "data", "automation.key"), 0o600)
     # 2. throwaway database with the day's rows of every collection (one older row where a report has none that day,
     #    so it is still monitored, as in the real database)
     client.drop_database(DBNAME)
@@ -105,7 +128,7 @@ def setup():
                 test[name].create_index(ix["key"])
     print(f"setup: {total} rows in {len(test.list_collection_names())} collections copied to {DBNAME}")
     # 3. start the copy (its own data/schedule.json continues the same replay day)
-    env = dict(os.environ, MONGO_DB=DBNAME, PORT=str(PORT))
+    env = dict(os.environ, MONGO_DB=DBNAME, PORT=str(PORT), BIND_HOST="127.0.0.1")   # this computer only, never the network
     log = open(os.path.join(COPY, "e2e_server.log"), "w")
     p = subprocess.Popen([os.path.join(SRC, ".venv", "bin", "python"), os.path.join(COPY, "app.py")], cwd=COPY, env=env,
                          stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
@@ -293,19 +316,28 @@ def teardown():
         except ProcessLookupError:
             pass
         time.sleep(1)
-    client.drop_database(DBNAME)
-    print(f"teardown: copy stopped, {DBNAME} dropped:", DBNAME not in client.list_database_names())
+    # every step on its own: one that fails (no right to drop the database, say) never keeps the copy (and its .env)
+    # on disk or the copy running
+    try:
+        client.drop_database(DBNAME)
+        print(f"teardown: copy stopped, {DBNAME} dropped:", DBNAME not in client.list_database_names())
+    except Exception as exc:  # noqa: BLE001
+        print(f"teardown: {DBNAME} not dropped ({type(exc).__name__}); drop it with the admin account")
     if os.path.exists(COPY):
-        shutil.rmtree(COPY)
+        shutil.rmtree(COPY, ignore_errors=True)
     print("teardown: ~/lg_e2e_app removed:", not os.path.exists(COPY))
 
 
 if __name__ == "__main__":
     what = sys.argv[1] if len(sys.argv) > 1 else "all"
-    if what in ("setup", "all"):
-        setup()
-    if what in ("check", "all"):
-        check()
+    try:
+        if what in ("setup", "all"):
+            setup()
+        if what in ("check", "all"):
+            check()
+    except BaseException:
+        teardown()                       # a failed setup or check never leaves the copy running (external review)
+        raise
     if what in ("teardown", "all"):
         teardown()
     if what != "setup" and what != "teardown":

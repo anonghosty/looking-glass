@@ -300,21 +300,34 @@ def install(app, ctx):
         return out
 
     def networks_of(x):
-        """The organisations in the kept search: devices and records each, the most devices first."""
+        """The organisations in the kept search: devices and records each, the most devices first. A finding for ONE
+        organisation holds its AS numbers (combo_review.org_asns): its records are chosen by AS number and shown
+        under its own name, so a network renamed since cannot make it match nothing, or everything (external
+        review, 2026-11-12). [] when none of its devices are in the records any more."""
         k = records(x)
         if not k:
             return []
+        own = book.review_org_asns(x, k) if hasattr(book, "review_org_asns") else None
         per = {}
         for e in k["found"]:
-            n = k["net"](e)
-            if x.get("network") and n != x["network"]:   # a finding for one organisation: only that one
-                continue
+            a = str(k["asn"](e) or "")
+            if own is not None:
+                if a not in own:
+                    continue
+                n = x["network"]
+            else:
+                n = k["net"](e)
             p = per.setdefault(n, {"network": n, "devices": set(), "records": 0, "asns": set()})
             p["devices"].add(k["host"](e)); p["records"] += 1
-            if k["asn"](e):
-                p["asns"].add(str(k["asn"](e)))
+            p["asns"].add(a)
         return sorted(({"network": p["network"], "devices": len(p["devices"]), "records": p["records"], "asns": sorted(p["asns"])}
                        for p in per.values()), key=lambda p: (-p["devices"], p["network"]))
+
+    def asns_for(x, network):
+        """The AS numbers of one organisation of the finding (None: ALL, the finding without a kept search)."""
+        if network == ALL:
+            return None
+        return next((set(p["asns"]) for p in networks_of(x) if p["network"] == network), set())
 
     def report_key(e, comms):
         return str((e.get("source") if comms else e.get("report")) or "")
@@ -324,12 +337,13 @@ def install(app, ctx):
         k = records(x)
         if not k:
             return []
+        sel = asns_for(x, network)
         devs = {}
         for e in k["found"]:
-            if network != ALL and k["net"](e) != network:
+            if sel is not None and str(k["asn"](e) or "") not in sel:
                 continue
             h = k["host"](e)
-            d = devs.setdefault(h, {"ip": h, "network": k["net"](e), "asn": str(k["asn"](e) or ""), "ports": set(), "reports": set(),
+            d = devs.setdefault(h, {"ip": h, "network": network or k["net"](e), "asn": str(k["asn"](e) or ""), "ports": set(), "reports": set(),
                                     "cves": set(), "issues": set(), "labels": set(), "categories": set(), "hostname": "", "records": 0, "last": ""})
             d["records"] += 1
             port = e.get("dst_port") if k["comms"] else e.get("port")
@@ -378,8 +392,9 @@ def install(app, ctx):
         if entry.get("section") == "infections" and entry.get("name"):
             add(cats, entry["name"])
         if k:
+            sel = asns_for(x, network)
             for e in k["found"]:
-                if network != ALL and k["net"](e) != network:
+                if sel is not None and str(k["asn"](e) or "") not in sel:
                     continue
                 rk, re_ = imp.entry(report_key(e, k["comms"]))
                 if re_:
@@ -528,13 +543,23 @@ def install(app, ctx):
             return "Sign in again to make changes (your session is older than 12 hours)."
         return ""
 
-    def open_finding(fid):
-        """(finding, None) when this advisor may write its advisories; else (None, (response, status))."""
+    def open_finding(fid, write=False):
+        """(finding, None) when this advisor may write its advisories; else (None, (response, status)). write: the
+        request changes or sends an advisory, which a closed finding no longer allows (external review, 2026-11-12:
+        advisories could still be saved and sent after management closed or withdrew the finding)."""
         x = finding(fid)
         if not x:
             return None, (jsonify(error="No such finding."), 404)
         if not ready(x):
             return None, (jsonify(error="Management has not approved this finding for an advisory."), 409)
+        if write and x.get("status") == "closed":
+            return None, (jsonify(error="This finding is closed: its advisories can be opened and downloaded, not changed or "
+                                        "sent."), 409)
+        if x.get("network") and kept(x) and not networks_of(x):
+            # one organisation's finding whose devices are no longer in its records: nothing to write about, and never
+            # everyone's devices instead (external review, 2026-11-12: it fell back to ALL)
+            return None, (jsonify(error=f"None of {x['network']}'s devices are in this finding's records any more, so no "
+                                        "advisory can be made for it. Ask the analyst to send the combination again."), 409)
         return x, None
 
     def all_sent(x):
@@ -549,7 +574,8 @@ def install(app, ctx):
         """The organisation asked for, if it is one of the finding's (or ALL without a kept search); else None."""
         nets = networks_of(x)
         if not nets:
-            return ALL
+            # ALL only for a finding without a kept search; one organisation's finding never widens to everyone
+            return None if (x.get("network") and kept(x)) else ALL
         n = str(raw or "").strip()
         return n if n in {p["network"] for p in nets} else None
 
@@ -686,7 +712,7 @@ def install(app, ctx):
         err = guard_write()
         if err:
             return jsonify(error=err), 403
-        x, bad = open_finding(fid)
+        x, bad = open_finding(fid, write=True)
         if bad:
             return bad
         b = request.get_json(silent=True) or {}
@@ -741,7 +767,9 @@ def install(app, ctx):
         a = pdf_input(v, auto, has_report)
         base = file_base(x, auto, network)
         if has_report:
-            out, err = book.review_report_of(x["id"], me()[0], a, network=network or None, file_base=base)
+            sel = asns_for(x, network)
+            out, err = book.review_report_of(x["id"], me()[0], a, network=network or None, file_base=base,
+                                             asns=sorted(sel) if sel is not None else None)
             if not out:
                 return None, err
             zname, zbytes, pname, pbytes = out
@@ -801,7 +829,7 @@ def install(app, ctx):
         err = guard_write()
         if err:
             return jsonify(error=err), 403
-        x, bad = open_finding(fid)
+        x, bad = open_finding(fid, write=True)
         if bad:
             return bad
         b = request.get_json(silent=True) or {}
@@ -829,6 +857,11 @@ def install(app, ctx):
         adv["generated"] = int(adv.get("generated") or len(old)) + 1
         adv["history"].append({"at": _now(), "user": user,
                                "what": f"report generated: {name}" + (" (replaces the previous one)" if old else "")})
+        if adv.get("status") == "drafted":
+            # what was marked ready is no longer what is there: back to draft until marked drafted again (external
+            # review, 2026-11-12)
+            adv["status"] = "draft"
+            adv["history"].append({"at": _now(), "user": user, "what": "back to draft: the report changed after it was marked drafted"})
         try:
             store.save(adv)
         except Changed:                                   # changed meanwhile (sent, perhaps): its files stay as they are
@@ -868,7 +901,7 @@ def install(app, ctx):
         err = guard_write()
         if err:
             return jsonify(error=err), 403
-        x, bad = open_finding(fid)
+        x, bad = open_finding(fid, write=True)
         if bad:
             return bad
         b = request.get_json(silent=True) or {}
@@ -926,7 +959,7 @@ def install(app, ctx):
         err = guard_write()
         if err:
             return jsonify(error=err), 403
-        x, bad = open_finding(fid)
+        x, bad = open_finding(fid, write=True)
         if bad:
             return bad
         b = request.get_json(silent=True) or {}

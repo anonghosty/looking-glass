@@ -372,12 +372,18 @@ class ServiceStore:
             ev.wait(120)
             return self.days.get(start) or Day(start, [])
         try:
-            new = self._load(start)
-            self._record_changes(start, day, new)
-            with self.lock:
-                self.days[start] = new
-                for k in [k for k in self.days if k < start - timedelta(days=2)]:
-                    del self.days[k]
+            for _ in range(3):
+                gen = getattr(self, "gen", 0)
+                new = self._load(start)
+                with self.lock:
+                    if getattr(self, "gen", 0) != gen:   # the constituency changed while loading: load again with it
+                        day = None
+                        continue
+                    self._record_changes(start, day, new)
+                    self.days[start] = new
+                    for k in [k for k in self.days if k < start - timedelta(days=2)]:
+                        del self.days[k]
+                return new
             return new
         except Exception:
             if self.log:
@@ -389,10 +395,12 @@ class ServiceStore:
             ev.set()
 
     def reset(self):
-        """Forget every loaded day (the constituency changed): the next request reloads them."""
+        """Forget every loaded day (the constituency changed): the next request reloads them; a load already running
+        loads again instead of storing the old constituency's day (external review, 2026-11-12)."""
         with self.lock:
             self.days.clear()
             self.changes.clear()
+            self.gen = getattr(self, "gen", 0) + 1
 
     def check(self, dt):
         start = self.day_start(dt)

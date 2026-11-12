@@ -133,6 +133,30 @@ try:
     r = a.post("/api/password-policy", json={"enabled": False, "days": 90, "password": PW_A}, headers=H)
     ok("switching the policy off keeps the 'every account now' request", r.status_code == 200 and not r.json["enabled"]
        and policy.expired(users.get("chkuser"))[0])
+
+    print("Forgot password: nothing about the account before its owner proves who they are (external review, 2026-11-12)")
+    with users.lock:
+        users._load(); users.data["users"]["chkuser"]["profile"] = {"full_name": "Kwabena Asante", "email": "kasante@example.org"}
+        users.save()
+    throttle.clear_address("127.0.0.1")
+    f = A.app.test_client()
+    tries = []
+    for name, pw in (("chkuser", "Kwabena-Asante-2026!"), ("nobody-here", "Kwabena-Asante-2026!"), ("chkuser", "Totally-Different-77!")):
+        r = f.post("/forgot", data={"mode": "self", "username": name, "password": pw, "password2": pw, "code": "000000"}, headers=UA)
+        tries.append((r.status_code, "not right" in r.get_data(as_text=True)))
+    ok("a wrong code gets the same answer whether the account exists or the password contains its owner's name",
+       len(set(tries)) == 1 and tries[0] == (401, True), str(tries))
+    ok("…and each is counted as a failed try", throttle.left("127.0.0.1", "chkuser") < 5)
+    throttle.clear_address("127.0.0.1")
+    with users.lock:
+        users._load(); users.data["users"]["chkuser"]["reset_allowed_until"] = int(time.time()) + 600; users.save()
+    last = users.get("chkuser").get("totp_last") or 0
+    while int(time.time()) // 30 <= last or time.time() % 30 > 27:
+        time.sleep(0.5)
+    r = f.post("/forgot", data={"mode": "self", "username": "chkuser", "password": "Kwabena-Asante-2026!", "password2": "Kwabena-Asante-2026!",
+                                "code": code(SEC_U)}, headers=UA)
+    ok("once proven (authenticator, reset allowed), the password rules apply: one built from the owner's name is refused",
+       r.status_code == 400, str(r.status_code))
 finally:
     users.path, users.mtime, users.data, policy.path, audit.add = real
     throttle.clear_address("127.0.0.1")

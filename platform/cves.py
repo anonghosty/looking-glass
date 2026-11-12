@@ -33,6 +33,7 @@ CVEORG = "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/{year
 CVEORG_PAGE = "https://www.cve.org/CVERecord?id="
 KEV_PAGE = "https://www.cisa.gov/known-exploited-vulnerabilities-catalog"
 TTL, KEV_TTL = 7 * 86400, 86400
+KEV_RETRY = 15 * 60                         # after a failed KEV download, the next try is not before this
 
 
 def is_cve(name):
@@ -119,7 +120,9 @@ class CveIntel:
     def kev(self):
         """CISA's catalog of exploited vulnerabilities: {CVE: entry}; refreshed once a day (kept if CISA is unreachable)."""
         k = self.cache["kev"]
-        if time.time() - k.get("t", 0) > KEV_TTL:
+        # after a failed download, wait KEV_RETRY before the next try: when CISA was unreachable every look-up tried again
+        # and waited up to 60 s, once per CVE (external review, 2026-11-12)
+        if time.time() - k.get("t", 0) > KEV_TTL and time.time() - getattr(self, "_kev_failed", 0) > KEV_RETRY:
             try:
                 d = self._get(KEV, timeout=60) or {}
                 items = {v["cveID"].upper(): {
@@ -132,9 +135,10 @@ class CveIntel:
                         self.cache["kev"] = {"t": time.time(), "items": items, "version": d.get("catalogVersion", ""),
                                              "released": d.get("dateReleased", "")}
                         self._save()
-            except RuntimeError as exc:
+            except Exception as exc:  # noqa: BLE001  (unreachable, refused, unreadable: keep the last catalog)
+                self._kev_failed = time.time()
                 if self.log:
-                    self.log.warning("CISA KEV catalog not refreshed: %s", exc)
+                    self.log.warning("CISA KEV catalog not refreshed (next try in %d min): %s", KEV_RETRY // 60, exc)
         return self.cache["kev"].get("items", {})
 
     def epss(self, ids):
@@ -238,9 +242,12 @@ class CveIntel:
             self._save()
         return data
 
-    def lookup_many(self, ids, progress=None):
+    def lookup_many(self, ids, progress=None, budget=None):
         """Explain several CVEs as one batch, reporting each step to progress(kind, text, done=None):
-        KEV (one download), EPSS (one request per 100), CVE.org (four at a time), NVD from the cache only."""
+        KEV (one download), EPSS (one request per 100), CVE.org (four at a time), NVD from the cache only.
+        budget: seconds; once spent, no further CVE.org record is fetched (those CVEs are explained from what is known
+        and fetched on a later look-up), so one request cannot hold up the server (external review, 2026-11-12)."""
+        deadline = time.monotonic() + budget if budget else None
         from concurrent.futures import ThreadPoolExecutor
         say = progress or (lambda *a, **k: None)
         ids = list(dict.fromkeys(i.strip().upper() for i in ids if is_cve(i)))
@@ -260,6 +267,10 @@ class CveIntel:
         done = [cached]
 
         def one(i):
+            if deadline is not None and time.monotonic() > deadline:
+                done[0] += 1
+                say("item", f"{i}: not fetched now (time budget spent): explained from what is known, fetched on a later look-up", done=done[0])
+                return
             try:
                 d = self.cveorg(i, fetch=True)
                 kv = (k.get(i) or {})

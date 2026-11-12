@@ -516,9 +516,11 @@ def install(app, ctx):
                 city_rows[(c, title(r) if r != "Unknown region" else "")] += n
         return countries, rows, details, city_rows
 
-    def package(job, entry, found, per_day, days, around=(), m=None, network=None, summary_only=False):
+    def package(job, entry, found, per_day, days, around=(), m=None, network=None, summary_only=False, asns=None):
         """The ZIP (PDF + devices CSV + records CSV). network: the report for one network provider only (an advisory to
-        that operator): the same report on its devices and records; the search's own result and summary stay as they are."""
+        that operator): the same report on its devices and records; the search's own result and summary stay as they are.
+        asns: that provider's AS numbers ("" for records without one). Given, the records are chosen by AS number and
+        network is only its name in the report (external review, 2026-11-12: a renamed network matched nothing by name)."""
         section = entry["section"]
         T = _TITLE["of"] if section == "services" else (lambda n: n)       # what people read: a report's title
         cols = COMMS_COLS if section == "infections" else SVC_COLS
@@ -526,9 +528,13 @@ def install(app, ctx):
         m = m or Matcher(entry, labels)
         is_a = entry.get("kind") == "a"
         net = ctx["network"]
-        if network:
+        if network or asns is not None:
             asn_of = (lambda e: e.get("src_asn")) if section == "infections" else (lambda e: e.get("asn"))
-            found = [e for e in found if (net(asn_of(e)) or "Unknown") == network]
+            if asns is not None:
+                sel = {str(a) for a in asns}
+                found = [e for e in found if str(asn_of(e) or "") in sel]
+            else:
+                found = [e for e in found if (net(asn_of(e)) or "Unknown") == network]
             hs = {m.host(e) for e in found}
             around = [e for e in around if m.host(e) in hs]
             n_by_day = collections.Counter(str(e.get("extracted_date") or "")[:10] for e in found)

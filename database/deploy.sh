@@ -80,7 +80,9 @@ BIND=$(env_get MONGO_BIND 127.0.0.1)
 OLD_CONTAINER=$(env_get MONGO_CONTAINER shadowserver-mongo)
 OLD_VOLUME=$(env_get MONGO_VOLUME shadowserver-mongo-data)
 MIGRATED_MARK="$PROJECT_DIR/.migrated-from-container"
-export MS_USER="$MONGO_USER" MS_PW="$MONGO_PASSWORD" MS_AUTHDB="$AUTH_DB" MS_DB="$MONGO_DB"
+# not exported: only mongosh gets the password, in its own environment (msh_*), never every command this script runs
+# (apt, curl, sudo...: external review, 2026-11-12)
+MS_USER="$MONGO_USER"; MS_PW="$MONGO_PASSWORD"; MS_AUTHDB="$AUTH_DB"; MS_DB="$MONGO_DB"
 
 # password-free sudo needs no prompt (and `sudo -v` would wait for one even then: it hangs when run without a terminal,
 # e.g. from install.sh); otherwise ask once.
@@ -132,9 +134,9 @@ fi
 if [[ $LOCAL != false ]]; then   # ------------------------------------------- local MongoDB: steps 3 to 6
 
 # mongosh helpers (password passed via environment, never on the command line)
-msh_noauth() { mongosh --quiet --port "$PORT" "$@"; }
+msh_noauth() { MS_USER="$MS_USER" MS_PW="$MS_PW" MS_AUTHDB="$MS_AUTHDB" MS_DB="$MS_DB" mongosh --quiet --port "$PORT" "$@"; }
 msh_auth() {
-  mongosh --quiet --port "$PORT" --eval \
+  MS_USER="$MS_USER" MS_PW="$MS_PW" MS_AUTHDB="$MS_AUTHDB" MS_DB="$MS_DB" mongosh --quiet --port "$PORT" --eval \
     'const r = db.getSiblingDB(process.env.MS_AUTHDB).auth(process.env.MS_USER, process.env.MS_PW); if (!r.ok && r !== 1) quit(9);' \
     --eval "$1"
 }
@@ -304,13 +306,23 @@ fi
 # ---------------------------------------------------------------- 8. global commands
 info "Installing global command 'shadowserver' (+ man page, tab completion)"
 chmod +x bin/shadowserver
-sudo ln -sfn "$PROJECT_DIR/bin/shadowserver" /usr/local/bin/shadowserver
-# Links (not copies), so documentation and completion stay current when the project files change.
+# the report data already on disk: this account only (new files get it from the pipeline's umask)
+for d in attachments_backup unzipped_backup sorting_backup quarantine logs; do
+  [[ -d $d ]] && chmod -R go-rwx "$d"
+done
+chmod go-rwx .mail_state.sqlite .pipeline_state.sqlite 2>/dev/null || true
+# Root-owned copies and a root-owned wrapper, never links into this (user-writable) folder: the tab completion is
+# sourced by every login shell, root's too, so a link let whoever can write here run code in other users' shells
+# (external review, 2026-11-12). Run ./deploy.sh again after updating to refresh the man page and completion.
+sudo rm -f /usr/local/bin/shadowserver /usr/local/share/man/man1/shadowserver.1 /etc/bash_completion.d/shadowserver
+printf '#!/bin/sh\n# installed by deploy.sh: runs the pipeline command of %s\nexec "%s/bin/shadowserver" "$@"\n' \
+  "$PROJECT_DIR" "$PROJECT_DIR" | sudo tee /usr/local/bin/shadowserver >/dev/null
+sudo chmod 0755 /usr/local/bin/shadowserver
 chmod 0644 docs/shadowserver.1 bin/shadowserver-completion.bash
 sudo install -d /usr/local/share/man/man1 /etc/bash_completion.d
-sudo ln -sfn "$PROJECT_DIR/docs/shadowserver.1" /usr/local/share/man/man1/shadowserver.1
+sudo install -m 0644 -o root -g root docs/shadowserver.1 /usr/local/share/man/man1/shadowserver.1
 sudo mandb -q >/dev/null 2>&1 || true
-sudo ln -sfn "$PROJECT_DIR/bin/shadowserver-completion.bash" /etc/bash_completion.d/shadowserver
+sudo install -m 0644 -o root -g root bin/shadowserver-completion.bash /etc/bash_completion.d/shadowserver
 command -v shadowserver >/dev/null || warn "/usr/local/bin is not on PATH - open a new shell"
 
 # ---------------------------------------------------------------- 9. schedule (optional)

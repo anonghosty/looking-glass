@@ -110,7 +110,10 @@ declare -A PREV=() MEM=()
 if [ -r "$LAST" ]; then
   while IFS= read -r line || [ -n "$line" ]; do [[ $line == *=* ]] && PREV["${line%%=*}"]="${line#*=}"; done < "$LAST"
 fi
-remember() { case "$1" in *PASSWORD*|*TOKEN*|*SECRET*|KEEP_*) ;; *) MEM["$1"]="$2" ;; esac; }
+# never saved for next time: passwords, tokens, secrets and API keys (external review, 2026-11-12: the Shadowserver API
+# key went into last.answers and the install log)
+remember() { case "$1" in *PASSWORD*|*TOKEN*|*SECRET*|*API_KEY*|KEEP_*) ;; *) MEM["$1"]="$2" ;; esac; }
+is_private() { [[ $1 == *TOKEN* || $1 == *API_KEY* ]]; }
 save_answers() {
   local k; : > "$LAST"; chmod 600 "$LAST"
   for k in "${!MEM[@]}"; do printf '%s=%s\n' "$k" "${MEM[$k]}" >> "$LAST"; done
@@ -150,7 +153,7 @@ ask_yesno() {  # KEY TITLE TEXT DEFAULT(yes|no) -> REPLY=yes|no
 ask_input() {  # KEY TITLE TEXT DEFAULT [validator]
   [ "$UI" = dialog ] && fit_windows
   local k="$1" t="$2" x="$3" def="${4-}" val="${5-}"
-  [[ $k == *TOKEN* ]] || def="$(prev "$k" "$def")"
+  is_private "$k" || def="$(prev "$k" "$def")"
   while :; do
     if ! _pre "$k" "$def"; then
       if [ "$UI" = dialog ]; then
@@ -164,7 +167,7 @@ ask_input() {  # KEY TITLE TEXT DEFAULT [validator]
       if [ -n "${ANS[$k]+x}" ] || [ "$INTERACTIVE" = 0 ]; then echo "Answer for $k is not valid: $err" >&2; exit 1; fi
       msg "Please check" "$err"; continue
     fi
-    if [[ $k == *TOKEN* ]]; then log "answer $k ($([ -n "$REPLY" ] && echo given || echo empty))"; else log "answer $k = ${REPLY:0:60}"; remember "$k" "$REPLY"; fi
+    if is_private "$k"; then log "answer $k ($([ -n "$REPLY" ] && echo given || echo empty))"; else log "answer $k = ${REPLY:0:60}"; remember "$k" "$REPLY"; fi
     return 0
   done
 }

@@ -484,6 +484,93 @@ try:
     one = F.get((d.get("finding") or "#0")[1:]) or {}
     ok("one network: a finding for that organisation, no case", st == 200 and not d.get("case") and one.get("network") == s6["networks"][0]["network"]
        and not one.get("parent"), d.get("error", ""))
+
+    print("One organisation's advisory is chosen by AS number, never widened to everyone (external review, 2026-11-12)")
+    oid, org0 = one["id"], s6["networks"][0]
+    ok("the finding holds its organisation's AS numbers", one.get("network_asns") and all(isinstance(a, str) for a in one["network_asns"]),
+       str(one.get("network_asns")))
+    case_kids = [F.get(k) for k in sids]
+    ok("…so does every sub-finding of a case", all(k_.get("network_asns") for k_ in case_kids))
+    st, d = call(f"/api/findings/{oid}/review-decision", MGMT, "POST", {"choice": "both", "text": "Go.", "to": "lg-check-advisor"},
+                 role="management", user="lg-check-management")
+    total_devices = sum(n["devices"] for n in s6["networks"])
+
+    def rename(label=None, asns=None, drop_asns=False):
+        with F.lock:
+            F._load()
+            it = F.data["items"][oid]
+            if label is not None:
+                it["network"] = label
+            if asns is not None:
+                it["network_asns"] = asns
+            if drop_asns:
+                it.pop("network_asns", None)
+            F._save()
+    real_asns = list(one["network_asns"])
+    rename(label="Renamed Telco Ltd")                       # the name it was sent under is no longer any network's name
+    st, d = call(f"/api/advisory/{oid}", ADVISOR, **ADV)
+    ok("the network renamed since: the advisory still finds exactly its devices, under its own name",
+       st == 200 and [n["network"] for n in d.get("networks") or []] == ["Renamed Telco Ltd"]
+       and d["networks"][0]["devices"] == org0["devices"], json.dumps(d.get("networks") or d.get("error")))
+    st, d = call(f"/api/advisory/{oid}/net?network={quote('Renamed Telco Ltd')}", ADVISOR, **ADV)
+    devs = (d.get("advisory") or {}).get("devices") or []
+    ok("…its device list: only its AS numbers, not every organisation's",
+       st == 200 and d.get("devices_total") == org0["devices"] < total_devices and all(v.get("asn") in real_asns for v in devs),
+       f"{d.get('devices_total')} of {total_devices}" if st == 200 else d.get("error", ""))
+    st, z = call(f"/review/{oid}/report", ADVISOR, raw=True, **ADV)
+    zf = zipfile.ZipFile(io.BytesIO(z)) if st == 200 else None
+    dev_csv = next((n for n in zf.namelist() if "device" in n.lower() and n.endswith(".csv")), None) if zf else None
+    rows = (zf.read(dev_csv).decode("utf-8-sig").strip().count("\n")) if dev_csv else -1
+    ok("/review/<fid>/report is scoped to the organisation too (its devices CSV)", st == 200 and rows == org0["devices"],
+       f"{rows} device rows, the organisation has {org0['devices']}, the search {total_devices}")
+    rename(label=org0["network"], drop_asns=True)            # a finding made before AS numbers were stored
+    st, d = call(f"/api/advisory/{oid}", ADVISOR, **ADV)
+    ok("a sub-finding made before this change gets its AS numbers from its name once, then keeps them",
+       st == 200 and sorted(F.get(oid).get("network_asns") or []) == sorted(real_asns), str(F.get(oid).get("network_asns")))
+    rename(asns=["4294967295"])                              # none of its devices left in the records
+    st, d = call(f"/api/advisory/{oid}", ADVISOR, **ADV)
+    ok("none of its devices left: the advisory is refused (409), not widened to every organisation",
+       st == 409 and "any more" in d.get("error", ""), d.get("error", ""))
+    st, d = call(f"/api/advisory/{oid}/net", ADVISOR, **ADV)
+    ok("…also with no network named (it used to fall back to ALL)", st == 409, str(st))
+    st, d = call(f"/review/{oid}/report", ADVISOR, **ADV)
+    ok("…and its report is refused too", st == 409 and "any more" in d.get("error", ""), d.get("error", ""))
+    rename(asns=real_asns)
+
+    print("Advisories follow the finding (external review, 2026-11-12)")
+    net1 = org0["network"]
+    body = {"network": net1, "subject": "Exposed routers", "description": "Exposed.", "actions": "- Close the port", "recipients": net1}
+    call(f"/api/advisory/{oid}/net", ADVISOR, "POST", body, **ADV)
+    call(f"/api/advisory/{oid}/generate", ADVISOR, "POST", {"network": net1}, **ADV)
+    st, d = call(f"/api/advisory/{oid}/drafted", ADVISOR, "POST", {"network": net1}, **ADV)
+    st, d = call(f"/api/advisory/{oid}/generate", ADVISOR, "POST", {"network": net1}, **ADV)
+    ok("regenerating a drafted advisory's report puts it back to draft (what was marked ready changed)",
+       st == 200 and d["advisory"]["status"] == "draft", d.get("error") or d["advisory"]["status"])
+    st, d = call(f"/api/advisory/{oid}/send", ADVISOR, "POST", {"network": net1, "recipients": net1}, **ADV)
+    ok("…so it cannot be sent before it is marked drafted again", st != 200, str(st))
+    F.set_status(oid, "closed", "withdrawn by management", "lg-check-management", "management", is_manager=True)
+    st, d = call(f"/api/advisory/{oid}/net", ADVISOR, "POST", body, **ADV)
+    ok("management closed the finding: its advisory can no longer be saved", st == 409 and "closed" in d.get("error", ""), d.get("error", ""))
+    st, d = call(f"/api/advisory/{oid}/send", ADVISOR, "POST", {"network": net1, "recipients": net1}, **ADV)
+    ok("…nor sent", st == 409 and "closed" in d.get("error", ""), d.get("error", ""))
+    st, d = call(f"/api/advisory/{oid}", ADVISOR, **ADV)
+    ok("…but it still opens, to read and download", st == 200, str(st))
+
+    print("A review moves only by its own Decide; closed undecided, it is withdrawn")
+    jid7, s7 = search(code, user="lg-wd-analyst")
+    st, d = call(f"/api/combos/search/{jid7}/review", ANALYST, "POST", {"codes": [s7["preview"]["cross"][0]["code"]], "title": "To withdraw",
+                                                                       "to": "lg-check-management"}, user="lg-wd-analyst")
+    wid = (d.get("finding") or "#0")[1:]
+    st, d = call(f"/api/combos/search/{jid7}/download", ANALYST, user="lg-wd-analyst")
+    ok("(sent: the analyst's download waits for management)", st == 409, str(st))
+    _, err = F.decide(wid, True, "ok", "lg-check-management", "management", to="lg-check-analyst")
+    ok("the general Accept is refused on a review (it would leave it without a decision)", err and "Decide" in err, err)
+    _, err = F.set_status(wid, "advisor", "move it", "lg-check-management", "management", is_manager=True)
+    ok("…so is moving it by hand while undecided", err and "Decide" in err, err)
+    _, err = F.set_status(wid, "closed", "not needed", "lg-check-management", "management", is_manager=True)
+    ok("closing it by hand withdraws it, recorded as such", not err and F.get(wid)["review"]["decision"] == "withdrawn", err)
+    st, d = call(f"/api/combos/search/{jid7}/download", ANALYST, user="lg-wd-analyst", raw=True)
+    ok("…and the analyst's download is theirs again (no longer waiting for a decision that never comes)", st == 200, str(st))
 finally:
     audit.add = real_add
     book.review_paths["store"] = real_store

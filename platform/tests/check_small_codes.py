@@ -45,6 +45,7 @@ ok("at 5 hosts, the code", small_codes.code_for("LG-C-X", MIN, False) == "LG-C-X
 ok("a viewer who sees hosts always gets it", small_codes.code_for("LG-C-X", 1, True) == "LG-C-X")
 
 A.svc["store"].get(A.replay_now())
+A.store.get(A.replay_now())
 SI = A.SVC_INTEL
 idx = SI.index()
 picked = None
@@ -71,6 +72,44 @@ ok("the codes that stay are the same for everyone", [c for c, n in patterns(res)
 view = as_viewer(RESEARCHER, lambda: SI.intel_view(base))
 ok("a services report's window (Intel gathered) holds small codes back as well",
    all(c is None for c, n in patterns(view["cross"]) if n < MIN), base)
+
+print("Every other place a code is handed out (external review, 2026-11-12)")
+sk = as_viewer(RESEARCHER, lambda: SI.sinkholes_of(base))
+ok("services sinkholes: an infection under 5 hosts has no code for a researcher",
+   all(n["code"] is None for n in sk["names"] if n["hosts"] < MIN) and all(n["code"] for n in sk["names"] if n["hosts"] >= MIN),
+   f"{len(sk['names'])} infections")
+ok("…an analyst keeps them all", all(n["code"] for n in as_viewer(ANALYST, lambda: SI.sinkholes_of(base))["names"]))
+inf = [r_ for x in res["infections"] for r_ in x["reports"]]
+ok("Intel gathered (hold_small): the infection codes per report follow the rule too",
+   all(r_["code"] is None for r_ in inf if r_["hosts"] < MIN), f"{len(inf)} rows")
+os.environ["PUBLIC_DEMO"] = "1"
+pub = as_viewer(ANALYST, lambda: SI.for_hosts(hs, hold_small=True))
+os.environ.pop("PUBLIC_DEMO")
+ok("PUBLIC_DEMO (demo forced for everyone): small patterns lose their codes even for an analyst",
+   all(c is None for c, n in patterns(pub) if n < MIN))
+IN = A.INTEL
+names = [n for n, _ in sorted(((n, sum(s["records"] for s in reps.values())) for (sec, n), reps in IN.index()["by"].items()
+                               if sec == "infections"), key=lambda kv: -kv[1])][:25]
+small_seen = big_seen = 0
+leak = []
+for nm in names:
+    gres = as_viewer(RESEARCHER, lambda: IN.gathered("infections", nm))
+    gana = as_viewer(ANALYST, lambda: IN.gathered("infections", nm))
+    for rr, ra in zip(gres["reports"], gana["reports"]):
+        for cr, ca in zip(rr["combinations"] + ([rr["single"]] if rr["single"] else []), ra["combinations"] + ([ra["single"]] if ra["single"] else [])):
+            if cr["hosts"] < MIN:
+                small_seen += 1
+                leak += [cr["code"]] if cr["code"] else []
+            else:
+                big_seen += 1
+    for xr in gres["across"]["cross_combos"]:
+        if xr["devices"] < MIN:
+            small_seen += 1
+            leak += [xr["code"]] if xr["code"] else []
+ok("network communications Intel gathered: no code for a combination, single or across-report pattern under 5 devices",
+   not leak, f"{small_seen} small, {big_seen} larger patterns checked; {len(leak)} with a code")
+ana_codes = [c["code"] for nm in names[:5] for r in as_viewer(ANALYST, lambda: IN.gathered("infections", nm))["reports"] for c in r["combinations"]]
+ok("…an analyst keeps every code there", all(ana_codes), f"{len(ana_codes)} codes")
 
 print("An analyst's code page (handed over in a channel)")
 handed = as_viewer(RESEARCHER, lambda: SI.for_hosts(hs))

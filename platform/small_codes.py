@@ -17,10 +17,12 @@ def viewer_sees_hosts():
     """True for viewers who see the devices (the 'unmasked' permission, demo mode off); outside a request (tools,
     tests calling the functions directly) True."""
     try:
+        import os
         from flask import g, has_request_context, request
         if not has_request_context():
             return True
-        if request.args.get("demo") == "1":
+        # PUBLIC_DEMO forces demo masking for every request (app.py): no one sees hosts then (external review, 2026-11-12)
+        if os.environ.get("PUBLIC_DEMO") == "1" or request.args.get("demo") == "1":
             return False
         u = getattr(g, "user", None)
         return bool(u) and "unmasked" in (u.get("perms") or ())

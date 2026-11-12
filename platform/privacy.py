@@ -176,8 +176,15 @@ def partial_mask_text(s):
     apart without a stable per-host ID, which researchers must never get."""
     if not s or not isinstance(s, str):
         return s
-    s = IPV4_FULL.sub(lambda m: f"x.{m.group(2)}.x.{m.group(4)}", s)
-    return IPV6.sub(lambda m: f"x:{m.group(2)}:x:x", s)
+    import ip_find                                 # the one finder every masker shares (external review, 2026-11-12)
+
+    def part(ip):
+        if ":" in ip:
+            g = ip.split(":")
+            return f"x:{g[1] if len(g) > 1 else 'x'}:x:x"
+        p = ip.split(".")
+        return f"x.{p[1]}.x.{p[3]}"
+    return ip_find.sub(s, part)
 
 
 def mask_event(ev, asns):

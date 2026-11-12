@@ -50,6 +50,10 @@ for platform, filt in (("comms", {}), ("comms", {"attack": "Botnet C2"}), ("serv
     ok(f"{platform} {filt or 'everything'}: no host references", '"ref' not in body and "src_ip" not in body and '"ip"' not in body)
     k = d.get("kpis", {})
     print("       ", {x: k[x] for x in list(k)[:6]})
+    if platform == "comms":
+        top = (d.get("c2") or {}).get("top") or []
+        ok(f"{platform} {filt or 'everything'}: C2 domains as numbers only (Domain 1, 2…), never the host",
+           all(re.fullmatch(r"Domain \d+", str(x.get("value"))) and x.get("value") == x.get("label") for x in top), json.dumps(top[:2])[:200])
 import io, zipfile  # noqa: E401,E402
 for label, args in (("services", {"platform": "services"}), ("communications, filtered", {"platform": "comms", "attack": "Botnet C2"})):
     r, code = call("/api/mgmt/report", args)

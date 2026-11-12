@@ -328,6 +328,10 @@ class Findings:
                 return None, "It is not with management: there is nothing to decide."
             if item.get("kind") == "case":
                 return None, "A case is decided organisation by organisation: decide each of its sub-findings."
+            if item.get("review"):
+                # a review is decided with its own Decide (which views the report carries): accepted here it had no
+                # decision, and the analyst waited for one forever (external review, 2026-11-12)
+                return None, "This is a review: decide it with Decide on its page (which views the report carries)."
             item["status"] = ("analyst" if to else "approved") if accept else "closed"
             item["history"].append({"status": item["status"], "kind": "decision", "decision": "accepted" if accept else "rejected",
                                     "user": user, "role": role, "at": round(time.time(), 3), "comment": text[:MAX_COMMENT], "to": to or ""})
@@ -349,6 +353,13 @@ class Findings:
                 return None, err
             if status == item["status"] and not comment and not to:
                 return None, "It already has that status; add a comment to note something."
+            rv = item.get("review")
+            if rv and not rv.get("decision") and status != item["status"]:
+                # an undecided review only moves by its own Decide; closing it by hand withdraws it, recorded as such,
+                # so the analyst is not left waiting for a decision that never comes (external review, 2026-11-12)
+                if status != "closed":
+                    return None, "This review is undecided: decide it with Decide on its page, or close it to withdraw it."
+                rv["decision"] = "withdrawn"
             item["status"] = status
             h = {"status": status, "user": user, "role": role, "at": round(time.time(), 3), "comment": comment[:MAX_COMMENT], "to": to or ""}
             if status == "advisor":

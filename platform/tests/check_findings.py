@@ -191,8 +191,10 @@ try:
     call(f"/api/findings/{rv['id']}/status", MGMT, "POST", {"status": "closed", "comment": "Not needed."}, role="management", user="lg-check-management")
     st, d = call(f"/api/findings/{rv['id']}/review-decision", MGMT, "POST", {"choice": "both", "text": "go", "to": "lg-check-advisor"},
                  role="management", user="lg-check-management")
-    ok("deciding a review that was closed is refused", st == 400 and "closed" in d.get("error", "") and A.FINDINGS.get(rv["id"])["status"] == "closed",
-       f"{st} {d.get('error', '')}")
+    # closing it by hand withdraws it (recorded as its decision), so it is "already decided" (external review, 2026-11-12)
+    ok("deciding a review that was closed is refused (closed by hand = withdrawn)", st == 400
+       and ("closed" in d.get("error", "") or "Already decided" in d.get("error", "")) and A.FINDINGS.get(rv["id"])["status"] == "closed"
+       and A.FINDINGS.get(rv["id"])["review"]["decision"] == "withdrawn", f"{st} {d.get('error', '')}")
 finally:
     audit.add = real_add
     A.FINDINGS.people_of = real_people

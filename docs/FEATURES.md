@@ -5,6 +5,7 @@ read more. Dates are UTC.
 
 ## Contents
 
+- [2026-11-12 (later): security review fixes](#2026-11-12-later-security-review-fixes)
 - [2026-11-12: audit evidence (NIST and CIS), report intake checks, the pipeline from Settings, password expiry](#2026-11-12-audit-evidence-nist-and-cis-report-intake-checks-the-pipeline-from-settings-password-expiry)
 - [2026-11-11: advisories, cases, an Overview for every role, the Audit portal](#2026-11-11-advisories-cases-an-overview-for-every-role-the-audit-portal)
 - [2026-11-10: combination codes, the analyst's combination search and findings](#2026-11-10-combination-codes-the-analysts-combination-search-and-findings)
@@ -13,6 +14,31 @@ read more. Dates are UTC.
 - [2026-11-09: faster platforms and a sharper Executive portal](#2026-11-09-faster-platforms-and-a-sharper-executive-portal)
 - [2026-11-08: Executive portal, 7-day baseline, vulnerabilities and network types](#2026-11-08-executive-portal-7-day-baseline-vulnerabilities-and-network-types)
 - [2026-11-07: definitions, the researcher role and PDF reports](#2026-11-07-definitions-the-researcher-role-and-pdf-reports)
+
+## 2026-11-12 (later): security review fixes
+
+An external review attacked the new features; every finding below is fixed and tested.
+
+**Fixed**
+
+- **Settings → Workers:** request files can no longer forge a server confirmation (no symlinks followed, results built
+  from a fixed list of fields), and each change is judged by what its value means to the pipeline (`block` is Block).
+- **Sender check (DKIM):** a message whose headers can be read two ways is not trusted; a pass needs a signed From
+  in the signer's domain. Block mode fails closed when the check cannot run. Report e-mails are keyed by the mailbox's
+  own message number, not the sender's Message-ID. Link downloads stop at the unzip size limit.
+- **Advisories:** one organisation's advisory is chosen by its network numbers (ASNs) and never widened to everyone;
+  a closed finding's advisories can no longer be changed or sent; regenerating a drafted report puts it back to draft.
+- **Masking:** one address finder for every masker, so spellings such as `v41.66.1.2` or `ip:2001:db8::1` are masked
+  everywhere; lasting codes for patterns on fewer than 5 hosts are held back everywhere they were still given out.
+- **Audit log:** the portal and the auditor's verifier are one implementation; deleted or rewritten side files
+  (`audit.seal`, `audit.head`, retention notes) no longer let a change pass.
+- **Accounts and workflow:** the forgot-password form tells nothing before identity is proven; recovery codes, the
+  authenticator and expired-password steps, restore and command-line account creation are tightened; a review closed
+  by hand is withdrawn instead of blocking the analyst; analyst codes are unique per request.
+- **Load:** cache keys ignore unknown parameters, CISA KEV backs off after a failure, look-ups keep their time budget,
+  Executive baselines are bounded, a constituency change always wins over a day load already running.
+- **Tests and CI:** every write route is checked for CSRF through a real sign-in; checks that need MongoDB skip when
+  it is not there; a GitHub Actions workflow runs the checks that need no database.
 
 ## 2026-11-12: audit evidence (NIST and CIS), report intake checks, the pipeline from Settings, password expiry
 

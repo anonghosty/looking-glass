@@ -247,6 +247,7 @@ class DayStore:
         self.lock = threading.Lock()
         self.loading = {}
         self.changes = {}          # day start -> reports that arrived or grew while the service was running
+        self.gen = 0               # moved on by reset(): a load begun before it is thrown away, not stored
 
     def _fetch_collection(self, src, start, end):
         c = db[src["name"]]
@@ -351,10 +352,13 @@ class DayStore:
         return day
 
     def reset(self):
-        """Forget every loaded day (Settings changed the constituency): the next request reloads them."""
+        """Forget every loaded day (Settings changed the constituency): the next request reloads them. A load already
+        running is not stored when it ends: it loads again, with the new constituency (external review, 2026-11-12:
+        it finished after the reset and put the old constituency's day back)."""
         with self.lock:
             self.days.clear()
             self.changes.clear()
+            self.gen += 1
 
     def _record_changes(self, start, old, new):
         """Remember which reports arrived (or grew) when a day is reloaded, so the browser can announce them."""
@@ -418,12 +422,18 @@ class DayStore:
             ev.wait(120)
             return self.days.get(start) or Day(start, [])
         try:
-            new = self._load(start)
-            self._record_changes(start, day, new)
-            with self.lock:
-                self.days[start] = new
-                for k in [k for k in self.days if k < start - timedelta(days=2)]:
-                    del self.days[k]
+            for _ in range(3):
+                gen = self.gen
+                new = self._load(start)
+                with self.lock:
+                    if self.gen != gen:          # the constituency changed while loading: load again with it
+                        day = None
+                        continue
+                    self._record_changes(start, day, new)
+                    self.days[start] = new
+                    for k in [k for k in self.days if k < start - timedelta(days=2)]:
+                        del self.days[k]
+                return new
             return new
         except Exception:
             app.logger.exception("Day load failed for %s", start.date())
@@ -1798,7 +1808,9 @@ def issues_resolve(names, budget=15.0, progress=None):
     out = {}
     ids = [n for n in names if cves.is_cve(n)]
     if ids:
-        cards = cve_intel.lookup_many(ids, progress=progress)
+        # budget: no more fetching once spent (external review, 2026-11-12: it was ignored); a progress window (the
+        # look-up the user started and watches) has no limit
+        cards = cve_intel.lookup_many(ids, progress=progress, budget=None if progress else budget)
         for n in ids:
             out[n] = issue_resolve(n, fetch=False) if cards.get(n.upper()) is None else cards[n.upper()]
             cur = issues_kb().get(n.lower())
@@ -1979,7 +1991,10 @@ def api_lookups_status(jid):
     j = _JOBS.get(jid)
     if not j or j["user"] != (getattr(g, "user", None) or {}).get("user", ""):
         return jsonify(error="No such look-up (finished ones are kept 30 minutes)."), 404
-    since = int(request.args.get("since") or 0)
+    try:                                   # a bad value is the start of the log, not a server error (external review)
+        since = max(0, int(request.args.get("since") or 0))
+    except ValueError:
+        since = 0
     out = {k: j[k] for k in ("id", "kind", "state", "total", "done", "failed", "current", "error")}
     out.update(elapsed=round(time.time() - j["t0"]), log=j["log"][since:], log_len=len(j["log"]))
     if j["state"] == "done":
@@ -2511,7 +2526,14 @@ def api_kb_entry():
 
 @app.route("/api/infections")
 def api_infections():
-    return jsonify(knowledge_base())
+    # who defined each one by full name, never the account name (external review, 2026-11-12: usernames were sent)
+    out = {}
+    for k, v in knowledge_base().items():
+        e = {f: x for f, x in v.items() if f not in ("curated_by", "curated_by_name")}
+        if v.get("curated_by"):
+            e["by"] = _by(v)
+        out[k] = e
+    return jsonify(out)
 
 
 @app.route("/api/infections/missing")
@@ -3120,4 +3142,6 @@ if _SERVING:
     threading.Thread(target=REPORT_MAP.loop, daemon=True, name="report-map").start()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "5000")), debug=False, threaded=True)
+    # `python app.py` (tests, development) listens on this computer only unless BIND_HOST says otherwise; the service
+    # runs under gunicorn (deploy/), which has its own bind setting (external review, 2026-11-12)
+    app.run(host=os.environ.get("BIND_HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "5000")), debug=False, threaded=True)

@@ -28,6 +28,7 @@ from flask import jsonify, request
 
 from privacy import partial_mask_text
 import hostmask
+import small_codes
 
 # Researchers never see what identifies a constituent host (a host name, address, e-mail, date or ID). What the services
 # reports say about a constituent's own hosts is masked (hostmask.py) before it is counted, and a value is shown only
@@ -109,7 +110,10 @@ def _values(e, key, kind, svc=False, raw=False):
             if not s or hostmask.looks_like_host(s):
                 continue                          # nothing left but "<host>": it named a host and nothing else
         elif kind not in KEEP_AS_IS and kind not in EXACT_KINDS:
-            s = partial_mask_text(s)       # attacker infrastructure, never a stable host ID (privacy.py)
+            # IP addresses inside threat data are partly masked; the C2 host itself is kept as it is, an IP literal
+            # too: researchers need the C2 servers for their analysis (the user's decision, 2026-11-12, after the
+            # external review raised it; written in SECURITY.md). A C2 server is the threat's side, not a constituent.
+            s = partial_mask_text(s)
         if s:
             yield s[:300]
 
@@ -260,6 +264,7 @@ class Intel:
 
     def gathered(self, section, name):
         data = self.index()
+        full = small_codes.viewer_sees_hosts()
         key = (section, name if section == "issues" else (name or "").lower())
         reports = []
         me = _norm(name)
@@ -280,8 +285,10 @@ class Intel:
             kinds.sort(key=lambda k: (k["kind"] in NO_LEADS, -k["distinct"]))
             # which associated tags / CVEs (and, for communications, C2 + client) come together on the same record: why
             # one counts less than another, and how many hosts keep repeating that exact combination
+            # a lasting code only for a pattern MIN_HOSTS or more hosts share, unless the viewer sees the hosts
+            # (small_codes.py; external review, 2026-11-12: these codes bypassed it)
             combos = [{"items": list(items), "count": n, "share": round(n / total, 4), **hosts(slot["ch"].get(items)),
-                       "code": combo_code(section, key[1], rep, items)}
+                       "code": small_codes.code_for(combo_code(section, key[1], rep, items), len(slot["ch"].get(items) or ()), full)}
                       for items, n in slot["combos"].most_common(12)]
             self._shown(section, key[1], rep, [c["items"] for c in combos])
             single = None
@@ -294,7 +301,8 @@ class Intel:
         leads = [x for x in self.leads()["leads"] if any(p == section and n == key[1] for p, n in x["names_key"])]
         across = self._across(data, key, me)
         for x in across["cross_combos"]:
-            x["code"] = cross_code(section, key[1], [(p["report"], p["items"]) for p in x["parts"]])
+            x["code"] = small_codes.code_for(cross_code(section, key[1], [(p["report"], p["items"]) for p in x["parts"]]),
+                                             x["devices"], full)
         self._shown(section, key[1], None, [[(p["report"], p["items"]) for p in x["parts"]] for x in across["cross_combos"]])
         return {"name": name, "section": section, "days": data["days"], "reports": reports, "leads": leads[:20],
                 "across": across}

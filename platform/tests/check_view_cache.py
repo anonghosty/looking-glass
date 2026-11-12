@@ -131,6 +131,12 @@ _, plain, _ = call(f"/api/svc/drill?{urlencode(sels[0])}&metric=hosts")
 ok("a masked viewer never gets the unmasked list from the cache (and the other way round)",
    masked.get("rows") and plain.get("rows") and masked["rows"][0]["ip"] != plain["rows"][0]["ip"],
    f"{masked['rows'][0]['ip']} / {plain['rows'][0]['ip'][:3]}…")
+import secrets as _sec  # noqa: E402
+q0 = urlencode(sels[0])
+call(f"/api/svc/insight?{q0}")
+_, junk, tj = call(f"/api/svc/insight?{q0}&x={_sec.token_hex(6)}&utm={_sec.token_hex(6)}")
+ok("a parameter nothing reads (&x=random) does not make a new cache entry: answered from the cache",
+   tj < 50 and junk.get("total") is not None, f"{tj:.0f} ms")
 
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))
 sys.exit(1 if fails else 0)

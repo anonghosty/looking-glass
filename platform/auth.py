@@ -355,8 +355,12 @@ class Users:
                     pass
 
     def all(self):
-        self._load()
-        return self.data.get("users", {})
+        """A snapshot of the accounts (the mapping copied under the lock): callers loop over it while sign-ins and admin
+        changes write, which could fail with "dictionary changed size during iteration" (external review, 2026-11-12).
+        Changes go through users.data under users.lock, never through this."""
+        with self.lock:
+            self._load()
+            return dict(self.data.get("users", {}))
 
     def get(self, name):
         return self.all().get(name)
@@ -934,6 +938,11 @@ def install(app, base_dir, logger):
             if not st:
                 return page("login.html", 401, next=nxt, view="signin", error="The login step expired. Enter your name and password again.")
             name = st["user"]; u = users.get(name)
+            if u and u.get("status", "active") != "active":
+                # revoked or disabled between the password and this step: no session (external review, 2026-11-12)
+                drop_step(tok)
+                audit.add("login_refused", user=name, detail="account no longer active at the authenticator step")
+                return page("login.html", 403, next=nxt, view="signin", error="This account cannot sign in.")
             if not u or throttle.locked(ip, name):
                 return page("login.html", 429, next=nxt, view="signin", error="Too many failed attempts. Try again in 15 minutes.")
             code = (request.form.get("code") or "").strip()
@@ -958,7 +967,13 @@ def install(app, base_dir, logger):
                 if stp is not None:
                     uu["totp_last"] = stp                       # each code works once
                 else:
-                    uu["recovery"].pop(used_recovery)
+                    # the code itself is found again under the lock: by its place in the list, a sign-in using another
+                    # code at the same moment could remove a different, unused one (external review, 2026-11-12)
+                    idx = next((i for i, hsh in enumerate(uu.get("recovery", [])) if check_password_hash(hsh, code.lower())), None)
+                    if idx is None:                             # used by another sign-in a moment ago
+                        audit.add("login_failed", user=name, detail="recovery code already used")
+                        return page("login.html", 401, next=nxt, view="signin", error="That recovery code was just used. Sign in again.")
+                    uu["recovery"].pop(idx)
                     audit.add("recovery_code_used", user=name, detail=f"{len(uu['recovery'])} left")
                 users.save()
             throttle.ok(ip, name)
@@ -1006,6 +1021,10 @@ def install(app, base_dir, logger):
         ip, _ = client()
         name = st["user"]
         u = users.get(name)
+        if u and u.get("status", "active") != "active":         # revoked meanwhile: no session (external review)
+            drop_step(tok)
+            audit.add("login_refused", user=name, detail="account no longer active at the expired-password step")
+            return page("login.html", 403, next=nxt, view="signin", error="This account cannot sign in.")
         if not u or throttle.locked(ip, name):
             return page("login.html", 429, next=nxt, view="signin", error="Too many failed attempts. Try again in 15 minutes.")
         pw, pw2 = request.form.get("password") or "", request.form.get("password2") or ""
@@ -1185,10 +1204,6 @@ def install(app, base_dir, logger):
         if throttle.locked(ip, name):
             return page("forgot.html", 429, mode=mode, error="Too many failed attempts. Try again in 15 minutes.")
         pw, pw2 = request.form.get("password") or "", request.form.get("password2") or ""
-        prof = (users.get(name) or {}).get("profile") or {} if NAME_RE.match(name) else {}
-        problem = password_problem(name or "x", pw, pw2, avoid=(prof.get("full_name", ""), (prof.get("email") or "").split("@")[0]))
-        if problem:
-            return page("forgot.html", 400, mode=mode, error=problem, username=name)
         u = users.get(name) if NAME_RE.match(name) else None
         code = (request.form.get("code") or "").strip()
         rec = (request.form.get("recovery") or "").strip().lower()
@@ -1206,6 +1221,12 @@ def install(app, base_dir, logger):
             audit.add("reset_failed", user=name if u else "", detail="" if u else f"unknown name {name!r}")
             return page("forgot.html", 401, mode=mode, username=name,
                         error=attempts_msg("The name, authenticator code or recovery code is not right.", ip, name))
+        # the new password's rules only AFTER the person proved who they are: checked first, they told anyone whether an
+        # account exists and let its owner's name be guessed, without counting a failed try (external review, 2026-11-12)
+        prof = u.get("profile") or {}
+        problem = password_problem(name, pw, pw2, avoid=(prof.get("full_name", ""), (prof.get("email") or "").split("@")[0]))
+        if problem:
+            return page("forgot.html", 400, mode=mode, error=problem, username=name)
         with users.lock:
             users._load()
             uu = users.data["users"][name]
@@ -1214,8 +1235,11 @@ def install(app, base_dir, logger):
             uu["changed"] = int(_now())                         # ends every session of the account
             uu["totp_last"] = step
             how = "administrator-approved" if uu.get("reset_allowed_until", 0) > _now() else "with a recovery code"
-            if used_rec is not None:
-                uu["recovery"].pop(used_rec)
+            if used_rec is not None:                            # found again under the lock, by the code (external review)
+                idx = next((i for i, hsh in enumerate(uu.get("recovery", [])) if check_password_hash(hsh, rec)), None)
+                if idx is None:
+                    return page("forgot.html", 401, mode=mode, username=name, error="That recovery code was just used.")
+                uu["recovery"].pop(idx)
             uu.pop("reset_requested", None); uu.pop("reset_allowed_until", None)
             users.save()
         sessions.end_user(name)
@@ -1324,9 +1348,15 @@ def install(app, base_dir, logger):
             elif action == "revoke":
                 if losing_admin:
                     return jsonify(error="This is the last admin."), 400
+                u["status_before"] = u.get("status", "active")   # what restore gives back
                 u["status"] = "disabled"; u["changed"] = int(_now()); detail = "account revoked"
             elif action == "restore":
-                u["status"] = "active" if u.get("totp") else "pending"; detail = f"status {u['status']}"
+                # only a revoked account, and back to what it was: restore used to make any account with an
+                # authenticator active, a pending one too, without its approval (external review, 2026-11-12)
+                if u.get("status") != "disabled":
+                    return jsonify(error="Only a revoked account can be restored (a pending one is approved instead)."), 400
+                was = u.pop("status_before", None) or ("active" if u.get("approved_at") else "pending")
+                u["status"] = was if (was != "active" or u.get("totp")) else "pending"; detail = f"status {u['status']}"
             elif action == "reset_mfa":
                 if losing_admin:
                     return jsonify(error="This is the last admin."), 400

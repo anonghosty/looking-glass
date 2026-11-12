@@ -93,7 +93,7 @@ class FakeBox:
 
 
 fetched_links = []
-sp._download_links = lambda links, d, threads, stats: [(u, fetched_links.append(u) or f"{abs(hash(u))}.zip") for u in links]
+sp._download_links = lambda links, d, threads, stats, **kw: [(u, fetched_links.append(u) or f"{abs(hash(u))}.zip") for u in links]
 real_checker = mail_auth.Checker
 sp.mail_auth.Checker = lambda domain="shadowserver.org": real_checker(domain, resolver=resolver)
 

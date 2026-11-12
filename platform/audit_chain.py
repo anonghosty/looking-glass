@@ -481,11 +481,9 @@ class Chain:
                 self._cache.pop(p, None)
 
     def removed(self):
-        try:
-            with open(os.path.join(self.dir, "removed.jsonl"), encoding="utf-8") as f:
-                return [json.loads(ln) for ln in f if ln.strip()]
-        except (OSError, ValueError):
-            return []
+        """The retention notes; a line that is not a note is skipped here (the check reports it as a break)."""
+        import audit_verifier
+        return audit_verifier._notes(os.path.join(self.dir, "removed.jsonl"))[0]
 
     # ------------------------------------------------------------------ the seal of entries written before the chain
     @property
@@ -542,8 +540,30 @@ class Chain:
 
     # ------------------------------------------------------------------ checking
     def verify(self):
-        """Walk every line kept. Returns a dict: ok, entries, chained, before_chain, first/last time, break (where the
-        chain breaks: entry number, time, what), head (the newest hash, and whether it matches data/audit.head)."""
+        """Whether the log is whole, by the SAME code an auditor runs on a proof package (audit_verifier.check): one
+        implementation, so the portal can never say "whole" where the independent check would not (external review,
+        2026-11-12: the two disagreed about a deleted archive with crafted notes). Read under the log's own lock, so a
+        write in progress is never taken for a break. Returns the portal's fields: ok, entries (kept), chained,
+        before_chain, first/last time, break, head, head_entry, seal, removals, the retention history, and so on."""
+        import fcntl
+        import audit_verifier
+        lock_fd = os.open(self.path + ".lock", os.O_WRONLY | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            r = audit_verifier.check(os.path.dirname(self.path), gap_days=int(_env_num("AUDIT_GAP_DAYS", 30)))
+        finally:
+            os.close(lock_fd)
+        return {"ok": r["ok"], "seal": r["seal"], "removals_recorded": r["removals_recorded"],
+                "removals_pending": r["removals_pending"], "removals": r["removals"], "removal_gaps": r["removal_gaps"],
+                "retention_history": r["retention_history"], "entries": r["kept"], "chained": r["chained"],
+                "before_chain": r["before_chain"], "first": r["first"], "last": r["last"], "break": r["break"],
+                "head": r["head"], "head_entry": r["head_entry"], "removed_entries": r["removed_by_retention"],
+                "head_file": r["head_file"] != "missing", "archives": r["archives"],
+                "removed_archives": len(self.removed()), "retention_days": self.retention_days,
+                "rotate_mb": round(self.rotate_bytes / 1_000_000, 1)}
+
+    def _verify_legacy(self):
+        """The portal's own walk before 2026-11-12, kept only for comparison in the checks; verify() is authoritative."""
         lines, removed = self.lines(), self.removed()
         prev_line_hash = removed[-1]["last_hash"] if removed else None     # the oldest archives were removed by retention
         before = chained = 0

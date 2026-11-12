@@ -87,7 +87,13 @@ def main(a):
         role = "admin" if "--admin" in a else LOWEST_ROLE   # "viewer" was renamed "external"
         users.set_password(name, ask_password(name), role)
         print(f"Account {name} ({role}) created.")
-        setup_mfa(name)
+        try:
+            setup_mfa(name)
+        except (SystemExit, KeyboardInterrupt, EOFError):
+            # no authenticator confirmed: the account goes again, never left with a password and no second factor
+            # (external review, 2026-11-12)
+            users._load(); users.data["users"].pop(name, None); users.save()
+            sys.exit(f"Authenticator not confirmed: account {name} was not kept. Run add again.")
     elif cmd == "passwd":
         need(name); users.set_password(name, ask_password(name)); print("Password changed; the account's sessions have ended.")
     elif cmd == "mfa":

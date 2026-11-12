@@ -582,6 +582,13 @@ Security scripts:
 - `deploy/create_readonly_db_user.py`: a read-only MongoDB account for the app.
 - `deploy/make_tls_cert.sh`: HTTPS for other screens.
 - `tests/lgauth.py`: lets the check scripts on this computer reach the API with the local automation key.
+- `tests/e2e_test.py`: starts a copy of the app on port 5055 against a throwaway database. The copy holds reference
+  data only (no accounts, sessions, keys, certificates, audit log, findings, notes or advisories), gets an automation
+  key of its own, listens on 127.0.0.1 only, and is removed again even when the test fails.
+- `python app.py` (tests, development) listens on 127.0.0.1 unless `BIND_HOST` says otherwise; the service itself runs
+  under gunicorn with its own bind setting.
+- IP addresses inside text are found by one module, `ip_find.py`, for every masker (the researchers' `hostmask.py` and
+  partial masking, and the masked viewers' `host_label.py`), so no spelling escapes one and not the other.
 
 ## Scripts
 

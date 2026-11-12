@@ -158,8 +158,12 @@ so they get the threat data itself; what they never get is who the constituents 
 - **Never a constituent's IP address.** Addresses are masked everywhere researchers look, also inside report values.
 - **Report data as reported:** service banners and the product, vendor and version taken from them; bot URLs, user
   agents, DNS look-ups and SNI values in Intel gathered; patterns, including those only one or a few hosts carry. IP
-  addresses inside these values are masked (in Intel gathered's threat values as `x.161.x.34`); nothing else in them
-  is removed, because it is the intelligence the research depends on. A pattern fewer than 5 hosts carry is shown
+  addresses inside these values are masked (in Intel gathered's threat values as `x.161.x.34`, found by the one
+  address finder every masker shares, `ip_find.py`); nothing else in them is removed, because it is the intelligence
+  the research depends on. **The one exception: the C2 host itself** (a sinkhole report's contacted host, `http_host`)
+  is shown as reported, an IP address too, because researchers need the C2 servers for their analysis; a C2 server is
+  the threat's side, never a constituent's host. Management sees no C2 host: it decides on numbers, so the
+  Executive portal lists the C2 domains as Domain 1, 2… with their devices and events, in every mode and every field. A pattern fewer than 5 hosts carry is shown
   without a lasting code (`small_codes.py`), so it cannot be followed back to a host over time.
 - **Team notes and free text** (what people write, not what reports contain) mask more: host names, IP addresses,
   e-mail addresses, dates and long IDs (`hostmask.py`).

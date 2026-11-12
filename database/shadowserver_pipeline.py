@@ -361,8 +361,11 @@ def _filename_from_response(url: str, headers) -> str:
     return name or f"download_{hashlib.sha1(url.encode()).hexdigest()[:16]}.bin"
 
 
-def _download_link(session, url: str, dest: Path):
-    """Returns (status, text, filename): status True = downloaded, False = already present, None = failed."""
+def _download_link(session, url: str, dest: Path, max_bytes: int = 2048 * 2**20):
+    """Returns (status, text, filename): status True = downloaded, False = already present, None = failed.
+    max_bytes: a download stops (and nothing is kept) past this size, ZIP_MAX_UNPACKED_MB as for the API (external
+    review, 2026-11-12: link downloads had no cap, so one link could fill the disk)."""
+    tmp = None
     try:
         with session.get(url, stream=True, timeout=(30, 300)) as resp:
             if resp.status_code != 200:
@@ -373,19 +376,34 @@ def _download_link(session, url: str, dest: Path):
             path = dest / name
             if path.exists():
                 return False, name, name
+            try:
+                announced = int(resp.headers.get("Content-Length") or 0)
+            except ValueError:
+                announced = 0
+            if announced > max_bytes:
+                return None, f"{url}: {human(announced)}, larger than {human(max_bytes)} (ZIP_MAX_UNPACKED_MB): not downloaded", ""
             tmp = path.with_name(f".{name}.part")
             size = 0
             with open(tmp, "wb") as fh:
                 for block in resp.iter_content(chunk_size=1 << 20):
-                    fh.write(block)
                     size += len(block)
+                    if size > max_bytes:
+                        raise OSError(f"larger than {human(max_bytes)} (ZIP_MAX_UNPACKED_MB): download stopped")
+                    fh.write(block)
             os.replace(tmp, path)
+            tmp = None
             return True, f"{name} ({human(size)})", name
     except Exception as exc:  # noqa: BLE001
         return None, f"{url}: {exc}", ""
+    finally:
+        if tmp is not None:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
-def _download_links(links, dest: Path, threads: int, stats: Counter) -> list:
+def _download_links(links, dest: Path, threads: int, stats: Counter, max_bytes: int = 2048 * 2**20) -> list:
     """Download the links; returns [(url, filename)] of those now on disk (downloaded or already there)."""
     import requests
     from requests.adapters import HTTPAdapter
@@ -399,7 +417,7 @@ def _download_links(links, dest: Path, threads: int, stats: Counter) -> list:
     total = len(links)
     ok = []
     with ThreadPoolExecutor(max_workers=threads) as pool:
-        futures = {pool.submit(_download_link, session, u, dest): u for u in sorted(links)}
+        futures = {pool.submit(_download_link, session, u, dest, max_bytes): u for u in sorted(links)}
         for i, fut in enumerate(futures_completed(futures), 1):
             result, text, name = fut.result()
             if result is not None:
@@ -466,9 +484,15 @@ def pull_emails(s: Settings, stats: Counter, refetch: bool = False) -> None:
         try:
             auth = (mail_auth.Checker(os.environ.get("MAIL_AUTH_DOMAIN") or "shadowserver.org"),
                     mail_auth.Log(s.base_dir / ".mail_state.sqlite"))
-        except Exception as exc:  # noqa: BLE001  (the check never stops the pipeline)
+        except Exception as exc:  # noqa: BLE001
+            if blocking:
+                # Block mode fails CLOSED: without the check no message can be judged, so none is read this run (they
+                # stay unread in the mailbox and are tried next run). It used to go on unchecked (external review,
+                # 2026-11-12: Block silently stopped blocking when the sender log could not be opened)
+                src.close()
+                raise RuntimeError(f"Block mode is on but the sender check is unavailable ({exc}): no e-mail is read "
+                                   "this run, so nothing unchecked is loaded. It is tried again next run.") from exc
             log.warning("Sender check unavailable this run: %s", exc)
-            blocking = False
     # messages an administrator released since the last run: their attachments join the others, their links are fetched
     try:
         for rkey, rlinks, rfiles, who in mail_auth.take_releases(s.base_dir, s.attachments_dir):
@@ -484,7 +508,8 @@ def pull_emails(s: Settings, stats: Counter, refetch: bool = False) -> None:
     try:
         items = src.list(s.days)
         done = set() if refetch else state.done_messages()
-        todo = [it for it in items if it[0] not in done]
+        legacy = getattr(src, "legacy", {}) or {}            # keys of earlier versions (Message-ID): handled already
+        todo = [it for it in items if it[0] not in done and legacy.get(it[0]) not in done]
         total = len(todo)
         stats["emails_known"] = len(items) - total
         log.info("%s: %d message(s) since %s, %d new, %d already handled earlier", src.describe(), len(items),
@@ -536,7 +561,7 @@ def pull_emails(s: Settings, stats: Counter, refetch: bool = False) -> None:
     if new_links:
         log.info("Downloading %d Shadowserver link(s) with %d threads (%d downloaded on earlier runs)",
                  len(new_links), s.download_threads, stats["links_known"])
-        got = _download_links(new_links, s.attachments_dir, s.download_threads, stats)
+        got = _download_links(new_links, s.attachments_dir, s.download_threads, stats, max_bytes=s.zip_limits.max_unpacked)
         state.mark_links(got)
         ok_links |= {u for u, _ in got}
     # a message is finished once its attachments are saved and every one of its links is on disk
@@ -1250,6 +1275,9 @@ def main(argv=None) -> int:
     ap.add_argument("-v", "--verbose", action="store_true", help="also show skipped files and debug info")
     ap.add_argument("-q", "--quiet", action="store_true", help="summary lines only (no per-file lines)")
     args = ap.parse_args(argv)
+    # everything this run writes (reports, attachments, quarantine, state, logs) is for this account only: the
+    # reports name constituents' hosts, and other users of the machine could read them (external review, 2026-11-12)
+    os.umask(0o077)
 
     global DETAIL
     if args.quiet:

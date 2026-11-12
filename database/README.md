@@ -14,9 +14,9 @@ It replaces the two original scripts with one faster, restartable pipeline that 
 | both, one after the other | `shadowserver run` |
 
 The original e-mail script (`pull_emails_and_create_services.py`) is no longer shipped: nothing used it, and old,
-unmaintained mail-handling code has no place next to the pipeline. `mongo_added_json.py` stays, because the
-equivalence tests compare the new loader with it; the pipeline itself does not use it. It takes its database settings
-from `.env`; no password is written in any script.
+unmaintained mail-handling code has no place next to the pipeline. `mongo_added_json.py` is no longer shipped either:
+`tests/test_equivalence.py` carries its own copy of the old loader's logic and proves the new loader builds exactly the
+same documents. No password is written in any script; every setting comes from `.env`.
 
 ---
 

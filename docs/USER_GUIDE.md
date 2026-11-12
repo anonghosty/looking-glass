@@ -517,7 +517,9 @@ The **advisor** role turns approved findings into advisories for the organisatio
 - **Charts:** sent per recipient, sent per month, and the impacts the advisories carried.
 
 **One advisory per organisation.** Open a finding and its organisation (network) is already chosen, with that
-organisation's IP addresses: the reports they appear in, what the devices are (*Seen as*), their CVEs and weaknesses
+organisation's IP addresses (chosen by the organisation's network numbers, its ASNs, kept on the finding when it was
+sent: a network renamed since still finds exactly its devices, and if none of them are left in the finding's records
+the advisory is refused rather than made about anyone else's devices): the reports they appear in, what the devices are (*Seen as*), their CVEs and weaknesses
 (*issues*), and the **impact** of each report (for example *Unauthorised remote access*, *Botnet recruitment*).
 
 **Never from a blank page.** The advisor writes only the short part: a description and the actions to take. The

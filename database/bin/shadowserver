@@ -129,7 +129,9 @@ EOF
       cron=$(schedule_cron "$arg")
       [[ -n $cron ]] || die "schedule: expected 'every 30m', 'every 2h', HH:MM (e.g. 06:30), 'off' or 'show' - got '$arg' (shadowserver schedule --help)"
       old=$(schedule_desc)
-      schedule_write "$cron $PROJECT_DIR/run.sh --quiet >/dev/null 2>&1 $CRON_MARK"
+      # the path quoted for the shell cron runs it with: a folder with spaces (or shell characters) in its name works and
+      # runs nothing else (external review, 2026-11-12)
+      schedule_write "$cron $(printf '%q' "$PROJECT_DIR/run.sh") --quiet >/dev/null 2>&1 $CRON_MARK"
       [[ -n $old ]] && echo "Changed the schedule: $old -> $(schedule_desc)" || echo "Scheduled: $(schedule_desc)."
       schedule_show | tail -n +2
       ;;

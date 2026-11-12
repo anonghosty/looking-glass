@@ -255,7 +255,11 @@ def register(app, ctx):
             "beacon": {"repeating": len(gaps_med), "regular": regular, "typical": dur(typical),
                        "share": regular / max(1, len(gaps_med))},
             "c2": {"domains": len(c2), "destinations": len(dst_ips),
-                   "top": [{"value": k, "label": ("Domain " + str(i + 1)) if d_mask else k, "count": v, "hosts": len(c2_h[k]), "share": v / max(1, n_ev)}
+                   # management decides on numbers, never on the C2 hosts themselves (the user, 2026-11-12): each is
+                   # "Domain 1, 2…" with its devices and events, in every mode (external review, 2026-11-12: value
+                   # carried the raw host, an IP address too)
+                   "top": [{"value": "Domain " + str(i + 1), "label": "Domain " + str(i + 1),
+                            "count": v, "hosts": len(c2_h[k]), "share": v / max(1, n_ev)}
                            for i, (k, v) in enumerate(c2.most_common(8))]},
         }
 
@@ -432,6 +436,11 @@ def register(app, ctx):
             return default
     import bounded_jobs
     base_jobs = bounded_jobs.Jobs("mgmt-baseline", _env_int("EXEC_BASELINE_WORKERS", 2) or 1, _env_int("EXEC_BASELINE_QUEUE", 20))
+    # builds made right in the request (past days already in memory, or the PDF report) take a slot too: at most
+    # EXEC_BASELINE_WORKERS at once, like the pool's (external review, 2026-11-12: they bypassed it)
+    inline_slots = threading.BoundedSemaphore(_env_int("EXEC_BASELINE_WORKERS", 2) or 1)
+    # summaries kept at most (newest first): every new filter value added entries, for 30 days (external review)
+    BASE_MAX = _env_int("EXEC_BASELINE_MAX", 5000) or 5000
 
     def _base_load():
         try:
@@ -447,6 +456,8 @@ def register(app, ctx):
         with base_lock:
             cut = (time.time() - 30 * 86400)
             keep = {k: v for k, v in list(bl["mem"].items()) if v.get("at", 0) > cut}
+            if len(keep) > BASE_MAX:
+                keep = dict(sorted(keep.items(), key=lambda kv: -kv[1].get("at", 0))[:BASE_MAX])
             bl["mem"] = keep
             frozen = dict(keep)
             tmp = base_path + ".tmp"
@@ -604,11 +615,18 @@ def register(app, ctx):
             if not (e and e.get("sig") == sig_of(platform, start)):
                 todo.append(start)
         jk = f"{platform}|{fk}"
+        inline = False
         if todo and not wait and all(past_ready(platform, s) for s in todo):
-            wait = True                 # every past day is already in memory: seconds, so the page gets it at once
+            # every past day is already in memory: seconds, so the page gets it at once, if a slot is free now
+            inline = inline_slots.acquire(blocking=False)
+        elif todo and wait:
+            inline = inline_slots.acquire(timeout=120)  # the PDF report waits for a slot, never more than the pool allows
         if todo:
-            if wait:
-                build(platform, todo, dict(args), d_mask, fk, {"done": 0})
+            if inline:
+                try:
+                    build(platform, todo, dict(args), d_mask, fk, {"done": 0})
+                finally:
+                    inline_slots.release()
                 todo = []
             else:
                 with base_lock:

@@ -1,0 +1,41 @@
+# The checks that need no database, no live data and no secrets, on every push and pull request (external review,
+# 2026-11-12: there was no CI). The full suite (platform/tests/run_all_checks.sh) and the security retest need a running
+# installation with its MongoDB, so they run on the server, not here.
+name: checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    env:
+      MONGO_HOST: 127.0.0.1      # nothing listens there: a test that needs the database would fail, not pass by accident
+      MONGO_PORT: "1"
+      LG_QUIET: "1"
+      THREATMAP_SCHEDULE: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the platform's and the pipeline's libraries
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r platform/requirements.txt -r database/requirements.txt
+      - name: Platform checks
+        working-directory: platform
+        run: |
+          set -e
+          for t in test_privacy_roles check_ip_find check_host_label_text check_cve_backoff; do
+            echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
+          done
+      - name: Pipeline checks
+        working-directory: database
+        run: |
+          set -e
+          for t in test_mail_auth test_mail_auth_pipeline test_worker_settings_effective test_link_downloads test_zip_limits test_report_api test_report_types; do
+            echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
+          done
+          python -m unittest tests.test_mail_sources
