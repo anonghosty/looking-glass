@@ -75,6 +75,8 @@ LABEL["audit_archive_removed"] = "Old audit archive removed by the retention"
 TAB_OF["audit_archive_removed"] = "system"
 LABEL["audit_archive_deleted_early"] = "Audit archive deleted BEFORE its retention ended"   # an alert (ALERT: "delete")
 TAB_OF["audit_archive_deleted_early"] = "system"
+LABEL["audit_retention_set"] = "Audit log retention setting recorded"
+TAB_OF["audit_retention_set"] = "config"
 # The NIST SP 800-53 Rev. 5 controls the checks support, with their official titles (Release 5.2.0, read from NIST's
 # OSCAL catalog, usnistgov/oscal-content, on 2026-11-11). The checks' own ids are LG-01…: they are Looking Glass checks,
 # mapped to NIST controls, not NIST control numbers themselves.
@@ -182,6 +184,13 @@ def install(app, ctx):
         if new_seal:
             audit.add("audit_sealed", user="Looking Glass", detail=f"{new_seal['entries']} entries written before the chain sealed · "
                       f"SHA-256 {new_seal['sha256']}", ip="", ua="")
+    except OSError:
+        pass
+
+    # the retention setting goes into the chain at start-up when it is new or changed (audit_chain.py): every removal is
+    # judged by the setting in force at that time, and every change of it is visible to an auditor
+    try:
+        audit.chain.record_retention_setting()
     except OSError:
         pass
 

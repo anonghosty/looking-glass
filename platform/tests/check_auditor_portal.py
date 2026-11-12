@@ -282,17 +282,20 @@ try:
     print("The reviewer's attacks on the retention (2026-11-12)")
     ad = os.path.join(tmp, "attack"); os.makedirs(ad)
     ac = audit_chain.Chain(os.path.join(ad, "audit.log"))
+    ac.record_retention_setting()                        # what start-up does: the setting (400 days) goes into the chain
     ac.rotate_bytes = 1                                  # every write rotates: several archives within the same second
     for i in range(8):
         ac.append({"t": time.time(), "event": "login", "user": f"u{i}"})
     names = [os.path.basename(p) for p in ac.archives()]
     v = ac.verify()
     ok("rotations in the same second never overwrite each other: every entry kept, chain whole",
-       v["ok"] and v["entries"] == 8 and len(names) == 7 and len(set(names)) == 7, ", ".join(names[:3]))
+       v["ok"] and v["entries"] == 9 and len(names) == 8 and len(set(names)) == 8, ", ".join(names[:3]))
     ok("…the extra archives get a counter and stay in order",
-       any("_02.log.gz" in n for n in names) and [json.loads(gzip.open(p, "rt").read())["user"] for p in ac.archives()] == [f"u{i}" for i in range(7)])
+       any("_02.log.gz" in n for n in names) and [json.loads(gzip.open(p, "rt").read())["user"] for p in ac.archives()[1:]] == [f"u{i}" for i in range(7)])
+    ok("the retention setting is recorded in the chain", v["retention_history"] and v["retention_history"][-1]["days"] == 400)
     ac.rotate_bytes = 5_000_000
     first = ac.archives()[0]                             # an archive seconds old, far inside the 400-day retention
+    # (archives()[0] holds the setting entry; it is the oldest archive, the one a deletion would take first)
     lines0 = [x for x in gzip.open(first, "rt").read().splitlines() if x]
     t0 = json.loads(lines0[-1])["t"]
     note = {"archive": os.path.basename(first), "entries": len(lines0), "last_hash": audit_chain.sha(lines0[-1]),
@@ -310,6 +313,60 @@ try:
        and not ac.verify()["ok"], json.dumps(rec[:1])[:160])
     import audit_portal as AP2
     ok("…shown as an alert in the portal", AP2.ALERT.search("audit_archive_deleted_early") is not None)
+
+    import subprocess
+    verifier = os.path.join(os.path.dirname(A.__file__), "audit_verifier.py")
+    alone = lambda folder: json.loads(subprocess.run([sys.executable, "-I", verifier, folder, "--json"], capture_output=True,
+                                                     text=True, timeout=60).stdout)
+
+    def forged(name, **lie):
+        """A chain as start-up leaves it (setting recorded), its oldest archive deleted with a note carrying `lie`."""
+        d = os.path.join(tmp, name); os.makedirs(d)
+        c = audit_chain.Chain(os.path.join(d, "audit.log")); c.record_retention_setting(); c.rotate_bytes = 1
+        for i in range(4):
+            c.append({"t": time.time(), "event": "login", "user": f"{name}{i}"})
+        c.rotate_bytes = 5_000_000
+        arch = c.archives()[1]                           # seconds old (archives()[0] holds the setting entry)
+        ls = [x for x in gzip.open(arch, "rt").read().splitlines() if x]
+        for p in c.archives()[:2]:                       # the setting's archive goes too, as a deletion would take it
+            os.remove(p)
+        n = {"archive": os.path.basename(arch), "entries": 2, "last_hash": audit_chain.sha(ls[-1]),
+             "oldest": json.loads(ls[0])["t"], "newest": json.loads(ls[-1])["t"], "removed_at": round(time.time(), 3),
+             "retention_days": 400}
+        n.update(lie)
+        with open(os.path.join(c.dir, "removed.jsonl"), "a") as f:
+            f.write(json.dumps(n) + "\n")
+        return c, d
+    for label, lie in (("a note claiming a 0-day retention", {"retention_days": 0}),
+                       ("a note claiming a removal 401 days in the future", {"removed_at": time.time() + 401 * 86400})):
+        lch, d = forged("lie" + str(len(label)), **lie)
+        v1, off1 = lch.verify(), alone(d)
+        lch.append({"t": time.time(), "event": "login", "user": "next"})   # Looking Glass records the removal
+        v2, off2 = lch.verify(), alone(d)
+        rec = [json.loads(x) for x in open(lch.path).read().splitlines() if "audit_archive_" in x]
+        ok(f"{label}: NOT whole, in the portal and the standalone verifier, before and after it is recorded",
+           not v1["ok"] and not off1["ok"] and not v2["ok"] and not off2["ok"], f"{v2['break']} | {off2.get('break')}")
+        ok(f"…and recorded as an alert that says why", rec and rec[-1]["event"] == "audit_archive_deleted_early",
+           (rec[-1]["detail"] if rec else "")[:170])
+    # a genuine clean-up still passes: entries 500 days old, the 400-day setting recorded, prune() removes them
+    gd = os.path.join(tmp, "genuine"); os.makedirs(gd)
+    gc = audit_chain.Chain(os.path.join(gd, "audit.log")); gc.rotate_bytes = 1
+    for i in range(3):                                   # in time order, as real use writes them
+        gc.append({"t": time.time() - 500 * 86400 + i, "event": "login", "user": f"old{i}"})
+    gc.rotate_bytes = 5_000_000
+    gc.record_retention_setting()                        # a later start-up records the 400-day setting
+    gc.prune()
+    gc.append({"t": time.time(), "event": "login", "user": "today"})
+    gv, goff = gc.verify(), alone(gd)
+    ok("a genuine clean-up (500-day-old entries, 400-day setting) passes, in the portal and the standalone verifier",
+       gv["ok"] and goff["ok"] and gv["removals"] and not any(x["early"] for x in gv["removals"]),
+       f"{gv.get('break')} | {goff.get('break')}")
+    # lowering the setting is not hidden either: the change goes into the chain
+    lc = audit_chain.Chain(os.path.join(tmp, "attack", "audit.log")); lc.retention_days = 1
+    lc.record_retention_setting()
+    ok("a change of the retention setting is recorded in the chain, with the old value",
+       [h["days"] for h in lc.verify()["retention_history"]][-1] == 1
+       and "it was 400 days" in [json.loads(x) for x in open(lc.path).read().splitlines()][-1]["detail"])
     # the same attack with the note's dates faked to look old: the age check passes, the gap to the entries kept shows it
     fd = os.path.join(tmp, "attack2"); os.makedirs(fd)
     fc = audit_chain.Chain(os.path.join(fd, "audit.log")); fc.rotate_bytes = 1
@@ -326,10 +383,6 @@ try:
     v = fc.verify()
     ok("…with its dates faked to look old: the jump in time to the first entry kept is reported for the auditor",
        v["removal_gaps"] and v["removal_gaps"][0]["days"] >= 499, json.dumps(v.get("removal_gaps"))[:160])
-    import subprocess
-    verifier = os.path.join(os.path.dirname(A.__file__), "audit_verifier.py")
-    alone = lambda folder: json.loads(subprocess.run([sys.executable, "-I", verifier, folder, "--json"], capture_output=True,
-                                                     text=True, timeout=60).stdout)
     out_a, out_f = alone(ad), alone(fd)
     ok("the standalone verifier finds both too: the early removal, and the gap",
        not out_a["ok"] and out_a["removed_early"] == [note["archive"]] and out_f["removal_gaps"], json.dumps(out_f.get("removal_gaps"))[:120])

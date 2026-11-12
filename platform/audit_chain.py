@@ -38,48 +38,128 @@ def _utc(t):
     return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(t)) if t else "unknown"
 
 
-def removed_early(note):
-    """True when a note says an archive was removed before its retention ended: its newest entry is not older than the
-    retention at the time it was removed. prune() never does that, so such a note means an archive was deleted by
-    hand or by someone hiding entries (external review, 2026-11-12: an archive seconds old, deleted with a hand-written
-    note, used to pass as a normal removal)."""
+RETENTION_EVENT = "audit_retention_set"
+
+
+def _f(x, default=0.0):
     try:
-        return float(note.get("newest") or 0) > float(note.get("removed_at") or 0) - float(note.get("retention_days") or 0) * 86400 + 1
+        return float(x)
     except (TypeError, ValueError):
-        return True
+        return default
 
 
-def removal_record(note):
+def judge_removal(note, removed_at, retention_days, setting_recorded=True):
+    """Why a removal was not allowed ("" when it was). The note is written next to the log by whoever removed the
+    archive, so the two values that decide are NOT taken from it (external review, 2026-11-12: a note claiming a
+    0-day retention, or a removal 401 days in the future, passed):
+      removed_at      the time of the chain entry Looking Glass wrote for the removal (or now, if not recorded yet);
+      retention_days  the retention setting in force then, as recorded in the chain (or the configured one).
+    An archive may only go once its newest entry is older than that retention. A note that claims a later removal
+    time or a shorter retention than the chain shows is a forged note."""
+    why = []
+    if _f(note.get("removed_at")) > removed_at + 60:
+        why.append(f"its note claims a removal time ({_utc(_f(note.get('removed_at')))}) later than the removal was recorded "
+                   f"({_utc(removed_at)})")
+    if setting_recorded and note.get("retention_days") is not None and _f(note.get("retention_days")) < retention_days:
+        why.append(f"its note claims a retention of {note.get('retention_days')} days, the setting was {int(retention_days)} days")
+    newest = _f(note.get("newest"), None)
+    if newest is None:
+        why.append("its note gives no newest entry")
+    elif newest > min(removed_at, _f(note.get("removed_at"), removed_at)) - retention_days * 86400 + 1:
+        why.append(f"its newest entry ({_utc(newest)}) was not yet {int(retention_days)} days old when it was removed")
+    return "; ".join(why)
+
+
+def retention_history(lines):
+    """The retention settings recorded in the chain, oldest first: [(time, days)]."""
+    out = []
+    for ln in lines:
+        if f'"{RETENTION_EVENT}"' not in ln:
+            continue
+        try:
+            rec = json.loads(ln)
+            out.append((_f(rec.get("t")), int(rec.get("target"))))
+        except (ValueError, TypeError):
+            continue
+    return out
+
+
+def setting_at(history, t, fallback):
+    """The retention in force at time t (the last setting recorded before it), else the fallback."""
+    days = None
+    for at, d in history:
+        if at <= t + 1:
+            days = d
+    return fallback if days is None else days
+
+
+def removal_record(note, retention_days, now=None):
     """The chain entry for an archive the retention removed (its note in removed.jsonl): which archive, how many
     entries, its last link and newest time. Recorded in the chain itself, so the removal cannot be hidden or changed
-    later; the notes file alone could be. A removal before the retention ended is recorded as an alert instead."""
-    early = removed_early(note)
-    head = (f"removed BEFORE its retention ended: its newest entry ({_utc(note.get('newest'))}) was not yet "
-            f"{note.get('retention_days')} days old when it was removed ({_utc(note.get('removed_at'))})" if early else
-            f"removed by the retention of {note.get('retention_days')} days")
-    return {"t": round(time.time(), 3), "event": REMOVAL_EVENTS[1 if early else 0], "user": "Looking Glass",
+    later; the notes file alone could be. Judged with the time of this entry and the retention setting in force,
+    never the note's own claims; a removal that was not allowed is recorded as an alert instead."""
+    now = now or time.time()
+    why = judge_removal(note, now, retention_days)
+    early = bool(why)
+    head = (f"removed BEFORE its retention ended: {why}" if early else f"removed by the retention of {int(retention_days)} days")
+    return {"t": round(now, 3), "event": REMOVAL_EVENTS[1 if early else 0], "user": "Looking Glass",
             "target": note.get("archive", ""),
             "detail": f"{note.get('entries')} entries up to {_utc(note.get('newest'))} {head} · last link {note.get('last_hash')}",
             "removed": {"entries": note.get("entries"), "last_hash": note.get("last_hash"), "oldest": note.get("oldest"),
                         "newest": note.get("newest"), "removed_at": note.get("removed_at"),
-                        "retention_days": note.get("retention_days"), "early": early},
+                        "retention_days": note.get("retention_days"), "retention_in_force": int(retention_days), "early": early},
             "ip": "", "location": "", "ua": ""}
 
 
-def removal_findings(notes, first_kept_t, gap_days):
-    """What the retention notes say that needs an auditor's attention.
-    early: archives removed before their retention ended (removed_early).
+def removal_findings(notes, lines, configured_days, gap_days, now=None):
+    """What the retention notes say that needs an auditor's attention, judged from the chain, not the notes.
+    findings: per note, its removal time (the chain entry that recorded it; now if not recorded yet), the retention in
+           force then (recorded in the chain; configured_days before the first record) and why it was not allowed.
+           A note whose chain entry is gone with a later removal was judged when it was recorded: skipped here.
     gaps:  a jump in time around a removed archive that real use does not leave: between one removed archive's newest
            entry and the next one's oldest, or the first entry still kept. A note's dates are written next to the log
            and could be faked to look old; the first kept entry's time is inside the chain and cannot. Normal use
            writes something at least every few days, so more than gap_days (AUDIT_GAP_DAYS, default 30) is flagged."""
-    early = [n.get("archive") for n in notes if removed_early(n)]
+    now = now or time.time()
+    history = retention_history(lines)
+    recorded_at = {}
+    first_kept_t = None
+    for ln in lines:
+        if first_kept_t is not None and '"audit_archive_' not in ln:
+            continue
+        try:
+            rec = json.loads(ln)
+        except ValueError:
+            continue
+        first_kept_t = rec.get("t") if first_kept_t is None else first_kept_t
+        if rec.get("event") in REMOVAL_EVENTS:
+            recorded_at[(rec.get("target"), (rec.get("removed") or {}).get("last_hash"))] = _f(rec.get("t"))
+    findings = []
+    for i, n in enumerate(notes):
+        key = (n.get("archive"), n.get("last_hash"))
+        pending = False
+        if key in recorded_at:
+            at = recorded_at[key]
+        elif i < len(notes) - 1 and first_kept_t is not None and _f(n.get("removed_at")) < _f(first_kept_t):
+            continue                          # its chain entry went with a later removal (judged when recorded)
+        else:
+            at, pending = now, True           # not recorded yet: it is judged as of now
+        # not recorded yet: the setting in force now is this installation's own (configured_days), whatever the chain
+        # still holds; recorded: the setting the chain shows for that time
+        days = configured_days if pending else setting_at(history, at, None)
+        recorded = days is not None
+        if not recorded:                      # logs from before the setting was recorded: the note is all there is
+            days = int(_f(n.get("retention_days"), configured_days))
+        why = judge_removal(n, at, days, recorded)
+        findings.append({"archive": n.get("archive"), "entries": n.get("entries"), "oldest": n.get("oldest"),
+                         "newest": n.get("newest"), "removed_at": at, "retention_days": days,
+                         "retention_recorded": recorded, "early": bool(why), "why": why})
     gaps = []
     for i, n in enumerate(notes):
         nxt = notes[i + 1].get("oldest") if i + 1 < len(notes) else first_kept_t
         if n.get("newest") and nxt and float(nxt) - float(n["newest"]) > gap_days * 86400:
             gaps.append({"after": n.get("archive"), "from": n["newest"], "to": nxt, "days": int((float(nxt) - float(n["newest"])) // 86400)})
-    return early, gaps
+    return findings, gaps, history
 
 
 def removals_unrecorded(lines, notes, recorded):
@@ -99,11 +179,13 @@ def removals_unrecorded(lines, notes, recorded):
         if rec.get("event") in REMOVAL_EVENTS:
             seen[rec.get("target")] = (rec.get("removed") or {}).get("last_hash")
     bad = []
-    for n in notes[:recorded]:
+    for i, n in enumerate(notes[:recorded]):
         if seen.get(n.get("archive")) == n.get("last_hash"):
             continue
-        if oldest is not None and (n.get("removed_at") or 0) < oldest:
-            continue                          # its entry was in an archive the retention removed later
+        # its entry was in an archive the retention removed later; never the newest note (that removal would have made
+        # a newer one), so a note dated in the past cannot excuse itself
+        if i < len(notes) - 1 and oldest is not None and _f(n.get("removed_at")) < oldest:
+            continue
         bad.append(n.get("archive"))
     return bad
 
@@ -229,12 +311,39 @@ class Chain:
             notes = self.removed()
             done = self._recorded_count()
             if len(notes) > done:             # archives removed by the retention since the last write
+                # the setting in force must be in the entries still kept, right before the removals it judges: its
+                # earlier record may have gone with the very archive that was removed
+                hist = retention_history(self.lines())
+                if not hist or hist[-1][1] != self.retention_days:
+                    self._write(self._retention_entry(hist))
                 for note in notes[done:]:
-                    self._write(removal_record(note))
+                    self._write(removal_record(note, self.retention_days))
                 self._set_recorded_count(len(notes))
             return self._write(rec)
         finally:
             os.close(lock_fd)                 # releases the lock
+
+    def record_retention_setting(self):
+        """Record the retention setting in the chain when it is not recorded yet or has changed (called at start-up).
+        The standalone verifier cannot read .env: with the setting in the chain, it judges every removal by the
+        setting in force at that time, and an auditor sees every change of the setting, also a lowering that would
+        let the retention remove recent entries. Returns the entry written, or None."""
+        import fcntl
+        lock_fd = os.open(self.path + ".lock", os.O_WRONLY | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            hist = retention_history(self.lines())
+            if hist and hist[-1][1] == self.retention_days:
+                return None
+            return self._write(self._retention_entry(hist))
+        finally:
+            os.close(lock_fd)
+
+    def _retention_entry(self, hist):
+        before = f"; it was {hist[-1][1]} days" if hist else ""
+        return {"t": round(time.time(), 3), "event": RETENTION_EVENT, "user": "Looking Glass", "target": str(self.retention_days),
+                "detail": f"audit retention set to {self.retention_days} days (AUDIT_RETENTION_DAYS){before}",
+                "ip": "", "location": "", "ua": ""}
 
     def _write(self, rec):
         """One chained line (the caller holds the lock)."""
@@ -426,16 +535,15 @@ class Chain:
         if missing and not brk:
             brk = {"entry": 1, "t": first_t, "what": f"retention notes with no entry in the chain ({', '.join(missing[:3])}): "
                                                     "an archive was removed or noted outside Looking Glass"}
-        early, gaps = removal_findings(removed, first_t, int(_env_num("AUDIT_GAP_DAYS", 30)))
+        findings, gaps, history = removal_findings(removed, lines, self.retention_days, int(_env_num("AUDIT_GAP_DAYS", 30)))
+        early = [x["archive"] for x in findings if x["early"]]
         if early and not brk:
             brk = {"entry": 1, "t": first_t, "what": f"archives removed before their retention ended ({', '.join(early[:3])}): "
                                                     "entries were deleted outside the retention"}
         return {"ok": brk is None, "seal": dict(seal, state=seal_state) if seal else None,
                 "removals_recorded": recorded - len(missing), "removals_pending": len(removed) - recorded,
-                "removals": [{"archive": n.get("archive"), "entries": n.get("entries"), "oldest": n.get("oldest"),
-                              "newest": n.get("newest"), "removed_at": n.get("removed_at"),
-                              "retention_days": n.get("retention_days"), "early": removed_early(n)} for n in removed],
-                "removal_gaps": gaps, "entries": len(lines), "chained": chained, "before_chain": before, "first": first_t, "last": last_t,
+                "removals": findings, "removal_gaps": gaps,
+                "retention_history": [{"t": t, "days": d} for t, d in history], "entries": len(lines), "chained": chained, "before_chain": before, "first": first_t, "last": last_t,
                 "break": brk, "head": head, "head_entry": len(lines) + gone, "removed_entries": gone,
                 "head_file": bool(saved), "archives": len(self.archives()),
                 "removed_archives": len(removed), "retention_days": self.retention_days,

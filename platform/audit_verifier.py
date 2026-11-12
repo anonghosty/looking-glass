@@ -19,7 +19,10 @@ The format it checks
   log/audit.seal                     the entries written before the chain started: their number and the SHA-256 of
                                      those lines joined by "\n"
   log/audit_archive/removed.jsonl    one note per archive the retention removed; each must also be an entry in the
-                                     chain (event "audit_archive_removed"); removed.recorded counts those recorded
+                                     chain (event "audit_archive_removed"); removed.recorded counts those recorded.
+                                     Whether a removal was allowed is judged from the chain, not the note: the time of
+                                     its chain entry, and the retention setting in force then (event
+                                     "audit_retention_set", recorded at start-up and whenever it changes)
   MANIFEST.json                      the SHA-256 of every file in the package when it was made
 
 What a whole chain proves: no entry was changed, inserted or removed after it was written, and nothing was cut from the
@@ -173,16 +176,70 @@ def check(folder, earlier=None, gap_days=30):
         brk = {"entry": gone + 1, "t": first_t, "what": f"retention notes with no entry in the chain ({', '.join(unaccounted[:3])}): "
                                                         "an archive was removed or noted outside Looking Glass"}
 
-    # An archive may only be removed once its newest entry is older than the retention: a note that says otherwise
-    # means entries were deleted outside the retention. A note's dates sit next to the log and could be faked to look
-    # old, so also: the time from a removed archive's newest entry to the next archive's oldest (or the first entry
-    # still kept, whose time is inside the chain) should not jump by more than gap_days; real use writes more often.
-    def early(n):
+    # An archive may only be removed once its newest entry is older than the retention. The note is written by whoever
+    # removed the archive, so the two values that decide are taken from the chain, not from the note: the removal time
+    # is the time of the chain entry Looking Glass wrote for it (now, if not recorded yet), and the retention is the
+    # setting in force then, recorded in the chain (event "audit_retention_set", "target" the days). A note claiming a
+    # later removal or a shorter retention is a forged note. Before the first recorded setting the note's own retention
+    # is all there is: such a removal is marked "retention not recorded". A note's dates of its own entries could be
+    # faked to look old too, so the time from a removed archive's newest entry to the next archive's oldest (or the
+    # first entry still kept, whose time is inside the chain) should not jump by more than gap_days.
+    def num(x, default=0.0):
         try:
-            return float(n.get("newest") or 0) > float(n.get("removed_at") or 0) - float(n.get("retention_days") or 0) * 86400 + 1
+            return float(x)
         except (TypeError, ValueError):
-            return True
-    removed_early = [n.get("archive") for n in removed if early(n)]
+            return default
+    history, rec_at = [], {}
+    for ln in lines:
+        if '"audit_retention_set"' not in ln and '"audit_archive_' not in ln:
+            continue
+        try:
+            rec = json.loads(ln)
+        except ValueError:
+            continue
+        if rec.get("event") == "audit_retention_set":
+            try:
+                history.append((num(rec.get("t")), int(rec.get("target"))))
+            except (TypeError, ValueError):
+                pass
+        elif rec.get("event") in ("audit_archive_removed", "audit_archive_deleted_early"):
+            rec_at[(rec.get("target"), (rec.get("removed") or {}).get("last_hash"))] = num(rec.get("t"))
+    removals = []
+    for i, n in enumerate(removed):
+        key = (n.get("archive"), n.get("last_hash"))
+        pending = False
+        if key in rec_at:
+            at = rec_at[key]
+        elif i < len(removed) - 1 and first_t is not None and num(n.get("removed_at")) < num(first_t):
+            continue                          # its chain entry went with a later removal (judged when it was recorded)
+        else:
+            at, pending = time.time(), True
+        days = None
+        for t, d in history:
+            if t <= at + 1:
+                days = d
+        recorded_setting = days is not None
+        if days is None:
+            days = int(num(n.get("retention_days")))
+        why = []
+        # Looking Glass records a removal in the same write that makes it: a note not recorded in the chain, with no
+        # retention setting in the chain to judge it by, can only be judged by its own claims, so it is not accepted
+        if pending and not recorded_setting:
+            why.append("it is not recorded in the chain and no retention setting is recorded to judge it by (Looking Glass "
+                       "records each removal in the same write that makes it)")
+        if num(n.get("removed_at")) > at + 60:
+            why.append(f"its note claims a removal time ({when(num(n.get('removed_at')))}) later than the removal was recorded ({when(at)})")
+        if recorded_setting and n.get("retention_days") is not None and num(n.get("retention_days")) < days:
+            why.append(f"its note claims a retention of {n.get('retention_days')} days, the setting was {days} days")
+        newest = num(n.get("newest"), None)
+        if newest is None:
+            why.append("its note gives no newest entry")
+        elif newest > min(at, num(n.get("removed_at"), at)) - days * 86400 + 1:
+            why.append(f"its newest entry ({when(newest)}) was not yet {days} days old when it was removed")
+        removals.append({"archive": n.get("archive"), "entries": n.get("entries"), "oldest": n.get("oldest"), "newest": n.get("newest"),
+                         "removed_at": at, "retention_days": days, "retention_recorded": recorded_setting,
+                         "early": bool(why), "why": "; ".join(why)})
+    removed_early = [x["archive"] for x in removals if x["early"]]
     if removed_early and not brk:
         brk = {"entry": gone + 1, "t": first_t, "what": f"archives removed before their retention ended ({', '.join(removed_early[:3])}): "
                                                         "entries were deleted outside the retention"}
@@ -194,9 +251,7 @@ def check(folder, earlier=None, gap_days=30):
 
     out = {"ok": brk is None, "entries": head_entry, "removals_recorded": recorded - len(unaccounted),
            "removals_pending": len(removed) - recorded, "removed_early": removed_early, "removal_gaps": gaps,
-           "removals": [{"archive": n.get("archive"), "entries": n.get("entries"), "newest": n.get("newest"),
-                         "removed_at": n.get("removed_at"), "retention_days": n.get("retention_days"), "early": early(n)}
-                        for n in removed], "kept": len(lines), "removed_by_retention": gone, "chained": chained,
+           "removals": removals, "retention_history": [{"t": t, "days": d} for t, d in history], "kept": len(lines), "removed_by_retention": gone, "chained": chained,
            "before_chain": before, "first": first_t, "last": last_t, "head": head, "head_entry": head_entry,
            "head_file": head_file, "seal": dict(seal, state=seal_state) if seal else None, "archives": len(archives), "break": brk}
 
@@ -277,7 +332,10 @@ def main():
               + (f", {r['removals_pending']} to be recorded with the next entry" if r["removals_pending"] else ""))
         for x in r["removals"]:
             print(f"                    {x['archive']}: {x['entries']} entries up to {when(x['newest'])}, removed {when(x['removed_at'])} "
-                  f"(retention {x['retention_days']} days)" + ("  REMOVED BEFORE ITS RETENTION ENDED" if x["early"] else ""))
+                  f"(retention {x['retention_days']} days{'' if x['retention_recorded'] else ', setting not recorded in the chain'})"
+                  + (f"  NOT ALLOWED: {x['why']}" if x["early"] else ""))
+    if r["retention_history"]:
+        print("  retention setting " + " · ".join(f"{h['days']} days from {when(h['t'])}" for h in r["retention_history"]))
         for g in r["removal_gaps"]:
             print(f"  ATTENTION         {g['days']} days without any entry after {g['after']} ({when(g['from'])} to {when(g['to'])}): "
                   "real use writes more often; ask why, or whether entries were removed and the note's dates changed")

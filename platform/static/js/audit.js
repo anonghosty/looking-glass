@@ -237,7 +237,9 @@
     const early = (v.removals || []).filter((x) => x.early);
     if ((v.removals || []).length) row("Removed by the retention", `${v.removals.length} archive(s), each recorded in the chain`
       + (early.length ? ` · ${early.length} removed BEFORE their retention ended: ${early.map((x) => x.archive).join(", ")}` : " · all old enough"));
+    if ((v.retention_history || []).length) row("Retention setting", v.retention_history.map((h) => `${h.days} days from ${fmtT(h.t)}`).join(" · "));
     b.append(st, dl);
+    for (const x of early) b.append(el("p", "au-vf bad", `${x.archive}: ${x.why}.`));
     for (const g of v.removal_gaps || []) {
       b.append(el("p", "au-vf bad", `Attention: ${g.days} days without any entry after ${g.after}. Real use writes more often: ask why, or whether entries were removed and the retention note's dates changed.`));
     }

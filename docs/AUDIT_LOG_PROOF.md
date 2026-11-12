@@ -89,7 +89,7 @@ that always says "verified". So do not take it on trust:
   PowerShell) with the one published here, outside the server:
 
   ```text
-  24097462fe2cfad96004d0dc91b691211c63362765a20a110fd492a8cb559885
+  4b4645b8cd650999c646cc1a8ffe61037d9f033d1ea44bc83c96a08be0e9a98c
   ```
 
   This is the verifier of the current release on GitHub. An installation of an older release ships the verifier of
@@ -149,9 +149,16 @@ its last link), so a removal cannot be hidden or its note changed afterwards: th
 chain entry. A removal made between two writes is recorded with the next entry.
 
 A removal must also have been **allowed**: an archive may only go once its newest entry is older than the retention.
-A note that says otherwise means entries were deleted outside the retention: the check reports the log as not whole,
-and Looking Glass records the removal as an **alert** ("Audit archive deleted BEFORE its retention ended"), never as a
-normal one. A note's dates sit next to the log and could be faked to look old, so the check also looks at time itself:
+The note is written by whoever removed the archive, so the two values that decide are **not taken from the note**:
+the removal time is the time of the chain entry Looking Glass wrote for it, and the retention is the **setting in
+force then, recorded in the chain** ("Audit log retention setting recorded": at start-up, whenever it changes, and
+again right before a removal is recorded, in case its earlier record went with the removed archive). A note claiming
+a later removal time or a shorter retention than the chain shows is a forged note. A removal that was not allowed
+makes the check report the log as not whole, and Looking Glass records it as an **alert** ("Audit archive deleted
+BEFORE its retention ended", with the reason), never as a normal one. Every change of the setting is visible too,
+also a lowering that would let the retention remove recent entries; the evidence report lists the setting's history.
+Logs from before the setting was recorded can only be judged by their notes: the check marks those removals "setting
+not recorded". A note's dates sit next to the log and could be faked to look old, so the check also looks at time itself:
 the first entry still kept carries its own time inside the chain, and a removed archive followed by more than
 `AUDIT_GAP_DAYS` (30) days without any entry is reported for the auditor to ask about (`--gap-days` in the verifier).
 The evidence report lists every removed archive with its dates and this finding. Archives are never overwritten:
