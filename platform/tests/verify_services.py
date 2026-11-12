@@ -31,6 +31,11 @@ db = client[os.environ["MONGO_DB"]]
 get = lambda p: json.load(urllib.request.urlopen(f"http://127.0.0.1:5000{p}", timeout=180))
 
 facets = get(f"/api/svc/facets?at={at}")
+# Just after 00:00 UTC "yesterday" is a day the platform does not replay yet (it waits for that day's reports and
+# serves the day before): comparing would report every report as different. Skip, as tests/verify_stats.py does.
+if facets.get("day") and facets["day"] != day:
+    print(f"SKIPPED: the platform answers for {facets['day']}, not {day} (it moves on once {day}'s reports are in).")
+    sys.exit(77)
 app_rows = {r["name"]: r["rows"] for r in facets["reports"]}
 nxt = end.strftime("%Y-%m-%d")
 total_db, ips, bad = 0, set(), 0

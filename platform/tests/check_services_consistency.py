@@ -26,7 +26,13 @@ def get(path, pairs):
 
 
 # the day's busiest region and network, so the check works for any country and constituency
-_fac = get("/api/svc/facets", [("at", at)])["facets"]
+_facets = get("/api/svc/facets", [("at", at)])
+# Just after 00:00 UTC "yesterday" is a day the platform does not replay yet (it waits for that day's reports and
+# serves the day before): the endpoints would answer for different days. Skip, as tests/verify_stats.py does.
+if _facets.get("day") and _facets["day"] != day:
+    print(f"SKIPPED: the platform answers for {_facets['day']}, not {day} (it moves on once {day}'s reports are in).")
+    sys.exit(77)
+_fac = _facets["facets"]
 _top = lambda k, i=0: ([r["value"] for r in _fac.get(k, []) if r["value"]] + ["", ""])[i]
 REGION, NETWORK = _top("region", 1) or _top("region"), _top("network")
 COMBOS = [
