@@ -216,7 +216,8 @@
     const say = (t, bad) => { msg.textContent = t; msg.style.color = bad ? "#ff8f8f" : ""; };
     // this form's organisation and data: fixed when it is drawn, whatever is picked afterwards
     const net = NET, seq = SEQ, here = D;
-    const body = () => ({ network: net, tlp: tlpVal, heading: head.value, subject: subj.value, description: desc.value, actions: act.value, recipients: rec.value });
+    // rev: the revision this form opened; a save after someone else's is refused ("changed meanwhile")
+    const body = () => ({ network: net, rev: here.advisory.rev, tlp: tlpVal, heading: head.value, subject: subj.value, description: desc.value, actions: act.value, recipients: rec.value });
     const save = async () => { const d = await post(`/api/advisory/${fid}/net`, body()); here.advisory = d.advisory; here.saved = true; return d; };
     // one action at a time; the page is drawn again only if this organisation is still the one shown
     const run = async (button, work) => {

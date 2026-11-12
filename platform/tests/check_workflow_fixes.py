@@ -8,7 +8,9 @@ look-up leaves the computer (the look-up is counted instead).
 3. approve works only on an account waiting for approval, so it can never demote the last administrator;
 4. /register counts every sign-up whose e-mail domain is looked up, and stops looking up after the limit;
 5. the advisory page drops an organisation's data that arrives after another was picked, and its buttons work on the
-   organisation their form was drawn for.
+   organisation their form was drawn for, and a save sends the revision its form opened;
+6. Admin → Users keeps the role picked for a waiting account across its 30-second refresh;
+7. the Executive page builds its 7-day baselines on a fixed number of threads with a bounded waiting list.
 Run: .venv/bin/python tests/check_workflow_fixes.py"""
 import json, os, shutil, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -125,6 +127,40 @@ try:
     ok("every button sends the organisation its form was drawn for", "const net = NET, seq = SEQ, here = D;" in js
        and "{ network: net }" in js and "network: NET" not in js)
     ok("the organisation cannot be switched while a save or generation is under way", "if (BUSY) return;" in js and "if (BUSY) { sel.value" in js)
+    ok("a save sends the revision its form opened (a tab left open cannot write over a newer save)", "rev: here.advisory.rev" in js)
+
+    print("6. Admin → Users: the role picked for a waiting account survives the 30-second refresh")
+    adm = open(os.environ.get("LG_ADMIN_JS") or os.path.join(root, "static/js/admin.js"), encoding="utf-8").read()
+    ok("the picked role is kept and drawn again after the refresh", "const CHOSEN = {};" in adm and "CHOSEN[u.name] = sel.value" in adm
+       and "roleNames.includes(CHOSEN[u.name]) ? CHOSEN[u.name] : u.role" in adm)
+
+    print("7. Executive baselines: a fixed number built at once, a bounded waiting list")
+    import threading, time
+    import bounded_jobs
+    J = bounded_jobs.Jobs("lg-check", 2, 3)
+    gate, running, peak, lock = threading.Event(), [0], [0], threading.Lock()
+
+    def job():
+        with lock:
+            running[0] += 1; peak[0] = max(peak[0], running[0])
+        gate.wait(10)
+        with lock:
+            running[0] -= 1
+    took = [J.submit(job) for _ in range(8)]
+    time.sleep(0.3)
+    ok("2 run at once, 3 wait, the other 3 are refused (nothing started for them)", took == [True] * 5 + [False] * 3 and peak[0] == 2
+       and J.started == 2, f"accepted {took.count(True)}, running at most {peak[0]}, threads {J.started}")
+    gate.set()
+    for _ in range(50):
+        if J.pending() == 0:
+            break
+        time.sleep(0.1)
+    ok("…the waiting ones run when a place is free, and the list empties", J.pending() == 0 and peak[0] == 2 and J.submit(lambda: None),
+       f"left {J.pending()}")
+    import management
+    src = open(management.__file__, encoding="utf-8").read()
+    ok("the Executive page builds its baselines through it (no thread per selection)", "base_jobs.submit(build" in src
+       and 'name="mgmt-baseline").start()' not in src)
 finally:
     audit.add = real_add
     auth.email_domain_problem = real_lookup

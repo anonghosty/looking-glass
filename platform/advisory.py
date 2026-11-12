@@ -467,7 +467,7 @@ def install(app, ctx):
         auto = auto or auto_of(x, adv.get("network", ALL))
         o = org()
         lv = tlp.of(adv.get("tlp")) or tlp.of(tlp.DEFAULT)
-        out = {"ref": adv.get("ref"), "organisation": o, "title": adv.get("heading") or f"{o} Security Advisory",
+        out = {"ref": adv.get("ref"), "rev": int(adv.get("rev") or 0), "organisation": o, "title": adv.get("heading") or f"{o} Security Advisory",
                "heading": adv.get("heading") or "", "heading_default": f"{o} Security Advisory", "subject": adv["subject"],
                "tlp": lv["key"], "tlp_short": lv["short"], "tlp_text": lv["text"],
                "network": adv.get("network", ALL), "status": adv["status"], "status_label": STATUS_LABEL.get(adv["status"], adv["status"]),
@@ -703,6 +703,15 @@ def install(app, ctx):
         adv = store.of(x["id"], network)
         if adv and adv["status"] == "sent":               # what went to the organisation stays as it was sent
             return jsonify(error=SENT_LOCKED.format(day=sent_day(adv))), 409
+        # the revision the page opened (external review, 2026-11-12): a form left open while someone else saved is
+        # refused, not written over theirs. A page without it (an older page, a script) is checked as before.
+        if adv and b.get("rev") is not None:
+            try:
+                opened = int(b.get("rev"))
+            except (TypeError, ValueError):
+                return jsonify(error=CHANGED), 409
+            if opened != int(adv.get("rev") or 0):
+                return jsonify(error=CHANGED), 409
         create = adv is None
         adv = adv or blank(x, user, network)
         level = tlp.of(b.get("tlp") or adv.get("tlp") or tlp.DEFAULT)

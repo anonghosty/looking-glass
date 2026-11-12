@@ -70,6 +70,16 @@ of …"), then replays the whole day from 00:00 to 24:00. Details: [TECHNICAL_RE
 
 What each protection does: [../docs/SECURITY.md](SECURITY.md).
 
+## Executive portal: 7-day baseline
+
+The Executive page compares each figure with the 7 days before; a selection seen for the first time builds that
+baseline in the background.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `EXEC_BASELINE_WORKERS` | `2` | baselines built at the same time (each reads up to 7 days of data) |
+| `EXEC_BASELINE_QUEUE` | `20` | baselines waiting their turn beyond those; when the list is full the page shows "building" and asks again on its next refresh |
+
 ## Audit portal and the audit log
 
 Set these to what your own audits and laws require; the defaults suit a yearly IT audit.

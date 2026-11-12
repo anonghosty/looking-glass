@@ -425,6 +425,14 @@ def register(app, ctx):
     bl = {"mem": {}, "jobs": {}, "sig": {}}
     base_lock, build_lock = threading.Lock(), threading.Lock()
 
+    def _env_int(name, default):
+        try:
+            return max(0, int(os.environ.get(name, default)))
+        except ValueError:
+            return default
+    import bounded_jobs
+    base_jobs = bounded_jobs.Jobs("mgmt-baseline", _env_int("EXEC_BASELINE_WORKERS", 2) or 1, _env_int("EXEC_BASELINE_QUEUE", 20))
+
     def _base_load():
         try:
             with open(base_path, encoding="utf-8") as fh:
@@ -605,9 +613,11 @@ def register(app, ctx):
             else:
                 with base_lock:
                     if jk not in bl["jobs"]:
+                        # at most EXEC_BASELINE_WORKERS builds at once, EXEC_BASELINE_QUEUE more waiting (bounded_jobs.py);
+                        # a full list: nothing starts now, the page asks again on its next refresh
                         bl["jobs"][jk] = {"done": 0, "total": len(todo)}
-                        threading.Thread(target=build, args=(platform, todo, dict(args), d_mask, fk, bl["jobs"][jk]),
-                                         daemon=True, name="mgmt-baseline").start()
+                        if not base_jobs.submit(build, platform, todo, dict(args), d_mask, fk, bl["jobs"][jk]):
+                            bl["jobs"].pop(jk, None)
         entries = [bl["mem"].get(f"{platform}|{s.date()}|{fk}") for s in starts]
         names = [r["value"] for r in (d.get("infections") if platform == "comms" else d.get("issues")) or []]
         kpis = {k: [None if not e or e.get("none") else e["kpis"].get(k, 0) for e in entries] for k in KPI_KEYS[platform]}

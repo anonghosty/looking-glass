@@ -37,6 +37,9 @@
 
   // ---------------- users
   let roleNames = [], ROLE_INFO = {};
+  // the role picked for an account waiting for approval, kept across the 30-second refresh (external review,
+  // 2026-11-12: the refresh put the box back to the stored role, so Approve could use a role nobody picked)
+  const CHOSEN = {};
   async function loadUsers() {
     let d; try { d = await getJSON("/api/admin/users"); } catch (e) { banner(`Could not load users: ${e.message}`, true); return; }
     finally { $("adLoading")?.remove(); window.LGLoader?.ready(); }
@@ -59,9 +62,13 @@
         r.title = `${u.reset_requested.ip} · ${u.reset_requested.location} · ${u.reset_requested.ua}`; st.append(r);
       }
       if (u.reset_allowed) st.append(el("div", "adm-flag ok", "Reset allowed (24 h)"));
-      const roleTd = el("td", "adm-role"); const sel = el("select", "adm-select lg-enhance"); for (const r of roleNames) { const o = el("option", null, r); o.value = r; sel.append(o); } sel.value = u.role;
-      // active accounts: the new role applies at once; pending accounts: it is kept in the list and applied by Approve
-      sel.addEventListener("change", () => { if (u.status !== "pending") act(u.name, "role", { role: sel.value }, `Role of ${u.name} changed to ${sel.value}.`); });
+      const roleTd = el("td", "adm-role"); const sel = el("select", "adm-select lg-enhance"); for (const r of roleNames) { const o = el("option", null, r); o.value = r; sel.append(o); }
+      sel.value = u.status === "pending" && roleNames.includes(CHOSEN[u.name]) ? CHOSEN[u.name] : u.role;
+      // active accounts: the new role applies at once; pending accounts: it is kept (CHOSEN) and applied by Approve
+      sel.addEventListener("change", () => {
+        if (u.status === "pending") CHOSEN[u.name] = sel.value;
+        else act(u.name, "role", { role: sel.value }, `Role of ${u.name} changed to ${sel.value}.`);
+      });
       sel.title = ROLE_INFO[u.role] || "";
       roleTd.append(sel);
       const mfa = el("td", null, u.mfa ? `On · ${u.recovery_left} recovery` : "Not set up");

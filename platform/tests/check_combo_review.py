@@ -238,6 +238,14 @@ try:
     st, d = call("/api/advisory/1/net", ADVISOR, "POST", body, **ADV)
     ok("…saved again under the same reference", st == 200 and d["advisory"]["ref"] == ref)
     ok("…with the advisor's own heading and the TLP chosen", d["advisory"]["title"] == body["heading"] and d["advisory"]["tlp"] == "TLP:RED")
+    # a form left open while someone else saved (external review, 2026-11-12): the page sends the revision it opened
+    rev_now = d["advisory"].get("rev")
+    st, d = call("/api/advisory/1/net", ADVISOR, "POST", dict(body, rev=rev_now - 1, subject="From a tab left open"), **ADV)
+    ok("a save from a form opened before someone else's save is refused, nothing written", st == 409 and "changed meanwhile" in d.get("error", "")
+       and A.ADVISORIES.of("1", NET)["subject"] == body["subject"], f"{st} {d.get('error', '')}")
+    st, d = call("/api/advisory/1/net", ADVISOR, "POST", dict(body, rev=rev_now), **ADV)
+    ok("…a save from the latest revision goes through, and the page gets the next one", st == 200 and d["advisory"].get("rev") == rev_now + 1,
+       f"{st} rev {d.get('advisory', {}).get('rev')}")
     st, d = call("/api/advisory/1/send", ADVISOR, "POST", {"network": NET}, **ADV)
     ok("it cannot be marked as sent before a report is generated", st == 400)
     st, pdf = call(f"/advisory/1/preview?network={quote(NET)}", ADVISOR, raw=True, **ADV)
