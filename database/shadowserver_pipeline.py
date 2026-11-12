@@ -2,9 +2,8 @@
 """
 Shadowserver pipeline: pull report e-mails -> unzip -> sort by service -> load into MongoDB.
 
-Replaces (and merges) the two original scripts:
-  1. pull_emails_and_create_services.py
-  2. mongo_added_json.py
+Replaces (and merges) the two original scripts: the e-mail script pull_emails_and_create_services.py (no longer
+shipped) and the loader mongo_added_json.py (kept for the equivalence tests).
 
 The MongoDB layout is exactly the same as the original scripts produced
 (database ``shadowserver`` by default):

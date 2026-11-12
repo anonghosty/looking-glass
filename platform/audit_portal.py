@@ -73,6 +73,8 @@ LABEL["audit_sealed"] = "Entries before the chain sealed"
 TAB_OF["audit_sealed"] = "system"
 LABEL["audit_archive_removed"] = "Old audit archive removed by the retention"
 TAB_OF["audit_archive_removed"] = "system"
+LABEL["audit_archive_deleted_early"] = "Audit archive deleted BEFORE its retention ended"   # an alert (ALERT: "delete")
+TAB_OF["audit_archive_deleted_early"] = "system"
 # The NIST SP 800-53 Rev. 5 controls the checks support, with their official titles (Release 5.2.0, read from NIST's
 # OSCAL catalog, usnistgov/oscal-content, on 2026-11-11). The checks' own ids are LG-01…: they are Looking Glass checks,
 # mapped to NIST controls, not NIST control numbers themselves.

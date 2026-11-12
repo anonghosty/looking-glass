@@ -13,8 +13,10 @@ It replaces the two original scripts with one faster, restartable pipeline that 
 | `mongo_added_json.py` (step 2) | `shadowserver run --stage load` |
 | both, one after the other | `shadowserver run` |
 
-The original two scripts are still in the folder for reference. The new pipeline does not use them. Like the
-pipeline, they take their mailbox and database settings from `.env`; no password is written in any script.
+The original e-mail script (`pull_emails_and_create_services.py`) is no longer shipped: nothing used it, and old,
+unmaintained mail-handling code has no place next to the pipeline. `mongo_added_json.py` stays, because the
+equivalence tests compare the new loader with it; the pipeline itself does not use it. It takes its database settings
+from `.env`; no password is written in any script.
 
 ---
 
@@ -397,8 +399,7 @@ database/
 ├── backups/                      database exports made by deploy
 ├── .pipeline_state.sqlite        files whose load was interrupted (resumed next run)
 ├── .pipeline.lock                prevents two runs at once
-├── pull_emails_and_create_services.py   original script (reference only; settings from .env)
-└── mongo_added_json.py                  original script (reference only; settings from .env)
+└── mongo_added_json.py                  original loader (for the equivalence tests only; settings from .env)
 ```
 
 Installed outside the project by `deploy`:

@@ -279,6 +279,61 @@ try:
     vv = sc.verify()
     ok("an older entry changed after the seal: detected", not vv["ok"] and vv["seal"]["state"] == "changed", json.dumps(vv.get("break")))
 
+    print("The reviewer's attacks on the retention (2026-11-12)")
+    ad = os.path.join(tmp, "attack"); os.makedirs(ad)
+    ac = audit_chain.Chain(os.path.join(ad, "audit.log"))
+    ac.rotate_bytes = 1                                  # every write rotates: several archives within the same second
+    for i in range(8):
+        ac.append({"t": time.time(), "event": "login", "user": f"u{i}"})
+    names = [os.path.basename(p) for p in ac.archives()]
+    v = ac.verify()
+    ok("rotations in the same second never overwrite each other: every entry kept, chain whole",
+       v["ok"] and v["entries"] == 8 and len(names) == 7 and len(set(names)) == 7, ", ".join(names[:3]))
+    ok("…the extra archives get a counter and stay in order",
+       any("_02.log.gz" in n for n in names) and [json.loads(gzip.open(p, "rt").read())["user"] for p in ac.archives()] == [f"u{i}" for i in range(7)])
+    ac.rotate_bytes = 5_000_000
+    first = ac.archives()[0]                             # an archive seconds old, far inside the 400-day retention
+    lines0 = [x for x in gzip.open(first, "rt").read().splitlines() if x]
+    t0 = json.loads(lines0[-1])["t"]
+    note = {"archive": os.path.basename(first), "entries": len(lines0), "last_hash": audit_chain.sha(lines0[-1]),
+            "oldest": t0, "newest": t0, "removed_at": round(time.time(), 3), "retention_days": 400}
+    os.remove(first)
+    with open(os.path.join(ac.dir, "removed.jsonl"), "a") as f:   # the note prune() would have written
+        f.write(json.dumps(note) + "\n")
+    v = ac.verify()
+    ok("an archive deleted inside its retention, with a hand-written note: the chain is NOT reported whole",
+       not v["ok"] and "before their retention ended" in v["break"]["what"] and v["removals"][0]["early"], json.dumps(v.get("break")))
+    ac.append({"t": time.time(), "event": "login", "user": "next"})
+    rec = [json.loads(x) for x in open(ac.path).read().splitlines() if "audit_archive_" in x]
+    ok("…and Looking Glass records it as an alert, not as a normal removal",
+       len(rec) == 1 and rec[0]["event"] == "audit_archive_deleted_early" and "BEFORE its retention ended" in rec[0]["detail"]
+       and not ac.verify()["ok"], json.dumps(rec[:1])[:160])
+    import audit_portal as AP2
+    ok("…shown as an alert in the portal", AP2.ALERT.search("audit_archive_deleted_early") is not None)
+    # the same attack with the note's dates faked to look old: the age check passes, the gap to the entries kept shows it
+    fd = os.path.join(tmp, "attack2"); os.makedirs(fd)
+    fc = audit_chain.Chain(os.path.join(fd, "audit.log")); fc.rotate_bytes = 1
+    for i in range(4):
+        fc.append({"t": time.time(), "event": "login", "user": f"f{i}"})
+    fc.rotate_bytes = 5_000_000
+    first = fc.archives()[0]
+    lines0 = [x for x in gzip.open(first, "rt").read().splitlines() if x]
+    old = time.time() - 500 * 86400
+    os.remove(first)
+    with open(os.path.join(fc.dir, "removed.jsonl"), "a") as f:
+        f.write(json.dumps({"archive": os.path.basename(first), "entries": len(lines0), "last_hash": audit_chain.sha(lines0[-1]),
+                            "oldest": old, "newest": old, "removed_at": round(time.time(), 3), "retention_days": 400}) + "\n")
+    v = fc.verify()
+    ok("…with its dates faked to look old: the jump in time to the first entry kept is reported for the auditor",
+       v["removal_gaps"] and v["removal_gaps"][0]["days"] >= 499, json.dumps(v.get("removal_gaps"))[:160])
+    import subprocess
+    verifier = os.path.join(os.path.dirname(A.__file__), "audit_verifier.py")
+    alone = lambda folder: json.loads(subprocess.run([sys.executable, "-I", verifier, folder, "--json"], capture_output=True,
+                                                     text=True, timeout=60).stdout)
+    out_a, out_f = alone(ad), alone(fd)
+    ok("the standalone verifier finds both too: the early removal, and the gap",
+       not out_a["ok"] and out_a["removed_early"] == [note["archive"]] and out_f["removal_gaps"], json.dumps(out_f.get("removal_gaps"))[:120])
+
     print("Evidence exports")
     audit.add("definition_saved", user="daniel", detail="=1+1", ip="10.0.0.3", ua="x")   # a value a spreadsheet would run
     r = c.get(f"/api/audit/export.csv?tab=all&{P}", headers=H)

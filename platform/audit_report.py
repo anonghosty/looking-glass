@@ -6,6 +6,7 @@ their evidence, the accounts (access review), the privileged changes and failed 
 nothing is cut off.
 """
 import io
+import time
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT
@@ -111,6 +112,23 @@ def build(d):
                 "is still at this entry number, every entry up to it is unchanged since this report, even against someone able "
                 "to rewrite the whole log on the server.", st["b"])]]
     out += [_table(rows, [38 * mm, W - 38 * mm], head=False)]
+    # every archive the retention removed, so an auditor sees what is gone and whether it was old enough to go
+    removals, gaps = v.get("removals") or [], v.get("removal_gaps") or []
+    if removals or gaps:
+        utc = lambda t: time.strftime("%Y-%m-%d %H:%M", time.gmtime(float(t))) if t else "–"
+        out.append(_p("Archives removed by the retention", st["h"]))
+        rows = [[_p(h, st["cellb"]) for h in ("Archive", "Entries", "Oldest to newest entry (UTC)", "Removed (UTC)", "Retention", "Finding")]]
+        for x in removals:
+            rows.append([_p(x.get("archive"), st["mono"]), _p(x.get("entries"), st["b"]),
+                         _p(f"{utc(x.get('oldest'))} to {utc(x.get('newest'))}", st["b"]), _p(utc(x.get("removed_at")), st["b"]),
+                         _p(f"{x.get('retention_days')} days", st["b"]),
+                         _p("REMOVED BEFORE ITS RETENTION ENDED" if x.get("early") else "old enough: as the retention allows",
+                            st["bad"] if x.get("early") else st["b"])])
+        out.append(_table(rows, [62 * mm, 18 * mm, 62 * mm, 32 * mm, 22 * mm, W - 196 * mm]))
+        for g in gaps:
+            out.append(_p(f"Attention: {g['days']} days without any entry after {g['after']} ({utc(g['from'])} to {utc(g['to'])} UTC). "
+                          "Real use writes more often: ask why, or whether entries were removed and the retention note's dates "
+                          "changed (the first entry still kept carries its own time inside the chain).", st["bad"]))
     out.append(_p("Control checks", st["h"]))
     # evidence only, no result column: whether a control is effective is the auditor's conclusion
     rows = [[_p(h, st["cellb"]) for h in ("Check", "Control", f"NIST SP 800-53 Rev. 5 (5.2.0)", "Evidence")]]

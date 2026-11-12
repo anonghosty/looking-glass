@@ -31,17 +31,55 @@ def sha(line):
     return hashlib.sha256(line.encode("utf-8")).hexdigest()
 
 
+REMOVAL_EVENTS = ("audit_archive_removed", "audit_archive_deleted_early")
+
+
+def _utc(t):
+    return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(t)) if t else "unknown"
+
+
+def removed_early(note):
+    """True when a note says an archive was removed before its retention ended: its newest entry is not older than the
+    retention at the time it was removed. prune() never does that, so such a note means an archive was deleted by
+    hand or by someone hiding entries (external review, 2026-11-12: an archive seconds old, deleted with a hand-written
+    note, used to pass as a normal removal)."""
+    try:
+        return float(note.get("newest") or 0) > float(note.get("removed_at") or 0) - float(note.get("retention_days") or 0) * 86400 + 1
+    except (TypeError, ValueError):
+        return True
+
+
 def removal_record(note):
     """The chain entry for an archive the retention removed (its note in removed.jsonl): which archive, how many
     entries, its last link and newest time. Recorded in the chain itself, so the removal cannot be hidden or changed
-    later; the notes file alone could be."""
-    when = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(note.get("newest") or 0))
-    return {"t": round(time.time(), 3), "event": "audit_archive_removed", "user": "Looking Glass", "target": note.get("archive", ""),
-            "detail": f"{note.get('entries')} entries up to {when} removed by the retention of {note.get('retention_days')} days "
-                      f"· last link {note.get('last_hash')}",
-            "removed": {"entries": note.get("entries"), "last_hash": note.get("last_hash"), "newest": note.get("newest"),
-                        "removed_at": note.get("removed_at"), "retention_days": note.get("retention_days")},
+    later; the notes file alone could be. A removal before the retention ended is recorded as an alert instead."""
+    early = removed_early(note)
+    head = (f"removed BEFORE its retention ended: its newest entry ({_utc(note.get('newest'))}) was not yet "
+            f"{note.get('retention_days')} days old when it was removed ({_utc(note.get('removed_at'))})" if early else
+            f"removed by the retention of {note.get('retention_days')} days")
+    return {"t": round(time.time(), 3), "event": REMOVAL_EVENTS[1 if early else 0], "user": "Looking Glass",
+            "target": note.get("archive", ""),
+            "detail": f"{note.get('entries')} entries up to {_utc(note.get('newest'))} {head} · last link {note.get('last_hash')}",
+            "removed": {"entries": note.get("entries"), "last_hash": note.get("last_hash"), "oldest": note.get("oldest"),
+                        "newest": note.get("newest"), "removed_at": note.get("removed_at"),
+                        "retention_days": note.get("retention_days"), "early": early},
             "ip": "", "location": "", "ua": ""}
+
+
+def removal_findings(notes, first_kept_t, gap_days):
+    """What the retention notes say that needs an auditor's attention.
+    early: archives removed before their retention ended (removed_early).
+    gaps:  a jump in time around a removed archive that real use does not leave: between one removed archive's newest
+           entry and the next one's oldest, or the first entry still kept. A note's dates are written next to the log
+           and could be faked to look old; the first kept entry's time is inside the chain and cannot. Normal use
+           writes something at least every few days, so more than gap_days (AUDIT_GAP_DAYS, default 30) is flagged."""
+    early = [n.get("archive") for n in notes if removed_early(n)]
+    gaps = []
+    for i, n in enumerate(notes):
+        nxt = notes[i + 1].get("oldest") if i + 1 < len(notes) else first_kept_t
+        if n.get("newest") and nxt and float(nxt) - float(n["newest"]) > gap_days * 86400:
+            gaps.append({"after": n.get("archive"), "from": n["newest"], "to": nxt, "days": int((float(nxt) - float(n["newest"])) // 86400)})
+    return early, gaps
 
 
 def removals_unrecorded(lines, notes, recorded):
@@ -50,7 +88,7 @@ def removals_unrecorded(lines, notes, recorded):
     itself be gone by the retention (the note is older than the oldest entry kept)."""
     seen, oldest = {}, None
     for ln in lines:
-        if '"audit_archive_removed"' not in ln and oldest is not None:
+        if '"audit_archive_' not in ln and oldest is not None:
             continue
         try:
             rec = json.loads(ln)
@@ -58,7 +96,7 @@ def removals_unrecorded(lines, notes, recorded):
             continue
         if oldest is None:
             oldest = rec.get("t")
-        if rec.get("event") == "audit_archive_removed":
+        if rec.get("event") in REMOVAL_EVENTS:
             seen[rec.get("target")] = (rec.get("removed") or {}).get("last_hash")
     bad = []
     for n in notes[:recorded]:
@@ -130,15 +168,29 @@ class Chain:
             os.makedirs(self.dir, mode=0o700, exist_ok=True)
             dst = os.path.join(self.dir, f"audit-{time.strftime('%Y%m%d-%H%M%S', time.gmtime(os.path.getmtime(old)))}-old.log.gz")
             if not os.path.exists(dst):
-                self._gzip(old, dst)
+                self._gzip(old, dst, counter=False)
         except OSError:                       # another process adopted it at the same moment
             pass
 
-    def _gzip(self, src, dst):
-        fd = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    def _gzip(self, src, dst, counter=True):
+        """Compress src into a new archive and remove src. An archive is never replaced: names have one-second
+        resolution, so two rotations in the same second (external review, 2026-11-12) used to overwrite the first
+        one and lose its entries. A taken name gets a counter (audit-<time>_02.log.gz: '_' sorts after '.', so the
+        archives stay in order). Returns the archive's path."""
+        base, n = dst[:-len(".log.gz")], 1
+        while True:
+            try:
+                fd = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                break
+            except FileExistsError:
+                if not counter:               # adopting audit.log.1: someone else did it already
+                    raise
+                n += 1
+                dst = f"{base}_{n:02d}.log.gz"
         with open(src, "rb") as fi, os.fdopen(fd, "wb") as raw, gzip.GzipFile(fileobj=raw, mode="wb") as fo:
             fo.write(fi.read())
         os.remove(src)
+        return dst
 
     def _load_head(self):
         """The newest link: the hash of the last line kept and how many lines there are."""
@@ -244,8 +296,12 @@ class Chain:
             except ValueError:
                 newest = 0
             if newest and newest < cut:
+                try:
+                    oldest = json.loads(lines[0]).get("t") if lines else None
+                except ValueError:
+                    oldest = None
                 note = {"archive": os.path.basename(p), "entries": len(lines), "last_hash": sha(lines[-1]) if lines else ZERO,
-                        "newest": newest, "removed_at": round(now, 3), "retention_days": self.retention_days}
+                        "oldest": oldest, "newest": newest, "removed_at": round(now, 3), "retention_days": self.retention_days}
                 fd = os.open(os.path.join(self.dir, "removed.jsonl"), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
                 with os.fdopen(fd, "a", encoding="utf-8") as f:
                     f.write(json.dumps(note) + "\n")
@@ -370,8 +426,16 @@ class Chain:
         if missing and not brk:
             brk = {"entry": 1, "t": first_t, "what": f"retention notes with no entry in the chain ({', '.join(missing[:3])}): "
                                                     "an archive was removed or noted outside Looking Glass"}
+        early, gaps = removal_findings(removed, first_t, int(_env_num("AUDIT_GAP_DAYS", 30)))
+        if early and not brk:
+            brk = {"entry": 1, "t": first_t, "what": f"archives removed before their retention ended ({', '.join(early[:3])}): "
+                                                    "entries were deleted outside the retention"}
         return {"ok": brk is None, "seal": dict(seal, state=seal_state) if seal else None,
-                "removals_recorded": recorded - len(missing), "removals_pending": len(removed) - recorded, "entries": len(lines), "chained": chained, "before_chain": before, "first": first_t, "last": last_t,
+                "removals_recorded": recorded - len(missing), "removals_pending": len(removed) - recorded,
+                "removals": [{"archive": n.get("archive"), "entries": n.get("entries"), "oldest": n.get("oldest"),
+                              "newest": n.get("newest"), "removed_at": n.get("removed_at"),
+                              "retention_days": n.get("retention_days"), "early": removed_early(n)} for n in removed],
+                "removal_gaps": gaps, "entries": len(lines), "chained": chained, "before_chain": before, "first": first_t, "last": last_t,
                 "break": brk, "head": head, "head_entry": len(lines) + gone, "removed_entries": gone,
                 "head_file": bool(saved), "archives": len(self.archives()),
                 "removed_archives": len(removed), "retention_days": self.retention_days,

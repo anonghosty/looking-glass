@@ -233,7 +233,15 @@
     row("Archives", `${v.archives} file(s) · ${v.removed_archives} removed by the retention of ${v.retention_days} days · rotated at ${v.rotate_mb} MB`);
     row("Head", `${v.head}@${v.head_entry ?? v.entries}`, true);
     if (v.checked) row("Checked", v.checked);
-    b.append(st, dl, el("p", "st-hint", "Note the head (hash@entry) with your evidence. At the next audit, compare it (Proof to take away): if it is still at that entry, the log up to it is unchanged."));
+    // archives the retention removed: each must have been old enough, and no unexplained jump in time around it
+    const early = (v.removals || []).filter((x) => x.early);
+    if ((v.removals || []).length) row("Removed by the retention", `${v.removals.length} archive(s), each recorded in the chain`
+      + (early.length ? ` · ${early.length} removed BEFORE their retention ended: ${early.map((x) => x.archive).join(", ")}` : " · all old enough"));
+    b.append(st, dl);
+    for (const g of v.removal_gaps || []) {
+      b.append(el("p", "au-vf bad", `Attention: ${g.days} days without any entry after ${g.after}. Real use writes more often: ask why, or whether entries were removed and the retention note's dates changed.`));
+    }
+    b.append( el("p", "st-hint", "Note the head (hash@entry) with your evidence. At the next audit, compare it (Proof to take away): if it is still at that entry, the log up to it is unchanged."));
   }
   $("vfRun").addEventListener("click", async () => {
     $("vfRun").disabled = true; window.LGLoader?.busy("Verifying the audit log");

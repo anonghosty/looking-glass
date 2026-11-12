@@ -77,6 +77,7 @@ Set these to what your own audits and laws require; the defaults suit a yearly I
 | Setting | Default | Meaning |
 |---|---|---|
 | `AUDIT_RETENTION_DAYS` | `400` | days archived audit entries are kept (compressed, `data/audit_archive/`) before they are deleted. The last link of each deleted archive is noted, so the integrity check still covers what is left |
+| `AUDIT_GAP_DAYS` | `30` | a removed archive followed by this many days without any entry is reported for the auditor (an archive removed and its note's dates faked to look old leaves such a jump; real use writes more often) |
 | `AUDIT_ROTATE_MB` | `5` | size at which `data/audit.log` is archived and a new file started; the tamper-evident chain goes on across files |
 | `AUDIT_DORMANT_DAYS` | `90` | control check LG-02 (NIST AC-2(3)): an active account unused this long is listed as dormant |
 | `AUDIT_MAX_ADMINS` | `3` | control check LG-03 (NIST AC-6(5)): the administrator limit the check names |

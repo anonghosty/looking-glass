@@ -89,7 +89,7 @@ that always says "verified". So do not take it on trust:
   PowerShell) with the one published here, outside the server:
 
   ```text
-  699a111c45fd0c38d9d9f384a36d31e6efe3d4ad6286972d3e314725309887bf
+  24097462fe2cfad96004d0dc91b691211c63362765a20a110fd492a8cb559885
   ```
 
   This is the verifier of the current release on GitHub. An installation of an older release ships the verifier of
@@ -146,7 +146,16 @@ the number of entries of each deleted archive are noted in `removed.jsonl` first
 there, and entry numbers still count from the start of the log. Each removal is also **recorded as an entry in the
 chain itself** ("Old audit archive removed by the retention": the archive, its number of entries, its newest time and
 its last link), so a removal cannot be hidden or its note changed afterwards: the check reports any note without its
-chain entry. A removal made between two writes is recorded with the next entry. An earlier head that falls in a removed archive can no
+chain entry. A removal made between two writes is recorded with the next entry.
+
+A removal must also have been **allowed**: an archive may only go once its newest entry is older than the retention.
+A note that says otherwise means entries were deleted outside the retention: the check reports the log as not whole,
+and Looking Glass records the removal as an **alert** ("Audit archive deleted BEFORE its retention ended"), never as a
+normal one. A note's dates sit next to the log and could be faked to look old, so the check also looks at time itself:
+the first entry still kept carries its own time inside the chain, and a removed archive followed by more than
+`AUDIT_GAP_DAYS` (30) days without any entry is reported for the auditor to ask about (`--gap-days` in the verifier).
+The evidence report lists every removed archive with its dates and this finding. Archives are never overwritten:
+two in the same second get numbered names. An earlier head that falls in a removed archive can no
 longer be compared entry by entry; the check says so. Set the retention to cover the time between audits
 ([CONFIGURATION.md](CONFIGURATION.md#audit-portal-and-the-audit-log)).
 
@@ -156,6 +165,10 @@ them go to `data/audit.seal`, and the seal itself is recorded as an entry in the
 is detected. Nothing can prove they were unchanged before the seal, and the evidence says so.
 
 ## 8. What the proof does not cover
+
+- **A careful rewrite of the oldest entries by someone who controls the server**, if the dates are faked well enough
+  to leave no gap. The age and gap checks make a hidden deletion visible in the common cases; the auditor's earlier
+  head (section 6) is what proves the entries up to it are unchanged.
 
 - **Completeness when written.** Entries are made by the application. An action it never logged cannot be shown by any
   hash. The control checks (LG-08, LG-15) and the auditor's own testing address what is logged.

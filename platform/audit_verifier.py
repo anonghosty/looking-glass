@@ -92,8 +92,9 @@ def parse_earlier(text):
     return m.group(1).lower(), (int(m.group(2)) if m.group(2) else None)
 
 
-def check(folder, earlier=None):
-    """Check the log in `folder` (the folder holding audit.log and audit_archive/). `earlier` = (hash, entry or None)."""
+def check(folder, earlier=None, gap_days=30):
+    """Check the log in `folder` (the folder holding audit.log and audit_archive/). `earlier` = (hash, entry or None);
+    gap_days: a jump in time around a removed archive longer than this is reported."""
     archives = sorted(glob.glob(os.path.join(folder, "audit_archive", "audit-*.log.gz")))
     lines = []
     for p in archives:
@@ -164,7 +165,7 @@ def check(folder, earlier=None):
         except ValueError:
             continue
         oldest_t = rec.get("t") if oldest_t is None else oldest_t
-        if rec.get("event") == "audit_archive_removed":
+        if rec.get("event") in ("audit_archive_removed", "audit_archive_deleted_early"):
             seen[rec.get("target")] = (rec.get("removed") or {}).get("last_hash")
     unaccounted = [n.get("archive") for n in removed[:recorded] if seen.get(n.get("archive")) != n.get("last_hash")
                    and not (oldest_t is not None and (n.get("removed_at") or 0) < oldest_t)]
@@ -172,8 +173,30 @@ def check(folder, earlier=None):
         brk = {"entry": gone + 1, "t": first_t, "what": f"retention notes with no entry in the chain ({', '.join(unaccounted[:3])}): "
                                                         "an archive was removed or noted outside Looking Glass"}
 
+    # An archive may only be removed once its newest entry is older than the retention: a note that says otherwise
+    # means entries were deleted outside the retention. A note's dates sit next to the log and could be faked to look
+    # old, so also: the time from a removed archive's newest entry to the next archive's oldest (or the first entry
+    # still kept, whose time is inside the chain) should not jump by more than gap_days; real use writes more often.
+    def early(n):
+        try:
+            return float(n.get("newest") or 0) > float(n.get("removed_at") or 0) - float(n.get("retention_days") or 0) * 86400 + 1
+        except (TypeError, ValueError):
+            return True
+    removed_early = [n.get("archive") for n in removed if early(n)]
+    if removed_early and not brk:
+        brk = {"entry": gone + 1, "t": first_t, "what": f"archives removed before their retention ended ({', '.join(removed_early[:3])}): "
+                                                        "entries were deleted outside the retention"}
+    gaps = []
+    for i, n in enumerate(removed):
+        nxt = removed[i + 1].get("oldest") if i + 1 < len(removed) else first_t
+        if n.get("newest") and nxt and float(nxt) - float(n["newest"]) > gap_days * 86400:
+            gaps.append({"after": n.get("archive"), "from": n["newest"], "to": nxt, "days": int((float(nxt) - float(n["newest"])) // 86400)})
+
     out = {"ok": brk is None, "entries": head_entry, "removals_recorded": recorded - len(unaccounted),
-           "removals_pending": len(removed) - recorded, "kept": len(lines), "removed_by_retention": gone, "chained": chained,
+           "removals_pending": len(removed) - recorded, "removed_early": removed_early, "removal_gaps": gaps,
+           "removals": [{"archive": n.get("archive"), "entries": n.get("entries"), "newest": n.get("newest"),
+                         "removed_at": n.get("removed_at"), "retention_days": n.get("retention_days"), "early": early(n)}
+                        for n in removed], "kept": len(lines), "removed_by_retention": gone, "chained": chained,
            "before_chain": before, "first": first_t, "last": last_t, "head": head, "head_entry": head_entry,
            "head_file": head_file, "seal": dict(seal, state=seal_state) if seal else None, "archives": len(archives), "break": brk}
 
@@ -222,6 +245,7 @@ def main():
     ap.add_argument("folder", nargs="?", default=here, help="the unzipped proof package (default: the folder of this script)")
     ap.add_argument("--earlier", help="the head hash noted at an earlier audit, as HASH or HASH@ENTRY")
     ap.add_argument("--json", action="store_true", help="print the result as JSON")
+    ap.add_argument("--gap-days", type=int, default=30, help="report a jump in time around a removed archive longer than this")
     a = ap.parse_args()
     root = os.path.abspath(a.folder)
     log = os.path.join(root, "log") if os.path.isdir(os.path.join(root, "log")) else root
@@ -229,7 +253,7 @@ def main():
         earlier = parse_earlier(a.earlier) if a.earlier else None
     except ValueError as e:
         ap.error(f"--earlier: {e}")
-    r = check(log, earlier)
+    r = check(log, earlier, a.gap_days)
     r["manifest"] = check_manifest(root)
     good = r["ok"] and (not r["manifest"] or not r["manifest"]["problems"]) and (not earlier or r["earlier"]["proven"])
     if a.json:
@@ -251,6 +275,12 @@ def main():
     if r["removed_by_retention"] or r["removals_pending"]:
         print(f"  retention         {r['removals_recorded']} removed archive(s) recorded in the chain"
               + (f", {r['removals_pending']} to be recorded with the next entry" if r["removals_pending"] else ""))
+        for x in r["removals"]:
+            print(f"                    {x['archive']}: {x['entries']} entries up to {when(x['newest'])}, removed {when(x['removed_at'])} "
+                  f"(retention {x['retention_days']} days)" + ("  REMOVED BEFORE ITS RETENTION ENDED" if x["early"] else ""))
+        for g in r["removal_gaps"]:
+            print(f"  ATTENTION         {g['days']} days without any entry after {g['after']} ({when(g['from'])} to {when(g['to'])}): "
+                  "real use writes more often; ask why, or whether entries were removed and the note's dates changed")
     if r["ok"]:
         print("  chain             WHOLE: no entry was changed, inserted or removed, and nothing was cut from the end")
     else:
