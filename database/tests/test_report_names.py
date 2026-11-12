@@ -91,7 +91,9 @@ def _may_create_db(mongo):
 
 def throwaway_db():
     """The real .env's MongoDB, with a database of its own (dropped afterwards). The pipeline's own account may only
-    write its database, so the administrator account kept in .env.before-pipeline-account is used when it is there.
+    write its database, so an administrator account is looked for: the file named by LG_MONGO_ADMIN_FILE (the
+    platform's tests/run_admin_db_tests.sh hands it over), /etc/looking-glass/mongo-admin.env when sudo works without a
+    password, or a copy left in .env.before-pipeline-account (older set-ups).
     (None, None) when no account may create a database, or MongoDB is not reachable."""
     try:
         s = sp.load_settings(argparse.Namespace(env_file=os.path.join(HERE, ".env"), workers=2, days=None))
@@ -100,10 +102,23 @@ def throwaway_db():
     c = _may_create_db(s.mongo)
     if c:
         return s, c
+    texts = []
+    given = os.environ.get("LG_MONGO_ADMIN_FILE")
+    if given and os.path.isfile(given):
+        texts.append(open(given, encoding="utf-8").read())
+    try:
+        import subprocess
+        r = subprocess.run(["sudo", "-n", "cat", "/etc/looking-glass/mongo-admin.env"], capture_output=True, text=True, timeout=10)
+        if r.returncode == 0:
+            texts.append(r.stdout)
+    except (OSError, subprocess.SubprocessError):
+        pass
     kept = os.path.join(HERE, ".env.before-pipeline-account")
     if os.path.isfile(kept):
+        texts.append(open(kept, encoding="utf-8").read())
+    for text in texts:
         e = {}
-        for raw in open(kept, encoding="utf-8").read().splitlines():
+        for raw in text.splitlines():
             line = raw.strip()
             if line and not line.startswith("#") and "=" in line:
                 k, v = line.split("=", 1)

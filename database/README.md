@@ -553,9 +553,15 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
   read-only server status, nothing else. It cannot change any other database, create accounts or change the server.
   `deploy.sh` creates the administrator (`root`) account the first time; `./create_pipeline_db_user.py` then makes the
   pipeline's account, checks its rights from MongoDB's own answer, and switches `.env` to it (the installer does this
-  for you). The administrator account stays in `.env.before-pipeline-account` (mode 600): it is the way back
-  (`cp .env.before-pipeline-account .env`) and what you need for administration (backups, restores, `deploy.sh` on a
-  new MongoDB). Keep it safe, or move it off the server.
+  for you).
+- **The administrator account is kept where only root can read it:** `/etc/looking-glass/mongo-admin.env` (owner
+  root, mode 600). `create_pipeline_db_user.py` moves it there with `./store_mongo_admin.sh` (it asks for your sudo
+  password), checks that it signs in, removes the copy from this folder and blanks the password in older `.env`
+  backups. The pipeline's and the platform's own Linux user cannot read it, so code run through a hostile e-mail
+  could not take it. See it again (the way back, backups, restores): `sudo cat /etc/looking-glass/mongo-admin.env`.
+  This protects against a break-in to the programs, not against root: if the user running Looking Glass has
+  passwordless sudo, it could read the file too. Even tighter: keep the password only in a password manager and
+  `sudo rm` the file (a re-install then asks for it).
 - **MongoDB on another server, run by someone else:** `./create_pipeline_db_user.py --print` shows the commands for its
   administrator to run (they never give you their password); put the account they create into `.env`. The
   `clusterMonitor` role in those commands only lets `shadowserver check` read the cache size: without it that one check

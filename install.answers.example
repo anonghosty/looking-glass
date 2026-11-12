@@ -12,7 +12,7 @@ MONGO_MODE=local
 MONGO_PORT=27017
 MONGO_ADMIN_USER=shadowserver_admin
 # empty = generate a strong random password (running the installer again: empty = use the one kept in
-# database/.env.before-pipeline-account, or in database/.env)
+# /etc/looking-glass/mongo-admin.env, or database/.env.before-pipeline-account or database/.env)
 MONGO_ADMIN_PASSWORD=
 MONGO_AUTH_SOURCE=admin
 MONGO_DB=shadowserver

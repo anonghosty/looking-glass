@@ -155,14 +155,18 @@ Looking Glass only reads the database. Give it an account that cannot write:
 .venv/bin/python deploy/create_readonly_db_user.py && deploy/reload.sh
 ```
 The script uses the administrator account in `.env` once, creates `lookingglass_ro` with read access only, checks
-that it cannot write, and puts it in `.env`. It keeps the old file as `.env.before-readonly` (it holds the
-administrator password): move that file off the computer.
+that it cannot write, and puts it in `.env`. The old file, `.env.before-readonly`, holds the administrator password:
+when the database pipeline is next to the platform, the script moves that account to
+`/etc/looking-glass/mongo-admin.env` (readable only by root; it asks for your sudo password) and removes the copy.
+Otherwise, move the copy off the computer.
 
 The pipeline gets its own account too, with read and write on its database only (in the database folder):
 ```bash
 ./create_pipeline_db_user.py
 ```
-The installer does both. When MongoDB runs on another server, run by someone else, add `--print` to either script:
+It keeps the administrator account in `/etc/looking-glass/mongo-admin.env` too, never in the project folders, where
+the programs' own Linux user could read it (`sudo cat` it when you need it). The installer does all of this. When
+MongoDB runs on another server, run by someone else, add `--print` to either script:
 it shows the commands for that server's administrator to run, and they give you the password for `.env`. Their own
 account is never needed or changed.
 

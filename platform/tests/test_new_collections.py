@@ -18,7 +18,7 @@ import _throwaway_mongo  # noqa: E402
 client = _throwaway_mongo.client(os.environ["MONGO_HOST"], os.environ.get("MONGO_PORT", 27017))
 if client is None:
     print("SKIPPED: needs a MongoDB account that may create databases. The platform's and the pipeline's are limited, "
-          "as they should be; the administrator account is looked for in the pipeline's .env.before-pipeline-account.")
+          "as they should be, and the administrator account is root-only: run tests/run_admin_db_tests.sh (asks for sudo once).")
     sys.exit(77)
 real = client[os.environ["MONGO_DB"]]
 name = f"lg_selftest_{os.getpid()}"

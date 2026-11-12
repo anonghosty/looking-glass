@@ -538,7 +538,7 @@ kw = dict(host=host, port=port, serverSelectionTimeoutMS=8000)
 if user:
     if not os.environ.get("MPW"):
         print(f"No password was given for the MongoDB account {user} (the first installation kept it in "
-              "database/.env.before-pipeline-account, or in database/.env)."); sys.exit(1)
+              "/etc/looking-glass/mongo-admin.env: sudo cat it; or in database/.env.before-pipeline-account or database/.env)."); sys.exit(1)
     kw.update(username=user, password=os.environ["MPW"], authSource=src)
 try:
     c = MongoClient(**kw)
@@ -679,19 +679,27 @@ if [ "$MONGO_MODE" = local ]; then
     # Where the first installation left the administrator account: database/.env, or, once the pipeline got its own
     # account (create_pipeline_db_user.py), database/.env.before-pipeline-account. The pipeline's own account is never
     # taken for the administrator: it cannot create the platform's read-only account.
+    # First choice: /etc/looking-glass/mongo-admin.env (root only, store_mongo_admin.sh), read with sudo into a private
+    # temporary file that is removed again right away.
     ADMIN_ENV="$DB_DIR/.env"; [ -f "$DB_DIR/.env.before-pipeline-account" ] && ADMIN_ENV="$DB_DIR/.env.before-pipeline-account"
+    ETC_TMP=""
+    if sudo -n test -f /etc/looking-glass/mongo-admin.env 2>/dev/null; then
+      ETC_TMP="$(umask 077; mktemp)"; sudo -n cat /etc/looking-glass/mongo-admin.env > "$ETC_TMP" 2>/dev/null && ADMIN_ENV="$ETC_TMP"
+    fi
     OLD_MUSER="$(env_get "$ADMIN_ENV" MONGO_USER)"; OLD_MPW="$(env_get "$ADMIN_ENV" MONGO_PASSWORD)"
+    ADMIN_FROM="${ADMIN_ENV#"$ROOT/"}"; [ -n "$ETC_TMP" ] && [ "$ADMIN_ENV" = "$ETC_TMP" ] && ADMIN_FROM=/etc/looking-glass/mongo-admin.env
+    [ -n "$ETC_TMP" ] && { shred -u "$ETC_TMP" 2>/dev/null || rm -f "$ETC_TMP"; }; unset ETC_TMP
     if [ "$OLD_MUSER" = lookingglass_pipeline ] || [ "$OLD_MUSER" = lookingglass_ro ]; then OLD_MUSER=""; OLD_MPW=""; fi
     ask_input MONGO_ADMIN_USER "MongoDB administrator" "Name of the MongoDB administrator account (as created the first time):" "${OLD_MUSER:-shadowserver_admin}" v_user; MONGO_ADMIN_USER="$REPLY"
     # use the stored password, unless another one is given (an empty answer = use it) or another account was named
     [ "$MONGO_ADMIN_USER" = "$OLD_MUSER" ] || OLD_MPW=""
     if [ -n "${ANS[MONGO_ADMIN_PASSWORD]:-}" ] || [ -z "$OLD_MPW" ]; then
-      ask_secret MONGO_ADMIN_PASSWORD "MongoDB administrator password" "Password of '$MONGO_ADMIN_USER' (the first installation kept it in database/.env.before-pipeline-account, or in database/.env):"
+      ask_secret MONGO_ADMIN_PASSWORD "MongoDB administrator password" "Password of '$MONGO_ADMIN_USER' (the first installation kept it in /etc/looking-glass/mongo-admin.env: sudo cat it; or in database/.env.before-pipeline-account or database/.env):"
       MONGO_ADMIN_PASSWORD="$REPLY"
     else
-      MONGO_ADMIN_PASSWORD="$OLD_MPW"; log "MongoDB password: taken from the existing ${ADMIN_ENV#"$ROOT/"}"
+      MONGO_ADMIN_PASSWORD="$OLD_MPW"; log "MongoDB password: taken from $ADMIN_FROM"
     fi
-    unset OLD_MPW OLD_MUSER
+    unset OLD_MPW OLD_MUSER ADMIN_FROM
   else
     ask_input MONGO_PORT "MongoDB port" "Port for MongoDB on this computer (27017 unless something else uses it):" "$(for q in 27017 27018 27019 27020; do in_use $q || { echo $q; break; }; done)" v_mongo_port; MONGO_PORT="$REPLY"
     passed "Port $MONGO_PORT is free for MongoDB."
@@ -717,7 +725,7 @@ server's network address too. Which address should it listen on?
       after_failure MONGO_ADMIN_USER "MongoDB" "$reason" MONGO_ADMIN_USER MONGO_ADMIN_PASSWORD MONGO_AUTH_SOURCE || break
     done
     # never go on with an empty password: it would be written into both .env files and cut them off the database
-    [ -n "$MONGO_ADMIN_PASSWORD" ] || { echo "The MongoDB password of '$MONGO_ADMIN_USER' is needed for a re-install (the first installation kept it in database/.env.before-pipeline-account, or in database/.env; copies are in database/.env.before-install-*)." >&2; exit 1; }
+    [ -n "$MONGO_ADMIN_PASSWORD" ] || { echo "The MongoDB password of '$MONGO_ADMIN_USER' is needed for a re-install (the first installation kept it in /etc/looking-glass/mongo-admin.env: sudo cat it; or in database/.env.before-pipeline-account or database/.env)." >&2; exit 1; }
   fi
 else
   if [ "$MONGO_MODE" = existing ] && [ "$MDB_INSTALLED" = 1 ] && [ "$MDB_ACTIVE" = 0 ]; then
@@ -1052,8 +1060,9 @@ if [ $WANT_DB = 1 ]; then
     DB_WARN="The pipeline is installed, but its setup check reported a problem (see the log; often the mailbox login)."
   fi
   [ "$SCHEDULE" = off ] && (cd "$DB_DIR" && bin/shadowserver schedule off >> "$LOG" 2>&1 || true)
-  # the pipeline's own account: read and write on its database only, not the administrator (root). The administrator
-  # account stays in database/.env.before-pipeline-account (mode 600), the one place it is kept on this computer.
+  # the pipeline's own account: read and write on its database only, not the administrator (root). The script then
+  # moves the administrator account to /etc/looking-glass/mongo-admin.env (root only; store_mongo_admin.sh), the one
+  # place it is kept on this computer, out of reach of the pipeline's and the platform's own Linux user.
   if [ "$KEEP_DB_ENV" = no ] && [ "$READONLY" = yes ] && [ -x "$DB_DIR/create_pipeline_db_user.py" ]; then
     gauge 36 "Giving the pipeline its own database account..."
     if ! (cd "$DB_DIR" && ./create_pipeline_db_user.py >> "$LOG" 2>&1); then
@@ -1093,8 +1102,8 @@ if [ $WANT_PF = 1 ]; then
   if [ "$KEEP_PF_ENV" = no ] && [ "$READONLY" = yes ]; then
     gauge 70 "Creating a read-only database account for the platform..."
     run "read-only MongoDB account" bash -c "cd '$PF_DIR' && .venv/bin/python deploy/create_readonly_db_user.py"
-    # the administrator password stays only in database/.env.before-pipeline-account (or database/.env, if the pipeline
-    # kept it; or nowhere on this computer, for a remote MongoDB)
+    # the administrator password stays only in /etc/looking-glass/mongo-admin.env (root only), or in database/.env if the
+    # pipeline kept it; nowhere on this computer for a remote MongoDB
     if [ -f "$PF_DIR/.env.before-readonly" ]; then shred -u "$PF_DIR/.env.before-readonly" 2>/dev/null || rm -f "$PF_DIR/.env.before-readonly"; fi
   fi
   if [ "$HTTPS" = selfsigned ]; then

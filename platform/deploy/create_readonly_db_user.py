@@ -7,13 +7,16 @@ Run it yourself on the server; it uses the administrator account currently in .e
   1. creates the user `lookingglass_ro` with only the `read` role on MONGO_DB (or resets its password),
      with a new random 32-character password;
   2. checks that the new account can read and cannot write;
-  3. keeps a copy of .env as .env.before-readonly (mode 600) and puts the new account into .env.
-Then reload the service (deploy/reload.sh). Keep the administrator password somewhere safe outside this server's .env.
+  3. keeps a copy of .env as .env.before-readonly (mode 600) and puts the new account into .env;
+  4. when the database pipeline is next to the platform: moves the administrator account from that copy to
+     /etc/looking-glass/mongo-admin.env, readable only by root (its store_mongo_admin.sh, with sudo), and removes the
+     copy. Otherwise (or with --keep-copy) the copy stays: move it off the server.
+Then reload the service (deploy/reload.sh).
 
 MongoDB on another server, run by someone else: --print shows the commands for its administrator to run instead
 (Looking Glass never needs their password); they give you the password for .env.
 
-Usage: .venv/bin/python deploy/create_readonly_db_user.py [--print]
+Usage: .venv/bin/python deploy/create_readonly_db_user.py [--print] [--keep-copy]
 """
 import os
 import re
@@ -88,5 +91,14 @@ for k, v in (("MONGO_USER", NEW_USER), ("MONGO_PASSWORD", pw), ("MONGO_AUTH_SOUR
 with open(ENV_PATH, "w", encoding="utf-8") as f:
     f.write(text)
 os.chmod(ENV_PATH, 0o600)
-print(".env now uses the read-only account (old copy: .env.before-readonly). Reload: bash deploy/reload.sh")
-print("Move .env.before-readonly (it holds the administrator password) off this server once everything works.")
+print(".env now uses the read-only account. Reload: bash deploy/reload.sh")
+# the copy holds the administrator password: move it where only root can read it (the database pipeline's
+# store_mongo_admin.sh, next to the platform), or say what to do with it
+store = next((p for p in (os.path.join(ROOT, "..", d, "store_mongo_admin.sh") for d in ("database", "shadowserver"))
+              if os.path.isfile(p)), None)
+if store and "--keep-copy" not in sys.argv[1:]:
+    import subprocess
+    if subprocess.run([store, ENV_PATH + ".before-readonly"]).returncode == 0:
+        sys.exit(0)
+print("The old copy .env.before-readonly holds the administrator password. Move it off this server, or where only root")
+print("can read it (database/store_mongo_admin.sh .../platform/.env.before-readonly), once everything works.")

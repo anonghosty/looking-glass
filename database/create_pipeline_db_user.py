@@ -17,9 +17,10 @@ Local MongoDB, administrator account in .env (what deploy.sh sets up):
     1. creates the account with a new random password (or resets it, if it exists);
     2. checks, without writing anything, that it has exactly those rights: read and write on MONGO_DB, nothing on any
        other database, no account management;
-    3. keeps a copy of .env as .env.before-pipeline-account (mode 600: it holds the administrator password, and it is
-       the way back) and puts the new account into .env.
-  Way back: cp .env.before-pipeline-account .env
+    3. keeps a copy of .env as .env.before-pipeline-account and puts the new account into .env;
+    4. moves the administrator account from that copy to /etc/looking-glass/mongo-admin.env, readable only by root
+       (store_mongo_admin.sh, with sudo), and removes the copy. Without sudo, or with --keep-copy, the copy stays.
+  Way back: sudo cat /etc/looking-glass/mongo-admin.env, and put its MONGO_ lines back into .env
 
 MongoDB on another server, run by someone else (MONGO_LOCAL=false):
   ./create_pipeline_db_user.py --print
@@ -153,8 +154,16 @@ def main():
     with open(ENV_PATH, "w", encoding="utf-8") as f:
         f.write(text)
     os.chmod(ENV_PATH, 0o600)
-    print(".env now uses the pipeline account. The administrator account is in .env.before-pipeline-account (mode 600):")
-    print("keep that file (or its two MONGO_ lines) safe; it is the way back: cp .env.before-pipeline-account .env")
+    print(".env now uses the pipeline account.")
+    # the administrator account must not stay where the pipeline's own user can read it: store_mongo_admin.sh moves it
+    # to /etc/looking-glass/ (root only) and removes the copy; without sudo the copy stays (mode 600)
+    if "--keep-copy" not in sys.argv[1:]:
+        import subprocess
+        r = subprocess.run([os.path.join(HERE, "store_mongo_admin.sh"), ENV_PATH + ".before-pipeline-account"])
+        if r.returncode == 0:
+            return 0
+    print("The administrator account is in .env.before-pipeline-account (mode 600), readable by this user. Move it")
+    print("where only root can read it: ./store_mongo_admin.sh   (or keep it in a password manager and delete the file)")
     return 0
 
 
