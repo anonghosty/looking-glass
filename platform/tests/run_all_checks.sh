@@ -51,6 +51,7 @@ run "combination codes + search"      $PY tests/check_combos.py
 run "findings (researcher → advisory)" $PY tests/check_findings.py
 run "analyst codes (analyst → researcher)" $PY tests/check_acodes.py
 run "report views, cases and advisories" $PY tests/check_combo_review.py
+run "workflow: advisory saves, approve, sign-up look-ups" $PY tests/check_workflow_fixes.py
 run "notifications (per person, channel only)" $PY tests/check_notifications.py
 run "overview of every role" $PY tests/check_overview.py
 run "peace of mind (admins)" $PY tests/check_peace.py

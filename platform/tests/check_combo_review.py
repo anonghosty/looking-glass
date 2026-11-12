@@ -286,8 +286,11 @@ try:
        and not IP_RX.search(json.dumps(f1.get("advisories"))))
     st, d = call("/api/advisory/1/send", ADVISOR, "POST", {"network": NET, "recipients": f"{NET}, Team B"}, **ADV)
     ok("the advisor marks it as sent", st == 200 and d["advisory"]["status"] == "sent", d.get("error", ""))
-    ok("…and the finding closes, logged", F.get("1")["status"] == "closed" and F.get("1")["history"][-1].get("kind") == "advisory_sent"
-       and ref in F.get("1")["history"][-1]["comment"])
+    # the finding closes only once every organisation has its advisory sent (external review, 2026-11-12)
+    ok("…logged; the finding closes only if it was its only organisation" if len(nets) == 1 else
+       "…logged; the finding stays open while its other organisations wait",
+       F.get("1")["history"][-1].get("kind") == "advisory_sent" and ref in F.get("1")["history"][-1]["comment"]
+       and (F.get("1")["status"] == "closed") == (len(nets) == 1), f"{len(nets)} organisations, finding {F.get('1')['status']}")
     # a sent advisory is the record of what the organisation received: locked (external review, 2026-11-11)
     sent_adv = d["advisory"]
     ok("the send records exactly which file went out", (sent_adv.get("sends") or [{}])[-1].get("report") == f"{fb}.zip" and sent_adv.get("locked") is True,
@@ -313,11 +316,27 @@ try:
     ok("…without any address", st == 200 and not IP_RX.search(ex.decode()))
     ok("…with its TLP level and what it means", (exj.get("tlp") or {}).get("level") == "TLP:RED" and exj["tlp"].get("meaning"))
     st, db = call("/api/advisory/dashboard", ADVISOR, **ADV)
-    ok("the advisor's portal counts it: sent, to whom, reports generated, the finding closed", st == 200 and db["kpis"]["sent"] == 1
-       and db["kpis"]["recipients"] == 2 and db["kpis"]["reports"] == 1 and db["kpis"]["drafted"] == 0 and db["kpis"]["closed_findings"] == 1
+    ok("the advisor's portal counts it: sent, to whom, reports generated, closed only when all are sent", st == 200 and db["kpis"]["sent"] == 1
+       and db["kpis"]["recipients"] == 2 and db["kpis"]["reports"] == 1 and db["kpis"]["drafted"] == 0
+       and db["kpis"]["closed_findings"] == (1 if len(nets) == 1 else 0)
        and db["advisories"][0]["network"] == NET and db["impacts"], json.dumps(db.get("kpis")))
     st, db2 = call("/api/advisory/dashboard", ADVISOR, role="advisor", user="lg-other-advisor")
     ok("…another advisor's portal does not", st == 200 and db2["kpis"]["sent"] == 0 and not db2["advisories"])
+    if len(nets) > 1:
+        # the other organisations: all but the last recorded as sent straight in the store (a report for each of them
+        # would take long), the last one through the advisor's steps: the finding closes with it, not before
+        rest = [n["network"] for n in nets[1:]]
+        model = {k: v for k, v in A.ADVISORIES.of("1", NET).items() if k not in ("ref", "rev")}
+        for other in rest[:-1]:
+            A.ADVISORIES.save(dict(model, network=other, recipients=[other]), create=True)
+        last = rest[-1]
+        call("/api/advisory/1/net", ADVISOR, "POST", dict(body, network=last, recipients=last), **ADV)
+        call("/api/advisory/1/generate", ADVISOR, "POST", {"network": last}, **ADV)
+        call("/api/advisory/1/drafted", ADVISOR, "POST", {"network": last}, **ADV)
+        before = F.get("1")["status"]
+        st, d = call("/api/advisory/1/send", ADVISOR, "POST", {"network": last, "recipients": last}, **ADV)
+        ok(f"the finding closes with the last of its {len(nets)} organisations, not before", before != "closed" and st == 200
+           and F.get("1")["status"] == "closed", f"before {before}, send {st} {d.get('error', '')}, after {F.get('1')['status']}")
     print("The organisation in Settings")
     png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
     ADM = dict(role="admin", user="lg-check-admin")

@@ -58,8 +58,11 @@ this, a proxy that forgot the header would make every visitor look like 127.0.0.
    scan?" shows the key, to type in without spaces.
 3. **Recovery codes:** 8 one-time codes are shown once (with a Copy button). Store them offline.
 
-New accounts are **pending** until an administrator approves them and chooses their role. Registration accepts at
-most 5 new accounts per address per hour and 100 pending accounts in total, and can be switched off with
+New accounts are **pending** until an administrator approves them and chooses their role; only a pending account can
+be approved, so approving never changes an active account's role (Role does that, and keeps the last administrator).
+Registration accepts at most 5 new accounts per address per hour and 100 pending accounts in total; the e-mail domain
+of a sign-up is looked up in DNS at most 30 times per address per hour, failed attempts included. Registration can be
+switched off with
 `REGISTRATION=0` (accounts are then created by administrators only, or with `manage/manage_users.py`).
 
 ### Password rules

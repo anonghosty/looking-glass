@@ -429,8 +429,8 @@ learn it exists.
    closes, on the record).
 3. For an advisory: the analyst sends the combination for one or more networks; management decides each organisation
    on its own and approves it to an advisor.
-4. The advisor writes the organisation's advisory and marks it **sent** on the Findings page. The finding closes. A
-   case closes once every one of its sub-findings is closed. Every step is in the finding's history and the audit
+4. The advisor writes the organisation's advisory and marks it **sent** on the Findings page. The finding closes once
+   every organisation in it has its advisory sent. A case closes once every one of its sub-findings is closed. Every step is in the finding's history and the audit
    log.
 
 **The page is a ticket tree.** A case shows its sub-findings beneath it, one per organisation. Closed sub-findings fold
@@ -555,6 +555,9 @@ in the archive.
 **Mark as sent** on the Findings page once it has gone out. The organisation's sub-finding closes, then its case when
 every sub-finding is closed. Each step is in the history and the audit log, and the dashboard updates.
 
+If two people (or two tabs) change the same advisory at once, the second change is refused with "changed meanwhile":
+open the advisory again to see the latest, then make the change. Nothing is overwritten, and a sent advisory stays sent.
+
 ### TLP: how far an advisory may travel
 
 The Traffic Light Protocol 2.0 (FIRST) is chosen on the advisory page and explained there and on the Definitions page.
@@ -616,7 +619,8 @@ changed, and failed look-ups are tried again next time. The names then appear ev
 ![Admin: users](media/screens/50-admin-users.png)
 
 **Admin** in the top bar (administrators):
-- **Users:** approve new accounts with a role, change roles, revoke or restore, reset an authenticator, allow a
+- **Users:** approve new accounts with a role (only accounts waiting for approval; an active account's role changes
+  with Role, which never removes the last administrator), change roles, revoke or restore, reset an authenticator, allow a
   password reset, end someone's sessions, delete. Each account shows its profile and when it last signed in.
   You cannot remove the last administrator or your own account.
 - **Roles & permissions:** the permissions of each role, and custom roles.

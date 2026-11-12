@@ -12,6 +12,10 @@
   const fid = document.body.dataset.fid, main = $("avMain");
   const LEVEL = { critical: "Critical", high: "High", medium: "Medium", low: "Low" };
   let IDX = null, NET = null, D = null;
+  // switching organisations quickly (external review, 2026-11-12): an organisation's data that arrives after another
+  // was picked is dropped (SEQ), every button works on the organisation its form was drawn for, and the organisation
+  // cannot be switched while a save, generation or marking is under way (BUSY)
+  let SEQ = 0, BUSY = false;
 
   const card = (title, sub, cls) => {
     const s = el("section", `av-card ${cls || ""}`);
@@ -80,7 +84,10 @@
       sel.append(new Option(`${n.network || "All networks"} · ${fmt(n.devices)} IP address${n.devices === 1 ? "" : "es"}, ${fmt(n.records)} records${st}`, n.network));
     }
     sel.value = NET ?? "";
-    sel.addEventListener("change", () => { if (sel.value || IDX.networks.some((n) => n.network === "")) openNet(sel.value); });
+    sel.addEventListener("change", () => {
+      if (BUSY) { sel.value = NET ?? ""; return; }
+      if (sel.value || IDX.networks.some((n) => n.network === "")) openNet(sel.value);
+    });
     const done = IDX.networks.filter((n) => n.status === "sent").length;
     row.append(sel, el("span", "muted", `${done} of ${IDX.networks.length} sent`));
     c.append(row);
@@ -207,11 +214,21 @@
     w.querySelectorAll(".av-tool").forEach((b) => { b.disabled = !edit; });
     const bar = el("div", "av-acts"), msg = el("span", "muted av-msg"); msg.setAttribute("role", "status");
     const say = (t, bad) => { msg.textContent = t; msg.style.color = bad ? "#ff8f8f" : ""; };
-    const body = () => ({ network: NET, tlp: tlpVal, heading: head.value, subject: subj.value, description: desc.value, actions: act.value, recipients: rec.value });
-    const save = async () => { const d = await post(`/api/advisory/${fid}/net`, body()); D.advisory = d.advisory; D.saved = true; return d; };
+    // this form's organisation and data: fixed when it is drawn, whatever is picked afterwards
+    const net = NET, seq = SEQ, here = D;
+    const body = () => ({ network: net, tlp: tlpVal, heading: head.value, subject: subj.value, description: desc.value, actions: act.value, recipients: rec.value });
+    const save = async () => { const d = await post(`/api/advisory/${fid}/net`, body()); here.advisory = d.advisory; here.saved = true; return d; };
+    // one action at a time; the page is drawn again only if this organisation is still the one shown
+    const run = async (button, work) => {
+      if (BUSY) return;
+      BUSY = true; button.disabled = true;
+      try { const done = await work(); if (seq === SEQ) { await reloadIndex(); draw(); if (done) sayLater(done); } }
+      catch (e) { if (seq === SEQ) { say(e.message, true); button.disabled = false; } }
+      finally { BUSY = false; }
+    };
     if (edit) {
       const sv = el("button", "lg-btn primary", "Save the advisory"); sv.type = "button";
-      sv.addEventListener("click", async () => { sv.disabled = true; say("Saving…"); try { await save(); await reloadIndex(); draw(); sayLater(`Saved as ${D.advisory.ref}.`); } catch (e) { say(e.message, true); sv.disabled = false; } });
+      sv.addEventListener("click", () => { say("Saving…"); run(sv, async () => { await save(); return `Saved as ${here.advisory.ref}.`; }); });
       bar.append(sv);
     }
     const prev = el("a", "pill-btn", "Preview the PDF"); prev.href = `/advisory/${fid}/preview?${q(NET)}`; prev.target = "_blank"; prev.rel = "noopener";
@@ -220,12 +237,13 @@
     if (edit) {
       const gen = el("button", "lg-btn", "Generate the report"); gen.type = "button";
       gen.title = `Saves, then makes ${D.file_base}${D.has_report ? ".zip: the PDF and the devices CSV, what goes to the organisation" : ".pdf"} and keeps it with this advisory`;
-      gen.addEventListener("click", async () => {
-        gen.disabled = true; say("Saving and generating the report…");
-        window.LGLoader?.busy(`Generating the report for ${NET || "all networks"}`);
-        try { await save(); const d = await post(`/api/advisory/${fid}/generate`, { network: NET }); D.advisory = d.advisory; await reloadIndex(); draw(); sayLater(`Generated ${d.file.name}.`); }
-        catch (e) { say(e.message, true); gen.disabled = false; }
-        finally { window.LGLoader?.ready(); }
+      gen.addEventListener("click", () => {
+        say("Saving and generating the report…");
+        run(gen, async () => {
+          window.LGLoader?.busy(`Generating the report for ${net || "all networks"}`);
+          try { await save(); const d = await post(`/api/advisory/${fid}/generate`, { network: net }); here.advisory = d.advisory; return `Generated ${d.file.name}.`; }
+          finally { window.LGLoader?.ready(); }
+        });
       });
       bar.append(gen);
     }
@@ -263,11 +281,10 @@
       const dr = el("button", "lg-btn av-send", "Mark as drafted"); dr.type = "button";
       dr.disabled = !a.generated.length;
       dr.title = a.generated.length ? "The advisory is finished: its text and its report. It is then marked as sent on the Findings page." : "Generate the report first: it is what goes out";
-      dr.addEventListener("click", async () => {
-        dr.disabled = true;
-        try { await save(); const d = await post(`/api/advisory/${fid}/drafted`, { network: NET }); D.advisory = d.advisory; await reloadIndex(); draw(); sayLater("Marked as drafted: mark it as sent on the Findings page once it has gone out."); }
-        catch (e) { say(e.message, true); dr.disabled = false; }
-      });
+      dr.addEventListener("click", () => run(dr, async () => {
+        await save(); const d = await post(`/api/advisory/${fid}/drafted`, { network: net }); here.advisory = d.advisory;
+        return "Marked as drafted: mark it as sent on the Findings page once it has gone out.";
+      }));
       sb.append(dr);
     }
     const next = IDX.networks.find((n) => n.network !== NET && n.status !== "sent");
@@ -292,15 +309,19 @@
     IDX = d;
   }
   async function openNet(n) {
-    NET = n;
+    if (BUSY) return;                            // a save or generation is under way: it finishes first
+    const my = ++SEQ;
+    NET = n; D = null;
     try { history.replaceState(null, "", `#${encodeURIComponent(n)}`); } catch { /* */ }
-    main.querySelectorAll(".av-card:not(:nth-of-type(1))").forEach(() => {});
     // the organisation's data takes a moment (its records, read again): the searching logo meanwhile
     if (IDX && main.children.length > 2) [...main.children].slice(2).forEach((x) => x.remove());     // keep the head and the picker
     const wait = el("div", "st-loading", `Opening ${n || "all networks"}: its IP addresses, reports and impact…`); main.append(wait);
-    const r = await fetch(`/api/advisory/${encodeURIComponent(fid)}/net?${q(n)}`, { cache: "no-store" });
-    wait.remove();
-    const d = await r.json().catch(() => ({}));
+    let r, d;
+    try {
+      r = await fetch(`/api/advisory/${encodeURIComponent(fid)}/net?${q(n)}`, { cache: "no-store" });
+      d = await r.json().catch(() => ({}));
+    } finally { wait.remove(); }
+    if (my !== SEQ) return;                      // another organisation was picked meanwhile: this one is not shown
     if (!r.ok) { D = null; draw(); main.append(el("p", "fd-empty", d.error || `Could not open it (HTTP ${r.status})`)); return; }
     D = d; draw(); if (pending) { sayLater(pending); pending = ""; }
     main.querySelectorAll(".av-card")[1]?.scrollIntoView({ behavior: "smooth", block: "start" });

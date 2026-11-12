@@ -76,6 +76,14 @@ def _list(v):
     return [x.strip() for x in str(v or "").split(",") if x.strip()]
 
 
+class Changed(Exception):
+    """The advisory was changed by someone else (another tab or advisor) after it was read: nothing was written."""
+
+
+CHANGED = ("This advisory was changed meanwhile (in another tab or by another advisor), so nothing was saved. "
+           "Open it again to see the latest, then make your change.")
+
+
 class Store:
     """The advisories, one JSON file each; the reports generated for them under files/<reference>/."""
 
@@ -114,13 +122,28 @@ class Store:
         return f"ADV-{year}-{(max(nums) + 1 if nums else 1):03d}"
 
     def save(self, adv, create=False):
+        """Write the advisory, only if nobody changed it since it was read (external review, 2026-11-12): every change
+        is read, checked and written back, and a save that started before a send used to write its old copy over the
+        sent one (status back to draft, the send gone). Each write raises "rev"; a write whose rev is no longer the
+        stored one raises Changed and nothing is written."""
         with self.lock:
             os.makedirs(self.dir, mode=0o700, exist_ok=True)
             if create:
                 existing = next((a for a in self._all() if a.get("finding") == adv["finding"] and a.get("network", ALL) == adv["network"]), None)
                 if existing:
-                    return existing
+                    raise Changed()
                 adv["ref"] = self.new_ref()
+                adv["rev"] = 1
+            else:
+                path = os.path.join(self.dir, f"{adv['ref']}.json")
+                try:
+                    with open(path, encoding="utf-8") as fh:
+                        stored = json.load(fh)
+                except (OSError, ValueError):
+                    raise Changed()
+                if int(stored.get("rev") or 0) != int(adv.get("rev") or 0):
+                    raise Changed()
+                adv["rev"] = int(adv.get("rev") or 0) + 1
             path = os.path.join(self.dir, f"{adv['ref']}.json")
             tmp = path + ".tmp"
             fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -135,11 +158,24 @@ class Store:
         return os.path.join(self.dir, "files", ref, f"{n}.zip")
 
     def keep_file(self, ref, n, data):
-        p = self.file_path(ref, n)
-        os.makedirs(os.path.dirname(p), mode=0o700, exist_ok=True)
-        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        """Keep a generated report as file n, or the next free number: a kept file is never written over (two
+        generations at once each get their own). Returns the number used."""
+        os.makedirs(os.path.dirname(self.file_path(ref, n)), mode=0o700, exist_ok=True)
+        while True:
+            try:
+                fd = os.open(self.file_path(ref, n), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                break
+            except FileExistsError:
+                n += 1
         with os.fdopen(fd, "wb") as fh:
             fh.write(data)
+        return n
+
+    def drop_file(self, ref, n):
+        try:
+            os.remove(self.file_path(ref, n))
+        except (OSError, ValueError):
+            pass
 
 
 class Impact:
@@ -501,6 +537,14 @@ def install(app, ctx):
             return None, (jsonify(error="Management has not approved this finding for an advisory."), 409)
         return x, None
 
+    def all_sent(x):
+        """True once every organisation of the finding has its advisory sent (external review, 2026-11-12: it used to
+        close when the advisories that existed were sent, so the first one sent closed it while organisations nobody
+        had started yet still waited). Without a kept search: the one advisory for all networks."""
+        done = {a.get("network", ALL) for a in store.of_finding(x["id"]) if a["status"] == "sent"}
+        nets = networks_of(x)
+        return all(p["network"] in done for p in nets) if nets else ALL in done
+
     def network_arg(x, raw):
         """The organisation asked for, if it is one of the finding's (or ALL without a kept search); else None."""
         nets = networks_of(x)
@@ -673,7 +717,10 @@ def install(app, ctx):
                 adv["history"].append({"at": _now(), "user": user, "what": "edited after it was drafted: back to draft"})
             else:
                 adv["history"].append({"at": _now(), "user": user, "what": "edited"})
-        adv = store.save(adv, create=create)
+        try:
+            adv = store.save(adv, create=create)
+        except Changed:
+            return jsonify(error=CHANGED), 409
         ctx["audit"].add("advisory_saved", user=user, target=adv["ref"], detail=f"finding #{x['id']} · {network or 'all networks'}")
         return jsonify(ok=True, advisory=view(adv, x, with_devices=True), saved=True)
 
@@ -767,22 +814,22 @@ def install(app, ctx):
         # one report per advisory: generating again replaces the previous one (every generation stays in the history,
         # and in the audit log); the number goes on, so a download link of an older one never gets the new file
         old = adv.get("reports") or []
-        n = max([r["n"] for r in old] + [0]) + 1
-        store.keep_file(adv["ref"], n, data)
-        sent_files = {s.get("report", {}).get("n") for s in adv.get("sends") or []}
-        for r in old:
-            if r["n"] in sent_files:                      # (never: a sent advisory is locked above) a sent file is kept
-                continue
-            try:
-                os.remove(store.file_path(adv["ref"], r["n"]))
-            except (OSError, ValueError):
-                pass
+        n = store.keep_file(adv["ref"], max([r["n"] for r in old] + [0]) + 1, data)
         user = me()[0]
         adv["reports"] = [{"n": n, "name": name, "at": _now(), "by": user, "size": len(data), "pdf": not zbytes}]
         adv["generated"] = int(adv.get("generated") or len(old)) + 1
         adv["history"].append({"at": _now(), "user": user,
                                "what": f"report generated: {name}" + (" (replaces the previous one)" if old else "")})
-        store.save(adv)
+        try:
+            store.save(adv)
+        except Changed:                                   # changed meanwhile (sent, perhaps): its files stay as they are
+            store.drop_file(adv["ref"], n)
+            return jsonify(error=CHANGED), 409
+        # only once the new one is recorded: the previous file goes (a sent file never: a sent advisory is locked above)
+        sent_files = {s.get("report", {}).get("n") for s in adv.get("sends") or []}
+        for r in old:
+            if r["n"] not in sent_files:
+                store.drop_file(adv["ref"], r["n"])
         ctx["audit"].add("advisory_report", user=user, target=adv["ref"], detail=f"{network or 'all networks'} · {name}")
         return jsonify(ok=True, advisory=view(adv, x, with_devices=True), file={"n": n, "name": name})
 
@@ -838,12 +885,12 @@ def install(app, ctx):
                                             "report": {"n": sent_file["n"], "name": sent_file["name"], "size": sent_file.get("size")}})
         adv["status"], adv["updated"] = "sent", _now()
         adv["history"].append({"at": _now(), "user": user, "what": "sent to " + ", ".join(rec) + f" (report {sent_file['name']})"})
-        store.save(adv)
-        # the finding closes once none of its advisories waits any more (a sub-finding has one: its organisation's);
-        # its case follows (findings.py), and every step is in their histories
-        pending = [a for a in store.of_finding(x["id"]) if a["status"] != "sent"]
+        try:
+            store.save(adv)
+        except Changed:
+            return jsonify(error=CHANGED), 409
         F.advisory_sent(x["id"], f"Advisory {adv['ref']} ({network or 'all networks'}, {adv.get('tlp') or tlp.DEFAULT}) sent to {', '.join(rec)}.",
-                        not pending, user, role)
+                        all_sent(x), user, role)
         ctx["audit"].add("advisory_sent", user=user, target=adv["ref"], detail=f"finding #{x['id']} · {network} · to {len(rec)} recipient(s)")
         return jsonify(ok=True, advisory=view(adv, F.get(x["id"]), with_devices=True))
 
@@ -887,7 +934,10 @@ def install(app, ctx):
         user = me()[0]
         adv["status"], adv["updated"] = "drafted", _now()
         adv["history"].append({"at": _now(), "user": user, "what": f"marked as drafted (report {adv['reports'][-1]['name']})"})
-        store.save(adv)
+        try:
+            store.save(adv)
+        except Changed:
+            return jsonify(error=CHANGED), 409
         ctx["audit"].add("advisory_drafted", user=user, target=adv["ref"], detail=f"finding #{x['id']} · {network or 'all networks'}")
         return jsonify(ok=True, advisory=view(adv, x, with_devices=True))
 

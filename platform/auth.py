@@ -53,6 +53,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import throttle_prune
 
 PUBLIC_PATHS = ("/login", "/register", "/forgot", "/logout", "/healthz", "/static/", "/favicon.ico")
+# sign-up attempts whose e-mail domain is looked up in DNS, per address and hour (room for typing mistakes)
+REGISTER_DNS_PER_HOUR = 30
 NAME_RE = re.compile(r"^[a-zA-Z0-9._-]{2,40}$")
 ROLE_RE = re.compile(r"^[a-z][a-z0-9_-]{1,30}$")
 TEST_PREFIX = "lg-selftest-"      # reserved for security_testing/security_retest.py; cannot be registered
@@ -1070,8 +1072,16 @@ def install(app, base_dir, logger):
                 return fail(403, "That setup code is not right. Read it on the server: cat data/setup_code "
                                  "in the platform folder (the installer showed the command).")
         # the local self-tests (reserved test prefix + automation key) use example addresses: format checked, DNS not
+        check_domain = not (is_test and test_key_ok)
+        # every e-mail domain looked up counts (external review, 2026-11-12): only sign-ups that reached the
+        # authenticator step were counted, so anyone could make this server look up made-up domains without end
+        if check_domain:
+            if throttle.count(("register-dns", ip), 3600) >= REGISTER_DNS_PER_HOUR:
+                return fail(429, "Too many sign-up attempts from this address. Try again in an hour.")
+            if throttle.count(("register-dns", ip), 3600, add=True) == REGISTER_DNS_PER_HOUR:
+                audit.add("register_limited", detail="e-mail domain look-ups")     # once, when the limit is reached
         problem = profile_problem(f["full_name"], f["organisation"], f["email"], f["country"], country_codes,
-                                  check_domain=not (is_test and test_key_ok))
+                                  check_domain=check_domain)
         if problem:
             return fail(400, problem)
         if users.get(name):
@@ -1240,6 +1250,10 @@ def install(app, base_dir, logger):
             if action in ("revoke", "delete", "reset_mfa") and name == me_:
                 return jsonify(error="You cannot do that to your own account."), 400
             if action == "approve":
+                # only an account waiting for approval (external review, 2026-11-12: approve on an active account changed
+                # its role past the last-admin check, so the only admin could be turned into an external)
+                if u.get("status") != "pending":
+                    return jsonify(error="Only an account waiting for approval is approved: change an active account's role with Role."), 400
                 role = body.get("role") or u.get("role", LOWEST_ROLE)
                 if role not in roles.roles:
                     return jsonify(error="Unknown role"), 400
