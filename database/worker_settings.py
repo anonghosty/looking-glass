@@ -12,8 +12,20 @@ its own .env or quarantine, and writes the result to data/pipeline_requests/done
 platform shows "waiting for the next run" until then, and records each result in the audit log.
 
 Passwords (mailbox, database), the mailbox address and the server are never in FIELDS: they cannot be requested.
+
+Requests may only make the pipeline STRICTER on their own (external review, 2026-11-12). The administrator's password
+is checked by the web app, but the pipeline cannot tell whether a person approved a file in the platform's data/: a
+bug in the web app or a compromise of its account could write one. So a request that WEAKENS the pipeline (weakens())
+waits until someone confirms it on the server, on the pipeline's own account:  ./confirm_request.sh <request id>
+That writes <pipeline DATA_DIR>/confirmed_requests/<id>.json holding the SHA-256 of the request exactly as confirmed,
+in the pipeline's folder, which the hardened web service cannot write. A request changed after its confirmation no
+longer matches and is not applied. Unconfirmed requests are refused after CONFIRM_DAYS days. Weakening means: the
+sender check lowered (Block -> Record only -> Off), a different expected signer, the mail server's certificate check
+turned off, a new Shadowserver API key, and releasing a held-back report. Tightening, folders, performance and unzip
+limits are applied at the next run as before.
 """
 import datetime as dt
+import hashlib
 import json
 import os
 import re
@@ -104,6 +116,51 @@ def validate(values, provider):
     return clean, errors
 
 
+MAIL_AUTH_RANK = {"off": 0, "log": 1, "enforce": 2}
+CONFIRM_DAYS = 7
+CONFIRM_DIR = "confirmed_requests"
+
+
+def weakens(req, env):
+    """Why this request would make the pipeline less strict (empty: it may be applied without confirmation).
+    env: the pipeline's current .env values (a value already in force is no change)."""
+    kind = req.get("kind")
+    if kind == "apikey":
+        return ["a new Shadowserver API key (the pipeline would fetch whatever that account receives)"]
+    if kind == "release":
+        return ["releasing a report the sender check held back"]
+    if kind != "settings":
+        return []
+    out, vals = [], req.get("values") or {}
+    cur = lambda k: str(env.get(k, SPEC[k][4]) if k in SPEC else env.get(k, "")).strip().lower()
+    if "MAIL_AUTH" in vals:
+        new = str(vals["MAIL_AUTH"]).strip().lower()
+        if MAIL_AUTH_RANK.get(new, -1) < MAIL_AUTH_RANK.get(cur("MAIL_AUTH"), 1):
+            out.append(f"the sender check lowered: {cur('MAIL_AUTH')} → {new}")
+    if "MAIL_AUTH_DOMAIN" in vals and str(vals["MAIL_AUTH_DOMAIN"]).strip().lower() != cur("MAIL_AUTH_DOMAIN"):
+        out.append(f"a different expected signer: {cur('MAIL_AUTH_DOMAIN')} → {str(vals['MAIL_AUTH_DOMAIN']).strip().lower()}")
+    if "IMAP_VERIFY_TLS" in vals and str(vals["IMAP_VERIFY_TLS"]).strip().lower() == "false" and cur("IMAP_VERIFY_TLS") != "false":
+        out.append("the mail server's certificate check turned off")
+    return out
+
+
+def request_sha(path) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def confirmation(base_dir, rid):
+    """The confirmation written on the server for this request, or None."""
+    try:
+        c = json.loads((Path(base_dir) / CONFIRM_DIR / f"{rid}.json").read_text(encoding="utf-8"))
+        return c if isinstance(c, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def confirm_command(rid):
+    return f"./confirm_request.sh {rid}"
+
+
 def valid_api(key, secret):
     return bool(re.fullmatch(r"[A-Za-z0-9._-]{8,200}", str(key or "")) and re.fullmatch(r"[\x21-\x7e]{8,200}", str(secret or "")))
 
@@ -182,7 +239,9 @@ def public(req: dict) -> dict:
     return out
 
 
-def pending(platform_data_dir):
+def pending(platform_data_dir, env=None, base_dir=None):
+    """The requests not yet handled. With env (the pipeline's .env): each says whether it waits for confirmation on
+    the server (weakens, confirm: the command), and with base_dir whether that confirmation was given."""
     d = req_dir(platform_data_dir)
     out = []
     for p in sorted(d.glob("*.json")) if d.exists() else []:
@@ -191,7 +250,13 @@ def pending(platform_data_dir):
         except (OSError, ValueError):
             continue
         if isinstance(req, dict):
-            out.append(public(req))
+            row = public(req)
+            if env is not None:
+                w = weakens(req, env)
+                if w:
+                    row["weakens"], row["confirm"] = w, confirm_command(str(req.get("id") or ""))
+                    row["confirmed"] = bool(base_dir and confirmation(base_dir, str(req.get("id") or "")))
+            out.append(row)
     return out
 
 
@@ -232,17 +297,42 @@ def apply_requests(platform_data_dir, env_file, base_dir, log):
     applied = 0
     for p in files:
         try:
-            req = json.loads(p.read_text(encoding="utf-8"))
+            raw = p.read_bytes()
+            req = json.loads(raw.decode("utf-8"))
         except (OSError, ValueError):
-            req = {}
+            raw, req = b"", {}
         req = req if isinstance(req, dict) else {}
         rid = str(req.get("id") or "")
-        status, why, changed = "refused", "", []
+        status, why, changed, confirmed_by = "refused", "", [], ""
         try:
             if not REQ_ID_RX.match(rid) or p.name != f"{rid}.json":
                 raise ValueError("not a request made by the platform")
             env = read_env(env_file)
             kind = req.get("kind")
+            # malformed requests are refused at once, before any wait for confirmation
+            if kind == "settings":
+                _, errors = validate(req.get("values") or {}, (env.get("MAIL_PROVIDER") or "imap").lower())
+                if errors:
+                    raise ValueError("; ".join(errors))
+            elif kind == "apikey" and not valid_api(req.get("key"), req.get("secret")):
+                raise ValueError("not an API key and secret")
+            elif kind == "release" and not QID_RX.match(str(req.get("qid") or "")):
+                raise ValueError("no such held-back report")
+            elif kind not in ("settings", "apikey", "release"):
+                raise ValueError(f"unknown request {kind!r}")
+            weak = weakens(req, env)
+            if weak:                         # loosening the pipeline needs a person on the server, not only a file here
+                c = confirmation(base_dir, rid)
+                if not c:
+                    made = dt.datetime.strptime(rid[:16], "%Y%m%dT%H%M%SZ").replace(tzinfo=dt.timezone.utc)
+                    if dt.datetime.now(dt.timezone.utc) - made > dt.timedelta(days=CONFIRM_DAYS):
+                        raise ValueError(f"not confirmed on the server within {CONFIRM_DAYS} days ({'; '.join(weak)})")
+                    log.warning("Settings → Workers request %s (%s, by %s) waits for confirmation on the server: %s. "
+                                "On the pipeline's account: %s", rid, kind, req.get("by", "?"), "; ".join(weak), confirm_command(rid))
+                    continue                 # stays in the folder; the platform shows it as waiting for confirmation
+                if c.get("sha256") != hashlib.sha256(raw).hexdigest():
+                    raise ValueError("changed after it was confirmed on the server: not applied")
+                confirmed_by = f"{c.get('by') or '?'} at {c.get('at') or '?'}"
             if kind == "settings":
                 provider = (env.get("MAIL_PROVIDER") or "imap").lower()
                 clean, errors = validate(req.get("values") or {}, provider)
@@ -276,6 +366,13 @@ def apply_requests(platform_data_dir, env_file, base_dir, log):
             why = str(exc)[:300]
         result = dict(public(req), id=rid or p.stem, status=status, reason=why, changed=changed,
                       applied_at=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"))
+        if confirmed_by:
+            result["confirmed_on_server"] = confirmed_by
+        if REQ_ID_RX.match(rid):
+            try:
+                (Path(base_dir) / CONFIRM_DIR / f"{rid}.json").unlink()     # used once
+            except OSError:
+                pass
         out = done / f"{(rid or p.stem)[:40]}.json"
         tmp = done / f".{out.name}.tmp"
         tmp.write_text(json.dumps(result), encoding="utf-8")
@@ -286,6 +383,85 @@ def apply_requests(platform_data_dir, env_file, base_dir, log):
         except OSError:
             pass
         (log.warning if status != "applied" else log.info)(
-            "Settings → Workers request %s (%s, by %s): %s%s", rid or p.name, req.get("kind", "?"), req.get("by", "?"),
+            "Settings → Workers request %s (%s, by %s%s): %s%s", rid or p.name, req.get("kind", "?"), req.get("by", "?"),
+            f", confirmed on the server by {confirmed_by}" if confirmed_by else "",
             status, f": {why}" if why else (f": {'; '.join(changed)}" if changed else ": nothing changed"))
     return applied
+
+
+# ------------------------------------------------------------------ confirming on the server (confirm_request.sh)
+def _describe(req):
+    if req.get("kind") == "settings":
+        return "; ".join(f"{k} = {v}" for k, v in (req.get("values") or {}).items())
+    if req.get("kind") == "release":
+        return f"release held-back report {req.get('qid')}"
+    return public(req).get("values") or req.get("kind")
+
+
+def cli(argv=None):
+    """./confirm_request.sh            list the requests waiting for confirmation
+       ./confirm_request.sh <id>       show one and confirm it (asks y/N; --yes to skip the question)"""
+    import argparse
+    import getpass
+    here = Path(__file__).resolve().parent
+    ap = argparse.ArgumentParser(description="Confirm, on the server, a Looking Glass Settings → Workers request that "
+                                             "makes the pipeline less strict.")
+    ap.add_argument("id", nargs="?")
+    ap.add_argument("--yes", action="store_true", help="confirm without asking")
+    a = ap.parse_args(argv)
+    env_file = here / ".env"
+    env = read_env(env_file)
+    base = Path(env.get("DATA_DIR") or here).expanduser().resolve()
+    pdata = find_platform_data(here, env)
+    if not pdata:
+        print("The platform's data folder was not found (PLATFORM_DIR in .env).")
+        return 2
+    d = req_dir(pdata)
+    waiting = []
+    for p in sorted(d.glob("*.json")) if d.exists() else []:
+        try:
+            req = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(req, dict) and REQ_ID_RX.match(str(req.get("id") or "")) and p.name == f"{req['id']}.json":
+            w = weakens(req, env)
+            if w:
+                waiting.append((p, req, w))
+    if not a.id:
+        if not waiting:
+            print("Nothing waits for confirmation.")
+        for p, req, w in waiting:
+            done = " (confirmed, applied at the next run)" if confirmation(base, req["id"]) else ""
+            print(f"{req['id']}  by {req.get('by', '?')} at {req.get('at', '?')}{done}\n    {_describe(req)}\n    weakens: {'; '.join(w)}")
+        return 0
+    match = [x for x in waiting if x[1]["id"] == a.id]
+    if not REQ_ID_RX.match(a.id) or not match:
+        print(f"No request {a.id!r} waits for confirmation (./confirm_request.sh lists them).")
+        return 1
+    p, req, w = match[0]
+    print(f"Request {req['id']}\n  asked by   {req.get('by', '?')} at {req.get('at', '?')} (in Looking Glass)\n"
+          f"  change     {_describe(req)}\n  weakens    {'; '.join(w)}")
+    if not a.yes:
+        try:
+            if input("Confirm this change? Type yes: ").strip().lower() != "yes":
+                print("Not confirmed.")
+                return 1
+        except EOFError:
+            print("Not confirmed.")
+            return 1
+    cd = base / CONFIRM_DIR
+    cd.mkdir(mode=0o700, parents=True, exist_ok=True)
+    body = {"id": req["id"], "sha256": request_sha(p), "by": getpass.getuser(),
+            "at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "weakens": w}
+    fd, tmp = tempfile.mkstemp(dir=str(cd), prefix=".c.", suffix=".tmp")
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        json.dump(body, fh)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, cd / f"{req['id']}.json")
+    print("Confirmed. The pipeline applies it at its next run (or run it now); the result shows in Settings → Workers.")
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(cli())

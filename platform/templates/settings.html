@@ -114,6 +114,19 @@
     </section>
     {% endif %}
 
+    {# passwords that expire, and "every account changes its password now" (password_policy.py, password-policy.js) #}
+    {% if "settings" in lg_perms %}
+    <section class="st-card pp-card" id="cardPwPolicy">
+      <h2>Password policy <span class="st-for">every account</span></h2>
+      <p class="st-hint">Make passwords expire after a number of days. After the authenticator code, a person whose password has expired is
+        asked for a new one before the platform opens, and goes straight in afterwards. Switching the policy on makes every account choose a
+        new password at its next sign-in, then every N days. Changing this needs your password; every change is in the audit log.</p>
+      <div id="ppBody"><div class="st-loading">Opening the password policy…</div></div>
+      <p class="st-hint pp-note">For the record: NIST SP 800-63B advises against forced periodic password changes unless a password may have
+        been exposed; some audits and regulators still ask for them. The choice is yours.</p>
+    </section>
+    {% endif %}
+
     {# the networks (AS numbers) for reference: read-only here, edited on the Definitions page #}
     {% with readonly=True %}{% include "_net_card.html" %}{% endwith %}
 
@@ -169,6 +182,7 @@
   <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>
   <script src="{{ url_for('static', filename='js/net-editor.js') }}"></script>
   <script src="{{ url_for('static', filename='js/organisation.js') }}"></script>
-  {% if "settings" in lg_perms %}<script src="{{ url_for('static', filename='js/pipeline-settings.js') }}"></script>{% endif %}
+  {% if "settings" in lg_perms %}<script src="{{ url_for('static', filename='js/pipeline-settings.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/password-policy.js') }}"></script>{% endif %}
 </body>
 </html>

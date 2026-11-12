@@ -51,6 +51,7 @@ from flask import abort, g, jsonify, redirect, render_template, request
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import throttle_prune
+import password_policy
 
 PUBLIC_PATHS = ("/login", "/register", "/forgot", "/logout", "/healthz", "/static/", "/favicon.ico")
 # sign-up attempts whose e-mail domain is looked up in DNS, per address and hour (room for typing mistakes)
@@ -371,6 +372,7 @@ class Users:
             u = self.data.setdefault("users", {}).setdefault(name, {"role": role or LOWEST_ROLE, "created": int(_now()), "status": status or "active"})
             u["hash"] = generate_password_hash(password)
             u["changed"] = int(_now())
+            u["pw_set_at"] = int(_now())                # when this password was set (password_policy.py)
             if role:
                 u["role"] = role
             if status:
@@ -692,6 +694,7 @@ def install(app, base_dir, logger):
                         idle=int(os.environ.get("SESSION_IDLE_MINUTES", "60")) * 60,
                         maximum=int(os.environ.get("SESSION_MAX_HOURS", "12")) * 3600)
     throttle = Throttle()
+    pw_policy = password_policy.Policy(data_dir)        # password expiry (Settings → Password policy)
     insecure_remote = os.environ.get("ALLOW_INSECURE_REMOTE_LOGIN") == "1"
     mfa_required = os.environ.get("MFA_REQUIRED", "1") != "0"
     registration_open = os.environ.get("REGISTRATION", "1") != "0"
@@ -875,6 +878,16 @@ def install(app, base_dir, logger):
         resp.delete_cookie("lg_step", path="/")
         return resp
 
+    def finish_login(name, nxt, persist=False):
+        """After the password and the authenticator: open the session, unless the password has expired
+        (password_policy.py); then the sign-in asks for a new password first, and opens the session once it is set."""
+        expired, why = pw_policy.expired(users.get(name) or {})
+        if not expired:
+            return start_session(name, nxt, persist=persist)
+        tok = new_step({"kind": "expired", "user": name, "remember": persist})
+        audit.add("password_expired", user=name, detail=why)
+        return step_response(page("login.html", next=nxt, view="expired", reason=why), tok)
+
     def new_step(data):
         tok = secrets.token_urlsafe(32)
         with plock:
@@ -949,7 +962,9 @@ def install(app, base_dir, logger):
                     audit.add("recovery_code_used", user=name, detail=f"{len(uu['recovery'])} left")
                 users.save()
             throttle.ok(ip, name)
-            return start_session(name, nxt, persist=st.get("remember", False))
+            return finish_login(name, nxt, persist=st.get("remember", False))
+        if step == "expired":                                   # the password expired: a new one before the session
+            return expired_submit(nxt)
         if step == "enrol":                                     # after an admin reset the authenticator
             return enrol_submit(nxt)
         # ---- name and password
@@ -972,7 +987,7 @@ def install(app, base_dir, logger):
         if not u.get("totp"):
             if not mfa_required and status == "active":
                 throttle.ok(ip, name)
-                return start_session(name, nxt, persist=remember)
+                return finish_login(name, nxt, persist=remember)
             secret = totp_new_secret()
             tok = new_step({"kind": "enrol", "user": name, "secret": secret, "reset": True})
             return step_response(enrol_page(name, secret, nxt), tok)
@@ -981,6 +996,41 @@ def install(app, base_dir, logger):
             return page("login.html", 403, next=nxt, view="signin", error="Your account is waiting for an admin to approve it.")
         tok = new_step({"kind": "mfa", "user": name, "remember": remember})
         return step_response(page("login.html", next=nxt, view="mfa"), tok)
+
+    def expired_submit(nxt):
+        """The new password for an expired one: the usual rules, not the expired one again. Then the session opens
+        (no second sign-in) and the account's other sessions end."""
+        st, tok = get_step("expired")
+        if not st:
+            return page("login.html", 401, next=nxt, view="signin", error="The sign-in step expired. Enter your name and password again.")
+        ip, _ = client()
+        name = st["user"]
+        u = users.get(name)
+        if not u or throttle.locked(ip, name):
+            return page("login.html", 429, next=nxt, view="signin", error="Too many failed attempts. Try again in 15 minutes.")
+        pw, pw2 = request.form.get("password") or "", request.form.get("password2") or ""
+        prof = u.get("profile") or {}
+        problem = password_problem(name, pw, pw2, avoid=(prof.get("full_name", ""), (prof.get("email") or "").split("@")[0],
+                                                         prof.get("organisation", "")))
+        if not problem and u.get("hash") and check_password_hash(u["hash"], pw):
+            problem = "Choose a new password: not the one that expired."
+        if problem:
+            st["tries"] += 1
+            if st["tries"] >= 5:
+                drop_step(tok)
+                return page("login.html", 401, next=nxt, view="signin", error="Too many tries. Sign in again.")
+            return step_response(page("login.html", 400, next=nxt, view="expired", error=problem,
+                                      reason="Your password has expired."), tok)
+        drop_step(tok)
+        with users.lock:
+            users._load()
+            uu = users.data["users"][name]
+            uu["hash"] = generate_password_hash(pw)
+            uu["pw_set_at"] = int(_now())
+            users.save()
+        sessions.end_user(name)                                 # every other session of this account ends
+        audit.add("password_changed", user=name, detail="expired password replaced at sign-in")
+        return start_session(name, nxt, persist=st.get("remember", False))
 
     def enrol_submit(nxt):
         """Confirm the authenticator (registration, or after an admin reset): store it, show the recovery codes."""
@@ -1022,6 +1072,7 @@ def install(app, base_dir, logger):
                                and not name.lower().startswith(TEST_PREFIX))
                 users.data["users"][name] = {"hash": st["hash"], "role": "admin" if first_admin else LOWEST_ROLE,
                                              "status": "active" if first_admin else "pending", "created": int(_now()),
+                                             "pw_set_at": int(_now()),
                                              "profile": st.get("profile", {}),
                                              "changed": int(_now()), "totp": st["secret"], "totp_last": stp, "recovery": hashes,
                                              "registered": {"at": int(_now()), "ip": ip, "location": location(ip),
@@ -1159,6 +1210,7 @@ def install(app, base_dir, logger):
             users._load()
             uu = users.data["users"][name]
             uu["hash"] = generate_password_hash(pw)
+            uu["pw_set_at"] = int(_now())                       # a new password: its age starts now (password_policy.py)
             uu["changed"] = int(_now())                         # ends every session of the account
             uu["totp_last"] = step
             how = "administrator-approved" if uu.get("reset_allowed_until", 0) > _now() else "with a recovery code"
@@ -1373,4 +1425,4 @@ def install(app, base_dir, logger):
     threading.Thread(target=prune_loop, daemon=True, name="session-prune").start()
 
     return {"users": users, "sessions": sessions, "roles": roles, "audit": audit, "has_perm": has_perm, "csrf_ok": csrf_ok,
-            "is_admin": lambda: has_perm("settings"), "fresh": fresh, "throttle": throttle}
+            "is_admin": lambda: has_perm("settings"), "fresh": fresh, "throttle": throttle, "password_policy": pw_policy}

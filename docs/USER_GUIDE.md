@@ -614,6 +614,22 @@ is not identified yet, from PeeringDB and RIPEstat (free public sources; only AS
 progress: how many are looked up, identified, already known (skipped) or failed. Names you corrected by hand are never
 changed, and failed look-ups are tried again next time. The names then appear everywhere at once.
 
+### Password policy
+
+**Settings → Password policy** (administrators) makes passwords expire. Tick **Make passwords expire**, set how many
+days a password lasts, and **Save the policy** (it asks for your own password). Switching it on makes **every account
+choose a new password at its next sign-in**, then every time its password is older than that. **Require every account to
+change its password at next sign-in** does the same at any moment, for example after a suspected leak (also with your
+password). The card shows how many accounts must choose a new password; every change is in the audit log.
+
+What people see: they sign in as always (name and password, then the authenticator code). If their password has
+expired, a box says so and asks for a new one, before the platform opens. The new password follows the usual rules and
+cannot be the one that expired. Once it is saved they go straight in, without signing in again, and their other open
+sessions end.
+
+NIST SP 800-63B advises against forcing periodic password changes when there is no sign a password was exposed; some
+audits and regulators still require them. The card says so; the choice is the installation's.
+
 ### Workers (the database pipeline)
 
 The **Workers** tab of Settings holds the pipeline's own settings, so they need not be edited in its `.env`. It is
@@ -624,6 +640,21 @@ usual schedule). The tab shows what is **waiting for the pipeline's next run** a
 **refused**, and each result is in the audit log. A wrong password counts like a failed sign-in, and every unlock,
 change (old → new value), key and release is in the audit log. Mailbox and database **passwords are never shown or
 changed here**: they stay in the pipeline's `.env`, set by the installer.
+
+**Changes that make the pipeline less strict also need the server.** Turning the sender check down (Block → Record
+only → Off), changing the expected signer, turning the mail server's certificate check off, saving a new Shadowserver
+API key and releasing a held-back report are requested here as usual, but the pipeline does not apply them on the
+web app's word alone. The tab marks them **waits for confirmation on the server** and shows the command; someone with
+access to the server runs it on the pipeline's account, in the pipeline's folder:
+
+```bash
+./confirm_request.sh <id>
+```
+
+The next run then applies it, and the audit log records who requested it and who confirmed it on the server. Without a
+confirmation it is refused after 7 days. Why: if the web app were ever broken into, it could otherwise switch these
+checks off itself (for example the certificate check, and with it expose the mailbox password, which the web app never
+holds). Making the pipeline stricter, folders, performance and unzip limits need no confirmation.
 
 - **Getting the reports:** *By e-mail* (the mailbox the reports are sent to) or *Shadowserver report API* (straight
   from Shadowserver, with the API key below; save the key first). Every scheduled run uses your choice and fetches only
@@ -643,7 +674,8 @@ changed here**: they stay in the pipeline's `.env`, set by the installer.
   them; afterwards the page only says they are set and when they were last checked, never the values. **Check with
   Shadowserver now** checks the saved ones again. The key is what *Shadowserver report API* above uses.
 - **Reports held back by the sender check:** each with why it was held back. **Release** (after your password) lets a
-  report you know is genuine through: the pipeline loads it at its next run. Released reports stay on record.
+  report you know is genuine through once it is confirmed on the server (above): the pipeline loads it at its next run.
+  Released reports stay on record.
 
 The pipeline uses the settings from its next run. When the pipeline runs on another computer, the tab says so and its
 settings stay in its own `.env`.
@@ -677,7 +709,14 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
   check of Looking Glass's own controls, **mapped to the NIST SP 800-53 Rev. 5 (Release 5.2.0) controls** it supports,
   cited by their official titles (for example LG-01 → IA-2(1), IA-2(2) multi-factor authentication; LG-06 → AC-7
   unsuccessful logon attempts; LG-10 → AU-9, AU-9(3) protection of audit information; LG-11 → AU-11 retention). The LG
-  numbers are Looking Glass's own, not NIST control numbers. Each check gives its evidence and **no pass or fail**:
+  numbers are Looking Glass's own, not NIST control numbers. Through those NIST controls each check also lists the
+  **CIS Critical Security Controls v8.1 safeguards** that CIS's own official mapping ("CIS Controls v8.1 Mapping to
+  NIST SP 800-53 Rev 5", July 2026) relates to them, with the NIST control each comes through and CIS's relationship
+  (Equivalent; Subset: the safeguard covers part of the NIST control; Superset: it covers more), so one chain reads
+  **LG → NIST → CIS** (for example LG-09 → AU-3 → 8.5 *Collect Detailed Audit Logs*, Equivalent). Looking Glass does
+  not choose these safeguards; a NIST control CIS does not map (AU-9, AC-2(7)) is shown as such. The CIS Controls are
+  © Center for Internet Security, Inc., cited unchanged under CC BY-NC-ND 4.0 (not under Looking Glass's licence);
+  the portal and the report carry that notice. Each check gives its evidence and **no pass or fail**:
   whether a control is implemented and operating effectively is the auditor's conclusion. Click a check to open the
   records behind it. The evidence report states the scope and limits of the checks.
 - **One tab per kind of event:** Authentication, Accounts and access, Sessions, Configuration changes, Data access
@@ -704,7 +743,8 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
   each download the page shows the file's own SHA-256 to note with it. Every check and every export is itself in the
   audit log.
 - **Proof to take away:** Verify is Looking Glass checking itself. The **proof package (ZIP)** lets the auditor check
-  it without trusting Looking Glass: the log's files exactly as stored, `MANIFEST.json` with the SHA-256 of each, and
+  it without trusting Looking Glass: the log's files exactly as stored, `audit_log.csv` (every entry in those files as a
+  spreadsheet, numbered as in the chain, made from the same copy), `MANIFEST.json` with the SHA-256 of each, and
   `verify_audit_log.py`, a short verifier in plain Python (standard library only) that recomputes the whole chain on
   the auditor's own computer (`python verify_audit_log.py`). The auditor keeps the package's SHA-256 and its head. At
   the next audit, **Compare with an earlier audit** (or `python verify_audit_log.py --earlier HASH@ENTRY` on a new

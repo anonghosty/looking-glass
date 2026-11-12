@@ -28,6 +28,7 @@ from datetime import datetime, timedelta, timezone
 
 from flask import Response, g, jsonify, render_template, request
 
+import control_map
 import csvsafe
 
 TABS = [("auth", "Authentication"), ("accounts", "Accounts and access"), ("sessions", "Sessions"),
@@ -90,6 +91,13 @@ for _e, _l in (("pipeline_unlock", "Workers settings unlocked (password)"),
                ("pipeline_request_applied", "Workers change applied by the pipeline"),
                ("pipeline_request_refused", "Workers change refused by the pipeline")):
     LABEL[_e], TAB_OF[_e] = _l, "config"
+# the password policy (password_policy.py) and expired passwords at sign-in (2026-11-12)
+for _e, _l, _t in (("password_policy_changed", "Password policy changed", "config"),
+                   ("password_change_forced", "Every account must choose a new password", "config"),
+                   ("password_policy_refused", "Password policy: wrong password", "config"),
+                   ("password_expired", "Password expired at sign-in", "auth"),
+                   ("password_changed", "New password after expiry", "auth")):
+    LABEL[_e], TAB_OF[_e] = _l, _t
 # The NIST SP 800-53 Rev. 5 controls the checks support, with their official titles (Release 5.2.0, read from NIST's
 # OSCAL catalog, usnistgov/oscal-content, on 2026-11-11). The checks' own ids are LG-01…: they are Looking Glass checks,
 # mapped to NIST controls, not NIST control numbers themselves.
@@ -107,7 +115,7 @@ ALERT = re.compile(r"failed|locked|misuse|refused|revoke|delete|limited|wrong")
 PRIVILEGED = {"user_role", "roles_changed", "user_approve", "user_revoke", "user_restore", "user_delete", "user_reset_mfa",
               "user_allow_reset", "settings_changed", "peace_of_mind", "kicked", "user_kick",
               "pipeline_unlock", "pipeline_settings_saved", "pipeline_apikey_saved", "sender_release",
-              "pipeline_change_requested", "pipeline_request_applied"}
+              "pipeline_change_requested", "pipeline_request_applied", "password_policy_changed", "password_change_forced"}
 MAX_DAYS = 800
 
 
@@ -492,9 +500,14 @@ def install(app, ctx):
             ("Audit and accountability", "LG-15", "Data exports are logged per person", ["AU-2", "AU-12"],
              f"{k['exports']} export(s) in the period (reports, CSV files, advisories, audit evidence), each with who and what."),
         ]
-        # no pass or fail: the checks present the evidence, the auditor decides
-        return [{"area": a, "id": i, "control": t, "nist": [{"id": n, "title": NIST[n]} for n in ns], "evidence": e,
-                 "view": VIEW.get(i)} for a, i, t, ns, e in c]
+        # no pass or fail: the checks present the evidence, the auditor decides. LG → NIST → CIS: the CIS safeguards are
+        # CIS's own mapping of the check's NIST controls (control_map.py), each with the NIST control it came through
+        out = []
+        for a, i, t, ns, e in c:
+            cis, unmapped = control_map.cis_for(ns)
+            out.append({"area": a, "id": i, "control": t, "nist": [{"id": n, "title": NIST[n]} for n in ns], "evidence": e,
+                        "cis": cis, "cis_unmapped": unmapped, "view": VIEW.get(i)})
+        return out
 
     @app.route("/api/audit/overview")
     def api_audit_overview():
@@ -505,12 +518,27 @@ def install(app, ctx):
         v = integrity()
         started = setup_time(v.get("first") or 0)
         return jsonify(period={"from": fr, "to": to}, checks=checks(t0, t1, ov), started=_when(started), nist_release=NIST_RELEASE,
+                       cis_release=control_map.CIS_RELEASE, cis_source=control_map.CIS_SOURCE, cis_attribution=control_map.CIS_ATTRIBUTION,
                        running_days=max(0, int((time.time() - started) // 86400)) if started else None,
                        integrity=dict(v, first=_when(v["first"]), last=_when(v["last"])), access_mode=ctx["access_mode"](), **ov)
 
     # ------------------------------------------------------------------ evidence exports
     def logged_export(kind, fr, to, extra=""):
         audit.add("audit_export", user=(g.user or {}).get("user", ""), target=kind, detail=f"{fr} to {to}{extra}")
+
+    def csv_bytes(rows, first=None):
+        """Shaped entries as CSV (UTF-8 with BOM for Excel; every cell formula-safe). first: number the rows from this
+        entry number of the chain (the proof package's copy, so a row can be found in log/ and against the head)."""
+        buf = io.StringIO()
+        w = csvsafe.writer(buf)
+        numbered = first is not None
+        w.writerow((["entry"] if numbered else []) + ["time_utc", "tab", "event", "by", "account", "address", "location", "browser",
+                                                       "detail", "detail_as_logged", "event_code", "self_test", "chained"])
+        for i, r in enumerate(rows, first or 1):
+            w.writerow(([i] if numbered else []) + [r["when"], r["tab"], r["label"], r["user_label"], r["target_label"], r["ip"],
+                        r["location"], r["ua"], r["detail"], r["detail_logged"], r["event"], "yes" if r["selftest"] else "",
+                        "yes" if r["chained"] else "no"])
+        return buf.getvalue().encode("utf-8-sig")
 
     @app.route("/api/audit/export.csv")
     def api_audit_export_csv():
@@ -521,15 +549,8 @@ def install(app, ctx):
         rows = rows_in(t0, t1)
         if tab != "all":
             rows = [r for r in rows if r["tab"] == tab]
-        buf = io.StringIO()
-        w = csvsafe.writer(buf)                        # every cell formula-safe
-        w.writerow(["time_utc", "tab", "event", "by", "account", "address", "location", "browser", "detail", "detail_as_logged",
-                    "event_code", "self_test", "chained"])
-        for r in rows:
-            w.writerow([r["when"], r["tab"], r["label"], r["user_label"], r["target_label"], r["ip"], r["location"],
-                        r["ua"], r["detail"], r["detail_logged"], r["event"], "yes" if r["selftest"] else "", "yes" if r["chained"] else "no"])
         logged_export("csv", fr, to, f" · {tab} · {len(rows)} entries")
-        data = buf.getvalue().encode("utf-8-sig")
+        data = csv_bytes(rows)
         return Response(data, mimetype="text/csv", headers={"Content-Disposition": f'attachment; filename="audit_{tab}_{fr}_{to}.csv"',
                                                              "Cache-Control": "no-store"})
 
@@ -546,6 +567,8 @@ def install(app, ctx):
                                   "integrity": dict(integrity()), "accounts": access_rows(), "privileged": ov["privileged_recent"],
                                   "fail_sources": ov["fail_sources"], "exports_by": ov["exports_by"], "per_day": ov["per_day"],
                                   "first": _when(integrity()["first"]), "last": _when(integrity()["last"]), "nist_release": NIST_RELEASE,
+                                  "cis_release": control_map.CIS_RELEASE, "cis_source": control_map.CIS_SOURCE,
+                                  "cis_attribution": control_map.CIS_ATTRIBUTION,
                                   "started": _when(setup_time(integrity().get("first") or 0)),
                                   "sealed_at": _when((integrity().get("seal") or {}).get("sealed_at")),
                                   "verifier_sha256": __import__("audit_proof").verifier_sha256()})
@@ -556,4 +579,5 @@ def install(app, ctx):
     # ------------------------------------------------------------------ proof the auditor takes away (audit_proof.py)
     import audit_proof
     audit_proof.install(app, audit, allowed, deny,
-                        lambda: ((g.user or {}).get("user", ""), people.audit((g.user or {}).get("user", ""))))
+                        lambda: ((g.user or {}).get("user", ""), people.audit((g.user or {}).get("user", ""))),
+                        to_csv=lambda records, first: csv_bytes([shaped(r) for r in records], first=first))

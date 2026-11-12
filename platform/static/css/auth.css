@@ -82,7 +82,8 @@ body.globe-drag .auth-hero { pointer-events: none; }
 /* card views: only the active one shows */
 .auth-view { display: none; flex-direction: column; gap: 14px; }
 .auth-card[data-view="choice"] [data-v="choice"], .auth-card[data-view="signin"] [data-v="signin"],
-.auth-card[data-view="register"] [data-v="register"], .auth-card[data-view="mfa"] [data-v="mfa"] { display: flex; }
+.auth-card[data-view="register"] [data-v="register"], .auth-card[data-view="mfa"] [data-v="mfa"],
+.auth-card[data-view="expired"] [data-v="expired"] { display: flex; }
 .auth-view[hidden] { display: none !important; }
 .auth-in { animation: authView .35s cubic-bezier(.2,.7,.2,1); }
 @keyframes authView { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }

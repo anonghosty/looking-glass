@@ -2753,6 +2753,11 @@ PIPELINE_SETTINGS = _pipeline_settings.install(app, {   # it writes requests onl
     "base_dir": BASE_DIR, "data_dir": os.path.join(BASE_DIR, "data"), "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"],
     "fresh": AUTH["fresh"], "audit": AUTH["audit"], "users": AUTH["users"], "throttle": AUTH["throttle"],
     "client": lambda: (request.remote_addr or "", request.headers.get("User-Agent", ""))})
+# Settings → Password policy (password_policy.py): expiry after N days, and "every account changes its password now"
+import password_policy as _password_policy  # noqa: E402
+_password_policy.install(app, {"policy": AUTH["password_policy"], "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"],
+                               "fresh": AUTH["fresh"], "audit": AUTH["audit"], "users": AUTH["users"], "throttle": AUTH["throttle"],
+                               "client": lambda: (request.remote_addr or "", request.headers.get("User-Agent", ""))})
 import peace as _peace  # noqa: E402
 PEACE = _peace.install(app, {"base_dir": BASE_DIR, "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"], "audit": AUTH["audit"],
                              "role_perms": lambda role: AUTH["roles"].perms(role or "")})   # an admin's "Peace of mind"

@@ -149,6 +149,19 @@ try:
     ok("…the mapping the auditor asked for: MFA → IA-2(1)/(2), lockouts → AC-7, audit protection → AU-9/AU-9(3), retention → AU-11",
        [n["id"] for n in C["LG-01"]["nist"]] == ["IA-2(1)", "IA-2(2)"] and [n["id"] for n in C["LG-06"]["nist"]] == ["AC-7"]
        and [n["id"] for n in C["LG-10"]["nist"]] == ["AU-9", "AU-9(3)"] and [n["id"] for n in C["LG-11"]["nist"]] == ["AU-11"])
+    import control_map as CM
+    ok("LG → NIST → CIS: every check carries CIS v8.1 safeguards or names the NIST controls CIS does not map",
+       all((x.get("cis") or x.get("cis_unmapped")) for x in o["checks"])
+       and o.get("cis_release") == "CIS Critical Security Controls v8.1" and "CC BY-NC-ND 4.0" in (o.get("cis_attribution") or ""))
+    ok("…each safeguard with CIS's exact title and the NIST control + relationship it came through",
+       all(s["title"] == CM.CIS_TITLES[s["id"]] and s["via"] and all(v["nist"] in [n["id"] for n in x["nist"]]
+           and v["relation"] in ("Equivalent", "Subset", "Superset") for v in s["via"]) for x in o["checks"] for s in x["cis"]))
+    ok("…CIS's own mapping, spot-checked: AU-3 → 8.5 Equivalent, AC-7 → 4.10 Subset, AU-11 → 8.10 Equivalent, AU-9 and AC-2(7) unmapped",
+       CM.NIST_TO_CIS["AU-3"] == [("8.5", "Equivalent")] and CM.NIST_TO_CIS["AC-7"] == [("4.10", "Subset")]
+       and ("8.10", "Equivalent") in CM.NIST_TO_CIS["AU-11"] and CM.NIST_TO_CIS["AU-9"] == [] and CM.NIST_TO_CIS["AC-2(7)"] == []
+       and "AU-9" in C["LG-10"]["cis_unmapped"] and [s["id"] for s in C["LG-10"]["cis"]] == ["3.11"])
+    ok("…every NIST control a check uses is in CIS's table (none silently dropped)",
+       all(n["id"] in CM.NIST_TO_CIS for x in o["checks"] for n in x["nist"]))
     ok("LG-01 states what sign-in enforces, not only enrolment", "requires the password and a one-time code" in C["LG-01"]["evidence"])
     ok("no check gives a verdict (no pass or fail: the auditor decides)", all("ok" not in x for x in o["checks"])
        and not any(w in x["evidence"].lower() for x in o["checks"] for w in ("passed", "attention", "within normal")))
@@ -427,6 +440,29 @@ try:
     ok("…its download is logged with the package's SHA-256 and the head it holds", last["event"] == "audit_export" and last["target"] == "proof"
        and hashlib.sha256(r.data).hexdigest() in last["detail"] and man["head"] in last["detail"], last.get("detail", ""))
     ok("…the head is sent with it (hash@entry) for the auditor to keep", r.headers.get("X-Audit-Head") == f"{man['head']}@{man['head_entry']}")
+    import csv as _csv
+    raw = z.read("audit_log.csv")
+    crow = list(_csv.reader(io.StringIO(raw.decode("utf-8-sig"))))
+    hdr, body = crow[0], crow[1:]
+    kept_lines = sum(1 for n in names if n.startswith("log/") and (n.endswith("audit.log") or n.endswith(".log.gz"))
+                     for ln in (gzip.decompress(z.read(n)) if n.endswith(".gz") else z.read(n)).decode().splitlines() if ln.strip())
+    ok("the proof package holds the audit log as CSV (audit_log.csv): every entry in log/, archives included",
+       hdr[:3] == ["entry", "time_utc", "tab"] and len(body) == man["csv"]["rows"] == kept_lines and man["csv"]["lines_not_entries"] == 0,
+       f"{len(body)} rows, {kept_lines} lines in log/")
+    ok("…numbered as in the chain: the last row is the head entry, the numbers run without a gap",
+       int(body[-1][0]) == man["head_entry"] and [int(b[0]) for b in body] == list(range(int(body[0][0]), man["head_entry"] + 1)))
+    ok("…readable (names, events) with the detail as logged, and formula-safe for spreadsheets",
+       "Signed in" in {b[3] for b in body} and not any(cell[:1] in ("=", "+", "-", "@") for b in body for cell in b[1:]))
+    import audit_proof as APf
+    sd = os.path.join(tmp, "snap-csv"); os.makedirs(os.path.join(sd, "audit_archive"))
+    for nm, evs in (("audit-20260101-000000.log.gz", ["a1", "a2"]), ("audit-20260201-000000.log.gz", ["b1"])):
+        with gzip.open(os.path.join(sd, "audit_archive", nm), "wt") as f:
+            f.write("".join(json.dumps({"event": e}) + "\n" for e in evs))
+    open(os.path.join(sd, "audit.log"), "w").write(json.dumps({"event": "c1"}) + "\n")
+    recs, skipped = APf.snapshot_records(sd)
+    ok("…archived entries come first, oldest archive first, then audit.log", [x["event"] for x in recs] == ["a1", "a2", "b1", "c1"] and skipped == 0)
+    ok("…listed in MANIFEST.json, so the verifier catches a changed CSV, and the README explains it",
+       any(f["path"] == "audit_log.csv" for f in man["files"]) and "audit_log.csv" in z.read("README.txt").decode())
     vsrc = z.read("verify_audit_log.py").decode()
     mods = {a.name.split(".")[0] for n in ast.walk(ast.parse(vsrc)) if isinstance(n, ast.Import) for a in n.names} | \
            {n.module.split(".")[0] for n in ast.walk(ast.parse(vsrc)) if isinstance(n, ast.ImportFrom) and n.module}
@@ -447,6 +483,12 @@ try:
        and out["head"] == man["head"] and out["head_entry"] == man["head_entry"], str(out)[:300])
     ok("…and it checks the retention's removal against its entry in the chain", out.get("removals_recorded") == 1 and out.get("removals_pending") == 0
        and "log/audit_archive/removed.recorded" in names)
+    pc = os.path.join(pkg, "audit_log.csv"); csv_orig = open(pc, "rb").read()
+    open(pc, "wb").write(csv_orig.replace(b"Signed in", b"Signed out", 1))
+    rc, out = run()
+    ok("…a changed row in audit_log.csv: reported, and the package is NOT verified", rc == 1
+       and any("audit_log.csv" in p for p in out["manifest"]["problems"]), str(out.get("manifest"))[:300])
+    open(pc, "wb").write(csv_orig)
     earlier = f"{man['head']}@{man['head_entry']}"
     rc, out = run("--earlier", earlier)
     ok("…--earlier with the head it holds: proven", rc == 0 and out["earlier"]["proven"], json.dumps(out.get("earlier")))

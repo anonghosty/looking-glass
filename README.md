@@ -360,6 +360,12 @@ Data and services keep their own terms: region boundaries from [geoBoundaries](h
 (CC BY 4.0 — credit geoBoundaries when you show the maps); Shadowserver reports, Mapbox, RIPEstat, PeeringDB, Malpedia,
 NVD, CISA KEV and FIRST EPSS under their providers' terms.
 
+The Audit portal and its report cite **CIS Critical Security Controls® v8.1** safeguard numbers and titles, unchanged,
+as given by CIS's official mapping to NIST SP 800-53 Rev. 5 (`platform/control_map.py`). That content is © Center for
+Internet Security, Inc., under [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/), **not** under
+AGPL-3.0: keep the notice, do not alter it, and ask CIS before any commercial use of the CIS Controls. The NIST
+SP 800-53 control titles are a US Government work.
+
 **Credits:** data — the Shadowserver Foundation (your CSIRT's own reports) · region boundaries — geoBoundaries ·
 maps — Mapbox · 3D arcs — deck.gl · network names — RIPEstat and PeeringDB · malware look-ups — Malpedia (Fraunhofer FKIE).
 

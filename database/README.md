@@ -576,6 +576,23 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
   line each) and applies the valid ones to its own `.env` (or releases a held-back report), then writes the result to
   `data/pipeline_requests/done/` and deletes the request, so the API secret in a key request lives no longer than
   that. A request that fails the checks changes nothing and its result says why.
+- **The web app can only make the pipeline stricter on its own.** The administrator's password is checked in the web
+  app, but the pipeline cannot tell whether a person approved a request file: a bug in the web app or a takeover of its
+  account could write one. So a request that makes the pipeline **less strict** waits until someone confirms it here,
+  on the pipeline's own account: the sender check lowered (Block → Record only → Off), a different expected signer,
+  the mail server's certificate check turned off, a new Shadowserver API key, or releasing a held-back report.
+
+  ```bash
+  ./confirm_request.sh              # what waits, who asked, and why it waits
+  ./confirm_request.sh <id>         # show one and confirm it (type yes)
+  ```
+
+  The confirmation is written into this folder (`confirmed_requests/`, mode 600), which the hardened web service
+  cannot write, and holds the request's SHA-256: a request changed after it was confirmed is refused. The next run
+  applies it and its result names who confirmed it. Unconfirmed requests are refused after 7 days. Tightening (Record
+  only → Block, certificate check on), folders, performance and unzip limits are applied at the next run as before.
+  This protection relies on the web app not being able to write this folder (the hardened service unit, or the two
+  running as different users).
 - **New report types are noticed** (`report_types.py`), however they arrive. After each run's sorting, the report types
   present (the folders in `sorting_backup/`) are compared with every type that arrived before (`.mail_state.sqlite`,
   table `report_types`); one arriving for the first time is logged as `NEW REPORT TYPE`, and the platform's Audit portal

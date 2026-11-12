@@ -63,6 +63,7 @@ next step exists.
 | File | What it is |
 |---|---|
 | `log/` | the log's files exactly as stored: `audit.log`, the archives (`audit_archive/*.log.gz`), the retention notes (`removed.jsonl`), `audit.head` and `audit.seal`. They are copied at one moment, under the same lock every writer of the log takes, so no entry is half written |
+| `audit_log.csv` | every entry in `log/` (archives first, then `audit.log`) as a spreadsheet: one row per entry, numbered as in the chain (the last row is the head), with readable names and the detail as logged, every cell formula-safe. It is made from the same copy as `log/` and listed in `MANIFEST.json`, so the verifier reports a changed CSV. The proof is `log/`; the CSV is its readable copy for working papers |
 | `MANIFEST.json` | the SHA-256 of every file in the package when it was made, and the head it holds |
 | `verify_audit_log.py` | the verifier: Python 3.8 or newer, standard library only, short enough to read before relying on it |
 | `README.txt` | what to keep, and how to check at the next audit |

@@ -79,6 +79,20 @@
     <div class="auth-links"><a href="/login?form=signin">Back</a></div>
   </form>
   {% endif %}
+
+  <!-- the password expired (password_policy.py): a new one before the session opens; no second sign-in -->
+  {% if view == "expired" %}
+  <form class="auth-view" data-v="expired" method="post" action="/login" autocomplete="off">
+    <h1>Your password has expired</h1>
+    <p class="auth-sub">{{ reason or "Your password has expired." }} Choose a new one to continue: you go straight in afterwards.</p>
+    <div class="wide">{{ pw("x-pw", "password", "New password", "new-password", meter=True, minlength=12) }}</div>
+    <div class="wide">{{ pw("x-pw2", "password2", "Repeat the new password", "new-password", match="x-pw", minlength=12) }}</div>
+    <input type="hidden" name="step" value="expired">
+    <input type="hidden" name="next" value="{{ next }}">
+    <button class="auth-btn" type="submit"><span>Save and continue</span></button>
+    <p class="auth-hint">It cannot be the password that expired. Your other open sessions end when it is saved.</p>
+  </form>
+  {% endif %}
 </div>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/auth-card.js') }}"></script>{% endblock %}

@@ -128,7 +128,20 @@
       if (pend.length) {
         box.append(el("h4", null, `Waiting for the pipeline's next run (${pend.length})`));
         const ul = el("ul");
-        pend.forEach((r) => ul.append(el("li", null, `${r.at.replace("T", " ").slice(0, 16)} UTC · ${r.by} · ${r.kind === "settings" ? Object.entries(r.values || {}).map(([k, v]) => `${k} → ${v}`).join(", ") : r.kind === "release" ? `release ${r.qid}` : r.values}`)));
+        pend.forEach((r) => {
+          const li = el("li", null, `${r.at.replace("T", " ").slice(0, 16)} UTC · ${r.by} · ${r.kind === "settings" ? Object.entries(r.values || {}).map(([k, v]) => `${k} → ${v}`).join(", ") : r.kind === "release" ? `release ${r.qid}` : r.values}`);
+          // a change that makes the pipeline less strict waits for someone on the server (worker_settings.weakens)
+          if ((r.weakens || []).length) {
+            const w = el("div", "wk-confirm");
+            if (r.confirmed) w.append(el("span", null, "Confirmed on the server: applied at the next run."));
+            else {
+              w.append(el("span", null, `Waits for confirmation on the server (${r.weakens.join("; ")}). On the pipeline's account, in ${S.pipeline_dir || "the pipeline's folder"}, run:`));
+              w.append(el("code", null, r.confirm));
+            }
+            li.append(w);
+          }
+          ul.append(li);
+        });
         box.append(ul);
       }
       if (res.length) {

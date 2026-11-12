@@ -35,7 +35,11 @@ Made {generated} by {by}. Head of the log in this package: entry {head_entry}
 
 What is in it
   log/                  the audit log's files exactly as Looking Glass stores them (one moment, under the log's lock)
-  MANIFEST.json         the SHA-256 of every file in this package when it was made
+  audit_log.csv         every entry in log/ ({csv_rows} rows, oldest first, archives included) as a spreadsheet to
+                        work with: one row per entry, numbered as in the chain (the last row is the head,
+                        entry {head_entry}), readable names and the detail as logged. It is made from log/ above, and MANIFEST.json holds its SHA-256, so the verifier also
+                        tells you if it was changed. The proof is log/; the CSV is the readable copy of it.
+  MANIFEST.json        the SHA-256 of every file in this package when it was made
   verify_audit_log.py   an independent verifier: Python 3.8 or newer, standard library only. Read it: it is short.
   README.txt            this file
 
@@ -97,33 +101,69 @@ def snapshot(chain, dest):
         os.close(lock_fd)
 
 
-def build(chain, generated_by):
-    """The proof package (bytes) and what it holds."""
+def snapshot_records(log):
+    """Every entry in the snapshot, oldest first: the archives (by name, as the verifier reads them), then audit.log.
+    Returns (records, lines that are not an entry)."""
+    out, skipped = [], 0
+    arch = os.path.join(log, "audit_archive")
+    paths = sorted(os.path.join(arch, n) for n in os.listdir(arch) if n.startswith("audit-") and n.endswith(".log.gz")) \
+        if os.path.isdir(arch) else []
+    for p in paths + [os.path.join(log, "audit.log")]:
+        for ln in audit_verifier._lines(p):
+            try:
+                rec = json.loads(ln)
+            except ValueError:
+                rec = None
+            if isinstance(rec, dict):
+                out.append(rec)
+            else:
+                skipped += 1
+    return out, skipped
+
+
+def build(chain, generated_by, to_csv=None):
+    """The proof package (bytes) and what it holds. to_csv(records) -> bytes: the readable CSV of the snapshot's
+    entries (audit_log.csv), made from the same copy as log/ so the two always match."""
     with tempfile.TemporaryDirectory(prefix="lg-proof-") as tmp:
         log = os.path.join(tmp, "log")
         snapshot(chain, log)
         r = audit_verifier.check(log)                 # the same code the auditor runs
         generated = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+        csv_rows = csv_skipped = 0
+        if to_csv:
+            recs, csv_skipped = snapshot_records(log)
+            # the chain numbers entries from its very first one; entries removed by the retention are not in log/, so
+            # the first row is entry head_entry - (entries kept) + 1, and the last one is the head
+            first = max(1, int(r.get("head_entry") or len(recs)) - len(recs) + 1)
+            with open(os.path.join(tmp, "audit_log.csv"), "wb") as f:
+                f.write(to_csv(recs, first))
+            csv_rows = len(recs)
         files = []
         for base, _, names in os.walk(log):
             for n in sorted(names):
                 p = os.path.join(base, n)
                 rel = "log/" + os.path.relpath(p, log).replace(os.sep, "/")
                 files.append({"path": rel, "bytes": os.path.getsize(p), "sha256": audit_verifier.file_sha(p)})
+        if to_csv:
+            p = os.path.join(tmp, "audit_log.csv")
+            files.append({"path": "audit_log.csv", "bytes": os.path.getsize(p), "sha256": audit_verifier.file_sha(p)})
         verifier = open(os.path.join(HERE, "audit_verifier.py"), "rb").read()
         files.append({"path": "verify_audit_log.py", "bytes": len(verifier), "sha256": hashlib.sha256(verifier).hexdigest()})
         files.sort(key=lambda f: f["path"])
         manifest = {"what": "Looking Glass audit log proof package", "generated": generated, "generated_by": generated_by,
                     "head": r["head"], "head_entry": r["head_entry"], "entries_kept": r["kept"],
                     "removed_by_retention": r["removed_by_retention"], "chain_whole_when_made": r["ok"], "files": files}
+        if to_csv:
+            manifest["csv"] = {"path": "audit_log.csv", "rows": csv_rows, "lines_not_entries": csv_skipped,
+                               "made_from": "the log/ files in this package (same moment)"}
         readme = README.format(generated=generated, by=generated_by, head=r["head"], head_entry=r["head_entry"],
-                               verifier_sha=hashlib.sha256(verifier).hexdigest())
+                               verifier_sha=hashlib.sha256(verifier).hexdigest(), csv_rows=csv_rows)
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
             for f in files:
                 if f["path"] == "verify_audit_log.py":
                     z.writestr("verify_audit_log.py", verifier)
-                else:
+                else:                                  # log/… and audit_log.csv
                     z.write(os.path.join(tmp, *f["path"].split("/")), f["path"])
             z.writestr("MANIFEST.json", json.dumps(manifest, indent=2))
             z.writestr("README.txt", readme)
@@ -132,8 +172,8 @@ def build(chain, generated_by):
                   "files": len(files), "generated": generated}
 
 
-def install(app, audit, allowed, deny, who):
-    """Register the two routes. who() = (account name, readable name) of the person asking."""
+def install(app, audit, allowed, deny, who, to_csv=None):
+    """Register the two routes. who() = (account name, readable name) of the person asking; to_csv: see build()."""
     from flask import Response, jsonify, request
 
     @app.route("/api/audit/proof.zip")
@@ -141,7 +181,7 @@ def install(app, audit, allowed, deny, who):
         if not allowed():
             return deny()
         user, label = who()
-        data, info = build(audit.chain, label or user)
+        data, info = build(audit.chain, label or user, to_csv)
         audit.add("audit_export", user=user, target="proof",
                   detail=f"proof package · head entry {info['head_entry']} {info['head']} · {info['files']} files · "
                          f"package SHA-256 {info['sha256']}" + ("" if info["ok"] else " · chain BROKEN"))

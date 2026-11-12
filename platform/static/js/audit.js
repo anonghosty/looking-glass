@@ -102,9 +102,10 @@
     const d = await getJSON(`/api/audit/overview?${per()}`);
     const body = $("ovBody"); body.replaceChildren();
     const k = d.kpis, nistN = new Set(d.checks.flatMap((c) => (c.nist || []).map((x) => x.id))).size;
+    const cisN = new Set(d.checks.flatMap((c) => (c.cis || []).map((x) => x.id))).size;
     const top = el("div", "au-kpis");
     // the checks carry evidence, not a verdict: the auditor decides
-    top.append(kpi("Control checks", fmt(d.checks.length), `evidence for ${nistN} NIST controls`),
+    top.append(kpi("Control checks", fmt(d.checks.length), `evidence for ${nistN} NIST controls · ${cisN} CIS safeguards`),
       kpi("Audit log", d.integrity.ok ? "Unbroken" : "Broken", `${fmt(d.integrity.entries)} entries kept`, d.integrity.ok ? "good" : "bad"),
       kpi("Sign-ins", fmt(k.signins), `${fmt(k.people)} people`), kpi("Failed sign-ins", fmt(k.failed), `${k.failure_rate} % of attempts`, k.failed ? "warn" : ""),
       kpi("Lockouts", fmt(k.lockouts), null, k.lockouts ? "warn" : ""), kpi("Privileged changes", fmt(k.privileged), "roles, accounts, settings"),
@@ -113,7 +114,7 @@
       + (d.started ? ` · system started ${d.started} (running ${fmt(d.running_days)} day${d.running_days === 1 ? "" : "s"})` : "")), top);
 
     // the control checks, by area
-    const cc = card("Control checks", `Automated checks of Looking Glass's own controls (LG-01…), each mapped to the ${d.nist_release || "NIST SP 800-53 Rev. 5"} controls it supports, with its evidence. They give no pass or fail: the conclusion is the auditor's. Click a check to open the records behind it; the PDF report carries the same, with its scope and limits.`);
+    const cc = card("Control checks", `Automated checks of Looking Glass's own controls (LG-01…), each mapped to the ${d.nist_release || "NIST SP 800-53 Rev. 5"} controls it supports and, through them, to the ${d.cis_release || "CIS Controls v8.1"} safeguards of CIS's own official mapping (each with the NIST control it comes through and CIS's relationship: equivalent, subset or superset), with its evidence. They give no pass or fail: the conclusion is the auditor's. Click a check to open the records behind it; the PDF report carries the same, with its scope and limits.`);
     const areas = [...new Set(d.checks.map((c) => c.area))];
     for (const a of areas) {
       const g = el("div", "au-check-g"); g.append(el("h4", null, a));
@@ -128,6 +129,19 @@
           n.append(el("small", null, c.nist.map((x) => x.title).join(" · ")));
           t.append(n);
         }
+        if ((c.cis || []).length || (c.cis_unmapped || []).length) {   // CIS's own mapping of those NIST controls (control_map.py)
+          const n = el("div", "au-nist au-cis");
+          n.append(el("em", null, "CIS v8.1"));
+          for (const x of c.cis || []) {
+            const s = el("span", null, x.id);
+            s.title = `${d.cis_release || "CIS Controls v8.1"} safeguard ${x.id}: ${x.title}\n` + x.via.map((v) => `via NIST ${v.nist}: ${v.relation}`).join("\n");
+            n.append(s);
+          }
+          const words = (c.cis || []).map((x) => `${x.title} (${x.via.map((v) => `${v.nist} ${v.relation.toLowerCase()}`).join(", ")})`);
+          for (const u of c.cis_unmapped || []) words.push(`${u}: no safeguard in CIS's mapping`);
+          n.append(el("small", null, words.join(" · ")));
+          t.append(n);
+        }
         t.append(el("p", null, c.evidence)); r.append(t);
         if (c.view) {
           r.type = "button"; r.title = `Open the evidence: ${TAB_NAMES[c.view.tab] || c.view.tab}`;
@@ -138,6 +152,7 @@
       }
       cc.append(g);
     }
+    if (d.cis_attribution) cc.append(el("p", "au-attrib", d.cis_attribution));   // CC BY-NC-ND 4.0 notice for the CIS content
     const grid = el("div", "au-grid2");
     const c1 = card("Sign-ins per day"); c1.append(dayChart(d.per_day), legend([["au-c-ok", "signed in"], ["au-c-fail", "failed"], ["au-c-lock", "locked out"]]));
     const c2 = card("Sign-ins by hour of the day (UTC)", "The shaded band is working hours (AUDIT_WORK_HOURS)."); c2.append(hourChart(d.hours, d.work_hours), legend([["au-c-ok", "within working hours"], ["au-c-late", "outside"]]));

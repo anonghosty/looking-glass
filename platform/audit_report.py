@@ -71,7 +71,11 @@ def build(d):
            _p(f"Automated checks of Looking Glass's own controls (the web application: accounts, roles, sign-in, sessions and the audit "
               f"log), computed from its records when this report was generated. Each check (LG-01 to LG-15) is mapped to the "
               f"{d.get('nist_release', 'NIST SP 800-53 Rev. 5')} controls it supports, cited by their official titles; the LG "
-              "identifiers are Looking Glass's own, not NIST control numbers. The checks present evidence and give no pass or fail: "
+              "identifiers are Looking Glass's own, not NIST control numbers. Next to them, the "
+              f"{d.get('cis_release', 'CIS Critical Security Controls')} safeguards that CIS's own official mapping relates to those "
+              f"NIST controls ({d.get('cis_source', 'CIS mapping to NIST SP 800-53 Rev. 5')}), each with the NIST control it comes "
+              "through and CIS's relationship (Equivalent, Subset: the safeguard covers part of the NIST control, Superset: it "
+              "covers more); a NIST control CIS does not map is said so. The checks present evidence and give no pass or fail: "
               "whether a control is implemented and operating effectively is the auditor's conclusion. Corroborate the evidence with independent testing (for "
               "example, try to sign in without a second factor) and review what lies outside the application: the server's "
               "operating system, its clock synchronisation, backups and network. "
@@ -136,12 +140,19 @@ def build(d):
                           "changed (the first entry still kept carries its own time inside the chain).", st["bad"]))
     out.append(_p("Control checks", st["h"]))
     # evidence only, no result column: whether a control is effective is the auditor's conclusion
-    rows = [[_p(h, st["cellb"]) for h in ("Check", "Control", f"NIST SP 800-53 Rev. 5 (5.2.0)", "Evidence")]]
+    rows = [[_p(h, st["cellb"]) for h in ("Check", "Control", "NIST SP 800-53 Rev. 5 (5.2.0)", "CIS Controls v8.1 (CIS's mapping)", "Evidence")]]
     for c in d["checks"]:
         nist = Paragraph("<br/>".join(f"<b>{escape(n['id'])}</b> {escape(n['title'])}" for n in c.get("nist") or []) or "–", st["small"])
+        cis_lines = [f"<b>{escape(s['id'])}</b> {escape(s['title'])} <font color='#5f5f69'>("
+                     + ", ".join(f"via {escape(v['nist'])}: {escape(v['relation'])}" for v in s["via"]) + ")</font>"
+                     for s in c.get("cis") or []]
+        cis_lines += [f"<font color='#5f5f69'>{escape(n)}: no safeguard in CIS's mapping</font>" for n in c.get("cis_unmapped") or []]
+        cis = Paragraph("<br/>".join(cis_lines) or "–", st["small"])
         rows.append([_p(c["id"], st["mono"]), Paragraph(f"{escape(c['control'])}<br/><font size='7' color='#5f5f69'>{escape(c['area'])}</font>", st["b"]),
-                     nist, _p(c["evidence"], st["b"])])
-    out.append(_table(rows, [16 * mm, 60 * mm, 58 * mm, W - 134 * mm]))
+                     nist, cis, _p(c["evidence"], st["b"])])
+    out.append(_table(rows, [15 * mm, 46 * mm, 50 * mm, 72 * mm, W - 183 * mm]))
+    if d.get("cis_attribution"):
+        out.append(_p(d["cis_attribution"], st["small"]))
     out += [PageBreak(), _p("Access review: every account", st["h"]),
             _p("Role, permissions, authenticator, last sign-in and who approved the account. Flags show what needs attention.", st["small"])]
     rows = [[_p(h, st["cellb"]) for h in ("Account", "Role", "Permissions", "Status", "Two factors", "Last sign-in", "Approved", "Flags")]]

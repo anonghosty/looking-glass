@@ -77,6 +77,14 @@ live on the page with a strength meter and a checklist; the form cannot be sent 
 
 Every password field has an eye button to show or hide what was typed.
 
+### Password expiry (optional)
+An administrator can make passwords expire (Settings → Password policy, `password_policy.py`): after N days, and
+"every account now" at any time. Both need the administrator's own password and are in the audit log. An expired
+password is replaced inside the sign-in, after the password AND the authenticator code and before any session exists:
+the new one follows the rules above and cannot be the expired one; the session then opens, the account's other sessions
+end, and the change is logged. Off by default. (NIST SP 800-63B advises against periodic changes without a sign of
+compromise; the option exists for the audits and regulators that still require them.)
+
 ### Signing in
 The sign-in card opens on a choice: **Sign in** or **Create an account**, plus **Forgot password?**
 1. User name and password.
@@ -181,6 +189,16 @@ country and city, install the `maxminddb` package and put a GeoLite2-City databa
 ### Command line (server)
 `manage/manage_users.py` creates and repairs accounts without the web pages (for example if every administrator is
 locked out): `add NAME [--admin]`, `passwd`, `mfa`, `role`, `remove`, `list`. Accounts it creates are active at once.
+
+### Pipeline settings from the web app (Settings → Workers)
+The web app never writes the pipeline's files: a change is a request in its own `data/pipeline_requests/`, which the
+pipeline checks again and applies at its next run. Requests may only make the pipeline **stricter** on their own. One
+that weakens it (the sender check lowered or another expected signer, the mail server's certificate check off, a new
+Shadowserver API key, a held-back report released) is held until someone confirms it on the server, on the pipeline's
+account (`./confirm_request.sh <id>` in the pipeline's folder). The confirmation lives in the pipeline's folder, which
+the hardened web service cannot write, and is bound to the request's SHA-256, so a request changed afterwards is
+refused; unconfirmed ones are refused after 7 days. So a bug in the web app or a takeover of its account cannot use
+this route to switch the pipeline's checks off or reach the mailbox password.
 
 ### Why TOTP, and what about OAuth / single sign-on
 TOTP is built in: it is free, works offline and no outside service sees your sign-ins. If your staff already have

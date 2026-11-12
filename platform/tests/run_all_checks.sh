@@ -44,6 +44,7 @@ else run "pipeline: reports by Shadowserver API or e-mail" bash -c 'echo "SKIPPE
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/report_types.py" ]; then run "pipeline: new report types noticed" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_report_types.py"
 else run "pipeline: new report types noticed" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 run "settings Workers + audit Sender check" $PY tests/check_pipeline_settings.py
+run "password expiry at sign-in (password policy)" $PY tests/check_password_policy.py
 run "privacy + roles unit tests"      $PY tests/test_privacy_roles.py
 run "masked viewers: report fields allowlist" $PY tests/check_masked_fields.py
 run "reverse proxy + first administrator" $PY tests/check_first_admin_proxy.py

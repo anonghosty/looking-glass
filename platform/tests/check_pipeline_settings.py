@@ -42,7 +42,9 @@ shutil.copy(real_pipe / "worker_settings.py", PIPE / "worker_settings.py")
 PLAT = tmp / "platform-data"                        # the platform's data folder for this check (requests go here)
 PLAT.mkdir()
 (PIPE / "shadowserver_pipeline.py").write_text("# stand-in\n")
-ENV0 = ("# Shadowserver pipeline\nMAIL_PROVIDER=imap\nIMAP_SERVER=mail.example.org\nIMAP_USER=csirt@example.org\n"
+FAKEPLAT = tmp / "fake-platform"                    # what confirm_request.sh finds as the platform (PLATFORM_DIR)
+FAKEPLAT.mkdir(); (FAKEPLAT / "app.py").write_text("# stand-in\n"); os.symlink(PLAT, FAKEPLAT / "data")
+ENV0 = (f"# Shadowserver pipeline\nPLATFORM_DIR={FAKEPLAT}\nMAIL_PROVIDER=imap\nIMAP_SERVER=mail.example.org\nIMAP_USER=csirt@example.org\n"
         "IMAP_PASSWORD=Very-Secret-Mailbox-9\nIMAP_FOLDER=inbox\nIMAP_VERIFY_TLS=false\nEMAIL_DAYS=7\n"
         "MONGO_PASSWORD=Very-Secret-Mongo-7\nWORKERS=6\n# a comment that must stay\n")
 (PIPE / ".env").write_text(ENV0)
@@ -57,6 +59,11 @@ A.PIPELINE_SETTINGS["ctx"]["data_dir"] = str(PLAT)
 def apply_now():
     """What the pipeline does at the start of its next run (shadowserver_pipeline.main)."""
     return WS.apply_requests(PLAT, PIPE / ".env", PIPE, logging.getLogger("lg-check-workers"))
+
+
+def confirm(rid):
+    """What someone on the server does: ./confirm_request.sh <id> (here without the y/N question)."""
+    return WS.cli([rid, "--yes"])
 log = MA.Log(PIPE / ".mail_state.sqlite")
 base = {"from_domain": "shadowserver.org", "signer": "shadowserver.org", "selector": "mail", "alg": "rsa-sha256", "bits": 1024, "reason": ""}
 for i in range(20):
@@ -169,6 +176,62 @@ try:
     c.get("/api/pipeline/settings", headers=H)
     ok("…each refusal goes into the audit log (as an alert)", sum(1 for e, *_ in logged if e == "pipeline_request_refused") == 4)
 
+    print("A request that makes the pipeline less strict waits for someone on the server (a file alone is not enough)")
+    rd = PLAT / "pipeline_requests"
+    before = (PIPE / ".env").read_text()           # now MAIL_AUTH=enforce, IMAP_VERIFY_TLS=true
+    forged = {k: WS.make_request(PLAT, "settings", {"values": v}, "a compromised web app")
+              for k, v in (("lower", {"MAIL_AUTH": "log"}), ("off", {"MAIL_AUTH": "off"}), ("signer", {"MAIL_AUTH_DOMAIN": "evil.example"}),
+                           ("tls", {"IMAP_VERIFY_TLS": "false"}))}
+    tighter = WS.make_request(PLAT, "settings", {"values": {"WORKERS": "4"}}, "a compromised web app")
+    n = apply_now()
+    env = (PIPE / ".env").read_text()
+    ok("sender check lowered or off, another signer, certificate check off: none applied, all still waiting",
+       "MAIL_AUTH=enforce" in env and "IMAP_VERIFY_TLS=true" in env and "evil.example" not in env
+       and {p.stem for p in rd.glob("*.json")} == set(forged.values()), env[-160:])
+    ok("…while a change that is no weaker (performance) is applied at once", n == 1 and "WORKERS=4" in env)
+    ok("…the waiting ones leave no result yet (nothing to log until they are confirmed or expire)",
+       not any(r_.get("id") in forged.values() for r_ in WS.results(PLAT, limit=50)))
+    pend = {r_["id"]: r_ for r_ in WS.pending(PLAT, WS.read_env(PIPE / ".env"), PIPE)}
+    ok("…each says why it waits and the command to confirm it", all(pend[i].get("weakens") and pend[i]["confirm"] == f"./confirm_request.sh {i}"
+       and pend[i]["confirmed"] is False for i in forged.values()), str(pend.get(forged["tls"]))[:200])
+    ok("…the same value as now is no change (MAIL_AUTH enforce → enforce needs nothing)",
+       WS.weakens({"kind": "settings", "values": {"MAIL_AUTH": "enforce", "IMAP_VERIFY_TLS": "true"}}, WS.read_env(PIPE / ".env")) == [])
+    ok("…a new API key and a release always wait", WS.weakens({"kind": "apikey"}, {}) and WS.weakens({"kind": "release"}, {}))
+    ok("confirm_request.sh lists them, and refuses an id that does not wait", WS.cli([]) == 0 and WS.cli(["20260101T000000Z-000000000000", "--yes"]) == 1
+       and WS.cli([tighter, "--yes"]) == 1)
+    ok("confirming writes the confirmation in the PIPELINE's folder (mode 600), with the request's SHA-256",
+       confirm(forged["tls"]) == 0 and oct(os.stat(PIPE / "confirmed_requests" / f"{forged['tls']}.json").st_mode & 0o777) == "0o600"
+       and json.loads((PIPE / "confirmed_requests" / f"{forged['tls']}.json").read_text())["sha256"] == WS.request_sha(rd / f"{forged['tls']}.json"))
+    confirm(forged["lower"])
+    p_ = rd / f"{forged['lower']}.json"                 # swapped after the confirmation: log → off
+    p_.write_text(p_.read_text().replace('"MAIL_AUTH": "log"', '"MAIL_AUTH": "off"'))
+    n = apply_now()
+    env = (PIPE / ".env").read_text()
+    res = {r_["id"]: r_ for r_ in WS.results(PLAT, limit=50)}
+    ok("a confirmed request is applied, and its result says who confirmed it on the server",
+       "IMAP_VERIFY_TLS=false" in env and res[forged["tls"]]["status"] == "applied" and res[forged["tls"]].get("confirmed_on_server"), str(res.get(forged["tls"]))[:200])
+    ok("a request changed after its confirmation is refused (the hash no longer matches)", "MAIL_AUTH=enforce" in env
+       and res[forged["lower"]]["status"] == "refused" and "changed after" in res[forged["lower"]]["reason"])
+    ok("…each confirmation is used once (deleted)", not any((PIPE / "confirmed_requests").glob("*.json")))
+    old = "20200101T000000Z-0123456789ab"              # older than CONFIRM_DAYS, never confirmed
+    (rd / f"{old}.json").write_text(json.dumps({"id": old, "kind": "settings", "values": {"MAIL_AUTH": "off"}, "by": "x", "at": "2020-01-01"}))
+    apply_now()
+    ok("an unconfirmed request is refused after 7 days", WS.results(PLAT, limit=50) and {r_["id"]: r_ for r_ in WS.results(PLAT, limit=50)}[old]["status"] == "refused"
+       and "within 7 days" in {r_["id"]: r_ for r_ in WS.results(PLAT, limit=50)}[old]["reason"])
+    c.get("/api/pipeline/settings", headers=H)
+    ok("…the audit log has who confirmed it on the server", any(e == "pipeline_request_applied" and "confirmed on the server by" in d_ for e, d_, _ in logged))
+    c.post("/api/pipeline/unlock", json={"password": PW}, headers=H)
+    r = c.post("/api/pipeline/settings", json={"values": {"MAIL_AUTH": "log"}}, headers=H)
+    g_ = c.get("/api/pipeline/settings", headers=H).json
+    row = next((x for x in g_.get("pending") or [] if x["id"] == (r.json or {}).get("request")), {})
+    ok("from Settings, a weakening change says it waits for the server and gives the command; the page shows it too",
+       r.status_code == 200 and r.json.get("confirm") and "./confirm_request.sh" in r.json.get("note", "") and row.get("confirm")
+       and g_.get("pipeline_dir"), str(r.json)[:240])
+    ok("…and the request in the audit log says so", any(e == "pipeline_change_requested" and "waits for confirmation on the server" in d_ for e, d_, _ in logged))
+    for p_ in rd.glob("*.json"):                       # not confirmed: drop it, and put the certificate check back on
+        p_.unlink()
+    WS.write_env(PIPE / ".env", {"IMAP_VERIFY_TLS": "true", "WORKERS": "6"})
+
     print("Shadowserver API key")
     sent = {}
 
@@ -203,8 +266,12 @@ try:
     ok("a key Shadowserver accepts waits for the pipeline, and the page never shows it", r.status_code == 200 and g_.json["api"]["key_waiting"]
        and "KEY12345678" not in g_.get_data(as_text=True) and "SECRET-abc" not in g_.get_data(as_text=True), str(r.status_code))
     apply_now()
+    ok("…a new key waits for confirmation on the server (not saved by the next run alone)",
+       "SHADOWSERVER_API_KEY" not in (PIPE / ".env").read_text() and r.json.get("confirm") and WS.pending(PLAT))
+    confirm(r.json["request"])
+    apply_now()
     env = (PIPE / ".env").read_text()
-    ok("the pipeline saves it in its own .env; the request (the only copy outside it) is deleted",
+    ok("once confirmed, the pipeline saves it in its own .env; the request (the only copy outside it) is deleted",
        "SHADOWSERVER_API_KEY=KEY12345678" in env and "SHADOWSERVER_API_SECRET=SECRET-abc-123" in env and not WS.pending(PLAT))
     g_ = c.get("/api/pipeline/settings", headers=H)
     every_file = "".join(p.read_text() for p in PLAT.rglob("*.json"))
@@ -246,7 +313,11 @@ try:
        r.status_code == 200 and not (qdir / MA.RELEASE_FILE).exists() and any(e == "sender_release" for e, *_ in logged)
        and c.get("/api/pipeline/held", headers=H).json["held"][0]["release_asked"], str(r.status_code))
     apply_now()
-    ok("…the pipeline's next run marks it released (its fetch step then lets it through)", (qdir / MA.RELEASE_FILE).exists())
+    ok("…a release waits for confirmation on the server (the next run alone does not release it)",
+       not (qdir / MA.RELEASE_FILE).exists() and r.json.get("confirm"))
+    confirm(r.json["request"])
+    apply_now()
+    ok("…once confirmed, the pipeline's next run marks it released (its fetch step then lets it through)", (qdir / MA.RELEASE_FILE).exists())
 
     print("Audit portal → Sender check")
     a, HA = client(AUDITOR)

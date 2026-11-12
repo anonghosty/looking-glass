@@ -13,6 +13,11 @@ loaded read-only from its folder: one copy of the rules) and applies it at the s
 minutes with the usual schedule), then writes the result back. The page shows what is waiting and what was applied or
 refused; each result is recorded in the audit log.
 
+A request that makes the pipeline LESS strict (the sender check lowered or another signer, the certificate check off, a
+new API key, a release) is not applied on this page's word alone: the pipeline holds it until someone confirms it on
+the server, on the pipeline's account (./confirm_request.sh <id>; worker_settings.weakens decides). This page says so
+and shows the command; a compromised web app can then only make the pipeline stricter.
+
 Locked by default. A request needs the Settings permission AND the signed-in administrator's own password again (unlock,
 10 minutes, this session only; a wrong password counts as a failed sign-in). Saving locks it again. Every unlock, failed
 unlock, request (old → new value), API key, release and result is in the audit log.
@@ -144,7 +149,8 @@ def install(app, ctx):
         new = [r for r in ws.results(ddir(), limit=200) if r.get("id") and r["id"] not in done]
         for r in reversed(new):
             audit.add("pipeline_request_" + ("applied" if r.get("status") == "applied" else "refused"), user=r.get("by", ""),
-                      target=r["id"], detail=(f"{r.get('kind')}: " + ("; ".join(r.get("changed") or []) or r.get("reason") or "nothing changed"))[:900])
+                      target=r["id"], detail=(f"{r.get('kind')}: " + ("; ".join(r.get("changed") or []) or r.get("reason") or "nothing changed")
+                                              + (f" | confirmed on the server by {r['confirmed_on_server']}" if r.get("confirmed_on_server") else ""))[:900])
             done.add(r["id"])
         if new:
             os.makedirs(os.path.dirname(logged_file()), mode=0o700, exist_ok=True)
@@ -153,9 +159,28 @@ def install(app, ctx):
                 json.dump(sorted(done)[-2000:], fh)
             os.replace(tmp, logged_file())
 
-    def requested(ws, kind, payload, detail):
+    def weak(ws, req, env):
+        """Why the pipeline will hold this request for confirmation on the server ([] = applied at the next run).
+        An older pipeline without the rule: [] (it applies as before)."""
+        f = getattr(ws, "weakens", None)
+        return f(req, env) if f else []
+
+    def waiting_list(ws, d, env):
+        base = os.path.realpath(os.path.expanduser(env.get("DATA_DIR") or str(d)))    # the pipeline's DATA_DIR, as it uses it
+        try:
+            return ws.pending(ddir(), env, base)
+        except TypeError:                                   # an older pipeline: no confirmation step
+            return ws.pending(ddir())
+
+    def confirm_note(ws, d, rid, why):
+        cmd = ws.confirm_command(rid) if hasattr(ws, "confirm_command") else f"./confirm_request.sh {rid}"
+        return (f"Requested and locked. This makes the pipeline less strict ({'; '.join(why)}), so it waits for "
+                f"confirmation on the server: on the pipeline's account, in {d}, run {cmd} . The next run after that applies it.")
+
+    def requested(ws, kind, payload, detail, why=()):
         rid = ws.make_request(ddir(), kind, payload, me()[0])
-        audit.add("pipeline_change_requested", user=me()[0], target=rid, detail=f"{kind}: {detail}"[:900])
+        audit.add("pipeline_change_requested", user=me()[0], target=rid,
+                  detail=(f"{kind}: {detail}" + (f" | waits for confirmation on the server: {'; '.join(why)}" if why else ""))[:900])
         unlocked.pop(me()[1], None)                         # saved: locked again
         return rid
 
@@ -170,7 +195,7 @@ def install(app, ctx):
         log_results(ws)
         env = pipeline_link.read_env(d / ".env")
         provider = (env.get("MAIL_PROVIDER") or "imap").lower()
-        waiting = ws.pending(ddir())
+        waiting = waiting_list(ws, d, env)
         key_waiting = any(r.get("kind") == "apikey" for r in waiting)
         st = api_state()
         _, sk = me()
@@ -182,7 +207,7 @@ def install(app, ctx):
                                 "min": f[5] if f[3] == "int" else None, "max": f[6] if f[3] == "int" else None,
                                 "help": f[7], "value": env.get(f[0], f[4])}
                                for f in ws.FIELDS if not f[8] or f[8] == provider],
-                       pending=waiting, results=ws.results(ddir(), limit=8),
+                       pending=waiting, results=ws.results(ddir(), limit=8), pipeline_dir=str(d),
                        api={"key_set": bool(env.get(API_KEYS[0]) and env.get(API_KEYS[1])), "key_waiting": key_waiting,
                             "checked_at": st.get("checked_at"), "ok": st.get("ok"), "message": st.get("message", "")})
 
@@ -235,10 +260,12 @@ def install(app, ctx):
         if not changed:
             unlocked.pop(me()[1], None)
             return jsonify(ok=True, changed=[], note="Nothing had changed. Locked again.")
+        why = weak(ws, {"kind": "settings", "values": changed}, env)
         rid = requested(ws, "settings", {"values": changed},
-                        "; ".join(f"{k}: {env.get(k, ws.SPEC[k][4])} → {v}" for k, v in changed.items()))
-        return jsonify(ok=True, changed=sorted(changed), request=rid,
-                       note="Requested and locked: the pipeline checks and applies it at its next run (within about 30 minutes).")
+                        "; ".join(f"{k}: {env.get(k, ws.SPEC[k][4])} → {v}" for k, v in changed.items()), why)
+        return jsonify(ok=True, changed=sorted(changed), request=rid, confirm=bool(why),
+                       note=confirm_note(ws, d, rid, why) if why else
+                       "Requested and locked: the pipeline checks and applies it at its next run (within about 30 minutes).")
 
     @app.route("/api/pipeline/apikey", methods=["POST"])
     def api_pipeline_apikey():
@@ -257,10 +284,11 @@ def install(app, ctx):
         audit.add("pipeline_apikey_checked", user=me()[0], detail=f"new Shadowserver API key: {'accepted' if ok else 'refused'} ({msg})"[:300])
         if not ok:
             return jsonify(error=f"Not saved: {msg}"), 400
-        rid = requested(ws, "apikey", {"key": key, "secret": secret}, "Shadowserver API key and secret (values not logged)")
+        why = weak(ws, {"kind": "apikey"}, {})
+        rid = requested(ws, "apikey", {"key": key, "secret": secret}, "Shadowserver API key and secret (values not logged)", why)
         save_api_state({"checked_at": now, "ok": True, "message": msg})
-        return jsonify(ok=True, message=msg, checked_at=now, request=rid,
-                       note="The pipeline saves it at its next run (within about 30 minutes).")
+        return jsonify(ok=True, message=msg, checked_at=now, request=rid, confirm=bool(why),
+                       note=confirm_note(ws, d, rid, why) if why else "The pipeline saves it at its next run (within about 30 minutes).")
 
     @app.route("/api/pipeline/apikey/check", methods=["POST"])
     def api_pipeline_apikey_check():
@@ -307,9 +335,12 @@ def install(app, ctx):
         if not (ws and re.fullmatch(r"[0-9a-f]{20}", qid) and match):
             return jsonify(error="No such held-back report."), 404
         m = match[0][1]
-        ws.make_request(ddir(), "release", {"qid": qid}, me()[0])
+        why = weak(ws, {"kind": "release"}, {})
+        rid = ws.make_request(ddir(), "release", {"qid": qid}, me()[0])
         audit.add("sender_release", user=me()[0], target=qid,
-                  detail=f"release requested ({m.get('result')}: {m.get('reason')}) | {(m.get('subject') or '')[:120]}")
-        return jsonify(ok=True, note="Release requested: the pipeline's next run lets it through.")
+                  detail=f"release requested ({m.get('result')}: {m.get('reason')}) | {(m.get('subject') or '')[:120]}"
+                         + (f" | request {rid} waits for confirmation on the server" if why else ""))
+        return jsonify(ok=True, request=rid, confirm=bool(why),
+                       note=confirm_note(ws, d, rid, why) if why else "Release requested: the pipeline's next run lets it through.")
 
     return {"is_unlocked": is_unlocked, "ctx": ctx}      # ctx: the checks point data_dir at a temporary folder
