@@ -53,19 +53,21 @@ with open(os.path.join(tmp, "users.json"), "w") as fh:
         "chkuser": {"hash": generate_password_hash(PW_U), "role": "external", "status": "active", "totp": SEC_U, "changed": 0}}}, fh)
 users.path, users.mtime = os.path.join(tmp, "users.json"), None
 UA = {"User-Agent": "lg-check-pwpolicy"}
-step_n = [int(time.time()) // 30 - 2]
 
 
 def sign_in(name, pw, secret):
-    """(client, response after the authenticator step). Each code is used once: walk the allowed window."""
+    """(client, response after the authenticator step). Each code works once (the server refuses a reused one), so
+    wait for a 30-second window this account has not used yet, and never start in a window's last 3 seconds: a
+    sign-in that crossed the boundary could otherwise land on a used window and be refused, as a real reuse would."""
+    last = (users.get(name) or {}).get("totp_last")
+    while True:
+        now = time.time()
+        if (last is None or int(now) // 30 > last) and 1 <= now % 30 <= 27:
+            break
+        time.sleep(0.5)
     c = A.app.test_client()
     r = c.post("/login", data={"username": name, "password": pw}, headers=UA)
-    step_n[0] += 1
     r = c.post("/login", data={"step": "mfa", "code": code(secret, int(time.time()) // 30), "next": "/"}, headers=UA)
-    if r.status_code == 401:                              # this code was used a moment ago: the next one
-        time.sleep(31 - time.time() % 30)
-        r = c.post("/login", data={"username": name, "password": pw}, headers=UA)
-        r = c.post("/login", data={"step": "mfa", "code": code(secret), "next": "/"}, headers=UA)
     return c, r
 
 

@@ -642,8 +642,9 @@ change (old → new value), key and release is in the audit log. Mailbox and dat
 changed here**: they stay in the pipeline's `.env`, set by the installer.
 
 **Changes that make the pipeline less strict also need the server.** Turning the sender check down (Block → Record
-only → Off), changing the expected signer, turning the mail server's certificate check off, saving a new Shadowserver
-API key and releasing a held-back report are requested here as usual, but the pipeline does not apply them on the
+only → Off), changing the expected signer, turning the mail server's certificate check off, going back from the
+Shadowserver API to e-mail, loosening an unzip limit (larger unpacked size, ratio or file count, or less disk space
+kept free), saving a new Shadowserver API key and releasing a held-back report are requested here as usual, but the pipeline does not apply them on the
 web app's word alone. The tab marks them **waits for confirmation on the server** and shows the command; someone with
 access to the server runs it on the pipeline's account, in the pipeline's folder:
 
@@ -654,7 +655,7 @@ access to the server runs it on the pipeline's account, in the pipeline's folder
 The next run then applies it, and the audit log records who requested it and who confirmed it on the server. Without a
 confirmation it is refused after 7 days. Why: if the web app were ever broken into, it could otherwise switch these
 checks off itself (for example the certificate check, and with it expose the mailbox password, which the web app never
-holds). Making the pipeline stricter, folders, performance and unzip limits need no confirmation.
+holds). Making the pipeline stricter (including stricter unzip limits), folders and performance need no confirmation.
 
 - **Getting the reports:** *By e-mail* (the mailbox the reports are sent to) or *Shadowserver report API* (straight
   from Shadowserver, with the API key below; save the key first). Every scheduled run uses your choice and fetches only

@@ -193,11 +193,14 @@ locked out): `add NAME [--admin]`, `passwd`, `mfa`, `role`, `remove`, `list`. Ac
 ### Pipeline settings from the web app (Settings → Workers)
 The web app never writes the pipeline's files: a change is a request in its own `data/pipeline_requests/`, which the
 pipeline checks again and applies at its next run. Requests may only make the pipeline **stricter** on their own. One
-that weakens it (the sender check lowered or another expected signer, the mail server's certificate check off, a new
-Shadowserver API key, a held-back report released) is held until someone confirms it on the server, on the pipeline's
+that weakens it (the sender check lowered or another expected signer, the mail server's certificate check off, the
+API given up for the mailbox, an unzip limit loosened, a new Shadowserver API key, a held-back report released) is held
+until someone confirms it on the server, on the pipeline's
 account (`./confirm_request.sh <id>` in the pipeline's folder). The confirmation lives in the pipeline's folder, which
 the hardened web service cannot write, and is bound to the request's SHA-256, so a request changed afterwards is
-refused; unconfirmed ones are refused after 7 days. So a bug in the web app or a takeover of its account cannot use
+refused; unconfirmed ones are refused after 7 days. The confirmation screen and the pipeline's log print every field
+of a request with its control characters removed, and a malformed request cannot be confirmed, so a forged request
+cannot redraw the screen to look harmless; what is shown is read once and is exactly what is hashed. So a bug in the web app or a takeover of its account cannot use
 this route to switch the pipeline's checks off or reach the mailbox password.
 
 ### Why TOTP, and what about OAuth / single sign-on

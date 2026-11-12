@@ -21,8 +21,11 @@ That writes <pipeline DATA_DIR>/confirmed_requests/<id>.json holding the SHA-256
 in the pipeline's folder, which the hardened web service cannot write. A request changed after its confirmation no
 longer matches and is not applied. Unconfirmed requests are refused after CONFIRM_DAYS days. Weakening means: the
 sender check lowered (Block -> Record only -> Off), a different expected signer, the mail server's certificate check
-turned off, a new Shadowserver API key, and releasing a held-back report. Tightening, folders, performance and unzip
-limits are applied at the next run as before.
+turned off, the API given up for the mailbox (api -> email), an unzip limit loosened (more unpacked size, ratio or
+files, less disk space kept free), a new Shadowserver API key, and releasing a held-back report. Tightening, folders
+and performance are applied at the next run as before. A malformed request is never shown as a change nor
+confirmable, and every field printed from a request (screen or log) has its control codes removed (clean()), so a
+forged file cannot redraw the confirmation screen.
 """
 import datetime as dt
 import hashlib
@@ -119,6 +122,36 @@ def validate(values, provider):
 MAIL_AUTH_RANK = {"off": 0, "log": 1, "enforce": 2}
 CONFIRM_DAYS = 7
 CONFIRM_DIR = "confirmed_requests"
+# unzip limits: a higher value of the first three, or a lower value of the last, loosens the zip-bomb protection
+ZIP_HIGHER_IS_LOOSER = ("ZIP_MAX_UNPACKED_MB", "ZIP_MAX_RATIO", "ZIP_MAX_FILES")
+ZIP_LOWER_IS_LOOSER = ("ZIP_KEEP_FREE_MB",)
+# control characters (C0, DEL, C1 such as \x9b) and the bidirectional overrides that reorder what a terminal shows
+_UNSAFE = re.compile(r"[\x00-\x1f\x7f-\x9f‎‏‪-‮⁦-⁩]")
+
+
+def clean(value, limit=300) -> str:
+    """Text from a request file as it may be printed (terminal, log): control codes shown as '?', never acted on.
+    A request file can be written by whoever this step guards against (external review, 2026-11-12)."""
+    return _UNSAFE.sub("?", str(value if value is not None else ""))[:limit]
+
+
+def problems(req, env):
+    """Why this request is malformed ([] = well formed): the same checks the pipeline applies before anything else."""
+    kind = req.get("kind")
+    if kind == "settings":
+        return validate(req.get("values") or {}, (env.get("MAIL_PROVIDER") or "imap").lower())[1]
+    if kind == "apikey":
+        return [] if valid_api(req.get("key"), req.get("secret")) else ["not an API key and secret"]
+    if kind == "release":
+        return [] if QID_RX.match(str(req.get("qid") or "")) else ["no such held-back report"]
+    return [f"unknown request {clean(kind, 40)!r}"]
+
+
+def _int(v):
+    try:
+        return int(str(v).strip())
+    except (TypeError, ValueError):
+        return None
 
 
 def weakens(req, env):
@@ -133,14 +166,20 @@ def weakens(req, env):
         return []
     out, vals = [], req.get("values") or {}
     cur = lambda k: str(env.get(k, SPEC[k][4]) if k in SPEC else env.get(k, "")).strip().lower()
-    if "MAIL_AUTH" in vals:
-        new = str(vals["MAIL_AUTH"]).strip().lower()
-        if MAIL_AUTH_RANK.get(new, -1) < MAIL_AUTH_RANK.get(cur("MAIL_AUTH"), 1):
-            out.append(f"the sender check lowered: {cur('MAIL_AUTH')} → {new}")
-    if "MAIL_AUTH_DOMAIN" in vals and str(vals["MAIL_AUTH_DOMAIN"]).strip().lower() != cur("MAIL_AUTH_DOMAIN"):
-        out.append(f"a different expected signer: {cur('MAIL_AUTH_DOMAIN')} → {str(vals['MAIL_AUTH_DOMAIN']).strip().lower()}")
-    if "IMAP_VERIFY_TLS" in vals and str(vals["IMAP_VERIFY_TLS"]).strip().lower() == "false" and cur("IMAP_VERIFY_TLS") != "false":
+    new = lambda k: clean(vals[k], 80).strip().lower()
+    if "MAIL_AUTH" in vals and MAIL_AUTH_RANK.get(new("MAIL_AUTH"), -1) < MAIL_AUTH_RANK.get(cur("MAIL_AUTH"), 1):
+        out.append(f"the sender check lowered: {cur('MAIL_AUTH')} → {new('MAIL_AUTH')}")
+    if "MAIL_AUTH_DOMAIN" in vals and new("MAIL_AUTH_DOMAIN") != cur("MAIL_AUTH_DOMAIN"):
+        out.append(f"a different expected signer: {cur('MAIL_AUTH_DOMAIN')} → {new('MAIL_AUTH_DOMAIN')}")
+    if "IMAP_VERIFY_TLS" in vals and new("IMAP_VERIFY_TLS") == "false" and cur("IMAP_VERIFY_TLS") != "false":
         out.append("the mail server's certificate check turned off")
+    if "REPORT_SOURCE" in vals and new("REPORT_SOURCE") == "email" and cur("REPORT_SOURCE") == "api":
+        out.append("from Shadowserver's signed API back to the mailbox (where a forged e-mail can arrive)")
+    for k in ZIP_HIGHER_IS_LOOSER + ZIP_LOWER_IS_LOOSER:
+        if k in vals:
+            a, b = _int(cur(k)), _int(new(k))
+            if a is not None and b is not None and (b > a if k in ZIP_HIGHER_IS_LOOSER else b < a):
+                out.append(f"an unzip limit loosened: {k} {a} → {b}")
     return out
 
 
@@ -309,17 +348,9 @@ def apply_requests(platform_data_dir, env_file, base_dir, log):
                 raise ValueError("not a request made by the platform")
             env = read_env(env_file)
             kind = req.get("kind")
-            # malformed requests are refused at once, before any wait for confirmation
-            if kind == "settings":
-                _, errors = validate(req.get("values") or {}, (env.get("MAIL_PROVIDER") or "imap").lower())
-                if errors:
-                    raise ValueError("; ".join(errors))
-            elif kind == "apikey" and not valid_api(req.get("key"), req.get("secret")):
-                raise ValueError("not an API key and secret")
-            elif kind == "release" and not QID_RX.match(str(req.get("qid") or "")):
-                raise ValueError("no such held-back report")
-            elif kind not in ("settings", "apikey", "release"):
-                raise ValueError(f"unknown request {kind!r}")
+            bad = problems(req, env)         # malformed requests are refused at once, before any wait for confirmation
+            if bad:
+                raise ValueError("; ".join(bad))
             weak = weakens(req, env)
             if weak:                         # loosening the pipeline needs a person on the server, not only a file here
                 c = confirmation(base_dir, rid)
@@ -328,20 +359,21 @@ def apply_requests(platform_data_dir, env_file, base_dir, log):
                     if dt.datetime.now(dt.timezone.utc) - made > dt.timedelta(days=CONFIRM_DAYS):
                         raise ValueError(f"not confirmed on the server within {CONFIRM_DAYS} days ({'; '.join(weak)})")
                     log.warning("Settings → Workers request %s (%s, by %s) waits for confirmation on the server: %s. "
-                                "On the pipeline's account: %s", rid, kind, req.get("by", "?"), "; ".join(weak), confirm_command(rid))
+                                "On the pipeline's account: %s", rid, clean(kind, 20), clean(req.get("by", "?"), 120),
+                                "; ".join(weak), confirm_command(rid))
                     continue                 # stays in the folder; the platform shows it as waiting for confirmation
                 if c.get("sha256") != hashlib.sha256(raw).hexdigest():
                     raise ValueError("changed after it was confirmed on the server: not applied")
-                confirmed_by = f"{c.get('by') or '?'} at {c.get('at') or '?'}"
+                confirmed_by = clean(f"{c.get('by') or '?'} at {c.get('at') or '?'}", 120)
             if kind == "settings":
                 provider = (env.get("MAIL_PROVIDER") or "imap").lower()
-                clean, errors = validate(req.get("values") or {}, provider)
+                ok_vals, errors = validate(req.get("values") or {}, provider)
                 if errors:
                     raise ValueError("; ".join(errors))
-                after = dict(env, **clean)
+                after = dict(env, **ok_vals)
                 if after.get("REPORT_SOURCE") == "api" and not (after.get(API_KEYS[0]) and after.get(API_KEYS[1])):
                     raise ValueError("the API was chosen but no API key is saved")
-                ch = {k: v for k, v in clean.items() if env.get(k, SPEC[k][4]) != v}
+                ch = {k: v for k, v in ok_vals.items() if env.get(k, SPEC[k][4]) != v}
                 if ch:
                     write_env(env_file, ch)
                 changed = [f"{k}: {env.get(k, SPEC[k][4])} → {v}" for k, v in ch.items()]
@@ -356,14 +388,14 @@ def apply_requests(platform_data_dir, env_file, base_dir, log):
                 match = [q for q, _ in mail_auth.held(base_dir) if q.name == qid] if QID_RX.match(qid) else []
                 if not match:
                     raise ValueError("no such held-back report")
-                mail_auth.request_release(match[0], req.get("by") or "?")
+                mail_auth.request_release(match[0], clean(req.get("by") or "?", 120))
                 changed = [f"held-back report {qid} released"]
             else:
                 raise ValueError(f"unknown request {kind!r}")
             status = "applied"
             applied += 1
         except Exception as exc:  # noqa: BLE001  (a bad request is refused, the run goes on)
-            why = str(exc)[:300]
+            why = clean(exc, 300)
         result = dict(public(req), id=rid or p.stem, status=status, reason=why, changed=changed,
                       applied_at=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"))
         if confirmed_by:
@@ -383,7 +415,8 @@ def apply_requests(platform_data_dir, env_file, base_dir, log):
         except OSError:
             pass
         (log.warning if status != "applied" else log.info)(
-            "Settings → Workers request %s (%s, by %s%s): %s%s", rid or p.name, req.get("kind", "?"), req.get("by", "?"),
+            "Settings → Workers request %s (%s, by %s%s): %s%s", clean(rid or p.name, 80), clean(req.get("kind", "?"), 20),
+            clean(req.get("by", "?"), 120),
             f", confirmed on the server by {confirmed_by}" if confirmed_by else "",
             status, f": {why}" if why else (f": {'; '.join(changed)}" if changed else ": nothing changed"))
     return applied
@@ -391,11 +424,12 @@ def apply_requests(platform_data_dir, env_file, base_dir, log):
 
 # ------------------------------------------------------------------ confirming on the server (confirm_request.sh)
 def _describe(req):
+    """What the request changes, as printed (only shown for well-formed requests, and cleaned all the same)."""
     if req.get("kind") == "settings":
-        return "; ".join(f"{k} = {v}" for k, v in (req.get("values") or {}).items())
+        return clean("; ".join(f"{k} = {v}" for k, v in (req.get("values") or {}).items()), 600)
     if req.get("kind") == "release":
-        return f"release held-back report {req.get('qid')}"
-    return public(req).get("values") or req.get("kind")
+        return clean(f"release held-back report {req.get('qid')}", 80)
+    return clean(public(req).get("values") or req.get("kind"), 120)
 
 
 def cli(argv=None):
@@ -417,29 +451,40 @@ def cli(argv=None):
         print("The platform's data folder was not found (PLATFORM_DIR in .env).")
         return 2
     d = req_dir(pdata)
-    waiting = []
+    waiting, malformed = [], []
     for p in sorted(d.glob("*.json")) if d.exists() else []:
         try:
-            req = json.loads(p.read_text(encoding="utf-8"))
+            raw = p.read_bytes()             # read ONCE: what is shown is exactly what is hashed and confirmed
+            req = json.loads(raw.decode("utf-8"))
         except (OSError, ValueError):
             continue
         if isinstance(req, dict) and REQ_ID_RX.match(str(req.get("id") or "")) and p.name == f"{req['id']}.json":
+            bad = problems(req, env)
+            if bad:                          # never shown as a change, never confirmable: the next run refuses it
+                malformed.append((req["id"], bad))
+                continue
             w = weakens(req, env)
             if w:
-                waiting.append((p, req, w))
+                waiting.append((raw, req, w))
+    who = lambda r: f"{clean(r.get('by', '?'), 120)} at {clean(r.get('at', '?'), 40)}"
     if not a.id:
         if not waiting:
             print("Nothing waits for confirmation.")
-        for p, req, w in waiting:
+        for raw, req, w in waiting:
             done = " (confirmed, applied at the next run)" if confirmation(base, req["id"]) else ""
-            print(f"{req['id']}  by {req.get('by', '?')} at {req.get('at', '?')}{done}\n    {_describe(req)}\n    weakens: {'; '.join(w)}")
+            print(f"{req['id']}  by {who(req)}{done}\n    {_describe(req)}\n    weakens: {'; '.join(w)}")
+        for rid, bad in malformed:
+            print(f"{rid}  MALFORMED, cannot be confirmed; the next run refuses it: {clean('; '.join(bad), 300)}")
         return 0
+    if any(rid == a.id for rid, _ in malformed):
+        print(f"Request {a.id} is malformed and cannot be confirmed; the pipeline's next run refuses it.")
+        return 1
     match = [x for x in waiting if x[1]["id"] == a.id]
     if not REQ_ID_RX.match(a.id) or not match:
-        print(f"No request {a.id!r} waits for confirmation (./confirm_request.sh lists them).")
+        print(f"No request {clean(a.id, 60)!r} waits for confirmation (./confirm_request.sh lists them).")
         return 1
-    p, req, w = match[0]
-    print(f"Request {req['id']}\n  asked by   {req.get('by', '?')} at {req.get('at', '?')} (in Looking Glass)\n"
+    raw, req, w = match[0]
+    print(f"Request {req['id']}\n  asked by   {who(req)} (in Looking Glass)\n"
           f"  change     {_describe(req)}\n  weakens    {'; '.join(w)}")
     if not a.yes:
         try:
@@ -451,7 +496,7 @@ def cli(argv=None):
             return 1
     cd = base / CONFIRM_DIR
     cd.mkdir(mode=0o700, parents=True, exist_ok=True)
-    body = {"id": req["id"], "sha256": request_sha(p), "by": getpass.getuser(),
+    body = {"id": req["id"], "sha256": hashlib.sha256(raw).hexdigest(), "by": getpass.getuser(),
             "at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "weakens": w}
     fd, tmp = tempfile.mkstemp(dir=str(cd), prefix=".c.", suffix=".tmp")
     with os.fdopen(fd, "w", encoding="utf-8") as fh:

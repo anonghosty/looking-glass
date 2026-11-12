@@ -140,7 +140,7 @@ try:
         ok(f"refused: {why}", r.status_code == 400, str(r.status_code))
     ok("…no request was made by any refused save", not WS.pending(PLAT))
     r = c.post("/api/pipeline/settings", json={"values": {"EMAIL_DAYS": "3", "MAIL_AUTH": "enforce", "IMAP_VERIFY_TLS": "true",
-                                                           "WORKERS": "6", "ZIP_MAX_RATIO": "500"}}, headers=H)
+                                                           "WORKERS": "6", "ZIP_MAX_RATIO": "150"}}, headers=H)
     ok("a valid save requests exactly what changed", r.status_code == 200 and sorted(r.json["changed"]) == ["EMAIL_DAYS", "IMAP_VERIFY_TLS", "MAIL_AUTH", "ZIP_MAX_RATIO"]
        and "next run" in r.json.get("note", ""), str(r.json))
     reqs = list((PLAT / "pipeline_requests").glob("*.json"))
@@ -153,7 +153,7 @@ try:
     n = apply_now()
     env = (PIPE / ".env").read_text()
     ok("the pipeline's next run checks the request again and applies it to its own .env", n == 1 and "EMAIL_DAYS=3" in env and "MAIL_AUTH=enforce" in env
-       and "IMAP_VERIFY_TLS=true" in env and "ZIP_MAX_RATIO=500" in env, env[-200:])
+       and "IMAP_VERIFY_TLS=true" in env and "ZIP_MAX_RATIO=150" in env, env[-200:])
     ok("…passwords and comments exactly as before, mode 600; the request is gone",
        "IMAP_PASSWORD=Very-Secret-Mailbox-9" in env and "MONGO_PASSWORD=Very-Secret-Mongo-7" in env and "# a comment that must stay" in env
        and oct(os.stat(PIPE / ".env").st_mode & 0o777) == "0o600" and not WS.pending(PLAT))
@@ -228,6 +228,49 @@ try:
        r.status_code == 200 and r.json.get("confirm") and "./confirm_request.sh" in r.json.get("note", "") and row.get("confirm")
        and g_.get("pipeline_dir"), str(r.json)[:240])
     ok("…and the request in the audit log says so", any(e == "pipeline_change_requested" and "waits for confirmation on the server" in d_ for e, d_, _ in logged))
+    for p_ in rd.glob("*.json"):
+        p_.unlink()
+
+    print("The confirmation screen cannot be redrawn by a forged request; more weakening changes wait")
+    import contextlib, io as _io
+    ESC = "\x1b[2A\x1b[2K\x9b2K‮evil"
+    forged_esc = WS.make_request(PLAT, "settings", {"values": {"MAIL_AUTH": "off"}}, "admin" + ESC)
+    p_ = rd / f"{forged_esc}.json"                      # its "at" with control codes too, as a forger would write it
+    j_ = json.loads(p_.read_text()); j_["at"] = "2026-11-12" + ESC; p_.write_text(json.dumps(j_))
+    bad_val = WS.make_request(PLAT, "settings", {"values": {"MAIL_AUTH_DOMAIN": "shadowserver.org" + ESC}}, "x")
+    shown = _io.StringIO()
+    with contextlib.redirect_stdout(shown):
+        WS.cli([]); WS.cli([forged_esc, "--yes"]); rc_bad = WS.cli([bad_val, "--yes"])
+    out_ = shown.getvalue()
+    ok("control codes in by, at and values never reach the terminal (escape, C1 \\x9b, right-to-left override)",
+       not any(ch in out_ for ch in ("\x1b", "\x9b", "‮")) and "admin?[2A" in out_, repr(out_[:300]))
+    ok("a malformed request (control codes in a value) is listed as MALFORMED and cannot be confirmed",
+       "MALFORMED" in out_ and rc_bad == 1 and WS.confirmation(PIPE, bad_val) is None)
+    msgs = []
+
+    class _H(logging.Handler):
+        def emit(self, rec): msgs.append(rec.getMessage())
+    lg = logging.getLogger("lg-check-workers"); hh = _H(); lg.addHandler(hh)
+    WS.make_request(PLAT, "settings", {"values": {"WORKERS": "5"}}, "someone" + ESC)
+    apply_now()
+    lg.removeHandler(hh)
+    ok("…nor the pipeline's log", msgs and not any(ch in m for m in msgs for ch in ("\x1b", "\x9b", "‮")), repr(msgs[:3])[:300])
+    res = {r_["id"]: r_ for r_ in WS.results(PLAT, limit=50)}
+    ok("…the confirmed one (shown cleaned) is applied as it was written", res.get(forged_esc, {}).get("status") == "applied"
+       and "MAIL_AUTH=off" in (PIPE / ".env").read_text())
+    WS.write_env(PIPE / ".env", {"MAIL_AUTH": "enforce"})
+    e_ = {"REPORT_SOURCE": "api", "ZIP_MAX_UNPACKED_MB": "2048", "ZIP_MAX_RATIO": "200", "ZIP_MAX_FILES": "100", "ZIP_KEEP_FREE_MB": "1024"}
+    W = lambda v: WS.weakens({"kind": "settings", "values": v}, e_)
+    ok("the API given up for the mailbox waits (api → email); email → api does not",
+       W({"REPORT_SOURCE": "email"}) and not WS.weakens({"kind": "settings", "values": {"REPORT_SOURCE": "api"}}, {"REPORT_SOURCE": "email"}))
+    ok("a loosened unzip limit waits: more unpacked size, ratio or files, less space kept free",
+       all(W({k: v}) for k, v in (("ZIP_MAX_UNPACKED_MB", "4096"), ("ZIP_MAX_RATIO", "201"), ("ZIP_MAX_FILES", "101"), ("ZIP_KEEP_FREE_MB", "512"))))
+    ok("…a tightened one does not (applied at the next run)",
+       not any(W({k: v}) for k, v in (("ZIP_MAX_UNPACKED_MB", "1024"), ("ZIP_MAX_RATIO", "100"), ("ZIP_MAX_FILES", "50"), ("ZIP_KEEP_FREE_MB", "2048"))))
+    loose = WS.make_request(PLAT, "settings", {"values": {"ZIP_MAX_RATIO": "100000"}}, "a compromised web app")
+    apply_now()
+    ok("…and the pipeline holds a loosened limit for confirmation", "ZIP_MAX_RATIO=100000" not in (PIPE / ".env").read_text()
+       and (rd / f"{loose}.json").exists())
     for p_ in rd.glob("*.json"):                       # not confirmed: drop it, and put the certificate check back on
         p_.unlink()
     WS.write_env(PIPE / ".env", {"IMAP_VERIFY_TLS": "true", "WORKERS": "6"})
