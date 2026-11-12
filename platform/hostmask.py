@@ -18,8 +18,9 @@ MASKS = [
                 r"(?:\s*[+-]\d{4}|\s+[A-Z]{2,4})?", re.I), "<date>"),
     (re.compile(r"\b\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?Z?)?\b"), "<date>"),
     (re.compile(r"\b\d{1,2}:\d{2}:\d{2}\b"), "<time>"),
-    (re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"), "<ip>"),
-    # IPv6: with "::", or at least four groups (so a time or a ratio is not one)
+    # (IPv4: only ip_find above, so both maskers follow one rule; a pattern here also masked the first four parts of a
+    # version such as 1.2.3.4.5, which the masked viewers' masker left alone: external review, 2026-11-12)
+    # IPv6 (and hardware addresses): with "::", or at least four groups (so a time or a ratio is not one)
     (re.compile(r"(?<![\w:])(?=[0-9a-f:]*::|(?:[0-9a-f]{1,4}:){4})[0-9a-f:]{3,}[0-9a-f](?![\w:])", re.I), "<ip>"),
     # host names: labels with at least one letter, ending in a letter-only top-level label (example.org, a.b.example.co)
     (re.compile(r"(?<![\w.-])(?:\*\.)?(?=[\w-]*[a-z])[\w-]+(?:\.[\w-]+)*\.[a-z]{2,24}(?![\w-])", re.I), "<host>"),

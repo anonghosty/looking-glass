@@ -192,8 +192,9 @@ a tamper-evident audit log with control checks mapped to NIST SP 800-53 and CIS 
                      analysts' browsers · wall screens · executives · partners (masked)
 ```
 
-1. **Collect.** The database pipeline reads the mailbox that receives your Shadowserver reports (Gmail / Google
-   Workspace, Microsoft 365 or any IMAP server), saves every attachment and download link, and skips what it already has.
+1. **Collect.** The database pipeline fetches your Shadowserver reports with your Shadowserver API key, or reads the
+   mailbox that receives them (Gmail / Google Workspace, Microsoft 365 or any IMAP server), falling back from one to the
+   other when needed. It skips what it already has.
 2. **Load.** Each report goes into MongoDB, one collection per report type, without duplicates.
 3. **Replay.** Shadowserver sends a day's reports during the next day; Looking Glass replays that day **in full, at
    the same time of day**, so a wall screen always shows a living picture.
@@ -201,14 +202,15 @@ a tamper-evident audit log with control checks mapped to NIST SP 800-53 and CIS 
 
 | Folder | What it is | Start here |
 |---|---|---|
-| [`database/`](database) | the Shadowserver pipeline: installs MongoDB, pulls the report e-mails, loads them | [database/README.md](database/README.md) |
+| [`database/`](database) | the Shadowserver pipeline: installs MongoDB, fetches the reports (API or e-mail), loads them | [database/README.md](database/README.md) |
 | [`platform/`](platform) | the Looking Glass web platform | [platform/README.md](platform/README.md) |
 | [`docs/`](docs) | glossary, comparison and screenshots | [docs/GLOSSARY.md](docs/GLOSSARY.md) |
 
 ## Quick start
 
-**You need:** Ubuntu 24.04 or later, Desktop or Server (on the computer itself, in a virtual machine, or Ubuntu on WSL 2 on Windows 10/11) · the mailbox that receives your
-Shadowserver reports · a free [Mapbox](https://account.mapbox.com/) token · optionally a [Malpedia](https://malpedia.caad.fkie.fraunhofer.de/) token.
+**You need:** Ubuntu 24.04 or later, Desktop or Server (on the computer itself, in a virtual machine, or Ubuntu on WSL 2 on Windows 10/11) · your Shadowserver API key, or
+the mailbox that receives your Shadowserver reports · about 250 MB of disk for the code and its Python environments,
+plus room for your reports in MongoDB · a free [Mapbox](https://account.mapbox.com/) token · optionally a [Malpedia](https://malpedia.caad.fkie.fraunhofer.de/) token.
 No Shadowserver reports yet? [Sign up your CSIRT](https://www.shadowserver.org/what-we-do/network-reporting/get-reports/) — it is free.
 
 1. **Get the code**
@@ -325,7 +327,7 @@ Please report security problems **privately** to the maintainers rather than in 
 |---|---|
 | Countries | the **54 African countries** today; global coverage is in the pipeline |
 | Operating system | **Ubuntu 24.04 or later, Desktop or Server** — on the computer itself, in a virtual machine, or Ubuntu on WSL 2 on Windows 10/11. On Ubuntu Server, create the first administrator through an SSH tunnel (`ssh -L 5000:127.0.0.1:5000 user@server`, then open http://localhost:5000) |
-| Memory and disk | about 2 GB RAM for the platform; MongoDB needs space for your reports |
+| Memory and disk | about 2 GB RAM for the platform. Disk: about 100 MB to download (the code itself is about 9 MB; the rest is screenshots, film posters and the history) and about 120 MB for the two Python environments; MongoDB needs space for your reports |
 | Network | the mailbox (IMAP, Gmail API or Microsoft Graph) or Shadowserver's report API, Mapbox for the map tiles; optional Malpedia, RIPEstat, PeeringDB, NVD, CISA KEV and EPSS look-ups |
 | Browsers | current Chrome, Edge, Firefox or Safari; TVs and phones supported |
 

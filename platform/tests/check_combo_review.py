@@ -11,6 +11,8 @@ import csv, io, json, os, re, sys, tempfile, time, zipfile
 from urllib.parse import quote
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 os.environ.setdefault("THREATMAP_SCHEDULE", "0")
+import needs_db  # noqa: E402
+needs_db.require()
 import app as A  # noqa: E402
 from flask import g  # noqa: E402
 

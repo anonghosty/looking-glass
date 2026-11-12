@@ -41,5 +41,21 @@ ok("041.066.001.002 and 41.66.1.2 get the same label", host_label.label_text("04
 print("Not addresses: left alone")
 for text in ("nginx/1.18.0", "version 1.2.3.4.5", "10:22:31", "ratio 3:2:1", "999.1.1.1", "OpenSSH_8.9p1 Ubuntu-3ubuntu0.6"):
     ok(f"{text!r} has no address", not ip_find.spans(text), str(ip_find.spans(text)))
+print("Four-part versions the text names as versions: kept by every masker (review follow-up)")
+for text in ("version 2.0.1.3", "Build: 1.2.3.4", "firmware=10.4.0.12", "Server: Apache/2.0.1.3 (Unix)",
+             "RouterOS/6.49.10.1", "rev. 3.1.0.2"):
+    ok(f"{text!r} has no address", not ip_find.spans(text), str(ip_find.spans(text)))
+    ok(f"…and stays for researchers: {hostmask.mask(text)!r}", hostmask.mask(text) == text)
+    ok(f"…and for masked viewers: {host_label.label_text(text)!r}", "Host " not in host_label.label_text(text))
+print("…but an address near such words is still masked")
+for text, ip in (("/api/41.66.1.2", "41.66.1.2"), ("version41.66.1.2", "41.66.1.2"), ("x/41.66.1.2", "41.66.1.2"),
+                 ("GET http://41.66.1.2/", "41.66.1.2"), ("http://example.org/41.66.1.2", "41.66.1.2"),
+                 ("host 41.66.1.2 version 2.0.1.3", "41.66.1.2"), ("v41.66.1.2", "41.66.1.2")):
+    found = [s[2] for s in ip_find.spans(text)]
+    ok(f"found in {text!r}", found == [ip], str(found))
+print("A five-part number: one rule in both maskers (left alone)")
+for text in ("1.2.3.4.5", "build 1.2.3.4.5 ok"):
+    ok(f"researchers keep {text!r}: {hostmask.mask(text)!r}", hostmask.mask(text) == text)
+    ok(f"masked viewers keep {text!r}: {host_label.label_text(text)!r}", host_label.label_text(text) == text)
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))
 sys.exit(1 if fails else 0)

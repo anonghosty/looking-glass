@@ -111,9 +111,9 @@ to advisory under
 
 <div class="lg-steps" markdown>
 
-1. **Collect.** The database pipeline reads the mailbox that receives your Shadowserver reports (Gmail / Google
-   Workspace, Microsoft 365 or any IMAP server), saves every attachment and download link, and skips what it
-   already has.
+1. **Collect.** The database pipeline fetches your Shadowserver reports with your Shadowserver API key, or reads the
+   mailbox that receives them (Gmail / Google Workspace, Microsoft 365 or any IMAP server), falling back from one to
+   the other when needed. It skips what it already has.
 2. **Load.** Each report goes into MongoDB, one collection per report type, without duplicates.
 3. **Replay.** Shadowserver sends a day's reports during the next day; Looking Glass replays that day in full, at
    the same time of day, so a wall screen always shows a living picture.

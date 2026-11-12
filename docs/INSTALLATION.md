@@ -61,10 +61,10 @@ Security is described in [../docs/SECURITY.md](SECURITY.md). Steps marked
 | Operating system | Ubuntu 24.04 or later, Desktop or Server, with systemd (on the computer itself, in a virtual machine, or Ubuntu on WSL 2 on Windows 10/11) |
 | Python | 3.12 or newer, with `venv` (tested on 3.14) |
 | MongoDB | 6 or newer, with authentication on, filled by the database pipeline |
-| Shadowserver | your CSIRT's free Shadowserver reports (https://www.shadowserver.org/what-we-do/network-reporting/) delivered to a mailbox |
+| Shadowserver | your CSIRT's free Shadowserver reports (https://www.shadowserver.org/what-we-do/network-reporting/) delivered to a mailbox, or fetched with your Shadowserver API key |
 | Mapbox | a free account and a public access token (`pk.…`) for the map: https://account.mapbox.com |
 | Malpedia (optional) | an API token, for the "Look up on Malpedia" buttons |
-| Memory / disk | about 2 GB RAM for the platform; the code is about 10 MB. MongoDB needs space for your reports |
+| Memory / disk | about 2 GB RAM for the platform. Disk: the download (`git clone`) is about 100 MB: the code itself is about 9 MB, the rest is screenshots, film posters and the history. The two Python environments the installer makes add about 120 MB. MongoDB needs space for your reports |
 
 ## Who can reach Looking Glass: `ACCESS_MODE`
 

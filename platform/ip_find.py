@@ -4,7 +4,8 @@ Before, the researchers' masker (hostmask.py) and the masked viewers' (host_labe
 and each let different spellings through: v41.66.1.2 (a letter glued on), id_41.66.1.2, ip:2001:db8::1 (IPv6 after a
 colon), 041.066.001.002 (leading zeros) and app.41.66.1.2.nip.io (an address inside a host name). Over-masking is
 preferred to a leak, so here an address only has to stand clear of other DIGITS (and of a dotted number it is part of,
-as in a version 1.2.3.4.5); letters, underscores, colons and dots around it do not protect it.
+as in a version 1.2.3.4.5); letters, underscores, colons and dots around it do not protect it. The one exception: a
+four-part number the text itself names as a version ("version 2.0.1.3", "Apache/2.0.1.3"), with nothing glued after it.
 
 spans(text) -> [(start, end, address)]   the address normalised (leading zeros dropped), so 041.066.001.002 and
                                           41.66.1.2 are the same host to every masker.
@@ -18,6 +19,22 @@ import re
 _V4 = re.compile(r"(?<!\d)(?<!\d\.)((?:0*\d{1,3}\.){3}0*\d{1,3})(?!\d)(?!\.\d)")
 # IPv6 candidates: runs of hex digits and colons (with an IPv4 tail allowed); checked with ipaddress below
 _V6 = re.compile(r"[0-9A-Fa-f:]*:[0-9A-Fa-f:]*(?:\d{1,3}(?:\.\d{1,3}){3})?")
+# A four-part version number is not an address when the text says so right before it (review follow-up, 2026-11-12):
+#   a version word and a separator   "version 2.0.1.3", "Build: 1.2.3.4", "firmware=10.4.0.12"
+#   a product name and a slash       "Apache/2.0.1.3", "RouterOS/6.49.10.1"  (not a path: "/api/41.66.1.2" stays masked)
+# A bare "v" is NOT enough (v41.66.1.2 was one of the reviewer's leaks), nor is a word glued on with no separator.
+_VERSION_BEFORE = re.compile(
+    r"(?:(?<![A-Za-z0-9_])(?:version|ver|build|release|revision|rev|firmware|fw)\.?[ \t]*[:=][ \t]*"
+    r"|(?<![A-Za-z0-9_])(?:version|ver|build|release|revision|rev|firmware|fw)\.?[ \t]+"
+    r"|(?<![\w/.:-])[A-Za-z][A-Za-z_-]{1,40}/)$", re.I)
+
+
+def _is_version(text, start, end):
+    """True when the text names the dotted number as a version just before it, and nothing is glued on after it
+    ("build 41.66.1.2a" stays masked)."""
+    if end < len(text) and (text[end].isalnum() or text[end] == "_"):
+        return False
+    return bool(_VERSION_BEFORE.search(text[max(0, start - 60):start]))
 
 
 def _v4(s):
@@ -60,7 +77,7 @@ def spans(text):
     out = []
     for m in _V4.finditer(text):
         ip = _v4(m.group(1))
-        if ip:
+        if ip and not _is_version(text, m.start(1), m.end(1)):
             out.append((m.start(1), m.end(1), ip))
     taken = [(a, b) for a, b, _ in out]
     for m in _V6.finditer(text):

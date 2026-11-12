@@ -589,6 +589,13 @@ Security scripts:
   under gunicorn with its own bind setting.
 - IP addresses inside text are found by one module, `ip_find.py`, for every masker (the researchers' `hostmask.py` and
   partial masking, and the masked viewers' `host_label.py`), so no spelling escapes one and not the other.
+  It masks anything shaped like an address, letters glued on or not (`v41.66.1.2`, `id_41.66.1.2`), but keeps a
+  four-part number the text itself names as a version, with nothing glued after it: after a version word and a
+  separator (`version 2.0.1.3`, `Build: 1.2.3.4`, `firmware=10.4.0.12`) or after a product name and a slash
+  (`Apache/2.0.1.3`; a path such as `/api/41.66.1.2` stays masked). A five-part number such as `1.2.3.4.5` is never
+  an address, in either masker.
+- Checks that read the reports database call `tests/needs_db.py` first: without a reachable MongoDB they report
+  SKIPPED (exit 77) instead of a connection error.
 
 ## Scripts
 

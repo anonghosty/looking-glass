@@ -33,8 +33,8 @@ MASKED = [   # (text, the address in it)
     ("addr_2001:db8::1", "2001:db8::1"),
     ("[2001:db8::1]:443", "2001:db8::1"),
     ("from fe80::1ff:fe23:4567:890a done", "fe80::1ff:fe23:4567:890a"),
-    # a letter glued on does not make it a version (external review, 2026-11-12: v41.66.1.2 leaked); over-masking a
-    # four-part version number is the price
+    # a letter glued on does not make it a version (external review, 2026-11-12: v41.66.1.2 leaked); only a number the
+    # text names as a version ("version 2.0.1.3", "Apache/2.0.1.3"), with nothing glued after it, is kept (ip_find.py)
     ("v41.66.1.2", "41.66.1.2"), ("build 41.66.1.2a", "41.66.1.2"), ("app.41.66.1.2.nip.io", "41.66.1.2"),
     ("ip:2001:db8::1", "2001:db8::1"),
 ]
