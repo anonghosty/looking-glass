@@ -1,0 +1,14 @@
+/* Audit portal → Sender check (sender-audit.js) */
+#pane-sender .au-sub-h { margin: 18px 0 8px; }
+.sn-chart-wrap { border: 1px solid var(--border, rgba(255,255,255,.1)); border-radius: 10px; padding: 10px 12px; }
+.sn-chart { width: 100%; height: auto; display: block; color: inherit; }
+.sn-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; font-size: 12px; opacity: .85; }
+.sn-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.sn-std { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.sn-std-card { margin: 0; }
+.sn-std-card h4 { margin: 4px 0 6px; font-size: 14px; }
+.sn-ref { font-size: 11px; opacity: .7; }
+.sn-asks { margin: 0 0 6px; font-size: 13px; opacity: .8; }
+.sn-asks::before { content: "Asks: "; font-weight: 600; }
+.sn-shows { margin: 0; font-size: 13px; }
+.sn-shows::before { content: "Evidence: "; font-weight: 600; }

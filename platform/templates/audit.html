@@ -14,6 +14,7 @@
   <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/settings.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/audit.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/sender-audit.css') }}" rel="stylesheet">
 </head>
 <body class="settings-page admin-page audit-page" data-perms="{{ lg_perms|join(',') }}" data-can-end="{{ '1' if can_end else '0' }}">
   <header class="hud">
@@ -43,6 +44,7 @@
       {% for key, label in tabs %}<button type="button" role="tab" data-tab="{{ key }}" aria-selected="false">{{ label }} <span class="au-n" data-n="{{ key }}"></span></button>{% endfor %}
       <button type="button" role="tab" data-tab="access" aria-selected="false">Access review</button>
       <button type="button" role="tab" data-tab="live" aria-selected="false">Signed in now</button>
+      <button type="button" role="tab" data-tab="sender" aria-selected="false">Sender check</button>
       <button type="button" role="tab" data-tab="evidence" aria-selected="false">Integrity and evidence</button>
     </nav>
     <div class="st-banner" id="banner" role="status" hidden></div>
@@ -79,6 +81,14 @@
       <p class="st-hint">Who is signed in now, from where and with what. {% if can_end %}Ending a session is on Admin.{% else %}Read only: ending a session is for the roles that manage accounts.{% endif %}</p>
       <div class="table-wrap"><table class="hosts adm-table" id="sessionsTable"><thead><tr>
         <th>User</th><th>Address</th><th>Location</th><th>Browser</th><th>Type</th><th>Started</th><th>Last activity</th></tr></thead><tbody></tbody></table></div>
+    </section>
+
+    <section class="st-card adm-pane au-pane" id="pane-sender" hidden>
+      <h2>Sender check</h2>
+      <p class="st-hint">Who really sent the reports: the pipeline verifies every report e-mail's DKIM signature with the sender's public key from DNS,
+        on the message exactly as it was downloaded, and records the result. Evidence for the period chosen above, next to what the current
+        standards ask. No verdict: the auditor decides.</p>
+      <div id="snBody"></div>
     </section>
 
     <section class="st-card adm-pane au-pane" id="pane-evidence" hidden>
@@ -119,6 +129,7 @@
   </main>
   <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
   <script src="{{ url_for('static', filename='js/notifications.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/sender-audit.js') }}"></script>
   <script src="{{ url_for('static', filename='js/audit.js') }}"></script>
 </body>
 </html>

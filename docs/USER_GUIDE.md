@@ -614,6 +614,37 @@ is not identified yet, from PeeringDB and RIPEstat (free public sources; only AS
 progress: how many are looked up, identified, already known (skipped) or failed. Names you corrected by hand are never
 changed, and failed look-ups are tried again next time. The names then appear everywhere at once.
 
+### Workers (the database pipeline)
+
+The **Workers** tab of Settings holds the pipeline's own settings, so they need not be edited in its `.env`. It is
+**locked**: **Edit** asks for *your own* password (the one you sign in with) and unlocks it for 10 minutes, in this
+session only. **Save the settings** locks it again. A wrong password counts like a failed sign-in, and every unlock,
+change (old → new value), key and release is in the audit log. Mailbox and database **passwords are never shown or
+changed here**: they stay in the pipeline's `.env`, set by the installer.
+
+- **Getting the reports:** *By e-mail* (the mailbox the reports are sent to) or *Shadowserver report API* (straight
+  from Shadowserver, with the API key below; save the key first). Every scheduled run uses your choice and fetches only
+  what is new; if your choice cannot be used on a run and the other way is set up, that run uses the other way and its
+  log says why. *Days back per run* applies to both.
+- **Sender check (DKIM):** applies to reports that come by e-mail. *Check the sender of every report* verifies each report e-mail's signature with the sender's
+  public key from DNS and records the result (Audit portal → Sender check). *Block reports that do not pass* also holds
+  back a report that is not validly signed by the expected domain (*Expected signer*, `shadowserver.org`): it is kept
+  apart and not loaded until an administrator releases it. Start with blocking off: a footer or forwarding rule added
+  on the way breaks a genuine signature too, so check first that every genuine report passes.
+- **E-mail settings** (in the same group): the mailbox folder (or Gmail label), messages per fetch, the mail server's
+  certificate check, the timeout.
+- **Loading performance:** loader processes, records per insert, download threads.
+- **Unzip limits:** the largest unpacked size, compression ratio and file count, and the disk space kept free.
+- **Shadowserver report API:** paste the API key and secret Shadowserver gave you. **Check with Shadowserver and save**
+  asks Shadowserver first (is the key accepted, and which report lists may it fetch) and saves them only if it accepts
+  them; afterwards the page only says they are set and when they were last checked, never the values. **Check with
+  Shadowserver now** checks the saved ones again. The key is what *Shadowserver report API* above uses.
+- **Reports held back by the sender check:** each with why it was held back. **Release** (after your password) lets a
+  report you know is genuine through: the pipeline loads it at its next run. Released reports stay on record.
+
+The pipeline uses the settings from its next run. When the pipeline runs on another computer, the tab says so and its
+settings stay in its own `.env`.
+
 ## 8. Administration
 
 ![Admin: users](media/screens/50-admin-users.png)
@@ -652,6 +683,14 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
 - **Access review:** every account with its role and what that role may do, its authenticator, last sign-in, who
   approved it and flags (no authenticator, dormant, pending too long, every permission), and the roles matrix.
 - **Signed in now:** every session with its address, location, browser and expiry (read only).
+- **Sender check:** who really sent the reports. The pipeline verifies every report e-mail's DKIM signature, and this
+  tab shows, for the period: the mode (record only or blocking), how many reports were checked and the share validly
+  signed by the expected domain, how many did not pass (signature fails, not signed, another signer, cannot be checked)
+  and how many were held back or released; results per day; the signing keys seen (domain, selector, algorithm, key
+  size); every report that did not pass and what happened to it; and the settings changes and releases. Next to the
+  evidence, what the current standards ask: RFC 6376 (DKIM), RFC 8301 (algorithms and key sizes), RFC 8463 (Ed25519),
+  RFC 7489 (DMARC alignment), NIST SP 800-177 Rev. 1 (Trustworthy Email) and NIST SP 800-53 Rev. 5 SI-7 (information
+  integrity). Evidence only, no verdict.
 - **Integrity and evidence:** **Verify the audit log** walks every entry. Each one carries the fingerprint (SHA-256)
   of the one before it, so a changed, inserted or removed entry breaks the chain and the check says where. It shows
   the **head** (hash@entry). Then download the **evidence report (PDF)** or **every event (CSV)** for the period. After

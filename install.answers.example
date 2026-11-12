@@ -45,6 +45,15 @@ IMAP_VERIFY_TLS=yes
 SCHEDULE=every 30m
 # days of e-mail every run looks back (1-60); already fetched e-mails are skipped, so 7 costs little and catches up
 EMAIL_DAYS=7
+# how the reports are fetched: email (the mailbox above) or api (Shadowserver's report API, with the key and secret
+# below; the key is checked with Shadowserver). With api, MAIL_FALLBACK=yes also sets up the mailbox above as a fallback
+REPORT_SOURCE=email
+#SS_API_KEY=your-api-key
+#SS_API_SECRET=change-me
+#MAIL_FALLBACK=yes
+# sender check (DKIM): every report's signature is checked and recorded; yes = also hold back reports that do not pass
+# until an administrator releases them (Settings → Workers). no (recommended at first) = record only
+MAIL_AUTH_BLOCK=no
 RUN_PIPELINE_NOW=yes
 FIRST_DAYS=7
 

@@ -298,7 +298,9 @@
   const LOG_TABS = new Set(Object.keys(HINTS));
   let current = "overview";
   const work = (tab) => tab === "overview" ? loadOverview : tab === "access" ? loadAccess : tab === "live" ? loadSessions
-    : tab === "evidence" ? async () => evPeriod() : () => loadLog(true);
+    : tab === "evidence" ? async () => evPeriod()
+    : tab === "sender" ? () => window.LGSender.load(per())          // sender-audit.js: the DKIM sender check
+    : () => loadLog(true);
   function show(tab, first) {
     current = tab;
     for (const b of tabs) b.setAttribute("aria-selected", String(b.dataset.tab === tab));

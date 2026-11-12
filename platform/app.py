@@ -2742,6 +2742,15 @@ _audit_portal.install(app, {"has_perm": AUTH["has_perm"], "users": AUTH["users"]
                             "audit": AUTH["audit"], "people": people, "perms_catalog": auth.PERMS, "auditor_role": auth.AUDITOR_ROLE,
                             "access_mode": security.access_mode,
                             "tls": lambda: os.path.exists(os.path.join(BASE_DIR, "data", "tls", "cert.pem")) or os.environ.get("TRUST_PROXY") == "1"})
+# Audit portal → Sender check (sender_audit.py, read only) and Settings → Workers (pipeline_settings.py): the pipeline's
+# DKIM sender check, its quarantine and its settings; mailbox and database passwords are never shown or edited
+import sender_audit as _sender_audit  # noqa: E402
+import pipeline_settings as _pipeline_settings  # noqa: E402
+_sender_audit.install(app, {"base_dir": BASE_DIR, "has_perm": AUTH["has_perm"], "audit": AUTH["audit"]})
+PIPELINE_SETTINGS = _pipeline_settings.install(app, {
+    "base_dir": BASE_DIR, "data_dir": os.path.join(BASE_DIR, "data"), "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"],
+    "fresh": AUTH["fresh"], "audit": AUTH["audit"], "users": AUTH["users"], "throttle": AUTH["throttle"],
+    "client": lambda: (request.remote_addr or "", request.headers.get("User-Agent", ""))})
 import peace as _peace  # noqa: E402
 PEACE = _peace.install(app, {"base_dir": BASE_DIR, "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"], "audit": AUTH["audit"],
                              "role_perms": lambda role: AUTH["roles"].perms(role or "")})   # an admin's "Peace of mind"

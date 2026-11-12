@@ -1,0 +1,31 @@
+/* Settings → Workers (pipeline-settings.js) and the Settings tabs */
+.st-tabs { display: flex; gap: 6px; margin: 0 0 14px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.st-tabs button { background: none; border: 0; border-bottom: 2px solid transparent; color: inherit; opacity: .7;
+  padding: 10px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+.st-tabs button[aria-selected="true"] { opacity: 1; border-bottom-color: var(--accent, #8ee0bd); }
+.st-tab-off { display: none !important; }
+.wk-lock { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border-radius: 10px; margin: 0 0 12px; }
+.wk-lock.is-locked { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); }
+.wk-lock.is-open { background: rgba(142,224,189,.08); border: 1px solid rgba(142,224,189,.35); }
+.wk-lock > span { flex: 1 1 260px; }
+.wk-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.wk-group { border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 10px 14px 14px; margin: 0; min-width: 0; }
+.wk-group legend { font-weight: 600; padding: 0 6px; }
+.wk-field { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 0; }
+.wk-field small, .wk-sender small { line-height: 1.4; }
+.wk-check { flex-direction: row; align-items: center; gap: 8px; }
+.wk-check input { width: 18px; height: 18px; }
+.wk-radios { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 2px; }
+.wk-sender > div { margin: 10px 0 0; display: flex; flex-direction: column; gap: 3px; }
+.wk-in { background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.15); border-radius: 8px; color: inherit; padding: 8px 10px; font: inherit; min-width: 0; }
+.wk-in:disabled, .wk-field input:disabled { opacity: .55; }
+.wk-acts { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0 0; }
+.wk-msg { min-height: 1.4em; margin: 10px 0 0; }
+.wk-msg.bad, .wk-err { color: #ff8f8f; }
+.wk-card { margin-top: 14px; }
+.wk-api { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 4px; }
+.wk-api .wk-in { flex: 1 1 220px; }
+.wk-modal { max-width: 440px; }
+.wk-pw { display: flex; gap: 8px; flex-wrap: wrap; }
+.wk-pw .wk-in { flex: 1 1 200px; }
+@media (max-width: 640px) { .wk-groups { grid-template-columns: 1fr; } }

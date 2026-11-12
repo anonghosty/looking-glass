@@ -12,6 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/settings.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/pipeline-settings.css') }}" rel="stylesheet">
 </head>
 <body class="settings-page" data-user="{{ lg_user }}"{% if "users" in lg_perms %} data-admin="1"{% endif %}>
   <header class="hud">
@@ -25,6 +26,13 @@
   </header>
 
   <main class="st-main st-pending" id="stMain">
+    {% if "settings" in lg_perms %}
+    {# General: the cards below; Workers: the database pipeline's settings (pipeline-settings.js, pipeline_settings.py) #}
+    <nav class="st-tabs" role="tablist" aria-label="Settings">
+      <button type="button" role="tab" data-st-tab="general" aria-selected="true">General</button>
+      <button type="button" role="tab" data-st-tab="workers" aria-selected="false">Workers</button>
+    </nav>
+    {% endif %}
     <div class="st-banner" id="banner" role="status" hidden></div>
     <div class="st-access" id="access" hidden></div>
     <div class="st-loading" id="stLoading">Loading the settings and the networks in the reports…</div>
@@ -109,6 +117,18 @@
     {# the networks (AS numbers) for reference: read-only here, edited on the Definitions page #}
     {% with readonly=True %}{% include "_net_card.html" %}{% endwith %}
 
+    {% if "settings" in lg_perms %}
+    <section class="st-card wk-pane" id="tabWorkers" hidden>
+      <h2>Workers <span class="st-for">the database pipeline</span></h2>
+      <p class="st-hint">How the pipeline fetches, checks and loads the Shadowserver reports. Locked: changing anything needs your own password,
+        and every change is in the audit log.</p>
+      <div id="wkBody"><div class="st-loading">Opening the pipeline's settings…</div></div>
+      <p class="wk-msg muted" id="wkMsg" role="status"></p>
+      <div class="wk-card" id="wkApi"></div>
+      <div class="wk-card" id="wkHeld"></div>
+    </section>
+    {% endif %}
+
     <section class="st-card">
       <h2>For deployment (.env)</h2>
       <p class="st-hint">The same settings can be given at installation in the <span class="mono">.env</span> file; settings applied here take precedence.
@@ -149,5 +169,6 @@
   <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>
   <script src="{{ url_for('static', filename='js/net-editor.js') }}"></script>
   <script src="{{ url_for('static', filename='js/organisation.js') }}"></script>
+  {% if "settings" in lg_perms %}<script src="{{ url_for('static', filename='js/pipeline-settings.js') }}"></script>{% endif %}
 </body>
 </html>

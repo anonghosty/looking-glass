@@ -70,6 +70,20 @@ of …"), then replays the whole day from 00:00 to 24:00. Details: [TECHNICAL_RE
 
 What each protection does: [../docs/SECURITY.md](SECURITY.md).
 
+## The database pipeline from the platform
+
+Settings → Workers edits the pipeline's own `.env`, and the Audit portal's Sender check reads its results. Both find the
+pipeline beside the platform (`../database` or `../shadowserver`).
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `PIPELINE_DIR` | empty | the pipeline's folder, when it is not beside the platform. On another computer: leave empty, its settings stay in its own `.env` |
+| `SHADOWSERVER_API_URL` | `https://transform.shadowserver.org/api2/` | Shadowserver's report API, used to check an API key before it is saved |
+
+The pipeline's sender check is set in the pipeline's `.env` (or Settings → Workers): `MAIL_AUTH` = `log` (record each
+report e-mail's DKIM result, hold nothing back), `enforce` (hold back reports that do not pass until an administrator
+releases them) or `off`; `MAIL_AUTH_DOMAIN` = the expected signer (`shadowserver.org`).
+
 ## Executive portal: 7-day baseline
 
 The Executive page compares each figure with the 7 days before; a selection seen for the first time builds that

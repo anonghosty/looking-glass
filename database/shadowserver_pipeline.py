@@ -55,6 +55,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import mail_sources  # noqa: E402  IMAP, Gmail API or Microsoft Graph (MAIL_PROVIDER)
 import zip_limits  # noqa: E402  size, ratio and file-count limits for unpacking (zip bombs)
 import report_names  # noqa: E402  which report names may become a folder and a MongoDB collection
+import mail_auth  # noqa: E402  who signed each report e-mail (DKIM), recorded; log only
+import report_api  # noqa: E402  the reports from Shadowserver's report API (REPORT_SOURCE=api)
 
 log = logging.getLogger("shadowserver")
 
@@ -413,6 +415,35 @@ def _download_links(links, dest: Path, threads: int, stats: Counter) -> list:
     return ok
 
 
+def _sender_verdict(auth, raw):
+    """Who signed the message (mail_auth.py); None when the check is off or could not run."""
+    if not auth:
+        return None
+    try:
+        return auth[0].check(raw)
+    except Exception as exc:  # noqa: BLE001  (never stops the pipeline)
+        log.warning("    [SENDER] could not be checked: %s", exc)
+        return None
+
+
+def _sender_record(auth, key, res, msg, names, stats, action) -> None:
+    if not (auth and res):
+        return
+    try:
+        stats[f"sender_{res['result']}"] += 1
+        if action != "kept":
+            stats[f"sender_{action}"] += 1
+        auth[1].add(key, res, _header_text(msg.get("Subject")) or "", names, action)
+        if res["result"] != "pass":
+            what = {"kept": "kept: blocking is off, the check only records",
+                    "quarantined": "HELD BACK in quarantine/mail_auth/ until an administrator releases it",
+                    "retry": "not processed this run: tried again next run"}.get(action, action)
+            log.warning("    [SENDER %s] from %s: %s (%s)", res["result"].upper(), res["from_domain"] or "?",
+                        res["reason"] or "no reason given", what)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("    [SENDER] could not be recorded: %s", exc)
+
+
 def pull_emails(s: Settings, stats: Counter, refetch: bool = False) -> None:
     """Fetch the report e-mails of the last `days` days from MAIL_PROVIDER (IMAP, Gmail API or Microsoft Graph,
     mail_sources.py), save new attachments and download Shadowserver links. Messages and links already handled
@@ -425,6 +456,29 @@ def pull_emails(s: Settings, stats: Counter, refetch: bool = False) -> None:
     per_message: dict[str, set] = {}
     unfinished: set[str] = set()
     saved_files: list[tuple[str, str]] = []
+    # the sender check (mail_auth.py): every message's DKIM signature, recorded. MAIL_AUTH=log only records;
+    # MAIL_AUTH=enforce holds back (quarantines) a message that does not pass
+    auth = None
+    blocking = mail_auth.mode() == "enforce"
+    if mail_auth.mode() != "off":
+        try:
+            auth = (mail_auth.Checker(os.environ.get("MAIL_AUTH_DOMAIN") or "shadowserver.org"),
+                    mail_auth.Log(s.base_dir / ".mail_state.sqlite"))
+        except Exception as exc:  # noqa: BLE001  (the check never stops the pipeline)
+            log.warning("Sender check unavailable this run: %s", exc)
+            blocking = False
+    # messages an administrator released since the last run: their attachments join the others, their links are fetched
+    try:
+        for rkey, rlinks, rfiles, who in mail_auth.take_releases(s.base_dir, s.attachments_dir):
+            per_message[rkey] = rlinks
+            links |= rlinks
+            saved_files += [(f, rkey) for f in rfiles]
+            if auth:
+                auth[1].set_action(rkey, "released")
+            log.warning("Sender check: a held-back message was RELEASED by %s (%d file(s), %d link(s))", who or "?",
+                        len(rfiles), len(rlinks))
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Sender check: releases could not be processed this run: %s", exc)
     try:
         items = src.list(s.days)
         done = set() if refetch else state.done_messages()
@@ -443,8 +497,25 @@ def pull_emails(s: Settings, stats: Counter, refetch: bool = False) -> None:
                 continue
             mine: set[str] = set()
             names: list[str] = []
+            res = _sender_verdict(auth, raw)
+            if blocking and res and res["result"] == "temperror":
+                unfinished.add(key)                  # DNS did not answer: decided on the next run, nothing saved now
+                _sender_record(auth, key, res, msg, [], stats, "retry")
+                continue
+            if blocking and res and res["result"] in mail_auth.BLOCK:
+                # held back: its attachments go to quarantine/mail_auth/<id>/, its links are only noted, nothing is
+                # loaded; an administrator can release it (Audit portal, or python3 mail_auth.py release <id>)
+                qdir = mail_auth.quarantine_dir(s.base_dir, key)
+                qdir.mkdir(parents=True, exist_ok=True)
+                if _handle_message(msg, qdir, Counter(), mine, f"{n}/{total} (held back)", names):
+                    unfinished.add(key)              # a held-back attachment could not be saved: fetched again next run
+                mail_auth.write_meta(qdir, key, res, _header_text(msg.get("Subject")), names, mine)
+                _sender_record(auth, key, res, msg, names, stats, "quarantined")
+                per_message[key] = set()             # handled: kept in quarantine, not fetched again
+                continue
             if _handle_message(msg, s.attachments_dir, stats, mine, f"{n}/{total}", names):
                 unfinished.add(key)                  # an attachment could not be saved: not done, try again
+            _sender_record(auth, key, res, msg, names, stats, "kept")
             per_message[key] = mine
             saved_files += [(f, key) for f in names]
             links |= mine
@@ -474,6 +545,17 @@ def pull_emails(s: Settings, stats: Counter, refetch: bool = False) -> None:
                     len(unfinished))
     state.forget_older_than(max(30, s.days + 7))
     state.close()
+    if auth:
+        try:
+            auth[1].forget_older_than(max(90, s.days + 7))
+            auth[1].close()
+        except Exception:  # noqa: BLE001
+            pass
+        checked = sum(stats[f"sender_{r}"] for r in mail_auth.RESULTS)
+        if checked:
+            log.info("Sender check (%s): %d message(s): %s%s", "blocking" if blocking else "log only, nothing held back",
+                     checked, ", ".join(f"{stats[f'sender_{r}']} {r}" for r in mail_auth.RESULTS if stats[f"sender_{r}"]),
+                     "".join(f" | {stats[f'sender_{a}']} {a}" for a in ("quarantined", "retry") if stats[f"sender_{a}"]))
     log.info("E-mail: %d new message(s) | attachments: %d saved, %d already there, %d failed | links: %d downloaded, "
              "%d already there, %d failed, %d skipped (done earlier) (%.1fs)",
              stats["emails"], stats["attachments_saved"], stats["attachments_skipped"], stats["attachments_failed"],
@@ -1116,6 +1198,42 @@ def _print_results(results) -> int:
 
 # --------------------------------------------------------------------------- main
 
+def fetch_reports(s: Settings, stats: Counter, refetch: bool = False) -> None:
+    """Get the reports the way REPORT_SOURCE says (report_api.py): "email" reads the mailbox, "api" asks Shadowserver's
+    report API. When the chosen way cannot be used this run and the other one is set up, the run uses the other one
+    and says why; the next run tries the chosen way again. Runs on the pipeline's own schedule either way."""
+    env = os.environ
+    chosen = report_api.source(env)
+    have_api, have_mail = bool(report_api.creds(env)), report_api.mail_configured(env)
+
+    def by_api():
+        report_api.pull(s.base_dir, s.attachments_dir, s.days, s.download_threads, stats, log, env, refetch,
+                        max_mb=max(1, s.zip_limits.max_unpacked // 2**20))
+
+    def by_mail():
+        pull_emails(s, stats, refetch=refetch)
+
+    first, second = (by_api, by_mail) if chosen == "api" else (by_mail, by_api)
+    second_ok = have_mail if chosen == "api" else have_api
+    names = ("Shadowserver API", "e-mail") if chosen == "api" else ("e-mail", "Shadowserver API")
+    log.info("Reports: %s (REPORT_SOURCE=%s)%s", names[0], chosen,
+             f"; {names[1]} is the fallback" if second_ok else "")
+    try:
+        first()
+        return
+    except (report_api.ApiError, imaplib.IMAP4.error, OSError, mail_sources.MailSourceError) as exc:
+        stats["email_failed" if chosen == "email" else "api_unusable"] += 1
+        if not second_ok:
+            log.error("%s failed: %s (continuing with files already on disk; no other way is set up)", names[0], exc)
+            return
+        log.error("%s failed: %s; this run uses the %s instead", names[0], exc, names[1])
+    try:
+        second()
+        stats["fallback_used"] += 1
+    except (report_api.ApiError, imaplib.IMAP4.error, OSError, mail_sources.MailSourceError) as exc:
+        log.error("%s failed too: %s (continuing with files already on disk)", names[1], exc)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stage", choices=("all", "email", "load"), default="all")
@@ -1152,11 +1270,7 @@ def main(argv=None) -> int:
     stats: Counter = Counter()
     t0 = time.monotonic()
     if args.stage in ("all", "email"):
-        try:
-            pull_emails(s, stats, refetch=args.all)
-        except (imaplib.IMAP4.error, OSError) as exc:
-            log.error("E-mail step failed: %s (continuing with files already on disk)", exc)
-            stats["email_failed"] += 1
+        fetch_reports(s, stats, refetch=args.all)
         unzip_and_sort(s, stats)
     if args.stage in ("all", "load"):
         load_into_mongo(s, stats)

@@ -489,6 +489,30 @@ check_mail() {  # uses the M_* variables; writes a temporary env file (mode 600)
   [[ $out == OK:* ]] && { echo "${out#OK: }"; return 0; }   # (runs in $(...): print, don't set variables)
   echo "${out#FAIL: }"; return 1
 }
+check_ssapi() {  # KEY SECRET: Shadowserver's report API accepts them (test/ping, reports/subscribed); prints the lists
+  SSK="$1" SSS="$2" chk_py <<'EOF'
+import hashlib, hmac, json, os, sys, urllib.error, urllib.request
+k, s = os.environ["SSK"].strip(), os.environ["SSS"].strip()
+def call(m):
+    b = json.dumps({"apikey": k}).encode()
+    r = urllib.request.Request("https://transform.shadowserver.org/api2/" + m, data=b, method="POST",
+                               headers={"HMAC2": hmac.new(s.encode(), b, hashlib.sha256).hexdigest(), "Content-Type": "application/json"})
+    with urllib.request.urlopen(r, timeout=20) as a:
+        return json.load(a)
+try:
+    if not (call("test/ping") or {}).get("pong"):
+        print("Shadowserver did not answer test/ping as expected."); sys.exit(1)
+    subs = call("reports/subscribed")
+except urllib.error.HTTPError as e:
+    try: why = json.load(e).get("error")
+    except Exception: why = ""
+    print(f"Shadowserver refused the key or secret (HTTP {e.code}{': ' + str(why)[:120] if why else ''}). Paste both again exactly."); sys.exit(1)
+except Exception as e:
+    print(f"Could not reach Shadowserver's API ({e.__class__.__name__}); check the internet connection."); sys.exit(2)
+names = ", ".join(str(x) for x in subs[:6]) if isinstance(subs, list) else ""
+print(f"Shadowserver accepted the key; reports for {names}" if names else "Shadowserver accepted the key, but no report list is subscribed to it yet")
+EOF
+}
 check_mapbox() {
   MB="$1" chk_py <<'EOF'
 import json, os, sys, urllib.error, urllib.parse, urllib.request
@@ -766,8 +790,38 @@ No: the platform uses '$MONGO_ADMIN_USER' as it is (it should be read-only)." ye
   done
 fi
 
-# ---- mailbox and schedule
+# ---- how the reports are fetched (e-mail or Shadowserver's report API), the mailbox, and the schedule
+REPORT_SOURCE=email; SS_API_KEY=""; SS_API_SECRET=""; WANT_MAIL=yes
 if [ $WANT_DB = 1 ]; then
+  ask_menu REPORT_SOURCE "Getting the reports" "How should the pipeline get your Shadowserver reports? Either way it runs on the
+schedule you choose next, fetches only what is new, and the platform shows the same data.
+(This can be changed later in Settings → Workers.)" email \
+    email "By e-mail: read the mailbox Shadowserver sends the reports to" \
+    api   "Through Shadowserver's report API (an API key and secret from Shadowserver)"
+  REPORT_SOURCE="$REPLY"
+  if [ "$REPORT_SOURCE" = api ]; then
+    msg "Shadowserver report API" "Shadowserver gives organisations that receive its reports an API key and a secret
+for its report API. With them, every run lists your reports of the last days and
+downloads the new ones straight from Shadowserver (HTTPS), with no mailbox involved.
+No key yet? Ask Shadowserver for API access for your reports."
+    while :; do
+      ask_input SS_API_KEY "API key" "Your Shadowserver API key:" "" v_nonempty; SS_API_KEY="$REPLY"
+      ask_secret SS_API_SECRET "API secret" "Its secret:"; SS_API_SECRET="$REPLY"
+      checking "the key with Shadowserver"
+      if reason="$(check_ssapi "$SS_API_KEY" "$SS_API_SECRET")"; then passed "$reason"; break; fi
+      after_failure SS_API_KEY "Shadowserver API" "$reason" SS_API_KEY SS_API_SECRET || break
+    done
+    ask_yesno MAIL_FALLBACK "Mailbox as a fallback" "Also set up the mailbox the reports are sent to?
+Then a run that cannot reach Shadowserver's API reads the mailbox instead (and says so in its log)." yes
+    WANT_MAIL="$REPLY"
+  fi
+fi
+if [ $WANT_DB = 1 ]; then
+  IMAP_SERVER=""; IMAP_USER=""; IMAP_PASSWORD=""; IMAP_FOLDER=inbox; IMAP_VERIFY_TLS=true; M_PROVIDER=imap
+  GMAIL_KEY_SRC=""; GMAIL_USER=""; GMAIL_LABEL=INBOX
+  MS_TENANT_ID=""; MS_CLIENT_ID=""; MS_CLIENT_SECRET=""; MS_MAILBOX=""; MS_FOLDER=inbox
+fi
+if [ $WANT_DB = 1 ] && [ "$WANT_MAIL" = yes ]; then
   msg "Shadowserver mailbox" "Shadowserver sends your reports by e-mail throughout the day. The pipeline
 reads that mailbox read-only: messages stay unread and are never deleted.
 
@@ -866,6 +920,8 @@ Choose No only if the mail server uses a self-signed certificate." yes; IMAP_VER
         after_failure IMAP_SERVER "Mailbox login" "$reason" IMAP_SERVER IMAP_USER IMAP_PASSWORD IMAP_FOLDER IMAP_VERIFY_TLS || break
       done ;;
   esac
+fi
+if [ $WANT_DB = 1 ]; then
   ask_menu SCHEDULE "How often" "How often should the pipeline fetch new reports? Shadowserver sends them
 throughout the day; each run only fetches what is new." "every 30m" \
     "every 30m" "Every 30 minutes (recommended)" \
@@ -882,6 +938,15 @@ throughout the day; each run only fetches what is new." "every 30m" \
 E-mails already fetched are skipped, so a longer look-back costs little and lets the
 pipeline catch up by itself after this computer was off or the mailbox unreachable
 (1 = only since yesterday; 7 recommended)." 7 v_days; EMAIL_DAYS="$REPLY"
+  MAIL_AUTH=log                    # the sender check concerns e-mail only: asked when a mailbox is used
+  [ "$WANT_MAIL" = yes ] && ask_yesno MAIL_AUTH_BLOCK "Sender check" "Shadowserver signs its report e-mails (DKIM). Every report's signature is checked
+and recorded either way (Audit portal → Sender check).
+
+Block reports that do not pass? A report that is not validly signed is then held back,
+and not loaded, until an administrator releases it (Settings → Workers).
+Recommended: No at first. A footer or forwarding rule added on the way also breaks a
+genuine signature; switch blocking on in Settings → Workers once the Sender check shows
+that every genuine report passes." no && MAIL_AUTH=$([ "$REPLY" = yes ] && echo enforce || echo log)
   ask_yesno RUN_PIPELINE_NOW "First run" "Fetch the reports of the last days right after installing?
 (Recommended: the platform needs at least yesterday's reports.)" yes; RUN_PIPELINE_NOW="$REPLY"
   if [ "$RUN_PIPELINE_NOW" = yes ]; then ask_input FIRST_DAYS "First run" "How many days of e-mail to fetch the first time?" 7 v_days; FIRST_DAYS="$REPLY"; fi
@@ -978,6 +1043,11 @@ case "${M_PROVIDER:-}" in
   microsoft_graph) MAIL_DESC="Microsoft Graph $MS_MAILBOX ($MS_FOLDER)" ;;
   *) MAIL_DESC="-" ;;
 esac
+[ "${WANT_MAIL:-yes}" = yes ] || MAIL_DESC="none (API only)"
+case "${REPORT_SOURCE:-email}" in
+  api) SOURCE_DESC="Shadowserver report API$([ "${WANT_MAIL:-yes}" = yes ] && echo ', the mailbox as a fallback' || echo ' only')" ;;
+  *)   SOURCE_DESC="e-mail (the mailbox)" ;;
+esac
 case "${SCHEDULE:-off}" in
   off) SCHED_DESC="only when run by hand (shadowserver run)" ;;
   every*) SCHED_DESC="${SCHEDULE/m/ minutes}"; SCHED_DESC="${SCHED_DESC/h/ hour(s)}" ;;
@@ -987,8 +1057,10 @@ yesno() { [ "$1" = yes ] && echo yes || echo no; }
 S="Install:          $([ $WANT_DB = 1 ] && echo -n 'database pipeline ')$([ $WANT_PF = 1 ] && echo -n 'platform')
 MongoDB:          $(case "$MONGO_MODE" in local) [ "$MDB_MANAGED" = 1 ] && echo "keep the one set up before, port $MONGO_PORT" || echo "install here, port $MONGO_PORT$([ "$MONGO_BIND" != 127.0.0.1 ] && echo ", also on ${MONGO_BIND#127.0.0.1,}")" ;; existing) echo "the one already on this computer, port $MONGO_PORT (not reconfigured)" ;; *) echo "existing, $MONGO_HOST:$MONGO_PORT" ;; esac) · database $MONGO_DB · account ${MONGO_ADMIN_USER:-(none)}"
 if [ $WANT_DB = 1 ]; then S+="
+Reports from:     $SOURCE_DESC
 Mailbox:          $MAIL_DESC
-Fetching:         $SCHED_DESC, each run looks back $EMAIL_DAYS day(s) · first run: $([ "$RUN_PIPELINE_NOW" = yes ] && echo "now, $FIRST_DAYS days" || echo later)"; fi
+Fetching:         $SCHED_DESC, each run looks back $EMAIL_DAYS day(s) · first run: $([ "$RUN_PIPELINE_NOW" = yes ] && echo "now, $FIRST_DAYS days" || echo later)
+Sender check:     DKIM signature of every report checked; $([ "${MAIL_AUTH:-log}" = enforce ] && echo "reports that do not pass are HELD BACK" || echo "recorded only, nothing held back")"; fi
 if [ $WANT_PF = 1 ]; then S+="
 Country:          $COUNTRY · map token $([ -n "$MAPBOX_TOKEN" ] && echo given || echo 'NOT given (add later)') · Malpedia $([ -n "$MALPEDIA_TOKEN" ] && echo given || echo skipped)
 Access:           $ACCESS_MODE$([ -n "$VIEWER_NETWORKS" ] && echo " ($VIEWER_NETWORKS)") · HTTPS: $HTTPS · port $LG_PORT · service $SERVICE_NAME
@@ -1042,6 +1114,7 @@ if [ $WANT_DB = 1 ]; then
     for kv in "MAIL_PROVIDER=$M_PROVIDER" "IMAP_SERVER=$IMAP_SERVER" "IMAP_USER=$IMAP_USER" "IMAP_FOLDER=$IMAP_FOLDER" "IMAP_VERIFY_TLS=$IMAP_VERIFY_TLS" \
               "GMAIL_SERVICE_ACCOUNT_FILE=${GMAIL_KEY_DST:-secrets/gmail-service-account.json}" "GMAIL_USER=$GMAIL_USER" "GMAIL_LABEL=$GMAIL_LABEL" \
               "MS_TENANT_ID=$MS_TENANT_ID" "MS_CLIENT_ID=$MS_CLIENT_ID" "MS_MAILBOX=$MS_MAILBOX" "MS_FOLDER=$MS_FOLDER" "EMAIL_DAYS=$EMAIL_DAYS" \
+              "MAIL_AUTH=${MAIL_AUTH:-log}" "REPORT_SOURCE=${REPORT_SOURCE:-email}" \
               "MONGO_HOST=$MONGO_HOST" "MONGO_PORT=$MONGO_PORT" "MONGO_USER=$MONGO_ADMIN_USER" "MONGO_AUTH_SOURCE=$MONGO_AUTH_SOURCE" \
               "MONGO_DB=$MONGO_DB" "MONGO_LOCAL=$([ "$MONGO_MODE" = local ] && echo true || echo false)" "MONGO_BIND=$MONGO_BIND"; do
       env_set "$DB_DIR/.env" "${kv%%=*}" "${kv#*=}"
@@ -1049,8 +1122,12 @@ if [ $WANT_DB = 1 ]; then
     env_set "$DB_DIR/.env" IMAP_PASSWORD "$IMAP_PASSWORD"
     env_set "$DB_DIR/.env" MS_CLIENT_SECRET "$MS_CLIENT_SECRET"
     env_set "$DB_DIR/.env" MONGO_PASSWORD "$MONGO_ADMIN_PASSWORD"
+    if [ -n "$SS_API_KEY" ]; then env_set "$DB_DIR/.env" SHADOWSERVER_API_KEY "$SS_API_KEY"; env_set "$DB_DIR/.env" SHADOWSERVER_API_SECRET "$SS_API_SECRET"; fi
   else
     env_set "$DB_DIR/.env" EMAIL_DAYS "$EMAIL_DAYS"    # goes with the schedule, which is applied either way
+    env_set "$DB_DIR/.env" MAIL_AUTH "${MAIL_AUTH:-log}"   # the sender check: asked either way
+    env_set "$DB_DIR/.env" REPORT_SOURCE "${REPORT_SOURCE:-email}"   # e-mail or the API: asked either way
+    if [ -n "$SS_API_KEY" ]; then env_set "$DB_DIR/.env" SHADOWSERVER_API_KEY "$SS_API_KEY"; env_set "$DB_DIR/.env" SHADOWSERVER_API_SECRET "$SS_API_SECRET"; fi
   fi
   gauge 14 "Installing $([ "$MONGO_MODE" = local ] && [ "$MDB_MANAGED" != 1 ] && echo "MongoDB and ")the database pipeline (several minutes)..."
   sargs=(); [ "$SCHEDULE" != off ] && sargs=(--schedule "$SCHEDULE")

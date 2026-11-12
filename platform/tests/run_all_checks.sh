@@ -35,6 +35,13 @@ if [ -n "$DBDIR" ]; then run "pipeline: unzip limits (zip bombs)" bash -c "cd '$
 else run "pipeline: unzip limits (zip bombs)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/report_names.py" ]; then run "pipeline: report names (quarantine)" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_report_names.py"
 else run "pipeline: report names (quarantine)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
+if [ -n "$DBDIR" ] && [ -f "$DBDIR/mail_auth.py" ]; then run "pipeline: sender check (DKIM)" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_mail_auth.py"
+else run "pipeline: sender check (DKIM)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
+if [ -n "$DBDIR" ] && [ -f "$DBDIR/tests/test_mail_auth_pipeline.py" ]; then run "pipeline: sender check blocks and releases" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_mail_auth_pipeline.py"
+else run "pipeline: sender check blocks and releases" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
+if [ -n "$DBDIR" ] && [ -f "$DBDIR/report_api.py" ]; then run "pipeline: reports by Shadowserver API or e-mail" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_report_api.py"
+else run "pipeline: reports by Shadowserver API or e-mail" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
+run "settings Workers + audit Sender check" $PY tests/check_pipeline_settings.py
 run "privacy + roles unit tests"      $PY tests/test_privacy_roles.py
 run "masked viewers: report fields allowlist" $PY tests/check_masked_fields.py
 run "reverse proxy + first administrator" $PY tests/check_first_admin_proxy.py

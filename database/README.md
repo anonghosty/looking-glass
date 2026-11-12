@@ -254,6 +254,7 @@ All settings live in `.env` in the project folder. Its permissions are `600`, so
 
 | Setting | Meaning | Default |
 |---|---|---|
+| `REPORT_SOURCE` | how each run gets the reports: `email` (the mailbox) or `api` (Shadowserver's report API, `report_api.py`). If the chosen way cannot be used on a run and the other is set up, that run uses the other and logs why | `email` |
 | `MAIL_PROVIDER` | `imap`, `gmail_api` or `microsoft_graph` ([docs/MAIL_SETUP.md](../docs/MAIL_SETUP.md)) | `imap` |
 | `GMAIL_SERVICE_ACCOUNT_FILE`, `GMAIL_USER`, `GMAIL_LABEL` | Gmail API: service account key, mailbox, label | –, –, `INBOX` |
 | `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_MAILBOX`, `MS_FOLDER` | Microsoft Graph app registration and mailbox | –, –, –, –, `inbox` |
@@ -261,6 +262,9 @@ All settings live in `.env` in the project folder. Its permissions are `600`, so
 | `IMAP_USER` / `IMAP_PASSWORD` | mailbox login | – |
 | `IMAP_FOLDER` | folder to read | `inbox` |
 | `IMAP_VERIFY_TLS` | verify the mail server certificate (`false` only for a self-signed certificate) | `true` in `.env.example` |
+| `MAIL_AUTH` | sender check: `log` verifies and records each report e-mail's DKIM signature without holding anything back; `enforce` also holds back reports that do not pass; `off` switches it off | `log` |
+| `SHADOWSERVER_API_KEY` / `SHADOWSERVER_API_SECRET` | Shadowserver report API key and secret, saved from the platform's Settings → Workers after Shadowserver accepted them | – |
+| `MAIL_AUTH_DOMAIN` | the domain that must have signed a genuine report | `shadowserver.org` |
 | `EMAIL_DAYS` | default for `--days`: how many days back every run (also the scheduled ones) looks | `7` in `.env.example` (asked by the installer); `1` when unset |
 | `MONGO_HOST` / `MONGO_PORT` | MongoDB address | `127.0.0.1` / `27017` |
 | `MONGO_USER` / `MONGO_PASSWORD` | MongoDB login (created by `deploy` as a root user) | – |
@@ -550,6 +554,30 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
 - Passwords are never put on the command line by the scripts. `deploy` passes them through environment variables and temporary mode-600 files, so they don't show up in `ps`.
 - The mail server certificate is **not** verified (`IMAP_VERIFY_TLS=false`), the same as the original script. Set it to `true` if the server has a valid certificate.
 - The mailbox is opened read-only; the pipeline never changes, moves or deletes e-mails.
+- **Reports by API instead of e-mail** (`REPORT_SOURCE=api`). With an API key and secret from Shadowserver, every run
+  asks Shadowserver's report API for the reports of the last `EMAIL_DAYS` days (`reports/list`, each request signed
+  with the secret in the `HMAC2` header, as Shadowserver documents it) and downloads the new ones from
+  `dl.shadowserver.org` over HTTPS into `attachments_backup/`, under the same names as the e-mail attachments; sorting
+  and loading are unchanged and the schedule stays the same. Shadowserver publishes no checksum, so each file is checked
+  here (a safe CSV name, not empty, a header line, at most `ZIP_MAX_UNPACKED_MB`), written to a `.part` file first, and
+  recorded with its size and SHA-256 (`.mail_state.sqlite`, table `api_files`) so it is never downloaded twice. A
+  failed download is tried again next run. If the API cannot be used on a run (no key, key refused, Shadowserver
+  unreachable) and a mailbox is set up, that run reads the mailbox instead; with `REPORT_SOURCE=email` and a saved key,
+  a run that cannot read the mailbox uses the API. Tests: `tests/test_report_api.py`.
+- **Who sent a report.** Anyone who knows the mailbox address can send it an e-mail. Shadowserver signs its report
+  e-mails with DKIM, so `mail_auth.py` checks each one's signature, on the message exactly as it was downloaded, with
+  Shadowserver's public key from DNS (your own mail server does not need to support DKIM). For now it **only records**
+  (`MAIL_AUTH=log`): every message gets a result (`pass`, `other` = signed by another domain, `fail` = changed or
+  forged, `none` = not signed, `temperror` = DNS did not answer, `permerror` = cannot be checked) in
+  `.mail_state.sqlite`, and anything but `pass` is a warning in the run log. No report is held back yet: a footer or a
+  forwarding rule added on the way also breaks a genuine signature, so the record shows first whether every genuine
+  report passes. See the results: `python3 mail_auth.py 7` (the last 7 days).
+- **Blocking** (`MAIL_AUTH=enforce`, asked by the installer, or Settings → Workers in the platform): a report that is
+  not validly signed by `MAIL_AUTH_DOMAIN` (`fail`, `none`, `other`, `permerror`) is held back in `quarantine/mail_auth/`
+  (its attachments there, its download links only noted) and is not loaded. One whose DNS look-up did not answer
+  (`temperror`) is simply tried again at the next run. An administrator releases a genuine one in Settings → Workers
+  (after their password), or here: `python3 mail_auth.py held` lists them, `python3 mail_auth.py release <id>` releases
+  one; the next run then loads it like any other. Released folders stay under `quarantine/mail_auth/released/` as the record.
 - **The pipeline has its own MongoDB account**, `lookingglass_pipeline`: read and write on its database (`MONGO_DB`) and
   read-only server status, nothing else. It cannot change any other database, create accounts or change the server.
   `deploy.sh` creates the administrator (`root`) account the first time; `./create_pipeline_db_user.py` then makes the
