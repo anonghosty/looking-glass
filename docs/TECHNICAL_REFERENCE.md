@@ -431,16 +431,23 @@ Shared by the map, the services platform and Settings:
 ## Glossary and hover explanations
 
 Each platform has a **Glossary** button in the top bar that covers **only that platform**:
-- **Reported network communications** (the map): the general terms plus its 12 reports (68 entries).
-- **Publicly accessible / vulnerable services**: its figures and terms, report families and its 86 reports.
+- **Reported network communications** (the map): the general terms plus its reports.
+- **Publicly accessible / vulnerable services**: its figures and terms, report families and its reports.
 
-The intro page's **Glossary** tab covers **both platforms** (172 entries). Every report is listed under its official Shadowserver name, with its Shadowserver rating, the number of records on the replayed day, and a **Shadowserver report page ↗** link to its page under https://www.shadowserver.org/what-we-do/network-reporting/ (links checked against that page). The links come from `data/service_reports.json`.
+The intro page's **Glossary** tab covers **both platforms**. Every report is listed under its official Shadowserver name, with its Shadowserver rating, the number of records on the replayed day, and a **Shadowserver report page ↗** link to its page under https://www.shadowserver.org/what-we-do/network-reporting/ (links checked against that page). The links come from `data/service_reports.json`.
 
-The intro page has a **Glossary** tab. It holds 51 plain-language definitions, written for management, grouped into The basics, Who and where, Threats, Numbers and measures, and Using the platform, with a search box. Examples: what an event is, what "median" and "median repeat interval" mean, sinkhole, honeypot, C2, cross-report hosts and demo mode.
+The general terms are plain-language definitions written for everyone, management included, grouped into The basics,
+Who and where, Threats, Numbers and measures, Using the platform, Accounts, roles and permissions, Publicly accessible /
+vulnerable services, and Security, audit and the pipeline, with a search box. Examples: what an event is, what
+"median" and "median repeat interval" mean, sinkhole, honeypot, C2, demo mode, a finding, an advisory and TLP, the
+audit log's hash chain, control checks, NIST SP 800-53, CIS Controls, the proof package, the sender check and
+confirmation on the server. `docs/GLOSSARY.md` is the same list for the documentation site; it is generated from
+`static/js/glossary.js` by `python3 tools/glossary_md.py`, so edit the JavaScript file and regenerate it rather than
+editing the Markdown (only its introduction and Related tools section are written by hand).
 
 The same definitions appear **on hover** across the platform. Labels with a dotted underline explain themselves: top-bar figures, the activity level, the replay clock, playback speed, filter headings, Intel chart titles, stream columns, and every number and chart title in the analysis view.
 
-All text lives in `static/js/glossary.js`. Edit a definition there and it changes in the Glossary tab and in the tooltips. To explain a new label, add a term to that file, then map the label's text to the term's key in `LABEL_TERMS` in `static/js/app.js`.
+All text lives in `static/js/glossary.js`. Edit a definition there and it changes in the Glossary tab and in the tooltips (and, once regenerated, in `docs/GLOSSARY.md`). To explain a new label, add a term to that file, then map the label's text to the term's key in `LABEL_TERMS` in `static/js/app.js`.
 
 ## Devices and performance (smart TVs, older computers)
 
@@ -541,8 +548,24 @@ Front-end libraries: Mapbox GL JS 3.8.0 (satellite style) and deck.gl 9.1.14 (3D
 
 Every page needs a sign-in with a password and an authenticator code. People request accounts on the sign-in page
 (full name, organisation, email, country) and administrators approve them with a role: external (masked data
-only), analyst (all data, exports, Malpedia) or admin. "Stay signed in" keeps a session for up to 5 days. Admins manage users,
-sessions, roles and permissions, and read the audit log on the **Admin** page.
+only), analyst (all data, exports, Malpedia), researcher (the Definitions page), management (the Executive portal),
+advisor (the Advisory portal), auditor (the Audit portal only, read only) or admin. "Stay signed in" keeps a session
+for up to 5 days. Admins manage users, sessions, roles and permissions on the **Admin** page; the audit log is read in
+the **Audit portal** (`/audit`). An optional password expiry policy is set in Settings (`password_policy.py`).
+
+The audit log and its evidence, module by module:
+- `audit_chain.py`: the hash-chained audit log, its archives on rotation and the retention removals recorded in the chain.
+- `audit_portal.py`: the Audit portal's pages and API, the control checks LG-01 to LG-15 and the access review.
+- `control_map.py`: NIST SP 800-53 Rev. 5 controls → CIS Controls v8.1 safeguards, taken unchanged from CIS's
+  official mapping (CC BY-NC-ND 4.0 content, not under AGPL).
+- `audit_report.py`: the evidence report (PDF). `audit_proof.py`: the proof package (log files, `audit_log.csv`,
+  manifest) and the continuity check. `audit_verifier.py`: the standalone verifier shipped in the package.
+- `sender_audit.py`: the Audit portal's Sender check page (DKIM results, keys, new report types).
+
+The pipeline from Settings → Workers: `pipeline_settings.py` (the page's API: unlock with the administrator's password,
+requests, the API key check, held-back reports) and `pipeline_link.py` (finds the pipeline beside the platform). The
+rules themselves live in the pipeline's `worker_settings.py`, which the platform loads read-only; a request that
+weakens the pipeline also needs `./confirm_request.sh` on the pipeline's account.
 
 - **`docs/SECURITY.md`:** how Looking Glass is secured, the changes made after the penetration test, the operator checklist.
 - **`docs/INSTALLATION.md`:** installing on Windows with WSL or on a Linux server, HTTPS, firewall, updating, troubleshooting.

@@ -5,6 +5,7 @@ read more. Dates are UTC.
 
 ## Contents
 
+- [2026-11-12: audit evidence (NIST and CIS), report intake checks, the pipeline from Settings, password expiry](#2026-11-12-audit-evidence-nist-and-cis-report-intake-checks-the-pipeline-from-settings-password-expiry)
 - [2026-11-11: advisories, cases, an Overview for every role, the Audit portal](#2026-11-11-advisories-cases-an-overview-for-every-role-the-audit-portal)
 - [2026-11-10: combination codes, the analyst's combination search and findings](#2026-11-10-combination-codes-the-analysts-combination-search-and-findings)
 - [2026-11-09: researchers' intel, notes and a page of their own](#2026-11-09-researchers-intel-notes-and-a-page-of-their-own)
@@ -12,6 +13,42 @@ read more. Dates are UTC.
 - [2026-11-09: faster platforms and a sharper Executive portal](#2026-11-09-faster-platforms-and-a-sharper-executive-portal)
 - [2026-11-08: Executive portal, 7-day baseline, vulnerabilities and network types](#2026-11-08-executive-portal-7-day-baseline-vulnerabilities-and-network-types)
 - [2026-11-07: definitions, the researcher role and PDF reports](#2026-11-07-definitions-the-researcher-role-and-pdf-reports)
+
+## 2026-11-12: audit evidence (NIST and CIS), report intake checks, the pipeline from Settings, password expiry
+
+Evidence an auditor can check without trusting Looking Glass, and reports that are checked before they are loaded.
+
+**New**
+
+- **LG → NIST → CIS.** Each control check (LG-01 to LG-15) names the NIST SP 800-53 Rev. 5 (5.2.0) controls it
+  supports and, through CIS's own official mapping, the CIS Critical Security Controls v8.1 safeguards, with CIS's
+  relationship (equivalent, subset, superset). In the Audit portal and the evidence report (PDF), with CIS's licence
+  notice. Evidence only: the conclusion is the auditor's. ([User guide](USER_GUIDE.md#the-audit-portal-audit))
+- **The audit log as CSV in the proof package.** Every entry in the package's log files, numbered as in the chain; the
+  verifier reports a changed CSV. ([How the audit log proves itself](AUDIT_LOG_PROOF.md))
+- **Sender check (DKIM).** Each report e-mail's signature is checked against Shadowserver's key in DNS: record only,
+  or hold back what does not pass until an administrator releases it. The Audit portal's **Sender check** page shows
+  the results, the signing keys and the new report types that arrived.
+- **Reports straight from Shadowserver's API**, as an alternative to the mailbox, with the API key checked by
+  Shadowserver before it is saved. If the chosen way fails on a run, the other is used and the log says why. Report
+  types Shadowserver adds later are fetched and noticed automatically.
+- **Settings → Workers:** the pipeline's own settings from the web app (how reports are fetched, the sender check,
+  mailbox folder and certificate check, performance, unzip limits, the API key, held-back reports), behind the
+  administrator's own password. Changes are requests the pipeline checks again and applies at its next run; one that
+  would make the pipeline less strict also needs `./confirm_request.sh` on the server.
+  ([User guide](USER_GUIDE.md#workers-the-database-pipeline))
+- **Password expiry (optional).** An administrator sets the number of days, or makes every account change now; after
+  the password and the authenticator code the person chooses a new one and goes straight in. Off by default.
+  ([User guide](USER_GUIDE.md#password-policy))
+- **The constituency from the network list:** Settings' network list has a *Constituent* tick box on each network.
+
+**Changed**
+
+- The mail server's certificate is checked by default (`IMAP_VERIFY_TLS=true`).
+- The service unit template runs the web app hardened (read-only system, only its own `data/` writable).
+- Faster Services figures and replay counts (cached per view, masking included in every cache key).
+- Workflow: an advisory saved in two tabs is refused as "changed meanwhile" instead of overwritten; a finding closes
+  only when every organisation's advisory is sent; only pending accounts can be approved.
 
 ## 2026-11-11: advisories, cases, an Overview for every role, the Audit portal
 

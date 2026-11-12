@@ -10,8 +10,9 @@ the platform: the **Glossary** tab on the overview page and the **Glossary** but
 - [Threats](#threats) (15 terms)
 - [Numbers and measures](#numbers-and-measures) (12 terms)
 - [Using the platform](#using-the-platform) (11 terms)
-- [Accounts, roles and permissions](#accounts-roles-and-permissions) (30 terms)
+- [Accounts, roles and permissions](#accounts-roles-and-permissions) (34 terms)
 - [Publicly accessible / vulnerable services](#publicly-accessible--vulnerable-services) (13 terms)
+- [Security, audit and the pipeline](#security-audit-and-the-pipeline) (18 terms)
 - [Related tools](#related-tools)
 - [A–Z index](#az-index)
 
@@ -223,11 +224,17 @@ Managers and executives. They use the management portal only: a polished dashboa
 **Management portal (Executive)**  
 The dashboard of the management role at /management. Every figure is aggregated (counts, shares, trends): click any bar, slice or region to focus every chart on it, click an infection or a CVE to have it explained, and download an executive report (PDF) of exactly what is on screen.
 
+**Advisor (role)**  
+Writes the advisories. Their Advisory portal (/advisory) shows what waits for an advisory, what is in progress and what was sent, to whom. They open a finding management approved to them, write the description and recommended actions for one organisation, generate its report and mark it sent. They see the affected organisation's devices for that advisory, nothing else of the platforms.
+
+**Auditor (role)**  
+An internal or external auditor. They use the Audit portal (/audit) only, read only: the audit log by tab, the dashboard and control checks, the access review, the log's integrity, and evidence to take away. They never see the platforms or any host data, and no one can change what this role may do, so it never depends on the people being audited.
+
 **Admin (role)**  
-Administrators. Everything an analyst and a researcher can do, plus Settings (country, constituency), accounts, roles, sessions and the audit log.
+Administrators. Everything the other roles can do, plus Settings (country, constituency, the password policy, the pipeline's Workers settings), accounts, roles, sessions and the Audit portal. Peace of mind lets an administrator step out of the day-to-day findings.
 
 **Permission**  
-One thing a role allows: view (see the platforms), unmasked (real addresses and names), export (CSV files, complete lists and reports), malpedia (malware and vulnerability look-ups), settings, definitions (the Definitions page), networks (correct network names), users (accounts and roles) and audit (the audit log).
+One thing a role allows: view (see the platforms), unmasked (real addresses and names), export (CSV files, complete lists and reports), malpedia (malware and vulnerability look-ups), settings, networks (correct network names), audit (the Audit portal), and four that belong to one role only: management (Executive portal), definitions (Researcher), advisory (Advisor) and users (Admin: accounts and roles).
 
 **Looking Glass definition**  
 A description of a malware name or an issue that Malpedia or the vulnerability databases do not cover, with references (evidence). The definitions that come with Looking Glass are signed Looking Glass; those written by a security researcher of the organisation carry the researcher's full name. It is shown to every user in look-ups, lists, CSV files and reports.
@@ -269,7 +276,13 @@ On the Combinations page, the PDF and CSV files for one operator only (Report fo
 An answer added to a finding's history, with text and codes: a researcher answering an analyst's code with combination codes, or anyone in the loop adding what they found. The status stays as it is.
 
 **Finding**  
-A researcher's note the team follows up, with a number (#1, #2…) and a status: New, With management, Back with the researcher, With the analyst, Advisory sent, Closed. Each move records who, when and a comment. Researchers, management, analysts and admins share the Findings page; no address is shown there.
+Something the team follows up, with a number (#1, #2…): a researcher's note or an analyst's combination, sent by name to a manager, who approves it to a named analyst or advisor or rejects it with a reason. Every hand-over names a person, and only the people a finding has passed through (and administrators) see it. A case holds one sub-finding per organisation; it closes when every organisation's advisory is sent. Each step records who, when and a comment, and no address is shown on the Findings page.
+
+**Advisory**  
+The report an advisor sends one organisation about its affected devices: the advisory pages (devices, impact, description, recommended actions), then the insights behind it, technical details with every weakness defined, and the Shadowserver references. It is signed by the CSIRT (name and logo from Settings), never by a person, and carries its TLP on every page. It goes out as a PDF and a devices CSV.
+
+**TLP (Traffic Light Protocol)**  
+FIRST's TLP 2.0 labels how far an advisory may travel: RED (the named recipients only), AMBER+STRICT (the recipient's organisation only), AMBER (the organisation and its clients who need to know; the default, since an advisory lists the organisation's addresses), GREEN (the recipient's community, not published) and CLEAR (anyone).
 
 **Seen in / Last seen**  
 The reports a name appears in. Each report shows whether it carries intel for the name (intel · N kinds) or only the name. A name not in today's reports shows where and when it was last seen (the last 30 days are remembered).
@@ -340,6 +353,64 @@ One bubble per report, sized by its records for the day. A dot flies into a bubb
 
 [↑ Back to contents](#contents)
 
+## Security, audit and the pipeline
+
+**Masking**  
+What viewers without the unmasked permission see instead of real data: every IP address becomes an opaque label (Host 3f9a2c41b07e) that cannot be turned back into the address, network names become aliases (Telco 1) and host names are removed. Researchers never see a constituent's IP address; report data (banners, URLs, user agents, DNS and SNI values, patterns) is shown to them as reported with the addresses in it masked, while team notes and free text also mask host names, e-mail addresses and IDs.
+
+**Authenticator code (two-step sign-in)**  
+Every account signs in with its password and a six-digit code from an authenticator app (TOTP), which changes every 30 seconds. Each code works once. Recovery codes, shown once when the authenticator is set up, replace a lost phone.
+
+**Password expiry**  
+An optional policy an administrator sets in Settings: passwords expire after a number of days, and turning it on (or Every account now) makes every account choose a new password at its next sign-in. After the password and the authenticator code, the person sets a new password and goes straight in. Off by default, as NIST SP 800-63B advises against forced periodic changes.
+
+**Audit portal**  
+The auditor's page (/audit), read only: the audit log by tab (sign-ins, accounts, sessions, configuration, data access and exports, workflow, system), a dashboard of key figures, the control checks, the access review, the log's integrity, the sender check, and evidence to take away (CSV, the evidence report, the proof package).
+
+**Audit log (hash chain)**  
+The record of who did what, when and from where on Looking Glass. Each entry holds the hash of the entry before it, so changing, inserting or removing any entry breaks the chain from that point; archives and removals by the retention period are recorded in the chain too. The Audit portal checks it, and anyone can check it independently with the proof package.
+
+**Control check (LG-01 … LG-15)**  
+An automated check of one of Looking Glass's own controls (for example LG-01 multi-factor authentication, LG-06 failed sign-ins, LG-10 audit log protection), with the evidence from its records. Each is mapped to the NIST SP 800-53 controls it supports and, through them, to CIS Controls safeguards. They give evidence, not a pass or fail: the conclusion is the auditor's.
+
+**NIST SP 800-53**  
+The US National Institute of Standards and Technology's catalogue of security and privacy controls (Revision 5, release 5.2.0), for example IA-2(1) multi-factor authentication or AU-9 protection of audit information. The control checks cite the controls they support by their official titles.
+
+**CIS Controls (safeguard)**  
+The Center for Internet Security's Critical Security Controls v8.1: prioritised safeguards such as 8.5 Collect Detailed Audit Logs. Looking Glass lists, for each control check, the safeguards CIS's own official mapping relates to its NIST controls, with CIS's relationship (equivalent, subset or superset), so one chain reads LG → NIST → CIS. CIS Controls © Center for Internet Security, used under CC BY-NC-ND 4.0.
+
+**Proof package**  
+A ZIP the auditor downloads from the Audit portal: the audit log's files exactly as stored, the whole log as a spreadsheet (audit_log.csv, one row per entry, numbered as in the chain), a manifest with the SHA-256 of every file, and a short verifier in plain Python that recomputes the chain on the auditor's own computer, without trusting Looking Glass.
+
+**Head (continuity check)**  
+The hash of the newest entry in the audit log and its entry number. An auditor keeps it with the evidence; at the next audit, if that hash is still at that entry number, every entry up to it is unchanged, even against someone able to rewrite the whole log on the server.
+
+**Evidence report (PDF)**  
+The Audit portal's report for a period: scope and method, key figures, the integrity of the audit log, every control check with its NIST and CIS mapping and its evidence, the access review and the privileged changes.
+
+**Database pipeline**  
+The separate program that fetches Shadowserver's reports on a schedule (usually every 30 minutes), checks and unpacks them, and loads them into MongoDB for the platforms to read. It runs on its own account and keeps its own settings and passwords.
+
+**Report source (e-mail or Shadowserver API)**  
+How the pipeline gets the reports: from the mailbox they are e-mailed to, or straight from Shadowserver's report API with an API key. If the chosen way cannot be used on a run and the other is set up, that run uses the other and its log says why. Report types Shadowserver adds later are fetched like any other.
+
+**Sender check (DKIM)**  
+For reports that arrive by e-mail: the pipeline checks each message's DKIM signature with the sender's public key from DNS, to tell genuine Shadowserver reports from forged ones. Record only keeps every result for the Audit portal; Block also holds back a report that is not validly signed by the expected signer (shadowserver.org).
+
+**Held-back report (quarantine)**  
+A report e-mail the sender check stopped: kept apart and not loaded. An administrator who knows it is genuine releases it in Settings → Workers, and it is loaded at the pipeline's next run. Released reports stay on record.
+
+**Workers (Settings)**  
+The Settings tab for the pipeline's own settings: how reports are fetched, the sender check, mailbox folder and certificate check, loading performance, unzip limits, the Shadowserver API key and held-back reports. It is locked behind the administrator's own password; a change is a request the pipeline checks again and applies at its next run. Passwords are never shown or changed there.
+
+**Confirmation on the server**  
+A Workers change that makes the pipeline less strict (the sender check lowered or another signer, the certificate check off, the API given up for e-mail, a looser unzip limit, a new API key, a release) also needs someone on the server to run ./confirm_request.sh with its number on the pipeline's account. So a fault in, or break-in to, the web app cannot switch the pipeline's protections off by itself.
+
+**New report type**  
+A Shadowserver report arriving for the first time. The pipeline notices it however it arrives and logs it, and the Audit portal's sender check lists it with whether Looking Glass's report definitions know it yet.
+
+[↑ Back to contents](#contents)
+
 ## Related tools
 
 Tools that CSIRTs often use alongside Looking Glass (see the [comparison](COMPARISON.md)).
@@ -373,22 +444,31 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Activity by 15 minutes](#numbers-and-measures) · 
 [Activity level](#numbers-and-measures) · 
 [Admin (role)](#accounts-roles-and-permissions) · 
+[Advisor (role)](#accounts-roles-and-permissions) · 
+[Advisory](#accounts-roles-and-permissions) · 
 [Affected city](#who-and-where) · 
 [All of the day's connections (map)](#using-the-platform) · 
 [Analysis view](#using-the-platform) · 
 [Analyst (role)](#accounts-roles-and-permissions) · 
 [Analyst code (LG-A)](#accounts-roles-and-permissions) · 
 [Attack type](#threats) · 
+[Audit log (hash chain)](#security-audit-and-the-pipeline) · 
+[Audit portal](#security-audit-and-the-pipeline) · 
+[Auditor (role)](#accounts-roles-and-permissions) · 
+[Authenticator code (two-step sign-in)](#security-audit-and-the-pipeline) · 
 [Beaconing](#numbers-and-measures) · 
 [Botnet](#threats) · 
 [Botnet C2](#threats) · 
 [Brute force](#threats) · 
 [C2 (command and control)](#threats) · 
 [C2 / sinkhole domains](#threats) · 
+[CIS Controls (safeguard)](#security-audit-and-the-pipeline) · 
 [Combination](#accounts-roles-and-permissions) · 
 [Combination code (LG-C, LG-X)](#accounts-roles-and-permissions) · 
 [Combination search](#accounts-roles-and-permissions) · 
+[Confirmation on the server](#security-audit-and-the-pipeline) · 
 [Constituency (Settings)](#publicly-accessible--vulnerable-services) · 
+[Control check (LG-01 … LG-15)](#security-audit-and-the-pipeline) · 
 [Country (Settings)](#publicly-accessible--vulnerable-services) · 
 [Critical](#threats) · 
 [Cross-report hosts](#numbers-and-measures) · 
@@ -396,6 +476,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Current time (UTC)](#the-basics) · 
 [CVE](#accounts-roles-and-permissions) · 
 [CVSS score](#accounts-roles-and-permissions) · 
+[Database pipeline](#security-audit-and-the-pipeline) · 
 [DDoS](#threats) · 
 [Demo mode](#using-the-platform) · 
 [Destination](#who-and-where) · 
@@ -408,11 +489,14 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Event stream](#using-the-platform) · 
 [Event time (UTC)](#the-basics) · 
 [Events yesterday](#numbers-and-measures) · 
+[Evidence report (PDF)](#security-audit-and-the-pipeline) · 
 [Exposed host](#publicly-accessible--vulnerable-services) · 
 [External (role)](#accounts-roles-and-permissions) · 
 [Filters](#using-the-platform) · 
 [Finding](#accounts-roles-and-permissions) · 
 [Follow-up (details lists)](#using-the-platform) · 
+[Head (continuity check)](#security-audit-and-the-pipeline) · 
+[Held-back report (quarantine)](#security-audit-and-the-pipeline) · 
 [Honeypot](#threats) · 
 [Hosts in several reports](#publicly-accessible--vulnerable-services) · 
 [Hosts with multiple issues](#publicly-accessible--vulnerable-services) · 
@@ -429,16 +513,21 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Malpedia](#accounts-roles-and-permissions) · 
 [Management (role)](#accounts-roles-and-permissions) · 
 [Management portal (Executive)](#accounts-roles-and-permissions) · 
+[Masking](#security-audit-and-the-pipeline) · 
 [Median](#numbers-and-measures) · 
 [Median repeat interval](#numbers-and-measures) · 
 [Needle through the haystack](#accounts-roles-and-permissions) · 
 [Network (ASN)](#who-and-where) · 
+[New report type](#security-audit-and-the-pipeline) · 
+[NIST SP 800-53](#security-audit-and-the-pipeline) · 
 [Note (researcher)](#accounts-roles-and-permissions) · 
+[Password expiry](#security-audit-and-the-pipeline) · 
 [Peak](#numbers-and-measures) · 
 [Permission](#accounts-roles-and-permissions) · 
 [Pin](#using-the-platform) · 
 [Playback speed](#using-the-platform) · 
 [Population report](#publicly-accessible--vulnerable-services) · 
+[Proof package](#security-audit-and-the-pipeline) · 
 [Publicly accessible / vulnerable services](#publicly-accessible--vulnerable-services) · 
 [Record](#publicly-accessible--vulnerable-services) · 
 [Regions heatmap](#publicly-accessible--vulnerable-services) · 
@@ -450,6 +539,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Report (PDF + CSV)](#accounts-roles-and-permissions) · 
 [Report family](#publicly-accessible--vulnerable-services) · 
 [Report per network provider](#accounts-roles-and-permissions) · 
+[Report source (e-mail or Shadowserver API)](#security-audit-and-the-pipeline) · 
 [Reports](#numbers-and-measures) · 
 [Request path](#who-and-where) · 
 [Researcher (role)](#accounts-roles-and-permissions) · 
@@ -457,6 +547,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Role](#accounts-roles-and-permissions) · 
 [Scanning](#threats) · 
 [Seen in / Last seen](#accounts-roles-and-permissions) · 
+[Sender check (DKIM)](#security-audit-and-the-pipeline) · 
 [Services constellation](#publicly-accessible--vulnerable-services) · 
 [Severity](#threats) · 
 [Shadowserver](#the-basics) · 
@@ -467,4 +558,6 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Target country](#who-and-where) · 
 [Target port](#who-and-where) · 
 [Threat actor](#accounts-roles-and-permissions) · 
-[User agent](#who-and-where)
+[TLP (Traffic Light Protocol)](#accounts-roles-and-permissions) · 
+[User agent](#who-and-where) · 
+[Workers (Settings)](#security-audit-and-the-pipeline)

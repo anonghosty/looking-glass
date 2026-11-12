@@ -175,7 +175,7 @@ says what changed and takes you there. Administrators can tick <b>Peace of mind<
 
 **Also:** all 54 African countries with their regions maps · your constituency only (networks and address ranges) ·
 network names and sectors identified automatically · works on TVs, tablets and phones · PDF reports on every list ·
-an audit log of everything.
+a tamper-evident audit log with control checks mapped to NIST SP 800-53 and CIS Controls.
 
 ## How it works
 
@@ -258,22 +258,35 @@ The complete guide, with every screen and button: [docs/USER_GUIDE.md](docs/USER
 | **Researcher** | only the Definitions page (no addresses) | define malware names and issues with references, study the intel gathered from the reports, share notes, correct network names |
 | **Management** | the Executive portal (aggregates, never addresses) and the findings it decides | filter, explain, download executive reports; approve findings to a named advisor or reject them |
 | **Advisor** | the Advisory portal and the findings sent to them | write and send one advisory per organisation, signed by the CSIRT |
-| **Admin** | everything | also Settings, the Definitions page, accounts, roles and the Audit portal; Peace of mind to step out of the operations |
+| **Auditor** | only the Audit portal (never the platforms or host data) | read the audit log, control checks, access review and integrity; export evidence. Changes nothing |
+| **Admin** | everything | also Settings (with the password policy and the pipeline's Workers settings), the Definitions page, accounts, roles and the Audit portal; Peace of mind to step out of the operations |
 
-Every role has an Overview and the Findings it takes part in. Administrators can build custom roles from the
-permissions (an *auditor* with only `audit` reads the audit log and the sessions and changes nothing). Details: [User guide → Roles](docs/USER_GUIDE.md#roles).
+Every role has an Overview, and every role but the auditor the Findings it takes part in. The auditor's permission is
+fixed, so what an auditor may do never depends on the people being audited. Administrators can build custom roles
+from the other permissions. Details: [User guide → Roles](docs/USER_GUIDE.md#roles).
 
 ## Security
 
 <img src="docs/media/screens/53-admin-roles.png" alt="Roles and permissions" width="100%">
 
 - **Two-factor sign-in for everyone** (authenticator app), strong passwords, lock-out after failed attempts, recovery codes.
+  Optional **password expiry**, set by an administrator (off by default, as NIST SP 800-63B advises).
 - **Sessions** bound to the browser, ended after inactivity; administrators see and end any session.
 - **Roles and permissions** enforced on the server; masking is done **on the server**, so hidden values never reach the browser.
 - **Executive portal** that cannot return an address (checked by an automated test).
 - **Audit portal** of its own: the audit log (sign-ins, failures, settings, accounts, definitions, notes, findings,
   decisions, advisories and report downloads, naming people as *Full Name (username)*) and who is signed in, readable
   by an auditor who can change nothing.
+- **A tamper-evident audit log:** every entry is chained to the one before it. Auditors take away a **proof package**
+  (the log's files, the whole log as CSV and a short Python verifier) and check it on their own computer, without
+  trusting Looking Glass.
+- **Control checks LG-01 to LG-15**, each mapped to the **NIST SP 800-53 Rev. 5** controls it supports and, through
+  CIS's official mapping, to the **CIS Controls v8.1** safeguards (LG → NIST → CIS), with evidence and no verdict: the
+  conclusion is the auditor's. In the portal and in the evidence report (PDF).
+- **Report intake checked:** report e-mails are checked for Shadowserver's DKIM signature (record, or hold back what
+  does not pass), or reports come straight from Shadowserver's report API; zip bombs are refused.
+- **The web app cannot weaken the pipeline:** a Workers change that would make it less strict also needs someone to
+  confirm it on the server (`./confirm_request.sh`).
 - **Findings are channels:** only the people a finding passed through (and administrators) can see it.
 - **Peace of mind** for administrators: Admin, Audit, Settings and the Overview only, no findings notifications.
 - **Safe exports:** no CSV cell can run as a spreadsheet formula.
@@ -308,7 +321,7 @@ Please report security problems **privately** to the maintainers rather than in 
 | Countries | the **54 African countries** today; global coverage is in the pipeline |
 | Operating system | **Ubuntu 24.04 or later, Desktop or Server** — on the computer itself, in a virtual machine, or Ubuntu on WSL 2 on Windows 10/11. On Ubuntu Server, create the first administrator through an SSH tunnel (`ssh -L 5000:127.0.0.1:5000 user@server`, then open http://localhost:5000) |
 | Memory and disk | about 2 GB RAM for the platform; MongoDB needs space for your reports |
-| Network | the mailbox (IMAP, Gmail API or Microsoft Graph), Mapbox for the map tiles; optional Malpedia, RIPEstat, PeeringDB, NVD, CISA KEV and EPSS look-ups |
+| Network | the mailbox (IMAP, Gmail API or Microsoft Graph) or Shadowserver's report API, Mapbox for the map tiles; optional Malpedia, RIPEstat, PeeringDB, NVD, CISA KEV and EPSS look-ups |
 | Browsers | current Chrome, Edge, Firefox or Safari; TVs and phones supported |
 
 ## Documentation
