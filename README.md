@@ -235,6 +235,11 @@ No Shadowserver reports yet? [Sign up your CSIRT](https://www.shadowserver.org/w
 (see [`install.answers.example`](install.answers.example)). Manual installation:
 [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
+**Uninstalling:** `./uninstall.sh` stops and removes the services, the schedule and the `shadowserver` command and
+keeps your data; `--remove-database`, `--remove-mongodb`, `--remove-files` or `--all` remove more, each after a typed
+confirmation. `./uninstall.sh --dry-run` shows what would happen first.
+[Details](docs/INSTALLATION.md#uninstalling).
+
 ## Using it, step by step
 
 | | |

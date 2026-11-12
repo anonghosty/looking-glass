@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{#- Link previews (Slack, WhatsApp, LinkedIn, X, Teams...): a real title and description and the preview card, instead
+    of "Looking Glass - Looking Glass" and no picture. The card is docs/assets/social-card.png (1200x630). -#}
+{%- set lg_site = config.site_url or "https://looking-glass-gh.readthedocs.io/en/latest/" -%}
+{%- if not lg_site.endswith("/") %}{% set lg_site = lg_site ~ "/" %}{% endif -%}
+{%- if page and page.is_homepage -%}
+  {%- set lg_title = "Looking Glass: Shadowserver reports, replayed for African CSIRTs" -%}
+{%- elif page and page.title -%}
+  {%- set lg_title = (page.title | striptags) ~ " · Looking Glass" -%}
+{%- else -%}
+  {%- set lg_title = config.site_name -%}
+{%- endif -%}
+{%- set lg_desc = (page.meta.description if page and page.meta and page.meta.description else config.site_description) -%}
+{%- set lg_url = (page.canonical_url if page and page.canonical_url else lg_site) -%}
+
+{% block htmltitle %}
+  <title>{{ lg_title }}</title>
+{% endblock %}
+
+{% block extrahead %}
+  {{ super() }}
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Looking Glass">
+  <meta property="og:title" content="{{ lg_title }}">
+  <meta property="og:description" content="{{ lg_desc }}">
+  <meta property="og:url" content="{{ lg_url }}">
+  <meta property="og:image" content="{{ lg_site }}assets/social-card.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Looking Glass: the threat map replaying a day of Shadowserver events (dummy data)">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ lg_title }}">
+  <meta name="twitter:description" content="{{ lg_desc }}">
+  <meta name="twitter:image" content="{{ lg_site }}assets/social-card.png">
+{% endblock %}

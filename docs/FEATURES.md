@@ -15,6 +15,16 @@ read more. Dates are UTC.
 - [2026-11-08: Executive portal, 7-day baseline, vulnerabilities and network types](#2026-11-08-executive-portal-7-day-baseline-vulnerabilities-and-network-types)
 - [2026-11-07: definitions, the researcher role and PDF reports](#2026-11-07-definitions-the-researcher-role-and-pdf-reports)
 
+## 2026-11-12 (evening): uninstaller
+
+- **`./uninstall.sh`** undoes what `./install.sh` set up: the platform service, the pipeline's schedule and the
+  global `shadowserver` command. The reports database and the folder are kept unless asked
+  (`--remove-database`, `--remove-mongodb`, `--remove-files`, `--all`), each after a typed confirmation.
+- It removes only what belongs to its own folder: other installations, other cron jobs and a MongoDB that Looking
+  Glass did not install are left alone. `--dry-run` shows the plan without changing anything.
+- Tested by `tests/check_uninstall.py`, also against a throwaway MongoDB (the reports database and the two Looking
+  Glass accounts go; other databases and accounts stay). Details: docs/INSTALLATION.md, Uninstalling.
+
 ## 2026-11-12 (later): security review fixes
 
 An external review attacked the new features; every finding below is fixed and tested.

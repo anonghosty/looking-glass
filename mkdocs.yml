@@ -19,6 +19,7 @@ hooks:
 
 theme:
   name: material
+  custom_dir: overrides            # link-preview tags and title (overrides/main.html)
   logo: assets/logo-mark.svg
   favicon: assets/logo-mark.svg
   palette:

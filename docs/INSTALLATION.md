@@ -340,6 +340,30 @@ security_testing/security_retest.py && tests/run_all_checks.sh
 changes. If `check_libraries.py` fails, its line names the library.
 If `deploy/looking-glass.service.template` changed, run `deploy/install.sh` again and copy the service file again (A4 / B3).
 
+## Uninstalling
+
+Run `./uninstall.sh` from the top of the Looking Glass folder (the one with `install.sh`), as the user who installed
+it. It shows what it will remove and what it keeps, and asks before it starts.
+
+| Command | Removes | Keeps |
+|---|---|---|
+| `./uninstall.sh` | the platform service, the pipeline's schedule, the global `shadowserver` command (man page, completion) | the reports database, MongoDB, this folder (settings, accounts, findings, audit log) |
+| `./uninstall.sh --remove-database` | also the reports database and the accounts `lookingglass_pipeline` and `lookingglass_ro`, and `/etc/looking-glass` | other databases and accounts in the same MongoDB |
+| `./uninstall.sh --remove-mongodb` | also MongoDB itself and **all** its data, only if Looking Glass installed it | a MongoDB that was there before Looking Glass (never touched) |
+| `./uninstall.sh --remove-files` | also this folder | — |
+| `./uninstall.sh --all` | everything above | system packages (python3, cron, curl…) |
+
+- `./uninstall.sh --dry-run` (with any of the options) shows what would be done and changes nothing.
+- Deleting data needs a typed confirmation: the database name, `remove-mongodb`, or the folder name. Unattended:
+  `--yes --i-understand-data-loss`.
+- It removes only what belongs to **this** folder. Another installation's service, schedule or command, other cron
+  jobs, and a MongoDB that Looking Glass did not install are left alone.
+- **Back up first** if you may want the data again: `platform/manage/backup.sh` for the platform, and `mongodump`
+  for the reports.
+- Firewall rules you added for the platform's port (A7 / B6) are not removed: remove them yourself.
+- After `./uninstall.sh` without options, `./install.sh` in the same folder installs again with the kept settings
+  and data.
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |

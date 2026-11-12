@@ -28,7 +28,7 @@ jobs:
         working-directory: platform
         run: |
           set -e
-          for t in test_privacy_roles check_ip_find check_host_label_text check_cve_backoff; do
+          for t in test_privacy_roles check_ip_find check_host_label_text check_cve_backoff check_uninstall; do
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
           done
       - name: Pipeline checks
