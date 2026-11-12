@@ -153,6 +153,20 @@ fingerprints, serials and banners. A field a report adds later stays hidden unti
 Everything is enforced on the server: an external account gets masked data even if the address asks for `demo=0`, and exports,
 Malpedia, Settings and the admin APIs answer 403 without the permission.
 
+**What researchers see (a deliberate rule, decided 2026-11-12 after the external review).** Researchers study threats,
+so they get the threat data itself; what they never get is who the constituents are.
+- **Never a constituent's IP address.** Addresses are masked everywhere researchers look, also inside report values.
+- **Report data as reported:** service banners and the product, vendor and version taken from them; bot URLs, user
+  agents, DNS look-ups and SNI values in Intel gathered; patterns, including those only one or a few hosts carry. IP
+  addresses inside these values are masked (in Intel gathered's threat values as `x.161.x.34`); nothing else in them
+  is removed, because it is the intelligence the research depends on. A pattern fewer than 5 hosts carry is shown
+  without a lasting code (`small_codes.py`), so it cannot be followed back to a host over time.
+- **Team notes and free text** (what people write, not what reports contain) mask more: host names, IP addresses,
+  e-mail addresses, dates and long IDs (`hostmask.py`).
+The difference is intended: report data is threat intelligence, notes are analysts' own text and may name a
+constituent. External viewers and demo mode get the same product, vendor and version lines as researchers; these are
+software names (for example "nginx 1.18", "Cisco IOS 15.2"), and a device that puts its own host name there is rare.
+
 ### Admin page (Admin button in the top bar)
 - **Users:** user name, full name, organisation, email, country; status; role; MFA and recovery codes left; when, where
   (address and location) and with which browser the account registered and last signed in; open sessions. Actions:
