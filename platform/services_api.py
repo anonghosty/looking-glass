@@ -18,6 +18,7 @@ from werkzeug.datastructures import MultiDict
 import masked_fields
 from privacy import mask_ip
 from respcache import ResultCache, day_key
+from replay_counts import ReplayCounts
 from services import (EMPTY, FAMILIES, SEV_ORDER, ServiceRegistry, ServiceStore, matches, parse_filters, parse_time,
                       report_info)
 
@@ -31,6 +32,7 @@ def register(app, ctx):
     store = ServiceStore(db, registry, refs, log, reload_seconds=ctx["reload_seconds"], fallback_scan=ctx["fallback"],
                          settings=ctx.get("settings"))
     svc_cache = ResultCache()       # whole-day statistics shared by every viewer, keyed on the loaded day
+    replay_counts = ReplayCounts()  # the replayed counter of a selection, polled every few seconds (replay_counts.py)
 
     # ------------------------------------------------------------------ helpers
     country_upper = {"t": 0.0, "v": ""}
@@ -363,12 +365,18 @@ def register(app, ctx):
         day = day_for(request.args.get("at"))
         at = parse_iso(request.args.get("at"), replay_now()).timestamp()
         pred = scope(day, request.args)
-        hi = bisect.bisect_right(day.keys, at)
-        done = sum(1 for e in day.events[:hi] if pred(e)) if pred else hi
-        total = sum(1 for e in day.events if pred(e)) if pred else len(day.events)
-        # the next matching record after the replay position, so an empty stream can say when something will appear
-        nxt = next((e for e in day.events[hi:] if not pred or pred(e)), None)
-        hosts = len({e["ip"] for e in day.events if e["ip"] and pred(e)}) if pred else None
+        if pred:      # a selection: its records found once per loaded day and kept (replay_counts.py), then a binary search
+            # masked or not is part of the key: a masked viewer's filters resolve differently (a real network name
+            # matches nothing for them), so the same words are a different selection
+            sel_key = (is_demo(), tuple(sorted((k, v) for k, v in request.args.items(multi=True) if k not in ("at", "demo"))))
+            m = replay_counts.of(day, sel_key, pred, lambda e: e["ip"])
+            done, nxt = replay_counts.at(m, at)
+            total, hosts = len(m["keys"]), m["hosts"]
+        else:
+            hi = bisect.bisect_right(day.keys, at)
+            done, total, hosts = hi, len(day.events), None
+            # the next record after the replay position, so an empty stream can say when something will appear
+            nxt = day.events[hi] if hi < len(day.events) else None
         return jsonify(replayed=done, total=total, day=day.start.date().isoformat(), next_at=iso_t(nxt["_t"]) if nxt else None, hosts=hosts)
 
     @app.route("/api/svc/stats")
@@ -413,12 +421,28 @@ def register(app, ctx):
                        unsupported=[{"name": s["name"], "label": s["label"], "missing": s["diagnostic"]["missing"]}
                                     for s in registry.unsupported])
 
+    # the analysis, its drill-down lists and the regions map: worked out once per loaded day and selection, then shared
+    # (external review, 2026-11-12: the analysis took about 1.4 s on every request, holding up everyone else). Kept
+    # apart from svc_cache, and smaller: a drill-down list can be large. "Show all" lists (downloads) are not kept.
+    view_cache = ResultCache(size=64)
+
+    def view_key(name, args, demo):
+        day = day_for(args.get("at"))
+        rest = tuple(sorted((k, v) for k, v in args.items(multi=True) if k not in ("at", "demo")))
+        return (name, day_key(day), demo, registry.version, asns.mtime, ctx["country_name"](), rest)
+
     @app.route("/api/svc/insight")
     def svc_insight():
         """Analysis of any selection, in the same shape as the map platform's analysis: figures (each with a
         drill-down list), key findings, composition donuts, hour / 15-minute charts, severity, breakdowns, hosts."""
         demo = is_demo()
-        day, evs, tw = selection(request.args)
+        args = request.args
+        out = view_cache.get(view_key("insight", args, demo), lambda: svc_insight_core(args, demo))
+        # the one per-request field: the replay moment it was asked at (the rest depends on the day and selection only)
+        return jsonify(dict(out, as_of=iso(parse_iso(args.get("at"), replay_now()))))
+
+    def svc_insight_core(args, demo):
+        day, evs, tw = selection(args)
         k = kpis(evs)
         sel, day_reports = host_profile(evs, day.events)
         day_issues = day_host_issues(day)
@@ -455,21 +479,31 @@ def register(app, ctx):
         rows, nhosts = host_rows(evs, demo, 15)
         hours = hours_by_family(evs, day)
         totals = [sum(v[i] for v in hours.values()) for i in range(24)]
-        return jsonify(day=day.start.date().isoformat(), as_of=iso(parse_iso(request.args.get("at"), replay_now())),
-                       **k, day_total=len(day.events), share=(len(evs) / len(day.events)) if day.events else 0,
-                       multi_issue_hosts=multi_issue, cross_report_hosts=cross, issues=len({i for e in evs for i in e["issues"]}),
-                       regions=len({e["region"] for e in evs if not region_unknown(e["region"])}),
-                       quarters=quarters(evs, day), hours_by_family=hours, peak_hour=(totals.index(max(totals)) if evs else None),
-                       severity=severity_rows(evs), breakdowns=b, findings=f,
-                       host_rows=rows, hosts_total=nhosts, time=request.args.get("time") or "")
+        return dict(day=day.start.date().isoformat(),
+                    **k, day_total=len(day.events), share=(len(evs) / len(day.events)) if day.events else 0,
+                    multi_issue_hosts=multi_issue, cross_report_hosts=cross, issues=len({i for e in evs for i in e["issues"]}),
+                    regions=len({e["region"] for e in evs if not region_unknown(e["region"])}),
+                    quarters=quarters(evs, day), hours_by_family=hours, peak_hour=(totals.index(max(totals)) if evs else None),
+                    severity=severity_rows(evs), breakdowns=b, findings=f,
+                    host_rows=rows, hosts_total=nhosts, time=args.get("time") or "")
 
     @app.route("/api/svc/drill")
     def svc_drill():
         """The list behind one analysis figure (hosts to follow up, issues, services, networks, regions...)."""
         demo = is_demo()
-        day, evs, _ = selection(request.args)
-        metric = request.args.get("metric", "hosts")
-        full = request.args.get("all") == "1"
+        args = request.args
+        if args.get("metric", "hosts") not in DRILL_METRICS:
+            return jsonify(error="unknown metric"), 400
+        if args.get("all") == "1":                         # the whole list (a download): worked out, not kept
+            return jsonify(svc_drill_core(args, demo))
+        return jsonify(view_cache.get(view_key("drill", args, demo), lambda: svc_drill_core(args, demo)))
+
+    DRILL_METRICS = ("hosts", "events", "vulnerable", "multi", "cross", "issues", "services", "networks", "regions", "share")
+
+    def svc_drill_core(args, demo):
+        day, evs, _ = selection(args)
+        metric = args.get("metric", "hosts")
+        full = args.get("all") == "1"
         lim = None if full else DRILL_LIMIT
         sel, day_reports = host_profile(evs, day.events)
         day_issues = day_host_issues(day)
@@ -547,15 +581,17 @@ def register(app, ctx):
             group_list(lambda e: e["region"], region_label, "Regions", "Regions of the country; click one to analyse it.", "region", "Region")
         elif metric == "share":
             group_list(lambda e: e["family"], lambda v: v, "Report families", f"{len(evs):,} of the day's {len(day.events):,} records, by report family.", "family", "Family")
-        else:
-            return jsonify(error="unknown metric"), 400
-        return jsonify(out)
+        return out
 
     @app.route("/api/svc/regions")
     def svc_regions():
         """Regions heatmap (country from Settings): records, hosts and what makes up each region (active filters)."""
         demo = is_demo()
-        day, evs, _ = selection(request.args)
+        args = request.args
+        return jsonify(view_cache.get(view_key("regions", args, demo), lambda: svc_regions_core(args, demo)))
+
+    def svc_regions_core(args, demo):
+        day, evs, _ = selection(args)
         g = {}
         for e in evs:
             r = "" if region_unknown(e["region"]) else e["region"]
@@ -568,7 +604,7 @@ def register(app, ctx):
         out = {r: {"events": x["events"], "hosts": len(x["hosts"]), "vulnerable_hosts": len(x["vuln"]), "critical": x["crit"],
                    "services": x["svc"].most_common(4), "issues": x["iss"].most_common(4), "cities": [c for c in x["city"].most_common(4) if c[0]],
                    "networks": x["net"].most_common(3)} for r, x in g.items()}
-        return jsonify(day=day.start.date().isoformat(), total=len(evs), regions=out)
+        return dict(day=day.start.date().isoformat(), total=len(evs), regions=out)
 
     @app.route("/api/svc/hosts.csv")
     def svc_hosts_csv():

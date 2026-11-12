@@ -720,6 +720,10 @@ def _geo_core(day, flt):
                 flows=sorted((out(f) for f in flows.values()), key=lambda r: -r["count"]))
 
 
+from replay_counts import ReplayCounts  # noqa: E402  (a selection's replayed counter, polled every 2 s per map tab)
+REPLAY_COUNTS = ReplayCounts()
+
+
 @app.route("/api/replayed")
 def api_replayed():
     """Exact number of the day's records (matching the filters) whose event time is at or before the replay
@@ -727,16 +731,18 @@ def api_replayed():
     rn = parse_iso(request.args.get("at"), replay_now())
     day = store.get(rn)
     flt = parse_filters(request.args)
-    hi = bisect.bisect_right(day.keys, rn.timestamp())
     if flt:
-        replayed = sum(1 for e in day.events[:hi] if matches(e, flt))
-        total = sum(1 for e in day.events if matches(e, flt))
+        # the selection's records found once per loaded day and kept (replay_counts.py); each poll is a binary search.
+        # hosts: distinct source hosts (the empty stream says "its IP address" or "their N IP addresses")
+        m = REPLAY_COUNTS.of(day, filters_key(flt), lambda e: matches(e, flt), lambda e: e["src_ip"])
+        replayed, nxt = REPLAY_COUNTS.at(m, rn.timestamp())
+        total, hosts = len(m["keys"]), m["hosts"]
     else:
-        replayed, total = hi, len(day.events)
+        hi = bisect.bisect_right(day.keys, rn.timestamp())
+        replayed, total, hosts = hi, len(day.events), None
+        nxt = day.events[hi] if hi < len(day.events) else None
     # the next matching event after the replay position, so an empty stream can say when something will appear
-    next_at = next((e["extracted_date"] for e in day.events[hi:] if not flt or matches(e, flt)), None)
-    # distinct source hosts of a filtered selection (the empty stream says "its IP address" or "their N IP addresses")
-    hosts = len({e["src_ip"] for e in day.events if e["src_ip"] and matches(e, flt)}) if flt else None
+    next_at = nxt["extracted_date"] if nxt else None
     return jsonify(replayed=replayed, total=total, at=iso(rn), day=day.start.date().isoformat(), next_at=next_at, hosts=hosts)
 
 
