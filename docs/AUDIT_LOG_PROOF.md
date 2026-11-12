@@ -89,7 +89,7 @@ that always says "verified". So do not take it on trust:
   PowerShell) with the one published here, outside the server:
 
   ```text
-  4b4645b8cd650999c646cc1a8ffe61037d9f033d1ea44bc83c96a08be0e9a98c
+  3bfa79b38fb1d730912d8f3cd86d7240eb07e451aff686333c7ecfd57fb41008
   ```
 
   This is the verifier of the current release on GitHub. An installation of an older release ships the verifier of
@@ -158,9 +158,14 @@ makes the check report the log as not whole, and Looking Glass records it as an 
 BEFORE its retention ended", with the reason), never as a normal one. Every change of the setting is visible too,
 also a lowering that would let the retention remove recent entries; the evidence report lists the setting's history.
 Logs from before the setting was recorded can only be judged by their notes: the check marks those removals "setting
-not recorded". A note's dates sit next to the log and could be faked to look old, so the check also looks at time itself:
-the first entry still kept carries its own time inside the chain, and a removed archive followed by more than
-`AUDIT_GAP_DAYS` (30) days without any entry is reported for the auditor to ask about (`--gap-days` in the verifier).
+not recorded". The archive's own dates are not taken from the note either: **each rotation is recorded in the chain**
+("Audit log archived": the archive's name, its number of entries, its oldest and newest times and its last link),
+as the first entry of the new file. That entry stays in the kept log after the archive is deleted, so a note that
+disagrees with it (for example one claiming a seconds-old archive held 500-day-old entries) makes the check report
+the log as not whole, and the age is judged by the recorded dates. Removals go oldest first, so the newest removed
+archive's rotation entry is always among the entries kept. For archives made before rotations were recorded, the check
+looks at time itself: a removed archive followed by more than `AUDIT_GAP_DAYS` (30) days without any entry is reported
+for the auditor to ask about (`--gap-days` in the verifier).
 The evidence report lists every removed archive with its dates and this finding. Archives are never overwritten:
 two in the same second get numbered names. An earlier head that falls in a removed archive can no
 longer be compared entry by entry; the check says so. Set the retention to cover the time between audits

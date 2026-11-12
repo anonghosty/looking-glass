@@ -22,7 +22,9 @@ The format it checks
                                      chain (event "audit_archive_removed"); removed.recorded counts those recorded.
                                      Whether a removal was allowed is judged from the chain, not the note: the time of
                                      its chain entry, and the retention setting in force then (event
-                                     "audit_retention_set", recorded at start-up and whenever it changes)
+                                     "audit_retention_set", recorded at start-up and whenever it changes); the archive's
+                                     own dates come from the rotation entry written into the next file when it was
+                                     archived (event "audit_archived"), which the note must agree with
   MANIFEST.json                      the SHA-256 of every file in the package when it was made
 
 What a whole chain proves: no entry was changed, inserted or removed after it was written, and nothing was cut from the
@@ -189,15 +191,20 @@ def check(folder, earlier=None, gap_days=30):
             return float(x)
         except (TypeError, ValueError):
             return default
-    history, rec_at = [], {}
+    # Each rotation writes an entry into the new file ("audit_archived": the archive's name, entries, oldest and newest
+    # times, last link). It stays in the kept log after the archive is deleted: a note must agree with it, and the age
+    # of the entries is judged by it, not by the note.
+    history, rec_at, rotations = [], {}, {}
     for ln in lines:
-        if '"audit_retention_set"' not in ln and '"audit_archive_' not in ln:
+        if '"audit_retention_set"' not in ln and '"audit_archive' not in ln:
             continue
         try:
             rec = json.loads(ln)
         except ValueError:
             continue
-        if rec.get("event") == "audit_retention_set":
+        if rec.get("event") == "audit_archived":
+            rotations[rec.get("target")] = rec.get("archived") or {}
+        elif rec.get("event") == "audit_retention_set":
             try:
                 history.append((num(rec.get("t")), int(rec.get("target"))))
             except (TypeError, ValueError):
@@ -231,13 +238,26 @@ def check(folder, earlier=None, gap_days=30):
             why.append(f"its note claims a removal time ({when(num(n.get('removed_at')))}) later than the removal was recorded ({when(at)})")
         if recorded_setting and n.get("retention_days") is not None and num(n.get("retention_days")) < days:
             why.append(f"its note claims a retention of {n.get('retention_days')} days, the setting was {days} days")
-        newest = num(n.get("newest"), None)
+        rot = rotations.get(n.get("archive"))
+        if rot:
+            diff = []
+            if rot.get("last_hash") != n.get("last_hash"):
+                diff.append("last link")
+            if rot.get("entries") != n.get("entries"):
+                diff.append(f"entries ({n.get('entries')}, recorded {rot.get('entries')})")
+            for k in ("oldest", "newest"):
+                if rot.get(k) is not None and abs(num(n.get(k), -1e18) - num(rot.get(k))) > 1:
+                    diff.append(f"{k} entry ({when(num(n.get(k), 0))}, recorded {when(num(rot.get(k)))})")
+            if diff:
+                why.append("its note disagrees with the rotation recorded when it was archived: " + ", ".join(diff))
+        newest = num((rot or n).get("newest"), None)
         if newest is None:
             why.append("its note gives no newest entry")
         elif newest > min(at, num(n.get("removed_at"), at)) - days * 86400 + 1:
             why.append(f"its newest entry ({when(newest)}) was not yet {days} days old when it was removed")
-        removals.append({"archive": n.get("archive"), "entries": n.get("entries"), "oldest": n.get("oldest"), "newest": n.get("newest"),
-                         "removed_at": at, "retention_days": days, "retention_recorded": recorded_setting,
+        removals.append({"archive": n.get("archive"), "entries": n.get("entries"), "oldest": (rot or n).get("oldest"),
+                         "newest": (rot or n).get("newest"), "removed_at": at, "retention_days": days,
+                         "retention_recorded": recorded_setting, "rotation_recorded": bool(rot),
                          "early": bool(why), "why": "; ".join(why)})
     removed_early = [x["archive"] for x in removals if x["early"]]
     if removed_early and not brk:
@@ -245,7 +265,8 @@ def check(folder, earlier=None, gap_days=30):
                                                         "entries were deleted outside the retention"}
     gaps = []
     for i, n in enumerate(removed):
-        nxt = removed[i + 1].get("oldest") if i + 1 < len(removed) else first_t
+        nxt = (rotations.get(removed[i + 1].get("archive")) or removed[i + 1]).get("oldest") if i + 1 < len(removed) else first_t
+        n = dict(n, newest=(rotations.get(n.get("archive")) or n).get("newest"))
         if n.get("newest") and nxt and float(nxt) - float(n["newest"]) > gap_days * 86400:
             gaps.append({"after": n.get("archive"), "from": n["newest"], "to": nxt, "days": int((float(nxt) - float(n["newest"])) // 86400)})
 

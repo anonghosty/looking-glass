@@ -222,7 +222,8 @@ try:
        and oct(os.stat(arch[0]).st_mode & 0o777) == "0o600" and gzip.open(arch[0], "rt").read().count("\n") == before)
     audit.chain.rotate_bytes = 5_000_000
     v = audit.chain.verify()
-    ok("the chain goes on across the archive", v["ok"] and v["entries"] == before + 1 and v["archives"] == 1, json.dumps({k: v[k] for k in ("ok", "entries", "archives")}))
+    ok("the chain goes on across the archive (the new file starts with the rotation entry)",
+       v["ok"] and v["entries"] == before + 2 and v["archives"] == 1, json.dumps({k: v[k] for k in ("ok", "entries", "archives")}))
     ok("the portal still reads the archived entries (the archived ones + 1 new)", c.get(f"/api/audit/events?tab=auth&{P}", headers=H).json["total"] == auth_before + 1)
     audit.chain.retention_days = 0                       # everything archived is past the retention
     audit.chain.prune(now=time.time() + 10)
@@ -288,10 +289,12 @@ try:
         ac.append({"t": time.time(), "event": "login", "user": f"u{i}"})
     names = [os.path.basename(p) for p in ac.archives()]
     v = ac.verify()
+    # 1 setting entry + 8 entries + a rotation entry for each of the 8 rotations
     ok("rotations in the same second never overwrite each other: every entry kept, chain whole",
-       v["ok"] and v["entries"] == 9 and len(names) == 8 and len(set(names)) == 8, ", ".join(names[:3]))
+       v["ok"] and v["entries"] == 17 and len(names) == 8 and len(set(names)) == 8, f"{v['entries']} entries · " + ", ".join(names[:3]))
+    last_user = lambda p: json.loads([x for x in gzip.open(p, "rt").read().splitlines() if x][-1])["user"]
     ok("…the extra archives get a counter and stay in order",
-       any("_02.log.gz" in n for n in names) and [json.loads(gzip.open(p, "rt").read())["user"] for p in ac.archives()[1:]] == [f"u{i}" for i in range(7)])
+       any("_02.log.gz" in n for n in names) and [last_user(p) for p in ac.archives()[1:]] == [f"u{i}" for i in range(7)])
     ok("the retention setting is recorded in the chain", v["retention_history"] and v["retention_history"][-1]["days"] == 400)
     ac.rotate_bytes = 5_000_000
     first = ac.archives()[0]                             # an archive seconds old, far inside the 400-day retention
@@ -367,7 +370,8 @@ try:
     ok("a change of the retention setting is recorded in the chain, with the old value",
        [h["days"] for h in lc.verify()["retention_history"]][-1] == 1
        and "it was 400 days" in [json.loads(x) for x in open(lc.path).read().splitlines()][-1]["detail"])
-    # the same attack with the note's dates faked to look old: the age check passes, the gap to the entries kept shows it
+    # the reviewer's next variant: a seconds-old archive whose note claims its entries were 500 days old. Before rotations
+    # were recorded this only showed a gap (a warning); now the rotation entry in the next file holds its real dates
     fd = os.path.join(tmp, "attack2"); os.makedirs(fd)
     fc = audit_chain.Chain(os.path.join(fd, "audit.log")); fc.rotate_bytes = 1
     for i in range(4):
@@ -381,11 +385,16 @@ try:
         f.write(json.dumps({"archive": os.path.basename(first), "entries": len(lines0), "last_hash": audit_chain.sha(lines0[-1]),
                             "oldest": old, "newest": old, "removed_at": round(time.time(), 3), "retention_days": 400}) + "\n")
     v = fc.verify()
-    ok("…with its dates faked to look old: the jump in time to the first entry kept is reported for the auditor",
-       v["removal_gaps"] and v["removal_gaps"][0]["days"] >= 499, json.dumps(v.get("removal_gaps"))[:160])
+    rot_first = [json.loads(x) for x in gzip.open(fc.archives()[0], "rt").read().splitlines() if x][0]
+    ok("each rotation is recorded as the first entry of the next file: name, entries, oldest and newest, last link",
+       rot_first["event"] == "audit_archived" and rot_first["target"] == os.path.basename(first)
+       and rot_first["archived"]["last_hash"] == audit_chain.sha(lines0[-1]) and rot_first["archived"]["entries"] == len(lines0))
+    ok("a seconds-old archive whose note claims 500-day-old entries: NOT whole (it disagrees with its recorded rotation)",
+       not v["ok"] and v["removals"][0]["early"] and "disagrees with the rotation" in v["removals"][0]["why"], v["removals"][0]["why"][:170])
     out_a, out_f = alone(ad), alone(fd)
-    ok("the standalone verifier finds both too: the early removal, and the gap",
-       not out_a["ok"] and out_a["removed_early"] == [note["archive"]] and out_f["removal_gaps"], json.dumps(out_f.get("removal_gaps"))[:120])
+    ok("the standalone verifier fails both too: the early removal, and the faked dates",
+       not out_a["ok"] and out_a["removed_early"] == [note["archive"]] and not out_f["ok"]
+       and "disagrees with the rotation" in out_f["removals"][0]["why"], out_f["removals"][0]["why"][:120])
 
     print("Evidence exports")
     audit.add("definition_saved", user="daniel", detail="=1+1", ip="10.0.0.3", ua="x")   # a value a spreadsheet would run

@@ -75,6 +75,8 @@ LABEL["audit_archive_removed"] = "Old audit archive removed by the retention"
 TAB_OF["audit_archive_removed"] = "system"
 LABEL["audit_archive_deleted_early"] = "Audit archive deleted BEFORE its retention ended"   # an alert (ALERT: "delete")
 TAB_OF["audit_archive_deleted_early"] = "system"
+LABEL["audit_archived"] = "Audit log archived (rotation recorded)"
+TAB_OF["audit_archived"] = "system"
 LABEL["audit_retention_set"] = "Audit log retention setting recorded"
 TAB_OF["audit_retention_set"] = "config"
 # The NIST SP 800-53 Rev. 5 controls the checks support, with their official titles (Release 5.2.0, read from NIST's

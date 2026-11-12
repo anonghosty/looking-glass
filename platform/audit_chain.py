@@ -39,6 +39,52 @@ def _utc(t):
 
 
 RETENTION_EVENT = "audit_retention_set"
+ARCHIVED_EVENT = "audit_archived"
+
+
+def archived_record(name, lines):
+    """The chain entry written as the first line of the new file at each rotation (external review, 2026-11-12): the
+    archive's name, entry count, first and last times and last link. It stays in the kept log after the archive is
+    deleted, so a removal note cannot lie about the archive afterwards: the note must agree with it, and the age of the
+    entries is judged by it. Removals go oldest first, so the newest removed archive's rotation entry is always kept."""
+    ts = []
+    for ln in (lines[0], lines[-1]):
+        try:
+            ts.append(json.loads(ln).get("t"))
+        except ValueError:
+            ts.append(None)
+    return {"t": round(time.time(), 3), "event": ARCHIVED_EVENT, "user": "Looking Glass", "target": name,
+            "detail": f"{len(lines)} entries ({_utc(ts[0])} to {_utc(ts[1])}) archived · last link {sha(lines[-1])}",
+            "archived": {"entries": len(lines), "oldest": ts[0], "newest": ts[1], "last_hash": sha(lines[-1])},
+            "ip": "", "location": "", "ua": ""}
+
+
+def rotations_in(lines):
+    """The rotation entries in the kept lines: {archive name: what was archived}."""
+    out = {}
+    for ln in lines:
+        if f'"{ARCHIVED_EVENT}"' not in ln:
+            continue
+        try:
+            rec = json.loads(ln)
+        except ValueError:
+            continue
+        if rec.get("event") == ARCHIVED_EVENT:
+            out[rec.get("target")] = rec.get("archived") or {}
+    return out
+
+
+def disagrees(note, rot):
+    """How a removal note differs from the rotation recorded when its archive was made ("" when it agrees)."""
+    diff = []
+    if rot.get("last_hash") != note.get("last_hash"):
+        diff.append("last link")
+    if rot.get("entries") != note.get("entries"):
+        diff.append(f"entries ({note.get('entries')}, recorded {rot.get('entries')})")
+    for k in ("oldest", "newest"):
+        if rot.get(k) is not None and abs(_f(note.get(k), -1e18) - _f(rot.get(k))) > 1:
+            diff.append(f"{k} entry ({_utc(_f(note.get(k), 0))}, recorded {_utc(_f(rot.get(k)))})")
+    return ", ".join(diff)
 
 
 def _f(x, default=0.0):
@@ -48,7 +94,7 @@ def _f(x, default=0.0):
         return default
 
 
-def judge_removal(note, removed_at, retention_days, setting_recorded=True):
+def judge_removal(note, removed_at, retention_days, setting_recorded=True, rotation=None):
     """Why a removal was not allowed ("" when it was). The note is written next to the log by whoever removed the
     archive, so the two values that decide are NOT taken from it (external review, 2026-11-12: a note claiming a
     0-day retention, or a removal 401 days in the future, passed):
@@ -62,7 +108,13 @@ def judge_removal(note, removed_at, retention_days, setting_recorded=True):
                    f"({_utc(removed_at)})")
     if setting_recorded and note.get("retention_days") is not None and _f(note.get("retention_days")) < retention_days:
         why.append(f"its note claims a retention of {note.get('retention_days')} days, the setting was {int(retention_days)} days")
-    newest = _f(note.get("newest"), None)
+    # the archive's own dates: from the rotation entry recorded when it was archived, when there is one (the note
+    # must agree with it); only archives made before rotations were recorded fall back to the note
+    if rotation:
+        diff = disagrees(note, rotation)
+        if diff:
+            why.append(f"its note disagrees with the rotation recorded when it was archived: {diff}")
+    newest = _f((rotation or {}).get("newest"), None) if rotation else _f(note.get("newest"), None)
     if newest is None:
         why.append("its note gives no newest entry")
     elif newest > min(removed_at, _f(note.get("removed_at"), removed_at)) - retention_days * 86400 + 1:
@@ -93,13 +145,13 @@ def setting_at(history, t, fallback):
     return fallback if days is None else days
 
 
-def removal_record(note, retention_days, now=None):
+def removal_record(note, retention_days, now=None, rotation=None):
     """The chain entry for an archive the retention removed (its note in removed.jsonl): which archive, how many
     entries, its last link and newest time. Recorded in the chain itself, so the removal cannot be hidden or changed
     later; the notes file alone could be. Judged with the time of this entry and the retention setting in force,
     never the note's own claims; a removal that was not allowed is recorded as an alert instead."""
     now = now or time.time()
-    why = judge_removal(note, now, retention_days)
+    why = judge_removal(note, now, retention_days, True, rotation)
     early = bool(why)
     head = (f"removed BEFORE its retention ended: {why}" if early else f"removed by the retention of {int(retention_days)} days")
     return {"t": round(now, 3), "event": REMOVAL_EVENTS[1 if early else 0], "user": "Looking Glass",
@@ -121,7 +173,7 @@ def removal_findings(notes, lines, configured_days, gap_days, now=None):
            and could be faked to look old; the first kept entry's time is inside the chain and cannot. Normal use
            writes something at least every few days, so more than gap_days (AUDIT_GAP_DAYS, default 30) is flagged."""
     now = now or time.time()
-    history = retention_history(lines)
+    history, rotations = retention_history(lines), rotations_in(lines)
     recorded_at = {}
     first_kept_t = None
     for ln in lines:
@@ -150,13 +202,17 @@ def removal_findings(notes, lines, configured_days, gap_days, now=None):
         recorded = days is not None
         if not recorded:                      # logs from before the setting was recorded: the note is all there is
             days = int(_f(n.get("retention_days"), configured_days))
-        why = judge_removal(n, at, days, recorded)
-        findings.append({"archive": n.get("archive"), "entries": n.get("entries"), "oldest": n.get("oldest"),
-                         "newest": n.get("newest"), "removed_at": at, "retention_days": days,
-                         "retention_recorded": recorded, "early": bool(why), "why": why})
+        rot = rotations.get(n.get("archive"))
+        why = judge_removal(n, at, days, recorded, rot)
+        findings.append({"archive": n.get("archive"), "entries": n.get("entries"),
+                         "oldest": (rot or n).get("oldest"), "newest": (rot or n).get("newest"), "removed_at": at,
+                         "retention_days": days, "retention_recorded": recorded, "rotation_recorded": bool(rot),
+                         "early": bool(why), "why": why})
     gaps = []
+    dates = lambda n: rotations.get(n.get("archive")) or n        # the recorded rotation's dates, else the note's
     for i, n in enumerate(notes):
-        nxt = notes[i + 1].get("oldest") if i + 1 < len(notes) else first_kept_t
+        nxt = dates(notes[i + 1]).get("oldest") if i + 1 < len(notes) else first_kept_t
+        n = dict(n, newest=dates(n).get("newest"))
         if n.get("newest") and nxt and float(nxt) - float(n["newest"]) > gap_days * 86400:
             gaps.append({"after": n.get("archive"), "from": n["newest"], "to": nxt, "days": int((float(nxt) - float(n["newest"])) // 86400)})
     return findings, gaps, history
@@ -307,17 +363,20 @@ class Chain:
         try:
             fcntl.flock(lock_fd, fcntl.LOCK_EX)
             if os.path.exists(self.path) and os.path.getsize(self.path) > self.rotate_bytes:
-                self.rotate()
+                rotated = self.rotate()
+                if rotated:                   # the first entry of the new file: what was archived (external review)
+                    self._write(rotated)
             notes = self.removed()
             done = self._recorded_count()
             if len(notes) > done:             # archives removed by the retention since the last write
                 # the setting in force must be in the entries still kept, right before the removals it judges: its
                 # earlier record may have gone with the very archive that was removed
-                hist = retention_history(self.lines())
+                kept = self.lines()
+                hist, rots = retention_history(kept), rotations_in(kept)
                 if not hist or hist[-1][1] != self.retention_days:
                     self._write(self._retention_entry(hist))
                 for note in notes[done:]:
-                    self._write(removal_record(note, self.retention_days))
+                    self._write(removal_record(note, self.retention_days, rotation=rots.get(note.get("archive"))))
                 self._set_recorded_count(len(notes))
             return self._write(rec)
         finally:
@@ -387,12 +446,16 @@ class Chain:
         os.replace(tmp, self.head_path)
 
     def rotate(self):
-        """Compress the current file into the archive (the chain goes on in the new file), then apply the retention."""
+        """Compress the current file into the archive (the chain goes on in the new file), then apply the retention.
+        Returns the rotation entry for the new file (archived_record), or None: the caller writes it, so the archive's
+        name, entry count, first and last times and last link stay in the kept log after the archive is gone."""
         if not os.path.exists(self.path):
-            return
+            return None
         os.makedirs(self.dir, mode=0o700, exist_ok=True)
-        self._gzip(self.path, os.path.join(self.dir, f"audit-{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}.log.gz"))
+        lines = self._lines_of(self.path)
+        dst = self._gzip(self.path, os.path.join(self.dir, f"audit-{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}.log.gz"))
         self.prune()
+        return archived_record(os.path.basename(dst), lines) if lines else None
 
     def prune(self, now=None):
         """Delete archives whose newest entry is older than the retention; note each one's last hash first."""
