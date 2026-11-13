@@ -47,7 +47,9 @@
     flash($("netStatus"), identifying ? "Networks are being identified right now (Settings → Identify networks): changes can be saved when it has finished."
       : `${fmt(rows.length)} networks · ${fmt(rows.filter((x) => !x.reviewed).length)} to review`, identifying ? "warn" : "");
     lookAllButton();
+    rowInputs.clear();
     render();
+    saveAllButton();
   }
 
   // ---- look-ups (2026-11-13): a network in the reports that has no name yet is looked up here, one row or all of
@@ -62,6 +64,42 @@
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || `Refused (${r.status})`);
     return j;
+  }
+  // ---- Save all (2026-11-13, the user's request): after Look up all, accept every named network that is not reviewed
+  // yet in one go, as each row shows it (a name corrected by hand included); asked once first. Saved one by one through
+  // the same /api/networks/entry as the row's own Save, so each is in the audit log.
+  const rowInputs = new Map();
+  const toAccept = () => rows.filter((x) => !x.reviewed && (rowInputs.has(x.asn) ? rowInputs.get(x.asn)().name : x.name));
+  function saveAllButton() {
+    let b = $("netSaveAll");
+    const n = toAccept().length;
+    if (RO || identifying || !n) { if (b) b.hidden = true; return; }      // Settings is read-only: names are saved on Definitions
+    if (!b) {
+      b = el("button", "lg-btn sm"); b.type = "button"; b.id = "netSaveAll";
+      b.title = "Mark every named network that is not reviewed yet as reviewed, with the name and type its row shows. Check them first.";
+      b.addEventListener("click", async () => {
+        const list = toAccept();
+        if (!list.length) return;
+        if (!window.confirm(`Mark ${list.length} network${list.length === 1 ? "" : "s"} reviewed, with the name and type each row shows?`)) return;
+        let saved = 0; const failed = [];
+        busy(b, true, "Saving…");
+        for (const x of list) {
+          const v = rowInputs.has(x.asn) ? rowInputs.get(x.asn)() : { name: x.name, type: x.type, note: x.note || "" };
+          try {
+            const r = await fetch("/api/networks/entry", { method: "POST", headers: hdr(true), body: JSON.stringify({ asn: x.asn, ...v }) });
+            const j = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(j.error || `Refused (${r.status})`);
+            saved += 1; flash($("netStatus"), `Saving: ${fmt(saved)} of ${fmt(list.length)}`);
+          } catch (e) { failed.push(`AS${x.asn}: ${e.message}`); }
+        }
+        busy(b, false);
+        await load();
+        flash($("netStatus"), `${fmt(saved)} network${saved === 1 ? "" : "s"} marked reviewed` + (failed.length ? `; not saved: ${failed.slice(0, 3).join("; ")}` : "."),
+          failed.length ? "bad" : "ok");
+      });
+      ($("netLookAll") || $("netStatus")).after(b);
+    }
+    b.hidden = false; b.replaceChildren(el("span", null, `Save all (${fmt(n)})`));
   }
   function lookAllButton() {
     let b = $("netLookAll");
@@ -163,10 +201,17 @@
       showStatus();
       const dirty = () => {
         const changed = !(name.value.trim() === x.name && type.value === x.type && note.value.trim() === (x.note || ""));
-        save.disabled = !changed; save.classList.toggle("primary", changed); tr.classList.toggle("dz-dirty", changed);
-        save.title = changed ? "Save this network (it is then marked reviewed)" : "Change the name, type or note to save";
+        // a network not reviewed yet can be saved as it is: Save is how a person accepts a looked-up name and type
+        // (2026-11-13: after Look up all, Save stayed greyed out until something was changed)
+        const accept = !x.reviewed && !!name.value.trim();
+        save.disabled = !(changed || accept); save.classList.toggle("primary", changed || accept); tr.classList.toggle("dz-dirty", changed);
+        save.title = changed ? "Save this network (it is then marked reviewed)"
+          : accept ? "Accept this name and type: the network is then marked reviewed" : "Change the name, type or note to save";
       };
       for (const i of [name, type, note]) { i.addEventListener("input", dirty); i.addEventListener("change", dirty); }
+      dirty();                                      // a network not reviewed yet: Save is ready as soon as the row shows
+      // Save all takes each row as it is on screen, a name corrected by hand included
+      rowInputs.set(x.asn, () => ({ name: name.value.trim(), type: type.value, note: note.value.trim() }));
       name.addEventListener("keydown", (e) => { if (e.key === "Enter" && !save.disabled) save.click(); });
       note.addEventListener("keydown", (e) => { if (e.key === "Enter" && !save.disabled) save.click(); });
       save.addEventListener("click", async () => {
@@ -176,7 +221,7 @@
           const j = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(j.error || `Refused (${r.status})`);
           Object.assign(x, { name: name.value.trim(), type: type.value, note: note.value.trim(), reviewed: true, by: "you", updated: new Date().toISOString().slice(0, 10) });
-          busy(save, false); dirty(); showStatus(); status.prepend(pill("Saved ✓", "ok")); counts();
+          busy(save, false); dirty(); showStatus(); status.prepend(pill("Saved ✓", "ok")); counts(); saveAllButton();
           tr.classList.add("dz-saved"); setTimeout(() => tr.classList.remove("dz-saved"), 1500);
         } catch (e) { busy(save, false); save.disabled = false; status.replaceChildren(pill(e.message, "bad")); }
       });
