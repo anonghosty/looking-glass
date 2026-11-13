@@ -102,6 +102,8 @@ html:has(body.mg) { overflow: auto; height: auto; }
 .mg-map .rg:hover:not(.none) { filter: brightness(1.3); } .mg-map .rg.on { stroke: #fff; stroke-width: 2.4; }
 
 .mg-bars { display: grid; gap: 4px; }
+/* the Reports card: every report, in as many columns as fit (none left out, no scroll box) */
+.mg-bars-all { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); column-gap: 22px; }
 .mg-bar { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 7px 8px; border: 0; border-radius: 9px;
   background: transparent; color: var(--mg-text); font: 500 12.8px Inter, sans-serif; text-align: left; cursor: pointer; transition: background .15s; }
 .mg-bar:hover:not(:disabled) { background: rgba(255, 255, 255, .05); } .mg-bar:disabled { cursor: default; }

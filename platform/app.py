@@ -37,6 +37,7 @@ from respcache import ResultCache, day_key, filters_key
 RCACHE = ResultCache()      # whole-day results shared by every viewer, keyed on the loaded day (see respcache.py)
 from settings import Settings
 import timezones  # noqa: E402  (display time zone: Settings > Country)
+import special_reports  # noqa: E402  (one-off Special Reports, kept out of the replay)
 import auth
 import security
 import services_api
@@ -807,6 +808,8 @@ def api_overview():
         # next phase (publicly accessible / vulnerable services): scan / population reports already in MongoDB
         services_reports=len([n for n in registry.names if re.match(r"(scan6?|population6?)_", n)]),
         schedule=schedule.status(), tz=settings.tz(day.start + timedelta(hours=12)),
+        # Shadowserver's one-off Special Reports: listed apart, never replayed nor counted (special_reports.py)
+        special=special_reports.listing(db),
     )
 
 

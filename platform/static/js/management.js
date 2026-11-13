@@ -579,6 +579,10 @@
     $("tMixTitle").textContent = comms ? "Attack types" : "Report families";
     donut($("chMix"), comms ? d.attack : d.families, comms ? "attack" : "family", comms ? "events" : "records");
     bars($("chNets"), d.networks.filter((r) => r.value !== "Unknown network"), { key: "network", unit: comms ? "devices" : "hosts" });
+    // every report of the selection, ranked by devices (hosts), none left out; a click focuses the page on it
+    const reps = d.reports || [];
+    bars($("chReports"), reps, { key: comms ? "report" : "service", unit: comms ? "devices" : "hosts", n: Infinity });
+    $("tReports").textContent = `All ${fmt(reps.length)} report${reps.length === 1 ? "" : "s"} with data in this selection, ranked by ${comms ? "devices" : "hosts"} · click one to focus on it`;
     if (comms) {
       $("tX1Title").textContent = "Devices in two reports"; $("tX1").textContent = "The same device seen by different sensors";
       bars($("chX1"), d.report_pairs, { metric: "count", unit: "devices", stack: true });

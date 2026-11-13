@@ -15,7 +15,7 @@ GET /api/audit/export.csv the period's events as CSV (formula-safe)
 GET /api/audit/report.pdf the evidence report: period, figures, control checks, integrity and its head hash, accounts
 Every export and every integrity check is itself in the audit log (who, when, which period).
 
-The thresholds are in .env, so each CSIRT sets its own: AUDIT_DORMANT_DAYS (90), AUDIT_MAX_ADMINS (3),
+The thresholds are in .env, so each CSIRT sets its own: AUDIT_DORMANT_DAYS (45, CIS's figure), AUDIT_MAX_ADMINS (3),
 AUDIT_PENDING_DAYS (7), AUDIT_WORK_HOURS (07-19, UTC), and the retention in audit_chain.py.
 """
 import collections
@@ -175,7 +175,9 @@ def install(app, ctx):
         WORK_FROM, WORK_TO = (int(x) for x in work.split("-", 1))
     except ValueError:
         WORK_FROM, WORK_TO = 7, 19
-    DORMANT, MAX_ADMINS, PENDING_DAYS = _num("AUDIT_DORMANT_DAYS", 90), _num("AUDIT_MAX_ADMINS", 3), _num("AUDIT_PENDING_DAYS", 7)
+    # defaults are CIS's own figures (CIS Controls v8.1 5.3: dormant accounts disabled after 45 days; 8.11: weekly
+    # audit-log reviews), so the checks can back those safeguards out of the box (2026-11-13); .env still decides
+    DORMANT, MAX_ADMINS, PENDING_DAYS = _num("AUDIT_DORMANT_DAYS", 45), _num("AUDIT_MAX_ADMINS", 3), _num("AUDIT_PENDING_DAYS", 7)
     FAIL_ALERT = _num("AUDIT_FAIL_ALERT", 10)
     verified = {"at": 0.0, "v": None}
     # where each control check's evidence is (the page opens that tab; "alerts" ticks Alerts only)
@@ -441,7 +443,7 @@ def install(app, ctx):
         ntp = ntp_synchronised()
         seal = v.get("seal")
         review = last_review()
-        REVIEW_DAYS = _num("AUDIT_REVIEW_DAYS", 30)
+        REVIEW_DAYS = _num("AUDIT_REVIEW_DAYS", 7)             # CIS 8.11: weekly or more often
         reviewed = bool(review) and time.time() - review["t"] <= REVIEW_DAYS * 86400
         if seal and seal["state"] == "intact":
             sealed = (f" The {fmt(seal['entries'])} entries written before the chain started ({_when(seal['first'])} to {_when(seal['last'])}) were "
@@ -502,9 +504,14 @@ def install(app, ctx):
         ]
         # no pass or fail: the checks present the evidence, the auditor decides. LG → NIST → CIS: the CIS safeguards are
         # CIS's own mapping of the check's NIST controls (control_map.py), each with the NIST control it came through
+        # what the checks found, for Looking Glass's reading of the CIS safeguards: "backed" only while the evidence meets
+        # CIS's own figures on this system (control_map.BACKED; review, 2026-11-13)
+        facts = {"mfa_required": mfa_on, "accounts_without_mfa": len(no_mfa), "dormant_days": DORMANT,
+                 "dormant_active": len(dormant), "not_approved": len(not_approved), "retention_days": v.get("retention_days"),
+                 "review_days": REVIEW_DAYS, "reviewed": reviewed, "tls": bool(tls)}
         out = []
         for a, i, t, ns, e in c:
-            cis, unmapped = control_map.cis_for(ns, i)
+            cis, unmapped = control_map.cis_for(ns, i, facts)
             out.append({"area": a, "id": i, "control": t, "nist": [{"id": n, "title": NIST[n]} for n in ns], "evidence": e,
                         "cis": cis, "cis_unmapped": unmapped, "view": VIEW.get(i)})
         return out

@@ -5,6 +5,7 @@ read more. Dates are UTC.
 
 ## Contents
 
+- [2026-11-13: special reports, the Executive Reports card, CIS backing by the evidence](#2026-11-13-special-reports-the-executive-reports-card-cis-backing-by-the-evidence)
 - [2026-11-12 (night): local times, Executive figures by devices, every report on the Overview](#2026-11-12-night-local-times-executive-figures-by-devices-every-report-on-the-overview)
 - [2026-11-12 (evening): uninstaller](#2026-11-12-evening-uninstaller)
 - [2026-11-12 (later): security review fixes](#2026-11-12-later-security-review-fixes)
@@ -16,6 +17,20 @@ read more. Dates are UTC.
 - [2026-11-09: faster platforms and a sharper Executive portal](#2026-11-09-faster-platforms-and-a-sharper-executive-portal)
 - [2026-11-08: Executive portal, 7-day baseline, vulnerabilities and network types](#2026-11-08-executive-portal-7-day-baseline-vulnerabilities-and-network-types)
 - [2026-11-07: definitions, the researcher role and PDF reports](#2026-11-07-definitions-the-researcher-role-and-pdf-reports)
+
+## 2026-11-13: special reports, the Executive Reports card, CIS backing by the evidence
+
+- **Special reports kept apart.** Shadowserver's one-off Special Reports (`YYYY-MM-DD-special...`, often a placeholder
+  00:00 time on every row) are loaded but never replayed nor counted in a day's totals or the Executive 7-day
+  comparison, so they cannot show as a false midnight spike; the intro page lists them with the day they were shared,
+  rows and hosts.
+- **Every report on the Executive portal.** A Reports card lists every report of the selection, ranked by devices
+  (click one to focus on it), and the Executive report has a Reports page with all of them, names never cut.
+- **CIS backing follows the evidence.** A safeguard is "backed" only while the system meets CIS's own figure: MFA
+  required (6.3, 6.5), audit records kept at least 90 days (8.10), dormant accounts after 45 days and none still active
+  (5.3), weekly audit-log reviews (8.11); otherwise "related", saying what differs. 8.4 stays related (CIS asks for two
+  time sources). The defaults are now CIS's figures: `AUDIT_DORMANT_DAYS=45`, `AUDIT_REVIEW_DAYS=7`.
+- **tzdata** is a requirement, so local times never vanish on a server without its own time-zone data.
 
 ## 2026-11-12 (night): local times, Executive figures by devices, every report on the Overview
 

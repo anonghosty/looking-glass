@@ -619,7 +619,7 @@ def _extract_zip(zip_path: Path, unzipped_dir: Path, sorting_dir: Path,
                     zip_limits.copy_member(zf, info, zip_limits.safe_path(tmp, info.filename), budget)
                     continue
                 zip_limits.copy_member(zf, info, tmp / f".route-{i}", budget)
-                staged.append((tmp / f".route-{i}", base, m.group(1)))
+                staged.append((tmp / f".route-{i}", base, report_names.canonical(m.group(1))))   # special-x -> special_x
         routed = []
         for path, base, service in staged:                 # the whole zip is unpacked: now move the reports in
             if not report_names.valid(service):            # an unusable report name never reaches MongoDB
@@ -716,17 +716,18 @@ def unzip_and_sort(s: Settings, stats: Counter) -> None:
                 m = SERVICE_RE.match(fn)
                 if not m:
                     continue
-                if not report_names.valid(m.group(1)):    # an unusable report name never reaches MongoDB
-                    report_names.quarantine(os.path.join(root, fn), s.base_dir, m.group(1))
-                    log.warning("[QUARANTINE] %s: %s. Moved to quarantine/%s/", fn, report_names.why(m.group(1)),
+                rname = report_names.canonical(m.group(1))   # a Special Report "special-x" loads as special_x
+                if not report_names.valid(rname):           # an unusable report name never reaches MongoDB
+                    report_names.quarantine(os.path.join(root, fn), s.base_dir, rname)
+                    log.warning("[QUARANTINE] %s: %s. Moved to quarantine/%s/", fn, report_names.why(rname),
                                 report_names.FOLDER)
                     continue
-                service_dir = s.sorting_dir / m.group(1)
+                service_dir = s.sorting_dir / rname
                 service_dir.mkdir(parents=True, exist_ok=True)
                 existed = (service_dir / fn).exists()
                 move_replace(os.path.join(root, fn), service_dir / fn)
                 stats["csv_moved"] += 1
-                detail("[%s] %s -> %s", "OVERWRITE" if existed else "MOVE", fn, m.group(1))
+                detail("[%s] %s -> %s", "OVERWRITE" if existed else "MOVE", fn, rname)
 
     log.info("Unzip: %d extracted (%d report CSVs sorted), %d already done, %d bad deleted, %d quarantined (limits), "
              "%d failed | %d loose CSV moved (%.1fs)", stats["zips_extracted"], stats["csv_sorted"], stats["zips_skipped"],

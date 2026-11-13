@@ -265,7 +265,8 @@ def register(app, ctx):
             "hours": hours, "peak_hour": peak, "findings": findings, "tz": tz_of(day),
             "item_counts": {k: len(v) for k, v in inf_h.items()},       # devices per infection (all of them: the baseline)
             "infections": infections, "attack": top(att, None, 10, n_ev),
-            "reports": top(rep, rep_h, 12, n_ev, label=lambda k: labels.get(k, k)),
+            # every report of the selection, ranked by devices (the Reports card and the PDF list them all: 2026-11-13)
+            "reports": top(rep, rep_h, None, n_ev, label=lambda k: labels.get(k, k)),
             "regions": top(reg, reg_h, 30, n_ev), "cities": top(city, None, 10, n_ev),
             "networks": top(net, net_h, 12, n_ev), "sectors": top(sec, sec_h, 15, n_ev),
             "severity": sorted(top(sev, None, 10, n_ev), key=lambda r: SEV_ORDER.get(r["value"], 9)),
@@ -424,6 +425,8 @@ def register(app, ctx):
             "hours": hours, "peak_hour": peak, "findings": findings, "tz": tz_of(day), "issues": issues, "infections_on": infections_on,
             "item_counts": {k: len(v) for k, v in iss_h.items()},       # hosts per issue (all of them: the baseline)
             "services": top(svc, svc_h, 12, n_ev), "families": top(fam, None, 8, n_ev),
+            # every report of the selection (on this platform a record's service is its report), ranked by hosts
+            "reports": top(svc, svc_h, None, n_ev),
             "regions": top(reg, reg_h, 30, n_ev), "networks": top(net, net_h, 12, n_ev), "sectors": top(sec, sec_h, 15, n_ev),
             "industries": top(ind, None, 10, n_ev), "vendors": top(vend, None, 10, n_ev),
             "severity": sorted(top(sev, None, 10, n_ev), key=lambda r: SEV_ORDER.get(r["value"], 9)),

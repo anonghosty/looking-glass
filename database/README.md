@@ -102,6 +102,8 @@ set `REPORT_SUFFIX` in `.env`.)
 
 go straight to `sorting_backup/<service>/`, replacing an older copy. Everything else in the zip goes to `unzipped_backup/<zip name>/`. Corrupt zips are deleted. Report CSVs that arrived unzipped are moved to their service folder the same way.
 
+**Special reports.** Shadowserver's one-off Special Reports are named `YYYY-MM-DD-special[-<name>]-...`, the date being the day they were shared; their times are often a placeholder (00:00 on every row). They are loaded like any report, into `special` (or `special_<name>`: a hyphenated name is turned into one with underscores instead of being quarantined). The platform never replays them nor counts them in a day's totals or the Executive 7-day comparison; it lists them apart on its intro page.
+
 **Step 3, load.** For each service folder, one query finds which files are already in MongoDB. Only new files are loaded, by 6 worker processes in parallel, biggest files first. Each CSV row becomes one document; duplicate rows within a file are dropped, and the database's unique index rejects rows that are already stored.
 
 If the e-mail step fails (mail server down, network), the pipeline logs the error and still sorts and loads what is already on disk.
@@ -647,6 +649,10 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
 ---
 
 ## 15. Uninstalling
+
+To remove the whole Looking Glass installation (platform service, schedule, global command, and optionally the reports
+database, MongoDB and the folder), use `./uninstall.sh` at the top of the Looking Glass folder (`--dry-run` shows the
+plan first; see the platform's docs/INSTALLATION.md, Uninstalling). For the pipeline alone:
 
 ```bash
 shadowserver schedule off                    # stop the daily run

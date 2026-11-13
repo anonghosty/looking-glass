@@ -18,6 +18,8 @@ import threading
 import time
 from datetime import datetime, timezone
 
+import special_reports
+
 STD_FIELDS = [
     "timestamp", "extracted_date", "logged_date", "protocol", "severity", "infection", "tag", "family", "category",
     "src_ip", "src_port", "src_asn", "src_geo", "src_region", "src_city", "src_hostname", "src_naics", "src_sector",
@@ -276,6 +278,8 @@ class Registry:
         self.names = set(names)
         for name in sorted(names):
             if name.startswith("discovered_fields_") or name in self.exclude:
+                continue
+            if special_reports.is_special(name):          # one-off Special Reports: listed apart, never replayed
                 continue
             if self.include is not None and name not in self.include:
                 continue

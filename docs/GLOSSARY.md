@@ -12,7 +12,7 @@ the platform: the **Glossary** tab on the overview page and the **Glossary** but
 - [Using the platform](#using-the-platform) (11 terms)
 - [Accounts, roles and permissions](#accounts-roles-and-permissions) (34 terms)
 - [Publicly accessible / vulnerable services](#publicly-accessible--vulnerable-services) (13 terms)
-- [Security, audit and the pipeline](#security-audit-and-the-pipeline) (20 terms)
+- [Security, audit and the pipeline](#security-audit-and-the-pipeline) (21 terms)
 - [Related tools](#related-tools)
 - [A–Z index](#az-index)
 
@@ -367,6 +367,9 @@ An optional policy an administrator sets in Settings: passwords expire after a n
 **CIS mapping (not a certification)**  
 Looking Glass uses the CIS Controls v8.1 as a map, to guide its security and make the auditor's work easier. The CIS safeguards next to each control check come from CIS's own mapping of the check's NIST controls and are shown exactly as CIS publishes them; beside each, as a separate badge, Looking Glass's own reading: backed (the check produces evidence for the safeguard as CIS words it), related (CIS's mapping relates it; nothing more is claimed) or not backed (the check does not look at its subject, with the reason). The CIS Controls are voluntary best practice, not a law or a requirement, and CIS issues no certificate for meeting them: organisations measure themselves with CIS's free Self Assessment Tool (CSAT) or with an auditor, and those that need a formal certificate usually go for ISO 27001 or SOC 2, with the CIS Controls as a guide.
 
+**Special report**  
+A one-off dataset Shadowserver shares outside its daily reports (a campaign's victims, a historical botnet, a newly found exposure), named by the day it was shared (YYYY-MM-DD-special). Its times are often a placeholder, 00:00 on every row, and its columns differ from one special report to the next. Looking Glass loads it but keeps it out of the replay, the day's totals and the Executive 7-day comparison, so it never shows as a false spike; the intro page lists it with its rows and hosts.
+
 **Time zone (display)**  
 Chosen in Settings next to the country: the zone the CSIRT reads its times in (for example Nairobi, UTC+3; DR Congo offers Kinshasa and Lubumbashi). Shadowserver writes every time in UTC and a day runs 00:00 to 24:00 UTC, as its reports do, so the platform keeps that and also shows each time in this zone: the replay clock, the record stream, details, chart hours, messages and the Executive report. Daylight saving is taken into account. For a zone at UTC (Ghana, for example) only UTC is shown.
 
@@ -561,6 +564,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Share of all events](#numbers-and-measures) · 
 [Sinkhole](#threats) · 
 [Source host](#who-and-where) · 
+[Special report](#security-audit-and-the-pipeline) · 
 [Tag](#threats) · 
 [Target country](#who-and-where) · 
 [Target port](#who-and-where) · 

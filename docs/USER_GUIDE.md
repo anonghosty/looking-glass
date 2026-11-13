@@ -155,8 +155,19 @@ At the top left: **Display** quality (Auto / Full / Lite, see section 6). At the
 **bell** (see [Notifications](#notifications-the-bell)), **Settings**, and **Log out** last; under them, whether both
 platforms show the whole country or your constituency.
 
-The day at a glance: totals, the activity over the day, the mix of attack types and every monitored report. The
-**Glossary** tab explains every term and every Shadowserver report in plain language, with links to Shadowserver's own
+The day at a glance: totals, the activity over the day, the mix of attack types and every monitored report (all of
+them, in as many columns as fit, with each report's records that day).
+
+![Every monitored report on the intro page, and the busiest time in local time too](media/screens/12-overview-reports.png)
+
+**Special reports.** Shadowserver sometimes shares a one-off **Special Report** (a campaign's victims, a historical
+botnet, a newly found exposure). It is not a daily report: it is dated the day it was shared, often with the same
+placeholder time (00:00) on every row, and its columns differ from one to the next. Looking Glass loads it, but keeps it
+**out of the replay, the day's totals and the Executive 7-day comparison**, so it can never show as a false spike at
+midnight. When one has arrived, a **Special reports** card on the intro page lists it: the day it was shared, its rows
+and its distinct hosts (hover for whether its times are a placeholder).
+
+The **Glossary** tab explains every term and every Shadowserver report in plain language, with links to Shadowserver's own
 report pages.
 
 Come back to it at any time with the **Overview** button, which is in every page's header, or the logo.
@@ -457,6 +468,15 @@ cross-report analysis (devices or hosts in 2, 3, 4+ reports, which reports or se
 attacking), repeat behaviour (devices beaconing at a regular rhythm and the typical interval), C2 / sinkhole domains,
 kinds of issue, devices (vendor and type) and severity.
 
+Lists are ranked by **devices** (distinct IP addresses; hosts on the services view), records breaking ties, so one
+chatty device cannot put its network, region or report on top. The **Reports** card lists **every report** of the
+selection with its devices and records (click one to focus the page on it), and the Executive report has a Reports page
+with all of them. The filter menus list every value of the day. Devices are counted by IP address, as Shadowserver
+reports them: one address can stand for several devices (shared mobile connections), and one device can use several
+addresses in a day; the page and the report say so.
+
+![The Executive portal's Reports card: every report, ranked by devices](media/screens/42-executive-reports.png)
+
 Every figure is aggregated: no address, host name or host list is ever shown (the server never sends them; the check
 `tests/check_management.py` verifies it). Choose a **report day** and the filters at the top, or click any bar, slice or
 region on the map to focus every chart on it; the chips show what is focused and **Reset all** clears it. Click an
@@ -728,9 +748,15 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
   not choose these safeguards; a NIST control CIS does not map (AU-9, AC-2(7)) is shown as such. CIS's number, title
   and relationship are shown exactly as CIS publishes them; next to each, as a separate badge marked as ours, **Looking
   Glass's own reading**:
-  - **backed**: the check produces evidence for the safeguard as CIS words it (for example LG-01 → 6.3 and 6.5 MFA,
-    LG-09 → 8.5 detailed audit logs, LG-11 → 8.10 retain audit logs). Conservative: only the pairs listed in
-    `control_map.py` (BACKED) are backed.
+  - **backed**: the check produces evidence for the safeguard as CIS words it, CIS's figures included, **on this
+    system, now** (for example LG-09 → 8.5 detailed audit logs). Conservative: only the pairs listed in
+    `control_map.py` (BACKED), and only while the evidence meets CIS's figure: 6.3 and 6.5 while MFA is required and
+    every account has an authenticator; 8.10 while audit records are kept at least 90 days; 5.3 only with
+    `AUDIT_DORMANT_DAYS` at 45 or less and no dormant account still active; 8.11 only with `AUDIT_REVIEW_DAYS` at 7 or
+    less and a review recorded. Otherwise the row is **related**, saying what differs ("Looking Glass lists accounts
+    unused for 90 days; CIS asks for 45"), which is advice for the auditor. The defaults are CIS's own figures
+    (`AUDIT_DORMANT_DAYS=45`, `AUDIT_REVIEW_DAYS=7`). 8.4 is never backed: the check reads whether the server's clock
+    is synchronised, and CIS asks for at least two time sources.
   - **not backed**: the mapping reaches it but the check does not look at its subject, with the reason: LG-01 → 6.4
     MFA for remote network access; LG-06 → 4.10 lockout on portable devices; LG-07 → 4.3 and 12.3; LG-10 → 3.11
     encryption at rest (LG-10 protects the audit log's integrity but encrypts nothing); LG-15 → 8.6 DNS, 8.7 URL,
@@ -743,6 +769,8 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
   the portal and the report carry that notice. Each check gives its evidence and **no pass or fail**:
   whether a control is implemented and operating effectively is the auditor's conclusion. Click a check to open the
   records behind it. The evidence report states the scope and limits of the checks.
+
+  ![Control checks: NIST controls, CIS's safeguards as published, and Looking Glass's own reading beside each](media/screens/57-audit-cis.png)
 - **One tab per kind of event:** Authentication, Accounts and access, Sessions, Configuration changes, Data access
   and exports, Workflow, and System and self-test. Each has its count, a search, *Alerts only*, and **Export CSV**.
   The built-in security test's events are kept apart in System and self-test.

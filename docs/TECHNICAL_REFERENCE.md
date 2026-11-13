@@ -601,10 +601,18 @@ Security scripts:
   browser's own time-zone database, so daylight saving is right). The Executive PDF does the same with `timezones.py`.
   `tests/check_timezones.py` checks all 54 countries' zones and the conversions.
 - CIS in the Audit portal (`control_map.py`): `NIST_TO_CIS` and `CIS_TITLES` are CIS's mapping, unchanged (CC BY-NC-ND
-  4.0). Looking Glass's own reading is kept apart in the same file: `BACKED` (check → safeguards it produces evidence
-  for, opt-in), `NOT_BACKED` (safeguard → reason), `lg_reading()`; every other pair is "related". `cis_for(nist, check)`
+  4.0). Looking Glass's own reading is kept apart in the same file: `BACKED` (check → safeguard → condition on the
+  check's facts, CIS's figures: 45 days dormant, 90 days retention, weekly reviews, MFA required), `NOT_BACKED`
+  (safeguard → reason), `RELATED_NOTE`, `lg_reading(check, safeguard, facts)`; a pair whose condition fails, and
+  every other pair, is "related". `audit_portal.py` passes the facts the checks computed. `cis_for(nist, check)`
   returns CIS's fields plus an `lg` field, which the portal shows as a separate badge and the PDF as a line marked
   "Looking Glass:". `CERTIFICATION_NOTE` ("The CIS Controls are used here as a map...") goes with the data.
+- Special Reports (`special_reports.py`): Shadowserver's one-off datasets (`YYYY-MM-DD-special[-<name>]-...`, often a
+  placeholder 00:00 time on every row). The pipeline loads them into `special` or `special_<name>`
+  (`report_names.canonical`, so a hyphenated name is not quarantined); both registries (`sources.py`, `services.py`)
+  skip every `special*` collection, so they never enter the replay, totals or baselines; `/api/overview` carries
+  `special`: per collection and shared date, rows and distinct hosts (counts only, cached 10 minutes), shown on the
+  intro page. `tests/check_special_reports.py` checks it against a throwaway MongoDB.
 - Executive portal figures (`management.py`): lists are ranked by distinct devices (IP addresses) when they are known,
   records breaking ties; the 7-day baseline keeps every infection and issue of each past day (`item_count` reads a
   missing item in an old top-80 summary as unknown, never 0).

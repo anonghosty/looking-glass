@@ -2478,6 +2478,25 @@
         ub.append(list);
       }
     }).catch(() => {});
+    // Shadowserver's one-off Special Reports: apart from the daily ones, counts only (special_reports.py)
+    const sp = o.special || [], spCard = document.getElementById("introSpecialCard");
+    if (spCard) {
+      spCard.hidden = !sp.length;
+      if (sp.length) {
+        $("introSpecialTitle").textContent = `${fmt(sp.length)} special report${sp.length === 1 ? "" : "s"}`;
+        $("introSpecialSub").textContent = "not in the replay or the totals";
+        const ul = $("introSpecial"); ul.replaceChildren();
+        for (const r of sp) {
+          const li = el("li", "on"); const sw = el("span", "swatch"); sw.style.background = "#e2a336";
+          li.append(sw, el("span", "nm", `${r.title}${r.shared ? ` · shared ${r.shared}` : ""}`), el("span", "ct", `${fmt(r.rows)} rows · ${fmt(r.hosts)} hosts`));
+          attachTip(li, () => [tipLine(r.title), tipLine(null, `Shared by Shadowserver on ${r.shared || "an unknown date"} · collection ${r.report}`),
+            tipLine(null, `${fmt(r.rows)} rows, ${fmt(r.hosts)} distinct hosts`),
+            tipLine(null, r.first && r.first === r.last ? `Every row carries the same time (${r.first}): a placeholder, not when it happened` : `Times from ${r.first || "?"} to ${r.last || "?"}`),
+            tipLine(null, "One-off dataset: kept out of the replay, the day's totals and the 7-day comparison")]);
+          ul.append(li);
+        }
+      }
+    }
     // every monitored report, active ones first
     $("introReportsTitle").textContent = `${fmt(o.reports_total)} reports monitored`;
     $("introReportsSub").textContent = `${fmt(o.reports_active)} with data for this day`;

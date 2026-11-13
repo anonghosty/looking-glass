@@ -171,9 +171,32 @@ try:
     ok("…LG-10 does not back 3.11 (it protects the log's integrity, encrypts nothing); LG-06 does not back 4.10",
        st_("LG-10", "3.11") == "not backed" and "encrypts nothing" in pair[("LG-10", "3.11")]["lg"]["note"] and st_("LG-06", "4.10") == "not backed")
     ok("…the AU-2 rows 8.6, 8.7, 8.8, 8.12 are not backed", all(st_("LG-15", s) == "not backed" for s in ("8.6", "8.7", "8.8", "8.12")))
-    ok("…backed is opt-in: every backed pair is listed in BACKED, everything unlisted and unexplained is 'related'",
-       all((s["lg"]["status"] == "backed") == (sg in CM.BACKED.get(chk, ())) for (chk, sg), s in pair.items())
-       and all(s["lg"]["status"] == "related" for (chk, sg), s in pair.items() if sg not in CM.BACKED.get(chk, ()) and sg not in CM.NOT_BACKED))
+    ok("…backed is opt-in: a backed pair is always listed in BACKED, everything unlisted and unexplained is 'related'",
+       all(sg in CM.BACKED.get(chk, {}) for (chk, sg), s in pair.items() if s["lg"]["status"] == "backed")
+       and all(s["lg"]["status"] == "related" for (chk, sg), s in pair.items() if sg not in CM.BACKED.get(chk, {}) and sg not in CM.NOT_BACKED))
+    # review, 2026-11-13: backed only while the evidence meets CIS's own figures on this system
+    R = lambda chk, sg, f: CM.lg_reading(chk, sg, f)
+    _src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "audit_portal.py"), encoding="utf-8").read()
+    ok("…the defaults are CIS's own figures: 45 days dormant, weekly reviews",
+       '_num("AUDIT_DORMANT_DAYS", 45)' in _src and '_num("AUDIT_REVIEW_DAYS", 7)' in _src)
+    ok("…5.3: 90 days is only related, with CIS's 45 days said", R("LG-02", "5.3", {"dormant_days": 90, "dormant_active": 0})["status"] == "related"
+       and "CIS asks for 45 days" in R("LG-02", "5.3", {"dormant_days": 90})["note"])
+    ok("…5.3: 45 days and no dormant account still active: backed; one still active: related",
+       R("LG-02", "5.3", {"dormant_days": 45, "dormant_active": 0})["status"] == "backed" and R("LG-02", "5.3", {"dormant_days": 45, "dormant_active": 1})["status"] == "related")
+    ok("…8.10: backed at 90 days or more, related below (CIS asks for at least 90)",
+       R("LG-11", "8.10", {"retention_days": 400})["status"] == "backed" and R("LG-11", "8.10", {"retention_days": 90})["status"] == "backed"
+       and R("LG-11", "8.10", {"retention_days": 30})["status"] == "related" and "at least 90" in R("LG-11", "8.10", {"retention_days": 30})["note"])
+    ok("…8.11: a 30-day review interval is only related (CIS asks weekly); 7 days with a review recorded: backed",
+       R("LG-13", "8.11", {"review_days": 30, "reviewed": True})["status"] == "related" and "weekly" in R("LG-13", "8.11", {"review_days": 30})["note"]
+       and R("LG-13", "8.11", {"review_days": 7, "reviewed": True})["status"] == "backed" and R("LG-13", "8.11", {"review_days": 7, "reviewed": False})["status"] == "related")
+    ok("…6.3 / 6.5: backed only while MFA is required and every active account has an authenticator",
+       R("LG-01", "6.3", {"mfa_required": True, "accounts_without_mfa": 0})["status"] == "backed"
+       and R("LG-01", "6.5", {"mfa_required": False, "accounts_without_mfa": 0})["status"] == "related"
+       and R("LG-01", "6.3", {"mfa_required": True, "accounts_without_mfa": 2})["status"] == "related")
+    ok("…8.4 is never backed: one synchronised clock, CIS asks for two time sources",
+       R("LG-12", "8.4", {})["status"] == "related" and "two synchronised time sources" in R("LG-12", "8.4", {})["note"])
+    ok("…3.14 by LG-15 stays related (exports logged, page views not)", R("LG-15", "3.14", {})["status"] == "related")
+    ok("…without the facts a conditional pair is never backed", R("LG-11", "8.10", None)["status"] == "related")
     ok("…every backed pair in the table is one CIS's mapping really reaches for that check (no invented pair)",
        all((chk, sg) in pair for chk, sgs in CM.BACKED.items() for sg in sgs))
     ok("…every not-backed row has a reason, read from the one table", all(s["lg"]["note"].endswith(CM.NOT_BACKED[sg]) for (chk, sg), s in pair.items()
@@ -183,8 +206,8 @@ try:
        all(s["title"] == CM.CIS_TITLES[s["id"]] and all((s["id"], v["relation"]) in CM.NIST_TO_CIS[v["nist"]] for v in s["via"]) for s in pair.values())
        and CM.NIST_TO_CIS["AU-9(3)"] == [("3.11", "Superset")] and CM.CIS_TITLES["3.11"] == "Encrypt Sensitive Data at Rest")
     backed = {s["id"] for s in pair.values() if s["lg"]["status"] == "backed"}
-    ok(f"…the overview count is the number of backed safeguards ({len(backed)}), the rest 'related by CIS's mapping'",
-       len(backed) == len({sg for sgs in CM.BACKED.values() for sg in sgs}) and 0 < len(backed) < len({s["id"] for s in pair.values()}))
+    ok(f"…the overview count is the number of safeguards backed on this system ({len(backed)}), the rest 'related'",
+       backed <= {sg for sgs in CM.BACKED.values() for sg in sgs} and 0 < len(backed) < len({s["id"] for s in pair.values()}))
     ok("…the certification note travels with the data", "issues no certificate" in (o.get("cis_note") or ""))
     ok("LG-01 states what sign-in enforces, not only enrolment", "requires the password and a one-time code" in C["LG-01"]["evidence"])
     ok("no check gives a verdict (no pass or fail: the auditor decides)", all("ok" not in x for x in o["checks"])

@@ -100,6 +100,15 @@
         <ul class="intro-reports intro-svc-reports" id="introSvcReports"></ul>
         <div class="intro-unsupported" id="introSvcUnsupported" hidden></div>
       </div>
+      <!-- Shadowserver's one-off Special Reports (special_reports.py): listed apart, never replayed nor counted -->
+      <div class="intro-card intro-special-card" id="introSpecialCard" hidden>
+        <div class="ic-head"><h2 id="introSpecialTitle">Special reports</h2><span class="muted" id="introSpecialSub"></span></div>
+        <p class="muted" style="margin:0 0 10px;font-size:12px">One-off datasets Shadowserver shares outside the daily reports
+          (a campaign's victims, a historical botnet, a new exposure), dated the day they were shared and often with a
+          placeholder time. They are kept out of the replay, the day's totals and the Executive 7-day comparison, so they
+          never show as a false spike.</p>
+        <ul class="intro-reports" id="introSpecial"></ul>
+      </div>
       </div>
 
       <div class="intro-pane" id="introGlossary" hidden>

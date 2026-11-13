@@ -25,6 +25,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 from sources import Registry, _is_time
+import special_reports
 
 CORE = ("ip", "port", "protocol", "asn", "geo", "region", "city", "hostname", "naics", "sector", "severity", "tag",
         "category")
@@ -175,6 +176,8 @@ class ServiceRegistry(Registry):
         self.names = set(names)
         for name in sorted(names):
             if name.startswith(("discovered_fields_", "files_")) or name in self.exclude:
+                continue
+            if special_reports.is_special(name):          # one-off Special Reports: listed apart, never replayed
                 continue
             c = self.db[name]
             try:

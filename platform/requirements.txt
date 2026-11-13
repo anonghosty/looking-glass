@@ -7,3 +7,6 @@ pymongo>=4.8,<5
 python-dotenv>=1.0,<2
 gunicorn>=23.0,<27
 reportlab>=4.0,<6
+# the IANA time-zone database for local times (timezones.py): Python's zoneinfo reads the server's own copy, which
+# minimal servers and containers can lack; versions are years (2025.2...), so the cap is far away on purpose
+tzdata>=2024.1,<2100

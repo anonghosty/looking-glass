@@ -92,23 +92,59 @@ RELATION = {"Equivalent": "same scope", "Subset": "the CIS safeguard covers part
 # Glass's judgment, kept apart and always shown as ours ("Looking Glass: ..."), never mixed into CIS's text (review,
 # 2026-11-12). The one place the portal, the PDF report and the tests read it from.
 #
-#   backed      the check produces evidence for the safeguard AS CIS WORDS IT (for Looking Glass itself). Opt-in, and
-#               conservative: a pair is backed only when it is listed here.
+#   backed      the check produces evidence for the safeguard AS CIS WORDS IT (for Looking Glass itself), figures
+#               included (45 days, weekly, 90 days...). Opt-in, conservative, and decided by the EVIDENCE: a pair listed
+#               in BACKED is backed only while its condition holds on this system (review, 2026-11-13); otherwise it
+#               is "related", with what differs from CIS's figure, as advice to the auditor.
 #   not backed  the mapping reaches it, but the check does not look at its subject: NOT_BACKED says why.
 #   related     everything else: CIS's mapping relates it to the check's NIST controls; Looking Glass claims no more.
 # When in doubt: related. One overclaim would make an auditor distrust the rest. The CIS Controls are a map
 # here, voluntary best practice with no CIS certificate: these checks are evidence for the organisation's own assessment.
+# Each condition reads the facts the check worked out (audit_portal.py) and returns "" when the safeguard is met as
+# CIS words it, else what differs (shown as "related: ..."). CIS's figures: 5.3 disable dormant accounts after 45 days;
+# 8.10 keep audit logs at least 90 days; 8.11 review audit logs weekly or more often (CIS Controls v8.1).
+def _mfa(f):
+    if not f.get("mfa_required", True):
+        return "MFA is not required on this system (MFA_REQUIRED=0)"
+    return f"{f['accounts_without_mfa']} active account(s) have no authenticator" if f.get("accounts_without_mfa") else ""
+
+
+def _dormant(f):
+    days, active = f.get("dormant_days", 90), f.get("dormant_active", 0)
+    if days > 45:
+        return (f"Looking Glass lists accounts unused for {days} days (AUDIT_DORMANT_DAYS) and an administrator disables "
+                f"them; CIS asks for 45 days")
+    return f"{active} account(s) unused for {days} days are still active; CIS asks for them to be disabled" if active else ""
+
+
+def _retention(f):
+    d = f.get("retention_days")
+    return "" if d is not None and d >= 90 else f"audit records are kept {d} days; CIS asks for at least 90"
+
+
+def _review(f):
+    days = f.get("review_days", 30)
+    if days > 7:
+        return f"Looking Glass looks for a review every {days} days (AUDIT_REVIEW_DAYS); CIS asks for weekly reviews"
+    return "" if f.get("reviewed") else f"no review recorded in the last {days} days"
+
+
 BACKED = {
-    "LG-01": {"6.3", "6.5"},          # sign-in to Looking Glass (an externally exposed application) needs MFA, admins too
-    "LG-02": {"5.3"},                 # dormant Looking Glass accounts listed and disabled
-    "LG-04": {"6.1"},                 # every account is granted through an administrator's approval
-    "LG-08": {"8.2"},                 # the audit log is collected
-    "LG-09": {"8.5"},                 # audit records hold who, what, when, where
-    "LG-11": {"8.10"},                # audit records kept for the retention period
-    "LG-12": {"8.4"},                 # the server's clock synchronisation is reported
-    "LG-13": {"8.11"},                # audit log reviews are recorded
-    "LG-14": {"3.10"},                # HTTPS for sign-in and sessions
-    "LG-15": {"8.2"},                 # exports are logged
+    "LG-01": {"6.3": _mfa, "6.5": _mfa},     # sign-in to Looking Glass (an externally exposed application) needs MFA
+    "LG-02": {"5.3": _dormant},              # dormant accounts: 45 days, and none left active
+    "LG-04": {"6.1": lambda f: f"{f['not_approved']} active account(s) without a recorded approval" if f.get("not_approved") else ""},
+    "LG-08": {"8.2": None},                  # the audit log is collected
+    "LG-09": {"8.5": None},                  # audit records hold who, what, when, where
+    "LG-11": {"8.10": _retention},           # at least 90 days
+    "LG-13": {"8.11": _review},              # weekly reviews, and one recorded
+    "LG-14": {"3.10": lambda f: "" if f.get("tls", True) else "HTTPS is off on this system"},
+    "LG-15": {"8.2": None},                  # exports are logged
+}
+# related, but worth saying why it is not more (advice for the auditor)
+RELATED_NOTE = {
+    ("LG-12", "8.4"): "the check reads whether the server's clock is synchronised; CIS asks for at least two synchronised "
+                      "time sources (check the NTP configuration on the server)",
+    ("LG-15", "3.14"): "exports are logged per person; viewing data on the pages is not logged entry by entry",
 }
 NOT_BACKED = {
     "3.11": "it protects the audit log's integrity but encrypts nothing: MongoDB and the data folder are plain files "
@@ -125,20 +161,28 @@ NOT_BACKED = {
 CERTIFICATION_NOTE = ("The CIS Controls are used here as a map, to guide Looking Glass's security and make the auditor's work easier. They are voluntary best practice, not a law or a requirement, and CIS issues no certificate for meeting them: organisations measure themselves with CIS's free Self Assessment Tool (CSAT) or with an auditor, and those that need a formal certificate usually go for ISO 27001 or SOC 2, with the CIS Controls as a guide.")
 
 
-def lg_reading(check, safeguard):
-    """Looking Glass's own reading of one (check, safeguard) pair: {"status": backed | not backed | related, "note"}."""
-    if safeguard in BACKED.get(check, ()):
-        return {"status": "backed", "note": f"backed by {check}, which produces evidence for it"}
+def lg_reading(check, safeguard, facts=None):
+    """Looking Glass's own reading of one (check, safeguard) pair on this system: {"status": backed | not backed |
+    related, "note"}. `facts`: what the check found (audit_portal.py); without them a conditional pair is "related"."""
+    conds = BACKED.get(check, {})
+    if safeguard in conds:
+        cond = conds[safeguard]
+        why = "" if cond is None else ("the evidence was not given" if facts is None else cond(facts))
+        if not why:
+            return {"status": "backed", "note": f"backed by {check}, which produces evidence for it"}
+        return {"status": "related", "note": f"related to {check}, not backed on this system: {why}"}
     if safeguard in NOT_BACKED:
         return {"status": "not backed", "note": f"not backed by {check}: {NOT_BACKED[safeguard]}"}
+    if (check, safeguard) in RELATED_NOTE:
+        return {"status": "related", "note": f"related to {check}: {RELATED_NOTE[(check, safeguard)]}"}
     return {"status": "related", "note": f"related to {check} by CIS's mapping only"}
 _ORDER = lambda s: tuple(int(x) for x in s.split("."))
 
 
-def cis_for(nist_ids, check=None):
+def cis_for(nist_ids, check=None, facts=None):
     """(safeguards, unmapped NIST ids) for a check's NIST controls, by CIS's own mapping. A safeguard reached through
     several NIST controls is listed once, with each of them and its relationship to each. "id", "title" and "via" are
-    CIS's, unchanged; "lg" is Looking Glass's own reading (lg_reading), kept apart."""
+    CIS's, unchanged; "lg" is Looking Glass's own reading on this system (lg_reading with the check's facts), apart."""
     out, unmapped = {}, []
     for n in nist_ids:
         pairs = NIST_TO_CIS.get(n)
@@ -146,6 +190,6 @@ def cis_for(nist_ids, check=None):
             unmapped.append(n)
             continue
         for sg, rel in pairs:
-            e = out.setdefault(sg, {"id": sg, "title": CIS_TITLES[sg], "via": [], "lg": lg_reading(check, sg)})
+            e = out.setdefault(sg, {"id": sg, "title": CIS_TITLES[sg], "via": [], "lg": lg_reading(check, sg, facts)})
             e["via"].append({"nist": n, "relation": rel})
     return [out[k] for k in sorted(out, key=_ORDER)], unmapped

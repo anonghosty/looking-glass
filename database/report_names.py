@@ -22,6 +22,17 @@ RESERVED = ("files_", "discovered_fields_")
 FOLDER = "report-names"
 
 
+def canonical(name: str) -> str:
+    """The collection name for a report name from a file name. Shadowserver's one-off Special Reports come as
+    "YYYY-MM-DD-special[-<name>]-...": "special-<name>" becomes "special_<name>" (hyphens are not allowed in a report
+    name), so a Special Report is loaded into its own collection instead of quarantined. The platform keeps every
+    "special*" collection out of the daily replay and lists it apart (special_reports.py). Others are unchanged."""
+    n = name or ""
+    if n.lower().startswith("special-"):
+        return re.sub(r"[^a-z0-9_]", "_", n.lower())[:64]
+    return n
+
+
 def valid(name: str) -> bool:
     return bool(VALID.match(name or "")) and not (name or "").startswith(RESERVED)
 

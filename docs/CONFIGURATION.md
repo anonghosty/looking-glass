@@ -107,12 +107,12 @@ Set these to what your own audits and laws require; the defaults suit a yearly I
 | `AUDIT_RETENTION_DAYS` | `400` | days archived audit entries are kept (compressed, `data/audit_archive/`) before they are deleted. The last link of each deleted archive is noted, so the integrity check still covers what is left |
 | `AUDIT_GAP_DAYS` | `30` | a removed archive followed by this many days without any entry is reported for the auditor (an archive removed and its note's dates faked to look old leaves such a jump; real use writes more often) |
 | `AUDIT_ROTATE_MB` | `5` | size at which `data/audit.log` is archived and a new file started; the tamper-evident chain goes on across files |
-| `AUDIT_DORMANT_DAYS` | `90` | control check LG-02 (NIST AC-2(3)): an active account unused this long is listed as dormant |
+| `AUDIT_DORMANT_DAYS` | `45` | control check LG-02 (NIST AC-2(3)): an active account unused this long is listed as dormant. 45 is CIS's figure (safeguard 5.3); above it, 5.3 shows as "related", not backed |
 | `AUDIT_MAX_ADMINS` | `3` | control check LG-03 (NIST AC-6(5)): the administrator limit the check names |
 | `AUDIT_PENDING_DAYS` | `7` | control check LG-04 (NIST AC-2): registrations waiting longer than this are listed |
 | `AUDIT_WORK_HOURS` | `07-19` | working hours in UTC: sign-ins outside them are counted on the dashboard |
 | `AUDIT_FAIL_ALERT` | `10` | control check LG-06 (NIST AC-7): the evidence says whether this many failed sign-ins from one address in one day was reached |
-| `AUDIT_REVIEW_DAYS` | `30` | control check LG-13 (NIST AU-6): the review interval the check names (integrity check or evidence export) |
+| `AUDIT_REVIEW_DAYS` | `7` | control check LG-13 (NIST AU-6): the review interval the check names (integrity check or evidence export). 7 is CIS's figure (weekly, safeguard 8.11); above it, 8.11 shows as "related", not backed |
 
 The control checks give evidence, not a pass or fail: the conclusion is the auditor's.
 

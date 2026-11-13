@@ -674,6 +674,37 @@ def build(d, enr, meta):
     top = doc.card(x3, y - h4 - 12, cw3, h4, "Severity", "As rated by Shadowserver")
     doc.donut(x3 + 14, top - 2, min(96, h4 - 50), d["severity"], unit, cw3 - 28, severity=True)
 
+    # ---------------- every report of the selection (2026-11-13): none left out, names wrapped, never cut
+    reps = [r for r in (d.get("reports") or []) if r.get("hosts") or r.get("count")]
+    if reps:
+        unit_h = "devices" if comms else "hosts"
+        rec_w = "events" if comms else "records"
+        ncol, gap, size, lead = 3, 16, 8.4, 10.6
+        cw = (W - 2 * M - gap * (ncol - 1)) / ncol
+        mx = max(r.get("hosts") or 0 for r in reps) or 1
+
+        def reports_page():
+            yy = doc.new_page("Reports")
+            doc.text(M, yy - 4, f"EVERY REPORT OF THIS SELECTION ({len(reps)}), RANKED BY {unit_h.upper()}", 8, HexColor("#a9b8ff"), True)
+            return yy - 20
+        top_y = reports_page()
+        col, cy = 0, top_y
+        for r in reps:
+            lines = simpleSplit(doc.s(r["label"]), doc.F["r"], size, cw - 92)
+            h = lead * len(lines) + 14
+            if cy - h < 44:                                   # next column, or next page
+                col, cy = col + 1, top_y
+                if col == ncol:
+                    top_y = reports_page(); col, cy = 0, top_y
+            x = M + col * (cw + gap)
+            ly = cy - 9
+            for ln in lines:
+                doc.text(x, ly, ln, size, HexColor("#d6ddee")); ly -= lead
+            doc.text(x + cw, cy - 9, f"{fmt(r.get('hosts') or 0)} {unit_h}", 8.6, TXT, True, "end")
+            doc.text(x + cw, cy - 19, f"{fmt(r.get('count') or 0)} {rec_w}", 7.2, MUTE, anchor="end")
+            doc.bar(x, ly + lead - 6, cw - 92, 4.5, (r.get("hosts") or 0) / mx)
+            cy -= h
+
     # ---------------- explanations
     if enr:
         y = doc.new_page("Explained")
