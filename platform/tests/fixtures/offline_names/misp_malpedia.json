@@ -1,0 +1,24 @@
+{
+  "authors": ["fixture"], "category": "tool", "description": "Fixture: a few made-up entries shaped like MISP Galaxy's Malpedia cluster.",
+  "name": "Malpedia", "source": "Malpedia", "type": "malpedia", "uuid": "00000000-0000-4000-8000-000000000001", "version": 1,
+  "values": [
+    {"value": "Fixtureloader", "uuid": "00000000-0000-4000-8000-000000000011",
+     "description": "Fixtureloader is a made-up loader used only by the Looking Glass tests.",
+     "meta": {"synonyms": ["FxLoad", "fixture_loader"], "refs": ["https://example.org/fixtureloader", "javascript:alert(1)", "https://example.org/fixtureloader"], "type": ["malware"]}},
+    {"value": "Badbox2", "uuid": "00000000-0000-4000-8000-000000000012",
+     "description": "A made-up Android entry to test Shadowserver-style names such as android.badbox2.",
+     "meta": {"synonyms": [], "refs": ["https://example.org/badbox2"]}},
+    {"value": "Quietbot", "uuid": "00000000-0000-4000-8000-000000000013", "description": "",
+     "meta": {"synonyms": ["QBot-Fixture"], "refs": ["https://example.org/quietbot-misp"]}},
+    {"value": "Sharedname", "uuid": "00000000-0000-4000-8000-000000000014",
+     "description": "The Malpedia-cluster text for Sharedname (should win over the botnet cluster).",
+     "meta": {"refs": []}},
+    {"value": "Oldvideo", "uuid": "00000000-0000-4000-8000-000000000016", "description": "",
+     "meta": {"synonyms": [], "refs": ["https://example.org/oldvideo"]}},
+    {"value": "Otherfam", "uuid": "00000000-0000-4000-8000-000000000017",
+     "description": "Another made-up family that lists elf.herdbot among its synonyms.",
+     "meta": {"synonyms": ["elf.herdbot"], "refs": []}},
+    {"value": "<b>Markup</b>", "uuid": "00000000-0000-4000-8000-000000000015",
+     "description": "<script>alert(1)</script> stays text.", "meta": {}}
+  ]
+}

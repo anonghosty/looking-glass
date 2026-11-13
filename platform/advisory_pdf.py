@@ -21,6 +21,7 @@ LEVEL = {"critical": RED, "high": AMBER, "medium": BLUE, "low": SLATE}
 LEVEL_WORD = {"critical": "Critical", "high": "High", "medium": "Medium", "low": "Low"}
 ACCENT = HexColor("#a9b8ff")
 BOTTOM = 40                                   # nothing below this line: the footer's room
+KEEP_MAX = 300                                # a block kept on one page is at most this tall (about half a landscape page)
 
 
 def _hard(doc, lines, font, size, width):
@@ -66,6 +67,14 @@ class Flow:
                 d.text(x, self.y - size, ln, size, color, bold)
                 self.y -= lead
         self.y -= 4
+
+    def height(self, text, size=9.6, bold=False, x=M, width=None):
+        """How much room para() would take for this text (to keep a block together before drawing it)."""
+        d = self.doc
+        width = width or (W - M - x)
+        n = sum(len(simpleSplit(d.s(b), d.F["b"] if bold else d.F["r"], size, width) or [""])
+                for b in str(text or "").replace("\r", "").split("\n"))
+        return n * size * 1.42 + 4
 
     def rich(self, text, size=9.6, color=TXT):
         """The advisor's text with its light markup: "- " bullets, "1. " numbers, **bold**; wrapped, never cut."""
@@ -258,6 +267,38 @@ def front(doc, a):
             for ln in reps:
                 yy -= 11; doc.text(M + 70, yy, ln, 8, MUTE)
             f.y = yy - 9
+
+    # MITRE ATT&CK techniques: the mappings of the reports in the advisory, with the ATT&CK version this advisory was
+    # generated with (kept with the advisory: a sent one keeps what the recipient got; attack_map.py)
+    att = a.get("attack") or {}                   # reviewed mappings only (advisory_attack.for_recipients)
+    if att.get("techniques"):
+        f.heading("MITRE ATT&CK techniques")
+        f.para(f"MITRE ATT&CK v{att.get('version') or '?'}. Observed: the report saw it; Possible: an exposure an attacker "
+               "could use. \"What it is\" and \"How to defend\" are MITRE's words; \"Why it is in this advisory\" is ours. "
+               "© The MITRE Corporation, reproduced and distributed with its permission.", 8.8, DIM)
+        seen = set()
+        for t in att["techniques"]:
+            if (t["id"], t.get("report"), t.get("category")) in seen:
+                continue
+            seen.add((t["id"], t.get("report"), t.get("category")))
+            cert = (t.get("certainty_label") or "").split(" (")[0] or str(t.get("certainty") or "").capitalize()
+            # the technique's lines as (text, size, colour, bold, x), measured first so the whole block is kept on one
+            # page (a technique split from its "How to defend" was seen in a render, 2026-11-13); a block taller than
+            # KEEP_MAX still flows over pages rather than leaving a page empty
+            rows = [(f"{t['id']} {t['name']} · {', '.join(t.get('tactics') or [])} · {cert}: {t.get('role', '')}", 9.6, TXT, True, M)]
+            if t.get("desc"):
+                rows.append((f"What it is (MITRE): {t['desc']}", 9, TXT, False, M + 10))
+            if t.get("why_here"):
+                rows.append((f"Why it is in this advisory (Looking Glass): {t['why_here']}", 9, TXT, False, M + 10))
+            if t.get("defend"):
+                rows.append(("How to defend (MITRE mitigations):", 9, TXT, False, M + 10))
+                for m in t["defend"]:
+                    rows.append((f"• {m['id']} {m['name']}" + (f": {m['text']}" if m.get("text") else ""), 8.8, DIM, False, M + 20))
+            rows.append((f"MITRE ATT&CK: {t.get('url') or ''}", 8.4, ACCENT, False, M + 10))
+            f.y -= 4
+            f.need(min(sum(f.height(s, z, b, x) for s, z, _, b, x in rows), KEEP_MAX))
+            for s, z, c, b, x in rows:
+                f.para(s, z, c, b, x=x)
 
     f.heading("Recommended Actions")
     if a.get("actions"):

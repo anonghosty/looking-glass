@@ -1,0 +1,22 @@
+{
+  "about": "Names and synonyms as MISP Galaxy really cross-lists them (13 Nov 2026); the descriptions are made up.",
+  "malpedia": {"name": "Malpedia", "type": "malpedia", "values": [
+    {"value": "Mirai (ELF)", "description": "Fixture text for the Malpedia cluster's Mirai (ELF).", "meta": {"synonyms": []}},
+    {"value": "Mirai (Windows)", "description": "", "meta": {"synonyms": []}},
+    {"value": "BADBOX", "description": "Fixture text for the Malpedia cluster's BADBOX.", "meta": {"synonyms": []}},
+    {"value": "BianLian (Android)", "description": "Fixture text for BianLian.", "meta": {"synonyms": ["Hydra"]}},
+    {"value": "Hydra", "description": "Fixture text for Hydra.", "meta": {"synonyms": []}},
+    {"value": "Alpha One", "description": "Made-up family A.", "meta": {"synonyms": ["Fixshare"]}},
+    {"value": "Beta Two", "description": "Made-up family B.", "meta": {"synonyms": ["Fixshare"]}}
+  ]},
+  "botnet": {"name": "Botnet", "type": "botnet", "values": [
+    {"value": "Mirai", "description": "Fixture text for the Botnet cluster's Mirai.", "meta": {"refs": []}},
+    {"value": "katana", "description": "Fixture text for katana.", "meta": {"synonyms": ["elf.mirai", "Mirai (ELF)"]}},
+    {"value": "Sora", "description": "Fixture text for Sora.", "meta": {"synonyms": ["Mirai Sora"]}},
+    {"value": "BadBox", "description": "Fixture text for the Botnet cluster's BadBox.", "meta": {}},
+    {"value": "Nitro", "description": "Fixture text for Nitro.", "meta": {"synonyms": ["Hydra"]}}
+  ]},
+  "tool": {"name": "Tool", "type": "tool", "values": [
+    {"value": "Mirai", "description": "Fixture text for the Tool cluster's Mirai.", "meta": {"synonyms": ["Linux/Mirai"]}}
+  ]}
+}

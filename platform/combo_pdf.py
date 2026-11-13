@@ -13,7 +13,9 @@ generated_by, shapes}.
 """
 from reportlab.lib.colors import Color, HexColor
 
+import attack_map
 import executive_pdf as ex
+import name_sources
 from executive_pdf import AMBER, BLUE, DIM, H, M, MUTE, RED, SLATE, TEAL, TXT, VIOLET, W, fmt, pct
 
 def _share(n, total):
@@ -201,9 +203,15 @@ class AnalystDoc(ex.Doc):
             tags, title = [("Malware family · Malpedia", BLUE)], x_.get("name", "")
         elif x_.get("curated"):
             tags, title = [("Looking Glass definition", VIOLET)], x_.get("title", "")
+        elif x_.get("reference"):                  # MISP Galaxy / MITRE ATT&CK (offline_names.py): its notice travels with it
+            tags, title = [(x_.get("source_label") or "Reference", SLATE)], x_.get("name", "")
         else:
-            tags, title = [(x_.get("title") or "Not in Malpedia", SLATE)], ""
+            tags, title = [("No source knows this name", SLATE)], x_.get("title") or ""
         desc = x_.get("description") or x_.get("text") or x_.get("reason") or ""
+        if kind != "cve":                          # the source, its licence and the other sources (name_sources.py)
+            desc = " ".join(s for s in (desc, name_sources.source_text(x_), name_sources.also_text(x_)) if s)
+        if x_.get("attack"):                       # MITRE ATT&CK, with the version this document was made with
+            desc = " ".join([desc] + attack_map.attack_lines(x_["attack"])).strip()
         alert = ""
         if kind == "cve" and x_.get("kev"):
             kv = x_["kev"]
@@ -226,10 +234,10 @@ class AnalystDoc(ex.Doc):
         if y is None:
             return h
         self.card(x, y, w, h)
-        tx = x + 12
+        tx = x + 12                                 # the name as reported first, as the card's heading; the source after it
+        self.text(x + 12, y - 17, name, 10.5, TXT, True)
         for t, col in tags:
-            tx = self.pill(tx, y - 17, t, col)
-        self.text(x + 12, y - 33, name, 10.5, TXT, True)
+            tx = self.pill(tx, y - 33, t, col)
         yy = y - 45
         for ln in sl:
             self.text(x + 12, yy, ln, 7.6, HexColor("#a9c3ff")); yy -= 10

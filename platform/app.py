@@ -112,6 +112,8 @@ host_refs = HostRefs(os.environ.get("REF_SECRET"))
 malpedia = Malpedia(os.environ.get("MALPEDIA_TOKEN"), os.path.join(BASE_DIR, "data", "malpedia_cache.json"), logger=app.logger)
 import cves  # noqa: E402  (NVD, CISA KEV and EPSS for the services platform's issues)
 from malpedia import MAX_PER_MINUTE as MAX_MP  # noqa: E402
+import offline_names  # noqa: E402  (MISP Galaxy + MITRE ATT&CK, read from data/ only: behind Malpedia, nothing sent out)
+OFFLINE_NAMES = offline_names.OfflineNames(os.path.join(BASE_DIR, "data"), needles=Malpedia.needles)
 cve_intel = cves.CveIntel(os.path.join(BASE_DIR, "data", "cve_cache.json"), os.environ.get("NVD_API_KEY", ""), logger=app.logger)
 PUBLIC_DEMO = os.environ.get("PUBLIC_DEMO") == "1"   # force demo masking for every request
 # who may connect, host names, cross-site writes, security headers, request size (security.py, docs/SECURITY_REPORT.md)
@@ -1276,7 +1278,11 @@ def _short(x):
         return f"{x.get('name')} ({x.get('family')})"
     if x.get("curated"):
         return f"{x.get('title')} (Looking Glass definition)"
-    return x.get("title") or "not in Malpedia"
+    if x.get("reference"):
+        return f"{x.get('name')} ({x.get('source_label')})"
+    if x.get("nosource"):
+        return f"no source knows this name: {x.get('title')}"
+    return x.get("title") or "no source knows this name"
 
 
 def _enrich_names(ordered):
@@ -1299,12 +1305,13 @@ def _enrich_names(ordered):
         stats[name] = stat
     note = ("Each infection / category was looked up on Malpedia, the malware encyclopedia of Fraunhofer FKIE (malware "
             "families, and threat actors for group names). Names Malpedia does not list are explained from the definitions "
-            "written by the security researchers of the organisation that uses this platform, with their references, or "
-            "from the evidence in the reports."
+            "written by the security researchers of the organisation that uses this platform, with their references, then "
+            "from MISP Galaxy and MITRE ATT&CK (copies kept on the server), or from the evidence in the reports."
             if malpedia.enabled else
             "Malpedia is not set up on this platform, so the infections / categories are explained from the definitions "
             "written by the security researchers of the organisation that uses this platform (with their references) and "
-            "the Looking Glass knowledge base, or from the evidence in the reports.")
+            "the Looking Glass knowledge base, then from MISP Galaxy and MITRE ATT&CK (copies kept on the server), or from "
+            "the evidence in the reports.")
     return out, stats, note
 
 
@@ -1323,8 +1330,9 @@ def _bd_rows(rows, total, hosts=False):
 def _pdf_rows(columns, rows, enr, issues=False, row_name=False):
     """Cells as printed text; plus what each infection (or issue) is, when the list has them."""
     has_inf = enr and (row_name or any(k in (("issues",) if issues else ("infections", "infection")) for k, _ in columns))
-    label = "What it is (CVE: NVD / CISA KEV / EPSS; others: definition)" if issues else "What it is (Malpedia / definition)"
-    cols = columns + ([["_explained", label]] if has_inf else [])
+    label = "What it is (CVE: NVD / CISA KEV / EPSS; others: definition)" if issues else "What it is"
+    cols = columns + ([["_explained", label]] + ([] if issues else [["_source", "Source"]]) + [["_attack", "MITRE ATT&CK"]]
+                      if has_inf else [])
     out = []
     for r in rows:
         x = {}
@@ -1334,6 +1342,13 @@ def _pdf_rows(columns, rows, enr, issues=False, row_name=False):
                 names = ([r.get("name")] if row_name else (r.get("issues") or [])) if issues else \
                     [n for n in ([r.get("infection")] if r.get("infection") else (r.get("infections") or [])) if n]
                 v = "; ".join(f"{n}: {_short(enr[n])}" for n in names if n in enr)
+            elif k == "_attack":                  # the ATT&CK techniques (IDs) of each name / issue, with the version used
+                names = ([r.get("name")] if row_name else (r.get("issues") or [])) if issues else \
+                    [n for n in ([r.get("infection")] if r.get("infection") else (r.get("infections") or [])) if n]
+                v = "; ".join(f"{n}: {attack_map.ids_text(enr[n].get('attack'))}" for n in names if n in enr and enr[n].get("attack"))
+            elif k == "_source":                  # which source answered, and the others that know the name
+                names = [n for n in ([r.get("infection")] if r.get("infection") else (r.get("infections") or [])) if n]
+                v = "; ".join(f"{n}: {', '.join(enr[n].get('sources') or []) or 'no source knows this name'}" for n in names if n in enr)
             elif k == "followup":
                 v = "; ".join(v or []) or "Monitor"
             elif isinstance(v, list):
@@ -1356,6 +1371,9 @@ SOURCES_TEXT = [
     "Looking Glass definitions: written by the security researchers of the organisation that uses this platform, for "
     "names that Malpedia does not list and for issues that are not CVEs, each with its references (evidence) and the "
     "name of the researcher who wrote it.",
+    "Names neither Malpedia nor the researchers explain: MISP Galaxy (its Malpedia cluster is Malpedia content, "
+    "CC BY-NC-SA 3.0; Botnet and Tool clusters CC0 1.0 / BSD 2-Clause) and MITRE ATT&CK (© The MITRE Corporation, "
+    "reproduced and distributed with the permission of The MITRE Corporation), read from copies kept on the server.",
     "Vulnerabilities (CVEs): NIST National Vulnerability Database (description, CVSS score), CISA Known Exploited "
     "Vulnerabilities catalog (confirmed active exploitation) and FIRST EPSS (probability of exploitation in the next 30 days).",
     "Figures describe the replay day up to the time of the analysis. The complete list is in the CSV file delivered "
@@ -1401,11 +1419,14 @@ def api_insight_report_pdf():
         f = sum(1 for x in enr.values() if x.get("found") and x.get("kind") != "actor")
         a = sum(1 for x in enr.values() if x.get("kind") == "actor")
         c = sum(1 for x in enr.values() if x.get("curated"))
+        o = sum(1 for x in enr.values() if x.get("reference"))      # MISP Galaxy / MITRE ATT&CK answered (name_sources.py)
+        rest = len(enr) - f - a - c - o
         pts.append(f"Of the {len(enr)} infections / categories explained in this report, {f} are malware families in Malpedia"
                    + (f", {a} {'is a threat actor' if a == 1 else 'are threat actors'}" if a else "")
                    + (f", {c} {'has' if c == 1 else 'have'} a Looking Glass definition" if c else "")
-                   + (f" and {len(enr) - f - a - c} {'is' if len(enr) - f - a - c == 1 else 'are'} not malware or not listed (explained from the report evidence)"
-                      if len(enr) - f - a - c else "") + ".")
+                   + (f", {o} {'is' if o == 1 else 'are'} described by MISP Galaxy or MITRE ATT&CK" if o else "")
+                   + (f" and {rest} {'is' if rest == 1 else 'are'} known to no source (explained from the report evidence)"
+                      if rest else "") + ".")
     peak = I.get("peak_hour")
     kpis = [(f"{I.get('total', 0):,}", "events in this selection"), (f"{I.get('share', 0):.1%}", f"of the day's {I.get('all_total', 0):,} events"),
             (f"{I.get('hosts', 0):,}", "source hosts"), (f"{I.get('reports', 0):,}", "reports"),
@@ -2120,9 +2141,9 @@ def malpedia_explain(name):
                          "families, so there is nothing to match."),
                 "advice": "Treat the device as possibly infected: run a security scan on it.", "seen_in": reports}
     what = f" ({kind})" if kind else ""
-    return {"verdict": "unlisted", "title": "Probably malware, but not in Malpedia under this name",
-            "text": (f'"{n}" looks like malware{what}, but Malpedia has no entry under this name: it may be new, '
-                     "seen mostly in one region, or called something else there."
+    return {"verdict": "unlisted", "title": "Probably malware, but no source lists it under this name",
+            "text": (f'"{n}" looks like malware{what}, but none of the sources (Malpedia, MISP Galaxy, MITRE ATT&CK) has '
+                     "an entry under this name: it may be new, seen mostly in one region, or called something else there."
                      + (f" Looking Glass describes it as: {kb.get('title')}." if kb.get("title") else "")),
             "advice": "Treat the device as infected: run a security scan, and read the Looking Glass description of "
                       "this name.", "seen_in": reports}
@@ -2149,9 +2170,31 @@ def _write_names(m):
     os.replace(tmp, _MISSES_PATH)
 
 
+def _is_services_report(name):
+    """True for the name of a publicly accessible / vulnerable services report (scan_mikrotik_service, scan_http...): a
+    report, never malware. 2026-11-13: on 10 November the combination reports asked Malpedia about services report
+    names as if they were malware; they were recorded and stayed on the Definitions to-do list."""
+    n = (name or "").strip().lower()
+    if not n:
+        return False
+    try:
+        if n in {s["name"].lower() for s in svc["registry"].get()}:
+            return True
+    except Exception:                              # noqa: BLE001  (no registry yet: the report map still answers)
+        pass
+    try:
+        reps = REPORT_MAP.get().get("reports") or {}
+        e = reps.get(n)
+        return bool(e and e.get("section") == "Services")
+    except Exception:                              # noqa: BLE001
+        return False
+
+
 def _record_check(name, family, asked=True):
     """Remember that a name was checked against Malpedia and what came back ("" = nothing). Names with nothing that
-    no administrator has defined yet are the to-do list in Settings."""
+    no administrator has defined yet are the to-do list in Settings. A services report's name is never recorded."""
+    if _is_services_report(name):
+        return
     now = utcnow().isoformat(timespec="seconds")
     with _MISSES_LOCK:
         m = _read_names()
@@ -2228,38 +2271,37 @@ def _curated(name):
 
 
 def mp_resolve(name):
-    """Look a name up the way users see it: the administrator's Malpedia family if set, else Malpedia's best match;
-    if none, the administrator's own definition with its references; if none, the plain explanation (and the name is
-    added to the administrator's to-do list)."""
-    cur = _curated(name)
-    if not malpedia.enabled:                         # no Malpedia token: the researchers' definitions, then the knowledge base
-        e = cur or knowledge_base().get((name or "").lower()) or {}
-        if e.get("description") or e.get("title"):
-            return {"found": False, "curated": True, "offline": True, "title": e.get("title") or name, "type": e.get("type", ""),
-                    "description": e.get("description", ""), "references": e.get("references", []),
-                    "updated": e.get("updated", ""), "by": _by(e) or ("Looking Glass" if not cur else ""),
-                    "malpedia_id": e.get("malpedia", ""), "seen_in": malpedia_explain(name)["seen_in"]}, {}
-        x = malpedia_explain(name)
-        return {"found": False, "offline": True, **x, "reason": f"{x['title']}. {x['text']}"}, {}
-    ov = (cur or {}).get("malpedia") or ""
-    r = (malpedia.lookup("actor", ov[6:]) if ov.startswith("actor:") else malpedia.lookup("family", ov)) if ov \
-        else malpedia.lookup("infection", name)
-    card = _mp_card(r)
-    _record_check(name, (card.get("family") or f"actor:{card.get('actor')}") if card else "")
-    if card:
-        if cur and cur.get("malpedia"):
-            card["matched_by"] = "the administrator's definition"
-        if cur and cur.get("references"):
-            card["curated_references"] = cur["references"]
-        return card, r
-    if cur:
-        return {"found": False, "curated": True, "title": cur.get("title") or name, "type": cur.get("type", ""),
-                "description": cur.get("description", ""), "references": cur.get("references", []),
-                "updated": cur.get("updated", ""), "by": _by(cur),
-                "seen_in": malpedia_explain(name)["seen_in"]}, r
-    x = malpedia_explain(name)
-    return {"found": False, **x, "reason": f"{x['title']}. {x['text']}",
-            "near": [m["id"] for m in (r.get("matches") or [])[:3]]}, r
+    """Look a name up the way users see it: one card, the researchers' definition first, else the first source that
+    knows it (Malpedia, MISP Galaxy, MITRE ATT&CK), with every other source under "Also described by"; else "No source
+    knows this name" with the plain explanation (name_sources.py). Malpedia's checks still fill the to-do list."""
+    return NAME_SOURCES.resolve(name)
+
+
+import name_sources  # noqa: E402  (one card per name, all sources side by side; refresh of the local copies)
+NAME_SOURCES = name_sources.NameSources(OFFLINE_NAMES, malpedia, {
+    "curated": lambda n: _curated(n), "kb": lambda: knowledge_base(), "mp_card": lambda r: _mp_card(r),
+    "record": lambda n, f: _record_check(n, f), "explain": lambda n: malpedia_explain(n), "by": lambda e: _by(e)})
+_NAME_SOURCES_API = name_sources.install(app, {
+    "base_dir": BASE_DIR, "offline": OFFLINE_NAMES, "allowed": lambda: _kb_allowed(),
+    "can_refresh": lambda: AUTH["has_perm"]("settings"), "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"],
+    "audit": AUTH["audit"], "python": os.path.join(BASE_DIR, ".venv", "bin", "python")
+    if os.path.exists(os.path.join(BASE_DIR, ".venv", "bin", "python")) else sys.executable})
+
+
+class _ReportDefs:                                   # Shadowserver's description of a report, for the ATT&CK mapping's basis
+    get = staticmethod(lambda k, default=None: _report_def(k))
+
+
+import attack_map  # noqa: E402  (MITRE ATT&CK: report mappings, malware techniques, CVE links; step 2)
+ATTACK = attack_map.AttackMap(os.path.join(BASE_DIR, "data"), OFFLINE_NAMES,
+                              report_map=lambda: (REPORT_MAP.get() or {}).get("reports") or {},
+                              report_defs=lambda: _ReportDefs, audit=AUTH["audit"])
+ATTACK.labels = lambda: {x["label"]: x["name"] for x in registry.get()}     # "Seen in" labels -> report keys
+NAME_SOURCES.attack = ATTACK
+attack_map.install(app, {"map": ATTACK, "allowed": lambda: _kb_allowed(), "change_allowed": lambda: _kb_change_allowed(),
+                         "fresh": AUTH["fresh"], "me": lambda: _me(),
+                         # MITRE's full text of a technique: everyone who reads ATT&CK in Looking Glass
+                         "readers": lambda: any(AUTH["has_perm"](p) for p in ("view", "definitions", "advisory", "management"))})
 
 
 def _mp_card(r):
@@ -2297,12 +2339,23 @@ def mp_resolve(name):  # noqa: F811
     return _noted(card, "infections", name), r
 
 
+def _with_attack(card, name):
+    """A CVE's ATT&CK techniques (CTID's KEV mappings, local copy; attack_map.py), when it has any."""
+    try:
+        att = ATTACK.cve_attack(name) if card.get("kind") == "cve" else None
+    except Exception:                              # noqa: BLE001  (a damaged copy must never break a look-up)
+        att = None
+    if att:
+        card = dict(card, attack=att)
+    return card
+
+
 def issue_resolve(name, fetch=True):  # noqa: F811
-    return _noted(_issue_resolve_plain(name, fetch=fetch), "issues", name)
+    return _with_attack(_noted(_issue_resolve_plain(name, fetch=fetch), "issues", name), name)
 
 
 def issues_resolve(names, budget=15.0, progress=None):  # noqa: F811
-    return {n: _noted(c, "issues", n) for n, c in _issues_resolve_plain(names, budget=budget, progress=progress).items()}
+    return {n: _with_attack(_noted(c, "issues", n), n) for n, c in _issues_resolve_plain(names, budget=budget, progress=progress).items()}
 
 
 @app.route("/api/malpedia/batch")
@@ -2349,6 +2402,7 @@ def api_malpedia():
         if field in ("infection", "tag"):
             card, r = mp_resolve(value)
             r = dict(r)
+            r["card"] = card                         # the whole card, all sources (name_sources.py): the page shows it as is
             if card.get("kind") == "actor":
                 r["actor_card"] = card
             elif card.get("curated"):
@@ -2388,9 +2442,12 @@ def api_kb_unresolved():
                 "kinds": sorted(x["classes"]), "title": e.get("title", ""),
                 "type": e.get("type", ""), "description": e.get("description", ""), "references": e.get("references", []),
                 "malpedia": e.get("malpedia", ""), "defined": bool(e.get("references") or e.get("malpedia")),
-                "updated": e.get("updated", ""), "by": _by(e) or ("Looking Glass" if defined_entry(e) else "")}
+                "updated": e.get("updated", ""), "by": _by(e) or ("Looking Glass" if defined_entry(e) else ""),
+                # which sources know the name (Malpedia from its recorded check, MISP Galaxy / ATT&CK from the copies)
+                "sources": NAME_SOURCES.known_by(n, (names.get(n.lower()) or {}).get("family", ""))}
     todo =[row(n, m) for n, m in sorted(misses.items(), key=lambda kv: -kv[1].get("count", 0))
-            if not _curated(n) and malpedia_explain(n)["verdict"] != "activity"]
+            if not _curated(n) and malpedia_explain(n)["verdict"] != "activity" and not _is_services_report(n)]
+    todo = [r for r in todo if not r["sources"]]     # "No source knows": none of Malpedia, MISP Galaxy, ATT&CK
     done = [row(n) for n, e in sorted(kb.items()) if e.get("references") or e.get("malpedia")]
     new = [row(n) for n in _unchecked_names()]
     for r in new:
@@ -2458,9 +2515,10 @@ def api_kb_entry():
             return jsonify(error="Definitions are for researchers and admins."), 403
         n = (request.args.get("name") or "").strip()
         e = (issues_kb() if request.args.get("section") == "issues" else knowledge_base()).get(n.lower()) or {}
+        others = NAME_SOURCES.other_sources(n) if n and request.args.get("section") != "issues" else []
         return jsonify(name=n, title=e.get("title", ""), type=e.get("type", ""), description=e.get("description", ""),
                        references=e.get("references", []), malpedia=e.get("malpedia", ""), updated=e.get("updated", ""),
-                       by=_by(e))
+                       by=_by(e), sources=others)       # the other sources' text and links, shown alongside the editor
     if not _kb_change_allowed():
         return jsonify(error="Only researchers and admins can change definitions."), 403
     if not AUTH["fresh"]():
@@ -2814,7 +2872,7 @@ ADVISORIES = _advisory.install(app, {"base_dir": BASE_DIR, "findings": FINDINGS,
                                      "is_demo": _site_demo, "audit": AUTH["audit"], "people_name": lambda u: people.name(u, ""),
                                      "title_of": lambda n: SVC_KB["title_of"](n), "describe": COMBOS.describe,
                                      "network": lambda asn: asn_registry.company(asn, False) if asn else "",
-                                     "scope_text": lambda: _scope_text()})
+                                     "scope_text": lambda: _scope_text(), "attack": ATTACK})
 
 
 import netypes  # noqa: E402  (network types: built-in sectors and the ones this site added)

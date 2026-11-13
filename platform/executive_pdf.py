@@ -574,9 +574,24 @@ class Doc:
             tags, title = [("Malware family · Malpedia", BLUE)], x_.get("name", "")
         elif x_.get("curated"):
             tags, title = [("Looking Glass definition", VIOLET)], x_.get("title", "")
+        elif x_.get("reference"):                  # MISP Galaxy / MITRE ATT&CK (offline_names.py)
+            tags, title = [(x_.get("source_label") or "Reference", SLATE)], x_.get("name", "")
         else:
-            tags, title = [(x_.get("title") or "Not in Malpedia", SLATE)], ""
+            tags, title = [("No source knows this name", SLATE)], x_.get("title") or ""
         desc = x_.get("description") or x_.get("text") or x_.get("reason") or ""
+        if kind != "cve":                          # the source first, so it is never cut off with the text
+            src = x_.get("licence_short") or ("Looking Glass definition" if x_.get("curated") else "")
+            also = ", ".join(a.get("source_label", "") for a in x_.get("also") or [])
+            if src or also:
+                desc = f"(Source: {src or 'the reports'}{'; also described by ' + also if also else ''}) {desc}"
+        att = x_.get("attack")
+        if att and att.get("techniques"):         # techniques by tactic, IDs only, first so they are never cut off
+            import attack_map
+            tac = "; ".join(f"{ta}: {', '.join(t['id'] for t in ts)}"
+                            for ta, ts in attack_map.by_tactic({"techniques": [t for t in att["techniques"] if t["certainty"] != "known"]}).items())
+            known = len({t["id"] for t in att["techniques"] if t["certainty"] == "known"})
+            line = f"ATT&CK v{att.get('version')}: " + (tac or "") + (f"{'; ' if tac else ''}{known} techniques known for this malware" if known else "")
+            desc = f"({line}) {desc}"
         alert = ""
         if kind == "cve" and x_.get("kev"):
             kv = x_["kev"]
@@ -595,12 +610,12 @@ class Doc:
         if y is None:
             return h
         self.card(x, y, w, h)
-        tx = x + 12
-        for t, col in tags:
-            tx = self.pill(tx, y - 17, t, col)
-        self.text(x + 12, y - 33, self.fit(name, w * .6, 10.5, True), 10.5, TXT, True)
+        tx = x + 12                                 # the name as reported first, as the card's heading; the source after it
+        self.text(x + 12, y - 17, self.fit(name, w * .6, 10.5, True), 10.5, TXT, True)
         if stat:
-            self.text(x + w - 12, y - 33, self.fit(stat, w * .38, 7.6), 7.6, HexColor("#a9c3ff"), anchor="end")
+            self.text(x + w - 12, y - 17, self.fit(stat, w * .38, 7.6), 7.6, HexColor("#a9c3ff"), anchor="end")
+        for t, col in tags:
+            tx = self.pill(tx, y - 33, t, col)
         yy = y - 45
         if title and title != name:
             self.text(x + 12, yy, self.fit(title, w - 24, 8.6, True), 8.6, HexColor("#c9d6ff"), True); yy -= 12

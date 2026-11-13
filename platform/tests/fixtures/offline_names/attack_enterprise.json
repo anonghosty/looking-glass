@@ -1,0 +1,27 @@
+{
+  "type": "bundle", "id": "bundle--00000000-0000-4000-8000-0000000000a0",
+  "objects": [
+    {"type": "x-mitre-collection", "id": "x-mitre-collection--00000000-0000-4000-8000-0000000000a9", "name": "Enterprise ATT&CK", "x_mitre_version": "99.1"},
+    {"type": "malware", "id": "malware--00000000-0000-4000-8000-0000000000a7", "name": "Herdbot",
+     "description": "[Herdbot](https://attack.mitre.org/software/S9003) is the ATT&CK view of the made-up router botnet.",
+     "x_mitre_aliases": ["Herdbot"], "x_mitre_platforms": ["Linux", "Network"],
+     "external_references": [{"source_name": "mitre-attack", "url": "https://attack.mitre.org/software/S9003", "external_id": "S9003"}]},
+    {"type": "marking-definition", "id": "marking-definition--00000000-0000-4000-8000-0000000000a1",
+     "definition_type": "statement", "definition": {"statement": "Copyright 2015-2026, The MITRE Corporation. MITRE ATT&CK and ATT&CK are registered trademarks of The MITRE Corporation."}},
+    {"type": "malware", "id": "malware--00000000-0000-4000-8000-0000000000a2", "name": "Quietbot",
+     "description": "[Quietbot](https://attack.mitre.org/software/S9001) is a made-up banking trojan used by [Fixture Group](https://attack.mitre.org/groups/G9001).(Citation: Fixture 2026) It spreads by e-mail.",
+     "x_mitre_aliases": ["Quietbot", "QuietB"], "x_mitre_platforms": ["Windows"],
+     "external_references": [{"source_name": "mitre-attack", "url": "https://attack.mitre.org/software/S9001", "external_id": "S9001"},
+                             {"source_name": "Fixture 2026", "url": "https://example.org/quietbot-report"}]},
+    {"type": "tool", "id": "tool--00000000-0000-4000-8000-0000000000a3", "name": "Sweeper",
+     "description": "[Sweeper](https://attack.mitre.org/software/S9002) is a made-up network scanner.",
+     "x_mitre_aliases": ["Sweeper"], "x_mitre_platforms": ["Linux", "Windows"],
+     "external_references": [{"source_name": "mitre-attack", "url": "https://attack.mitre.org/software/S9002", "external_id": "S9002"}]},
+    {"type": "malware", "id": "malware--00000000-0000-4000-8000-0000000000a4", "name": "Oldthing", "revoked": true,
+     "description": "Revoked: must not be indexed.", "external_references": []},
+    {"type": "malware", "id": "malware--00000000-0000-4000-8000-0000000000a5", "name": "Gonething", "x_mitre_deprecated": true,
+     "description": "Deprecated: must not be indexed.", "external_references": []},
+    {"type": "attack-pattern", "id": "attack-pattern--00000000-0000-4000-8000-0000000000a6", "name": "Not software",
+     "description": "Techniques are not names of malware."}
+  ]
+}

@@ -62,6 +62,10 @@ if ! pidof systemd >/dev/null 2>&1 && [ ! -d /run/systemd/system ]; then
   echo "systemd is not running here. On WSL, enable it first (docs/INSTALLATION.md, part A1)."
 fi
 
+step "5. Weekly refresh of the name sources (MISP Galaxy, MITRE ATT&CK)"
+# public lists that explain malware names Malpedia and the researchers do not; only these downloads leave the server
+manage/fetch_offline_names.py --schedule || echo "not scheduled: see docs/OPERATIONS.md (Offline name sources)"
+
 step "Next steps"
 cat <<EOF
 1. Edit .env (MongoDB address and account, MAPBOX_TOKEN):   nano $project/.env
@@ -73,4 +77,5 @@ cat <<EOF
 4. Open http://localhost:$port in a browser and choose "Let's get started" to create the first administrator.
    It asks for the one-time setup code: cat $(pwd)/data/setup_code
 5. Other screens: deploy/make_tls_cert.sh (HTTPS), ACCESS_MODE in .env, firewall (docs/INSTALLATION.md).
+6. First copy of the name sources now (otherwise on Monday's weekly refresh):  $project/manage/fetch_offline_names.py
 EOF

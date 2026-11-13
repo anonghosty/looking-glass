@@ -33,6 +33,7 @@ import time
 
 from flask import Response, g, jsonify, render_template, request
 
+import advisory_attack
 import finding_rules
 import issue_tags
 import tlp
@@ -71,6 +72,8 @@ def content_sig(adv):
     import hashlib
     body = [adv.get("heading") or "", adv.get("subject") or "", adv.get("tlp") or "", adv.get("description") or "",
             adv.get("actions") or ""]
+    if adv.get("attack_decisions"):            # the advisor's ATT&CK choices change what the report carries (advisory_attack.py)
+        body.append(sorted(adv["attack_decisions"].items()))
     return hashlib.sha256(json.dumps(body, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
@@ -537,9 +540,18 @@ def install(app, ctx):
                               "size": r.get("size", 0)} for r in adv.get("reports") or []],
                "history": [{"at": time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(h["at"])), "by": name_of(h["user"]), "what": h["what"]}
                            for h in adv.get("history") or []]}
+        out["attack"] = attack_of(adv, auto)
         if with_devices:
             out["devices"] = auto["devices"][:MAX_DEVICES_SHOWN]
         return out
+
+    def attack_of(adv, auto):
+        """MITRE ATT&CK techniques of the advisory: the mappings of its reports and Shadowserver's naming of its
+        categories (attack_map.py). A sent advisory shows what was generated and sent (the snapshot kept with its
+        report), never today's mapping or version; otherwise the current ones."""
+        if adv.get("status") == "sent":             # what went out; none for an advisory sent before ATT&CK was added
+            return next((r.get("attack") for r in adv.get("reports") or [] if r.get("attack")), None)
+        return advisory_attack.build(ctx.get("attack"), auto, adv)   # with "pending": suggested ones the advisor decides on
 
     def pdf_input(v, auto, has_report):
         o = ctx["org"].get()
@@ -550,6 +562,7 @@ def install(app, ctx):
                 "categories": v["affected"]["categories"], "labels": v["affected"]["labels"], "devices": auto["devices"], "reports": v["reports"], "impact": v["impact"],
                 "kinds_line": v["kinds_line"], "description": v["description"], "actions": v["recommended_actions"],
                 "recipients": v["recipients"], "has_report": has_report,
+                "attack": advisory_attack.for_recipients(v.get("attack")),     # only reviewed mappings go to recipients
                 "tlp": v["tlp"], "tlp_short": v["tlp_short"], "tlp_text": v["tlp_text"], "tlp_colour": (tlp.of(v["tlp"]) or {}).get("colour", "#FFC000"),
                 "header": f"{v['tlp']} · {ref} · {v['network'] or 'all networks'}"[:80]}
 
@@ -840,7 +853,8 @@ def install(app, ctx):
                                      "recommended_actions", "recipients", "sends", "generated", "history")},
                 "impact": [{"flag": f["flag"], "label": f["label"], "level": f["level"], "text": f["text"], "reports": f["reports"]} for f in v["impact"]],
                 "shadowserver_reports": [{"report": r["key"], "title": r["title"], "section": r["section"], "group": r["group"],
-                                          "url": r["url"], "impact": r["flags"]} for r in v["reports"]]}
+                                          "url": r["url"], "impact": r["flags"]} for r in v["reports"]],
+                "mitre_attack": advisory_attack.snapshot(v.get("attack"))}      # reviewed ones only, with MITRE's texts
 
     @app.route("/advisory/<fid>/preview")
     def advisory_preview(fid):
@@ -882,6 +896,9 @@ def install(app, ctx):
             return jsonify(error=SENT_LOCKED.format(day=sent_day(adv))), 409
         if not adv["description"] or not adv["actions"]:
             return jsonify(error="Write the Description and the Recommended Actions first."), 400
+        att_now = attack_of(adv, auto_of(x, network))
+        if advisory_attack.pending_text(att_now):         # never send unreviewed ATT&CK mappings silently
+            return jsonify(error=advisory_attack.pending_text(att_now)), 409
         out, err = build(x, adv, network)
         if not out:
             return jsonify(error=err), 409
@@ -892,8 +909,10 @@ def install(app, ctx):
         old = adv.get("reports") or []
         n = store.keep_file(adv["ref"], max([r["n"] for r in old] + [0]) + 1, data)
         user = me()[0]
+        att = advisory_attack.snapshot(att_now)           # what this file carries, with MITRE's texts: kept with it
         adv["reports"] = [{"n": n, "name": name, "at": _now(), "by": user, "size": len(data), "pdf": not zbytes,
-                           "content": content_sig(adv)}]
+                           "content": content_sig(adv), "attack": att,
+                           "attack_version": (att or {}).get("version") or (ctx["attack"].version() if ctx.get("attack") else "")}]
         adv["generated"] = int(adv.get("generated") or len(old)) + 1
         adv["history"].append({"at": _now(), "user": user,
                                "what": f"report generated: {name}" + (" (replaces the previous one)" if old else "")})
@@ -934,6 +953,36 @@ def install(app, ctx):
         return Response(data, mimetype="application/pdf" if rec.get("pdf") else "application/zip",
                         headers={"Content-Disposition": f'attachment; filename="{rec["name"]}"', "Cache-Control": "no-store"})
 
+    @app.route("/api/advisory/<fid>/attack", methods=["POST"])
+    def api_advisory_attack(fid):
+        """The advisor confirms a suggested ATT&CK mapping for this advisory, removes one, or restores it
+        (advisory_attack.py). {network, key, action}. Not for a sent advisory."""
+        err = guard_write()
+        if err:
+            return jsonify(error=err), 403
+        x, bad = open_finding(fid, write=True)
+        if bad:
+            return bad
+        b = request.get_json(silent=True) or {}
+        network = network_arg(x, b.get("network"))
+        adv = store.of(x["id"], network) if network is not None else None
+        if not adv:
+            return jsonify(error="Save the advisory first."), 404
+        if adv["status"] == "sent":
+            return jsonify(error=SENT_LOCKED.format(day=sent_day(adv))), 409
+        e = advisory_attack.decide(adv, attack_of(adv, auto_of(x, network)), b.get("key"), b.get("action"))
+        if e:
+            return jsonify(error=e), 400
+        user = me()[0]
+        adv["updated"] = _now()
+        adv["history"].append({"at": _now(), "user": user, "what": f"ATT&CK {b['action']}: {b['key'].replace('|', ' in ')}"})
+        try:
+            store.save(adv)
+        except Changed:
+            return jsonify(error=CHANGED), 409
+        ctx["audit"].add("advisory_attack_" + b["action"], user=user, target=adv["ref"] or f"finding #{x['id']}", detail=b["key"][:120])
+        return jsonify(ok=True, advisory=view(adv, x, with_devices=True))
+
     @app.route("/api/advisory/<fid>/send", methods=["POST"])
     def api_advisory_send(fid):
         """Mark the organisation's advisory as sent to its recipients (the mail itself goes out as the team sends
@@ -962,6 +1011,11 @@ def install(app, ctx):
             return jsonify(error="Mark the advisory as drafted first (on its page): then it is marked as sent here."), 400
         if adv["status"] != "sent" and report_stale(adv):
             return jsonify(error=STALE), 409
+        if adv["status"] != "sent":                       # the file must carry no unreviewed ATT&CK mapping
+            sent_att = (adv["reports"][-1] or {}).get("attack") or {}
+            if any(t.get("status") not in advisory_attack.REVIEWED for t in sent_att.get("techniques") or []):
+                return jsonify(error="The report carries ATT&CK mappings that are not reviewed: decide on them on the advisory page "
+                                     "and generate the report again."), 409
         user, role = me()
         adv["recipients"] = list(dict.fromkeys(adv["recipients"] + rec))
         sent_file = adv["reports"][-1]                     # exactly which file went to them
@@ -1017,6 +1071,8 @@ def install(app, ctx):
             return jsonify(error="It was already sent."), 409
         if report_stale(adv):
             return jsonify(error=STALE), 409
+        if advisory_attack.pending_text(attack_of(adv, auto_of(x, network))):
+            return jsonify(error=advisory_attack.pending_text(attack_of(adv, auto_of(x, network)))), 409
         user = me()[0]
         adv["status"], adv["updated"] = "drafted", _now()
         adv["history"].append({"at": _now(), "user": user, "what": f"marked as drafted (report {adv['reports'][-1]['name']})"})

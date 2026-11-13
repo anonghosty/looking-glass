@@ -34,6 +34,96 @@
     return d;
   }
 
+  // ---------------- MITRE ATT&CK in the advisory (advisory_attack.py): per technique what it is (MITRE), why it is here
+  // (Looking Glass), how to defend (MITRE's mitigations); MITRE's full text one click away. Suggested mappings are
+  // flagged: the advisor confirms each for this advisory or removes it; only reviewed ones go to recipients (the server
+  // refuses to generate the report otherwise).
+  const httpUrl = (u) => { try { return ["http:", "https:"].includes(new URL(u).protocol); } catch { return false; } };
+  const ext = (href, text, cls) => { if (!httpUrl(href)) return el("span", cls, text); const a = el("a", cls, text); a.href = href; a.target = "_blank"; a.rel = "noopener noreferrer"; return a; };
+  function techBox(t, a, kind) {
+    // the organisation, switch counter and advisory this box was drawn for: Confirm/Remove/Undo send these, never
+    // whatever is picked when the answer comes back (the same rule as the form's buttons, check_workflow_fixes 5)
+    const tnet = NET, tseq = SEQ, there = D;
+    const box = el("article", `av-tech av-tech-${kind}`);
+    const head = el("div", "av-tech-head");
+    const cert = (t.certainty_label || "").split(" (")[0] || t.certainty || "";
+    head.append(ext(t.url, `${t.id} ${t.name}`, "av-tech-id"), el("span", "av-tech-tac", (t.tactics || []).join(", ")),
+      el("span", `av-flag ${t.certainty === "observed" ? "high" : "medium"}`, cert));
+    if (kind === "pending") head.append(el("span", "av-flag critical", "Suggested, not reviewed"));
+    if (kind === "removed") head.append(el("span", "av-flag low", "Removed from this advisory"));
+    if (t.status === "confirmed for this advisory") head.append(el("span", "av-flag low", "Confirmed for this advisory"));
+    box.append(head, el("p", "av-tech-role", t.role || ""));
+    if (t.desc) {
+      const p = el("p", "av-tech-line"); p.append(el("b", null, "What it is (MITRE): "), document.createTextNode(t.desc));
+      const more = el("button", "pill-btn av-tech-more", "MITRE's full description"); more.type = "button"; more.setAttribute("aria-expanded", "false");
+      const full = el("div", "av-tech-full"); full.hidden = true;
+      more.addEventListener("click", async () => {
+        const open = full.hidden; full.hidden = !open; more.setAttribute("aria-expanded", String(open));
+        if (open && !full.dataset.loaded) {
+          full.replaceChildren(el("div", "st-loading", "Opening MITRE's description…"));
+          try {
+            const r = await fetch(`/api/attack/technique/${encodeURIComponent(t.id)}`, { cache: "no-store", credentials: "same-origin" });
+            const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+            full.replaceChildren(el("p", null, j.description), el("small", "muted", `MITRE ATT&CK v${j.version}. ${j.notice}`)); full.dataset.loaded = "1";
+          } catch (e) { full.replaceChildren(el("p", "muted", `Could not open it: ${e.message}`)); }
+        }
+      });
+      box.append(p, more, full);
+    }
+    if (t.why_here) { const p = el("p", "av-tech-line"); p.append(el("b", null, "Why it is in this advisory (Looking Glass): "), document.createTextNode(t.why_here)); box.append(p); }
+    if (t.defend?.length) {
+      box.append(el("p", "av-tech-line av-tech-dh", "How to defend (MITRE mitigations):"));
+      const ul = el("ul", "av-tech-def");
+      for (const m of t.defend) { const li = el("li"); li.append(ext(m.url, `${m.id} ${m.name}`, "av-tech-mid")); if (m.text) li.append(document.createTextNode(`: ${m.text}`)); ul.append(li); }
+      box.append(ul);
+    }
+    if (!a.locked && kind !== "out") {
+      const acts = el("div", "av-tech-acts");
+      const act = (label, action, primary) => {
+        const b = el("button", primary ? "pill-btn primary" : "pill-btn", label); b.type = "button";
+        b.addEventListener("click", async () => {
+          if (BUSY) return; BUSY = true; b.disabled = true; window.LGLoader?.busy("Saving");
+          try { const d = await post(`/api/advisory/${fid}/attack`, { network: tnet, key: t.key, action }); if (tseq !== SEQ) return; there.advisory = d.advisory; draw(); }
+          catch (e) { b.disabled = false; acts.append(el("span", "av-err", e.message)); }
+          finally { BUSY = false; window.LGLoader?.ready(); }
+        });
+        return b;
+      };
+      if (kind === "pending") acts.append(act("Confirm for this advisory", "confirm", true), act("Remove", "remove"));
+      if (kind === "removed") acts.append(act("Restore", "restore"));
+      box.append(acts);
+    } else if (!a.locked && t.status === "confirmed for this advisory") {
+      const acts = el("div", "av-tech-acts"), b = el("button", "pill-btn", "Undo"); b.type = "button";
+      b.addEventListener("click", async () => {
+        if (BUSY) return; BUSY = true; b.disabled = true;
+        try { const d = await post(`/api/advisory/${fid}/attack`, { network: tnet, key: t.key, action: "restore" }); if (tseq !== SEQ) return; there.advisory = d.advisory; draw(); }
+        catch (e) { b.disabled = false; acts.append(el("span", "av-err", e.message)); } finally { BUSY = false; }
+      });
+      acts.append(b); box.append(acts);
+    }
+    return box;
+  }
+  function attackBlock(a) {
+    const at = el("div", "av-impact av-attack"), A = a.attack;
+    at.append(el("b", null, `MITRE ATT&CK techniques (ATT&CK v${A.version || "?"}${a.locked ? ", as sent" : ""})`));
+    at.append(el("p", "av-sub", "\"What it is\" and \"How to defend\" are MITRE's words; \"Why it is in this advisory\" is Looking Glass's. Only reviewed mappings go to recipients."));
+    if (A.pending?.length) {
+      const w = el("div", "av-tech-warn");
+      w.append(el("b", null, `${A.pending.length} suggested mapping${A.pending.length === 1 ? "" : "s"} to decide on`),
+        el("span", null, " Researchers have not reviewed these yet. Confirm each for this advisory, or remove it: the report cannot be generated until you have."));
+      at.append(w);
+      for (const t of A.pending) at.append(techBox(t, a, "pending"));
+    }
+    for (const t of A.techniques || []) at.append(techBox(t, a, "out"));
+    if (A.removed?.length) {
+      const det = el("details", "av-tech-removedlist"); det.append(el("summary", null, `Removed from this advisory (${A.removed.length})`));
+      for (const t of A.removed) det.append(techBox(t, a, "removed"));
+      at.append(det);
+    }
+    at.append(el("small", "muted", "© The MITRE Corporation; ATT&CK is reproduced and distributed with its permission."));
+    return at;
+  }
+
   // ---------------- the light markup: **bold**, "- " bullets, "1. " numbers (kept as text, drawn the same in the PDF)
   function toolbar(ta, preview) {
     const bar = el("div", "av-tools");
@@ -169,6 +259,7 @@
       });
       dc.append(im);
     }
+    if (a.attack && (a.attack.techniques?.length || a.attack.pending?.length || a.attack.removed?.length)) dc.append(attackBlock(a));
     main.append(dc);
 
     // step 3: the template

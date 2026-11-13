@@ -65,7 +65,7 @@ for text in ("nginx/1.18.0", "version 1.2.3.4.5", "10:22:31", "ratio 3:2:1", "99
     ok(f"{text!r} has no address", not ip_find.spans(text), str(ip_find.spans(text)))
 print("Four-part versions the text names as versions: kept by every masker (review follow-up)")
 for text in ("version 2.0.1.3", "Build: 1.2.3.4", "firmware=10.4.0.12", "Server: Apache/2.0.1.3 (Unix)",
-             "RouterOS/6.49.10.1", "rev. 3.1.0.2"):
+             "RouterOS/6.49.10.1", "rev. 3.1.0.2", "nginx/1.18.0.1", "(OpenSSH/8.9.1.1)"):
     ok(f"{text!r} has no address", not ip_find.spans(text), str(ip_find.spans(text)))
     ok(f"…and stays for researchers: {hostmask.mask(text)!r}", hostmask.mask(text) == text)
     ok(f"…and for masked viewers: {host_label.label_text(text)!r}", "Host " not in host_label.label_text(text))
@@ -78,7 +78,10 @@ for text, ip in (("/api/41.66.1.2", "41.66.1.2"), ("version41.66.1.2", "41.66.1.
 print("…and after a word and a slash in a value, with a port, or too large to be a version (review 2026-11-13)")
 for text, ip in (("url=word/203.0.113.7", "203.0.113.7"), ("q=path/203.0.113.7:80", "203.0.113.7"),
                  ("u=x?y=word/203.0.113.7", "203.0.113.7"), ("word/203.0.113.7", "203.0.113.7"),
-                 ("proxy/41.66.1.2 up", "41.66.1.2"), ("word/203.0.113.7:8080", "203.0.113.7"), ("a@b/41.66.1.2", "41.66.1.2")):
+                 ("proxy/41.66.1.2 up", "41.66.1.2"), ("word/203.0.113.7:8080", "203.0.113.7"), ("a@b/41.66.1.2", "41.66.1.2"),
+                 # re-check 2026-11-13: low first numbers are addresses too (Amazon 3.x, private 10.x, Google 8.8.8.8)
+                 ("Location: proxy/3.120.4.5", "3.120.4.5"), ("gw/10.0.0.1", "10.0.0.1"), ("relay/8.8.8.8", "8.8.8.8"),
+                 ("via cdn/13.107.4.52", "13.107.4.52")):
     found = [s[2] for s in ip_find.spans(text)]
     ok(f"found in {text!r}", found == [ip], str(found))
     ok(f"…masked for researchers: {hostmask.mask(text)!r}", ip not in hostmask.mask(text))

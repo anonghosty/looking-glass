@@ -99,3 +99,25 @@
 .av-state.stale { border: 1px solid rgba(245, 181, 74, .6); background: rgba(245, 181, 74, .08); color: #f1d9a8; margin-top: 8px; }
 .av-state a { color: #9cb7ff; }
 .av-net.drafted { border-color: rgba(124, 156, 255, .6); }
+
+/* MITRE ATT&CK in the advisory (advisory.js attackBlock, advisory_attack.py): one box per technique */
+.av-attack { gap: 10px; }
+.av-tech { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: rgba(255, 255, 255, .02); min-width: 0; }
+.av-tech-pending { border-color: rgba(239, 93, 108, .55); background: rgba(239, 93, 108, .05); }
+.av-tech-removed { opacity: .75; }
+.av-tech-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.av-tech-id { font-weight: 600; font-size: 13px; color: #cfdcff; overflow-wrap: anywhere; }
+.av-tech-tac { font-size: 11.5px; color: var(--muted); }
+.av-tech-role { margin: 0; font-size: 12.5px; color: var(--text-2); }
+.av-tech-line { margin: 2px 0 0; font-size: 12.8px; line-height: 1.5; overflow-wrap: anywhere; }
+.av-tech-line b { color: var(--text); font-weight: 600; }
+.av-tech-dh { font-weight: 600; }
+.av-tech-def { margin: 0 0 0 18px; padding: 0; font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
+.av-tech-mid { font-weight: 600; }
+.av-tech-more { justify-self: start; font-size: 11.5px; }
+.av-tech-full { padding: 8px 10px; border-left: 2px solid rgba(91, 141, 239, .5); font-size: 12.5px; line-height: 1.55; color: var(--text-2); }
+.av-tech-full p { margin: 0 0 4px; white-space: pre-line; }
+.av-tech-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; align-items: center; }
+.av-tech-warn { padding: 8px 10px; border-radius: 9px; border: 1px solid rgba(239, 93, 108, .55); background: rgba(239, 93, 108, .08); font-size: 12.8px; }
+.av-tech-removedlist > summary { cursor: pointer; font-size: 12.5px; color: var(--text-2); }
+.av-err { color: #ff9a9e; font-size: 12px; }

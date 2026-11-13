@@ -385,8 +385,12 @@
     } else if (x.found && x.kind === "actor") head.append(badge("Threat actor · Malpedia", "warn"));
     else if (x.found) head.append(badge("Malware family · Malpedia", "info"));
     else if (x.curated) head.append(badge("Looking Glass definition", "ok"));
-    else head.append(badge(x.title || "Not in Malpedia", ""));
-    c.append(head);
+    else if (x.reference) head.append(badge(x.source_label || "Reference", "info"));   // MISP Galaxy / MITRE ATT&CK (offline copies)
+    else head.append(badge(x.pending ? "Not checked yet" : "No source knows this name", ""));
+    // the name as reported, in bold, then the source's badge: the same header on every card, so cards never run together
+    const top = el("div", "mg-ex-top");
+    top.append(el("b", "mg-ex-name", name || x.name || x.title || ""), head);
+    c.append(top);
     const title = x.kind === "cve" ? (x.kev?.name || "") : (x.name || x.title || "");
     if (title && title !== name) c.append(el("h3", null, title));
     if (row) c.append(el("p", "mg-ex-impact", state.plat === "comms" ? `${fmt(row.hosts)} devices · ${fmt(row.count)} events in this selection` : `${fmt(row.hosts)} hosts · ${fmt(row.count)} records in this selection`));
@@ -415,6 +419,45 @@
     }
     const refs = [x.url, x.kev_url, ...(x.references || []), ...(x.curated_references || [])].filter(Boolean);
     if (refs.length) { const ul = el("ul", "mg-ex-refs"); for (const u of [...new Set(refs)].slice(0, 8)) { const li = el("li"); li.append(link(u)); ul.append(li); } c.append(el("h4", null, "References"), ul); }
+    if (x.attack?.techniques?.length) {             // MITRE ATT&CK techniques by tactic (attack_map.py)
+      const at = el("div", "mg-ex-attack");
+      at.append(el("h4", null, `MITRE ATT&CK techniques by tactic (v${x.attack.version || "?"})`));
+      const by = {};
+      for (const t of x.attack.techniques) {
+        const ta = (t.tactics || ["Other"])[0]; (by[ta] ||= []);
+        if (!by[ta].some((y) => y.id === t.id)) by[ta].push(t);
+      }
+      const dl = el("dl", "mg-ex-facts");
+      for (const [ta, ts] of Object.entries(by)) {
+        const dd = el("dd");
+        ts.forEach((t, i) => {
+          if (i) dd.append(document.createTextNode("; "));
+          const a = link(t.url); a.textContent = t.id;   // link() keeps only http(s); the text is the technique ID
+          const tip = [t.desc && `What it is (MITRE): ${t.desc}`, t.defend?.length && `How to defend: ${t.defend.map((m) => `${m.id} ${m.name}`).join("; ")}`].filter(Boolean).join("\n");
+          if (tip) a.title = tip;
+          dd.append(a, document.createTextNode(` ${t.name} (${t.kind || (t.certainty_label || "").split(" (")[0]}${t.status === "suggested" ? ", suggested" : ""})`));
+        });
+        dl.append(el("dt", null, ta), dd);
+      }
+      at.append(dl);
+      if (x.attack.licence) at.append(el("p", "mg-ex-desc mg-ex-src", `Source: ${x.attack.licence}`));
+      c.append(at);
+    }
+    if (x.kind !== "cve") {                         // the source and its licence travel with its text (name_sources.py)
+      const src = x.curated ? `Looking Glass definition${x.by ? `, written by ${x.by}` : ""}${x.updated ? ` on ${x.updated}` : ""}.` : x.licence || "";
+      if (src) c.append(el("p", "mg-ex-desc mg-ex-src", `Source: ${src}`));
+      for (const a of x.also || []) {               // the other sources that know the name, folded
+        const det = el("details", "mg-ex-also"), sum = el("summary", null, `Also described by ${a.source_label || "another source"}${a.name ? `: ${a.name}` : ""}`);
+        det.append(sum);
+        if (a.description) det.append(el("p", "mg-ex-desc", a.description));
+        if (a.alt_names?.length) det.append(el("p", "mg-ex-desc", `Also known as: ${a.alt_names.join(", ")}`));
+        const ar = [a.url, ...(a.references || [])].filter(Boolean);
+        if (ar.length) { const ul = el("ul", "mg-ex-refs"); for (const u of [...new Set(ar)].slice(0, 6)) { const li = el("li"); li.append(link(u)); ul.append(li); } det.append(ul); }
+        if (a.licence) det.append(el("p", "mg-ex-desc mg-ex-src", `Source: ${a.licence}`));
+        else if (a.by) det.append(el("p", "mg-ex-desc mg-ex-src", `Written by ${a.by}.`));
+        c.append(det);
+      }
+    }
     return c;
   }
   function closeDrawer() { $("mgDrawer").classList.remove("open"); $("mgDrawer").setAttribute("aria-hidden", "true"); $("mgScrim").hidden = true; }

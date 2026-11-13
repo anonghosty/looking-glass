@@ -160,6 +160,10 @@ body.is-loading .mg-grid, body.is-loading .mg-kpis { opacity: .55; transition: o
 .mg-close { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--mg-card-b); background: rgba(255, 255, 255, .04); color: #fff; font-size: 20px; cursor: pointer; }
 .mg-close:hover { background: rgba(255, 255, 255, .1); }
 .mg-drawer-body { padding: 18px 24px 28px; overflow-y: auto; }
+.mg-ex-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-bottom: 6px; margin-bottom: 4px;
+  border-bottom: 1px solid rgba(148, 163, 184, .3); }
+.mg-ex-top .mg-ex-name { font-size: 15px; overflow-wrap: anywhere; }
+.mg-ex-attack dd a, .mg-ex-also a { overflow-wrap: anywhere; }
 .mg-explain h3 { margin: 12px 0 6px; font-size: 17px; } .mg-explain h4 { margin: 18px 0 6px; font-size: 12.5px; color: var(--mg-dim); text-transform: uppercase; letter-spacing: .06em; }
 .mg-ex-badges { display: flex; flex-wrap: wrap; gap: 6px; }
 .mg-ex-impact { margin: 10px 0; padding: 9px 12px; border-radius: 10px; background: rgba(91, 141, 239, .1); color: #c9d6ff; font-size: 13px; font-weight: 600; }

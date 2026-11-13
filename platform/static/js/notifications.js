@@ -8,7 +8,10 @@
   const css = document.createElement("link"); css.rel = "stylesheet"; css.href = "/static/css/notifications.css"; document.head.append(css);
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
   const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content || "";
-  const safe = (u) => typeof u === "string" && u.startsWith("/") && !u.startsWith("//") && !u.includes("\\");
+  // a path on this site only: no control characters or spaces at all, since browsers drop tabs and line breaks from a
+  // link, so "/\t/evil.example" would become "//evil.example", another site (re-check 2026-11-13)
+  const safe = (u) => typeof u === "string" && u.length < 500 && !/[\u0000- \u007f\\]/.test(u)
+    && u.startsWith("/") && !u.startsWith("//");
   const bells = [];
   let data = { count: 0, waiting: 0, items: [] }, panel = null, openFor = null;
 

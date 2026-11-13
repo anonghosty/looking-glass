@@ -42,7 +42,7 @@
   const sortBy = { inf: { key: "", dir: 1 }, iss: { key: "", dir: 1 } };
   const statusRank = (x, sec) => sec === "iss"
     ? (x.exploited ? 0 : 1) * 1000 - (x.cvss || 0) * 10 + (x.cve ? 0 : 500) + (x.defined ? 0 : -200)
-    : x.defined ? 2 : x.family_found ? 1 : x.unchecked ? 3 : 0;
+    : x.defined ? 2 : (x.family_found || x.sources?.length) ? 1 : x.unchecked ? 3 : 0;
   function sortRows(rows, sec, section) {
     const s = sortBy[sec]; if (!s.key) return rows;
     const L = window.LGIntel;
@@ -94,18 +94,52 @@
     $("issN1").textContent = fmt(iss.filter((x) => !x.cve && !x.defined).length); $("issN2").textContent = fmt(iss.filter((x) => x.exploited).length);
     $("issN3").textContent = fmt(iss.filter((x) => x.cve).length); $("issN4").textContent = fmt(iss.filter((x) => x.defined).length);
     const c = data.check || {};
-    flash($("infStatus"), !data.malpedia ? "Malpedia is not set up (MALPEDIA_TOKEN in .env): the look-up uses your definitions; you can still write them."
+    flash($("infStatus"), !data.malpedia ? "Malpedia is not set up (MALPEDIA_TOKEN in .env): the look-up uses your definitions, MISP Galaxy and MITRE ATT&CK."
       : c.running ? `Background check running: ${c.done} done, ${c.left} to go…`
       : data.unchecked.length ? `${data.unchecked.length} new name${data.unchecked.length === 1 ? "" : "s"} from the reports not checked yet.` : "Every name in the loaded reports has been checked.",
       data.unchecked.length ? "warn" : "ok");
     renderInf(); renderIss();
+    sourcesPanel();
+  }
+
+  // ---------------- the local copies of MISP Galaxy and MITRE ATT&CK: last refresh, entries; "Refresh sources" for admins
+  async function sourcesPanel(note) {
+    const box = $("infSources"); if (!box) return;
+    let s;
+    try { const r = await fetch("/api/name-sources", { cache: "no-store", headers: hdr(false) }); if (!r.ok) { box.hidden = true; return; } s = await r.json(); }
+    catch { box.hidden = true; return; }
+    box.replaceChildren();
+    const line = el("p", "dz-sources-line");
+    line.append(el("b", null, "Offline sources: "));
+    line.append(document.createTextNode(s.sources.map((x) => x.installed
+      ? `${x.label} ${fmt(x.entries)} entries${x.versions?.enterprise ? ` (ATT&CK ${x.versions.enterprise})` : ""}, downloaded ${String(x.fetched).slice(0, 10)}`
+      : `${x.label} not downloaded yet`).join(" · ")));
+    box.append(line);
+    if (s.last?.at) box.append(el("p", "dz-sources-line muted", `Last refresh ${String(s.last.at).replace("T", " ").slice(0, 16)} UTC by ${s.last.by || "?"}: ${s.last.ok ? "done" : "failed, the old copies are kept"}. ${s.last.message || ""}`));
+    if (s.running) box.append(el("p", "dz-sources-line", "A refresh is running…"));
+    if (note) box.append(el("p", `dz-sources-line ${note.kind || ""}`, note.text));
+    if (s.can_refresh) {
+      const b = el("button", "lg-btn sm", "Refresh sources"); b.type = "button"; b.disabled = s.running;
+      b.title = "Download MISP Galaxy and MITRE ATT&CK again now (they are also refreshed every week). Only these public files are downloaded; nothing about your constituency is sent.";
+      b.addEventListener("click", async () => {
+        busy(b, true, "Starting…");
+        try {
+          const r = await fetch("/api/name-sources/refresh", { method: "POST", headers: hdr(true), body: "{}" });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok) { sourcesPanel({ text: j.error || `Refused (${r.status})`, kind: "bad" }); return; }
+          sourcesPanel({ text: "Refresh started: it takes about a minute. Reload this page to see the new counts.", kind: "ok" });
+        } catch (e) { sourcesPanel({ text: `Not started: ${e.message}`, kind: "bad" }); }
+      });
+      box.append(b);
+    }
+    box.hidden = false;
   }
 
   // ---------------- 1. infections & categories
   function infRows() {
     const q = $("infSearch").value.trim().toLowerCase();
     const rows = infTab === "all" ? data.all || [] : data[infTab] || [];
-    return rows.filter((x) => !q || [x.name, x.title, x.family_found, (x.reports || []).join(" "), x.description].join(" ").toLowerCase().includes(q));
+    return rows.filter((x) => !q || [x.name, x.title, x.family_found, (x.reports || []).join(" "), x.description, (x.sources || []).join(" ")].join(" ").toLowerCase().includes(q));
   }
   function renderInf() {
     for (const b of document.querySelectorAll("[data-inf]")) b.setAttribute("aria-selected", String(b.dataset.inf === infTab));
@@ -113,22 +147,26 @@
     markHeads("infTable", "inf");
     const rows = sortRows(infRows(), "inf", "infections");
     if (!rows.length) {
-      const msg = $("infSearch").value.trim() ? "Nothing matches the search." : infTab === "unresolved" ? "Nothing to do: every name Malpedia does not know has a definition."
-        : infTab === "unchecked" ? "No new names waiting: they are checked with Malpedia every 30 minutes, or now with Look up with Malpedia." : "Nothing here yet.";
+      const msg = $("infSearch").value.trim() ? "Nothing matches the search." : infTab === "unresolved" ? "Nothing to do: every name that no source knows has a definition."
+        : infTab === "unchecked" ? "No new names waiting: they are checked every 30 minutes, or now with Look up names." : "Nothing here yet.";
       const tr = el("tr", "dz-empty"), td = el("td", null, msg); td.colSpan = 6; tr.append(td); tb.append(tr); return;
     }
     for (const x of rows.slice(0, 400)) {
       const tr = el("tr");
       const status = el("td");
+      const srcs = x.sources || [];                  // the sources that know the name (name_sources.py)
       if (x.defined) status.append(pill(x.malpedia ? "Malpedia" : "Defined", "ok"));
       else if (x.family_found) status.append(pill(x.family_found.startsWith("actor:") ? "Threat actor" : "Malpedia", "info"));
+      else if (srcs.length) status.append(pill(srcs[0].split(" · ")[0], "info"));
       else if (infTab === "unchecked" || x.unchecked) status.append(pill("Not checked yet", ""));
-      else status.append(pill("Needs a definition", "warn"));
+      else status.append(pill("No source knows", "warn"));
       const def = el("td", "dz-def");
-      if (x.defined) def.append(el("b", null, x.title || x.malpedia || "Defined"), el("small", null, `${x.malpedia ? `Malpedia ${x.malpedia} · ` : ""}${x.references.length} reference${x.references.length === 1 ? "" : "s"}${x.by ? ` · ${x.by}` : ""}${x.updated ? `, ${x.updated}` : ""}`));
-      else if (x.family_found) def.append(el("b", "mono", x.family_found.replace("actor:", "")), el("small", null, "found in Malpedia"));
+      const known = srcs.length ? `Known to: ${srcs.join(", ")}` : "";
+      if (x.defined) def.append(el("b", null, x.title || x.malpedia || "Defined"), el("small", null, `${x.malpedia ? `Malpedia ${x.malpedia} · ` : ""}${x.references.length} reference${x.references.length === 1 ? "" : "s"}${x.by ? ` · ${x.by}` : ""}${x.updated ? `, ${x.updated}` : ""}${known ? ` · also ${known.slice(10)}` : ""}`));
+      else if (x.family_found) def.append(el("b", "mono", x.family_found.replace("actor:", "")), el("small", null, known || "found in Malpedia"));
+      else if (srcs.length) def.append(el("b", null, srcs.join(", ")), el("small", null, "describe this name (open Define to see what they say)"));
       else def.append(el("span", "muted", x.title ? `${x.title} (no references yet)` : x.kinds?.length ? `Seen as: ${x.kinds.join(", ")}` : "—"));
-      const act = el("td", "dz-act"), b = el("button", `lg-btn sm${x.defined || x.family_found ? "" : " primary"}`, x.defined ? "Edit" : "Define"); b.type = "button";
+      const act = el("td", "dz-act"), b = el("button", `lg-btn sm${x.defined || x.family_found || srcs.length ? "" : " primary"}`, x.defined ? "Edit" : "Define"); b.type = "button";
       b.addEventListener("click", () => openEditor(x.name, "infections"));
       act.append(intelBtn(x.name, "infections"), notesBtn(x.name, "infections"), b);
       // seen in the replay day; otherwise where and when it was last seen (seen_index.py); otherwise not recently
@@ -158,8 +196,8 @@
     try {
       await window.LGLookup.run({ kind: "malpedia", values: names, title: "Looking up infections and categories",
         intro: `${names.length} name${names.length === 1 ? "" : "s"}${recheck ? " (every name in the reports, to refresh them)" : " not known yet"}. ` +
-          (data.malpedia ? "Malpedia's answers are kept a week, so known names come back at once; new names are asked at most 30 a minute." :
-            "Malpedia is not set up: the Looking Glass definitions answer.") });
+          (data.malpedia ? "Malpedia's answers are kept a week, so known names come back at once; new names are asked at most 30 a minute. " :
+            "Malpedia is not set up: the Looking Glass definitions answer first. ") + "MISP Galaxy and MITRE ATT&CK answer from the copies on this server." });
       flash($("infStatus"), "Look-up finished: the lists below are up to date.", "ok");
       await load();
     } catch (e) { flash($("infStatus"), `Look-up failed: ${e.message}`, "bad"); }
@@ -251,6 +289,7 @@
     $("kbDescLbl").textContent = cve ? "Note for your organisation (optional)" : "Description: what it is";
     $("kbName").placeholder = isIssue ? "Exposed admin panel" : "android.midnight-mimosa";
     $("kbForm").reset(); $("kbRefs").replaceChildren(); $("kbMsg").textContent = ""; $("kbMsg").className = "id-msg"; $("kbMpHits").replaceChildren(); $("kbBy").textContent = ""; $("kbSeen").textContent = "";
+    $("kbOthers").replaceChildren(); $("kbOthers").hidden = true;
     $("kbName").readOnly = !!name;
     let e = { references: [] };
     if (name) {
@@ -274,7 +313,43 @@
     $("kbType").value = e.type || ""; $("kbDesc").value = e.description || "";
     for (const u of (e.references.length ? e.references : [""])) refRow(u);
     if (e.by || e.updated) $("kbBy").textContent = `Last changed${e.by ? ` by ${e.by}` : ""}${e.updated ? ` on ${e.updated}` : ""}`;
-    show(true);                                // the notes have their own window now (Notes button, kb-notes.js)
+    othersPanel(e.sources || []);
+    show(true);                               // the notes have their own window now (Notes button, kb-notes.js)
+  }
+  // what the other sources say about the name, shown alongside the editor: their text, other names, links and licence.
+  // Their links can be added to the references with one click; nothing is copied into the definition by itself.
+  const httpUrl = (u) => { try { return ["http:", "https:"].includes(new URL(u).protocol); } catch { return false; } };
+  function othersPanel(list) {
+    const box = $("kbOthers"); box.replaceChildren();
+    if (!list.length) return;
+    box.append(el("p", "st-hint", `${list.length === 1 ? "Another source describes" : `${list.length} other sources describe`} this name. Your definition is shown first; these stay below it as "Also described by".`));
+    for (const a of list) {
+      const det = el("details", "kb-other"), sum = el("summary");
+      sum.append(el("span", "dz-pill info", a.source_label || "Source"), document.createTextNode(` ${a.name || a.title || ""}${a.id ? ` (${a.id})` : a.family ? ` (${a.family})` : ""}`));
+      det.append(sum);
+      if (a.matched_by) det.append(el("p", "st-hint", `Matched by ${a.matched_by}.`));
+      if (a.description) det.append(el("p", "kb-other-desc", a.description));
+      if (a.alt_names?.length) det.append(el("p", "st-hint", `Also known as: ${a.alt_names.join(", ")}`));
+      const links = [a.url, ...(a.references || [])].filter((u, i, arr) => u && httpUrl(u) && arr.indexOf(u) === i).slice(0, 8);
+      if (links.length) {
+        const ul = el("ul", "kb-other-refs");
+        for (const u of links) {
+          const li = el("li"), ln = el("a", null, u.replace(/^https?:\/\//, "").slice(0, 80)); ln.href = u; ln.target = "_blank"; ln.rel = "noopener noreferrer";
+          const add = el("button", "lg-btn sm ghost", "Add as reference"); add.type = "button";
+          add.addEventListener("click", () => {
+            const have = [...$("kbRefs").querySelectorAll("input")];
+            if (have.some((i) => i.value.trim() === u)) return;
+            const empty = have.find((i) => !i.value.trim()); if (empty) empty.value = u; else refRow(u);
+            add.disabled = true; add.textContent = "Added";
+          });
+          li.append(ln, document.createTextNode(" "), add); ul.append(li);
+        }
+        det.append(ul);
+      }
+      if (a.licence) det.append(el("p", "st-hint", `Source: ${a.licence}`));
+      box.append(det);
+    }
+    box.hidden = false;
   }
   $("infAdd").addEventListener("click", () => openEditor("", "infections"));
   $("issAdd").addEventListener("click", () => openEditor("", "issues"));

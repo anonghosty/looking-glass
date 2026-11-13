@@ -63,7 +63,7 @@ Security is described in [../docs/SECURITY.md](SECURITY.md). Steps marked
 | MongoDB | 6 or newer, with authentication on, filled by the database pipeline |
 | Shadowserver | your CSIRT's free Shadowserver reports (https://www.shadowserver.org/what-we-do/network-reporting/) delivered to a mailbox, or fetched with your Shadowserver API key |
 | Mapbox | a free account and a public access token (`pk.…`) for the map: https://account.mapbox.com |
-| Malpedia (optional) | an API token, for the "Look up on Malpedia" buttons |
+| Malpedia (optional) | an API token, so Malpedia joins the sources behind the "Look up" buttons |
 | Memory / disk | about 2 GB RAM for the platform. Disk: the download (`git clone`) is about 100 MB: the code itself is about 9 MB, the rest is screenshots, film posters and the history. The two Python environments the installer makes add about 120 MB. MongoDB needs space for your reports |
 
 ## Who can reach Looking Glass: `ACCESS_MODE`

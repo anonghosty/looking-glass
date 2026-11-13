@@ -96,7 +96,7 @@ that always says "verified". So do not take it on trust:
   PowerShell) with the one published here, outside the server:
 
   ```text
-  08c2a0f8770ea757e2b64b03b6ac7d661b5a6ccd5de0dfc2a4d3c9fda339395a
+  6e169444581c5e056d2cf47512c34cf63f0595d00dd3aadceda3d26551aa16b3
   ```
 
   This is the verifier of the current release on GitHub. An installation of an older release ships the verifier of

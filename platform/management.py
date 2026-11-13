@@ -993,7 +993,8 @@ def register(app, ctx):
                 "intro": "Aggregated figures for the constituency, as filtered in the management portal. No individual addresses are included.",
                 "summary_points": d["findings"], "kpis": kpis, "hours": d["hours"], "peak_hour": d["peak_hour"],
                 "enrichment": enr, "enrichment_stats": stats, "enrichment_title": et,
-                "enrichment_note": "Infections are explained from Malpedia (malware families and threat actors) and the Looking Glass definitions; "
+                "enrichment_note": "Infections are explained from the Looking Glass definitions, Malpedia (malware families and threat actors), "
+                                   "MISP Galaxy and MITRE ATT&CK, each card naming its source; "
                                    "vulnerabilities from CISA's Known Exploited Vulnerabilities catalog, EPSS, CVE.org and NVD.",
                 "breakdowns": [b for b in bds if b[2]], "charts": [c for c in charts if c[1]], "glossary": [],
                 "sources": ctx["sources_text"]}

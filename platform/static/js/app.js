@@ -5,8 +5,9 @@
   const CFG = window.TM_CONFIG || {};
   // Malpedia look-ups; without a Malpedia token the Looking Glass definitions (written by researchers) answer instead
   const MP_ON = !!(CFG.malpedia || CFG.enrich);
-  const MP_NAME = CFG.malpedia ? "Malpedia" : "definitions";
-  const MP_SRC = CFG.malpedia ? "on Malpedia" : "in the Looking Glass definitions";
+  const MP_SRC = "";                   // look-ups ask every source now (name_sources.py): the buttons just say "Look up"
+  const SOURCES_INTRO = "Each name is looked up once: the researchers' definitions, " + (CFG.malpedia ? "Malpedia (answers kept a week), " : "")
+    + "MISP Galaxy and MITRE ATT&CK (copies kept on this server). Only the names are looked up.";
   const mq = (q) => window.matchMedia(q).matches;
   // local times beside UTC (static/js/localtime.js, Settings > Country > Time zone); without it, UTC only
   const LT = () => window.LGTime || { on: () => false, also: () => "", slot: () => "", tag: () => "UTC", place: () => "UTC" };
@@ -125,8 +126,8 @@
   // the infection name, and the report's tag when it names something else
   function kbLookups(box, names) {
     const [inf, tag] = names;
-    malpediaButton(box, "infection", inf, inf ? `Look up ${inf} ${MP_SRC}` : undefined);
-    if (tag && tag !== inf && !/^untagged$/i.test(tag)) malpediaButton(box, "tag", tag, `Look up tag ${tag} ${MP_SRC}`);
+    malpediaButton(box, "infection", inf, inf ? `Look up ${inf}` : undefined);
+    if (tag && tag !== inf && !/^untagged$/i.test(tag)) malpediaButton(box, "tag", tag, `Look up tag ${tag}`);
   }
 
   // ------------------------------------------------------------------ Malpedia: many names at once (each unique name once)
@@ -138,9 +139,83 @@
     }
     return out;
   }
-  function mpSummary(res) {           // e.g. "3 of 4 names found in Malpedia"
-    const v = Object.values(res), f = v.filter((x) => x.found).length, c = v.filter((x) => x.curated).length;
-    return `${f} of ${v.length} name${v.length === 1 ? "" : "s"} found in Malpedia${c ? `, ${c} defined by Looking Glass` : ""}${v.some((x) => x.pending) ? " (some not checked yet: try again in a minute)" : ""}`;
+  function mpSummary(res) {           // e.g. "3 of 4 names explained (Looking Glass 1, Malpedia 2); 1 no source knows"
+    const v = Object.values(res), by = {};
+    for (const x of v) if (!x.nosource && !x.pending) { const s = x.curated ? "Looking Glass" : x.found ? "Malpedia" : (x.source_label || "").split(" · ")[0] || "other"; by[s] = (by[s] || 0) + 1; }
+    const known = Object.values(by).reduce((a, b) => a + b, 0), none = v.filter((x) => x.nosource).length;
+    return `${known} of ${v.length} name${v.length === 1 ? "" : "s"} explained${known ? ` (${Object.entries(by).map(([k, n]) => `${k} ${n}`).join(", ")})` : ""}${none ? `; ${none} no source knows` : ""}${v.some((x) => x.pending) ? " (some not checked yet: try again in a minute)" : ""}`;
+  }
+  // MITRE ATT&CK on a card (attack_map.py): what the reports saw or the exposure allows, with the certainty and the
+  // constituent's role in plain words; then, folded, the techniques MITRE links to the malware, by tactic
+  // hover text of a technique: MITRE's short definition and how to defend (MITRE's mitigations)
+  const attackTip = (t) => [t.desc && `What it is (MITRE): ${t.desc}`, t.defend?.length && `How to defend: ${t.defend.map((m) => `${m.id} ${m.name}`).join("; ")}`].filter(Boolean).join("\n");
+  function attackLink(t) {
+    const s = el("span", "mp-tech");
+    if (attackTip(t)) s.title = attackTip(t);
+    s.append(extLink(t.url, t.id), document.createTextNode(` ${t.name}`));
+    if (t.tactics?.length) s.append(el("small", "muted", ` · ${t.tactics.join(", ")}`));
+    return s;
+  }
+  function mpAttack(card, att) {
+    if (!att?.techniques?.length) return;
+    const box = el("div", "mp-attack");
+    box.append(el("p", "mp-meta mp-attack-h", `MITRE ATT&CK (v${att.version || "?"})`));
+    const main = att.techniques.filter((t) => t.certainty !== "known"), known = att.techniques.filter((t) => t.certainty === "known");
+    if (main.length) {
+      const ul = el("ul", "mp-attack-list");
+      for (const t of main) {
+        const li = el("li"); li.append(el("span", `mp-cert mp-cert-${t.certainty}`, (t.certainty_label || t.certainty).split(" (")[0]), attackLink(t));
+        if (t.desc || t.defend?.length) {          // what it is / how to defend, one click away
+          const det = el("details", "mp-attack-what"); det.append(el("summary", null, "What it is and how to defend"));
+          if (t.desc) det.append(el("p", "mp-meta", `What it is (MITRE): ${t.desc}`));
+          if (t.defend?.length) det.append(el("p", "mp-meta", `How to defend (MITRE): ${t.defend.map((m) => `${m.id} ${m.name}`).join("; ")}`));
+          det.addEventListener("click", (ev) => ev.stopPropagation());
+          li.append(det);
+        }
+        li.append(el("div", "mp-meta", `${t.role}${t.report ? ` (${t.report})` : ""}${t.status === "suggested" ? " · suggested, not yet reviewed by a researcher" : t.status === "please check" ? " · being checked" : ""}${t.retired_in ? ` · retired in ${t.retired_in}` : ""}${t.kind ? ` · ${t.kind}` : ""}`));
+        ul.append(li);
+      }
+      box.append(ul);
+    }
+    if (known.length) {
+      const det = el("details", "mp-attack-known");
+      det.append(el("summary", null, `Known for this malware: ${known.length} technique${known.length === 1 ? "" : "s"} MITRE links to ${att.software || "it"}`));
+      const by = {};
+      for (const t of known) (by[(t.tactics || ["Other"])[0]] ||= []).push(t);
+      for (const [ta, ts] of Object.entries(by)) {
+        const p = el("p", "mp-meta"); p.append(el("b", null, `${ta}: `));
+        ts.forEach((t, i) => { if (i) p.append(document.createTextNode("; ")); p.append(extLink(t.url, t.id), document.createTextNode(` ${t.name}`)); });
+        det.append(p);
+      }
+      if (att.groups?.length) det.append(el("p", "mp-meta", `Groups MITRE says use it: ${att.groups.join(", ")}`));
+      det.addEventListener("click", (ev) => ev.stopPropagation());
+      box.append(det);
+    }
+    if (att.licence) box.append(el("p", "mp-meta mp-licence", `Source: ${att.licence}${att.mapped_with ? ` Mapped with ATT&CK v${att.mapped_with}.` : ""}`));
+    else box.append(el("p", "mp-meta mp-licence", "© The MITRE Corporation; ATT&CK is reproduced and distributed with its permission."));
+    card.append(box);
+  }
+  // the other sources that know the name, each folded: its text, other names, references and credit / licence
+  function mpAlso(card, x) {
+    if (!x.also?.length) return;
+    const box = el("div", "mp-also"); box.append(el("p", "mp-meta mp-also-h", "Also described by:"));
+    for (const a of x.also) {
+      const det = el("details", "mp-also-item"), sum = el("summary");
+      sum.append(el("span", "badge mp-badge mp-badge-ref", a.source_label || a.source || "Source"), document.createTextNode(` ${a.name || a.title || ""}${a.id ? ` (${a.id})` : a.family ? ` (${a.family})` : ""}`));
+      det.append(sum);
+      if (a.url) { const p = el("p", "mp-meta"); p.append(extLink(a.url, a.url.replace(/^https?:\/\//, "").slice(0, 90))); det.append(p); }
+      if (a.matched_by) det.append(el("p", "mp-meta", `Matched by ${a.matched_by}.`));
+      if (a.type) det.append(el("p", "mp-meta", a.type));
+      if (a.description) det.append(el("p", "mp-desc", a.description));
+      if (a.alt_names?.length) det.append(el("p", "mp-meta", `Also known as: ${a.alt_names.join(", ")}`));
+      if (a.platforms?.length) det.append(el("p", "mp-meta", `Platforms: ${a.platforms.join(", ")}`));
+      if (a.references?.length) kbRefs(det, a.references, `References (${fmt(a.reference_count || a.references.length)}):`);
+      if (a.by) det.append(el("p", "mp-meta", `Defined by ${a.by}${a.updated ? ` on ${a.updated}` : ""}.`));
+      if (a.licence) det.append(el("p", "mp-meta mp-licence", `Source: ${a.licence}`));
+      det.addEventListener("click", (ev) => ev.stopPropagation());
+      box.append(det);
+    }
+    card.append(box);
   }
   // references (evidence) written by an administrator in Settings
   function kbRefs(card, refs, label) {
@@ -152,6 +227,16 @@
   // the card, plus the researchers' notes on the name (notes.py): new findings, newest first
   function mpCard(x, name) {
     const card = mpCardBody(x, name);
+    // every card starts with the name as the report gives it, in bold, then the badge of the source that answered:
+    // the same header whether the researchers' definition or a source answers, so stacked cards never run together
+    const top = el("div", "mp-name-row");
+    top.append(el("b", "mp-name mono", name || x.name || x.title || ""));
+    const badge = card.querySelector(".mp-head > .mp-badge");
+    if (badge) top.append(badge);
+    card.prepend(top);
+    if ((x.found) && x.licence) card.append(el("p", "mp-meta mp-licence", `Source: ${x.licence}`));
+    mpAttack(card, x.attack);
+    mpAlso(card, x);
     for (const n of x.notes || []) {
       const p = el("p", "mp-note"); p.append(el("b", null, `Notes shared by ${n.role || "Researcher"}: ${n.by || "a researcher"}${n.date ? ` (${n.date})` : ""}: `), document.createTextNode(n.text));
       card.append(p);
@@ -162,15 +247,32 @@
   function mpCardBody(x, name) {
     const card = el("div", "mp-card");
     const head = el("div", "mp-head");
-    if (x.curated) {                                 // Malpedia has nothing, an administrator defined it (Settings)
+    if (x.curated) {                                 // the researchers' own definition: always the headline
       card.classList.add("mp-curated");
       head.append(el("span", "badge mp-badge mp-badge-kb", "Looking Glass definition"));
-      head.append(el("b", null, name && name.toLowerCase() !== String(x.title).toLowerCase() ? `${name}: ${x.title}` : x.title)); card.append(head);
+      head.append(el("b", null, x.title)); card.append(head);
       if (x.type) card.append(el("p", "mp-meta", x.type));
       if (x.description) card.append(el("p", "mp-desc", x.description));
       if (x.seen_in?.length) card.append(el("p", "mp-meta", `Seen in: ${x.seen_in.join(", ")}`));
       kbRefs(card, x.references, `Evidence (${x.references.length} reference${x.references.length === 1 ? "" : "s"}):`);
-      card.append(el("p", "mp-meta", `Not in Malpedia; defined${x.by ? ` by ${x.by}` : ""}${x.updated ? ` on ${x.updated}` : ""}.`));
+      card.append(el("p", "mp-meta", `Defined${x.by ? ` by ${x.by}` : ""}${x.updated ? ` on ${x.updated}` : ""}.`));
+      return card;
+    }
+    if (x.reference) {                               // MISP Galaxy / MITRE ATT&CK, from the copies on the server (offline_names.py)
+      card.classList.add("mp-reference");
+      head.append(el("span", "badge mp-badge mp-badge-ref", x.source_label || "Reference"));
+      const t = el("b"); t.append(x.url ? extLink(x.url, `${x.name}${x.id ? ` (${x.id})` : ""}`) : document.createTextNode(x.name));
+      head.append(t); card.append(head);
+      if (name && name.toLowerCase() !== String(x.name).toLowerCase()) card.append(el("p", "mp-meta", `Reported by Shadowserver as "${name}".`));
+      card.append(el("p", "mp-meta", `Answered by ${x.source_label}${x.matched_by ? `, matched by ${x.matched_by}` : ""}.`));
+      if (x.type) card.append(el("p", "mp-meta", x.type));
+      if (x.description) card.append(el("p", "mp-desc", x.description));
+      if (x.alt_names?.length) card.append(el("p", "mp-meta", `Also known as: ${x.alt_names.join(", ")}`));
+      if (x.platforms?.length) card.append(el("p", "mp-meta", `Platforms: ${x.platforms.join(", ")}`));
+      if (x.seen_in?.length) card.append(el("p", "mp-meta", `Seen in: ${x.seen_in.join(", ")}`));
+      kbRefs(card, x.references, `References (${fmt(x.reference_count || x.references.length)}):`);
+      if (x.near?.length) card.append(el("p", "mp-meta", `Similar names in Malpedia: ${x.near.join(", ")}`));
+      if (x.licence) card.append(el("p", "mp-meta mp-licence", `Source: ${x.licence}`));
       return card;
     }
     if (x.found && x.kind === "actor") {               // a threat actor (group), not a malware family
@@ -198,6 +300,8 @@
       if (x.description) card.append(el("p", "mp-desc", x.description));
       if (x.alt_names?.length) card.append(el("p", "mp-meta", `Also known as: ${x.alt_names.join(", ")}`));
       if (x.attribution?.length) card.append(el("p", "mp-meta", `Attributed to: ${x.attribution.join(", ")}`));
+      const yr = Object.entries(x.yara || {}).map(([k, v]) => `${v} ${k}`).join(", ");
+      if (yr) card.append(el("p", "mp-meta", `YARA rules: ${yr}`));
       if (x.updated) card.append(el("p", "mp-meta", `Updated ${x.updated}`));
       if (x.references?.length) {
         const ul = el("ul", "mp-refs");
@@ -206,8 +310,8 @@
       }
       kbRefs(card, x.curated_references, "Looking Glass references:");
     } else {
-      head.append(el("span", "badge mp-badge mp-badge-no", x.offline ? "No definition yet" : "Not in Malpedia"));
-      head.append(el("b", null, name ? `${name}: ${x.title || "not found"}` : x.title || "Not found")); card.append(head);
+      head.append(el("span", "badge mp-badge mp-badge-no", x.pending ? "Not checked yet" : "No source knows this name"));
+      head.append(el("b", null, x.title || "Not found")); card.append(head);
       if (x.text) card.append(el("p", "mp-desc", x.text));
       if (x.seen_in?.length) card.append(el("p", "mp-meta", `Seen in: ${x.seen_in.join(", ")}`));
       if (x.pending) card.append(el("p", "mp-meta", "Not checked yet (Malpedia allows a limited number of look-ups per minute): try again in a minute."));
@@ -215,10 +319,12 @@
     }
     return card;
   }
-  function mpShort(x) { return x.found && x.kind === "actor" ? `${x.name} (threat actor)` : x.found ? `${x.name} (${x.family})` : x.curated ? `${x.title} (Looking Glass definition)` : (x.title || "not in Malpedia"); }
+  function mpShort(x) { return x.found && x.kind === "actor" ? `${x.name} (threat actor)` : x.found ? `${x.name} (${x.family})` : x.curated ? `${x.title} (Looking Glass definition)` : x.reference ? `${x.name} (${x.source_label})` : x.pending ? "not checked yet" : `no source knows this name${x.title ? `: ${x.title}` : ""}`; }
+  // the sources that know a name: the one that answered first, then the others
+  function mpSources(x) { return x.pending ? "not checked yet" : (x.sources?.length ? x.sources.join(", ") : x.found ? "Malpedia" : x.curated ? "Looking Glass definition" : "no source knows this name"); }
   function renderMpList(box, res) {
     const list = el("div", "mp-cards");
-    for (const [name, x] of Object.entries(res).sort((a, b) => Number(b[1].found) - Number(a[1].found) || a[0].localeCompare(b[0]))) list.append(mpCard(x, name));
+    for (const [name, x] of Object.entries(res).sort((a, b) => Number(!!a[1].nosource) - Number(!!b[1].nosource) || a[0].localeCompare(b[0]))) list.append(mpCard(x, name));
     box.append(list);
   }
   // a host (clicked IP): all of its infections / categories at once
@@ -226,16 +332,16 @@
     box.replaceChildren();
     if (!MP_ON || !names.length) return;
     const wrap = el("div", "mp-host");
-    const btn = el("button", "pill-btn mp-btn", `Look up this host's ${names.length} infection${names.length === 1 ? "" : "s"} / categor${names.length === 1 ? "y" : "ies"} ${MP_SRC}`);
+    const btn = el("button", "pill-btn mp-btn", `Look up this host's ${names.length} infection${names.length === 1 ? "" : "s"} / categor${names.length === 1 ? "y" : "ies"}`);
     btn.type = "button";
     btn.addEventListener("click", async () => {
-      btn.disabled = true; btn.textContent = "Looking up on Malpedia…";
+      btn.disabled = true; btn.textContent = "Looking up…";
       try {
         const res = names.length > 3 ? await window.LGLookup.run({ kind: "malpedia", values: names, title: `Looking up this host's ${names.length} infections`,
-          intro: CFG.malpedia ? "Each name is looked up on Malpedia once (answers kept a week)." : "Answered from the Looking Glass definitions." })
+          intro: SOURCES_INTRO })
           : await mpBatch(names);
         wrap.replaceChildren(el("div", "mp-head", mpSummary(res))); renderMpList(wrap, res);
-      } catch (err) { btn.disabled = false; btn.textContent = `Malpedia lookup failed: ${err.message} (click to retry)`; }
+      } catch (err) { btn.disabled = false; btn.textContent = `Look-up failed: ${err.message} (click to retry)`; }
     });
     wrap.append(btn); box.append(wrap);
   }
@@ -244,18 +350,19 @@
   function malpediaButton(box, field, value, label) {
     if (!value || !MP_ON) return null;
     const wrap = el("div", "mp");
-    const btn = el("button", "pill-btn mp-btn", label || "Look up on Malpedia");
+    const btn = el("button", "pill-btn mp-btn", label || "Look up");
     btn.type = "button";
-    btn.title = `Search Malpedia, the malware encyclopedia, for "${value}"`;
+    btn.title = field === "hash" ? `Search Malpedia's sample collection for "${value}"`
+      : `Explain "${value}": the researchers' definition, ${CFG.malpedia ? "Malpedia, " : ""}MISP Galaxy and MITRE ATT&CK (only the name is looked up)`;
     btn.addEventListener("click", (ev) => { ev.stopPropagation(); loadMalpedia(wrap, field, value); });
     wrap.append(btn); box.append(wrap);
     return wrap;
   }
   async function loadMalpedia(wrap, field, value) {
-    wrap.replaceChildren(el("div", "mp-loading", "Looking up on Malpedia…"));
+    wrap.replaceChildren(el("div", "mp-loading", "Looking up…"));
     let r;
     try { r = await getJSON(`/api/malpedia?field=${encodeURIComponent(field)}&value=${encodeURIComponent(value)}`); }
-    catch (err) { wrap.replaceChildren(el("p", "mp-err", `Malpedia lookup failed: ${err.message}`)); return; }
+    catch (err) { wrap.replaceChildren(el("p", "mp-err", `Look-up failed: ${err.message}`)); return; }
     renderMalpedia(wrap, r, value);
   }
   // links from Malpedia (third-party data): only http(s) becomes a link, anything else (javascript:, data:...) is plain text
@@ -278,6 +385,7 @@
       }
       wrap.append(card); return;
     }
+    if (r.card) { wrap.append(mpCard(r.card, value)); return; }   // one card, every source (name_sources.py)
     const f = r.family;
     if (!f && r.curated) { wrap.append(mpCard(r.curated, value)); return; }
     if (!f && r.actor_card) { wrap.append(mpCard(r.actor_card, value)); return; }
@@ -1403,8 +1511,8 @@
       for (const [k, v] of extras) {
         const val = String(v ?? "");
         if (/^(md5|sha1|sha256|.*_hash|hash)$/i.test(k) || /^(?:[0-9a-f]{32}|[0-9a-f]{40}|[0-9a-f]{64})$/i.test(val)) {
-          if (/^(?:[0-9a-f]{32}|[0-9a-f]{40}|[0-9a-f]{64})$/i.test(val)) malpediaButton(xs, "hash", val, `Look up ${pretty(k)} ${MP_SRC}`);
-        } else if (/^(family|malware|malware_family|threat|botnet)$/i.test(k) && val) malpediaButton(xs, "infection", val, `Look up ${pretty(k)} "${val}" ${MP_SRC}`);
+          if (/^(?:[0-9a-f]{32}|[0-9a-f]{40}|[0-9a-f]{64})$/i.test(val)) malpediaButton(xs, "hash", val, `Look up ${pretty(k)} on Malpedia`);
+        } else if (/^(family|malware|malware_family|threat|botnet)$/i.test(k) && val) malpediaButton(xs, "infection", val, `Look up ${pretty(k)} "${val}"`);
       }
       body.append(xs);
     }
@@ -2152,22 +2260,21 @@
       acts.append(pdfButton(`/api/insight/report?kind=${encodeURIComponent(d.kind)}&value=${encodeURIComponent(d.value)}&metric=${r.metric}&at=${encodeURIComponent(d.as_of)}&all=1&label=${encodeURIComponent(label)}`));
       }
       if (MP_ON && r.columns.some(([k]) => k === "infections" || k === "infection")) {
-        const mp = el("button", "pill-btn mp-btn", r.mp ? `${MP_NAME} ✓` : `Enrich with ${MP_NAME}`); mp.type = "button";
-        mp.title = "Look up every infection / category in this list on Malpedia (each name once) and add the result to the table and the CSV";
+        const mp = el("button", "pill-btn mp-btn", r.mp ? "Explained ✓" : "Explain the names"); mp.type = "button";
+        mp.title = "Look up every infection / category in this list (each name once) in the definitions and the sources, and add what it is and its source to the table and the CSV";
         mp.disabled = !!r.mp;
         mp.addEventListener("click", async () => {
-          mp.disabled = true; mp.textContent = `Looking up ${MP_SRC}…`;
+          mp.disabled = true; mp.textContent = "Looking up…";
           try {
             let all = r;
             if (r.total > r.rows.length) { try { all = await getJSON(`/api/insight/drill?kind=${encodeURIComponent(d.kind)}&value=${encodeURIComponent(d.value)}&metric=${r.metric}&at=${encodeURIComponent(d.as_of)}&all=1`); } catch { all = r; } }
             const names = [...new Set(all.rows.flatMap((row) => [].concat(row.infections || row.infection || [])).filter(Boolean))];
-            r.mp = await window.LGLookup.run({ kind: "malpedia", values: names, title: CFG.malpedia ? "Looking up on Malpedia" : "Looking up the definitions",
-              intro: `${names.length} infection${names.length === 1 ? "" : "s"} / categor${names.length === 1 ? "y" : "ies"} in this list, each looked up once. ` +
-                (CFG.malpedia ? "Malpedia's answers are kept for a week, so names seen before come back at once; new names are asked at most 30 a minute." :
-                  "Malpedia is not set up here: the Looking Glass definitions answer.") });
+            r.mp = await window.LGLookup.run({ kind: "malpedia", values: names, title: "Explaining the names",
+              intro: `${names.length} infection${names.length === 1 ? "" : "s"} / categor${names.length === 1 ? "y" : "ies"} in this list. ` + SOURCES_INTRO
+                + (CFG.malpedia ? " New names are asked of Malpedia at most 30 a minute." : "") });
             // kept on r; redraw only if this list is still the one shown (review 2026-11-13)
             if (box.dataset.metric === r.metric && !box.hidden && box.isConnected) renderDrill(box, r, d);
-          } catch (err) { mp.disabled = false; mp.textContent = `Malpedia failed: ${err.message} (retry)`; }
+          } catch (err) { mp.disabled = false; mp.textContent = `Look-up failed: ${err.message} (retry)`; }
         });
         acts.append(mp);
       }
@@ -2176,8 +2283,8 @@
     x.addEventListener("click", () => { box.hidden = true; box.dataset.metric = ""; box.parentElement?.querySelectorAll(".i-kpi.active").forEach((k) => { k.classList.remove("active"); k.setAttribute("aria-expanded", "false"); }); });
     acts.append(x); head.append(acts); box.append(head);
     if (r.intro) box.append(el("p", "drill-intro", r.intro));
-    if (r.mp) {                                      // the Malpedia answer for every name in the list
-      const det = el("details", "mp-batch"); det.append(el("summary", null, `Malpedia: ${mpSummary(r.mp)}. Show each name and why`));
+    if (r.mp) {                                      // the answer for every name in the list, with its sources
+      const det = el("details", "mp-batch"); det.append(el("summary", null, `${mpSummary(r.mp)}. Show each name and its sources`));
       renderMpList(det, r.mp); box.append(det);
     }
     if (!r.rows.length) { box.append(el("p", "drill-empty", r.empty)); return; }
@@ -2186,7 +2293,7 @@
     const canOpen = hostRows || PIVOTS.has(r.row_kind);
     const wrap = el("div", "table-wrap drill-wrap"); const tbl = el("table", "hosts drill-table");
     const thead = el("thead"); const hr = el("tr");
-    const cols = r.mp ? [...r.columns, ["_malpedia", "Malpedia"]] : r.columns;
+    const cols = r.mp ? [...r.columns, ["_malpedia", "What it is"], ["_source", "Source"]] : r.columns;
     for (const [, label] of cols) hr.append(el("th", null, label));
     thead.append(hr); tbl.append(thead);
     const tb = el("tbody");
@@ -2198,11 +2305,19 @@
           const td = el("td", "mp-cell");
           for (const n of [].concat(row.infections || row.infection || [])) {
             const x = r.mp?.[n]; if (!x) continue;
-            const det = el("details", `mp-mini ${x.found ? "ok" : "no"}`);
+            const det = el("details", `mp-mini ${x.nosource || x.pending ? "no" : "ok"}`);
             const sum = el("summary"); sum.append(el("b", "mono", n), document.createTextNode(` → ${mpShort(x)}`));
             det.append(sum, mpCard(x, n));
             det.addEventListener("click", (ev) => ev.stopPropagation());   // opening it does not open the host
             td.append(det);
+          }
+          tr.append(td); continue;
+        }
+        if (key === "_source") {                    // which source answered, then the others that know the name
+          const td = el("td", "mp-src-cell");
+          for (const n of [].concat(row.infections || row.infection || [])) {
+            const x = r.mp?.[n]; if (!x) continue;
+            td.append(el("div", null, `${n}: ${mpSources(x)}`));
           }
           tr.append(td); continue;
         }
@@ -2232,22 +2347,28 @@
     if (r.total > r.rows.length) box.append(el("p", "drill-more", `Showing the first ${fmt(r.rows.length)} of ${fmt(r.total)}.${document.body.dataset.export === "1" ? ` Download CSV saves all ${fmt(r.total)}.` : ""}`));
     else if (canOpen) box.append(el("p", "drill-more", `${fmt(r.total)} ${r.total === 1 ? "entry" : "entries"}. Click a row to analyse it.`));
   }
-  // Malpedia result for one row: the families found, and why the others are not there
+  // what each name of a row is, for the CSV: the headline, its description and references, the sources, the others
   function mpForRow(mp, row) {
     const names = [].concat(row.infections || row.infection || []);
-    const fams = [], descs = [], notes = [];
+    const what = [], descs = [], srcs = [], also = [], att = [];
     for (const n of names) {
       const x = mp?.[n]; if (!x) continue;
-      if (x.found) { fams.push(`${n} = ${x.name} (${x.kind === "actor" ? "threat actor" : x.family}) ${x.url || ""}`.trim()); if (x.description) descs.push(`${x.name}: ${x.description}`); }
-      else if (x.curated) notes.push(`${n}: ${x.title} (Looking Glass definition). ${x.description || ""} References: ${(x.references || []).join(" ")}`.trim());
-      else notes.push(`${n}: ${x.title}. ${x.text || ""}`.trim());
+      what.push(`${n} = ${mpShort(x)}${x.url ? ` ${x.url}` : ""}`);
+      const d = x.description || x.text || "";
+      if (d) descs.push(`${n}: ${d}${x.references?.length ? ` References: ${x.references.join(" ")}` : ""}`);
+      srcs.push(`${n}: ${mpSources(x)}${x.licence ? ` (${x.licence})` : x.curated && x.by ? ` (written by ${x.by})` : ""}`);
+      if (x.also?.length) also.push(`${n}: ${x.also.map((a) => `${a.source_label} as ${a.name || a.title || n}${a.url ? ` ${a.url}` : ""}${a.licence_short ? ` [${a.licence_short}]` : ""}`).join("; ")}`);
+      if (x.attack?.techniques?.length) {
+        const main = x.attack.techniques.filter((t) => t.certainty !== "known"), kn = new Set(x.attack.techniques.filter((t) => t.certainty === "known").map((t) => t.id));
+        att.push(`${n}: ${main.map((t) => `${t.id} ${t.name} (${(t.certainty_label || "").split(" (")[0].toLowerCase()})`).join(", ")}${kn.size ? `${main.length ? "; " : ""}known for this malware: ${[...kn].join(", ")}` : ""} (ATT&CK v${x.attack.version})`);
+      }
     }
-    return { families: fams.join("; "), descriptions: descs.join(" | "), notes: notes.join(" | ") };
+    return { what: what.join("; "), descriptions: descs.join(" | "), sources: srcs.join(" | "), also: also.join(" | "), attack: att.join(" | ") };
   }
   // PDF report of a figure: executive summary, key figures, infections explained, breakdowns, the complete list
   function pdfButton(url) {
     const b = el("button", "pill-btn pdf-btn", "Download report (PDF + CSV)"); b.type = "button";
-    b.title = "A ZIP file with a detailed PDF report of this figure (executive summary, key figures, priorities, the infections / categories explained with Malpedia or the definitions, breakdowns, report definitions) and the complete list as a CSV file";
+    b.title = "A ZIP file with a detailed PDF report of this figure (executive summary, key figures, priorities, the infections / categories explained with their sources, breakdowns, report definitions) and the complete list as a CSV file";
     b.addEventListener("click", () => window.LGPdf.download(b, url));
     return b;
   }
@@ -2263,10 +2384,10 @@
     }
     // quoted, and spreadsheet-safe: a cell starting with = + - @ (not a plain number) would run as a formula
     const q = (s) => { s = String(s); if (/^[=+\-@\t\r\n＝＋－＠]/.test(s) && !/^([+-]?\d+([.,]\d+)*%?|-+)$/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; };
-    const lines = [[...r.columns.map(([, l]) => q(l)), ...(mp ? [q("Malpedia families"), q("Malpedia descriptions"), q("Not in Malpedia: what it is and why")] : [])].join(",")];
+    const lines = [[...r.columns.map(([, l]) => q(l)), ...(mp ? [q("What it is"), q("Description and references"), q("Source"), q("Also described by"), q("MITRE ATT&CK")] : [])].join(",")];
     for (const row of r.rows) {
       const cells = r.columns.map(([k]) => q(k === "followup" ? (row[k] || []).join("; ") : drillCell(k, row[k])));
-      if (mp) { const m = mpForRow(mp, row); cells.push(q(m.families), q(m.descriptions), q(m.notes)); }
+      if (mp) { const m = mpForRow(mp, row); cells.push(q(m.what), q(m.descriptions), q(m.sources), q(m.also), q(m.attack)); }
       lines.push(cells.join(","));
     }
     const blob = new Blob([lines.join("\r\n")], { type: "text/csv;charset=utf-8" });

@@ -17,6 +17,7 @@ data/*
 !data/pattern_fields.json
 !data/product_rules.json
 !data/report_impact.json
+!data/attack_rules.json
 # rendered by deploy/install.sh for this computer
 deploy/*.service
 # outputs of the tools/ diagnostics

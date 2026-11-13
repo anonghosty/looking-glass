@@ -13,6 +13,32 @@
       </header>
       <ul class="ig-leads" id="leadList"></ul>
     </section>
+    {# MITRE ATT&CK: each report's suggested technique, to confirm or change; new ATT&CK versions (static/js/attack-map.js, attack_map.py) #}
+    <section class="st-card dz am-card" id="cardAttack" hidden>
+      <header class="dz-head">
+        <div class="dz-icon dz-icon-inf" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M4 5h16M4 12h16M4 19h16M8 3v4M14 10v4M10 17v4"/></svg>
+        </div>
+        <div class="dz-title">
+          <h2>Looking Glass asks: which MITRE ATT&amp;CK techniques fit these reports?</h2>
+          <p class="dz-sub">Each Shadowserver report gets a suggested technique from its type. Confirm it, change it, or record that no
+            technique fits. A reviewed mapping never changes by itself: a new ATT&amp;CK version or a changed report only puts it back to
+            "please check".</p>
+        </div>
+      </header>
+      <div id="amNotice"></div>
+      <div class="dz-stats" role="tablist" aria-label="ATT&amp;CK mappings">
+        <button class="dz-stat warn" type="button" role="tab" data-am="check" aria-selected="false"><b id="amN1">–</b><span>Please check</span><em>a report or ATT&amp;CK changed</em></button>
+        <button class="dz-stat" type="button" role="tab" data-am="suggested" aria-selected="true"><b id="amN2">–</b><span>Suggested</span><em>confirm or change</em></button>
+        <button class="dz-stat" type="button" role="tab" data-am="none" aria-selected="false"><b id="amN3">–</b><span>Not mapped yet</span><em>choose techniques</em></button>
+        <button class="dz-stat ok" type="button" role="tab" data-am="reviewed" aria-selected="false"><b id="amN4">–</b><span>Reviewed</span><em>never overwritten</em></button>
+      </div>
+      <div class="dz-toolbar">
+        <input type="search" class="dz-search" id="amSearch" placeholder="Search a report or a technique" autocomplete="off" aria-label="Search the ATT&amp;CK mappings">
+        <span class="dz-status" id="amStatus" role="status"></span>
+      </div>
+      <div class="am-scroll" id="amList"><div class="st-loading">Loading the ATT&amp;CK mappings…</div></div>
+    </section>
     <section class="st-card dz" id="cardInf" hidden>
       <header class="dz-head">
         <div class="dz-icon dz-icon-inf" aria-hidden="true">
@@ -20,29 +46,32 @@
         </div>
         <div class="dz-title">
           <h2>Infections &amp; categories</h2>
-          <p class="dz-sub">Network communications · the names in the sinkhole and honeypot reports, looked up in Malpedia. Names Malpedia
-            does not list are defined here, with references, and every user then sees that definition.</p>
+          <p class="dz-sub">Network communications · the names in the sinkhole and honeypot reports, looked up in Malpedia, MISP Galaxy
+            and MITRE ATT&amp;CK. Names no source knows are defined here, with references; every user then sees that definition first,
+            with the sources that also describe the name below it.</p>
         </div>
         <div class="dz-actions">
           <button class="lg-btn primary" id="infLookup" type="button">
             <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="m21 21-4.3-4.3M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z"/></svg>
-            <span>Look up with Malpedia</span></button>
+            <span>Look up names</span></button>
           <button class="lg-btn" id="infAdd" type="button">
             <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
             <span>Define a name</span></button>
         </div>
       </header>
       <div class="dz-stats" role="tablist" aria-label="Infections and categories">
-        <button class="dz-stat warn" type="button" role="tab" data-inf="unresolved" aria-selected="true"><b id="infN1">–</b><span>Malpedia doesn't know</span><em>need a definition</em></button>
+        <button class="dz-stat warn" type="button" role="tab" data-inf="unresolved" aria-selected="true"><b id="infN1">–</b><span>No source knows</span><em>need a definition</em></button>
         <button class="dz-stat" type="button" role="tab" data-inf="unchecked" aria-selected="false"><b id="infN2">–</b><span>New, not checked yet</span><em>checked every 30 minutes</em></button>
         <button class="dz-stat ok" type="button" role="tab" data-inf="defined" aria-selected="false"><b id="infN3">–</b><span>Defined</span><em>with references</em></button>
-        <button class="dz-stat" type="button" role="tab" data-inf="all" aria-selected="false"><b id="infN4">–</b><span>All names in the reports</span><em>Malpedia, actors, definitions</em></button>
+        <button class="dz-stat" type="button" role="tab" data-inf="all" aria-selected="false"><b id="infN4">–</b><span>All names in the reports</span><em>definitions and sources</em></button>
       </div>
+      {# the local copies of MISP Galaxy and MITRE ATT&CK: last refresh, entries; admins can refresh them (name_sources.py) #}
+      <div class="dz-sources" id="infSources" hidden></div>
       <div class="dz-toolbar">
         <input type="search" class="dz-search" id="infSearch" placeholder="Search a name, report or definition" autocomplete="off" aria-label="Search the infections and categories">
         <span class="dz-status" id="infStatus" role="status"></span>
       </div>
-      <div class="table-wrap dz-table"><table id="infTable"><thead><tr><th data-sort="name">Name</th><th data-sort="seen">Seen in</th><th data-sort="status">Status</th><th>Definition / Malpedia</th><th data-sort="across" class="dz-across-h">Across reports</th><th class="dz-act"></th></tr></thead><tbody></tbody></table></div>
+      <div class="table-wrap dz-table"><table id="infTable"><thead><tr><th data-sort="name">Name</th><th data-sort="seen">Seen in</th><th data-sort="status">Status</th><th>Definition / sources</th><th data-sort="across" class="dz-across-h">Across reports</th><th class="dz-act"></th></tr></thead><tbody></tbody></table></div>
     </section>
 
     <section class="st-card dz" id="cardIss" hidden>

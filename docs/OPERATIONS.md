@@ -102,6 +102,19 @@ First-level regions of all 54 African countries (geoBoundaries, CC BY 4.0), with
 `manage/fetch_africa_boundaries.py` downloads them again, and `manage/region_aliases.py` re-links the region names
 found in reports to the map regions (needs Ubuntu's `iso-codes` package).
 
+### Offline name sources (`data/names_misp_galaxy.json`, `data/names_attack.json`)
+MISP Galaxy (Malpedia, Botnet and Tool clusters) and MITRE ATT&CK (malware and tools) explain names that neither the
+researchers nor Malpedia explain, and appear under "Also described by" on every card (see the User Guide, Definitions).
+`manage/fetch_offline_names.py` downloads them (at most once a week; `--force` now, `--status` to see what is installed).
+The installer schedules it weekly (`--schedule`: Mondays 04:17 in the user's crontab, tagged `# looking-glass-name-sources`;
+`--unschedule` removes it). A download that is invalid, too small, or under 70% of the copy in use is refused and the old
+copy kept; the reason is in `data/names_refresh.log` and `data/names_refresh.json`, and every refresh (with counts and the
+ATT&CK version) is in the audit log. Administrators can also refresh from the Definitions page (**Refresh sources**,
+at most once an hour). Look-ups only read these files. The same script downloads MITRE CTID's KEV → ATT&CK mappings
+(`data/attack_kev.json`, `--only kev`), and when a new ATT&CK version arrives it compares it with the old one: the report
+mappings it touches go back to "please check" (`data/attack_mappings.json`; the rule table that suggests them is the
+shipped `data/attack_rules.json`), one notice appears on the Definitions page and one entry in the audit log.
+
 ## Checks
 
 | Command | What it checks | Time |

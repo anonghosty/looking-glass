@@ -51,6 +51,9 @@ real_exports = book.export_paths["dir"]; book.export_paths["dir"] = os.path.join
 real_adv, real_org = A.ADVISORIES.dir, A.ORG.path
 A.ADVISORIES.dir, A.ORG.path = os.path.join(tmp, "advisories"), os.path.join(tmp, "organisation.json")
 audit = A.AUTH["audit"]; real_add = audit.add; audited = []
+# this check is about report views, cases and advisories, not ATT&CK: without the ATT&CK copy an advisory carries no
+# ATT&CK section, so its suggested mappings do not hold up generating (that gate: tests/check_advisory_attack.py)
+A.ATTACK.offline = None
 audit.add = lambda *a, **k: audited.append(a[0] if a else "")
 jids = []
 

@@ -87,6 +87,24 @@ def ok(label, cond, info=""):
     print(("  ok  " if cond else "  FAIL") + " " + label + (f"  [{info}]" if info else ""), flush=True)
 
 
+def events(op, path, tries=5):
+    """The "events" list of /api/svc/events. A run once crashed here with KeyError 'events' (2026-11-13): an answer
+    that was not the list, most likely the data still loading after a reload. Wait and ask again; if it never comes,
+    record a failure with the status instead of stopping the whole run."""
+    s, body = 0, ""
+    for i in range(tries):
+        s, _, body = req(op, path)
+        try:
+            d = json.loads(body)
+        except ValueError:
+            d = None
+        if s == 200 and isinstance(d, dict) and isinstance(d.get("events"), list):
+            return d["events"]
+        time.sleep(2 * (i + 1))
+    ok(f"events list answered ({path.split('?')[0]})", False, f"status {s}: {body[:120]!r}")
+    return []
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *a, **k):
         return None
@@ -315,8 +333,8 @@ try:
     s, _, _ = req(aop, "/api/malpedia?field=family&value=win.emotet/../../x"); ok("Malpedia: bad family id refused", s in (400, 503), str(s))
 
     print("\nDemo mode (report #6)")
-    ev = json.loads(req(aop, "/api/svc/events?latest=1&limit=1&service=Accessible+HTTP")[2])["events"] \
-        or json.loads(req(aop, "/api/svc/events?latest=1&limit=1")[2])["events"]
+    ev = events(aop, "/api/svc/events?latest=1&limit=1&service=Accessible+HTTP") \
+        or events(aop, "/api/svc/events?latest=1&limit=1")
     HAVE_DATA = bool(ev)
     if not HAVE_DATA:
         for lbl in ("demo mode: a raw IP no longer confirms membership", "demo mode: the opaque reference still works"):
@@ -368,7 +386,7 @@ try:
     ok("admin approves the account as external", s == 200, str(s))
     time.sleep(0.5)
     nop, (s, _), _ = login("lg-selftest-new", npw, nsec); ok("approved account logs in", s == 302, str(s))
-    ev2 = json.loads(req(nop, "/api/svc/events?latest=1&limit=50&demo=0")[2])["events"]
+    ev2 = events(nop, "/api/svc/events?latest=1&limit=50&demo=0")
     if ev2 or HAVE_DATA:
         ok("viewer gets masked data even with demo=0 (no 'unmasked' permission)", ev2 and all(masked(e["ip"]) for e in ev2), ev2[0]["ip"] if ev2 else "")
     else:
@@ -384,7 +402,7 @@ try:
     ok("admin changes the role to analyst", s == 200, str(s))
     s, _, _ = req(nop, "/api/clock"); ok("role change ends the account's sessions", s == 401, str(s))
     nop, (s, _), _ = login("lg-selftest-new", npw, nsec)
-    ev3 = json.loads(req(nop, "/api/svc/events?latest=1&limit=50")[2])["events"]
+    ev3 = events(nop, "/api/svc/events?latest=1&limit=50")
     _, _, home2 = req(nop, "/")
     ok("analyst: no masking flag, Demo switch available", 'data-masked' not in home2 and 'id="btnDemo"' in home2 and json.loads(req(nop, "/api/clock")[2]).get("demo_forced") is False)
     if ev3 or HAVE_DATA:

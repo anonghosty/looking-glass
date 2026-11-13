@@ -147,8 +147,10 @@ def check(folder, earlier=None, gap_days=30):
     for p in archives + [os.path.join(folder, "audit.log")]:
         try:
             lines.extend(_lines(p))
-        except Damaged as e:
-            damaged.append(str(e))
+        except Damaged:
+            # built from the file name only, never from the exception text (code scanning #28: what reaches the web
+            # page must not come from an exception)
+            damaged.append(os.path.basename(p) + ": unreadable")
     archives = [p for p in archives if not any(d.startswith(os.path.basename(p) + ":") for d in damaged)]
     removed, bad_notes = _notes(os.path.join(folder, "audit_archive", "removed.jsonl"))
     gone = sum(_int(r.get("entries")) for r in removed)            # entries of archives the retention removed

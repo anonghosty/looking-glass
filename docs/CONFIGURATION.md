@@ -29,7 +29,7 @@ New report types that Shadowserver starts sending are picked up by themselves wi
 | Setting | Default | Meaning |
 |---|---|---|
 | `MAPBOX_TOKEN` | empty | public Mapbox token (`pk.…`): map tiles in the browser and place look-ups on the server (each place once, cached in `data/geocache.json`). Restrict it to your site's address in the Mapbox account |
-| `MALPEDIA_TOKEN` | empty | optional Malpedia API token for the **Look up on Malpedia** buttons. Stays on the server; answers are cached for a week |
+| `MALPEDIA_TOKEN` | empty | optional Malpedia API token: Malpedia then joins the sources behind the **Look up** buttons (the researchers' definitions, MISP Galaxy and MITRE ATT&CK answer without it). Stays on the server; answers are cached for a week |
 | `NVD_API_KEY` | empty | optional NIST NVD API key (free, nvd.nist.gov/developers/request-an-api-key). CVE look-ups work without it at 5 per 30 seconds; with it, 50. CISA KEV and EPSS need no key |
 
 ## Replay

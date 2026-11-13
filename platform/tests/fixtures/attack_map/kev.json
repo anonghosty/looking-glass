@@ -1,0 +1,9 @@
+{"metadata": {"attack_version": "1.0", "mapping_framework": "kev", "mapping_framework_version": "01/01/2026"},
+ "mapping_objects": [
+  {"capability_id": "CVE-2099-0001", "mapping_type": "exploitation_technique", "attack_object_id": "T1190"},
+  {"capability_id": "CVE-2099-0001", "mapping_type": "primary_impact", "attack_object_id": "T1071.001"},
+  {"capability_id": "CVE-2099-0001", "mapping_type": "primary_impact", "attack_object_id": "T1071.001"},
+  {"capability_id": "not-a-cve", "mapping_type": "primary_impact", "attack_object_id": "T1190"},
+  {"capability_id": "CVE-2099-0002", "mapping_type": "made_up_kind", "attack_object_id": "T1190"},
+  {"capability_id": "CVE-2099-0003", "mapping_type": "secondary_impact", "attack_object_id": "javascript:alert(1)"}
+ ]}

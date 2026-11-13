@@ -33,12 +33,25 @@ _COLONS3 = re.compile(r":{3,}")
 #   a version word and a separator   "version 2.0.1.3", "Build: 1.2.3.4", "firmware=10.4.0.12"
 #   a product name and a slash       "Apache/2.0.1.3", "RouterOS/6.49.10.1"  (not a path: "/api/41.66.1.2" stays masked)
 # A bare "v" is NOT enough (v41.66.1.2 was one of the reviewer's leaks), nor is a word glued on with no separator.
+# Products that print a four-part version after a slash. Only these, never any word: "proxy/3.120.4.5" and
+# "gw/10.0.0.1" are addresses (re-check 2026-11-13: an earlier "first number 25 or lower" rule let low foreign and
+# private addresses through: 3.x and 18.x Amazon, 13.x and 20.x Microsoft, 8.8.8.8, 10.x). A product missing here only
+# means its version is masked too, which is preferred to an address left in place.
+PRODUCTS = ("apache", "httpd", "nginx", "openresty", "tengine", "lighttpd", "caddy", "litespeed", "openlitespeed",
+            "microsoft-iis", "iis", "microsoft-httpapi", "jetty", "tomcat", "apache-coyote", "express", "werkzeug",
+            "gunicorn", "uvicorn", "php", "python", "node", "openssl", "openssh", "dropbear", "routeros", "mikrotik",
+            "squid", "varnish", "haproxy", "envoy", "traefik", "boa", "goahead", "goahead-webs", "uhttpd", "mini_httpd",
+            "thttpd", "allegro", "rompager", "webs", "cisco", "fortios", "pan-os", "exim", "postfix", "dovecot",
+            "sendmail", "bind", "dnsmasq", "unbound", "powerdns", "ntpd", "samba", "proftpd", "vsftpd", "pure-ftpd",
+            "filezilla", "zimbra", "jenkins", "grafana", "kibana", "elasticsearch", "redis", "mongodb", "mysql",
+            "mariadb", "postgresql", "vmware", "esxi", "zyxel", "hikvision", "dahua", "ubnt", "unifi", "synology",
+            "qnap", "netgear", "tp-link", "d-link", "huawei", "zte", "openwrt", "dd-wrt", "lancom", "draytek", "sonicwall",
+            "citrix", "netscaler", "f5", "big-ip", "pulse", "ivanti", "checkpoint", "gitlab", "nextcloud", "owncloud")
 _VERSION_BEFORE = re.compile(
     r"(?:(?<![A-Za-z0-9_])(?:version|ver|build|release|revision|rev|firmware|fw)\.?[ \t]*[:=][ \t]*"
     r"|(?<![A-Za-z0-9_])(?:version|ver|build|release|revision|rev|firmware|fw)\.?[ \t]+"
-    # a product name stands at the start or after a space or bracket, never as a value: "url=word/203.0.113.7" and
-    # "?q=path/203.0.113.7" are paths with an address (review 2026-11-13: they were read as versions and left as they were)
-    r"|(?<![\w/.:=?&#%@+-])[A-Za-z][A-Za-z_-]{1,40}/)$", re.I)
+    # a known product name, at the start or after a space or bracket, never as a value ("url=apache/…" is a path)
+    r"|(?<![\w/.:=?&#%@+-])(?:" + "|".join(re.escape(p) for p in PRODUCTS) + r")/)$", re.I)
 
 
 def _is_version(text, start, end):
@@ -48,13 +61,6 @@ def _is_version(text, start, end):
         return False
     if text[end:end + 1] == ":" and text[end + 1:end + 2].isdigit():
         return False                    # address:port is an address, never a version (review 2026-11-13)
-    # a version starts small (Apache/2.0.1.3, RouterOS/6.49.10.1); "proxy/203.0.113.7" is an address. Public address
-    # ranges start well above 25, so a first part above it is masked (over-masking is preferred to a leak)
-    try:
-        if int(text[start:end].split(".")[0]) > 25:
-            return False
-    except ValueError:
-        return False
     return bool(_VERSION_BEFORE.search(text[max(0, start - 60):start]))
 
 

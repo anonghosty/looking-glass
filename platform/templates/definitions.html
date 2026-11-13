@@ -40,6 +40,8 @@
     <div class="st-modal-head"><h2 id="kbTitle">Define a name</h2><button class="icon-btn" id="kbClose" type="button" aria-label="Close">
       <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg></button></div>
     <p class="st-hint" id="kbSeen"></p>
+    {# what the other sources (Malpedia, MISP Galaxy, MITRE ATT&CK) say about the name, alongside the editor (name_sources.py) #}
+    <div class="kb-others" id="kbOthers" hidden></div>
     <form id="kbForm" class="kb-form" autocomplete="off">
       <label class="st-field">Name in the reports<input id="kbName" required maxlength="80" placeholder="android.midnight-mimosa"></label>
       <div class="st-field" id="kbMpBox">
@@ -71,6 +73,7 @@
   <script src="{{ url_for('static', filename='js/people-pick.js') }}"></script>
   <script src="{{ url_for('static', filename='js/kb-notes.js') }}"></script>
   <script src="{{ url_for('static', filename='js/kb-settings.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/attack-map.js') }}"></script>
   <script src="{{ url_for('static', filename='js/kb-services-patterns.js') }}"></script>
   <script src="{{ url_for('static', filename='js/kb-services.js') }}"></script>
   <script src="{{ url_for('static', filename='js/net-editor.js') }}"></script>

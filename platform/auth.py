@@ -92,11 +92,14 @@ FIXED_ROLES = {"management": ["management"], AUDITOR_ROLE: list(AUDITOR_PERMS), 
 # Permissions that belong to one role only (and admin): they cannot be ticked onto any other role.
 EXCLUSIVE_PERMS = {"management": "management", "definitions": "researcher", "advisory": "advisor", "users": "admin"}
 AUDIT_PATHS = ("/audit", "/api/audit/", "/api/admin/audit", "/api/admin/sessions", "/overview", "/api/notifications")   # all an auditor opens
-ADVISORY_PATHS = ("/findings", "/api/findings", "/advisory", "/api/advisory", "/api/organisation", "/organisation/logo", "/api/notifications", "/overview")    # all the advisor role (no 'view') can open
+ADVISORY_PATHS = ("/findings", "/api/findings", "/advisory", "/api/advisory", "/api/organisation", "/organisation/logo", "/api/notifications", "/overview",
+                  "/api/attack/technique/")    # all the advisor role (no 'view') can open; MITRE's full text of a technique
 DEFINITIONS_PATHS = ("/definitions", "/api/kb/", "/api/networks", "/api/lookups", "/api/intel", "/api/notes", "/api/combo-codes/",
-                     "/findings", "/api/findings", "/intel/", "/api/notifications", "/overview")
+                     "/findings", "/api/findings", "/intel/", "/api/notifications", "/overview",
+                     "/api/attack", "/api/name-sources")      # ATT&CK mappings and the name sources' status (attack_map.py, name_sources.py)
 MANAGEMENT_PATHS = ("/management", "/api/mgmt/", "/api/lookups", "/api/combo-codes/", "/findings", "/api/findings",
-                    "/intel/", "/api/intel/acode/", "/review/", "/api/review/", "/api/notifications", "/overview")  # all the management role can open
+                    "/intel/", "/api/intel/acode/", "/review/", "/api/review/", "/api/notifications", "/overview",
+                    "/api/attack/technique/")  # all the management role can open
 MANAGEMENT_ONLY = "management"            # the permission (and role) that cannot be given to any other role   # all a researcher (no 'view') can open
 LOWEST_ROLE = "external"
 # "Peace of mind" (peace.py): an admin who ticks it keeps only the admin and audit duties and Settings; the platforms,
@@ -105,7 +108,7 @@ PEACE_PERMS = {"users", "audit", "settings", "view"}      # view: the platforms'
 # the work they step out of, by its addresses: the platforms, the findings and the portals (pages and their data)
 PEACE_CLOSED = ("/services", "/findings", "/api/findings", "/advisory", "/api/advisory", "/management", "/api/mgmt/", "/review/",
                 "/api/review/", "/combinations", "/api/combos", "/definitions", "/api/kb/", "/api/notes", "/intel/", "/api/intel",
-                "/api/analyst-codes", "/api/combo-codes/",
+                "/api/analyst-codes", "/api/combo-codes/", "/api/attack",
                 # the platforms' host-level data (review 2026-11-13: these answered an admin in Peace of mind, complete
                 # lists and the hosts CSV included); the Overview needs none of them (the map's stream stays: the page
                 # polls it behind the Overview, and Peace of mind sees it masked)

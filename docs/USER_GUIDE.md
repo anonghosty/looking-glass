@@ -45,7 +45,7 @@ partners see the country's situation at a glance on a wall screen.
 
 **Look into one host**
 1. Click its row in the stream (bottom), or its address in any list.
-2. Read every report, service and issue for it; use **Enrich with Malpedia** or **Explain issues**.
+2. Read every report, service and issue for it; use **Explain the names** or **Explain issues**.
 
 **Show the platforms on a wall screen or to partners**
 1. Sign in with an **external** account (always masked) and tick **Stay signed in**.
@@ -224,21 +224,25 @@ whole platform.
 **Hosts in several reports** and **Hosts with multiple issues** compare each host across all its reports of the
 day, so a blocklisted host that also runs an outdated web server shows up in both.
 
-**Malpedia** (analysts and admins, with a Malpedia token): host lists with infections have **Enrich with Malpedia**,
-which looks up every infection / category of the list once and adds a Malpedia column to the table and two columns
-to the CSV (families found, and why the others are not there: an activity such as scanning, a proxy network, a
-generic sinkhole label, or simply not catalogued). A host's own analysis (click its IP) looks up all its infections at
-once.
+**Explaining names** (analysts and admins; permission *malpedia*): host lists with infections have **Explain the
+names**, which looks up every infection / category of the list once (the researchers' definitions, Malpedia with a
+token, MISP Galaxy, MITRE ATT&CK) and adds *What it is* and *Source* columns to the table, and to the CSV *What it is*,
+*Description and references*, *Source* (with the licence) and *Also described by*. Names no source knows are explained
+from the reports (an activity such as scanning, a proxy network, a generic sinkhole label, or simply not catalogued).
+A host's own analysis (click its IP) looks up all its infections at once; **Look up** in an event's details explains
+one name.
 
 ![The Definitions page (researcher role)](media/screens/61-definitions.png)
 
-**Definitions for names Malpedia does not know** (researchers and admins: the **Definitions** page at `/definitions`,
+**Definitions for names no source knows** (researchers and admins: the **Definitions** page at `/definitions`,
 a page of its own; admins open it with the **Definitions** button on the intro page, the map, the services platform
 and Settings).
-Names that Malpedia cannot match are listed under **Malpedia doesn't know**; names that new reports bring in appear under
-**New, not checked yet** by themselves and are checked with Malpedia in the background every 30 minutes (or at once with
-**Check new names with Malpedia**). Scanning, brute-force and other activities are not malware and are left out.
-**Define** opens an editor:
+Names that none of the sources (Malpedia, MISP Galaxy, MITRE ATT&CK) can match are listed under **No source knows**; names
+that new reports bring in appear under **New, not checked yet** by themselves and are checked with Malpedia in the
+background every 30 minutes (or at once with **Look up names**). Scanning, brute-force and other activities are not
+malware and are left out. The **Definition / sources** column shows which sources know each name. **Define** opens an
+editor; when other sources describe the name, their text, other names, links and licence are shown above the form
+(each folded; **Add as reference** copies a link into your references):
 
 - **Name in Malpedia** (optional): if Malpedia lists the malware under another name, search it with **Find in Malpedia**
   and pick the family (for example `lumma-stealer-beacon` → `win.lumma`). Future look-ups of the name show that family.
@@ -248,10 +252,100 @@ Names that Malpedia cannot match are listed under **Malpedia doesn't know**; nam
 - **Title, type and a plain description**, and **References (evidence)**: web links to the research that supports the
   definition (vendor blogs, CERT advisories). At least one reference is needed; only `http(s)` links are accepted.
 
-From then on every user sees the definition (badge *Looking Glass definition*, with its references and who wrote it and
-when) in the stream, host lists, host analysis, the CSV and the PDF reports, instead of "not in Malpedia". Every change
-is in the audit log. Definitions written on a site are kept in `data/definitions.json` (kept on upgrades, included in
+From then on every user sees the definition first (badge *Looking Glass definition*, with its references and who wrote
+it and when) in the stream, host lists, host analysis, the CSV and the PDF reports, with the sources that also know the
+name below it. A researcher's definition always comes first and is never overwritten by a source. Every change is in
+the audit log. Definitions written on a site are kept in `data/definitions.json` (kept on upgrades, included in
 backups); the definitions that come with Looking Glass are in `data/infections.json` and `data/issues.json`.
+
+**One card per name, every source side by side.** Names are explained from four sources: the researchers' own
+definition, **Malpedia** (with a token), **MISP Galaxy** (its Malpedia, Botnet and Tool clusters) and **MITRE ATT&CK**
+(malware and tools). The last two are free public lists that Looking Glass keeps a copy of on the server. The card's
+headline is the researchers' definition when there is one, else the first source that knows the name, in that order.
+Under it, **Also described by** lists every other source that knows the name, each folded (click to open) with its
+description, other names, references and its own credit and licence. When none knows it, the card says **No source
+knows this name** and explains it from the evidence in the reports. Each card names its source and licence: Malpedia's
+content (also the MISP Galaxy Malpedia cluster) is licensed **CC BY-NC-SA 3.0**; the MISP Botnet and Tool clusters are
+CC0 1.0 / BSD 2-Clause; ATT&CK carries MITRE's notice (© The MITRE Corporation, reproduced and distributed with its
+permission). Names are matched by name or alternative name, ignoring case; only entries with a description count, and
+names the reports show are activities (scanning, brute force), general labels or old software are never matched to these
+lists.
+
+The same card is used everywhere names are explained: **Look up** in the event details and host analysis, **Explain the
+names** on the analysis lists (the table and the CSV get *What it is* and *Source* columns), the analysis, combination
+and Executive PDFs (description, then *Source: …* with the licence, then *Also described by*), the Executive portal's
+**Explain**, and the advisories' **Technical Details**.
+
+**Keeping the copies current.** The installer schedules a weekly refresh (Mondays 04:17, the user's crontab;
+`manage/fetch_offline_names.py --schedule`, `--unschedule` to remove it). A download is used only if it is valid, has
+enough entries and is not suddenly much smaller than the copy in use (under 70%); otherwise the old copy stays and the
+reason is logged. On the Definitions page the line above the table shows each copy's entries, download date and the
+ATT&CK version, and the last refresh; administrators (permission *settings*) have **Refresh sources** (at most once an
+hour). Every refresh, automatic or manual, is in the audit log with its date, counts and the ATT&CK version. From the
+command line:
+
+```
+manage/fetch_offline_names.py            # download (skipped if the copy is less than 7 days old)
+manage/fetch_offline_names.py --status   # what is installed, when it was downloaded, the versions
+manage/fetch_offline_names.py --force    # download now
+```
+
+The copies are `data/names_misp_galaxy.json`, `data/names_attack.json` and `data/attack_kev.json` (a few MB; the
+refresh log is `data/names_refresh.log`). A look-up only reads these files: no name, host or report is sent anywhere;
+only the downloads of the public files leave the server. Without them, look-ups work as before.
+
+**MITRE ATT&CK techniques.** Cards, documents and the Definitions page show which ATT&CK techniques a name, a report or a
+CVE stands for, always with how sure that is and what the constituent's part was:
+
+- **Observed** (the report saw it): for example a device that contacted a sinkholed command-and-control server over
+  HTTP: *T1071.001 Web Protocols, this device was used for it*; an address that decoy amplifiers saw forged requests
+  for: *T1498.002 Reflection Amplification, this address was the target of it*.
+- **Known for this malware** (MITRE's links): the techniques MITRE links to the ATT&CK Software entry that matches the
+  name, by tactic, with the groups MITRE says use it.
+- **Possible** (an exposure an attacker could use): for example an open DNS resolver: *T1498.002, attackers can use this
+  exposure for it* (the host is the tool; the victim is someone else); an open RDP service: *T1133, T1021*.
+- **CVEs**: the techniques MITRE's Center for Threat-Informed Defense maps to CISA KEV vulnerabilities (Mappings
+  Explorer, Apache 2.0): how it is exploited, its main and further impact.
+
+Every Shadowserver report has a **mapping**. A shipped rule table (`data/attack_rules.json`) suggests the technique
+from the report's name, type and group when the report first arrives; it is *suggested* until a researcher reviews it.
+On the Definitions page, **Looking Glass asks: which MITRE ATT&CK techniques fit these reports?** lists the reports to
+look at (*please check*, *suggested*, *not mapped yet*). **Confirm** accepts the suggestion; **Change** opens a short
+list of 5 to 10 techniques that fit that kind of report, then a search over all of ATT&CK by ID, word or tactic (from the
+local copy; retired techniques are hidden). Several techniques can be chosen, or **No ATT&CK technique fits**, with an
+optional note. Every change is in the audit log, and a reviewed mapping is never replaced by a suggestion: it only goes
+back to *please check*, keeping the old mapping shown, when Shadowserver changes the report's type or description, or
+when MITRE retires one of its techniques.
+
+**New ATT&CK versions** (MITRE publishes about twice a year) are noticed by the weekly refresh and compared with the old
+one: a technique MITRE revoked gets MITRE's named replacement as the suggestion and is shown as *retired in vN* until
+confirmed; one deprecated with no replacement goes to *please check* with the short list; one split into sub-techniques
+offers them; a renamed one simply shows its new name; the malware families' technique links are updated by themselves;
+new techniques are in the picker at once. The Definitions page shows one notice per update (for example *ATT&CK v18 →
+v19: 2 mappings to check, 14 new techniques, 3 malware families updated*) with a button to show just those mappings, and
+the update is one entry in the audit log (old and new version, counts).
+
+**What each technique means, and how to defend.** Every technique carries MITRE's own short definition (the first
+sentences of its description) and up to three of MITRE's mitigations, the ones that suit the kind of report first: for
+an exposed or accessible service *M1035 Limit Access to Resource Over Network* comes first; for an infection or
+command-and-control traffic, network intrusion prevention and traffic filtering. Cards, the Definitions page and the
+Executive portal show them on hover (or with **What it is and how to defend**).
+
+**ATT&CK in advisories.** The advisory's **MITRE ATT&CK techniques** section (in the PDF, the preview and the advisory
+page) gives for each technique: its ID, name, tactic and certainty; **What it is (MITRE)**; **Why it is in this advisory
+(Looking Glass)**, our own words from the mapping and the advisory's figures (how many hosts, the products seen most);
+**How to defend (MITRE mitigations)**; and the link to attack.mitre.org. On the advisory page, **MITRE's full
+description** opens under each one. **Only reviewed mappings go to recipients**: a mapping still only *suggested* is
+flagged on the advisory page, and the advisor confirms it for this advisory or removes it. Until every one is decided,
+the report cannot be generated (the server refuses, not only the page), and a report that somehow carries an unreviewed
+mapping cannot be marked as sent. Each decision is in the advisory's history and the audit log, and changing one after
+generating makes the report out of date.
+
+**Documents keep the version they were made with.** PDFs and CSV files name the ATT&CK version they used (*MITRE ATT&CK
+v18*) and are never rewritten. An advisory keeps, with each generated report, the techniques, MITRE's definitions and
+mitigations, our "why" lines and the version it carried, so a sent advisory still shows exactly what the recipient got;
+new documents use the current version. ATT&CK is © The MITRE
+Corporation and is reproduced and distributed with its permission.
 
 **Who wrote it.** Definitions, notes and network corrections name their author by the **full name** given when the
 account was registered, not the username. The definitions that come with Looking Glass are signed **Looking Glass**.
@@ -381,8 +475,9 @@ or the Findings page) is for roles that see addresses and may export:
 lookup, TLS name, user agent and tags; for services, the associated tags and CVEs). The search is off in Demo mode, a
 search can be downloaded for an hour by the analyst who ran it, and every search is in the audit log.
 
-**Without a Malpedia token** the same buttons (**Enrich with definitions**, the look-ups in the stream and the host
+**Without a Malpedia token** the same buttons (**Explain the names**, the look-ups in the stream and the host
 analysis) still work: they show the Looking Glass definitions written by researchers and the built-in knowledge base,
+then MISP Galaxy and MITRE ATT&CK when their copies are installed (`manage/fetch_offline_names.py`, see Definitions),
 and a plain explanation for anything not defined yet ("No definition yet").
 
 ![Issues on the services platform](media/screens/32-services-insight.png)
@@ -392,7 +487,7 @@ and a plain explanation for anything not defined yet ("No definition yet").
 score, weakness, references), in CISA's Known Exploited Vulnerabilities catalog (**actively exploited**, with the date
 CISA added it, ransomware use and CISA's required action) and in FIRST EPSS (probability of exploitation in the next 30
 days). Issues that are not CVEs (Exposed admin panel, Expired certificate, POODLE, BADCANDY…) are never looked up: their
-definition and references are used. A progress window shows each step and every issue as it is looked up (it takes a few seconds; the look-up continues if you close the window). The CVEs are looked up in batches: the official CVE.org records at once, NVD's own analysis in the background within minutes. **Enrich with Malpedia** (network communications) uses the same progress window.
+definition and references are used. A progress window shows each step and every issue as it is looked up (it takes a few seconds; the look-up continues if you close the window). The CVEs are looked up in batches: the official CVE.org records at once, NVD's own analysis in the background within minutes. **Explain the names** (network communications) uses the same progress window.
 
 **Network names and types** (on the Definitions page, researchers and admins; permission *networks*. Settings shows
 them read-only for reference). Correct a

@@ -10,6 +10,9 @@ import os
 from datetime import datetime, timezone
 from xml.sax.saxutils import escape
 
+import attack_map
+import name_sources
+
 from reportlab.graphics.charts.barcharts import HorizontalBarChart, VerticalBarChart
 from reportlab.graphics.shapes import Drawing, String
 from reportlab.lib import colors
@@ -33,7 +36,7 @@ CARD_BG = colors.HexColor("#111627")
 HEAD_BG = colors.HexColor("#1b2238")
 BODY = colors.HexColor("#d6ddee")
 KINDS = {"found": colors.HexColor("#2e7d5b"), "actor": colors.HexColor("#b7791f"), "curated": colors.HexColor("#6d4fc4"),
-         "none": colors.HexColor("#8a93a3"), "kev": colors.HexColor("#c0392b"), "cve": colors.HexColor("#2f5fb3")}
+         "reference": colors.HexColor("#3b7a8c"), "none": colors.HexColor("#8a93a3"), "kev": colors.HexColor("#c0392b"), "cve": colors.HexColor("#2f5fb3")}
 MAX_ROWS = 5000                     # rows printed in the complete list (the CSV has every row)
 
 # ------------------------------------------------------------------ fonts: Unicode where the server has DejaVu
@@ -284,25 +287,32 @@ def _kind(x):
         return "found", "Malpedia"
     if x.get("curated"):
         return "curated", "Looking Glass definition"
+    if x.get("reference"):                          # MISP Galaxy / MITRE ATT&CK, from the copies in data/ (offline_names.py)
+        return "reference", x.get("source_label") or "Reference"
     if x.get("pending"):
         return "none", "Not checked yet"
-    return "none", "No definition yet" if x.get("offline") else "Not in Malpedia"
+    return "none", "No source knows this name"
 
 
 def enrichment_block(name, x, stat, S, width):
     """One infection / category: what it is, from Malpedia or the researchers' definitions, with references."""
     k, badge = _kind(x)
     shown = (x.get("kev") or {}).get("name", "") if x.get("kind") == "cve" else (x.get("name") or x.get("title") or "")
-    head = Table([[P(t(badge), S["badge"]), P(f"<b>{t(name)}</b>" + (f"  =  {t(shown)}" if shown and shown != name else ""), S["h2"])]],
+    # the name as reported is the card's heading, then the source's badge with what that source calls it
+    title = P(f"<b>{t(name)}</b>", S["h2"])
+    head = Table([[P(t(badge), S["badge"]), P(t(shown) if shown and shown != name else "", S["meta"])]],
                  colWidths=[46 * mm, width - 46 * mm])
     head.setStyle(TableStyle([("BACKGROUND", (0, 0), (0, 0), KINDS[k]), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                               ("LEFTPADDING", (0, 0), (0, 0), 5), ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2)]))
-    out = [head]
+    out = [title, head]
     facts = []
     if stat:
         facts.append(f"In this selection: {stat}.")
     if k == "found":
         facts.append(f"Malpedia family {x.get('family')}" + (f", matched by {x['matched_by']}" if x.get("matched_by") else "") + ".")
+    if k == "reference":
+        facts.append(f"Answered by {x.get('source_label')}" + (f" ({x['id']})" if x.get("id") else "")
+                     + (f", matched by {x['matched_by']}" if x.get("matched_by") else "") + ".")
     if k == "actor":
         facts.append(f'"{name}" is a threat actor (a group of attackers), not a malware program'
                      + (f"; matched by {x['matched_by']}" if x.get("matched_by") else "") + ".")
@@ -378,12 +388,22 @@ def enrichment_block(name, x, stat, S, width):
     refs += [u for u in (x.get("curated_references") or []) if u not in refs]
     if refs:
         out.append(P(f"<b>{'Evidence / references' if k == 'curated' else 'References'}"
-                     + (f" ({x.get('reference_count')} in {x.get('ref_source') or 'NVD' if x.get('kind') == 'cve' else 'Malpedia'}, {len(refs)} shown)"
+                     + (f" ({x.get('reference_count')} in {x.get('ref_source') or 'NVD' if x.get('kind') == 'cve' else x.get('source_label') or 'Malpedia'}, {len(refs)} shown)"
                         if x.get("reference_count", 0) > len(refs) else "")
                      + ":</b>", S["meta"]))
         out += [link(u, S["link"]) for u in refs[:10]]
+    if x.get("kind") != "cve":                     # the source and its licence travel with its text (name_sources.py)
+        src = name_sources.source_text(x)
+        if src:
+            out.append(P(f"<b>Source:</b> {t(src[len('Source: '):])}", S["meta"]))
+        also = name_sources.also_text(x)
+        if also:
+            out.append(P(f"<b>Also described by:</b> {t(also[len('Also described by: '):])}", S["meta"]))
+    for ln in attack_map.attack_lines(x.get("attack")):   # MITRE ATT&CK, with the version this PDF was made with
+        head_, _, rest_ = ln.partition(": ")
+        out.append(P(f"<b>{t(head_)}:</b> {t(rest_)}", S["meta"]))
     out.append(Spacer(1, 7))
-    return KeepTogether(out[:4]), out[4:]
+    return KeepTogether(out[:5]), out[5:]
 
 
 # ------------------------------------------------------------------ the document
@@ -523,12 +543,14 @@ def build(spec):
         total = spec.get("total", len(rows))
         st.append(P(t(f"{total:,} entr{'y' if total == 1 else 'ies'}"
                       + (f"; the first {MAX_ROWS:,} are printed here (the CSV download has all of them)" if total > MAX_ROWS else "")
-                      + (". The last column gives what each infection / category is." if any(k == "_explained" for k, _ in cols) else ".")),
+                      + (". The last columns give what each infection / category is and which sources know it."
+                         if any(k == "_source" for k, _ in cols) else
+                         ". The last column gives what each infection / category is." if any(k == "_explained" for k, _ in cols) else ".")),
                       S["meta"]))
         st.append(Spacer(1, 4))
         weights = {"ip": 1.1, "dst": 1.1, "followup": 1.5, "infections": 1.7, "infection": 1.4, "reports": 1.7, "issues": 1.8,
                    "services": 1.6, "network": 1.5, "kinds": 1.2, "domains": 1.5, "domain": 1.6, "name": 1.6, "report": 1.4,
-                   "_explained": 2.6, "device": 1.4, "events": 0.6, "hosts": 0.6, "critical": 0.6, "share": 0.7, "first": 0.8,
+                   "_explained": 2.6, "_source": 1.3, "_attack": 1.4, "device": 1.4, "events": 0.6, "hosts": 0.6, "critical": 0.6, "share": 0.7, "first": 0.8,
                    "last": 0.8, "interval": 0.8, "rhythm": 0.7, "city": 0.9, "region": 0.9, "country": 0.7, "ports": 0.8}
         wsum = sum(weights.get(k, 1.0) for k, _ in cols)
         widths = [W * weights.get(k, 1.0) / wsum for k, _ in cols]

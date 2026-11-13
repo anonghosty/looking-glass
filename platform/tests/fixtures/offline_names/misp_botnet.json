@@ -1,0 +1,10 @@
+{
+  "authors": ["fixture"], "category": "tool", "description": "Fixture: made-up botnet cluster entries.",
+  "name": "Botnet", "source": "MISP Project", "type": "botnet", "uuid": "00000000-0000-4000-8000-000000000002", "version": 1,
+  "values": [
+    {"value": "Sharedname", "uuid": "00000000-0000-4000-8000-000000000021",
+     "description": "The botnet-cluster text for Sharedname (should lose to the Malpedia cluster).", "meta": {"refs": ["https://example.org/shared-botnet"]}},
+    {"value": "Herdbot", "uuid": "00000000-0000-4000-8000-000000000022",
+     "description": "Herdbot is a made-up botnet of home routers, for the tests.", "meta": {"refs": ["https://example.org/herdbot"]}}
+  ]
+}

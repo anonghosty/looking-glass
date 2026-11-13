@@ -1,0 +1,8 @@
+{
+  "authors": ["fixture"], "category": "tool", "description": "Fixture: made-up tool cluster entries.",
+  "name": "Tool", "source": "MISP Project", "type": "tool", "uuid": "00000000-0000-4000-8000-000000000003", "version": 1,
+  "values": [
+    {"value": "Pokekit", "uuid": "00000000-0000-4000-8000-000000000031",
+     "description": "Pokekit is a made-up remote administration tool, for the tests.", "meta": {"synonyms": ["PK-Tool"], "refs": []}}
+  ]
+}

@@ -201,8 +201,10 @@ def install(app, audit, allowed, deny, who, to_csv=None):
             return deny()
         try:
             earlier = audit_verifier.parse_earlier(request.args.get("earlier", ""))
-        except ValueError as e:
-            return jsonify(error=f"The earlier head: {e}."), 400
+        except ValueError:
+            # a fixed message, never the exception text (code scanning #29)
+            return jsonify(error="The earlier head: expected the 64-character head hash, optionally followed by @ "
+                                 "and the entry number."), 400
         # under the log's lock, as the integrity check: a rotation or a retention run halfway through the read would
         # otherwise show a break that is not there (review 2026-11-13)
         import fcntl

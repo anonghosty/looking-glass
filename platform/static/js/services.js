@@ -1451,6 +1451,18 @@
       if (x.cwes?.length) card.append(el("p", "mp-meta", `Weakness: ${x.cwes.join(", ")}`));
       if (x.note) card.append(el("p", "mp-meta", `Note by ${x.note_by || "a researcher"}: ${x.note}`));
       refList(card, [x.kev_url, x.nvd ? "" : x.cveorg_url, ...(x.references || []).slice(0, 6), ...(x.curated_references || [])], "References:");
+      if (x.attack?.techniques?.length) {          // MITRE ATT&CK for the CVE: CTID's KEV mappings (attack_map.py)
+        const box = el("div", "mp-attack");
+        box.append(el("p", "mp-meta mp-attack-h", `MITRE ATT&CK (v${x.attack.version || "?"}): what attackers can use this vulnerability for`));
+        const ul = el("ul", "mp-attack-list");
+        for (const t of x.attack.techniques) {
+          const li = el("li"); li.append(el("span", "mp-cert mp-cert-possible", t.kind || "Possible"), extLink(t.url, t.id), document.createTextNode(` ${t.name}`));
+          if (t.tactics?.length) li.append(el("small", "muted", ` · ${t.tactics.join(", ")}`));
+          ul.append(li);
+        }
+        box.append(ul, el("p", "mp-meta mp-licence", `Source: ${x.attack.licence || x.attack.source}${x.attack.mapped_with ? ` Mapped with ATT&CK v${x.attack.mapped_with}.` : ""}`));
+        card.append(box);
+      }
     } else if (x.curated) {
       card.classList.add("mp-curated");
       head.append(el("span", "badge mp-badge mp-badge-kb", "Looking Glass definition"), el("b", null, `${name}: ${x.title}`)); card.append(head);

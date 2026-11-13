@@ -951,6 +951,100 @@ td.mp-cell { min-width: 260px; max-width: 420px; white-space: normal; }
 /* Malpedia card: a definition written by an administrator (Settings) */
 .mp-badge-kb { background: rgba(139, 92, 246, .16); color: #c4b5fd; border-color: rgba(139, 92, 246, .45); }
 .mp-card.mp-curated { border-color: rgba(139, 92, 246, .35); }
+/* MISP Galaxy / MITRE ATT&CK answers (offline copies, offline_names.py) */
+.mp-badge-ref { background: rgba(56, 160, 180, .16); color: #9fdbe6; border-color: rgba(56, 160, 180, .45); }
+.mp-card.mp-reference { border-color: rgba(56, 160, 180, .35); }
+.mp-card .mp-licence { font-size: .92em; opacity: .85; }
+/* each name's card stands on its own: its reported name in bold with the source's badge, a clear border, space between */
+.mp-card { border-width: 1.5px; border-color: rgba(148, 163, 184, .45); }
+.mp-cards { gap: 14px; }
+.mp-mini > .mp-card, .mp-host .mp-card, .mp .mp-card { margin: 8px 0 14px; }
+.mp-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: -2px 0 6px; padding-bottom: 6px;
+  border-bottom: 1px solid rgba(148, 163, 184, .3); }
+.mp-name-row .mp-name { font-size: 1.08em; color: var(--text); overflow-wrap: anywhere; }
+/* "Also described by": the other sources that know the name, each folded (name_sources.py) */
+.mp-also { margin-top: 6px; border-top: 1px dashed rgba(148, 163, 184, .25); padding-top: 4px; }
+.mp-also .mp-also-h { margin-bottom: 2px; }
+.mp-also-item { margin: 3px 0; }
+.mp-also-item > summary { cursor: pointer; list-style-position: inside; }
+.mp-also-item[open] { padding-bottom: 4px; }
+.mp-src-cell { font-size: .9em; white-space: normal; min-width: 140px; }
+/* Definitions page: the offline sources' status line and Refresh button; the other sources beside the editor */
+.dz-sources { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 6px 0 2px; font-size: .88em; }
+.dz-sources .dz-sources-line { margin: 0; flex: 1 1 100%; }
+.dz-sources .dz-sources-line.bad { color: #f6a5ad; }
+.dz-sources .dz-sources-line.ok { color: #9be3bf; }
+.kb-others { margin: 0 0 10px; padding: 8px 10px; border: 1px solid rgba(56, 160, 180, .3); border-radius: 8px; max-height: 260px; overflow: auto; }
+.kb-other { margin: 4px 0; }
+.kb-other > summary { cursor: pointer; }
+.kb-other-desc { margin: 4px 0; font-size: .92em; }
+.kb-other-refs { margin: 2px 0 4px 16px; padding: 0; font-size: .88em; }
+.kb-other-refs li { margin: 2px 0; overflow-wrap: anywhere; }
+/* MITRE ATT&CK on cards and the Definitions page (attack_map.py) */
+.mp-attack { margin-top: 6px; border-top: 1px dashed rgba(148, 163, 184, .25); padding-top: 4px; }
+.mp-attack-list { list-style: none; margin: 2px 0 4px; padding: 0; }
+.mp-attack-list li { margin: 3px 0; }
+.mp-cert { display: inline-block; font-size: .78em; padding: 0 6px; margin-right: 6px; border-radius: 9px; border: 1px solid; }
+.mp-cert-observed { color: #f6c27a; border-color: rgba(246, 194, 122, .5); }
+.mp-cert-possible { color: #9fdbe6; border-color: rgba(56, 160, 180, .5); }
+.mp-cert-known { color: #c4b5fd; border-color: rgba(139, 92, 246, .45); }
+.mp-attack-known > summary { cursor: pointer; font-size: .9em; }
+/* Definitions page: the ATT&CK mappings card (attack-map.js), on the page's own tokens (settings.css: dz-*, lg-btn) */
+.am-card .am-notice { margin: 14px 0 0; border-color: rgba(245, 181, 74, .45); background: rgba(245, 181, 74, .06); }
+.am-notice .dz-panel-row { align-items: center; justify-content: space-between; }
+.am-notice-text { margin: 0; font-size: 13px; }
+.am-scroll { max-height: 640px; overflow: auto; display: grid; gap: 10px; padding: 2px; }
+.am-empty { margin: 0; padding: 26px 12px; text-align: center; color: var(--muted); font-size: 13px; border: 1px solid var(--border); border-radius: 11px; }
+.am-report { padding: 12px 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-2); min-width: 0; }
+.am-report.am-check { border-color: rgba(245, 181, 74, .45); }
+.am-report-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.am-report-title { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -.005em; overflow-wrap: anywhere; }
+.am-report .dz-by { margin: 2px 0 0; overflow-wrap: anywhere; }
+.am-why { margin: 6px 0 0; font-size: 12.8px; color: var(--text-2); line-height: 1.5; }
+.am-reason { margin: 6px 0 0; font-size: 12.8px; color: #f5b54a; line-height: 1.5; }
+.am-cert { display: inline-block; padding: 1px 7px; border-radius: 6px; font-size: 11px; font-weight: 600; border: 1px solid var(--border-strong); color: var(--text-2); }
+.am-cert-observed { color: #f5b54a; border-color: rgba(245, 181, 74, .4); }
+.am-cert-possible { color: #a9c3ff; border-color: rgba(91, 141, 239, .4); }
+.am-cert-known { color: #c4b5fd; border-color: rgba(139, 92, 246, .4); }
+.am-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
+.am-chip { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px 6px; max-width: 100%; padding: 4px 8px; border-radius: 8px;
+  border: 1px solid var(--border-strong); background: rgba(255, 255, 255, .03); font-size: 12.5px; min-width: 0; }
+.am-chip-name { min-width: 8em; flex: 0 1 auto; }
+.am-opt .am-chip { flex: 1 1 auto; }
+.am-group .am-tactic { display: none; }          /* the group's heading already names the tactic */
+.am-chip-id { color: #a9c3ff; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.am-chip-id:hover { text-decoration: underline; }
+.am-chip-id:focus-visible { outline: 2px solid #5b8def; outline-offset: 2px; border-radius: 3px; }
+.am-chip-name { color: var(--text); overflow-wrap: break-word; }
+.am-tactic { font-size: 10.5px; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 6px; white-space: nowrap; }
+.am-chip-old { opacity: .7; } .am-chip-old .am-chip-id, .am-chip-old .am-chip-name { text-decoration: line-through; }
+.am-chip-x { border: 0; background: transparent; color: var(--muted); font-size: 15px; line-height: 1; cursor: pointer; padding: 0 2px; border-radius: 4px; }
+.am-chip-x:hover { color: var(--text); } .am-chip-x:focus-visible { outline: 2px solid #5b8def; }
+.am-retired { font-size: 11px; color: #f5b54a; }
+.am-ba { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: start; margin-top: 10px;
+  padding: 10px 12px; border: 1px dashed rgba(245, 181, 74, .45); border-radius: 10px; }
+.am-ba-side { min-width: 0; } .am-ba-side .am-chips { margin-top: 4px; }
+.am-ba-arrow { align-self: center; font-size: 18px; color: var(--muted); }
+.am-ba-label { display: block; margin: 0; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.am-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.am-more { justify-self: center; }
+.am-picker { margin-top: 12px; display: grid; gap: 8px; }
+.am-picker-h { margin: 0; font-size: 13px; }
+.am-chosen { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: 9px; background: rgba(255, 255, 255, .02); }
+.am-chosen .am-ba-label { margin-right: 4px; }
+.am-groups { display: grid; gap: 6px; }
+.am-group { margin: 0; padding: 6px 10px 8px; border: 1px solid var(--border); border-radius: 9px; min-width: 0; }
+.am-group legend { padding: 0 4px; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.am-opt { display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; min-width: 0; }
+.am-opt input[type=checkbox] { width: 16px; height: 16px; flex: none; accent-color: #5b8def; cursor: pointer; }
+.am-opt input[type=checkbox]:focus-visible { outline: 2px solid #5b8def; outline-offset: 2px; }
+.am-nofit { font-size: 12.8px; color: var(--text-2); }
+.am-q, .am-note { box-sizing: border-box; border-color: var(--border-strong); }
+.am-note { resize: vertical; font: inherit; }
+@media (max-width: 640px) {
+  .am-ba { grid-template-columns: 1fr; } .am-ba-arrow { transform: rotate(90deg); justify-self: start; }
+  .am-report { padding: 10px 11px; } .am-scroll { max-height: none; }
+}
 .mp-badge-actor { background: rgba(245, 181, 74, .14); color: #f5c87a; border-color: rgba(245, 181, 74, .45); }
 .mp-card.mp-actor { border-color: rgba(245, 181, 74, .3); }
 /* Issues explained (services): CVEs */
