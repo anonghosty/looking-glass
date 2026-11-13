@@ -149,7 +149,13 @@ def install(app, ctx):
     def kept_path(fid):
         if not re.fullmatch(r"\d{1,9}", str(fid)):
             raise ValueError("not a finding number")
-        return os.path.join(paths["store"], f"{fid}.json")
+        # and the path stays inside the kept searches' folder (CodeQL py/path-injection, 2026-11-13: the number check
+        # already allows nothing else; this makes it plain)
+        base = os.path.realpath(paths["store"])
+        p = os.path.realpath(os.path.join(base, f"{fid}.json"))
+        if not p.startswith(base + os.sep):
+            raise ValueError("not a finding number")
+        return p
 
     def keep_search(fid, j):
         """The search's records (their ids, per day), so the report can be made from exactly them later (owner-only)."""

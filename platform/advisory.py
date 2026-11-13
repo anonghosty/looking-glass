@@ -183,7 +183,13 @@ class Store:
     def file_path(self, ref, n):
         if not re.fullmatch(r"ADV-\d{4}-\d{3,6}", str(ref)) or not re.fullmatch(r"\d{1,4}", str(n)):
             raise ValueError("bad file")
-        return os.path.join(self.dir, "files", ref, f"{n}.zip")
+        # and the path stays inside the advisories' file folder, whatever the checks above let through (CodeQL
+        # py/path-injection, 2026-11-13: the patterns already allow nothing else; this makes it plain)
+        base = os.path.realpath(os.path.join(self.dir, "files"))
+        p = os.path.realpath(os.path.join(base, str(ref), f"{n}.zip"))
+        if not p.startswith(base + os.sep):
+            raise ValueError("bad file")
+        return p
 
     def keep_file(self, ref, n, data):
         """Keep a generated report as file n, or the next free number: a kept file is never written over (two

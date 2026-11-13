@@ -12,7 +12,9 @@ mask(text) -> masked text.  looks_like_host(text) -> True when the whole value i
 import re
 
 MASKS = [
-    (re.compile(r"\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b"), "<email>"),
+    # an address starts where a run of its characters starts (the look-behind): starting at every word boundary inside a
+    # long run (1.1.1.…) and scanning to its end for an "@" took time with the square of its length (2026-11-13)
+    (re.compile(r"(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b"), "<email>"),
     # dates and times first: a time (10:22:31) must not be taken for an IPv6 address
     (re.compile(r"\b(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*,?\s+\d{1,2}\s+[a-z]{3,9}\s+\d{2,4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?"
                 r"(?:\s*[+-]\d{4}|\s+[A-Z]{2,4})?", re.I), "<date>"),

@@ -51,7 +51,9 @@ ok("::ffff:41.66.1.2 and 41.66.1.2 get the same label",
    host_label.label_text("::ffff:41.66.1.2") == host_label.label_text("41.66.1.2"))
 print("Long runs of colons cost little (review 2026-11-13: 3,000 colons took 6.9 s)")
 for name, s in (("8,000 colons", ":" * 8000), ("value= and 8,000 colons", "value=" + ":" * 8000 + "1"),
-                ("4,000 '1:'", "1:" * 4000), ("2,000 '::ffff:'", "::ffff:" * 2000), ("2,000 '1.1:'", "1.1:" * 2000)):
+                ("4,000 '1:'", "1:" * 4000), ("2,000 '::ffff:'", "::ffff:" * 2000), ("2,000 '1.1:'", "1.1:" * 2000),
+                # long runs of dots too (CodeQL py/polynomial-redos, 2026-11-13: these took time with the square of the length)
+                ("50,000 dots", "." * 50000), ("25,000 'a.'", "a." * 25000), ("25,000 '1.'", "1." * 25000)):
     t0 = time.perf_counter()
     ip_find.spans(s); hostmask.mask(s); host_label.label_text(s)
     took = time.perf_counter() - t0

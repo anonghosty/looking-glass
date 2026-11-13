@@ -8,7 +8,7 @@ temporary audit log (the real data/audit.log is never written by this check):
   archives on rotation, retention that removes old archives without breaking the chain, the old .1 copy adopted;
 * evidence: CSV (formula-safe) and the PDF report, each export logged.
 Run: .venv/bin/python tests/check_auditor_portal.py"""
-import gzip, io, json, os, shutil, sys, tempfile, time
+import gzip, io, json, os, re, shutil, sys, tempfile, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("LG_QUIET", "1")
 os.environ.setdefault("THREATMAP_SCHEDULE", "0")
@@ -628,7 +628,8 @@ try:
     mods = {a.name.split(".")[0] for n in ast.walk(ast.parse(vsrc)) if isinstance(n, ast.Import) for a in n.names} | \
            {n.module.split(".")[0] for n in ast.walk(ast.parse(vsrc)) if isinstance(n, ast.ImportFrom) and n.module}
     ok("the README gives the verifier's own SHA-256, to compare with the one published on GitHub",
-       hashlib.sha256(z.read("verify_audit_log.py")).hexdigest() in z.read("README.txt").decode() and "github.com" in z.read("README.txt").decode())
+       hashlib.sha256(z.read("verify_audit_log.py")).hexdigest() in z.read("README.txt").decode()
+       and re.search(r"https://github\.com/[\w.-]+/[\w.-]+", z.read("README.txt").decode()))   # the full link to the repository
     ok("the verifier needs the Python standard library only", mods <= {"argparse", "glob", "gzip", "hashlib", "json", "os", "re", "sys", "time"}, ", ".join(sorted(mods)))
     pkg = os.path.join(tmp, "pkg"); z.extractall(pkg)
 

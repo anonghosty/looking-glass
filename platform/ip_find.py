@@ -20,7 +20,10 @@ import re
 _V4 = re.compile(r"(?<!\d)(?<!\d\.)((?:0*\d{1,3}\.){3}0*\d{1,3})(?!\d)(?!\.\d)")
 # IPv6 candidates: runs of hex digits, colons and dots (dots for an IPv4 tail, ::ffff:41.66.1.2; review 2026-11-13: the
 # run used to stop before the tail, so only "::ffff:41" was masked and ".66.1.2" was left); checked with ipaddress below
-_V6 = re.compile(r"[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*")
+# Each run is matched once, whole, from its first character (the look-behind): the earlier "[...]*:[...]*" retried
+# from every position of a long run without a colon, so a long run of dots took time with the square of its length
+# (CodeQL py/polynomial-redos, 2026-11-13). Runs with fewer than two colons hold no IPv6 address and are skipped.
+_V6 = re.compile(r"(?<![0-9A-Fa-f:.])[0-9A-Fa-f:.]+")
 # the longest IPv6 text there is (8 groups, or 6 groups and an IPv4 tail) is 45 characters, with at most 7 colons;
 # nothing longer is tried, so the work grows with the length of the text, not its square (review 2026-11-13: 3,000
 # colons took 6.9 s)
@@ -124,7 +127,8 @@ def spans(text):
         if ip and not _is_version(text, m.start(1), m.end(1)):
             v4.append((m.start(1), m.end(1), ip))
     v6 = [(m.start() + off + o, m.start() + off + o + n, ip)
-          for m in _V6.finditer(text) for off, seg in _segments(m.group(0)) for o, n, ip in _v6_in(seg)]
+          for m in _V6.finditer(text) if m.group(0).count(":") >= 2
+          for off, seg in _segments(m.group(0)) for o, n, ip in _v6_in(seg)]
     # one sweep over both, left to right (both lists are in order): an IPv6 address that touches an IPv4 (an
     # IPv4-mapped tail) replaces it and covers all of it even where the two only partly overlap, so no digits of
     # either are left; overlapping hits are joined into one

@@ -31,7 +31,9 @@ pa = Flask("proxytest")
 
 @pa.route("/who")
 def who():
-    return f"{request.remote_addr} {request.scheme}"
+    # plain text, never read as a page (CodeQL py/reflective-xss on this test-only app, 2026-11-13)
+    from flask import Response
+    return Response(f"{request.remote_addr} {request.scheme}", mimetype="text/plain")
 
 
 @pa.route("/healthz")
