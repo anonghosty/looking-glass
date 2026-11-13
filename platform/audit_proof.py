@@ -109,7 +109,12 @@ def snapshot_records(log):
     paths = sorted(os.path.join(arch, n) for n in os.listdir(arch) if n.startswith("audit-") and n.endswith(".log.gz")) \
         if os.path.isdir(arch) else []
     for p in paths + [os.path.join(log, "audit.log")]:
-        for ln in audit_verifier._lines(p):
+        try:
+            lines = audit_verifier._lines(p)
+        except audit_verifier.Damaged:      # a damaged archive: the rest is still listed; the check reports the damage
+            skipped += 1
+            continue
+        for ln in lines:
             try:
                 rec = json.loads(ln)
             except ValueError:

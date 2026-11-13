@@ -285,7 +285,10 @@ body.is-paused #replayDate, body.is-paused #clockDate, body.is-waiting #replayDa
 .chip-n { font: 11px var(--mono); color: var(--muted); margin-left: 2px; }
 .r-ep { display: flex; flex-direction: column; min-width: 0; }
 .r-ep .top { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.r-ep .ip { font: 500 12px var(--mono); color: var(--text); white-space: nowrap; }
+/* a long address (IPv6) stays in its column, cut with an ellipsis; the whole address is in its tooltip (2026-11-13: it
+   ran over the destination beside it) */
+.r-ep .ip { font: 500 12px var(--mono); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.r-ep .top img, .r-ep .top .flag { flex: none; }
 .r-ep .place, .r-ep .sub { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .r-arrow { color: var(--muted); }
 .r-proto { font: 11px var(--mono); color: var(--muted); }
@@ -1051,6 +1054,8 @@ details.mp-mini.kev > summary { color: #ff9a9e; }
 /* Log out is always the last button of a header, on every page of both platforms */
 .hud-right > .account-form, .hud-right > .mg-logout { order: 99; }
 .hud-right > .account-form > button { order: 99; }   /* the form has no box of its own: its button is the header item */
+/* …and Settings the one before it, on every page (2026-11-13: on the two platforms it was third, after the Overview) */
+.hud-right > #btnSettings, .hud-right > a.nav-ic[href="/settings"], .hud-right > button.nav-ic[data-go="/settings"] { order: 98; }
 
 /* "Make analyst code" in the analysis window (acode-make.js) */
 .ac-btn { border-color: rgba(245, 181, 74, .45) !important; color: #f5d9a8 !important; }

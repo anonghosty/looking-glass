@@ -1221,7 +1221,10 @@
     const box = el("span", cls);
     // a side the report does not have at all (source-only or destination-only reports) says so
     const none = !ip && !cc && !place;
-    const top = el("span", "top"); top.append(flagImg(cc), el("span", "ip", none ? "not reported" : `${ip || "n/a"}${port ? ":" + port : ""}`));
+    // an IPv6 address with a port is written [address]:port, so the port is not read as one more group of the address
+    const shown = none ? "not reported" : `${ip && port && ip.includes(":") ? `[${ip}]` : (ip || "n/a")}${port ? ":" + port : ""}`;
+    const ipEl = el("span", "ip", shown); ipEl.title = shown;          // the whole address when the column cuts it
+    const top = el("span", "top"); top.append(flagImg(cc), ipEl);
     if (none) top.title = "This report does not include this side of the connection";
     const pl = el("span", "place", place); pl.title = place;
     box.append(top, pl);
@@ -2250,11 +2253,12 @@
   }
   async function downloadDrill(r, d, btn) {
     const mp = r.mp;
-    if (r.total > r.rows.length) {   // the table shows the first rows; the file gets all of them
-      // busy while the full list loads; say so when only the rows shown are saved (review 2026-11-13)
+    {   // the file is always fetched from the server, whole: every download is then in the audit log as an export,
+        // a short list that fits on screen too (review 2026-11-13: it was saved from the rows shown, with no request)
+      // busy while the full list loads; nothing is saved when the server refuses or does not answer
       const label = btn ? btn.textContent : ""; if (btn) { btn.disabled = true; btn.textContent = "Preparing…"; }
-      try { r = await getJSON(`/api/insight/drill?kind=${encodeURIComponent(d.kind)}&value=${encodeURIComponent(d.value)}&metric=${r.metric}&at=${encodeURIComponent(d.as_of)}&all=1`); }
-      catch (err) { toast(`Saved only the first ${fmt(r.rows.length)} rows: ${err.message}`); }   // fall back to the rows shown
+      try { r = await getJSON(`/api/insight/drill?kind=${encodeURIComponent(d.kind)}&value=${encodeURIComponent(d.value)}&metric=${r.metric}&at=${encodeURIComponent(d.as_of)}&all=1&download=1`); }
+      catch (err) { toast(`Not saved: ${err.message}`); return; }
       finally { if (btn) { btn.disabled = false; btn.textContent = label; } }
     }
     // quoted, and spreadsheet-safe: a cell starting with = + - @ (not a plain number) would run as a formula

@@ -598,6 +598,13 @@ try:
     ok("both exports are in the audit log, with who and which period", [x["event"] for x in tail] == ["audit_export", "audit_export"]
        and all(x["user"] == AUD and day in x["detail"] for x in tail))
     ok("…and the chain is still whole", audit.chain.verify()["ok"])
+    # and in the far past (re-check 2026-11-13: 29 days before 1 January of year 1 does not exist)
+    for path in ("/api/audit/overview?to=0001-01-01", "/api/audit/overview?from=0001-01-01&to=0001-01-02",
+                 "/api/audit/overview?from=0001-01-01", "/api/audit/events?to=0001-01-01", "/api/audit/export.csv?to=0001-01-01",
+                 "/api/audit/report.pdf?to=0001-01-01", "/api/audit/overview?from=0001-01-01&to=9999-12-31",
+                 "/api/audit/sender?to=0001-01-01", "/api/audit/sender?to=9999-12-31"):
+        st = c.get(path, headers=H).status_code
+        ok(f"a period in the far past or future, no error: {path}", st == 200, str(st))
 
     print("Proof to take away: the proof package and the independent verifier")
     import ast, hashlib, subprocess, zipfile
@@ -636,6 +643,25 @@ try:
     open(os.path.join(sd, "audit.log"), "w").write(json.dumps({"event": "c1"}) + "\n")
     recs, skipped = APf.snapshot_records(sd)
     ok("…archived entries come first, oldest archive first, then audit.log", [x["event"] for x in recs] == ["a1", "a2", "b1", "c1"] and skipped == 0)
+    # a damaged archive (review 2026-11-13): bad data in the middle, cut short, or not gzip at all. The check reports a
+    # break naming the file; nothing answers with a traceback or a 500
+    import audit_verifier as AV
+    good = open(os.path.join(sd, "audit_archive", "audit-20260101-000000.log.gz"), "rb").read()
+    for label, blob in (("bad data inside", good[:12] + bytes(b ^ 0xFF for b in good[12:-8]) + good[-8:]), ("cut short", good[:len(good) // 2]),
+                        ("not gzip at all", b"plain text, not an archive\n")):
+        dd = os.path.join(tmp, "dmg-" + label.replace(" ", "-")); shutil.copytree(sd, dd)
+        open(os.path.join(dd, "audit_archive", "audit-20260101-000000.log.gz"), "wb").write(blob)
+        try:
+            res = AV.check(dd)
+            ok(f"a damaged archive ({label}): reported as a break naming the file, no crash", not res["ok"]
+               and "audit-20260101-000000.log.gz" in (res.get("break") or {}).get("what", ""), str(res.get("break")))
+        except Exception as e:      # noqa: BLE001
+            ok(f"a damaged archive ({label}): reported as a break naming the file, no crash", False, f"{type(e).__name__}: {e}")
+        try:
+            recs2, _ = APf.snapshot_records(dd)
+            ok(f"…the snapshot's CSV still reads the rest ({label})", [x["event"] for x in recs2][-2:] == ["b1", "c1"], str([x["event"] for x in recs2]))
+        except Exception as e:      # noqa: BLE001
+            ok(f"…the snapshot's CSV still reads the rest ({label})", False, f"{type(e).__name__}: {e}")
     ok("…listed in MANIFEST.json, so the verifier catches a changed CSV, and the README explains it",
        any(f["path"] == "audit_log.csv" for f in man["files"]) and "audit_log.csv" in z.read("README.txt").decode())
     vsrc = z.read("verify_audit_log.py").decode()

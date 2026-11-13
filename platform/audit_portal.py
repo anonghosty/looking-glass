@@ -24,7 +24,7 @@ import json
 import os
 import re
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from flask import Response, g, jsonify, render_template, request
 
@@ -245,8 +245,11 @@ def install(app, ctx):
                 return dflt
         # nothing is logged in the future: a period ending later ends today (review 2026-11-13: ?to=9999-12-31 went one
         # day past the last date Python has and answered 500)
-        to = min(d(request.args.get("to"), today), today)
-        fr = min(d(request.args.get("from"), to - timedelta(days=29)), today)
+        # …and nothing is logged before 1970: a date earlier than that starts there (re-check 2026-11-13: ?to=0001-01-01
+        # went 29 days before the first date Python has)
+        floor = date(1970, 1, 1)
+        to = max(min(d(request.args.get("to"), today), today), floor)
+        fr = max(min(d(request.args.get("from"), to - timedelta(days=29)), today), floor)
         fr, to = min(fr, to), max(fr, to)
         fr = max(fr, to - timedelta(days=MAX_DAYS))
         t0 = datetime(fr.year, fr.month, fr.day, tzinfo=timezone.utc).timestamp()

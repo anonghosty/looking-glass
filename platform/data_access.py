@@ -33,11 +33,16 @@ SENSITIVE = {
     "/api/svc/drill": ("data_viewed", "hosts behind a figure (services)"),
     "/api/svc/detail": ("data_viewed", "a record's details (services)"),
     "/api/svc/hosts.csv": ("data_exported", "host list download (services CSV)"),
+    # routes with a part in the path, by their rule (review 2026-11-13: an advisor opening one organisation's advisory
+    # saw its IP addresses, ports and reports, and nothing was logged)
+    "/api/advisory/<fid>/net": ("data_viewed", "an organisation's hosts (advisory)"),
 }
 # Every request parameter says what was looked at, except these display and time options (review 2026-11-13: a list
 # of the parameters to keep missed src_ip and most services filters, so different hosts' views were one "whole
 # selection" and the repeats were dropped). A parameter added later is logged by default.
-IGNORE = frozenset(("at", "demo", "from", "to", "limit", "latest", "since", "time", "n", "format", "_", "page", "sort"))
+IGNORE = frozenset(("at", "demo", "from", "to", "limit", "latest", "since", "time", "n", "format", "_", "page", "sort", "download", "all"))
+# the lists the pages save as CSV files (download=1): an export, every time
+DOWNLOADS = {"/api/insight/drill": "host list download (map CSV)", "/api/svc/drill": "host list download (services CSV)"}
 RAW_MAX = 120          # each value is cut to this BEFORE the address finder reads it (a long value costs nothing)
 SHOWN_MAX = 60
 _TAIL = re.compile(r"[0-9A-Fa-f:.]+$")
@@ -76,6 +81,10 @@ class DataAccessLog:
         if not user or user.startswith("lg-selftest"):
             return False
         event, what = SENSITIVE[path]
+        if args.get("download") == "1" and path in DOWNLOADS:
+            # the drill-down list saved as a CSV in the browser: the page fetches it for the file, so the download is
+            # logged as an export (review 2026-11-13: a list that fitted on screen was saved with no request at all)
+            event, what = "data_exported", DOWNLOADS[path]
         sel = self.selection(args)
         key = (user, path, sel)
         now = time.time()
@@ -101,7 +110,14 @@ def register(app, audit_add, user_of, host_ref):
     def _data_access(resp):
         try:
             if request.method == "GET":
-                log.record(request.path, request.args, resp.status_code)
+                rule = request.url_rule.rule if request.url_rule is not None else ""
+                if rule in SENSITIVE and rule != request.path:
+                    # a route with a part in its path: logged by its rule, the part (a finding's ID) in the selection
+                    from werkzeug.datastructures import MultiDict
+                    args = MultiDict(list(request.args.items(multi=True)) + [(k, str(v)) for k, v in (request.view_args or {}).items()])
+                    log.record(rule, args, resp.status_code)
+                else:
+                    log.record(request.path, request.args, resp.status_code)
         except Exception:          # noqa: BLE001  (logging a view must never break the page)
             pass
         return resp

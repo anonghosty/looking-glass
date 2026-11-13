@@ -285,11 +285,16 @@
     const txt = el("span", "r-inf-txt"); const b = el("b", null, ev.service); b.title = defOf(ev.service)?.def || ev.service;
     const srcl = el("span", "r-src-label"); const cd = el("i"); cd.style.background = famColor(ev.family); srcl.append(cd, document.createTextNode(ev.family));
     txt.append(b, srcl); inf.append(sw, txt);
-    const host = el("span", "r-ep r-src"); const top = el("span", "top"); top.append(flagImg(ev.geo), el("span", "ip", `${ev.ip}${ev.port ? ":" + ev.port : ""}`));
+    // an IPv6 address with a port is written [address]:port; the whole of it in the tooltip when the column cuts it
+    const ipTxt = `${ev.port && String(ev.ip || "").includes(":") ? `[${ev.ip}]` : ev.ip}${ev.port ? ":" + ev.port : ""}`;
+    const ipEl = el("span", "ip", ipTxt); ipEl.title = ipTxt;
+    const host = el("span", "r-ep r-src"); const top = el("span", "top"); top.append(flagImg(ev.geo), ipEl);
     const place = [titleCase(ev.city), regionLabel(ev.region)].filter(Boolean).join(", ");
     const pl = el("span", "place", place); pl.title = place; host.append(top, pl); if (ev.network) host.append(el("span", "sub", ev.network));
     const arrow = el("span", "r-arrow", "·");
-    const dev = el("span", "r-ep r-dst"); const dt = el("span", "top"); dt.append(el("span", "ip", [ev.vendor, ev.product].filter(Boolean).join(" · ") || ev.device_type || "not identified"));
+    const devName = [ev.vendor, ev.product].filter(Boolean).join(" · ") || ev.device_type || "not identified";
+    const devEl = el("span", "ip", devName); devEl.title = devName;                // cut by the column: whole in the tooltip
+    const dev = el("span", "r-ep r-dst"); const dt = el("span", "top"); dt.append(devEl);
     const dv = el("span", "place", [ev.device_type, ev.version].filter(Boolean).join(" · ")); dev.append(dt, dv); if (ev.hostname) dev.append(el("span", "sub", ev.hostname));
     const proto = el("span", "r-proto", [ev.protocol, ev.port].filter(Boolean).join("/"));
     const req = el("span", "r-req");
@@ -1380,11 +1385,11 @@
   }
   async function downloadDrill(r, pairs, d, btn) {
     const iss = r.iss, kind = r.row_kind;
-    if (r.total > r.rows.length) {
-      // busy while the full list loads; say so when only the rows shown are saved (review 2026-11-13)
+    {   // always fetched from the server, whole: every download is in the audit log as an export, a short list too
+        // (review 2026-11-13: a list that fitted on screen was saved from the rows shown, with no request)
       const label = btn ? btn.textContent : ""; if (btn) { btn.disabled = true; btn.textContent = "Preparing…"; }
-      try { const p = new URLSearchParams(pairs); p.set("at", atParam()); p.set("metric", r.metric); p.set("all", "1"); r = await getJSON(`/api/svc/drill?${p}`); }
-      catch (err) { toast(`Saved only the first ${fmt(r.rows.length)} rows: ${err.message}`); }
+      try { const p = new URLSearchParams(pairs); p.set("at", atParam()); p.set("metric", r.metric); p.set("all", "1"); p.set("download", "1"); r = await getJSON(`/api/svc/drill?${p}`); }
+      catch (err) { toast(`Not saved: ${err.message}`); return; }
       finally { if (btn) { btn.disabled = false; btn.textContent = label; } }
     }
     // quoted, and spreadsheet-safe: a cell starting with = + - @ (not a plain number) would run as a formula

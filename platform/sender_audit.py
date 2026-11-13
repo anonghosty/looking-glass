@@ -34,8 +34,10 @@ def _period():
             return datetime.strptime(str(v or "")[:10], "%Y-%m-%d").date()
         except ValueError:
             return dflt
-    to = d(request.args.get("to"), today)
-    fr = d(request.args.get("from"), to - timedelta(days=29))
+    # within 1970..today, as the Audit portal (review 2026-11-13: 0001-01-01 and 9999-12-31 went past Python's dates)
+    floor = today.replace(year=1970, month=1, day=1)
+    to = max(min(d(request.args.get("to"), today), today), floor)
+    fr = max(min(d(request.args.get("from"), to - timedelta(days=29)), today), floor)
     fr, to = min(fr, to), max(fr, to)
     fr = max(fr, to - timedelta(days=731))
     return fr, to

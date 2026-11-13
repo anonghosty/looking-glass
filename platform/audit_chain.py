@@ -292,7 +292,9 @@ class Chain:
         for p in self.archives():
             try:
                 out.extend(self._lines_of(p))
-            except (OSError, EOFError):
+            except (OSError, EOFError, ValueError, gzip.zlib.error):
+                # a damaged archive (bad data, not text: review 2026-11-13, it answered 500): the pages show what can be
+                # read; the integrity check (audit_verifier) reports the damage as a break
                 pass
         out.extend(self._lines_of(self.path))
         return out
@@ -351,7 +353,12 @@ class Chain:
             pass
         arch = self.archives()
         if arch:
-            lines = self._lines_of(arch[-1])
+            try:
+                lines = self._lines_of(arch[-1])
+            except (OSError, EOFError, ValueError, gzip.zlib.error):
+                # a damaged newest archive: the entry is still written (a sign-in must never fail on it); its link
+                # cannot match, and the check reports the damaged file as the break (review 2026-11-13)
+                return None
             return lines[-1] if lines else None
         return None
 
@@ -462,7 +469,10 @@ class Chain:
         now = now or time.time()
         cut = now - self.retention_days * 86400
         for p in self.archives():
-            lines = self._lines_of(p)
+            try:
+                lines = self._lines_of(p)
+            except (OSError, EOFError, ValueError, gzip.zlib.error):
+                continue          # a damaged archive is kept: evidence is never deleted unread (review 2026-11-13)
             try:
                 newest = json.loads(lines[-1]).get("t", 0) if lines else 0
             except ValueError:

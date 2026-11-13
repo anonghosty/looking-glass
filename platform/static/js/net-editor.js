@@ -75,6 +75,14 @@
       && (!q || x.asn.includes(q) || x.name.toLowerCase().includes(q) || (x.holder || "").toLowerCase().includes(q) || (TYPES[x.type] || x.type).toLowerCase().includes(q)));
     if (!shown.length) {
       const tr = el("tr", "dz-empty"), td = el("td", null, q || tf ? "No network matches." : view === "todo" ? "Nothing to review: every network has been checked. " : "No networks yet.");
+      // a fresh install: the list is built by Identify networks (Settings, admins), never by itself, since it sends the AS
+      // numbers to PeeringDB and RIPEstat (2026-11-13: the empty card did not say how to fill it)
+      if (!q && !tf && !rows.length) {
+        const idb = $("btnIdentify");
+        td.textContent = idb ? "No networks yet. Identify networks looks up the company name and type of every network in the reports loaded (only AS numbers are sent, to PeeringDB and RIPEstat): "
+          : "No networks yet. An administrator fills this list with Settings → Identify networks, once the first reports are in.";
+        if (idb) { const b = el("button", "lg-btn sm", "Identify networks"); b.type = "button"; b.addEventListener("click", () => idb.click()); td.append(b); }
+      }
       if (!q && !tf && view === "todo" && rows.length) {
         td.append(el("span", "muted", "Every network stays editable (a company renames or rebrands): "));
         const b = el("button", "lg-btn sm", "Show every network"); b.type = "button"; b.addEventListener("click", () => { view = "all"; render(); }); td.append(b);
@@ -95,11 +103,14 @@
           tr.classList.toggle("dz-constituent", cb.checked);
           pick.append(cb);
         }
-        tr.append(el("td", "mono dz-name", `AS${x.asn}`), el("td", "dz-w-name", x.name), el("td", null, TYPES[x.type] || x.type), el("td", "muted", x.note || "—"),
+        // a network in the reports not looked up yet (Identify networks): listed for review, without a name
+        const nm = x.identified === false && !x.name ? el("td", "dz-w-name muted", "not identified yet") : el("td", "dz-w-name", x.name);
+        tr.append(el("td", "mono dz-name", `AS${x.asn}`), nm, el("td", null, TYPES[x.type] || x.type), el("td", "muted", x.note || "—"),
           el("td", "dz-seen", `${x.holder || "—"}${x.country ? ` (${x.country})` : ""}`), el("td", "num mono", fmt(x.events)), st, pick);
         tb.append(tr); continue;
       }
       const name = el("input", "dz-input"); name.value = x.name; name.maxLength = 80; name.setAttribute("aria-label", `Company name for AS${x.asn}`);
+      if (x.identified === false && !x.name) name.placeholder = "not identified yet: type the name, or run Identify networks";
       const type = el("select", "dz-input lg-enhance"); type.setAttribute("aria-label", `Type of AS${x.asn}`);
       for (const t of typeList) { const o = el("option", null, t.label); o.value = t.key; type.append(o); }
       type.value = TYPES[x.type] ? x.type : "unknown";

@@ -88,6 +88,11 @@ try:
        ", ".join(sorted(nav)))
     nav2 = set(re.findall(r'aria-label="([^"]+)"', get("/admin").get_data(as_text=True)))
     ok("…and on its other pages, the Overview icon", "Overview" in nav2 and "Findings" not in nav2, ", ".join(sorted(nav2)))
+    # review 2026-11-13: the platforms' data APIs and the complete lists still answered with Peace of mind on
+    for p in ("/api/related?ref=x", "/api/insight?kind=infection&value=x", "/api/svc/events?limit=1", "/api/svc/drill?metric=hosts",
+              "/api/svc/detail?id=x", "/api/svc/hosts.csv", "/api/insight/drill?kind=infection&value=x&metric=hosts&all=1"):
+        st = get(p).status_code
+        ok(f"{p}: closed (host-level data, exports, complete lists)", st == 403, str(st))
     r = get("/api/notifications")
     ok("no findings notification comes in", r.status_code == 200 and r.json.get("count") == 0 and r.json.get("peace") is True)
     print("Off again: everything is back")

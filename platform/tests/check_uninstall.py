@@ -219,6 +219,41 @@ def main():
         r = run(root, env, "--yes")
         check("unsafe MONGO_DB refused", r.returncode != 0 and (tmp / "sys/systemd/looking-glass.service").exists())
 
+    # review 2026-11-13: MongoDB's own databases, a unit installed through a symlink, a run that will not stop
+    for name in ("admin", "Local", "config"):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t); root, env, cron, log = setup(tmp)
+            (root / "database/.env").write_text(f"MONGO_DB={name}\n")
+            r = run(root, env, "--yes", "--remove-database", "--i-understand-data-loss")
+            check(f"MONGO_DB={name} (MongoDB's own database) refused before anything is changed", r.returncode != 0
+                  and "MongoDB's own databases" in r.stderr and (tmp / "sys/systemd/looking-glass.service").exists(), (r.stdout + r.stderr)[-300:])
+    with tempfile.TemporaryDirectory() as t:
+        tmp = Path(t); root, env, cron, log = setup(tmp)
+        link = tmp / "lg-link"; link.symlink_to(root)
+        (tmp / "sys/systemd/looking-glass.service").write_text(f"[Service]\nWorkingDirectory={link}/platform/\n")
+        r = run(root, env, "--yes")
+        check("a unit installed through a symlink (with a trailing slash) is found and removed", r.returncode == 0
+              and not (tmp / "sys/systemd/looking-glass.service").exists() and (tmp / "sys/systemd/other-app.service").exists(),
+              (r.stdout + r.stderr)[-300:])
+    with tempfile.TemporaryDirectory() as t:
+        tmp = Path(t); root, env, cron, log = setup(tmp)
+        lock = root / "database/.pipeline.lock"; lock.write_text("")
+        # detached: its own session and no shared output, so nothing waits on it; killed as a group afterwards
+        holder = subprocess.Popen(["flock", str(lock), "sleep", "400"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                  stderr=subprocess.DEVNULL, start_new_session=True)
+        try:
+            stub(tmp / "stubs", "sleep", "true")             # the 5-minute wait passes at once
+            r = run(root, env, "--yes", "--remove-files", "--i-understand-data-loss")
+            check("a run that still holds the lock: stopped there, the folder NOT deleted", r.returncode != 0
+                  and "NOT touched" in r.stderr and (root / "install.sh").exists(), (r.stdout + r.stderr)[-300:])
+        finally:
+            import signal
+            try:
+                os.killpg(holder.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            holder.wait()
+
     print(f"{sum(results)}/{len(results)} checks passed")
     return 0 if all(results) else 1
 

@@ -704,7 +704,9 @@ def unzip_and_sort(s: Settings, stats: Counter) -> None:
                 elif result == "zips_bad_deleted":
                     reopened = _forget_broken(s, z.name)
                     log.warning("[UNZIP %d/%d] [DELETE] corrupt or mislabeled zip: %s%s", i, total, z.name,
-                                " (its e-mail/link is fetched again next run)" if reopened else
+                                " (its e-mail/link is fetched again next run)" if reopened > 0 else
+                                f" (fetched again {mail_sources.MailState.REFETCH_MAX} times, broken each time: not fetched "
+                                "again. Ask Shadowserver to send it again)" if reopened < 0 else
                                 " (not in the mail record: run with --days N --all to fetch it again)")
                 elif result == "zips_refused":
                     log.warning("[UNZIP %d/%d] [QUARANTINE] %s not unpacked: it %s. Moved to quarantine/%s",
@@ -870,6 +872,7 @@ def load_file(category: str, path: str, filename: str, chunk: int) -> dict:
         res["failed"] += bad
 
     if filename.endswith(".csv"):
+        own = 0
         for errors in ("strict", "replace"):
             info: dict = {}
             try:
@@ -880,6 +883,11 @@ def load_file(category: str, path: str, filename: str, chunk: int) -> dict:
                 if errors == "replace":
                     raise
                 res["notes"].append("non-UTF-8 bytes replaced")
+                # the file is read again from its start: the rows read so far are counted once, not twice, and those
+                # this run already inserted are not "already in DB" the second time (review 2026-11-13)
+                own = res["inserted"]
+                res["rows"] = res["duplicates"] = res["failed"] = 0
+        res["duplicates"] = max(0, res["duplicates"] - own)
         res["headers"] = info.get("headers")
         if info.get("extra_columns"):
             res["notes"].append(f"{info['extra_columns']} row(s) had extra columns (dropped)")

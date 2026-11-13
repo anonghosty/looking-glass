@@ -444,7 +444,12 @@ class MailState:
         # which message each saved attachment came from, so a file found broken later (corrupt zip) sends its
         # message back for a fresh download instead of being lost
         self.db.execute("CREATE TABLE IF NOT EXISTS files (file TEXT PRIMARY KEY, key TEXT, done_at TEXT)")
+        # how often each broken file was fetched again (review 2026-11-13: a file that arrives broken every time was
+        # deleted and fetched again on every run, for ever)
+        self.db.execute("CREATE TABLE IF NOT EXISTS refetched (file TEXT PRIMARY KEY, times INTEGER, last_at TEXT)")
         self.db.commit()
+
+    REFETCH_MAX = 3            # fresh downloads of one broken file; after that it is left alone (the log says so)
 
     def mark_files(self, items) -> None:
         now = dt.datetime.now().isoformat(timespec="seconds")
@@ -453,7 +458,14 @@ class MailState:
 
     def forget_file(self, name: str) -> int:
         """A saved file turned out broken and was deleted: fetch it again on the next run (its message and any
-        link that gave it are no longer marked done). Returns how many records were reopened."""
+        link that gave it are no longer marked done). Returns how many records were reopened; -1 when the file was
+        already fetched again REFETCH_MAX times and still arrived broken: then it stays as done, so it stops."""
+        row = self.db.execute("SELECT times FROM refetched WHERE file = ?", (name,)).fetchone()
+        times = row[0] if row else 0
+        if times >= self.REFETCH_MAX:
+            return -1
+        self.db.execute("INSERT OR REPLACE INTO refetched VALUES (?, ?, ?)",
+                        (name, times + 1, dt.datetime.now().isoformat(timespec="seconds")))
         n = self.db.execute("DELETE FROM messages WHERE key IN (SELECT key FROM files WHERE file = ?)", (name,)).rowcount
         n += self.db.execute("DELETE FROM links WHERE file = ?", (name,)).rowcount
         self.db.execute("DELETE FROM files WHERE file = ?", (name,))

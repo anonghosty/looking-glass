@@ -105,7 +105,12 @@ PEACE_PERMS = {"users", "audit", "settings", "view"}      # view: the platforms'
 # the work they step out of, by its addresses: the platforms, the findings and the portals (pages and their data)
 PEACE_CLOSED = ("/services", "/findings", "/api/findings", "/advisory", "/api/advisory", "/management", "/api/mgmt/", "/review/",
                 "/api/review/", "/combinations", "/api/combos", "/definitions", "/api/kb/", "/api/notes", "/intel/", "/api/intel",
-                "/api/analyst-codes", "/api/combo-codes/")
+                "/api/analyst-codes", "/api/combo-codes/",
+                # the platforms' host-level data (review 2026-11-13: these answered an admin in Peace of mind, complete
+                # lists and the hosts CSV included); the Overview needs none of them (the map's stream stays: the page
+                # polls it behind the Overview, and Peace of mind sees it masked)
+                "/api/related", "/api/insight", "/api/svc/events", "/api/svc/insight", "/api/svc/drill", "/api/svc/detail",
+                "/api/svc/hosts", "/api/svc/report", "/api/svc/regions", "/api/svc/replayed", "/api/svc/stats", "/api/svc/summary")
 PEACE_PATHS = ("/settings", "/api/settings", "/api/asns/identify", "/api/networks", "/api/clock", "/api/svc/clock",
                "/api/organisation", "/organisation/logo", "/overview", "/api/peace", "/api/notifications", "/audit")
 PEACE = {"of": lambda user: False}           # peace.py: whether this admin has Peace of mind on
@@ -792,6 +797,8 @@ def install(app, base_dir, logger):
                         return redirect("/?intro=1")
                     if p == "/" and request.args.get("intro") != "1":
                         return redirect("/?intro=1")           # the Overview, never the map
+                    if p in EXPORT_PATHS or request.args.get("all") == "1":   # 'export' is not kept (review 2026-11-13)
+                        return jsonify(error="Peace of mind is on: no exports or complete lists."), 403
                     return None
                 if not p.startswith(("/api/me", "/admin", "/api/admin", "/audit")) and "view" not in g.user["perms"]:
                     # management: only the management portal (the start page sends them there)

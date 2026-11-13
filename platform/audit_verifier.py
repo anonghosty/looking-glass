@@ -58,6 +58,10 @@ def file_sha(path):
     return h.hexdigest()
 
 
+class Damaged(Exception):
+    """A file of the log that cannot be read (a damaged archive: bad gzip data, cut short, not text)."""
+
+
 def _lines(path):
     opener = gzip.open if path.endswith(".gz") else open
     try:
@@ -65,6 +69,9 @@ def _lines(path):
             return [ln.rstrip("\n") for ln in f if ln.strip()]
     except FileNotFoundError:
         return []
+    except (OSError, EOFError, ValueError, gzip.zlib.error) as e:      # zlib through gzip: no module beyond the list
+        # review 2026-11-13: a damaged archive stopped the check with a traceback; it is a break in the log, reported
+        raise Damaged(f"{os.path.basename(path)}: {type(e).__name__}") from None
 
 
 def _json(path, many=False):
@@ -136,10 +143,13 @@ def check(folder, earlier=None, gap_days=30):
     """Check the log in `folder` (the folder holding audit.log and audit_archive/). `earlier` = (hash, entry or None);
     gap_days: a jump in time around a removed archive longer than this is reported."""
     archives = sorted(glob.glob(os.path.join(folder, "audit_archive", "audit-*.log.gz")))
-    lines = []
-    for p in archives:
-        lines.extend(_lines(p))
-    lines.extend(_lines(os.path.join(folder, "audit.log")))
+    lines, damaged = [], []
+    for p in archives + [os.path.join(folder, "audit.log")]:
+        try:
+            lines.extend(_lines(p))
+        except Damaged as e:
+            damaged.append(str(e))
+    archives = [p for p in archives if not any(d.startswith(os.path.basename(p) + ":") for d in damaged)]
     removed, bad_notes = _notes(os.path.join(folder, "audit_archive", "removed.jsonl"))
     gone = sum(_int(r.get("entries")) for r in removed)            # entries of archives the retention removed
 
@@ -149,6 +159,8 @@ def check(folder, earlier=None, gap_days=30):
     brk, started = None, False
     if bad_notes:
         brk = {"entry": gone + 1, "what": f"{bad_notes} line(s) in the retention notes (removed.jsonl) that are not a note"}
+    if damaged and not brk:
+        brk = {"entry": gone + 1, "what": f"a file of the log cannot be read, it is damaged ({', '.join(damaged[:3])})"}
     hashes = []
     for i, ln in enumerate(lines):
         n = gone + i + 1                                           # the entry's number since the log began

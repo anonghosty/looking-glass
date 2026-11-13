@@ -327,6 +327,18 @@ The second list of 2026-11-13:
 | The re-check: a host name whose first label is only digits and dashes (41-66-1-2.static.telco.com.gh) was not masked anywhere `hostmask.py` masks (banners, notes, researcher views, Spam link hosts) | Any dotted name ending in a letter-only top-level label is a host name, whatever its first label | `tests/check_banner_inbound.py`: the reviewer's names; fails on the old code |
 | `?to=9999-12-31` on the audit overview answered 500 | A period ending in the future ends today | `tests/check_auditor_portal.py` |
 | The audit CSV put any `tab` value into the download's file name | Known tab names only; anything else is refused | `tests/check_auditor_portal.py` (a quote and a line break) |
+| `?to=0001-01-01` still answered 500 (the period starts 29 days earlier); the sender audit had the same code | A period lies within 1 January 1970 and today, in the Audit portal and the sender audit | `tests/check_auditor_portal.py` |
+| Peace of mind left the platforms' host data, the complete lists and the hosts CSV open (its rule returned before the export check) | Those APIs are closed while it is on; exports and complete lists are refused | `tests/check_peace.py` |
+| An advisor opening one organisation's advisory (its IP addresses) was not in the data-access log | Logged by its route, with the finding and the organisation | `tests/check_data_access.py` |
+| A drill-down list short enough to fit on screen was saved as CSV in the browser, with no request: no audit entry | Every CSV download is fetched whole from the server and logged as an export | `tests/check_data_access.py` |
+| A damaged audit archive (bad data, cut short, not gzip) crashed the integrity check and the evidence package | Reported as a break naming the file; the evidence lists the rest; retention never deletes an archive it cannot read; writing goes on | `tests/check_auditor_portal.py` |
+| Services filter lists: masked and unmasked viewers threw each other's lists out of a one-entry cache | Four entries | — |
+| 500s on wrong types: `limit=abc` on the services records | A bad number falls back to the default | probe of every API with wrong types (only deliberate 503s remain, Malpedia without a token) |
+| A zip that arrives broken every time was deleted and fetched again on every run, for ever | At most three fresh downloads, then it is left and the log says to ask Shadowserver | `database/tests/test_refetch_and_rows.py` |
+| A CSV with a bad byte after its first batches was read again and its rows counted twice (and its own rows as "already in DB") | Counted once | `database/tests/test_refetch_and_rows.py` |
+| Uninstall: `MONGO_DB=admin` (or `local`, `config`) would have been dropped; a unit installed through a symlink was missed; a run still holding the lock could have its database and folder deleted under it; a dry run could fall through to a real delete | Refused; units compared by real path; stopped with nothing deleted; a plain if/else | `tests/check_uninstall.py` (fails 5 times on the old script) |
+| The service sandbox allowed every kind of socket and system call | `RestrictAddressFamilies` (UNIX, IPv4, IPv6, netlink), `SystemCallFilter=@system-service`, no capabilities, `ProtectClock`, `ProtectKernelLogs`, `ProtectHostname`, `RestrictRealtime` | the platform's checks run under the same rules |
+| The retest's "attempts left" check passed any page saying "attempt left" (missing brackets) | The status and either wording | — |
 
 Other hardening added:
 - **systemd sandbox:** `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=read-only`, writable only `data/`, `PrivateTmp`, `UMask=0077` and more. Check it with `systemd-analyze security threatmap`.

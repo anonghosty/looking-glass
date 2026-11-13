@@ -29,6 +29,19 @@ RestrictSUIDSGID=true
 LockPersonality=true
 RestrictNamespaces=true
 SystemCallArchitectures=native
+# sockets: only those the platform uses (its own HTTP, MongoDB, DNS and the HTTPS look-ups; netlink for the C library's
+# name lookups); raw and packet sockets are refused (review 2026-11-13)
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+# no capabilities at all, no real-time scheduling, no clock, kernel log or host name changes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictRealtime=true
+ProtectClock=true
+ProtectKernelLogs=true
+ProtectHostname=true
+# the system calls of an ordinary service only (systemd's @system-service set); anything else answers "not permitted"
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
 
 [Install]
 WantedBy=multi-user.target

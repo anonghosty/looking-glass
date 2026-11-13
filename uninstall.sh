@@ -66,9 +66,14 @@ env_get() {  # FILE KEY [DEFAULT]: the value as written (never executed)
 # platform services: unit files whose WorkingDirectory is this platform folder (whatever name was chosen)
 UNITS=()
 if [ -d "$SYSTEMD_DIR" ]; then
+  # compared as real paths: a unit installed through a symlink or with a trailing slash is this folder's too (review
+  # 2026-11-13: it was missed, and kept restarting against a deleted folder)
+  PF_REAL=$(readlink -f "$PF_DIR" 2>/dev/null || printf '%s' "$PF_DIR")
   for f in "$SYSTEMD_DIR"/*.service; do
     [ -f "$f" ] || continue
-    grep -qxF "WorkingDirectory=$PF_DIR" "$f" 2>/dev/null && UNITS+=("$(basename "$f")")
+    wd=$(sed -n 's/^WorkingDirectory=//p' "$f" 2>/dev/null | head -n1)
+    [ -n "$wd" ] || continue
+    [ "$(readlink -f "$wd" 2>/dev/null || printf '%s' "${wd%/}")" = "$PF_REAL" ] && UNITS+=("$(basename "$f")")
   done
 fi
 # the schedule: only this folder's cron line (another installation's line stays)
@@ -89,6 +94,9 @@ MONGO_HOST=$(env_get "$ENVF" MONGO_HOST 127.0.0.1)
 MONGO_PORT=$(env_get "$ENVF" MONGO_PORT 27017)
 MONGO_LOCAL=$(env_get "$DB_DIR/.env" MONGO_LOCAL false); MONGO_LOCAL=${MONGO_LOCAL,,}
 [[ $MONGO_DB =~ ^[A-Za-z0-9_-]{1,63}$ ]] || die "MONGO_DB in $ENVF is not a plain database name: refusing to go on."
+# MongoDB's own databases are never "the reports database" (review 2026-11-13: MONGO_DB=admin would have dropped
+# every MongoDB account with --remove-database)
+[[ ${MONGO_DB,,} =~ ^(admin|local|config)$ ]] && die "MONGO_DB in $ENVF is '$MONGO_DB', one of MongoDB's own databases: refusing to go on."
 
 # ------------------------------------------------------------------------------------------------ the plan
 say ""
@@ -171,6 +179,10 @@ if [ $DRY = 0 ] && { pipeline_running || [ -n "$(pipeline_pids)" ]; }; then
   for _ in $(seq 1 60); do { pipeline_running || [ -n "$(pipeline_pids)" ]; } || break; sleep 5; done
   if pipeline_running || [ -n "$(pipeline_pids)" ]; then
     for p in $(pipeline_pids); do kill "$p" 2>/dev/null || true; done
+    sleep 5
+    # the run's wrapper (run.sh) holds the lock: while anything still holds it, nothing below is touched (review
+    # 2026-11-13: the database and the folder could be deleted under a run that was still going)
+    pipeline_running && die "a pipeline run still holds $DB_DIR/.pipeline.lock: the database and files were NOT touched. Stop it (or wait), then run this again."
     skip "it did not finish: stopped"
   fi
 fi
@@ -237,8 +249,8 @@ if [ $RM_MONGO = 1 ]; then
   do_ sudo env DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq 'mongodb-org*' 'mongodb-mongosh*' 'mongodb-database-tools'
   do_ sudo rm -rf /etc/systemd/system/mongod.service.d/shadowserver.conf /var/lib/mongodb /var/log/mongodb \
     "$MONGOD_CONF" "$MONGOD_CONF.orig"
-  [ $DRY = 1 ] && say "  would remove /etc/apt/sources.list.d/mongodb-org-*.list and /usr/share/keyrings/mongodb-server-*.gpg" \
-    || sudo bash -c 'rm -f /etc/apt/sources.list.d/mongodb-org-*.list /usr/share/keyrings/mongodb-server-*.gpg'
+  if [ $DRY = 1 ]; then say "  would remove /etc/apt/sources.list.d/mongodb-org-*.list and /usr/share/keyrings/mongodb-server-*.gpg"
+  else sudo bash -c 'rm -f /etc/apt/sources.list.d/mongodb-org-*.list /usr/share/keyrings/mongodb-server-*.gpg'; fi
   do_ sudo systemctl daemon-reload || true
   done_ "MongoDB removed"
 else skip "kept"; fi

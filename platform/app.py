@@ -2832,6 +2832,13 @@ def api_networks():
              "type": v.get("type", "unknown"), "role": v.get("role", ""), "reviewed": bool(v.get("reviewed")),
              "source": v.get("source", ""), "note": v.get("note", ""), "events": v.get("events_last_check", 0),
              "updated": v.get("updated", ""), "by": _by(v, "updated_by")} for a, v in asn_registry.all().items()]
+    # every network in the reports is listed from the start, not only those Identify networks has looked up: one not
+    # identified yet is "not reviewed", with its events and no name (2026-11-13: a fresh install showed an empty list)
+    known = {r["asn"] for r in rows}
+    counts, meta = _networks_in_data_cached()
+    rows += [{"asn": a, "name": "", "holder": "", "country": (meta.get(a) or {}).get("country", ""), "type": "unknown",
+              "role": (meta.get(a) or {}).get("role", ""), "reviewed": False, "source": "", "identified": False,
+              "note": "", "events": n, "updated": "", "by": ""} for a, n in counts.items() if a not in known]
     rows.sort(key=lambda r: (r["reviewed"], -r["events"]))
     return jsonify(networks=rows, types=people.with_names(netypes.all_types(DATA_DIR)), identifying=bool(_ASN_JOB and _ASN_JOB.running()))
 
@@ -2877,11 +2884,20 @@ def api_networks_entry():
         return jsonify(error="Unknown network type: add it first (Add a type)."), 400
     path = asn_registry.path
     with _NET_LOCK:
-        with open(path, encoding="utf-8") as f:
-            data = _json.load(f)
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = _json.load(f)
+        except FileNotFoundError:                       # a fresh install: the first network named by hand starts it
+            data = {"asns": {}}
         e = data.setdefault("asns", {}).get(asn)
         if e is None:
-            return jsonify(error=f"AS{asn} is not in the registry (it is added when it appears in the reports)."), 404
+            # a network in the reports that Identify networks has not looked up yet: named by hand, it joins the
+            # registry (2026-11-13: every network in the reports is listed for review from the start)
+            if asn not in _networks_in_data_cached()[0]:
+                return jsonify(error=f"AS{asn} is not in the reports loaded."), 404
+            meta = _networks_in_data_cached()[1].get(asn) or {}
+            e = data["asns"][asn] = {"name": "", "type": "unknown", "country": meta.get("country", ""), "role": meta.get("role", ""),
+                                     "events_last_check": _networks_in_data_cached()[0].get(asn, 0)}
         before = (e.get("name"), e.get("type"), e.get("note") or "")
         e.update(name=name, type=kind, note=note, reviewed=True, source="edited",
                  updated=utcnow().date().isoformat(), updated_by=_me()[0], updated_by_name=_me()[1])
@@ -3016,6 +3032,18 @@ def _networks_in_data():
         m["role"] = "both" if {"source", "destination"} <= r else (next(iter(r)) if len(r) == 1 else "both")
     counts = Counter({str(a): n for a, n in counts.items() if str(a).isdigit() and str(a) != "0"})
     return counts, meta
+
+
+_NETS_CACHE = {"key": None, "val": (Counter(), {})}
+
+
+def _networks_in_data_cached():
+    """_networks_in_data() for the network list: worked out again only when a loaded day changes."""
+    key = tuple(sorted((str(k), len(d.events), getattr(d, "version", "")) for k, d in list(store.days.items()))) + \
+        tuple(sorted((str(k), len(d.events), getattr(d, "version", "")) for k, d in list(svc["store"].days.items())))
+    if _NETS_CACHE["key"] != key:
+        _NETS_CACHE.update(key=key, val=_networks_in_data())
+    return _NETS_CACHE["val"]
 
 
 @app.route("/api/asns/identify", methods=["GET", "POST"])

@@ -425,7 +425,8 @@ try:
         return totp_at(secret, step)
     fop, _ = client()
     s, _, b = req(fop, "/login", {"username": VIEWER, "password": "wrong-password-xyz"})
-    ok("wrong password shows the attempts left", s == 401 and "attempts left" in b or "attempt left" in b, str(s))
+    # the status AND either wording (review 2026-11-13: without the brackets any page saying "attempt left" passed)
+    ok("wrong password shows the attempts left", s == 401 and ("attempts left" in b or "attempt left" in b), str(s))
     s, _, b = req(fop, "/forgot", {"mode": "ask", "username": VIEWER}); s2, _, b2 = req(fop, "/forgot", {"mode": "ask", "username": "no-such-user-xyz"})
     ok("'ask an administrator': same answer for real and unknown names", s == s2 == 200 and "administrators have been notified" in b and "administrators have been notified" in b2)
     al = {u["name"]: u for u in json.loads(req(aop2, "/api/admin/users")[2])["users"]}

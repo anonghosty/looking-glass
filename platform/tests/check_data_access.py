@@ -33,7 +33,7 @@ def _who():
 
 
 for path in list(data_access.SENSITIVE) + ["/api/clock"]:
-    app.add_url_rule(path, path, (lambda: ("ok", 200)), methods=["GET", "POST"])
+    app.add_url_rule(path, path, (lambda **kw: ("ok", 200)), methods=["GET", "POST"])
 app.add_url_rule("/api/missing", "missing", lambda: ("no", 404))
 
 data_access.register(app, lambda event, **kw: entries.append({"event": event, **kw}),
@@ -129,6 +129,28 @@ get("/api/insight", kind="x", value="a" * 115 + "203.0.113.45")
 ok("an address cut in half at the limit leaves none of its digits", len(entries) == n + 1
    and not any(p in entries[-1]["detail"] for p in ("203.0", "203.", "113.4")), entries[-1]["detail"] if len(entries) > n else "")
 ok("no entry ever holds an IP address (all of the above)", not any("203.0.113" in str(x) for x in entries))
+
+print("A drill-down list saved as a CSV (download=1) is an export, every time (review 2026-11-13)")
+n = len(entries)
+get("/api/insight/drill", kind="infection", value="mirai", metric="hosts", all="1", download="1")
+get("/api/insight/drill", kind="infection", value="mirai", metric="hosts", all="1", download="1")
+get("/api/svc/drill", metric="hosts", service="Accessible RDP", all="1", download="1")
+ok("map and services lists: one export entry per download, the same list twice included", len(entries) == n + 3
+   and [x["event"] for x in entries[n:]] == ["data_exported"] * 3
+   and entries[n]["target"] == "host list download (map CSV)" and entries[-1]["target"] == "host list download (services CSV)", str(entries[n:]))
+ok("…with the selection, not the download options", "value=mirai" in entries[n]["detail"] and "download" not in entries[n]["detail"], entries[n]["detail"])
+
+print("An advisor opening one organisation's advisory (its IP addresses) is logged (review 2026-11-13)")
+n = len(entries)
+get("/api/advisory/F-17/net", user="sarah", network="Example Telecom")
+e = entries[-1] if len(entries) > n else {}
+ok("logged by its route, with the finding and the organisation", e.get("event") == "data_viewed" and e.get("user") == "sarah"
+   and e.get("target") == "an organisation's hosts (advisory)" and "fid=F-17" in e.get("detail", "")
+   and "network=Example Telecom" in e.get("detail", ""), str(e))
+get("/api/advisory/F-17/net", user="sarah", network="Example Telecom")
+ok("…once per window, like every view", len(entries) == n + 1)
+get("/api/advisory/F-18/net", user="sarah", network="Example Telecom")
+ok("…another finding is another view", len(entries) == n + 2)
 
 print("CIS 3.14 follows it")
 import control_map as CM  # noqa: E402

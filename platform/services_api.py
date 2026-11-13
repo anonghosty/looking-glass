@@ -334,7 +334,10 @@ def register(app, ctx):
         t_from = parse_iso(request.args.get("from"), t_to - timedelta(seconds=10))
         if t_to - t_from > timedelta(minutes=30):
             t_from = t_to - timedelta(minutes=30)
-        limit = max(1, min(int(request.args.get("limit", 300) or 300), 2000))
+        try:                     # a limit that is not a number: the default (review 2026-11-13: it answered 500)
+            limit = max(1, min(int(request.args.get("limit", 300) or 300), 2000))
+        except (TypeError, ValueError):
+            limit = 300
         if request.args.get("latest") == "1":
             # the most recent `limit` matching records of the replay day up to `to`, however long ago (a filtered
             # stream, e.g. Block List whose records all came at 01:00-03:00, is never empty once they have replayed)
@@ -427,7 +430,14 @@ def register(app, ctx):
         b = facets_cache.get(key)
         if b is None:
             b = breakdowns(day.events, demo, 400)
-            facets_cache.clear(); facets_cache[key] = b
+            # masked and unmasked viewers each keep their own lists (review 2026-11-13: one entry only, so the two
+            # kinds of viewer worked the whole day out again for each other, request after request)
+            try:
+                while len(facets_cache) >= 4:
+                    facets_cache.pop(next(iter(facets_cache)))
+            except (StopIteration, KeyError, RuntimeError):      # another request trimmed it at the same moment
+                facets_cache.clear()
+            facets_cache[key] = b
         return jsonify(day=day.start.date().isoformat(), total=len(day.events), facets=b,
                        reports=[{"name": s["name"], "label": s["label"], "family": s["family"],
                                  "rows": day.per_source.get(s["name"], 0), "warnings": s["diagnostic"]["warnings"]}
