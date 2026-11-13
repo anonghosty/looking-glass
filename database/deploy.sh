@@ -34,7 +34,7 @@ die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 # Read KEY from .env literally (no shell expansion), stripping optional quotes.
 env_get() {
   local v
-  v=$(grep -E "^[[:space:]]*$1[[:space:]]*=" .env 2>/dev/null | tail -n1 | cut -d= -f2- || true)
+  v=$(grep -E "^[[:space:]]*$1[[:space:]]*=" .env 2>/dev/null | head -n1 | cut -d= -f2- || true)
   v="${v%$'\r'}"; v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]]}"}"
   if [[ ${#v} -ge 2 && ( ( $v == \'*\' ) || ( $v == \"*\" ) ) ]]; then v="${v:1:${#v}-2}"; fi
   printf '%s' "${v:-${2-}}"

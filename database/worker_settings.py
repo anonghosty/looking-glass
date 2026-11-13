@@ -255,7 +255,7 @@ def read_env(path):
             v = v.strip()
             if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
                 v = v[1:-1]
-            out[k.strip()] = v
+            out.setdefault(k.strip(), v)     # a key written twice: the first counts, as in the pipeline
     return out
 
 
@@ -267,11 +267,16 @@ def write_env(path, updates):
         if not KEY_RX.match(k) or "\n" in str(v) or "\r" in str(v):
             raise ValueError(f"refused: {k}")
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    left = dict(updates)
-    for i, ln in enumerate(lines):
+    left, done, out = dict(updates), set(), []
+    for ln in lines:
         m = re.match(r"^\s*([A-Z][A-Z0-9_]*)\s*=", ln)
         if m and m.group(1) in left:
-            lines[i] = f"{m.group(1)}={left.pop(m.group(1))}"
+            out.append(f"{m.group(1)}={left.pop(m.group(1))}"); done.add(m.group(1))
+        elif m and m.group(1) in done:
+            continue        # a later copy of a key just set: removed, so every reader sees the one value (review 2026-11-13)
+        else:
+            out.append(ln)
+    lines = out
     if left:
         lines += ["", "# set from Looking Glass Settings → Workers"] + [f"{k}={v}" for k, v in left.items()]
     mode = path.stat().st_mode & 0o777 if path.exists() else 0o600

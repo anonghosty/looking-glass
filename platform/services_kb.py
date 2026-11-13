@@ -27,6 +27,7 @@ import time
 from flask import jsonify, request
 
 from report_map import sibling
+from services import banner_mask
 from services_intel import SINK
 from svc_patterns import MIN_HOSTS
 
@@ -62,13 +63,15 @@ def _stats(store, load_day=None):
                 x["records"] += 1
                 x["hosts"].add(ip)
                 x["per_day"][str(key)] += 1
-                if e.get("product"):
-                    x["products"][e["product"]] += 1
-                dev = " ".join(v for v in (e.get("vendor"), e.get("device_type")) if v)
+                # researchers never see a host: banners can carry the host's own name or address (review 2026-11-13)
+                prod, vend, dtype, ver = (banner_mask(e.get(k) or "") for k in ("product", "vendor", "device_type", "version"))
+                if prod:
+                    x["products"][prod] += 1
+                dev = " ".join(v for v in (vend, dtype) if v)
                 if dev:
                     x["devices"][dev] += 1
-                if e.get("version"):
-                    x["versions"][f"{e.get('product') or e.get('vendor') or ''} {e['version']}".strip()] += 1
+                if ver:
+                    x["versions"][f"{prod or vend or ''} {ver}".strip()] += 1
                 if e.get("port"):
                     x["ports"][f"{e['port']}/{(e.get('protocol') or '').lower() or '?'}"] += 1
                 x["severity"][e.get("severity") or "unrated"] += 1

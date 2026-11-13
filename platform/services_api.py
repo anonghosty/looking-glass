@@ -19,7 +19,7 @@ import masked_fields
 from privacy import mask_ip
 from respcache import ResultCache, day_key
 from replay_counts import ReplayCounts
-from services import (EMPTY, FAMILIES, FILTER_KEYS, SEV_ORDER, ServiceRegistry, ServiceStore, matches, parse_filters,
+from services import (BANNER, banner_mask, EMPTY,FAMILIES, FILTER_KEYS, SEV_ORDER, ServiceRegistry, ServiceStore, matches, parse_filters,
                        parse_time, report_info)
 
 DRILL_LIMIT = 300
@@ -83,6 +83,8 @@ def register(app, ctx):
             out["ip"] = mask_ip(e["ip"])
             out["hostname"] = "hidden" if e["hostname"] else ""
             out["asn"] = ""
+            for k in BANNER:            # banners can carry the host's own name or address (review 2026-11-13)
+                out[k] = banner_mask(out.get(k) or "")
             out["demo"] = True
         if full:
             ex = e.get("extras") or {}
@@ -164,7 +166,8 @@ def register(app, ctx):
         if not cross and not multi:
             return (lambda e: matches(e, flt)) if flt else None
         seed_flt, view_flt = split_cross(args)
-        key = (id(day), day.version, cross, multi, tuple(sorted((k, tuple(sorted(map(str, v)))) for k, v in seed_flt.items())))
+        # a masked viewer's banner filter matches differently: its kind is part of the key
+        key = (id(day), day.version, cross, multi, tuple(sorted((k, type(v).__name__, tuple(sorted(map(str, v)))) for k, v in seed_flt.items())))
         ips = scope_cache.get(key)
         if ips is None:
             ips = {e["ip"] for e in day.events if matches(e, seed_flt)}
@@ -205,6 +208,7 @@ def register(app, ctx):
 
     def breakdowns(evs, demo, n=10):
         empty = lambda k: (lambda v: v or EMPTY.get(k, "unknown"))
+        b = banner_mask if demo else (lambda v: v)
         return {
             "service": top(evs, lambda e: e["service"], demo, n),
             "family": top(evs, lambda e: e["family"], demo, n),
@@ -214,9 +218,9 @@ def register(app, ctx):
             "port": top(evs, lambda e: e["port"], demo, n),
             "network": [r for r in top(evs, lambda e: network(e, demo), demo, n) if r["value"]],
             "city": top(evs, lambda e: e["city"], demo, n, lambda v: (v or "unknown city").title()),
-            "vendor": [r for r in top(evs, lambda e: e["vendor"], demo, n) if r["value"]],
-            "device_type": [r for r in top(evs, lambda e: e["device_type"], demo, n) if r["value"]],
-            "product": [r for r in top(evs, lambda e: e["product"], demo, n) if r["value"]],
+            "vendor": [r for r in top(evs, lambda e: b(e["vendor"]), demo, n) if r["value"]],
+            "device_type": [r for r in top(evs, lambda e: b(e["device_type"]), demo, n) if r["value"]],
+            "product": [r for r in top(evs, lambda e: b(e["product"]), demo, n) if r["value"]],
             "sector": [r for r in top(evs, lambda e: e["sector"], demo, n) if r["value"]],
             "protocol": [r for r in top(evs, lambda e: e["protocol"], demo, n) if r["value"]],
             "region": [r for r in top(evs, lambda e: e["region"], demo, n, region_label) if r["value"]],
@@ -284,7 +288,8 @@ def register(app, ctx):
                          "services": sorted(h["services"]), "ports": sorted(p for p in h["ports"] if p),
                          "issues": sorted(h["issues"]), "severity": inv.get(h["worst"], ""),
                          "city": (e["city"] or "").title(), "network": asns.label(e["asn"], demo) if e["asn"] else "",
-                         "vendor": e["vendor"], "product": e["product"], "score": score,
+                         "vendor": banner_mask(e["vendor"]) if demo else e["vendor"],
+                         "product": banner_mask(e["product"]) if demo else e["product"], "score": score,
                          "first": iso_t(h["t0"]), "last": iso_t(h["t1"])})
         rows.sort(key=lambda r: (-r["score"], -len(r["issues"]), -r["events"]))
         return rows if limit is None else rows[:limit], len(rows)
@@ -533,7 +538,7 @@ def register(app, ctx):
                 rows.append({"ref": e["ip_ref"], "ip": mask_ip(ip) if demo else ip, "followup": reasons,
                              "issues": sorted(iss), "services": sorted(day_reports.get(ip, h["services"])),
                              "events": h["events"], "city": (e["city"] or "").title(), "region": (e["region"] or "").title(),
-                             "network": asns.label(e["asn"], demo) if e["asn"] else "", "device": " · ".join(x for x in (e["vendor"], e["product"]) if x),
+                             "network": asns.label(e["asn"], demo) if e["asn"] else "", "device": " · ".join((banner_mask(x) if demo else x) for x in (e["vendor"], e["product"]) if x),
                              "first": iso_t(h["t0"]), "last": iso_t(h["t1"]),
                              "_s": (len(iss) * 3 + h["crit"] * 2 + len(day_reports.get(ip, ())))})
             rows.sort(key=lambda r: (-r["_s"], -r["events"]))

@@ -476,9 +476,12 @@ class Audit:
     @staticmethod
     def is_selftest(r):
         """Made by the built-in security test (installer, security_retest.py): its temporary lg-selftest-* accounts
-        and its own client name. Kept in the log like everything else; hidden by default on the Admin page."""
-        return (r.get("user") or "").startswith(TEST_PREFIX) or (r.get("target") or "").startswith(TEST_PREFIX) \
-            or (r.get("ua") or "").startswith("LookingGlass-retest")
+        and its own client name. Kept in the log like everything else; hidden by default on the Admin page.
+        The client name alone does not count: anyone can send it, so it marks a self-test only from the server itself
+        (loopback), where the test runs (review 2026-11-13)."""
+        if (r.get("user") or "").startswith(TEST_PREFIX) or (r.get("target") or "").startswith(TEST_PREFIX):
+            return True
+        return (r.get("ua") or "").startswith("LookingGlass-retest") and _is_loopback(r.get("ip"))
 
     def read(self, limit=200, q="", offset=0, selftests=True, label=None):
         """(total shown, rows, self-test events hidden). label(username) names accounts "Full Name (username)"
@@ -668,7 +671,8 @@ class Throttle:
 
 def _is_loopback(addr):
     try:
-        return ipaddress.ip_address(addr or "").is_loopback
+        a = ipaddress.ip_address(addr or "")
+        return (getattr(a, "ipv4_mapped", None) or a).is_loopback
     except ValueError:
         return False
 
@@ -734,7 +738,10 @@ def install(app, base_dir, logger):
     def name_taken(name):
         """A user name is taken when one differs from it only in letter case (review 2026-11-13)."""
         low = (name or "").lower()
-        return any(n.lower() == low for n in users.all())
+        current = users.all()                              # re-reads the file first
+        if low in (users.data.get("deleted_names") or ()):  # a deleted account's name is never given out again
+            return True
+        return any(n.lower() == low for n in current)
 
     def active_admins():
         # the temporary accounts of security_testing/security_retest.py never count: the first-run page stays as it is while
@@ -1098,7 +1105,7 @@ def install(app, base_dir, logger):
                 audit.add("mfa_enrolled", user=name, detail="after reset")
                 status = u["status"]
             else:
-                if any(n.lower() == name.lower() for n in users.data["users"]):
+                if name_taken(name):                       # also a deleted account's name (review 2026-11-13)
                     return page("login.html", 409, view="register", error="That name was taken meanwhile. Choose another.")
                 # the setup code (checked at the first step) is the proof of access to the server, not "this computer":
                 # behind a reverse proxy the administrator comes through the proxy, over HTTPS (remote_needs_tls)
@@ -1224,15 +1231,19 @@ def install(app, base_dir, logger):
         u = users.get(name) if NAME_RE.match(name) else None
         code = (request.form.get("code") or "").strip()
         rec = (request.form.get("recovery") or "").strip().lower()
-        ok, used_rec, step = False, None, None
+        ok, used_rec, step, hashed = False, None, None, False
         if u and u.get("status") == "active" and u.get("totp"):
             step = totp_check(u.get("totp"), code, u.get("totp_last"))
             admin_allowed = u.get("reset_allowed_until", 0) > _now()
             if step is not None and not admin_allowed and re.fullmatch(r"[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}", rec):
                 used_rec = next((i for i, hsh in enumerate(u.get("recovery", [])) if check_password_hash(hsh, rec)), None)
+                hashed = True
             ok = step is not None and (admin_allowed or used_rec is not None)
-        else:
-            check_password_hash(_DUMMY_HASH, pw)                # same work for unknown names
+        if not hashed:
+            # the same work on every answer that does not need a right authenticator code first: an unknown name and an
+            # active account with a wrong code both cost one password hash, so the time does not tell which names are
+            # active accounts (review 2026-11-13: only unknown names were hashed, so they took longer)
+            check_password_hash(_DUMMY_HASH, pw)
         if not ok:
             throttle.failed(ip, name)
             audit.add("reset_failed", user=name if u else "", detail="" if u else f"unknown name {name!r}")
@@ -1393,6 +1404,11 @@ def install(app, base_dir, logger):
                 if losing_admin:
                     return jsonify(error="This is the last admin."), 400
                 users.data["users"].pop(name, None); detail = "account deleted"
+                # the name stays reserved: someone registering it later would inherit the old account's findings,
+                # notes, channel memberships and audit history under the same name (review 2026-11-13)
+                gone = users.data.setdefault("deleted_names", [])
+                if name.lower() not in gone and not name.lower().startswith(TEST_PREFIX):   # the self-test reuses its names
+                    gone.append(name.lower())
             else:
                 return jsonify(error="Unknown action"), 400
             users.save()

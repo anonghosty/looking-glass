@@ -199,6 +199,10 @@ def mask_event(ev, asns):
             out[f] = "hidden"
     for f in ("http_url", "http_host", "http_referer", "http_agent", "ssl_servername", "detail", "filename"):
         out[f] = mask_text(out.get(f, ""))
+    # the line hash is a hash of the raw report line: anyone holding a guess of the line (an address, a port, a
+    # time) can hash it and confirm the address; the event ID is an ID. Neither is sent (review 2026-11-13)
+    for f in ("line_hash", "event_id", "_id"):
+        out.pop(f, None)
     # report-specific fields: an allowlist (masked_fields.py), so user names, passwords, banners, paths and any field
     # a report adds later stay hidden; the fields shown are masked for hosts, addresses, e-mails, dates and IDs
     import masked_fields

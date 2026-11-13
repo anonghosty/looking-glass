@@ -112,10 +112,15 @@ try:
                           ("detail_formula", "daniel", "", "10.0.0.3")):
         audit.add(e, user=u, target=tgt, detail="=1+1" if e == "detail_formula" else "x", ip=ip, ua="Mozilla/5.0 (Windows NT 10.0) Chrome/130")
     audit.add("login", user="lg-selftest-viewer", detail="self-test", ip="127.0.0.1", ua="LookingGlass-retest/1.0")
+    # the self-test's client name sent from outside: anyone can send it, so the row stays visible (review 2026-11-13)
+    audit.add("login_failed", user="grace", detail="x", ip="203.0.113.9", ua="LookingGlass-retest/1.0")
+    ok("a self-test client name from outside is not a self-test", not audit.is_selftest({"user": "grace", "ip": "203.0.113.9", "ua": "LookingGlass-retest/1.0"})
+       and audit.is_selftest({"user": "x", "ip": "127.0.0.1", "ua": "LookingGlass-retest/1.0"})
+       and audit.is_selftest({"user": "x", "ip": "::ffff:127.0.0.1", "ua": "LookingGlass-retest/1.0"}))
     day = time.strftime("%Y-%m-%d", time.gmtime())
     P = f"from={day}&to={day}"
     d = c.get(f"/api/audit/events?tab=auth&{P}", headers=H).json
-    ok("Authentication: sign-ins, failures and the lockout", sorted(r["event"] for r in d["rows"]) == ["login", "login_failed", "login_failed", "login_locked"],
+    ok("Authentication: sign-ins, failures and the lockout", sorted(r["event"] for r in d["rows"]) == ["login", "login_failed", "login_failed", "login_failed", "login_locked"],
        ", ".join(sorted(r["event"] for r in d["rows"])))
     ok("…the self-test's sign-in is left out", all(not r["selftest"] for r in d["rows"]))
     ok("…readable, with failures marked", any(r["label"] == "Failed sign-in" and r["alert"] for r in d["rows"]))
@@ -126,13 +131,13 @@ try:
     ok("Workflow: the finding", tabs["workflow"] == ["finding_created"])
     ok("Sessions: the session an admin ended", tabs["sessions"] == ["kicked"])
     ok("System and self-test: the self-test's events (and unknown events)", "login" in tabs["system"] and "detail_formula" in tabs["system"])
-    ok("the counts per tab", d["counts"].get("auth") == 4 and d["counts"].get("accounts") == 1, str(d["counts"]))
+    ok("the counts per tab", d["counts"].get("auth") == 5 and d["counts"].get("accounts") == 1, str(d["counts"]))
     ok("a period without events shows none", c.get("/api/audit/events?tab=auth&from=2001-01-01&to=2001-01-31", headers=H).json["total"] == 0)
     ok("search within a tab", c.get(f"/api/audit/events?tab=auth&{P}&q=203.0.113.5", headers=H).json["total"] == 3)
 
     print("The dashboard and the control checks")
     o = c.get(f"/api/audit/overview?{P}", headers=H).json
-    ok("key figures (the self-test account's own sign-in left out)", o["kpis"]["signins"] == 1 and o["kpis"]["failed"] == 2 and o["kpis"]["lockouts"] == 1
+    ok("key figures (the self-test account's own sign-in left out)", o["kpis"]["signins"] == 1 and o["kpis"]["failed"] == 3 and o["kpis"]["lockouts"] == 1
        and o["kpis"]["privileged"] == 3, json.dumps(o["kpis"]))
     ok("sign-ins per day, for every day of the period", len(o["per_day"]) == 1 and o["per_day"][0]["ok"] == 1)
     ok("sign-ins by hour", len(o["hours"]) == 24 and sum(o["hours"]) == 1)

@@ -15,6 +15,7 @@ server_type, serverid_software, application) or issue markers (CVE tags, ssl_poo
 cert_expired); those are normalised to vendor, device_type, product, version and issues. Everything else is
 kept as `extras` for the details view.
 """
+import functools
 import hashlib
 import json
 import re
@@ -431,6 +432,24 @@ EMPTY = {"vendor": "unknown vendor", "device_type": "unknown type", "product": "
          "city": "unknown city", "sector": "unknown sector"}
 
 
+# product, vendor, device type and version come from the hosts' own banners, so they can carry the host's name or
+# address ("Apache on mail.example.org", "router 198.51.100.7"). A masked viewer sees them through hostmask (the same
+# masking as the report fields): software and versions stay, hosts, addresses, e-mails, dates and IDs become <host>,
+# <ip>... (review 2026-11-13). The values repeat a lot, so the masked form is cached.
+BANNER = ("vendor", "device_type", "product", "version")
+
+
+@functools.lru_cache(maxsize=8192)
+def banner_mask(v):
+    import hostmask
+    return hostmask.mask(v) if v else (v or "")
+
+
+class MaskedValues(frozenset):
+    """A masked viewer's filter on a banner field: it is compared with the masked value, so a host name typed into the
+    request cannot tell whether that host is in the data."""
+
+
 def _masked(refs):
     """True in a masked request (external role, demo mode): the same test the IP and network filters use."""
     try:
@@ -453,6 +472,8 @@ def parse_filters(args, refs, asns):
             vals = {"\x00masked-hostname"}
         elif k == "asn":
             vals = set().union(*(asns.resolve(v) for v in vals))
+        elif k in BANNER and _masked(refs):
+            vals = MaskedValues(vals)
         out[k] = vals
     if args.get("vulnerable") in ("1", "yes", "true"):
         out["vulnerable"] = {True}
@@ -466,6 +487,9 @@ def matches(e, flt):
                 return False
         elif k == "issue":
             if not vals.intersection(e["issues"]):
+                return False
+        elif type(vals) is MaskedValues:
+            if banner_mask(e.get(k) or "") not in vals:
                 return False
         elif e.get(k) not in vals:
             return False

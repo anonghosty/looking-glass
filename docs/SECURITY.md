@@ -160,13 +160,16 @@ Malpedia, Settings and the admin APIs answer 403 without the permission.
 **What researchers see (a deliberate rule, decided 2026-11-12 after the external review).** Researchers study threats,
 so they get the threat data itself; what they never get is who the constituents are.
 - **Never a constituent's IP address.** Addresses are masked everywhere researchers look, also inside report values.
-- **Report data as reported:** service banners and the product, vendor and version taken from them; bot URLs, user
+- **Report data as reported:** service banners and the product, vendor and version taken from them (with a host's own
+  name, address or e-mail inside them masked, since 2026-11-13); bot URLs, user
   agents, DNS look-ups and SNI values in Intel gathered; patterns, including those only one or a few hosts carry. IP
   addresses inside these values are masked (in Intel gathered's threat values as `x.161.x.34`, found by the one
   address finder every masker shares, `ip_find.py`); nothing else in them is removed, because it is the intelligence
   the research depends on. **The one exception: the C2 host itself** (a sinkhole report's contacted host, `http_host`)
   is shown as reported, an IP address too, because researchers need the C2 servers for their analysis; a C2 server is
-  the threat's side, never a constituent's host. Management sees no C2 host: it decides on numbers, so the
+  the threat's side, never a constituent's host. (A Spam URL record has no C2: its constituent is the spam relay
+  that sent the message, and the host of a link in the spam is a "Spam link host", masked when it is in the
+  constituency.) Management sees no C2 host: it decides on numbers, so the
   Executive portal lists each C2 / sinkhole domain by its name, so the executive can tell what the devices call; a C2 host that is, or holds, an IP address is never shown and reads "IP address 1, 2…", also when the name spells the address (ec2-203-0-113-7.compute.amazonaws.com, an IPv6 address with dashes, a decimal or hex number) (decided 2026-11-13; before, every domain was numbered, which made no sense to the executives). A pattern fewer than 5 hosts carry is shown
   without a lasting code (`small_codes.py`), so it cannot be followed back to a host over time.
 - **Team notes and free text** (what people write, not what reports contain) mask more: host names, IP addresses,
@@ -309,6 +312,18 @@ Changes after the external review of 2026-11-13:
 | An overview could widen to every organisation when MongoDB could not load its days | A day that cannot be loaded is an error, never a smaller search | `tests/check_combo_review.py` |
 | Low: a race on authenticator codes, names differing in case, a chunked JSON array, any `?notice=` text, a forged request crashing `confirm_request.sh`, the uninstaller missing a running pipeline, a re-install turning Block off | Each fixed where it was | `tests/check_auth_offline.py`, `database/tests/test_worker_settings_effective.py`, `tests/check_uninstall.py` |
 | CI ran 8 of the platform's checks; sign-in and MFA were only tested live | 30 database-free checks in CI; a new offline check of sign-in, MFA, recovery codes, `/forgot` and each role's portal; checks without a database or service now skip instead of failing | `.github/workflows/checks.yml` |
+
+The second list of 2026-11-13:
+
+| Finding | Fix | Verified by |
+|---|---|---|
+| The self-test's client name (`LookingGlass-retest`) hid any request from the Admin and Audit views; anyone can send it | The client name counts only from the server itself (loopback), where the self-test runs; the self-test's own `lg-selftest-` accounts as before | `tests/check_auditor_portal.py`: an outside request with that name is shown and counted |
+| The line hash (a hash of the raw report line) reached masked viewers: a guessed address, port and time could be hashed and confirmed | Masked events carry no line hash, event ID or record ID | `tests/check_banner_inbound.py`: fails on the old code |
+| A key written twice in `.env` was read as the first value by the pipeline and the last by Settings and the installer | Every reader takes the first; Settings and the installer write the key once and remove later copies, line by line | a throwaway `.env` with a key twice and a key that only ends in the same name; `database/tests/test_worker_settings_effective.py` |
+| A deleted account's name could be registered again, inheriting its findings, notes, channels and audit history | The name stays reserved (any letter case); only `manage_users.py add NAME --reuse-name` on the server gives it out again, for the same person | `tests/check_auth_offline.py` |
+| `/forgot` took longer for an unknown name than for an active account with a wrong code, so its time told which names are active | Both cost one password hash | `tests/check_auth_offline.py` counts the hashes on each path |
+| Product, vendor, device type and version reached masked viewers and researchers unmasked; a banner can carry the host's own name or address | Masked like a report's own fields (host names, addresses, e-mails, dates, IDs); a masked viewer's filter on them is compared with the masked value | `tests/check_banner_inbound.py` |
+| Intel called a Spam URL record's link host a "C2 domain" | Shadowserver's Spam URL report is about the sender (`src_ip`, the spam relay); the link's host is a "Spam link host", never a C2, and masked when it is in the constituency (`dst_geo` is the platform's country); not counted as a C2 on the Executive portal | `tests/check_banner_inbound.py` |
 
 Other hardening added:
 - **systemd sandbox:** `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=read-only`, writable only `data/`, `PrivateTmp`, `UMask=0077` and more. Check it with `systemd-analyze security threatmap`.

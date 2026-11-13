@@ -2619,7 +2619,10 @@ INTEL = _intel.install(app, {"store": store, "svc_store": svc["store"], "allowed
                              "cross": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"],   # every category
                                                                         hold_small=True),     # researchers: no code below 5 hosts
                              "labels": lambda: {**{x["name"]: x["label"] for x in registry.get()},
-                                                **{x["name"]: x["label"] for x in svc["registry"].get()}}})
+                                                **{x["name"]: x["label"] for x in svc["registry"].get()}},
+                             # Spam URL: the link's host is a "Spam link host", masked when in the country (review 2026-11-13)
+                             "inbound": lambda: {x["name"] for x in registry.get() if x.get("layout") == "inbound"},
+                             "country": lambda: settings.data["country"]})
 
 
 # combination codes and the analyst's combination search (combos.py)

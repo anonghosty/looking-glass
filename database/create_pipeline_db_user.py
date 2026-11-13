@@ -58,7 +58,7 @@ def read_env(path):
         k, v = k.strip(), v.strip()
         if len(v) >= 2 and v[0] == v[-1] and v[0] in "'\"":
             v = v[1:-1]
-        out[k] = v
+        out.setdefault(k, v)                 # a key written twice: the first counts, as in the pipeline
     return out
 
 

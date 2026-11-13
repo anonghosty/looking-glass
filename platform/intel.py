@@ -58,12 +58,31 @@ COMBO_KINDS = {"Associated tags", "Other CVEs on the same hosts"}
 # Sinkhole DNS record would look like "the name only" although it carries the domain looked up.
 COMMS_COMBO_KINDS = COMBO_KINDS | {"C2 domain", "User agent", "DNS lookup", "TLS server name (SNI)"}
 COMMS_FIELDS.append(("Associated tags", "tag"))
+# Inbound reports (sources.py layout "inbound": Shadowserver's Spam URL report). The constituent is the sender: src_ip is
+# the spam relay that delivered the message (last hop). ip / hostname (dst_* here) and url are where a link found in
+# the spam points: often a spammer's site, sometimes a legitimate one hidden among them, and never a C2. So those hosts
+# are a "Spam link host", not a "C2 domain"; and when the link points into the constituency (dst_geo is the platform's
+# country) it is a constituent's own host, masked like the services reports' constituent data (review 2026-11-13,
+# checked against Shadowserver's Spam URL report page). Both filled from the registry and settings.
+INBOUND = set()
+COUNTRY = {"code": ""}
+SPAM_HOST = "Spam link host"
+COMMS_INBOUND = [(SPAM_HOST if k == "C2 domain" else k, f) for k, f in COMMS_FIELDS]
+
+
+def _comms(e):
+    """(fields, masked) for a communications record: an inbound record names spam link hosts, masked when they are in
+    the constituency."""
+    if e.get("source") not in INBOUND:
+        return COMMS_FIELDS, False
+    here = bool(COUNTRY["code"]) and (e.get("dst_geo") or "").upper() == COUNTRY["code"]
+    return COMMS_INBOUND, here
 
 
 def _norm(s):
     """'Exposed admin panel', 'exposed-admin-panel' and 'exposed_admin_panel' are the same name."""
     return re.sub(r"[\s_.-]+", "-", (s or "").strip().lower())
-DOMAIN_KINDS = {"C2 domain", "TLS server name (SNI)", "DNS lookup", "Certificate name"}     # compared as one kind
+DOMAIN_KINDS = {"C2 domain", "TLS server name (SNI)", "DNS lookup", "Certificate name", "Spam link host"}  # compared as one kind
 EXACT_KINDS = {"SSH fingerprint (HASSH)", "TLS fingerprint (JARM)", "Certificate SHA-256", "Web page hash"}
 KEEP_AS_IS = {"C2 domain"}                    # the threat's side: an IP literal here is a C2 server, kept
 # kinds whose values are shared by nature (common usernames, stock patterns, labels): shown, never a lead
@@ -149,8 +168,11 @@ def cross_code(section, name, parts):
 
 def record_items(section, e, me):
     """The combination one record carries, exactly as index() counts it (tests/check_combos.py compares the two)."""
-    fields, kinds = (COMMS_FIELDS, COMMS_COMBO_KINDS) if section == "infections" else (SVC_FIELDS, COMBO_KINDS)
-    together = [v for kind, f in fields if kind in kinds for v in _values(e, f, kind, svc=section != "infections")]
+    if section == "infections":
+        (fields, masked), kinds = _comms(e), COMMS_COMBO_KINDS
+    else:
+        fields, masked, kinds = SVC_FIELDS, True, COMBO_KINDS
+    together = [v for kind, f in fields if kind in kinds for v in _values(e, f, kind, svc=masked)]
     return tuple(sorted({v for v in together if _norm(v) != me}))
 
 
@@ -177,6 +199,7 @@ class Intel:
             if self.cache["key"] == key and time.time() - self.cache["at"] < 300:
                 return self.cache["data"]
         labels = self.ctx["labels"]()
+        _refresh_inbound(self.ctx)                 # a report found since start-up
         # per value and per combination: records, and records per host (hosts are counted, never kept in an answer)
         by = collections.defaultdict(lambda: collections.defaultdict(lambda: {
             "records": 0, "kinds": collections.defaultdict(collections.Counter), "combos": collections.Counter(),
@@ -204,8 +227,9 @@ class Intel:
                 slot = by[("infections", n)][rep]
                 slot["records"] += 1
                 together, host = [], e.get("src_ip") or ""
-                for kind, f in COMMS_FIELDS:
-                    for v in _values(e, f, kind):
+                fields, masked = _comms(e)
+                for kind, f in fields:
+                    for v in _values(e, f, kind, svc=masked):
                         slot["kinds"][kind][v] += 1
                         if host:
                             slot["vh"][(kind, v)][host] += 1
@@ -425,10 +449,21 @@ class Intel:
         return {"days": data["days"], "leads": kept[:60]}
 
 
+def _refresh_inbound(ctx):
+    try:
+        names = set(ctx.get("inbound", lambda: ())())
+        COUNTRY["code"] = str(ctx.get("country", lambda: "")() or "").upper()
+    except Exception:                                      # noqa: BLE001  (the registry not ready: keep what is known)
+        return
+    INBOUND.clear()
+    INBOUND.update(names)
+
+
 def install(app, ctx):
     """ctx: store, svc_store, labels() -> {collection: report name}, defined() -> {(section, name): title},
-    allowed() -> may this request see the researchers' work."""
+    allowed() -> may this request see the researchers' work; inbound() -> the names of the inbound reports."""
     intel = Intel(ctx)
+    _refresh_inbound(ctx)
 
     @app.route("/api/intel")
     def api_intel():

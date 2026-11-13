@@ -17,6 +17,7 @@ from datetime import timedelta
 
 from flask import Response, jsonify, render_template, request
 
+import intel as _intel           # INBOUND: the reports whose URL host is the constituent's own
 from security import public_error
 import timezones
 
@@ -291,7 +292,8 @@ def register(app, ctx):
             if e["dst_geo"]:
                 dst[e["dst_geo"]] += 1
             hours[int((e["_t"] - t0) // 3600) % 24] += 1
-            if e["http_host"]:
+            # an inbound report's URL host (Spam URL: a link found in the spam) is not a C2 (review 2026-11-13)
+            if e["http_host"] and e["source"] not in _intel.INBOUND:
                 c2[e["http_host"]] += 1
                 if ip:
                     c2_h[e["http_host"]].add(ip)

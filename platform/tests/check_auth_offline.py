@@ -166,10 +166,41 @@ try:
     r = reg.post("/register", data=dict(form, username="chk-other", email="Management@Example.org"), base_url="https://localhost", headers=UA)
     ok("…nor an e-mail address that differs only in case", r.status_code == 409, str(r.status_code))
 
+    print("/forgot does the same work for an active account and an unknown name (review 2026-11-13)")
+    real_check, hashes = auth.check_password_hash, []
+    auth.check_password_hash = lambda h, p: (hashes.append(1), real_check(h, p))[1]
+    try:
+        throttle.clear_address("127.0.0.1")
+        work = {}
+        for who in ("chk-auditor", "nobody-at-all"):
+            hashes.clear()
+            A.app.test_client().post("/forgot", data={"username": who, "code": "000000", "recovery": "9999-9999-9999",
+                                                      "password": NEW, "password2": NEW}, headers=UA)
+            work[who] = len(hashes)
+        ok("a wrong code on an active account and an unknown name: one password hash each", work["chk-auditor"] == work["nobody-at-all"] == 1, str(work))
+    finally:
+        auth.check_password_hash = real_check
+        throttle.clear_address("127.0.0.1")
+
+    print("A deleted account's name is not given out again (review 2026-11-13)")
+    tok = sessions.create("chk-admin", "127.0.0.1", UA["User-Agent"])
+    cl = A.app.test_client(); cl.set_cookie("lg_session", tok)
+    csrf = sessions.s[auth._h(tok)]["csrf"]
+    r = cl.post("/api/admin/users/chk-external", json={"action": "delete"}, headers=dict(UA, **{"X-CSRF-Token": csrf}))
+    ok("an administrator deletes chk-external", r.status_code == 200 and not users.get("chk-external"), f"{r.status_code} {r.get_data(as_text=True)[:120]}")
+    ok("…its name is kept as reserved", "chk-external" in (json.load(open(users.path)).get("deleted_names") or []))
+    sessions.end(token=tok)
+    r = reg.post("/register", data=dict(form, username="chk-external", email="new-person@example.org"), base_url="https://localhost", headers=UA)
+    ok("…so nobody can register it again", r.status_code == 409, str(r.status_code))
+    r = reg.post("/register", data=dict(form, username="CHK-External", email="new-person@example.org"), base_url="https://localhost", headers=UA)
+    ok("…in any letter case", r.status_code == 409, str(r.status_code))
+
     print("Each portal opens for its own role only")
     PAGES = {"/management": {"management", "admin"}, "/advisory": {"advisor", "admin"}, "/definitions": {"researcher", "admin"},
              "/audit": {"auditor", "admin"}, "/admin": {"admin"}}       # admin holds every permission (SECURITY.md)
     for role in SEC:
+        if role == "external":
+            continue                                   # deleted above
         tok = sessions.create(f"chk-{role}", "127.0.0.1", UA["User-Agent"])
         cl = A.app.test_client(); cl.set_cookie("lg_session", tok)
         for page, allowed in PAGES.items():

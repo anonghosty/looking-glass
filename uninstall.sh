@@ -56,7 +56,7 @@ do_() { if [ $DRY = 1 ]; then printf '  would run: %s\n' "$*"; else "$@"; fi; }
 [ -d "$DB_DIR" ] || [ -d "$PF_DIR" ] || die "run it from the Looking Glass folder (database/ or platform/ next to it)."
 
 env_get() {  # FILE KEY [DEFAULT]: the value as written (never executed)
-  local v; v=$(grep -E "^[[:space:]]*$2[[:space:]]*=" "$1" 2>/dev/null | tail -n1 | cut -d= -f2- || true)
+  local v; v=$(grep -E "^[[:space:]]*$2[[:space:]]*=" "$1" 2>/dev/null | head -n1 | cut -d= -f2- || true)
   v="${v%$'\r'}"; v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]]}"}"
   if [[ ${#v} -ge 2 && ( ( $v == \'*\' ) || ( $v == \"*\" ) ) ]]; then v="${v:1:${#v}-2}"; fi
   printf '%s' "${v:-${3-}}"

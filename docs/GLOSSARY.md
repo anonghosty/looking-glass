@@ -245,6 +245,9 @@ On the Definitions page: what the reports carry for an infection or an issue, re
 **Indicator**  
 A trace of a threat that can be searched for elsewhere: a C2 domain, a URL, a user agent, a file or certificate fingerprint, a username a bot tries. Looking Glass collects them from the reports for researchers (Intel gathered).
 
+**Spam link host**  
+In Intel gathered, from Shadowserver's Spam URL report: the host of a link found in a spam message. The report is about the server that sent the spam (the spam relay); the link may point to a spammer's site or to a legitimate one. It is never a C2, and when it points into the constituency it is masked like any constituent's host.
+
 **Combination**  
 The exact set of indicators that occur together on one record, for example iot + router-os + winbox, or a C2 domain with a particular user agent. Combinations explain why one indicator counts fewer records than another, and show which variants exist.
 

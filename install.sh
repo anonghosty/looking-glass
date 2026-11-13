@@ -278,17 +278,25 @@ import os, re, sys
 p, k, v = sys.argv[1], os.environ["K"], os.environ["V"]
 text = open(p, encoding="utf-8").read() if os.path.exists(p) else ""
 line = f"{k}={v}"
-if re.search(rf"^{re.escape(k)}=.*$", text, flags=re.M):
-    text = re.sub(rf"^{re.escape(k)}=.*$", lambda m: line, text, count=1, flags=re.M)
-else:
-    text = text.rstrip("\n") + "\n" + line + "\n"
+# the first copy of the key gets the value; later copies are removed, so every reader sees the one value (review
+# 2026-11-13); line by line, so another key that only ends in the same name is never touched
+out, done = [], False
+for ln in text.splitlines():
+    if re.match(rf"^{re.escape(k)}=", ln):
+        if not done:
+            out.append(line); done = True
+        continue
+    out.append(ln)
+if not done:
+    out.append(line)
+text = "\n".join(out).rstrip("\n") + "\n"
 fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
 with os.fdopen(fd, "w", encoding="utf-8") as f:
     f.write(text)
 os.chmod(p, 0o600)
 EOF
 }
-env_get() { grep -E "^$2=" "$1" 2>/dev/null | tail -n1 | cut -d= -f2- || true; }
+env_get() { grep -E "^$2=" "$1" 2>/dev/null | head -n1 | cut -d= -f2- || true; }
 gen_password() { python3 -c 'import secrets; print(secrets.token_urlsafe(24))'; }
 v_port() { [[ $1 =~ ^[0-9]+$ ]] && [ "$1" -ge 1 ] && [ "$1" -le 65535 ] || { echo "A port is a number from 1 to 65535."; return 1; }; }
 v_nonempty() { [ -n "$1" ] || { echo "This cannot be empty."; return 1; }; }

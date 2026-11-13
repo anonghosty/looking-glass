@@ -3,7 +3,8 @@
 ''''exec "$(dirname -- "$0")/../.venv/bin/python" "$0" "$@" # '''
 HELP = """Looking Glass accounts (data/users.json). Run on the server; passwords are typed here, never on a web page.
 
-  add NAME [--admin]      create an account (asks for the password), set up its authenticator app and recovery codes
+  add NAME [--admin]      create an account (asks for the password), set up its authenticator app and recovery codes;
+                          a deleted account's name is refused unless --reuse-name (the same person coming back)
   passwd NAME             change the password (ends the account's sessions)
   mfa NAME                set up (or replace) the authenticator app; new recovery codes (ends the account's sessions)
   role NAME ROLE        change the role (external, analyst, admin or a custom role)
@@ -69,8 +70,22 @@ def need(name, exists=True):
         sys.exit("Names: 2-40 letters, digits, dot, dash or underscore.")
     if exists and not users.get(name):
         sys.exit(f"No account {name}.")
-    if not exists and users.get(name):
+    if not exists and any(n.lower() == name.lower() for n in users.all()):
         sys.exit(f"Account {name} already exists.")
+
+
+def reserved(name):
+    """A deleted account's name stays reserved: a new account under it would inherit the old one's findings, notes,
+    channels and audit history (review 2026-11-13). Only this server-side tool can give it out again (--reuse-name)."""
+    users._load()
+    return name.lower() in (users.data.get("deleted_names") or ())
+
+
+def reserve(name):
+    users._load()
+    gone = users.data.setdefault("deleted_names", [])
+    if name.lower() not in gone:
+        gone.append(name.lower())
 
 
 def main(a):
@@ -84,6 +99,11 @@ def main(a):
     name = a[1] if len(a) > 1 else ""
     if cmd == "add":
         need(name, exists=False)
+        if reserved(name):
+            if "--reuse-name" not in a:
+                sys.exit(f"{name} belonged to a deleted account; its findings, notes and audit history still name it. "
+                         "Choose another name, or add --reuse-name if this is the same person.")
+            users.data["deleted_names"].remove(name.lower()); users.save()
         role = "admin" if "--admin" in a else LOWEST_ROLE   # "viewer" was renamed "external"
         users.set_password(name, ask_password(name), role)
         print(f"Account {name} ({role}) created.")
@@ -107,7 +127,8 @@ def main(a):
             sys.exit("role NAME " + "|".join(sorted(known)))
         users._load(); users.data["users"][name]["role"] = a[2]; users.save(); print(f"{name} is now {a[2]}.")
     elif cmd == "remove":
-        need(name); users._load(); users.data["users"].pop(name, None); users.save(); print(f"Account {name} removed; its sessions have ended.")
+        need(name); users._load(); users.data["users"].pop(name, None); reserve(name); users.save()
+        print(f"Account {name} removed; its sessions have ended. The name stays reserved.")
     else:
         print(HELP)
 

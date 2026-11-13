@@ -31,7 +31,7 @@ jobs:
         working-directory: platform
         run: |
           set -e
-          for t in test_privacy_roles test_schedule check_ip_find check_host_label_text check_masked_fields check_data_access \
+          for t in test_privacy_roles test_schedule check_ip_find check_host_label_text check_masked_fields check_banner_inbound check_data_access \
                    check_auth_offline check_login_throttle check_password_policy check_csrf_routes check_settings_access \
                    check_first_admin_proxy check_retest_reset check_workflow_fixes check_calc_offline \
                    check_audit_portal check_auditor_portal check_pipeline_settings check_scope_reload check_libraries \

@@ -78,6 +78,7 @@ run "settings Workers + audit Sender check" $PY tests/check_pipeline_settings.py
 run "password expiry at sign-in (password policy)" $PY tests/check_password_policy.py
 run "privacy + roles unit tests"      $PY tests/test_privacy_roles.py
 run "masked viewers: report fields allowlist" $PY tests/check_masked_fields.py
+run "masked viewers: banners, line hash, Spam URL hosts" $PY tests/check_banner_inbound.py
 run "reverse proxy + first administrator" $PY tests/check_first_admin_proxy.py
 run "settings: Settings permission only" $PY tests/check_settings_access.py
 run "failed-login counter (locks, clean-up)" $PY tests/check_login_throttle.py
