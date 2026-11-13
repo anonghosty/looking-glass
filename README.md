@@ -56,6 +56,13 @@ teams, especially across Africa. Looking Glass needs **one modest server and a g
 > Looking Glass **complements** IntelMQ and Elastic; it does not replace them. See the
 > [honest comparison](docs/COMPARISON.md), with sources.
 
+**The story behind it.** Botnets get taken down; the infected devices don't get cleaned. When a takedown silences the
+command servers, the devices keep calling, now to a sinkhole, and Shadowserver reports those calls to national CSIRTs
+every day. Looking Glass began with a question its creator kept hearing from CSIRT teams across Africa: how do we
+process the Shadowserver data? (4:54, narrated, with captions; animation with made-up data)
+
+[![Watch The devices that kept calling: the story of Looking Glass (4:54) on YouTube](docs/media/films/origin-story.jpg)](https://www.youtube.com/watch?v=PndLu4TlK3A)
+
 ## Features
 
 <table>

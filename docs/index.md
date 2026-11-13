@@ -107,6 +107,22 @@ The chapters of each film are on its page: the use cases at the top of [Use case
 to advisory under
 [Advisories](USER_GUIDE.md#advisories-the-advisor) in the user guide.
 
+## The story behind it
+
+Botnets get taken down; the infected devices don't get cleaned. When Google moved against the XCPE botnet on
+2 November 2026, its command servers went dark, but the malware sat in the TV boxes' firmware, so the boxes kept
+calling. Emotet, Qakbot and BadBox tell the same story, and Shadowserver reports those calls every day, free, to
+national CSIRTs. Someone still has to find each device and reach the network it sits on.
+
+Looking Glass began with a question its creator kept hearing from CSIRT members across Africa: how do we process the
+Shadowserver data? This film tells how that question became a web that connects every report, so a CSIRT can go for
+the device that tugs on the most threads.
+
+<!-- film: origin-story -->
+
+Every scene is animation with made-up data: every IP address, network name and AS number in it is fictional. The
+sources for each fact are in the film's description on YouTube.
+
 ## How it works
 
 <div class="lg-steps" markdown>

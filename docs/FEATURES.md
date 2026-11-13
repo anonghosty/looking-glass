@@ -31,6 +31,9 @@ read more. Dates are UTC.
   (5.3), weekly audit-log reviews (8.11); otherwise "related", saying what differs. 8.4 stays related (CIS asks for two
   time sources). The defaults are now CIS's figures: `AUDIT_DORMANT_DAYS=45`, `AUDIT_REVIEW_DAYS=7`.
 - **tzdata** is a requirement, so local times never vanish on a server without its own time-zone data.
+- **The story film**, *The devices that kept calling* (4:54): why Looking Glass exists, from botnet takedowns whose
+  devices keep calling to the question CSIRT teams across Africa kept asking. On the documentation site's home page
+  ("The story behind it", with chapters) and in the README.
 
 ## 2026-11-12 (night): local times, Executive figures by devices, every report on the Overview
 

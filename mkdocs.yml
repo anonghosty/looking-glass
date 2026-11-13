@@ -133,6 +133,15 @@ extra:
         - [224, "Part 4: separation of duties"]
         - [280, "The loop closes"]
         - [324, "Free and open source"]
+    origin-story:
+      id: PndLu4TlK3A
+      title: "The devices that kept calling: the story of Looking Glass"
+      length: "4:54"
+      sound: "narrated, with captions"
+      chapters:
+        - [0, "The takedowns: the devices kept calling"]
+        - [121, "Part 1: the question that kept coming up"]
+        - [246, "Still calling, now found"]
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/anonghosty/looking-glass
