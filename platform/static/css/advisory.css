@@ -96,5 +96,6 @@
 .av-state { margin: 0; padding: 8px 12px; border-radius: 10px; font-size: 13px; color: var(--text-2); }
 .av-state.drafted { border: 1px solid rgba(124, 156, 255, .5); background: rgba(124, 156, 255, .08); }
 .av-state.sent { border: 1px solid rgba(43, 176, 127, .55); background: rgba(43, 176, 127, .08); }
+.av-state.stale { border: 1px solid rgba(245, 181, 74, .6); background: rgba(245, 181, 74, .08); color: #f1d9a8; margin-top: 8px; }
 .av-state a { color: #9cb7ff; }
 .av-net.drafted { border-color: rgba(124, 156, 255, .6); }

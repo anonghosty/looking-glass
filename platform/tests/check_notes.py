@@ -8,6 +8,8 @@ Usage: tests/check_notes.py      (the app in-process)"""
 import json, os, sys, tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 os.environ.setdefault("THREATMAP_SCHEDULE", "0")
+import needs_db  # noqa: E402
+needs_db.require()   # no reachable MongoDB (a fresh clone, CI): skipped, not crashed
 import app as A  # noqa: E402
 import notes as N  # noqa: E402
 from flask import g  # noqa: E402

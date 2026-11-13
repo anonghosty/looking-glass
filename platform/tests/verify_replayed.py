@@ -5,6 +5,7 @@ Usage: .venv/bin/python tests/verify_replayed.py [ISO time]   (default: now minu
 """
 import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import lgauth  # noqa: E402,F401  local API login (automation key)
+lgauth.require_server()   # no running service (a fresh clone, CI): skipped, not crashed
 import os, sys  # noqa: E401
 # These totals are for the whole country. With a constituency set in Settings the platform shows only that part, which
 # tests/verify_constituency.py checks against MongoDB: skip (exit 77) instead of reporting a false difference.

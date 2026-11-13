@@ -44,5 +44,36 @@ for name, (attr, unit) in lim_attr.items():
     ok(f"{name}: eff_zip agrees with zip_limits.Limits.from_env", not bad, str(bad))
 ok("MAIL_AUTH_DOMAIN: unset or empty means shadowserver.org, as the pipeline uses it",
    WS.eff_domain(None) == WS.eff_domain("") == "shadowserver.org" and WS.eff_domain(" Shadowserver.ORG ") == "shadowserver.org")
+
+# confirm_request.sh on forged request files (review 2026-11-13: "values" as a list crashed it): every odd shape is
+# listed as malformed or refused, never a crash, and never confirmed
+import contextlib, io, json, pathlib, tempfile  # noqa: E401,E402
+tmp = tempfile.mkdtemp(prefix="wsfuzz-")
+pdata = pathlib.Path(tmp) / "data"
+(pdata / "pipeline_requests").mkdir(parents=True)
+real = (WS.find_platform_data, WS.read_env)
+WS.find_platform_data = lambda *a, **k: pdata
+WS.read_env = lambda p: {"DATA_DIR": tmp, "MAIL_AUTH": "enforce", "ZIP_MAX_UNPACKED_MB": "1024"}
+RID = "20261113T070000Z-abcdefabcdef"
+shapes = [{"kind": "settings", "values": ["MAIL_AUTH"]}, {"kind": "settings", "values": "MAIL_AUTH=off"},
+          {"kind": "settings", "values": {"MAIL_AUTH": ["off"]}}, {"kind": "settings", "values": {"ZIP_MAX_UNPACKED_MB": {"a": 1}}},
+          {"kind": "settings", "values": {"MAIL_AUTH": None}}, {"kind": "settings", "values": {"ZIP_MAX_UNPACKED_MB": "nan"}},
+          {"kind": ["settings"]}, {"kind": {"a": 1}}, {"kind": "release", "qid": ["../../x"]}, {"kind": "apikey", "key": {"a": 1}}]
+crashed, confirmed = [], []
+try:
+    for b in shapes:
+        (pdata / "pipeline_requests" / f"{RID}.json").write_text(json.dumps(dict(b, id=RID)))
+        for args in ([], [RID, "--yes"]):
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    rc = WS.cli(args)
+                if args and rc == 0:
+                    confirmed.append(b)
+            except Exception as e:  # noqa: BLE001
+                crashed.append((b, type(e).__name__))
+finally:
+    WS.find_platform_data, WS.read_env = real
+ok(f"confirm_request.sh on {len(shapes)} forged request shapes: no crash", not crashed, str(crashed[:2]))
+ok("…and none of them is confirmed", not confirmed, str(confirmed[:2]))
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))
 sys.exit(1 if fails else 0)

@@ -55,6 +55,8 @@ run "CVE look-ups: KEV backoff, time budget" $PY tests/check_cve_backoff.py
 run "constituency change beats a running day load" $PY tests/check_scope_reload.py
 run "CSRF on every write route (real sign-in)" $PY tests/check_csrf_routes.py
 run "uninstaller removes only its own parts" $PY tests/check_uninstall.py
+run "sign-in, MFA, recovery, /forgot, role gates (offline)" $PY tests/check_auth_offline.py
+run "grades and shares (offline)"     $PY tests/check_calc_offline.py
 DBDIR=""; for d in ../database ../shadowserver; do [ -f "$d/zip_limits.py" ] && [ -x "$d/.venv/bin/python" ] && DBDIR=$d && break; done
 if [ -n "$DBDIR" ]; then run "pipeline: unzip limits (zip bombs)" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_zip_limits.py"
 else run "pipeline: unzip limits (zip bombs)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi

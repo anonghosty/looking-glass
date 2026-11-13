@@ -102,7 +102,8 @@ are in `platform/tests/` and `platform/security_testing/`, and the pipeline's in
 
 | Threat | Control | Test |
 |---|---|---|
-| Reach pages or the API without signing in | Every page and API needs a sign-in: password (scrypt) plus TOTP | `security_retest.py` (about 120 checks) |
+| Reach pages or the API without signing in | Every page and API needs a sign-in: password (scrypt) plus TOTP | `security_retest.py` (about 120 checks), `check_auth_offline.py` |
+| Replay an authenticator code, or reuse a recovery code | Each code works once, checked again when it is recorded; recovery codes are removed when used | `check_auth_offline.py` |
 | Guess passwords | 5 failures per account and address, then a 15-minute lock; 20 per address per hour; same answer and timing for wrong names | `check_login_throttle.py`, `security_retest.py` |
 | Steal or plant a session | Server-side sessions (only a hash is stored); a new ID at sign-in; HttpOnly, SameSite=Strict, Secure, `__Host-`; bound to address and browser | `security_retest.py` |
 | Make a signed-in user's browser change things (CSRF, DNS rebinding) | CSRF token, JSON only, `Origin` and `Sec-Fetch-Site` checks, host-name allow list | `check_csrf_routes.py`, `security_retest.py` |
@@ -114,6 +115,7 @@ are in `platform/tests/` and `platform/security_testing/`, and the pipeline's in
 | Threat | Control | Test |
 |---|---|---|
 | Send a forged "Shadowserver" report | DKIM checked on the message as downloaded, with the From header bound to the signer's domain; a message the parser would read differently from the check is `permerror`; `MAIL_AUTH=enforce` holds back anything that does not pass | `test_mail_auth.py`, `test_mail_auth_pipeline.py` |
+| Add a header above a genuine signed report (a Content-Type of their own, read first by the parser) | More From, Content-Type, Content-Transfer-Encoding or MIME-Version headers than the signature covers: not a pass | `test_mail_auth.py` |
 | A zip bomb, or names that climb out of the folder | Limits counted on the real bytes (unpacked size, ratio, files, free disk); a bomb is quarantined with its reason | `test_zip_limits.py` |
 | Links to somewhere other than Shadowserver, or huge downloads | Only `https://dl.shadowserver.org/` links are followed (`LINK_RE` in `shadowserver_pipeline.py`); a download is capped at the unzip size limit | `test_link_downloads.py` (the size cap), `test_mail_auth_pipeline.py` |
 | A report type made to skew the day's figures | One-off special reports are loaded apart, never replayed or counted in the totals and trends | `check_special_reports.py`, `test_report_names.py` |
@@ -126,7 +128,10 @@ are in `platform/tests/` and `platform/security_testing/`, and the pipeline's in
 | Follow one rare host over time | Patterns carried by fewer than 5 hosts get no lasting code | `check_small_codes.py` |
 | Open a finding or advisory they are not part of | Findings are channels: only participants and admins | `check_findings.py`, `check_workflow_fixes.py` |
 | Change Settings, roles or accounts | Permissions checked on the server; exclusive and fixed roles; the last administrator kept; on a 5-day session, changes need a fresh sign-in after 12 hours | `check_settings_access.py`, `test_privacy_roles.py`, `security_retest.py` |
-| Look at or download host data quietly | Every export, and every view of host-level data, is an audit entry, with hosts by reference | `check_data_access.py` |
+| Look at or download host data quietly | Every export, and every view of host-level data with every filter of it, is an audit entry, with hosts by reference | `check_data_access.py` |
+| Tie up the server's CPU with one request (a long run of colons for the address finder) | The finder reads candidates of at most 45 characters; logged values are cut before it reads them | `check_ip_find.py`, `check_data_access.py` |
+| Send an organisation a report that no longer says what the advisory's record says (edited text or TLP) | The report keeps a fingerprint of its text; drafted and sent are refused until it is generated again | `check_combo_review.py` |
+| Register a look-alike name ("Grace" beside "grace") | Names and e-mail addresses that differ only in letter case are one | `check_auth_offline.py` |
 
 ### A4. A takeover of the web app (a bug, or its Linux account)
 
@@ -142,7 +147,7 @@ are in `platform/tests/` and `platform/security_testing/`, and the pipeline's in
 | Threat | Control | Test |
 |---|---|---|
 | Change, insert or remove an entry | Each entry carries the SHA-256 of the one before it; `audit.head` catches entries cut from the end; archives removed by retention leave their last link | `check_audit_portal.py`, `check_auditor_portal.py` |
-| Delete an archive and plant notes to hide it | The chain must be whole from the seal to the head, in the portal and in the standalone verifier alike | `check_auditor_portal.py` (the reviewer's crafted-archive attack) |
+| Delete an archive and plant notes to hide it | The chain must be whole from the seal to the head, in the portal and in the standalone verifier alike; notes are matched to their archive's rotation entry by last link and name, and every kept rotation entry must have its archive or a matching note | `check_auditor_portal.py` (the reviewers' crafted-archive attacks) |
 | Rewrite the whole chain, with full control of the server | Not preventable on the server itself. The auditor keeps an earlier head off the server, and at the next audit it must still be at its entry number | [How the audit log proves itself](AUDIT_LOG_PROOF.md) |
 
 ## 6. What remains

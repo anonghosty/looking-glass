@@ -15,6 +15,8 @@ Usage: .venv/bin/python tests/e2e_test.py setup|check|teardown|all      (all = s
 """
 import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import lgauth  # noqa: E402,F401  local API login (automation key)
+import needs_db  # noqa: E402
+needs_db.require()   # it runs its own copy of the service on the real MongoDB: without one (a fresh clone, CI), skipped
 import json
 import os
 import re

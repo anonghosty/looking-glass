@@ -82,6 +82,43 @@ get("/api/related", ref="h-off")
 ok("DATA_ACCESS_LOG=0 turns it off", len(entries) == n and not data_access.enabled())
 os.environ.pop("DATA_ACCESS_LOG")
 
+print("Every filter is recorded, so different hosts are different views (review 2026-11-13)")
+n = len(entries)
+get("/api/events", src_ip="203.0.113.7")
+get("/api/events", src_ip="203.0.113.8")
+ok("the map's events are logged (they were not), one entry per host filtered on", len(entries) == n + 2, str(entries[n:]))
+ok("…src_ip recorded as the host's reference, never the address",
+   all("src_ip=host R" in x["detail"] and "203.0.113" not in x["detail"] for x in entries[n:]), str(entries[n:]))
+n = len(entries)
+get("/api/svc/drill", metric="hosts", port="3389", country="GH", asn="AS64500", tag="rdp")
+d = entries[-1]["detail"] if len(entries) > n else ""
+ok("services filters are all in the entry (port, country, asn, tag)",
+   all(f in d for f in ("port=3389", "country=GH", "asn=AS64500", "tag=rdp")), d)
+n = len(entries)
+c.get("/api/events", query_string=[("src_ip", "203.0.113.20"), ("src_ip", "203.0.113.21")], headers={"X-User": "daniel"})
+ok("a parameter given twice: both values recorded", len(entries) == n + 1 and entries[-1]["detail"].count("src_ip=host R") == 2,
+   entries[-1]["detail"] if len(entries) > n else "")
+n = len(entries)
+get("/api/events", at="2026-11-13T10:00:00", demo="0", limit="500")
+get("/api/events", at="2026-11-13T10:05:00", demo="0", limit="200")
+ok("display and time options alone do not make a new view", len(entries) == n + 1, str(entries[n:]))
+n = len(entries)
+get("/api/related", **{"203.0.113.9": "1"})
+ok("an address typed as a parameter name is masked too", len(entries) == n + 1 and "203.0.113" not in entries[-1]["detail"],
+   entries[-1]["detail"] if len(entries) > n else "")
+print("A long value is cut before the address finder reads it (review 2026-11-13: the CPU could be tied up)")
+import time as _t  # noqa: E402
+n = len(entries)
+t0 = _t.perf_counter()
+get("/api/insight", kind="src_ip", value=":" * 8000 + "1")
+took = _t.perf_counter() - t0
+ok(f"8,000 colons in value=: logged in {took:.3f} s (under 0.2 s)", len(entries) == n + 1 and took < 0.2)
+n = len(entries)
+get("/api/insight", kind="x", value="a" * 115 + "203.0.113.45")
+ok("an address cut in half at the limit leaves none of its digits", len(entries) == n + 1
+   and not any(p in entries[-1]["detail"] for p in ("203.0", "203.", "113.4")), entries[-1]["detail"] if len(entries) > n else "")
+ok("no entry ever holds an IP address (all of the above)", not any("203.0.113" in str(x) for x in entries))
+
 print("CIS 3.14 follows it")
 import control_map as CM  # noqa: E402
 ok("LG-15 backs 3.14 while views are logged", CM.lg_reading("LG-15", "3.14", {"data_access_logged": True})["status"] == "backed")

@@ -186,7 +186,10 @@ def install(app, ctx):
         for iso, ids in kept["by_day"].items():
             day = ctx["day"](plat, iso)
             if day is None:
-                continue
+                # a day that cannot be loaded now (MongoDB busy or down) is an error, never a quietly smaller search: an
+                # overview with no records looked like one without a kept search and widened to every organisation
+                # (review 2026-11-13)
+                return None, f"The records of {iso} could not be loaded from the database just now: try again in a moment."
             fi, ai = set(ids["found"]), set(ids["around"])
             for e in day.events:
                 if e.get("id") in fi:

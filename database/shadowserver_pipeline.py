@@ -619,7 +619,12 @@ def _extract_zip(zip_path: Path, unzipped_dir: Path, sorting_dir: Path,
                     zip_limits.copy_member(zf, info, zip_limits.safe_path(tmp, info.filename), budget)
                     continue
                 zip_limits.copy_member(zf, info, tmp / f".route-{i}", budget)
-                staged.append((tmp / f".route-{i}", base, report_names.canonical(m.group(1))))   # special-x -> special_x
+                staged.append((tmp / f".route-{i}", base, m.group(1)))
+        # a Special Report's own name (special-badbox -> special_badbox): cut where the country part begins, learnt from
+        # the ordinary reports sorted before and those in this zip (report_names.special_name)
+        tails = report_names.learn_tails(sorting_dir) | {
+            t for _, b, g in staged if (t := report_names.country_tail(b, g))}
+        staged = [(p, b, report_names.special_name(b, g, tails)) for p, b, g in staged]
         routed = []
         for path, base, service in staged:                 # the whole zip is unpacked: now move the reports in
             if not report_names.valid(service):            # an unusable report name never reaches MongoDB
@@ -709,6 +714,7 @@ def unzip_and_sort(s: Settings, stats: Counter) -> None:
                               items[0] if items else "")
 
     # Sweep: CSV attachments that arrived un-zipped, plus anything left from older runs.
+    tails = report_names.learn_tails(s.sorting_dir)
     for search_dir in (s.unzipped_dir, s.attachments_dir):
         for root, dirs, files in os.walk(search_dir):
             dirs[:] = [d for d in dirs if not d.endswith(".partial")]
@@ -716,7 +722,7 @@ def unzip_and_sort(s: Settings, stats: Counter) -> None:
                 m = SERVICE_RE.match(fn)
                 if not m:
                     continue
-                rname = report_names.canonical(m.group(1))   # a Special Report "special-x" loads as special_x
+                rname = report_names.special_name(fn, m.group(1), tails)   # "special-x" loads as special_x
                 if not report_names.valid(rname):           # an unusable report name never reaches MongoDB
                     report_names.quarantine(os.path.join(root, fn), s.base_dir, rname)
                     log.warning("[QUARANTINE] %s: %s. Moved to quarantine/%s/", fn, report_names.why(rname),

@@ -157,6 +157,25 @@ ok("a header block that starts with a continuation line: permerror", r["result"]
 r = C.check(genuine)
 ok("…while the genuine message still passes", r["result"] == "pass", r["reason"])
 
+print("A header added above a signed one (review 2026-11-13: an unsigned Content-Type over the signed one passed)")
+MIME = HEAD + [b"MIME-Version: 1.0", b"Content-Type: multipart/mixed; boundary=\"REAL\"",
+               b"Content-Transfer-Encoding: 7bit"]
+SIGNED = (b"From", b"To", b"Subject", b"Date", b"Message-ID", b"MIME-Version", b"Content-Type", b"Content-Transfer-Encoding")
+real_mime = message(head=MIME, hs=SIGNED)
+r = C.check(real_mime)
+ok("a report whose signature covers its MIME headers passes", r["result"] == "pass", r["reason"])
+for hdr in (b"Content-Type: multipart/mixed; boundary=\"EVIL\"", b"Content-Transfer-Encoding: base64", b"MIME-Version: 1.0"):
+    forged_top = hdr + b"\r\n" + real_mime
+    first = _email.message_from_bytes(forged_top).get(hdr.split(b":")[0].decode())
+    r = C.check(forged_top)
+    ok(f"{hdr.split(b':')[0].decode()} added above the signed one (the parser reads the added one: {first[:30]!r}): not a pass",
+       r["result"] != "pass" and r["result"] in mail_auth.BLOCK and "more" in r["reason"], f"{r['result']}: {r['reason']}")
+r = C.check(b"Content-Type: multipart/mixed; boundary=\"EVIL\"\r\n" + message())
+ok("…and a Content-Type the signature does not cover may appear once (Shadowserver's own may be unsigned)",
+   r["result"] == "pass", f"{r['result']}: {r['reason']}")
+r = C.check(b"Content-Type: text/plain\r\nContent-Type: multipart/mixed; boundary=\"EVIL\"\r\n" + message())
+ok("…but not twice", r["result"] != "pass" and "more" in r["reason"], f"{r['result']}: {r['reason']}")
+
 print("A pass vouches for the sender: From signed, one From, from the signer's domain")
 r = C.check(message(hs=(b"To", b"Subject", b"Date", b"Message-ID")))
 ok("a valid shadowserver.org signature that does not sign From: not a pass ('other', held back in Block mode)",

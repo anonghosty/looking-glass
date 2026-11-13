@@ -55,6 +55,8 @@ Checking means reading every line and, for each one:
 | Entries cut from the end and `audit.head` deleted | a break: `audit.head` is written with every chained entry, so its absence is not excused |
 | `audit.seal` deleted or rewritten, then an entry from before the chain changed | a break: the seal's count and SHA-256 are taken from its own entry in the chain (`audit_sealed`) |
 | An archive deleted, with hand-written retention notes | a break unless each note is backed by the chain: its removal entry, or (for a note whose entry went with a later removal) no rotation entry of its archive left either. Archives are known by name and last link together; a note for an empty archive, or a line that is not a note, is a break |
+| An archive deleted, with a note under a made-up name that carries the real last link and old dates | a break: a note is matched to its archive's rotation entry by its last link as well as by its name, so the archive's real name and dates are judged, not the note's |
+| An archive deleted, with no note at all, or with a note that does not match | a break: every rotation entry still in the log must point to an archive that is there (same name, same last link) or to a retention note for exactly that archive |
 
 The portal's **Verify the audit log** runs exactly the same code as the verifier in the proof package
 (`audit_verifier.py`): one implementation, so the two can never disagree. That is still Looking Glass checking itself,
@@ -94,7 +96,7 @@ that always says "verified". So do not take it on trust:
   PowerShell) with the one published here, outside the server:
 
   ```text
-  3ea69b61a70432aced7a85fcbb7b8e1c7339f18728432594d96eaeabda1cc0cc
+  7babeae9ea2346b8a2f3dd7d20966acfae3cfab6ae4454aede521ddf5c49aeab
   ```
 
   This is the verifier of the current release on GitHub. An installation of an older release ships the verifier of

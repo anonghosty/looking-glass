@@ -93,6 +93,10 @@ The sign-in card opens on a choice: **Sign in** or **Create an account**, plus *
 3. On success, a new session ID is issued.
 
 - Wrong names and wrong passwords get the same answer and take the same time.
+- User names and e-mail addresses that differ only in letter case are one: "Grace" cannot register beside "grace".
+- An authenticator code works once, checked again at the moment it is recorded, so two sign-ins with the same code at
+  the same moment cannot both pass. The sign-in page shows no text from its address other than Looking Glass's own
+  notices.
 - The page says how many attempts are left before the 15-minute lock (5 per account and address; 20 per address an
   hour).
 - Pending accounts are told they await approval; revoked accounts are told they have been revoked (only after the
@@ -203,9 +207,10 @@ software names (for example "nginx 1.18", "Cisco IOS 15.2"), and a device that p
   Glass's own reading, labelled as ours: backed, related or not backed with the reason (for example LG-10 → 3.11
   encryption at rest: not backed, Looking Glass does not encrypt its data at rest). One table holds the reading
   (`control_map.py`: BACKED, NOT_BACKED). The CIS Controls are used here as a map, to guide Looking Glass's security and make the auditor's work easier. They are voluntary best practice, not a law or a requirement, and CIS issues no certificate for meeting them: organisations measure themselves with CIS's free Self Assessment Tool (CSAT) or with an auditor, and those that need a formal certificate usually go for ISO 27001 or SOC 2, with the CIS Controls as a guide.
-- **Data access logging:** every export, and every view of host-level data (one host's activity, the hosts behind a
-  figure, a record's details, an analysis), is an audit entry with who, when, from where and what; hosts appear by
-  their reference, never their address (`data_access.py`; `DATA_ACCESS_LOG=0` turns view logging off).
+- **Data access logging:** every export, and every view of host-level data (the map's events, the services page's
+  records, one host's activity, the hosts behind a figure, a record's details, an analysis), is an audit entry with
+  who, when, from where and what, every filter of the view included; hosts appear by their reference, never their
+  address (`data_access.py`; `DATA_ACCESS_LOG=0` turns view logging off).
 - **Roles & permissions:** the matrix above, editable.
 
 **Location** is "This computer", "Local network" or "Internet". Addresses are never sent to an online service; to add
@@ -289,6 +294,21 @@ Changes after an external code review (2026-11-09):
 | The masking test could never fail | It now fails on any leak, and first proves it detects real values in unmasked answers; unit tests for `privacy.py` and the roles | proven by breaking masking in a throwaway copy |
 | Pinned events (full details) stayed in the browser after logout | Pins are per account, never kept for masked accounts, deleted on the sign-in page | `tests/test_demo.py` |
 | The release was marked publishable before its scan; images and PDFs were not scanned | A separate marker is written only after a clean scan and is required to publish; binaries are scanned for paths, authors, EXIF, GPS and PNG text chunks | deliberate failures in the build |
+
+Changes after the external review of 2026-11-13:
+
+| Finding | Fix | Verified by |
+|---|---|---|
+| `::ffff:41.66.1.2` was masked as `<ip>.66.1.2`: three of four parts showed | The IPv6 run takes the IPv4 tail in; an IPv4-mapped address is that IPv4 host, masked whole, with the same label | `tests/check_ip_find.py`: fails on any run of three dotted numbers left; fails on the old code |
+| A long run of colons tied up the CPU (a few thousand colons took seconds) | IPv6 candidates of at most 45 characters and 7 colons; values cut before the audit logger reads them | `tests/check_ip_find.py`, `tests/check_data_access.py` (thousands of colons in milliseconds) |
+| A deleted archive with a note under a made-up name verified as whole | Notes matched to rotations by last link too; every kept rotation must have its archive or a matching note | `tests/check_auditor_portal.py` (the reviewer's attack, WHOLE on the old verifier) |
+| An advisory edited after its report was generated could go out with the old report | The report keeps a fingerprint of what it says; drafted and sent are refused until it is generated again | `tests/check_combo_review.py` |
+| An unsigned Content-Type above a signed message passed the sender check | More From / Content-Type / Content-Transfer-Encoding / MIME-Version headers than signed: not a pass | `database/tests/test_mail_auth.py` |
+| Every Special Report landed in one `special` collection | Each in its own, the name cut where the country part begins | `database/tests/test_report_names.py` |
+| View logging missed `src_ip`, most services filters and `/api/events` | Every parameter but display and time options; the event streams logged | `tests/check_data_access.py` |
+| An overview could widen to every organisation when MongoDB could not load its days | A day that cannot be loaded is an error, never a smaller search | `tests/check_combo_review.py` |
+| Low: a race on authenticator codes, names differing in case, a chunked JSON array, any `?notice=` text, a forged request crashing `confirm_request.sh`, the uninstaller missing a running pipeline, a re-install turning Block off | Each fixed where it was | `tests/check_auth_offline.py`, `database/tests/test_worker_settings_effective.py`, `tests/check_uninstall.py` |
+| CI ran 8 of the platform's checks; sign-in and MFA were only tested live | 30 database-free checks in CI; a new offline check of sign-in, MFA, recovery codes, `/forgot` and each role's portal; checks without a database or service now skip instead of failing | `.github/workflows/checks.yml` |
 
 Other hardening added:
 - **systemd sandbox:** `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=read-only`, writable only `data/`, `PrivateTmp`, `UMask=0077` and more. Check it with `systemd-analyze security threatmap`.

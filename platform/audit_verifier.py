@@ -269,7 +269,7 @@ def check(folder, earlier=None, gap_days=30):
     # Each rotation writes an entry into the new file ("audit_archived": the archive's name, entries, oldest and newest
     # times, last link). It stays in the kept log after the archive is deleted: a note must agree with it, and the age
     # of the entries is judged by it, not by the note.
-    history, rec_at, rotations = [], {}, {}
+    history, rec_at, rotations, by_link, rotated = [], {}, {}, {}, []
     for ln in lines:
         if '"audit_retention_set"' not in ln and '"audit_archive' not in ln:
             continue
@@ -282,6 +282,11 @@ def check(folder, earlier=None, gap_days=30):
         if rec.get("event") == "audit_archived" and isinstance(rec.get("archived"), dict):
             rotations[(rec.get("target"), rec["archived"].get("last_hash"))] = rec["archived"]
             rotations.setdefault(rec.get("target"), rec["archived"])    # by name too, for a note whose last link lies
+            # and by last link, for a note whose NAME lies (review 2026-11-13: a note under a made-up name with the
+            # real last link matched no rotation, so its own old dates were believed)
+            if isinstance(rec["archived"].get("last_hash"), str):
+                by_link.setdefault(rec["archived"]["last_hash"], dict(rec["archived"], name=rec.get("target")))
+                rotated.append((rec.get("target"), rec["archived"]["last_hash"]))
         elif rec.get("event") == "audit_retention_set":
             try:
                 history.append((num(rec.get("t")), int(rec.get("target"))))
@@ -317,9 +322,12 @@ def check(folder, earlier=None, gap_days=30):
             why.append(f"its note claims a removal time ({when(num(n.get('removed_at')))}) later than the removal was recorded ({when(at)})")
         if recorded_setting and n.get("retention_days") is not None and num(n.get("retention_days")) < days:
             why.append(f"its note claims a retention of {n.get('retention_days')} days, the setting was {days} days")
-        rot = rotations.get((n.get("archive"), n.get("last_hash"))) or rotations.get(n.get("archive"))
+        rot = rotations.get((n.get("archive"), n.get("last_hash"))) or by_link.get(n.get("last_hash")) \
+            or rotations.get(n.get("archive"))
         if rot:
             diff = []
+            if rot.get("name") and rot.get("name") != n.get("archive"):
+                diff.append(f"archive name ({n.get('archive')}, recorded {rot.get('name')})")
             if rot.get("last_hash") != n.get("last_hash"):
                 diff.append("last link")
             if rot.get("entries") != n.get("entries"):
@@ -342,6 +350,20 @@ def check(folder, earlier=None, gap_days=30):
     if removed_early and not brk:
         brk = {"entry": gone + 1, "t": first_t, "what": f"archives removed before their retention ended ({', '.join(removed_early[:3])}): "
                                                         "entries were deleted outside the retention"}
+
+    # Every rotation entry still in the log names an archive that must be either here (the same name, ending in the
+    # same last link) or covered by a removal note with that name and that last link (review 2026-11-13).
+    present = {}
+    for p in archives:
+        tail = _lines(p)
+        if tail:
+            present[os.path.basename(p)] = sha(tail[-1])
+    noted = {(n.get("archive"), n.get("last_hash")) for n in removed}
+    missing = [name for name, link in rotated if present.get(name) != link and (name, link) not in noted]
+    if missing and not brk:
+        brk = {"entry": gone + 1, "t": first_t, "what": f"archives recorded as rotated are missing and no retention note "
+                                                        f"covers them ({', '.join(str(m) for m in missing[:3])}): entries "
+                                                        "were deleted outside the retention"}
     gaps = []
     for i, n in enumerate(removed):
         rk = lambda x: rotations.get((x.get("archive"), x.get("last_hash"))) or rotations.get(x.get("archive"))

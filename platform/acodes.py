@@ -23,6 +23,8 @@ import hashlib
 import json
 import os
 import re
+import threading
+import time
 from datetime import datetime, timezone
 from urllib.parse import parse_qsl
 
@@ -151,8 +153,39 @@ def install(app, ctx):
                 out.append(d)
         return out
 
+    _rec_cache, _rec_lock = {}, threading.Lock()
+    REC_TTL, REC_MAX = 300, 16
+
     def records(entry, day=None):
         """The records of an analyst code on its day (the given day object, or the code's day(s) loaded)."""
+        if day is None:
+            try:
+                with open(ids_path(entry["code"]), encoding="utf-8") as f:
+                    ids = set(json.load(f))
+            except (OSError, ValueError, KeyError):
+                ids = None
+            if ids is not None:
+                # a code made from a search can span up to 31 days: they are read ONE at a time and only the code's own
+                # records kept, one such read at a time, and the result kept a few minutes (review 2026-11-13: every
+                # day was loaded into memory at once, again on every view)
+                key = (entry["code"], tuple(entry.get("days") or [entry["day"]]))
+                hit = _rec_cache.get(key)
+                if hit and time.time() - hit[0] < REC_TTL:
+                    return list(hit[1])
+                with _rec_lock:
+                    hit = _rec_cache.get(key)
+                    if hit and time.time() - hit[0] < REC_TTL:
+                        return list(hit[1])
+                    out = []
+                    for iso in key[1]:
+                        d = ctx["day"](entry["platform"], iso)
+                        if d is not None:
+                            out.extend(e for e in d.events if e.get("id") in ids)
+                        d = None
+                    if len(_rec_cache) >= REC_MAX:
+                        _rec_cache.pop(min(_rec_cache, key=lambda k: _rec_cache[k][0]))
+                    _rec_cache[key] = (time.time(), out)
+                    return list(out)
         days = [day] if day is not None else days_of(entry)
         if not days:
             return []

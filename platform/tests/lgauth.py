@@ -68,3 +68,14 @@ def urlopen(url, *a, **kw):
 
 
 urllib.request.urlopen = urlopen
+
+
+def require_server(timeout=4):
+    """For checks that call the running service: without one (a fresh clone, CI) they are SKIPPED (exit 77), not
+    crashed with a connection error (review 2026-11-13). With the service up, nothing changes."""
+    import sys
+    try:
+        urlopen(BASE + "/healthz", timeout=timeout).read()
+    except Exception as exc:  # noqa: BLE001  any reason is "not running" here; the name says which
+        print(f"SKIPPED: needs the running Looking Glass service at {BASE}, which did not answer ({exc.__class__.__name__})")
+        sys.exit(77)

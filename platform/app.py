@@ -916,7 +916,9 @@ def _median(xs):
 
 def _top(events, field, n=8, label=None, key=None):
     c = Counter((key(e[field]) if key else e[field]) for e in events if e[field])
-    total = sum(c.values()) or 1
+    # a share is of the whole selection, events without a value included (review 2026-11-13: it was of the events
+    # that had one, so a field filled in on a tenth of the events read as 100 %)
+    total = len(events) or 1
     return [{"value": v, "label": label(v) if label else v, "count": k, "share": round(k / total, 4)} for v, k in c.most_common(n)]
 
 
@@ -1623,7 +1625,7 @@ def api_insight():
         "tag": _top(ev, "tag", 6),
     }
     paths = Counter(_request_path(e["http_url"]) for e in ev if e["http_url"])
-    breakdowns["request"] = [{"value": v, "label": mt(v), "count": k, "share": round(k / (sum(paths.values()) or 1), 4)} for v, k in paths.most_common(6)]
+    breakdowns["request"] = [{"value": v, "label": mt(v), "count": k, "share": round(k / (len(ev) or 1), 4)} for v, k in paths.most_common(6)]
     if demo:
         for key in REF_KINDS:
             for r in breakdowns.get(key, []):
@@ -1687,8 +1689,9 @@ def api_insight():
     return jsonify(
         kind=kind, kind_label=INSIGHT_KINDS[kind], value=value, as_of=iso(rn),
         total=n, share=round(n / max(1, len(sofar)), 4), all_total=len(sofar),
-        hosts=len(by_host), asns=len({e["src_asn"] for e in ev}), c2_hosts=len({e["http_host"] for e in ev if e["http_host"]}),
-        dst_ips=len({e["dst_ip"] for e in ev}),
+        # an empty value is not a network or an address (review 2026-11-13: both counts included it)
+        hosts=len(by_host), asns=len({e["src_asn"] for e in ev if e["src_asn"]}), c2_hosts=len({e["http_host"] for e in ev if e["http_host"]}),
+        dst_ips=len({e["dst_ip"] for e in ev if e["dst_ip"]}),
         first=ev[0]["extracted_date"] if ev else None, last=ev[-1]["extracted_date"] if ev else None,
         beacon_median=_median(intervals), beacon_median_label=_fmt_dur(_median(intervals)), regular_beacons=regular,
         multi_infected=multi, hours=hours, peak_hour=peak_hour,

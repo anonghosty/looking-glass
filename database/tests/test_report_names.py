@@ -41,6 +41,50 @@ class Names(unittest.TestCase):
         self.assertTrue(rn.valid("filesystem_scan"), "only the exact prefixes are reserved")
 
 
+class Specials(unittest.TestCase):
+    """Each Special Report in its own collection (review 2026-11-13: the file pattern stopped at "special", so every
+    one landed in one "special" collection and the name handling never ran)."""
+
+    def name(self, fn, tails=()):
+        m = sp.SERVICE_RE.match(fn)
+        self.assertTrue(m, fn)
+        return rn.special_name(fn, m.group(1), tails)
+
+    def test_country_tail(self):
+        self.assertEqual(rn.country_tail("2026-11-10-scan_http-ghana-geo.csv", "scan_http"), "ghana-geo")
+        self.assertEqual(rn.country_tail("2026-11-10-scan_http-123-south-africa-geo_as64500.csv", "scan_http"), "south-africa-geo")
+        self.assertIsNone(rn.country_tail("2026-11-10-special-x-ghana-geo.csv", "special"))
+
+    def test_names(self):
+        self.assertEqual(self.name("2026-11-10-special-badbox-ghana-geo.csv"), "special_badbox", "no country learnt yet")
+        self.assertEqual(self.name("2026-11-10-special-badbox-ghana-geo.csv", {"ghana-geo"}), "special_badbox")
+        self.assertEqual(self.name("2026-11-10-special-honeypot-ddos-123-ghana-geo.csv", {"ghana-geo"}), "special_honeypot_ddos")
+        self.assertEqual(self.name("2026-11-10-special-badbox-south-africa-geo.csv", {"south-africa-geo"}), "special_badbox",
+                         "a hyphenated country, learnt from the ordinary reports")
+        self.assertEqual(self.name("2026-11-10-special-ghana-geo.csv", {"ghana-geo"}), "special", "a Special Report with no name")
+        self.assertEqual(self.name("2026-11-10-special-ics-cote-d-ivoire-geo_as64500.csv", {"cote-d-ivoire-geo"}), "special_ics")
+        self.assertEqual(self.name("2026-11-10-scan_http-ghana-geo.csv", {"ghana-geo"}), "scan_http", "ordinary reports unchanged")
+        self.assertNotEqual(self.name("2026-11-10-special-a-ghana-geo.csv", {"ghana-geo"}),
+                            self.name("2026-11-10-special-b-ghana-geo.csv", {"ghana-geo"}), "two Special Reports, two collections")
+
+    def test_zip(self):
+        base = Path(tempfile.mkdtemp(prefix="specials-"))
+        try:
+            att, unz, srt = (base / d for d in ("attachments_backup", "unzipped_backup", "sorting_backup"))
+            for d in (att, unz, srt):
+                d.mkdir()
+            z = att / "reports.zip"
+            with zipfile.ZipFile(z, "w") as zf:
+                for fn in ("2026-11-10-scan_example-south-africa-geo.csv", "2026-11-10-special-badbox-south-africa-geo.csv",
+                           "2026-11-10-special-ics-south-africa-geo.csv"):
+                    zf.writestr(fn, CSV)
+            result, items = sp._extract_zip(z, unz, srt)
+            self.assertEqual(result, "zips_extracted")
+            self.assertEqual(sorted(p.name for p in srt.iterdir()), ["scan_example", "special_badbox", "special_ics"])
+        finally:
+            shutil.rmtree(base, ignore_errors=True)
+
+
 class Folders(unittest.TestCase):
     def setUp(self):
         self.base = Path(tempfile.mkdtemp(prefix="reportnames-"))

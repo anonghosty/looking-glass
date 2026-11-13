@@ -24,18 +24,27 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r platform/requirements.txt -r database/requirements.txt
+      # every check that needs no database and no running service (review 2026-11-13: about 20 of them were left out,
+      # the CSRF, sign-in, MFA, settings, masking and Workers checks among them). The others skip by themselves without
+      # MongoDB or the service (exit 77): they run on the server, in platform/tests/run_all_checks.sh.
       - name: Platform checks
         working-directory: platform
         run: |
           set -e
-          for t in test_privacy_roles check_ip_find check_host_label_text check_cve_backoff check_uninstall check_timezones check_special_reports check_data_access; do
+          for t in test_privacy_roles test_schedule check_ip_find check_host_label_text check_masked_fields check_data_access \
+                   check_auth_offline check_login_throttle check_password_policy check_csrf_routes check_settings_access \
+                   check_first_admin_proxy check_retest_reset check_workflow_fixes check_calc_offline \
+                   check_audit_portal check_auditor_portal check_pipeline_settings check_scope_reload check_libraries \
+                   check_cve_backoff check_uninstall check_timezones check_special_reports check_report_map \
+                   check_findings_ui check_notifications check_overview check_greetings check_peace; do
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
           done
       - name: Pipeline checks
         working-directory: database
         run: |
           set -e
-          for t in test_mail_auth test_mail_auth_pipeline test_worker_settings_effective test_link_downloads test_zip_limits test_report_api test_report_types; do
+          for t in test_mail_auth test_mail_auth_pipeline test_worker_settings_effective test_link_downloads test_zip_limits test_report_api \
+                   test_report_types test_report_names test_equivalence; do
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
           done
           python -m unittest tests.test_mail_sources

@@ -46,7 +46,7 @@ audit.add = lambda *a, **k: audited.append((a[0] if a else "", k.get("detail", "
 users, sessions, throttle = A.AUTH["users"], A.AUTH["sessions"], A.AUTH["throttle"]
 real_users = (users.path, users.mtime, users.data)
 real_lookup = auth.email_domain_problem
-MADE, IP = [], "127.0.0.77"
+MADE, IP, SETUP_REAL = [], "127.0.0.77", []
 try:
     print("1. Advisories: read, checked, written back")
     S = AV.Store(os.path.join(tmp, "advisories"))
@@ -83,6 +83,9 @@ try:
         json.dump({"users": {"chk-admin": {"status": "active", "role": "admin", "totp": "x", "changed": 0},
                              "chk-waiting": {"status": "pending", "role": "external", "totp": "x"}}}, fh)
     users.path, users.mtime = upath, None
+    # these throwaway accounts hold an administrator: the first-run code follows them to the throwaway folder, or the
+    # /register pages below would delete the real installation's data/setup_code (review 2026-11-13)
+    setup = A.AUTH["setup"]; SETUP_REAL.append(setup.path); setup.path = os.path.join(tmp, "setup_code")
     token = sessions.create("chk-admin", "127.0.0.1", "lg-check-workflow"); MADE.append(token)
     csrf = next(s["csrf"] for s in sessions.s.values() if s["user"] == "chk-admin")
     c = A.app.test_client(); c.set_cookie("lg_session", token)
@@ -165,6 +168,8 @@ finally:
     audit.add = real_add
     auth.email_domain_problem = real_lookup
     users.path, users.mtime, users.data = real_users
+    if SETUP_REAL:
+        A.AUTH["setup"].path = SETUP_REAL[0]
     for t in MADE:
         sessions.end(token=t)
     for ip in (IP, "127.0.0.78"):

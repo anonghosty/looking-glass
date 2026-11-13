@@ -7,6 +7,7 @@ Every record is re-derived from the raw documents with this script's own code (n
 /api/svc/stats, /api/svc/facets and /api/svc/replayed are compared with it."""
 import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import lgauth  # noqa: E402,F401  local API login (automation key)
+lgauth.require_server()   # no running service (a fresh clone, CI): skipped, not crashed
 import os, sys, re, time, json, urllib.request, urllib.parse, urllib.error
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 from collections import Counter, defaultdict

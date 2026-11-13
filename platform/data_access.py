@@ -14,6 +14,7 @@ The built-in self-test's accounts are not logged. DATA_ACCESS_LOG=0 in .env turn
 so, and CIS 3.14 is no longer backed by LG-15).
 """
 import os
+import re
 import threading
 import time
 
@@ -22,6 +23,8 @@ import ip_find
 REPEAT_WINDOW = 600
 # path -> (event, what it shows): GET requests answered 200 are logged
 SENSITIVE = {
+    "/api/events": ("data_viewed", "events (map)"),            # review 2026-11-13: the map's events were not logged
+    "/api/svc/events": ("data_viewed", "records (services)"),
     "/api/related": ("data_viewed", "one host's activity (map)"),
     "/api/insight": ("data_viewed", "an analysis (map)"),
     "/api/insight/drill": ("data_viewed", "hosts behind a figure (map)"),
@@ -30,9 +33,18 @@ SENSITIVE = {
     "/api/svc/detail": ("data_viewed", "a record's details (services)"),
     "/api/svc/hosts.csv": ("data_exported", "host list download (services CSV)"),
 }
-# the request parameters that say what was looked at (others are display options)
-KEYS = ("ref", "kind", "value", "metric", "source", "report", "service", "family", "issue", "region", "city", "network",
-        "attack", "infection", "severity", "code", "id")
+# Every request parameter says what was looked at, except these display and time options (review 2026-11-13: a list
+# of the parameters to keep missed src_ip and most services filters, so different hosts' views were one "whole
+# selection" and the repeats were dropped). A parameter added later is logged by default.
+IGNORE = frozenset(("at", "demo", "from", "to", "limit", "latest", "since", "time", "n", "format", "_", "page", "sort"))
+RAW_MAX = 120          # each value is cut to this BEFORE the address finder reads it (a long value costs nothing)
+SHOWN_MAX = 60
+_TAIL = re.compile(r"[0-9A-Fa-f:.]+$")
+
+
+def _cut(v, n):
+    """v cut to n characters; when something was cut, a half address left at the end goes too."""
+    return v if len(v) <= n else _TAIL.sub("", v[:n]) + "…"
 
 
 def enabled():
@@ -47,12 +59,14 @@ class DataAccessLog:
     def selection(self, args):
         """What was looked at, from the request's parameters: addresses replaced by their host reference."""
         parts = []
-        for k in KEYS:
-            v = args.get(k)
-            if v:
-                v = ip_find.sub(str(v), lambda ip: f"host {self.host_ref(ip)}")
-                parts.append(f"{k}={v[:60]}")
-        return ", ".join(parts)[:220] or "the whole selection"
+        for k in sorted(set(args.keys()) - IGNORE)[:20]:
+            vals = args.getlist(k) if hasattr(args, "getlist") else [args.get(k)]
+            for v in [str(x) for x in vals if x][:10]:
+                v = ip_find.sub(_cut(v, RAW_MAX), lambda ip: f"host {self.host_ref(ip)}")
+                name = ip_find.sub(_cut(k, 40), lambda ip: "host")
+                parts.append(f"{_cut(name, 30)}={_cut(v, SHOWN_MAX)}")
+        sel = ", ".join(parts)
+        return (_cut(sel, 400) if sel else "") or "the whole selection"
 
     def record(self, path, args, status):
         if not enabled() or status != 200 or path not in SENSITIVE:

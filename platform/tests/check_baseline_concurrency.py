@@ -12,6 +12,9 @@ import logging
 import os
 import shutil
 import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import needs_db  # noqa: E402
+needs_db.require()   # no reachable MongoDB (a fresh clone, CI): skipped, not crashed
 import tempfile
 import threading
 import time

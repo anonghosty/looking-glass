@@ -5,6 +5,7 @@
 "Top findings" combinations. Read-only (no report downloads). Usage: tests/verify_management.py"""
 import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import lgauth  # noqa: E402,F401  local API login (automation key)
+lgauth.require_server()   # no running service (a fresh clone, CI): skipped, not crashed
 import os, sys, json, time, urllib.request, urllib.parse
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 import mongo_derive as L  # noqa: E402

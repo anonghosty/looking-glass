@@ -16,6 +16,8 @@ Usage: tests/check_combos.py"""
 import collections, csv, io, json, os, re, sys, tempfile, time, urllib.parse, zipfile
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 os.environ.setdefault("THREATMAP_SCHEDULE", "0")
+import needs_db  # noqa: E402
+needs_db.require()   # no reachable MongoDB (a fresh clone, CI): skipped, not crashed
 import app as A  # noqa: E402
 import combos as C  # noqa: E402
 import intel as I  # noqa: E402

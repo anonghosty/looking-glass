@@ -102,7 +102,7 @@ set `REPORT_SUFFIX` in `.env`.)
 
 go straight to `sorting_backup/<service>/`, replacing an older copy. Everything else in the zip goes to `unzipped_backup/<zip name>/`. Corrupt zips are deleted. Report CSVs that arrived unzipped are moved to their service folder the same way.
 
-**Special reports.** Shadowserver's one-off Special Reports are named `YYYY-MM-DD-special[-<name>]-...`, the date being the day they were shared; their times are often a placeholder (00:00 on every row). They are loaded like any report, into `special` (or `special_<name>`: a hyphenated name is turned into one with underscores instead of being quarantined). The platform never replays them nor counts them in a day's totals or the Executive 7-day comparison; it lists them apart on its intro page.
+**Special reports.** Shadowserver's one-off Special Reports are named `YYYY-MM-DD-special[-<name>]-...`, the date being the day they were shared; their times are often a placeholder (00:00 on every row). They are loaded like any report, each into its own collection: `special_<name>` (`special` when it has no name; a hyphenated name is turned into one with underscores instead of being quarantined). The name ends where the country part begins; since a country can hold hyphens too (`south-africa-geo`), that point is learnt from the ordinary reports, whose names never do, or else taken as the last word before `-geo`. The platform never replays them nor counts them in a day's totals or the Executive 7-day comparison; it lists them apart on its intro page.
 
 **Step 3, load.** For each service folder, one query finds which files are already in MongoDB. Only new files are loaded, by 6 worker processes in parallel, biggest files first. Each CSV row becomes one document; duplicate rows within a file are dropped, and the database's unique index rejects rows that are already stored.
 
@@ -615,7 +615,9 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
   forged, `none` = not signed, `temperror` = DNS did not answer, `permerror` = cannot be checked) in
   `.mail_state.sqlite`, and anything but `pass` is a warning in the run log. A **pass** needs a valid signature by
   `MAIL_AUTH_DOMAIN` that signs the message's single From header, with From in that domain (or a subdomain); a valid
-  signature without that is `other`. A message whose header block Python's e-mail parser (which the pipeline uses to
+  signature without that is `other`. So is one with more From, Content-Type, Content-Transfer-Encoding or
+  MIME-Version headers than its signature covers (a header the signature does not cover at all may appear once): a
+  copy added above a signed header would be the one the pipeline reads. A message whose header block Python's e-mail parser (which the pipeline uses to
   read attachments) would read differently from the check, for example a line without a colon above the headers, is
   `permerror`: the check and the pipeline must see the same message, or nothing is vouched for. No report is held back yet: a footer or a
   forwarding rule added on the way also breaks a genuine signature, so the record shows first whether every genuine

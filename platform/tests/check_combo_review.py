@@ -284,11 +284,34 @@ try:
     st3, _ = call(f"/advisory/1/file/{ref}/2", ADVISOR, raw=True, **ADV)
     ok("generating again replaces the report: one download, the latest", st == 200 and len(gen) == 1 and gen[0]["n"] == 2 and st2 == 404 and st3 == 200,
        f"{len(gen)} kept, old link {st2}, new link {st3}")
+    # an edit after the report was generated (review 2026-11-13: the record said "NEWTEXT" and TLP:RED while the PDF that
+    # went out said "OLDTEXT" and TLP:CLEAR): the report is out of date until generated again
+    ok("a freshly generated report is up to date", (d.get("advisory") or {}).get("report_stale") is False, str((d.get("advisory") or {}).get("report_stale")))
+    for change, label in ((dict(description=body["description"] + "\nNEWTEXT"), "the Description"),
+                          (dict(tlp="TLP:CLEAR"), "the TLP level")):
+        st, d = call("/api/advisory/1/net", ADVISOR, "POST", dict(body, **change), **ADV)
+        ok(f"{label} changed after generating: the report is marked out of date", st == 200 and d["advisory"]["report_stale"] is True,
+           f"{st} {d.get('error', '')}")
+        st, d = call("/api/advisory/1/drafted", ADVISOR, "POST", {"network": NET}, **ADV)
+        ok("…it cannot be marked drafted with the old report", st == 409 and "generate the report again" in d.get("error", ""),
+           f"{st} {d.get('error', '')}")
+        st, d = call("/api/advisory/1/net", ADVISOR, "POST", body, **ADV)
+        ok("…put back as it was, the report matches again", st == 200 and d["advisory"]["report_stale"] is False, f"{st}")
     st, d = call("/api/advisory/1/send", ADVISOR, "POST", {"network": NET, "recipients": f"{NET}, Team B"}, **ADV)
     ok("it is not marked as sent before it is drafted", st == 400 and "drafted" in d.get("error", ""), d.get("error", ""))
     st, d = call("/api/advisory/1/drafted", ADVISOR, "POST", {"network": NET}, **ADV)
     ok("the advisor marks it as drafted on its page", st == 200 and d["advisory"]["status"] == "drafted" and d["advisory"]["status_label"] == "Drafted",
        d.get("error", ""))
+    # drafted, then edited: back to draft AND out of date, so neither drafted nor sent goes through with the old file
+    st, d = call("/api/advisory/1/net", ADVISOR, "POST", dict(body, description=body["description"] + "\nNEWTEXT"), **ADV)
+    ok("edited after it was drafted: back to draft, the report out of date", st == 200 and d["advisory"]["status"] == "draft"
+       and d["advisory"]["report_stale"] is True, f"{st}")
+    st, d = call("/api/advisory/1/send", ADVISOR, "POST", {"network": NET, "recipients": NET}, **ADV)
+    ok("…it cannot be sent with the old report", st in (400, 409), f"{st} {d.get('error', '')}")
+    call("/api/advisory/1/net", ADVISOR, "POST", body, **ADV)
+    call("/api/advisory/1/generate", ADVISOR, "POST", {"network": NET}, **ADV)
+    st, d = call("/api/advisory/1/drafted", ADVISOR, "POST", {"network": NET}, **ADV)
+    ok("…generated again, it can be marked drafted", st == 200 and d["advisory"]["status"] == "drafted", f"{st} {d.get('error', '')}")
     st, fl = call("/api/findings", ADVISOR, role="advisor", user="lg-check-advisor")
     f1 = next((f_ for f_ in fl.get("findings") or [] if f_["id"] == "1"), {})
     ok("the Findings page shows it drafted, with its organisation and TLP, to mark as sent there",
@@ -305,12 +328,13 @@ try:
     sent_adv = d["advisory"]
     ok("the send records exactly which file went out", (sent_adv.get("sends") or [{}])[-1].get("report") == f"{fb}.zip" and sent_adv.get("locked") is True,
        json.dumps(sent_adv.get("sends")))
-    st_f, sent_bytes = call(f"/advisory/1/file/{ref}/2", ADVISOR, raw=True, **ADV)
+    sent_n = (sent_adv.get("generated") or [{}])[-1].get("n")
+    st_f, sent_bytes = call(f"/advisory/1/file/{ref}/{sent_n}", ADVISOR, raw=True, **ADV)
     st, d = call("/api/advisory/1/net", ADVISOR, "POST", dict(body, subject="Changed after sending"), **ADV)
     ok("once sent, its text can no longer be changed", st == 409 and "can no longer be changed" in d.get("error", ""), f"{st} {d.get('error', '')}")
     st, d = call("/api/advisory/1/generate", ADVISOR, "POST", {"network": NET}, **ADV)
     ok("…and its report is not generated again", st == 409 and "can no longer be changed" in d.get("error", ""), f"{st} {d.get('error', '')}")
-    st, again = call(f"/advisory/1/file/{ref}/2", ADVISOR, raw=True, **ADV)
+    st, again = call(f"/advisory/1/file/{ref}/{sent_n}", ADVISOR, raw=True, **ADV)
     ok("…the file that was sent is still there, byte for byte", st_f == 200 and st == 200 and again == sent_bytes, f"{st_f} {st}")
     st, a3 = call(f"/api/advisory/1/net?network={quote(NET)}", ADVISOR, **ADV)
     ok("…and the advisory still reads as it was sent", st == 200 and a3["advisory"]["subject"] == body["subject"] and a3["advisory"]["status"] == "sent")
@@ -538,6 +562,32 @@ try:
     st, d = call(f"/review/{oid}/report", ADVISOR, **ADV)
     ok("…and its report is refused too", st == 409 and "any more" in d.get("error", ""), d.get("error", ""))
     rename(asns=real_asns)
+
+    print("The database cannot load the finding's days just now (review 2026-11-13: an overview widened to everyone)")
+
+    def cell(fn, name):
+        return fn.__closure__[fn.__code__.co_freevars.index(name)].cell_contents
+    adv_records = cell(cell(A.app.view_functions["api_advisory"], "networks_of"), "records")
+    stores = [A.store, A.svc["store"]]
+    saved_days = [(s_, s_.days, s_._load) for s_ in stores]
+
+    def boom(*a, **k):
+        raise RuntimeError("MongoDB not answering (simulated)")
+    try:
+        for s_ in stores:
+            s_.days, s_._load = {}, boom
+        cell(adv_records, "_cache").clear()
+        k_, err_ = book.review_records("1")
+        ok("the kept search is refused with a reason, never quietly smaller", k_ is None and "could not be loaded" in err_, err_)
+        st, d = call("/api/advisory/1/net", ADVISOR, **ADV)
+        ok("…the overview's advisory does not fall back to every organisation", st in (404, 409, 400) and not (d.get("advisory") or {}).get("devices"),
+           f"{st} {d.get('error', '')}")
+        st, d = call("/review/1/report", ADVISOR, **ADV)
+        ok("…and its report is refused", st != 200, f"{st} {d.get('error', '') if isinstance(d, dict) else ''}")
+    finally:
+        for s_, days_, load_ in saved_days:
+            s_.days, s_._load = days_, load_
+        cell(adv_records, "_cache").clear()
 
     print("Advisories follow the finding (external review, 2026-11-12)")
     net1 = org0["network"]

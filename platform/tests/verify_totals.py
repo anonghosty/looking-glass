@@ -7,6 +7,7 @@ Usage: .venv/bin/python tests/verify_totals.py [YYYY-MM-DD]   (default: yesterda
 """
 import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import lgauth  # noqa: E402,F401  local API login (automation key)
+lgauth.require_server()   # no running service (a fresh clone, CI): skipped, not crashed
 import os, sys  # noqa: E401
 # These totals are for the whole country. With a constituency set in Settings the platform shows only that part, which
 # tests/verify_constituency.py checks against MongoDB: skip (exit 77) instead of reporting a false difference.
@@ -62,6 +63,29 @@ for s in app_sources["sources"]:
     bad += not ok
     print(f"{s['label'][:38]:38} {n:8,} {a:8,}  {'yes' if ok else 'NO'}")
 print(f"{'TOTAL':38} {total_mongo:8,} {total_app:8,}  {'yes' if total_mongo == total_app else 'NO'}")
+
+# The list of reports above is the app's own: a report it wrongly counts, or wrongly leaves out, would match itself.
+# So it is also checked against MongoDB's own list of collections, by rules that do not come from the platform
+# (review 2026-11-13): one-off Special Reports and the pipeline's bookkeeping are never counted; every report the app
+# counts is a real collection; and every event report (event4_*, event6_*: the communications reports by Shadowserver's
+# own naming) that has records on the day is counted.
+names = set(db.list_collection_names())
+app_names = {s["name"] for s in app_sources["sources"]}
+wrong_in = sorted(n for n in app_names if n.startswith(("special", "files_", "discovered_fields_")))
+missing_db = sorted(app_names - names)
+
+
+def on_day(n):
+    c = db[n]
+    return bool(c.find_one({"extracted_date": {"$gte": start, "$lt": end}}, {"_id": 1})
+                or c.find_one({"extracted_date": {"$gte": start.strftime("%Y-%m-%dT"), "$lt": end.strftime("%Y-%m-%dT")}}, {"_id": 1}))
+
+
+left_out = sorted(n for n in names if n.startswith(("event4_", "event6_")) and n not in app_names and on_day(n))
+for label, xs in (("special or bookkeeping collections counted", wrong_in), ("reports counted that are not in MongoDB", missing_db),
+                  ("event reports with records on the day NOT counted", left_out)):
+    print(f"{label}: {', '.join(xs) if xs else 'none'}")
+    bad += bool(xs)
 print(f"\n/api/stats total (shown as 'Events yesterday'): {stats['total']:,}  "
       f"{'matches' if stats['total'] == total_mongo else 'DIFFERS from'} MongoDB")
 print(f"critical {stats['critical']:,} · source hosts {stats['unique_src_ip']:,} · reports {stats['unique_sources']} · "

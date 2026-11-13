@@ -339,7 +339,14 @@
     polling = true;
     const gen = state.generation;
     try {
-      const to = replayNow() + LOOKAHEAD_MS * state.speed, from = state.cursor ?? replayNow();
+      // faster than real time the replay loops back to the start of the day (replayNow): the cursor, left at the end of
+      // the day, was then ahead of the clock and nothing was asked for again (review 2026-11-13: the stream stopped for
+      // good after the first loop). The clock jumped back past the cursor: re-anchor it there and read on from it.
+      const now = replayNow();
+      if (state.cursor != null && state.cursor - now > 2 * LOOKAHEAD_MS * state.speed + 60000) {
+        state.anchorReplay = now; state.anchorWall = Date.now(); state.cursor = now; state.pending = [];
+      }
+      const to = now + LOOKAHEAD_MS * state.speed, from = state.cursor ?? now;
       if (to - from < 500) return;
       const p = filterParams(); p.set("from", new Date(from).toISOString()); p.set("to", new Date(to).toISOString()); p.set("limit", "400");
       const d = await getJSON(`/api/svc/events?${p}`);

@@ -8,6 +8,7 @@ for the day yet, e.g. a fresh install). Before 2026-11-11 it printed FAIL lines 
 """
 import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import lgauth  # noqa: E402,F401  local API login (automation key)
+lgauth.require_server()   # no running service (a fresh clone, CI): skipped, not crashed
 import json
 import sys
 import urllib.parse

@@ -8,6 +8,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent.parent
@@ -163,6 +164,19 @@ def main():
         check("folder kept", (root / "database/.env").exists())
         check("administrator account file kept (database kept)", (tmp / "sys/etc-lg/mongo-admin.env").exists())
         check("no package removed", "apt-get" not in calls)
+
+    with tempfile.TemporaryDirectory() as t:   # a pipeline run going on (review 2026-11-13: it was never found)
+        tmp = Path(t); root, env, cron, log = setup(tmp)
+        lock = root / "database/.pipeline.lock"
+        # as run.sh does: it holds .pipeline.lock while it runs, the script named by a relative path
+        holder = subprocess.Popen(["flock", str(lock), "sleep", "8"], cwd=root / "database")
+        time.sleep(0.5)
+        t0 = time.time()
+        r = run(root, env, "--yes")
+        waited = time.time() - t0
+        holder.wait(timeout=30)
+        check("a run in progress (holding the pipeline's lock) is found and waited for",
+              r.returncode == 0 and "a pipeline run is in progress" in r.stdout and waited >= 5, f"{waited:.1f} s; {r.stdout[-200:]}")
 
     with tempfile.TemporaryDirectory() as t:   # a command that runs another folder's pipeline is left alone
         tmp = Path(t); root, env, cron, log = setup(tmp, cmd_owner="other")

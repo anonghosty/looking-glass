@@ -52,6 +52,9 @@ with open(os.path.join(tmp, "users.json"), "w") as fh:
         "chkadmin": {"hash": generate_password_hash(PW_A), "role": "admin", "status": "active", "totp": SEC_A, "pw_set_at": int(time.time()), "changed": 0},
         "chkuser": {"hash": generate_password_hash(PW_U), "role": "external", "status": "active", "totp": SEC_U, "changed": 0}}}, fh)
 users.path, users.mtime = os.path.join(tmp, "users.json"), None
+# the throwaway accounts hold an administrator: the first-run code must follow them to the throwaway folder, or the
+# first page shown would delete the real installation's data/setup_code (review 2026-11-13)
+setup = A.AUTH["setup"]; real_setup = setup.path; setup.path = os.path.join(tmp, "setup_code")
 UA = {"User-Agent": "lg-check-pwpolicy"}
 
 
@@ -159,6 +162,7 @@ try:
        r.status_code == 400, str(r.status_code))
 finally:
     users.path, users.mtime, users.data, policy.path, audit.add = real
+    setup.path = real_setup
     throttle.clear_address("127.0.0.1")
     for s in list(sessions.s.values()):
         if s.get("user") in ("chkuser", "chkadmin"):

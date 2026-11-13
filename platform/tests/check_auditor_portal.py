@@ -248,7 +248,9 @@ try:
 
     print("The access review")
     a = c.get("/api/audit/access", headers=H).json
-    ok("every account, without the self-test's", a["accounts"] and not any(x["name"].startswith("lg-selftest-") for x in a["accounts"]))
+    real_names = sorted(n for n in users.all() if not n.startswith("lg-selftest-"))
+    ok("every account, without the self-test's (exactly the installation's accounts, none on a fresh clone)",
+       sorted(x["name"] for x in a["accounts"]) == real_names, f"{len(a['accounts'])} listed, {len(real_names)} accounts")
     ok("each with role, permissions, authenticator, last sign-in, approval and flags",
        all({"role", "permissions", "mfa", "last_login", "approved_by", "flags"} <= set(x) for x in a["accounts"]))
     ok("the roles matrix marks the fixed roles", {r["role"] for r in a["roles"] if r["fixed"]} >= {"admin", "management", "auditor"})
@@ -490,6 +492,48 @@ try:
        not xv["ok"] and not xo["ok"], f"{xv.get('break')} | {xo.get('break')}")
     ok("…the portal and the standalone verifier are one implementation: same verdict, same break",
        xv["ok"] == xo["ok"] and xv["break"] == xo["break"] and xv["head"] == xo["head"])
+    # the review of 2026-11-13: ONE note under a made-up archive name with the real last link and old dates, then
+    # Looking Glass's next write records it in the chain; matched by name only, the note's own dates were believed
+    nc, nd = fresh("renamed")
+    victim = nc.archives()[0]
+    vl = [x for x in gzip.open(victim, "rt").read().splitlines() if x]
+    old = time.time() - 900 * 86400
+    os.remove(victim)
+    with open(os.path.join(nc.dir, "removed.jsonl"), "a") as f:
+        f.write(json.dumps({"archive": "audit-20230101-000000.log.gz", "entries": len(vl), "last_hash": audit_chain.sha(vl[-1]),
+                            "oldest": old, "newest": old, "removed_at": round(time.time(), 3), "retention_days": 400}) + "\n")
+    nc.append({"t": time.time(), "event": "login", "user": "after-the-attack"})     # Looking Glass's next write
+    nv, no = nc.verify(), alone(nd)
+    ok("a young archive deleted, one note under a made-up name with the real last link, then a normal write: NOT whole",
+       not nv["ok"] and not no["ok"], f"{nv.get('break')} | {no.get('break')}")
+    ok("…the note is matched to its rotation by its last link and caught by the archive's real dates",
+       any(r["early"] and "archive name" in r["why"] for r in nv["removals"]), str([r["why"][:120] for r in nv["removals"]]))
+    # and without any note: a rotation entry whose archive is gone is a break on its own
+    mc, md = fresh("missing")
+    os.remove(mc.archives()[0])
+    mc.append({"t": time.time(), "event": "login", "user": "after"})
+    mv = mc.verify()
+    ok("an archive named in a kept rotation entry, gone with no note at all: NOT whole", not mv["ok"], str(mv.get("break")))
+    # a note under another name that copies the archive's REAL dates and count: only the name differs
+    rc, rd = fresh("uncovered")
+    victim = rc.archives()[0]
+    vl = [x for x in gzip.open(victim, "rt").read().splitlines() if x]
+    real = [json.loads(x).get("t") for x in (vl[0], vl[-1])]
+    os.remove(victim)
+    with open(os.path.join(rc.dir, "removed.jsonl"), "a") as f:
+        f.write(json.dumps({"archive": os.path.basename(victim) + "x", "entries": len(vl), "last_hash": audit_chain.sha(vl[-1]),
+                            "oldest": real[0], "newest": real[1], "removed_at": time.time(), "retention_days": 400}) + "\n")
+    rc.append({"t": time.time(), "event": "login", "user": "after"})
+    rr = alone(rd)
+    ok("…a note under another name with the archive's real dates and count: NOT whole too",
+       not rr["ok"], str(rr.get("break")))
+    # a normal retention removal is still whole
+    oc, od = fresh("normal")
+    oc.retention_days = 0
+    oc.prune(now=time.time() + 2)
+    oc.append({"t": time.time(), "event": "login", "user": "after-prune"})
+    ov = oc.verify()
+    ok("archives the retention itself removed: still whole", ov["ok"], str(ov.get("break")))
     sd2 = os.path.join(tmp, "unsealed"); os.makedirs(sd2)
     with open(os.path.join(sd2, "audit.log"), "w") as f:   # entries from before the chain, then the chain starts
         for i in range(3):

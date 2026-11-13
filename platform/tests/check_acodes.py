@@ -7,6 +7,7 @@ researchers open it without the host's address and with the names and codes of e
 the finding with a code; management filters the Executive portal by it (counts only); the analysts find it in their
 list and report on it (PDF + CSV); other roles are refused. Usage: tests/check_acodes.py"""
 import io, json, os, re, sys, tempfile, time, zipfile
+from datetime import timedelta
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 os.environ.setdefault("THREATMAP_SCHEDULE", "0")
 import needs_db  # noqa: E402
@@ -152,6 +153,30 @@ try:
     st, fr = call("/api/findings", RESEARCHER, role="researcher", user="lg-check-researcher")
     ok("the researcher it was sent to sees the same", any((f.get("codes") or [{}])[0].get("asked", "").startswith("Just across-report")
                                                           for f in fr.get("findings") or []))
+    print("An older code over many days: read one day at a time, once (review 2026-11-13)")
+    loads, peak, held = [], [0], [0]
+    real_days, real_load = A.store.days, A.store._load
+
+    class Gone:                                        # counts how many loaded days are alive at once
+        def __init__(self, d):
+            self.events = d.events; held[0] += 1; peak[0] = max(peak[0], held[0])
+
+        def __del__(self):
+            held[0] -= 1
+    try:
+        A.store.days = {}
+        A.store._load = lambda start: (loads.append(start), Gone(day))[1]
+        isos = [(day.start - timedelta(days=i)).date().isoformat() for i in range(5)]
+        entry = {"code": code, "platform": "comms", "day": isos[0], "days": isos}
+        r1 = A.ACODES.records(entry)
+        first = len(loads)
+        r2 = A.ACODES.records(entry)
+        ok("a 5-day code: each day read once, never two days in memory together",
+           first == 5 and peak[0] == 1, f"{first} reads, at most {peak[0]} days held at once")
+        ok("…viewed again within minutes: no day read again, the same records", len(loads) == first and len(r1) == len(r2) == 5 * len(want),
+           f"{len(loads) - first} more reads, {len(r1)}/{len(r2)} records")
+    finally:
+        A.store.days, A.store._load = real_days, real_load
 finally:
     book.export_paths["dir"] = real_exports
     audit.add = real_add

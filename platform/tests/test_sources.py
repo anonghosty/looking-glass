@@ -6,6 +6,8 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["TRUST_PROXY"] = "0"     # the app is called in-process, not through a reverse proxy (proxy_guard.py)
+import needs_db  # noqa: E402
+needs_db.require()   # no reachable MongoDB (a fresh clone, CI): skipped, not crashed
 import app as tm  # noqa: E402
 
 t = time.time()

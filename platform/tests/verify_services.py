@@ -9,6 +9,7 @@ expected the old x.161.x.34 masking; masked views now show "Host <reference>" (h
 import ipaddress
 import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import lgauth  # noqa: E402,F401  local API login (automation key)
+lgauth.require_server()   # no running service (a fresh clone, CI): skipped, not crashed
 import json
 import os
 import re

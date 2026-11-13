@@ -11,6 +11,7 @@ formula (= + - @ tab CR LF, or their full-width forms), unless the cell is a pla
    cell of every CSV is checked. Usage: tests/check_csv_safety.py"""
 import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import lgauth  # noqa: E402,F401  local API login (automation key)
+lgauth.require_server()   # no running service (a fresh clone, CI): skipped, not crashed
 import os, sys, io, csv, json, re, zipfile, urllib.request, urllib.parse  # noqa: E402
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)

@@ -562,6 +562,11 @@ report brings the rest by itself:
 4. **Generate the report.** Generating again replaces it: there is only ever one download.
 5. **Mark as drafted** when it is ready to go out.
 
+If you change the heading, subject, TLP, Description or Recommended Actions after generating, the report is marked
+**out of date**: it no longer says what the advisory says. It cannot be marked as drafted or sent until you generate it
+again, so the organisation always receives what the record shows. Putting the text back as it was makes it current
+again.
+
 **The report** opens with the **ADVISORY** pages (the organisation's devices, the impact, the description and the
 actions), then **INSIGHTS**, **TECHNICAL DETAILS** and **REFERENCES**, each with its label. It is signed by your CSIRT
 (its name and logo from Settings), never by a person; who wrote it is kept in the audit log. It carries no internal code
@@ -774,8 +779,9 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
   ![Control checks: NIST controls, CIS's safeguards as published, and Looking Glass's own reading beside each](media/screens/57-audit-cis.png)
 - **One tab per kind of event:** Authentication, Accounts and access, Sessions, Configuration changes, Data access
   and exports, Workflow, and System and self-test. **Data access and exports** holds every export (reports, CSV
-  files, advisories, audit evidence, host-list downloads) and every **view of host-level data**: one host's activity,
-  the hosts behind a figure, a record's details, an analysis. Each says who, when, from where and what was looked at,
+  files, advisories, audit evidence, host-list downloads) and every **view of host-level data**: the events on the map
+  and the records on the services page, one host's activity, the hosts behind a figure, a record's details, an
+  analysis. Each says who, when, from where and what was looked at (every filter of the view),
   hosts by their reference, never their address; the same person viewing the same thing again within 10 minutes is
   not logged twice. `DATA_ACCESS_LOG=0` in `.env` turns view logging off (the Audit portal then says so). Each has its count, a search, *Alerts only*, and **Export CSV**.
   The built-in security test's events are kept apart in System and self-test.

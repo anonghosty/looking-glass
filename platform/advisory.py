@@ -61,6 +61,28 @@ SENT_LOCKED = ("This advisory was sent on {day}: it can no longer be changed, so
                "received stays exact. A correction goes out as a new message.")
 
 
+def content_sig(adv):
+    """A fingerprint of what the advisor wrote that the report carries: heading, subject, TLP, Description and
+    Recommended Actions. Kept with each generated report: when the advisory no longer matches, the report is out of
+    date, and it can be neither marked drafted nor sent until it is generated again (review 2026-11-13: an edit after
+    generating left the old PDF to go out, so the record could say TLP:RED while the organisation received TLP:CLEAR).
+    The recipients are not in it: the advisory may be sent on to more people with the same file, and each send
+    records who it went to."""
+    import hashlib
+    body = [adv.get("heading") or "", adv.get("subject") or "", adv.get("tlp") or "", adv.get("description") or "",
+            adv.get("actions") or ""]
+    return hashlib.sha256(json.dumps(body, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def report_stale(adv):
+    """True when the advisory has a report and it no longer carries what the advisory says (or predates fingerprints)."""
+    reps = adv.get("reports") or []
+    return bool(reps) and reps[-1].get("content") != content_sig(adv)
+
+
+STALE = "The advisory was changed after its report was generated: generate the report again, so what goes out is what it says."
+
+
 def sent_day(adv):
     return _day(max((s["at"] for s in adv.get("sends") or []), default=0)) or "an earlier day"
 
@@ -498,6 +520,7 @@ def install(app, ctx):
                "sends": [{"to": s["to"], "at": _day(s["at"]), "by": name_of(s["by"]), "report": (s.get("report") or {}).get("name", "")}
                          for s in adv.get("sends") or []],
                "locked": adv.get("status") == "sent",    # sent: read-only, the record of what went out
+               "report_stale": adv.get("status") != "sent" and report_stale(adv),
                "generated": [{"n": r["n"], "name": r["name"], "at": time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(r["at"])), "by": name_of(r["by"]),
                               "size": r.get("size", 0)} for r in adv.get("reports") or []],
                "history": [{"at": time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(h["at"])), "by": name_of(h["user"]), "what": h["what"]}
@@ -574,8 +597,9 @@ def install(app, ctx):
         """The organisation asked for, if it is one of the finding's (or ALL without a kept search); else None."""
         nets = networks_of(x)
         if not nets:
-            # ALL only for a finding without a kept search; one organisation's finding never widens to everyone
-            return None if (x.get("network") and kept(x)) else ALL
+            # ALL only for a finding without a kept search; a finding WITH one whose records cannot be read now (or
+            # hold none of its devices any more) never widens to everyone, an overview included (review 2026-11-13)
+            return None if kept(x) else ALL
         n = str(raw or "").strip()
         return n if n in {p["network"] for p in nets} else None
 
@@ -752,6 +776,8 @@ def install(app, ctx):
                 adv["history"].append({"at": _now(), "user": user, "what": "edited after it was drafted: back to draft"})
             else:
                 adv["history"].append({"at": _now(), "user": user, "what": "edited"})
+            if report_stale(adv):
+                adv["history"].append({"at": _now(), "user": user, "what": "the report is out of date: generate it again"})
         try:
             adv = store.save(adv, create=create)
         except Changed:
@@ -853,7 +879,8 @@ def install(app, ctx):
         old = adv.get("reports") or []
         n = store.keep_file(adv["ref"], max([r["n"] for r in old] + [0]) + 1, data)
         user = me()[0]
-        adv["reports"] = [{"n": n, "name": name, "at": _now(), "by": user, "size": len(data), "pdf": not zbytes}]
+        adv["reports"] = [{"n": n, "name": name, "at": _now(), "by": user, "size": len(data), "pdf": not zbytes,
+                           "content": content_sig(adv)}]
         adv["generated"] = int(adv.get("generated") or len(old)) + 1
         adv["history"].append({"at": _now(), "user": user,
                                "what": f"report generated: {name}" + (" (replaces the previous one)" if old else "")})
@@ -920,6 +947,8 @@ def install(app, ctx):
             return jsonify(error="Generate the report first: it is what goes to them."), 400
         if adv["status"] not in ("drafted", "sent"):
             return jsonify(error="Mark the advisory as drafted first (on its page): then it is marked as sent here."), 400
+        if adv["status"] != "sent" and report_stale(adv):
+            return jsonify(error=STALE), 409
         user, role = me()
         adv["recipients"] = list(dict.fromkeys(adv["recipients"] + rec))
         sent_file = adv["reports"][-1]                     # exactly which file went to them
@@ -973,6 +1002,8 @@ def install(app, ctx):
             return jsonify(error="Generate the report first: it is what goes out."), 400
         if adv["status"] == "sent":
             return jsonify(error="It was already sent."), 409
+        if report_stale(adv):
+            return jsonify(error=STALE), 409
         user = me()[0]
         adv["status"], adv["updated"] = "drafted", _now()
         adv["history"].append({"at": _now(), "user": user, "what": f"marked as drafted (report {adv['reports'][-1]['name']})"})

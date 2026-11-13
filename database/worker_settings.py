@@ -83,6 +83,8 @@ SPEC = {f[0]: f for f in FIELDS}
 def validate(values, provider):
     """({key: clean value}, [errors]) for the fields given; unknown keys (passwords among them) are refused."""
     clean, errors = {}, []
+    if values is not None and not isinstance(values, dict):     # a forged file (review 2026-11-13: a list crashed
+        return {}, ["the values are not a list of settings"]      # confirm_request.sh and the run's request step)
     for k, v in (values or {}).items():
         f = SPEC.get(k)
         if not f or (f[8] and f[8] != provider):
@@ -546,7 +548,8 @@ def _apply_all(dfd, done_fd, names, env_file, base_dir, log):
 def _describe(req):
     """What the request changes, as printed (only shown for well-formed requests, and cleaned all the same)."""
     if req.get("kind") == "settings":
-        return clean("; ".join(f"{k} = {v}" for k, v in (req.get("values") or {}).items()), 600)
+        vals = req.get("values") if isinstance(req.get("values"), dict) else {}
+        return clean("; ".join(f"{k} = {v}" for k, v in vals.items()), 600)
     if req.get("kind") == "release":
         return clean(f"release held-back report {req.get('qid')}", 80)
     return clean(public(req).get("values") or req.get("kind"), 120)

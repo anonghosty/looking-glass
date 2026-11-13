@@ -6,6 +6,7 @@ platform's own lists and against MongoDB. Each download is an audit-log entry of
 self-test on the Admin page). Usage: tests/check_reports.py"""
 import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import lgauth  # noqa: E402,F401  local API login (automation key)
+lgauth.require_server()   # no running service (a fresh clone, CI): skipped, not crashed
 import os, sys, io, csv, json, re, time, zipfile, urllib.request, urllib.parse, urllib.error
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 import mongo_derive as L  # noqa: E402

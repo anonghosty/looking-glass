@@ -267,6 +267,8 @@
         li.append(l, el("small", "muted", ` · ${x.at} · ${x.by} · ${fmt(Math.round(x.size / 1024))} KB`)); ul.append(li);
       });
       r.append(ul);
+      // changed after it was generated (review 2026-11-13): the file no longer says what the advisory says
+      if (a.report_stale) r.append(el("p", "av-state stale", "Out of date: the advisory was changed after this report was generated. Generate it again before it is marked as drafted or sent."));
     } else r.append(el("p", "fd-empty", "No report generated yet for this organisation."));
     const sb = el("div", "av-acts");
     // drafted here; marked as sent on the Findings page, where the finding (and its case) then closes
@@ -280,8 +282,10 @@
       sb.append(p);
     } else if (edit && D.saved) {
       const dr = el("button", "lg-btn av-send", "Mark as drafted"); dr.type = "button";
-      dr.disabled = !a.generated.length;
-      dr.title = a.generated.length ? "The advisory is finished: its text and its report. It is then marked as sent on the Findings page." : "Generate the report first: it is what goes out";
+      dr.disabled = !a.generated.length || a.report_stale;
+      dr.title = !a.generated.length ? "Generate the report first: it is what goes out"
+        : a.report_stale ? "Generate the report again first: the advisory was changed after it was generated"
+        : "The advisory is finished: its text and its report. It is then marked as sent on the Findings page.";
       dr.addEventListener("click", () => run(dr, async () => {
         await save(); const d = await post(`/api/advisory/${fid}/drafted`, { network: net }); here.advisory = d.advisory;
         return "Marked as drafted: mark it as sent on the Findings page once it has gone out.";

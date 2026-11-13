@@ -21,6 +21,72 @@ from security import public_error
 import timezones
 
 
+# How a day compares with its 7-day average, in levels that mean something: a few percent is day-to-day noise
+# (grey); amber and red are kept for changes worth acting on, so the colours are not learned to be ignored.
+#   normal  under 10 %, or numbers too small to read anything into      grey
+#   info    up 10-25 % (keep an eye on it) / down 10-25 %                blue
+#   good    down 25-50 %                                                 green
+#   watch   up 25-50 %; down 50 % or more; gone quiet (0 today)          amber  (look into it: also a reporting change?)
+#   high    up 50 % or more; new this week with 20 or more               red    (investigate now)
+# the scale, as shown on the page and in the report (one source for both)
+SCALE = [
+    {"level": "normal", "name": "Normal", "range": "within ±10%",
+     "meaning": "The usual day-to-day change. Also used when the numbers are too small to read anything into "
+                "(under 20, or fewer than 10 apart)."},
+    {"level": "info", "name": "Slight rise / Slight drop", "range": "10% to 25% up or down",
+     "meaning": "A small change: keep an eye on it."},
+    {"level": "watch", "name": "Caution", "range": "25% to 50% up",
+     "meaning": "Clearly above the usual level: look into it today."},
+    {"level": "high", "name": "Danger", "range": "50% or more up, or new this week (20 or more)",
+     "meaning": "Extreme: investigate now — a new campaign, newly affected hosts, or a network reported for the first time."},
+    {"level": "good", "name": "Clear drop", "range": "25% to 50% down",
+     "meaning": "Clearly below the usual level: often clean-up working."},
+    {"level": "watch", "name": "Unusual drop / Went quiet", "range": "50% or more down, or none today (after 10 or more a day)",
+     "meaning": "Check before reading it as good news: a takedown, a sinkhole change or a report that did not arrive."},
+]
+
+def assess(today, vals, unit="devices"):
+    seen = [v for v in vals if v is not None]
+    if len(seen) < 3:
+        return None
+    a = sum(seen) / len(seen)
+    r = lambda level, label, note: {"level": level, "label": label, "note": note, "avg": round(a, 1),
+                                    "change": None if not a else round((today - a) / a, 4)}
+    if a == 0:
+        if not today:
+            return r("normal", "None this week", "Not seen in the previous 7 days either.")
+        if today < 20:      # the scale: under 20 is too small to read anything into (review 2026-11-13: was amber)
+            return r("normal", "New this week (small numbers)", f"Not seen in the previous 7 days, but only {today:,} "
+                                                                f"{unit} today: too few to read anything into yet.")
+        return r("high", "New this week",
+                 f"Not seen at all in the previous 7 days: find out what it is, which {unit} and where, before it spreads.")
+    ch = (today - a) / a
+    # cut, not rounded: 9.96 % shows as 9.9 % (Normal), never as "10.0 %", which would look like a slight change
+    p = f"{int(abs(ch) * 100)}%" if abs(ch) >= .1 else f"{int(abs(ch) * 1000) / 10:.1f}%"
+    sign = "+" if ch >= 0 else "-"
+    if today == 0 and a >= 10:
+        return r("watch", "Went quiet", "Seen every day this week but not today: a takedown, a sinkhole change or a report "
+                                        "that did not arrive? Check before reading it as good news.")
+    if abs(ch) >= .10 and (max(today, a) < 20 or abs(today - a) < 10):
+        return r("normal", f"Normal {sign}{p} (small numbers)", f"Only {abs(today - a):,.0f} {unit} apart: too few to read "
+                                                               f"anything into, nothing to do.")
+    if abs(ch) < .10:
+        return r("normal", f"Normal {sign}{p}", "Nothing to do.")
+    if ch > 0:
+        if ch >= .5:
+            return r("high", f"Danger +{p}", f"Investigate now: a new campaign, newly affected {unit} or a network "
+                                             f"reported for the first time.")
+        if ch >= .25:
+            return r("watch", f"Caution +{p}", "Look into it today.")
+        return r("info", f"Slight rise +{p}", "Keep an eye on it.")
+    if ch <= -.5:
+        return r("watch", f"Unusual drop -{p}", "Clean-up working, or a report that did not arrive? Check before reading "
+                                                "it as good news.")
+    if ch <= -.25:
+        return r("good", f"Clear drop -{p}", "Often clean-up working.")
+    return r("info", f"Slight drop -{p}", "Keep an eye on it.")
+
+
 def item_count(e, n):
     """An infection's or issue's count on a past day of the 7-day baseline: None when unknown (no summary, no reports
     that day, or a summary from before 2026-11-12 that kept only the day's top 80, where a missing item may simply have
@@ -260,7 +326,8 @@ def register(app, ctx):
         return {
             "platform": "comms", "day": day.start.date().isoformat(), "days": days, "filters": f, "facets": facets,
             "kpis": {"events": n_ev, "devices": n_hosts, "infections": len(inf), "reports": len(rep), "regions": len([r for r in reg if r != "Unknown region"]),
-                     "networks": len(net), "multi_infected": multi_inf, "cross_report": cross,
+                     # "Unknown network" is not a network (review 2026-11-13), as "Unknown region" is not a region
+                     "networks": len([n for n in net if n != "Unknown network"]), "multi_infected": multi_inf, "cross_report": cross,
                      "critical": sev.get("critical", 0), "share_of_day": n_ev / max(1, len(all_ev)), "day_events": len(all_ev)},
             "hours": hours, "peak_hour": peak, "findings": findings, "tz": tz_of(day),
             "item_counts": {k: len(v) for k, v in inf_h.items()},       # devices per infection (all of them: the baseline)
@@ -474,11 +541,16 @@ def register(app, ctx):
     # summaries kept at most (newest first): every new filter value added entries, for 30 days (external review)
     BASE_MAX = _env_int("EXEC_BASELINE_MAX", 5000) or 5000
 
+    # raised whenever a day's summary is counted differently, so summaries made the old way are not compared with new
+    # ones (2: "Unknown network" no longer counts as a network, review 2026-11-13)
+    BASE_VERSION = 2
+
     def _base_load():
         try:
             with open(base_path, encoding="utf-8") as fh:
-                bl["mem"] = json.load(fh).get("days", {})
-        except (OSError, ValueError, TypeError):
+                saved = json.load(fh)
+            bl["mem"] = saved.get("days", {}) if saved.get("version") == BASE_VERSION else {}
+        except (OSError, ValueError, TypeError, AttributeError):
             bl["mem"] = {}
     def _base_save():
         if not base_path:
@@ -495,7 +567,8 @@ def register(app, ctx):
             tmp = base_path + ".tmp"
             try:
                 with open(tmp, "w", encoding="utf-8") as fh:
-                    json.dump({"about": "Executive portal: 7-day baseline summaries (aggregates only)", "days": frozen}, fh)
+                    json.dump({"about": "Executive portal: 7-day baseline summaries (aggregates only)", "version": BASE_VERSION,
+                               "days": frozen}, fh)
                 os.replace(tmp, base_path)
             except OSError:
                 pass
@@ -688,68 +761,6 @@ def register(app, ctx):
     def avg(vals):
         v = [x for x in vals if x is not None]
         return sum(v) / len(v) if v else None
-
-    # How a day compares with its 7-day average, in levels that mean something: a few percent is day-to-day noise
-    # (grey); amber and red are kept for changes worth acting on, so the colours are not learned to be ignored.
-    #   normal  under 10 %, or numbers too small to read anything into      grey
-    #   info    up 10-25 % (keep an eye on it) / down 10-25 %                blue
-    #   good    down 25-50 %                                                 green
-    #   watch   up 25-50 %; down 50 % or more; gone quiet (0 today)          amber  (look into it: also a reporting change?)
-    #   high    up 50 % or more; new this week with 20 or more               red    (investigate now)
-    # the scale, as shown on the page and in the report (one source for both)
-    SCALE = [
-        {"level": "normal", "name": "Normal", "range": "within ±10%",
-         "meaning": "The usual day-to-day change. Also used when the numbers are too small to read anything into "
-                    "(under 20, or fewer than 10 apart)."},
-        {"level": "info", "name": "Slight rise / Slight drop", "range": "10% to 25% up or down",
-         "meaning": "A small change: keep an eye on it."},
-        {"level": "watch", "name": "Caution", "range": "25% to 50% up",
-         "meaning": "Clearly above the usual level: look into it today."},
-        {"level": "high", "name": "Danger", "range": "50% or more up, or new this week (20 or more)",
-         "meaning": "Extreme: investigate now — a new campaign, newly affected hosts, or a network reported for the first time."},
-        {"level": "good", "name": "Clear drop", "range": "25% to 50% down",
-         "meaning": "Clearly below the usual level: often clean-up working."},
-        {"level": "watch", "name": "Unusual drop / Went quiet", "range": "50% or more down, or none today (after 10 or more a day)",
-         "meaning": "Check before reading it as good news: a takedown, a sinkhole change or a report that did not arrive."},
-    ]
-
-    def assess(today, vals, unit="devices"):
-        seen = [v for v in vals if v is not None]
-        if len(seen) < 3:
-            return None
-        a = sum(seen) / len(seen)
-        r = lambda level, label, note: {"level": level, "label": label, "note": note, "avg": round(a, 1),
-                                        "change": None if not a else round((today - a) / a, 4)}
-        if a == 0:
-            if not today:
-                return r("normal", "None this week", "Not seen in the previous 7 days either.")
-            return r("high" if today >= 20 else "watch", "New this week",
-                     f"Not seen at all in the previous 7 days: find out what it is, which {unit} and where, before it spreads.")
-        ch = (today - a) / a
-        # cut, not rounded: 9.96 % shows as 9.9 % (Normal), never as "10.0 %", which would look like a slight change
-        p = f"{int(abs(ch) * 100)}%" if abs(ch) >= .1 else f"{int(abs(ch) * 1000) / 10:.1f}%"
-        sign = "+" if ch >= 0 else "-"
-        if today == 0 and a >= 10:
-            return r("watch", "Went quiet", "Seen every day this week but not today: a takedown, a sinkhole change or a report "
-                                            "that did not arrive? Check before reading it as good news.")
-        if abs(ch) >= .10 and (max(today, a) < 20 or abs(today - a) < 10):
-            return r("normal", f"Normal {sign}{p} (small numbers)", f"Only {abs(today - a):,.0f} {unit} apart: too few to read "
-                                                                   f"anything into, nothing to do.")
-        if abs(ch) < .10:
-            return r("normal", f"Normal {sign}{p}", "Nothing to do.")
-        if ch > 0:
-            if ch >= .5:
-                return r("high", f"Danger +{p}", f"Investigate now: a new campaign, newly affected {unit} or a network "
-                                                 f"reported for the first time.")
-            if ch >= .25:
-                return r("watch", f"Caution +{p}", "Look into it today.")
-            return r("info", f"Slight rise +{p}", "Keep an eye on it.")
-        if ch <= -.5:
-            return r("watch", f"Unusual drop -{p}", "Clean-up working, or a report that did not arrive? Check before reading "
-                                                    "it as good news.")
-        if ch <= -.25:
-            return r("good", f"Clear drop -{p}", "Often clean-up working.")
-        return r("info", f"Slight drop -{p}", "Keep an eye on it.")
 
     def trend_findings(platform, d, b):
         """Plain sentences comparing the day with its 7-day baseline (only when there are at least 3 past days)."""

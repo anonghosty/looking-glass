@@ -139,7 +139,10 @@ def install(app, logger=None):
                 abort(403, description="Cross-site requests are not accepted.")
             # every route takes a JSON object: an array (or a bare value) is refused here, once, instead of failing
             # inside a route with a 500 (external review, 2026-11-12)
-            if request.mimetype == "application/json" and request.content_length:
+            # every JSON body, a chunked one too (it has no Content-Length: review 2026-11-13, a chunked array reached a
+            # route and failed with a 500); the 64 KB limit still applies while it is read
+            if request.mimetype == "application/json" and (request.content_length
+                                                           or "chunked" in (request.headers.get("Transfer-Encoding") or "").lower()):
                 body = request.get_json(silent=True)
                 if body is not None and not isinstance(body, dict):
                     abort(400, description="Send the data as a JSON object.")

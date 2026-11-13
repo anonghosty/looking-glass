@@ -73,8 +73,11 @@ try:
     r = get("/")
     ok("the start page goes to the platforms' Overview, never the map", r.status_code == 302 and r.headers["Location"].endswith("/?intro=1"), r.headers.get("Location", ""))
     html = get("/?intro=1").get_data(as_text=True)
-    ok("the Overview keeps an eye on the database (its figures load), the platforms not offered",
-       'data-itab="glossary" hidden' in html and 'id="btnExplore" hidden' in html and 'id="btnServices" href="/services" hidden' in html and get("/api/clock").status_code == 200)
+    ok("the Overview keeps an eye on the database, the platforms not offered",
+       'data-itab="glossary" hidden' in html and 'id="btnExplore" hidden' in html and 'id="btnServices" href="/services" hidden' in html)
+    import needs_db  # noqa: E402
+    if needs_db.reachable()[0]:          # its figures need the reports database (none on a fresh clone or in CI)
+        ok("…and its figures load", get("/api/clock").status_code == 200)
     cards = set(re.findall(r'class="portal-card pc-\w+" href="([^"]+)"', html))
     ok("its Overview: Settings, Admin and the audit log only", cards == {"/settings", "/admin", "/audit"}, ", ".join(sorted(cards)))
     ok("…saying Peace of mind is on", "Peace of mind is on" in html)

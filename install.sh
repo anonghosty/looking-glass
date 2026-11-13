@@ -941,7 +941,12 @@ throughout the day; each run only fetches what is new." "every 30m" \
 E-mails already fetched are skipped, so a longer look-back costs little and lets the
 pipeline catch up by itself after this computer was off or the mailbox unreachable
 (1 = only since yesterday; 7 recommended)." 7 v_days; EMAIL_DAYS="$REPLY"
-  MAIL_AUTH=log                    # the sender check concerns e-mail only: asked when a mailbox is used
+  # the sender check concerns e-mail only: asked when a mailbox is used. A re-install keeps what the pipeline has now
+  # (review 2026-11-13: Block, switched on later in Settings → Workers, was quietly set back to "record only"): it is
+  # the default offered, and kept as it is when the question is not asked
+  MAIL_AUTH_NOW="$(env_get "$DB_DIR/.env" MAIL_AUTH)"
+  case "${MAIL_AUTH_NOW,,}" in enforce|block) PREV[MAIL_AUTH_BLOCK]=yes;; log) PREV[MAIL_AUTH_BLOCK]=no;; esac
+  MAIL_AUTH="${MAIL_AUTH_NOW:-log}"
   [ "$WANT_MAIL" = yes ] && ask_yesno MAIL_AUTH_BLOCK "Sender check" "Shadowserver signs its report e-mails (DKIM). Every report's signature is checked
 and recorded either way (Audit portal → Sender check).
 

@@ -57,6 +57,8 @@ PUBLIC_PATHS = ("/login", "/register", "/forgot", "/logout", "/healthz", "/stati
 # sign-up attempts whose e-mail domain is looked up in DNS, per address and hour (room for typing mistakes)
 REGISTER_DNS_PER_HOUR = 30
 NAME_RE = re.compile(r"^[a-zA-Z0-9._-]{2,40}$")
+PASSWORD_CHANGED = "Password changed. Log in with the new password."
+LOGIN_NOTICES = frozenset((PASSWORD_CHANGED,))        # the sign-in page shows no other ?notice= text
 ROLE_RE = re.compile(r"^[a-z][a-z0-9_-]{1,30}$")
 TEST_PREFIX = "lg-selftest-"      # reserved for security_testing/security_retest.py; cannot be registered
 MIN_PASSWORD = 12
@@ -729,6 +731,11 @@ def install(app, base_dir, logger):
         u = getattr(g, "user", None)
         return bool(u and p in u.get("perms", ()))
 
+    def name_taken(name):
+        """A user name is taken when one differs from it only in letter case (review 2026-11-13)."""
+        low = (name or "").lower()
+        return any(n.lower() == low for n in users.all())
+
     def active_admins():
         # the temporary accounts of security_testing/security_retest.py never count: the first-run page stays as it is while
         # the retest runs on a server that has no administrator yet
@@ -926,7 +933,10 @@ def install(app, base_dir, logger):
     def login():
         nxt = _safe_next(request.values.get("next"))
         if request.method == "GET":
+            # only the notices Looking Glass itself sends: any other text in the address was shown as the platform's own
+            # message (review 2026-11-13: a crafted link could put a fake warning on the sign-in page)
             notice = request.args.get("notice", "")[:200]
+            notice = notice if notice in LOGIN_NOTICES else ""
             view = request.args.get("form") if request.args.get("form") in ("signin", "register") else ("signin" if notice else "choice")
             return page("login.html", next=nxt, view=view, notice=notice)
         if remote_needs_tls():
@@ -965,7 +975,12 @@ def install(app, base_dir, logger):
                 users._load()
                 uu = users.data["users"][name]
                 if stp is not None:
-                    uu["totp_last"] = stp                       # each code works once
+                    # each code works once, checked again under the lock: two sign-ins with the same code at the same
+                    # moment both passed the check above (review 2026-11-13)
+                    if uu.get("totp_last") is not None and stp <= uu["totp_last"]:
+                        audit.add("login_failed", user=name, detail="authenticator code already used")
+                        return page("login.html", 401, next=nxt, view="signin", error="That code was just used. Sign in again.")
+                    uu["totp_last"] = stp
                 else:
                     # the code itself is found again under the lock: by its place in the list, a sign-in using another
                     # code at the same moment could remove a different, unused one (external review, 2026-11-12)
@@ -1083,7 +1098,7 @@ def install(app, base_dir, logger):
                 audit.add("mfa_enrolled", user=name, detail="after reset")
                 status = u["status"]
             else:
-                if name in users.data["users"]:
+                if any(n.lower() == name.lower() for n in users.data["users"]):
                     return page("login.html", 409, view="register", error="That name was taken meanwhile. Choose another.")
                 # the setup code (checked at the first step) is the proof of access to the server, not "this computer":
                 # behind a reverse proxy the administrator comes through the proxy, over HTTPS (remote_needs_tls)
@@ -1154,9 +1169,11 @@ def install(app, base_dir, logger):
                                   check_domain=check_domain)
         if problem:
             return fail(400, problem)
-        if users.get(name):
+        # names and e-mail addresses that differ only in letter case are the same (review 2026-11-13: "Grace" could
+        # register beside "grace", and pass for her on every page that shows a user name)
+        if name_taken(name):
             return fail(409, "That user name is taken. Choose another.")
-        if any((u.get("profile") or {}).get("email") == f["email"] for u in users.all().values()):
+        if any(((u.get("profile") or {}).get("email") or "").lower() == f["email"].lower() for u in users.all().values()):
             return fail(409, "An account with this email address already exists. Use Forgot password, or ask an administrator.")
         if sum(1 for u in users.all().values() if u.get("status") == "pending") >= 100:
             return fail(429, "Too many accounts are waiting for approval. Try again later.")
@@ -1230,6 +1247,8 @@ def install(app, base_dir, logger):
         with users.lock:
             users._load()
             uu = users.data["users"][name]
+            if uu.get("totp_last") is not None and step <= uu["totp_last"]:     # the same code, used meanwhile (review)
+                return page("forgot.html", 401, mode=mode, username=name, error="That authenticator code was just used.")
             uu["hash"] = generate_password_hash(pw)
             uu["pw_set_at"] = int(_now())                       # a new password: its age starts now (password_policy.py)
             uu["changed"] = int(_now())                         # ends every session of the account
@@ -1245,7 +1264,7 @@ def install(app, base_dir, logger):
         sessions.end_user(name)
         throttle.ok(ip, name)
         audit.add("password_reset", user=name, detail=how)
-        return redirect("/login?notice=" + quote("Password changed. Log in with the new password."))
+        return redirect("/login?notice=" + quote(PASSWORD_CHANGED))
 
     @app.route("/logout", methods=["POST", "GET"])
     def logout():
@@ -1455,4 +1474,5 @@ def install(app, base_dir, logger):
     threading.Thread(target=prune_loop, daemon=True, name="session-prune").start()
 
     return {"users": users, "sessions": sessions, "roles": roles, "audit": audit, "has_perm": has_perm, "csrf_ok": csrf_ok,
-            "is_admin": lambda: has_perm("settings"), "fresh": fresh, "throttle": throttle, "password_policy": pw_policy}
+            "is_admin": lambda: has_perm("settings"), "fresh": fresh, "throttle": throttle, "password_policy": pw_policy,
+            "setup": setup}      # the first-run code: checks that swap in their own accounts point it elsewhere too

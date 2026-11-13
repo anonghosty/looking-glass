@@ -156,11 +156,23 @@ if [ -n "$CRON_HERE" ]; then
   fi
   done_ "schedule removed (other cron jobs kept)"
 else skip "none for this folder"; fi
-# a pipeline run that is going on right now: let it finish rather than cut it off mid-load
-if [ $DRY = 0 ] && pgrep -f "$DB_DIR/shadowserver_pipeline.py" >/dev/null 2>&1; then
+# a pipeline run that is going on right now: let it finish rather than cut it off mid-load. A run holds the lock
+# run.sh takes (.pipeline.lock): its command line names the script by a relative path, so matching the full path never
+# found it (review 2026-11-13). Its processes are this folder's when their working folder is this folder.
+pipeline_running() { [ -f "$DB_DIR/.pipeline.lock" ] && ! flock -n "$DB_DIR/.pipeline.lock" true 2>/dev/null; }
+pipeline_pids() {
+  local p
+  for p in $(pgrep -f "shadowserver_pipeline.py" 2>/dev/null); do
+    [ "$(readlink -f "/proc/$p/cwd" 2>/dev/null)" = "$(readlink -f "$DB_DIR")" ] && echo "$p"
+  done
+}
+if [ $DRY = 0 ] && { pipeline_running || [ -n "$(pipeline_pids)" ]; }; then
   say "  a pipeline run is in progress: waiting up to 5 minutes for it to finish..."
-  for _ in $(seq 1 60); do pgrep -f "$DB_DIR/shadowserver_pipeline.py" >/dev/null 2>&1 || break; sleep 5; done
-  pgrep -f "$DB_DIR/shadowserver_pipeline.py" >/dev/null 2>&1 && { pkill -f "$DB_DIR/shadowserver_pipeline.py" || true; skip "it did not finish: stopped"; }
+  for _ in $(seq 1 60); do { pipeline_running || [ -n "$(pipeline_pids)" ]; } || break; sleep 5; done
+  if pipeline_running || [ -n "$(pipeline_pids)" ]; then
+    for p in $(pipeline_pids); do kill "$p" 2>/dev/null || true; done
+    skip "it did not finish: stopped"
+  fi
 fi
 
 # ------------------------------------------------------------------------------------------------ 3. command

@@ -8,6 +8,8 @@ import sys
 from datetime import timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import needs_db  # noqa: E402
+needs_db.require()   # no reachable MongoDB (a fresh clone, CI): skipped, not crashed
 import app as tm  # noqa: E402
 
 now = tm.utcnow()

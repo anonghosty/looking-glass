@@ -33,6 +33,62 @@ def canonical(name: str) -> str:
     return n
 
 
+def learn_tails(sorting_dir, limit: int = 400) -> set:
+    """The country parts of the ordinary reports already sorted (a few files of each report folder)."""
+    import os
+    out = set()
+    try:
+        for d in os.scandir(sorting_dir):
+            if not d.is_dir() or d.name.startswith("special"):
+                continue
+            for i, f in enumerate(os.scandir(d.path)):
+                if i >= 3 or len(out) >= limit:
+                    break
+                t = country_tail(f.name, d.name)
+                if t:
+                    out.add(t)
+    except OSError:
+        pass
+    return out
+
+
+_CORE = re.compile(r"^\d{4}-\d{2}-\d{2}-(.+?)(?:_as\d+)?\.csv$")
+
+
+def country_tail(filename: str, service: str):
+    """The part after the report name in an ordinary report's file name ("2026-11-10-scan_http-123-ghana-geo.csv",
+    "scan_http" -> "ghana-geo"), or None. An ordinary report name has no hyphen, so this split is exact; it tells
+    where the name of a Special Report ends (special_name)."""
+    m = _CORE.match(filename or "")
+    if not m or not service or service.startswith("special") or not m.group(1).startswith(service + "-"):
+        return None
+    rest = re.sub(r"^\d+-", "", m.group(1)[len(service) + 1:])      # Shadowserver's number for the recipient
+    return rest or None
+
+
+def special_name(filename: str, first: str, tails=()) -> str:
+    """The collection name of a report, from its file name and the name the file pattern found (`first`).
+    For a Special Report the pattern stops at the first word ("special-badbox-ghana-geo" -> "special"), because the
+    country part may hold hyphens too (south-africa-geo), so every Special Report landed in one "special" collection
+    (review 2026-11-13). Its name is cut where the country part begins: one learnt from the ordinary reports (`tails`,
+    longest first), or else the last word before "-geo". Others: canonical(first)."""
+    if not (first or "").lower().startswith("special"):
+        return canonical(first)
+    m = _CORE.match(filename or "")
+    core = m.group(1).lower() if m else ""
+    head = None
+    for t in sorted({t.lower() for t in tails if t}, key=len, reverse=True):
+        if core.endswith("-" + t) and len(core) > len(t) + 1:
+            head = core[:-len(t) - 1]
+            break
+    if head is None and core.endswith("-geo"):
+        head = re.sub(r"-[a-z0-9_]+-geo$", "", core)
+    if not head or not head.startswith("special"):
+        return canonical(first)
+    head = re.sub(r"-\d+$", "", head)                               # Shadowserver's number for the recipient
+    return canonical(head) if head != "special" else "special"
+
+
 def valid(name: str) -> bool:
     return bool(VALID.match(name or "")) and not (name or "").startswith(RESERVED)
 

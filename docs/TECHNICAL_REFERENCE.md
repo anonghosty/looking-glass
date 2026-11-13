@@ -608,16 +608,29 @@ Security scripts:
   returns CIS's fields plus an `lg` field, which the portal shows as a separate badge and the PDF as a line marked
   "Looking Glass:". `CERTIFICATION_NOTE` ("The CIS Controls are used here as a map...") goes with the data.
 - Data access logging (`data_access.py`, CIS 3.14): an `after_request` hook writes `data_viewed` for answered GETs of
-  `/api/related`, `/api/insight`, `/api/insight/drill`, `/api/svc/insight`, `/api/svc/drill`, `/api/svc/detail`, and
-  `data_exported` for `/api/svc/hosts.csv`; the detail is the selection with every address replaced by its host
-  reference (`HostRefs`); one entry per person and selection per 10 minutes; not for the self-test;
+  `/api/events`, `/api/svc/events`, `/api/related`, `/api/insight`, `/api/insight/drill`, `/api/svc/insight`,
+  `/api/svc/drill`, `/api/svc/detail`, and `data_exported` for `/api/svc/hosts.csv`. The detail is every request
+  parameter except display and time options (`IGNORE`: at, demo, from, to, limit, latest, since, time, n, format, page,
+  sort), repeated parameters included, so a parameter added later is logged by default. Each value is cut to 120
+  characters before the address finder reads it (a half address at the cut is dropped), and every address is replaced
+  by its host reference (`HostRefs`); one entry per person and selection per 10 minutes; not for the self-test;
   `DATA_ACCESS_LOG=0` turns it off. `tests/check_data_access.py`.
+- The address finder (`ip_find.py`) reads IPv6 candidates of at most 45 characters and 7 colons, split where three or
+  more colons stand together, so its work grows with the text's length (thousands of colons: milliseconds). An
+  IPv4-mapped address (`::ffff:41.66.1.2`) is that IPv4 host, masked whole, with the same label.
+- Advisories: each generated report keeps a fingerprint of the heading, subject, TLP, Description and Recommended
+  Actions (`advisory.content_sig`). When the advisory no longer matches it, the report is out of date
+  (`report_stale` in the page's data), and drafted and sent are refused (409) until it is generated again.
+- The sign-in page shows only the notices Looking Glass sends (`auth.LOGIN_NOTICES`); user names and e-mail addresses
+  that differ only in letter case are one; an authenticator code is checked again under the accounts lock, so two
+  sign-ins with the same code at once cannot both pass.
 - Executive PDF (`executive_pdf.py`): text is never cut. `fit()` keeps the whole text, smaller (to 80 %, never under
   6 pt) or on two lines; `wrap(max_lines=)` sets it smaller rather than cutting; Key findings take the largest size at
   which all of them fit, and continue on a page of their own if needed.
 - Special Reports (`special_reports.py`): Shadowserver's one-off datasets (`YYYY-MM-DD-special[-<name>]-...`, often a
-  placeholder 00:00 time on every row). The pipeline loads them into `special` or `special_<name>`
-  (`report_names.canonical`, so a hyphenated name is not quarantined); both registries (`sources.py`, `services.py`)
+  placeholder 00:00 time on every row). The pipeline loads each into its own `special_<name>` (`special` when it has
+  no name): `report_names.special_name` cuts the name where the country part begins, learnt from the ordinary reports
+  (whose names hold no hyphen), or else at the last word before `-geo`; both registries (`sources.py`, `services.py`)
   skip every `special*` collection, so they never enter the replay, totals or baselines; `/api/overview` carries
   `special`: per collection and shared date, rows and distinct hosts (counts only, cached 10 minutes), shown on the
   intro page. `tests/check_special_reports.py` checks it against a throwaway MongoDB.

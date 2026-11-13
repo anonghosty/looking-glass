@@ -33,6 +33,8 @@ import sys
 from pathlib import Path
 
 RESULTS = ("pass", "other", "fail", "none", "temperror", "permerror")
+# headers that decide who sent a report and how its parts are read: never more copies than the signature covers
+GUARDED = ("from", "content-type", "content-transfer-encoding", "mime-version")
 
 
 def _fields(head: bytes):
@@ -223,12 +225,16 @@ class Checker:
             if not sigs:
                 out.update(result="none", reason="no DKIM signature")
                 return out
-            results = []                     # (result, domain, selector, reason, (alg, bits), From signed)
+            results = []                     # (result, domain, selector, reason, (alg, bits), From signed, extra copies)
+            names = [f.split(b":", 1)[0].strip().lower().decode("latin-1") for f in fields]
             for f in sigs:
                 r = self._verify_one(f, fields, body)
-                h = _tags(f.split(b":", 1)[1].decode("ascii", "replace")).get("h", "")
-                results.append(r + ((self.last_key if r[0] == "ok" else ("", 0)),
-                                    "from" in [x.strip().lower() for x in h.split(":")]))
+                h = [x.strip().lower() for x in _tags(f.split(b":", 1)[1].decode("ascii", "replace")).get("h", "").split(":")]
+                # a header the parser reads first must be the signed one: a copy added above a signed header (an unsigned
+                # Content-Type over the signed one, review 2026-11-13) passed while the parser read the attacker's. More
+                # copies than the signature covers are refused; a header it does not cover may appear only once.
+                extra = [g for g in GUARDED if names.count(g) > max(h.count(g), 1)]
+                results.append(r + ((self.last_key if r[0] == "ok" else ("", 0)), "from" in h, extra))
             good = [r for r in results if r[0] == "ok"]
             mine = [r for r in good if r[1] == self.expect or r[1].endswith("." + self.expect)]
             # a pass vouches for who SENT it: exactly one From header, signed (in h=), from the signer's domain
@@ -241,7 +247,10 @@ class Checker:
                     why_not = ("the message has %d From headers" % len(froms) if len(froms) != 1 else
                                "the From header is not signed" if not any(r[5] for r in mine) else
                                f"From ({out['from_domain'] or 'none'}) does not match the signer ({mine[0][1]})")
-                mine = ok_from
+                elif not [r for r in ok_from if not r[6]]:
+                    why_not = ("it has more " + ", ".join(ok_from[0][6]) + " headers than the signature covers "
+                               "(a header added on the way, which the pipeline would read first)")
+                mine = [r for r in ok_from if not r[6]]
             if mine:
                 out.update(result="pass", signer=mine[0][1], selector=mine[0][2], alg=mine[0][4][0], bits=mine[0][4][1])
             elif why_not:
