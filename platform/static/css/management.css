@@ -14,6 +14,10 @@ html:has(body.mg) { overflow: auto; height: auto; }
   background: linear-gradient(90deg, rgba(91, 141, 239, .25), rgba(139, 92, 246, .25)); border: 1px solid rgba(139, 92, 246, .45); color: #d8ccff; vertical-align: 2px; }
 .mg-brand-sub { color: var(--mg-dim); font-size: 12.5px; margin-top: 2px; }
 .mg-top-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+/* the page buttons are icons, as on every other page (_page_nav.html; the names are in the tooltips), Log out last */
+.mg-top-actions .nav-ic { padding: 0 9px; }
+.mg-top-actions .nav-ic > span:not(.lg-bell-n) { display: none; }
+.mg-top-actions > .account-form { order: 99; }
 .mg-day { display: flex; align-items: center; gap: 8px; color: var(--mg-dim); font-size: 12px; }
 .mg-day select, .mg-sel select { appearance: none; padding: 8px 32px 8px 12px; border-radius: 10px; border: 1px solid var(--mg-card-b); color: var(--mg-text); font: 600 13px Inter, sans-serif;
   background: rgba(255, 255, 255, .04) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14'%3E%3Cpath fill='none' stroke='%239aa6bf' stroke-width='2' d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center; cursor: pointer; }

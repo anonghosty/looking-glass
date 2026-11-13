@@ -163,7 +163,10 @@
 
   // the header's page buttons (templates/_page_nav.html) open every page, the new ones included, with the logo animation
   document.addEventListener("click", (e) => {
-    const a = e.target.closest?.("a.nav-ic[href]");
+    // the page buttons of the platforms' headers and the overview too (account-btn: Executive, Admin, Definitions,
+    // Combinations, Findings), so every page opens with the logo, also one without a loading line of its own
+    // (Combinations opened plainly before, 2026-11-13)
+    const a = e.target.closest?.("a.nav-ic[href], a.account-btn[href]");
     if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || a.target === "_blank") return;
     const href = a.getAttribute("href");
     if (!href || !href.startsWith("/")) return;

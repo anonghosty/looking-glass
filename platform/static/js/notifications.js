@@ -14,10 +14,9 @@
 
   const BELL = "M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0";
   function makeBell(host) {
-    // it looks like the header's other buttons: an icon button beside the page icons, a labelled button on the
-    // Executive portal (whose header has text buttons)
-    const text = host.classList.contains("mg-top-actions");
-    const b = el("button", text ? "mg-link lg-bell lg-bell-text" : "demo-btn nav-ic lg-bell"); b.type = "button";
+    // it looks like the header's other buttons: an icon button beside the page icons, on every page (the Executive
+    // portal's header has icon buttons too since 2026-11-13)
+    const b = el("button", "demo-btn nav-ic lg-bell"); b.type = "button";
     b.setAttribute("aria-haspopup", "dialog"); b.setAttribute("aria-expanded", "false");
     b.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="${BELL}"/></svg>`;
     const badge = el("span", "lg-bell-n"); badge.hidden = true; b.append(badge, el("span", "lg-bell-label", "Notifications"));

@@ -57,7 +57,8 @@ server, on the pipeline's own account ([Security, section 2](SECURITY.md#pipelin
    - Analysts see addresses.
    - Researchers see the threat data with every constituent address masked. Patterns carried by fewer than 5 hosts
      get no lasting code.
-   - Management sees numbers, with C2 domains as Domain 1, 2…
+   - Management sees numbers and the C2 / sinkhole domains by name; a C2 host that is an IP address reads
+     "IP address 1, 2…", never the address.
    - External viewers see everything masked.
    - The auditor sees only the audit log and its evidence.
 5. **Followed up.** A finding is a channel. Every hand-over names a person, and only the people in it (and admins)

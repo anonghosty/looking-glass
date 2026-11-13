@@ -87,6 +87,20 @@ def assess(today, vals, unit="devices"):
     return r("info", f"Slight drop -{p}", "Keep an eye on it.")
 
 
+def c2_rows(most_common, hosts_of, n_ev):
+    """The Executive portal's C2 / sinkhole rows: a domain by its name; anything that is or holds an IP address as
+    "IP address 1, 2…" (numbered among those only), never the address."""
+    import ip_find
+    rows, n_ip = [], 0
+    for k, v in most_common:
+        name = str(k or "")
+        if not name or ip_find.spans(name):
+            n_ip += 1
+            name = f"IP address {n_ip}"
+        rows.append({"value": name, "label": name, "count": v, "hosts": len(hosts_of[k]), "share": v / max(1, n_ev)})
+    return rows
+
+
 def item_count(e, n):
     """An infection's or issue's count on a past day of the 7-day baseline: None when unknown (no summary, no reports
     that day, or a summary from before 2026-11-12 that kept only the day's top 80, where a missing item may simply have
@@ -352,12 +366,10 @@ def register(app, ctx):
             "beacon": {"repeating": len(gaps_med), "regular": regular, "typical": dur(typical),
                        "share": regular / max(1, len(gaps_med))},
             "c2": {"domains": len(c2), "destinations": len(dst_ips),
-                   # management decides on numbers, never on the C2 hosts themselves (the user, 2026-11-12): each is
-                   # "Domain 1, 2…" with its devices and events, in every mode (external review, 2026-11-12: value
-                   # carried the raw host, an IP address too)
-                   "top": [{"value": "Domain " + str(i + 1), "label": "Domain " + str(i + 1),
-                            "count": v, "hosts": len(c2_h[k]), "share": v / max(1, n_ev)}
-                           for i, (k, v) in enumerate(c2.most_common(8))]},
+                   # a C2 / sinkhole domain is shown by its name, so the executive can tell what the devices call (the
+                   # user, 2026-11-13: "Domain 1, 2" made no sense to them); one that is, or holds, an IP address is
+                   # never shown: it is "IP address 1, 2…" (the one address finder every masker uses, ip_find.py)
+                   "top": c2_rows(c2.most_common(8), c2_h, n_ev)},
         }
 
     # ------------------------------------------------------------------ publicly accessible / vulnerable services

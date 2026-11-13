@@ -55,6 +55,17 @@ evs = [{"dst_port": 443}] * 10 + [{"dst_port": ""}] * 90
 top = A._top(evs, "dst_port")
 ok("10 of 100 events have port 443, the other 90 none: its share is 10 %, not 100 %", top and top[0]["share"] == 0.1, str(top))
 ok("…an empty value is never listed", all(r["value"] for r in top))
+print("C2 / sinkhole rows in the Executive portal: domains by name, IP addresses never (the user, 2026-11-13)")
+rows = M.c2_rows([("tv-update.example", 30), ("203.0.113.7", 20), ("198.51.100.9:8080", 10), ("cdn.example.net", 5),
+                  ("203.0.113.8.nip.io", 4), ("", 2)], {k: {1, 2} for k in ("tv-update.example", "203.0.113.7", "198.51.100.9:8080",
+                                                                          "cdn.example.net", "203.0.113.8.nip.io", "")}, 100)
+labels = [r["label"] for r in rows]
+ok("a domain is shown by its name", labels[0] == "tv-update.example" and labels[3] == "cdn.example.net", str(labels))
+ok("an IP address, one with a port, one inside a name, or an empty value: IP address 1, 2…, numbered among those only",
+   labels[1] == "IP address 1" and labels[2] == "IP address 2" and labels[4] == "IP address 3" and labels[5] == "IP address 4", str(labels))
+ok("…no address in any row", not any(x in str(rows) for x in ("203.0.113", "198.51.100")))
+ok("counts and devices kept", rows[0]["count"] == 30 and rows[0]["hosts"] == 2 and rows[0]["share"] == 0.3)
+
 print("An advisory's report is out of date only when the advisory changed after it")
 import advisory as ADV  # noqa: E402
 a = {"heading": "", "subject": "S", "tlp": "TLP:AMBER", "description": "D", "actions": "A", "history": []}
