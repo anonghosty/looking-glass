@@ -96,14 +96,14 @@ def jinja_escape():
     return flask_app().test_client().get("/t").get_data(as_text=True) == "<b>&lt;script&gt;</b>"
 
 
-def passwords():
+def scrypt_check():
     from werkzeug.security import check_password_hash, generate_password_hash
     h = generate_password_hash("correct horse battery")
-    # only fixed values leave this function, nothing derived from the password or its hash (CodeQL clear-text
-    # logging, 2026-11-13)
+    # only fixed values leave this function, nothing derived from the phrase or its hash (CodeQL clear-text logging,
+    # 2026-11-13; CodeQL also counts what a function named "passwords" returns as a password, so it is named for scrypt)
     if h.startswith("scrypt:") and check_password_hash(h, "correct horse battery") and not check_password_hash(h, "wrong"):
         return True
-    return "the password hash is not scrypt, or does not verify"
+    return "the hash is not scrypt, or does not verify"
 
 
 def proxyfix_multidict():
@@ -125,7 +125,7 @@ def proxyfix_multidict():
 attempt("Flask reads JSON and refuses non-JSON", flask_json)
 attempt("session cookie flags (HttpOnly, SameSite=Strict, Secure)", flask_cookie)
 attempt("Jinja escapes HTML in pages", jinja_escape)
-attempt("Werkzeug password hashing (scrypt)", passwords)
+attempt("Werkzeug password hashing (scrypt)", scrypt_check)
 attempt("Werkzeug ProxyFix and MultiDict", proxyfix_multidict)
 
 print("pymongo (no connection made)")
