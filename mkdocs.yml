@@ -82,6 +82,7 @@ nav:
       - Operations: OPERATIONS.md
       - Technical reference: TECHNICAL_REFERENCE.md
   - Security:
+      - Architecture and threat model: ARCHITECTURE.md
       - Security: SECURITY.md
       - How the audit log proves itself: AUDIT_LOG_PROOF.md
       - Penetration test report: SECURITY_REPORT.md

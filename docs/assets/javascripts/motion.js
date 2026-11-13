@@ -15,14 +15,15 @@
   function wire() {
     var io = new IntersectionObserver(function (entries) {
       entries.forEach(function (e) {
-        if (e.isIntersecting) { e.target.classList.add("is-in"); io.unobserve(e.target); }
+        if (e.isIntersecting) { e.target.setAttribute("data-lg-in", ""); io.unobserve(e.target); }
       });
     }, { rootMargin: "0px 0px -6% 0px", threshold: 0.06 });
     var fold = window.innerHeight * 0.92, count = new Map();
     document.querySelectorAll(SEL).forEach(function (el) {
-      if (el.classList.contains("lg-reveal") || el.closest(".lg-hero")) return;
+      if (el.hasAttribute("data-lg-reveal") || el.closest(".lg-hero")) return;
       if (el.getBoundingClientRect().top < fold) return;          // already on screen: the page's own fade-in shows it
-      el.classList.add("lg-reveal");
+      // an attribute, not a class: Material and this site style tables as table:not([class]), so a class would strip them
+      el.setAttribute("data-lg-reveal", "");
       if (el.matches(STAGGER)) {
         var i = count.get(el.parentElement) || 0;
         count.set(el.parentElement, i + 1);

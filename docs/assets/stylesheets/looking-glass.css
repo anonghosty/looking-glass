@@ -271,7 +271,7 @@ body {
 .md-typeset .lg-hero-film a.lg-film-yt { justify-self: center; }
 
 /* ---------------- motion: the platform's (rise with its ease, the logo that draws itself, a ping on what to press).
-   Load animations are CSS only and end visible; scroll reveals need motion.js to add .lg-reveal first. */
+   Load animations are CSS only and end visible; scroll reveals need motion.js to add data-lg-reveal first. */
 .lg-hero-mark { display: flex; justify-content: center; }
 .lgh-logo { overflow: visible; }
 .lgh-ring { transform-origin: 19.4px 11.6px; opacity: 0; }
@@ -310,13 +310,14 @@ body {
   .lg-hero > :nth-child(n+5) { animation-delay: 1.25s; }
   .lg-hero-film { animation: lg-rise .8s cubic-bezier(.2, .8, .2, 1) 1.4s both; }
 
-  /* what is below the fold rises into view (motion.js marks it .lg-reveal, then .is-in) */
-  .lg-reveal { opacity: 0; transform: translateY(18px);
+  /* what is below the fold rises into view (motion.js marks it data-lg-reveal, then data-lg-in: attributes, not
+     classes, so tables keep their table:not([class]) styles) */
+  [data-lg-reveal] { opacity: 0; transform: translateY(18px);
     transition: opacity .7s cubic-bezier(.2, .8, .2, 1) var(--lg-d, 0s), transform .7s cubic-bezier(.2, .8, .2, 1) var(--lg-d, 0s); }
-  .lg-reveal.is-in { opacity: 1; transform: none; }
-  .md-typeset h2.lg-reveal::before { transform-origin: left; transform: scaleX(0); transition: transform .8s cubic-bezier(.2, .8, .2, 1) .15s; }
-  .md-typeset h2.lg-reveal.is-in::before { transform: none; }
-  .md-typeset .grid.cards > ul > li.lg-reveal:hover { transition-delay: 0s; }
+  [data-lg-reveal][data-lg-in] { opacity: 1; transform: none; }
+  .md-typeset h2[data-lg-reveal]::before { transform-origin: left; transform: scaleX(0); transition: transform .8s cubic-bezier(.2, .8, .2, 1) .15s; }
+  .md-typeset h2[data-lg-reveal][data-lg-in]::before { transform: none; }
+  .md-typeset .grid.cards > ul > li[data-lg-reveal]:hover { transition-delay: 0s; }
 
   /* the film play buttons ping like the map's hits */
   .lg-film-play { animation: lg-btn-ping 2.4s ease-out 2s infinite; }
