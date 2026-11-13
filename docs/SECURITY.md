@@ -340,6 +340,27 @@ The second list of 2026-11-13:
 | The service sandbox allowed every kind of socket and system call | `RestrictAddressFamilies` (UNIX, IPv4, IPv6, netlink), `SystemCallFilter=@system-service`, no capabilities, `ProtectClock`, `ProtectKernelLogs`, `ProtectHostname`, `RestrictRealtime` | the platform's checks run under the same rules |
 | The retest's "attempts left" check passed any page saying "attempt left" (missing brackets) | The status and either wording | — |
 
+The re-check of 82d5719:
+
+| Finding | Fix | Verified by |
+|---|---|---|
+| An address after a word and a slash (`url=word/203.0.113.7`, `path/203.0.113.7:80`, `proxy/41.66.1.2`) was read as a product version and left unmasked | A product name counts only at the start or after a space or bracket, never as a value; an address with a port is never a version; a "version" starting above 25 is masked | `tests/check_ip_find.py` (fails on the old finder) |
+| A zip that failed with a file error while unpacking was retried on every run, its reports never loaded | Quarantined with the reason; a full disk is still retried | `database/tests/test_zip_limits.py` |
+| The sandbox let the platform reach local sockets it never uses (the user's systemd and D-Bus under `/run/user`, the system bus) | `InaccessiblePaths=-/run/user -/run/dbus -/var/run/dbus` | the platform's checks run under the same rules |
+| The advisory PDF preview was not in the data-access log | Logged like the organisation view | `tests/check_data_access.py` |
+| A combination ZIP kept on disk was served after a restart on a snapshot of the review state | The review gate is asked again; an older copy without its code is not served | `tests/check_combos.py` |
+| `--remove-mongodb` could purge a MongoDB that was there before Looking Glass (taken over with `MONGO_TAKE_OVER`) | deploy.sh marks a take-over; the uninstaller also reads the original configuration it kept; such a MongoDB is never removed | `tests/check_uninstall.py` (fails on the old script) |
+| The uninstaller missed the schedule of a folder with a space (written shell-quoted) | Both spellings matched | `tests/check_uninstall.py` |
+| 500s: a role sent as a list, a time window like `1..2+3`, a non-Latin name in the Executive download, a `Retry-After` date from the mailbox | Refused or read correctly; the download name is plain ASCII with the full name in `filename*` | `tests/check_wrong_types.py`, `database/tests/test_refetch_and_rows.py` |
+| The advisory page went blank on a malformed `#…` in the address | Read as no network | — |
+| The host analysis never said "appears in N reports" (it compared the host's reference, not its address) | Compared by address | checked on the day's data |
+| Demo mode on the map left the real operator names in the network filters | The filter lists are fetched again when demo mode changes | — |
+| LG-11 said "complete since the system started" when it had only checked the period chosen | It speaks of the period, and says when the log itself starts later than the system | `tests/check_auditor_portal.py` |
+| The `mail_auth.py` command line ignored `DATA_DIR` | It reads it like the pipeline | — |
+| The Executive day list went stale at midnight; the combination search could be finished by the previous search's poll while a new one started; the continuity proof ran without the log's lock | The list is rebuilt when the days change and fetched again on return after midnight; the previous search is let go first; the proof takes the lock | — |
+| The policy allowed any script on unpkg and cdnjs | The three outside scripts by their exact files | browser check of the map and the authenticator set-up |
+| After a network change the platform refused its own new address until a restart | Its own addresses are looked at again (at most once a minute) for an unknown host name | `tests/check_wrong_types.py` |
+
 Other hardening added:
 - **systemd sandbox:** `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=read-only`, writable only `data/`, `PrivateTmp`, `UMask=0077` and more. Check it with `systemd-analyze security threatmap`.
 - **gunicorn request limits:** request line, number of header fields, and field size.

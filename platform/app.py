@@ -1668,8 +1668,11 @@ def api_insight():
             else:
                 msg += " They contact several sinkholes, which suggests several infections or command channels on the same device."
             insights.append(msg)
-        if kind == "src_ip" and len(host_sources.get(value, ())) > 1:
-            insights.append(f"This host appears in {len(host_sources[value])} different reports on the same day.")
+        # the host's address, not its reference: host_sources is keyed by address (review 2026-11-13: the reference
+        # never matched, so this sentence never showed)
+        host_ip = host_refs.resolve(value) if kind == "src_ip" else None
+        if kind == "src_ip" and len(host_sources.get(host_ip, ())) > 1:
+            insights.append(f"This host appears in {len(host_sources[host_ip])} different reports on the same day.")
         if intervals:
             insights.append(f"Hosts seen more than once typically repeat every {_fmt_dur(_median(intervals))} (median). "
                             f"{regular:,} of these {len(intervals):,} hosts repeat at a regular rhythm, which points to automated beaconing or scripted attacks.")

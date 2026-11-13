@@ -151,6 +151,11 @@ get("/api/advisory/F-17/net", user="sarah", network="Example Telecom")
 ok("…once per window, like every view", len(entries) == n + 1)
 get("/api/advisory/F-18/net", user="sarah", network="Example Telecom")
 ok("…another finding is another view", len(entries) == n + 2)
+n = len(entries)
+get("/advisory/F-17/preview", user="sarah", network="Example Telecom")
+e = entries[-1] if len(entries) > n else {}
+ok("the advisory's PDF preview is logged too (review 2026-11-13)", e.get("target") == "an organisation's advisory report (preview)"
+   and "fid=F-17" in e.get("detail", ""), str(e))
 
 print("CIS 3.14 follows it")
 import control_map as CM  # noqa: E402

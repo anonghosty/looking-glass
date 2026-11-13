@@ -162,6 +162,29 @@ try:
     ok("one CSV row per device, one per record", len(devs) - 1 == s["devices"] and len(recs) - 1 == s["records"], f"{len(devs) - 1} / {len(recs) - 1}")
     ok("stable column names for enrichment (source_ip …, combination_code)", recs[0].startswith("time,source_ip,") and recs[0].endswith("combination_code"))
     ok("no cell starts like a spreadsheet formula", not any(re.search(r'(^|,)"?[=+@]', line) for line in devs[1:] + recs[1:]))
+    # after a restart (the search gone from memory) the copy on disk is served only if the review gate allows it NOW
+    # (review 2026-11-13: the flag kept with it was a snapshot)
+    kept_job = book.jobs.pop(d["id"])
+    real_gate = getattr(book, "review_gate", None)
+    meta_p = os.path.join(EXPORTS, d["id"] + ".json")
+    meta = json.load(open(meta_p)); meta["gated"] = False; json.dump(meta, open(meta_p, "w"))   # only the gate decides here
+    try:
+        book.review_gate = lambda job: (False, "Waiting for management's decision (test)")
+        code_r, _ = call(f"/api/combos/search/{d['id']}/download", ANALYST, raw=True)
+        ok("after a restart: a combination sent to management since is NOT downloaded from disk", code_r == 409, f"HTTP {code_r}")
+        seen = {}
+        book.review_gate = lambda job: (seen.update(code=job["inputs"][0]["code"]), (True, ""))[1]
+        code_r, zr = call(f"/api/combos/search/{d['id']}/download", ANALYST, raw=True)
+        ok("…the gate is asked about this combination, and when it allows, the copy on disk is served",
+           code_r == 200 and zr[:2] == b"PK" and seen.get("code") == c0["code"], f"HTTP {code_r} {seen}")
+        meta = json.load(open(meta_p)); meta.pop("code", None); json.dump(meta, open(meta_p, "w"))
+        code_r, _ = call(f"/api/combos/search/{d['id']}/download", ANALYST, raw=True)
+        ok("…a copy kept by an older version (no code to ask about): not served", code_r == 409, f"HTTP {code_r}")
+    finally:
+        book.review_gate = real_gate
+        if real_gate is None:
+            del book.review_gate
+        book.jobs[d["id"]] = kept_job
     # the report for one network provider: only its devices and records
     na = (s.get("networks_all") or [{}])[0]
     code_n, zn = call(f"/api/combos/search/{d['id']}/download?network={urllib.parse.quote(na.get('label', ''))}", ANALYST, raw=True)

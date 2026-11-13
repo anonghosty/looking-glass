@@ -189,8 +189,14 @@ if [[ $MONGO_PREEXISTING == 1 && $(env_get MONGO_TAKE_OVER false) != true ]]; th
 fi
 info "Configuring mongod ($BIND:$PORT, auth on, cache ${CACHE_GB} GB, memory limit $MEM)"
 [[ -f /etc/mongod.conf && ! -f /etc/mongod.conf.orig ]] && sudo cp /etc/mongod.conf /etc/mongod.conf.orig
+TAKEN=""
+# a MongoDB that was here before Looking Glass stays someone else's: the uninstaller never removes it (review 2026-11-13)
+if [[ $MONGO_PREEXISTING == 1 ]] || grep -q '^# Taken over by' /etc/mongod.conf 2>/dev/null; then
+  TAKEN="# Taken over by deploy.sh (MONGO_TAKE_OVER): MongoDB was installed before Looking Glass; uninstall.sh never removes it."
+fi
 conf=$(cat <<EOF
 # Managed by $PROJECT_DIR/deploy.sh - edit .env and re-run deploy instead of editing here.
+$TAKEN
 storage:
   dbPath: /var/lib/mongodb
   wiredTiger:

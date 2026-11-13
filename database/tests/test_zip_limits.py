@@ -60,6 +60,27 @@ class ZipLimits(unittest.TestCase):
         self.assertTrue(q.exists(), "the zip is in quarantine/")
         self.assertIn("refused:", (q.parent / (q.name + ".reason.txt")).read_text())
 
+    def test_file_error_while_unpacking_is_quarantined(self):
+        """Review 2026-11-13: a member "notes/a.txt" beside a member "notes" failed with a file error on every run,
+        logged "will retry next run" for ever, and the reports inside never loaded. Now it is quarantined at once."""
+        p = self.make("2026-11-10-clash.zip", [(REPORT, csv_text(64 * 1024)), ("notes", b"x"), ("notes/a.txt", b"y")])
+        result, items = self.run_zip(p)
+        self.assertEqual(result, "zips_refused", items)
+        self.assertIn("could not be unpacked", items[0])
+        self.nothing_left(p)
+        result2, _ = self.run_zip(self.att / p.name) if (self.att / p.name).exists() else ("gone", [])
+        self.assertEqual(result2, "gone", "the next run finds nothing to retry")
+
+    def test_full_disk_is_still_retried(self):
+        """A full disk is not the zip's fault: it stays in place and is tried again next run."""
+        import errno as _errno
+        p = self.make("2026-11-10-scan_example.zip", [(REPORT, csv_text(64 * 1024))])
+        with mock.patch.object(zl, "copy_member", side_effect=OSError(_errno.ENOSPC, "No space left on device")):
+            result, items = self.run_zip(p)
+        self.assertEqual(result, "zips_failed", items)
+        self.assertTrue(p.exists(), "the zip stays for the next run")
+        self.assertFalse((self.base / "quarantine").exists(), "nothing quarantined")
+
     def test_normal_report_goes_through(self):
         p = self.make("2026-11-10-scan_example.zip", [(REPORT, csv_text(3 * MB))])
         result, routed = self.run_zip(p)

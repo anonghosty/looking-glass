@@ -498,7 +498,7 @@ def matches(e, flt):
 
 def parse_time(value):
     """'START+MINUTES' (fractional minutes from 00:00) -> (start_s, end_s) offsets, or None."""
-    m = re.match(r"^\s*([\d.]+)\+([\d.]+)\s*$", value or "")
+    m = re.match(r"^\s*(\d+(?:\.\d+)?)\+(\d+(?:\.\d+)?)\s*$", value or "")   # one number each side (1..2 answered 500)
     if not m:
         return None
     a = float(m.group(1)) * 60

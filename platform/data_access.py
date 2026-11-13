@@ -36,6 +36,8 @@ SENSITIVE = {
     # routes with a part in the path, by their rule (review 2026-11-13: an advisor opening one organisation's advisory
     # saw its IP addresses, ports and reports, and nothing was logged)
     "/api/advisory/<fid>/net": ("data_viewed", "an organisation's hosts (advisory)"),
+    # the advisory's PDF as it stands, read in the browser: the same hosts, so the same entry (review 2026-11-13)
+    "/advisory/<fid>/preview": ("data_viewed", "an organisation's advisory report (preview)"),
 }
 # Every request parameter says what was looked at, except these display and time options (review 2026-11-13: a list
 # of the parameters to keep missed src_ip and most services filters, so different hosts' views were one "whole

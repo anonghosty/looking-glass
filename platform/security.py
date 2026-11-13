@@ -15,6 +15,9 @@
 import ipaddress
 import os
 import secrets
+import time
+
+NAMES_REFRESH = 60          # seconds between two looks at this machine's own addresses for an unknown host name
 from urllib.parse import urlsplit
 
 from flask import abort, g, request
@@ -57,7 +60,11 @@ def _host_only(host):
 
 
 CSP = ("default-src 'self'; "
-       "script-src 'self' 'nonce-{nonce}' https://api.mapbox.com https://unpkg.com https://cdnjs.cloudflare.com; "
+       # the outside scripts by their exact files, never a whole site (review 2026-11-13: unpkg and cdnjs serve any
+       # package): Mapbox GL (its own folder: it loads its plug-ins from there), deck.gl and the QR-code library of the
+       # authenticator set-up; each page tag also carries an integrity hash
+       "script-src 'self' 'nonce-{nonce}' https://api.mapbox.com/mapbox-gl-js/ https://unpkg.com/deck.gl@9.1.14/dist.min.js "
+       "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js; "
        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.mapbox.com; "
        "font-src 'self' data: https://fonts.gstatic.com; "
        "img-src 'self' data: blob: https://flagcdn.com https://api.mapbox.com https://*.tiles.mapbox.com; "
@@ -107,6 +114,20 @@ def install(app, logger=None):
     import proxy_guard
     proxy_guard.install(app, os.environ.get("TRUST_PROXY") == "1")
 
+    # this machine's own addresses change with the network (a laptop moving networks, DHCP): an unknown host name is checked
+    # against them again, at most once a minute (2026-11-13: after a network change the new address was refused until a
+    # restart). Only the machine's own names and addresses are added, never the name a request gives.
+    own = {"at": time.monotonic(), "names": set()}
+
+    def _refreshed_names():
+        if time.monotonic() - own["at"] >= NAMES_REFRESH:
+            own["at"] = time.monotonic()
+            fresh = _own_names()
+            if fresh - hosts and logger:
+                logger.warning("This computer's addresses changed: now also answering on %s", ", ".join(sorted(fresh - hosts)))
+            own["names"] = fresh
+        return own["names"]
+
     def client_allowed():
         if mode == "public":
             return True
@@ -122,7 +143,7 @@ def install(app, logger=None):
         if not client_allowed():
             # visitors are not told how the server is configured (docs/INSTALLATION.md explains ACCESS_MODE to administrators)
             abort(403, description="Looking Glass is not available from your network. Contact the administrator.")
-        if not any_host and _host_only(request.host) not in hosts:
+        if not any_host and _host_only(request.host) not in hosts and _host_only(request.host) not in _refreshed_names():
             abort(400, description="Unknown host name. Contact the administrator.")
         if request.method not in SAFE_METHODS:
             origin = request.headers.get("Origin")

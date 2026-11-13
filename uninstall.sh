@@ -77,7 +77,9 @@ if [ -d "$SYSTEMD_DIR" ]; then
   done
 fi
 # the schedule: only this folder's cron line (another installation's line stays)
-CRON_HERE=$(crontab -l 2>/dev/null | grep -F -- "$CRON_MARK" | grep -F -- "$DB_DIR/" || true)
+# the schedule writes the folder shell-quoted (printf %q: "my lg" becomes my\ lg): both spellings are this folder's
+# (review 2026-11-13: a folder with a space kept its schedule after the uninstall)
+CRON_HERE=$(crontab -l 2>/dev/null | grep -F -- "$CRON_MARK" | grep -F -e "$DB_DIR/" -e "$(printf '%q' "$DB_DIR")/" || true)
 # the global command: only when it runs this folder's pipeline
 CMD_HERE=0
 if [ -e "$BIN_LINK" ] || [ -L "$BIN_LINK" ]; then
@@ -86,6 +88,16 @@ fi
 # MongoDB: installed by this folder's deploy.sh?
 MONGO_OURS=0
 grep -qF "Managed by $DB_DIR/deploy.sh" "$MONGOD_CONF" 2>/dev/null && MONGO_OURS=1
+# …but not a MongoDB that was there before and was taken over (MONGO_TAKE_OVER): deploy.sh says so in the file, and
+# an older one kept the original configuration, not written by it, as mongod.conf.orig (review 2026-11-13: --remove-mongodb
+# would have purged it, every database in it)
+MONGO_TAKEN=0
+if [ $MONGO_OURS = 1 ]; then
+  if grep -q '^# Taken over by' "$MONGOD_CONF" 2>/dev/null \
+     || { [ -f "$MONGOD_CONF.orig" ] && ! grep -q 'Managed by .*deploy.sh' "$MONGOD_CONF.orig" 2>/dev/null; }; then
+    MONGO_OURS=0; MONGO_TAKEN=1
+  fi
+fi
 MONGO_OTHER=0
 [ $MONGO_OURS = 0 ] && command -v mongod >/dev/null 2>&1 && MONGO_OTHER=1
 ENVF="$DB_DIR/.env"; [ -f "$ENVF" ] || ENVF="$PF_DIR/.env"
@@ -111,6 +123,7 @@ if [ $CMD_HERE = 1 ]; then say "  • the global 'shadowserver' command, its man
 [ $RM_DB = 1 ] && [ -d "$ETC_LG" ] && say "  • $ETC_LG (the MongoDB administrator account kept by the installer)"
 if [ $RM_MONGO = 1 ]; then
   if [ $MONGO_OURS = 1 ]; then say "  • ${RED}MongoDB itself (packages, /etc/mongod.conf, /var/lib/mongodb: ALL its databases)${R}"
+  elif [ $MONGO_TAKEN = 1 ]; then say "  • MongoDB: NOT removed. It was on this computer before Looking Glass (taken over with MONGO_TAKE_OVER); its original configuration is $MONGOD_CONF.orig."; RM_MONGO=0
   elif [ $MONGO_OTHER = 1 ]; then say "  • MongoDB: NOT removed. It was not installed by Looking Glass (another program may use it)."; RM_MONGO=0
   else say "  • MongoDB: not installed on this computer"; RM_MONGO=0; fi
 fi

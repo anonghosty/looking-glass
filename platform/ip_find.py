@@ -36,13 +36,24 @@ _COLONS3 = re.compile(r":{3,}")
 _VERSION_BEFORE = re.compile(
     r"(?:(?<![A-Za-z0-9_])(?:version|ver|build|release|revision|rev|firmware|fw)\.?[ \t]*[:=][ \t]*"
     r"|(?<![A-Za-z0-9_])(?:version|ver|build|release|revision|rev|firmware|fw)\.?[ \t]+"
-    r"|(?<![\w/.:-])[A-Za-z][A-Za-z_-]{1,40}/)$", re.I)
+    # a product name stands at the start or after a space or bracket, never as a value: "url=word/203.0.113.7" and
+    # "?q=path/203.0.113.7" are paths with an address (review 2026-11-13: they were read as versions and left as they were)
+    r"|(?<![\w/.:=?&#%@+-])[A-Za-z][A-Za-z_-]{1,40}/)$", re.I)
 
 
 def _is_version(text, start, end):
     """True when the text names the dotted number as a version just before it, and nothing is glued on after it
     ("build 41.66.1.2a" stays masked)."""
     if end < len(text) and (text[end].isalnum() or text[end] == "_"):
+        return False
+    if text[end:end + 1] == ":" and text[end + 1:end + 2].isdigit():
+        return False                    # address:port is an address, never a version (review 2026-11-13)
+    # a version starts small (Apache/2.0.1.3, RouterOS/6.49.10.1); "proxy/203.0.113.7" is an address. Public address
+    # ranges start well above 25, so a first part above it is masked (over-masking is preferred to a leak)
+    try:
+        if int(text[start:end].split(".")[0]) > 25:
+            return False
+    except ValueError:
         return False
     return bool(_VERSION_BEFORE.search(text[max(0, start - 60):start]))
 

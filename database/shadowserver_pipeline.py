@@ -28,6 +28,7 @@ import argparse
 import csv
 import datetime as dt
 import email
+import errno
 import hashlib
 import imaplib
 import itertools
@@ -647,6 +648,17 @@ def _extract_zip(zip_path: Path, unzipped_dir: Path, sorting_dir: Path,
         shutil.rmtree(tmp, ignore_errors=True)
         zip_path.unlink(missing_ok=True)
         return "zips_bad_deleted", []
+    except OSError as exc:
+        # a file error while unpacking (a member "notes/a.txt" beside a member "notes", a name the disk refuses...):
+        # the same zip fails the same way every run, so it is quarantined like a refused one (review 2026-11-13: it was
+        # retried for ever and its reports never loaded). A full disk is not the zip's fault: retried next run.
+        shutil.rmtree(tmp, ignore_errors=True)
+        if exc.errno in (errno.ENOSPC, errno.EDQUOT, errno.EIO, errno.EROFS, errno.EAGAIN, errno.EBUSY, errno.ENOMEM):
+            return "zips_failed", [str(exc)]
+        reason = f"could not be unpacked: {exc.strerror or exc.__class__.__name__}" + (
+            f" ({os.path.basename(str(exc.filename))})" if exc.filename else "")
+        where = zip_limits.quarantine(zip_path, unzipped_dir.parent, reason)
+        return "zips_refused", [reason, where.name]
     except Exception as exc:  # noqa: BLE001  (left in place, retried next run; also zip_limits.LowDisk)
         shutil.rmtree(tmp, ignore_errors=True)
         return "zips_failed", [str(exc)]

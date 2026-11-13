@@ -1368,7 +1368,7 @@ def install(app, base_dir, logger):
                 if u.get("status") != "pending":
                     return jsonify(error="Only an account waiting for approval is approved: change an active account's role with Role."), 400
                 role = body.get("role") or u.get("role", LOWEST_ROLE)
-                if role not in roles.roles:
+                if not isinstance(role, str) or role not in roles.roles:     # a list or a number: refused, not a 500
                     return jsonify(error="Unknown role"), 400
                 if not u.get("totp"):
                     return jsonify(error="This account has not set up its authenticator yet."), 400
@@ -1376,7 +1376,7 @@ def install(app, base_dir, logger):
                 detail = f"role {role}"
             elif action == "role":
                 role = body.get("role")
-                if role not in roles.roles:
+                if not isinstance(role, str) or role not in roles.roles:     # review 2026-11-13: a list answered 500
                     return jsonify(error="Unknown role"), 400
                 if losing_admin and "users" not in roles.perms(role):
                     return jsonify(error="This is the last admin: give another account the admin role first."), 400

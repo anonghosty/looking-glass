@@ -226,6 +226,17 @@ try:
        and "203.0.113.5" in ia1["evidence"] and "AUDIT_FAIL_ALERT" in ia1["evidence"], ia1["evidence"])
     au2 = C["LG-11"]
     ok("LG-11 (AU-11): judged from when the system started, said in the evidence", "system started" in au2["evidence"], au2["evidence"])
+    ok("…and never 'complete since' the start: it speaks of the period chosen (review 2026-11-13)",
+       "complete since" not in au2["evidence"], au2["evidence"])
+    # an account made long before the oldest entry: the log starts later than the system, and the evidence says so
+    real_all = A.AUTH["users"].all
+    A.AUTH["users"].all = lambda: {**real_all(), "early-bird": {"created": int(time.time()) - 200 * 86400}}
+    try:
+        ev2 = {x["id"]: x for x in c.get(f"/api/audit/overview?{P}", headers=H).json["checks"]}["LG-11"]["evidence"]
+    finally:
+        A.AUTH["users"].all = real_all
+    ok("…a log that starts months after the system did: said, never called complete since the start",
+       ("The log itself starts on" in ev2 or "entries from before it are missing" in ev2) and "complete since" not in ev2, ev2)
     ok("every check but HTTPS opens its evidence (tab to show)", all(x["view"] for x in o["checks"] if x["id"] != "LG-14")
        and C["LG-06"]["view"] == {"tab": "auth", "alerts": True})
     ok("the overview says when the system started and how long it runs", o.get("started") and o.get("running_days") is not None)

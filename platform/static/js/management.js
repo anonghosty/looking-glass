@@ -565,7 +565,9 @@
     document.body.dataset.plat = d.platform;
     for (const b of document.querySelectorAll("[data-plat]")) b.setAttribute("aria-selected", String(b.dataset.plat === d.platform));
     $("mgScope").textContent = `${d.scope}${d.demo ? " · Demo mode" : ""}`;
-    const sel = $("mgDay"); if (sel.options.length !== d.days.length) { sel.replaceChildren(...d.days.slice().reverse().map((x) => new Option(new Date(`${x}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }), x))); }
+    // rebuilt whenever the days differ, not only their number: at midnight the window moves by a day and keeps its length
+    // (review 2026-11-13: the list went stale)
+    const sel = $("mgDay"); if ([...sel.options].map((o) => o.value).join() !== d.days.slice().reverse().join()) { sel.replaceChildren(...d.days.slice().reverse().map((x) => new Option(new Date(`${x}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }), x))); }
     sel.value = d.day; window.LGSelect?.sync(sel);
     $("mgEyebrow").textContent = `${comms ? "Infections & attacks" : "Exposure & vulnerabilities"} · ${new Date(`${d.day}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}`;
     $("mgHeadline").textContent = d.findings[0] || "Nothing was reported for this selection.";
@@ -698,6 +700,13 @@
   // ---------------- controls
   for (const b of document.querySelectorAll("[data-plat]")) b.addEventListener("click", () => { if (state.plat !== b.dataset.plat) { state.plat = b.dataset.plat; load(true); } });
   $("mgDay").addEventListener("change", () => { state.day = $("mgDay").value; load(); });
+  // back on the page after midnight (UTC): the days have moved on, so the list and the figures are fetched again,
+  // quietly (review 2026-11-13: the day picker stayed on the old days until the page was reloaded)
+  let openedOn = new Date().toISOString().slice(0, 10);
+  document.addEventListener("visibilitychange", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    if (document.visibilityState === "visible" && today !== openedOn && state.data) { openedOn = today; load(false, true); }
+  });
   $("mgDemo").addEventListener("click", () => { state.demo = !state.demo; $("mgDemo").setAttribute("aria-pressed", String(state.demo)); state.filters[state.plat] = {}; load(state.demo ? "Opening the demonstration data" : true); });
   // the reports' regions are on none of the selected country's regions: ask before the report (without the map,
   // or fix the country first: admins in Settings, management users through their administrator)

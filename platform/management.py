@@ -1013,10 +1013,15 @@ def register(app, ctx):
             app.logger.warning("Executive PDF (dashboard design) failed, plain layout used: %s", exc)
             pdf = ctx["build_pdf"](spec)
         AUTH["audit"].add("report_pdf", user=who, target=f"management:{platform}", detail=sel[:120])
+        # the file name in the header: plain ASCII (a non-Latin selection broke the header, review 2026-11-13), with the full
+        # name for browsers that read filename* (RFC 6266); inside the ZIP the full name is kept
         base = "looking-glass_executive_" + re.sub(r"[^\w.-]+", "-", f"{d['day']}_{plat}_{sel}")[:110].strip("-")
+        ascii_base = re.sub(r"-{2,}", "-", re.sub(r"[^A-Za-z0-9_.-]+", "-", base)).strip("-") or "looking-glass_executive"
+        from urllib.parse import quote as _q
+        disp = lambda ext: f"attachment; filename=\"{ascii_base}.{ext}\"; filename*=UTF-8''{_q(base + '.' + ext, safe='')}"
         if request.args.get("format") == "pdf":
             return Response(pdf, mimetype="application/pdf",
-                            headers={"Content-Disposition": f'attachment; filename="{base}.pdf"', "Cache-Control": "no-store"})
+                            headers={"Content-Disposition": disp("pdf"), "Cache-Control": "no-store"})
         import csvsafe as _csv, io as _io, zipfile   # every cell spreadsheet-safe (no formulas)
         unit = "Devices" if platform == "comms" else "Hosts"
         def table(rows, what, total):
@@ -1051,7 +1056,7 @@ def register(app, ctx):
             for name, text in files.items():
                 zf.writestr(f"{base}_{name}.csv", text)
         return Response(z.getvalue(), mimetype="application/zip",
-                        headers={"Content-Disposition": f'attachment; filename="{base}.zip"', "Cache-Control": "no-store"})
+                        headers={"Content-Disposition": disp("zip"), "Cache-Control": "no-store"})
 
     # internals for the checks (tests/check_past_days.py): not reachable over HTTP
     return {"prewarm": prewarm, "internals": {"comms": comms, "services": services, "summarise": summarise,

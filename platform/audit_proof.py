@@ -203,7 +203,15 @@ def install(app, audit, allowed, deny, who, to_csv=None):
             earlier = audit_verifier.parse_earlier(request.args.get("earlier", ""))
         except ValueError as e:
             return jsonify(error=f"The earlier head: {e}."), 400
-        r = audit_verifier.check(os.path.dirname(audit.chain.path), earlier)
+        # under the log's lock, as the integrity check: a rotation or a retention run halfway through the read would
+        # otherwise show a break that is not there (review 2026-11-13)
+        import fcntl
+        lock_fd = os.open(audit.chain.path + ".lock", os.O_WRONLY | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            r = audit_verifier.check(os.path.dirname(audit.chain.path), earlier)
+        finally:
+            os.close(lock_fd)
         e = r["earlier"]
         user, _ = who()
         audit.add("audit_verified", user=user, target="continuity",

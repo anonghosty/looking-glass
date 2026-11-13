@@ -2368,7 +2368,9 @@
     // concealed references and network aliases differ between the two modes, so those filters are cleared
     for (const k of ["src_ip", "http_host", "dst_ip", "http_agent", "request", "src_asn", "dst_asn"]) state.filters[k] = "";
     renderFilterBar(); renderPins();
-    resetStream(); refreshStats();
+    // the filter lists too: their network names become aliases in demo mode, and the real names come back without it
+    // (review 2026-11-13: the network filters kept the real operator names until the page was reloaded)
+    resetStream(); refreshStats(); loadFacets();
   }
   $("btnDemo").addEventListener("click", () => { if (!state.demoForced) setDemo(!state.demo); });
   setDemo(state.demo, false);

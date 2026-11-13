@@ -883,7 +883,9 @@ def install(app, ctx):
             os.makedirs(exports["dir"], mode=0o700, exist_ok=True)
             for suffix, data in ((".zip", z.getvalue()), (".json", json.dumps({"user": job["user"], "name": f"{base}.zip",
                                                                                 "at": time.time(), "summary": job["summary"],
-                                                                                "gated": bool(job.get("needs_review") and not job.get("review_ok"))}).encode())):
+                                                                                "gated": bool(job.get("needs_review") and not job.get("review_ok")),
+                                                                                # the gate is asked again on a download from disk
+                                                                                "code": entry.get("code", ""), "needs_review": bool(job.get("needs_review"))}).encode())):
                 fd = os.open(os.path.join(exports["dir"], job["id"] + suffix), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
                 with os.fdopen(fd, "wb") as f:
                     f.write(data)
@@ -1072,6 +1074,15 @@ def install(app, ctx):
                 return jsonify(error="This search has expired (finished searches are kept for an hour): run it again."), 404
             if meta.get("gated"):                     # kept before a restart, still waiting for management's decision
                 return jsonify(error="This search has across-report data: run it again once management has decided.", needs_review=True), 409
+            # the review gate as it stands NOW (review 2026-11-13: the flag kept with the file was a snapshot, so a
+            # combination sent to management afterwards, or decided, still downloaded from disk after a restart)
+            if gate:
+                if not meta.get("code"):              # kept by an older version: the gate cannot be asked, so no download
+                    return jsonify(error="This search was kept before a restart by an older version: run it again."), 409
+                allowed, why = gate({"inputs": [{"code": meta["code"], "kind": "c"}], "needs_review": bool(meta.get("needs_review")),
+                                     "user": user()})
+                if not allowed:
+                    return jsonify(error=why, needs_review=True), 409
             name = meta["name"]
         return Response(data, mimetype="application/zip",
                         headers={"Content-Disposition": f'attachment; filename="{name}"', "Content-Length": str(len(data)),
@@ -1085,6 +1096,7 @@ def install(app, ctx):
 
     book.resolve = resolve
     book.own_job = own                    # acodes.py: an analyst's request made from a finished search
+    book.jobs = jobs                      # tests: a service restart is the search gone from memory
     book.package = package                # combo_review.py: the report again, with the views management chose
     book.describe = lambda code: (describe(resolve(code)) if CODE_RX.match(code or "") else
                                   describe(book.get(code)) if ANY_RX.match(code or "") else "")

@@ -42,6 +42,9 @@ ProtectHostname=true
 # the system calls of an ordinary service only (systemd's @system-service set); anything else answers "not permitted"
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
+# local sockets it never uses stay out of reach: the user's systemd and D-Bus (/run/user) and the system bus
+# (review 2026-11-13). "-": no error on a computer where a folder does not exist
+InaccessiblePaths=-/run/user -/run/dbus -/var/run/dbus
 
 [Install]
 WantedBy=multi-user.target

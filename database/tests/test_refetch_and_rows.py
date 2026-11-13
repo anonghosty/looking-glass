@@ -71,5 +71,17 @@ with tempfile.TemporaryDirectory() as t:
     ok("loading the same file again: every row 'already in DB', counted once", res2["rows"] == total and res2["duplicates"] == total
        and res2["inserted"] == 0, str(res2))
 
+print("Retry-After from the mailbox's server: seconds or a date, never a crash (review 2026-11-13)")
+import datetime as _dt  # noqa: E402
+from email.utils import format_datetime  # noqa: E402
+soon = format_datetime(_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(seconds=20), usegmt=True)
+for v, want in (("30", 30), ("0", 4), ("900", 60), (None, 4), ("", 4), ("soon", 4), ("Wed, 21 Oct 2015 07:28:00 GMT", 4), (soon, None)):
+    try:
+        got = mail_sources._retry_after(v, 4)
+        good = (1 <= got <= 60 and abs(got - 20) <= 2) if want is None else got == want
+        ok(f"Retry-After {v!r} -> wait {got}s", good, str(got))
+    except Exception as e:      # noqa: BLE001
+        ok(f"Retry-After {v!r}", False, f"{type(e).__name__}: {e}")
+
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))
 sys.exit(1 if fails else 0)

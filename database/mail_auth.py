@@ -401,8 +401,22 @@ def take_releases(base: Path, attach_dir: Path):
     return out
 
 
+def _data_dir():
+    """Where the pipeline keeps its data: DATA_DIR from the environment or .env (first value), else this folder
+    (review 2026-11-13: the command line always looked in this folder, so it found nothing with DATA_DIR set)."""
+    here = Path(__file__).resolve().parent
+    d = os.environ.get("DATA_DIR")
+    if not d:
+        try:
+            import worker_settings
+            d = worker_settings.read_env(here / ".env").get("DATA_DIR")
+        except Exception:      # noqa: BLE001  (no .env: this folder)
+            d = None
+    return Path(d).expanduser().resolve() if d else here
+
+
 def main(argv):
-    base = Path(__file__).resolve().parent
+    base = _data_dir()
     if len(argv) > 1 and argv[1] == "held":
         for qdir, meta in held(base):
             print(f"{qdir.name}  {meta.get('at')}  {meta.get('result'):<9} from {meta.get('from_domain') or '?'}  "

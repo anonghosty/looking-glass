@@ -439,8 +439,13 @@ def install(app, ctx):
         started = setup_time(oldest)
         since = max(t0, started) if started else t0
         au2_ok = bool(oldest) and oldest <= since + 300 and not v["removed_archives"]
+        # what the check shows is the PERIOD chosen; the log may itself start well after the system did (review
+        # 2026-11-13: "complete since then" was said when the oldest entry was months after the start)
+        late = bool(started and oldest and oldest > started + 300)
         au2 = (f"The system started on {_when(started)} ({max(0, int((time.time() - started) // 86400))} days ago); "
-               if started else "") + (f"the log is complete since then: oldest entry {_when(oldest)}, nothing removed by the retention of {v['retention_days']} days."
+               if started else "") + ((f"the period chosen is fully covered: oldest entry {_when(oldest)}, nothing removed by the retention of {v['retention_days']} days."
+               + (f" The log itself starts on {_when(oldest)}, {max(1, int((oldest - started) // 86400))} day(s) after the system started: "
+                  "entries from before it are not kept." if late else ""))
                if au2_ok else (f"oldest entry kept {_when(oldest) or 'none'}; {v['removed_archives']} archive(s) removed by the retention of "
                f"{v['retention_days']} days, so the period is only partly covered." if v["removed_archives"] else
                f"but the oldest entry kept is from {_when(oldest) or 'none'}: entries from before it are missing (not removed by the "

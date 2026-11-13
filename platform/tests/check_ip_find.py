@@ -75,6 +75,14 @@ for text, ip in (("/api/41.66.1.2", "41.66.1.2"), ("version41.66.1.2", "41.66.1.
                  ("host 41.66.1.2 version 2.0.1.3", "41.66.1.2"), ("v41.66.1.2", "41.66.1.2")):
     found = [s[2] for s in ip_find.spans(text)]
     ok(f"found in {text!r}", found == [ip], str(found))
+print("…and after a word and a slash in a value, with a port, or too large to be a version (review 2026-11-13)")
+for text, ip in (("url=word/203.0.113.7", "203.0.113.7"), ("q=path/203.0.113.7:80", "203.0.113.7"),
+                 ("u=x?y=word/203.0.113.7", "203.0.113.7"), ("word/203.0.113.7", "203.0.113.7"),
+                 ("proxy/41.66.1.2 up", "41.66.1.2"), ("word/203.0.113.7:8080", "203.0.113.7"), ("a@b/41.66.1.2", "41.66.1.2")):
+    found = [s[2] for s in ip_find.spans(text)]
+    ok(f"found in {text!r}", found == [ip], str(found))
+    ok(f"…masked for researchers: {hostmask.mask(text)!r}", ip not in hostmask.mask(text))
+    ok(f"…and for masked viewers: {host_label.label_text(text)!r}", ip not in host_label.label_text(text))
 print("A five-part number: one rule in both maskers (left alone)")
 for text in ("1.2.3.4.5", "build 1.2.3.4.5 ok"):
     ok(f"researchers keep {text!r}: {hostmask.mask(text)!r}", hostmask.mask(text) == text)

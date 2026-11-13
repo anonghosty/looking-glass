@@ -336,7 +336,9 @@
     try { await reloadIndex(); } catch (e) { $("avLoading")?.remove(); main.append(el("p", "fd-empty", e.message)); return; }
     $("avLoading")?.remove();
     window.LGLoader?.ready();
-    const want = decodeURIComponent(location.hash.slice(1) || "");
+    // a malformed address part (#%E0%A4%A) is simply not a network: the page opens as usual (review 2026-11-13: it went blank)
+    let want = "";
+    try { want = decodeURIComponent(location.hash.slice(1) || ""); } catch { want = ""; }
     if (IDX.networks.length === 1) return openNet(IDX.networks[0].network);
     if (want && IDX.networks.some((n) => n.network === want)) return openNet(want);
     draw();

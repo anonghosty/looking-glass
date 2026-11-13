@@ -172,6 +172,22 @@ class ImapSource:
 
 
 # --------------------------------------------------------------------------------------------------------- HTTP helper
+def _retry_after(value, default):
+    """Seconds to wait from a Retry-After header: a number of seconds, or an HTTP date (review 2026-11-13: a date
+    crashed the download); anything else, the default. Never more than a minute."""
+    v = (value or "").strip()
+    if v.isdigit():
+        return min(60, int(v)) or default
+    if v:
+        try:
+            from email.utils import parsedate_to_datetime
+            secs = (parsedate_to_datetime(v) - dt.datetime.now(dt.timezone.utc)).total_seconds()
+            return min(60, max(1, int(secs))) if secs > 0 else default
+        except (TypeError, ValueError, OverflowError):
+            pass
+    return min(60, default)
+
+
 class _Http:
     def __init__(self):
         import requests
@@ -186,7 +202,7 @@ class _Http:
             except self.requests.RequestException as exc:
                 raise MailSourceError(f"{what}: cannot reach {url.split('/')[2]} ({exc.__class__.__name__})") from exc
             if r.status_code in (429, 503, 504) and attempt < 4:
-                time.sleep(min(60, int(r.headers.get("Retry-After", "0") or 0) or 2 ** (attempt + 1)))
+                time.sleep(_retry_after(r.headers.get("Retry-After"), 2 ** (attempt + 1)))
                 continue
             return r
         return r

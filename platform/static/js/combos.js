@@ -114,6 +114,9 @@
     }
     $("cbSearch").disabled = true; $("cbStop").hidden = false; $("cbStep3Box").hidden = true;
     $("cbProgress").hidden = false; $("cbLog").replaceChildren(); $("cbBar").style.width = "2%";
+    // the previous search is let go before the new one starts: its next poll would otherwise still count as the current
+    // search while this request is on its way, finish it, and switch Search back on (review 2026-11-13)
+    clearTimeout(timer); job = null;
     let r;
     try {
       r = await fetch("/api/combos/search", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() }, body: JSON.stringify(body) });

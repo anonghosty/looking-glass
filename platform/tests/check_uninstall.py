@@ -54,7 +54,12 @@ def setup(tmp, cmd_owner="self", mongo_conf=None):
                     "15 3 * * * /usr/bin/backup-job\n")
     st = tmp / "stubs"
     log = tmp / "calls.log"
-    stub(st, "sudo", f'echo "sudo $*" >> "{log}"; [ "$1" = -n ] && shift; [ "$1" = -v ] && exit 0; "$@"')
+    # the stand-in sudo runs what it is given as the user, inside the throwaway folders only: anything naming a real
+    # system path is logged and NOT run (2026-11-13: an old uninstaller under test reached rm -rf /var/lib/mongodb; it
+    # was refused by the folder's permissions, nothing was lost, but a check must never be able to try)
+    stub(st, "sudo", f'echo "sudo $*" >> "{log}"; [ "$1" = -n ] && shift; [ "$1" = -v ] && exit 0; '
+                     'for a in "$@"; do case "$a" in /var/*|/etc/*|/usr/*|/lib/*|/opt/*|/boot/*|*" /var/"*|*" /etc/"*|*" /usr/"*) '
+                     f'echo "refused (real system path): $*" >> "{log}"; exit 0;; esac; done; "$@"')
     stub(st, "systemctl", f'echo "systemctl $*" >> "{log}"')
     stub(st, "mandb", "true")
     stub(st, "apt-get", f'echo "apt-get $*" >> "{log}"')
@@ -235,6 +240,31 @@ def main():
         check("a unit installed through a symlink (with a trailing slash) is found and removed", r.returncode == 0
               and not (tmp / "sys/systemd/looking-glass.service").exists() and (tmp / "sys/systemd/other-app.service").exists(),
               (r.stdout + r.stderr)[-300:])
+    # review 2026-11-13 (second list): a folder with a space keeps no schedule; a taken-over MongoDB is never removed
+    with tempfile.TemporaryDirectory() as t:
+        tmp = Path(t) / "my lg"; tmp.mkdir(); root, env, cron, log = setup(tmp)
+        # as bin/shadowserver writes it: printf %q of the path, a space escaped with a backslash
+        cron.write_text("*/30 * * * * " + str(root / "database/run.sh").replace(" ", "\\ ") + " --quiet >/dev/null 2>&1 # shadowserver-pipeline\n"
+                        "15 3 * * * /usr/bin/backup-job\n")
+        r = run(root, env, "--yes")
+        left = cron.read_text() if cron.exists() else ""
+        check("a folder with a space: its schedule (written shell-quoted) is removed, other jobs kept",
+              r.returncode == 0 and "shadowserver-pipeline" not in left and "backup-job" in left, (r.stdout + r.stderr)[-300:] + " | " + left)
+    for how, orig, note in (("marked", None, True), ("older install, original kept", "# someone else's config\nnet:\n  port: 27017\n", False)):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            root, env, cron, log = setup(tmp, mongo_conf="# Managed by @DB@/deploy.sh - edit .env\n"
+                                                         + ("# Taken over by deploy.sh (MONGO_TAKE_OVER): MongoDB was installed before Looking Glass\n" if note else ""))
+            if orig:
+                (tmp / "sys/mongod.conf.orig").write_text(orig)
+            r = run(root, env, "--dry-run", "--remove-mongodb")        # the plan only: never a real removal
+            check(f"a MongoDB taken over ({how}): NOT removed by --remove-mongodb", r.returncode == 0 and "apt-get purge" not in r.stdout
+                  and "taken over" in r.stdout and "would remove /etc/apt" not in r.stdout, (r.stdout + r.stderr)[-300:])
+    with tempfile.TemporaryDirectory() as t:
+        tmp = Path(t); root, env, cron, log = setup(tmp, mongo_conf="# Managed by @DB@/deploy.sh - edit .env\n")
+        (tmp / "sys/mongod.conf.orig").write_text("# Managed by /old/database/deploy.sh\n")
+        r = run(root, env, "--dry-run", "--remove-mongodb")
+        check("…while one Looking Glass installed itself is still removed when asked", "apt-get purge" in r.stdout, r.stdout[-300:])
     with tempfile.TemporaryDirectory() as t:
         tmp = Path(t); root, env, cron, log = setup(tmp)
         lock = root / "database/.pipeline.lock"; lock.write_text("")

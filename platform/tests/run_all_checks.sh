@@ -82,6 +82,7 @@ run "masked viewers: banners, line hash, Spam URL hosts" $PY tests/check_banner_
 run "reverse proxy + first administrator" $PY tests/check_first_admin_proxy.py
 run "settings: Settings permission only" $PY tests/check_settings_access.py
 run "network list: every network in the reports" $PY tests/check_networks_list.py
+run "values of the wrong kind: refused, never a 500" $PY tests/check_wrong_types.py
 run "failed-login counter (locks, clean-up)" $PY tests/check_login_throttle.py
 run "request times in UTC (one day copy)" $PY tests/check_time_offsets.py
 run "masked views: no host-name filter" $PY tests/check_masked_hostname.py
