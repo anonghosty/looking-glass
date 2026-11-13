@@ -99,9 +99,11 @@ def jinja_escape():
 def passwords():
     from werkzeug.security import check_password_hash, generate_password_hash
     h = generate_password_hash("correct horse battery")
-    # on failure a fixed message, nothing taken from the hash (CodeQL clear-text logging, 2026-11-13)
-    good = h.startswith("scrypt:") and check_password_hash(h, "correct horse battery") and not check_password_hash(h, "wrong")
-    return good or "the password hash is not scrypt, or does not verify"
+    # only fixed values leave this function, nothing derived from the password or its hash (CodeQL clear-text
+    # logging, 2026-11-13)
+    if h.startswith("scrypt:") and check_password_hash(h, "correct horse battery") and not check_password_hash(h, "wrong"):
+        return True
+    return "the password hash is not scrypt, or does not verify"
 
 
 def proxyfix_multidict():
