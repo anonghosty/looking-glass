@@ -87,7 +87,9 @@ try:
     # /register pages below would delete the real installation's data/setup_code (review 2026-11-13)
     setup = A.AUTH["setup"]; SETUP_REAL.append(setup.path); setup.path = os.path.join(tmp, "setup_code")
     token = sessions.create("chk-admin", "127.0.0.1", "lg-check-workflow"); MADE.append(token)
-    csrf = next(s["csrf"] for s in sessions.s.values() if s["user"] == "chk-admin")
+    # the CSRF token of THIS session, by its key: the first "chk-admin" session found could be one another check left
+    # behind (one that crashed before ending it), and its token made every request below fail (2026-11-13)
+    csrf = sessions.s[auth._h(token)]["csrf"]
     c = A.app.test_client(); c.set_cookie("lg_session", token)
     H = {"User-Agent": "lg-check-workflow", "X-CSRF-Token": csrf}
     r = c.post("/api/admin/users/chk-admin", json={"action": "approve", "role": "external"}, headers=H)

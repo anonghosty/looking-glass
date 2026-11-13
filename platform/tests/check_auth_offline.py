@@ -148,7 +148,7 @@ try:
     print("A JSON array sent in chunks is refused like any other (it reached a route and failed with a 500)")
     tok = sessions.create("chk-admin", "127.0.0.1", UA["User-Agent"])
     cl = A.app.test_client(); cl.set_cookie("lg_session", tok)
-    csrf = next(s["csrf"] for s in sessions.s.values() if s["user"] == "chk-admin")
+    csrf = sessions.s[auth._h(tok)]["csrf"]          # this session's own token (never another one left behind)
 
     import io  # noqa: E402
     # as gunicorn hands a chunked request to the app: no Content-Length, the body read to its end

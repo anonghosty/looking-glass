@@ -25,7 +25,7 @@ real_get, real_perms = users.get, roles.perms
 users.get = lambda name: ({"status": "active", "role": "lg-auditor", "changed": 0} if name == USER else real_get(name))
 roles.perms = lambda role: ({"audit"} if role == "lg-auditor" else real_perms(role))
 token = sessions.create(USER, "127.0.0.1", UA)
-csrf = next(s["csrf"] for s in sessions.s.values() if s["user"] == USER)
+csrf = max((s for s in sessions.s.values() if s["user"] == USER and s.get("csrf")), key=lambda s: s["created"])["csrf"]   # the newest: the one this check made
 c = A.app.test_client()
 c.set_cookie("lg_session", token)
 H = {"User-Agent": UA}

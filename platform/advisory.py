@@ -75,9 +75,15 @@ def content_sig(adv):
 
 
 def report_stale(adv):
-    """True when the advisory has a report and it no longer carries what the advisory says (or predates fingerprints)."""
+    """True when the advisory has a report and it no longer carries what the advisory says. A report generated before
+    fingerprints were kept is judged by the history instead: out of date only if the advisory was edited after it."""
     reps = adv.get("reports") or []
-    return bool(reps) and reps[-1].get("content") != content_sig(adv)
+    if not reps:
+        return False
+    if reps[-1].get("content") is None:
+        made = reps[-1].get("at", 0)
+        return any(h.get("at", 0) > made and str(h.get("what", "")).startswith("edited") for h in adv.get("history") or [])
+    return reps[-1]["content"] != content_sig(adv)
 
 
 STALE = "The advisory was changed after its report was generated: generate the report again, so what goes out is what it says."

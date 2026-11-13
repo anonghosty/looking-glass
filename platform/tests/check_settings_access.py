@@ -39,7 +39,7 @@ MADE = []
 def client(user):
     token = sessions.create(user, "127.0.0.1", UA)
     MADE.append(token)
-    csrf = next(s["csrf"] for s in sessions.s.values() if s["user"] == user)
+    csrf = max((s for s in sessions.s.values() if s["user"] == user and s.get("csrf")), key=lambda s: s["created"])["csrf"]   # the newest: the one this check made
     c = A.app.test_client(); c.set_cookie("lg_session", token)
     return c, csrf
 

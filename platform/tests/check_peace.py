@@ -35,7 +35,7 @@ A.PEACE.path = os.path.join(tmp, "peace_of_mind.json"); A.PEACE._c = (None, {})
 audit = A.AUTH["audit"]; real_add = audit.add; audited = []
 audit.add = lambda *a, **k: audited.append((a[0] if a else "", k.get("user")))
 token = sessions.create(USER, "127.0.0.1", UA)
-csrf = next(s["csrf"] for s in sessions.s.values() if s["user"] == USER)
+csrf = max((s for s in sessions.s.values() if s["user"] == USER and s.get("csrf")), key=lambda s: s["created"])["csrf"]   # the newest: the one this check made
 c = A.app.test_client()
 c.set_cookie("lg_session", token)
 H = {"User-Agent": UA}

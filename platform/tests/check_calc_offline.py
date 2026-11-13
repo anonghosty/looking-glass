@@ -55,5 +55,16 @@ evs = [{"dst_port": 443}] * 10 + [{"dst_port": ""}] * 90
 top = A._top(evs, "dst_port")
 ok("10 of 100 events have port 443, the other 90 none: its share is 10 %, not 100 %", top and top[0]["share"] == 0.1, str(top))
 ok("…an empty value is never listed", all(r["value"] for r in top))
+print("An advisory's report is out of date only when the advisory changed after it")
+import advisory as ADV  # noqa: E402
+a = {"heading": "", "subject": "S", "tlp": "TLP:AMBER", "description": "D", "actions": "A", "history": []}
+a["reports"] = [{"n": 1, "at": 100, "content": ADV.content_sig(a)}]
+ok("a report with its fingerprint, nothing changed: current", ADV.report_stale(a) is False)
+ok("…the TLP changed: out of date", ADV.report_stale(dict(a, tlp="TLP:CLEAR")) is True)
+old = dict(a, reports=[{"n": 1, "at": 100}], history=[{"at": 90, "what": "edited"}, {"at": 100, "what": "report generated: x.pdf"}])
+ok("a report from before fingerprints, not edited since: current (no needless regeneration)", ADV.report_stale(old) is False)
+old2 = dict(old, history=old["history"] + [{"at": 150, "what": "edited after it was drafted: back to draft"}])
+ok("…edited after it was generated: out of date", ADV.report_stale(old2) is True)
+ok("no report yet: not out of date", ADV.report_stale(dict(a, reports=[])) is False)
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))
 sys.exit(1 if fails else 0)

@@ -83,7 +83,7 @@ try:
 
     print("An administrator switches the policy on (90 days)")
     a, ra = sign_in("chkadmin", PW_A, SEC_A)
-    csrf = next(s["csrf"] for s in sessions.s.values() if s["user"] == "chkadmin")
+    csrf = max((s for s in sessions.s.values() if s["user"] == "chkadmin" and s.get("csrf")), key=lambda s: s["created"])["csrf"]   # the newest: the one this check made
     H = dict(UA, **{"X-CSRF-Token": csrf})
     r = a.post("/api/password-policy", json={"enabled": True, "days": 90, "password": "wrong"}, headers=H)
     ok("…not with a wrong password (refused, counted, logged)", r.status_code == 403 and not policy.get()["enabled"]
