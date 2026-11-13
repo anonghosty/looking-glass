@@ -87,14 +87,42 @@ def assess(today, vals, unit="devices"):
     return r("info", f"Slight drop -{p}", "Keep an eye on it.")
 
 
+_OCT = r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
+# an IPv4 address spelled in a host name with dashes or underscores: ec2-203-0-113-7.compute.amazonaws.com,
+# c-203-0-113-7.hsd1.comcast.net, ip203-0-113-7.dyn.example (review 2026-11-13)
+_DASHED_V4 = re.compile(rf"(?<!\d){_OCT}[-_]{_OCT}[-_]{_OCT}[-_]{_OCT}(?!\d)")
+
+
+def _spelled_address(name):
+    """True when a host name gives an IP address away in a form the shared finder (ip_find, used by every masked view)
+    does not read: four numbers 0-255 joined by dashes or underscores, an IPv6 address written with dashes
+    (2001-db8--1.sslip.io), or the whole name a decimal or hex number (3405803783, 0xcb007107). For the Executive C2
+    rows only: widening ip_find would change every masked view."""
+    import ipaddress
+    n = name.strip().lower().rstrip(".")
+    if _DASHED_V4.search(n):
+        return True
+    if re.fullmatch(r"\d{1,10}", n) and int(n) <= 0xFFFFFFFF or re.fullmatch(r"0x[0-9a-f]{1,8}", n):
+        return True
+    for label in n.split("."):
+        if label.count("-") >= 2 and re.fullmatch(r"[0-9a-f-]+", label):
+            try:
+                ipaddress.IPv6Address(label.replace("-", ":"))
+                return True
+            except ValueError:
+                pass
+    return False
+
+
 def c2_rows(most_common, hosts_of, n_ev):
     """The Executive portal's C2 / sinkhole rows: a domain by its name; anything that is or holds an IP address as
-    "IP address 1, 2…" (numbered among those only), never the address."""
+    "IP address 1, 2…" (numbered among those only), never the address: written plainly (ip_find) or spelled in the
+    name (_spelled_address)."""
     import ip_find
     rows, n_ip = [], 0
     for k, v in most_common:
         name = str(k or "")
-        if not name or ip_find.spans(name):
+        if not name or ip_find.spans(name) or _spelled_address(name):
             n_ip += 1
             name = f"IP address {n_ip}"
         rows.append({"value": name, "label": name, "count": v, "hosts": len(hosts_of[k]), "share": v / max(1, n_ev)})

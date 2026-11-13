@@ -167,7 +167,7 @@ so they get the threat data itself; what they never get is who the constituents 
   the research depends on. **The one exception: the C2 host itself** (a sinkhole report's contacted host, `http_host`)
   is shown as reported, an IP address too, because researchers need the C2 servers for their analysis; a C2 server is
   the threat's side, never a constituent's host. Management sees no C2 host: it decides on numbers, so the
-  Executive portal lists each C2 / sinkhole domain by its name, so the executive can tell what the devices call; a C2 host that is, or holds, an IP address is never shown and reads "IP address 1, 2…" (decided 2026-11-13; before, every domain was numbered, which made no sense to the executives). A pattern fewer than 5 hosts carry is shown
+  Executive portal lists each C2 / sinkhole domain by its name, so the executive can tell what the devices call; a C2 host that is, or holds, an IP address is never shown and reads "IP address 1, 2…", also when the name spells the address (ec2-203-0-113-7.compute.amazonaws.com, an IPv6 address with dashes, a decimal or hex number) (decided 2026-11-13; before, every domain was numbered, which made no sense to the executives). A pattern fewer than 5 hosts carry is shown
   without a lasting code (`small_codes.py`), so it cannot be followed back to a host over time.
 - **Team notes and free text** (what people write, not what reports contain) mask more: host names, IP addresses,
   e-mail addresses, dates and long IDs (`hostmask.py`).

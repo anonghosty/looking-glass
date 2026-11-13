@@ -65,6 +65,19 @@ ok("an IP address, one with a port, one inside a name, or an empty value: IP add
    labels[1] == "IP address 1" and labels[2] == "IP address 2" and labels[4] == "IP address 3" and labels[5] == "IP address 4", str(labels))
 ok("…no address in any row", not any(x in str(rows) for x in ("203.0.113", "198.51.100")))
 ok("counts and devices kept", rows[0]["count"] == 30 and rows[0]["hosts"] == 2 and rows[0]["share"] == 0.3)
+# an address spelled in the name (review 2026-11-13: cloud and ISP host names gave the address away)
+spelled = ["ec2-203-0-113-7.compute.amazonaws.com", "c-203-0-113-7.hsd1.comcast.net", "ip203-0-113-7.dyn.example",
+           "host_203_0_113_7.example", "2001-db8--1.sslip.io", "3405803783", "0xcb007107"]
+kept = ["sc.dqmop.com", "dlynankz.biz", "cdn-77.example.net", "a1-b2.example", "web-2024-11-13.example",
+        "abc-def-ghi.example", "deadbeef.example"]
+rs = M.c2_rows([(k, 1) for k in spelled + kept], {k: {1} for k in spelled + kept}, 10)
+got = {k: r["label"] for k, r in zip(spelled + kept, rs)}
+ok("an address spelled with dashes, underscores, as IPv6 with dashes, or as a decimal or hex number: IP address N",
+   all(got[k].startswith("IP address ") for k in spelled), str({k: got[k] for k in spelled if not got[k].startswith("IP address")}))
+ok("…the reviewer's ec2-203-0-113-7… example: masked", got["ec2-203-0-113-7.compute.amazonaws.com"].startswith("IP address"))
+ok("domain names with numbers or dashes that are no address stay as they are", all(got[k] == k for k in kept),
+   str({k: got[k] for k in kept if got[k] != k}))
+ok("…no part of 203.0.113.7 or 2001:db8::1 left in any row", not any(s in str(rs) for s in ("203-0-113", "203_0_113", "2001-db8", "3405803783", "0xcb007107")))
 
 print("An advisory's report is out of date only when the advisory changed after it")
 import advisory as ADV  # noqa: E402
