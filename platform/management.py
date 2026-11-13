@@ -87,7 +87,8 @@ def assess(today, vals, unit="devices"):
     return r("info", f"Slight drop -{p}", "Keep an eye on it.")
 
 
-_OCT = r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
+# one number 0-255, with leading zeros too (203-000-113-007 is 203.0.113.7; review 2026-11-13)
+_OCT = r"(?:0*(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d))"
 # an IPv4 address spelled in a host name with dashes or underscores: ec2-203-0-113-7.compute.amazonaws.com,
 # c-203-0-113-7.hsd1.comcast.net, ip203-0-113-7.dyn.example (review 2026-11-13)
 _DASHED_V4 = re.compile(rf"(?<!\d){_OCT}[-_]{_OCT}[-_]{_OCT}[-_]{_OCT}(?!\d)")
