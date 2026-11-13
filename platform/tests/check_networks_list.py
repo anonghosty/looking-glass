@@ -78,6 +78,41 @@ try:
     ok("…named, reviewed, with its country", saved.get("name") == "Sample University" and saved.get("reviewed") is True and saved.get("country") == "GH", str(saved))
     r = c.post("/api/networks/entry", json={"asn": "65999", "name": "Made Up", "type": "unknown"}, headers=hdr)
     ok("a network that is not in the reports: refused", r.status_code == 404, str(r.status_code))
+
+    print("Look up all: one button, the names saved not reviewed (PeeringDB and RIPEstat replaced here: no network)")
+    import asn_lookup  # noqa: E402
+    real_lk = (asn_lookup.peeringdb, asn_lookup.ripestat, asn_lookup.time.sleep)
+    asked = []
+    asn_lookup.peeringdb = lambda asns: (asked.extend(asns), {"64500": {"name": "Example Telecom", "type": "isp"}})[1]
+    asn_lookup.ripestat = lambda a: {"64500": "EXAMPLE-AS, GH", "64501": "SAMPLE UNIVERSITY, GH"}.get(a, "")
+    asn_lookup.time.sleep = lambda s: None
+    try:
+        use_registry(None)
+        j = c.get("/api/networks", headers=H).json
+        ok("the list says this account may look networks up", j.get("can_lookup") is True)
+        r = c.post("/api/networks/lookup", json={"asns": ["64500", "AS64501", "65999"]}, headers=hdr)
+        ok("look up: answered, the network not in the reports left out", r.status_code == 200 and r.json["asked"] == 2
+           and r.json["found"] == 2, f"{r.status_code} {r.get_data(as_text=True)[:160]}")
+        ok("…only the AS numbers went out", sorted(asked) == ["64500", "64501"], str(asked))
+        rows = {x["asn"]: x for x in c.get("/api/networks", headers=H).json["networks"]}
+        ok("…named, and NOT reviewed (a person checks, then Saves)", rows["64500"]["name"] == "Example Telecom"
+           and rows["64500"]["type"] == "isp" and not rows["64500"]["reviewed"] and rows["64501"]["name"], str(rows.get("64500")))
+        ok("…the others still listed, not identified", rows["64502"].get("identified") is False and rows["64503"].get("identified") is False)
+        use_registry({"64500": {"name": "Our Telco", "type": "isp", "reviewed": True, "events_last_check": 2}})
+        r = c.post("/api/networks/lookup", json={"asns": ["64500"]}, headers=hdr)
+        ok("a reviewed network is never overwritten", r.status_code == 200
+           and json.load(open(reg))["asns"]["64500"]["name"] == "Our Telco", r.get_data(as_text=True)[:120])
+        for body, want in (({"asns": "64500"}, 400), ({"asns": ["64x"]}, 400), ({"asns": ["65999"]}, 404), ([1, 2], 400)):
+            st = c.post("/api/networks/lookup", json=body, headers=hdr).status_code
+            ok(f"refused: {json.dumps(body)} -> {want}", st == want, str(st))
+        st = c.post("/api/networks/lookup", json={"asns": ["64502"]}, headers=H).status_code
+        ok("without the page's token: refused", st == 403, str(st))
+        A._LOOKUP_SEEN.clear()
+        sts = [c.post("/api/networks/lookup", json={"asns": ["64502"]}, headers=hdr).status_code for _ in range(14)]
+        ok("many look-ups in a minute: slowed down (429), never the free APIs hammered", 429 in sts and sts[0] == 200, str(sts))
+        A._LOOKUP_SEEN.clear()
+    finally:
+        asn_lookup.peeringdb, asn_lookup.ripestat, asn_lookup.time.sleep = real_lk
 finally:
     sessions.end(key=auth._h(token))
     users.get, audit.add = real[0], real[1]

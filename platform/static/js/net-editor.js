@@ -40,13 +40,54 @@
     const r = await fetch("/api/networks", { cache: "no-store", headers: hdr(false) });
     if (!r.ok) { $("cardNets").hidden = true; return; }
     const j = await r.json();
-    rows = j.networks; identifying = j.identifying; setTypes(j.types);
+    rows = j.networks; identifying = j.identifying; canLookup = !!j.can_lookup; setTypes(j.types);
     $("cardNets").hidden = false; counts();
     // nothing left to review: open on every network, each still editable (a company renames, rebrands, merges…)
     if (view === "todo" && !rows.some((x) => !x.reviewed)) view = "all";
     flash($("netStatus"), identifying ? "Networks are being identified right now (Settings → Identify networks): changes can be saved when it has finished."
       : `${fmt(rows.length)} networks · ${fmt(rows.filter((x) => !x.reviewed).length)} to review`, identifying ? "warn" : "");
+    lookAllButton();
     render();
+  }
+
+  // ---- look-ups (2026-11-13): a network in the reports that has no name yet is looked up here, one row or all of
+  // them, on both pages (it was only Settings → Identify networks, out of sight). Only AS numbers are sent, to PeeringDB
+  // and RIPEstat; the names found are saved "not reviewed", for a person to check and Save.
+  let canLookup = false;
+  // one button for all of them (the user's choice, 2026-11-13): every network without a name, and those whose last
+  // look-up failed (tried again)
+  const unnamed = () => rows.filter((x) => !x.reviewed && ((x.identified === false && !x.name) || x.source === "failed"));
+  async function lookup(asns) {
+    const r = await fetch("/api/networks/lookup", { method: "POST", headers: hdr(true), body: JSON.stringify({ asns }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || `Refused (${r.status})`);
+    return j;
+  }
+  function lookAllButton() {
+    let b = $("netLookAll");
+    const n = unnamed().length;
+    if (!canLookup || identifying || !n) { if (b) b.hidden = true; return; }
+    if (!b) {
+      b = el("button", "lg-btn sm primary"); b.type = "button"; b.id = "netLookAll";
+      b.title = "Look up the company name and type of every network that has none yet (only the AS numbers are sent, to PeeringDB and RIPEstat). The names are saved not reviewed: check them, then Save.";
+      b.addEventListener("click", async () => {
+        const todo = unnamed().map((x) => x.asn);
+        let done = 0, found = 0;
+        busy(b, true, "Looking up…");
+        try {
+          for (let i = 0; i < todo.length; i += 10) {           // ten at a time: each answer stays short
+            const j = await lookup(todo.slice(i, i + 10));
+            done += j.asked || 0; found += j.found || 0;
+            flash($("netStatus"), `Looking up: ${fmt(done)} of ${fmt(todo.length)} · ${fmt(found)} named`);
+          }
+          await load();
+          flash($("netStatus"), `${fmt(found)} of ${fmt(todo.length)} network${todo.length === 1 ? "" : "s"} named: check them, then Save.`, "ok");
+        } catch (e) { flash($("netStatus"), `Look-up stopped: ${e.message}`, "bad"); }
+        finally { busy(b, false); lookAllButton(); }
+      });
+      $("netStatus").after(b);
+    }
+    b.hidden = false; b.replaceChildren(el("span", null, `Look up all (${fmt(n)} not identified)`));
   }
 
   function renderTypes(tb) {
@@ -110,7 +151,7 @@
         tb.append(tr); continue;
       }
       const name = el("input", "dz-input"); name.value = x.name; name.maxLength = 80; name.setAttribute("aria-label", `Company name for AS${x.asn}`);
-      if (x.identified === false && !x.name) name.placeholder = "not identified yet: type the name, or run Identify networks";
+      if (x.identified === false && !x.name) name.placeholder = canLookup ? "not identified yet: Look up all, or type the name" : "not identified yet: type the name";
       const type = el("select", "dz-input lg-enhance"); type.setAttribute("aria-label", `Type of AS${x.asn}`);
       for (const t of typeList) { const o = el("option", null, t.label); o.value = t.key; type.append(o); }
       type.value = TYPES[x.type] ? x.type : "unknown";
@@ -140,8 +181,9 @@
         } catch (e) { busy(save, false); save.disabled = false; status.replaceChildren(pill(e.message, "bad")); }
       });
       const td = (node, cls) => { const c = el("td", cls || null); c.append(node); return c; };
+      const act = td(save, "dz-act");
       tr.append(el("td", "mono dz-name", `AS${x.asn}`), td(name, "dz-w-name"), td(type, "dz-w-type"), td(note, "dz-w-note"),
-        el("td", "dz-seen", `${x.holder || "—"}${x.country ? ` (${x.country})` : ""}`), el("td", "num mono", fmt(x.events)), status, td(save, "dz-act"));
+        el("td", "dz-seen", `${x.holder || "—"}${x.country ? ` (${x.country})` : ""}`), el("td", "num mono", fmt(x.events)), status, act);
       tb.append(tr);
     }
     if (shown.length > 300) { const tr = el("tr", "dz-empty"), td = el("td", null, `Showing 300 of ${fmt(shown.length)}: search or choose a type to narrow the list.`); td.colSpan = 8; tr.append(td); tb.append(tr); }

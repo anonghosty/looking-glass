@@ -643,8 +643,10 @@ Settings also lists the **network names and types** read-only, for reference; th
 page (**Edit on the Definitions page**). The researchers' work (definitions, Intel gathered, notes) is on that page too.
 
 The list holds every network that appears in the reports, from the first day: one that has not been looked up yet is
-**Not reviewed**, without a name ("not identified yet"); you can type its name and type yourself, or let Identify
-networks fill it in.
+**Not reviewed**, without a name ("not identified yet"); you can type its name and type yourself, or press **Look up
+all** at the top of the list (Settings and the Definitions page, for administrators and researchers): it looks up every
+network without a name, ten at a time with a running count, and saves what it finds as not reviewed, for you to check
+and Save. A reviewed network is never changed by a look-up.
 
 **Identify networks** (above the network list) looks up the company name and type of every network in the data that
 is not identified yet, from PeeringDB and RIPEstat (free public sources; only AS numbers are sent). A window shows the

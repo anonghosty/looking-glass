@@ -2840,7 +2840,57 @@ def api_networks():
               "role": (meta.get(a) or {}).get("role", ""), "reviewed": False, "source": "", "identified": False,
               "note": "", "events": n, "updated": "", "by": ""} for a, n in counts.items() if a not in known]
     rows.sort(key=lambda r: (r["reviewed"], -r["events"]))
-    return jsonify(networks=rows, types=people.with_names(netypes.all_types(DATA_DIR)), identifying=bool(_ASN_JOB and _ASN_JOB.running()))
+    return jsonify(networks=rows, types=people.with_names(netypes.all_types(DATA_DIR)), identifying=bool(_ASN_JOB and _ASN_JOB.running()),
+                   can_lookup=_lookup_allowed())
+
+
+def _lookup_allowed():
+    """Who may look networks up: the admins (Settings) and the researchers (networks), as for editing the names."""
+    return bool(_settings_change_allowed() or AUTH["has_perm"]("networks"))
+
+
+_LOOKUP_SEEN = {}          # user -> times of their look-ups in the last minute (a page cannot hammer the free APIs)
+
+
+@app.route("/api/networks/lookup", methods=["POST"])
+def api_networks_lookup():
+    """Look up a few networks of the reports by hand (2026-11-13: the network list shows every network in the reports,
+    and those without a name had no way to be looked up outside Settings → Identify networks). Body {asns: [...]}: at
+    most 10 AS numbers, each one in the reports loaded. The same look-up as Identify networks (asn_lookup.identify:
+    PeeringDB and RIPEstat, only the AS numbers are sent); the names are saved not reviewed, for a person to check."""
+    import asn_lookup
+    if not (_settings_change_allowed() or (AUTH["has_perm"]("networks") and AUTH["csrf_ok"]())):
+        return jsonify(error="Only researchers and admins can look networks up."), 403
+    if not AUTH["fresh"]():
+        return jsonify(error="Sign in again to make changes (your session is older than 12 hours)."), 403
+    if _ASN_JOB and _ASN_JOB.running():
+        return jsonify(error="Networks are being identified right now (Settings → Identify networks); try again when it has finished."), 409
+    b = request.get_json(silent=True)
+    if not isinstance(b, dict) or not isinstance(b.get("asns"), list):
+        return jsonify(error="asns: a list of AS numbers expected"), 400
+    asns = []
+    for a in b["asns"][:10]:
+        a = str(a).strip().upper().removeprefix("AS")
+        if not a.isdigit() or len(a) > 10:
+            return jsonify(error="An AS number is digits only, for example 64500."), 400
+        asns.append(a)
+    counts, meta = _networks_in_data_cached()
+    asns = [a for a in dict.fromkeys(asns) if a in counts]
+    if not asns:
+        return jsonify(error="None of these networks is in the reports loaded."), 404
+    who = (getattr(g, "user", None) or {}).get("user", "token")
+    now = time.time()
+    recent = [t for t in _LOOKUP_SEEN.get(who, []) if now - t < 60]
+    if len(recent) >= 12:
+        return jsonify(error="Many look-ups in the last minute: wait a moment."), 429
+    _LOOKUP_SEEN[who] = recent + [now]
+    with _NET_LOCK:
+        st = asn_lookup.identify(asn_registry.path, {a: counts[a] for a in asns}, meta)
+    reg = asn_lookup.load(asn_registry.path)["asns"]
+    names = {a: (reg.get(a) or {}).get("name", "") for a in asns}
+    AUTH["audit"].add("networks_lookup", user=who, target=", ".join(f"AS{a}" for a in asns),
+                      detail=f"{st.get('added', 0)} named, {st.get('failed', 0)} failed")
+    return jsonify(asked=len(asns), found=st.get("added", 0), failed=st.get("failed", 0), names=names)
 
 
 @app.route("/api/networks/types", methods=["POST"])
