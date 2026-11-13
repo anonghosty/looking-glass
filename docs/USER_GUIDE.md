@@ -783,7 +783,7 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
   and the records on the services page, one host's activity, the hosts behind a figure, a record's details, an
   analysis. Each says who, when, from where and what was looked at (every filter of the view),
   hosts by their reference, never their address; the same person viewing the same thing again within 10 minutes is
-  not logged twice. `DATA_ACCESS_LOG=0` in `.env` turns view logging off (the Audit portal then says so). Each has its count, a search, *Alerts only*, and **Export CSV**.
+  not logged twice, but every download is, the same list twice included. `DATA_ACCESS_LOG=0` in `.env` turns view logging off (the Audit portal then says so). Each has its count, a search, *Alerts only*, and **Export CSV**.
   The built-in security test's events are kept apart in System and self-test.
 - **Access review:** every account with its role and what that role may do, its authenticator, last sign-in, who
   approved it and flags (no authenticator, dormant, pending too long, every permission), and the roles matrix.

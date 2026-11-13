@@ -9,7 +9,8 @@ module writes one audit entry per view, in the "Data access and exports" tab:
 
 Who, when, from where and what, like every audit entry. A host appears only as its opaque reference (HostRefs, the one
 the pages use), never its address, so the audit log does not become a second copy of the data. The same person viewing
-the same thing again within REPEAT_WINDOW seconds is not logged again (the audit log is append-only; a page polls).
+the same thing again within REPEAT_WINDOW seconds is not logged again (the audit log is append-only; a page polls);
+every download is logged, the same list downloaded twice included.
 The built-in self-test's accounts are not logged. DATA_ACCESS_LOG=0 in .env turns it off (the Audit portal then says
 so, and CIS 3.14 is no longer backed by LG-15).
 """
@@ -79,7 +80,9 @@ class DataAccessLog:
         key = (user, path, sel)
         now = time.time()
         with self.lock:
-            if now - self.seen.get(key, 0) < REPEAT_WINDOW:
+            # every download is its own audit line: each copy of host data leaving the platform counts, even the same
+            # list twice (review 2026-11-13); only VIEWS are written once per person and selection per window
+            if event != "data_exported" and now - self.seen.get(key, 0) < REPEAT_WINDOW:
                 return False
             self.seen[key] = now
             if len(self.seen) > 20000:                    # forget old keys, never grow without bound

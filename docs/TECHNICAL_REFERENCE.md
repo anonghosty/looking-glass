@@ -613,7 +613,8 @@ Security scripts:
   parameter except display and time options (`IGNORE`: at, demo, from, to, limit, latest, since, time, n, format, page,
   sort), repeated parameters included, so a parameter added later is logged by default. Each value is cut to 120
   characters before the address finder reads it (a half address at the cut is dropped), and every address is replaced
-  by its host reference (`HostRefs`); one entry per person and selection per 10 minutes; not for the self-test;
+  by its host reference (`HostRefs`); a view is one entry per person and selection per 10 minutes, a download is
+  an entry every time (the same list twice included); not for the self-test;
   `DATA_ACCESS_LOG=0` turns it off. `tests/check_data_access.py`.
 - The address finder (`ip_find.py`) reads IPv6 candidates of at most 45 characters and 7 colons, split where three or
   more colons stand together, so its work grows with the text's length (thousands of colons: milliseconds). An

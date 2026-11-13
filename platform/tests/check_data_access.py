@@ -82,6 +82,17 @@ get("/api/related", ref="h-off")
 ok("DATA_ACCESS_LOG=0 turns it off", len(entries) == n and not data_access.enabled())
 os.environ.pop("DATA_ACCESS_LOG")
 
+print("Every download is its own entry, the same list twice included (review 2026-11-13)")
+n = len(entries)
+get("/api/svc/hosts.csv", service="Accessible RDP")
+get("/api/svc/hosts.csv", service="Accessible RDP")
+ok("the same host list downloaded twice within the window: two entries", len(entries) == n + 2
+   and all(x["event"] == "data_exported" for x in entries[n:]), str(entries[n:]))
+n = len(entries)
+get("/api/svc/drill", metric="hosts", issue="CVE-2024-9999")
+get("/api/svc/drill", metric="hosts", issue="CVE-2024-9999")
+ok("…while the same view twice is still one entry", len(entries) == n + 1, str(entries[n:]))
+
 print("Every filter is recorded, so different hosts are different views (review 2026-11-13)")
 n = len(entries)
 get("/api/events", src_ip="203.0.113.7")
