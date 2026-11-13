@@ -621,6 +621,12 @@ Security scripts:
 - Advisories: each generated report keeps a fingerprint of the heading, subject, TLP, Description and Recommended
   Actions (`advisory.content_sig`). When the advisory no longer matches it, the report is out of date
   (`report_stale` in the page's data), and drafted and sent are refused (409) until it is generated again.
+- Dialogs (`static/js/dialog-focus.js`, loaded on every page by `loader.js`): any element marked `aria-modal="true"`
+  counts as a dialog while it is shown. Focus moves into it, Tab and Shift+Tab stay inside the top-most one, closing
+  returns focus to what opened it, and Escape with two or more open closes only the top-most. On a phone or tablet the
+  filter drawer is marked as a dialog while it covers the page. Page scripts drop answers that arrive after the user
+  moved on (sequence counters), say when a request failed instead of waiting forever, and disable a button while its
+  request runs.
 - The sign-in page shows only the notices Looking Glass sends (`auth.LOGIN_NOTICES`); user names and e-mail addresses
   that differ only in letter case are one; an authenticator code is checked again under the accounts lock, so two
   sign-ins with the same code at once cannot both pass.

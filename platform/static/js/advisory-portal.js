@@ -34,7 +34,12 @@
   const link = (href, text) => { const a = el("a", null, text); a.href = href; return a; };
 
   async function load() {
-    const r = await fetch("/api/advisory/dashboard", { cache: "no-store" });
+    let r;
+    try { r = await fetch("/api/advisory/dashboard", { cache: "no-store" }); }
+    catch (e) {                                // the connection dropped: say so, never a page that loads for ever (review 2026-11-13)
+      document.getElementById("apLoading")?.remove(); window.LGLoader?.ready();
+      main.append(el("p", "fd-empty", `Could not open it: ${e.message}`)); return;
+    }
     const d = await r.json().catch(() => ({}));
     document.getElementById("apLoading")?.remove();
     window.LGLoader?.ready();

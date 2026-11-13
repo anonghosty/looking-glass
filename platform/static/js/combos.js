@@ -9,18 +9,30 @@
   const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content || "";
   const MAX = +document.body.dataset.maxDays || 31;
   const CODE_RX = /^LG-[CXA]-[0-9A-F]{8}$/;
-  let entry = null, job = null, timer = null, autoDownload = false;
+  let entry = null, job = null, timer = null, autoDownload = false, lookSeq = 0, drawSeq = 0;
 
   function say(node, text, kind) { node.textContent = text; node.className = `cb-msg ${kind || ""}`; }
   const iso = (d) => d.toISOString().slice(0, 10);
 
   async function look(code) {
+    // a new code: a search still running for the previous one is left behind (its results would be drawn under this
+    // code), and only the latest look-up's answer is shown (review 2026-11-13)
+    const seq = ++lookSeq;
+    clearTimeout(timer); job = null; done();
     code = code.trim().toUpperCase(); $("cbCode").value = code;
     $("cbEntry").hidden = true; $("cbStep2Box").hidden = true; $("cbStep3Box").hidden = true; entry = null;
     if (!CODE_RX.test(code)) { say($("cbCodeMsg"), "A code looks like LG-C-1A2B3C4D (one report), LG-X-1A2B3C4D (across reports) or LG-A-1A2B3C4D (an analyst's selection).", "bad"); return; }
     say($("cbCodeMsg"), `Looking up ${code}…`); $("cbCodeMsg").classList.add("lg-loading");     // the searching logo meanwhile
-    const r = await fetch(`/api/combo-codes/${code}`, { cache: "no-store" });
-    const d = await r.json().catch(() => ({}));
+    let r, d;
+    try {
+      r = await fetch(`/api/combo-codes/${code}`, { cache: "no-store" });
+      d = await r.json().catch(() => ({}));
+    } catch {
+      if (seq !== lookSeq) return;
+      $("cbCodeMsg").classList.remove("lg-loading"); $("cbCodeMsg").querySelector(".lg-logo-wrap")?.remove();
+      say($("cbCodeMsg"), "The connection was interrupted. Try again.", "bad"); return;
+    }
+    if (seq !== lookSeq) return;                  // another code was looked up meanwhile
     $("cbCodeMsg").classList.remove("lg-loading"); $("cbCodeMsg").querySelector(".lg-logo-wrap")?.remove();
     if (!r.ok) { say($("cbCodeMsg"), d.error || `Not found (HTTP ${r.status})`, "bad"); return; }
     say($("cbCodeMsg"), ""); entry = d;
@@ -94,7 +106,7 @@
 
   // ---------------- the search
   async function start() {
-    if (!entry) return;
+    if (!entry || $("cbSearch").disabled) return;   // never two searches at once (a double click, a re-run on download)
     const body = { code: entry.code };
     if (where() === "history") {
       const n = span(); if (n < 1 || n > MAX) return;
@@ -115,8 +127,16 @@
   // download a ZIP on its own (external review, 2026-11-12)
   function failed() { autoDownload = false; $("cbDownload").textContent = "Download PDF + CSV (ZIP)"; done(); }
   async function poll() {
-    const r = await fetch(`/api/combos/search/${job}`, { cache: "no-store" });
-    const d = await r.json().catch(() => ({}));
+    const mine = job;                             // a poll for a search that was left behind stops here
+    let r, d;
+    try {
+      r = await fetch(`/api/combos/search/${mine}`, { cache: "no-store" });
+      d = await r.json().catch(() => ({}));
+    } catch {
+      if (mine !== job) return;
+      $("cbLog").append(el("li", "bad", "The connection was interrupted. Search again.")); failed(); return;
+    }
+    if (mine !== job) return;
     if (!r.ok) { $("cbLog").append(el("li", "bad", d.error || "The search was lost.")); failed(); return; }
     $("cbBar").style.width = `${Math.max(2, Math.round((d.done / Math.max(1, d.total)) * 100))}%`;
     const log = $("cbLog"); log.replaceChildren(); for (const l of d.log.slice(-12)) log.append(el("li", null, l));
@@ -146,8 +166,10 @@
         const r = await fetch(`/api/combos/search/${job}/summary?network=${encodeURIComponent(n)}`, { cache: "no-store" });
         const x = await r.json().catch(() => ({}));
         if (!r.ok) { note.textContent = x.error || `Could not filter (HTTP ${r.status})`; return; }
-        figures(x.summary || {}); bar.classList.add("on");
-        note.textContent = `${fmt(x.summary.devices)} of ${fmt(full.devices)} devices, ${fmt(x.summary.records)} of ${fmt(full.records)} records: everything below is ${n} only.`;
+        const xs = x.summary || {};
+        figures(xs); bar.classList.add("on");
+        note.textContent = `${fmt(xs.devices)} of ${fmt(full.devices)} devices, ${fmt(xs.records)} of ${fmt(full.records)} records: everything below is ${n} only.`;
+      } catch { note.textContent = "The connection was interrupted. Pick the network again.";
       } finally { sel.disabled = false; note.classList.remove("lg-loading"); note.querySelector(".lg-logo-wrap")?.remove(); }
     });
   }
@@ -235,12 +257,15 @@
       for (const [n, c] of ((det[r.value] || {}).cities || []).slice(0, 4)) { const li = el("div", "cb-tree-city"); li.append(el("span", null, n), el("small", null, `${fmt(c)} device${c === 1 ? "" : "s"}`)); g.append(li); }
       tree.append(g);
     }
-    // the map
+    // the map (only the latest draw: one that waited for the shapes while a network was picked stops, or both would
+    // add their regions, review 2026-11-13)
+    const seq = ++drawSeq;
     svg.replaceChildren();
     const country = s.country;
     if (!country || !window.LGRegions) { box.classList.add("nomap"); return; }
     if (shapesFor !== country) { shapesFor = country; shapesP = fetch(`/static/data/adm1/${country}.json`).then((r) => (r.ok ? r.json() : null)).catch(() => null); }
     const shapes = await shapesP;
+    if (seq !== drawSeq) return;
     if (!shapes) { box.classList.add("nomap"); return; }
     box.classList.remove("nomap");
     const resolve = window.LGRegions.index(shapes), byKey = new Map();
@@ -339,7 +364,10 @@
   // the download goes through the page: the file keeps its name, and an expired search says so instead of a broken file
   $("cbDownload").addEventListener("click", async (e) => {
     e.preventDefault();
-    const a = $("cbDownload"), label = a.textContent; a.textContent = "Preparing the download…";
+    const a = $("cbDownload");
+    if (a.dataset.busy) return;                   // a double click: one download (and at most one re-run)
+    a.dataset.busy = "1";
+    const label = a.textContent; a.textContent = "Preparing the download…";
     try {
       let r = await fetch(a.href, { cache: "no-store" });
       if (r.status === 404 && entry) {
@@ -360,7 +388,7 @@
       const tmp = el("a"); tmp.href = url; tmp.download = name; document.body.append(tmp); tmp.click(); tmp.remove();
       setTimeout(() => URL.revokeObjectURL(url), 30000);
     } catch { alert("Download failed: the connection was interrupted. Try again."); }
-    finally { if (!autoDownload) a.textContent = label; }
+    finally { delete a.dataset.busy; if (!autoDownload) a.textContent = label; }
   });
   // ---------------- the analysts' codes: a searchable drop-down list to revisit one and report on it again
   let acodes = [];
@@ -409,7 +437,14 @@
   loadAcodes();
   $("cbCodeForm").addEventListener("submit", (e) => { e.preventDefault(); look($("cbCode").value); });
   $("cbSearch").addEventListener("click", () => { autoDownload = false; start(); });   // a search the analyst starts never downloads on its own
-  $("cbStop").addEventListener("click", () => job && fetch(`/api/combos/search/${job}/stop`, { method: "POST", headers: { "X-CSRF-Token": csrf() } }));
+  $("cbStop").addEventListener("click", async () => {
+    const b = $("cbStop");
+    if (!job || b.disabled) return;
+    b.disabled = true;                            // one stop request; the search's own poll then ends it
+    try { await fetch(`/api/combos/search/${job}/stop`, { method: "POST", headers: { "X-CSRF-Token": csrf() } }); }
+    catch { $("cbLog").append(el("li", "bad", "The stop request did not reach the server. Try again.")); }
+    finally { b.disabled = false; }
+  });
   const q = new URLSearchParams(location.search).get("code");
   if (q) look(q);
 })();

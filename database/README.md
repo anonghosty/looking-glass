@@ -617,7 +617,9 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
   `MAIL_AUTH_DOMAIN` that signs the message's single From header, with From in that domain (or a subdomain); a valid
   signature without that is `other`. So is one with more From, Content-Type, Content-Transfer-Encoding or
   MIME-Version headers than its signature covers (a header the signature does not cover at all may appear once): a
-  copy added above a signed header would be the one the pipeline reads. A message whose header block Python's e-mail parser (which the pipeline uses to
+  copy added above a signed header would be the one the pipeline reads. Requiring Content-Type and MIME-Version to be
+  signed is not possible: Shadowserver's signatures (checked on its report e-mails, 2026-11-13) cover Date, From
+  (twice, so a second From cannot be added), To, Subject and the List-* headers, but not Content-Type or MIME-Version. A message whose header block Python's e-mail parser (which the pipeline uses to
   read attachments) would read differently from the check, for example a line without a colon above the headers, is
   `permerror`: the check and the pipeline must see the same message, or nothing is vouched for. No report is held back yet: a footer or a
   forwarding rule added on the way also breaks a genuine signature, so the record shows first whether every genuine

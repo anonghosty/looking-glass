@@ -79,7 +79,12 @@
       const ses = el("td", null, String(u.sessions));
       // the buttons sit in a flex box INSIDE the cell: a flex <td> stops being a table cell and breaks the row
       const actTd = el("td", "adm-act-cell"), acts = el("div", "adm-actions"); actTd.append(acts);
-      const btn = (label, cls, fn) => { const b = el("button", `pill-btn ${cls || ""}`, label); b.type = "button"; b.addEventListener("click", fn); acts.append(b); };
+      // disabled while its request runs; back on if it was cancelled or failed (on success the list redraws) (review 2026-11-13)
+      const btn = (label, cls, fn) => {
+        const b = el("button", `pill-btn ${cls || ""}`, label); b.type = "button";
+        b.addEventListener("click", async () => { b.disabled = true; let ok = false; try { ok = await fn(); } finally { if (!ok) b.disabled = false; } });
+        acts.append(b);
+      };
       if (u.status === "pending") btn("Approve", "primary", () => act(u.name, "approve", { role: sel.value }, `${u.name} approved as ${sel.value}.`));
       if (u.status === "disabled") btn("Restore", "", () => act(u.name, "restore", {}, `${u.name} restored.`));
       if (!u.you) {
@@ -101,8 +106,10 @@
   }
   async function act(name, action, extra, ok) {
     if (!action) { loadUsers(); return; }           // pending: the role is applied on approval
-    try { await post(`/api/admin/users/${encodeURIComponent(name)}`, { action, ...extra }); banner(ok); } catch (e) { banner(e.message, true); }
+    let done = false;
+    try { await post(`/api/admin/users/${encodeURIComponent(name)}`, { action, ...extra }); banner(ok); done = true; } catch (e) { banner(e.message, true); }
     loadUsers();
+    return done;                                     // the button that asked stays disabled only when it worked
   }
 
   // the audit log and the live sessions are a page of their own (/audit, audit.js)

@@ -65,11 +65,16 @@
     const r = await fetch("/api/lookups", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify({ kind, values }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { w.msg.className = "lk-msg bad"; w.msg.textContent = j.error || `Refused (${r.status})`; w.now.textContent = ""; throw new Error(j.error || `Refused (${r.status})`); }
-    let since = 0;
+    let since = 0, misses = 0;
     for (;;) {
       await new Promise((ok) => setTimeout(ok, 700));
       let s;
-      try { s = await (await fetch(`/api/lookups/${j.id}?since=${since}`, { credentials: "same-origin", cache: "no-store" })).json(); } catch { continue; }
+      try { s = await (await fetch(`/api/lookups/${j.id}?since=${since}`, { credentials: "same-origin", cache: "no-store" })).json(); misses = 0; }
+      catch (err) {   // give up after 10 failed polls in a row, so the caller's "(retry)" shows (review 2026-11-13)
+        if (++misses < 10) continue;
+        w.msg.className = "lk-msg bad"; w.msg.textContent = `Lost contact with the server: ${err.message}`; w.now.textContent = "";
+        throw new Error(`lost contact with the server (${err.message})`);
+      }
       if (s.error && !s.state) throw new Error(s.error);
       since = s.log_len;
       for (const line of s.log) w.log.append(el("li", null, line));

@@ -205,7 +205,9 @@
   }
   async function overview(box, name) {
     box.replaceChildren(el("p", "svc-loading", "Reading what the reports show for this service…"));
-    const r = await fetch(`/api/kb/service?name=${encodeURIComponent(name)}`, { cache: "no-store" });
+    let r;
+    try { r = await fetch(`/api/kb/service?name=${encodeURIComponent(name)}`, { cache: "no-store" }); }
+    catch (e) { box.replaceChildren(el("p", "svc-loading", `Could not open: ${e.message}`)); return; }   // (review 2026-11-13)
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { box.replaceChildren(el("p", "svc-loading", d.error || `Could not open (HTTP ${r.status})`)); return; }
     box.replaceChildren();

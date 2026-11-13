@@ -66,7 +66,10 @@
     head.append(el("b", null, "Notifications"), el("span", "lg-notif-sub", data.count ? `${data.count} new${data.waiting ? ` · ${data.waiting} waiting for you` : ""}` : "Nothing new"));
     if (data.count) {
       const all = el("button", "lg-notif-clear", "Clear all"); all.type = "button";
-      all.addEventListener("click", async () => { all.disabled = true; if (await clear({ all: true })) { data.items = []; paint(); } all.disabled = false; });
+      all.addEventListener("click", async () => {          // a dropped connection must not leave it disabled (review 2026-11-13)
+        all.disabled = true;
+        try { if (await clear({ all: true })) { data.items = []; paint(); } } catch { /* offline for a moment: try again */ } finally { all.disabled = false; }
+      });
       head.append(all);
     }
     panel.append(head);
@@ -105,8 +108,15 @@
     panel.style.right = `${Math.max(8, Math.round(document.documentElement.clientWidth - r.right))}px`;
     b.setAttribute("aria-expanded", "true");
     refresh();
+    // focus into the list, so Tab from the bell reaches it (it sits at the end of the page; review 2026-11-13)
+    setTimeout(() => panel.querySelector("a, button")?.focus({ preventScroll: true }), 0);
   }
-  function close() { if (panel) panel.hidden = true; for (const b of bells) b.setAttribute("aria-expanded", "false"); }
+  function close() {
+    if (!panel || panel.hidden) return;
+    const inside = panel.contains(document.activeElement);
+    panel.hidden = true; for (const b of bells) b.setAttribute("aria-expanded", "false");
+    if (inside) openFor?.focus({ preventScroll: true });   // back to the bell, not lost to the page
+  }
   document.addEventListener("click", close);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });

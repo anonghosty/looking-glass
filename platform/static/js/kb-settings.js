@@ -254,9 +254,14 @@
     $("kbName").readOnly = !!name;
     let e = { references: [] };
     if (name) {
-      const r = await fetch(`/api/kb/entry?name=${encodeURIComponent(name)}&section=${section}`, { cache: "no-store", headers: hdr(false) });
-      if (r.ok) e = await r.json();
+      // a failed read must not open an empty form: saving it would wipe the stored definition (review 2026-11-13)
+      let err = "";
+      try {
+        const r = await fetch(`/api/kb/entry?name=${encodeURIComponent(name)}&section=${section}`, { cache: "no-store", headers: hdr(false) });
+        if (r.ok) e = await r.json(); else err = (await r.json().catch(() => ({}))).error || `HTTP ${r.status}`;
+      } catch (x) { err = x.message || "The connection was interrupted. Try again."; }
       if (mine !== openSeq) return;           // another name was opened meanwhile: its own call fills the form
+      if (err) { flash($(isIssue ? "issStatus" : "infStatus"), `Could not open “${name}”: ${err}`, "bad"); return; }
       const row = !isIssue && [...data.unresolved, ...data.unchecked, ...data.defined, ...(data.all || [])].find((x) => x.name === name);
       if (row && row.reports?.length) $("kbSeen").textContent = `Seen in: ${row.reports.join(", ")}${row.kinds?.length ? ` (${row.kinds.join(", ")})` : ""}.`;
       else if (row && row.last_seen?.length) $("kbSeen").textContent = `Last seen in ${row.last_seen.map((s) => `${s.report} on ${s.date}`).join("; ")}.`;

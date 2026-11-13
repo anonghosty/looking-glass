@@ -8,15 +8,24 @@
   const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content || "";
   let state = "open", data = { findings: [], statuses: [] };
 
+  let loadSeq = 0;      // only the newest load draws: Open then All quickly, the reload after "Mark as sent" (review 2026-11-13)
   async function load() {
+    const seq = ++loadSeq;
     // the searching logo whenever the list is read (first open, Open / All, after an action), not only the first time
     if (!$("fdList").querySelector(".st-loading")) {
       const w = el("div", "st-loading fd-loading", state === "open" ? "Reading the open findings…" : "Reading every finding…");
       if (data.findings.length) $("fdList").prepend(w); else $("fdList").replaceChildren(w);
     }
-    const r = await fetch(`/api/findings?state=${state}`, { cache: "no-store" });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) { $("fdList").replaceChildren(el("p", "fd-empty", d.error || `Could not load (HTTP ${r.status})`)); return; }
+    let r, d;
+    try {
+      r = await fetch(`/api/findings?state=${state}`, { cache: "no-store" });
+      d = await r.json().catch(() => ({}));
+    } catch {
+      if (seq !== loadSeq) return;
+      $("fdList").replaceChildren(el("p", "fd-empty", "The connection was interrupted. Try again.")); window.LGLoader?.ready(); return;
+    }
+    if (seq !== loadSeq) return;
+    if (!r.ok) { $("fdList").replaceChildren(el("p", "fd-empty", d.error || `Could not load (HTTP ${r.status})`)); window.LGLoader?.ready(); return; }
     data = d; draw(); window.LGLoader?.ready();
     const want = location.hash.match(/^#f(\d+)$/);
     if (want) { const c = $(`f${want[1]}`); if (c) { c.classList.add("flash"); c.scrollIntoView({ block: "center" }); } }
@@ -76,7 +85,8 @@
             const d = await rr.json().catch(() => ({}));
             if (!rr.ok) { m.textContent = d.error || `Not saved (HTTP ${rr.status})`; m.className = "fd-msg bad"; return; }
             load();
-          } finally { go.disabled = false; }
+          } catch { m.textContent = "The connection was interrupted. Try again."; m.className = "fd-msg bad"; }
+          finally { go.disabled = false; }
         });
         row.append(rec, go, m); r.append(row);
       }
@@ -214,7 +224,8 @@
           const d = await r.json().catch(() => ({}));
           if (!r.ok) { m.textContent = d.error || `Not saved (HTTP ${r.status})`; m.className = "fd-msg bad"; return; }
           Object.assign(f, d.finding); const n = card(f); c.replaceWith(n); n.classList.add("flash");
-        } finally { both.disabled = only.disabled = false; }
+        } catch { m.textContent = "The connection was interrupted. Try again."; m.className = "fd-msg bad"; }
+        finally { both.disabled = only.disabled = false; }
       };
       both.addEventListener("click", () => go("both")); only.addEventListener("click", () => go("researcher"));
       const row = el("div", "fd-decide-row"); row.append(m, only, both);
@@ -288,7 +299,8 @@
         const d = await r.json().catch(() => ({}));
         if (!r.ok) { rmsg.textContent = d.error || `Not sent (HTTP ${r.status})`; rmsg.className = "fd-msg bad"; return; }
         Object.assign(f, d.finding); const n = card(f); c.replaceWith(n); n.classList.add("flash"); n.querySelector(".fd-more").open = true;
-      } finally { rgo.disabled = false; }
+      } catch { rmsg.textContent = "The connection was interrupted. Try again."; rmsg.className = "fd-msg bad"; }
+      finally { rgo.disabled = false; }
     });
     // the history: who moved it, when, with what comment
     const tl = el("ol", "fd-hist");
@@ -323,7 +335,7 @@
       const rej = el("button", "lg-btn sm fd-reject", "Reject and close"); rej.type = "button";
       const dmsg = el("span", "fd-msg");
       const toBox = el("div", "fd-to"); toBox.hidden = true;
-      const send = async (decision, to) => {
+      const send = async (decision, to, ok) => {      // ok: the picker's button, held while it sends (review 2026-11-13)
         acc.disabled = rej.disabled = true;
         try {
           const r = await fetch(`/api/findings/${f.id}/decision`, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() },
@@ -331,7 +343,8 @@
           const d = await r.json().catch(() => ({}));
           if (!r.ok) { dmsg.textContent = d.error || `Not saved (HTTP ${r.status})`; dmsg.className = "fd-msg bad"; return; }
           Object.assign(f, d.finding); const n = card(f); c.replaceWith(n); n.classList.add("flash");
-        } finally { acc.disabled = rej.disabled = false; }
+        } catch { dmsg.textContent = "The connection was interrupted. Try again."; dmsg.className = "fd-msg bad"; }
+        finally { acc.disabled = rej.disabled = false; if (ok) ok.disabled = false; }
       };
       const need = (accept) => {
         if (dta.value.trim()) return true;
@@ -347,7 +360,7 @@
         const cancel = el("button", "lg-btn sm ghost", "Cancel"); cancel.type = "button";
         ok.addEventListener("click", () => {
           if (!p.check()) { dmsg.textContent = `Choose ${window.LGPeople.label("analyst")}.`; dmsg.className = "fd-msg bad"; return; }
-          send("accept", p.value());
+          ok.disabled = true; send("accept", p.value(), ok);
         });
         cancel.addEventListener("click", () => { toBox.hidden = true; toBox.replaceChildren(); });
         const r2 = el("div", "fd-decide-row"); r2.append(cancel, ok);
@@ -369,7 +382,7 @@
     const KIND = { management: "management", researcher: "researcher", analyst: "analyst", advisor: "advisor" };
     // "Move it on" to a person (management, a researcher, an analyst): Looking Glass asks to whom, then it is sent
     const toBox = el("div", "fd-to"); toBox.hidden = true; let toP = null;
-    const send = async (to) => {
+    const send = async (to, ok) => {      // ok: the picker's button, held while it sends (review 2026-11-13)
       go.disabled = true;
       try {
         const r = await fetch(`/api/findings/${f.id}/status`, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() },
@@ -377,7 +390,8 @@
         const d = await r.json().catch(() => ({}));
         if (!r.ok) { msg.textContent = d.error || `Not saved (HTTP ${r.status})`; msg.className = "fd-msg bad"; return; }
         Object.assign(f, d.finding); const n = card(f); c.replaceWith(n); n.classList.add("flash");
-      } finally { go.disabled = false; }
+      } catch { msg.textContent = "The connection was interrupted. Try again."; msg.className = "fd-msg bad"; }
+      finally { go.disabled = false; if (ok) ok.disabled = false; }
     };
     const ask = () => {
       const k = KIND[sel.value];
@@ -385,7 +399,7 @@
       const h = el("div", "fd-ask"); h.append(el("b", null, "Looking Glass asks:"), document.createTextNode(` to whom does it go? (${window.LGPeople.label(k)})`));
       const ok = el("button", "lg-btn sm primary", "Send it"); ok.type = "button";
       const cancel = el("button", "lg-btn sm ghost", "Cancel"); cancel.type = "button";
-      ok.addEventListener("click", () => { if (!toP.check()) { msg.textContent = `Choose ${window.LGPeople.label(k)}.`; msg.className = "fd-msg bad"; return; } send(toP.value()); });
+      ok.addEventListener("click", () => { if (!toP.check()) { msg.textContent = `Choose ${window.LGPeople.label(k)}.`; msg.className = "fd-msg bad"; return; } ok.disabled = true; send(toP.value(), ok); });
       cancel.addEventListener("click", () => { toBox.hidden = true; toP = null; });
       const row = el("div", "fd-decide-row"); row.append(cancel, ok);
       toBox.append(h, toP.el, row); toBox.hidden = false; toP.el.querySelector("select")?.focus();

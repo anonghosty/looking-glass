@@ -10,7 +10,7 @@
   --border-strong: rgba(255, 255, 255, 0.14);
   --text: #ededef;
   --text-2: #b4b4bb;
-  --muted: #7c7c85;
+  --muted: #8a8a93;   /* 5.0:1 on the raised cards too (was #7c7c85, 4.15:1 there; review 2026-11-13) */
   --accent: #5b8def;           /* single interactive accent */
   --accent-soft: rgba(91, 141, 239, 0.14);
   --pin: #9e8cfc;
@@ -1003,7 +1003,7 @@ details.mp-mini.kev > summary { color: #ff9a9e; }
 .lgs-opt i { font-style: normal; color: #8fb0ff; font-weight: 700; }
 .lgs-opt:hover, .lgs-opt:focus { outline: none; background: rgba(91, 141, 239, .16); color: #fff; }
 .lgs-opt.on { color: #fff; background: rgba(91, 141, 239, .1); font-weight: 600; }
-.lgs-none { margin: 8px 10px; color: #6b7690; font-size: 12.5px; }
+.lgs-none { margin: 8px 10px; color: #7a85a0; font-size: 12.5px; }
 @media (prefers-reduced-motion: reduce) { .lgs-pop { animation: none; } .lgs-chev { transition: none; } }
 /* places */
 .grid2 .lgs { width: 100%; }

@@ -328,8 +328,9 @@
     $("streamResize").addEventListener("pointerdown", (e) => { startY = e.clientY; startH = $("stream").getBoundingClientRect().height; addEventListener("pointermove", move); addEventListener("pointerup", up); });
   })();
   document.addEventListener("keydown", (e) => {
-    if (e.target.matches("input, select, textarea")) return;
+    // Escape works while typing (e.g. the glossary search); only the letter shortcut skips fields (review 2026-11-13)
     if (e.key === "Escape") { closeInsight(); closeModal(); closeGlossary(); setDrawer(false); }
+    else if (e.target.matches("input, select, textarea")) return;
     else if (e.key.toLowerCase() === "l") setStreamCollapsed(!$("stream").classList.contains("collapsed"));
   });
 
@@ -1014,7 +1015,15 @@
   }
 
   // ------------------------------------------------------------------ drawer (tablet / phone): same as the map platform
-  function setDrawer(open) { $("drawer").classList.toggle("open", open); $("scrim").hidden = !open || !mq("(max-width: 1099px)"); $("btnDrawer").setAttribute("aria-expanded", String(open)); }
+  function setDrawer(open) {
+    const overlay = open && mq("(max-width: 1099px)");
+    $("drawer").classList.toggle("open", open); $("scrim").hidden = !overlay; $("btnDrawer").setAttribute("aria-expanded", String(open));
+    // on a phone or tablet the drawer covers the page: a dialog while it does, so focus moves in, Tab stays inside and
+    // closing returns focus to the menu button (dialog-focus.js; review 2026-11-13). On a desktop it is a side panel.
+    const d = $("drawer");
+    if (overlay) { d.setAttribute("role", "dialog"); d.setAttribute("aria-modal", "true"); $("btnCloseDrawer").focus({ preventScroll: true }); }
+    else { d.removeAttribute("aria-modal"); d.removeAttribute("role"); }
+  }
   $("btnDrawer").addEventListener("click", () => setDrawer(true));
   $("btnCloseDrawer").addEventListener("click", () => setDrawer(false));
   $("scrim").addEventListener("click", () => setDrawer(false));
@@ -1051,9 +1060,15 @@
   }
   async function openModal(ev) {
     hideTip();
+    // newest click wins; a reply after close or a later click is dropped; no repeat request for the same row (review 2026-11-13)
+    const key = `${ev.id}|${ev.extracted_date}`;
+    if (openModal.loading === key) return;
+    const seq = ++openModal.seq; openModal.loading = key;
     let d;
     try { d = await getJSON(`/api/svc/detail?id=${encodeURIComponent(ev.id)}&at=${encodeURIComponent(ev.extracted_date)}`); }
-    catch (err) { toast(`Could not load the record: ${err.message}`); return; }
+    catch (err) { if (seq === openModal.seq) toast(`Could not load the record: ${err.message}`); return; }
+    finally { if (openModal.loading === key && seq === openModal.seq) openModal.loading = null; }
+    if (seq !== openModal.seq) return;
     const e = d.event; state.modalEv = e; refLabels.set(e.ip_ref, e.ip);
     $("modal").style.setProperty("--mc", famColor(e.family));
     const sw = el("span", "swatch"); sw.style.background = famColor(e.family);
@@ -1084,7 +1099,8 @@
     if (ex.length || hid) body.append(section(`${e.service} specific fields${hid}`, ex.map(([k, v]) => [k.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()), v]), true));
     $("modal").hidden = false; $("modalScrim").hidden = false; $("btnModalClose").focus();
   }
-  function closeModal() { $("modal").hidden = true; if ($("insight").hidden && $("glossary").hidden) $("modalScrim").hidden = true; state.modalEv = null; }
+  openModal.seq = 0; openModal.loading = null;
+  function closeModal() { openModal.seq++; openModal.loading = null; $("modal").hidden = true; if ($("insight").hidden && $("glossary").hidden) $("modalScrim").hidden = true; state.modalEv = null; }
   $("btnModalClose").addEventListener("click", closeModal);
   $("modalScrim").addEventListener("click", () => { if (!$("glossary").hidden) closeGlossary(); else if (!$("insight").hidden) closeInsight(); else closeModal(); });
   $("mHost").addEventListener("click", () => { const e = state.modalEv; if (e) openInsight([["ip", e.ip_ref]]); });
@@ -1128,7 +1144,7 @@
     const p = new URLSearchParams(pairs); p.set("at", atParam());
     window.LGAnalysis = { platform: "services", query: p.toString(), at: p.get("at"), title: selTitle(pairs) };   // acode-make.js
     let d;
-    try { d = await getJSON(`/api/svc/insight?${p}`); } catch (err) { $("iBody").replaceChildren(el("div", "i-loading", `Could not load analysis: ${err.message}`)); return; }
+    try { d = await getJSON(`/api/svc/insight?${p}`); } catch (err) { if (stack[stack.length - 1] !== pairs) return; $("iBody").replaceChildren(el("div", "i-loading", `Could not load analysis: ${err.message}`)); return; }
     if (stack[stack.length - 1] !== pairs) return;
     renderInsight(pairs, d, opts.drill);
   }
@@ -1269,7 +1285,7 @@
     box.scrollIntoView({ block: "nearest", behavior: reducedMotion ? "auto" : "smooth" });
     const p = new URLSearchParams(pairs); p.set("at", atParam()); p.set("metric", metric);
     let r;
-    try { r = await getJSON(`/api/svc/drill?${p}`); } catch (err) { box.replaceChildren(el("div", "i-loading", `Could not load the details: ${err.message}`)); return; }
+    try { r = await getJSON(`/api/svc/drill?${p}`); } catch (err) { if (box.dataset.metric !== metric) return; box.replaceChildren(el("div", "i-loading", `Could not load the details: ${err.message}`)); return; }
     if (box.dataset.metric !== metric) return;
     renderDrill(box, r, pairs, d);
   }
@@ -1280,7 +1296,7 @@
     const acts = el("div", "drill-actions");
     if (r.rows.length) {
       const canExport = document.body.dataset.export === "1";     // external viewers get no downloads
-      const dl = el("button", "pill-btn", "Download CSV"); dl.type = "button"; dl.title = "Save this list as a spreadsheet file (CSV)"; dl.addEventListener("click", () => downloadDrill(r, pairs, d)); if (canExport) acts.append(dl);
+      const dl = el("button", "pill-btn", "Download CSV"); dl.type = "button"; dl.title = "Save this list as a spreadsheet file (CSV)"; dl.addEventListener("click", () => downloadDrill(r, pairs, d, dl)); if (canExport) acts.append(dl);
       const p = new URLSearchParams(pairs); p.set("at", atParam()); p.set("metric", r.metric); p.set("all", "1"); p.set("label", selTitle(pairs));
       const pdf = el("button", "pill-btn pdf-btn", "Download report (PDF + CSV)"); pdf.type = "button";
       pdf.title = "A ZIP file with a detailed PDF report of this figure (executive summary, key figures, priorities, the issues explained: CVEs with NVD, CISA KEV and EPSS, breakdowns, report definitions) and the complete list as a CSV file";
@@ -1301,7 +1317,8 @@
             r.iss = await window.LGLookup.run({ kind: "issues", values: names, title: "Explaining the issues",
               intro: `${names.length} issue${names.length === 1 ? "" : "s"}: ${nCve} CVE${nCve === 1 ? "" : "s"}, looked up in batches (CISA's exploited-vulnerabilities catalog once a day, EPSS 100 at a time, ` +
                 `the official CVE.org records four at a time; NVD's own analysis is added in the background at NVD's pace), and ${names.length - nCve} other issue${names.length - nCve === 1 ? "" : "s"}, explained from their definitions.` });
-            renderDrill(box, r, pairs, d);
+            // kept on r; redraw only if this list is still the one shown (review 2026-11-13)
+            if (box.dataset.metric === r.metric && !box.hidden && box.isConnected) renderDrill(box, r, pairs, d);
           } catch (err) { ib.disabled = false; ib.textContent = `Look-up failed: ${err.message} (retry)`; }
         });
         acts.append(ib);
@@ -1361,9 +1378,15 @@
     if (r.total > r.rows.length) box.append(el("p", "drill-more", `Showing the first ${fmt(r.rows.length)} of ${fmt(r.total)}.${document.body.dataset.export === "1" ? ` Download CSV saves all ${fmt(r.total)}.` : ""}`));
     else box.append(el("p", "drill-more", `${fmt(r.total)} ${r.total === 1 ? "entry" : "entries"}. Click a row to analyse it.`));
   }
-  async function downloadDrill(r, pairs, d) {
+  async function downloadDrill(r, pairs, d, btn) {
     const iss = r.iss, kind = r.row_kind;
-    if (r.total > r.rows.length) { try { const p = new URLSearchParams(pairs); p.set("at", atParam()); p.set("metric", r.metric); p.set("all", "1"); r = await getJSON(`/api/svc/drill?${p}`); } catch { /* the rows shown */ } }
+    if (r.total > r.rows.length) {
+      // busy while the full list loads; say so when only the rows shown are saved (review 2026-11-13)
+      const label = btn ? btn.textContent : ""; if (btn) { btn.disabled = true; btn.textContent = "Preparing…"; }
+      try { const p = new URLSearchParams(pairs); p.set("at", atParam()); p.set("metric", r.metric); p.set("all", "1"); r = await getJSON(`/api/svc/drill?${p}`); }
+      catch (err) { toast(`Saved only the first ${fmt(r.rows.length)} rows: ${err.message}`); }
+      finally { if (btn) { btn.disabled = false; btn.textContent = label; } }
+    }
     // quoted, and spreadsheet-safe: a cell starting with = + - @ (not a plain number) would run as a formula
     const q = (s) => { s = String(s); if (/^[=+\-@\t\r\n＝＋－＠]/.test(s) && !/^([+-]?\d+([.,]\d+)*%?|-+)$/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; };
     const lines = [[...r.columns.map(([, l]) => q(l)), ...(iss ? [q("What the issues are (CVE: NVD / CISA KEV / EPSS; others: definition)")] : [])].join(",")];

@@ -98,8 +98,11 @@
   }
 
   // ---------------- Overview: the figures, the charts and the control checks
+  let ovSeq = 0;      // fast period presets: only the newest overview draws (review 2026-11-13)
   async function loadOverview() {
+    const seq = ++ovSeq;
     const d = await getJSON(`/api/audit/overview?${per()}`);
+    if (seq !== ovSeq) return;
     const body = $("ovBody"); body.replaceChildren();
     const k = d.kpis, nistN = new Set(d.checks.flatMap((c) => (c.nist || []).map((x) => x.id))).size;
     // the count says what it counts: safeguards BACKED by a check (Looking Glass's own, conservative reading in
@@ -180,11 +183,18 @@
   }
 
   // ---------------- one tab of the log
-  let logTab = "auth", logOffset = 0;
+  // only the newest load writes rows and moves logOffset; "Show more" waits while the log loads (review 2026-11-13)
+  let logTab = "auth", logOffset = 0, logSeq = 0;
   async function loadLog(reset) {
+    const seq = ++logSeq;
     if (reset) logOffset = 0;
     const q = encodeURIComponent($("logSearch").value.trim());
-    const d = await getJSON(`/api/audit/events?tab=${logTab}&${per()}&q=${q}&limit=200&offset=${logOffset}&alerts=${$("logAlerts").checked ? 1 : 0}&selftests=${$("logTests").checked ? 1 : 0}`);
+    const more = $("logMore"); more.disabled = true;
+    let d;
+    try {
+      d = await getJSON(`/api/audit/events?tab=${logTab}&${per()}&q=${q}&limit=200&offset=${logOffset}&alerts=${$("logAlerts").checked ? 1 : 0}&selftests=${$("logTests").checked ? 1 : 0}`);
+    } finally { if (seq === logSeq) more.disabled = false; }
+    if (seq !== logSeq) return;
     for (const [key, n] of Object.entries(d.counts || {})) { const s = document.querySelector(`[data-n="${key}"]`); if (s) s.textContent = fmt(n); }
     document.querySelectorAll("[data-n]").forEach((s) => { if (!(s.dataset.n in (d.counts || {}))) s.textContent = "0"; });
     const tb = $("logTable").querySelector("tbody"); if (reset) tb.replaceChildren();

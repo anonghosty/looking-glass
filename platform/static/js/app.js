@@ -1027,7 +1027,9 @@
       window.LGLoader?.ready();
       setTimeout(fitKpis, 1000);   // after the figures have counted up to their new width
       renderIntel(s);
-    } catch { /* keep previous */ }
+    } catch (err) {   // keep previous; with no figures yet, say so once (review 2026-11-13)
+      if (my === refreshStats.seq && !state.stats && !refreshStats.toasted) { refreshStats.toasted = true; toast(`Could not load figures: ${err.message}`); }
+    }
   }
   async function loadFacets() {
     try {
@@ -1419,7 +1421,9 @@
           ["Seen in reports", (r.sources || []).map((s) => `${s.label} (${fmt(s.count)}, ${Math.round((s.count / Math.max(1, r.count)) * 100)}%)`).join(", ")],
           ["Infections / categories", r.infections.join(", ")], ["Contacted hosts", r.hosts.join(", ")], ["Destinations", r.dst_ips.join(", ")],
         ]));
-      } catch { /* leave placeholder */ }
+      } catch (err) {   // say so instead of "Loading…" forever (review 2026-11-13)
+        if (state.modalEv === ev) related.replaceWith(section("This host yesterday", [["Status", `Could not load: ${err.message}`]]));
+      }
     }
   }
   function setPlace(id, cc, parts) {
@@ -1436,7 +1440,9 @@
   }
   function closeModal() { $("modal").hidden = true; $("modalScrim").hidden = true; state.modalEv = null; }
   $("btnModalClose").addEventListener("click", closeModal);
-  $("modalScrim").addEventListener("click", () => { if (!$("insight").hidden) closeInsight(); else closeModal(); });
+  // one click on the background closes the top layer only: the glossary, when open over these, closes on its own
+  // (its listener below), and the analysis or record under it stays (review 2026-11-13: both closed at once)
+  $("modalScrim").addEventListener("click", () => { if (!$("glossaryDlg").hidden) return; if (!$("insight").hidden) closeInsight(); else closeModal(); });
   $("mHost").addEventListener("click", () => { if (state.modalEv) openInsight("src_ip", state.modalEv.src_ref || state.modalEv.src_ip); });
   $("mPin").addEventListener("click", () => state.modalEv && togglePin(state.modalEv));
   $("mCopy").addEventListener("click", async () => {
@@ -1947,7 +1953,11 @@
     let d;
     try {
       d = await getJSON(`/api/insight?kind=${encodeURIComponent(kind)}&value=${encodeURIComponent(value)}&at=${encodeURIComponent(new Date(replayNow()).toISOString())}`);
-    } catch (err) { $("iBody").replaceChildren(el("div", "i-loading", `Could not load analysis: ${err.message}`)); return; }
+    } catch (err) {
+      const top = insightStack[insightStack.length - 1];   // a newer analysis owns the dialog (review 2026-11-13)
+      if (!top || top[0] !== kind || top[1] !== value) return;
+      $("iBody").replaceChildren(el("div", "i-loading", `Could not load analysis: ${err.message}`)); return;
+    }
     const cur = insightStack[insightStack.length - 1];
     if (!cur || cur[0] !== kind || cur[1] !== value) return;
     renderInsight(d);
@@ -2112,7 +2122,7 @@
     let r;
     try {
       r = await getJSON(`/api/insight/drill?kind=${encodeURIComponent(d.kind)}&value=${encodeURIComponent(d.value)}&metric=${metric}&at=${encodeURIComponent(d.as_of)}`);
-    } catch (err) { box.replaceChildren(el("div", "i-loading", `Could not load the details: ${err.message}`)); return; }
+    } catch (err) { if (box.dataset.metric !== metric) return; box.replaceChildren(el("div", "i-loading", `Could not load the details: ${err.message}`)); return; }
     if (box.dataset.metric !== metric) return;
     renderDrill(box, r, d);
   }
@@ -2133,7 +2143,7 @@
       if (document.body.dataset.export === "1") {
       const dl = el("button", "pill-btn", "Download CSV"); dl.type = "button";
       dl.title = "Save this list as a spreadsheet file (CSV)";
-      dl.addEventListener("click", () => downloadDrill(r, d));
+      dl.addEventListener("click", () => downloadDrill(r, d, dl));
       acts.append(dl);
       const label = `${d.kind_label || ""}: ${d.value_label || d.value}${d.scope_label ? ` (${d.scope_label})` : ""}`;
       acts.append(pdfButton(`/api/insight/report?kind=${encodeURIComponent(d.kind)}&value=${encodeURIComponent(d.value)}&metric=${r.metric}&at=${encodeURIComponent(d.as_of)}&all=1&label=${encodeURIComponent(label)}`));
@@ -2152,7 +2162,8 @@
               intro: `${names.length} infection${names.length === 1 ? "" : "s"} / categor${names.length === 1 ? "y" : "ies"} in this list, each looked up once. ` +
                 (CFG.malpedia ? "Malpedia's answers are kept for a week, so names seen before come back at once; new names are asked at most 30 a minute." :
                   "Malpedia is not set up here: the Looking Glass definitions answer.") });
-            renderDrill(box, r, d);
+            // kept on r; redraw only if this list is still the one shown (review 2026-11-13)
+            if (box.dataset.metric === r.metric && !box.hidden && box.isConnected) renderDrill(box, r, d);
           } catch (err) { mp.disabled = false; mp.textContent = `Malpedia failed: ${err.message} (retry)`; }
         });
         acts.append(mp);
@@ -2237,10 +2248,14 @@
     b.addEventListener("click", () => window.LGPdf.download(b, url));
     return b;
   }
-  async function downloadDrill(r, d) {
+  async function downloadDrill(r, d, btn) {
     const mp = r.mp;
     if (r.total > r.rows.length) {   // the table shows the first rows; the file gets all of them
-      try { r = await getJSON(`/api/insight/drill?kind=${encodeURIComponent(d.kind)}&value=${encodeURIComponent(d.value)}&metric=${r.metric}&at=${encodeURIComponent(d.as_of)}&all=1`); } catch { /* fall back to the rows shown */ }
+      // busy while the full list loads; say so when only the rows shown are saved (review 2026-11-13)
+      const label = btn ? btn.textContent : ""; if (btn) { btn.disabled = true; btn.textContent = "Preparing…"; }
+      try { r = await getJSON(`/api/insight/drill?kind=${encodeURIComponent(d.kind)}&value=${encodeURIComponent(d.value)}&metric=${r.metric}&at=${encodeURIComponent(d.as_of)}&all=1`); }
+      catch (err) { toast(`Saved only the first ${fmt(r.rows.length)} rows: ${err.message}`); }   // fall back to the rows shown
+      finally { if (btn) { btn.disabled = false; btn.textContent = label; } }
     }
     // quoted, and spreadsheet-safe: a cell starting with = + - @ (not a plain number) would run as a formula
     const q = (s) => { s = String(s); if (/^[=+\-@\t\r\n＝＋－＠]/.test(s) && !/^([+-]?\d+([.,]\d+)*%?|-+)$/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; };
@@ -2298,9 +2313,15 @@
 
   // ------------------------------------------------------------------ drawer / layout
   function setDrawer(open) {
+    const overlay = open && mq("(max-width: 1099px)");
     $("drawer").classList.toggle("open", open);
-    $("scrim").hidden = !open || !mq("(max-width: 1099px)");
+    $("scrim").hidden = !overlay;
     $("btnDrawer").setAttribute("aria-expanded", String(open));
+    // on a phone or tablet the drawer covers the page: a dialog while it does, so focus moves in, Tab stays inside and
+    // closing returns focus to the menu button (dialog-focus.js; review 2026-11-13). On a desktop it is a side panel.
+    const d = $("drawer");
+    if (overlay) { d.setAttribute("role", "dialog"); d.setAttribute("aria-modal", "true"); $("btnCloseDrawer").focus({ preventScroll: true }); }
+    else { d.removeAttribute("aria-modal"); d.removeAttribute("role"); }
   }
   $("btnDrawer").addEventListener("click", () => setDrawer(true));
   $("btnCloseDrawer").addEventListener("click", () => setDrawer(false));
@@ -2394,7 +2415,10 @@
   }
   async function loadIntro(first) {
     let o;
-    try { o = await getJSON("/api/overview"); } catch { return; }
+    try { o = await getJSON("/api/overview"); } catch {   // say so; the minute timer retries (review 2026-11-13)
+      const k = $("introKicker"); if (k) k.textContent = "Could not load the overview (retrying every minute)";
+      return;
+    }
     window.__lgIntroData = o;
     window.LGTime?.set(o.tz);              // the intro can open before the first clock sync
     window.LGLoader?.ready();   // arriving from another page: the logo hands over once the overview has its figures

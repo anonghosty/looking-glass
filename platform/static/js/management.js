@@ -51,24 +51,30 @@
       }
     }
   }
+  // only the newest load draws and clears the loaders; what an older one turned on is cleared by the newest (review 2026-11-13)
+  let loadSeq = 0, fullOn = false, cardsOn = false;
   async function load(big, quiet = false) {
+    const seq = ++loadSeq;
     // quiet: the 7-day baseline finished more days in the background; refresh the figures without the loaders
     if (!quiet) clearTimeout(baseTimer);
     document.body.classList.add("is-loading");
     const full = !quiet && (big || !state.data) && window.LGLoader;
-    if (full) window.LGLoader.busy(typeof big === "string" ? big : PLAT_LABEL[state.plat]);
-    else if (!quiet) { clearTimeout(busyTimer); cardsBusy(true); }
+    if (full) { window.LGLoader.busy(typeof big === "string" ? big : PLAT_LABEL[state.plat]); fullOn = true; }
+    else if (!quiet) { clearTimeout(busyTimer); cardsBusy(true); cardsOn = true; }
     try {
       const r = await fetch(`/api/mgmt/${state.plat}?${query()}`, { cache: "no-store", credentials: "same-origin" });
       const d = await r.json();
+      if (seq !== loadSeq) return;        // a newer load started: it draws
       if (!r.ok) throw new Error(d.error || r.statusText);
       state.data = d;
       render();
-    } catch (e) { toast(`Could not load: ${e.message}`, "bad"); }
+    } catch (e) { if (seq === loadSeq) toast(`Could not load: ${e.message}`, "bad"); }
     finally {
-      document.body.classList.remove("is-loading");
-      clearTimeout(busyTimer); if (!full && !quiet) requestAnimationFrame(() => cardsBusy(false));
-      if (full) window.LGLoader.ready();
+      if (seq === loadSeq) {
+        document.body.classList.remove("is-loading");
+        clearTimeout(busyTimer); if (cardsOn) { cardsOn = false; requestAnimationFrame(() => cardsBusy(false)); }
+        if (fullOn) { fullOn = false; window.LGLoader.ready(); }
+      }
     }
   }
 
@@ -740,6 +746,7 @@
     finally { b.disabled = false; b.classList.remove("busy"); b.querySelector("b").textContent = "Executive report"; }
   });
   $("mgExplainAll").addEventListener("click", async () => {
+    if (!state.data) return;      // clicked before the first load: nothing to explain yet (review 2026-11-13)
     const d = state.data, comms = d.platform === "comms", b = $("mgExplainAll");
     const names = (comms ? d.infections : d.issues).slice(0, 25).map((r) => r.value);
     b.disabled = true;

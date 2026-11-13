@@ -288,7 +288,7 @@
     fetch(`/api/combos/search/${job}`, { cache: "no-store" }).then((r) => r.json()).then((st) => {
       if (st.needs_review) { c.replaceChildren(); reviewBox(job, st, entry, c); }
       else if (!entry || !String(entry.code || "").startsWith("LG-A-")) plainSend(job, st, entry, c);
-    }).catch(() => {});
+    }).catch(() => { c.append(el("p", "cb-hint", "Could not read this search's state: reload the page to send it to management.")); });   // (review 2026-11-13)
     c.append(el("h3", null, "Across every category"),
       el("p", "cb-hint", `What these ${pl(s.devices, "device")} show in the other categories: the services reports they are in (with their pattern codes), the CVEs and issues on them, the infections they call sinkholes as. Added to this report for its generation.`));
     const out = el("div", "ce-out");
@@ -305,7 +305,8 @@
         if (!r.ok) { msg.textContent = d.error || `Failed (HTTP ${r.status})`; return; }
         draw(out, d.enrich); s.enrich = d.enrich; go.textContent = "Analysis added: refresh it";
         msg.textContent = "Added to the report: download it below.";
-      } finally { go.disabled = false; }
+      } catch { msg.textContent = "The connection was interrupted. Try again."; }
+      finally { go.disabled = false; }
     });
     // the request to management: an analyst code of exactly these devices, as a finding
     const req = el("details", "ce-req");

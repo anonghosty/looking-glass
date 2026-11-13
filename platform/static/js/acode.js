@@ -200,7 +200,12 @@
   }
 
   async function load() {
-    const r = await fetch(`/api/intel/acode/${encodeURIComponent(code)}`, { cache: "no-store" });
+    let r;
+    try { r = await fetch(`/api/intel/acode/${encodeURIComponent(code)}`, { cache: "no-store" }); }
+    catch (e) {                                // the connection dropped: say so, never a page that loads for ever (review 2026-11-13)
+      $("axLoading")?.remove(); window.LGLoader?.ready();
+      main.append(el("p", "ax-empty", `Could not open it: ${e.message}`)); return;
+    }
     const d = await r.json().catch(() => ({}));
     $("axLoading")?.remove();
     window.LGLoader?.ready();
@@ -292,7 +297,8 @@
           msg.className = "ax-msg ok";
           if (nfc.checked) { nfc.checked = false; nfc.disabled = true; nfc.dispatchEvent(new Event("change")); }
           ta.value = ""; picked.clear(); for (const cb of main.querySelectorAll(".ax-tick input")) cb.checked = false; drawPicked();
-        } finally { replyBtn.disabled = false; }
+        } catch { msg.textContent = "The connection was interrupted. Try again."; msg.className = "ax-msg bad"; }   // (review 2026-11-13)
+        finally { replyBtn.disabled = false; }
       });
       main.append(rp);
     }

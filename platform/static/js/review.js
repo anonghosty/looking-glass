@@ -30,7 +30,12 @@
   }
 
   async function load() {
-    const r = await fetch(`/api/review/${encodeURIComponent(fid)}`, { cache: "no-store" });
+    let r;
+    try { r = await fetch(`/api/review/${encodeURIComponent(fid)}`, { cache: "no-store" }); }
+    catch (e) {                                // the connection dropped: say so, never a page that loads for ever (review 2026-11-13)
+      $("rvLoading")?.remove(); window.LGLoader?.ready();
+      main.append(el("p", "fd-empty", `Could not open it: ${e.message}`)); return;
+    }
     const d = await r.json().catch(() => ({}));
     $("rvLoading")?.remove();
     window.LGLoader?.ready();
@@ -121,7 +126,8 @@
           const x = await rr.json().catch(() => ({}));
           if (!rr.ok) { m.textContent = x.error || `Not saved (HTTP ${rr.status})`; m.className = "fd-msg bad"; return; }
           main.replaceChildren(el("p", "fd-empty", choice === "reject" ? "Rejected: the finding is closed." : "Saved: it goes to the advisor.")); setTimeout(() => location.reload(), 900);
-        } finally { add.disabled = only.disabled = rej.disabled = false; }
+        } catch { m.textContent = "The connection was interrupted. Try again."; m.className = "fd-msg bad"; }   // (review 2026-11-13)
+        finally { add.disabled = only.disabled = rej.disabled = false; }
       };
       add.addEventListener("click", () => go("both")); only.addEventListener("click", () => go("researcher")); rej.addEventListener("click", () => go("reject"));
       const row = el("div", "fd-decide-row"); row.append(m, rej, only, ...(plain ? [] : [add]));

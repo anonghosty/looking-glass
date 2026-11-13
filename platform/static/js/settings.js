@@ -58,19 +58,26 @@
   }
   async function idPoll() {
     clearTimeout(idTimer);
-    let st; try { st = await (await fetch("/api/asns/identify", { cache: "no-store" })).json(); } catch { idTimer = setTimeout(idPoll, 2000); return; }
+    let st; try { st = await (await fetch("/api/asns/identify", { cache: "no-store" })).json(); } catch { idTimer = setTimeout(idPoll, 2000); $("btnIdentify").disabled = false; return; }
     idRender(st);
+    $("btnIdentify").disabled = false;         // polling (a click shows the progress again) or over (a click starts a new job)
     if (st.state === "running") idTimer = setTimeout(idPoll, 1000);
-    else if (st.state === "done" || st.state === "stopped") { const keep = new Set(chosen); await load(); chosen = keep; renderNets(); refresh(); }
+    else {
+      idTimer = null;                          // done, failed or stopped: no job to resume (review 2026-11-13)
+      if (st.state === "done" || st.state === "stopped") { const keep = new Set(chosen); await load(); chosen = keep; renderNets(); refresh(); }
+    }
   }
   $("btnIdentify").addEventListener("click", async () => {
+    // a job already running: show its progress window again (closing it never stopped the polling), never a second start (review 2026-11-13)
+    if (idTimer) { idShow(true); return; }
+    const btn = $("btnIdentify"); btn.disabled = true;      // until the job is polled or has failed
     idShow(true); idRender({ state: "running", total: 0, done: 0, added: 0, known: 0, failed: 0, current: "", log: [], message: "" });
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
     try {
       const r = await fetch("/api/asns/identify", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: "{}" });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) { idRender({ state: "failed", total: 0, done: 0, added: 0, known: 0, failed: 0, log: [], message: j.error || `Refused (${r.status}).` }); return; }
-    } catch (e) { idRender({ state: "failed", total: 0, done: 0, added: 0, known: 0, failed: 0, log: [], message: `Could not start: ${e.message}` }); return; }
+      if (!r.ok) { btn.disabled = false; idRender({ state: "failed", total: 0, done: 0, added: 0, known: 0, failed: 0, log: [], message: j.error || `Refused (${r.status}).` }); return; }
+    } catch (e) { btn.disabled = false; idRender({ state: "failed", total: 0, done: 0, added: 0, known: 0, failed: 0, log: [], message: `Could not start: ${e.message}` }); return; }
     idPoll();
   });
   $("idClose").addEventListener("click", () => idShow(false));
@@ -84,11 +91,16 @@
   }
 
   // ---------------- country
+  let countrySeq = 0;
   async function renderCountry() {
+    const mine = ++countrySeq;
     const iso = $("country").value, info = data.countries.find((c) => c.iso2 === iso) || {};
     $("countryMeta").textContent = info.regions ? `${info.regions} first-level regions · geoBoundaries ADM1` : "No region boundaries available for this country";
     const svg = $("preview"); svg.replaceChildren(); shapes = null;
-    if (info.regions) { try { shapes = await (await fetch(`/static/data/adm1/${iso}.json`)).json(); } catch { shapes = null; } }
+    let got = null;
+    if (info.regions) { try { got = await (await fetch(`/static/data/adm1/${iso}.json`)).json(); } catch { got = null; } }
+    if (mine !== countrySeq) return;           // another country was picked meanwhile: its own call draws the map (review 2026-11-13)
+    shapes = got;
     const keys = shapes ? Object.keys(shapes.regions) : [];
     const country = norm(info.country || "");
     // report region names -> map regions through the map's names, ISO names and aliases (static/js/regions.js)

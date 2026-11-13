@@ -170,4 +170,12 @@
     e.preventDefault();
     window.LGLoader.go(href);
   });
+
+  // keyboard focus for every dialog on every page (dialog-focus.js): loaded from here, which every page already has
+  if (!document.querySelector('script[src*="dialog-focus.js"]')) {
+    const s = document.createElement("script");
+    s.src = (document.currentScript?.src || "/static/js/loader.js").replace(/loader\.js(\?.*)?$/, "dialog-focus.js");
+    s.defer = true;
+    document.head.append(s);
+  }
 })();

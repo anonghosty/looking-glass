@@ -22,7 +22,9 @@
 
   async function fieldsPane(pane, name, onSaved) {
     pane.replaceChildren(el("p", "svc-loading", "Measuring how each field groups the hosts…"));
-    const r = await fetch(`/api/kb/service/fields?name=${encodeURIComponent(name)}`, { cache: "no-store" });
+    let r;
+    try { r = await fetch(`/api/kb/service/fields?name=${encodeURIComponent(name)}`, { cache: "no-store" }); }
+    catch (e) { pane.replaceChildren(el("p", "svc-loading", `Could not open: ${e.message}`)); return; }   // (review 2026-11-13)
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { pane.replaceChildren(el("p", "svc-loading", d.error || `HTTP ${r.status}`)); return; }
     pane.replaceChildren();
@@ -67,8 +69,15 @@
       } catch (e) { msg.className = "kbn-msg bad"; msg.textContent = e.message; } finally { save.disabled = false; }
     });
     reset.addEventListener("click", async () => {
-      const rr = await post("/api/kb/service/fields", { name, reset: true });
-      if (rr.ok) onSaved?.();
+      if (reset.disabled) return;              // one reset at a time; say why it failed (review 2026-11-13)
+      reset.disabled = true;
+      try {
+        const rr = await post("/api/kb/service/fields", { name, reset: true });
+        const j = await rr.json().catch(() => ({}));
+        if (!rr.ok) throw new Error(j.error || `HTTP ${rr.status}`);
+        onSaved?.();
+      } catch (e) { msg.className = "kbn-msg bad"; msg.textContent = e instanceof TypeError ? "The connection was interrupted. Try again." : e.message; }
+      finally { reset.disabled = false; }
     });
     // a product rule: how to read a product and its version out of a response
     const pr = block("Add a product rule", "When a banner, a system description or a server header holds a product Looking Glass does not recognise yet: the text it contains, and the product's name. Your rules are tried first.");
@@ -79,10 +88,14 @@
     const add = el("button", "lg-btn sm", "Add rule"); add.type = "button"; const m2 = el("span", "kbn-msg");
     f.append(contains, product, vl, add, m2); pr.append(f);
     add.addEventListener("click", async () => {
-      const rr = await post("/api/kb/product-rules", { contains: contains.value, product: product.value, version: vcb.checked });
-      const j = await rr.json().catch(() => ({}));
-      if (!rr.ok) { m2.className = "kbn-msg bad"; m2.textContent = j.error || `HTTP ${rr.status}`; return; }
-      m2.className = "kbn-msg ok"; m2.textContent = "Rule added: the patterns are counted with it from now on."; contains.value = ""; product.value = "";
+      add.disabled = true;                     // like Save: one post at a time, a dropped connection said (review 2026-11-13)
+      try {
+        const rr = await post("/api/kb/product-rules", { contains: contains.value, product: product.value, version: vcb.checked });
+        const j = await rr.json().catch(() => ({}));
+        if (!rr.ok) { m2.className = "kbn-msg bad"; m2.textContent = j.error || `HTTP ${rr.status}`; return; }
+        m2.className = "kbn-msg ok"; m2.textContent = "Rule added: the patterns are counted with it from now on."; contains.value = ""; product.value = "";
+      } catch { m2.className = "kbn-msg bad"; m2.textContent = "The connection was interrupted. Try again."; }
+      finally { add.disabled = false; }
     });
     pane.append(pr);
   }

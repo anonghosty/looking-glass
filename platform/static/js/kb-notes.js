@@ -99,21 +99,29 @@
         const del = el("button", "kbn-del", "Remove"); del.type = "button";
         del.addEventListener("click", async () => {
           if (!confirm("Remove this note? It disappears from the cards and future reports.")) return;
-          const r = await post("/api/notes/delete", { id: n.id });
-          const d = await r.json().catch(() => ({}));
-          if (!r.ok) { msg.textContent = d.error || `Not removed (HTTP ${r.status})`; msg.className = "kbn-msg bad"; return; }
-          load();
+          del.disabled = true;                 // one request at a time; a dropped connection said (review 2026-11-13)
+          try {
+            const r = await post("/api/notes/delete", { id: n.id });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) { msg.textContent = d.error || `Not removed (HTTP ${r.status})`; msg.className = "kbn-msg bad"; return; }
+            load();
+          } catch { msg.textContent = "The connection was interrupted. Try again."; msg.className = "kbn-msg bad"; }
+          finally { del.disabled = false; }
         });
         meta.append(del);
       }
       list.append(li);
     }
   }
+  // only the latest name's notes are drawn: A's arriving after B was opened are dropped (review 2026-11-13)
+  let loadSeq = 0;
   async function load() {
+    const mine = ++loadSeq;
     try {
       const r = await fetch(`/api/notes?section=${cur.section}&name=${encodeURIComponent(cur.name)}`, { cache: "no-store" });
-      render(r.ok ? (await r.json()).notes : []);
-    } catch { render([]); }
+      const notes = r.ok ? (await r.json()).notes : [];
+      if (mine === loadSeq) render(notes);
+    } catch { if (mine === loadSeq) render([]); }
   }
 
   // ---------------- combinations: picked, and three ways to pick
@@ -270,9 +278,14 @@
     const run = async () => {
       const code = inp.value.trim().toUpperCase();
       if (!CODE_RX.test(code)) { out.replaceChildren(el("span", "kbn-msg bad", "A code looks like LG-C-1A2B3C4D or LG-X-1A2B3C4D.")); return; }
-      const r = await fetch(`/api/combo-codes/${code}`, { cache: "no-store" }); const x = await r.json().catch(() => ({}));
-      if (!r.ok) { out.replaceChildren(el("span", "kbn-msg bad", x.error || `Unknown (HTTP ${r.status})`)); return; }
-      pick({ code, text: x.text }); inp.value = ""; out.replaceChildren(el("span", "kbn-msg ok", `Attached: ${x.text}`));
+      if (b.disabled) return;                  // Enter while it runs (review 2026-11-13)
+      b.disabled = true;
+      try {
+        const r = await fetch(`/api/combo-codes/${code}`, { cache: "no-store" }); const x = await r.json().catch(() => ({}));
+        if (!r.ok) { out.replaceChildren(el("span", "kbn-msg bad", x.error || `Unknown (HTTP ${r.status})`)); return; }
+        pick({ code, text: x.text }); inp.value = ""; out.replaceChildren(el("span", "kbn-msg ok", `Attached: ${x.text}`));
+      } catch { out.replaceChildren(el("span", "kbn-msg bad", "The connection was interrupted. Try again.")); }
+      finally { b.disabled = false; }
     };
     b.addEventListener("click", run); inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); run(); } });
     const svcHint = el("div", "kbn-svc-hint");
@@ -302,7 +315,8 @@
       if (toMgr) { toMgr.reset(); toMgr.el.hidden = true; } renderPicked(); renderPane();
       const f = (d.notes || []).find((n) => n.id === d.note?.id)?.finding;
       msg.textContent = tracked && f ? `Note saved and sent as finding ${f.number}: only you and the manager you chose see it.` : "Note saved and shared."; msg.className = "kbn-msg ok"; render(d.notes || []);
-    } finally { add.disabled = false; }
+    } catch { msg.textContent = "The connection was interrupted. Try again."; msg.className = "kbn-msg bad"; }   // (review 2026-11-13)
+    finally { add.disabled = false; }
   });
 
   // ---------------- open / close

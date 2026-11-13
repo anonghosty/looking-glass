@@ -1,6 +1,6 @@
 /* Looking Glass · Executive (management portal) */
 body.mg { --mg-bg: #070a12; --mg-card: rgba(18, 23, 38, .72); --mg-card-b: rgba(120, 140, 190, .14); --mg-text: #eef2fb; --mg-dim: #9aa6bf;
-  --mg-mute: #6b7690; --mg-blue: #5b8def; --mg-violet: #8b5cf6; --mg-teal: #22c3a6; --mg-amber: #f5b54a; --mg-red: #ef5d6c;
+  --mg-mute: #7a85a0;  /* 5.0:1 on the cards (was #6b7690, 4.1:1: below WCAG AA for text, review 2026-11-13) */ --mg-blue: #5b8def; --mg-violet: #8b5cf6; --mg-teal: #22c3a6; --mg-amber: #f5b54a; --mg-red: #ef5d6c;
   margin: 0; min-height: 100vh; overflow-x: hidden; overflow-y: auto; height: auto; background: var(--mg-bg); color: var(--mg-text);
   font-family: Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 html:has(body.mg) { overflow: auto; height: auto; }
@@ -339,7 +339,7 @@ body.is-loading .mg-grid, body.is-loading .mg-kpis { opacity: 1; }
 .mg-base-head span { font-size: 12.5px; color: var(--mg-mute, #9aa0ab); font-weight: 500; }
 .mg-base-head b { font-size: 20px; letter-spacing: -.02em; }
 .mg-base-cell .mg-spark { width: 100%; height: 70px; margin-top: 8px; }
-.mg-base-axis { display: flex; justify-content: space-between; font-size: 10.5px; color: #6d7380; margin-top: 2px; }
+.mg-base-axis { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--mg-mute); margin-top: 2px; }
 .mg-base-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; gap: 8px; }
 .mg-base-foot small { color: var(--mg-mute, #9aa0ab); font-size: 11.5px; }
 .mg-base-status { font-size: 12px; color: var(--mg-mute, #9aa0ab); }
