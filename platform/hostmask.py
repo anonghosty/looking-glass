@@ -24,8 +24,10 @@ MASKS = [
     # version such as 1.2.3.4.5, which the masked viewers' masker left alone: external review, 2026-11-12)
     # IPv6 (and hardware addresses): with "::", or at least four groups (so a time or a ratio is not one)
     (re.compile(r"(?<![\w:])(?=[0-9a-f:]*::|(?:[0-9a-f]{1,4}:){4})[0-9a-f:]{3,}[0-9a-f](?![\w:])", re.I), "<ip>"),
-    # host names: labels with at least one letter, ending in a letter-only top-level label (example.org, a.b.example.co)
-    (re.compile(r"(?<![\w.-])(?:\*\.)?(?=[\w-]*[a-z])[\w-]+(?:\.[\w-]+)*\.[a-z]{2,24}(?![\w-])", re.I), "<host>"),
+    # host names: dotted labels ending in a letter-only top-level label (example.org, a.b.example.co). Any label may
+    # be digits and dashes only: 41-66-1-2.static.telco.com.gh is a host name too (review 2026-11-13: a look-ahead
+    # demanded a letter in the FIRST label, so names that begin with a spelled address were left as they were)
+    (re.compile(r"(?<![\w.-])(?:\*\.)?[\w-]+(?:\.[\w-]+)*\.[a-z]{2,24}(?![\w-])", re.I), "<host>"),
     (re.compile(r"\b[0-9a-f]{12,}\b", re.I), "<id>"),
     (re.compile(r"(?<![\w.])\d{6,}(?![\w.])"), "<n>"),
 ]

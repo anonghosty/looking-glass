@@ -581,6 +581,15 @@ try:
     body = r.get_data(as_text=True)
     ok("CSV for the period", r.status_code == 200 and body.lstrip("﻿").startswith("time_utc,tab,event,by") and "attachment" in r.headers.get("Content-Disposition", ""))
     ok("…formula-safe", "'=1+1" in body and ",=1+1" not in body)
+    r = c.get(f"/api/audit/export.csv?tab=auth&{P}", headers=H)
+    ok("…one tab: its name in the file name", r.status_code == 200 and "audit_auth_" in r.headers.get("Content-Disposition", ""))
+    r = c.get('/api/audit/export.csv?tab=x"%0d%0aSet-Cookie:a=b', headers=H)
+    ok("…an unknown tab (a quote, a line break) is refused, never put in the header", r.status_code == 400
+       and "Set-Cookie" not in str(r.headers), str(r.status_code))
+    for path in ("/api/audit/overview?to=9999-12-31", "/api/audit/overview?from=9999-12-30&to=9999-12-31",
+                 "/api/audit/events?to=9999-12-31", "/api/audit/export.csv?to=9999-12-31"):
+        st = c.get(path, headers=H).status_code
+        ok(f"a period in the far future ends today, no error: {path}", st == 200, str(st))
     r = c.get(f"/api/audit/report.pdf?{P}", headers=H)
     ok("the evidence report (PDF)", r.status_code == 200 and r.data[:4] == b"%PDF" and len(r.data) > 3000, str(len(r.data)))
     if os.environ.get("LG_SAVE_PDF"):

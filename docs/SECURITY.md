@@ -324,6 +324,9 @@ The second list of 2026-11-13:
 | `/forgot` took longer for an unknown name than for an active account with a wrong code, so its time told which names are active | Both cost one password hash | `tests/check_auth_offline.py` counts the hashes on each path |
 | Product, vendor, device type and version reached masked viewers and researchers unmasked; a banner can carry the host's own name or address | Masked like a report's own fields (host names, addresses, e-mails, dates, IDs); a masked viewer's filter on them is compared with the masked value | `tests/check_banner_inbound.py` |
 | Intel called a Spam URL record's link host a "C2 domain" | Shadowserver's Spam URL report is about the sender (`src_ip`, the spam relay); the link's host is a "Spam link host", never a C2, and masked when it is in the constituency (`dst_geo` is the platform's country); not counted as a C2 on the Executive portal | `tests/check_banner_inbound.py` |
+| The re-check: a host name whose first label is only digits and dashes (41-66-1-2.static.telco.com.gh) was not masked anywhere `hostmask.py` masks (banners, notes, researcher views, Spam link hosts) | Any dotted name ending in a letter-only top-level label is a host name, whatever its first label | `tests/check_banner_inbound.py`: the reviewer's names; fails on the old code |
+| `?to=9999-12-31` on the audit overview answered 500 | A period ending in the future ends today | `tests/check_auditor_portal.py` |
+| The audit CSV put any `tab` value into the download's file name | Known tab names only; anything else is refused | `tests/check_auditor_portal.py` (a quote and a line break) |
 
 Other hardening added:
 - **systemd sandbox:** `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=read-only`, writable only `data/`, `PrivateTmp`, `UMask=0077` and more. Check it with `systemd-analyze security threatmap`.

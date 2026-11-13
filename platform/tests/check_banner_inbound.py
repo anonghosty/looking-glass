@@ -41,6 +41,10 @@ for raw, gone in (("Apache httpd on mail.example.org", "mail.example.org"), ("Ro
                   ("admin@example.org web panel", "admin@example.org")):
     m = S.banner_mask(raw)
     ok(f"{raw!r} -> {m!r}", gone not in m and m)
+for raw, gone in (("Apache on 41-66-1-2.static.telco.com.gh", "41-66-1-2"), ("41-66-1-2.static.telco.com.gh", "telco"),
+                  ("dsl-41-66-1-2.vodafone.com.gh", "vodafone"), ("1.static.example.org", "example")):
+    m = S.banner_mask(raw)
+    ok(f"a name whose first label is digits and dashes: {raw!r} -> {m!r}", gone not in m and "<" in m)
 ok("plain software and versions stay", S.banner_mask("OpenSSH 8.9p1 Ubuntu-3ubuntu0.6") == "OpenSSH 8.9p1 Ubuntu-3ubuntu0.6",
    S.banner_mask("OpenSSH 8.9p1 Ubuntu-3ubuntu0.6"))
 ok("an empty value stays empty", S.banner_mask("") == "")
@@ -101,6 +105,10 @@ ok("never a 'C2 domain' in a Spam URL record", "C2 domain" not in ka and "C2 dom
 ok("a link abroad: 'Spam link host' cheap-pills.example.net", ka.get(I.SPAM_HOST) == ["cheap-pills.example.net"], str(ka.get(I.SPAM_HOST)))
 ok("a link into the constituency: its host is masked out", not kh.get(I.SPAM_HOST) and "shop.example.gh" not in json.dumps(kh), json.dumps(kh)[:200])
 ok("…and so is the URL", all("shop.example.gh" not in v for v in kh.get("URL", [])), str(kh.get("URL")))
+spelled = dict(base, dst_hostname="41-66-1-2.static.telco.com.gh", http_host="", http_url="http://41.66.1.2/pharma", dst_geo="GH")
+ks = kinds(spelled)
+ok("a link into the constituency whose name spells an address: masked too", "telco" not in json.dumps(ks) and "41-66-1-2" not in json.dumps(ks),
+   json.dumps(ks)[:200])
 ok("record_items (combination codes) follows the same rule", "shop.example.gh" not in json.dumps(I.record_items("infections", home, "spam-url")))
 sink = dict(base, source="event4_sinkhole_http", http_host="c2.example.com", dst_hostname="", http_url="", dst_geo="US")
 ok("a sinkhole record still names its C2 domain", kinds(sink).get("C2 domain") == ["c2.example.com"], str(kinds(sink).get("C2 domain")))

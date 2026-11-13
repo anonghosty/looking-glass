@@ -243,8 +243,10 @@ def install(app, ctx):
                 return datetime.strptime(str(v or "")[:10], "%Y-%m-%d").date()
             except ValueError:
                 return dflt
-        to = d(request.args.get("to"), today)
-        fr = d(request.args.get("from"), to - timedelta(days=29))
+        # nothing is logged in the future: a period ending later ends today (review 2026-11-13: ?to=9999-12-31 went one
+        # day past the last date Python has and answered 500)
+        to = min(d(request.args.get("to"), today), today)
+        fr = min(d(request.args.get("from"), to - timedelta(days=29)), today)
         fr, to = min(fr, to), max(fr, to)
         fr = max(fr, to - timedelta(days=MAX_DAYS))
         t0 = datetime(fr.year, fr.month, fr.day, tzinfo=timezone.utc).timestamp()
@@ -564,6 +566,8 @@ def install(app, ctx):
             return deny()
         t0, t1, fr, to = period()
         tab = request.args.get("tab") or "all"
+        if tab != "all" and tab not in dict(TABS):        # a known tab only: it goes into the file name (review 2026-11-13)
+            return jsonify(error="Unknown tab."), 400
         rows = rows_in(t0, t1)
         if tab != "all":
             rows = [r for r in rows if r["tab"] == tab]
