@@ -195,7 +195,10 @@ try:
        and R("LG-01", "6.3", {"mfa_required": True, "accounts_without_mfa": 2})["status"] == "related")
     ok("…8.4 is never backed: one synchronised clock, CIS asks for two time sources",
        R("LG-12", "8.4", {})["status"] == "related" and "two synchronised time sources" in R("LG-12", "8.4", {})["note"])
-    ok("…3.14 by LG-15 stays related (exports logged, page views not)", R("LG-15", "3.14", {})["status"] == "related")
+    ok("…3.14 by LG-15: backed while views of host-level data are logged too, related when they are not",
+       R("LG-15", "3.14", {"data_access_logged": True})["status"] == "backed" and R("LG-15", "3.14", {"data_access_logged": False})["status"] == "related")
+    ok("…LG-15's evidence counts the views of host-level data apart from the exports",
+       "Views of host-level data are logged" in C["LG-15"]["evidence"] and "views" in o["kpis"])
     ok("…without the facts a conditional pair is never backed", R("LG-11", "8.10", None)["status"] == "related")
     ok("…every backed pair in the table is one CIS's mapping really reaches for that check (no invented pair)",
        all((chk, sg) in pair for chk, sgs in CM.BACKED.items() for sg in sgs))

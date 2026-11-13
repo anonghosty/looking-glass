@@ -30,6 +30,7 @@ from flask import Response, g, jsonify, render_template, request
 
 import control_map
 import csvsafe
+import data_access
 
 TABS = [("auth", "Authentication"), ("accounts", "Accounts and access"), ("sessions", "Sessions"),
         ("config", "Configuration changes"), ("data", "Data access and exports"), ("workflow", "Workflow"),
@@ -43,7 +44,8 @@ for _tab, _events in {
     "sessions": ("kicked", "session_misuse", "user_kick"),
     "config": ("settings_changed", "networks_identify", "network_edited", "network_type_added", "definition_saved",
                "peace_of_mind", "organisation_set"),
-    "data": ("report_pdf", "combo_export", "advisory_download", "advisory_export", "advisory_report", "audit_export"),
+    "data": ("report_pdf", "combo_export", "advisory_download", "advisory_export", "advisory_report", "audit_export",
+             "data_exported", "data_viewed"),
     "workflow": ("finding_created", "finding_status", "finding_decision", "finding_reply", "finding_review_decision",
                  "combo_review_sent", "advisory_saved", "advisory_drafted", "advisory_sent", "note_added", "note_removed",
                  "analyst_code", "combo_code"),
@@ -70,6 +72,8 @@ LABEL = {"login": "Signed in", "login_failed": "Failed sign-in", "login_locked":
          "analyst_code": "Analyst code made", "combo_code": "Combination code made",
          "selftest_counters_reset": "Self-test cleared its sign-in counters", "audit_export": "Audit evidence exported",
          "audit_verified": "Audit log integrity checked"}
+LABEL["data_viewed"] = "Host-level data viewed"          # data_access.py (CIS 3.14)
+LABEL["data_exported"] = "Host list downloaded"
 LABEL["audit_sealed"] = "Entries before the chain sealed"
 TAB_OF["audit_sealed"] = "system"
 LABEL["audit_archive_removed"] = "Old audit archive removed by the retention"
@@ -383,18 +387,19 @@ def install(app, ctx):
                     slot["locked"] += 1
                 if e in PRIVILEGED:
                     slot["changes"] += 1
-                if r["tab"] == "data":
+                if r["tab"] == "data" and e != "data_viewed":          # views are counted apart (data_access.py)
                     slot["exports"] += 1
             if e in ("login_failed", "login_refused", "login_locked"):
                 fail_ip[(r["ip"], r["location"])] += 1
                 fail_ip_day[(r["ip"], day)] += 1
-            if r["tab"] == "data":
+            if r["tab"] == "data" and e != "data_viewed":
                 export_by[r["user_label"] or r["user"]] += 1
         ok_n, fail_n = by["login"], by["login_failed"] + by["login_refused"]
         tabs = collections.Counter(r["tab"] for r in rows)
         priv = [r for r in rows if r["privileged"]][-15:][::-1]
         return {"kpis": {"events": len(rows), "signins": ok_n, "failed": fail_n, "failure_rate": round(100 * fail_n / max(1, ok_n + fail_n), 1),
-                         "lockouts": by["login_locked"], "privileged": sum(by[e] for e in PRIVILEGED), "exports": tabs["data"],
+                         "lockouts": by["login_locked"], "privileged": sum(by[e] for e in PRIVILEGED),
+                         "exports": tabs["data"] - by["data_viewed"], "views": by["data_viewed"],
                          "people": len(active_users), "after_hours": len(after_hours), "misuse": by["session_misuse"],
                          "account_changes": tabs["accounts"], "config_changes": tabs["config"]},
                 "per_day": [dict(day=x, **per_day[x]) for x in days], "hours": hours, "work_hours": [WORK_FROM, WORK_TO],
@@ -499,8 +504,12 @@ def install(app, ctx):
               f", more than {REVIEW_DAYS} days ago.") if review else "No integrity check or evidence export recorded yet.")),
             ("System and communications protection", "LG-14", "Sign-ins and sessions are encrypted in transit", ["SC-8", "SC-8(1)"],
              "HTTPS is on (TLS)." if tls else "HTTPS is off: passwords and session cookies cross the network readable."),
-            ("Audit and accountability", "LG-15", "Data exports are logged per person", ["AU-2", "AU-12"],
-             f"{k['exports']} export(s) in the period (reports, CSV files, advisories, audit evidence), each with who and what."),
+            ("Audit and accountability", "LG-15", "Data access and exports are logged per person", ["AU-2", "AU-12"],
+             f"{k['exports']} export(s) in the period (reports, CSV files, advisories, audit evidence), each with who and what. "
+             + (f"Views of host-level data are logged too (one host's activity, the hosts behind a figure, a record's details, "
+                f"an analysis): {k.get('views', 0)} in the period, each with who, when and what, hosts by reference, never "
+                f"their address." if data_access.enabled() else
+                "Views of host-level data are NOT logged on this system (DATA_ACCESS_LOG=0 in .env).")),
         ]
         # no pass or fail: the checks present the evidence, the auditor decides. LG → NIST → CIS: the CIS safeguards are
         # CIS's own mapping of the check's NIST controls (control_map.py), each with the NIST control it came through
@@ -508,7 +517,8 @@ def install(app, ctx):
         # CIS's own figures on this system (control_map.BACKED; review, 2026-11-13)
         facts = {"mfa_required": mfa_on, "accounts_without_mfa": len(no_mfa), "dormant_days": DORMANT,
                  "dormant_active": len(dormant), "not_approved": len(not_approved), "retention_days": v.get("retention_days"),
-                 "review_days": REVIEW_DAYS, "reviewed": reviewed, "tls": bool(tls)}
+                 "review_days": REVIEW_DAYS, "reviewed": reviewed, "tls": bool(tls),
+                 "data_access_logged": data_access.enabled()}
         out = []
         for a, i, t, ns, e in c:
             cis, unmapped = control_map.cis_for(ns, i, facts)

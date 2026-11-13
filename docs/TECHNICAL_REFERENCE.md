@@ -607,6 +607,14 @@ Security scripts:
   every other pair, is "related". `audit_portal.py` passes the facts the checks computed. `cis_for(nist, check)`
   returns CIS's fields plus an `lg` field, which the portal shows as a separate badge and the PDF as a line marked
   "Looking Glass:". `CERTIFICATION_NOTE` ("The CIS Controls are used here as a map...") goes with the data.
+- Data access logging (`data_access.py`, CIS 3.14): an `after_request` hook writes `data_viewed` for answered GETs of
+  `/api/related`, `/api/insight`, `/api/insight/drill`, `/api/svc/insight`, `/api/svc/drill`, `/api/svc/detail`, and
+  `data_exported` for `/api/svc/hosts.csv`; the detail is the selection with every address replaced by its host
+  reference (`HostRefs`); one entry per person and selection per 10 minutes; not for the self-test;
+  `DATA_ACCESS_LOG=0` turns it off. `tests/check_data_access.py`.
+- Executive PDF (`executive_pdf.py`): text is never cut. `fit()` keeps the whole text, smaller (to 80 %, never under
+  6 pt) or on two lines; `wrap(max_lines=)` sets it smaller rather than cutting; Key findings take the largest size at
+  which all of them fit, and continue on a page of their own if needed.
 - Special Reports (`special_reports.py`): Shadowserver's one-off datasets (`YYYY-MM-DD-special[-<name>]-...`, often a
   placeholder 00:00 time on every row). The pipeline loads them into `special` or `special_<name>`
   (`report_names.canonical`, so a hyphenated name is not quarantined); both registries (`sources.py`, `services.py`)

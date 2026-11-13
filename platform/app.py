@@ -3107,6 +3107,11 @@ def _combo_filter(code, section, events, day=None):
     return _combos.Matcher(entry, labels).match(events)
 
 
+# who viewed host-level data, and the services host-list download: audit entries (data_access.py; CIS 3.14)
+import data_access as _data_access  # noqa: E402
+DATA_ACCESS = _data_access.register(app, lambda event, **kw: AUTH["audit"].add(event, **kw),
+                                    lambda: (getattr(g, "user", None) or {}).get("user", ""), host_refs.ref)
+
 _mgmt = management.register(app, {
     "data_dir": DATA_DIR, "combo_filter": _combo_filter,
     "infections_of": lambda ips: SVC_INTEL.infections_of(ips),       # services hosts also calling botnet sinkholes

@@ -31,6 +31,11 @@ read more. Dates are UTC.
   (5.3), weekly audit-log reviews (8.11); otherwise "related", saying what differs. 8.4 stays related (CIS asks for two
   time sources). The defaults are now CIS's figures: `AUDIT_DORMANT_DAYS=45`, `AUDIT_REVIEW_DAYS=7`.
 - **tzdata** is a requirement, so local times never vanish on a server without its own time-zone data.
+- **Views of host-level data are logged** in the audit log (Data access and exports): one host's activity, the hosts
+  behind a figure, a record's details, an analysis, and the services host-list download, which had no entry before.
+  Who, when and what, hosts by reference, never their address. LG-15 now backs CIS 3.14, Log Sensitive Data Access.
+- **Nothing cut in the Executive report:** every label and every key finding is printed in full (smaller or on two
+  lines when needed, never "…"); findings that do not fit the first page continue on the next.
 - **The story film**, *The devices that kept calling* (4:54): why Looking Glass exists, from botnet takedowns whose
   devices keep calling to the question CSIRT teams across Africa kept asking. On the documentation site's home page
   ("The story behind it", with chapters) and in the README.

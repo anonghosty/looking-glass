@@ -50,6 +50,7 @@ run "demo masking"                    $PY tests/test_demo.py
 run "one address finder for every masker" $PY tests/check_ip_find.py
 run "display time zones (all 54 countries)" $PY tests/check_timezones.py
 run "special reports kept out of the replay" $PY tests/check_special_reports.py
+run "views of host data in the audit log" $PY tests/check_data_access.py
 run "CVE look-ups: KEV backoff, time budget" $PY tests/check_cve_backoff.py
 run "constituency change beats a running day load" $PY tests/check_scope_reload.py
 run "CSRF on every write route (real sign-in)" $PY tests/check_csrf_routes.py

@@ -17,6 +17,12 @@ from reportlab.pdfgen import canvas as rl_canvas
 import reports_pdf as rp
 import timezones
 
+
+class _Fit(str):
+    """A text Doc.fit() could not fit at its size: drawn whole at .size (or as .lines), never cut."""
+    size = None
+    lines = None
+
 W, H = landscape(A4)
 M = 26                                         # page margin
 BG, CARD, EDGE = HexColor("#070a12"), HexColor("#111627"), HexColor("#222a3f")
@@ -55,28 +61,51 @@ class Doc:
     def text(self, x, y, text, size=10, color=TXT, bold=False, anchor="start", mono=False):
         c = self.c
         c.setFillColor(color)
+        if isinstance(text, _Fit):              # fit(): the whole text, smaller, or on two lines; never cut
+            size = text.size
         c.setFont(self.F["m"] if mono else self.F["b"] if bold else self.F["r"], size)
-        t = self.s(text)
-        (c.drawString if anchor == "start" else c.drawRightString if anchor == "end" else c.drawCentredString)(x, y, t)
+        draw = c.drawString if anchor == "start" else c.drawRightString if anchor == "end" else c.drawCentredString
+        if isinstance(text, _Fit) and text.lines:
+            for i, ln in enumerate(text.lines):
+                draw(x, y - i * size * 1.15, ln)
+            return
+        draw(x, y, self.s(text))
 
     def wrap(self, x, y, text, width, size=9.5, color=TXT, bold=False, leading=None, max_lines=None):
-        """Draws wrapped text downward from y (baseline of the first line); returns the y below the last line."""
-        leading = leading or size * 1.38
-        lines = simpleSplit(self.s(text), self.F["b"] if bold else self.F["r"], size, width)
+        """Draws wrapped text downward from y (baseline of the first line); returns the y below the last line.
+        Never cuts the text (no "…": the user's rule for every PDF): above max_lines it is set smaller, down to 80 %
+        of the size, and if it still needs more lines, all of them are drawn."""
+        font = self.F["b"] if bold else self.F["r"]
+        lines = simpleSplit(self.s(text), font, size, width)
         if max_lines and len(lines) > max_lines:
-            lines = lines[:max_lines]
-            lines[-1] = lines[-1].rstrip()[:-1] + "…"
+            s = size
+            while len(lines) > max_lines and s > size * .8:
+                s = round(s - .2, 2)
+                lines = simpleSplit(self.s(text), font, s, width)
+            if leading:
+                leading = leading * s / size
+            size = s
+        leading = leading or size * 1.38
         for ln in lines:
             self.text(x, y, ln, size, color, bold)
             y -= leading
         return y
 
     def fit(self, text, width, size, bold=False):
+        """The WHOLE text for one line of `width`: at `size` when it fits, else a little smaller (down to 80 % of the
+        size, never under 6 pt, so it stays readable), else on two lines at that size. Never cut, never "…" (the user's
+        rule for every PDF)."""
         t = self.s(text)
         font = self.F["b"] if bold else self.F["r"]
-        while t and self.c.stringWidth(t, font, size) > width:
-            t = t[:-2] + "…" if len(t) > 2 else ""
-        return t
+        w = self.c.stringWidth(t, font, size)
+        if not t or w <= width:
+            return t
+        floor = max(6.0, size * .8)
+        s = max(floor, round(size * width / w - .05, 2))
+        out = _Fit(t)
+        out.size = s
+        out.lines = None if self.c.stringWidth(t, font, s) <= width else simpleSplit(t, font, s, width)
+        return out
 
     # ---------------- shapes
     def card(self, x, y, w, h, title=None, sub=None, tone=None):
@@ -273,7 +302,8 @@ class Doc:
             self.text(x + 12, y - 17, self.fit(label, w - 20, 8.6, True), 8.6, DIM, True)
             col = HexColor("#ff9aa4") if tone == RED else HexColor("#ffd38a") if tone == AMBER else TXT
             self.text(x + 12, y - 41, v, 21, col, True)
-            self.text(x + 12, y - 56, self.fit(sub, w - 20, 7.6), 7.6, MUTE)
+            # the tile has room for two lines: wrap at the normal size before making it smaller, never cut
+            self.wrap(x + 12, y - 54, sub, w - 20, 7.4, MUTE, leading=8.4, max_lines=2)
         return y - 66 - 12
 
     def area(self, x, y, w, h, hours, peak, unit):
@@ -318,15 +348,27 @@ class Doc:
             self.text(px + (6 if anchor == "start" else -6 if anchor == "end" else 0), min(py + 7, T + 2), f"Peak {peak:02d}:00 · {fmt(hours[peak])}", 7.6, TXT, True, anchor)
 
     def findings(self, x, y, w, h, items):
+        """Every finding in full (no "…", none dropped): the largest size, from 8.8 pt down to 7 pt, at which all of
+        them fit the card; the ones that still do not fit are returned, for a page of their own."""
         top = self.card(x, y, w, h, "Key findings", "For this selection")
-        yy = top - 4
-        for i, t in enumerate(items[:7], 1):
-            if yy < y - h + 24:
-                break
+        room = top - 4 - (y - h + 16)
+        font = self.F["r"]
+        need = lambda s: sum(len(simpleSplit(self.s(t), font, s, w - 52)) * s * 1.36 + 6 for t in items)
+        size = 8.8
+        while size > 7 and need(size) > room:
+            size = round(size - .2, 2)
+        yy, rest = top - 4, []
+        for i, t in enumerate(items, 1):
+            h_t = len(simpleSplit(self.s(t), font, size, w - 52)) * size * 1.36 + 6
+            if rest or yy - h_t < y - h + 16:
+                rest.append(t); continue
             c = self.c
             c.setFillColor(Color(.36, .55, .94, .18)); c.roundRect(x + 14, yy - 4, 14, 14, 4, stroke=0, fill=1)
             self.text(x + 21, yy, str(i), 7.6, HexColor("#a9c3ff"), True, "middle")
-            yy = self.wrap(x + 36, yy, t, w - 52, 8.8, HexColor("#d6ddee"), leading=12, max_lines=3) - 6
+            yy = self.wrap(x + 36, yy, t, w - 52, size, HexColor("#d6ddee"), leading=size * 1.36) - 6
+        if rest:
+            self.text(x + w - 14, y - h + 8, f"{len(rest)} more on the next page", 7.4, MUTE, anchor="end")
+        return rest
 
     def bars(self, x, y, w, rows, metric="hosts", n=8, label=lambda r: r["label"], stack=False, row_h=None):
         rows = [r for r in rows if (r.get(metric) if r.get(metric) is not None else r.get("count"))][:n]
@@ -467,7 +509,8 @@ class Doc:
             name = (r.get("title") or r["value"]) if comms else r["value"]
             self.text(x + 26, yy - 9, self.fit(name, w * .55, 9.6, True), 9.6, TXT, True)
             sub = r["value"] if comms and r.get("title") and r["title"] != r["value"] else (r.get("title") if not comms else "")
-            nx = x + 26 + min(w * .55, c.stringWidth(self.s(self.fit(name, w * .55, 9.6, True)), self.F["b"], 9.6)) + 8
+            fn = self.fit(name, w * .55, 9.6, True)          # its real width, at the size it is drawn
+            nx = x + 26 + min(w * .55, c.stringWidth(str(fn), self.F["b"], getattr(fn, "size", None) or 9.6)) + 8
             if sub:
                 self.text(nx, yy - 9, self.fit(sub, x + w - 90 - nx, 7.8), 7.8, MUTE, mono=comms)
             tx = x + 26
@@ -592,7 +635,13 @@ def build(d, enr, meta):
     hgt = y - 30
     cw = (W - 2 * M - 12) * .62
     doc.area(M, y, cw, hgt, d["hours"], d["peak_hour"], unit)
-    doc.findings(M + cw + 12, y, W - 2 * M - cw - 12, hgt, d["findings"][1:] or ["No further findings for this selection."])
+    more = doc.findings(M + cw + 12, y, W - 2 * M - cw - 12, hgt, d["findings"][1:] or ["No further findings for this selection."])
+    if more:                                        # findings that did not fit the card: in full, on a page of their own
+        yy = doc.new_page("Key findings (continued)")
+        n0 = len(d["findings"][1:]) - len(more)
+        for i, t in enumerate(more, n0 + 1):
+            doc.text(M + 6, yy - 9, f"{i}.", 9, HexColor("#a9c3ff"), True)
+            yy = doc.wrap(M + 26, yy - 9, t, W - 2 * M - 30, 9.6, HexColor("#d6ddee")) - 8
 
     # ---------------- 7-day baseline (the report day against the 7 days before it)
     if (d.get("baseline") or {}).get("days"):

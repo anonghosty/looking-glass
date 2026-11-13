@@ -203,6 +203,9 @@ software names (for example "nginx 1.18", "Cisco IOS 15.2"), and a device that p
   Glass's own reading, labelled as ours: backed, related or not backed with the reason (for example LG-10 → 3.11
   encryption at rest: not backed, Looking Glass does not encrypt its data at rest). One table holds the reading
   (`control_map.py`: BACKED, NOT_BACKED). The CIS Controls are used here as a map, to guide Looking Glass's security and make the auditor's work easier. They are voluntary best practice, not a law or a requirement, and CIS issues no certificate for meeting them: organisations measure themselves with CIS's free Self Assessment Tool (CSAT) or with an auditor, and those that need a formal certificate usually go for ISO 27001 or SOC 2, with the CIS Controls as a guide.
+- **Data access logging:** every export, and every view of host-level data (one host's activity, the hosts behind a
+  figure, a record's details, an analysis), is an audit entry with who, when, from where and what; hosts appear by
+  their reference, never their address (`data_access.py`; `DATA_ACCESS_LOG=0` turns view logging off).
 - **Roles & permissions:** the matrix above, editable.
 
 **Location** is "This computer", "Local network" or "Internet". Addresses are never sent to an online service; to add

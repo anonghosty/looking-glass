@@ -96,17 +96,6 @@ the few devices that matter, and reports you can send. One modest server and a g
 
 </div>
 
-## See it working
-
-<div class="lg-films" markdown>
-<!-- film: use-cases compact -->
-<!-- film: finding-to-advisory compact -->
-</div>
-
-The chapters of each film are on its page: the use cases at the top of [Use cases](USE_CASES.md), and From finding
-to advisory under
-[Advisories](USER_GUIDE.md#advisories-the-advisor) in the user guide.
-
 ## The story behind it
 
 Botnets get taken down; the infected devices don't get cleaned. When Google moved against the XCPE botnet on
@@ -122,6 +111,19 @@ the device that tugs on the most threads.
 
 Every scene is animation with made-up data: every IP address, network name and AS number in it is fictional. The
 sources for each fact are in the film's description on YouTube.
+
+## See it working
+
+First the use cases, a needle through the haystack; then the new role, the advisor, from finding to advisory.
+
+<div class="lg-films" markdown>
+<!-- film: use-cases compact -->
+<!-- film: finding-to-advisory compact -->
+</div>
+
+The chapters of each film are on its page: the use cases at the top of [Use cases](USE_CASES.md), and From finding
+to advisory under
+[Advisories](USER_GUIDE.md#advisories-the-advisor) in the user guide.
 
 ## How it works
 

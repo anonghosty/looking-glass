@@ -138,13 +138,15 @@ BACKED = {
     "LG-11": {"8.10": _retention},           # at least 90 days
     "LG-13": {"8.11": _review},              # weekly reviews, and one recorded
     "LG-14": {"3.10": lambda f: "" if f.get("tls", True) else "HTTPS is off on this system"},
-    "LG-15": {"8.2": None},                  # exports are logged
+    "LG-15": {"8.2": None,                   # exports are logged
+              # 3.14 Log Sensitive Data Access: exports AND views of host-level data are logged per person (data_access.py)
+              "3.14": lambda f: "" if f.get("data_access_logged") else
+                      "views of host-level data are not logged on this system (DATA_ACCESS_LOG=0)"},
 }
 # related, but worth saying why it is not more (advice for the auditor)
 RELATED_NOTE = {
     ("LG-12", "8.4"): "the check reads whether the server's clock is synchronised; CIS asks for at least two synchronised "
                       "time sources (check the NTP configuration on the server)",
-    ("LG-15", "3.14"): "exports are logged per person; viewing data on the pages is not logged entry by entry",
 }
 NOT_BACKED = {
     "3.11": "it protects the audit log's integrity but encrypts nothing: MongoDB and the data folder are plain files "

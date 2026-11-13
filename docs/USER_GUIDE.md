@@ -755,8 +755,9 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
     `AUDIT_DORMANT_DAYS` at 45 or less and no dormant account still active; 8.11 only with `AUDIT_REVIEW_DAYS` at 7 or
     less and a review recorded. Otherwise the row is **related**, saying what differs ("Looking Glass lists accounts
     unused for 90 days; CIS asks for 45"), which is advice for the auditor. The defaults are CIS's own figures
-    (`AUDIT_DORMANT_DAYS=45`, `AUDIT_REVIEW_DAYS=7`). 8.4 is never backed: the check reads whether the server's clock
-    is synchronised, and CIS asks for at least two time sources.
+    (`AUDIT_DORMANT_DAYS=45`, `AUDIT_REVIEW_DAYS=7`). 3.14 (Log Sensitive Data Access) is backed by LG-15 while
+    views of host-level data are logged as well as exports (on by default). 8.4 is never backed: the check reads
+    whether the server's clock is synchronised, and CIS asks for at least two time sources.
   - **not backed**: the mapping reaches it but the check does not look at its subject, with the reason: LG-01 → 6.4
     MFA for remote network access; LG-06 → 4.10 lockout on portable devices; LG-07 → 4.3 and 12.3; LG-10 → 3.11
     encryption at rest (LG-10 protects the audit log's integrity but encrypts nothing); LG-15 → 8.6 DNS, 8.7 URL,
@@ -772,7 +773,11 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
 
   ![Control checks: NIST controls, CIS's safeguards as published, and Looking Glass's own reading beside each](media/screens/57-audit-cis.png)
 - **One tab per kind of event:** Authentication, Accounts and access, Sessions, Configuration changes, Data access
-  and exports, Workflow, and System and self-test. Each has its count, a search, *Alerts only*, and **Export CSV**.
+  and exports, Workflow, and System and self-test. **Data access and exports** holds every export (reports, CSV
+  files, advisories, audit evidence, host-list downloads) and every **view of host-level data**: one host's activity,
+  the hosts behind a figure, a record's details, an analysis. Each says who, when, from where and what was looked at,
+  hosts by their reference, never their address; the same person viewing the same thing again within 10 minutes is
+  not logged twice. `DATA_ACCESS_LOG=0` in `.env` turns view logging off (the Audit portal then says so). Each has its count, a search, *Alerts only*, and **Export CSV**.
   The built-in security test's events are kept apart in System and self-test.
 - **Access review:** every account with its role and what that role may do, its authenticator, last sign-in, who
   approved it and flags (no authenticator, dormant, pending too long, every permission), and the roles matrix.
