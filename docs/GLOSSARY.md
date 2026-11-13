@@ -281,6 +281,12 @@ Something the team follows up, with a number (#1, #2…): a researcher's note or
 **Advisory**  
 The report an advisor sends one organisation about its affected devices: the advisory pages (devices, impact, description, recommended actions), then the insights behind it, technical details with every weakness defined, and the Shadowserver references. It is signed by the CSIRT (name and logo from Settings), never by a person, and carries its TLP on every page. It goes out as a PDF and a devices CSV.
 
+**Drafted / Sent (advisory)**  
+An advisory's states after it is written. Drafted: finished and ready to go out, its report generated. Sent: marked as sent to its recipients on the Findings page, with exactly which file went to them; a sent advisory can no longer be changed, so the record of what the organisation received stays exact.
+
+**Report out of date (advisory)**  
+An advisory whose heading, subject, TLP, Description or Recommended Actions changed after its report was generated: the file no longer says what the advisory says. It cannot be marked drafted or sent until the report is generated again, so the organisation always receives what the record shows.
+
 **TLP (Traffic Light Protocol)**  
 FIRST's TLP 2.0 labels how far an advisory may travel: RED (the named recipients only), AMBER+STRICT (the recipient's organisation only), AMBER (the organisation and its clients who need to know; the default, since an advisory lists the organisation's addresses), GREEN (the recipient's community, not published) and CLEAR (anyone).
 
@@ -378,6 +384,12 @@ The auditor's page (/audit), read only: the audit log by tab (sign-ins, accounts
 
 **Audit log (hash chain)**  
 The record of who did what, when and from where on Looking Glass. Each entry holds the hash of the entry before it, so changing, inserting or removing any entry breaks the chain from that point; archives and removals by the retention period are recorded in the chain too. The Audit portal checks it, and anyone can check it independently with the proof package.
+
+**Data access log**  
+The audit log's record of who looked at host-level data: the map's events, the services records, one host's activity, the hosts behind a figure, a record's details, an analysis, and every download of host lists. Each entry says who, when, from where and what was selected (every filter of the view); hosts appear by their reference, never their IP address. The same view by the same person within 10 minutes is recorded once.
+
+**Retention note and rotation entry**  
+When the audit log grows, its older entries are moved to a compressed archive, and the move is recorded in the chain itself (the rotation entry: the archive's name, entry count, dates and last link). When the retention period removes an archive, a retention note keeps its last link, so the chain can still be checked from there. An archive that is missing with no matching note, or a note that does not match the archive's rotation entry, breaks the chain.
 
 **Control check (LG-01 … LG-15)**  
 An automated check of one of Looking Glass's own controls (for example LG-01 multi-factor authentication, LG-06 failed sign-ins, LG-10 audit log protection), with the evidence from its records. Each is mapped to the NIST SP 800-53 controls it supports and, through them, to CIS Controls safeguards. They give evidence, not a pass or fail: the conclusion is the auditor's.
