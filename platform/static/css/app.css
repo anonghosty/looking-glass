@@ -603,7 +603,10 @@ body.admin-page .st-main { max-width: 1560px; }
   .lg-transition.on { opacity: 1; }
 }
 .intro-svc-card { width: 100%; margin-top: 16px; text-align: left; }
-.intro-svc-reports { grid-template-columns: repeat(3, minmax(0, 1fr)); max-height: 210px; }
+/* every services report is listed (often 80+): the list scrolls inside its card instead of spilling over the cards
+   below it (it had a height but no scrolling) */
+.intro-svc-reports { grid-template-columns: repeat(3, minmax(0, 1fr)); max-height: 260px; overflow-y: auto;
+  overscroll-behavior: contain; padding-right: 6px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.38) rgba(255,255,255,.05); }
 .intro-svc-reports li { cursor: default; }
 @media (max-width: 900px) { .intro-svc-reports { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 520px) { .intro-svc-reports { grid-template-columns: 1fr; } }
