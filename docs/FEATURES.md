@@ -270,7 +270,7 @@ against the trends, an analyst pulls exactly those devices and writes the adviso
 - **Maintenance tools repaired** (`tools/daysize.py`, `tools/quickcheck.py`, `tools/list_infections.py`,
   `manage/manage_users.py`).
 
-([SECURITY.md](SECURITY.md#6-supported-versions-and-changes))
+([SECURITY.md](SECURITY.md#5-supported-versions-and-changes))
 
 ## 2026-11-09: faster platforms and a sharper Executive portal
 

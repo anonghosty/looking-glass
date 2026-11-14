@@ -157,6 +157,18 @@ e = entries[-1] if len(entries) > n else {}
 ok("the advisory's PDF preview is logged too (review 2026-11-13)", e.get("target") == "an organisation's advisory report (preview)"
    and "fid=F-17" in e.get("detail", ""), str(e))
 
+print("A view sent in the request body is logged from the body (2026-11-14: nothing sensitive in an address)")
+n = len(entries)
+c.post("/api/intelligence/report", headers={"X-User": "rachel"},
+       json={"name": "blocklist", "day": "2026-11-13", "q": "", "ip": "203.0.113.60", "filters": {"source": ["list-a", "list-b"]}})
+e = entries[-1] if len(entries) > n else {}
+ok("logged with who and the selection, filters included", e.get("event") == "data_viewed" and e.get("user") == "rachel"
+   and "name=blocklist" in e.get("detail", "") and "source=list-a" in e.get("detail", "") and "source=list-b" in e.get("detail", ""), str(e))
+ok("…an address in the body is its host reference, never the address", "203.0.113" not in str(e) and "ip=host R" in e.get("detail", ""), str(e))
+n = len(entries)
+c.post("/api/intelligence/report", headers={"X-User": "rachel"}, data="not json", content_type="application/json")
+ok("…a body that is not JSON: the page still answers, nothing odd logged", len(entries) <= n + 1 and not any("not json" in str(x) for x in entries[n:]))
+
 print("CIS 3.14 follows it")
 import control_map as CM  # noqa: E402
 ok("LG-15 backs 3.14 while views are logged", CM.lg_reading("LG-15", "3.14", {"data_access_logged": True})["status"] == "backed")

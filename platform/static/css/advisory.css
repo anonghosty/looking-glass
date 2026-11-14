@@ -72,6 +72,12 @@
 .av-net.on { background: rgba(124, 156, 255, .14); border-color: rgba(124, 156, 255, .7); }
 .av-ipwrap { max-height: 420px; overflow: auto; }
 .av-ips td { overflow-wrap: anywhere; font-size: 12.5px; vertical-align: top; } .av-ips td.num { text-align: right; }
+/* every value shows in full (2026-11-14: infections were cut with "…" by the shared .hosts style): lists wrap between
+   their items, never mid-name; the address, ports, count and time stay on one line */
+.av-ips td { white-space: normal; overflow: visible; text-overflow: clip; max-width: none; overflow-wrap: break-word; line-height: 1.45; }
+.av-ips td:nth-child(1), .av-ips td:nth-child(3), .av-ips td:nth-child(9), .av-ips td:nth-child(10) { white-space: nowrap; }
+.av-ips td.av-list span { white-space: nowrap; }
+.av-ips td:nth-child(4) { min-width: 170px; } .av-ips td:nth-child(7) { min-width: 200px; max-width: 320px; } .av-ips td:nth-child(8) { min-width: 140px; max-width: 240px; }
 .av-tools { display: flex; gap: 6px; flex-wrap: wrap; }
 .av-tool { padding: 4px 10px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text-2); font: 600 12px Inter, sans-serif; cursor: pointer; }
 .av-tool.b { font-weight: 800; } .av-tool:hover { color: var(--text); background: #232328; } .av-tool:disabled { opacity: .5; cursor: default; }

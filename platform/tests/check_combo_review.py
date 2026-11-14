@@ -398,6 +398,12 @@ try:
     ok("it goes to an organisation: signed by the CSIRT (the person is in the audit log), without the team's notes",
        m_.get("generated_by") == "Example CSIRT" and d_.get("notes") == [] and not any("researcher note" in str(p_) for p_ in d_.get("findings") or [])
        and not any(c_.get("note") or c_.get("by") for _, c_ in d_.get("explained") or []), m_.get("generated_by", ""))
+    # 2026-11-14: an advisory listed infections and CVEs in its device table that its Technical Details never defined
+    named_ = {(str(n_), "infections") for dv_ in (m_.get("advisory") or {}).get("devices") or [] for n_ in dv_.get("infections") or []} | \
+             {(str(c_), "issues") for dv_ in (m_.get("advisory") or {}).get("devices") or [] for c_ in dv_.get("cves") or []}
+    defined_ = {n_ for n_, _ in d_.get("explained") or []}
+    missing_ = sorted(n_ for n_, s_ in named_ if A._combo_explain(s_, n_) and n_ not in defined_)
+    ok("every infection and CVE the device table names, with a definition, is in the Technical Details", not missing_, ", ".join(missing_))
     ok("every step is in the audit log", {"combo_review_sent", "finding_review_decision", "advisory_saved", "advisory_report", "advisory_sent", "organisation_set"} <= set(audited),
        ", ".join(sorted(set(audited))))
 

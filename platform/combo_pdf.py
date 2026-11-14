@@ -60,6 +60,8 @@ class AnalystDoc(ex.Doc):
             return "ADVISORY"
         if s.startswith("Technical Details"):
             return "TECHNICAL DETAILS"
+        if s.endswith("· Technical Details"):            # short insights with the Technical Details under them
+            return "INSIGHTS · TECHNICAL DETAILS"
         if s.startswith("Shadowserver Report References"):
             return "REFERENCES"
         return "INSIGHTS"
@@ -404,8 +406,9 @@ def build(d, meta):
     after = None                                       # where the explanations may start on this page (charts on their own)
     top0 = H - M - 44                                  # the first line under a page's header (AnalystDoc.new_page)
     alone_h = min(top0 - 30, max(110, max((66 + min(len(s[2]), 10) * s[4] for s in side), default=0)))
-    # an advisory keeps its insights and its Technical Details on pages of their own, each part with its own label
-    shared = not adv and not across_on and bool(d["explained"] or d["notes"]) and top0 - alone_h - 18 > H * .45
+    # short charts on their own leave most of a page empty (2026-11-14, an advisory's page 12): the Technical Details
+    # carry on under them, an advisory's page then labelled with both parts
+    shared = not across_on and bool(d["explained"] or d["notes"]) and top0 - alone_h - 18 > H * .45
     if across_on or side:
         y = doc.new_page("Across reports" if across_on else " · ".join([s[0] for s in side] + ([EXPL] if shared else [])))
         hh = y - 30

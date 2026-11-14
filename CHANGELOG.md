@@ -12,8 +12,17 @@ What changed in each release of Looking Glass. Releases are named by date; the n
   regions, per day, and the Executive portal filtered to that selection), not the whole combination's.
 - Advisories: each affected device lists the infections it calls botnet sinkholes as in an Infections column of its
   own (page and PDF), including infections the analyst ticked on services findings.
+- Reviews made before the drill-down figures existed show them when they are next opened.
+- Advisories and review reports: the Technical Details define the infections and CVEs/issues the analyst ticked,
+  and every infection and CVE the advisory's device table names. Short charts no longer leave a page mostly empty.
+- Advisories: the device table shows every value in full (lists wrap instead of being cut off).
+- Abused or Compromised: the latest report day is yesterday (UTC), since Shadowserver dates each report with the day
+  of its data and sends it the next morning; today's figure reads "Today's reports so far: X of the usual Y".
 
 ### Added
+- Findings: each reply code shows how many devices it covers.
+- Abused or Compromised: reference fields (sources, details, leak sites) open as links in a new tab; malicious URLs
+  are never links. Every cell shows its full value on hover.
 - Combinations: under each organisation, the infections and CVEs/issues its own devices carry, with the ticked ones
   highlighted, and a button that ticks the organisations carrying them.
 - Combinations: a researcher's reply code can be searched within the analyst's selection it answers, so the review,
@@ -35,6 +44,9 @@ What changed in each release of Looking Glass. Releases are named by date; the n
 ### Security
 - Abused or Compromised: viewing a report's records is recorded in the data-access log; leaked accounts can be
   filtered or searched by e-mail or user name only after they are shown, which is recorded in the audit log.
+- Abused or Compromised sends filters, searches and addresses in the request body, never in the page address.
+- The web service's access log records the page asked for, without query strings or referring pages.
+- Responses no longer carry a Server header naming the web server.
 
 ## 2026-11-14
 

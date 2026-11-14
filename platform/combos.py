@@ -838,7 +838,11 @@ def install(app, ctx):
                  [(entry["report"], entry["items"])] if entry["kind"] == "r" else [(r, i) for r, i in entry["parts"]])
         cves = [] if is_a else sorted({i.upper() for _, items in parts for i in items if re.match(r"^CVE-\d{4}-\d{4,7}$", i, re.I)})
         explained, stats = [], {}
-        heads = [(nm, section) for nm in entry.get("names", [])[:8]] if is_a else [(entry["name"], section)]
+        ticked_n = {str(t_.get("name")): t_.get("hosts") for t_ in ((enr or {}).get("infections") or []) + ((enr or {}).get("issues") or [])
+                    if t_.get("name") and isinstance(t_.get("hosts"), int)}
+        av_n = collections.Counter(str(n_) for dv_ in (job.get("advisory") or {}).get("devices") or []
+                                   for n_ in set((dv_.get("infections") or []) + (dv_.get("cves") or [])))
+        heads =[(nm, section) for nm in entry.get("names", [])[:8]] if is_a else [(entry["name"], section)]
         if section == "services":
             # a services name is a report, not malware (Malpedia would call it "probably malware"): its issues (tags) and
             # the infections its devices call are defined instead, with the across-report views' when the report has them
@@ -855,13 +859,39 @@ def install(app, ctx):
                         heads.append((it.split(":", 1)[1].strip(), "infections"))
                     elif re.search(r"CVE-\d{4}-\d{4,7}", it, re.I) and not is_a:
                         cves.append(re.search(r"CVE-\d{4}-\d{4,7}", it, re.I).group(0).upper())
-            heads = list(dict.fromkeys(heads))[:12]
-            cves = sorted(set(cves))
+            # what the analyst ticked when drilling down (2026-11-14: a drilled-down review's report had no definition of
+            # the ticked infections nor the ticked CVEs/issues): defined first, they are what the report is about
+            ticked = []
+            for t_ in (enr or {}).get("infections") or []:
+                if t_.get("name"):
+                    ticked.append((str(t_["name"]), "infections"))
+            for t_ in (enr or {}).get("issues") or []:
+                nm_ = str(t_.get("name") or "")
+                cv_ = re.search(r"CVE-\d{4}-\d{4,7}", nm_, re.I)
+                if cv_:
+                    cves.append(cv_.group(0).upper())
+                elif nm_:
+                    ticked.append((issue_tags.issue_of(nm_) or nm_, "issues"))
+            # an advisory: what its device table names (each device's infections and CVEs) is defined too, so the
+            # recipient finds every name it was sent explained (2026-11-14: a researcher's-view advisory listed
+            # infections in its Infections column and had no Technical Details at all)
+            av_ = job.get("advisory") or {}
+            for dv_ in av_.get("devices") or []:
+                for nm_ in dv_.get("infections") or []:
+                    ticked.append((str(nm_), "infections"))
+            for nm_ in av_.get("issues") or []:
+                if issue_tags.issue_of(str(nm_)) or not str(nm_).lower().startswith("tag:"):
+                    ticked.append((str(nm_), "issues"))
+            av_cves = [str(c_).upper() for c_ in av_.get("cves") or [] if re.match(r"^CVE-\d{4}-\d{4,7}$", str(c_), re.I)]
+            heads = list(dict.fromkeys(ticked + heads))[:16]
+            cves = sorted(set(cves)) + [c_ for c_ in sorted(set(av_cves)) if c_ not in set(cves)][:max(0, 20 - len(set(cves)))]
         for nm, sec in heads + [(c, "issues") for c in cves if c.lower() != entry["name"].lower()]:
             card = ctx["explain"](sec, nm)
             if card:
                 explained.append((nm, card))
                 stats[nm] = (f"Named in this selection of {len(devs):,} devices" if is_a and nm in entry.get("names", [])
+                             else f"Ticked by the analyst: {ticked_n[nm]:,} of the devices" if nm in ticked_n
+                             else f"{av_n[nm]:,} of the {len(devs):,} devices in this advisory" if av_n.get(nm)
                              else f"{len(devs):,} devices in this combination")
         data = {"section": section, "code": entry["code"], "name": entry["name"], "parts": parts,
                 "headline": (f"{len(devs):,} device{'s' if len(devs) != 1 else ''} in the analyst's selection ({span})" if is_a else

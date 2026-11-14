@@ -93,6 +93,7 @@ app = Flask(__name__, template_folder=os.path.join(os.path.dirname(os.path.abspa
 api = I.install(app, {"db": FakeDB(DB), "report_map": type("M", (), {"get": lambda self: MAP})(), "settings": Settings(),
                       "has_perm": lambda p: p in g.user["perms"], "is_demo": lambda: demo[0],
                       "audit": type("A", (), {"add": lambda self, ev, **k: audited.append((ev, k))})(),
+                      "csrf_ok": lambda: CSRF[0],
                       "svc_reports": lambda: {"compromised_website", "blocklist"}, "network": lambda a: "Example Net" if str(a) == "64500" else "",
                       "cross": lambda hosts: {"services": [{"title": "HTTP"}], "issues": [{"name": "CVE-2024-0001", "hosts": 1}], "infections": []}})
 AN, MG, RS = {"view", "unmasked", "export"}, {"management"}, {"definitions"}
@@ -101,11 +102,31 @@ AN, MG, RS = {"view", "unmasked", "export"}, {"management"}, {"definitions"}
 ROLE = {"management": "management", "definitions": "researcher"}
 
 
-def call(path, perms, raw=False, role=None):
-    with app.test_request_context(path):
+BODY_ROUTES = ("/api/intelligence/report", "/api/intelligence/export.csv", "/api/intelligence/host")
+CSRF = [True]
+
+
+def call(path, perms, raw=False, role=None, get=False):
+    """As the page calls it: the three look-ups send their view in a POST body (2026-11-14); get=True sends it in the URL."""
+    from urllib.parse import urlsplit, parse_qsl
+    u = urlsplit(path)
+    method, body, url = "GET", None, path
+    if u.path in BODY_ROUTES and not get:
+        body, filters = {}, {}
+        for k, v in parse_qsl(u.query):
+            if k in ("name", "day", "q", "reveal", "ip"):
+                body[k] = v
+            else:
+                filters.setdefault(k, []).append(v)
+        body["filters"] = filters
+        method, url = "POST", u.path
+    with app.test_request_context(url, method=method, json=body):
         role = role or next((ROLE[p] for p in perms if p in ROLE), "analyst")
         g.user = {"user": "lg-check", "role": role, "perms": set(perms)}
-        ep = app.url_map.bind("localhost").match(path.split("?")[0])
+        try:
+            ep = app.url_map.bind("localhost").match(url.split("?")[0], method=method)
+        except Exception:                                     # noqa: BLE001  (405: the route does not take this method)
+            return 405, {}
         r = app.view_functions[ep[0]](**ep[1])
         code = r[1] if isinstance(r, tuple) else r.status_code
         r = r[0] if isinstance(r, tuple) else r
@@ -206,5 +227,16 @@ ok("a host's cross-view: every Intelligence report of the week it is in", st == 
 ok("…with the services platform's categories, and logged", h["issues"] and audited[-1][0] == "intelligence_host")
 ok("…a host outside the constituency shows nothing", call("/api/intelligence/host?ip=198.51.100.9", AN)[1]["intelligence"] == [])
 ok("…not an address: refused", call("/api/intelligence/host?ip=x;drop", AN)[0] == 400)
+
+print("Nothing sensitive in an address (2026-11-14)")
+ok("a GET with a search or a filter in the URL is refused", call(f"/api/intelligence/report?name=blocklist&day={D[1]}&q=x", AN, get=True)[0] == 400
+   and call(f"/api/intelligence/report?name=blocklist&day={D[1]}&ip=192.0.2.1", AN, get=True)[0] == 400)
+ok("…a GET with only the report and the day still works", call(f"/api/intelligence/report?name=blocklist&day={D[1]}", AN, get=True)[0] == 200)
+ok("the host view takes its address only in the body (no GET)", call("/api/intelligence/host?ip=192.0.2.1", AN, get=True)[0] == 405)
+ok("the export with a filter only in the body", call(f"/api/intelligence/export.csv?name=blocklist&day={D[1]}&source=list-a", AN, get=True)[0] == 400)
+CSRF[0] = False
+ok("a body sent without this page's token is refused", call(f"/api/intelligence/report?name=blocklist&day={D[1]}", AN)[0] == 403
+   and call("/api/intelligence/host?ip=192.0.2.1", AN)[0] == 403)
+CSRF[0] = True
 print(f"\n{checks - len(fails)} of {checks} Intelligence portal checks passed" + (f"; FAILED: {fails}" if fails else ""))
 sys.exit(1 if fails else 0)

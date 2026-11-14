@@ -266,12 +266,20 @@
       ["IP address", "Host name", "Ports", "Reports", "CVEs", "Issues", "Infections", "Seen as", "Records", "Last seen (UTC)"].forEach((x) => h.append(el("th", null, x)));
       const th = el("thead"); th.append(h); t.append(th);
       const tb = el("tbody");
+      // a list cell: every name whole (never split at a hyphen), the line breaking only between names (2026-11-14)
+      const list = (cls, xs) => {
+        const td = el("td", `${cls || ""} av-list`.trim());
+        if (!xs.length) { td.textContent = "–"; return td; }
+        // the name in a span that never breaks; the ", " between them is where the line may break
+        xs.forEach((x, i) => td.append(el("span", null, String(x)), ...(i < xs.length - 1 ? [document.createTextNode(", ")] : [])));
+        return td;
+      };
       a.devices.forEach((d) => {
         const tr = el("tr");
-        tr.append(el("td", "mono", d.ip), el("td", null, d.hostname || "–"), el("td", "mono", d.ports.join(", ") || "–"), el("td", null, d.reports.join(", ")),
-                  el("td", "mono", d.cves.join(", ") || "–"), el("td", null, d.issues.join(", ") || "–"),
-                  el("td", "mono", (d.infections || d.categories || []).join(", ") || "–"),     // what it calls botnet sinkholes as
-                  el("td", "muted", (d.labels || []).join(", ") || "–"), el("td", "num", fmt(d.records)), el("td", "mono", d.last || ""));
+        tr.append(el("td", "mono", d.ip), el("td", null, d.hostname || "–"), list("mono", d.ports), list(null, d.reports),
+                  list("mono", d.cves), list(null, d.issues),
+                  list("mono", d.infections || d.categories || []),     // what it calls botnet sinkholes as
+                  list("muted", d.labels || []), el("td", "num", fmt(d.records)), el("td", "mono", d.last || ""));
         tb.append(tr);
       });
       t.append(tb);

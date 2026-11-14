@@ -44,7 +44,7 @@ Looking Glass is two programs that share one database. Everything except the bro
 There is one way back from the web app to the pipeline: Settings → Workers. The web app can't write the pipeline's
 folder. A setting change is a request file in the web app's own `data/pipeline_requests/`, which the pipeline checks
 again at its next run. A request that would make the pipeline **less strict** waits until someone confirms it on the
-server, on the pipeline's own account ([Security, section 2](SECURITY.md#pipeline-settings-from-the-web-app-settings--workers)).
+server, on the pipeline's own account ([Security, section 1](SECURITY.md#pipeline-settings-from-the-web-app-settings--workers)).
 
 ## 2. From a report to an advisory
 

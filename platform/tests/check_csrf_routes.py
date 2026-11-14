@@ -34,7 +34,9 @@ def ok(label, cond, info=""):
 PUBLIC = {"/login", "/logout", "/register", "/forgot"}            # forms before a session exists (Origin checks apply)
 AUTOMATION_ONLY = {"/api/selftest/reset-login-counters"}
 MARK = re.compile(r"csrf_ok|guard_write|guard\(change=True\)|need\(\s*\"\w+\",\s*change=|_settings_change_allowed|"
-                  r"_kb_change_allowed|change_allowed\"\]\(|can_note\"\]\(")
+                  r"_kb_change_allowed|change_allowed\"\]\(|can_note\"\]\(|"
+                  # Abused or Compromised look-ups sent in a POST body (2026-11-14): refuse_get() checks csrf_ok on every POST
+                  r"refuse_get\(")
 routes = []
 for r in A.app.url_map.iter_rules():
     ms = (r.methods or set()) - {"GET", "HEAD", "OPTIONS"}

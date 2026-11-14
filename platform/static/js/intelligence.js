@@ -51,11 +51,11 @@
     main.replaceChildren();
     const hero = el("section", "it-hero");
     hero.append(el("div", "fd-eyebrow", "Shadowserver · Intelligence reports"), el("h1", null, "Abused or Compromised"),
-      el("p", "it-sub", "What Shadowserver's Intelligence reports say about the constituency: compromised systems and victims, malicious content hosted here, addresses listed or targeted, leaked accounts and attacker infrastructure. Today is compared with the median of the 7 days before. Only hosts inside the constituency are counted."));
+      el("p", "it-sub", "What Shadowserver's Intelligence reports say about the constituency: compromised systems and victims, malicious content hosted here, addresses listed or targeted, leaked accounts and attacker infrastructure. The latest report day (yesterday: Shadowserver sends a day's reports the next morning) is compared with the median of the 7 days before. Only hosts inside the constituency are counted."));
     const a = S.arriving;
     const line = el("p", `it-arrive ${a.still ? "still" : "in"}`);
-    line.textContent = a.still ? `Today's reports are still arriving: ${a.in} of the usual ${a.usual} in so far (${dayLabel(S.today)}). Today's figures will grow during the day.`
-      : `Today's reports are in: ${a.in} report${a.in === 1 ? "" : "s"} (usually ${a.usual}), ${dayLabel(S.today)}.`;
+    // today's reports are the latest report day's (Shadowserver sends a day's reports the next morning)
+    line.textContent = `Today's reports so far: ${a.in} of the usual ${a.usual}${a.still ? "" : ", all in"} (the reports for ${dayLabel(S.today)}).`;
     hero.append(line);
     main.append(hero);
     // group tiles
@@ -94,7 +94,7 @@
       }
       nr.append(ul); main.append(nr);
     }
-    main.append(el("p", "it-foot", `Figures of ${new Date(S.generated).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}; they are kept two minutes.`));
+    main.append(el("p", "it-foot", `Figures counted at ${new Date(S.generated).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}; they are refreshed every two minutes (reload the page for the latest).`));
   }
 
   const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -108,7 +108,7 @@
     if (x.severity) h.append(el("span", `it-sev ${x.severity}`, x.severity));
     c.append(h, el("p", "it-meaning", x.meaning || `Affected: ${x.affected}`));
     const n = el("div", "it-n");
-    n.append(el("b", null, fmt(x.today)), el("span", `it-vs ${k}`, `today · ${words}`));
+    n.append(el("b", null, fmt(x.today)), el("span", `it-vs ${k}`, `on ${dayLabel(S.today)} · ${words}`));
     c.append(n, bars(x.per_day, S.today));
     const row = el("div", "it-acts");
     const open = el("button", "lg-btn primary sm", "Open the records"); open.type = "button";
@@ -121,6 +121,9 @@
   }
 
   // ------------------------------------------------------------------ a report's view
+  // the view in a request body (2026-11-14): addresses, accounts, searches and filters never go in a URL
+  const postJSON = (url, b) => fetch(url, { method: "POST", cache: "no-store", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() }, body: JSON.stringify(b) });
+  const body = () => ({ name: view.name, day: view.day, filters: view.filters, q: view.q || "", reveal: view.reveal ? "1" : "" });
   function qs(extra) {
     const p = new URLSearchParams({ name: view.name, day: view.day });
     for (const [k, vs] of Object.entries(view.filters)) for (const v of vs) p.append(k, v);
@@ -140,7 +143,7 @@
     pane.replaceChildren(el("div", "st-loading", "Reading the report's records…"));
     if (scroll) pane.scrollIntoView({ behavior: "smooth", block: "start" });
     let r, d;
-    try { r = await fetch(`/api/intelligence/report?${qs()}`, { cache: "no-store" }); d = await r.json().catch(() => ({})); }
+    try { r = await postJSON("/api/intelligence/report", body()); d = await r.json().catch(() => ({})); }
     catch (e) { pane.replaceChildren(el("p", "fd-empty", `Could not read it: ${e.message}`)); return; }
     if (!r.ok) { pane.replaceChildren(el("p", "fd-empty", d.error || `Could not read it (HTTP ${r.status})`)); return; }
     drawView(pane, d);
@@ -244,7 +247,22 @@
       rv.title = view.reveal ? "" : "Leaked accounts are masked. Showing them is written to the audit log.";
       rv.addEventListener("click", () => { view.reveal = !view.reveal; fetchView(false); }); acts.append(rv);
     }
-    if (d.total) { const ex = el("a", "pill-btn", "Download CSV"); ex.href = `/api/intelligence/export.csv?${qs()}`; ex.title = "Every record of this view, as a spreadsheet file. The download is written to the audit log."; acts.append(ex); }
+    if (d.total) {
+      // the view goes in the request body, never the address; the file comes back and is saved from the page
+      const ex = el("button", "pill-btn", "Download CSV"); ex.type = "button"; ex.title = "Every record of this view, as a spreadsheet file. The download is written to the audit log.";
+      ex.addEventListener("click", async () => {
+        ex.disabled = true;
+        try {
+          const r = await postJSON("/api/intelligence/export.csv", body());
+          if (!r.ok) { const x = await r.json().catch(() => ({})); ex.textContent = x.error || `Not downloaded (HTTP ${r.status})`; return; }
+          const name = /filename="([^"]+)"/.exec(r.headers.get("Content-Disposition") || "")?.[1] || "looking-glass.csv";
+          const url = URL.createObjectURL(await r.blob()); const a = el("a"); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+        } catch { ex.textContent = "The connection was interrupted. Try again."; }
+        finally { ex.disabled = false; }
+      });
+      acts.append(ex);
+    }
     rh.append(acts); rec.append(rh);
     if (d.masked) rec.append(el("p", "drill-intro", "Accounts are masked (first letter and domain). “Show the accounts” shows them in full; that is written to the audit log."));
     if (!d.rows.length) rec.append(el("p", "drill-empty", "No record on this day with this selection."));
@@ -253,6 +271,29 @@
     // an analyst code and finding from this view
     if (d.code) pane.append(codeBox(d));
     else if (!d.no_ip && d.total) pane.append(el("p", "it-note", "An analyst code is made from the services platform's records: this report is not among them."));
+  }
+
+  // a cell's value (2026-11-14): web addresses in reference fields (a write-up, a block list's page) open in a new tab;
+  // the addresses a report is ABOUT (a compromised site, a malware or sandbox URL, a C2 or redirect) are never links,
+  // so no one opens a malicious page by a click. Every cell shows its full value on hover.
+  const REF_FIELDS = new Set(["detail", "source_url", "public_source", "leak_site_url"]);
+  const URL_RX = /https?:\/\/[^\s<>"']+/g;
+  function cellText(td, key, v) {
+    td.title = v;
+    if (!v) return;
+    if (!REF_FIELDS.has(key) || !/https?:\/\//i.test(v)) { td.textContent = v; return; }
+    let last = 0;
+    for (const m of v.matchAll(URL_RX)) {
+      if (m.index > last) td.append(document.createTextNode(v.slice(last, m.index)));
+      let href = null;
+      try { const u = new URL(m[0]); if (u.protocol === "http:" || u.protocol === "https:") href = u.href; } catch { /* not an address */ }
+      if (href) {
+        const a = el("a", "it-reflink", m[0]); a.href = href; a.target = "_blank"; a.rel = "noopener noreferrer";
+        a.title = `${m[0]} (opens outside Looking Glass)`; td.append(a);
+      } else td.append(document.createTextNode(m[0]));
+      last = m.index + m[0].length;
+    }
+    if (last < v.length) td.append(document.createTextNode(v.slice(last)));
   }
 
   function table(d) {
@@ -272,7 +313,7 @@
         if (c.key === "ip" && v) {
           const b = el("button", "it-ip mono", v); b.type = "button"; b.title = "What else this host carries";
           b.addEventListener("click", () => hostView(v, b)); td.append(b);
-        } else td.textContent = v;
+        } else { cellText(td, c.key, v); }
         row.append(td);
       }
       let extraRow = null;
@@ -285,7 +326,7 @@
           extraRow = el("tr", "it-extra"); extraRow.hidden = true;
           const cell = el("td"); cell.colSpan = cols.length + 1;
           const dl = el("dl", "it-extra-dl");
-          for (const k of more) { const item = el("div"); item.append(el("dt", null, k.replace(/_/g, " ")), el("dd", null, r[k])); dl.append(item); }
+          for (const k of more) { const item = el("div"); const dd = el("dd"); cellText(dd, k, r[k]); item.append(el("dt", null, k.replace(/_/g, " ")), dd); dl.append(item); }
           cell.append(dl); extraRow.append(cell);
           b.addEventListener("click", () => {
             const open = extraRow.hidden; extraRow.hidden = !open;
@@ -314,7 +355,7 @@
     const onKey = (e) => { if (e.key === "Escape") { box.remove(); from?.focus(); document.removeEventListener("keydown", onKey); } };
     document.addEventListener("keydown", onKey);
     let r, d;
-    try { r = await fetch(`/api/intelligence/host?ip=${encodeURIComponent(ip)}`, { cache: "no-store" }); d = await r.json().catch(() => ({})); }
+    try { r = await postJSON("/api/intelligence/host", { ip }); d = await r.json().catch(() => ({})); }
     catch (e) { box.lastChild.replaceWith(el("p", "fd-empty", `Could not read it: ${e.message}`)); return; }
     if (!r.ok) { box.lastChild.replaceWith(el("p", "fd-empty", d.error || `HTTP ${r.status}`)); return; }
     const body = el("div", "it-hbody");

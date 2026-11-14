@@ -142,12 +142,31 @@
   // Executive portal (counts only), analysts search or report on it (with the addresses)
   // within: the analyst code a researcher's reply codes answer (2026-11-14): searched only among its devices, so the
   // report and the advisory carry exactly what was drilled down to
+  // how many of an analyst code's devices each code stands for (/api/intel/acode/<code>/devices), fetched once per code
+  const devCounts = new Map();
+  const countsOf = (acode) => {
+    if (!devCounts.has(acode)) devCounts.set(acode, fetch(`/api/intel/acode/${encodeURIComponent(acode)}/devices`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : {})).then((d) => d.devices || {}).catch(() => ({})));
+    return devCounts.get(acode);
+  };
   function codesBox(codes, within) {
     const cs = el("div", "fd-codes");
     for (const x of codes) {
       const isA = x.code.startsWith("LG-A-");
       const row = el("div", `fd-code${isA ? " a" : ""}`);
       const what = el("span", null, x.text || "");
+      // the number of devices: within the analyst's selection for a researcher's answer, all of it for the analyst code
+      const acode = isA ? x.code : within;
+      if (acode) {
+        const n = el("span", "fd-code-n lg-loading", "…"); n.title = isA ? "The devices of this selection" : `The devices of ${acode} that carry it`;
+        what.prepend(n);
+        countsOf(acode).then((m) => {
+          n.classList.remove("lg-loading");
+          const k = m[x.code];
+          if (k == null) { n.remove(); return; }
+          n.textContent = isA ? `${Number(k).toLocaleString("en-US")} device${k === 1 ? "" : "s"}` : `${Number(k).toLocaleString("en-US")} device${k === 1 ? "" : "s"} in the selection`;
+        });
+      }
       if (x.asked) {                      // what the analyst asked for when making the code (acodes.py)
         const [head, ...rest] = x.asked.split(": ");
         const ask = el("span", "fd-asked"); ask.append(el("b", null, "Asked for: "), document.createTextNode(head));

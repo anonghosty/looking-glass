@@ -6,29 +6,7 @@ see [INSTALLATION.md](INSTALLATION.md); for the parts, trust boundaries and thre
 
 ---
 
-## 1. What protects what
-
-| Layer | Protection | Where |
-|---|---|---|
-| Network | `ACCESS_MODE`: `local` (this computer), `private` (+ `VIEWER_NETWORKS` allow list) or `public` (any address); other computers must use HTTPS to sign in | `deploy/looking-glass.service.template`, `security.py`, `gunicorn.conf.py` |
-| Host names | Only `localhost`, `127.0.0.1`, `::1` and `ALLOWED_HOSTS` are served (stops DNS rebinding) | `security.py` |
-| Login | Every page and API needs a login: password (scrypt) plus a code from an authenticator app (TOTP) | `auth.py`, `templates/login.html` |
-| Accounts | Self-registration with approval, QR authenticator set-up, roles with permissions, admin page, audit log, password reset | `auth.py`, `templates/login.html`, `templates/admin.html` |
-| Password guessing | 5 wrong attempts for an account from one address lock it for 15 minutes; 20 failures from one address in an hour lock the address. Failure records older than an hour are cleared out, so the counter cannot grow without end on a public install | `auth.py`, `throttle_prune.py` |
-| Sessions | Server-side; the cookie is HttpOnly, SameSite=Strict, and Secure over HTTPS; bound to address and browser; idle and maximum timeouts | `auth.py` |
-| Changes | Admin role, CSRF token, JSON only, and same-origin checks on `Origin` / `Sec-Fetch-Site` | `app.py`, `security.py` |
-| Input | Times clamped to the replay days; Malpedia values validated; settings limited in size and content; 64 KB request limit | `app.py`, `malpedia.py`, `settings.py`, `security.py` |
-| Browser | Content-Security-Policy with a per-request nonce; no inline handlers and no eval; frames refused; nosniff; Referrer-Policy; integrity hashes on CDN files | `security.py`, templates |
-| Demo mode | Real addresses, AS numbers and network names are masked on the server; host filters accept only opaque references; report fields only from an allowlist; Settings is admin-only | `privacy.py`, `masked_fields.py`, `app.py` |
-| Report zips | Unpacked within limits counted on the real bytes (unpacked size, compression ratio, files per zip, free disk); a zip bomb is quarantined with the reason and nothing of it is loaded; names inside a zip cannot leave its folder. Defaults suit a large country, changeable in `.env` | `database/zip_limits.py` |
-| Database | Read-only MongoDB account for the platform (`lookingglass_ro`); the pipeline's own account (`lookingglass_pipeline`: read and write on its database only, no account management); the administrator account only in `/etc/looking-glass/mongo-admin.env` (root, mode 600), out of reach of the programs' own Linux user; MongoDB bound to localhost with authentication | `deploy/create_readonly_db_user.py`, `database/create_pipeline_db_user.py`, `database/store_mongo_admin.sh` |
-| Operating system | systemd sandbox: no privilege gain, read-only system and home folder, writable only in `data/`, private files (umask 077) | `deploy/looking-glass.service.template` |
-| Outbound downloads (name sources) | MISP Galaxy and MITRE ATT&CK are downloaded only by `manage/fetch_offline_names.py`, run by the weekly cron line, an administrator on the server, or the **Refresh sources** button (permission *settings*, CSRF token, fresh sign-in, at most once an hour, one at a time; every refresh in the audit log): plain HTTPS GETs of fixed public files on raw.githubusercontent.com (and one listing of MITRE CTID's public Mappings Explorer repository on api.github.com, to find its newest KEV mapping file) (no name, host or report in the request; redirects away from HTTPS refused; 200 MB per file; at most once a week unless `--force`; a download that is invalid or under 70% of the copy in use is refused and the old copy kept). Only compact indexes are kept (`data/names_misp_galaxy.json`, `data/names_attack.json`); a look-up only reads them and sends nothing. The text is third-party data: shown as text, links only `http(s)` | `offline_names.py`, `manage/fetch_offline_names.py` |
-| ATT&CK in advisories | Only reviewed mappings go to recipients: generating an advisory's report is refused while a mapping is only suggested (the advisor confirms or removes it: advisors only, CSRF token, fresh sign-in, audited, part of the report's content fingerprint), and a report carrying an unreviewed mapping cannot be marked sent. The generated report keeps its techniques and texts; "why" lines use counts and products, never an address | `advisory_attack.py`, `advisory.py` |
-| Trusting CTID's CVE mappings | CVE techniques (MITRE CTID, KEV mappings) in advisories are suggestions under the reviewed-only rule unless an administrator trusts CTID: `POST /api/attack/ctid-trust` needs permission *settings*, the CSRF token and a fresh sign-in, accepts only true or false, is off by default, and every change is in the audit log. CVE look-ups read the local copy only | `attack_map.py`, `advisory_attack.py` |
-| Secrets | `.env` and `data/users.json`, `sessions.json`, `automation.key` and `tls/key.pem` are mode 600; backups are mode 600 in a 700 folder | file system |
-
-## 2. Accounts, sign-in and administration
+## 1. Accounts, sign-in and administration
 
 ### First run
 When no administrator exists, the sign-in page shows only **Let's get started**, and it asks for a **one-time setup
@@ -239,7 +217,7 @@ central accounts, single sign-on through OpenID Connect is the next step: Micros
 and leavers managed centrally), or a self-hosted Keycloak or Authentik. The login is a separate module (`auth.py`), so
 an OpenID Connect provider can be added later.
 
-## 3. Session hijacking defences
+## 2. Session hijacking defences
 
 - **Server-side sessions.**
   - The browser holds only a random 256-bit ID.
@@ -274,7 +252,7 @@ an OpenID Connect provider can be added later.
 - **Report intake:** unpacking limits against oversized or malicious archives, report names checked before they become
   collections, and an optional DKIM check of every report e-mail, with blocking and quarantine.
 
-## 4. Operator checklist
+## 3. Operator checklist
 
 Do this on every installation (details in [INSTALLATION.md](INSTALLATION.md)):
 - [ ] Install the hardened service unit (the installer does this; `deploy/install.sh` on a manual installation).
@@ -294,7 +272,7 @@ Do this on every installation (details in [INSTALLATION.md](INSTALLATION.md)):
 - [ ] Check the installation (below).
 - [ ] Take a backup (`manage/backup.sh`) and keep a copy off the server.
 
-## 5. Checking your installation
+## 4. Checking your installation
 
 After installing or updating, check that every protection is in place on your own server:
 ```bash
@@ -317,13 +295,13 @@ They record sign-ins, failed sign-ins and lockouts; sessions ended because they 
 browser; recovery-code use; and settings changes. The audit log (Audit portal) records who did what, and how to prove
 it was not changed is in [How the audit log proves itself](AUDIT_LOG_PROOF.md).
 
-## 6. Supported versions and changes
+## 5. Supported versions and changes
 
 Security fixes are made on the latest version (the `main` branch). Update with the steps in
 [INSTALLATION.md](INSTALLATION.md#updating). What changed in each release, security changes included, is in the
 [changelog](../CHANGELOG.md).
 
-## 7. Reporting a vulnerability
+## 6. Reporting a vulnerability
 
 - **In Looking Glass itself:** report it privately through the repository's Security tab (**Report a vulnerability**),
   not in a public issue. Include the steps to reproduce and the version (commit) you run.

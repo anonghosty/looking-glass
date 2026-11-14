@@ -172,3 +172,4 @@ details.fd-subd[hidden] { display: none; }
 .fd-meta { min-width: 0; }
 .fd-name { overflow-wrap: anywhere; word-break: break-word; min-width: 0; }
 .fd-view.d { border-color: rgba(255, 197, 61, .5); background: rgba(255, 197, 61, .04); }   /* the drill-down: what the report covers */
+.fd-code-n { display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 999px; border: 1px solid rgba(255, 197, 61, .5); background: rgba(255, 197, 61, .08); color: #ffe2a0; font: 600 11.5px var(--font); white-space: nowrap; }   /* devices behind a code */

@@ -31,3 +31,23 @@ timeout = 120
 # string (it can hold host addresses, account names and searches), no referring page (its URL can too), no browser
 # string. Views of host data are in the audit log instead, with hosts as opaque references (2026-11-14).
 access_log_format = '%(h)s %(t)s "%(m)s %(U)s %(H)s" %(s)s %(b)s %(L)ss'
+
+
+# No Server header (2026-11-14): gunicorn names itself ("Server: gunicorn") in every response, which tells a scanner
+# what answers before anyone signs in. The header is dropped; nothing else in the response changes.
+def _no_server_header():
+    try:
+        from gunicorn.http import wsgi as _wsgi
+        if getattr(_wsgi.Response.default_headers, "_lg_no_server", False):
+            return
+        original = _wsgi.Response.default_headers
+
+        def default_headers(self):
+            return [h for h in original(self) if not h.lower().startswith("server:")]
+        default_headers._lg_no_server = True
+        _wsgi.Response.default_headers = default_headers
+    except Exception:          # noqa: BLE001  (another gunicorn layout: the header stays, the service still starts)
+        pass
+
+
+_no_server_header()
