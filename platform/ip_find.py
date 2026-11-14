@@ -47,11 +47,14 @@ PRODUCTS = ("apache", "httpd", "nginx", "openresty", "tengine", "lighttpd", "cad
             "mariadb", "postgresql", "vmware", "esxi", "zyxel", "hikvision", "dahua", "ubnt", "unifi", "synology",
             "qnap", "netgear", "tp-link", "d-link", "huawei", "zte", "openwrt", "dd-wrt", "lancom", "draytek", "sonicwall",
             "citrix", "netscaler", "f5", "big-ip", "pulse", "ivanti", "checkpoint", "gitlab", "nextcloud", "owncloud")
-_VERSION_BEFORE = re.compile(
+_VERSION_WORD = re.compile(
     r"(?:(?<![A-Za-z0-9_])(?:version|ver|build|release|revision|rev|firmware|fw)\.?[ \t]*[:=][ \t]*"
-    r"|(?<![A-Za-z0-9_])(?:version|ver|build|release|revision|rev|firmware|fw)\.?[ \t]+"
-    # a known product name, at the start or after a space or bracket, never as a value ("url=apache/…" is a path)
-    r"|(?<![\w/.:=?&#%@+-])(?:" + "|".join(re.escape(p) for p in PRODUCTS) + r")/)$", re.I)
+    r"|(?<![A-Za-z0-9_])(?:version|ver|build|release|revision|rev|firmware|fw)\.?[ \t]+)$", re.I)
+# a known product name, at the start or after a space or bracket, never as a value ("url=apache/…" is a path)
+_PRODUCT_BEFORE = re.compile(r"(?<![\w/.:=?&#%@+-])(?:" + "|".join(re.escape(p) for p in PRODUCTS) + r")/$", re.I)
+# ...and then only a version that starts small: real ones do (Apache/2, nginx/1, RouterOS/6, Node/22, GitLab/17);
+# "apache/41.66.1.2" is an address after a product word (external review, 2026-11-14)
+PRODUCT_VERSION_MAX = 25
 
 
 def _is_version(text, start, end):
@@ -61,7 +64,13 @@ def _is_version(text, start, end):
         return False
     if text[end:end + 1] == ":" and text[end + 1:end + 2].isdigit():
         return False                    # address:port is an address, never a version (review 2026-11-13)
-    return bool(_VERSION_BEFORE.search(text[max(0, start - 60):start]))
+    before = text[max(0, start - 60):start]
+    if _VERSION_WORD.search(before):
+        return True
+    if _PRODUCT_BEFORE.search(before):
+        first = text[start:end].split(".", 1)[0]
+        return first.isdigit() and int(first) <= PRODUCT_VERSION_MAX
+    return False
 
 
 def _v4(s):

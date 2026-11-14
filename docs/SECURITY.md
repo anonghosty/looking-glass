@@ -367,6 +367,8 @@ The re-check of 82d5719:
 | Code scanning #28 and #29: the audit continuity check sent exception text to the page | Fixed messages only; a damaged archive is named, with "unreadable" | `tests/check_auditor_portal.py` |
 | The advisory's Confirm, Remove and Undo buttons for ATT&CK mappings sent the organisation picked at the moment of the click | Each button sends the organisation its form was drawn for; an answer after a switch is dropped | `tests/check_workflow_fixes.py` |
 | A technique's lines in the advisory PDF could be split over two pages | The whole technique is measured and kept on one page | `tests/check_advisory_attack.py` (fails on the old code) |
+| With the report database unreachable, the Definitions to-do list came back empty without saying why (and GitHub's checks, which have no database, failed) | The names are still listed; only "seen in" may be missing, and the answer and the page say so | `tests/check_kb_report_names.py` (with and without MongoDB) |
+| A known product name followed by an address (`apache/41.66.1.2`) kept the address as a "version" | After a product name a version must start at 25 or lower, as real ones do | `tests/check_ip_find.py` (fails on the old finder) |
 
 Other hardening added:
 - **systemd sandbox:** `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=read-only`, writable only `data/`, `PrivateTmp`, `UMask=0077` and more. Check it with `systemd-analyze security threatmap`.

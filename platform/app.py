@@ -2056,12 +2056,18 @@ _ACTIVITY = {
     "IP spoofing": "sending traffic with a forged sender address",
 }
 _EVIDENCE = {"at": 0.0, "data": {}}
+# set for one request when the report database cannot be read: the evidence already in memory (maybe none) is used
+# instead of reading stored days, so the Definitions to-do list still lists its names (external review, 2026-11-14:
+# with MongoDB down the list came back empty)
+_EV_OFFLINE = threading.local()
 from seen_index import SeenIndex  # noqa: E402
 SEEN = SeenIndex(os.path.join(BASE_DIR, "data", "seen_names.json"), logger=app.logger)
 
 
 def _name_evidence():
     """name -> {'classes': set, 'reports': set} over the days in memory (refreshed at most every minute)."""
+    if getattr(_EV_OFFLINE, "on", False):
+        return _EVIDENCE["data"] or {}
     if time.time() - _EVIDENCE["at"] < 60 and _EVIDENCE["data"]:
         return _EVIDENCE["data"]
     labels = {x["name"]: x["label"] for x in registry.get()}
@@ -2431,6 +2437,19 @@ def api_kb_unresolved():
     """Names a look-up could not match (most seen first), and the names already defined by an administrator."""
     if not _kb_allowed():
         return jsonify(error="Definitions are for researchers and admins."), 403
+    db_ok = True
+    try:
+        _name_evidence()
+    except _MongoError:
+        db_ok = False                      # list the names anyway; "seen in" shows only what is in memory
+        _EV_OFFLINE.on = True
+    try:
+        return _kb_unresolved(db_ok)
+    finally:
+        _EV_OFFLINE.on = False
+
+
+def _kb_unresolved(db_ok):
     names = _read_names()
     misses = {n: x for n, x in names.items() if not x.get("family")}
     kb, ev = knowledge_base(), _name_evidence()
@@ -2469,7 +2488,9 @@ def api_kb_unresolved():
                         epss=c.get("epss"), title=item["title"] or (c.get("kev") or {}).get("name", ""))
         issues.append(item)
     return jsonify(unresolved=todo, defined=done, unchecked=new, all=every, check=_AUTOCHECK, malpedia=malpedia.enabled,
-                   issues=issues, cve=cve_intel.status())
+                   issues=issues, cve=cve_intel.status(), database=db_ok,
+                   database_note="" if db_ok else ("The report database cannot be read just now, so where and when each name "
+                                                   "was seen may be missing. The names themselves are listed."))
 
 
 @app.route("/api/kb/malpedia-search")

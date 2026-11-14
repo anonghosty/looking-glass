@@ -46,8 +46,13 @@ try:
     ok("a services report name is not recorded", "scan_ssh" not in rec)
     ok("…a real name still is", "new-name-test" in rec)
     print("Never listed, even from an old record")
-    j = c.get("/api/kb/unresolved", headers={"User-Agent": UA}).json
-    todo = {r["name"] for r in j.get("unresolved", [])}
+    # with or without the report database (GitHub's checks have none): the list still answers with its names; only
+    # "seen in" may be missing then, and the answer says so (external review, 2026-11-14: it came back empty)
+    r = c.get("/api/kb/unresolved", headers={"User-Agent": UA}); j = r.json or {}
+    todo = {x["name"] for x in j.get("unresolved", [])}
+    ok("the to-do list answers, database or not", r.status_code == 200 and isinstance(j.get("unresolved"), list), str(r.status_code))
+    ok("…and says whether the report database could be read", isinstance(j.get("database"), bool)
+       and (j["database"] or bool(j.get("database_note"))), str(j.get("database")))
     ok("the three old report names are not on the to-do list", not todo & {"scan_mikrotik_service", "scan_http", "scan_http_vulnerable"}, str(sorted(todo)[:8]))
     ok("…a real unknown name stays on it", "greedyrat-test" in todo, str(sorted(todo)[:8]))
 finally:
