@@ -261,7 +261,7 @@ A match the platform found in the reports and asks a researcher to look into: th
 A new finding a researcher records on a name (the C2 moved, seen together with another family…), dated and signed. It appears on every card of that name and in the PDF reports as Notes shared by Researcher: full name (date). Notes are kept apart from the definitions and are never replaced by an update.
 
 **Combination code (LG-C, LG-X)**  
-A short code for one exact combination Intel gathered shows: LG-C-… for one report (the records that carry exactly these indicators), LG-X-… for a cross-report pattern (what a device carried in each of several reports). The same combination always has the same code, and a code carries no address, so researchers and management can pass it on in notes and reports; an analyst pastes it on the Combinations page to get exactly those devices.
+A short code for one exact combination Intel gathered shows: LG-C-… for one report (the records that carry exactly these indicators), LG-X-… for a cross-report pattern (what a device carried in each of several reports). A code carries no address, so researchers and management can pass it on in notes and reports; an analyst pastes it on the Combinations page to get exactly those devices.
 
 **Combination search**  
 The analysts' page (/combinations) that turns a combination code into the devices behind it, over the days in memory or up to 31 days of stored history, with a PDF summary (region map, across reports, each name and CVE explained with its references, and the researchers' notes on every name) and CSV files of the devices and records. A chart with nothing to show is left out of the PDF. It lists real addresses, so it is only for roles that see them and may export, and is off in Demo mode.

@@ -385,6 +385,46 @@ class Findings:
             self._save()
             return item, ""
 
+    # ---------------- over time (finding_watch.py, 2026-11-14)
+    OPEN = OPEN
+
+    def all_open(self):
+        with self.lock:
+            self._load()
+            return [dict(x) for x in self.data["items"].values() if x["status"] in OPEN]
+
+    def visible(self, user, admin, strict=False):
+        with self.lock:
+            self._load()
+            return [dict(x) for x in self.data["items"].values() if self.sees(x, user, admin, strict)]
+
+    def set_reported(self, fid, first, last):
+        """The days its records were reported (kept, so the page and the expiry need no database)."""
+        with self.lock:
+            self._load()
+            item = self.data["items"].get(str(fid))
+            if item and item.get("reported") != {"first": first, "last": last}:
+                item["reported"] = {"first": first, "last": last}
+                self._save()
+
+    def expire(self, fid, why, user):
+        """Closed because its time to act passed: recorded in its history like any closing, by Looking Glass."""
+        with self.lock:
+            self._load()
+            item = self.data["items"].get(str(fid))
+            if not item or item["status"] not in OPEN or item.get("kind") == "case":
+                return False                               # a case follows its sub-findings
+            rv = item.get("review")
+            if rv and not rv.get("decision"):
+                rv["decision"] = "withdrawn"
+            item["status"] = "closed"
+            item["expired"] = True
+            item["history"].append({"status": "closed", "kind": "expired", "user": user, "role": "system",
+                                    "at": round(time.time(), 3), "comment": why[:MAX_COMMENT], "to": ""})
+            self._sync_case(item)
+            self._save()
+            return True
+
     def of_note(self, note_id):
         with self.lock:
             self._load()
@@ -392,7 +432,8 @@ class Findings:
 
     def shown(self, x, describe=None):
         """As people see it: names in full, dates readable, codes with what they mean. No address in any field."""
-        who = lambda u, r: {"by": self.people.name(u, ""), "role": ROLE_LABEL.get(r, "Researcher")}
+        who = lambda u, r: ({"by": "Looking Glass", "role": "Looking Glass"} if r == "system" else
+                            {"by": self.people.name(u, ""), "role": ROLE_LABEL.get(r, "Researcher")})
         day = lambda t: time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(t)) if t else ""
         return {"id": x["id"], "number": f"#{x['id']}", "section": x["section"], "name": x["name"], "title": x["title"], "text": x["text"],
                 "codes": [{"code": c, "text": (describe(c) if describe else "") or "", "asked": self.asked_of(c) or ""}
@@ -416,6 +457,8 @@ class Findings:
                 # a case and its sub-findings (one per organisation): the page shows them as one ticket
                 "kind": x.get("kind") or "", "parent": x.get("parent") or "", "network": x.get("network") or "",
                 "children": list(x.get("children") or []),
+                # when its records were reported (finding_watch.py), and whether it closed because time to act ran out
+                "reported": dict(x.get("reported") or {}), "expired": bool(x.get("expired")),
                 # its advisories (advisory.py): reference, organisation, state; the advisor marks a drafted one as sent here
                 "advisories": self.advisories_of(x["id"]) if x.get("review") else []}
 

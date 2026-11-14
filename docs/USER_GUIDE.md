@@ -149,9 +149,10 @@ networks, audit).
 
 ![The intro page: yesterday at a glance](media/screens/10-overview.png)
 
-Every role starts on its own **Overview**. The first time you open it, it greets you by your first name: *Greetings,
-Kwame! Welcome to Looking Glass*. After that it picks one of thirty greetings at random each time (some of them for
-fun). It uses the name the administrator entered, never the user name.
+Every role starts on its own **Overview** after signing in (a link to a particular page still opens that page). The
+first time you open it, it greets you by your first name: *Greetings, Kwame! Welcome to Looking Glass*. After that it
+picks one of thirty greetings at random each time, each role its own thirty (some of them for fun). It uses the name the
+administrator entered, never the user name.
 
 ![Every role has its own Overview](media/screens/11-overview-roles.png)
 
@@ -427,8 +428,8 @@ the analyst pulls exactly those devices and writes the advisory. Two complete wa
 demonstration data, are in [Use case scenarios: a needle through the haystack](USE_CASES.md).
 
 **Combination codes.** Every combination in Intel gathered carries a code: **`LG-C-…`** for one exact combination in
-one report, **`LG-X-…`** for a cross-report pattern (what a device carried in each of several reports). The same
-combination always has the same code, and a code carries no address. Click a code to copy it.
+one report, **`LG-X-…`** for a cross-report pattern (what a device carried in each of several reports). A code
+carries no address. Click a code to copy it.
 
 **Attaching codes to a note.** The Notes window has a **Combinations for this note** section with three ways in:
 - **Seen in the reports:** every combination of the name, grouped by report like a detailed drop-down list, with
@@ -575,6 +576,17 @@ learn it exists.
 4. The advisor writes the organisation's advisory and marks it **sent** on the Findings page. The finding closes once
    every organisation in it has its advisory sent. A case closes once every one of its sub-findings is closed. Every step is in the finding's history and the audit
    log.
+
+**When it was reported, and whether it is still there.** Each finding shows the day its records were reported
+(a finding opened from a name shows the day it was found), how many of its devices are in the latest report again for
+the same combination, and the day its time to act runs out. Its links open the Executive portal and the combination
+search on the day it was reported, so an old finding can still be worked on. Analysts (on the combination search) and
+advisors (in the advisory's device list) see the devices reported again marked **again**, with a line above the list;
+the Findings page itself never shows an address.
+
+**Time to act.** An open finding closes on its own once its time to act has passed: `FINDING_ACT_DAYS` days after its
+records were reported (30 unless set in `.env`; `0` turns it off). Its history then says *Time to act expired*, by
+Looking Glass, and everyone in its channel sees it in the bell.
 
 **The page is a ticket tree.** A case shows its sub-findings beneath it, one per organisation. Closed sub-findings fold
 into their own group, and every level opens and closes with a click. The **state pill** says where each one stands

@@ -352,7 +352,6 @@ searchable site, with the films. The same guides are in the [`docs/`](docs) fold
 | Topic | Document |
 |---|---|
 | **Use case scenarios: a needle through the haystack** | [docs/USE_CASES.md](docs/USE_CASES.md) |
-| What changed in each release | [CHANGELOG.md](CHANGELOG.md) |
 | Every feature, explained | [docs/FEATURES.md](docs/FEATURES.md) |
 | Screenshots | [docs/media](docs/media) |
 | Every term, in plain language | [docs/GLOSSARY.md](docs/GLOSSARY.md) |

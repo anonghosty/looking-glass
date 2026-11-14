@@ -59,6 +59,7 @@ run "sign-in, MFA, recovery, /forgot, role gates (offline)" $PY tests/check_auth
 run "grades and shares (offline)"     $PY tests/check_calc_offline.py
 DBDIR=""; for d in ../database ../shadowserver; do [ -f "$d/zip_limits.py" ] && [ -x "$d/.venv/bin/python" ] && DBDIR=$d && break; done
 if [ -n "$DBDIR" ]; then run "pipeline: unzip limits (zip bombs)" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_zip_limits.py"
+if [ -n "$DBDIR" ]; then run "pipeline: row hash limits and failed rows" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_line_hash.py"; fi
 else run "pipeline: unzip limits (zip bombs)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/report_names.py" ]; then run "pipeline: report names (quarantine)" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_report_names.py"
 else run "pipeline: report names (quarantine)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
@@ -94,6 +95,7 @@ run "analyst code page: how the selection came about" $PY tests/check_acode_chai
 run "combinations: ticked infections and CVEs go into the report" $PY tests/check_ticked_names.py
 run "Intelligence portal: who sees what, counts, views, export" $PY tests/check_intelligence.py
 run "combination codes never stand for two combinations" $PY tests/check_code_collisions.py
+run "findings over time: reported day, repeats, time to act" $PY tests/check_finding_watch.py
 run "offline names: MISP Galaxy + ATT&CK, nothing sent" $PY tests/check_offline_names.py
 run "ATT&CK mappings, versions, CVE links" $PY tests/check_attack_map.py
 run "ATT&CK in advisories (reviewed only)" $PY tests/check_advisory_attack.py

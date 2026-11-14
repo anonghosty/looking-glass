@@ -256,3 +256,9 @@
 .ce-net.has { border-color: rgba(255, 197, 61, .6); box-shadow: inset 3px 0 0 rgba(255, 197, 61, .8); }
 .ce-net.has.on { background: rgba(124, 156, 255, .1); }
 .ce-net { align-content: start; }   /* a card taller than its content keeps its lines together at the top */
+/* a finding's devices reported again in the latest report (2026-11-14) */
+.cb-again-banner { margin: 6px 0 10px; padding: 8px 12px; border-radius: 9px; font-size: 12.5px; line-height: 1.45; border: 1px solid var(--border); }
+.cb-again-banner.hot { color: #ffd38a; border-color: rgba(255,190,90,.45); background: rgba(255,170,60,.08); font-weight: 600; }
+.cb-again-banner.calm { color: #9fe3bf; border-color: rgba(90,200,140,.35); background: rgba(90,200,140,.06); }
+.cb-table tr.cb-again td { background: rgba(255,170,60,.05); }
+.cb-again-tag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; font: 600 10.5px Inter, sans-serif; color: #1b1203; background: #ffc46b; vertical-align: 1px; }

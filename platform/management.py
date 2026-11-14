@@ -233,10 +233,46 @@ def register(app, ctx):
         return [{"value": k, "label": label(k) if label else k, "count": c, "share": c / tot,
                  **({"hosts": len(hosts.get(k, ()))} if hosts is not None else {})} for k, c in ranked if k not in (None, "")]
 
+    one_past = {"key": None, "day": None}
+    one_past_lock = threading.Lock()
+
+    def past_full(store, start):
+        """A past day loaded in full for a selection (a code), one at a time: the store keeps only the days around the
+        latest, and a review's drill-down can be from days before (2026-11-14: a drill-down reported on 9 Nov showed 0
+        on the 13th). One slot, replaced by the next: memory stays bounded."""
+        try:
+            sig = store.signature(start)
+        except Exception:                                  # noqa: BLE001
+            sig = None
+        key = (id(store), start, repr(sig))
+        with one_past_lock:
+            if one_past["key"] == key:
+                return one_past["day"]
+            one_past["key"], one_past["day"] = None, None   # the old one goes before the next is loaded
+            day = store._load(start)
+            one_past["key"], one_past["day"] = key, day
+            return day
+
     def day_of(store):
-        days = sorted(store.days)
         want = request.args.get("day")
+        if want and request.args.get("code") and not store.days:
+            store.get(ctx["replay_now"]())                 # just started: the latest day first, the week is counted from it
+        days = sorted(store.days)
         start = next((d for d in days if d.date().isoformat() == want), None) if want else None
+        if start is None and want and request.args.get("code") and days:
+            # a selection asked for on a day no longer in memory, within the week the portal compares with: loaded
+            from datetime import datetime, timezone
+            try:
+                ws = datetime.fromisoformat(want).replace(tzinfo=timezone.utc)
+            except ValueError:
+                ws = None
+            if ws is not None and days[-1] - timedelta(days=BASE_N + 1) <= ws < days[-1] and ws.date().isoformat() == want:
+                try:
+                    full = past_full(store, ws)
+                except Exception:                          # noqa: BLE001  (MongoDB busy: the latest day, as before)
+                    full = None
+                if full is not None and getattr(full, "events", None) is not None:
+                    return full, sorted({x.date().isoformat() for x in days} | {want})
         if start is None:
             d = store.get(ctx["replay_now"]())
             return d, [x.date().isoformat() for x in days]

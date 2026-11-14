@@ -100,6 +100,7 @@ def status(base_dir, ok, stats, min_gb, now=None):
     free = free_gb(base_dir)
     st = {"finished": round(now), "ok": bool(ok), "file_errors": int(stats.get("file_errors", 0)),
           "email_failed": int(stats.get("email_failed", 0)), "rows_inserted": int(stats.get("rows_inserted", 0)),
+          "rows_failed": int(stats.get("rows_failed", 0)), "files_rows_failed": int(stats.get("files_rows_failed", 0)),
           "pruned_files": int(stats.get("retention_files", 0)), "pruned_mb": round(stats.get("retention_bytes", 0) / 1048576, 1),
           "free_gb": round(free, 1), "min_free_gb": min_gb, "disk_low": bool(min_gb and 0 <= free < min_gb)}
     p = os.path.join(base_dir, "pipeline_status.json")

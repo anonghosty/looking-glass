@@ -283,6 +283,23 @@
         tb.append(tr);
       });
       t.append(tb);
+      // the devices reported again in the latest report for the same combination (finding_watch.py, 2026-11-14):
+      // a banner over the list and a tag on each of them
+      const again = el("div", "av-again"); again.hidden = true; dc.append(again);
+      fetch(`/api/findings/${encodeURIComponent(fid)}/again`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((x) => {
+        if (!x || x.state !== "ready" || x.again == null) return;
+        const set = new Set(x.again_ips || []);
+        let n = 0;
+        for (const tr of tb.children) {
+          const ipCell = tr.firstElementChild;
+          if (ipCell && set.has(ipCell.textContent)) { n += 1; tr.classList.add("av-rep-again"); ipCell.append(el("span", "av-again-tag", "again")); }
+        }
+        const day = new Date(`${x.latest}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+        again.hidden = false;
+        again.className = `av-again ${n ? "hot" : "calm"}`;
+        again.textContent = n ? `${fmt(n)} of these ${fmt(a.devices.length)} devices were reported again in the latest report (${day}) for the same combination: marked "again" below.`
+          : `None of these devices was reported again in the latest report (${day}) for the same combination.`;
+      }).catch(() => {});
       const w = el("div", "table-wrap av-ipwrap"); w.append(t); dc.append(w);
       if (D.devices_total > a.devices.length) dc.append(el("p", "av-sub", `The first ${fmt(a.devices.length)} of ${fmt(D.devices_total)} here; the report has all of them.`));
     }

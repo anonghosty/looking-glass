@@ -173,3 +173,12 @@ details.fd-subd[hidden] { display: none; }
 .fd-name { overflow-wrap: anywhere; word-break: break-word; min-width: 0; }
 .fd-view.d { border-color: rgba(255, 197, 61, .5); background: rgba(255, 197, 61, .04); }   /* the drill-down: what the report covers */
 .fd-code-n { display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 999px; border: 1px solid rgba(255, 197, 61, .5); background: rgba(255, 197, 61, .08); color: #ffe2a0; font: 600 11.5px var(--font); white-space: nowrap; }   /* devices behind a code */
+
+/* over time (2026-11-14): reported day, devices in the latest report again, time to act; wraps, never cut */
+.fd-watch { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 8px 0 2px; font-size: 12px; }
+.fd-watch > span { padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); background: rgba(255,255,255,.03); color: var(--text-2, #c9cdd6); white-space: normal; overflow-wrap: anywhere; }
+.fd-watch .fd-w-rep { color: #c5d2ff; border-color: rgba(120,150,255,.35); }
+.fd-watch .fd-w-again.hot { color: #ffd38a; border-color: rgba(255,190,90,.45); background: rgba(255,170,60,.08); font-weight: 600; }
+.fd-watch .fd-w-again.calm { color: #9fe3bf; border-color: rgba(90,200,140,.35); }
+.fd-watch .fd-w-act { color: var(--muted); }
+.fd-watch .fd-w-exp { color: #ffb4b4; border-color: rgba(255,120,120,.45); background: rgba(255,90,90,.08); font-weight: 600; }

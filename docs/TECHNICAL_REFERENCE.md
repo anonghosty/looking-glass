@@ -90,11 +90,10 @@ server side is in small modules called from `app.py`:
   show them ("Notes shared by Researcher: *full name* (*date*)"). `GET /api/notes`, `POST /api/notes` (with
   optional `codes` and `finding: {title}`), `POST /api/notes/delete` (author or admin); audit events `note_added`,
   `note_removed`. A note's combination codes must be known to the code book; they are printed with the note.
-- **`combos.py`, combination codes and the analysts' combination search.** `intel.combo_code` / `intel.cross_code` hash
-  the section, name, report(s) and exact indicators into `LG-C-XXXXXXXX` / `LG-X-XXXXXXXX` (SHA-256, 8 hex digits; no
-  address). `intel.record_items` is the one matching rule: Intel gathered counts with it and the search matches with it
+- **`combos.py`, combination codes and the analysts' combination search.** Each exact combination gets a code, `LG-C-?` / `LG-X-?`
+  (no address). `intel.record_items` is the one matching rule: Intel gathered counts with it and the search matches with it
   so both agree for every name and report. Codes shown to a researcher go to
-  `data/combo_codes.json` (the twenty thousand most recent kept); a code not there is looked for in memory. The search is a background thread per
+  `data/combo_codes.json`; a code not there is looked for in memory. The search is a background thread per
   analyst (one at a time): over the days in memory together, or a date range (at most 31 days) read day by day from
   MongoDB with `app._combo_fetch` (only the name's reports, inside the constituency). For the devices found it also
   follows them into the name's other reports (cross-report patterns with their codes, sets of reports). The result is a
@@ -106,7 +105,15 @@ server side is in small modules called from `app.py`:
   `GET /api/combos/search/<id>`, `POST /api/combos/search/<id>/stop`, `GET /api/combos/search/<id>/download` (analysts,
   admins: `unmasked` + `export`, never in Demo mode, only the analyst who ran it), page `/combinations`. Audit events
   `combo_code`, `combo_export`.
-- **`acodes.py`, analyst codes.** `LG-A-XXXXXXXX` (SHA-256 of platform, day and selection). Made from an analysis
+- **`finding_watch.py`, findings over time.** A finding's reported days (its review's kept search, or its analyst
+  code's day), kept with the finding; how many of its devices the latest day shows again for the same combination
+  (computed in one background worker, one finding at a time); and the expiry: an open finding whose last reported day
+  is more than `FINDING_ACT_DAYS` (30) days ago is closed with "Time to act expired" (history kind `expired`, by
+  Looking Glass). Routes: `GET /api/findings/watch` (counts and days of the findings in the user's channel, never an
+  address), `GET /api/findings/<id>/again` (the addresses, for analysts, advisors and admins in the channel). The
+  Executive portal loads a past day of the last week for a view filtered to a code (`/api/mgmt/<platform>?code=?&day=?`),
+  one such day at a time.
+- **`acodes.py`, analyst codes.** `LG-A-?`. Made from an analysis
   window's selection (`kind`/`value` on the map, the query arguments on the services platform; `app._slice_on` and
   `services_api.scope_events` apply them to any day). The exact record IDs of the selection are kept in
   `data/acodes/<code>.json` (0600), so masked roles (whose filters accept only aliases) see the same records; what
@@ -570,7 +577,6 @@ weakens the pipeline also needs `./confirm_request.sh` on the pipeline's account
 
 - **`docs/SECURITY.md`:** how Looking Glass is secured, the operator checklist, checking an installation and reporting a vulnerability.
 - **`docs/INSTALLATION.md`:** installing on Windows with WSL or on a Linux server, HTTPS, firewall, updating, troubleshooting.
-- **`CHANGELOG.md`:** what changed in each release.
 
 Every CSV the platform hands out (report ZIPs, the services host list, Executive tables, and the browser downloads) passes
 through one guard (`csvsafe.py`, the same rule in `app.js` / `services.js`): a cell that a spreadsheet would run as a

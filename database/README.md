@@ -327,6 +327,12 @@ Database `shadowserver`:
 | `files_<service>` | file in the service folder | `filename`, `category`, `path` |
 
 - **Index:** `<service>` has a unique index on `(filename, category, line_hash)`, the same as before.
+- **Known limits of `line_hash`** (kept as they are, because every stored hash depends on them): only the header's
+  fields go into it, so two rows that differ only in values beyond the header count as one (those extra values are
+  dropped and counted either way); and the values are joined with `,` without CSV quoting, so `"x,y","z"` and
+  `"x","y,z"` in the same file count as one row. `tests/test_line_hash.py` pins both.
+- **Rows that cannot be written** (not duplicates) make the run fail: exit code 1, the platform's bell says how many,
+  and the file stays in the journal, so the next run tries it again (its rows already stored are skipped).
 - **JSON files:** a JSON file in a service folder becomes one document: `filename`, `category`, `line_hash` (of the whole file) plus the JSON fields, as before.
 
 ### Everyday administration

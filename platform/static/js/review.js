@@ -11,8 +11,10 @@
   const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content || "";
   const fid = document.body.dataset.fid, main = $("rvMain");
 
-  function portal(codes, plat) {
-    const u = `/management?embed=1&plat=${plat}&code=${encodeURIComponent(codes.join(","))}`;
+  function portal(codes, plat, day) {
+    // day: the view's own last reported day (2026-11-14: a drill-down seen only on 9 Nov opened on the latest day and
+    // showed 0 everywhere)
+    const u = `/management?embed=1&plat=${plat}&code=${encodeURIComponent(codes.join(","))}` + (/^\d{4}-\d{2}-\d{2}$/.test(day || "") ? `&day=${day}` : "");
     const f = el("iframe", "rv-frame"); f.src = u; f.title = "The Executive portal for this view"; f.setAttribute("scrolling", "no");
     // the portal at its full height, so the page scrolls as one (no scroll bar inside, nothing cut off)
     f.addEventListener("load", () => {
@@ -46,6 +48,9 @@
     hero.append(el("div", "fd-eyebrow", `Review · finding ${f.number} · ${f.status_label}`), el("h1", null, f.title));
     const meta = el("div", "rv-meta");
     meta.append(el("span", null, f.created));            // the date and the channel only
+    // the day its records were reported (finding_watch.py): every view below opens on it, not on today's report
+    const repDay = f.reported?.last || "";
+    if (repDay) meta.append(el("span", "rv-rep", `Reported ${new Date(`${repDay}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}`));
     if (f.network) meta.append(el("b", "rv-org", `Organisation: ${f.network}`));
     if (f.parent) { const a = el("a", null, `Sub-finding of case #${f.parent}`); a.href = `/findings#f${f.parent}`; meta.append(a); }
     if (f.channel?.length) meta.append(el("span", "fd-channel", `Channel: ${f.channel.join(", ")}`));
@@ -78,8 +83,10 @@
     // the drill-down first (2026-11-14): exactly the devices the analyst selected, which is what the report and the
     // advisory cover; the whole combination is the context they came from
     const D = rv.drill || null;
+    // the drill-down's own last day with records: its devices may not be in the latest day's reports
+    const drillDay = ((D?.per_day || []).filter((p) => Number(p[1]) > 0).map((p) => p[0]).sort().pop()) || "";
     const views = [
-      ...(rv.drill_code ? [["d", "The drill-down", `${fmt(D?.devices)} device${D?.devices === 1 ? "" : "s"} the analyst selected: what the report covers`, [rv.drill_code], d.plat_researcher]] : []),
+      ...(rv.drill_code ? [["d", "The drill-down", `${fmt(D?.devices)} device${D?.devices === 1 ? "" : "s"} the analyst selected: what the report covers${drillDay ? ` (last seen ${drillDay})` : ""}`, [rv.drill_code], d.plat_researcher, drillDay]] : []),
       ["r", rv.drill_code ? "The whole combination (context)" : "The researcher's view", `the combination ${rv.source}`, [rv.source], d.plat_researcher],
       ...(!rv.codes.length ? [] : [
         ["a", "The analyst's view", `${rv.codes.length} across-report pattern${rv.codes.length === 1 ? "" : "s"}: ${fmt((A.patterns || []).reduce((s, x) => s + x.hosts, 0))} devices`, rv.codes, d.plat_analyst],
@@ -100,7 +107,7 @@
     const show = (k) => {
       for (const b of tabs.children) b.setAttribute("aria-selected", String(b.dataset.k === k));
       for (const [kk, fr] of Object.entries(frames)) fr.hidden = kk !== k;
-      if (!frames[k]) { const v = views.find((x) => x[0] === k); frames[k] = portal(v[3], v[4]); pane.append(frames[k]); }
+      if (!frames[k]) { const v = views.find((x) => x[0] === k); frames[k] = portal(v[3], v[4], v[5] || repDay); pane.append(frames[k]); }
     };
     for (const [k, l, sub] of views) {
       const b = el("button", `rv-tab ${k}`); b.type = "button"; b.setAttribute("role", "tab"); b.dataset.k = k;

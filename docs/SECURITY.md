@@ -298,8 +298,7 @@ it was not changed is in [How the audit log proves itself](AUDIT_LOG_PROOF.md).
 ## 5. Supported versions and changes
 
 Security fixes are made on the latest version (the `main` branch). Update with the steps in
-[INSTALLATION.md](INSTALLATION.md#updating). What changed in each release, security changes included, is in the
-[changelog](../CHANGELOG.md).
+[INSTALLATION.md](INSTALLATION.md#updating).
 
 ## 6. Reporting a vulnerability
 

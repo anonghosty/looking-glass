@@ -10,6 +10,10 @@
   const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content || "";
   const MAX = +document.body.dataset.maxDays || 31;
   const CODE_RX = /^LG-[CXA]-[0-9A-F]{8}$/;
+  // opened from a finding: its devices reported again in the latest report are marked in the lists (finding_watch.py)
+  const FINDING = (new URLSearchParams(location.search).get("finding") || "").match(/^\d{1,9}$/)?.[0] || "";
+  let againP = null;
+  const againOf = () => (againP ||= FINDING ? fetch(`/api/findings/${FINDING}/again`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null));
   let entry = null, job = null, timer = null, autoDownload = false, lookSeq = 0, drawSeq = 0;
 
   function say(node, text, kind) { node.textContent = text; node.className = `cb-msg ${kind || ""}`; }
@@ -363,6 +367,20 @@
         t.append(tr);
       }
       const sc = el("div", "cb-table-wrap"); sc.append(t); c.append(sc);
+      againOf().then((x) => {
+        if (!x || x.state !== "ready" || x.again == null) return;
+        const set = new Set(x.again_ips || []);
+        let n = 0;
+        for (const tr of t.querySelectorAll("tr")) {
+          const ipCell = tr.firstElementChild;
+          if (ipCell?.tagName === "TD" && set.has(ipCell.textContent)) { n += 1; tr.classList.add("cb-again"); ipCell.append(el("span", "cb-again-tag", "again")); }
+        }
+        const day = new Date(`${x.latest}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+        const b = el("p", `cb-again-banner ${x.again ? "hot" : "calm"}`, x.again
+          ? `Finding #${FINDING}: ${fmt(x.again)} of its ${fmt(x.devices)} devices were reported again in the latest report (${day}) for the same combination${n ? `; ${fmt(n)} of them are in this list, marked "again"` : ""}. The CSV has them all.`
+          : `Finding #${FINDING}: none of its ${fmt(x.devices)} devices was reported again in the latest report (${day}).`);
+        c.insertBefore(b, sc);
+      });
     }
   }
 
@@ -451,6 +469,9 @@
     finally { b.disabled = false; }
   });
   const q = new URLSearchParams(location.search).get("code");
+  // opened from a finding (2026-11-14): its own day, so an old finding's records are what is searched
+  const qDay = new URLSearchParams(location.search).get("day") || "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(qDay) && qDay <= $("cbTo").max) { $("cbFrom").value = qDay; $("cbTo").value = qDay; span(); }
   if (q) look(q);
   if (WITHIN && $("cbStep2Box")) {                    // say it on the page: only the selection's devices are searched
     const n = el("p", "cb-within"); n.append(el("b", null, `Within the analyst's selection ${WITHIN}`),

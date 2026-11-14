@@ -143,8 +143,11 @@
     pane.replaceChildren(el("div", "st-loading", "Reading the report's records…"));
     if (scroll) pane.scrollIntoView({ behavior: "smooth", block: "start" });
     let r, d;
+    // the platform's loading animation while the records are read (2026-11-14: the page showed only a line of text)
+    window.LGLoader?.busy("Reading the report's records");
     try { r = await postJSON("/api/intelligence/report", body()); d = await r.json().catch(() => ({})); }
-    catch (e) { pane.replaceChildren(el("p", "fd-empty", `Could not read it: ${e.message}`)); return; }
+    catch (e) { window.LGLoader?.ready(); pane.replaceChildren(el("p", "fd-empty", `Could not read it: ${e.message}`)); return; }
+    window.LGLoader?.ready();
     if (!r.ok) { pane.replaceChildren(el("p", "fd-empty", d.error || `Could not read it (HTTP ${r.status})`)); return; }
     drawView(pane, d);
   }
@@ -355,8 +358,10 @@
     const onKey = (e) => { if (e.key === "Escape") { box.remove(); from?.focus(); document.removeEventListener("keydown", onKey); } };
     document.addEventListener("keydown", onKey);
     let r, d;
+    window.LGLoader?.busy("Following this host through the week's reports");
     try { r = await postJSON("/api/intelligence/host", { ip }); d = await r.json().catch(() => ({})); }
-    catch (e) { box.lastChild.replaceWith(el("p", "fd-empty", `Could not read it: ${e.message}`)); return; }
+    catch (e) { window.LGLoader?.ready(); box.lastChild.replaceWith(el("p", "fd-empty", `Could not read it: ${e.message}`)); return; }
+    window.LGLoader?.ready();
     if (!r.ok) { box.lastChild.replaceWith(el("p", "fd-empty", d.error || `HTTP ${r.status}`)); return; }
     const body = el("div", "it-hbody");
     body.append(el("h4", null, "In the Intelligence reports this week"));

@@ -772,7 +772,15 @@ def iter_csv_docs(path: str, filename: str, category: str, errors: str = "strict
 
     The file is streamed (constant memory). Splitting each physical line with
     str.splitlines() yields exactly the same line list as the original
-    ``file.read().splitlines()``, so the csv parsing and line_hash are unchanged."""
+    ``file.read().splitlines()``, so the csv parsing and line_hash are unchanged.
+
+    line_hash is kept exactly as the original loader made it (every stored hash depends on it), with two known limits
+    (external review, 2026-11-14; tests/test_line_hash.py):
+      * only the header's fields go into it: two rows that differ only in values beyond the header are one row (the
+        extra values are dropped either way, and counted as "extra columns");
+      * the fields are joined with commas without the CSV quoting: "x,y","z" and "x","y,z" give the same hash, so the
+        second of such a pair, in the same file, is taken for a duplicate. Shadowserver's fields rarely line up like
+        that (it takes a comma inside one field and the same text split across the next one)."""
     info = info if info is not None else {}
     with open(path, "r", encoding="utf-8", errors=errors, newline="") as fh:
         lines = (piece for raw in fh for piece in raw.splitlines())
@@ -1089,7 +1097,14 @@ def load_into_mongo(s: Settings, stats: Counter) -> None:
                         log.error("[LOAD %d/%d] FAILED %s/%s: %s (will retry next run)",
                                   done_count, total, category, fn, exc)
                     else:
-                        journal.done(category, fn)
+                        # rows that could not be written (not duplicates: invalid documents, write errors) make the file
+                        # an error for the run, its exit code and the platform's bell, and it stays in the journal, so
+                        # the next run tries it again (its rows already stored are skipped as duplicates). External
+                        # review, 2026-11-14: such a file was marked done, never retried, and the run reported fine.
+                        if res["failed"]:
+                            stats["files_rows_failed"] += 1
+                        else:
+                            journal.done(category, fn)
                         record_fields(category, res["headers"])
                         stats["files_loaded"] += 1
                         for k in ("rows", "inserted", "duplicates", "failed"):
@@ -1101,7 +1116,7 @@ def load_into_mongo(s: Settings, stats: Counter) -> None:
                         if res.get("bad_timestamp"):
                             extra.append(f"{res['bad_timestamp']:,} bad timestamp skipped")
                         if res["failed"]:
-                            extra.append(f"{res['failed']:,} FAILED")
+                            extra.append(f"{res['failed']:,} FAILED, the file is tried again next run")
                         detail("[LOAD %d/%d] %s/%s: %s rows inserted%s (%.1fs)", done_count, total, category,
                                fn, f"{res['inserted']:,}", f", {', '.join(extra)}" if extra else "",
                                res.get("seconds", 0))
@@ -1123,9 +1138,9 @@ def load_into_mongo(s: Settings, stats: Counter) -> None:
             client.close()
 
     log.info("Load: %d files, %s rows inserted, %s duplicates skipped, %d rows with bad timestamp skipped "
-             "(as before), %d failed rows, %d file errors (%.1fs)",
+             "(as before), %d failed rows in %d file(s) tried again next run, %d file errors (%.1fs)",
              stats["files_loaded"], f"{stats['rows_inserted']:,}", f"{stats['rows_duplicates']:,}",
-             stats["rows_bad_timestamp"], stats["rows_failed"], stats["file_errors"], time.monotonic() - t0)
+             stats["rows_bad_timestamp"], stats["rows_failed"], stats["files_rows_failed"], stats["file_errors"], time.monotonic() - t0)
 
 
 # --------------------------------------------------------------------------- check
@@ -1375,13 +1390,19 @@ def main(argv=None) -> int:
         raise
     finally:
         # what the platform's bell shows: when this run finished, whether it went well, and the free disk (retention.py)
-        st = retention.status(str(s.base_dir), not failed and not stats["file_errors"] and not stats["email_failed"],
+        st = retention.status(str(s.base_dir), not failed and not run_errors(stats),
                               stats, retention.min_free_gb(_env))
         if st["disk_low"]:
             log.warning("[DISK] only %.1f GB free where the reports are kept (warning below %g GB, DISK_MIN_FREE_GB)",
                         st["free_gb"], st["min_free_gb"])
     log.info("Done in %.1fs", time.monotonic() - t0)
-    return 1 if stats["file_errors"] or stats["email_failed"] else 0
+    return 1 if run_errors(stats) else 0
+
+
+def run_errors(stats) -> int:
+    """What makes a run fail (exit code 1, the bell's warning): files that could not be loaded, files with rows that
+    could not be written, the mailbox that could not be read."""
+    return int(stats["file_errors"] + stats["files_rows_failed"] + stats["email_failed"])
 
 
 if __name__ == "__main__":

@@ -88,7 +88,7 @@ read more. Dates are UTC.
   (`audit.seal`, `audit.head`, retention notes) no longer let a change pass.
 - **Accounts and workflow:** the forgot-password form tells nothing before identity is proven; recovery codes, the
   authenticator and expired-password steps, restore and command-line account creation are tightened; a review closed
-  by hand is withdrawn instead of blocking the analyst; analyst codes are unique per request.
+  by hand is withdrawn instead of blocking the analyst.
 - **Load:** cache keys ignore unknown parameters, CISA KEV backs off after a failure, look-ups keep their time budget,
   Executive baselines are bounded, a constituency change always wins over a day load already running.
 
@@ -174,8 +174,8 @@ against the trends, an analyst pulls exactly those devices and writes the adviso
 **New**
 
 - **Combination codes.** Every combination in Intel gathered has a short code: `LG-C-…` for one report, `LG-X-…` for a
-  cross-report pattern. The same combination always gets the same code, and a code carries no address, so researchers
-  and management can pass it on safely. ([User guide](USER_GUIDE.md#combination-codes-the-combination-search-and-findings))
+  cross-report pattern. A code carries no address, so researchers and management can pass it on
+  safely. ([User guide](USER_GUIDE.md#combination-codes-the-combination-search-and-findings))
 - **A Notes window of its own.** Notes have their own **Notes** button on every row of both tables, apart from Define.
   A note can carry combination codes, picked from every combination of that name (grouped by report, with a filter),
   built by ticking the name's real indicators, or pasted (and checked). Nothing is typed by hand, so there are no

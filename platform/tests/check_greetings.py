@@ -44,8 +44,15 @@ try:
     for _ in range(80):
         x = greet("lg-g-ike")
         seen.add(x[0] + "{name}" + x[2])
-    ok("after that, the random greetings (by name, never the first-time one)", all(s in greetings.GREETINGS for s in seen) and len(seen) > 10,
-       f"{len(seen)} different in 80 visits")
+    ok("after that, the random greetings of the person's role (by name, never the first-time one)",
+       all(s in greetings.ROLE_GREETINGS["researcher"] for s in seen) and len(seen) > 10, f"{len(seen)} different in 80 visits")
+    every = [s for lst in list(greetings.ROLE_GREETINGS.values()) + [greetings.GREETINGS] for s in lst]
+    ok("each built-in role has its own 30, and none is shared between roles (2026-11-14)",
+       set(greetings.ROLE_GREETINGS) == {"admin", "analyst", "researcher", "management", "advisor", "auditor"}
+       and all(len(v) == 30 for v in greetings.ROLE_GREETINGS.values()) and len(every) == len(set(every)) == 210,
+       f"{len(every)} greetings, {len(set(every))} different")
+    ok("…an external viewer or a custom role gets the general 30", greetings.for_role("external") is greetings.GREETINGS
+       and greetings.for_role("my-custom-role") is greetings.GREETINGS)
     ok("…always the first name", all(greet("lg-g-ike")[1] == "Ike" for _ in range(5)))
     x = greet("lg-g-noname")
     ok("no name entered: never the username", x[1] == "there" and "lg-g-noname" not in "".join(x[:3]), "".join(x[:3]))
@@ -53,8 +60,8 @@ try:
         g.user = {"user": "lg-g-evil", "role": "researcher", "perms": {"definitions"}, "csrf": "t"}
         html = render_template("overview.html", lg_perms=["definitions"], lg_user="lg-g-evil", lg_role="researcher", lg_csrf="t", lg_peace=False)
     ok("a name with markup is shown as text", "<script>x</script>" not in html and "&lt;script&gt;" in html)
-    ok("30 greetings, each with the name once", len(greetings.GREETINGS) == 30 and all(s.count("{name}") == 1 for s in greetings.GREETINGS))
-    longest = max(len(s.replace("{name}", "Bartholomew")) for s in greetings.GREETINGS + [greetings.FIRST])
+    ok("30 greetings per list, each with the name once", len(greetings.GREETINGS) == 30 and all(s.count("{name}") == 1 for s in every))
+    longest = max(len(s.replace("{name}", "Bartholomew")) for s in every + [greetings.FIRST])
     ok("each short enough to fit the title (a long name in it: at most 52 characters)", longest <= 52, f"longest {longest}")
 finally:
     W.path = real_path

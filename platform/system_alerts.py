@@ -91,6 +91,8 @@ class Alerts:
             t = st.get("finished") or 0
             if not st.get("ok"):
                 bits = [f"{st.get('file_errors', 0)} file error(s)" if st.get("file_errors") else "",
+                        (f"{st.get('rows_failed', 0):,} row(s) not written in {st.get('files_rows_failed', 0)} file(s), tried again next run"
+                         if st.get("files_rows_failed") else ""),
                         "the mailbox could not be read" if st.get("email_failed") else ""]
                 out.append({"key": f"pipeline-failed:{t}", "problem": True, "title": "The last report run had problems",
                             "text": f"the pipeline's run of {_when(t)} did not go well" + (": " + ", ".join(b for b in bits if b) if any(bits) else "")

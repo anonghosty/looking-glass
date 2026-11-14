@@ -841,6 +841,8 @@
         } else toast(x.error || `Unknown combination code ${code}`, "bad");
       } catch { /* the portal still opens unfiltered */ }
     }
+    // a day given in the address (a review's drill-down opens on its own last reported day)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(qs.get("day") || "")) state.day = qs.get("day");
     load(true);
     if (qs.get("embed") !== "1" && !code) intelligence();
   })();

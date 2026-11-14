@@ -229,7 +229,8 @@ try:
     op, (s, loc), h = login(ADMIN, apw, asec, nxt="//evil.example/x")
     used = totp_at(asec, LAST.get(ADMIN, 0))
     ok("password + authenticator code -> logged in", s == 302, f"{s} {loc}")
-    ok("redirect after login stays on this site (no open redirect)", loc in ("/", B + "/"), loc)
+    # a hostile next= is dropped: the sign-in lands on this site's own start (every role's Overview since 2026-11-14)
+    ok("redirect after login stays on this site (no open redirect)", loc in ("/", B + "/", "/overview", B + "/overview"), loc)
     cookie = h.get("Set-Cookie", "")
     ok("session cookie HttpOnly, SameSite=Strict, Path=/", "HttpOnly" in cookie and "SameSite=Strict" in cookie and "Path=/" in cookie, cookie.split(";")[0][:20] + "…")
     if TLS:

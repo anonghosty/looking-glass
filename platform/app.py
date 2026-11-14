@@ -2873,6 +2873,15 @@ _combo_review.install(app, {"book": COMBOS, "findings": FINDINGS, "notes": NOTES
                             "cross": lambda hosts, with_hosts=False: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"],
                                                                                          with_hosts=with_hosts)})
 
+# findings over time: the day their records were reported, their devices in the latest report again, time to act
+import finding_watch as _finding_watch  # noqa: E402
+_combo_labels = lambda: {**{x["name"]: x["label"] for x in registry.get()}, **{x["name"]: x["label"] for x in svc["registry"].get()}}
+FINDING_WATCH = _finding_watch.install(app, {
+    "findings": FINDINGS, "book": COMBOS, "acodes": ACODES, "has_perm": AUTH["has_perm"], "replay_now": replay_now,
+    "stores": {"comms": store, "services": svc["store"]}, "network": lambda asn: asn_registry.company(asn, False) if asn else "",
+    "svc_matcher": lambda entry: SVC_INTEL.matcher(entry), "comms_matcher": lambda entry: _combos.Matcher(entry, _combo_labels()),
+    "logger": app.logger, "no_loop": not os.path.basename(sys.argv[0] or "").startswith("gunicorn")})
+
 # the organisation (name and logo, set in Settings) and the advisor's advisories on decided findings
 import organisation as _organisation  # noqa: E402
 

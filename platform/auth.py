@@ -966,7 +966,11 @@ def install(app, base_dir, logger):
 
     def finish_login(name, nxt, persist=False):
         """After the password and the authenticator: open the session, unless the password has expired
-        (password_policy.py); then the sign-in asks for a new password first, and opens the session once it is set."""
+        (password_policy.py); then the sign-in asks for a new password first, and opens the session once it is set.
+        Every role lands on its Overview (user, 2026-11-14: a researcher was taken straight to Definitions); a page
+        the link asked for (next=) still opens."""
+        if nxt in ("", "/"):
+            nxt = "/overview"
         expired, why = pw_policy.expired(users.get(name) or {})
         if not expired:
             return start_session(name, nxt, persist=persist)

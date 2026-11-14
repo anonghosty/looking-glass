@@ -149,7 +149,43 @@
       .then((r) => (r.ok ? r.json() : {})).then((d) => d.devices || {}).catch(() => ({})));
     return devCounts.get(acode);
   };
-  function codesBox(codes, within) {
+  // ---------------- over time (2026-11-14): when its records were reported, how many of its devices the latest report
+  // shows again, and the day its time to act runs out (finding_watch.py; counts only, never an address)
+  let watchP = null, watchT = null;
+  const watchOf = () => (watchP ||= fetch("/api/findings/watch", { cache: "no-store" }).then((r) => (r.ok ? r.json() : {}))
+    .then((d) => d.findings || {}).catch(() => ({})));
+  const dayTxt = (iso) => (iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "");
+  const n0 = (n) => Number(n || 0).toLocaleString("en-US");
+  function watchLine(f) {
+    const w = el("div", "fd-watch");
+    const draw = () => watchOf().then((all) => {
+      const x = all[f.id] || {}, rep = x.reported_last || f.reported?.last || "", first = x.reported_first || f.reported?.first || "";
+      const parts = [];
+      parts.push(el("span", "fd-w-rep", rep ? (first && first !== rep ? `Reported ${dayTxt(first)} to ${dayTxt(rep)}` : `Reported ${dayTxt(rep)}`)
+        : `Found ${dayTxt(String(f.created || "").slice(0, 10))}`));
+      if (x.state === "ready" && x.again != null) {
+        const s = el("span", `fd-w-again${x.again ? " hot" : " calm"}`,
+          `${n0(x.again)} of ${n0(x.devices)} device${x.devices === 1 ? "" : "s"} in the latest report again (${dayTxt(x.latest)})`);
+        s.title = x.again ? "Still there: these devices were reported again for the same combination" : "None of its devices was reported again for the same combination";
+        parts.push(s);
+      } else if (x.state === "ready" && x.devices) {
+        parts.push(el("span", "fd-w-again", `${n0(x.devices)} device${x.devices === 1 ? "" : "s"}, reported in the latest report (${dayTxt(x.latest)})`));
+      } else if (x.state === "counting") {
+        parts.push(el("span", "fd-w-again lg-loading", "Comparing with the latest report…"));
+        clearTimeout(watchT);                           // one refresh for every card still counting
+        watchT = setTimeout(() => { watchP = null; document.querySelectorAll(".fd-watch").forEach((n) => n.dispatchEvent(new Event("lg-refresh"))); }, 15000);
+      }
+      if (f.expired) parts.push(el("span", "fd-w-exp", "Time to act expired"));
+      else if (f.open && x.act_until) { const a = el("span", "fd-w-act", `Act by ${dayTxt(x.act_until)}`); a.title = `Closed on its own after that day: ${x.act_days} days from the report`; parts.push(a); }
+      w.replaceChildren(...parts);
+    });
+    w.addEventListener("lg-refresh", draw);
+    draw();
+    return w;
+  }
+  // the finding's own day in a link: the Executive portal and the search open on the day its records were reported
+  const dayQ = (f) => (f?.reported?.last ? `&day=${f.reported.last}` : "") + (f ? `&finding=${encodeURIComponent(f.id)}` : "");
+  function codesBox(codes, within, f) {
     const cs = el("div", "fd-codes");
     for (const x of codes) {
       const isA = x.code.startsWith("LG-A-");
@@ -176,9 +212,9 @@
       const acts = el("div", "fd-code-acts");
       const link = (label, href, title) => { const a = el("a", "lg-btn sm", label); a.href = href; a.title = title; acts.append(a); };
       if (isA && data.can_research) link("Open as researcher", `/intel/${x.code}`, "The names, definitions and intel of exactly these records, never an address; pick codes for your reply");
-      if (data.can_portal) link("Show in Executive", `/management?code=${x.code}`, "Filter the Executive portal to exactly this (aggregated figures, no addresses)");
+      if (data.can_portal) link("Show in Executive", `/management?code=${x.code}${dayQ(f)}`, "Filter the Executive portal to exactly this, on the day it was reported (aggregated figures, no addresses)");
       const inA = !isA && within ? `&within=${encodeURIComponent(within)}` : "";
-      if (data.can_search) link(isA ? "Report (PDF + CSV)" : inA ? "Search within the selection" : "Search", `/combinations?code=${x.code}${inA}`,
+      if (data.can_search) link(isA ? "Report (PDF + CSV)" : inA ? "Search within the selection" : "Search", `/combinations?code=${x.code}${inA}${dayQ(f)}`,
         inA ? `Only the devices of ${within} that carry it, with their addresses, as PDF + CSV (Combinations page)` : "The devices behind it with their addresses, as PDF + CSV (Combinations page)");
       if (acts.children.length) row.append(acts);
       cs.append(row);
@@ -247,7 +283,7 @@
     // the decision
     if (rv.decision) {
       p.append(el("p", `fd-rv-done ${rv.decision}`, `${rv.decision === "both" ? "Added the analyst's views" : rv.decision === "analyst" ? "The analyst's view (drilled down)" : rv.drilled ? "The researcher's view (drilled down)" : "The researcher's view"} · ${rv.by}${rv.comment ? `: ${rv.comment}` : ""}`));
-      if (data.can_search) { const a = el("a", "lg-btn sm primary", "Generate the report"); a.href = `/combinations?code=${encodeURIComponent(rv.source)}`; a.title = "Open the code again: the report follows management's decision"; p.append(a); }
+      if (data.can_search) { const a = el("a", "lg-btn sm primary", "Generate the report"); a.href = `/combinations?code=${encodeURIComponent(rv.source)}${dayQ(f)}`; a.title = "Open the code again, on the day it was reported: the report follows management's decision"; p.append(a); }
     } else if (data.can_decide && f.open) {
       const ta = el("textarea", "fd-in"); ta.rows = 2; ta.maxLength = 1000; ta.placeholder = "Your comment: the directive for the report";
       const both = el("button", "lg-btn sm primary", "Add the analyst's views"); both.type = "button";
@@ -295,6 +331,7 @@
     if (f.assignee && !f.open) meta.append(el("span", "fd-with", `Last with ${f.assignee}`));    // open: the state says who
     if (f.channel?.length && !f.parent) { const ch = el("span", "fd-channel", `Channel: ${f.channel.join(", ")}`); ch.title = "Only these people see this finding and its trail"; meta.append(ch); }
     c.append(h, meta);
+    if (f.kind !== "case") c.append(watchLine(f));
     if (!f.parent) c.append(el("p", "fd-text", f.text));       // a sub-finding carries its case's text: said once, on the case
     if (f.origin === "analyst" && !f.parent) meta.prepend(el("span", "fd-origin", "From an analyst"));
     if (f.kind === "case") {
@@ -317,7 +354,7 @@
         a.title = "The final look: what the researcher is saying, and the researcher's and the analyst's views as the Executive portal shows them"; g.append(a); }
       c.append(g);
       if ((f.advisories || []).length) c.append(advBox(f));
-    } else if (f.codes.length) c.append(el("h3", null, f.origin === "analyst" ? "The analyst's code" : "Combinations"), codesBox(f.codes, acodeOf(f)));
+    } else if (f.codes.length) c.append(el("h3", null, f.origin === "analyst" ? "The analyst's code" : "Combinations"), codesBox(f.codes, acodeOf(f), f));
     // the reply box: text and codes (researchers answer an analyst's code with combination codes, and the other way round)
     // "Reply to the analyst" only for the researchers an analyst's code is for; everyone else just replies
     const rp = el("details", "fd-replybox"); rp.append(el("summary", null, f.origin === "analyst" && data.can_research ? "Reply to the analyst" : "Reply"));
@@ -348,7 +385,7 @@
       li.append(el("b", null, x.kind === "reply" ? "Reply" : x.kind === "decision" ? (x.decision === "accepted" ? "Accepted by management · directive" : "Rejected by management") : x.status_label),
         el("span", null, `${x.role}: ${x.by} · ${x.at}${x.to ? ` → ${x.to}` : ""}`));
       if (x.comment) li.append(el("p", null, x.comment));
-      if (x.codes?.length) li.append(codesBox(x.codes, acodeOf(f)));
+      if (x.codes?.length) li.append(codesBox(x.codes, acodeOf(f), f));
       tl.append(li);
     }
     const det = el("details", "fd-more"); det.append(el("summary", null, `History (${f.history.length})${f.replies ? ` · ${pl(f.replies, "reply", "replies")}` : ""}`), tl);
