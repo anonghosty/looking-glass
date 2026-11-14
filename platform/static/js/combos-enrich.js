@@ -17,7 +17,14 @@
     for (const x of items) s.append(el("span", `ce-chip ${cls || ""}`, x));
     return s;
   }
-  function draw(out, e, tick) {
+  // a tick box for an infection or a CVE/issue, sent to management with the patterns (2026-11-14: they could be seen but
+  // not put in the report); only on the analyst's own search before it is sent
+  function nameTick(set, name, row) {
+    const lab = el("label", "ce-tick ce-ntick"), cb = el("input"); cb.type = "checkbox"; cb.value = name; cb.checked = set.has(name);
+    cb.addEventListener("change", () => { cb.checked ? set.add(name) : set.delete(name); row.classList.toggle("on", cb.checked); });
+    lab.append(cb, el("span", null, "Send this one")); return lab;
+  }
+  function draw(out, e, tick, names) {
     out.replaceChildren();
     if ((e.sources || []).length) {                    // where these devices were seen, every report by kind
       const w = el("article", "ce-src"); w.append(el("b", null, "Where these devices were seen"));
@@ -34,6 +41,7 @@
     for (const i of e.infections) {
       const r = el("div", "ce-row"); r.append(el("code", "ce-name", i.name), el("span", "ce-n", pl(i.hosts, "device")));
       if (i.reports.length) r.append(el("span", "ce-sub", `in ${i.reports.map((x) => `${x.title} (${fmt(x.hosts)})`).join(", ")}`));
+      if (names) r.append(nameTick(tickedInf, i.name, r));
       inf.append(r);
     }
     // CVEs and issues
@@ -44,6 +52,7 @@
       r.append(c);
       if ((i.seen_in || []).length) for (const g of i.seen_in) r.append(el("span", "ce-sub", `${g.kind} ${g.reports.length}: ${g.reports.map((x) => `${x.title} (${fmt(x.hosts)})`).join(" · ")}`));
       else r.append(el("span", "ce-sub", `in ${(i.reports || []).map((x) => `${x.title} (${fmt(x.hosts)})`).join(", ") || "the services reports"}`));
+      if (names) r.append(nameTick(tickedIss, i.name, r));
       cve.append(r);
     }
     // across reports: each exact pattern of these devices over every report they are in (LG-X)
@@ -76,7 +85,21 @@
   }
 
   // ---------------- across-report data: tick the patterns, send them to a manager, the report follows the decision
-  const ticked = new Set();
+  const ticked = new Set(), tickedInf = new Set(), tickedIss = new Set();
+  const tickCount = () => {
+    const parts = [ticked.size && pl(ticked.size, "pattern"), tickedInf.size && pl(tickedInf.size, "infection"), tickedIss.size && `${fmt(tickedIss.size)} CVE${tickedIss.size === 1 ? "" : "s"}/issue${tickedIss.size === 1 ? "" : "s"}`].filter(Boolean);
+    return parts.length ? `${parts.join(", ")} ticked.` : "Nothing ticked yet.";
+  };
+  const anyTicked = () => ticked.size + tickedInf.size + tickedIss.size > 0;
+  // after management's decision: the infections and CVEs/issues it added to the report, as they were sent
+  function addedNames(out, rv) {
+    const inf = rv.sent_infections || [], iss = rv.sent_issues || [];
+    if (!inf.length && !iss.length) return;
+    const w = el("article", "ce-sec cve"); const h = el("header"); h.append(el("i"), el("b", null, "Infections and CVEs/issues added"), el("span", null, `${inf.length + iss.length} ticked`)); w.append(h);
+    for (const x of inf) { const r = el("div", "ce-row"); r.append(el("code", "ce-name", x.name), el("span", "ce-n", pl(x.hosts, "device")), el("span", "ce-sub", "infection (calling botnet sinkholes)")); w.append(r); }
+    for (const x of iss) { const r = el("div", "ce-row"); const c = el("span", `ce-chip${/^CVE-/i.test(x.name) ? " cve" : ""}`, x.name); r.append(c, el("span", "ce-n", pl(x.hosts, "device"))); w.append(r); }
+    out.append(w);
+  }
   // the analyst's view: where these devices were seen (report names), and each exact pattern across reports with its
   // devices' IP addresses and networks (the researcher's infections and CVE views are not part of it)
   const IPS_SHOWN = 12;
@@ -156,16 +179,17 @@
     const state = el("div", `ce-state ${rv ? (rv.decision ? "ok" : "wait") : "todo"}`);
     if (!rv) state.append(el("b", null, "Download locked"), document.createTextNode(" until management decides: tick the patterns that matter and send them."));
     else if (!rv.decision) { state.append(el("b", null, `Waiting for management's decision on finding ${rv.finding}`), document.createTextNode(" · the report follows it. ")); const a = el("a", null, "Open it"); a.href = `/findings#f${rv.finding.slice(1)}`; state.append(a); }
-    else state.append(el("b", null, rv.decision === "both" ? "Management added your views" : "Management chose the researcher's view only"),
+    else state.append(el("b", null, rv.decision === "both" ? "Management added your views" : rv.decision === "analyst" ? "Management chose your view only (the devices behind what you ticked)" : "Management chose the researcher's view only"),
       document.createTextNode(` (finding ${rv.finding}): ${rv.advisor || "the advisor management chose"} writes the advisory and generates the report from exactly what you sent, below.`));
     c.append(state);
     // decided: exactly what was sent to management, nothing looked up again; the report carries this
     if (rv && rv.decision) {
       const out = el("div", "ce-out"); c.append(out);
-      if (rv.decision === "both" && (rv.sent || []).length) {
-        c.querySelector("h3").textContent = "Across reports: what management added to the report";
-        analystDraw(out, { cross: rv.sent, sources: [], days: rv.days || [], multi_hosts: rv.sent.reduce((s, x) => s + x.hosts, 0) }, false);
-        out.append(el("p", "cb-hint", `Exactly what was sent to management on finding ${rv.finding}: these patterns and their devices are in the report (summary points in the PDF, and …_other_categories.csv with every device).`));
+      if ((rv.decision === "both" || rv.decision === "analyst") && ((rv.sent || []).length || (rv.sent_infections || []).length || (rv.sent_issues || []).length)) {
+        c.querySelector("h3").textContent = "Across every category: what management added to the report";
+        if ((rv.sent || []).length) analystDraw(out, { cross: rv.sent, sources: [], days: rv.days || [], multi_hosts: rv.sent.reduce((s, x) => s + x.hosts, 0) }, false);
+        addedNames(out, rv);
+        out.append(el("p", "cb-hint", `Exactly what was sent to management on finding ${rv.finding}: these and their devices are in the report (summary points in the PDF, and …_other_categories.csv with every device).`));
       } else {
         c.querySelector("h3").textContent = "Across reports: not in this report";
         out.append(el("p", "cb-hint", `Management chose the researcher's view only (finding ${rv.finding}): the report is the combination above, without the across-report patterns.`));
@@ -173,8 +197,9 @@
       return;
     }
     const out = el("div", "ce-out"); c.append(out);
-    // where they were seen, the infections and the CVEs (as before), then Across reports with each pattern's addresses
-    draw(out, pv);
+    // where they were seen, the infections and the CVEs (each to tick, until it is sent), then Across reports with each
+    // pattern's addresses
+    draw(out, pv, undefined, !rv);
     out.querySelector(".ce-sec.svc")?.remove();
     if (out.lastElementChild?.matches("p.cb-hint")) out.lastElementChild.remove();
     const tmp = el("div"); analystDraw(tmp, pv, !rv);
@@ -185,23 +210,24 @@
     const toM = window.LGPeople ? window.LGPeople.picker("management") : null;
     const t = el("input", "ac-in"); t.maxLength = 140; t.placeholder = `Title, e.g. ${entry?.code || "this code"}: the same devices across reports`;
     const n = el("textarea", "ac-in"); n.rows = 3; n.maxLength = 2000; n.placeholder = "Why these patterns matter for the report (e.g. the same hosts expose CWMP and call the same sinkhole)";
-    const cnt = el("span", "cb-hint", "No pattern ticked yet.");
-    const send = el("button", "lg-btn primary", "Send the ticked patterns to management"); send.type = "button";
-    const np = netPicker(st, () => { send.textContent = sendLabel(np.values(), "Send the ticked patterns to management"); });
+    const cnt = el("span", "cb-hint", "Nothing ticked yet.");
+    const send = el("button", "lg-btn primary", "Send the ticked views to management"); send.type = "button";
+    const np = netPicker(st, () => { send.textContent = sendLabel(np.values(), "Send the ticked views to management"); });
     const rmsg = el("div", "cb-hint");
     req.append(el("b", null, "Send to management"), cnt, np.el, ...(toM ? [toM.el] : []), t, n, send, rmsg);
     c.append(req);
-    out.addEventListener("change", () => { cnt.textContent = ticked.size ? `${pl(ticked.size, "pattern")} ticked.` : "Nothing ticked yet."; });
+    out.addEventListener("change", () => { cnt.textContent = tickCount(); });
     send.addEventListener("click", async () => {
-      if (!ticked.size) { rmsg.textContent = "Tick at least one pattern."; return; }
+      if (!anyTicked()) { rmsg.textContent = "Tick at least one pattern, infection or CVE/issue."; return; }
       if (toM && !toM.check()) { rmsg.textContent = "Choose the manager it goes to."; return; }
       if (!t.value.trim()) { rmsg.textContent = "Give the finding a short title."; return; }
       send.disabled = true; rmsg.textContent = "Sending…";
       try {
-        const r = await post(`/api/combos/search/${job}/review`, { codes: [...ticked], networks: np.values(), title: t.value.trim(), text: n.value.trim(), to: toM ? toM.value() : "" });
+        const r = await post(`/api/combos/search/${job}/review`, { codes: [...ticked], infections: [...tickedInf], issues: [...tickedIss],
+          networks: np.values(), title: t.value.trim(), text: n.value.trim(), to: toM ? toM.value() : "" });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) { rmsg.textContent = d.error || `Refused (HTTP ${r.status})`; send.disabled = false; return; }
-        rmsg.replaceChildren(document.createTextNode(`${sentText(d)}With ${pl(d.codes.length, "pattern")}. Once management decides, the advisor they name generates the report. `));
+        rmsg.replaceChildren(document.createTextNode(`${sentText(d)}With ${tickCount().replace(/ ticked\.$/, "")}. Once management decides, the advisor they name generates the report. `));
         const a = el("a", null, "Open it on the Findings page"); a.href = `/findings#f${d.finding.slice(1)}`; rmsg.append(a);
         send.hidden = true; state.className = "ce-state wait"; state.replaceChildren(el("b", null, `Waiting for management's decision on finding ${d.finding}`));
         out.querySelectorAll("input[type=checkbox]").forEach((x) => { x.disabled = true; });
@@ -254,9 +280,20 @@
       if (!rv.decision) { s.append(el("b", null, `Waiting for management's decision on finding ${rv.finding}`), document.createTextNode(" · ")); const a = el("a", null, "Open it"); a.href = `/findings#f${rv.finding.slice(1)}`; s.append(a); }
       else if (rejected) s.append(el("b", null, `Management rejected finding ${rv.finding}`), document.createTextNode(": no advisory; the download is yours again."));
       else s.append(el("b", null, "Management approved it"), document.createTextNode(` (finding ${rv.finding}): ${rv.advisor || "the advisor management chose"} writes the advisory and generates the report from exactly this search.`));
-      w.append(s); c.append(w); return;
+      w.append(s);
+      if (rv.decision === "both" || rv.decision === "analyst") { const added = el("div", "ce-out"); addedNames(added, rv); w.append(added); }
+      c.append(w); return;
     }
     w.append(el("p", "cb-hint", "These devices turn up in no other report, so there are no across-report views to tick. Send the combination to a manager: they approve it and name the advisor who writes the advisory and generates the report from exactly this search, or reject it."));
+    // the infections and CVEs/issues on these devices: tick those the report should carry (management decides)
+    const pv = st.preview || {};
+    if ((pv.infections || []).length || (pv.issues || []).length) {
+      const box2 = el("div", "ce-out ce-plain-ticks");
+      draw(box2, Object.assign({}, pv, { cross: [], sources: [] }), undefined, true);
+      box2.querySelector(".ce-sec.svc")?.remove();
+      if (box2.lastElementChild?.matches("p.cb-hint")) box2.lastElementChild.remove();
+      w.append(el("p", "cb-hint", "Tick the infections and CVEs/issues the report should carry: management decides whether they are added."), box2);
+    }
     const toM = window.LGPeople ? window.LGPeople.picker("management") : null;
     const t = el("input", "ac-in"); t.maxLength = 140; t.placeholder = `Title, e.g. ${entry?.code || "this code"}: exposed devices for an advisory`;
     const n = el("textarea", "ac-in"); n.rows = 3; n.maxLength = 2000; n.placeholder = "Your final comments: why this needs an advisory";
@@ -271,10 +308,12 @@
       if (!t.value.trim()) { msg.textContent = "Give the finding a short title."; return; }
       send.disabled = true; msg.textContent = "Sending…";
       try {
-        const r = await post(`/api/combos/search/${job}/review`, { codes: [], networks: np.values(), title: t.value.trim(), text: n.value.trim(), to: toM ? toM.value() : "" });
+        const r = await post(`/api/combos/search/${job}/review`, { codes: [], infections: [...tickedInf], issues: [...tickedIss],
+          networks: np.values(), title: t.value.trim(), text: n.value.trim(), to: toM ? toM.value() : "" });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) { msg.textContent = d.error || `Refused (HTTP ${r.status})`; send.disabled = false; return; }
-        msg.replaceChildren(document.createTextNode(`${sentText(d)}Once management approves, the advisor they name generates the report. `));
+        msg.replaceChildren(document.createTextNode(`${sentText(d)}${anyTicked() ? `With ${tickCount().replace(/ ticked\.$/, "")}. ` : ""}Once management approves, the advisor they name generates the report. `));
+        w.querySelectorAll("input[type=checkbox]").forEach((x) => { x.disabled = true; });
         const a = el("a", null, "Open it on the Findings page"); a.href = `/findings#f${d.finding.slice(1)}`; msg.append(a);
         send.hidden = true; if (dl) dl.hidden = true;
       } catch { msg.textContent = "The connection was interrupted. Try again."; send.disabled = false; }

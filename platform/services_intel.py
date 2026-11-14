@@ -96,6 +96,9 @@ class ServicesIntel:
         hosts = collections.defaultdict(set)
         host_reports = collections.defaultdict(set)                               # host -> bases
         host_items = collections.defaultdict(lambda: collections.defaultdict(set))  # host -> base -> items
+        # host -> CVE / issue -> the reports it was seen in (for_hosts looked through every record for each call: one
+        # host's cross-view took 0.3 s alone and ~8 s when ten were opened at once; performance test 2026-11-14)
+        host_issues = collections.defaultdict(lambda: collections.defaultdict(set))
         records = collections.Counter()
         for d in svc:
             for e in d.events:
@@ -114,6 +117,8 @@ class ServicesIntel:
                     host_items[ip][base].add(it)
                 combos[base][items] += 1
                 combo_hosts[base][items][ip] += 1
+                for i in e.get("issues") or []:
+                    host_issues[ip][i].add(base)
         infected = collections.defaultdict(set)                                   # host -> infection names
         sink_rep = collections.defaultdict(lambda: collections.defaultdict(set))  # host -> sinkhole report -> names
         labels = self.ctx["labels"]() if self.ctx.get("labels") else {}
@@ -128,7 +133,7 @@ class ServicesIntel:
                         (it[0] not in template_labels.get(b, ()) or len(nets[b][it] - {""}) >= MIN_NETWORKS)}
                     for b, v in vals.items()}
         data = {"fields": fields, "vals": vals, "showable": showable, "combos": combos, "combo_hosts": combo_hosts, "hosts": hosts,
-                "host_reports": host_reports, "host_items": host_items, "infected": infected, "sink_rep": sink_rep, "records": records,
+                "host_reports": host_reports, "host_items": host_items, "host_issues": host_issues, "infected": infected, "sink_rep": sink_rep, "records": records,
                 "days": sorted({d.start.date().isoformat() for d in svc})}
         with self.lock:
             self.cache.update(key=key, at=time.time(), data=data)
@@ -328,12 +333,12 @@ class ServicesIntel:
         services.sort(key=lambda s: -s["hosts"])
         issues = collections.defaultdict(set)
         issue_reps = collections.defaultdict(lambda: collections.defaultdict(set))   # issue -> report -> hosts
-        for d in list(self.ctx["svc_store"].days.values()):
-            for e in d.events:
-                if e.get("ip") in hosts:
-                    for i in e.get("issues") or []:
-                        issues[i].add(e["ip"])
-                        issue_reps[i][sibling(e.get("report") or "")].add(e["ip"])
+        hi = data["host_issues"]
+        for h in hosts:                                   # from the index: no pass over every record per call
+            for i, bases in (hi.get(h) or {}).items():
+                issues[i].add(h)
+                for b in bases:
+                    issue_reps[i][b].add(h)
         names = collections.defaultdict(set)
         for h in hosts:
             for n in data["infected"].get(h, ()):
@@ -344,6 +349,8 @@ class ServicesIntel:
                      "code": small_codes.code_for(self.sink_code(s["report"], n), len(hs & data["hosts"][s["report"]]), full)}
                     for s in services if hs & data["hosts"][s["report"]]]
             infections.append({"name": n, "hosts": len(hs), "reports": sorted(reps, key=lambda r: -r["hosts"])[:6]})
+            if with_hosts:                                 # only for the analysts (combo_review.py): ticked into a report
+                infections[-1]["ips"] = sorted(hs)
         # across reports: the exact pattern of each host over every report it is in (services reports with their pattern
         # items, sinkhole reports with the infections), counted; LG-X codes keyed on the pattern's first report
         by_pat = collections.defaultdict(list)
@@ -400,7 +407,9 @@ class ServicesIntel:
                                         for r, rh in sorted(issue_reps[i].items(), key=lambda kv: -len(kv[1]))],
                             # every report that led to it, grouped by kind (its hosts' sinkhole reports too)
                             "seen_in": grouped({r: len(rh) for r, rh in issue_reps[i].items()}, title_of, kind_of,
-                                               dict(collections.Counter(r for x in h for r in (data["sink_rep"].get(x) or {}))))}
+                                               dict(collections.Counter(r for x in h for r in (data["sink_rep"].get(x) or {})))),
+                            # only for the analysts (combo_review.py): the hosts, for an issue ticked into a report
+                            **({"ips": sorted(h)} if with_hosts else {})}
                            for i, h in sorted(issues.items(), key=lambda kv: -len(kv[1]))][:40],
                 "issues_total": len(issues), "infections": infections[:20], "infections_hosts": len({h for hs in names.values() for h in hs})}
 

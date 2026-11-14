@@ -103,3 +103,6 @@ html.lite .portal-card, html.lite .portal-card .pc-ic { transition: none; box-sh
 h1.lg-greet { font-size: clamp(24px, 4.2vw, 42px) !important; line-height: 1.15; max-width: 960px; margin-left: auto; margin-right: auto;
   text-wrap: balance; overflow-wrap: anywhere; }
 h1.lg-greet .lg-greet-name { background: linear-gradient(90deg, #9db8f5, #c9a8f5 60%, #f1a2a5); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* the Intelligence card's live line (portal-intel.js): today against the usual */
+.portal-card .pc-body small.pc-live { color: #ffe2a0; font-variant-numeric: tabular-nums; }

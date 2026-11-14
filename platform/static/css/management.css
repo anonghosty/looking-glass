@@ -399,3 +399,8 @@ body.is-loading .mg-grid, body.is-loading .mg-kpis { opacity: 1; }
 .mg-bar { align-items: center; }
 /* embedded in a review page (review.html): the portal's figures only, its header and platform switch left out */
 .mg-embed .mg-top, .mg-embed .mg-switch { display: none !important; }
+
+/* Shadowserver's Intelligence reports, counts only (management.js intelligence(), 2026-11-14) */
+.mg-grid.mg-grid-intel { grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+.mg-intel-note { margin: -6px 0 0; font-size: 12.5px; color: var(--muted); max-width: 980px; }
+.mg-intel-card .mg-steps { min-height: 120px; }

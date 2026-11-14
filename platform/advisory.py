@@ -300,7 +300,7 @@ def install(app, ctx):
         if x.get("kind") == "case":
             return False
         if x.get("review"):
-            return x["review"].get("decision") in ("both", "researcher")      # a rejected one has no advisory
+            return x["review"].get("decision") in ("both", "researcher", "analyst")      # a rejected one has no advisory
         # with the advisor, AND management really approved it: having been "with the advisor" once is not enough
         # (anyone in the channel could set that before; external review, 2026-11-11, finding_rules.py)
         with_advisor = x["status"] in ("advisor", "advisory") or any(h.get("status") == "advisor" for h in x.get("history") or [])
@@ -456,7 +456,7 @@ def install(app, ctx):
                         add(cves, m.group(0).upper())
                     elif str(it).lower().startswith("tag:"):
                         add(issues, issue_tags.issue_of(it)) if issue_tags.issue_of(it) else add(labels, str(it).split(":", 1)[1].strip().lower())
-        if rv.get("decision") == "both":           # the analyst's views management added: this organisation's devices in them
+        if rv.get("decision") in ("both", "analyst"):   # the analyst's views management added (or chose alone): this organisation's devices in them
             for p in rv.get("sent") or []:
                 if network != ALL and not any(dv.get("ip") in ips for dv in p.get("devices") or []):
                     continue
@@ -477,6 +477,21 @@ def install(app, ctx):
                     rk, re_ = imp.entry(q.get("report") or q.get("title"))
                     if re_:
                         reps.setdefault(rk, (re_, None))
+            # the infections and CVEs/issues the analyst ticked (2026-11-14), for this organisation's devices
+            mine = lambda x: network == ALL or any(dv.get("ip") in ips for dv in x.get("devices") or [])  # noqa: E731
+            for x in rv.get("sent_infections") or []:
+                if mine(x):
+                    add(cats, x["name"])
+                    for sk, se in imp.sinkhole_reports():
+                        reps.setdefault(sk, (se, "the devices were seen calling a sinkhole in one of these reports"))
+            for x in rv.get("sent_issues") or []:
+                if mine(x):
+                    m = CVE_RX.fullmatch(str(x["name"]))
+                    add(cves, m.group(0).upper()) if m else add(issues, x["name"])
+                    for r in x.get("reports") or []:
+                        rk, re_ = imp.entry(r.get("report") or r.get("title"))
+                        if re_:
+                            reps.setdefault(rk, (re_, None))
         reports, by_flag = [], collections.OrderedDict()
         for key, (e, note) in reps.items():
             fl = [f for f in imp.flags_of(key, e) if imp.flag(f)]
@@ -494,7 +509,7 @@ def install(app, ctx):
         line = ("See Technical Details for the definitions of the highlighted "
                 + (kinds[0] if len(kinds) == 1 else ", ".join(kinds[:-1]) + " and " + kinds[-1]) + ".") if kinds else ""
         return {"cves": cves, "issues": issues, "categories": cats, "labels": labels, "reports": reports, "impact": impact, "kinds_line": line,
-                "devices": devs, "entry_name": entry.get("name") or "", "across": rv.get("decision") == "both" or entry.get("kind") == "x"}
+                "devices": devs, "entry_name": entry.get("name") or "", "across": rv.get("decision") in ("both", "analyst") or entry.get("kind") == "x"}
 
     def org():
         return ctx["org"].get()["name"] or "Looking Glass"
@@ -526,7 +541,8 @@ def install(app, ctx):
                "created": _day(adv["created"]), "updated": _day(adv["updated"]), "by": name_of(adv["by"]),
                "finding": f"#{x['id']}", "finding_title": x["title"], "source_code": adv.get("source") or "",
                "decision": {"both": "The researcher's view and the analyst's across-report views",
-                            "researcher": "The researcher's view"}.get(adv.get("decision"), ""),
+                            "researcher": "The researcher's view",
+                            "analyst": "The analyst's view only: the devices behind what the analyst ticked"}.get(adv.get("decision"), ""),
                "data_title": data_title(x, auto),
                "affected": {"cves": auto["cves"], "issues": auto["issues"], "categories": auto["categories"], "labels": auto["labels"],
                             "devices": len(auto["devices"]), "records": sum(d["records"] for d in auto["devices"])},

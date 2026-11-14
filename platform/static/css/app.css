@@ -995,6 +995,11 @@ td.mp-cell { min-width: 260px; max-width: 420px; white-space: normal; }
 .am-card .am-notice { margin: 14px 0 0; border-color: rgba(245, 181, 74, .45); background: rgba(245, 181, 74, .06); }
 .am-notice .dz-panel-row { align-items: center; justify-content: space-between; }
 .am-notice-text { margin: 0; font-size: 13px; }
+/* the Combinations page: an infection or CVE/issue ticked for the report; the review page's list of them */
+.ce-row .ce-ntick { margin-left: auto; }
+.ce-row.on { background: rgba(124, 140, 255, .08); border-radius: 8px; }
+.rv-names { margin: 12px 0; padding: 10px 14px; border: 1px solid rgba(255,255,255,.1); border-radius: 12px; }
+.rv-names ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; overflow-wrap: anywhere; }
 .kb-db-note { margin: 0 0 14px; padding: 10px 14px; border: 1px solid rgba(245, 181, 74, .45); border-radius: 10px;
   background: rgba(245, 181, 74, .06); font-size: 13px; overflow-wrap: anywhere; }
 .am-scroll { max-height: 640px; overflow: auto; display: grid; gap: 10px; padding: 2px; }

@@ -215,7 +215,8 @@ class Findings:
                 case["participants"].append(u)
 
     def decide_review(self, fid, choice, text, user, role, to):
-        """Management: add the analyst's views to the report ("both") or use the researcher's view only ("researcher").
+        """Management: add the analyst's views to the report ("both"), use the researcher's view only ("researcher") or
+        the analyst's view only ("analyst": the report is about the devices behind what the analyst ticked, alone).
         It goes to the advisor management names (`to`), who writes the advisory and generates the report."""
         with self.lock:
             self._load()
@@ -226,8 +227,11 @@ class Findings:
                 return None, "Already decided."
             if item["status"] not in OPEN:                 # closed some other way: there is nothing left to decide
                 return None, "This finding is closed: there is nothing to decide."
-            if choice == "both" and not item["review"].get("codes"):
-                choice = "researcher"          # sent without across-report patterns: there is no analyst's view to add
+            ticked = item["review"].get("codes") or item["review"].get("sent_infections") or item["review"].get("sent_issues")
+            if choice == "analyst" and not ticked:
+                return None, "The analyst ticked nothing: there is no analyst's view to use on its own."
+            if choice == "both" and not ticked:
+                choice = "researcher"          # sent without anything ticked: there is no analyst's view to add
             item["review"].update(decision="rejected" if choice == "reject" else choice, by=user, at=round(time.time(), 3), comment=text[:MAX_COMMENT])
             if choice == "reject":             # rejected: closed, with the reason; no advisory
                 item["status"] = "closed"
@@ -239,7 +243,8 @@ class Findings:
             item["status"] = "advisor"
             item["history"].append({"status": "advisor", "kind": "decision", "decision": "accepted", "user": user, "role": role,
                                     "at": round(time.time(), 3), "to": to,
-                                    "comment": ("Add the analyst's views: " if choice == "both" else "Use the researcher's view only: ") + text[:MAX_COMMENT]})
+                                    "comment": {"both": "Add the analyst's views: ", "analyst": "Use the analyst's view only: "}.get(
+                                        choice, "Use the researcher's view only: ") + text[:MAX_COMMENT]})
             self._join(item, to)
             self._sync_case(item)
             self._save()
@@ -393,7 +398,8 @@ class Findings:
                 "updated": day(x["history"][-1]["at"]),
                 "display_name": self.title_of(x["name"]) if x.get("section") == "services" else x["name"],
                 # the review without "sent" (the devices' addresses, kept for the analyst's report only: never on this page)
-                "review": ({k: v for k, v in x["review"].items() if k not in ("by", "sent")} | {"by": self.people.name(x["review"]["by"]) if x["review"].get("by") else ""})
+                "review": ({k: v for k, v in x["review"].items() if k not in ("by", "sent", "sent_infections", "sent_issues")}
+                           | {"by": self.people.name(x["review"]["by"]) if x["review"].get("by") else ""})
                           if x.get("review") else None,
                 "assignee": self.people.name(x["assignee"]) if x.get("assignee") else "",
                 "channel": [self.people.name(u) for u in x.get("participants") or []],
@@ -540,8 +546,8 @@ def install(app, ctx):
             return jsonify(error="No such finding."), 404
         b = request.get_json(silent=True) or {}
         choice = b.get("choice")
-        if choice not in ("both", "researcher", "reject"):
-            return jsonify(error="Add the analyst's views, use the researcher's view only, or reject it."), 400
+        if choice not in ("both", "researcher", "analyst", "reject"):
+            return jsonify(error="Add the analyst's views, use the researcher's or the analyst's view only, or reject it."), 400
         text = str(b.get("text") or "").replace("\r", "").strip()[:MAX_COMMENT]
         if not text:
             return jsonify(error="Give the reason for rejecting it." if choice == "reject" else "Give your comment (the directive for the report)."), 400

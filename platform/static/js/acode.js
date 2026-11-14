@@ -216,6 +216,24 @@
     const h = el("h1"); h.append(el("code", null, d.code), document.createTextNode(d.finding ? ` ${d.finding.title}` : "")); hero.append(h);
     hero.append(el("p", "ax-sel", d.label));
     if (d.finding?.text) { const q = el("blockquote", "ax-note"); q.append(el("b", null, "The analyst's note"), el("p", null, d.finding.text)); hero.append(q); }
+    // how this selection came about: the earlier codes it was made from, oldest first, each with its own note
+    if ((d.chain || []).length) {
+      const ch = el("div", "ax-chain"); ch.append(el("b", "ax-chain-h", "How this selection came about"));
+      const ol = el("ol", "ax-chain-list");
+      for (const s of d.chain) {
+        const li = el("li", s.hidden ? "ax-chain-hidden" : null);
+        const top = el("div", "ax-chain-top");
+        if (s.page && !s.hidden) { const a = el("a", null, s.code); a.href = s.page; top.append(a); } else top.append(el("code", null, s.code));
+        if (s.hidden) top.append(el("small", "muted", "in a finding you are not part of"));
+        else top.append(el("small", "muted", [s.kind === "analyst" ? "analyst code" : "combination code", s.day, s.finding && `finding ${s.finding}`, s.by && `by ${s.by}`, s.at].filter(Boolean).join(" · ")));
+        li.append(top);
+        if (!s.hidden && s.label) li.append(el("p", "ax-chain-label", s.label));
+        if (!s.hidden && s.note) { const n = el("p", "ax-chain-note"); n.append(el("b", null, s.title ? `${s.title}: ` : "Note: "), document.createTextNode(s.note)); li.append(n); }
+        ol.append(li);
+      }
+      const now = el("li", "ax-chain-now"); now.append(el("code", null, d.code), el("small", "muted", " this selection")); ol.append(now);
+      ch.append(ol); hero.append(ch);
+    }
     const k = el("div", "ax-kpis");
     for (const [v, l] of [[d.records, "records"], [d.devices, d.section === "issues" ? "hosts" : "devices"], [d.reports, "reports"], [d.names.length, d.section === "issues" ? "issues" : "infections / categories"]]) {
       const t = el("div", "ax-kpi"); t.append(el("b", null, fmt(v)), el("span", null, l)); k.append(t);

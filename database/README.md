@@ -97,8 +97,9 @@ receives your Shadowserver reports (sign up for free at https://www.shadowserver
 YYYY-MM-DD-<service>[-<number>]-<country>-geo[_asNNNN].csv
 ```
 
-(`<number>` is Shadowserver's id for the receiving CSIRT, any number of digits, for example `123`; `<country>` is the country as Shadowserver names it, for example `cote-d-ivoire` or `south-africa`. If your reports are named differently,
-set `REPORT_SUFFIX` in `.env`.)
+(`<number>` is Shadowserver's id for the receiving CSIRT, any number of digits, for example `123`; `<country>` is the country as Shadowserver names it, for example `cote-d-ivoire` or `south-africa`. The last part may also be `-asn`, `-netblock` or `-domain` instead of `-geo`:
+reports without an IP address, such as Compromised Account, Ransomware Victim and Sandbox-DNS, usually reach a CSIRT
+through a domain filter. If your reports are named differently, set `REPORT_SUFFIX` in `.env`.)
 
 go straight to `sorting_backup/<service>/`, replacing an older copy. Everything else in the zip goes to `unzipped_backup/<zip name>/`. Corrupt zips are deleted. Report CSVs that arrived unzipped are moved to their service folder the same way.
 
@@ -284,7 +285,7 @@ All settings live in `.env` in the project folder. Its permissions are `600`, so
 | `INSERT_CHUNK` | rows per bulk insert | `2000` |
 | `DOWNLOAD_THREADS` | parallel link downloads | `4` |
 | `IMAP_FETCH_BATCH` | e-mails fetched per IMAP round trip | `25` |
-| `REPORT_SUFFIX` | regular expression for the part of report file names after the service (`<country>-geo`) | any `<name>-geo` |
+| `REPORT_SUFFIX` | regular expression for the part of report file names after the service (`<country>-geo`) | any `<name>-geo` (or `-asn`, `-netblock`, `-domain`) |
 | `ZIP_MAX_UNPACKED_MB` | largest unpacked size of one report zip, all files together | `2048` |
 | `ZIP_MAX_RATIO` | most a file may be compressed (unpacked / packed); report CSVs stay well under 50, zip bombs go past 1000 | `200` |
 | `ZIP_MAX_FILES` | most files in one zip (Shadowserver sends one CSV per zip) | `100` |
@@ -463,7 +464,7 @@ Everything together stays under about 5 GB, which leaves plenty for Windows and 
 - Database name, collection names, document fields and field order, value types, `line_hash` values, the unique index, and the `discovered_fields_` / `files_` documents. This was proven by the tests in [section 12](#12-testing).
 - How the service name is taken from a report's file name. (The pattern accepts any country.)
 - Duplicate rows within a file are dropped. Rows with an unreadable `timestamp` are skipped. A file that already has rows in MongoDB is not loaded again.
-- By default, e-mails since yesterday are pulled, and the mail server certificate is not verified.
+- By default, e-mails since yesterday are pulled.
 - An e-mail without a new attachment falls back to its download links.
 - Corrupt zips are deleted. A newer copy of a report replaces the older one in its service folder.
 
@@ -472,6 +473,7 @@ Everything together stays under about 5 GB, which leaves plenty for Windows and 
 | Original behaviour | Now |
 |---|---|
 | Fetching marked e-mails as **read** | Mailbox opened read-only; e-mails stay unread |
+| The mail server's certificate was **not verified** | Verified by default (`IMAP_VERIFY_TLS=true`, also when the setting is missing); `false` only for a server with a self-signed certificate |
 | `files_<service>` got a **duplicate entry for every file on every run** | One entry per file |
 | A CSV row with more values than headers made the **bulk insert fail**, losing other rows sent with it | That row is stored with its header columns; a warning is logged |
 | A file with non-UTF-8 bytes **crashed the whole run** | Loaded with the bad bytes replaced; a warning is logged |

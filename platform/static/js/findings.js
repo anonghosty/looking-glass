@@ -208,7 +208,7 @@
     cols.append(rc, ac); p.append(cols);
     // the decision
     if (rv.decision) {
-      p.append(el("p", `fd-rv-done ${rv.decision}`, `${rv.decision === "both" ? "Added the analyst's views" : "The researcher's view only"} · ${rv.by}${rv.comment ? `: ${rv.comment}` : ""}`));
+      p.append(el("p", `fd-rv-done ${rv.decision}`, `${rv.decision === "both" ? "Added the analyst's views" : rv.decision === "analyst" ? "The analyst's view only" : "The researcher's view only"} · ${rv.by}${rv.comment ? `: ${rv.comment}` : ""}`));
       if (data.can_search) { const a = el("a", "lg-btn sm primary", "Generate the report"); a.href = `/combinations?code=${encodeURIComponent(rv.source)}`; a.title = "Open the code again: the report follows management's decision"; p.append(a); }
     } else if (data.can_decide && f.open) {
       const ta = el("textarea", "fd-in"); ta.rows = 2; ta.maxLength = 1000; ta.placeholder = "Your comment: the directive for the report";
@@ -268,7 +268,7 @@
       const nc = (rv.codes || []).length;
       g.append(el("span", null, f.parent ? (nc ? `${nc} across-report pattern${nc === 1 ? "" : "s"} on this organisation's devices.` : "The combination on this organisation's devices.")
         : nc ? `The researcher's combination ${rv.source} and ${nc} across-report pattern${nc === 1 ? "" : "s"} the analyst ticked.` : `The researcher's combination ${rv.source}, as it is.`));
-      g.append(el("b", `fd-rv-state ${rv.decision || "wait"}`, rv.decision ? (rv.decision === "both" ? "Decided: the analyst's views added" : rv.decision === "rejected" ? "Rejected and closed"
+      g.append(el("b", `fd-rv-state ${rv.decision || "wait"}`, rv.decision ? (rv.decision === "both" ? "Decided: the analyst's views added" : rv.decision === "analyst" ? "Decided: the analyst's view only" : rv.decision === "rejected" ? "Rejected and closed"
         : (rv.codes || []).length ? "Decided: the researcher's view only" : "Approved for the advisory") : "Waiting for management's decision"));
       if (rv.decision && data.can_advise && f.open) {
         // the advisor writes the advisory and generates the report on a page of its own

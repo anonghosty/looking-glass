@@ -266,10 +266,14 @@ def enrich_rows(enr):
                          f"{dv['ip']}" + (f" ({dv['network']})" if dv.get("network") else ""), 1, "", x["code"]])
     for i in enr.get("issues") or []:
         rows.append(["cve / issue", "; ".join(f"{r['title']} ({r['hosts']})" for r in i.get("reports") or []), i["name"], i["hosts"], "", ""])
+        for dv in i.get("devices") or []:             # ticked by the analyst: each device of it, as sent to management
+            rows.append(["cve / issue device", i["name"], f"{dv['ip']}" + (f" ({dv['network']})" if dv.get("network") else ""), 1, "", ""])
     for i in enr.get("infections") or []:
         rows.append(["infection (calling sinkholes)", "", i["name"], i["hosts"], "", ""])
         for r in i.get("reports") or []:
-            rows.append(["infection in a services report", r["title"], i["name"], r["hosts"], "", r["code"]])
+            rows.append(["infection in a services report", r["title"], i["name"], r["hosts"], "", r.get("code", "")])
+        for dv in i.get("devices") or []:
+            rows.append(["infection device", i["name"], f"{dv['ip']}" + (f" ({dv['network']})" if dv.get("network") else ""), 1, "", ""])
     return rows
 
 
@@ -667,15 +671,28 @@ def install(app, ctx):
                 return re.sub(r"\s{2,}", " ", t).strip()
             pts = [no_codes(p_) for p_ in pts]
         enr = job.get("enrich")
-        if enr and network and enr.get("cross"):
-            # one organisation's report: only the across-report patterns of its own devices, with only those devices
+        if enr and network and (enr.get("cross") or (enr.get("sent") and (enr.get("infections") or enr.get("issues")))):
+            # one organisation's report: only the across-report patterns, and the ticked infections and CVEs/issues, of
+            # its own devices, with only those devices
             hs_net = {d["ip"] for d in devs}
-            cross_net = []
-            for p_ in enr["cross"]:
+
+            def own(items):
+                out_ = []
+                for p_ in items or []:
+                    if "devices" not in p_:
+                        out_.append(p_)
+                        continue
+                    dv_ = [d for d in p_.get("devices") or [] if d.get("ip") in hs_net]
+                    if dv_:
+                        out_.append(dict(p_, devices=dv_, hosts=len(dv_)))
+                return out_
+            cross_net = []                         # the patterns exactly as before: one without its devices is left out
+            for p_ in enr.get("cross") or []:
                 dv_ = [d for d in p_.get("devices") or [] if d.get("ip") in hs_net]
                 if dv_:
                     cross_net.append(dict(p_, devices=dv_, hosts=len(dv_)))
-            enr = dict(enr, cross=cross_net, cross_total=len(cross_net), multi_hosts=sum(p_["hosts"] for p_ in cross_net))
+            enr = dict(enr, cross=cross_net, cross_total=len(cross_net), multi_hosts=sum(p_["hosts"] for p_ in cross_net),
+                       infections=own(enr.get("infections")), issues=own(enr.get("issues")))
         if enr:
             pts.extend([no_codes(p_) for p_ in enrich_points(enr)] if job.get("advisory") else enrich_points(enr))
         # activity by hour of the day (network communications carry the event time)

@@ -42,7 +42,10 @@ class AnalystDoc(ex.Doc):
         lw = self.c.stringWidth("Looking Glass", self.F["b"], 13)
         self.pill(M + lw + 8, H - M - 5, self.label_of(section) if self.meta.get("advisory") else
                   "ANALYST · " + ("SELECTION" if str(self.meta.get("header", "")).find("LG-A-") >= 0 else "COMBINATION"), AMBER, 7)
-        self.text(M, H - M - 20, f"{self.meta['platform_label']} · {self.meta['scope']}", 8.5, DIM)
+        # the platform and scope line ("Publicly accessible services · Ghana · whole country"): not on the advisory's own
+        # pages (user, 2026-11-14); the report's other pages keep it
+        if not (self.meta.get("advisory") and self.label_of(section) == "ADVISORY"):
+            self.text(M, H - M - 20, f"{self.meta['platform_label']} · {self.meta['scope']}", 8.5, DIM)
         self.text(W - M, H - M - 6, section, 11, HexColor("#a9b8ff"), True, "end")
         self.text(W - M, H - M - 20, self.fit(self.meta["header"], 420, 8.5), 8.5, DIM, anchor="end")
         c.setStrokeColor(Color(1, 1, 1, .08)); c.setLineWidth(.6); c.line(M, H - M - 30, W - M, H - M - 30)

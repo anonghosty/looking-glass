@@ -51,16 +51,23 @@ def install(app, ctx):
         if sent is None and rv.get("decision"):           # a review made before the copy was kept: the ticked codes, as found now
             keep = set(rv.get("codes") or [])
             sent = [x for x in prev.get("cross") or [] if x["code"] in keep]
-        if review and rv.get("decision") == "both":
+        s_inf, s_iss = rv.get("sent_infections") or [], rv.get("sent_issues") or []
+        added = rv.get("decision") in ("both", "analyst")     # the analyst's views go into the report (alone, for "analyst")
+        if review and added:
             an = rv.get("analyst") or {}
+            # exactly what was sent: the ticked patterns, and the ticked infections and CVEs/issues with their devices
             job["enrich"] = {"cross": sent or [], "cross_total": len(sent or []), "multi_hosts": sum(x["hosts"] for x in sent or []),
                              "sources": an.get("sources") or [], "days": an.get("days") or prev.get("days") or [],
-                             "issues": [], "infections": [], "services": [], "sent": True}
+                             "issues": s_iss, "issues_total": len(s_iss), "infections": s_inf,
+                             "infections_hosts": len({d["ip"] for x in s_inf for d in x.get("devices") or []}) or sum(x["hosts"] for x in s_inf),
+                             "services": [], "sent": True}
         else:
             job["enrich"] = None
         job["review_ok"] = bool(review and rv.get("decision"))
         job["review"] = ({"finding": f"#{review['id']}", "decision": rv.get("decision"), "status": review["status"],
-                          "sent": (sent or []) if rv.get("decision") == "both" else [],
+                          "sent": (sent or []) if added else [],
+                          "sent_infections": s_inf if added else [],
+                          "sent_issues": s_iss if added else [],
                           "days": (rv.get("analyst") or {}).get("days") or [],
                           "advisor": ctx["people_name"](review["assignee"]) if rv.get("decision") and review.get("assignee") else ""}
                          if review else None)
@@ -105,7 +112,10 @@ def install(app, ctx):
             ip = e.get("src_ip") if section == "infections" else e.get("ip")
             if ip and ip not in asn_of:
                 asn_of[ip] = e.get("src_asn") if section == "infections" else e.get("asn")
-        for x in (job["preview"] or {}).get("cross") or []:
+        pv = job["preview"] or {}
+        # each across-report pattern, infection and CVE/issue with its devices (to tick into the report, 2026-11-14:
+        # the infections and CVEs could be seen but not ticked)
+        for x in (pv.get("cross") or []) + (pv.get("infections") or []) + (pv.get("issues") or []):
             x["devices"] = [{"ip": ip, "asn": str(asn_of.get(ip) or ""), "network": ctx["network"](asn_of.get(ip)) if asn_of.get(ip) else ""}
                             for ip in x.pop("ips", [])]
         job["needs_review"] = bool((job["preview"] or {}).get("cross"))
@@ -203,7 +213,25 @@ def install(app, ctx):
                 if e.get("id") in ai:
                     around.append(e)
         m = ctx["svc_matcher"](entry) if entry.get("section") == "services" and ctx.get("svc_matcher") else None
-        return {"entry": entry, "found": found, "around": around, "per_day": [tuple(p) for p in kept["per_day"]], "m": m, "plat": plat}, ""
+        per_day = [tuple(p) for p in kept["per_day"]]
+        if rv.get("decision") == "analyst":
+            # the analyst's view only (2026-11-14): exactly the devices behind what the analyst ticked (patterns,
+            # infections, CVEs/issues), a part of the combination's devices; the report, its organisations and the
+            # advisory are about them alone
+            only = analyst_devices(rv)
+            host = (m.host if m is not None else (lambda e: (e.get("src_ip") if entry.get("section") == "infections" else e.get("ip")) or ""))
+            found = [e for e in found if host(e) in only]
+            around = [e for e in around if host(e) in only]
+            n_by_day = collections.Counter(str(e.get("extracted_date") or e.get("timestamp") or "")[:10] for e in found)
+            per_day = [(dd, n_by_day.get(dd, 0)) for dd, _ in per_day]
+            if not found:
+                return None, "None of the devices the analyst ticked are in the kept records: no report is made."
+        return {"entry": entry, "found": found, "around": around, "per_day": per_day, "m": m, "plat": plat}, ""
+
+    def analyst_devices(rv):
+        """The addresses of the devices behind what the analyst sent: ticked patterns, infections and CVEs/issues."""
+        return {d.get("ip") for x in (rv.get("sent") or []) + (rv.get("sent_infections") or []) + (rv.get("sent_issues") or [])
+                for d in x.get("devices") or [] if d.get("ip")}
 
     def org_asns(x, k):
         """A sub-finding's organisation as AS numbers: stored when it was made; for one made before that, the AS
@@ -360,8 +388,16 @@ def install(app, ctx):
             return jsonify(error=f"This combination was already sent to management: see finding #{prior[-1].get('parent') or prior[-1]['id']}."), 409
         b = request.get_json(silent=True) or {}
         codes = [c for c in dict.fromkeys(str(c).strip().upper() for c in (b.get("codes") or [])) if c in avail][:20]
-        if avail and not codes:
-            return jsonify(error="Tick at least one across-report pattern to send."), 400
+        # the infections and CVEs/issues ticked too (2026-11-14): only names this search's devices really carry
+        av_inf = {x["name"]: x for x in prev.get("infections") or []}
+        av_iss = {x["name"]: x for x in prev.get("issues") or []}
+        t_inf = [n for n in dict.fromkeys(str(n).strip() for n in (b.get("infections") or [])) if n in av_inf][:40]
+        t_iss = [n for n in dict.fromkeys(str(n).strip() for n in (b.get("issues") or [])) if n in av_iss][:40]
+        bad_n = [str(n) for n in list(b.get("infections") or []) + list(b.get("issues") or []) if str(n).strip() not in av_inf and str(n).strip() not in av_iss]
+        if bad_n:
+            return jsonify(error=f"Not on these devices: {bad_n[0][:80]}."), 400
+        if avail and not (codes or t_inf or t_iss):
+            return jsonify(error="Tick at least one across-report pattern, infection or CVE/issue to send."), 400
         # no across-report data: the combination goes to management as it is (the researcher's view), for the advisory
         title = str(b.get("title") or "").strip()[:140]
         text = str(b.get("text") or "").replace("\r", "").strip()[:2000]
@@ -383,12 +419,19 @@ def install(app, ctx):
         analyst = {"patterns": [{"code": c, "hosts": avail[c]["hosts"], "parts": [{"title": p["title"], "items": p["items"]} for p in avail[c]["parts"]]}
                                 for c in codes],
                    "multi_hosts": prev.get("multi_hosts", 0), "patterns_total": prev.get("cross_total", 0),
-                   "sources": prev.get("sources") or [], "days": prev.get("days") or []}
+                   "sources": prev.get("sources") or [], "days": prev.get("days") or [],
+                   # the ticked infections and CVEs/issues, in words and counts (management never sees an address)
+                   "infections": [{"name": n, "hosts": av_inf[n]["hosts"], "reports": [r["title"] for r in av_inf[n].get("reports") or []][:6]} for n in t_inf],
+                   "issues": [{"name": n, "hosts": av_iss[n]["hosts"], "reports": [r["title"] for r in av_iss[n].get("reports") or []][:6]} for n in t_iss]}
         me, role = user()
         section = entry.get("section") or "infections"
         # exactly what was sent, with the devices' addresses: for the analyst's report later (never shown to management)
         sent = [{"code": c, "hosts": avail[c]["hosts"], "parts": avail[c]["parts"], "devices": avail[c].get("devices") or []} for c in codes]
-        base = {"source": entry["code"], "codes": codes, "researcher": researcher, "analyst": analyst, "requested_by": me, "sent": sent}
+        keep = lambda x: {k: v for k, v in x.items() if k in ("name", "hosts", "reports", "seen_in", "devices")}  # noqa: E731
+        sent_inf = [keep(av_inf[n]) for n in t_inf]
+        sent_iss = [keep(av_iss[n]) for n in t_iss]
+        base = {"source": entry["code"], "codes": codes, "researcher": researcher, "analyst": analyst, "requested_by": me, "sent": sent,
+                "sent_infections": sent_inf, "sent_issues": sent_iss}
         # the organisations (networks) it is for: none named = the whole combination (an overview, the advisor picks the
         # organisations later); one = a finding for that organisation; several = a case with one sub-finding each
         per_net = per_network(j)
@@ -407,10 +450,21 @@ def install(app, ctx):
                     sent_n.append(dict(x, devices=dv, hosts=len(dv)))
             pats = [dict(pt, hosts=next(s_["hosts"] for s_ in sent_n if s_["code"] == pt["code"]))
                     for pt in analyst["patterns"] if any(s_["code"] == pt["code"] for s_ in sent_n)]
-            return dict(base, network=net, codes=[s_["code"] for s_ in sent_n], sent=sent_n,
+
+            def narrow(items):                     # the ticked infections or issues of this organisation's devices only
+                out = []
+                for x in items:
+                    dv = [d for d in x.get("devices") or [] if d.get("ip") in p["ips"]]
+                    if dv:
+                        out.append(dict(x, devices=dv, hosts=len(dv)))
+                return out
+            inf_n, iss_n = narrow(sent_inf), narrow(sent_iss)
+            words = lambda xs: [{"name": x["name"], "hosts": x["hosts"], "reports": [r["title"] for r in x.get("reports") or []][:6]} for x in xs]  # noqa: E731
+            return dict(base, network=net, codes=[s_["code"] for s_ in sent_n], sent=sent_n, sent_infections=inf_n, sent_issues=iss_n,
                         researcher=dict(researcher, devices=len(p["ips"]), records=p["records"], networks=1,
                                         top_networks=[{"label": net, "devices": len(p["ips"])}]),
-                        analyst=dict(analyst, patterns=pats, multi_hosts=sum(s_["hosts"] for s_ in sent_n)))
+                        analyst=dict(analyst, patterns=pats, multi_hosts=sum(s_["hosts"] for s_ in sent_n),
+                                     infections=words(inf_n), issues=words(iss_n)))
         if len(nets) > 1:
             case, kids = F.create_case(entry["code"], section, researcher["what"][:200], title, text, me, role, to,
                                        [(n, for_net(n)) for n in nets])
@@ -423,7 +477,8 @@ def install(app, ctx):
                 keep_search(k["id"], j)                    # each organisation's report is made later from these records
             j["review"] = {"finding": f"#{case['id']}", "decision": None, "status": case["status"]}
             ctx["audit"].add("combo_review_sent", user=me, target=entry["code"],
-                             detail=f"case #{case['id']} to {to} · {len(kids)} organisations · {len(codes)} pattern(s)")
+                             detail=f"case #{case['id']} to {to} · {len(kids)} organisations · {len(codes)} pattern(s)"
+                                    f" · {len(t_inf)} infection(s) · {len(t_iss)} CVE/issue(s)")
             return jsonify(finding=f"#{case['id']}", case=True, subs=[{"finding": f"#{k['id']}", "network": k["network"]} for k in kids],
                            to=ctx["people_name"](to), codes=codes)
         review = for_net(nets[0]) if nets else base
@@ -437,5 +492,6 @@ def install(app, ctx):
         j["review"] = {"finding": f"#{item['id']}", "decision": None, "status": item["status"]}
         keep_search(item["id"], j)                         # the report is made later from exactly these records
         ctx["audit"].add("combo_review_sent", user=me, target=entry["code"],
-                         detail=f"#{item['id']} to {to} · {len(review['codes'])} pattern(s)" + (f" · {nets[0]}" if nets else ""))
+                         detail=f"#{item['id']} to {to} · {len(review['codes'])} pattern(s) · {len(review.get('sent_infections') or [])} infection(s)"
+                                f" · {len(review.get('sent_issues') or [])} CVE/issue(s)" + (f" · {nets[0]}" if nets else ""))
         return jsonify(finding=f"#{item['id']}", to=ctx["people_name"](to), codes=review["codes"], network=nets[0] if nets else "")

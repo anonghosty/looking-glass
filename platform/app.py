@@ -3350,6 +3350,15 @@ SVC_KB = _services_kb.install(app, {
     "cve_card": lambda n: cve_intel.card(n, fetch=False), "issues_kb": issues_kb,
     "collections": lambda: [n for n in db.list_collection_names() if not n.startswith(_report_map.NO_REPORT)]})
 
+# The Intelligence portal: Shadowserver's Intelligence reports for analysts and admins, counts for management
+# (intelligence.py, 2026-11-14)
+import intelligence as _intelligence  # noqa: E402
+INTELLIGENCE = _intelligence.install(app, {
+    "db": db, "report_map": REPORT_MAP, "settings": settings, "has_perm": AUTH["has_perm"], "is_demo": is_demo,
+    "audit": AUTH["audit"], "svc_reports": lambda: {x["name"] for x in svc["registry"].get()},
+    "network": lambda asn: asn_registry.company(asn, False) if asn else "",
+    "cross": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"])})
+
 # A few heavy read-only answers, kept a few minutes and computed one at a time; any change starts afresh
 # (response_cache.py). Last, so every route exists.
 import response_cache as _response_cache  # noqa: E402

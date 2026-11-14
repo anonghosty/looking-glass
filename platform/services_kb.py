@@ -144,21 +144,29 @@ def install(app, ctx):
                 out.append(f"Shadowserver added field{'s' if len(new) > 1 else ''} {', '.join(new[:6])}: check its pattern fields.")
         return out
 
+    _sr = {"of": None, "out": None}
+
     def services_reports():
-        """base name -> {entry, names[]}: the Services section of the map, IPv6 twins folded into their IPv4 report."""
+        """base name -> {entry, names[]}: the Services section of the map, IPv6 twins folded into their IPv4 report.
+        The map is read once per call and the result kept while the map is the same object (performance test
+        2026-11-14: rmap.get() was called for every report, each reading the rules file, ~150 file reads per call)."""
+        reps = rmap.get().get("reports") or {}
+        if _sr["of"] is reps and _sr["out"] is not None:
+            return _sr["out"]
         out = {}
-        for k, e in (rmap.get().get("reports") or {}).items():
+        for k, e in reps.items():
             if e.get("section") != "Services":
                 continue
             base = sibling(k)
-            if base not in (rmap.get().get("reports") or {}):
+            if base not in reps:
                 base = k
             g = out.setdefault(base, {"entry": None, "names": []})
             g["names"].append(k)
             if k == base:
                 g["entry"] = e
         for base, g in out.items():
-            g["entry"] = g["entry"] or (rmap.entry(g["names"][0]) or {})
+            g["entry"] = g["entry"] or (reps.get(g["names"][0]) or {})
+        _sr.update(of=reps, out=out)
         return out
 
     def issue_row(name, hosts):

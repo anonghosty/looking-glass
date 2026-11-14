@@ -108,3 +108,13 @@
 .ax-row { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
 .ax-msg { margin-right: auto; font-size: 12.5px; color: var(--text-2); } .ax-msg.ok { color: #8ff0c4; } .ax-msg.bad { color: #ffb4b6; }
 @media (max-width: 700px) { .ax-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ax-list li { grid-template-columns: 1fr; } .ax-part { grid-template-columns: 1fr; } }
+/* how this selection came about: the earlier codes' notes, oldest first (acode.js) */
+.ax-chain { margin: 10px 0 0; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.02); }
+.ax-chain-h { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #cbd5e1; }
+.ax-chain-list { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 8px; }
+.ax-chain-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.ax-chain-top a, .ax-chain-top code { font-family: var(--mono, monospace); font-weight: 600; }
+.ax-chain-label { margin: 2px 0 0; font-size: 13px; color: var(--text-2, #cbd5e1); overflow-wrap: anywhere; }
+.ax-chain-note { margin: 4px 0 0; font-size: 13.5px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
+.ax-chain-hidden { opacity: .7; }
+.ax-chain-now code { font-weight: 600; color: #f5d9a8; }

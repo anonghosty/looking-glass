@@ -86,9 +86,11 @@ PROJECT_DIR = Path(__file__).resolve().parent
 # kenya-geo, south-africa-geo, ...). The number is Shadowserver's id for the recipient (a few digits; other
 # CSIRTs have other ids of any length), so any number of digits is accepted; service names never end in -<digits>.
 # Numbered/unnumbered and _as#### variants as in the original script. REPORT_SUFFIX in .env (a regular expression)
-# replaces "<country>-geo" when a CSIRT's reports are named differently.
+# replaces "<country>-geo" when a CSIRT's reports are named differently. The filter part may also be -asn, -netblock or
+# -domain (2026-11-14): reports without an IP address (Compromised Account, Ransomware Victim, Sandbox-DNS) can reach a
+# CSIRT through a domain filter, and their files would otherwise never be sorted or loaded.
 def compile_service_re() -> "re.Pattern[str]":
-    suffix = os.environ.get("REPORT_SUFFIX") or r"[a-z][a-z0-9_-]*?-geo"
+    suffix = os.environ.get("REPORT_SUFFIX") or r"[a-z][a-z0-9_-]*?-(?:geo|asn|netblock|domain)"
     return re.compile(r"^\d{4}-\d{2}-\d{2}-(.*?)(?:-\d+)?-(?:" + suffix + r")(?:_as\d+)?\.csv$")
 
 

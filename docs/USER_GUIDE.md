@@ -23,6 +23,7 @@ partners see the country's situation at a glance on a wall screen.
 - [3. Reported network communications (the map)](#3-reported-network-communications-the-map)
 - [4. Publicly accessible / vulnerable services](#4-publicly-accessible--vulnerable-services)
 - [5. Analysis and follow-up](#5-analysis-and-follow-up) · [Findings and cases](#findings-cases-and-who-holds-them)
+- [Intelligence (analysts)](#intelligence-analysts)
 - [Management portal (Executive)](#management-portal-executive)
 - [Advisories (the advisor)](#advisories-the-advisor) · [TLP](#tlp-how-far-an-advisory-may-travel)
 - [Notifications (the bell)](#notifications-the-bell)
@@ -62,7 +63,13 @@ partners see the country's situation at a glance on a wall screen.
 
 **Decide a finding (management)**
 1. The bell shows it; open the review from **Findings**.
-2. **Approve** and name the advisor (it goes straight to them), or **Reject** with the reason (it closes).
+2. **Approve** and name the advisor (it goes straight to them), or **Reject** with the reason (it closes). On a review
+   with the analyst's views, choose both views, the researcher's view only, or the analyst's view only.
+
+**Follow Shadowserver's Intelligence reports (analyst)**
+1. Open **Intelligence** from the header or the Overview card.
+2. Compare today with the usual on the group tiles, then **Open the records** of a report; filter on its own fields,
+   click an address for what else that host carries, **Export CSV**, or make an analyst code from the view.
 
 **Send an advisory to an organisation (advisor)**
 1. Open the finding from the **Advisory portal**; its organisation and that organisation's devices are already there.
@@ -484,6 +491,13 @@ or the Findings page) is for roles that see addresses and may export:
    across-report patterns, write a title and a comment, name the manager, and **pick the networks** it concerns. No
    network: an overview, and the advisor picks the organisations later. One network: a finding for that organisation.
    Several: a **case** with one sub-finding per organisation, each decided on its own.
+   Under **every category for these devices** you can also tick **infections** and **CVEs and issues** for the report:
+   each one is checked against this search's own devices, management sees the names and counts (never an address),
+   and the report and the advisory carry them on each organisation's own devices.
+
+7. **Management decides** on the review page: **Add the analyst's views** (the combination and what you ticked),
+   **Use the researcher's view only**, **Use the analyst's view only** (the report and the advisory cover just the
+   devices behind what you ticked, for example the few with a critical CVE), or **Reject and close** with the reason.
 
 "Exactly" means the record carries these indicators and no other indicator of the kinds compared (C2 domain, DNS
 lookup, TLS name, user agent and tags; for services, the associated tags and CVEs). The search is off in Demo mode, a
@@ -557,6 +571,31 @@ learn it exists.
 into their own group, and every level opens and closes with a click. The **state pill** says where each one stands
 and who holds it (*With management · Efua Owusu*). The filters at the top count each state; **Open** and **All** switch
 between work in progress and everything.
+
+## Intelligence (analysts)
+
+Shadowserver sends a group of **Intelligence** reports beside the two platforms: compromised systems and victims
+(compromised websites and devices, ransomware victims), malicious content hosted in the constituency (malware and
+sandbox URLs, spam links), addresses on block lists or targeted, leaked accounts, and attacker infrastructure. The
+**Intelligence** page (`/intelligence`) is for analysts and administrators; it is closed in Demo mode.
+
+- **Group tiles:** today's records in each group against the median of the 7 days before, with the 8 days as bars.
+  While the day's files are still coming in, the page says so: "still arriving: N of the usual M reports".
+- **One card per report received**, in plain words, with today against the usual. **Open the records** shows a day's
+  records with filters on that report's own fields (for example URL, application, tag, detail, sector and server for
+  compromised websites; vendor, type, model, tag and sector for devices; source and reason for block lists) and a
+  search over every field.
+- **An address** opens what else that host carries: the other Intelligence reports of the week and the services
+  platform's categories for it.
+- **Export CSV** downloads every record of the view; it is in the audit log.
+- **Leaked accounts** (Compromised Account) are masked until you choose **Show the accounts**, which is in the audit log.
+- **Make an analyst code** from a view: its devices go to the researcher you choose, as for any analyst code.
+- **Not received this week** lists the reports that did not arrive, with the likely reason. Reports without an IP
+  address (Compromised Account, Ransomware Victim, Sandbox-DNS) reach a CSIRT through a domain filter: ask
+  Shadowserver to add the constituency's domains.
+
+Hosts outside the constituency (Settings) are left out everywhere on the page. Management sees the totals per group
+and their 7 days on the Executive portal, never a host.
 
 ## Management portal (Executive)
 

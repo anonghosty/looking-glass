@@ -62,6 +62,7 @@ if [ -n "$DBDIR" ]; then run "pipeline: unzip limits (zip bombs)" bash -c "cd '$
 else run "pipeline: unzip limits (zip bombs)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/report_names.py" ]; then run "pipeline: report names (quarantine)" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_report_names.py"
 else run "pipeline: report names (quarantine)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
+if [ -n "$DBDIR" ] && [ -f "$DBDIR/tests/test_no_ip_reports.py" ]; then run "pipeline: reports without an IP address" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_no_ip_reports.py"; fi
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/mail_auth.py" ]; then run "pipeline: sender check (DKIM)" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_mail_auth.py"
 else run "pipeline: sender check (DKIM)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/tests/test_mail_auth_pipeline.py" ]; then run "pipeline: sender check blocks and releases" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_mail_auth_pipeline.py"
@@ -89,6 +90,9 @@ run "locked sign-ins: limits, admin list and unlock" $PY tests/check_lockouts.py
 run "system alerts in the admins' bell" $PY tests/check_system_alerts.py
 run "heavy answers cached safely (per role, afresh after changes)" $PY tests/check_response_cache.py
 run "Settings → Task monitor (admins only, no address, actions audited)" $PY tests/check_task_monitor.py
+run "analyst code page: how the selection came about" $PY tests/check_acode_chain.py
+run "combinations: ticked infections and CVEs go into the report" $PY tests/check_ticked_names.py
+run "Intelligence portal: who sees what, counts, views, export" $PY tests/check_intelligence.py
 run "offline names: MISP Galaxy + ATT&CK, nothing sent" $PY tests/check_offline_names.py
 run "ATT&CK mappings, versions, CVE links" $PY tests/check_attack_map.py
 run "ATT&CK in advisories (reviewed only)" $PY tests/check_advisory_attack.py

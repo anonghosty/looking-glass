@@ -385,7 +385,36 @@ def install(app, ctx):
                 "day": span[0] if len(span) == 1 else f"{span[0]} to {span[-1]}", "days": span,
                 "records": len(evs), "devices": len(hosts), "reports": len({rep(e) for e in evs}), "names": out,
                 "finding": {"id": f["id"], "number": f"#{f['id']}", "title": f["title"], "text": f["text"], "status": f["status"]} if f else None,
-                "in_memory": bool(evs), "cross": cross, "focus": entry.get("focus", "")}
+                "in_memory": bool(evs), "cross": cross, "focus": entry.get("focus", ""), "chain": chain_of(code)}
+
+    CHAIN_MAX = 12
+
+    def chain_of(code):
+        """How a selection came about: the codes it was made from, oldest first (sel.from_code, back to the first), each
+        with its finding's note when it has one. A code the reader may not open is named but not shown; a loop or a very
+        long chain stops (2026-11-14: the earlier notes were not on the page)."""
+        out, seen, cur = [], {code}, code
+        for _ in range(CHAIN_MAX):
+            e = book.get(cur) or {}
+            parent = ((e.get("sel") or {}).get("from_code") or "").strip().upper()
+            if not parent or parent in seen:
+                break
+            seen.add(parent)
+            pe = book.get(parent) or {}
+            f = ctx["findings"].of_code(parent)
+            if f is not None and not ctx["findings"].sees(f, user()[0], hp("settings")):
+                out.append({"code": parent, "hidden": True})
+                cur = parent
+                continue
+            out.append({"code": parent, "kind": "analyst" if parent.startswith("LG-A-") else "combination",
+                        "label": pe.get("label") or (book.describe(parent) if hasattr(book, "describe") else ""),
+                        "day": day_span(pe) if pe.get("kind") == "a" and pe.get("day") else str(pe.get("day") or ""),
+                        "note": (f or {}).get("text", ""), "title": (f or {}).get("title", ""),
+                        "by": ctx["people_name"]((f or {}).get("user", "")) if f and ctx.get("people_name") else "",
+                        "at": time.strftime("%Y-%m-%d", time.gmtime(f["at"])) if f and f.get("at") else "",
+                        "finding": f"#{f['id']}" if f else "", "page": f"/intel/{parent}" if parent.startswith("LG-A-") else ""})
+            cur = parent
+        return out[::-1]
 
     def in_channel(code, f=None):
         """Whether this user may open the code: one of the people of its finding (a channel, like a ticket), or an admin;
@@ -441,4 +470,5 @@ def install(app, ctx):
     api.describe = lambda entry: f"Analyst selection on {day_span(entry)} ({'network communications' if entry['platform'] == 'comms' else 'services'}): {entry.get('label', '')}"
     api.days_of = days_of
     api.allowed = lambda code: in_channel(code)            # combos.py, the Executive filter: the channel rule
+    api.chain = chain_of                                    # how a selection came about (tests/check_acode_chain.py)
     return api

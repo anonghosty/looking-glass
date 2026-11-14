@@ -842,5 +842,32 @@
       } catch { /* the portal still opens unfiltered */ }
     }
     load(true);
+    if (qs.get("embed") !== "1" && !code) intelligence();
   })();
+  // Shadowserver's Intelligence reports: each group's total today against the usual, and its 7 days (counts only, never a
+  // host: /api/intelligence/totals, intelligence.py)
+  async function intelligence() {
+    let d;
+    try { const r = await fetch("/api/intelligence/totals", { cache: "no-store" }); if (!r.ok) return; d = await r.json(); }
+    catch { return; }
+    if (!d || !(d.groups || []).length) return;
+    const box = $("mgIntel"), note = $("mgIntelNote");
+    const day = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", timeZone: "UTC" });
+    const a = d.arriving || {};
+    note.textContent = (a.still ? `Today's reports are still arriving: ${a.in} of the usual ${a.usual} in so far. ` : "")
+      + "Records per day in each group of Shadowserver's Intelligence reports, inside the constituency; today is compared with the median of the 7 days before."
+      + (d.not_received ? ` ${d.not_received} of these reports did not arrive this week.` : "");
+    box.replaceChildren();
+    for (const gr of d.groups) {
+      const c = el("article", "mg-card mg-intel-card");
+      // while the day's files are still coming in, a low figure is not a fall: no percentage then
+      const diff = gr.median && !(a.still && gr.today < gr.median) ? Math.round(((gr.today - gr.median) / gr.median) * 100) : null;
+      c.append(el("header"));
+      c.firstChild.append(el("h2", null, gr.group), el("p", null, `${fmt(gr.today)} today · usually ${fmt(gr.median)}${diff == null ? "" : diff === 0 ? "" : ` · ${diff > 0 ? "+" : ""}${diff}%`} · ${gr.received} of ${gr.reports} report${gr.reports === 1 ? "" : "s"} received this week`));
+      const st = el("div", "mg-steps"); c.append(st);
+      steps(st, gr.per_day.map((p) => ({ count: p.rows, label: day(p.day) })), "records");
+      box.append(c);
+    }
+    $("mgIntelHead").hidden = note.hidden = box.hidden = false;
+  }
 })();
