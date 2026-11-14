@@ -136,10 +136,13 @@
     if (missing > 0) b.append(el("p", "fd-empty", `${pl(missing, "other sub-finding", "other sub-findings")} of this case ${missing === 1 ? "is" : "are"} not in your channel, so ${missing === 1 ? "it is" : "they are"} not shown here.`));
     return b;
   }
+  const acodeOf = (f) => (f.codes || []).map((c) => c.code || c).find((c) => /^LG-A-/.test(c)) || "";
   const pl = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   // a code and what each role can do with it: researchers open an analyst's selection, management filters the
   // Executive portal (counts only), analysts search or report on it (with the addresses)
-  function codesBox(codes) {
+  // within: the analyst code a researcher's reply codes answer (2026-11-14): searched only among its devices, so the
+  // report and the advisory carry exactly what was drilled down to
+  function codesBox(codes, within) {
     const cs = el("div", "fd-codes");
     for (const x of codes) {
       const isA = x.code.startsWith("LG-A-");
@@ -155,7 +158,9 @@
       const link = (label, href, title) => { const a = el("a", "lg-btn sm", label); a.href = href; a.title = title; acts.append(a); };
       if (isA && data.can_research) link("Open as researcher", `/intel/${x.code}`, "The names, definitions and intel of exactly these records, never an address; pick codes for your reply");
       if (data.can_portal) link("Show in Executive", `/management?code=${x.code}`, "Filter the Executive portal to exactly this (aggregated figures, no addresses)");
-      if (data.can_search) link(isA ? "Report (PDF + CSV)" : "Search", `/combinations?code=${x.code}`, "The devices behind it with their addresses, as PDF + CSV (Combinations page)");
+      const inA = !isA && within ? `&within=${encodeURIComponent(within)}` : "";
+      if (data.can_search) link(isA ? "Report (PDF + CSV)" : inA ? "Search within the selection" : "Search", `/combinations?code=${x.code}${inA}`,
+        inA ? `Only the devices of ${within} that carry it, with their addresses, as PDF + CSV (Combinations page)` : "The devices behind it with their addresses, as PDF + CSV (Combinations page)");
       if (acts.children.length) row.append(acts);
       cs.append(row);
     }
@@ -208,7 +213,7 @@
     cols.append(rc, ac); p.append(cols);
     // the decision
     if (rv.decision) {
-      p.append(el("p", `fd-rv-done ${rv.decision}`, `${rv.decision === "both" ? "Added the analyst's views" : rv.decision === "analyst" ? "The analyst's view only" : "The researcher's view only"} · ${rv.by}${rv.comment ? `: ${rv.comment}` : ""}`));
+      p.append(el("p", `fd-rv-done ${rv.decision}`, `${rv.decision === "both" ? "Added the analyst's views" : rv.decision === "analyst" ? "The analyst's view (drilled down)" : rv.drilled ? "The researcher's view (drilled down)" : "The researcher's view"} · ${rv.by}${rv.comment ? `: ${rv.comment}` : ""}`));
       if (data.can_search) { const a = el("a", "lg-btn sm primary", "Generate the report"); a.href = `/combinations?code=${encodeURIComponent(rv.source)}`; a.title = "Open the code again: the report follows management's decision"; p.append(a); }
     } else if (data.can_decide && f.open) {
       const ta = el("textarea", "fd-in"); ta.rows = 2; ta.maxLength = 1000; ta.placeholder = "Your comment: the directive for the report";
@@ -268,7 +273,7 @@
       const nc = (rv.codes || []).length;
       g.append(el("span", null, f.parent ? (nc ? `${nc} across-report pattern${nc === 1 ? "" : "s"} on this organisation's devices.` : "The combination on this organisation's devices.")
         : nc ? `The researcher's combination ${rv.source} and ${nc} across-report pattern${nc === 1 ? "" : "s"} the analyst ticked.` : `The researcher's combination ${rv.source}, as it is.`));
-      g.append(el("b", `fd-rv-state ${rv.decision || "wait"}`, rv.decision ? (rv.decision === "both" ? "Decided: the analyst's views added" : rv.decision === "analyst" ? "Decided: the analyst's view only" : rv.decision === "rejected" ? "Rejected and closed"
+      g.append(el("b", `fd-rv-state ${rv.decision || "wait"}`, rv.decision ? (rv.decision === "both" ? "Decided: the analyst's views added" : rv.decision === "analyst" ? "Decided: the analyst's view (drilled down)" : rv.decision === "rejected" ? "Rejected and closed"
         : (rv.codes || []).length ? "Decided: the researcher's view only" : "Approved for the advisory") : "Waiting for management's decision"));
       if (rv.decision && data.can_advise && f.open) {
         // the advisor writes the advisory and generates the report on a page of its own
@@ -279,7 +284,7 @@
         a.title = "The final look: what the researcher is saying, and the researcher's and the analyst's views as the Executive portal shows them"; g.append(a); }
       c.append(g);
       if ((f.advisories || []).length) c.append(advBox(f));
-    } else if (f.codes.length) c.append(el("h3", null, f.origin === "analyst" ? "The analyst's code" : "Combinations"), codesBox(f.codes));
+    } else if (f.codes.length) c.append(el("h3", null, f.origin === "analyst" ? "The analyst's code" : "Combinations"), codesBox(f.codes, acodeOf(f)));
     // the reply box: text and codes (researchers answer an analyst's code with combination codes, and the other way round)
     // "Reply to the analyst" only for the researchers an analyst's code is for; everyone else just replies
     const rp = el("details", "fd-replybox"); rp.append(el("summary", null, f.origin === "analyst" && data.can_research ? "Reply to the analyst" : "Reply"));
@@ -310,7 +315,7 @@
       li.append(el("b", null, x.kind === "reply" ? "Reply" : x.kind === "decision" ? (x.decision === "accepted" ? "Accepted by management · directive" : "Rejected by management") : x.status_label),
         el("span", null, `${x.role}: ${x.by} · ${x.at}${x.to ? ` → ${x.to}` : ""}`));
       if (x.comment) li.append(el("p", null, x.comment));
-      if (x.codes?.length) li.append(codesBox(x.codes));
+      if (x.codes?.length) li.append(codesBox(x.codes, acodeOf(f)));
       tl.append(li);
     }
     const det = el("details", "fd-more"); det.append(el("summary", null, `History (${f.history.length})${f.replies ? ` · ${pl(f.replies, "reply", "replies")}` : ""}`), tl);

@@ -98,9 +98,13 @@ api = I.install(app, {"db": FakeDB(DB), "report_map": type("M", (), {"get": lamb
 AN, MG, RS = {"view", "unmasked", "export"}, {"management"}, {"definitions"}
 
 
-def call(path, perms, raw=False):
+ROLE = {"management": "management", "definitions": "researcher"}
+
+
+def call(path, perms, raw=False, role=None):
     with app.test_request_context(path):
-        g.user = {"user": "lg-check", "role": "x", "perms": set(perms)}
+        role = role or next((ROLE[p] for p in perms if p in ROLE), "analyst")
+        g.user = {"user": "lg-check", "role": role, "perms": set(perms)}
         ep = app.url_map.bind("localhost").match(path.split("?")[0])
         r = app.view_functions[ep[0]](**ep[1])
         code = r[1] if isinstance(r, tuple) else r.status_code
@@ -116,6 +120,8 @@ st, tot = call("/api/intelligence/totals", MG)
 ok("…and gets the counts only: totals and the 7-day trend per group, no address", st == 200 and tot["groups"] and not IP_RX.search(json.dumps(tot))
    and all(len(gr["per_day"]) == 8 for gr in tot["groups"]))
 ok("a researcher gets no totals either", call("/api/intelligence/totals", RS)[0] == 403)
+ok("an administrator does not open it either (analysts only), though the role sees addresses and exports",
+   call("/api/intelligence", AN | {"settings", "users"}, role="admin")[0] == 403 and call("/intelligence", AN | {"settings"}, raw=True, role="admin")[0] == 403)
 demo[0] = True
 ok("demo mode: refused (the portal shows real records)", call("/api/intelligence", AN)[0] == 403)
 demo[0] = False
@@ -144,7 +150,9 @@ ok("the no-IP report received is a card of its own, marked so", any(r["name"] ==
 
 print("A report's view")
 st, v = call(f"/api/intelligence/report?name=compromised_website&day={D[1]}", AN)
-ok("its rows, its own fields as filters", st == 200 and v["total"] == 10 and [f["key"] for f in v["facets"]] == ["url", "tag", "sector"],
+ok("its rows, its own fields as filters, then networks (by name) as the analysis window has them", st == 200 and v["total"] == 10
+   and [f["key"] for f in v["facets"]] == ["url", "tag", "sector", "asn"] and v["facets"][3]["values"][0]["label"] == "Example Net (AS64500)"
+   and v["stats"]["hosts"] == 10 and v["stats"]["networks"] == 1,
    f"{v.get('total')} · {[f['key'] for f in v.get('facets', [])]}")
 ok("networks by name, never a bare number", all(r["asn"] == "Example Net (AS64500)" for r in v["rows"]))
 st, v2 = call(f"/api/intelligence/report?name=compromised_website&day={D[1]}&sector=Education&tag=phishing", AN)
@@ -163,8 +171,19 @@ ok("…no analyst code (no device)", not va["code"])
 n0 = len(audited)
 st, vr = call(f"/api/intelligence/report?name=compromised_account&day={D[1]}&reveal=1", AN)
 ok("…shown when the analyst asks, and that is logged", vr["rows"][0]["email"] == "alice@example.org" and audited[n0:] and audited[-1][0] == "intelligence_reveal")
+n1 = len(audited)
+st, vf = call(f"/api/intelligence/report?name=compromised_account&day={D[1]}&email=nobody@example.org", AN)
+st2, vq = call(f"/api/intelligence/report?name=compromised_account&day={D[1]}&q=alice", AN)
+ok("masked accounts cannot be filtered or searched on the account itself (no leak confirmed without a logged reveal)",
+   vf["total"] == 1 and vq["total"] == 0 and not any(f["key"] in ("email", "username") for f in vf["facets"])
+   and not any(a[0] == "intelligence_reveal" for a in audited[n1:]), f"filter: {vf['total']} · search: {vq['total']}")
+st, vr2 = call(f"/api/intelligence/report?name=compromised_account&day={D[1]}&q=alice&reveal=1", AN)
+ok("…once revealed (and logged), the account search works", vr2["total"] == 1 and audited[-1][0] == "intelligence_reveal")
+import data_access  # noqa: E402
+ok("viewing a report's records is in the data-access log (host-level data)", data_access.SENSITIVE.get("/api/intelligence/report", ("",))[0] == "data_viewed")
+n3 = len(audited)
 st, vb = call(f"/api/intelligence/report?name=blocklist&day={D[1]}&reveal=1", AN)
-ok("…reveal means nothing on another report", not any(a[0] == "intelligence_reveal" for a in audited[n0 + 1:]))
+ok("…reveal means nothing on another report", not any(a[0] == "intelligence_reveal" for a in audited[n3:]))
 
 print("Export and a host")
 st, body = call(f"/api/intelligence/export.csv?name=compromised_website&day={D[1]}&sector=Education", AN, raw=True)

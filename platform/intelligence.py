@@ -1,4 +1,4 @@
-"""The Intelligence portal (/intelligence, 2026-11-14): Shadowserver's Intelligence reports for analysts and admins.
+"""The Intelligence portal (/intelligence, 2026-11-14): Shadowserver's Intelligence reports for analysts.
 
 The report map (report_map.py) places 15 Shadowserver reports in its Intelligence section, in five groups: compromised
 systems and victims, malicious content hosted in the constituency, reputation (listed or targeted), leaked accounts, and
@@ -19,7 +19,7 @@ Addresses) reached anyone, mixed into the services platform. This module reads t
   which checks and keeps them as for any other selection;
 * management gets the counts only (/api/intelligence/totals): totals and the 7-day trend per group, never a host.
 
-API (analysts and admins: roles with unmasked + export): GET /api/intelligence, GET /api/intelligence/report,
+API (analysts only): GET /api/intelligence, GET /api/intelligence/report,
 GET /api/intelligence/export.csv, GET /api/intelligence/host; management: GET /api/intelligence/totals.
 Installed from app.py: intelligence.install(app, ctx).
 """
@@ -44,6 +44,7 @@ TTL = 120                    # seconds the counts are kept
 GROUP_ORDER = ["Compromised systems and victims", "Malicious content hosted in the constituency",
                "Reputation: listed or targeted", "Leaked accounts and credentials", "Attacker infrastructure found in the constituency"]
 SKIP = {"_id", "line_hash", "filename", "category", "extracted_date", "logged_date"}
+ACCOUNT_FIELDS = {"email", "username"}     # leaked accounts: masked, never filtered or searched unless revealed (audited)
 # the fields each report's detail view filters on (the design agreed 2026-11-14), then what each shows in a row
 FIELDS = {
     "compromised_website": ["url", "application", "tag", "detail", "sector", "server"],
@@ -129,7 +130,8 @@ def install(app, ctx):
     lock, cache = threading.Lock(), {}
 
     def analyst():
-        return hp("unmasked") and hp("export")
+        # analysts only (user, 2026-11-14): not administrators or other roles that also see addresses and export
+        return (getattr(g, "user", None) or {}).get("role") == "analyst" and hp("unmasked") and hp("export")
 
     def me():
         return (getattr(g, "user", None) or {}).get("user", "")
@@ -241,7 +243,7 @@ def install(app, ctx):
 
     def refuse():
         if not analyst():
-            return jsonify(error="The Intelligence portal is for analysts (roles that see addresses and export)."), 403
+            return jsonify(error="Abused or Compromised is for analysts."), 403
         if ctx["is_demo"]():
             return jsonify(error="Demo mode is on: the Intelligence portal shows real records. Switch demo mode off to open it."), 403
         return None
@@ -252,13 +254,19 @@ def install(app, ctx):
     def view_rows(name, day, args, reveal):
         """The rows of one report on one day, filtered on its own fields (exact values) and a free text."""
         rows = read(name, day)
-        flt = {f: args.getlist(f) for f in FIELDS.get(name, []) + ["ip", "asn", "region"] if args.getlist(f)}
+        fields = FIELDS.get(name, []) + ["ip", "asn", "region"]
+        if name == "compromised_account" and not reveal:
+            # leaked accounts: a filter or search on the account itself would confirm a leak without the reveal being
+            # logged (review 2026-11-14), so masked views filter and search only the other fields
+            fields = [f for f in fields if f not in ACCOUNT_FIELDS]
+        flt = {f: args.getlist(f) for f in fields if args.getlist(f)}
         text = (args.get("q") or "").strip().lower()[:120]
         out = []
         for r in rows:
             if any(_s(r.get(f)) not in set(v) for f, v in flt.items()):
                 continue
-            if text and not any(text in _s(v).lower() for k, v in r.items() if k not in SKIP):
+            if text and not any(text in _s(v).lower() for k, v in r.items() if k not in SKIP
+                                and not (name == "compromised_account" and not reveal and k in ACCOUNT_FIELDS)):
                 continue
             out.append(r)
         if name == "compromised_account" and not reveal:      # leaked accounts: masked unless asked for
@@ -289,7 +297,7 @@ def install(app, ctx):
     @app.route("/intelligence")
     def intelligence_page():
         if not analyst():
-            return render_template("denied.html", message="The Intelligence portal is for analysts and admins (roles that see addresses and export)."), 403
+            return render_template("denied.html", message="Abused or Compromised is for analysts."), 403
         return render_template("intelligence.html")
 
     @app.route("/api/intelligence")
@@ -318,11 +326,25 @@ def install(app, ctx):
         cols, extra = columns(name, rows)
         facets = []
         for f in FIELDS.get(name, []):
+            if name == "compromised_account" and not reveal and f in ACCOUNT_FIELDS:
+                continue                                 # masked accounts are not offered as filters
             c = Counter(_s(x.get(f)) for x in rows if _s(x.get(f)))
             if c:
                 facets.append({"key": f, "label": NAMES.get(f, f), "values": [{"value": v, "rows": k} for v, k in c.most_common(12)],
                                "more": max(0, len(c) - 12)})
+        # networks and regions too, as the platforms' analysis shows them (a network by its name; the filter is its number)
+        if rows and any(x.get("ip") for x in rows[:50]):
+            for f, lab in (("asn", "Networks"), ("region", "Regions")):
+                c = Counter(_s(x.get(f)) for x in rows if _s(x.get(f)))
+                if c:
+                    facets.append({"key": f, "label": lab, "values": [{"value": v, "label": val(f, {f: v}), "rows": k} for v, k in c.most_common(12)],
+                                   "more": max(0, len(c) - 12)})
         hosts = sorted({_s(x.get("ip")) for x in rows if _ip_ok(x.get("ip"))})
+        stats = {"records": len(rows), "hosts": len(hosts),
+                 "networks": len({_s(x.get("asn")) for x in rows if _s(x.get("asn"))}),
+                 "regions": len({_s(x.get("region")) for x in rows if _s(x.get("region"))}),
+                 "fields": [{"label": NAMES.get(f, f), "values": len({_s(x.get(f)) for x in rows if _s(x.get(f))})}
+                            for f in FIELDS.get(name, [])[:3] if not (name == "compromised_account" and not reveal and f in ACCOUNT_FIELDS)]}
         # the records' own days (their time stamps): an analyst code is made on the day most of them were seen
         rec_days = Counter(_s(x.get("extracted_date") or x.get("timestamp"))[:10] for x in rows if x.get("extracted_date") or x.get("timestamp"))
         code = None
@@ -331,7 +353,7 @@ def install(app, ctx):
             code = {"possible": len(hosts) <= CODE_HOSTS, "hosts": len(hosts), "max": CODE_HOSTS,
                     "query": "&".join([f"report={name}"] + [f"ip={h}" for h in hosts[:CODE_HOSTS]]),
                     "at": (rec_days.most_common(1)[0][0] + "T12:00:00Z") if rec_days else f"{day}T00:00:00Z"}
-        return jsonify(name=name, title=e.get("title") or name, day=day, days=list(reversed(days())), total=len(rows),
+        return jsonify(name=name, title=e.get("title") or name, day=day, days=list(reversed(days())), total=len(rows), stats=stats,
                        hosts=len(hosts), shown=min(len(rows), SHOW_CAP), columns=[{"key": k, "label": NAMES.get(k, k.replace("_", " ").capitalize())} for k in cols],
                        extra=extra, rows=[{k: val(k, x) for k in cols + extra if x.get(k) not in (None, "")} for x in rows[:SHOW_CAP]],
                        facets=facets, filters={k: v for k, v in flt.items()}, q=text, masked=name == "compromised_account" and not reveal,

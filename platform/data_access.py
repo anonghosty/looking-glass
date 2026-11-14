@@ -38,6 +38,8 @@ SENSITIVE = {
     "/api/advisory/<fid>/net": ("data_viewed", "an organisation's hosts (advisory)"),
     # the advisory's PDF as it stands, read in the browser: the same hosts, so the same entry (review 2026-11-13)
     "/advisory/<fid>/preview": ("data_viewed", "an organisation's advisory report (preview)"),
+    # the Abused or Compromised portal's records of one report on one day, with their host addresses (review 2026-11-14)
+    "/api/intelligence/report": ("data_viewed", "a report's records (Abused or Compromised)"),
 }
 # Every request parameter says what was looked at, except these display and time options (review 2026-11-13: a list
 # of the parameters to keep missed src_ip and most services filters, so different hosts' views were one "whole

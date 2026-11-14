@@ -43,14 +43,14 @@
     catch (e) { $("itLoading")?.remove(); window.LGLoader?.ready(); main.append(el("p", "fd-empty", `Could not open it: ${e.message}`)); return; }
     const d = await r.json().catch(() => ({}));
     $("itLoading")?.remove(); window.LGLoader?.ready();
-    if (!r.ok) { main.append(el("p", "fd-empty", d.error || `Could not open the Intelligence portal (HTTP ${r.status})`)); return; }
+    if (!r.ok) { main.append(el("p", "fd-empty", d.error || `Could not open Abused or Compromised (HTTP ${r.status})`)); return; }
     S = d; draw();
   }
 
   function draw() {
     main.replaceChildren();
     const hero = el("section", "it-hero");
-    hero.append(el("div", "fd-eyebrow", "Shadowserver · Intelligence reports"), el("h1", null, "Intelligence"),
+    hero.append(el("div", "fd-eyebrow", "Shadowserver · Intelligence reports"), el("h1", null, "Abused or Compromised"),
       el("p", "it-sub", "What Shadowserver's Intelligence reports say about the constituency: compromised systems and victims, malicious content hosted here, addresses listed or targeted, leaked accounts and attacker infrastructure. Today is compared with the median of the 7 days before. Only hosts inside the constituency are counted."));
     const a = S.arriving;
     const line = el("p", `it-arrive ${a.still ? "still" : "in"}`);
@@ -146,75 +146,118 @@
     drawView(pane, d);
   }
 
+  // a report's records, laid out as the platforms' analysis window (app.css: i-kpis, m-sec, brk, fchip, hosts, pill-btn)
   function drawView(pane, d) {
     pane.replaceChildren();
-    const h = el("header", "it-vh");
+    // the head: what it is, the day, the selection
+    const head = el("header", "it-vh");
     const t = el("div");
-    t.append(el("div", "fd-eyebrow", "Report"), el("h2", null, d.title), el("p", "it-sub", d.meaning));
-    const close = el("button", "lg-btn sm", "Close"); close.type = "button";
+    t.append(el("div", "fd-eyebrow", "Report · Abused or Compromised"), el("h2", null, d.title), el("p", "it-sub", d.meaning));
+    const right = el("div", "it-vh-acts");
+    const sel = el("select", "it-dayselect"); sel.setAttribute("aria-label", "Day");
+    for (const dd of [...d.days].reverse()) { const o = new Option(dayLabel(dd), dd); if (dd === d.day) o.selected = true; sel.append(o); }
+    sel.addEventListener("change", () => { view.day = sel.value; fetchView(false); });
+    const close = el("button", "pill-btn", "Close"); close.type = "button";
     close.addEventListener("click", () => { pane.hidden = true; pane.replaceChildren(); });
-    h.append(t, close); pane.append(h);
-    // the days
-    const days = el("div", "it-days"); days.setAttribute("role", "tablist");
-    for (const dd of d.days) {
-      const b = el("button", "it-day", dayLabel(dd)); b.type = "button"; b.setAttribute("role", "tab");
-      b.setAttribute("aria-selected", String(dd === d.day));
-      b.addEventListener("click", () => { view.day = dd; fetchView(false); }); days.append(b);
-    }
-    pane.append(days);
-    // filters: its own fields' values, then a free text
-    const fl = el("div", "it-facets");
-    for (const f of d.facets) {
-      const g = el("div", "it-facet"); g.append(el("b", null, f.label));
-      const chips = el("div", "it-chips");
-      for (const v of f.values) {
-        const on = (view.filters[f.key] || []).includes(v.value);
-        const c = el("button", `it-chip${on ? " on" : ""}`); c.type = "button";
-        c.append(el("span", null, v.value), el("small", null, fmt(v.rows)));
-        c.title = v.value; c.setAttribute("aria-pressed", String(on));
-        c.addEventListener("click", () => {
-          const cur = new Set(view.filters[f.key] || []);
-          if (cur.has(v.value)) cur.delete(v.value); else cur.add(v.value);
-          if (cur.size) view.filters[f.key] = [...cur]; else delete view.filters[f.key];
-          fetchView(false);
-        });
-        chips.append(c);
+    right.append(sel, close); head.append(t, right); pane.append(head);
+    pane.append(el("p", "it-range", d.total ? `Records reported by Shadowserver on ${dayLabel(d.day)}, inside the constituency` : `No records for ${dayLabel(d.day)} with this selection`));
+    // the selection, as chips (each removable), and a free text
+    const parts = el("div", "i-parts it-parts");
+    const nf = Object.values(view.filters).reduce((s, v) => s + v.length, 0) + (view.q ? 1 : 0);
+    if (nf) {
+      parts.append(el("span", "i-parts-lbl", "Selection:"));
+      const label = (k, v) => { const f = d.facets.find((x) => x.key === k); const hit = f?.values.find((x) => x.value === v); return [f?.label || k, hit?.label || v]; };
+      for (const [k, vs] of Object.entries(view.filters)) for (const v of vs) {
+        const [kl, vl] = label(k, v);
+        const chip = el("span", "fchip part"); const b = el("b", null, `${kl}:`); const s = el("span", "mono", vl);
+        const x = el("button", null, "×"); x.type = "button"; x.title = "Remove this part (widen the selection)";
+        x.addEventListener("click", () => { const rest = (view.filters[k] || []).filter((y) => y !== v); if (rest.length) view.filters[k] = rest; else delete view.filters[k]; fetchView(false); });
+        chip.append(b, s, x); parts.append(chip);
       }
-      if (f.more) chips.append(el("small", "it-more", `and ${pl(f.more, "other value")}: use the search`));
-      g.append(chips); fl.append(g);
+      if (view.q) { const chip = el("span", "fchip part"); const x = el("button", null, "×"); x.type = "button"; x.addEventListener("click", () => { view.q = ""; fetchView(false); }); chip.append(el("b", null, "Search:"), el("span", "mono", view.q), x); parts.append(chip); }
+      const clr = el("button", "pill-btn", "Clear"); clr.type = "button"; clr.addEventListener("click", () => { view.filters = {}; view.q = ""; fetchView(false); }); parts.append(clr);
     }
     const sf = el("form", "it-search");
     const inp = el("input", "fd-in"); inp.type = "search"; inp.placeholder = "Search every field (an address, a domain, a word)"; inp.value = d.q || ""; inp.maxLength = 120;
     inp.setAttribute("aria-label", "Search the records");
-    const go = el("button", "lg-btn sm", "Search"); go.type = "submit";
-    sf.append(inp, go);
-    sf.addEventListener("submit", (e) => { e.preventDefault(); view.q = inp.value.trim(); fetchView(false); });
-    fl.append(sf);
-    pane.append(fl);
-    // what this view holds, and what can be done with it
-    const bar = el("div", "it-vbar");
-    const nf = Object.values(view.filters).reduce((s, v) => s + v.length, 0) + (view.q ? 1 : 0);
-    bar.append(el("span", "it-count", `${pl(d.total, "record")}${d.no_ip ? "" : ` · ${pl(d.hosts, "host")}`}${nf ? ` · ${pl(nf, "filter")}` : ""}${d.total > d.shown ? ` · the first ${fmt(d.shown)} shown (the export carries all)` : ""}`));
-    if (nf) { const c = el("button", "lg-btn sm", "Clear the filters"); c.type = "button"; c.addEventListener("click", () => { view.filters = {}; view.q = ""; fetchView(false); }); bar.append(c); }
-    if (d.can_reveal) {
-      const rv = el("button", "lg-btn sm", view.reveal ? "Mask the accounts again" : "Show the accounts"); rv.type = "button";
-      rv.title = view.reveal ? "" : "Leaked accounts are masked. Showing them is written to the audit log.";
-      rv.addEventListener("click", () => { view.reveal = !view.reveal; fetchView(false); }); bar.append(rv);
+    const go = el("button", "pill-btn", "Search"); go.type = "submit";
+    sf.append(inp, go); sf.addEventListener("submit", (e) => { e.preventDefault(); view.q = inp.value.trim(); fetchView(false); });
+    pane.append(parts, sf);
+    // the figures
+    const st = d.stats || {};
+    const kpis = el("div", "i-kpis");
+    const kpi = (v, k, go) => {
+      const b = el("div", "i-kpi"); b.append(el("div", "v", v), el("div", "k", k));
+      if (go) { b.classList.add("click"); b.tabIndex = 0; b.setAttribute("role", "button"); b.append(el("div", "go", "Details ›"));
+        b.addEventListener("click", go); b.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } }); }
+      kpis.append(b);
+    };
+    const toRecords = () => pane.querySelector(".it-records")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    kpi(fmt(st.records ?? d.total), "Records", d.total ? toRecords : null);
+    if (!d.no_ip) { kpi(fmt(st.hosts ?? d.hosts), "Hosts", d.total ? toRecords : null); kpi(fmt(st.networks || 0), "Networks"); kpi(fmt(st.regions || 0), "Regions"); }
+    for (const f of (st.fields || []).filter((x) => x.values)) kpi(fmt(f.values), `${f.label}${f.values === 1 ? "" : "s"}`.replace(/ss$/, "s"));
+    pane.append(kpis);
+    if (d.total) pane.append(el("div", "i-kpi-hint", "Click a value below to narrow the records to it; click Records or Hosts for the list."));
+    // key findings, in words, from the breakdowns
+    if (d.total) {
+      const f = el("section", "m-sec"); f.append(el("h3", null, "Key findings"));
+      const ul = el("ul", "i-findings");
+      ul.append(el("li", null, `${pl(d.total, "record")}${d.no_ip ? "" : ` from ${pl(st.hosts ?? d.hosts, "host")} in ${pl(st.networks || 0, "network")}`} on ${dayLabel(d.day)}.`));
+      for (const fc of d.facets.slice(0, 4)) {
+        const top = fc.values[0]; if (!top) continue;
+        ul.append(el("li", null, `Most common ${fc.label.toLowerCase()}: ${top.label || top.value} (${pl(top.rows, "record")}, ${Math.round((top.rows / d.total) * 100)}%).`));
+      }
+      f.append(ul); pane.append(f);
     }
-    if (d.total) { const ex = el("a", "lg-btn sm", "Export CSV"); ex.href = `/api/intelligence/export.csv?${qs()}`; ex.title = "Every record of this view. The export is written to the audit log."; bar.append(ex); }
-    pane.append(bar);
-    if (d.masked) pane.append(el("p", "it-note", "Accounts are masked (first letter and domain). “Show the accounts” shows them in full; that is written to the audit log."));
-    // the records
-    if (!d.rows.length) pane.append(el("p", "fd-empty", "No record on this day with these filters."));
-    else pane.append(table(d));
+    // the breakdowns: each field's values with their share; a click narrows to that value
+    if (d.facets.length) {
+      const breaks = el("div", "i-breaks");
+      for (const fc of d.facets) {
+        const sec = el("section", "m-sec"); sec.append(el("h3", null, fc.label));
+        const list = el("ul", "brk");
+        for (const v of fc.values) {
+          const li = el("li"); const bl = el("span", "bl"); const lab = el("span", ["url", "request", "email", "username", "beacon_host"].includes(fc.key) ? "mono" : null, v.label || v.value);
+          lab.title = `${v.label || v.value}: ${pl(v.rows, "record")}`; bl.append(lab);
+          const share = d.total ? v.rows / d.total : 0;
+          const bs = el("span", "bs"); const bi = el("i"); bi.style.width = `${Math.max(2, share * 100)}%`; bs.append(bi);
+          li.append(bl, bs, el("span", "bv", `${Math.round(share * 100)}%`));
+          const on = (view.filters[fc.key] || []).includes(v.value);
+          if (!on) {
+            li.classList.add("click"); li.tabIndex = 0; li.setAttribute("role", "button");
+            const add = () => { view.filters[fc.key] = [...(view.filters[fc.key] || []), v.value]; fetchView(false); };
+            li.addEventListener("click", add); li.addEventListener("keydown", (e) => { if (e.key === "Enter") add(); });
+          } else li.classList.add("on");
+          list.append(li);
+        }
+        sec.append(list);
+        if (fc.more) sec.append(el("p", "drill-more", `and ${pl(fc.more, "other value")}: use the search`));
+        breaks.append(sec);
+      }
+      pane.append(breaks);
+    }
+    // the records: the platforms' host table, with its downloads
+    const rec = el("section", "m-sec wide it-records");
+    const rh = el("div", "drill-head"); rh.append(el("h3", null, `Records${d.total > d.shown ? ` · the first ${fmt(d.shown)} of ${fmt(d.total)} (the CSV carries all)` : ""}`));
+    const acts = el("div", "drill-actions");
+    if (d.can_reveal) {
+      const rv = el("button", "pill-btn", view.reveal ? "Mask the accounts again" : "Show the accounts"); rv.type = "button";
+      rv.title = view.reveal ? "" : "Leaked accounts are masked. Showing them is written to the audit log.";
+      rv.addEventListener("click", () => { view.reveal = !view.reveal; fetchView(false); }); acts.append(rv);
+    }
+    if (d.total) { const ex = el("a", "pill-btn", "Download CSV"); ex.href = `/api/intelligence/export.csv?${qs()}`; ex.title = "Every record of this view, as a spreadsheet file. The download is written to the audit log."; acts.append(ex); }
+    rh.append(acts); rec.append(rh);
+    if (d.masked) rec.append(el("p", "drill-intro", "Accounts are masked (first letter and domain). “Show the accounts” shows them in full; that is written to the audit log."));
+    if (!d.rows.length) rec.append(el("p", "drill-empty", "No record on this day with this selection."));
+    else rec.append(table(d));
+    pane.append(rec);
     // an analyst code and finding from this view
     if (d.code) pane.append(codeBox(d));
     else if (!d.no_ip && d.total) pane.append(el("p", "it-note", "An analyst code is made from the services platform's records: this report is not among them."));
   }
 
   function table(d) {
-    const wrap = el("div", "it-tablewrap");
-    const tb = el("table", "it-table");
+    const wrap = el("div", "drill-wrap it-tablewrap");
+    const tb = el("table", "hosts drill-table it-table");
     const cols = d.columns;
     const thead = el("thead"), tr = el("tr");
     for (const c of cols) tr.append(el("th", null, c.label));
@@ -227,23 +270,33 @@
         const td = el("td", `c-${c.key}`);
         const v = r[c.key] || "";
         if (c.key === "ip" && v) {
-          const b = el("button", "it-ip", v); b.type = "button"; b.title = "What else this host carries";
+          const b = el("button", "it-ip mono", v); b.type = "button"; b.title = "What else this host carries";
           b.addEventListener("click", () => hostView(v, b)); td.append(b);
         } else td.textContent = v;
         row.append(td);
       }
+      let extraRow = null;
       if (d.extra.length) {
+        // the record's other fields open in a full-width row under it (in the narrow column they wrapped letter by letter)
         const td = el("td", "c-more");
         const more = d.extra.filter((k) => r[k]);
         if (more.length) {
-          const det = el("details"); det.append(el("summary", null, pl(more.length, "field")));
-          const dl = el("dl");
-          for (const k of more) dl.append(el("dt", null, k.replace(/_/g, " ")), el("dd", null, r[k]));
-          det.append(dl); td.append(det);
+          const b = el("button", "it-more-btn", `▸ ${pl(more.length, "field")}`); b.type = "button"; b.setAttribute("aria-expanded", "false");
+          extraRow = el("tr", "it-extra"); extraRow.hidden = true;
+          const cell = el("td"); cell.colSpan = cols.length + 1;
+          const dl = el("dl", "it-extra-dl");
+          for (const k of more) { const item = el("div"); item.append(el("dt", null, k.replace(/_/g, " ")), el("dd", null, r[k])); dl.append(item); }
+          cell.append(dl); extraRow.append(cell);
+          b.addEventListener("click", () => {
+            const open = extraRow.hidden; extraRow.hidden = !open;
+            b.setAttribute("aria-expanded", String(open)); b.textContent = `${open ? "▾" : "▸"} ${pl(more.length, "field")}`;
+          });
+          td.append(b);
         }
         row.append(td);
       }
       body.append(row);
+      if (extraRow) body.append(extraRow);
     }
     tb.append(body); wrap.append(tb);
     return wrap;

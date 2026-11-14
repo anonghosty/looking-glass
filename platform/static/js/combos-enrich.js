@@ -175,24 +175,26 @@
     }
     c.append(el("h3", null, "Across reports: management decides what the report carries"),
       el("p", rv && rv.decision ? "cb-hint ce-intro hide" : "cb-hint", `These devices also turn up in other reports (${pl(pv.multi_hosts || 0, "device")} in 2+ reports, ${pl(pv.cross_total || 0, "exact pattern")}). ` +
-        "The researcher's view is the combination above; the analyst's view is the patterns you tick below. Send them to a manager: they decide whether the report adds your views or uses the researcher's only, and send it to an advisor, who writes the advisory and generates the report."));
+        "The researcher's view is the whole combination above; your view is exactly what you tick below (the devices behind the ticked patterns, infections and CVEs/issues). Send it to a manager: whichever view they choose, the report covers exactly the devices you drilled down to; an advisor writes the advisory and generates it."));
     const state = el("div", `ce-state ${rv ? (rv.decision ? "ok" : "wait") : "todo"}`);
     if (!rv) state.append(el("b", null, "Download locked"), document.createTextNode(" until management decides: tick the patterns that matter and send them."));
     else if (!rv.decision) { state.append(el("b", null, `Waiting for management's decision on finding ${rv.finding}`), document.createTextNode(" · the report follows it. ")); const a = el("a", null, "Open it"); a.href = `/findings#f${rv.finding.slice(1)}`; state.append(a); }
-    else state.append(el("b", null, rv.decision === "both" ? "Management added your views" : rv.decision === "analyst" ? "Management chose your view only (the devices behind what you ticked)" : "Management chose the researcher's view only"),
+    else state.append(el("b", null, rv.decision === "both" ? "Management added your views" : rv.decision === "analyst" ? "Management chose your view, of exactly the devices you drilled down to" : rv.drilled ? "Management chose the researcher's view, of exactly the devices you drilled down to" : "Management chose the researcher's view"),
       document.createTextNode(` (finding ${rv.finding}): ${rv.advisor || "the advisor management chose"} writes the advisory and generates the report from exactly what you sent, below.`));
     c.append(state);
     // decided: exactly what was sent to management, nothing looked up again; the report carries this
     if (rv && rv.decision) {
       const out = el("div", "ce-out"); c.append(out);
       if ((rv.decision === "both" || rv.decision === "analyst") && ((rv.sent || []).length || (rv.sent_infections || []).length || (rv.sent_issues || []).length)) {
-        c.querySelector("h3").textContent = "Across every category: what management added to the report";
+        c.querySelector("h3").textContent = rv.decision === "analyst" ? "What the report carries: the devices you drilled down to" : "Across every category: what management added to the report";
         if ((rv.sent || []).length) analystDraw(out, { cross: rv.sent, sources: [], days: rv.days || [], multi_hosts: rv.sent.reduce((s, x) => s + x.hosts, 0) }, false);
         addedNames(out, rv);
         out.append(el("p", "cb-hint", `Exactly what was sent to management on finding ${rv.finding}: these and their devices are in the report (summary points in the PDF, and …_other_categories.csv with every device).`));
       } else {
         c.querySelector("h3").textContent = "Across reports: not in this report";
-        out.append(el("p", "cb-hint", `Management chose the researcher's view only (finding ${rv.finding}): the report is the combination above, without the across-report patterns.`));
+        out.append(el("p", "cb-hint", rv.drilled
+          ? `Management chose the researcher's view (finding ${rv.finding}): the report covers exactly the devices you drilled down to, with the combination's own analysis and nothing added.`
+          : `Management chose the researcher's view (finding ${rv.finding}): the report is the combination above, without the across-report patterns.`));
       }
       return;
     }
@@ -216,7 +218,7 @@
     const rmsg = el("div", "cb-hint");
     req.append(el("b", null, "Send to management"), cnt, np.el, ...(toM ? [toM.el] : []), t, n, send, rmsg);
     c.append(req);
-    out.addEventListener("change", () => { cnt.textContent = tickCount(); });
+    out.addEventListener("change", () => { cnt.textContent = tickCount(); np.refresh(); });
     send.addEventListener("click", async () => {
       if (!anyTicked()) { rmsg.textContent = "Tick at least one pattern, infection or CVE/issue."; return; }
       if (toM && !toM.check()) { rmsg.textContent = "Choose the manager it goes to."; return; }
@@ -237,30 +239,68 @@
 
   // the organisations (networks) it is sent for: none ticked = the whole combination (one overview finding); one = a
   // finding for that organisation; several = a case with one sub-finding per organisation, each decided on its own
+  // where each infection, CVE/issue and across-report pattern was seen, by organisation: {network: {kind:name -> devices}}
+  // (2026-11-14: the analyst saw the organisations but not which of them carry what they ticked)
+  function seenByNetwork(pv) {
+    const by = new Map();
+    const add = (kind, name, devs) => {
+      const per = new Map();
+      for (const d of devs || []) { const n = d.network || "Unknown"; per.set(n, (per.get(n) || 0) + 1); }
+      for (const [n, k] of per) { if (!by.has(n)) by.set(n, new Map()); by.get(n).set(`${kind}:${name}`, { kind, name, devices: k }); }
+    };
+    for (const x of pv.infections || []) add("inf", x.name, x.devices);
+    for (const x of pv.issues || []) add("iss", x.name, x.devices);
+    for (const x of pv.cross || []) add("pat", x.code, x.devices);
+    return by;
+  }
+  const isTicked = (x) => (x.kind === "inf" ? tickedInf : x.kind === "iss" ? tickedIss : ticked).has(x.name);
+
   function netPicker(st, onChange) {
     const nets = st.networks || [];
+    const seen = seenByNetwork(st.preview || {});
     const w = el("div", "ce-nets");
     const head = el("div", "ce-nets-head");
     head.append(el("b", null, "The organisations (networks) it is for"),
-      el("span", "cb-hint", "Tick one to send it for that organisation, several to open a case with one sub-finding each (management reviews each one), or none for the whole combination."));
+      el("span", "cb-hint", "Tick one to send it for that organisation, several to open a case with one sub-finding each (management reviews each one), or none for the whole combination. Under each: the infections and CVEs/issues its own devices carry; what you ticked is highlighted."));
     const tools = el("div", "ce-nets-tools");
     const all = el("button", "lg-btn sm ghost", "Tick all"); all.type = "button";
+    const carrying = el("button", "lg-btn sm ghost", "Tick those carrying the ticked items"); carrying.type = "button";
     const none = el("button", "lg-btn sm ghost", "Clear"); none.type = "button";
     const find = el("input", "ac-in ce-nets-find"); find.placeholder = "Find a network"; find.type = "search";
-    tools.append(find, all, none);
+    tools.append(find, all, carrying, none);
     const list = el("div", "ce-nets-list");
     const boxes = [];
     for (const n of nets) {
       const lab = el("label", "ce-net"), cb = el("input"); cb.type = "checkbox"; cb.value = n.network;
-      lab.append(cb, el("span", null, n.network), el("small", null, `${fmt(n.devices)} IP · ${fmt(n.records)} records`));
+      const what = el("span", "ce-net-seen");
+      lab.append(cb, el("span", null, n.network), el("small", null, `${fmt(n.devices)} IP · ${fmt(n.records)} records`), what);
       cb.addEventListener("change", () => { lab.classList.toggle("on", cb.checked); onChange(); });
-      boxes.push([cb, lab]); list.append(lab);
+      boxes.push([cb, lab, what, n.network]); list.append(lab);
     }
+    // what each organisation's devices carry: the ticked items first (highlighted), then the rest, a few at most
+    const refresh = () => {
+      for (const [, lab, what, net] of boxes) {
+        const items = [...((seen.get(net) || new Map()).values())].filter((x) => x.kind !== "pat" || isTicked(x));
+        items.sort((a, b) => Number(isTicked(b)) - Number(isTicked(a)) || b.devices - a.devices);
+        const hit = items.some(isTicked);
+        lab.classList.toggle("has", hit);
+        what.replaceChildren();
+        for (const x of items.slice(0, 5)) {
+          const c = el("span", `ce-net-item ${x.kind}${isTicked(x) ? " ticked" : ""}`, x.kind === "pat" ? "pattern" : x.name);
+          c.title = `${x.kind === "inf" ? "Infection" : x.kind === "iss" ? (/^CVE-/i.test(x.name) ? "CVE" : "Issue") : `Across-report pattern ${x.name}`}: ${pl(x.devices, "device")} of this organisation`;
+          c.append(el("em", null, fmt(x.devices))); what.append(c);
+        }
+        if (items.length > 5) what.append(el("span", "ce-net-more", `+${items.length - 5}`));
+      }
+      carrying.disabled = !anyTicked();
+    };
+    refresh();
+    carrying.addEventListener("click", () => { for (const [cb, lab] of boxes) { cb.checked = lab.classList.contains("has"); lab.classList.toggle("on", cb.checked); } onChange(); });
     all.addEventListener("click", () => { for (const [cb, lab] of boxes) if (!lab.hidden) { cb.checked = true; lab.classList.add("on"); } onChange(); });
     none.addEventListener("click", () => { for (const [cb, lab] of boxes) { cb.checked = false; lab.classList.remove("on"); } onChange(); });
     find.addEventListener("input", () => { const t = find.value.trim().toLowerCase(); for (const [cb, lab] of boxes) lab.hidden = !!t && !cb.value.toLowerCase().includes(t); });
-    w.append(head, ...(nets.length > 8 ? [tools] : [tools]), list);
-    return { el: w, values: () => boxes.filter(([cb]) => cb.checked).map(([cb]) => cb.value) };
+    w.append(head, tools, list);
+    return { el: w, refresh, values: () => boxes.filter(([cb]) => cb.checked).map(([cb]) => cb.value) };
   }
   const sendLabel = (nets, base) => (nets.length > 1 ? `Submit ${nets.length} networks (a case, one sub-finding each)` : nets.length === 1 ? `Send for ${nets[0]}` : base);
   const sentText = (d) => (d.case ? `Case ${d.finding} sent to ${d.to}, with ${d.subs.length} sub-findings: ${d.subs.map((s) => `${s.finding} ${s.network}`).join(", ")}. Management reviews each one. `
@@ -300,6 +340,7 @@
     const send = el("button", "lg-btn primary", "Send to management"); send.type = "button";
     const np = netPicker(st, () => { send.textContent = sendLabel(np.values(), "Send to management (the whole combination)"); });
     send.textContent = sendLabel([], "Send to management (the whole combination)");
+    w.addEventListener("change", (ev) => { if (ev.target.closest(".ce-plain-ticks")) np.refresh(); });
     const msg = el("div", "cb-hint");
     w.append(np.el, ...(toM ? [toM.el] : []), t, n, send, msg);
     c.append(w);

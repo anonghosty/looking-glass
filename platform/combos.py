@@ -453,6 +453,9 @@ def install(app, ctx):
                 per_day = sorted(by_day.items())
                 job["done"] = job["total"] = 1
             else:
+                wset = job.get("_within_hosts")           # drilled down within an analyst's selection: only its devices
+                if wset is not None:
+                    job["log"].append(f"Within the analyst's selection {job['within']}: {len(wset):,} devices")
                 for i, day in enumerate(days):
                     if job.get("cancel"):
                         job["log"].append("Stopped.")
@@ -460,6 +463,8 @@ def install(app, ctx):
                     mem = store.days.get(day)
                     evs = mem.events if mem is not None else ctx["fetch"](entry["section"], cols, day)
                     hit = m.match(evs)
+                    if wset is not None:
+                        hit = [e for e in hit if m.host(e) in wset]
                     found += hit
                     keep(evs, hit)
                     per_day.append((day.date().isoformat(), len(hit)))
@@ -733,7 +738,9 @@ def install(app, ctx):
                 "title": f"Combination {entry['code']}", "selection": describe(entry)[:150], "day": span,
                 "generated_by": job["user"], "scope": ctx["scope_text"](), "demo": False,
                 "intro": (f"Every device that carried exactly the combination {entry['code']} of {T(entry['name'])}, found by the analyst's "
-                          f"combination search over {span}. The researcher's code and this list use the same matching rule as Intel gathered."),
+                          f"combination search over {span}. The researcher's code and this list use the same matching rule as Intel gathered."
+                          + (f" Only the devices of the analyst's selection {job['within']} are included: the researcher drilled down to "
+                             f"this combination within it." if job.get("within") else "")),
                 "summary_points": pts,
                 "kpis": [(f"{len(devs):,}", "devices"), (f"{len(rows):,}", "records"), (f"{repeat:,}", "devices repeating it"),
                          (f"{multi_day:,}", "devices on several days"), (f"{len(nets):,}", "networks"),
@@ -980,6 +987,20 @@ def install(app, ctx):
             if n > MAX_DAYS:
                 return jsonify(error=f"At most {MAX_DAYS} days at a time."), 400
             days = [f + timedelta(days=i) for i in range(n)]
+        # within an analyst's selection (user, 2026-11-14): a researcher's reply code searched only among the devices of
+        # the analyst code it answers, on that code's own days, so what the advisor gets is exactly what was drilled down to
+        within, wset = str(b.get("within") or "").strip().upper(), None
+        if within:
+            if not re.fullmatch(r"LG-A-[0-9A-F]{8}", within) or entry.get("kind") == "a":
+                return jsonify(error="Within: an analyst code (LG-A-…), for a researcher's code."), 400
+            we = book.get(within)
+            if not we or we.get("kind") != "a" or (hasattr(book, "acode_allowed") and not book.acode_allowed(within)):
+                return jsonify(error=f"{within} is not an analyst code of your channels."), 404
+            hk = "src_ip" if we.get("platform") == "comms" else "ip"
+            wset = {e.get(hk) for e in (book.acode_records(we) or []) if e.get(hk)}
+            if not wset:
+                return jsonify(error=f"The analyst's selection {within} has no devices left in the records."), 409
+            days = [datetime.fromisoformat(d).replace(tzinfo=timezone.utc) for d in (we.get("days") or [we["day"]])][:MAX_DAYS]
         _sweep()
         me = user()
         with jobs_lock:
@@ -988,11 +1009,13 @@ def install(app, ctx):
             jid = secrets.token_hex(8)
             job = jobs[jid] = {"id": jid, "user": me, "code": code, "state": "running", "done": 0, "total": len(days) if days else 1,
                                "log": [], "at": time.time(), "result": None, "error": "", "summary": None}
+            if wset is not None:
+                job.update(within=within, _within_hosts=wset)
         def in_app():
             with app.app_context():           # the explanation look-ups and the PDF builder run as in a request
                 run(job, entry, days)
         threading.Thread(target=in_app, daemon=True, name=f"combo-{jid}").start()
-        return jsonify(id=jid, entry=public_entry(entry))
+        return jsonify(id=jid, entry=public_entry(entry), within=within or None)
 
     def own(jid):
         with jobs_lock:
@@ -1010,7 +1033,7 @@ def install(app, ctx):
                 return jsonify(id=jid, code="", state="done", done=1, total=1, log=["Finished before the service restarted."],
                                error="", summary=meta.get("summary"), file=meta["name"])
             return jsonify(error="No such search (finished searches are kept for an hour)."), 404
-        return jsonify({k: v for k, v in j.items() if k not in ("result", "user", "at", "cancel", "inputs")} |
+        return jsonify({k: v for k, v in j.items() if k not in ("result", "user", "at", "cancel", "inputs") and not k.startswith("_")} |
                        {"file": j["result"]["name"] if j["result"] else None})
 
     @app.route("/api/combos/search/<jid>/stop", methods=["POST"])

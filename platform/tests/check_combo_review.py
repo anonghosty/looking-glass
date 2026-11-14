@@ -111,8 +111,8 @@ try:
     ok("a decision needs the advisor it goes to", st == 400)
     st, d = call("/api/findings/1/review-decision", MGMT, "POST", {"choice": "both", "text": "Add them: one advisory for both reports.",
                                                                     "to": "lg-check-advisor"}, role="management", user="lg-check-management")
-    ok("the manager adds the analyst's views; it goes to the advisor named", st == 200 and d["finding"]["status"] == "advisor"
-       and F.get("1").get("assignee") == "lg-check-advisor" and d["finding"]["review"]["decision"] == "both", d.get("error", ""))
+    ok("the manager approves the analyst's views; it goes to the advisor named, as the drilled-down decision", st == 200 and d["finding"]["status"] == "advisor"
+       and F.get("1").get("assignee") == "lg-check-advisor" and d["finding"]["review"]["decision"] == "analyst" and d["finding"]["review"].get("drilled"), d.get("error", ""))
     st, d = call("/api/findings/1/review-decision", MGMT, "POST", {"choice": "researcher", "text": "x", "to": "lg-check-advisor"},
                  role="management", user="lg-check-management")
     ok("…once", st == 400)
@@ -160,7 +160,7 @@ try:
         st, zz = call("/review/1/report", ADVISOR, role="advisor", user="lg-check-advisor", raw=True)
     finally:
         SI.Matcher.match, CB.Matcher.match = real_m1, real_m2; book.package = real_pkg
-    ok("the review's report is made from the kept records (no new search)", st == 200 and calls and calls[0] == s["summary"]["records"],
+    ok("the review's report is made from the kept records (no new search): only the drilled-down devices' records", st == 200 and calls and 0 < calls[0] < s["summary"]["records"],
        f"HTTP {st} · {calls[:1]} of {s['summary']['records']} records" if st == 200 else str(zz)[:150])
     if st == 200:
         zn = zipfile.ZipFile(io.BytesIO(zz)).namelist()
@@ -523,6 +523,8 @@ try:
     st, d = call(f"/api/findings/{oid}/review-decision", MGMT, "POST", {"choice": "both", "text": "Go.", "to": "lg-check-advisor"},
                  role="management", user="lg-check-management")
     total_devices = sum(n["devices"] for n in s6["networks"])
+    # what the analyst drilled down to: the ticked pattern's devices, on this organisation
+    want_org = len({dv["ip"] for dv in s6["preview"]["cross"][0]["devices"] if (dv.get("network") or "Unknown") == org0["network"]})
 
     def rename(label=None, asns=None, drop_asns=False):
         with F.lock:
@@ -540,18 +542,18 @@ try:
     st, d = call(f"/api/advisory/{oid}", ADVISOR, **ADV)
     ok("the network renamed since: the advisory still finds exactly its devices, under its own name",
        st == 200 and [n["network"] for n in d.get("networks") or []] == ["Renamed Telco Ltd"]
-       and d["networks"][0]["devices"] == org0["devices"], json.dumps(d.get("networks") or d.get("error")))
+       and d["networks"][0]["devices"] == want_org, json.dumps(d.get("networks") or d.get("error")))
     st, d = call(f"/api/advisory/{oid}/net?network={quote('Renamed Telco Ltd')}", ADVISOR, **ADV)
     devs = (d.get("advisory") or {}).get("devices") or []
     ok("…its device list: only its AS numbers, not every organisation's",
-       st == 200 and d.get("devices_total") == org0["devices"] < total_devices and all(v.get("asn") in real_asns for v in devs),
+       st == 200 and d.get("devices_total") == want_org < total_devices and all(v.get("asn") in real_asns for v in devs),
        f"{d.get('devices_total')} of {total_devices}" if st == 200 else d.get("error", ""))
     st, z = call(f"/review/{oid}/report", ADVISOR, raw=True, **ADV)
     zf = zipfile.ZipFile(io.BytesIO(z)) if st == 200 else None
     dev_csv = next((n for n in zf.namelist() if "device" in n.lower() and n.endswith(".csv")), None) if zf else None
     rows = (zf.read(dev_csv).decode("utf-8-sig").strip().count("\n")) if dev_csv else -1
-    ok("/review/<fid>/report is scoped to the organisation too (its devices CSV)", st == 200 and rows == org0["devices"],
-       f"{rows} device rows, the organisation has {org0['devices']}, the search {total_devices}")
+    ok("/review/<fid>/report is scoped to the organisation too (its devices CSV), drilled down", st == 200 and rows == want_org,
+       f"{rows} device rows, the organisation has {want_org} drilled down ({org0['devices']} in all), the search {total_devices}")
     rename(label=org0["network"], drop_asns=True)            # a finding made before AS numbers were stored
     st, d = call(f"/api/advisory/{oid}", ADVISOR, **ADV)
     ok("a sub-finding made before this change gets its AS numbers from its name once, then keeps them",

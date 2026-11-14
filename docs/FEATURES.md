@@ -8,12 +8,12 @@ read more. Dates are UTC.
 - [2026-11-13: special reports, the Executive Reports card, CIS backing by the evidence](#2026-11-13-special-reports-the-executive-reports-card-cis-backing-by-the-evidence)
 - [2026-11-12 (night): local times, Executive figures by devices, every report on the Overview](#2026-11-12-night-local-times-executive-figures-by-devices-every-report-on-the-overview)
 - [2026-11-12 (evening): uninstaller](#2026-11-12-evening-uninstaller)
-- [2026-11-12 (later): security review fixes](#2026-11-12-later-security-review-fixes)
+- [2026-11-12 (later): security fixes](#2026-11-12-later-security-fixes)
 - [2026-11-12: audit evidence (NIST and CIS), report intake checks, the pipeline from Settings, password expiry](#2026-11-12-audit-evidence-nist-and-cis-report-intake-checks-the-pipeline-from-settings-password-expiry)
 - [2026-11-11: advisories, cases, an Overview for every role, the Audit portal](#2026-11-11-advisories-cases-an-overview-for-every-role-the-audit-portal)
 - [2026-11-10: combination codes, the analyst's combination search and findings](#2026-11-10-combination-codes-the-analysts-combination-search-and-findings)
 - [2026-11-09: researchers' intel, notes and a page of their own](#2026-11-09-researchers-intel-notes-and-a-page-of-their-own)
-- [2026-11-09: security review fixes](#2026-11-09-security-review-fixes)
+- [2026-11-09: security fixes](#2026-11-09-security-fixes)
 - [2026-11-09: faster platforms and a sharper Executive portal](#2026-11-09-faster-platforms-and-a-sharper-executive-portal)
 - [2026-11-08: Executive portal, 7-day baseline, vulnerabilities and network types](#2026-11-08-executive-portal-7-day-baseline-vulnerabilities-and-network-types)
 - [2026-11-07: definitions, the researcher role and PDF reports](#2026-11-07-definitions-the-researcher-role-and-pdf-reports)
@@ -68,12 +68,10 @@ read more. Dates are UTC.
   (`--remove-database`, `--remove-mongodb`, `--remove-files`, `--all`), each after a typed confirmation.
 - It removes only what belongs to its own folder: other installations, other cron jobs and a MongoDB that Looking
   Glass did not install are left alone. `--dry-run` shows the plan without changing anything.
-- Tested by `tests/check_uninstall.py`, also against a throwaway MongoDB (the reports database and the two Looking
-  Glass accounts go; other databases and accounts stay). Details: docs/INSTALLATION.md, Uninstalling.
+- In MongoDB it removes only the reports database and the two Looking Glass accounts; other databases and accounts
+  stay. Details: docs/INSTALLATION.md, Uninstalling.
 
-## 2026-11-12 (later): security review fixes
-
-An external review attacked the new features; every finding below is fixed and tested.
+## 2026-11-12 (later): security fixes
 
 **Fixed**
 
@@ -93,8 +91,6 @@ An external review attacked the new features; every finding below is fixed and t
   by hand is withdrawn instead of blocking the analyst; analyst codes are unique per request.
 - **Load:** cache keys ignore unknown parameters, CISA KEV backs off after a failure, look-ups keep their time budget,
   Executive baselines are bounded, a constituency change always wins over a day load already running.
-- **Tests and CI:** every write route is checked for CSRF through a real sign-in; checks that need MongoDB skip when
-  it is not there; a GitHub Actions workflow runs the checks that need no database.
 
 ## 2026-11-12: audit evidence (NIST and CIS), report intake checks, the pipeline from Settings, password expiry
 
@@ -225,8 +221,7 @@ against the trends, an analyst pulls exactly those devices and writes the adviso
 - **Overview:** the page buttons (Executive, Admin, Definitions, Combinations, Findings, Settings) are centred at the
   top; Log out and the scope stay on the right.
 - **Day change:** loading a new day no longer holds up the pages. The reload runs after the replay schedule's lock is
-  released, so the replay position and status answer at once while a day loads. Tested with a simulated day change and
-  the real reload from the database.
+  released, so the replay position and status answer at once while a day loads.
 - **Intel gathered:** Sinkhole DNS lookups (and TLS server names) are part of the combinations, so a DNS report no
   longer looks like "the name only". When a name's devices never share a report, the window explains why (IPv6 and IPv4
   reports, and DNS reports that see the resolver). Switching report keeps your place instead of jumping to the top.
@@ -264,19 +259,18 @@ against the trends, an analyst pulls exactly those devices and writes the adviso
 - **Documentation in one place.** Every guide is in `docs/`, including the security policy (`docs/SECURITY.md`); the
   glossary has the new terms.
 
-## 2026-11-09: security review fixes
+## 2026-11-09: security fixes
 
 - **Safe CSV exports:** no cell can run as a spreadsheet formula (formula characters get a leading apostrophe).
 - **Masked views accept only aliases:** a real network name or AS number no longer works as a filter in Demo mode or
-  for roles without *unmasked*, so a viewer cannot test whether a network is in the data.
+  for roles without *unmasked*, so a viewer cannot find out whether a network is in the data.
 - **Pinned events** belong to the signed-in account and are deleted at log-out; masked accounts keep none.
-- **A masking test that can fail**, plus unit tests for the masking and the roles.
 - **Release builds:** publishable only after a clean scan, images and PDFs scanned for hidden metadata, curated data
   checked to reach the repository, documentation links checked.
 - **Maintenance tools repaired** (`tools/daysize.py`, `tools/quickcheck.py`, `tools/list_infections.py`,
-  `tests/test_sources.py`, `manage/manage_users.py`).
+  `manage/manage_users.py`).
 
-([SECURITY.md](SECURITY.md#4-changes-made-after-the-penetration-test))
+([SECURITY.md](SECURITY.md#6-supported-versions-and-changes))
 
 ## 2026-11-09: faster platforms and a sharper Executive portal
 
@@ -299,4 +293,3 @@ against the trends, an analyst pulls exactly those devices and writes the adviso
 
 - **Definitions** with references for names Malpedia does not know, and the **researcher** role that writes them.
 - **PDF reports** on every list behind an analysis figure.
-- **Penetration test** and its fixes ([SECURITY_REPORT.md](SECURITY_REPORT.md)).

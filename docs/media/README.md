@@ -1,7 +1,7 @@
 # Media
 
 Screenshots of Looking Glass. Everything here uses **dummy data**: documentation IP ranges
-(RFC 5737, RFC 2544, RFC 3849), private AS numbers and fictional network names, on a test installation set to Kenya.
+(RFC 5737, RFC 2544, RFC 3849), private AS numbers and fictional network names, on an installation set to Kenya.
 
 ## Screenshots
 

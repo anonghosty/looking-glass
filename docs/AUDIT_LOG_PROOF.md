@@ -112,8 +112,7 @@ with the one above.
 
 Someone with full control of the server could change entry 500, then recompute every `prev` from entry 501 to the end,
 write a new `audit.head`, and rebuild a package with a new manifest. The chain would check out perfectly, because it
-was rebuilt to. The test suite performs exactly this attack (`tests/check_auditor_portal.py`), and on its own the
-verifier finds the rewritten log whole.
+was rebuilt to. On its own, the verifier finds such a rewritten log whole.
 
 A chain proves that nothing was changed *after* it was written. It cannot, by itself, tell an original log from one
 rebuilt from scratch.

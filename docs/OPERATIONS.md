@@ -9,8 +9,8 @@ project's Python (`.venv`); run the others with `.venv/bin/python <script>`.
 |---|---|
 | `deploy/` | installing and running the service: `install.sh`, the service template, HTTPS certificate, reload, read-only database account |
 | `manage/` | looking after a running installation: accounts, backups, network names, infection knowledge base, region maps |
-| `security_testing/` | the security documentation, the penetration test report and the security retest |
-| `tests/` | automated checks of both platforms against the database |
+| `security_testing/` | the security documentation and the installation's security check |
+| `tests/` | the installation check: both platforms against the database |
 | `tools/` | diagnostics for the database and the reports |
 | `docs/` | these guides |
 
@@ -136,17 +136,14 @@ at most once an hour). Look-ups only read these files. The same script downloads
 mappings it touches go back to "please check" (`data/attack_mappings.json`; the rule table that suggests them is the
 shipped `data/attack_rules.json`), one notice appears on the Definitions page and one entry in the audit log.
 
-## Checks
+## Checking your installation
 
 | Command | What it checks | Time |
 |---|---|---|
 | `security_testing/security_retest.py` ▶ | about 120 checks of every security protection against the running service; must end with ALL PASSED | 2 min |
-| `tests/run_all_checks.sh` | replay schedule, new reports on both platforms, consistency of every figure, totals against MongoDB, every statistic and filter of both platforms and the Executive portal against MongoDB (`tests/verify_stats.py`, `verify_svc_stats.py`, `verify_management.py`), report downloads, CSV formula safety, masking (fails on any leak), privacy and roles unit tests, Intel gathered, researchers' notes, cross-report filters | 4 min |
-| `tests/check_baseline_concurrency.py` | 24 new Executive selections at the same moment: every 7-day baseline completes and none fails; runs in a temporary copy | 3 min |
-| `tests/check_past_days.py` | the Executive 7-day baseline from compact past days equals the full days (complete answers, 7 days, both platforms); runs in a temporary copy | 5 min |
-| `tests/e2e_test.py all` ▶ | end to end: runs a copy on port 5055 with a throwaway database, simulates Shadowserver deliveries and checks what both platforms show | 5 min |
+| `tests/run_all_checks.sh` | replay schedule, new reports on both platforms, consistency of every figure, totals against MongoDB, every statistic and filter of both platforms and the Executive portal against MongoDB, report downloads, CSV formula safety, masking (fails on any leak), privacy and roles, Intel gathered, researchers' notes, cross-report filters | 4 min |
 
-The checks only read this installation's own database and service; tests that create reports use throwaway databases and drop them.
+The checks only read this installation's own database and service; checks that create reports use throwaway databases and drop them.
 They reach the API with the local automation key (`data/automation.key`), accepted from this computer only.
 
 ## Diagnostics (`tools/`)

@@ -23,7 +23,7 @@ partners see the country's situation at a glance on a wall screen.
 - [3. Reported network communications (the map)](#3-reported-network-communications-the-map)
 - [4. Publicly accessible / vulnerable services](#4-publicly-accessible--vulnerable-services)
 - [5. Analysis and follow-up](#5-analysis-and-follow-up) · [Findings and cases](#findings-cases-and-who-holds-them)
-- [Intelligence (analysts)](#intelligence-analysts)
+- [Abused or Compromised (analysts)](#abused-or-compromised-analysts)
 - [Management portal (Executive)](#management-portal-executive)
 - [Advisories (the advisor)](#advisories-the-advisor) · [TLP](#tlp-how-far-an-advisory-may-travel)
 - [Notifications (the bell)](#notifications-the-bell)
@@ -64,10 +64,11 @@ partners see the country's situation at a glance on a wall screen.
 **Decide a finding (management)**
 1. The bell shows it; open the review from **Findings**.
 2. **Approve** and name the advisor (it goes straight to them), or **Reject** with the reason (it closes). On a review
-   with the analyst's views, choose both views, the researcher's view only, or the analyst's view only.
+   where the analyst drilled down, choose the researcher's view or the analyst's view: either way the report covers
+   exactly the devices the analyst drilled down to.
 
-**Follow Shadowserver's Intelligence reports (analyst)**
-1. Open **Intelligence** from the header or the Overview card.
+**Follow what is abused or compromised (analyst)**
+1. Open **Abused or Compromised** from the header or the Overview card.
 2. Compare today with the usual on the group tiles, then **Open the records** of a report; filter on its own fields,
    click an address for what else that host carries, **Export CSV**, or make an analyst code from the view.
 
@@ -495,9 +496,17 @@ or the Findings page) is for roles that see addresses and may export:
    each one is checked against this search's own devices, management sees the names and counts (never an address),
    and the report and the advisory carry them on each organisation's own devices.
 
-7. **Management decides** on the review page: **Add the analyst's views** (the combination and what you ticked),
-   **Use the researcher's view only**, **Use the analyst's view only** (the report and the advisory cover just the
-   devices behind what you ticked, for example the few with a critical CVE), or **Reject and close** with the reason.
+7. **Management decides** on the review page. What you ticked is your drill-down: the report and the advisory cover
+   exactly those devices (for example the few with a critical CVE), whichever view management approves:
+   - **Use the researcher's view:** those devices, with the combination's own analysis and nothing added;
+   - **Use the analyst's view:** those devices, with the patterns, infections and CVEs/issues you ticked added;
+   - **Reject and close**, with the reason.
+
+   With nothing ticked, management approves the whole combination or rejects it.
+
+8. **A researcher's reply to your analyst code:** on the finding, **Search within the selection** opens the
+   researcher's code limited to the devices of your analyst code, on its own days. The review, the report and the
+   advisory then carry only those devices.
 
 "Exactly" means the record carries these indicators and no other indicator of the kinds compared (C2 domain, DNS
 lookup, TLS name, user agent and tags; for services, the associated tags and CVEs). The search is off in Demo mode, a
@@ -572,12 +581,12 @@ into their own group, and every level opens and closes with a click. The **state
 and who holds it (*With management · Efua Owusu*). The filters at the top count each state; **Open** and **All** switch
 between work in progress and everything.
 
-## Intelligence (analysts)
+## Abused or Compromised (analysts)
 
 Shadowserver sends a group of **Intelligence** reports beside the two platforms: compromised systems and victims
 (compromised websites and devices, ransomware victims), malicious content hosted in the constituency (malware and
 sandbox URLs, spam links), addresses on block lists or targeted, leaked accounts, and attacker infrastructure. The
-**Intelligence** page (`/intelligence`) is for analysts and administrators; it is closed in Demo mode.
+**Abused or Compromised** page (`/intelligence`) is for analysts only; it is closed in Demo mode.
 
 - **Group tiles:** today's records in each group against the median of the 7 days before, with the 8 days as bars.
   While the day's files are still coming in, the page says so: "still arriving: N of the usual M reports".
@@ -625,8 +634,7 @@ addresses in a day; the page and the report say so.
 
 ![The Executive portal's Reports card: every report, ranked by devices](media/screens/42-executive-reports.png)
 
-Every figure is aggregated: no address, host name or host list is ever shown (the server never sends them; the check
-`tests/check_management.py` verifies it). Choose a **report day** and the filters at the top, or click any bar, slice or
+Every figure is aggregated: no address, host name or host list is ever shown (the server never sends them). Choose a **report day** and the filters at the top, or click any bar, slice or
 region on the map to focus every chart on it; the chips show what is focused and **Reset all** clears it. Click an
 infection or an issue to have it **explained** (Malpedia, threat actors and the Looking Glass definitions; for CVEs: CISA
 KEV with the required action, CVSS, EPSS and the official records). **Explain all** looks up the top names with a progress
@@ -760,7 +768,7 @@ notifications.
 names become stable aliases ("Telco 1", "Bank 2"), host names disappear. Masking happens on the server, so the
 hidden values never reach the browser. External accounts are always masked; `PUBLIC_DEMO=1` masks everyone.
 While masked, filters accept only the aliases and opaque host references: typing a real network name, AS number or
-address finds nothing, so a viewer cannot test whether a network or host is in the data.
+address finds nothing, so a viewer cannot find out whether a network or host is in the data.
 
 **Pinned events** (the pin at the end of a row on the map) keep their full details in your browser only while you are
 signed in: they belong to your account and are deleted when you log out. Masked accounts do not keep pins.
@@ -938,7 +946,7 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
   analysis. Each says who, when, from where and what was looked at (every filter of the view),
   hosts by their reference, never their address; the same person viewing the same thing again within 10 minutes is
   not logged twice, but every download is, the same list twice included. `DATA_ACCESS_LOG=0` in `.env` turns view logging off (the Audit portal then says so). Each has its count, a search, *Alerts only*, and **Export CSV**.
-  The built-in security test's events are kept apart in System and self-test.
+  The installation check's events are kept apart in System and self-test.
 - **Access review:** every account with its role and what that role may do, its authenticator, last sign-in, who
   approved it and flags (no authenticator, dormant, pending too long, every permission), and the roles matrix.
 - **Signed in now:** every session with its address, location, browser and expiry (read only).

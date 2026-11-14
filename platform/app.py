@@ -123,7 +123,7 @@ slow_log.install(app, os.path.join(BASE_DIR, "data"))
 # who is using the service and what each request costs, for the Task monitor (request_tracker.py; memory only)
 import request_tracker  # noqa: E402
 request_tracker.install_start(app)
-# who may connect, host names, cross-site writes, security headers, request size (security.py, docs/SECURITY_REPORT.md)
+# who may connect, host names, cross-site writes, security headers, request size (security.py, docs/SECURITY.md)
 security.install(app, app.logger)
 # login, accounts, roles and sessions (auth.py): every page and API needs a login
 AUTH = auth.install(app, BASE_DIR, app.logger)

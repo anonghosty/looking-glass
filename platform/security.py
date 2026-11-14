@@ -1,4 +1,4 @@
-"""Request guards and security headers for Looking Glass (see docs/SECURITY_REPORT.md).
+"""Request guards and security headers for Looking Glass (see docs/SECURITY.md).
 
 * Who may connect (report #1): this machine only, by default. Other screens (a TV, a colleague's laptop) are allowed
   by address in VIEWER_NETWORKS (e.g. "192.168.1.50,10.0.0.0/24"); everyone else gets 403. For anything wider, put

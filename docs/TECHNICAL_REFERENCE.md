@@ -93,7 +93,7 @@ server side is in small modules called from `app.py`:
 - **`combos.py`, combination codes and the analysts' combination search.** `intel.combo_code` / `intel.cross_code` hash
   the section, name, report(s) and exact indicators into `LG-C-XXXXXXXX` / `LG-X-XXXXXXXX` (SHA-256, 8 hex digits; no
   address). `intel.record_items` is the one matching rule: Intel gathered counts with it and the search matches with it
-  (`tests/check_combos.py` proves both agree for every name and report). Codes shown to a researcher go to
+  so both agree for every name and report. Codes shown to a researcher go to
   `data/combo_codes.json` (the twenty thousand most recent kept); a code not there is looked for in memory. The search is a background thread per
   analyst (one at a time): over the days in memory together, or a date range (at most 31 days) read day by day from
   MongoDB with `app._combo_fetch` (only the name's reports, inside the constituency). For the devices found it also
@@ -166,7 +166,7 @@ The **Demo** button in the top bar conceals sensitive details while the data kee
 - Locations stay visible.
 - Pins and "Copy JSON" are hidden.
 
-**The masking happens on the server** (`privacy.py`, `?demo=1`), so concealed values are never sent to the browser. Drill-downs still work through opaque host references (`src_ref`). While a request is masked (Demo, or a role without *unmasked*), filters accept only what the masked view shows: host filters only the opaque references, network filters only the aliases (`AsnRegistry.strict`); a real address, company name or AS number matches nothing, so a viewer cannot test whether something is in the data.
+**The masking happens on the server** (`privacy.py`, `?demo=1`), so concealed values are never sent to the browser. Drill-downs still work through opaque host references (`src_ref`). While a request is masked (Demo, or a role without *unmasked*), filters accept only what the masked view shows: host filters only the opaque references, network filters only the aliases (`AsnRegistry.strict`); a real address, company name or AS number matches nothing, so a viewer cannot find out whether something is in the data.
 
 Pinned events keep full details in the browser, so they are stored per account (`tm.pins:<username>`), never for masked accounts, and deleted on the sign-in page (log out, expired session). The aliases are fixed in `data/asns.json` (`demo_alias`), so "Telco 1" means the same network in every presentation.
 
@@ -174,13 +174,14 @@ For a public deployment where nobody may switch demo off, set `PUBLIC_DEMO=1` in
 
 ## Requirements and installation
 
-See [INSTALLATION.md](INSTALLATION.md). In short: Ubuntu 24.04 or later, Desktop or Server (or Ubuntu on WSL 2), Python 3.12+ (tested on 3.14),
+See [INSTALLATION.md](INSTALLATION.md). In short: Ubuntu 24.04 or later, Desktop or Server (or Ubuntu on WSL 2), Python 3.12+,
 MongoDB filled by the Shadowserver pipeline (`../database`), a Mapbox token, and optionally a Malpedia token.
 Python packages (from `requirements.txt`): Flask, Werkzeug, pymongo, python-dotenv, gunicorn and ReportLab. Each is
 allowed up to, not including, its next major version (for example `flask>=3.0,<4`): bug and security fixes still
 install, big changes do not. `tests/check_libraries.py` checks the installed versions against these limits and tries
 the parts of each library the platform uses; it needs no data, and the installer runs it. To allow a new major
-version, raise its limit, reinstall, and keep it only if `tests/run_all_checks.sh` and the security retest pass.
+version, raise its limit, reinstall, and keep it only if the installation check (`tests/run_all_checks.sh` and
+`security_testing/security_retest.py`) passes.
 
 External services:
 - **MongoDB** (database `shadowserver` by default). The app only reads; it never writes to the database.
@@ -280,7 +281,7 @@ Each collection was matched to its report in two ways:
 
 **Record stream.** With or without filters, the record stream opens with the latest (matching) records of the day up to the replay time, however long ago, then adds new ones as they replay. Shadowserver's service reports arrive in bursts, so the last few minutes are often empty; the stream no longer shows "Waiting for records" in those gaps (or for Block List, whose records all arrive between 01:00 and 03:00). "Waiting for records" now only appears before the day's first record has replayed.
 
-The figures, stream, Intel, regions map and analysis all follow this one rule. `tests/check_services_consistency.py` checks 28 combinations in normal and demo mode: stats, analysis, regions, replayed and the whole-day stream must all agree, and the host lists must match.
+The figures, stream, Intel, regions map and analysis all follow this one rule.
 
 **Cards as filters.** Two analysis cards can be part of **Filter the view**: Hosts with multiple issues and Hosts in several reports, as well as Hosts with issues. With one of them open, the button reads "Filter the view · Hosts in several reports", and the page shows exactly the hosts of the card's table, with all their reports. They are also checkboxes under Filters (`multi`, `cross`, `vulnerable=1`; usable in the address too).
 
@@ -296,7 +297,7 @@ The figures, stream, Intel, regions map and analysis all follow this one rule. `
 - the map platform's glossary tab, which has new groups for both kinds of report;
 - the map platform's overview report tooltips.
 
-**API.** All endpoints are under `/api/svc/`: `clock`, `events`, `detail`, `replayed`, `stats`, `facets`, `insight`, `hosts.csv`, `glossary`, `diagnostics` and `summary`. `tests/verify_services.py [day]` checks records per report, the total and the hosts against MongoDB, and that demo mode masks every IP.
+**API.** All endpoints are under `/api/svc/`: `clock`, `events`, `detail`, `replayed`, `stats`, `facets`, `insight`, `hosts.csv`, `glossary`, `diagnostics` and `summary`.
 
 **Compatibility check.** Every discovered collection is checked against the fields the platform uses (`diagnose` in `sources.py`).
 
@@ -319,9 +320,9 @@ What happens in each case:
 
 Reports that match discovery but fail a required check are not loaded. They are listed on the overview under "N more report types discovered, not supported yet", with what they lack and "Support will be added in a future update". A new report type is announced either way: "compatibility check passed … loaded onto the map", or "discovered but cannot be shown yet: missing …". `/api/diagnostics` gives the full check for every report, and `tools/diagnose_reports.py` runs it read-only from the command line.
 
-Single-host scan, population, device and blocklist reports have no source and destination fields at all, so they are not candidates. Rows are loaded by filename prefix (`YYYY-MM-DD-…`), so a new collection needs a `filename` index, or `FALLBACK_SCAN=1`. When the report list changes, open pages update the overview ("N reports monitored"), filters and figures, and announce the new type. `tests/test_new_collections.py` checks this using a throwaway database.
+Single-host scan, population, device and blocklist reports have no source and destination fields at all, so they are not candidates. Rows are loaded by filename prefix (`YYYY-MM-DD-…`), so a new collection needs a `filename` index, or `FALLBACK_SCAN=1`. When the report list changes, open pages update the overview ("N reports monitored"), filters and figures, and announce the new type.
 
-So the replay time can be more than 24 hours behind the current time; the top bar shows both (**Replay time (UTC)** from `extracted_date`, and **Current time (UTC)**), and every stream row shows its own replay time. The schedule is saved in `data/schedule.json`, so a service restart continues where it was. A restart also keeps a running settle time, even before the day has been reloaded. Only the server runs the schedule; scripts that import `app.py` do not touch it. `tests/test_schedule.py` simulates several days (late imports, reports trickling in, restarts, outages). At faster speeds (demos) the day loops instead of running past 24:00.
+So the replay time can be more than 24 hours behind the current time; the top bar shows both (**Replay time (UTC)** from `extracted_date`, and **Current time (UTC)**), and every stream row shows its own replay time. The schedule is saved in `data/schedule.json`, so a service restart continues where it was. A restart also keeps a running settle time, even before the day has been reloaded. Only the server runs the schedule; scripts that import `app.py` do not touch it. At faster speeds (demos) the day loops instead of running past 24:00.
 
 Run it as a service with gunicorn. Use **one worker**, since the day cache is in memory, and threads for concurrent viewers:
 
@@ -423,7 +424,7 @@ Shared by the map, the services platform and Settings:
   The script uses the ISO 3166-2 list of Ubuntu's `iso-codes` package. Every ISO first-level subdivision of the 54 countries now lands on a map region, apart from where ISO's top level is above the map's units: the island groups of Cabo Verde and Equatorial Guinea (their municipalities and provinces match), and the uninhabited Cargados Carajos Shoals of Mauritius. Matching ignores accents, letter case and words such as "Region" or "Governorate". `static/js/regions.js` does it in the browser for the services regions map and the Settings preview.
 
   Both maps label every region where the name fits without overlapping (regions with records first, then the largest), and hovering names any region with its ISO code and records. Several report names on one region (a newer province inside the old one) are added up, and the tooltip lists them. Report regions that are on no region of the map are listed under the map. `manage/fetch_africa_boundaries.py` runs the alias step after downloading.
-- **Constituency.** Leave it on "Whole country", or choose the networks your CSIRT is responsible for. Networks are grouped by company, covering all their AS numbers, and can be searched and filtered by type. You can also add address ranges, such as a government network without its own AS number. Both platforms then keep only records whose host is in the constituency: on the map platform the source or destination side, on the services platform the host. Every figure, list, map, analysis and export follows. Saving reloads both platforms' data. Open pages refresh by themselves and show **Constituency: N networks** in their top bars; the intro page shows the same. `tests/verify_constituency.py` checks both platforms against MongoDB with the constituency that is set.
+- **Constituency.** Leave it on "Whole country", or choose the networks your CSIRT is responsible for. Networks are grouped by company, covering all their AS numbers, and can be searched and filtered by type. You can also add address ranges, such as a government network without its own AS number. Both platforms then keep only records whose host is in the constituency: on the map platform the source or destination side, on the services platform the host. Every figure, list, map, analysis and export follows. Saving reloads both platforms' data. Open pages refresh by themselves and show **Constituency: N networks** in their top bars; the intro page shows the same.
 - **Deployment.** The same settings can be given in `.env` as `COUNTRY`, `CONSTITUENT_ASNS` and `CONSTITUENT_CIDRS`. The page shows the lines for your current choice. Settings saved on the page are stored in `data/settings.json` and take precedence.
 - **Who can change them.** Accounts with the Settings permission (administrators), from a recent sign-in. Accounts without the permission do not see Settings. (The old `SETTINGS_TOKEN` header was removed: settings have one rule.)
 - **The replay schedule is unaffected.** It still waits for the reports themselves, so a narrow constituency with no records on a day is not mistaken for a missing report.
@@ -479,7 +480,7 @@ With `MALPEDIA_TOKEN` set in `.env`, every infection description (in the event d
   CISA KEV one download a day; EPSS one request per 100 CVEs; CVE.org records four at a time (description, CNA or CISA-ADP CVSS, CWE, references; a cold batch of 24 CVEs takes about 2.5 s);
   NVD's own analysis only from the background thread (every 10 minutes, at NVD's pace, one worker process; `NVD_API_KEY` makes it 10 times faster). Cache `data/cve_cache.json` (NVD / CVE.org / EPSS 7 days, KEV 1 day), merged between worker processes.
   Non-CVE issues come from `data/issues.json` (shipped) and the `issues` of `data/definitions.json`, never looked up. `GET /api/issues/batch?values=` (permission `malpedia`).
-- Management portal: `management.py` (`/management`, `GET /api/mgmt/comms|services` with filters and `day`, `GET /api/mgmt/explain?kind=infection|issue&name=`, `GET /api/mgmt/report?platform=` executive PDF). Answers carry aggregates only (counts, shares, trends, facets); `tests/check_management.py` asserts that no address of the loaded day appears in any answer and that other roles get 403. Permission `management` is exclusive (`auth.Roles` strips it from every role except `management` and `admin`; the `management` role is always exactly `["management"]`); management users are confined to `MANAGEMENT_PATHS`.
+- Management portal: `management.py` (`/management`, `GET /api/mgmt/comms|services` with filters and `day`, `GET /api/mgmt/explain?kind=infection|issue&name=`, `GET /api/mgmt/report?platform=` executive PDF). Answers carry aggregates only (counts, shares, trends, facets) and never an address; other roles get 403. Permission `management` is exclusive (`auth.Roles` strips it from every role except `management` and `admin`; the `management` role is always exactly `["management"]`); management users are confined to `MANAGEMENT_PATHS`.
 - Look-up jobs: `POST /api/lookups` {kind: issues | malpedia, values} (permission `malpedia`, CSRF; at most 400 names, two running jobs per user) starts a background job; `GET /api/lookups/<id>?since=n` returns progress, the new log lines and, when done, the results. The page shows them in a progress window (`static/js/pdf.js`, `LGLookup.run`). Malpedia jobs wait and continue when Malpedia's 30-a-minute limit is reached.
 - Reports: `GET /api/insight/report` and `/api/svc/report` return a ZIP (PDF + complete list as CSV, formula-safe); `format=pdf` returns the PDF alone (then the list is printed).
 - Network names: `GET /api/networks`, `POST /api/networks/entry`, `POST /api/networks/types` (permission `networks` or settings; CSRF; fresh sign-in). Types: `netypes.py` (built-in sectors, PeeringDB categories) plus `data/network_types.json`; demo aliases use each type's word. The built-in researcher role has `definitions` and `networks` (added once to existing installs, marker `data/.roles_networks_added`).
@@ -526,10 +527,10 @@ Front-end libraries: Mapbox GL JS 3.8.0 (satellite style) and deck.gl 9.1.14 (3D
 - **Filter map works for every analysis:** it sets the map, the stream and Intel to exactly that analysis' selection, every part of it, including networks, destination IPs, destination cities, user agents and request paths (also in demo mode, through concealed references). A time window is the one part that is not applied, because the replay itself is the time axis.
 - **One filter model everywhere:** the map, stream, Intel, `/api/events`, `/api/stats`, `/api/geo` and the analyses all accept the same fields (`source, attack_class, infection, severity, protocol, tag, src_city, src_geo, src_asn, src_ip, dst_geo, dst_city, dst_asn, dst_ip, dst_port, http_host, http_agent, request`), so an analysis and the filtered map always show the same numbers.
 - **Deep dive with filters:** Intel always reflects the active filters, and so does everything you click in it. With several filters (for example Botnet C2 + one city), an Intel entry opens a **Filtered selection** analysis that combines them with what you clicked ("Attack type: Botnet C2 · Affected city: … · Source network: …", with the same number of events Intel shows), and an Intel hour or 15-minute bar opens that time window within all the filters. The figures, findings, charts and follow-up lists all work inside it, and its own bars go down to 15 minutes. In demo mode, concealed values (destination IPs, domains, user agents, paths) are sent as opaque references that only the server can resolve, so they stay hidden but still open their analysis.
-- **Accurate whole-day figures:** the top bar, Intel, the analysis view and its lists always count **every record of every report for the replayed day** (00:00 to 24:00 UTC). The replay only drives the map and the event stream and never changes these numbers; they change only if late rows arrive in MongoDB (picked up by the 10-minute day reload). `tests/verify_totals.py [YYYY-MM-DD]` compares them with direct MongoDB counts per report.
-- **Shared results, computed once per data change** (`respcache.py`): the statistics, filter lists, overview and whole-day map layer of the map platform and the services statistics are kept in memory under a key naming everything they depend on: the loaded day (its start, the moment it was loaded and its version, which changes whenever MongoDB has new or different rows), the filters, demo mode, the constituency and the network names. Every other viewer of the same selection gets the stored answer at once; when a report arrives the day is reloaded, the key changes and the next request recomputes from the fresh data. Simultaneous requests for the same key compute once (the others wait for that result). What depends on the replay moment (`as_of`, the current quarter and hour) is always worked out per request. On a large synthetic test day, a repeated statistics request went from several seconds to under a millisecond, with identical answers.
+- **Accurate whole-day figures:** the top bar, Intel, the analysis view and its lists always count **every record of every report for the replayed day** (00:00 to 24:00 UTC). The replay only drives the map and the event stream and never changes these numbers; they change only if late rows arrive in MongoDB (picked up by the 10-minute day reload).
+- **Shared results, computed once per data change** (`respcache.py`): the statistics, filter lists, overview and whole-day map layer of the map platform and the services statistics are kept in memory under a key naming everything they depend on: the loaded day (its start, the moment it was loaded and its version, which changes whenever MongoDB has new or different rows), the filters, demo mode, the constituency and the network names. Every other viewer of the same selection gets the stored answer at once; when a report arrives the day is reloaded, the key changes and the next request recomputes from the fresh data. Simultaneous requests for the same key compute once (the others wait for that result). What depends on the replay moment (`as_of`, the current quarter and hour) is always worked out per request.
 - **Executive lookups:** network sector, company and region / city names are worked out once per distinct value per request (the sector lookup used to read the network-type list once per record).
-- **Executive 7-day baseline from compact past days:** each of the 7 days before the report day is loaded once and kept in a compact form (only the 13 fields the Executive figures read, repeated text stored once), so any filter or clicked combination gets its baseline from memory in about a second instead of 14 MongoDB day loads. A day is loaded again when its row counts in MongoDB change or the constituency changes. `MGMT_PAST_RECORDS` (default 3,000,000) caps the records kept; above it the oldest days are loaded as before. `tests/check_past_days.py` proves the compact days give exactly the same complete Executive answers as the full days (7 days × both platforms × 11 selections).
+- **Executive 7-day baseline from compact past days:** each of the 7 days before the report day is loaded once and kept in a compact form (only the 13 fields the Executive figures read, repeated text stored once), so any filter or clicked combination gets its baseline from memory in about a second instead of 14 MongoDB day loads. A day is loaded again when its row counts in MongoDB change or the constituency changes. `MGMT_PAST_RECORDS` (default 3,000,000) caps the records kept; above it the oldest days are loaded as before. The compact days give exactly the same complete Executive answers as the full days.
 - **Intel (right):** 24-hour activity chart (hover any 15-minute bar for its count) (real counts per 15 minutes from `extracted_date` for the whole day; the white bar marks the replay position), attack types, source reports, top infections / categories, most affected cities, contacted C2 / sinkhole domains and target countries.
   - Click any item to open the **analysis** view. Every chart in it has hover tooltips, and clicking a segment or row drills further:
     - KPIs and key findings
@@ -567,9 +568,9 @@ requests, the API key check, held-back reports) and `pipeline_link.py` (finds th
 rules themselves live in the pipeline's `worker_settings.py`, which the platform loads read-only; a request that
 weakens the pipeline also needs `./confirm_request.sh` on the pipeline's account.
 
-- **`docs/SECURITY.md`:** how Looking Glass is secured, the changes made after the penetration test, the operator checklist.
+- **`docs/SECURITY.md`:** how Looking Glass is secured, the operator checklist, checking an installation and reporting a vulnerability.
 - **`docs/INSTALLATION.md`:** installing on Windows with WSL or on a Linux server, HTTPS, firewall, updating, troubleshooting.
-- **`docs/SECURITY_REPORT.md`:** the penetration test of 2026-11-07 and its remediation status.
+- **`CHANGELOG.md`:** what changed in each release.
 
 Every CSV the platform hands out (report ZIPs, the services host list, Executive tables, and the browser downloads) passes
 through one guard (`csvsafe.py`, the same rule in `app.js` / `services.js`): a cell that a spreadsheet would run as a
@@ -581,11 +582,7 @@ Security scripts:
 - `manage/manage_users.py`: accounts on the command line (recovery when no administrator can sign in).
 - `deploy/create_readonly_db_user.py`: a read-only MongoDB account for the app.
 - `deploy/make_tls_cert.sh`: HTTPS for other screens.
-- `tests/lgauth.py`: lets the check scripts on this computer reach the API with the local automation key.
-- `tests/e2e_test.py`: starts a copy of the app on port 5055 against a throwaway database. The copy holds reference
-  data only (no accounts, sessions, keys, certificates, audit log, findings, notes or advisories), gets an automation
-  key of its own, listens on 127.0.0.1 only, and is removed again even when the test fails.
-- `python app.py` (tests, development) listens on 127.0.0.1 unless `BIND_HOST` says otherwise; the service itself runs
+- `python app.py` (development) listens on 127.0.0.1 unless `BIND_HOST` says otherwise; the service itself runs
   under gunicorn with its own bind setting.
 - IP addresses inside text are found by one module, `ip_find.py`, for every masker (the researchers' `hostmask.py` and
   partial masking, and the masked viewers' `host_label.py`), so no spelling escapes one and not the other.
@@ -599,7 +596,6 @@ Security scripts:
   `/api/overview`, `/api/settings/public` and the Executive data carry `tz` ({zone, city, offset, same_as_utc}) for
   the replay day, and the pages show the same moment in that zone beside UTC with `static/js/localtime.js` (the
   browser's own time-zone database, so daylight saving is right). The Executive PDF does the same with `timezones.py`.
-  `tests/check_timezones.py` checks all 54 countries' zones and the conversions.
 - CIS in the Audit portal (`control_map.py`): `NIST_TO_CIS` and `CIS_TITLES` are CIS's mapping, unchanged (CC BY-NC-ND
   4.0). Looking Glass's own reading is kept apart in the same file: `BACKED` (check → safeguard → condition on the
   check's facts, CIS's figures: 45 days dormant, 90 days retention, weekly reviews, MFA required), `NOT_BACKED`
@@ -614,8 +610,8 @@ Security scripts:
   sort), repeated parameters included, so a parameter added later is logged by default. Each value is cut to 120
   characters before the address finder reads it (a half address at the cut is dropped), and every address is replaced
   by its host reference (`HostRefs`); a view is one entry per person and selection per 10 minutes, a download is
-  an entry every time (the same list twice included); not for the self-test;
-  `DATA_ACCESS_LOG=0` turns it off. `tests/check_data_access.py`.
+  an entry every time (the same list twice included); not for the installation check;
+  `DATA_ACCESS_LOG=0` turns it off.
 - The address finder (`ip_find.py`) reads IPv6 candidates of at most 45 characters and 7 colons, split where three or
   more colons stand together, so its work grows with the text's length (thousands of colons: milliseconds). An
   IPv4-mapped address (`::ffff:41.66.1.2`) is that IPv4 host, masked whole, with the same label.
@@ -640,48 +636,38 @@ Security scripts:
   (whose names hold no hyphen), or else at the last word before `-geo`; both registries (`sources.py`, `services.py`)
   skip every `special*` collection, so they never enter the replay, totals or baselines; `/api/overview` carries
   `special`: per collection and shared date, rows and distinct hosts (counts only, cached 10 minutes), shown on the
-  intro page. `tests/check_special_reports.py` checks it against a throwaway MongoDB.
+  intro page.
 - Executive portal figures (`management.py`): lists are ranked by distinct devices (IP addresses) when they are known,
   records breaking ties; the 7-day baseline keeps every infection and issue of each past day (`item_count` reads a
   missing item in an old top-80 summary as unknown, never 0).
-- Checks that read the reports database call `tests/needs_db.py` first: without a reachable MongoDB they report
-  SKIPPED (exit 77) instead of a connection error.
+- Parts of the installation check that read the reports database are skipped when MongoDB cannot be reached: they
+  report SKIPPED (exit 77) instead of a connection error.
 
 ## Scripts
 
 ### Checking everything
 
-- **`bash tests/run_all_checks.sh`** runs every automated check in one go and prints one line per check (about 2 minutes). The checks are read-only against this installation's own database and service; the collection tests use throwaway databases that they drop. The checks are:
+- **`bash tests/run_all_checks.sh`** runs the whole installation check in one go and prints one line per check (about 2 minutes). The checks are read-only against this installation's own database and service; the collection checks use throwaway databases that they drop. The checks are:
   - replay schedule;
   - new communications and services collections;
   - services consistency (28 filter combinations);
   - services and communications totals against MongoDB;
-  - **statistics and filters** (`tests/verify_stats.py`): every figure is worked out a second time straight in MongoDB, with aggregation pipelines that derive the fields on their own, and compared with the running service: the headline figures of the statistics and the overview, every top list, the 96 quarter-hour timeline, the hourly chart, the top networks per company, every filter on its own (its 3 most common values and the rarest) on the statistics, the map and the replayed count, combinations of filters, the *unknown* / *untagged* / *unrated* labels, and the edges (unknown filter names, values that do not exist, `at=` outside the two days served, the 30-minute window and the limits of `/api/events`). It also reports, without failing, how many filter values one request can carry (a web-server limit of about 8 KB) and how fast the statistics answer under load. `tests/verify_stats.py -v` prints every comparison; a date checks the day before. Skipped when a constituency is set (the constituency check covers that) or when the day has no records yet;
-  - **services statistics** (`tests/verify_svc_stats.py`): the services platform worked out a second time from the raw MongoDB documents with the check's own code (tags, issues, products, families): the headline figures, every whole-day breakdown with its host counts, every filter (3 most common values and the rarest), combinations, vulnerable only, the *unknown …* labels;
-  - **Executive portal** (`tests/verify_management.py`): both portals' figures, hourly chart and lists, the filters, every day of the 7-day baseline and every grade (recomputed), and the clickable "Top findings" combinations (narrowed to one, the portal must count exactly its devices or hosts). The shared reading of MongoDB is `tests/mongo_derive.py`;
-  - **reports** (`tests/check_reports.py`): analysis reports of both platforms and both Executive reports are downloaded (ZIP and PDF alone); every PDF opens, every CSV has as many rows as the on-screen list and as MongoDB, the combination CSVs add up to the portal's figures and the 7-day trend CSV matches the portal. Each download is an audit entry of the automation account;
-  - **CSV formula safety** (`tests/check_csv_safety.py`): planted formula values through the guard, the code (no CSV is
+  - **statistics and filters**: every figure is worked out a second time straight in MongoDB, with aggregation pipelines that derive the fields on their own, and compared with the running service: the headline figures of the statistics and the overview, every top list, the 96 quarter-hour timeline, the hourly chart, the top networks per company, every filter on its own (its 3 most common values and the rarest) on the statistics, the map and the replayed count, combinations of filters, the *unknown* / *untagged* / *unrated* labels, and the edges (unknown filter names, values that do not exist, `at=` outside the two days served, the 30-minute window and the limits of `/api/events`). It also reports, without failing, how many filter values one request can carry (a web-server limit of about 8 KB) and how fast the statistics answer under load. Skipped when a constituency is set (the constituency check covers that) or when the day has no records yet;
+  - **services statistics**: the services platform worked out a second time from the raw MongoDB documents with the check's own code (tags, issues, products, families): the headline figures, every whole-day breakdown with its host counts, every filter (3 most common values and the rarest), combinations, vulnerable only, the *unknown …* labels;
+  - **Executive portal**: both portals' figures, hourly chart and lists, the filters, every day of the 7-day baseline and every grade (recomputed), and the clickable "Top findings" combinations (narrowed to one, the portal must count exactly its devices or hosts);
+  - **reports**: analysis reports of both platforms and both Executive reports are downloaded (ZIP and PDF alone); every PDF opens, every CSV has as many rows as the on-screen list and as MongoDB, the combination CSVs add up to the portal's figures and the 7-day trend CSV matches the portal. Each download is an audit entry of the automation account;
+  - **CSV formula safety**: planted formula values through the guard, the code (no CSV is
     written without it, the browser rule is run on the same values) and every cell of the real downloads;
   - replayed counts;
   - constituency;
-  - **demo masking** (`tests/test_demo.py`): no real address, AS number, network name or host name in any masked answer
+  - **demo masking**: no real address, AS number, network name or host name in any masked answer
     of either platform (Demo button and roles without *unmasked*), raw addresses and real network names as filters find
     nothing, pins never outlive the account. It first proves it finds real values in unmasked answers, so it can fail;
-  - **privacy and roles unit tests** (`tests/test_privacy_roles.py`): IP and text masking, aliases, host references,
+  - **privacy and roles**: IP and text masking, aliases, host references,
     strict filters, role rules and people's names, on invented values;
-  - **Intel gathered** (`tests/check_intel.py`) and **researchers' notes** (`tests/check_notes.py`, on a throwaway notes
-    file): researchers get them, other roles are refused, no constituent address in any answer, notes reach the cards
+  - **Intel gathered** and **researchers' notes** (on a throwaway notes file): researchers get them, other roles are refused, no constituent address in any answer, notes reach the cards
     and the PDF reports;
-  - **several reports / multiple issues** (`tests/check_cross_filters.py`): for every report family and the busiest reports, the figure, the analysis table, the filtered view, every bubble, what clicking a bubble shows and the regions map must agree with an independent count straight from MongoDB; it also checks that a filtered stream finds the latest records however long ago.
-- **`.venv/bin/python tests/e2e_test.py all`** is the end-to-end test of report arrivals (about 5 minutes). It copies the project to `~/lg_e2e_app` (its own data files) and the replay day's rows to a throwaway database `lg_e2e`, and starts the copy on port 5055. It then simulates Shadowserver and checks what both platforms and the intro page report, as the browser sees them:
-  - late rows for reports already in;
-  - a report's first rows of the day;
-  - new compatible and incompatible collections on each platform (announced, field score, listed on the intro page, not picked up by the other platform);
-  - a constituency change on both platforms;
-  - dropped collections;
-  - the replay schedule staying on its day.
-
-  Afterwards the copy is stopped and the copy and the test database are deleted. `setup`, `check` and `teardown` can also be run one at a time, for example to watch the copy's pages at http://127.0.0.1:5055 while `check` runs.
+  - **several reports / multiple issues**: for every report family and the busiest reports, the figure, the analysis table, the filtered view, every bubble, what clicking a bubble shows and the regions map must agree with an independent count straight from MongoDB; it also checks that a filtered stream finds the latest records however long ago.
 - While the intro page is open, it refreshes the services card within about 15 seconds of a new services collection, late services records or a field-check result. Communications changes refresh it straight from the map's clock.
 - The "replay paused while this tab was in the background" notice appears only on the platforms, not over the intro page; the replay still pauses and resumes as before.
 
@@ -690,6 +676,5 @@ Security scripts:
 - `tools/daysize.py [YYYY-MM-DD]` (default yesterday) shows one day's rows and files per report, its time range, top tags and countries.
 - `tools/list_infections.py [YYYY-MM-DD]` lists every infection of that day (any day, not only the replay day).
 - `tools/discover.py` surveys every collection: size, indexes, src/dst fields, latest document and yesterday's row count. It writes `tools/discovery.json`, and `tools/show_srcdst.py` prints the matching collections from it.
-- `tests/test_sources.py` is a smoke test: it builds the registry, loads the replay day from all collections and calls the APIs.
 - `deploy/reload.sh` restarts the systemd service without sudo. It kills the main process and systemd starts it again; `sudo systemctl restart looking-glass` does the same.
 - `manage/backup.sh [dest]` creates a timestamped archive of the project, including `.env` and everything in `data/` but not `.venv`, saved as `~/backups/<project folder>-<UTC time>.tar.gz` with a `.sha256` file and mode 600.

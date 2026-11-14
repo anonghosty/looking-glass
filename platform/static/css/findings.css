@@ -162,3 +162,12 @@ details.fd-subs-closed { margin-top: 10px; border: 1px dashed var(--border-stron
 details.fd-subs-closed > summary b { font-size: 13px; color: var(--text-2); }
 details.fd-subd[hidden] { display: none; }
 .fd-page { --s-advisor: #5b8def; } .s-advisor { --sc: var(--s-advisor); }
+
+/* the card head (2026-11-14): the title row wraps as a whole; the organisation label and the state stay on one line
+   each, never squeezed into two; a long combination name (mono) wraps inside the card instead of running past it */
+.fd-t { flex-wrap: wrap; row-gap: 6px; flex: 1 1 auto; }
+.fd-t h2 { min-width: 0; flex: 0 1 auto; }
+.fd-org { white-space: nowrap; flex: none; margin-left: 0; align-self: center; }
+.fd-h > .fd-pill { flex: none; align-self: flex-start; margin-top: 2px; }
+.fd-meta { min-width: 0; }
+.fd-name { overflow-wrap: anywhere; word-break: break-word; min-width: 0; }

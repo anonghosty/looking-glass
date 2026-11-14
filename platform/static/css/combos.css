@@ -239,3 +239,20 @@
 .cb-filter-note { font-size: 12.5px; color: var(--muted); }
 .cb-filter.on { border-color: rgba(124, 156, 255, .7); box-shadow: 0 0 0 1px rgba(124, 156, 255, .25) inset; }
 .cb-filter.on .cb-filter-note { color: #cfdcff; }
+
+/* the network picker: what each organisation's devices carry (combos-enrich.js seenByNetwork), the ticked items
+   highlighted, and organisations carrying a ticked item marked (2026-11-14) */
+.ce-nets-list { max-height: 360px; }
+.ce-net { align-items: start; }
+.ce-net-seen { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; min-width: 0; }
+.ce-net .ce-net-item { display: inline-flex; gap: 4px; align-items: baseline; max-width: 100%; padding: 1px 7px; border-radius: 999px;
+  font: 500 11px var(--mono); color: var(--text-2, #c8c8cf); border: 1px solid var(--border-strong); background: rgba(255, 255, 255, .02); overflow-wrap: anywhere; }
+.ce-net .ce-net-item em { font-style: normal; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ce-net .ce-net-item.inf { border-color: rgba(229, 72, 77, .35); }
+.ce-net .ce-net-item.iss { border-color: rgba(247, 107, 21, .35); }
+.ce-net .ce-net-item.ticked { color: #fff; background: rgba(255, 197, 61, .16); border-color: rgba(255, 197, 61, .75); }
+.ce-net .ce-net-item.ticked em { color: #ffe2a0; }
+.ce-net .ce-net-more { color: var(--muted); font-size: 11px; align-self: center; }
+.ce-net.has { border-color: rgba(255, 197, 61, .6); box-shadow: inset 3px 0 0 rgba(255, 197, 61, .8); }
+.ce-net.has.on { background: rgba(124, 156, 255, .1); }
+.ce-net { align-content: start; }   /* a card taller than its content keeps its lines together at the top */

@@ -855,7 +855,7 @@
     const day = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", timeZone: "UTC" });
     const a = d.arriving || {};
     note.textContent = (a.still ? `Today's reports are still arriving: ${a.in} of the usual ${a.usual} in so far. ` : "")
-      + "Records per day in each group of Shadowserver's Intelligence reports, inside the constituency; today is compared with the median of the 7 days before."
+      + "Abused or compromised: records per day in each group of Shadowserver's Intelligence reports, inside the constituency; today is compared with the median of the 7 days before."
       + (d.not_received ? ` ${d.not_received} of these reports did not arrive this week.` : "");
     box.replaceChildren();
     for (const gr of d.groups) {

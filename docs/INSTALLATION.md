@@ -59,13 +59,13 @@ Security is described in [../docs/SECURITY.md](SECURITY.md). Steps marked
 |---|---|
 | Countries | the 54 African countries today (regions maps, settings, constituency); global coverage is in the pipeline |
 | Operating system | Ubuntu 24.04 or later, Desktop or Server, with systemd (on the computer itself, in a virtual machine, or Ubuntu on WSL 2 on Windows 10/11) |
-| Python | 3.12 or newer, with `venv` (tested on 3.14) |
+| Python | 3.12 or newer, with `venv` |
 | MongoDB | 6 or newer, with authentication on, filled by the database pipeline |
 | Shadowserver | your CSIRT's free Shadowserver reports (https://www.shadowserver.org/what-we-do/network-reporting/) delivered to a mailbox, or fetched with your Shadowserver API key |
 | Mapbox | a free account and a public access token (`pk.…`) for the map: https://account.mapbox.com |
 | Malpedia (optional) | an API token, so Malpedia joins the sources behind the "Look up" buttons |
 | Name sources (no account needed) | MISP Galaxy, MITRE ATT&CK and MITRE CTID's KEV mappings: the installer downloads the first copies (public files on GitHub, about 60 MB to fetch, about 6 MB kept, a minute) and schedules a weekly refresh. Without internet the installation goes on without them; look-ups then use the definitions and Malpedia until the next refresh |
-| Memory / disk | about 2 GB RAM for the platform. Disk: the download (`git clone`) is about 100 MB: the code itself is about 9 MB, the rest is screenshots, film posters and the history. The two Python environments the installer makes add about 120 MB. MongoDB needs space for your reports |
+| Memory / disk | about 2 GB RAM for the platform and MongoDB together. Disk: `git clone` downloads about 50 MB (about 36 MB with `--depth 1`, the latest version only) and takes about 45 MB on disk; the code itself is under 10 MB, the rest is screenshots and film posters. The two Python environments the installer makes add about 115 MB. MongoDB needs space for your reports |
 
 ## Who can reach Looking Glass: `ACCESS_MODE`
 
@@ -333,7 +333,7 @@ Port 5000 and MongoDB's 27017 stay closed to the network.
 manage/backup.sh
 git pull
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python tests/check_libraries.py   # the libraries: inside the tested versions, and working
+.venv/bin/python tests/check_libraries.py   # the libraries: inside the supported versions, and working
 deploy/reload.sh                     # or: sudo systemctl restart looking-glass
 security_testing/security_retest.py && tests/run_all_checks.sh
 ```

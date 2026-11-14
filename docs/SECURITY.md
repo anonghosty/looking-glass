@@ -1,17 +1,8 @@
 # Looking Glass — security
 
-This document describes how Looking Glass is secured, what was changed after the penetration test of 2026-11-07
-(`docs/SECURITY_REPORT.md`), and how to run it safely. To install it, see `docs/INSTALLATION.md`.
-
-**Status: hardening is in progress.**
-- **Done:** all application fixes, tested with `security_testing/security_retest.py` (about 120 checks, all passing).
-- **Still to do by the operator, on each installation:**
-  - install the hardened service unit;
-  - switch MongoDB to the read-only account;
-  - review the Windows firewall rules (on WSL installations);
-  - create the real user accounts.
-
-  These steps are listed under [Operator checklist](#5-operator-checklist).
+How Looking Glass protects the data it holds, how to run it safely, and how to report a vulnerability. To install it,
+see [INSTALLATION.md](INSTALLATION.md); for the parts, trust boundaries and threat model, see
+[Architecture and threat model](ARCHITECTURE.md).
 
 ---
 
@@ -32,9 +23,9 @@ This document describes how Looking Glass is secured, what was changed after the
 | Report zips | Unpacked within limits counted on the real bytes (unpacked size, compression ratio, files per zip, free disk); a zip bomb is quarantined with the reason and nothing of it is loaded; names inside a zip cannot leave its folder. Defaults suit a large country, changeable in `.env` | `database/zip_limits.py` |
 | Database | Read-only MongoDB account for the platform (`lookingglass_ro`); the pipeline's own account (`lookingglass_pipeline`: read and write on its database only, no account management); the administrator account only in `/etc/looking-glass/mongo-admin.env` (root, mode 600), out of reach of the programs' own Linux user; MongoDB bound to localhost with authentication | `deploy/create_readonly_db_user.py`, `database/create_pipeline_db_user.py`, `database/store_mongo_admin.sh` |
 | Operating system | systemd sandbox: no privilege gain, read-only system and home folder, writable only in `data/`, private files (umask 077) | `deploy/looking-glass.service.template` |
-| Outbound downloads (name sources) | MISP Galaxy and MITRE ATT&CK are downloaded only by `manage/fetch_offline_names.py`, run by the weekly cron line, an administrator on the server, or the **Refresh sources** button (permission *settings*, CSRF token, fresh sign-in, at most once an hour, one at a time; every refresh in the audit log): plain HTTPS GETs of fixed public files on raw.githubusercontent.com (and one listing of MITRE CTID's public Mappings Explorer repository on api.github.com, to find its newest KEV mapping file) (no name, host or report in the request; redirects away from HTTPS refused; 200 MB per file; at most once a week unless `--force`; a download that is invalid or under 70% of the copy in use is refused and the old copy kept). Only compact indexes are kept (`data/names_misp_galaxy.json`, `data/names_attack.json`); a look-up only reads them and sends nothing. The text is third-party data: shown as text, links only `http(s)` | `offline_names.py`, `manage/fetch_offline_names.py`, `tests/check_offline_names.py` |
-| ATT&CK in advisories | Only reviewed mappings go to recipients: generating an advisory's report is refused while a mapping is only suggested (the advisor confirms or removes it: advisors only, CSRF token, fresh sign-in, audited, part of the report's content fingerprint), and a report carrying an unreviewed mapping cannot be marked sent. The generated report keeps its techniques and texts; "why" lines use counts and products, never an address | `advisory_attack.py`, `advisory.py`, `tests/check_advisory_attack.py` |
-| Trusting CTID's CVE mappings | CVE techniques (MITRE CTID, KEV mappings) in advisories are suggestions under the reviewed-only rule unless an administrator trusts CTID: `POST /api/attack/ctid-trust` needs permission *settings*, the CSRF token and a fresh sign-in, accepts only true or false, is off by default, and every change is in the audit log. CVE look-ups read the local copy only | `attack_map.py`, `advisory_attack.py`, `tests/check_cve_attack.py` |
+| Outbound downloads (name sources) | MISP Galaxy and MITRE ATT&CK are downloaded only by `manage/fetch_offline_names.py`, run by the weekly cron line, an administrator on the server, or the **Refresh sources** button (permission *settings*, CSRF token, fresh sign-in, at most once an hour, one at a time; every refresh in the audit log): plain HTTPS GETs of fixed public files on raw.githubusercontent.com (and one listing of MITRE CTID's public Mappings Explorer repository on api.github.com, to find its newest KEV mapping file) (no name, host or report in the request; redirects away from HTTPS refused; 200 MB per file; at most once a week unless `--force`; a download that is invalid or under 70% of the copy in use is refused and the old copy kept). Only compact indexes are kept (`data/names_misp_galaxy.json`, `data/names_attack.json`); a look-up only reads them and sends nothing. The text is third-party data: shown as text, links only `http(s)` | `offline_names.py`, `manage/fetch_offline_names.py` |
+| ATT&CK in advisories | Only reviewed mappings go to recipients: generating an advisory's report is refused while a mapping is only suggested (the advisor confirms or removes it: advisors only, CSRF token, fresh sign-in, audited, part of the report's content fingerprint), and a report carrying an unreviewed mapping cannot be marked sent. The generated report keeps its techniques and texts; "why" lines use counts and products, never an address | `advisory_attack.py`, `advisory.py` |
+| Trusting CTID's CVE mappings | CVE techniques (MITRE CTID, KEV mappings) in advisories are suggestions under the reviewed-only rule unless an administrator trusts CTID: `POST /api/attack/ctid-trust` needs permission *settings*, the CSRF token and a fresh sign-in, accepts only true or false, is off by default, and every change is in the audit log. CVE look-ups read the local copy only | `attack_map.py`, `advisory_attack.py` |
 | Secrets | `.env` and `data/users.json`, `sessions.json`, `automation.key` and `tls/key.pem` are mode 600; backups are mode 600 in a 700 folder | file system |
 
 ## 2. Accounts, sign-in and administration
@@ -274,165 +265,66 @@ an OpenID Connect provider can be added later.
 - **Script injection, the main way cookies are stolen, is contained:** strict CSP (nonce, no eval, no inline handlers), all report data inserted as text, and `HttpOnly` cookies.
 - **`Cache-Control: no-store`** on the API, the login page and Settings, so data doesn't stay in browser or proxy caches.
 
-## 4. Changes made after the penetration test
+### Service hardening
+- **systemd sandbox:** `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=read-only`, writable only `data/`,
+  `PrivateTmp`, `UMask=0077` and more. Check it with `systemd-analyze security looking-glass`.
+- **Request limits:** request line, number of header fields and field size (gunicorn), and a 64 KB body limit.
+- **Separate database accounts:** the platform reads with a read-only MongoDB account; the pipeline has its own
+  account limited to its database; the administrator account is kept root-only in `/etc/looking-glass/`.
+- **Report intake:** unpacking limits against oversized or malicious archives, report names checked before they become
+  collections, and an optional DKIM check of every report e-mail, with blocking and quarantine.
 
-| # | Finding | Fix | Verified by |
-|---|---|---|---|
-| 1 | Reachable from the network without login, plain HTTP | Login + MFA for everything. Local-only bind (unit) and an app-level guard: other computers get 403 unless listed in `VIEWER_NETWORKS`. HTTPS on the same port via `gunicorn.conf.py` + `deploy/make_tls_cert.sh`. Firewall steps in `docs/INSTALLATION.md` | retest: no-login pages redirect, APIs 401; the network address gets 403 |
-| 2 | Settings changeable by any web page (CSRF, DNS rebinding) | Admin role; per-session CSRF token; JSON only (415 otherwise); a foreign `Origin` or `Sec-Fetch-Site: cross-site` gets 403; unknown `Host` gets 400; an empty body no longer means "defaults" | retest: text/plain 415, foreign Origin 403, cross-site 403, rebinding 400, no token 403, viewer 403 |
-| 3 | MongoDB `root` account | `deploy/create_readonly_db_user.py` creates `lookingglass_ro` (read role only), checks that it can't write, and switches `.env` | **operator step** (needs the admin account once) |
-| 4 | A far-future `at=` evicted the replay day | All request times are clamped to the replay day and the day before it | retest: `at=2099` gives the replay day; no reload |
-| 5 | Malpedia path injection, quota and cache use | Allowed fields only; hashes must be hex of the right length; family IDs `platform.name`; values ≤ 100 characters and URL-encoded; 30 API calls a minute; cache capped at 3,000 entries | retest: bad hash, field and family ID all 400 |
-| 6 | Public demo leaks (network names, IP oracle) | Settings admin-only; in demo mode host filters accept only the server's opaque references | retest: a raw IP in demo mode gives 0 records; the reference still works |
-| 7 | No size limit; any country code | 64 KB request limit; at most 2,000 AS numbers and 500 ranges; country must be one of the 54 | retest: 2.9 MB refused, ZZ 400 |
-| 8 | No security headers | CSP with nonce (no `unsafe-eval`; inline scripts carry the nonce; the old browser-age check no longer uses `new Function`), `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Cross-Origin-Opener-Policy`, `Permissions-Policy`; `Server: Looking Glass` | retest + browser: map, services and Settings work with no CSP violations |
-| 9 | CDN scripts without SRI | sha384 integrity on `mapbox-gl.js`, `mapbox-gl.css`, `deck.gl` (pinned versions) | retest; browser loads them |
-| 10 | Malpedia links not limited to http(s) | Only `http:` / `https:` links; anything else is shown as text | code |
-| 11 | JSON array caused 500 | 400 with a message | retest |
-| 12 | Mapbox token visible | Expected for a public `pk.` token | **operator step:** restrict it to your hostnames in the Mapbox account |
+## 4. Operator checklist
 
-Changes after an external code review (2026-11-09):
+Do this on every installation (details in [INSTALLATION.md](INSTALLATION.md)):
+- [ ] Install the hardened service unit (the installer does this; `deploy/install.sh` on a manual installation).
+- [ ] Create the administrator account: open the sign-in page, click **Let's get started**, and type the setup code
+      from `data/setup_code`.
+- [ ] Approve registered accounts in Admin → Users with the right role.
+- [ ] Use the read-only MongoDB account for the platform and the pipeline's own account (the installer does both;
+      `deploy/create_readonly_db_user.py` and `database/create_pipeline_db_user.py` on a manual installation).
+- [ ] Check the mail server's certificate (`IMAP_VERIFY_TLS=true`, the default) and, once genuine Shadowserver mail
+      passes the sender check, block what fails it (`MAIL_AUTH=enforce`), or take the reports by Shadowserver's API.
+- [ ] WSL only: remove Windows firewall rules that open the port to the network, unless other screens need it.
+- [ ] Other screens: choose `ACCESS_MODE` (`private` with `VIEWER_NETWORKS`, or `public`), switch on HTTPS, and open
+      the firewall accordingly.
+- [ ] Restrict the Mapbox token to your host names in the Mapbox account.
+- [ ] Wall screens: an external account (always masked) with "Stay signed in for 5 days", and `PUBLIC_DEMO=1` for
+      public displays.
+- [ ] Check the installation (below).
+- [ ] Take a backup (`manage/backup.sh`) and keep a copy off the server.
 
-| Finding | Fix | Verified by |
-|---|---|---|
-| CSV exports could carry spreadsheet formulas (vendor and product banners come from the scanned hosts) | One guard for every CSV (`csvsafe.py`, the same rule in the browser downloads): formula cells get a leading apostrophe | `tests/check_csv_safety.py`: planted values, the code, every cell of the real downloads |
-| In masked views a real network name or AS number still worked as a filter (a network-presence oracle) | Masked requests accept only the aliases as network filters, as host filters already accepted only opaque references | `tests/test_demo.py`; the check fails with the fix removed |
-| The masking test could never fail | It now fails on any leak, and first proves it detects real values in unmasked answers; unit tests for `privacy.py` and the roles | proven by breaking masking in a throwaway copy |
-| Pinned events (full details) stayed in the browser after logout | Pins are per account, never kept for masked accounts, deleted on the sign-in page | `tests/test_demo.py` |
-| The release was marked publishable before its scan; images and PDFs were not scanned | A separate marker is written only after a clean scan and is required to publish; binaries are scanned for paths, authors, EXIF, GPS and PNG text chunks | deliberate failures in the build |
+## 5. Checking your installation
 
-Changes after the external review of 2026-11-13:
-
-| Finding | Fix | Verified by |
-|---|---|---|
-| `::ffff:41.66.1.2` was masked as `<ip>.66.1.2`: three of four parts showed | The IPv6 run takes the IPv4 tail in; an IPv4-mapped address is that IPv4 host, masked whole, with the same label | `tests/check_ip_find.py`: fails on any run of three dotted numbers left; fails on the old code |
-| A long run of colons tied up the CPU (a few thousand colons took seconds) | IPv6 candidates of at most 45 characters and 7 colons; values cut before the audit logger reads them | `tests/check_ip_find.py`, `tests/check_data_access.py` (thousands of colons in milliseconds) |
-| A deleted archive with a note under a made-up name verified as whole | Notes matched to rotations by last link too; every kept rotation must have its archive or a matching note | `tests/check_auditor_portal.py` (the reviewer's attack, WHOLE on the old verifier) |
-| An advisory edited after its report was generated could go out with the old report | The report keeps a fingerprint of what it says; drafted and sent are refused until it is generated again | `tests/check_combo_review.py` |
-| An unsigned Content-Type above a signed message passed the sender check | More From / Content-Type / Content-Transfer-Encoding / MIME-Version headers than signed: not a pass | `database/tests/test_mail_auth.py` |
-| Every Special Report landed in one `special` collection | Each in its own, the name cut where the country part begins | `database/tests/test_report_names.py` |
-| View logging missed `src_ip`, most services filters and `/api/events` | Every parameter but display and time options; the event streams logged | `tests/check_data_access.py` |
-| An overview could widen to every organisation when MongoDB could not load its days | A day that cannot be loaded is an error, never a smaller search | `tests/check_combo_review.py` |
-| Low: a race on authenticator codes, names differing in case, a chunked JSON array, any `?notice=` text, a forged request crashing `confirm_request.sh`, the uninstaller missing a running pipeline, a re-install turning Block off | Each fixed where it was | `tests/check_auth_offline.py`, `database/tests/test_worker_settings_effective.py`, `tests/check_uninstall.py` |
-| CI ran 8 of the platform's checks; sign-in and MFA were only tested live | 30 database-free checks in CI; a new offline check of sign-in, MFA, recovery codes, `/forgot` and each role's portal; checks without a database or service now skip instead of failing | `.github/workflows/checks.yml` |
-
-The second list of 2026-11-13:
-
-| Finding | Fix | Verified by |
-|---|---|---|
-| The self-test's client name (`LookingGlass-retest`) hid any request from the Admin and Audit views; anyone can send it | The client name counts only from the server itself (loopback), where the self-test runs; the self-test's own `lg-selftest-` accounts as before | `tests/check_auditor_portal.py`: an outside request with that name is shown and counted |
-| The line hash (a hash of the raw report line) reached masked viewers: a guessed address, port and time could be hashed and confirmed | Masked events carry no line hash, event ID or record ID | `tests/check_banner_inbound.py`: fails on the old code |
-| A key written twice in `.env` was read as the first value by the pipeline and the last by Settings and the installer | Every reader takes the first; Settings and the installer write the key once and remove later copies, line by line | a throwaway `.env` with a key twice and a key that only ends in the same name; `database/tests/test_worker_settings_effective.py` |
-| A deleted account's name could be registered again, inheriting its findings, notes, channels and audit history | The name stays reserved (any letter case); only `manage_users.py add NAME --reuse-name` on the server gives it out again, for the same person | `tests/check_auth_offline.py` |
-| `/forgot` took longer for an unknown name than for an active account with a wrong code, so its time told which names are active | Both cost one password hash | `tests/check_auth_offline.py` counts the hashes on each path |
-| Product, vendor, device type and version reached masked viewers and researchers unmasked; a banner can carry the host's own name or address | Masked like a report's own fields (host names, addresses, e-mails, dates, IDs); a masked viewer's filter on them is compared with the masked value | `tests/check_banner_inbound.py` |
-| Intel called a Spam URL record's link host a "C2 domain" | Shadowserver's Spam URL report is about the sender (`src_ip`, the spam relay); the link's host is a "Spam link host", never a C2, and masked when it is in the constituency (`dst_geo` is the platform's country); not counted as a C2 on the Executive portal | `tests/check_banner_inbound.py` |
-| The re-check: a host name whose first label is only digits and dashes (41-66-1-2.static.telco.com.gh) was not masked anywhere `hostmask.py` masks (banners, notes, researcher views, Spam link hosts) | Any dotted name ending in a letter-only top-level label is a host name, whatever its first label | `tests/check_banner_inbound.py`: the reviewer's names; fails on the old code |
-| `?to=9999-12-31` on the audit overview answered 500 | A period ending in the future ends today | `tests/check_auditor_portal.py` |
-| The audit CSV put any `tab` value into the download's file name | Known tab names only; anything else is refused | `tests/check_auditor_portal.py` (a quote and a line break) |
-| `?to=0001-01-01` still answered 500 (the period starts 29 days earlier); the sender audit had the same code | A period lies within 1 January 1970 and today, in the Audit portal and the sender audit | `tests/check_auditor_portal.py` |
-| Peace of mind left the platforms' host data, the complete lists and the hosts CSV open (its rule returned before the export check) | Those APIs are closed while it is on; exports and complete lists are refused | `tests/check_peace.py` |
-| An advisor opening one organisation's advisory (its IP addresses) was not in the data-access log | Logged by its route, with the finding and the organisation | `tests/check_data_access.py` |
-| A drill-down list short enough to fit on screen was saved as CSV in the browser, with no request: no audit entry | Every CSV download is fetched whole from the server and logged as an export | `tests/check_data_access.py` |
-| A damaged audit archive (bad data, cut short, not gzip) crashed the integrity check and the evidence package | Reported as a break naming the file; the evidence lists the rest; retention never deletes an archive it cannot read; writing goes on | `tests/check_auditor_portal.py` |
-| Services filter lists: masked and unmasked viewers threw each other's lists out of a one-entry cache | Four entries | — |
-| 500s on wrong types: `limit=abc` on the services records | A bad number falls back to the default | probe of every API with wrong types (only deliberate 503s remain, Malpedia without a token) |
-| A zip that arrives broken every time was deleted and fetched again on every run, for ever | At most three fresh downloads, then it is left and the log says to ask Shadowserver | `database/tests/test_refetch_and_rows.py` |
-| A CSV with a bad byte after its first batches was read again and its rows counted twice (and its own rows as "already in DB") | Counted once | `database/tests/test_refetch_and_rows.py` |
-| Uninstall: `MONGO_DB=admin` (or `local`, `config`) would have been dropped; a unit installed through a symlink was missed; a run still holding the lock could have its database and folder deleted under it; a dry run could fall through to a real delete | Refused; units compared by real path; stopped with nothing deleted; a plain if/else | `tests/check_uninstall.py` (fails 5 times on the old script) |
-| The service sandbox allowed every kind of socket and system call | `RestrictAddressFamilies` (UNIX, IPv4, IPv6, netlink), `SystemCallFilter=@system-service`, no capabilities, `ProtectClock`, `ProtectKernelLogs`, `ProtectHostname`, `RestrictRealtime` | the platform's checks run under the same rules |
-| The retest's "attempts left" check passed any page saying "attempt left" (missing brackets) | The status and either wording | — |
-
-The re-check of 82d5719:
-
-| Finding | Fix | Verified by |
-|---|---|---|
-| An address after a word and a slash (`url=word/203.0.113.7`, `path/203.0.113.7:80`, `proxy/41.66.1.2`) was read as a product version and left unmasked | Only a known product name (apache, nginx, openssh, routeros and the like) followed by a slash makes a version, and only at the start or after a space or bracket, never as a value; an address with a port is never a version. Any other word before a slash (`proxy/3.120.4.5`, `gw/10.0.0.1`) leaves the address masked | `tests/check_ip_find.py` (fails on the old finder) |
-| A zip that failed with a file error while unpacking was retried on every run, its reports never loaded | Quarantined with the reason; a full disk is still retried | `database/tests/test_zip_limits.py` |
-| The sandbox let the platform reach local sockets it never uses (the user's systemd and D-Bus under `/run/user`, the system bus) | `InaccessiblePaths=-/run/user -/run/dbus -/var/run/dbus` | the platform's checks run under the same rules |
-| The advisory PDF preview was not in the data-access log | Logged like the organisation view | `tests/check_data_access.py` |
-| A combination ZIP kept on disk was served after a restart on a snapshot of the review state | The review gate is asked again; an older copy without its code is not served | `tests/check_combos.py` |
-| `--remove-mongodb` could purge a MongoDB that was there before Looking Glass (taken over with `MONGO_TAKE_OVER`) | deploy.sh marks a take-over; the uninstaller also reads the original configuration it kept; such a MongoDB is never removed | `tests/check_uninstall.py` (fails on the old script) |
-| The uninstaller missed the schedule of a folder with a space (written shell-quoted) | Both spellings matched | `tests/check_uninstall.py` |
-| 500s: a role sent as a list, a time window like `1..2+3`, a non-Latin name in the Executive download, a `Retry-After` date from the mailbox | Refused or read correctly; the download name is plain ASCII with the full name in `filename*` | `tests/check_wrong_types.py`, `database/tests/test_refetch_and_rows.py` |
-| The advisory page went blank on a malformed `#…` in the address | Read as no network | — |
-| The host analysis never said "appears in N reports" (it compared the host's reference, not its address) | Compared by address | checked on the day's data |
-| Demo mode on the map left the real operator names in the network filters | The filter lists are fetched again when demo mode changes | — |
-| LG-11 said "complete since the system started" when it had only checked the period chosen | It speaks of the period, and says when the log itself starts later than the system | `tests/check_auditor_portal.py` |
-| The `mail_auth.py` command line ignored `DATA_DIR` | It reads it like the pipeline | — |
-| The Executive day list went stale at midnight; the combination search could be finished by the previous search's poll while a new one started; the continuity proof ran without the log's lock | The list is rebuilt when the days change and fetched again on return after midnight; the previous search is let go first; the proof takes the lock | — |
-| The policy allowed any script on unpkg and cdnjs | The three outside scripts by their exact files | browser check of the map and the authenticator set-up |
-| After a network change the platform refused its own new address until a restart | Its own addresses are looked at again (at most once a minute) for an unknown host name | `tests/check_wrong_types.py` |
-| A notification link like `/\t/evil.example` passed the "starts with one slash" test, and a browser drops the tab, so it led to another site | A link with a control character, space or backslash is not followed | browser check of 11 links |
-| A services report's name could be recorded in the infections to-do list (from a combination export) | Services reports are never recorded as unresolved infections; the list leaves them out | `tests/check_kb_report_names.py` |
-| Code scanning #28 and #29: the audit continuity check sent exception text to the page | Fixed messages only; a damaged archive is named, with "unreadable" | `tests/check_auditor_portal.py` |
-| The advisory's Confirm, Remove and Undo buttons for ATT&CK mappings sent the organisation picked at the moment of the click | Each button sends the organisation its form was drawn for; an answer after a switch is dropped | `tests/check_workflow_fixes.py` |
-| A technique's lines in the advisory PDF could be split over two pages | The whole technique is measured and kept on one page | `tests/check_advisory_attack.py` (fails on the old code) |
-| With the report database unreachable, the Definitions to-do list came back empty without saying why (and GitHub's checks, which have no database, failed) | The names are still listed; only "seen in" may be missing, and the answer and the page say so | `tests/check_kb_report_names.py` (with and without MongoDB) |
-| A known product name followed by an address (`apache/41.66.1.2`) kept the address as a "version" | After a product name a version must start at 25 or lower, as real ones do | `tests/check_ip_find.py` (fails on the old finder) |
-| A whole office behind one public address could lock itself out (20 failures an hour) and nobody could see or lift the lock | Admin → Locked sign-ins lists each lock; lifting one needs the users permission, CSRF and a fresh sign-in and is a privileged entry in the audit log; the limits are set in `.env` within bounds that keep guessing slow | `tests/check_lockouts.py` |
-| Slow pages in real use could not be found | Requests over `SLOW_REQUEST_S` are logged by route pattern only (never an address, query text or name; file mode 600); the name index is rebuilt once when many requests arrive together | `tests/check_slow_log.py` |
-| Restarts, failed report runs, a filling disk or a failed name refresh were only in log files | Admins' bell shows them; nothing in them names a host | `tests/check_system_alerts.py` |
-| Heavy answers were computed again for every visitor, and pages queued behind them | A short cache for five read-only answers, keyed by role, permissions, Peace of mind and the full address (masking never crosses roles); any change starts afresh; errors and cookies are never kept; a kept answer is identical to a fresh one | `tests/check_response_cache.py` |
-| Admins had no view of the service without a terminal | Settings → Task monitor (the `settings` permission): service, jobs, requests, cache, MongoDB, machine, pipeline; no host from the reports; clearing the cache and its time need CSRF and a fresh sign-in and are in the audit log | `tests/check_task_monitor.py` |
-| Shadowserver's Intelligence reports had no page of their own; three were mixed into the services platform and the rest could not be shown | The Intelligence portal (`/intelligence`) for roles with `unmasked` and `export` only, refused in demo mode; read-only queries, hosts outside the constituency left out; leaked accounts masked unless asked for, and showing them is in the audit log; every CSV export and every host cross-view is in the audit log; an analyst code from a view goes through the existing analyst-code checks; management gets counts only, never a host | `tests/check_intelligence.py` (offline, no database needed) |
-| Reports without an IP address (Compromised Account, Ransomware Victim, Sandbox-DNS) arriving through a domain filter were never sorted or loaded | The pipeline also recognises file names ending `-asn`, `-netblock` and `-domain`; ordinary `-geo` names and the report-name quarantine are unchanged | `database/tests/test_no_ip_reports.py` |
-| Infections and CVEs/issues the analyst saw on a combination's devices could not go into the report | The analyst ticks them on the Combinations page; each name is checked on the server against that search's own devices (an unknown one is refused); management sees names and counts, never an address; the report and each organisation's advisory carry only what was ticked, on that organisation's devices | `tests/check_ticked_names.py` |
-| Management could add the analyst's views or use the researcher's only, never the analyst's alone | "Use the analyst's view only": the report, its organisations and the advisory cover exactly the devices behind what the analyst ticked; refused when nothing was ticked | `tests/check_ticked_names.py` |
-| The pipeline's sorted report copies only grew | Optional retention (`SORTED_KEEP_DAYS`, off by default): a copy is removed only when MongoDB has its rows and it is not waiting to load; never follows a link; each removal noted (mode 600) | `database/tests/test_retention.py` |
-
-Other hardening added:
-- **systemd sandbox:** `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=read-only`, writable only `data/`, `PrivateTmp`, `UMask=0077` and more. Check it with `systemd-analyze security threatmap`.
-- **gunicorn request limits:** request line, number of header fields, and field size.
-- **Geocoding cache moved to `data/geocache.json`,** so the sandbox only needs `data/` writable.
-
-## 5. Operator checklist
-
-Do this on every installation (details in `docs/INSTALLATION.md`):
-- [ ] Install the hardened unit: `deploy/install.sh`, then copy `deploy/looking-glass.service` to `/etc/systemd/system/` (needs sudo; docs/INSTALLATION.md).
-- [ ] Create the administrator account: open http://localhost:5000 on the server (or the proxy's HTTPS address), click **Let's get started**, and type the setup code from `cat data/setup_code`.
-- [ ] Approve registered accounts in Admin → Users with the right role (external, analyst, admin or a custom role).
-- [ ] Switch to the read-only MongoDB account: `deploy/create_readonly_db_user.py`, then move `.env.before-readonly` off the server.
-- [ ] Give the pipeline its own account: `database/create_pipeline_db_user.py`. It moves the administrator account to `/etc/looking-glass/mongo-admin.env` (root only) with `database/store_mongo_admin.sh`; run that script yourself if it says sudo was not available. This only helps if the user running Looking Glass has no passwordless sudo.
-- [ ] Now and then, run the three tests that need a throwaway database (they skip in the normal suite, because only root can read the administrator account): `tests/run_admin_db_tests.sh` (asks for sudo once).
-- [ ] WSL only: remove the Windows / Hyper-V firewall rules that open port 5000 to the network, unless other screens need it.
-- [ ] Other screens: choose `ACCESS_MODE` (`private` with `VIEWER_NETWORKS`, or `public`), switch on HTTPS, and open the firewall accordingly.
-- [ ] Restrict the Mapbox token to your hostnames in the Mapbox account.
-- [ ] Wall screens: an external account (always masked) with "Stay signed in for 5 days", and `PUBLIC_DEMO=1` for public displays.
-- [ ] Run `security_testing/security_retest.py` and `tests/run_all_checks.sh`; both must pass.
-- [ ] Take a backup (`manage/backup.sh`) and keep it off the server too.
-
-## 6. Checking it
-
-Every security protection:
+After installing or updating, check that every protection is in place on your own server:
 ```bash
 .venv/bin/python security_testing/security_retest.py
-```
-- About 120 checks against the running service (login, MFA, sessions, registration, approval, roles and permissions, admin, audit, password reset, and every finding of the penetration test). It uses two temporary accounts with random secrets and removes them afterwards.
-- It leaves about 10 failed logins from this computer in the lockout counter (one address may have 20 an hour). So don't run it twice in quick succession, or restart the service in between.
-
-The platform checks:
-```bash
 bash tests/run_all_checks.sh
 ```
-
-The end-to-end test, which runs on a separate copy:
-```bash
-.venv/bin/python tests/e2e_test.py all
-```
-
-The scripts reach the API with the local automation key (`data/automation.key`, mode 600, accepted from this computer only).
+- The first checks the protections against the running service (sign-in, MFA, sessions, roles and permissions,
+  administration, the audit log, password reset, request and browser protections). It uses two temporary accounts
+  with random secrets and removes them afterwards. It leaves about 10 failed sign-ins from this computer in the
+  lockout counter, so leave a few minutes before running it again.
+- The second checks the configuration, the data and each part of the platform.
+- Both reach the API with the local automation key (`data/automation.key`, mode 600, accepted from this computer only).
+- The installer runs both at the end of an installation when you ask it to.
 
 **Logs:**
 ```bash
 journalctl -u looking-glass
 ```
-They record:
-- logins, failed logins and lockouts;
-- sessions ended because they were used from another address or browser;
-- recovery-code use;
-- settings changes.
+They record sign-ins, failed sign-ins and lockouts; sessions ended because they were used from another address or
+browser; recovery-code use; and settings changes. The audit log (Audit portal) records who did what, and how to prove
+it was not changed is in [How the audit log proves itself](AUDIT_LOG_PROOF.md).
 
-## 7. Reporting a problem
+## 6. Supported versions and changes
 
-Report suspected vulnerabilities to the CSIRT team that runs this installation; don't open public issues for them. Include the steps to reproduce, and the logs if possible.
+Security fixes are made on the latest version (the `main` branch). Update with the steps in
+[INSTALLATION.md](INSTALLATION.md#updating). What changed in each release, security changes included, is in the
+[changelog](../CHANGELOG.md).
+
+## 7. Reporting a vulnerability
+
+- **In Looking Glass itself:** report it privately through the repository's Security tab (**Report a vulnerability**),
+  not in a public issue. Include the steps to reproduce and the version (commit) you run.
+- **In an installation:** report it to the CSIRT team that runs it.

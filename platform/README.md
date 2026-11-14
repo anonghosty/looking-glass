@@ -37,7 +37,6 @@ including Windows (WSL) and Linux servers, HTTPS and firewalls: [docs/INSTALLATI
 | [docs/OPERATIONS.md](../docs/OPERATIONS.md) | day-to-day running: service, accounts, backups, reference data, checks, diagnostics |
 | [docs/TECHNICAL_REFERENCE.md](../docs/TECHNICAL_REFERENCE.md) | how it works inside: data sources, replay schedule, masking, API, every script |
 | [docs/SECURITY.md](../docs/SECURITY.md) | how it is secured: accounts, MFA, sessions, roles, hardening, operator checklist |
-| [docs/SECURITY_REPORT.md](../docs/SECURITY_REPORT.md) | the penetration test and how every finding was fixed |
 
 ## Folder layout
 
@@ -53,7 +52,7 @@ platform/
 ├── deploy/                             install.sh, service template, HTTPS certificate, reload, read-only DB account
 ├── manage/                             accounts, backups, network names, knowledge base, region maps
 ├── security_testing/                   security_retest.py (the security documents are in ../docs/)
-├── tests/                              automated checks (run_all_checks.sh, end-to-end test)
+├── tests/                              installation checks (run_all_checks.sh, end-to-end check)
 └── tools/                              database and report diagnostics
 The guides above are in the top-level docs/ folder.
 ```

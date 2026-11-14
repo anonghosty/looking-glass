@@ -3,7 +3,7 @@
 How a CSIRT team uses Looking Glass to turn a day of Shadowserver reports into a few advisories that a network operator
 can act on, instead of forwarding a spreadsheet of thousands of addresses.
 
-> All figures and network names on this page come from the **demonstration data** shipped for testing (fictional
+> All figures and network names on this page come from the **demonstration data** shipped with Looking Glass (fictional
 > networks, documentation address ranges, real public CVEs). Your own figures will differ.
 
 **Watch first:** the three stories on this page, told on screen in 11 minutes, narrated, with captions.

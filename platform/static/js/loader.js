@@ -100,7 +100,7 @@
   }
   const LABELS = { "/advisory/": "Opening the advisory", "/advisory": "Opening the advisory portal", "/findings": "Opening the findings",
     "/review/": "Opening the review", "/combinations": "Opening the combination search", "/management": "Opening the Executive portal",
-    "/intel/": "Opening the analyst's selection", "/intelligence": "Opening the Intelligence reports", "/audit": "Opening the Audit portal", "/overview": "Opening the overview",
+    "/intel/": "Opening the analyst's selection", "/intelligence": "Opening Abused or Compromised", "/audit": "Opening the Audit portal", "/overview": "Opening the overview",
     "/services": "Opening publicly accessible / vulnerable services", "/settings": "Opening settings",
     "/definitions": "Opening definitions and intel", "/admin": "Opening administration", "/?intro": "Opening the overview", "/": "Opening reported network communications" };
   const labelFor = (url) => LABELS[Object.keys(LABELS).find((k) => url.startsWith(k) && (k !== "/" || url === "/" || url.startsWith("/?") && !url.startsWith("/?intro")))] || "Opening";

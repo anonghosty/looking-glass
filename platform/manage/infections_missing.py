@@ -4,8 +4,7 @@ Usage:  .venv/bin/python manage/infections_missing.py [days]      (default: the 
 
 Read-only against Mongo. Prints the undefined and needs-review infections with counts, reports, tags,
 families and sample C2 domains, and writes data/infections_missing.json with ready-to-fill stub entries.
-Bring that file (or this output) back to Claude to have the new entries researched and written, then
-merge them into data/infections.json. The server picks up changes to that file without a restart.
+Research and write the new entries from that file (or this output), then merge them into data/infections.json. The server picks up changes to that file without a restart.
 """
 import json
 import os

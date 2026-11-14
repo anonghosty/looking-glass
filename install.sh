@@ -1037,7 +1037,7 @@ Leave empty if none." "" ""; ALLOWED_HOSTS="$REPLY"
   [ "$MONGO_MODE" = local ] && READONLY=yes   # (remote: asked with the MongoDB login above)
   ask_input SERVICE_NAME "Service name" "Name of the systemd service:" looking-glass v_user; SERVICE_NAME="$REPLY"
 fi
-ask_yesno RUN_CHECKS "Checks" "Run the automated checks and the security test at the end? (about 5 minutes)" yes; RUN_CHECKS="$REPLY"
+ask_yesno RUN_CHECKS "Checks" "Check the installation at the end: settings, data and every security protection? (about 5 minutes)" yes; RUN_CHECKS="$REPLY"
 
 # ---- existing configuration
 KEEP_DB_ENV=no; KEEP_PF_ENV=no
@@ -1242,8 +1242,8 @@ if [ "$RUN_CHECKS" = yes ]; then
   if [ $WANT_PF = 1 ]; then
     gauge 86 "Checking the platform's libraries..."
     check "platform libraries (tests/check_libraries.py)" bash -c "cd '$PF_DIR' && .venv/bin/python tests/check_libraries.py"
-    gauge 88 "Security test of the platform (about 2 minutes)..."
-    check "platform security test (security_testing/security_retest.py)" bash -c "cd '$PF_DIR' && security_testing/security_retest.py"
+    gauge 88 "Checking the platform's security protections (about 2 minutes)..."
+    check "platform security protections (security_testing/security_retest.py)" bash -c "cd '$PF_DIR' && security_testing/security_retest.py"
     gauge 94 "Checking both platforms against the database (about 2 minutes)..."
     check "platform checks (tests/run_all_checks.sh)" bash -c "cd '$PF_DIR' && tests/run_all_checks.sh"
   fi
@@ -1277,7 +1277,7 @@ if printf '%s\n' "${RESULTS[@]}" | grep -q '^FAIL.*run_all_checks'; then OUT+="
 Note: the platform checks need yesterday's reports in the database; they fail until the first
       reports are loaded. Run them again later: platform/tests/run_all_checks.sh"; fi
 if printf '%s\n' "${RESULTS[@]}" | grep -q '^FAIL.*check_libraries'; then OUT+="
-Note: a library the platform uses is missing, outside the versions it was tested with, or behaves
+Note: a library the platform uses is missing, outside the versions it supports, or behaves
       differently. This does not depend on reports. See the log, or run: platform/.venv/bin/python
       platform/tests/check_libraries.py"; fi
 [ $WANT_PF = 1 ] && OUT+="

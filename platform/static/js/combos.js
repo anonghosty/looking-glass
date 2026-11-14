@@ -3,6 +3,7 @@
    or a date range of the stored history, follow the progress, download the PDF + CSV. */
 (() => {
   "use strict";
+  const WITHIN = (new URLSearchParams(location.search).get("within") || "").toUpperCase().match(/^LG-A-[0-9A-F]{8}$/)?.[0] || "";
   const $ = (id) => document.getElementById(id);
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
   const fmt = (n) => Number(n || 0).toLocaleString("en-US");
@@ -108,6 +109,7 @@
   async function start() {
     if (!entry || $("cbSearch").disabled) return;   // never two searches at once (a double click, a re-run on download)
     const body = { code: entry.code };
+    if (WITHIN && entry.code !== WITHIN) body.within = WITHIN;     // a researcher's code within the analyst's selection
     if (where() === "history") {
       const n = span(); if (n < 1 || n > MAX) return;
       body.from = $("cbFrom").value; body.to = $("cbTo").value;
@@ -450,4 +452,9 @@
   });
   const q = new URLSearchParams(location.search).get("code");
   if (q) look(q);
+  if (WITHIN && $("cbStep2Box")) {                    // say it on the page: only the selection's devices are searched
+    const n = el("p", "cb-within"); n.append(el("b", null, `Within the analyst's selection ${WITHIN}`),
+      document.createTextNode(": only its devices, on its own days, are searched. The report and the advisory carry exactly these."));
+    $("cbStep2Box").prepend(n);
+  }
 })();

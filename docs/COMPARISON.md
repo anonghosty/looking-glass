@@ -78,7 +78,7 @@ Free and open source (AGPL-3.0), built for one job: turning a CSIRT's own Shadow
 | Useful straight after the guided installer: mailbox, database, platform, accounts | Replays the previous day (as Shadowserver delivers it); not real-time ingestion of other feeds |
 | Modest resources: about 2 GB RAM for the platform, one server ([installation guide](INSTALLATION.md)) | Does not e-mail constituents automatically (IntelMQ does) |
 | Executive portal and reports with aggregates only; masked views for partners and public screens | No free-text search across arbitrary data (Elasticsearch does) |
-| Secure by default: MFA for everyone, roles, audit log, penetration-tested | A young project: one maintainer team, single-server design |
+| Security on by default: MFA for everyone, roles, audit log, an installation check | A young project: one maintainer team, single-server design |
 
 ## Side by side
 

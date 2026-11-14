@@ -1,4 +1,4 @@
-/* Looking Glass · the Intelligence portal (/intelligence, intelligence.js) */
+﻿/* Looking Glass Â· the Intelligence portal (/intelligence, intelligence.js) */
 .it-main { max-width: 1400px; margin: 0 auto; display: grid; gap: 18px; padding: 0 clamp(12px, 2vw, 32px) 60px; grid-template-columns: minmax(0, 1fr); }
 .it-hero { display: grid; gap: 6px; padding: 22px 24px; border-radius: 20px; border: 1px solid rgba(124, 156, 255, .35);
   background: linear-gradient(135deg, rgba(91, 141, 239, .12), rgba(139, 92, 246, .08)); min-width: 0; }
@@ -96,3 +96,32 @@
   .it-tile b { font-size: 22px; }
   .it-vh { flex-direction: column; }
 }
+
+/* a record's other fields: a full-width row under it, in columns (the narrow "More" cell wrapped them letter by letter) */
+.it-table td.c-more { white-space: nowrap; min-width: 0; }
+.it-more-btn { padding: 0; border: 0; background: none; color: var(--accent); font: 500 12.5px var(--font); cursor: pointer; white-space: nowrap; }
+.it-table tr.it-extra td { background: rgba(255, 255, 255, .02); padding: 8px 12px 12px; max-width: none; }
+.it-table .it-extra-dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 8px 18px; margin: 0; }
+.it-table .it-extra-dl > div { min-width: 0; }
+.it-table .it-extra-dl dt { color: var(--muted); font-size: 11.5px; text-transform: capitalize; }
+.it-table .it-extra-dl dd { margin: 2px 0 0; overflow-wrap: anywhere; color: var(--text); }
+
+.it-table .it-extra-dl { position: sticky; left: 12px; max-width: min(100%, calc(100vw - 72px)); }   /* phones: the fields stay in view while the table scrolls sideways */
+
+/* the records view in the analysis window's components (app.css): only what that window does not already have */
+.it-view { gap: 12px; }
+.it-vh-acts { display: flex; gap: 8px; align-items: center; flex: none; }
+.it-dayselect { padding: 5px 28px 5px 10px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--surface-2, #1a1a1e); color: var(--text); font: 500 12.5px var(--font); }
+.it-range { margin: -4px 0 0; font-size: 12px; color: var(--muted); }
+.it-parts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.it-parts:empty { display: none; }
+.it-parts .i-parts-lbl { font-size: 12px; color: var(--muted); }
+.it-view .i-kpis { margin-bottom: 0; }
+.it-view .i-breaks { margin-bottom: 0; }
+.it-view .brk li.on { background: var(--accent-soft); }
+.it-view .brk .bl span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.it-records .drill-head { margin-bottom: 8px; }
+.it-records .drill-wrap { max-height: 520px; }
+.it-records .hosts td { max-width: 320px; }
+.it-records .hosts tr.it-extra td { white-space: normal; }
+a.pill-btn { text-decoration: none; display: inline-flex; align-items: center; }   /* a download link looks like the platforms' pill buttons */

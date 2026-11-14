@@ -234,8 +234,8 @@ No Shadowserver reports yet? [Sign up your CSIRT](https://www.shadowserver.org/w
    Google, Microsoft or IMAP credentials), how often to fetch and **how many days each run looks back**, your
    country, tokens, who may open the platform, and the port. **Every answer is checked on the spot** — a real mailbox
    login, real token checks, a real MongoDB login, port conflicts.
-4. **Let it install.** System packages, MongoDB, Python environments, services and the scheduled fetch; then it runs
-   the security test and the platform checks and shows the result.
+4. **Let it install.** System packages, MongoDB, Python environments, services and the scheduled fetch; then, if you
+   ask it to, it checks the installation and shows the result.
 5. **Open the address it shows** and choose **Let's get started** to create the first administrator with an
    authenticator app. It asks for a one-time setup code: `cat platform/data/setup_code` (the installer shows this). On **Ubuntu Server** (no browser on the machine), create the first administrator through an SSH
    tunnel: `ssh -L 5000:127.0.0.1:5000 user@server`, then open http://localhost:5000 on your own computer (use the
@@ -288,7 +288,7 @@ from the other permissions. Details: [User guide → Roles](docs/USER_GUIDE.md#r
   Optional **password expiry**, set by an administrator (off by default, as NIST SP 800-63B advises).
 - **Sessions** bound to the browser, ended after inactivity; administrators see and end any session.
 - **Roles and permissions** enforced on the server; masking is done **on the server**, so hidden values never reach the browser.
-- **Executive portal** that cannot return an address (checked by an automated test).
+- **Executive portal** that cannot return an address.
 - **Audit portal** of its own: the audit log (sign-ins, failures, settings, accounts, definitions, notes, findings,
   decisions, advisories and report downloads, naming people as *Full Name (username)*) and who is signed in, readable
   by an auditor who can change nothing.
@@ -312,8 +312,8 @@ from the other permissions. Details: [User guide → Roles](docs/USER_GUIDE.md#r
 - **Safe exports:** no CSV cell can run as a spreadsheet formula.
 - **Hardened web layer:** HTTPS for remote access, a strict content security policy (per-request nonce, no eval),
   CSRF tokens and same-origin checks, HttpOnly / SameSite=Strict / Secure cookies, frames refused, network allow lists.
-- **Penetration-tested:** every finding fixed, and [`security_retest.py`](platform/security_testing/security_retest.py)
-  checks each protection again on your own installation. See [SECURITY.md](docs/SECURITY.md).
+- **Installation check:** [`security_retest.py`](platform/security_testing/security_retest.py)
+  checks each protection on your own installation. See [SECURITY.md](docs/SECURITY.md).
 - **No secrets in the code:** credentials live only in `.env` files, which `.gitignore` keeps out of the repository.
 
 Please report security problems **privately** to the maintainers rather than in a public issue.
@@ -352,7 +352,8 @@ searchable site, with the films. The same guides are in the [`docs/`](docs) fold
 | Topic | Document |
 |---|---|
 | **Use case scenarios: a needle through the haystack** | [docs/USE_CASES.md](docs/USE_CASES.md) |
-| What is new, with dates | [docs/FEATURES.md](docs/FEATURES.md) |
+| What changed in each release | [CHANGELOG.md](CHANGELOG.md) |
+| Every feature, explained | [docs/FEATURES.md](docs/FEATURES.md) |
 | Screenshots | [docs/media](docs/media) |
 | Every term, in plain language | [docs/GLOSSARY.md](docs/GLOSSARY.md) |
 | Comparison with IntelMQ and Elastic | [docs/COMPARISON.md](docs/COMPARISON.md) |
@@ -362,15 +363,15 @@ searchable site, with the films. The same guides are in the [`docs/`](docs) fold
 | Every setting | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) |
 | Day-to-day running, backups, checks | [docs/OPERATIONS.md](docs/OPERATIONS.md) |
 | How it works inside | [docs/TECHNICAL_REFERENCE.md](docs/TECHNICAL_REFERENCE.md) |
-| Security and the penetration test | [docs/SECURITY.md](docs/SECURITY.md) |
+| Security | [docs/SECURITY.md](docs/SECURITY.md) |
 | The database pipeline | [database/README.md](database/README.md) |
 
 ## Contributing and reporting problems
 
 - **Questions and bugs:** open an issue with what you did, what you expected and what happened (never paste
   addresses from your reports, tokens or passwords).
-- **Improvements:** fork, branch, and open a pull request; run `platform/tests/run_all_checks.sh` and
-  `platform/security_testing/security_retest.py` first.
+- **Improvements:** fork, branch, and open a pull request; check the installation first
+  (`platform/tests/run_all_checks.sh` and `platform/security_testing/security_retest.py`).
 - **Security problems:** report privately to the maintainers.
 
 ## Licence and credits

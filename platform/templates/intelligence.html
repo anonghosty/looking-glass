@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b0b0d">
   <meta name="csrf-token" content="{{ lg_csrf }}">
-  <title>Looking Glass · Intelligence</title>
+  <title>Looking Glass · Abused or Compromised</title>
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo-mark.svg') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,14 +19,14 @@
   <header class="hud">
     <div class="hud-left">
       <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
-      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Intelligence · signed in as {{ lg_user }} ({{ lg_role }})</span></div></div>
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Abused or Compromised · signed in as {{ lg_user }} ({{ lg_role }})</span></div></div>
     </div>
     <div class="hud-right">
       {% set nav_here = "intelligence" %}{% set nav_go = false %}{% include "_page_nav.html" %}
     </div>
   </header>
   <main class="st-main it-main" id="itMain">
-    <div class="st-loading" id="itLoading">Opening Shadowserver's Intelligence reports: today against the last 7 days…</div>
+    <div class="st-loading" id="itLoading">Opening Abused or Compromised: today against the last 7 days…</div>
   </main>
   <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
   <script src="{{ url_for('static', filename='js/notifications.js') }}" defer></script>

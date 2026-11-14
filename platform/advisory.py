@@ -542,7 +542,7 @@ def install(app, ctx):
                "finding": f"#{x['id']}", "finding_title": x["title"], "source_code": adv.get("source") or "",
                "decision": {"both": "The researcher's view and the analyst's across-report views",
                             "researcher": "The researcher's view",
-                            "analyst": "The analyst's view only: the devices behind what the analyst ticked"}.get(adv.get("decision"), ""),
+                            "analyst": "The analyst's view: the devices behind what the analyst drilled down to"}.get(adv.get("decision"), ""),
                "data_title": data_title(x, auto),
                "affected": {"cves": auto["cves"], "issues": auto["issues"], "categories": auto["categories"], "labels": auto["labels"],
                             "devices": len(auto["devices"]), "records": sum(d["records"] for d in auto["devices"])},

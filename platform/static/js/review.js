@@ -49,6 +49,8 @@
     if (f.network) meta.append(el("b", "rv-org", `Organisation: ${f.network}`));
     if (f.parent) { const a = el("a", null, `Sub-finding of case #${f.parent}`); a.href = `/findings#f${f.parent}`; meta.append(a); }
     if (f.channel?.length) meta.append(el("span", "fd-channel", `Channel: ${f.channel.join(", ")}`));
+    // drilled down within an analyst's selection: only its devices were searched (combos.py within)
+    if (rv.within) meta.append(el("b", "rv-org", `Within the analyst's selection ${rv.within}`));
     hero.append(meta);
     if (f.text) { const q = el("blockquote", "rv-quote"); q.append(el("b", null, `Final comments by the analyst, ${f.by}`), el("p", null, f.text)); hero.append(q); }
     main.append(hero);
@@ -116,19 +118,20 @@
     const dc = el("section", "rv-card rv-decide");
     dc.append(el("h2", null, "The decision"));
     if (rv.decision) {
-      const said = { both: "Added the analyst's views", researcher: plain ? "Approved" : "The researcher's view only", analyst: "The analyst's view only",
+      const said = { both: "Added the analyst's views", researcher: plain ? "Approved" : rv.drilled ? "The researcher's view, of the devices drilled down to" : "The researcher's view", analyst: "The analyst's view, of the devices drilled down to",
         rejected: "Rejected and closed" }[rv.decision] || rv.decision;
       dc.append(el("p", `fd-rv-done ${rv.decision}`, `${said} · ${rv.by}${rv.comment ? `: ${rv.comment}` : ""}`));
     } else if (d.can_decide && f.open) {
       const ta = el("textarea", "fd-in"); ta.rows = 3; ta.maxLength = 1000; ta.placeholder = "Your comment: the directive for the report, or the reason for rejecting";
       const toV = window.LGPeople ? window.LGPeople.picker("advisor") : null;      // the advisor who writes the advisory
-      const add = el("button", "lg-btn primary", "Add the analyst's views"); add.type = "button";
-      const only = el("button", plain ? "lg-btn primary" : "lg-btn", plain ? "Approve and send to the advisor" : "Use the researcher's view only"); only.type = "button";
+      // two outcomes (user, 2026-11-14): the whole combination, or exactly what the analyst drilled down to (the devices
+      // behind the ticked patterns, infections and CVEs/issues, with the combination kept as how they were found)
+      const add = el("button", "lg-btn primary", "Use the analyst's view"); add.type = "button";
+      add.title = "The devices the analyst drilled down to, with what the analyst ticked (patterns, infections, CVEs/issues) added to the report";
+      const only = el("button", plain ? "lg-btn primary" : "lg-btn", plain ? "Approve and send to the advisor" : "Use the researcher's view"); only.type = "button";
+      only.title = plain ? "" : "The devices the analyst drilled down to, with the combination's own analysis only (nothing added)";
       const rej = el("button", "lg-btn fd-reject", "Reject and close"); rej.type = "button";
-      // the analyst's view on its own (2026-11-14): the report is about the devices behind what the analyst ticked,
-      // without the rest of the combination (it may hold the critical issues)
-      const aonly = el("button", "lg-btn", "Use the analyst's view only"); aonly.type = "button";
-      aonly.title = "The report and the advisory cover only the devices behind the patterns, infections and CVEs/issues the analyst ticked";
+      const aonly = add;                                 // one button now: kept as a name for the code below
       const m = el("span", "fd-msg");
       const go = async (choice) => {
         if (!ta.value.trim()) { m.textContent = choice === "reject" ? "Write the reason first." : "Write your comment (the directive) first."; m.className = "fd-msg bad"; ta.focus(); return; }
@@ -143,11 +146,10 @@
         } catch { m.textContent = "The connection was interrupted. Try again."; m.className = "fd-msg bad"; }   // (review 2026-11-13)
         finally { add.disabled = only.disabled = aonly.disabled = rej.disabled = false; }
       };
-      add.addEventListener("click", () => go("both")); only.addEventListener("click", () => go("researcher")); rej.addEventListener("click", () => go("reject"));
-      aonly.addEventListener("click", () => go("analyst"));
-      const row = el("div", "fd-decide-row"); row.append(m, rej, only, ...(plain ? [] : [aonly, add]));
+      add.addEventListener("click", () => go("analyst")); only.addEventListener("click", () => go("researcher")); rej.addEventListener("click", () => go("reject"));
+      const row = el("div", "fd-decide-row"); row.append(m, rej, only, ...(plain ? [] : [add]));
       dc.append(el("p", "fd-rv-hint", plain ? "Approve and it goes to the advisor you choose, who writes the advisory and generates the report; or reject it with the reason (it is closed)."
-                                            : "It goes to the advisor you choose: they write the advisory and generate the report with the views you chose (both, the researcher's only, or the analyst's only: just the devices behind what the analyst ticked). Or reject it with the reason (it is closed)."),
+                                            : "It goes to the advisor you choose, who writes the advisory and generates the report for exactly the devices the analyst drilled down to: the researcher's view gives the combination's own analysis of them; the analyst's view adds what the analyst ticked. Or reject it with the reason (it is closed)."),
         ta, ...(toV ? [toV.el] : []), row);
     } else dc.append(el("p", "fd-rv-done wait", "Waiting for management's decision."));
     const back = el("a", `lg-btn ${rv.decision ? "primary" : "sm"}`, "Back to the Findings page"); back.href = `/findings#f${f.id}`; dc.append(back);

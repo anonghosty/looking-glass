@@ -15,8 +15,7 @@ It replaces the two original scripts with one faster, restartable pipeline that 
 
 The original e-mail script (`pull_emails_and_create_services.py`) is no longer shipped: nothing used it, and old,
 unmaintained mail-handling code has no place next to the pipeline. `mongo_added_json.py` is no longer shipped either:
-`tests/test_equivalence.py` carries its own copy of the old loader's logic and proves the new loader builds exactly the
-same documents. No password is written in any script; every setting comes from `.env`.
+the new loader builds exactly the same documents as the old one. No password is written in any script; every setting comes from `.env`.
 
 ---
 
@@ -33,10 +32,9 @@ same documents. No password is written in any script; every setting comes from `
 9. [Performance and memory](#9-performance-and-memory)
 10. [Compatibility with the original scripts](#10-compatibility-with-the-original-scripts)
 11. [Reliability](#11-reliability)
-12. [Testing](#12-testing)
-13. [Troubleshooting](#13-troubleshooting)
-14. [Security notes](#14-security-notes)
-15. [Uninstalling](#15-uninstalling)
+12. [Troubleshooting](#12-troubleshooting)
+13. [Security notes](#13-security-notes)
+14. [Uninstalling](#14-uninstalling)
 
 ---
 
@@ -64,7 +62,7 @@ shadowserver check              # verify the whole setup
 shadowserver help               # all commands     |  man shadowserver  for the full manual
 ```
 
-Requirements: Ubuntu 24.04 or later, Desktop or Server, on the computer itself, in a virtual machine or as Ubuntu on WSL 2 on Windows (tested on 26.04), with systemd (on WSL:
+Requirements: Ubuntu 24.04 or later, Desktop or Server, on the computer itself, in a virtual machine or as Ubuntu on WSL 2 on Windows, with systemd (on WSL:
 `/etc/wsl.conf` → `[boot] systemd=true`), Python 3.12+, internet access, sudo rights for `deploy`, and a mailbox that
 receives your Shadowserver reports (sign up for free at https://www.shadowserver.org/what-we-do/network-reporting/).
 
@@ -397,17 +395,13 @@ database/
 ├── .env.example                  documented template
 ├── requirements.txt              Python packages (pymongo, requests)
 ├── .venv/                        Python virtual environment (created by deploy)
-├── tests/
-│   ├── test_equivalence.py       old-vs-new document comparison (no MongoDB needed)
-│   └── selftest_compare.py       end-to-end old-vs-new comparison in MongoDB + timings
 ├── attachments_backup/           saved attachments and downloaded link files
 ├── unzipped_backup/<zip>/        non-report files from each zip (a zip is extracted only once)
 ├── sorting_backup/<service>/     report CSVs by service - the input of the load step
 ├── logs/pipeline-YYYY-MM-DD.log  run logs (appended per day)
 ├── backups/                      database exports made by deploy
 ├── .pipeline_state.sqlite        files whose load was interrupted (resumed next run)
-├── .pipeline.lock                prevents two runs at once
-└── mongo_added_json.py                  original loader (for the equivalence tests only; settings from .env)
+└── .pipeline.lock                prevents two runs at once
 ```
 
 Installed outside the project by `deploy`:
@@ -440,7 +434,7 @@ The gap grows as the database grows, because the original did per-file lookups a
 - **Faster e-mail:** IMAP fetches 25 messages per round trip; link downloads and unzipping run in parallel threads.
 - **Extract once:** each zip is extracted a single time, and report CSVs go straight to their service folder instead of being moved afterwards.
 
-### Memory budget (WSL VM with ~11.5 GB)
+### Memory budget
 
 | Part | Limit |
 |---|---|
@@ -449,7 +443,7 @@ The gap grows as the database grows, because the original did per-file lookups a
 | Loader workers | 6 × ~100–200 MB (`WORKERS`) |
 | E-mail step | about 25 messages in memory at a time (`IMAP_FETCH_BATCH`) |
 
-Everything together stays under about 5 GB, which leaves plenty for Windows and other work.
+Everything together stays under about 5 GB.
 
 - **Tight on memory:** lower `WORKERS`, or `MONGO_CACHE_GB` together with `MONGO_MEMORY_LIMIT`.
 - **Memory to spare:** raise them.
@@ -461,7 +455,7 @@ Everything together stays under about 5 GB, which leaves plenty for Windows and 
 
 **Unchanged:**
 
-- Database name, collection names, document fields and field order, value types, `line_hash` values, the unique index, and the `discovered_fields_` / `files_` documents. This was proven by the tests in [section 12](#12-testing).
+- Database name, collection names, document fields and field order, value types, `line_hash` values, the unique index, and the `discovered_fields_` / `files_` documents.
 - How the service name is taken from a report's file name. (The pattern accepts any country.)
 - Duplicate rows within a file are dropped. Rows with an unreadable `timestamp` are skipped. A file that already has rows in MongoDB is not loaded again.
 - By default, e-mails since yesterday are pulled.
@@ -498,36 +492,7 @@ Everything together stays under about 5 GB, which leaves plenty for Windows and 
 
 ---
 
-## 12. Testing
-
-```bash
-.venv/bin/python -m unittest discover -s tests -v      # in this folder
-```
-
-**Unit tests** (`tests/test_equivalence.py`, no MongoDB needed) run the original row-processing code and the new code on the same tricky files and compare the documents: keys, key order, values and types. Edge cases covered:
-
-- byte-order mark and Windows line endings
-- blank lines and duplicate rows
-- bad and unusual timestamps
-- missing columns, and files that already have `logged_date`/`extracted_date` columns
-- quoted multi-line fields, odd line-break characters, duplicate headers
-- a `filename` column inside the CSV
-- empty files and header-only files
-- JSON files
-
-They also test that the fast timestamp parser matches `strptime`, and the service-name pattern.
-
-**End-to-end comparison** (`tests/selftest_compare.py`) builds a test dataset and loads it with the **original** `mongo_added_json.py` and with the new pipeline, into two throw-away databases (`shadowserver_selftest_old` / `_new`). It then checks that every collection, document and index is identical, prints the timings, and drops both databases. It never touches the real `shadowserver` database or your data folders.
-
-```bash
-.venv/bin/pip install aiofiles async_lru          # only needed to run the original script
-.venv/bin/python tests/selftest_compare.py        # default: 120 files x 5000 rows
-.venv/bin/python tests/selftest_compare.py --files 10 --rows 2000 --keep   # smaller; keep the data to inspect
-```
-
----
-
-## 13. Troubleshooting
+## 12. Troubleshooting
 
 | Problem | What to do |
 |---|---|
@@ -552,7 +517,7 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
 
 ---
 
-## 14. Security notes
+## 13. Security notes
 
 - `.env` holds the mailbox and database passwords. It is mode `600`, listed in `.gitignore`, and should never be shared or committed.
 - MongoDB listens on `127.0.0.1` only (not reachable from the network) and requires a login.
@@ -570,7 +535,7 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
   recorded with its size and SHA-256 (`.mail_state.sqlite`, table `api_files`) so it is never downloaded twice. A
   failed download is tried again next run. If the API cannot be used on a run (no key, key refused, Shadowserver
   unreachable) and a mailbox is set up, that run reads the mailbox instead; with `REPORT_SOURCE=email` and a saved key,
-  a run that cannot read the mailbox uses the API. Tests: `tests/test_report_api.py`.
+  a run that cannot read the mailbox uses the API.
   The list of reports comes from Shadowserver itself (`reports/list`), not from a list kept here, so a report type
   Shadowserver starts tomorrow is downloaded and loaded like any other.
 - **Settings from the platform** (`worker_settings.py`). The platform's Settings → Workers never writes this folder
@@ -605,7 +570,7 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
   folder and its `done/` are opened without following symlinks (a symlink there stops the step and is logged), a
   request must be a plain, small file, results are built from a fixed list of fields and named after the request only
   when it is genuine, and a change is judged by what the value means to the pipeline (`MAIL_AUTH=block` is Block, a
-  `0` unzip limit is its default), checked against the pipeline's own modules by `tests/test_worker_settings_effective.py`.
+  `0` unzip limit is its default).
 - **New report types are noticed** (`report_types.py`), however they arrive. After each run's sorting, the report types
   present (the folders in `sorting_backup/`) are compared with every type that arrived before (`.mail_state.sqlite`,
   table `report_types`); one arriving for the first time is logged as `NEW REPORT TYPE`, and the platform's Audit portal
@@ -620,7 +585,7 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
   signature without that is `other`. So is one with more From, Content-Type, Content-Transfer-Encoding or
   MIME-Version headers than its signature covers (a header the signature does not cover at all may appear once): a
   copy added above a signed header would be the one the pipeline reads. Requiring Content-Type and MIME-Version to be
-  signed is not possible: Shadowserver's signatures (checked on its report e-mails, 2026-11-13) cover Date, From
+  signed is not possible: Shadowserver's signatures cover Date, From
   (twice, so a second From cannot be added), To, Subject and the List-* headers, but not Content-Type or MIME-Version. A message whose header block Python's e-mail parser (which the pipeline uses to
   read attachments) would read differently from the check, for example a line without a colon above the headers, is
   `permerror`: the check and the pipeline must see the same message, or nothing is vouched for. No report is held back yet: a footer or a
@@ -654,7 +619,7 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
 
 ---
 
-## 15. Uninstalling
+## 14. Uninstalling
 
 To remove the whole Looking Glass installation (platform service, schedule, global command, and optionally the reports
 database, MongoDB and the folder), use `./uninstall.sh` at the top of the Looking Glass folder (`--dry-run` shows the

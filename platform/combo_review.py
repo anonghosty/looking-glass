@@ -74,7 +74,7 @@ def install(app, ctx):
 
     def sent_review(job):
         """The review this analyst already sent on this combination (with or without across-report patterns), else None."""
-        return F.review_for(job["inputs"][0]["code"], job["user"], False)
+        return F.review_for(job["inputs"][0]["code"], job["user"], False, job.get("within") or "")
 
     def per_network(job):
         """{network: {ips, records}} of a search's devices: the organisations it can be sent for."""
@@ -120,13 +120,13 @@ def install(app, ctx):
                             for ip in x.pop("ips", [])]
         job["needs_review"] = bool((job["preview"] or {}).get("cross"))
         if job["needs_review"]:
-            apply(job, F.review_for(entry["code"], job["user"], False))
+            apply(job, F.review_for(entry["code"], job["user"], False, job.get("within") or ""))
 
     def review_gate(job):
         """(allowed, why) for a download: open until the combination is sent to management; then the report is the
         advisor's, once management decided (a rejected one opens again: there is no advisory)."""
         entry = job["inputs"][0]
-        revs = F.reviews_for(entry["code"], user()[0], False)
+        revs = F.reviews_for(entry["code"], user()[0], False, job.get("within") or "")
         # rejected or withdrawn (closed by hand while undecided): no advisory comes, the report is the analyst's again
         # (a review closed undecided before this rule counts as withdrawn too)
         active = [r for r in revs if r["review"].get("decision") not in ("rejected", "withdrawn")
@@ -214,7 +214,7 @@ def install(app, ctx):
                     around.append(e)
         m = ctx["svc_matcher"](entry) if entry.get("section") == "services" and ctx.get("svc_matcher") else None
         per_day = [tuple(p) for p in kept["per_day"]]
-        if rv.get("decision") == "analyst":
+        if rv.get("decision") == "analyst" or (rv.get("drilled") and rv.get("decision") == "researcher"):
             # the analyst's view only (2026-11-14): exactly the devices behind what the analyst ticked (patterns,
             # infections, CVEs/issues), a part of the combination's devices; the report, its organisations and the
             # advisory are about them alone
@@ -382,7 +382,9 @@ def install(app, ctx):
         avail = {x["code"]: x for x in prev.get("cross") or []}
         if j["inputs"][0].get("kind") == "a":
             return jsonify(error="An analyst code is already on its own finding."), 400
-        prior = [r for r in F.reviews_for(j["inputs"][0]["code"], j["user"], False)
+        # the same code searched within an analyst's selection is its own request (only those devices), apart from the code
+        # searched on its own
+        prior = [r for r in F.reviews_for(j["inputs"][0]["code"], j["user"], False, j.get("within") or "")
                  if r["review"].get("decision") not in ("rejected", "withdrawn")]
         if prior:
             return jsonify(error=f"This combination was already sent to management: see finding #{prior[-1].get('parent') or prior[-1]['id']}."), 409
@@ -431,7 +433,9 @@ def install(app, ctx):
         sent_inf = [keep(av_inf[n]) for n in t_inf]
         sent_iss = [keep(av_iss[n]) for n in t_iss]
         base = {"source": entry["code"], "codes": codes, "researcher": researcher, "analyst": analyst, "requested_by": me, "sent": sent,
-                "sent_infections": sent_inf, "sent_issues": sent_iss}
+                "sent_infections": sent_inf, "sent_issues": sent_iss,
+                # drilled down within an analyst's selection: the kept search holds only its devices (combos.py within)
+                **({"within": j["within"]} if j.get("within") else {})}
         # the organisations (networks) it is for: none named = the whole combination (an overview, the advisor picks the
         # organisations later); one = a finding for that organisation; several = a case with one sub-finding each
         per_net = per_network(j)

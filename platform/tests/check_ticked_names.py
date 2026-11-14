@@ -52,6 +52,7 @@ real_exports = book.export_paths["dir"]; book.export_paths["dir"] = os.path.join
 real_adv, real_org = A.ADVISORIES.dir, A.ORG.path
 A.ADVISORIES.dir, A.ORG.path = os.path.join(tmp, "advisories"), os.path.join(tmp, "organisation.json")
 audit = A.AUTH["audit"]; real_add = audit.add; audited = []
+real_ids = A.ACODES.paths["ids"]; A.ACODES.paths["ids"] = os.path.join(tmp, "acodes")
 A.ATTACK.offline = None
 audit.add = lambda *a, **k: audited.append((a[0] if a else "", k.get("detail") or (a[2] if len(a) > 2 else "")))
 
@@ -117,7 +118,7 @@ try:
     ok("…with no address anywhere, and no devices list", not IP_RX.search(json.dumps(fl))
        and not any(k in (f.get("review") or {}) for k in ("sent", "sent_infections", "sent_issues")))
     st, d = call("/api/findings/1/review-decision", MGMT, "POST", {"choice": "both", "text": "Add the CVEs to the report.", "to": "lg-check-advisor"}, **MG)
-    ok("\"Add the analyst's views\" works with names alone", st == 200 and d["finding"]["review"]["decision"] == "both", d.get("error", ""))
+    ok("approving the analyst's views works with names alone (recorded as the drilled-down decision)", st == 200 and d["finding"]["review"]["decision"] == "analyst", d.get("error", ""))
 
     print("The advisor's report carries the names and their devices")
     st, z = call("/review/1/report", ADVISOR, raw=True, **ADV)
@@ -188,8 +189,53 @@ try:
        f"{len(a.get('networks') or [])} networks · ticked on {len(nets_ticked)}")
     st, fl = call("/api/findings", MGMT, **MG)
     ok("…management still sees no address", not IP_RX.search(json.dumps(fl)))
+    print("The researcher's view after a drill-down: also only the drilled-down devices (decided from now on)")
+    A3 = "lg-check-analyst3"
+    jid3, s3 = search(code, user=A3)
+    pv3 = s3.get("preview") or {}
+    pick3 = sorted((pv3.get("issues") or []), key=lambda x: x["hosts"])[0]
+    st, d = call(f"/api/combos/search/{jid3}/review", ANALYST, "POST", {"codes": [], "issues": [pick3["name"]], "title": "Drilled", "to": "lg-check-management"}, user=A3)
+    fid3 = (d.get("finding") or "#").lstrip("#")
+    st, d = call(f"/api/findings/{fid3}/review-decision", MGMT, "POST", {"choice": "researcher", "text": "The researcher's view.", "to": "lg-check-advisor"}, **MG)
+    ok("management chooses the researcher's view: marked as drilled down", st == 200 and d["finding"]["review"]["decision"] == "researcher"
+       and d["finding"]["review"].get("drilled"), d.get("error", ""))
+    st, z = call(f"/review/{fid3}/report", ADVISOR, raw=True, **ADV)
+    if st == 200:
+        zf = zipfile.ZipFile(io.BytesIO(z)); dv = next((n for n in zf.namelist() if n.endswith("_devices.csv")), None)
+        rows = list(csv.reader(io.StringIO(zf.read(dv).decode("utf-8-sig")))) if dv else []
+        ipcol = next((i for i, h in enumerate(rows[0]) if h.lower() in ("ip", "ip address", "host", "device")), None) if rows else None
+        ips = {r[ipcol].split(" ")[0] for r in rows[1:] if ipcol is not None and len(r) > ipcol}
+        oc = next((n for n in zf.namelist() if n.endswith("_other_categories.csv")), None)
+        ok("…its report covers exactly the drilled-down devices, with nothing added", ips == {x["ip"] for x in pick3["devices"]} and not oc,
+           f"{len(ips)} devices · other categories file: {bool(oc)}")
+    else:
+        ok("…its report covers exactly the drilled-down devices, with nothing added", False, f"HTTP {st}")
+
+    print("A researcher's code searched within the analyst's selection: only its devices")
+    st, d = call(f"/api/combos/search/{jid3}/acode", ANALYST, "POST", {"title": "Selection", "to": "lg-check-management"}, user=A3)
+    acode = d.get("code") or ""
+    ok("the analyst makes an analyst code of a search's devices", st == 200 and acode.startswith("LG-A-"), d.get("error", ""))
+    sel = {e.get("ip") for e in A.ACODES.records(A.COMBOS.get(acode))} if acode else set()
+    xc = (pv3.get("cross") or [{}])[0].get("code")
+    st, j = call("/api/combos/search", ANALYST, "POST", {"code": xc, "within": acode}, user=A3)
+    for _ in range(600):
+        st2, sw = call(f"/api/combos/search/{j.get('id')}", ANALYST, user=A3)
+        if sw.get("state") != "running":
+            break
+        time.sleep(0.2)
+    with A.app.test_request_context("/"):
+        g.user = {"user": A3}
+        job = A.COMBOS.own_job(j.get("id"))
+    hosts = {e.get("ip") for e in (job or {}).get("inputs", [None, []])[1]}
+    ok("…the search runs within it and finds only the selection's devices", st == 200 and j.get("within") == acode and hosts and hosts <= sel,
+       f"{len(hosts)} found · {len(sel)} in the selection")
+    st, j2 = call("/api/combos/search", ANALYST, "POST", {"code": xc, "within": acode}, user="lg-someone-else")
+    ok("…another analyst cannot search within a selection outside their channels", st == 404, j2.get("error", ""))
+    st, j3 = call("/api/combos/search", ANALYST, "POST", {"code": acode, "within": acode}, user=A3)
+    ok("…and an analyst code is never searched within another", st == 400)
 finally:
     audit.add = real_add
+    A.ACODES.paths["ids"] = real_ids
     book.review_paths["store"] = real_store
     book.export_paths["dir"] = real_exports
     A.ADVISORIES.dir, A.ORG.path = real_adv, real_org

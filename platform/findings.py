@@ -228,11 +228,17 @@ class Findings:
             if item["status"] not in OPEN:                 # closed some other way: there is nothing left to decide
                 return None, "This finding is closed: there is nothing to decide."
             ticked = item["review"].get("codes") or item["review"].get("sent_infections") or item["review"].get("sent_issues")
+            if choice == "both":
+                # approving the analyst's views sends exactly what was drilled down to (user, 2026-11-14): the devices
+                # behind what the analyst ticked, never the whole combination ("both" stays only on older decisions)
+                choice = "analyst" if ticked else "researcher"
             if choice == "analyst" and not ticked:
-                return None, "The analyst ticked nothing: there is no analyst's view to use on its own."
-            if choice == "both" and not ticked:
-                choice = "researcher"          # sent without anything ticked: there is no analyst's view to add
+                return None, "The analyst ticked nothing: there is no analyst's view to use."
             item["review"].update(decision="rejected" if choice == "reject" else choice, by=user, at=round(time.time(), 3), comment=text[:MAX_COMMENT])
+            if choice != "reject" and ticked:
+                # the analyst drilled down: whichever view management approves, the report and the advisory cover exactly
+                # those devices (user, 2026-11-14); marked here so decisions made before this rule keep what they had
+                item["review"]["drilled"] = True
             if choice == "reject":             # rejected: closed, with the reason; no advisory
                 item["status"] = "closed"
                 item["history"].append({"status": "closed", "kind": "decision", "decision": "rejected", "user": user, "role": role,
@@ -243,7 +249,7 @@ class Findings:
             item["status"] = "advisor"
             item["history"].append({"status": "advisor", "kind": "decision", "decision": "accepted", "user": user, "role": role,
                                     "at": round(time.time(), 3), "to": to,
-                                    "comment": {"both": "Add the analyst's views: ", "analyst": "Use the analyst's view only: "}.get(
+                                    "comment": {"both": "Add the analyst's views: ", "analyst": "Use the analyst's view (drilled down): "}.get(
                                         choice, "Use the researcher's view only: ") + text[:MAX_COMMENT]})
             self._join(item, to)
             self._sync_case(item)
@@ -267,16 +273,18 @@ class Findings:
             self._save()
             return item, ""
 
-    def reviews_for(self, code, user, admin):
-        """Every review on `code` this user is in (sub-findings of a case each count), oldest first."""
+    def reviews_for(self, code, user, admin, within=None):
+        """Every review on `code` this user is in (sub-findings of a case each count), oldest first. within: only the
+        reviews of that code searched within that analyst's selection ("" = the code on its own; None = any)."""
         with self.lock:
             self._load()
-            mine = [x for x in self.data["items"].values() if (x.get("review") or {}).get("source") == code and self.sees(x, user, admin)]
+            mine = [x for x in self.data["items"].values() if (x.get("review") or {}).get("source") == code and self.sees(x, user, admin)
+                    and (within is None or (x["review"].get("within") or "") == within)]
         return sorted(mine, key=lambda x: x["at"])
 
-    def review_for(self, code, user, admin):
+    def review_for(self, code, user, admin, within=None):
         """The latest decided review on `code` this user is in (the report follows it), else the latest pending one, else None."""
-        mine = self.reviews_for(code, user, admin)
+        mine = self.reviews_for(code, user, admin, within)
         decided = [x for x in mine if x["review"].get("decision")]
         return (decided or mine or [None])[-1]
 
