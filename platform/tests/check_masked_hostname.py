@@ -24,11 +24,17 @@ def ok(label, cond, info=""):
 
 day = A.svc["store"].get(A.replay_now())
 named = [e for e in day.events if e.get("hostname")]
-if not named:
-    print("SKIPPED: no services record with a host name in the replay day")
+# a host name that belongs to exactly one address that day: a shared one (a provider's or a default name on many
+# devices) makes "finds the host" ambiguous, and which name comes first depends on the day's reports (2026-11-14)
+ips_of = {}
+for e in named:
+    ips_of.setdefault(e["hostname"], set()).add(e["ip"])
+single = [e for e in named if len(ips_of[e["hostname"]]) == 1]
+if not single:
+    print("SKIPPED: no services record with a host name of one address in the replay day")
     sys.exit(77)
-host = named[0]["hostname"]
-ip = named[0]["ip"]
+host = single[0]["hostname"]
+ip = single[0]["ip"]
 
 users, roles = A.AUTH["users"], A.AUTH["roles"]
 real_get, real_perms = users.get, roles.perms

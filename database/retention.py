@@ -1,5 +1,5 @@
-"""How long the pipeline keeps its own copies of report files, and how much disk is left (2026-11-14: sorting_backup
-had grown to 954 MB on a live server and only grew).
+"""How long the pipeline keeps its own copies of report files, and how much disk is left (sorting_backup only ever
+grew).
 
 Every report's rows are in MongoDB once loaded; the sorted CSV in sorting_backup/<report>/ is a second copy. With
 SORTED_KEEP_DAYS set (.env; 0 = keep everything, the default, so nobody's evidence goes away on an upgrade), after each

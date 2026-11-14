@@ -18,17 +18,22 @@
     return d;
   }
 
-  // ---------------- the tabs: General (the cards that were there) and Workers
+  // ---------------- the tabs: General (the cards that were there), Workers, and Task monitor (task-monitor.js); each
+  // tab other than General is one pane; the page is told which tab shows (lg:settings-tab) so a pane can start or stop
   const tabs = [...document.querySelectorAll(".st-tabs [data-st-tab]")];
-  const general = () => [...document.querySelectorAll("#stMain > .st-card, #stMain > .st-access")].filter((x) => !pane.contains(x) && x !== pane);
+  const PANES = { workers: pane, monitor: document.getElementById("tabMonitor") };
+  const panes = () => Object.values(PANES).filter(Boolean);
+  const general = () => [...document.querySelectorAll("#stMain > .st-card, #stMain > .st-access")].filter((x) => !panes().some((p) => p === x || p.contains(x)));
   let loaded = false;
   function show(which) {
+    if (!PANES[which] && which !== "general") which = "general";
     for (const b of tabs) b.setAttribute("aria-selected", String(b.dataset.stTab === which));
     for (const c of general()) c.classList.toggle("st-tab-off", which !== "general");
-    pane.hidden = which !== "workers";
+    for (const [k, p] of Object.entries(PANES)) if (p) p.hidden = which !== k;
     const bar = $("applyBar"); if (bar) bar.classList.toggle("st-tab-off", which !== "general");
-    try { history.replaceState(null, "", which === "workers" ? "#workers" : location.pathname); } catch { /* */ }
+    try { history.replaceState(null, "", which === "general" ? location.pathname : `#${which}`); } catch { /* */ }
     if (which === "workers" && !loaded) { loaded = true; load(); }
+    document.dispatchEvent(new CustomEvent("lg:settings-tab", { detail: which }));
   }
   for (const b of tabs) b.addEventListener("click", () => show(b.dataset.stTab));
 
@@ -267,5 +272,5 @@
     t.append(tb); const wrap = el("div", "table-wrap"); wrap.append(t); c.append(wrap);
   }
 
-  show((location.hash || "") === "#workers" ? "workers" : "general");
+  show((location.hash || "").slice(1) || "general");          // #workers, #monitor (the bell's alerts link here) or General
 })();

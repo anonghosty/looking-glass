@@ -39,6 +39,7 @@ Free and open source (AGPL-3.0) · built in Africa, for African CSIRTs · worldw
 11. [Contributing and reporting problems](#contributing-and-reporting-problems)
 12. [Licence and credits](#licence-and-credits)
 13. [Author](#author)
+14. [Acknowledgements](#acknowledgements)
 
 ---
 
@@ -406,6 +407,12 @@ maps — Mapbox · 3D arcs — deck.gl · network names — RIPEstat and Peering
 Looking Glass was built by **Ike Owuraku Amponsah**, Cybersecurity Threat Intelligence Analyst.
 
 [LinkedIn: linkedin.com/in/iowuraku](https://www.linkedin.com/in/iowuraku)
+
+## Acknowledgements
+
+My sincere gratitude to my mentor, **Kwadwo Osafo-Maafo**, who mentored me over a period of years. He helped me build
+my critical thinking skills and the habit of deliberating carefully on ideas and systems. He helped me build on my skills,
+pointed out what I should learn, and showed me which aspects of cyber threat intelligence to take seriously.
 
 <sub>All screenshots use **dummy data**: documentation IP ranges (RFC 5737 / RFC 2544 / RFC 3849),
 private AS numbers and fictional network names.</sub>

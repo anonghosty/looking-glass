@@ -43,7 +43,7 @@ for _tab, _events in {
                  "user_allow_reset", "roles_changed", "login_unlocked"),
     "sessions": ("kicked", "session_misuse", "user_kick"),
     "config": ("settings_changed", "networks_identify", "network_edited", "network_type_added", "definition_saved",
-               "peace_of_mind", "organisation_set"),
+               "peace_of_mind", "organisation_set", "cache_cleared", "cache_time_changed"),
     "data": ("report_pdf", "combo_export", "advisory_download", "advisory_export", "advisory_report", "audit_export",
              "data_exported", "data_viewed"),
     "workflow": ("finding_created", "finding_status", "finding_decision", "finding_reply", "finding_review_decision",
@@ -55,6 +55,7 @@ for _tab, _events in {
         TAB_OF[_e] = _tab
 LABEL = {"login": "Signed in", "login_failed": "Failed sign-in", "login_locked": "Locked out", "login_refused": "Sign-in refused",
          "login_unlocked": "Sign-in lock lifted by an admin",
+         "cache_cleared": "Kept answers cleared (task monitor)", "cache_time_changed": "How long answers are kept changed (task monitor)",
          "logout": "Signed out", "registered": "Account registered", "mfa_enrolled": "Authenticator set up",
          "recovery_code_used": "Recovery code used", "session_misuse": "Session misuse", "kicked": "Session ended by an admin",
          "user_kick": "Sessions ended by an admin", "user_approve": "Account approved", "user_role": "Role changed",
@@ -121,7 +122,7 @@ PRIVILEGED = {"user_role", "roles_changed", "user_approve", "user_revoke", "user
               "user_allow_reset", "settings_changed", "peace_of_mind", "kicked", "user_kick",
               "pipeline_unlock", "pipeline_settings_saved", "pipeline_apikey_saved", "sender_release",
               "pipeline_change_requested", "pipeline_request_applied", "password_policy_changed", "password_change_forced",
-              "login_unlocked"}
+              "login_unlocked", "cache_time_changed"}
 MAX_DAYS = 800
 
 

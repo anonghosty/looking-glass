@@ -87,6 +87,8 @@ run "services report names are never malware names" $PY tests/check_kb_report_na
 run "slow requests logged by route only; one name-index rebuild" $PY tests/check_slow_log.py
 run "locked sign-ins: limits, admin list and unlock" $PY tests/check_lockouts.py
 run "system alerts in the admins' bell" $PY tests/check_system_alerts.py
+run "heavy answers cached safely (per role, afresh after changes)" $PY tests/check_response_cache.py
+run "Settings → Task monitor (admins only, no address, actions audited)" $PY tests/check_task_monitor.py
 run "offline names: MISP Galaxy + ATT&CK, nothing sent" $PY tests/check_offline_names.py
 run "ATT&CK mappings, versions, CVE links" $PY tests/check_attack_map.py
 run "ATT&CK in advisories (reviewed only)" $PY tests/check_advisory_attack.py

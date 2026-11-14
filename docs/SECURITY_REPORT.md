@@ -10,10 +10,10 @@
 
 **Date:** 2026-11-07
 **Target:** Looking Glass as first deployed on a development workstation (Windows with WSL 2). This covers the gunicorn service on port 5000, its host and network exposure, MongoDB, and the browser pages. Details that identify the test machine and its network have been left out of this published copy.
-**Method:** grey box. The tester had the source code and ran live tests against the real service and against a separate copy.
+**Method:** grey box. The tester had the source code and ran tests against the running service and against a separate copy.
 
 The tests were non-destructive:
-- **The only write to the real service** was a "settings save" with the current values, so only its timestamp changed.
+- **The only write to the running service** was a "settings save" with the current values, so only its timestamp changed.
 - **Load and abuse tests** ran only on a throwaway copy (port 5055, test database `lg_e2e`, public demo mode forced), which was removed afterwards.
 - **No denial-of-service flooding**, and no calls to third-party services.
 
@@ -75,7 +75,7 @@ These lists are effectively a target list. Traffic is unencrypted, so it can als
 
 ### 2. Settings can be changed by any web page on this computer — High
 
-**Evidence:** these live tests against the real service, using the current values, all returned **200, accepted**:
+**Evidence:** these tests against the running service, using the current values, all returned **200, accepted**:
 - `POST /api/settings` with `Content-Type: text/plain` and `Origin: https://evil.example`, which is a cross-site "simple" request that browsers send without asking the server first;
 - the same as a form post with an empty body;
 - the same with `Host: rebind.evil.example` (DNS rebinding).
@@ -112,7 +112,7 @@ DNS rebinding goes further: a malicious site can also read all the data through 
 - services: 1.26 s before → 3.35 s after;
 - comms: 1.96 s after.
 
-On the real data a reload means reading all the day's records from MongoDB again. Anyone who can reach the server can repeat this to keep both platforms reloading. No false "new report" notices were produced.
+A reload means reading all the day's records from MongoDB again. Anyone who can reach the server can repeat this to keep both platforms reloading. No false "new report" notices were produced.
 
 **Fix:**
 - Only accept `at` within the replay day and the day before (clamp otherwise).

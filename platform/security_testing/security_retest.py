@@ -406,7 +406,7 @@ try:
     _, _, home2 = req(nop, "/")
     ok("analyst: no masking flag, Demo switch available", 'data-masked' not in home2 and 'id="btnDemo"' in home2 and json.loads(req(nop, "/api/clock")[2]).get("demo_forced") is False)
     if ev3 or HAVE_DATA:
-        ok("analyst sees real data and may export", ev3 and not any(masked(e["ip"]) for e in ev3) and req(nop, "/api/svc/hosts.csv")[0] == 200)
+        ok("analyst sees unmasked data and may export", ev3 and not any(masked(e["ip"]) for e in ev3) and req(nop, "/api/svc/hosts.csv")[0] == 200)
     else:
         ok("analyst may export", req(nop, "/api/svc/hosts.csv")[0] == 200)
         skip("analyst sees real (unmasked) data", "no records loaded yet")

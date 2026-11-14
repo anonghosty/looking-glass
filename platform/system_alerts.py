@@ -1,5 +1,5 @@
-"""System alerts in the bell, for administrators (2026-11-14: the platform restarted during a network outage and
-nobody was told; a failing pipeline run or a filling disk was only in log files).
+"""System alerts in the bell, for administrators: a restart, a failing pipeline run or a filling disk was only in log
+files, so nobody was told.
 
 Shown to accounts with the 'settings' permission, next to their findings notifications (notifications.py), shaped
 like them so the bell shows them as they are:
@@ -74,12 +74,14 @@ class Alerts:
             starts = [json.loads(x) for x in open(os.path.join(self.data, "restarts.jsonl"), encoding="utf-8") if x.strip()]
         except (OSError, ValueError):
             starts = []
-        for s in starts:
-            t = s.get("t") or 0
-            if now - t < RESTART_SHOW_S:
-                out.append({"key": f"restart:{t}", "problem": False, "title": "Looking Glass restarted",
-                            "text": f"the service started again at {_when(t)} (an update, a reload or the computer restarting).",
-                            "at": t, "link": "/admin"})
+        recent = sorted(t for t in ((s.get("t") or 0) for s in starts if isinstance(s, dict)) if now - t < RESTART_SHOW_S)
+        if recent:                                   # one alert for every start of the last day: the latest, and how many
+            t = recent[-1]
+            more = f" It started {len(recent)} times in the last 24 hours." if len(recent) > 1 else ""
+            out.append({"key": f"restart:{t}", "problem": False,
+                        "title": "Looking Glass restarted" + (f" ({len(recent)} times today)" if len(recent) > 1 else ""),
+                        "text": f"the service started again at {_when(t)} (an update, a reload or the computer restarting).{more}",
+                        "at": t, "link": "/settings#monitor"})
         st = self._pipeline_status()
         try:
             stale_h = max(1.0, float(self.env.get("PIPELINE_STALE_HOURS", "26") or 26))

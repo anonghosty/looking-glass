@@ -27,6 +27,25 @@ project's Python (`.venv`); run the others with `.venv/bin/python <script>`.
 The replay needs nothing from you: it waits for each day's reports, then replays the day. The intro page and the
 top bar show "Waiting for the reports of …" while it waits.
 
+### Watching it: Settings → Task monitor
+
+Administrators can watch the service without a terminal on **Settings → Task monitor**, refreshed every five seconds
+while the tab is open: the web service's memory, CPU, threads and uptime; requests running now and per minute over
+the last hour; whether each background job is running; the slowest requests of the last day (every request slower
+than `SLOW_REQUEST_S`, by route only); the kept answers; MongoDB's memory; the computer's load, memory, swap and disk;
+the pipeline's last run and schedule; recent starts, sign-in locks and the admins' alerts.
+
+Two actions are there, each needing a fresh sign-in and written to the audit log:
+
+- **Keep heavy answers for** (off, 30 s … 30 min; default 3 min, or `CACHE_TTL_S`). The Definitions lists, Intel
+  summary and leads and the ATT&CK panel take seconds to compute with a lot of data; Looking Glass keeps each answer for
+  that time and computes it for one person at a time. A kept answer is exactly what was computed: always correct, only
+  as recent as the time chosen. New reports show within it; anyone's change shows at once.
+- **Clear kept answers now**: the next visit computes afresh.
+
+From a terminal: `./manage/slow_requests.py [--days N]` (the slow requests) and `./tools/resource_check.py` (disk and
+memory against the budgets in `.env`).
+
 ## Accounts
 
 Normally done on the **Admin** page ([USER_GUIDE.md](USER_GUIDE.md)). On the command line, for recovery:
@@ -127,7 +146,7 @@ shipped `data/attack_rules.json`), one notice appears on the Definitions page an
 | `tests/check_past_days.py` | the Executive 7-day baseline from compact past days equals the full days (complete answers, 7 days, both platforms); runs in a temporary copy | 5 min |
 | `tests/e2e_test.py all` ▶ | end to end: runs a copy on port 5055 with a throwaway database, simulates Shadowserver deliveries and checks what both platforms show | 5 min |
 
-The checks only read the real database and service; tests that create reports use throwaway databases and drop them.
+The checks only read this installation's own database and service; tests that create reports use throwaway databases and drop them.
 They reach the API with the local automation key (`data/automation.key`), accepted from this computer only.
 
 ## Diagnostics (`tools/`)

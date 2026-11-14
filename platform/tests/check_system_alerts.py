@@ -40,6 +40,14 @@ try:
         SA.note_start(os.path.join(plat, "data"), now=now - 5 * 86400 + i)
     ok("only the last 50 starts are kept", len(open(os.path.join(plat, "data", "restarts.jsonl")).read().splitlines()) == 50)
     SA.note_start(os.path.join(plat, "data"), now=now - 1800)          # a recent one again, for the checks below
+    for k in (3, 2):
+        SA.note_start(os.path.join(plat, "data"), now=now - k * 600)
+    r = [a for a in A.current(now) if a["key"].startswith("restart")]
+    ok("several starts in a day are one alert, the latest, with how many", len(r) == 1 and r[0]["key"] == f"restart:{round(now - 1200)}"
+       and "3 times" in r[0]["title"], str(r))
+    A.clear("ann", ["sys:" + r[0]["key"]])
+    SA.note_start(os.path.join(plat, "data"), now=now - 60)
+    ok("…cleared, a new start shows it again", any(i["id"] == f"sys:restart:{round(now - 60)}" for i in A.for_user("ann", now)))
     print("The pipeline's run (its status file, found beside the platform)")
     stp = os.path.join(pipe, "reports", "pipeline_status.json")
     json.dump({"finished": round(now - 600), "ok": True, "free_gb": 900, "min_free_gb": 5, "disk_low": False}, open(stp, "w"))

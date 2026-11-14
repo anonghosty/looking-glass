@@ -419,7 +419,7 @@ Installed outside the project by `deploy`:
 
 ## 9. Performance and memory
 
-### Measured on this machine
+### Measured
 
 | | Original scripts | New pipeline |
 |---|---|---|

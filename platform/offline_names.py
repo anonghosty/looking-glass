@@ -307,8 +307,8 @@ class OfflineNames:
 
     def _best(self, fname, name):
         """The best entry of one index for a name. Only entries with a description answer (a bare name says nothing,
-        and real data showed such entries matching the wrong thing: 'popcorntime' the old video app, not the ransomware).
-        A name match on any search string beats a synonym match (real data: 'elf.mirai' is listed as a synonym of
+        and in MISP Galaxy's own entries such ones match the wrong thing: 'popcorntime' the old video app, not the ransomware).
+        A name match on any search string beats a synonym match (in MISP Galaxy, 'elf.mirai' is listed as a synonym of
         another family, while 'mirai' is Mirai's own name); then the plainest search string first (the full name
         before the shortened one), then Malpedia's cluster before botnet before tool."""
         doc, idx = self._load(fname)

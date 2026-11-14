@@ -13,6 +13,7 @@
   <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/settings.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/pipeline-settings.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/task-monitor.css') }}" rel="stylesheet">
 </head>
 <body class="settings-page" data-user="{{ lg_user }}"{% if "users" in lg_perms %} data-admin="1"{% endif %}>
   <header class="hud">
@@ -31,6 +32,7 @@
     <nav class="st-tabs" role="tablist" aria-label="Settings">
       <button type="button" role="tab" data-st-tab="general" aria-selected="true">General</button>
       <button type="button" role="tab" data-st-tab="workers" aria-selected="false">Workers</button>
+      <button type="button" role="tab" data-st-tab="monitor" aria-selected="false">Task monitor</button>
     </nav>
     {% endif %}
     <div class="st-banner" id="banner" role="status" hidden></div>
@@ -147,6 +149,31 @@
       <div class="wk-card" id="wkApi"></div>
       <div class="wk-card" id="wkHeld"></div>
     </section>
+
+    {# Task monitor: the service, its jobs, requests, cache, database, machine and pipeline (task_monitor.py, task-monitor.js) #}
+    <section class="st-card tm-pane" id="tabMonitor" hidden>
+      <h2>Task monitor <span class="st-for">this server, right now</span></h2>
+      <p class="st-hint">How Looking Glass and what it depends on are doing, refreshed every few seconds while this tab is open:
+        the web service, its background jobs, the requests it is answering, the slowest pages of the last day, the kept
+        answers, MongoDB, the computer and the report pipeline. Nothing here names a host from the reports.</p>
+      <div class="tm-head">
+        <nav class="tm-tabs" role="tablist" aria-label="Task monitor">
+          <button type="button" role="tab" data-tm="overview" aria-selected="true">Overview</button>
+          <button type="button" role="tab" data-tm="processes" aria-selected="false">Processes</button>
+          <button type="button" role="tab" data-tm="performance" aria-selected="false">Performance</button>
+          <button type="button" role="tab" data-tm="users" aria-selected="false">Users</button>
+        </nav>
+        <span class="tm-head-r"><span class="muted" id="tmAt" role="status"></span>
+          <button class="pill-btn" id="tmPause" type="button" aria-pressed="false">Pause</button></span></div>
+      <div data-tm-pane="overview">
+        <div id="tmBody"><div class="st-loading">Reading the server's figures…</div></div>
+        <div class="tm-cache" id="tmCache"></div>
+      </div>
+      <div data-tm-pane="processes" hidden><div id="tmProc"></div></div>
+      <div data-tm-pane="performance" hidden><div id="tmPerf"></div></div>
+      <div data-tm-pane="users" hidden><div id="tmUsers"></div></div>
+      <p class="wk-msg muted" id="tmMsg" role="status"></p>
+    </section>
     {% endif %}
 
     <section class="st-card">
@@ -190,6 +217,7 @@
   <script src="{{ url_for('static', filename='js/net-editor.js') }}"></script>
   <script src="{{ url_for('static', filename='js/organisation.js') }}"></script>
   {% if "settings" in lg_perms %}<script src="{{ url_for('static', filename='js/pipeline-settings.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/password-policy.js') }}"></script>{% endif %}
+  <script src="{{ url_for('static', filename='js/password-policy.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/task-monitor.js') }}"></script>{% endif %}
 </body>
 </html>

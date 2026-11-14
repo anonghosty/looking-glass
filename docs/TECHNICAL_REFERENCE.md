@@ -651,7 +651,7 @@ Security scripts:
 
 ### Checking everything
 
-- **`bash tests/run_all_checks.sh`** runs every automated check in one go and prints one line per check (about 2 minutes). The checks are read-only against the real database and service; the collection tests use throwaway databases that they drop. The checks are:
+- **`bash tests/run_all_checks.sh`** runs every automated check in one go and prints one line per check (about 2 minutes). The checks are read-only against this installation's own database and service; the collection tests use throwaway databases that they drop. The checks are:
   - replay schedule;
   - new communications and services collections;
   - services consistency (28 filter combinations);

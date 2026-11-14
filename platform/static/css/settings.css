@@ -3,6 +3,15 @@ html, body.settings-page { overflow: auto; height: auto; min-height: 100%; }
 body.settings-page { background: radial-gradient(ellipse at 50% 0%, #121624 0%, var(--bg) 60%) fixed; }
 body.settings-page .hud { position: sticky; top: 0; }
 .st-main { max-width: 1180px; margin: 0 auto; padding: 22px 16px 60px; display: grid; gap: 16px; }
+/* a grid column grows to its widest content (a wide table made the page 940 px wide on a phone): the cards may shrink,
+   and a wide table scrolls inside its own box */
+.st-main { grid-template-columns: minmax(0, 1fr); }
+.st-main > * { min-width: 0; }
+@media (max-width: 420px) { .st-field select, .st-field .lgs { min-width: 0; width: 100%; } }
+/* on a phone: the country's map and its region list shrink to the screen; long buttons wrap */
+.st-country > * { min-width: 0; }
+@media (max-width: 860px) { .st-country { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 520px) { .pp-card .lg-btn { white-space: normal; text-align: left; max-width: 100%; } }
 .st-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
 /* the researchers' work moved to /definitions: a signpost where it used to be */
 .st-moved { display: grid; gap: 10px; justify-items: start; border-color: rgba(91, 141, 239, .3); background: linear-gradient(135deg, rgba(91, 141, 239, .08), var(--surface) 60%); }

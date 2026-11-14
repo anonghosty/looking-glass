@@ -2,7 +2,7 @@
 researchers, and what each record gives (used by services_intel.py).
 
 * data/pattern_fields.json (shipped, replaced by updates): per report the identity fields that cluster hosts in a way
-  that means something, chosen from real data; the tag field for every report; fields that are never pattern fields
+  that means something, chosen from the reports' own values; the tag field for every report; fields that are never pattern fields
   (they name or locate a host).
 * data/pattern_fields_local.json (this site, kept on updates): a researcher's own choice per report (signed, dated);
   it replaces the shipped one for that report.

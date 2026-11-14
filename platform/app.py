@@ -120,10 +120,14 @@ PUBLIC_DEMO = os.environ.get("PUBLIC_DEMO") == "1"   # force demo masking for ev
 # first, so it times the whole request
 import slow_log  # noqa: E402
 slow_log.install(app, os.path.join(BASE_DIR, "data"))
+# who is using the service and what each request costs, for the Task monitor (request_tracker.py; memory only)
+import request_tracker  # noqa: E402
+request_tracker.install_start(app)
 # who may connect, host names, cross-site writes, security headers, request size (security.py, docs/SECURITY_REPORT.md)
 security.install(app, app.logger)
 # login, accounts, roles and sessions (auth.py): every page and API needs a login
 AUTH = auth.install(app, BASE_DIR, app.logger)
+request_tracker.install_tag(app)     # after the sign-in check: the running request knows its account
 # the security self-test clears this computer's login counters itself, so it never restarts the service (retest_reset.py)
 import retest_reset  # noqa: E402
 retest_reset.install(app, {"throttle": AUTH["throttle"], "audit": AUTH["audit"]})
@@ -2915,7 +2919,7 @@ if os.path.basename(sys.argv[0] or "").startswith("gunicorn"):     # the service
 NOTIFS = _notifications.install(app, {"base_dir": BASE_DIR, "findings": FINDINGS, "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"],
                                       "people_name": lambda u: people.name(u, ""),
                                       "labels": lambda s: _findings.LABEL.get(s, s),
-                                      "system": _system_alerts.Alerts(BASE_DIR)})
+                                      "system": (NOTIFS_ALERTS := _system_alerts.Alerts(BASE_DIR))})
 import tlp as _tlp  # noqa: E402
 _tlp.install(app)               # the Traffic Light Protocol levels, for the Definitions page's card
 ORG = _organisation.install(app, {"base_dir": BASE_DIR, "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"],
@@ -3345,6 +3349,18 @@ SVC_KB = _services_kb.install(app, {
     "report_info": report_info, "notes": NOTES, "allowed": _kb_allowed,
     "cve_card": lambda n: cve_intel.card(n, fetch=False), "issues_kb": issues_kb,
     "collections": lambda: [n for n in db.list_collection_names() if not n.startswith(_report_map.NO_REPORT)]})
+
+# A few heavy read-only answers, kept a few minutes and computed one at a time; any change starts afresh
+# (response_cache.py). Last, so every route exists.
+import response_cache as _response_cache  # noqa: E402
+RESPONSE_CACHE = _response_cache.install(app, ("api_kb_services", "api_intel_summary", "api_intel_leads", "api_kb_unresolved",
+                                               "api_attack"), live={"api_kb_unresolved": lambda: {"check": dict(_AUTOCHECK)}},
+                                        data_dir=os.path.join(BASE_DIR, "data"))
+# Settings → Task monitor: the service, its jobs, requests, cache, database, machine and pipeline, for admins (task_monitor.py)
+import task_monitor as _task_monitor  # noqa: E402
+_task_monitor.install(app, {"base_dir": BASE_DIR, "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"],
+                            "audit": AUTH["audit"], "cache": RESPONSE_CACHE, "throttle": AUTH["throttle"],
+                            "alerts": NOTIFS_ALERTS if "NOTIFS_ALERTS" in globals() else None})
 
 # Not when app.py is merely imported by a script or check: the schedule state file belongs to the server.
 _SERVING = __name__ == "__main__" or "gunicorn" in os.path.basename(sys.argv[0] if sys.argv else "")

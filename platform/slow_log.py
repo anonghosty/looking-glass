@@ -1,5 +1,5 @@
-"""Slow requests, recorded so the pages that are slow in real use can be found and fixed (2026-11-14: a load test on the
-test machine could not show what live's data costs).
+"""Slow requests, recorded so the pages that are slow in use can be found and fixed (a test installation with little
+data cannot show what a large one costs).
 
 Every request that takes longer than SLOW_REQUEST_S seconds (.env, default 2; 0 switches it off) adds one line to
 data/slow_requests.jsonl: when, the route PATTERN (for example /api/svc/insight, never the address, query text or any
@@ -13,8 +13,18 @@ import threading
 import time
 
 _LOCK = threading.Lock()
-_INFLIGHT = {"n": 0}
+_INFLIGHT = {"n": 0, "total": 0}
+_MINUTES = {}                                   # minute (epoch // 60) -> requests started in it (the last 60 kept)
 MAX_BYTES = 2 * 1024 * 1024
+
+
+def counts():
+    """For the task monitor: running now, since start, in the last minute, per minute over the last hour."""
+    now = int(time.time() // 60)
+    with _LOCK:
+        per = [_MINUTES.get(m, 0) for m in range(now - 59, now + 1)]
+        return {"running": _INFLIGHT["n"], "total": _INFLIGHT["total"], "last_minute": _MINUTES.get(now - 1, 0) + 0,
+                "this_minute": _MINUTES.get(now, 0), "per_minute": per}
 
 
 def threshold():
@@ -45,8 +55,14 @@ def install(app, data_dir):
     @app.before_request
     def _slow_start():
         g._slow_t0 = time.monotonic()
+        m = int(time.time() // 60)
         with _LOCK:
             _INFLIGHT["n"] += 1
+            _INFLIGHT["total"] += 1
+            _MINUTES[m] = _MINUTES.get(m, 0) + 1
+            if len(_MINUTES) > 60:
+                for k in sorted(_MINUTES)[:-60]:
+                    del _MINUTES[k]
         g._slow_counted = True
 
     @app.teardown_request

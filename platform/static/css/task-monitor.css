@@ -1,0 +1,80 @@
+/* Looking Glass · Settings → Task monitor (task-monitor.js) */
+.tm-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 12px; flex-wrap: wrap; }
+.tm-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.tm-tile { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 1px solid var(--line, rgba(255,255,255,.1));
+  border-radius: 12px; background: rgba(255,255,255,.025); min-width: 0; }
+.tm-tile .tm-label { font-size: 12px; color: var(--muted, #94a3b8); }
+.tm-tile .tm-value { font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.tm-tile small { overflow-wrap: anywhere; }
+.tm-tile.tm-warn { border-color: rgba(245, 181, 74, .55); background: rgba(245, 181, 74, .06); }
+.tm-tile.tm-bad { border-color: rgba(239, 68, 68, .6); background: rgba(239, 68, 68, .07); }
+.tm-memrow { display: flex; align-items: center; gap: 10px; margin: 12px 0 4px; }
+.tm-meter { flex: 1; height: 8px; border-radius: 6px; background: rgba(255,255,255,.08); overflow: hidden; }
+.tm-meter i { display: block; height: 100%; background: var(--accent, #7c8cff); border-radius: 6px; }
+.tm-meter.tm-high i { background: #f5b54a; }
+.tm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-top: 12px; }
+.tm-card { padding: 12px 14px; border: 1px solid var(--line, rgba(255,255,255,.1)); border-radius: 12px; min-width: 0; margin-top: 12px; }
+.tm-grid .tm-card { margin-top: 0; }
+.tm-card h3 { margin: 0 0 8px; font-size: 14px; }
+.tm-bars { width: 100%; height: 48px; display: block; }
+.tm-bars rect { fill: var(--accent, #7c8cff); }
+.tm-note { margin: 6px 0 0; }
+.tm-jobs, .tm-plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tm-jobs li { display: grid; grid-template-columns: 12px 1fr; column-gap: 8px; align-items: center; }
+.tm-jobs li small { grid-column: 2; }
+.tm-dot { width: 9px; height: 9px; border-radius: 50%; background: #64748b; }
+.tm-ok .tm-dot { background: #22c55e; }
+.tm-done .tm-dot { background: #94a3b8; }
+.tm-bad .tm-dot { background: #ef4444; }
+.tm-okline { color: #4ade80; }
+.tm-badline { color: #f87171; }
+.tm-slow td, .tm-slow th { white-space: nowrap; }
+.tm-slow td.mono { white-space: normal; overflow-wrap: anywhere; }
+.tm-cache-row { align-items: flex-end; flex-wrap: wrap; gap: 10px; }
+.tm-misc p, .tm-pipe p { margin: 0 0 6px; overflow-wrap: anywhere; }
+/* the inner tabs, like Task Manager's */
+.tm-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.tm-tabs button { background: none; border: 1px solid transparent; color: var(--text-2, #cbd5e1); padding: 6px 12px; border-radius: 8px; font: inherit; font-size: 13px; cursor: pointer; }
+.tm-tabs button[aria-selected="true"] { background: rgba(124, 140, 255, .14); border-color: rgba(124, 140, 255, .45); color: var(--text, #fff); }
+.tm-head-r { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* Processes and Users tables */
+.tm-proc-head { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.tm-tm th { padding: 0; }
+.tm-sort { background: none; border: 0; color: inherit; font: inherit; font-weight: 600; padding: 8px 10px; cursor: pointer; white-space: nowrap; }
+.tm-tm td.tm-wrap { white-space: normal; overflow-wrap: anywhere; min-width: 160px; }
+.tm-row-warn td { background: rgba(245, 181, 74, .07); }
+.tm-row-bad td { background: rgba(239, 68, 68, .08); }
+.tm-share { display: inline-flex; align-items: center; gap: 6px; min-width: 110px; }
+.tm-share i { display: block; height: 8px; border-radius: 4px; background: var(--accent, #7c8cff); min-width: 2px; }
+.tm-share small { color: var(--muted, #94a3b8); }
+/* Performance: a list of resources with small graphs on the left, the chosen one large on the right */
+.tm-perf { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 14px; }
+.tm-perf-list { display: grid; gap: 6px; align-content: start; }
+.tm-perf-item { display: grid; grid-template-columns: 90px 1fr; gap: 10px; align-items: center; text-align: left; padding: 8px; border-radius: 10px;
+  border: 1px solid var(--line, rgba(255,255,255,.1)); background: rgba(255,255,255,.02); color: inherit; font: inherit; cursor: pointer; }
+.tm-perf-item.on { border-color: rgba(124, 140, 255, .6); background: rgba(124, 140, 255, .1); }
+.tm-perf-txt { display: flex; flex-direction: column; min-width: 0; }
+.tm-perf-txt small { overflow-wrap: anywhere; }
+.tm-spark { width: 90px; height: 36px; display: block; border: 1px solid rgba(255,255,255,.08); border-radius: 4px; }
+.tm-perf-main { min-width: 0; border: 1px solid var(--line, rgba(255,255,255,.1)); border-radius: 12px; padding: 12px 14px; }
+.tm-perf-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.tm-perf-top h3 { margin: 0; font-size: 18px; }
+.tm-perf-now { font-size: 18px; }
+.tm-chart { width: 100%; height: 220px; display: block; margin: 10px 0 6px; border: 1px solid rgba(255,255,255,.1); border-radius: 6px; background: rgba(255,255,255,.015); }
+.tm-grid-line { stroke: rgba(255,255,255,.07); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.tm-line { fill: none; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.tm-line.s0 { stroke: #7c8cff; } .tm-area.s0 { fill: rgba(124, 140, 255, .18); }
+.tm-line.s1 { stroke: #f5b54a; } .tm-area.s1 { fill: rgba(245, 181, 74, .12); }
+.tm-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; margin-bottom: 8px; }
+.tm-key i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; vertical-align: middle; }
+.tm-key.s0 i { background: #7c8cff; } .tm-key.s1 i { background: #f5b54a; }
+.tm-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 16px; margin: 10px 0 0; }
+.tm-fact { min-width: 0; }
+.tm-facts dt { font-size: 12px; color: var(--muted, #94a3b8); }
+.tm-facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+@media (max-width: 760px) { .tm-perf { grid-template-columns: minmax(0, 1fr); } .tm-perf-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) {
+  .tm-tiles { grid-template-columns: 1fr 1fr; }
+  .tm-tile .tm-value { font-size: 17px; }
+  .tm-grid { grid-template-columns: 1fr; }
+}

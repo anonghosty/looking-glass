@@ -153,6 +153,12 @@ devices most likely to matter, send that operator a short, explained report, the
 
 [Follow the use cases step by step](USE_CASES.md){ .md-button .md-button--primary }
 
+## Acknowledgements
+
+The creator of Looking Glass is deeply grateful to the mentor **Kwadwo Osafo-Maafo**, over a period of years, for helping
+build critical thinking skills and careful deliberation on ideas and systems, for building on those skills, and for pointing
+out what to learn and which aspects of cyber threat intelligence to take seriously.
+
 <p class="lg-fine">Every screenshot uses dummy data: documentation IP ranges (RFC 5737 / RFC 2544 / RFC 3849), private AS
 numbers and fictional network names. Looking Glass is free software under the
 <a href="https://github.com/anonghosty/looking-glass/blob/main/LICENSE">GNU AGPL-3.0</a>.</p>
