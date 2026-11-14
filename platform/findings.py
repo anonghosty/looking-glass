@@ -147,7 +147,8 @@ class Findings:
             self.data["seq"] += 1
             fid = str(self.data["seq"])
             item = {"id": fid, "note": None, "origin": "analyst", "kind": "review", "section": section, "name": label,
-                    "title": title[:MAX_TITLE], "text": text, "codes": [code] + [c for c in review.get("codes", []) if c != code],
+                    "title": title[:MAX_TITLE], "text": text, "codes": [code] + [c for c in review.get("codes", []) if c != code]
+                    + ([review["drill_code"]] if review.get("drill_code") else []),       # the drill-down's own code (its channel)
                     "user": user, "role": role, "at": now, "status": "management", "review": dict(review, decision=None),
                     "history": [{"status": "management", "user": user, "role": role, "at": now, "to": to,
                                  "comment": (f"Across-report views for {code}: {len(review.get('codes', []))} pattern(s) ticked." if review.get("codes")
@@ -178,7 +179,8 @@ class Findings:
                 fid = str(self.data["seq"])
                 item = {"id": fid, "note": None, "origin": "analyst", "kind": "review", "parent": pid, "network": net, "section": section,
                         "name": label, "title": f"{title[:MAX_TITLE - 40]} · {net}"[:MAX_TITLE], "text": text,
-                        "codes": [code] + [c for c in review.get("codes", []) if c != code], "user": user, "role": role, "at": now,
+                        "codes": [code] + [c for c in review.get("codes", []) if c != code]
+                        + ([review["drill_code"]] if review.get("drill_code") else []), "user": user, "role": role, "at": now,
                         "status": "management", "review": dict(review, decision=None),
                         "history": [{"status": "management", "user": user, "role": role, "at": now, "to": to,
                                      "comment": f"Sub-finding of case #{pid} for {net}: "

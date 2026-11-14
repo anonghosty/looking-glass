@@ -422,6 +422,54 @@ def install(app, ctx):
         f = f if f is not None else ctx["findings"].of_code(code)
         return not f or ctx["findings"].sees(f, user()[0], hp("settings"))
 
+    _cd_cache, _cd_lock = {}, threading.Lock()
+
+    def code_devices(code):
+        """{code: devices}: for an analyst code, how many of its devices each code the researcher can answer with stands
+        for (the same figures as its page), and the code itself with all its devices. Kept ten minutes."""
+        hit = _cd_cache.get(code)
+        if hit and time.time() - hit[0] < 600:
+            return hit[1]
+        with _cd_lock:
+            hit = _cd_cache.get(code)
+            if hit and time.time() - hit[0] < 600:
+                return hit[1]
+            v = view(code)
+            out = {}
+            if v:
+                out[code] = v["devices"]
+                for n in v["names"]:
+                    for c in n["combinations"]:
+                        out.setdefault(c["code"], c["devices"])
+                    for x in n["across"]:
+                        out.setdefault(x["code"], x["devices"])
+                cr = v.get("cross") or {}
+                for s in cr.get("services") or []:
+                    for c in s.get("combinations") or []:
+                        if c.get("code"):
+                            out.setdefault(c["code"], c["hosts"])
+                for x in cr.get("cross") or []:
+                    if x.get("code"):
+                        out.setdefault(x["code"], x["hosts"])
+                for x in cr.get("infections") or []:
+                    for r in x.get("reports") or []:
+                        if r.get("code"):
+                            out.setdefault(r["code"], r["hosts"])
+            if len(_cd_cache) > 64:
+                _cd_cache.pop(min(_cd_cache, key=lambda k: _cd_cache[k][0]))
+            _cd_cache[code] = (time.time(), out)
+            return out
+
+    @app.route("/api/intel/acode/<code>/devices")
+    def api_acode_code_devices(code):
+        """How many of an analyst code's devices each answering code stands for (the Findings page shows the counts)."""
+        if not reader():
+            return jsonify(error="Analyst codes are for researchers, management, analysts and admins."), 403
+        code = (code or "").strip().upper()
+        if not ACODE_RX.match(code) or not in_channel(code):
+            return jsonify(error="No such analyst code."), 404
+        return jsonify(code=code, devices=code_devices(code))
+
     @app.route("/api/intel/acode/<code>")
     def api_acode_view(code):
         if not reader():
@@ -465,7 +513,25 @@ def install(app, ctx):
     class API:
         pass
     api = API()
+    def make_selection(platform, evs, from_code, label):
+        """An analyst code standing for exactly these records (combo_review.py: the devices an analyst drilled down to,
+        so management's Executive figures are of that selection, not the whole combination). No finding of its own: it
+        joins the review's finding, whose channel alone opens it. Returns the code, or None for no records."""
+        days = sorted({str(e.get("extracted_date") or e.get("timestamp") or "")[:10] for e in evs} - {""})
+        if not evs or not days:
+            return None
+        sel = {"from_code": from_code, "days": days, "drill": True}
+        code = new_acode(book, platform, days[-1], sel)
+        host = (lambda e: e.get("src_ip")) if platform == "comms" else (lambda e: e.get("ip"))
+        names = collections.Counter(n for e in evs for n in ([(e.get("infection") or "").lower()] if platform == "comms" else (e.get("issues") or [])) if n)
+        entry = {"kind": "a", "platform": platform, "day": days[-1], "days": days, "sel": sel, "label": label[:400],
+                 "records": len(evs), "hosts": len({host(e) for e in evs if host(e)}), "names": [n for n, _ in names.most_common(12)]}
+        save_ids(code, evs)
+        book.put(code, entry)
+        return code
+
     api.records = records
+    api.make_selection = make_selection
     api.paths = paths
     api.describe = lambda entry: f"Analyst selection on {day_span(entry)} ({'network communications' if entry['platform'] == 'comms' else 'services'}): {entry.get('label', '')}"
     api.days_of = days_of

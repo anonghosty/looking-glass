@@ -228,6 +228,56 @@ def install(app, ctx):
                 return None, "None of the devices the analyst ticked are in the kept records: no report is made."
         return {"entry": entry, "found": found, "around": around, "per_day": per_day, "m": m, "plat": plat}, ""
 
+    def drill_build(source, comms, evs, label):
+        """Management's figures of exactly these records (the devices an analyst drilled down to), counts only, and an
+        analyst code standing for them (the Executive portal shows that selection). (None, None) for no records."""
+        if not evs:
+            return None, None
+        host = (lambda e: e.get("src_ip")) if comms else (lambda e: e.get("ip"))
+        asn = (lambda e: e.get("src_asn")) if comms else (lambda e: e.get("asn"))
+        reg = (lambda e: e.get("src_region")) if comms else (lambda e: e.get("region"))
+        nets, regs, days_ = {}, {}, collections.Counter()
+        for e in evs:
+            h = host(e)
+            nets.setdefault((ctx["network"](asn(e)) if asn(e) else "") or "Unknown", set()).add(h)
+            regs.setdefault(reg(e) or "Unknown region", set()).add(h)
+            days_[str(e.get("extracted_date") or e.get("timestamp") or "")[:10]] += 1
+        figs = {"devices": len({host(e) for e in evs}), "records": len(evs), "networks": len(nets),
+                "top_networks": [{"label": n, "devices": len(h)} for n, h in sorted(nets.items(), key=lambda kv: -len(kv[1]))[:8]],
+                "regions": [{"label": r, "devices": len(h)} for r, h in sorted(regs.items(), key=lambda kv: -len(kv[1]))[:8]],
+                "per_day": sorted([d_, n] for d_, n in days_.items() if d_)}
+        code_ = ctx["acodes"].make_selection("comms" if comms else "services", evs, source, label) if ctx.get("acodes") else None
+        return figs, code_
+
+    def backfill_drill(fid):
+        """A review sent before the drill-down's own figures: work them out from its kept records, once."""
+        x = F.get(fid)
+        rv = (x or {}).get("review") or {}
+        ips = analyst_devices(rv)
+        if not ips or rv.get("drill"):
+            return
+        k, _ = records_of(fid)
+        if not k:
+            return
+        comms = k["entry"].get("section") == "infections"
+        m = k["m"]
+        host = m.host if m is not None else ((lambda e: e.get("src_ip")) if comms else (lambda e: e.get("ip")))
+        label = f"The devices the analyst drilled down to in {rv['source']}" + (f", on {x['network']}" if x.get("network") else "")
+        figs, code_ = drill_build(rv["source"], comms, [e for e in k["found"] if host(e) in ips], label)
+        if not figs:
+            return
+        with F.lock:
+            F._load()
+            it = F.data["items"].get(fid)
+            if it and it.get("review") and not it["review"].get("drill"):
+                it["review"]["drill"] = figs
+                if code_:
+                    it["review"]["drill_code"] = code_
+                    it.setdefault("codes", []).append(code_)       # its channel opens the code
+                F._save()
+
+    book.review_backfill = backfill_drill
+
     def analyst_devices(rv):
         """The addresses of the devices behind what the analyst sent: ticked patterns, infections and CVEs/issues."""
         return {d.get("ip") for x in (rv.get("sent") or []) + (rv.get("sent_infections") or []) + (rv.get("sent_issues") or [])
@@ -346,6 +396,14 @@ def install(app, ctx):
         if not x or not x.get("review") or not F.sees(x, user()[0], hp("settings")):
             return jsonify(error="No such review."), 404
         rv = x["review"]
+        if not rv.get("drill") and analyst_devices(rv):
+            # a review sent before management's figures were of the drill-down (2026-11-14): worked out once from its
+            # kept records and kept with the finding
+            try:
+                backfill_drill(str(fid))
+                x = F.get(fid); rv = x["review"]
+            except Exception:                              # noqa: BLE001  (the page still opens with the combination's figures)
+                pass
         src = book.resolve_any(rv["source"]) if hasattr(book, "resolve_any") else None
         notes, rf = [], None
         if src and src.get("kind") != "a" and ctx.get("notes"):
@@ -436,6 +494,16 @@ def install(app, ctx):
                 "sent_infections": sent_inf, "sent_issues": sent_iss,
                 # drilled down within an analyst's selection: the kept search holds only its devices (combos.py within)
                 **({"within": j["within"]} if j.get("within") else {})}
+        # what the analyst drilled down to (the devices behind the ticked patterns, infections and CVEs/issues): management
+        # weighs exactly that selection (user, 2026-11-14: its figures were the whole combination's): counts only, and an
+        # analyst code of exactly those records, so the Executive portal on the review page shows them too
+        drilled_ips = {d.get("ip") for x in sent + sent_inf + sent_iss for d in x.get("devices") or [] if d.get("ip")}
+        found_all, comms = j["inputs"][1], section == "infections" or entry.get("platform") == "comms"
+        host_of = (lambda e: e.get("src_ip")) if comms else (lambda e: e.get("ip"))
+
+        def drill_of(ips, label):
+            return drill_build(entry["code"], comms, [e for e in found_all if host_of(e) in ips], label)
+        drill_label = f"The devices the analyst drilled down to in {entry['code']}"
         # the organisations (networks) it is for: none named = the whole combination (an overview, the advisor picks the
         # organisations later); one = a finding for that organisation; several = a case with one sub-finding each
         per_net = per_network(j)
@@ -443,6 +511,8 @@ def install(app, ctx):
         bad = [n for n in nets if n not in per_net]
         if bad:
             return jsonify(error=f"Not a network of this search: {bad[0]}."), 400
+        if drilled_ips and not nets:                       # one review on every organisation: the whole drill-down
+            base["drill"], base["drill_code"] = drill_of(drilled_ips, drill_label)
 
         def for_net(net):
             """The review narrowed to one organisation: its figures, and the ticked patterns its devices are in."""
@@ -464,7 +534,11 @@ def install(app, ctx):
                 return out
             inf_n, iss_n = narrow(sent_inf), narrow(sent_iss)
             words = lambda xs: [{"name": x["name"], "hosts": x["hosts"], "reports": [r["title"] for r in x.get("reports") or []][:6]} for x in xs]  # noqa: E731
-            return dict(base, network=net, codes=[s_["code"] for s_ in sent_n], sent=sent_n, sent_infections=inf_n, sent_issues=iss_n,
+            drill_n = {}
+            if drilled_ips:                        # this organisation's part of the drill-down: its own figures and code
+                fg, cd = drill_of(drilled_ips & p["ips"], f"{drill_label}, on {net}")
+                drill_n = {"drill": fg, "drill_code": cd}
+            return dict(base, network=net, **drill_n, codes=[s_["code"] for s_ in sent_n], sent=sent_n, sent_infections=inf_n, sent_issues=iss_n,
                         researcher=dict(researcher, devices=len(p["ips"]), records=p["records"], networks=1,
                                         top_networks=[{"label": net, "devices": len(p["ips"])}]),
                         analyst=dict(analyst, patterns=pats, multi_hosts=sum(s_["hosts"] for s_ in sent_n),

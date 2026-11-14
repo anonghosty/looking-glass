@@ -54,8 +54,52 @@ class CodeBook:
 
     def __init__(self, path, logger=None):
         self.path, self.log = path, logger
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()          # re-entrant: record() makes codes (assign) while it holds the lock
         self.data, self.loaded = {}, False
+        self.by_key = None                     # what a combination is -> its code (built from the book once)
+        self.held = {}                         # code -> key, for codes handed out but not recorded yet
+        self._indexed = None                   # the data the index was built from
+
+    @staticmethod
+    def key_of(entry):
+        """What a book entry stands for (its stored key, or worked out from its fields for entries made before keys)."""
+        if entry.get("key"):
+            return entry["key"]
+        if entry.get("kind") == "r":
+            return I.combo_key(entry.get("section", ""), entry.get("name", ""), entry.get("report", ""), entry.get("items") or [])
+        if entry.get("kind") == "x":
+            return I.cross_key(entry.get("section", ""), entry.get("name", ""), [(r, tuple(i)) for r, i in entry.get("parts") or []])
+        return None                            # an analyst code: its own rule (acodes.new_acode)
+
+    def assign(self, prefix, key):
+        """The code of a combination: the one it already has, else the plain 8-character hash, else (that code stands
+        for something else) the next candidate that is free. Never two combinations on one code."""
+        with self.lock:
+            self._load()
+            if self.by_key is None or self._indexed is not self.data:      # first use, or the book's data was replaced
+                self.by_key, self.held, self._indexed = {}, {}, self.data
+                for c, e in self.data.items():
+                    k = self.key_of(e)
+                    if k is not None:
+                        self.by_key.setdefault(k, c)
+            hit = self.by_key.get(key)
+            if hit:
+                return hit
+            n = 1
+            while True:
+                code = I.code_from(prefix, key, n)
+                e = self.data.get(code)
+                other = self.held.get(code) if e is None else self.key_of(e) or ("analyst", code)
+                if other is None or other == key:
+                    break
+                n += 1
+                if n == 2 and self.log:
+                    self.log.warning("combination code %s already stands for another combination: a code of its own is given",
+                                     I.code_from(prefix, key, 1))
+            self.by_key[key] = code
+            if code not in self.data:
+                self.held[code] = key
+            return code
 
     def _load(self):
         if self.loaded:
@@ -74,7 +118,10 @@ class CodeBook:
     def _save(self):
         if len(self.data) > KEEP_CODES:
             for k, _ in sorted(self.data.items(), key=lambda kv: kv[1].get("last", ""))[:len(self.data) - KEEP_CODES]:
+                key = self.key_of(self.data[k])
                 del self.data[k]
+                if self.by_key and key is not None and self.by_key.get(key) == k:
+                    del self.by_key[key]               # a forgotten code is free again for whatever it is made from
         tmp = f"{self.path}.{os.getpid()}.tmp"
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -90,13 +137,21 @@ class CodeBook:
             for c in combos:
                 if report is None:
                     parts = [[r, sorted(i)] for r, i in c]
+                    key = I.cross_key(section, name, parts)
                     code, entry = I.cross_code(section, name, parts), {"kind": "x", "section": section, "name": name, "parts": parts}
                 else:
+                    key = I.combo_key(section, name, report, c)
                     code, entry = I.combo_code(section, name, report, c), {"kind": "r", "section": section, "name": name,
                                                                             "report": report, "items": sorted(c)}
                 old = self.data.get(code)
+                if old is not None and self.key_of(old) != key:
+                    # never: assign() gave this combination a code of its own; refused rather than mixing two up
+                    if self.log:
+                        self.log.error("combination code %s stands for another combination: not recorded", code)
+                    continue
                 if old is None:
-                    self.data[code] = dict(entry, first=today, last=today)
+                    self.data[code] = dict(entry, key=key, first=today, last=today)
+                    self.held.pop(code, None)
                     new = True
                 elif old.get("last") != today:
                     old["last"] = today
@@ -289,6 +344,7 @@ def install(app, ctx):
     -> scoped events of those reports that day from MongoDB, network(asn) -> name, has_perm(p), csrf_ok(), is_demo(),
     audit, notes (notes.Notes), explain(section, name) -> card or None, build_pdf(spec), scope_text(), base_dir, logger."""
     book = CodeBook(os.path.join(ctx["base_dir"], "data", "combo_codes.json"), ctx.get("logger"))
+    I.CODE_BOOK["book"] = book                # every code shown anywhere comes from this book: never two combinations on one
     if ctx.get("title_of"):
         _TITLE["of"] = ctx["title_of"]
     ctx["intel"].on_codes = book.record

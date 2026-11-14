@@ -2869,6 +2869,7 @@ _combo_review.install(app, {"book": COMBOS, "findings": FINDINGS, "notes": NOTES
                             "fresh": AUTH["fresh"], "is_demo": is_demo, "audit": AUTH["audit"],
                             "people_name": lambda u: people.name(u, ""),
                             "network": lambda asn: asn_registry.company(asn, False) if asn else "",
+                            "acodes": ACODES,      # the drill-down's own analyst code (management's figures of that selection)
                             "cross": lambda hosts, with_hosts=False: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"],
                                                                                          with_hosts=with_hosts)})
 
@@ -3355,6 +3356,7 @@ SVC_KB = _services_kb.install(app, {
 import intelligence as _intelligence  # noqa: E402
 INTELLIGENCE = _intelligence.install(app, {
     "db": db, "report_map": REPORT_MAP, "settings": settings, "has_perm": AUTH["has_perm"], "is_demo": is_demo,
+    "csrf_ok": AUTH["csrf_ok"],             # the views it is sent in a request body (POST) carry the page's token
     "audit": AUTH["audit"], "svc_reports": lambda: {x["name"] for x in svc["registry"].get()},
     "network": lambda asn: asn_registry.company(asn, False) if asn else "",
     "cross": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"])})

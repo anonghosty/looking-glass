@@ -410,8 +410,16 @@ def install(app, ctx):
             if "End of life" in iss and any(i.startswith("End of life (") for i in iss):
                 iss.remove("End of life")
             return iss
+        # the infections each device calls botnet sinkholes as (2026-11-14: a column of their own): from its own sinkhole
+        # records, and the infections the analyst ticked for it (services findings carry them only there); both kept
+        # with the finding, so the advisory does not change from one day to the next
+        ticked = {}
+        for inf in ((x.get("review") or {}).get("sent_infections") or []):
+            for dv in inf.get("devices") or []:
+                ticked.setdefault(dv.get("ip"), set()).add(str(inf.get("name") or ""))
         return sorted(({**d, "ports": sorted(d["ports"], key=lambda p: (len(p), p)), "reports": sorted(d["reports"]), "cves": sorted(d["cves"]),
                         "issues": clean(d), "labels": sorted(d["labels"]), "categories": sorted(d["categories"]),
+                        "infections": sorted((d["categories"] | ticked.get(d["ip"], set())) - {""}),
                         "last": d["last"][:16].replace("T", " ")} for d in devs.values()),
                       key=lambda d: (-d["records"], d["ip"]))
 

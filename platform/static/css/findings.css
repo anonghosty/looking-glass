@@ -171,3 +171,4 @@ details.fd-subd[hidden] { display: none; }
 .fd-h > .fd-pill { flex: none; align-self: flex-start; margin-top: 2px; }
 .fd-meta { min-width: 0; }
 .fd-name { overflow-wrap: anywhere; word-break: break-word; min-width: 0; }
+.fd-view.d { border-color: rgba(255, 197, 61, .5); background: rgba(255, 197, 61, .04); }   /* the drill-down: what the report covers */

@@ -93,6 +93,7 @@ run "Settings → Task monitor (admins only, no address, actions audited)" $PY t
 run "analyst code page: how the selection came about" $PY tests/check_acode_chain.py
 run "combinations: ticked infections and CVEs go into the report" $PY tests/check_ticked_names.py
 run "Intelligence portal: who sees what, counts, views, export" $PY tests/check_intelligence.py
+run "combination codes never stand for two combinations" $PY tests/check_code_collisions.py
 run "offline names: MISP Galaxy + ATT&CK, nothing sent" $PY tests/check_offline_names.py
 run "ATT&CK mappings, versions, CVE links" $PY tests/check_attack_map.py
 run "ATT&CK in advisories (reviewed only)" $PY tests/check_advisory_attack.py

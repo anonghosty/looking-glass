@@ -586,7 +586,7 @@ between work in progress and everything.
 Shadowserver sends a group of **Intelligence** reports beside the two platforms: compromised systems and victims
 (compromised websites and devices, ransomware victims), malicious content hosted in the constituency (malware and
 sandbox URLs, spam links), addresses on block lists or targeted, leaked accounts, and attacker infrastructure. The
-**Abused or Compromised** page (`/intelligence`) is for analysts only; it is closed in Demo mode.
+**Abused or Compromised** page (`/intelligence`) is for analysts and administrators; it is closed in Demo mode.
 
 - **Group tiles:** today's records in each group against the median of the 7 days before, with the 8 days as bars.
   While the day's files are still coming in, the page says so: "still arriving: N of the usual M reports".

@@ -27,3 +27,7 @@ control_socket_disable = True
 # Loading a day from MongoDB and a burst of heavy Executive requests can keep it busy for longer than the default 30 s
 # (seen 2026-11-09: "WORKER TIMEOUT"), so allow 2 minutes; a worker that is truly stuck is still replaced.
 timeout = 120
+# The access log (the service's journal) keeps who asked for which page and how it went, never what was asked: no query
+# string (it can hold host addresses, account names and searches), no referring page (its URL can too), no browser
+# string. Views of host data are in the audit log instead, with hosts as opaque references (2026-11-14).
+access_log_format = '%(h)s %(t)s "%(m)s %(U)s %(H)s" %(s)s %(b)s %(L)ss'

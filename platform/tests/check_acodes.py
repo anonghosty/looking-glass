@@ -97,6 +97,15 @@ try:
     ok("the researcher it was sent to opens it", st == 200)
     st, _ = call(f"/api/intel/acode/{code}", RESEARCHER, role="researcher", user="lg-outsider")
     ok("a researcher outside its channel does not (as unknown)", st == 404)
+    # the number of devices beside each code on the Findings page (2026-11-14): the code page's own figures
+    st, cd = call(f"/api/intel/acode/{code}/devices", RESEARCHER, role="researcher", user="lg-check-researcher")
+    m = cd.get("devices") or {}
+    want_m = {c["code"]: c["devices"] for n in v["names"] for c in n["combinations"]}
+    ok("each answering code's devices within the selection, as the code's page counts them", st == 200 and m.get(code) == v["devices"]
+       and all(m.get(k) == n_ for k, n_ in want_m.items()), f"{len(m)} codes")
+    ok("…only numbers, no address", ip not in json.dumps(cd))
+    st, _ = call(f"/api/intel/acode/{code}/devices", RESEARCHER, role="researcher", user="lg-outsider")
+    ok("…and nothing for someone outside its channel", st == 404)
     st, _ = call("/api/findings/1/reply", RESEARCHER, "POST", {"text": "sneaking in"}, role="researcher", user="lg-outsider")
     ok("…and cannot reply on its finding", st == 404)
     st, fl = call("/api/findings", RESEARCHER, role="researcher", user="lg-outsider")

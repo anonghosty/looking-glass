@@ -152,18 +152,44 @@ def hosts(per_host):
     return {"hosts": len(per_host), "repeat_hosts": sum(1 for c in per_host.values() if c > 1)}
 
 
+# The code book (combos.CodeBook) that hands out codes: set by combos.install. Codes keep 8 hex characters (people type
+# and quote them), so two different combinations can share one (about 4.5% at 20,000 codes); the book checks what a code
+# already stands for and gives the second one a code of its own (external review, 2026-11-14).
+CODE_BOOK = {"book": None}
+
+
+def combo_key(section, name, report, items):
+    """What one exact combination is: the text its code is made from."""
+    return "\x1e".join(["r", section, (name or "").strip().lower(), report or "", "\x1f".join(sorted(items))])
+
+
+def cross_key(section, name, parts):
+    """What one cross-report pattern is: the text its code is made from."""
+    return "\x1e".join(["x", section, (name or "").strip().lower()] +
+                       [r + "\x1d" + "\x1f".join(sorted(items)) for r, items in sorted((r, tuple(i)) for r, i in parts)])
+
+
+def code_from(prefix, key, n=1):
+    """The n-th candidate code for a key: the first is the plain hash (every code made so far), later ones add n."""
+    raw = key if n == 1 else f"{key}\x1e{n}"
+    return prefix + hashlib.sha256(raw.encode()).hexdigest()[:8].upper()
+
+
+def _assign(prefix, key):
+    book = CODE_BOOK["book"]
+    return book.assign(prefix, key) if book is not None else code_from(prefix, key)
+
+
 def combo_code(section, name, report, items):
     """The code of one exact combination in one report (LG-C-XXXXXXXX): the same name, report and indicators always give
-    the same code, so a researcher's note and an analyst's export talk about exactly the same thing. No address in it."""
-    raw = "\x1e".join(["r", section, (name or "").strip().lower(), report or "", "\x1f".join(sorted(items))])
-    return "LG-C-" + hashlib.sha256(raw.encode()).hexdigest()[:8].upper()
+    the same code, so a researcher's note and an analyst's export talk about exactly the same thing. No address in it.
+    A different combination never gets the same code (CodeBook.assign)."""
+    return _assign("LG-C-", combo_key(section, name, report, items))
 
 
 def cross_code(section, name, parts):
     """The code of one cross-report pattern: per report, everything the devices carried there (LG-X-XXXXXXXX)."""
-    raw = "\x1e".join(["x", section, (name or "").strip().lower()] +
-                      [r + "\x1d" + "\x1f".join(sorted(items)) for r, items in sorted((r, tuple(i)) for r, i in parts)])
-    return "LG-X-" + hashlib.sha256(raw.encode()).hexdigest()[:8].upper()
+    return _assign("LG-X-", cross_key(section, name, parts))
 
 
 def record_items(section, e, me):

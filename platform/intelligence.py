@@ -19,7 +19,7 @@ Addresses) reached anyone, mixed into the services platform. This module reads t
   which checks and keeps them as for any other selection;
 * management gets the counts only (/api/intelligence/totals): totals and the 7-day trend per group, never a host.
 
-API (analysts only): GET /api/intelligence, GET /api/intelligence/report,
+API (analysts and administrators): GET /api/intelligence, GET /api/intelligence/report,
 GET /api/intelligence/export.csv, GET /api/intelligence/host; management: GET /api/intelligence/totals.
 Installed from app.py: intelligence.install(app, ctx).
 """
@@ -130,18 +130,21 @@ def install(app, ctx):
     lock, cache = threading.Lock(), {}
 
     def analyst():
-        # analysts only (user, 2026-11-14): not administrators or other roles that also see addresses and export
-        return (getattr(g, "user", None) or {}).get("role") == "analyst" and hp("unmasked") and hp("export")
+        # analysts and administrators only (user, 2026-11-14): not other roles that also see addresses and export
+        return (getattr(g, "user", None) or {}).get("role") in ("analyst", "admin") and hp("unmasked") and hp("export")
 
     def me():
         return (getattr(g, "user", None) or {}).get("user", "")
 
     def today():
-        return datetime.now(timezone.utc).date()
+        """The latest report day: yesterday (UTC). Shadowserver dates a file with the day its data covers and sends it the
+        next morning (00:30 to 07:30 UTC here), so the files dated today never exist yet (2026-11-14: "today" showed 0 and
+        "still arriving" all day). While yesterday's files come in, the page says they are still arriving."""
+        return datetime.now(timezone.utc).date() - timedelta(days=1)
 
     def days():
         t = today()
-        return [(t - timedelta(days=i)).isoformat() for i in range(DAYS)]          # today first
+        return [(t - timedelta(days=i)).isoformat() for i in range(DAYS)]          # the latest report day first
 
     def entries():
         """The Intelligence reports of the report map, in its group order."""
@@ -239,13 +242,43 @@ def install(app, ctx):
         usual_n = int(statistics.median(usual)) if usual else 0
         return {"today": t, "days": list(reversed(ds)), "groups": out, "not_received": not_received,
                 "arriving": {"in": arrived_today, "usual": usual_n, "still": arrived_today < usual_n},
-                "generated": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")}
+                # when the figures were counted (they are refreshed every TTL seconds), not when the page was served
+                "generated": datetime.fromtimestamp((cache.get("counts") or (None, time.time()))[1], timezone.utc)
+                             .isoformat(timespec="seconds").replace("+00:00", "Z")}
 
     def refuse():
         if not analyst():
-            return jsonify(error="Abused or Compromised is for analysts."), 403
+            return jsonify(error="Abused or Compromised is for analysts and administrators."), 403
         if ctx["is_demo"]():
             return jsonify(error="Demo mode is on: the Intelligence portal shows real records. Switch demo mode off to open it."), 403
+        return None
+
+    # What the analyst looks at (an address, an account, a search, filters) goes in the request body, never the address
+    # (2026-11-14): an address ends up in the service's access log, the browser's history and proxies. A GET may carry
+    # only the report and the day.
+    SAFE_GET = {"name", "day"}
+
+    def params():
+        """The request's view: the JSON body of a POST, as a MultiDict (filters: {field: [values]}); a GET's report and day."""
+        from werkzeug.datastructures import MultiDict
+        if request.method != "POST":
+            return request.args
+        b = request.get_json(silent=True) or {}
+        md = MultiDict()
+        for k in ("name", "day", "q", "reveal", "ip"):
+            if b.get(k) not in (None, ""):
+                md.add(k, str(b[k])[:300])
+        for k, vs in (b.get("filters") or {}).items() if isinstance(b.get("filters"), dict) else []:
+            for v in (vs if isinstance(vs, list) else [vs])[:50]:
+                md.add(str(k)[:40], str(v)[:300])
+        return md
+
+    def refuse_get(keys):
+        """A GET that carries more than the report and the day: refused, so nothing sensitive is ever in an address."""
+        if request.method == "GET" and set(keys) - SAFE_GET:
+            return jsonify(error="Send filters, searches and addresses in the request body (POST), never in the address."), 400
+        if request.method == "POST" and not ctx["csrf_ok"]():
+            return jsonify(error="Refused (the request did not come from this page)."), 403
         return None
 
     def entry_of(name):
@@ -297,7 +330,7 @@ def install(app, ctx):
     @app.route("/intelligence")
     def intelligence_page():
         if not analyst():
-            return render_template("denied.html", message="Abused or Compromised is for analysts."), 403
+            return render_template("denied.html", message="Abused or Compromised is for analysts and administrators."), 403
         return render_template("intelligence.html")
 
     @app.route("/api/intelligence")
@@ -307,19 +340,20 @@ def install(app, ctx):
             return r
         return jsonify(summary())
 
-    @app.route("/api/intelligence/report")
+    @app.route("/api/intelligence/report", methods=["GET", "POST"])
     def api_intelligence_report():
-        r = refuse()
+        r = refuse() or refuse_get(request.args.keys())
         if r:
             return r
-        name, day = (request.args.get("name") or "").strip(), (request.args.get("day") or "").strip() or today().isoformat()
+        args = params()
+        name, day = (args.get("name") or "").strip(), (args.get("day") or "").strip() or today().isoformat()
         e = entry_of(name)
         if not e:
             return jsonify(error="Not an Intelligence report."), 404
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) or day not in days():
             return jsonify(error=f"Choose one of the last {DAYS} days."), 400
-        reveal = request.args.get("reveal") == "1" and name == "compromised_account"
-        rows, flt, text = view_rows(name, day, request.args, reveal)
+        reveal = args.get("reveal") == "1" and name == "compromised_account"
+        rows, flt, text = view_rows(name, day, args, reveal)
         rows.sort(key=lambda x: _s(x.get("timestamp")), reverse=True)        # the newest first
         if reveal:
             ctx["audit"].add("intelligence_reveal", user=me(), target=name, detail=f"{day} · {len(rows)} leaked account(s) shown unmasked")
@@ -359,16 +393,17 @@ def install(app, ctx):
                        facets=facets, filters={k: v for k, v in flt.items()}, q=text, masked=name == "compromised_account" and not reveal,
                        can_reveal=name == "compromised_account", code=code, no_ip=e.get("has_ip") is False, meaning=MEANING.get(name, ""))
 
-    @app.route("/api/intelligence/export.csv")
+    @app.route("/api/intelligence/export.csv", methods=["GET", "POST"])
     def api_intelligence_export():
-        r = refuse()
+        r = refuse() or refuse_get(request.args.keys())
         if r:
             return r
-        name, day = (request.args.get("name") or "").strip(), (request.args.get("day") or "").strip()
+        args = params()
+        name, day = (args.get("name") or "").strip(), (args.get("day") or "").strip()
         if not entry_of(name) or day not in days():
             return jsonify(error="Not an Intelligence report on one of the last days."), 400
-        reveal = request.args.get("reveal") == "1" and name == "compromised_account"
-        rows, flt, text = view_rows(name, day, request.args, reveal)
+        reveal = args.get("reveal") == "1" and name == "compromised_account"
+        rows, flt, text = view_rows(name, day, args, reveal)
         cols, extra = columns(name, rows)
         buf = io.StringIO()
         w = csvsafe.writer(buf)          # a value starting with = + - @ never runs as a spreadsheet formula
@@ -381,13 +416,14 @@ def install(app, ctx):
         return Response("﻿" + buf.getvalue(), mimetype="text/csv",
                         headers={"Content-Disposition": f'attachment; filename="{fn}"', "Cache-Control": "no-store"})
 
-    @app.route("/api/intelligence/host")
+    @app.route("/api/intelligence/host", methods=["POST"])
     def api_intelligence_host():
-        """One host across the week's Intelligence reports and every category the services platform knows for it."""
-        r = refuse()
+        """One host across the week's Intelligence reports and every category the services platform knows for it. The
+        address comes in the request body (POST), never in the URL."""
+        r = refuse() or refuse_get([])
         if r:
             return r
-        ip = (request.args.get("ip") or "").strip()
+        ip = (params().get("ip") or "").strip()
         if not _ip_ok(ip):
             return jsonify(error="Not an IP address."), 400
         seen = []

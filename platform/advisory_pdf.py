@@ -237,10 +237,12 @@ def front(doc, a):
     devs = a.get("devices") or []
     if devs:
         f.heading(f"Affected IP addresses ({len(devs):,})")
-        f.table([("IP address", .14, True), ("Host name", .14, False), ("Ports", .07, True), ("Reports", .24, False),
-                 ("CVEs and issues", .29, False), ("Last seen (UTC)", .12, True)],
+        # infections apart from CVEs and issues (2026-11-14): what the device calls botnet sinkholes as
+        f.table([("IP address", .13, True), ("Host name", .12, False), ("Ports", .06, True), ("Reports", .2, False),
+                 ("CVEs and issues", .23, False), ("Infections", .14, False), ("Last seen (UTC)", .12, True)],
                 [[d["ip"], d.get("hostname") or "–", ", ".join(d.get("ports") or []) or "–", ", ".join(d.get("reports") or []) or "–",
-                  ", ".join((d.get("cves") or []) + (d.get("issues") or []) + (d.get("categories") or [])) or "–", d.get("last") or "–"] for d in devs])
+                  ", ".join((d.get("cves") or []) + (d.get("issues") or [])) or "–",
+                  ", ".join(d.get("infections") or d.get("categories") or []) or "–", d.get("last") or "–"] for d in devs])
 
     f.heading("Description")
     if a.get("description"):

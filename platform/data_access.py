@@ -45,6 +45,8 @@ SENSITIVE = {
 # of the parameters to keep missed src_ip and most services filters, so different hosts' views were one "whole
 # selection" and the repeats were dropped). A parameter added later is logged by default.
 IGNORE = frozenset(("at", "demo", "from", "to", "limit", "latest", "since", "time", "n", "format", "_", "page", "sort", "download", "all"))
+# views whose selection is sent in the request body (POST), never in the URL: logged from the body
+BODY_VIEWS = frozenset(("/api/intelligence/report",))
 # the lists the pages save as CSV files (download=1): an export, every time
 DOWNLOADS = {"/api/insight/drill": "host list download (map CSV)", "/api/svc/drill": "host list download (services CSV)"}
 RAW_MAX = 120          # each value is cut to this BEFORE the address finder reads it (a long value costs nothing)
@@ -113,7 +115,16 @@ def register(app, audit_add, user_of, host_ref):
     @app.after_request
     def _data_access(resp):
         try:
-            if request.method == "GET":
+            if request.method == "POST" and request.path in BODY_VIEWS:
+                # a view sent in the request body, so its addresses and searches stay out of URLs and the access log
+                # (2026-11-14): logged from the body, the same way
+                from werkzeug.datastructures import MultiDict
+                b = request.get_json(silent=True) or {}
+                pairs = [(k, str(v)) for k, v in b.items() if k != "filters" and not isinstance(v, (dict, list)) and v not in (None, "")]
+                for k, vs in (b.get("filters") or {}).items() if isinstance(b.get("filters"), dict) else []:
+                    pairs += [(str(k), str(v)) for v in (vs if isinstance(vs, list) else [vs])]
+                log.record(request.path, MultiDict(pairs), resp.status_code)
+            elif request.method == "GET":
                 rule = request.url_rule.rule if request.url_rule is not None else ""
                 if rule in SENSITIVE and rule != request.path:
                     # a route with a part in its path: logged by its rule, the part (a finding's ID) in the selection

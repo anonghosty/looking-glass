@@ -181,9 +181,23 @@
     const p = el("section", "fd-review");
     p.append(el("h3", null, "Which views does the report carry?"));
     const cols = el("div", "fd-views");
-    // the researcher's view
+    // the drill-down first (2026-11-14): the figures of exactly the devices the analyst selected, which the report covers
+    if (rv.drill) {
+      const D = rv.drill, dc = el("article", "fd-view d");
+      dc.append(el("div", "fd-view-k", "What the analyst drilled down to (what the report covers)"));
+      const kd = el("div", "fd-kpis");
+      for (const [v, l] of [[D.devices, "devices"], [D.records, "records"], [D.networks, "networks"]]) {
+        const t = el("div"); t.append(el("b", null, Number(v || 0).toLocaleString("en-US")), el("span", null, l)); kd.append(t);
+      }
+      dc.append(kd);
+      if ((D.top_networks || []).length) dc.append(el("h4", null, "Devices per network"), bars(D.top_networks, "devices"));
+      if ((D.regions || []).length) dc.append(el("h4", null, "Devices per region"), bars(D.regions, "devices"));
+      if ((D.per_day || []).length) dc.append(el("h4", null, "Records per day"), bars(D.per_day.map(([d, n]) => ({ label: d, n })), "n"));
+      p.append(dc);
+    }
+    // the researcher's view (with a drill-down: the whole combination, as context)
     const rc = el("article", "fd-view r");
-    rc.append(el("div", "fd-view-k", "The researcher's view"), el("code", "fd-view-code", R.code || rv.source), el("p", "fd-view-what", R.what || ""));
+    rc.append(el("div", "fd-view-k", rv.drill ? "The whole combination (context)" : "The researcher's view"), el("code", "fd-view-code", R.code || rv.source), el("p", "fd-view-what", R.what || ""));
     const k = el("div", "fd-kpis");
     for (const [v, l] of [[R.devices, "devices"], [R.records, "records"], [R.networks, "networks"], [R.repeat, "repeating"], [R.multi_day, "on several days"]]) {
       const t = el("div"); t.append(el("b", null, Number(v || 0).toLocaleString("en-US")), el("span", null, l)); k.append(t);

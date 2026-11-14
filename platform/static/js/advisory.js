@@ -263,13 +263,14 @@
     dc.append(g);
     if ((a.devices || []).length) {
       const t = el("table", "hosts av-ips"), h = el("tr");
-      ["IP address", "Host name", "Ports", "Reports", "CVEs", "Issues", "Seen as", "Records", "Last seen (UTC)"].forEach((x) => h.append(el("th", null, x)));
+      ["IP address", "Host name", "Ports", "Reports", "CVEs", "Issues", "Infections", "Seen as", "Records", "Last seen (UTC)"].forEach((x) => h.append(el("th", null, x)));
       const th = el("thead"); th.append(h); t.append(th);
       const tb = el("tbody");
       a.devices.forEach((d) => {
         const tr = el("tr");
         tr.append(el("td", "mono", d.ip), el("td", null, d.hostname || "–"), el("td", "mono", d.ports.join(", ") || "–"), el("td", null, d.reports.join(", ")),
-                  el("td", "mono", d.cves.join(", ") || "–"), el("td", null, [...d.issues, ...(d.categories || [])].join(", ") || "–"),
+                  el("td", "mono", d.cves.join(", ") || "–"), el("td", null, d.issues.join(", ") || "–"),
+                  el("td", "mono", (d.infections || d.categories || []).join(", ") || "–"),     // what it calls botnet sinkholes as
                   el("td", "muted", (d.labels || []).join(", ") || "–"), el("td", "num", fmt(d.records)), el("td", "mono", d.last || ""));
         tb.append(tr);
       });

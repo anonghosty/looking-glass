@@ -49,8 +49,8 @@ class Coll:
     def estimated_document_count(self): return len(self.rows)
 
 
-T = datetime.now(timezone.utc).date()
-D = [(T - timedelta(days=i)).isoformat() for i in range(8)]          # today first
+T = datetime.now(timezone.utc).date() - timedelta(days=1)    # the latest report day: yesterday (files arrive the next morning)
+D = [(T - timedelta(days=i)).isoformat() for i in range(8)]          # the latest report day first
 
 
 def row(day, n, **kw):
@@ -120,14 +120,16 @@ st, tot = call("/api/intelligence/totals", MG)
 ok("…and gets the counts only: totals and the 7-day trend per group, no address", st == 200 and tot["groups"] and not IP_RX.search(json.dumps(tot))
    and all(len(gr["per_day"]) == 8 for gr in tot["groups"]))
 ok("a researcher gets no totals either", call("/api/intelligence/totals", RS)[0] == 403)
-ok("an administrator does not open it either (analysts only), though the role sees addresses and exports",
-   call("/api/intelligence", AN | {"settings", "users"}, role="admin")[0] == 403 and call("/intelligence", AN | {"settings"}, raw=True, role="admin")[0] == 403)
+ok("an administrator opens it too", call("/api/intelligence", AN | {"settings", "users"}, role="admin")[0] == 200)
+ok("another role that sees addresses and exports does not (analysts and administrators only)",
+   call("/api/intelligence", AN, role="custom-hunter")[0] == 403 and call("/intelligence", AN, raw=True, role="custom-hunter")[0] == 403)
 demo[0] = True
 ok("demo mode: refused (the portal shows real records)", call("/api/intelligence", AN)[0] == 403)
 demo[0] = False
 ok("the page is refused to a researcher", call("/intelligence", RS, raw=True)[0] == 403)
 
 print("The groups and reports")
+ok("the latest report day is yesterday (UTC), never today: its files are sent the next morning", call("/api/intelligence", AN)[1].get("today") == D[0], D[0])
 st, s = call("/api/intelligence", AN)
 ok("an analyst opens it", st == 200, s.get("error", ""))
 grp = {x["group"]: x for x in s["groups"]}

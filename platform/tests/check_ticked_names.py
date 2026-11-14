@@ -115,6 +115,36 @@ try:
     ok("the ticked infections and CVEs/issues, each with its device count",
        [x["name"] for x in an.get("infections") or []] == t_inf and [x["name"] for x in an.get("issues") or []] == t_iss
        and all(x["hosts"] == want[x["name"]] for x in (an.get("infections") or []) + (an.get("issues") or [])), json.dumps(an)[:200])
+    # management's figures are of the drill-down, not the whole combination (user, 2026-11-14)
+    dr = (f.get("review") or {}).get("drill") or {}
+    want_dev = {d["ip"] for x in inf + iss if x["name"] in t_inf + t_iss for d in x["devices"]}
+    ok("management's figures are exactly the drill-down's devices, not the whole combination",
+       dr.get("devices") == len(want_dev) < s["summary"]["devices"], f"{dr.get('devices')} drilled · {len(want_dev)} ticked · {s['summary']['devices']} in all")
+    dcode = (f.get("review") or {}).get("drill_code") or ""
+    ok("…with an analyst code of exactly that selection, on the review's own finding (its channel)",
+       dcode.startswith("LG-A-") and any((c.get("code") if isinstance(c, dict) else c) == dcode for c in f.get("codes") or []), dcode)
+    if dcode and dr.get("per_day"):
+        day0, n0 = dr["per_day"][-1]
+        plat = "services" if (f.get("section") or "") in ("issues", "services") else "comms"
+        st, mg = call(f"/api/mgmt/{plat}?code={dcode}&day={day0}", MGMT, **MG)
+        got = (mg.get("kpis") or {}).get("records", (mg.get("kpis") or {}).get("events"))
+        ok("…and the Executive portal, filtered by it, counts exactly the drill-down's records that day", st == 200 and got == n0,
+           f"{got} in the portal · {n0} drilled on {day0}" if st == 200 else mg.get("error", ""))
+        st, mg2 = call(f"/api/mgmt/{plat}?code={dcode}&day={day0}", MGMT, role="management", user="lg-other-manager")
+        got2 = (mg2.get("kpis") or {}).get("records", (mg2.get("kpis") or {}).get("events"))
+        ok("…a manager outside the finding's channel gets nothing from that code", not got2, str(got2))
+    # a review sent before the drill-down had figures of its own: opening its review page works them out, once
+    with F.lock:
+        F._load()
+        old_rv = F.data["items"]["1"]["review"]
+        saved_dr = (old_rv.pop("drill", None), old_rv.pop("drill_code", None))
+        F._save()
+    st, rvp = call("/api/review/1", MGMT, **MG)
+    dr2 = ((rvp.get("finding") or {}).get("review") or {}).get("drill") or {}
+    ok("an older review gets its drill-down figures when its page is opened, the same as a new one",
+       st == 200 and dr2.get("devices") == len(want_dev) and dr2.get("records") == (saved_dr[0] or {}).get("records")
+       and (F.get("1").get("review") or {}).get("drill_code", "").startswith("LG-A-"), f"{dr2.get('devices')} devices")
+    ok("…its new code joins its finding (its channel)", (F.get("1").get("review") or {}).get("drill_code") in (F.get("1").get("codes") or []))
     ok("…with no address anywhere, and no devices list", not IP_RX.search(json.dumps(fl))
        and not any(k in (f.get("review") or {}) for k in ("sent", "sent_infections", "sent_issues")))
     st, d = call("/api/findings/1/review-decision", MGMT, "POST", {"choice": "both", "text": "Add the CVEs to the report.", "to": "lg-check-advisor"}, **MG)
@@ -159,6 +189,15 @@ try:
         else:
             miss += 1
     ok("…(at least one organisation carries a ticked name)", hit >= 1, f"{hit} with, {miss} without")
+    if t_inf:                                              # the Infections column: the ticked infection on exactly its devices
+        inf_ips = {d["ip"] for x in inf if x["name"] == t_inf[0] for d in x["devices"]}
+        net_i = next((n["network"] for n in nets if any(dv.get("network") == n["network"] for x in inf if x["name"] == t_inf[0] for dv in x["devices"])), None)
+        if net_i:
+            st, a3 = call(f"/api/advisory/1/net?network={quote(net_i)}", ADVISOR, **ADV)
+            devs3 = (a3.get("advisory") or {}).get("devices") or []
+            with_inf = {d["ip"] for d in devs3 if t_inf[0] in (d.get("infections") or [])}
+            ok("the advisory's device list has an Infections column: the ticked infection on exactly its devices",
+               with_inf and with_inf <= inf_ips and with_inf == {d["ip"] for d in devs3} & inf_ips, f"{len(with_inf)} devices on {net_i}")
 
     print("The analyst's view only: the report is about the devices behind what was ticked, alone")
     A2 = "lg-check-analyst2"

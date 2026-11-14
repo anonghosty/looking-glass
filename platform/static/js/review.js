@@ -75,8 +75,12 @@
     const both = d.plat_researcher === d.plat_analyst;
     // sent with nothing ticked (no across-report pattern, infection or CVE/issue): the researcher's view only
     const plain = !rv.codes.length && !(A.infections || []).length && !(A.issues || []).length;
+    // the drill-down first (2026-11-14): exactly the devices the analyst selected, which is what the report and the
+    // advisory cover; the whole combination is the context they came from
+    const D = rv.drill || null;
     const views = [
-      ["r", "The researcher's view", `the combination ${rv.source}`, [rv.source], d.plat_researcher],
+      ...(rv.drill_code ? [["d", "The drill-down", `${fmt(D?.devices)} device${D?.devices === 1 ? "" : "s"} the analyst selected: what the report covers`, [rv.drill_code], d.plat_researcher]] : []),
+      ["r", rv.drill_code ? "The whole combination (context)" : "The researcher's view", `the combination ${rv.source}`, [rv.source], d.plat_researcher],
       ...(!rv.codes.length ? [] : [
         ["a", "The analyst's view", `${rv.codes.length} across-report pattern${rv.codes.length === 1 ? "" : "s"}: ${fmt((A.patterns || []).reduce((s, x) => s + x.hosts, 0))} devices`, rv.codes, d.plat_analyst],
         ...(both ? [["b", "Both together", "the combination and the patterns", [rv.source, ...rv.codes], d.plat_researcher]] : [])]),
@@ -113,7 +117,7 @@
     }
     vs.append(pats, pane);
     main.append(vs);
-    show("r");
+    show(rv.drill_code ? "d" : "r");
     // the decision
     const dc = el("section", "rv-card rv-decide");
     dc.append(el("h2", null, "The decision"));

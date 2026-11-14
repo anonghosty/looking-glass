@@ -5,6 +5,14 @@ What changed in each release of Looking Glass. Releases are named by date; the n
 
 ## Unreleased
 
+### Fixed
+- Combination codes (LG-C, LG-X) can no longer stand for two different combinations. Codes keep their 8 characters;
+  when a new combination's code is already taken, it gets a code of its own. Every existing code stays the same.
+- Management's review now shows the figures of exactly what the analyst drilled down to (devices, records, networks,
+  regions, per day, and the Executive portal filtered to that selection), not the whole combination's.
+- Advisories: each affected device lists the infections it calls botnet sinkholes as in an Infections column of its
+  own (page and PDF), including infections the analyst ticked on services findings.
+
 ### Added
 - Combinations: under each organisation, the infections and CVEs/issues its own devices carry, with the ticked ones
   highlighted, and a button that ticks the organisations carrying them.
@@ -12,7 +20,7 @@ What changed in each release of Looking Glass. Releases are named by date; the n
   the report and the advisory carry only that selection's devices.
 
 ### Changed
-- The Intelligence portal is now called Abused or Compromised, and is for analysts only. A report's records are laid
+- The Intelligence portal is now called Abused or Compromised, for analysts and administrators. A report's records are laid
   out like the platforms' analysis window: figures, key findings, a breakdown of each field (networks and regions
   too), and the record list with its download.
 - Reviews: when the analyst drilled down (ticked patterns, infections or CVEs/issues), the report and the advisory
