@@ -80,6 +80,8 @@ fi
 # the schedule writes the folder shell-quoted (printf %q: "my lg" becomes my\ lg): both spellings are this folder's
 # (review 2026-11-13: a folder with a space kept its schedule after the uninstall)
 CRON_HERE=$(crontab -l 2>/dev/null | grep -F -- "$CRON_MARK" | grep -F -e "$DB_DIR/" -e "$(printf '%q' "$DB_DIR")/" || true)
+# the platform's weekly refresh of MISP Galaxy and MITRE ATT&CK (manage/fetch_offline_names.py --schedule), this folder's only
+NAMES_CRON=$(crontab -l 2>/dev/null | grep -F -- "# looking-glass-name-sources" | grep -F -e "$PF_DIR/" -e "$(printf '%q' "$PF_DIR")/" || true)
 # the global command: only when it runs this folder's pipeline
 CMD_HERE=0
 if [ -e "$BIN_LINK" ] || [ -L "$BIN_LINK" ]; then
@@ -118,6 +120,7 @@ say ""
 say "${B}Will be removed${R}"
 if [ ${#UNITS[@]} -gt 0 ]; then say "  • platform service(s): ${UNITS[*]} (stopped, disabled, unit file deleted)"; else say "  • platform service: none found for this folder"; fi
 if [ -n "$CRON_HERE" ]; then say "  • the pipeline schedule (cron line of this folder)"; else say "  • pipeline schedule: none found for this folder"; fi
+if [ -n "$NAMES_CRON" ]; then say "  • the weekly refresh of MISP Galaxy and MITRE ATT&CK (cron line of this folder)"; fi
 if [ $CMD_HERE = 1 ]; then say "  • the global 'shadowserver' command, its man page and tab completion"; else say "  • global 'shadowserver' command: not this folder's (left alone)"; fi
 [ $RM_DB = 1 ] && say "  • ${RED}the reports database '$MONGO_DB' on $MONGO_HOST:$MONGO_PORT and the accounts lookingglass_pipeline, lookingglass_ro${R}"
 [ $RM_DB = 1 ] && [ -d "$ETC_LG" ] && say "  • $ETC_LG (the MongoDB administrator account kept by the installer)"
@@ -177,6 +180,15 @@ if [ -n "$CRON_HERE" ]; then
   fi
   done_ "schedule removed (other cron jobs kept)"
 else skip "none for this folder"; fi
+if [ -n "$NAMES_CRON" ]; then
+  if [ $DRY = 1 ]; then say "  would remove the cron line: $NAMES_CRON"
+  else
+    others=$(crontab -l 2>/dev/null | grep -vxF -- "$NAMES_CRON" || true)
+    if [ -z "$(printf '%s' "$others" | tr -d '[:space:]')" ]; then crontab -r 2>/dev/null || true
+    else printf '%s\n' "$others" | crontab -; fi
+  fi
+  done_ "weekly refresh of the name sources removed (other cron jobs kept)"
+fi
 # a pipeline run that is going on right now: let it finish rather than cut it off mid-load. A run holds the lock
 # run.sh takes (.pipeline.lock): its command line names the script by a relative path, so matching the full path never
 # found it (review 2026-11-13). Its processes are this folder's when their working folder is this folder.

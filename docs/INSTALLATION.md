@@ -64,6 +64,7 @@ Security is described in [../docs/SECURITY.md](SECURITY.md). Steps marked
 | Shadowserver | your CSIRT's free Shadowserver reports (https://www.shadowserver.org/what-we-do/network-reporting/) delivered to a mailbox, or fetched with your Shadowserver API key |
 | Mapbox | a free account and a public access token (`pk.…`) for the map: https://account.mapbox.com |
 | Malpedia (optional) | an API token, so Malpedia joins the sources behind the "Look up" buttons |
+| Name sources (no account needed) | MISP Galaxy, MITRE ATT&CK and MITRE CTID's KEV mappings: the installer downloads the first copies (public files on GitHub, about 60 MB to fetch, about 6 MB kept, a minute) and schedules a weekly refresh. Without internet the installation goes on without them; look-ups then use the definitions and Malpedia until the next refresh |
 | Memory / disk | about 2 GB RAM for the platform. Disk: the download (`git clone`) is about 100 MB: the code itself is about 9 MB, the rest is screenshots, film posters and the history. The two Python environments the installer makes add about 120 MB. MongoDB needs space for your reports |
 
 ## Who can reach Looking Glass: `ACCESS_MODE`

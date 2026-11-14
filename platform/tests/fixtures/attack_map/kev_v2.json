@@ -1,0 +1,13 @@
+{"metadata": {"attack_version": "1.0", "mapping_framework": "kev", "mapping_framework_version": "01/01/2026",
+              "capability_groups": {"code_execution": "Code Execution", "auth_bypass": "Authentication Bypass"}},
+ "mapping_objects": [
+  {"capability_id": "CVE-2099-1001", "capability_group": "code_execution", "capability_description": "Fixture product remote code execution",
+   "mapping_type": "exploitation_technique", "attack_object_id": "T1190", "attack_object_name": "Exploit Public-Facing Application",
+   "comments": "Fixture: exploited by sending a crafted request to the web interface."},
+  {"capability_id": "CVE-2099-1001", "capability_group": "code_execution", "mapping_type": "primary_impact",
+   "attack_object_id": "T9001", "attack_object_name": "Old Fixture Channel", "comments": "Fixture: the old channel."},
+  {"capability_id": "CVE-2099-1001", "capability_group": "code_execution", "mapping_type": "secondary_impact",
+   "attack_object_id": "T9002", "attack_object_name": "Fixture Thing Going Away", "comments": ""},
+  {"capability_id": "CVE-2099-1002", "capability_group": "auth_bypass", "mapping_type": "exploitation_technique",
+   "attack_object_id": "T1133", "attack_object_name": "External Remote Services", "comments": "Fixture: logs in without a password."}
+ ]}

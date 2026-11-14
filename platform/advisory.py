@@ -970,6 +970,20 @@ def install(app, ctx):
             return jsonify(error="Save the advisory first."), 404
         if adv["status"] == "sent":
             return jsonify(error=SENT_LOCKED.format(day=sent_day(adv))), 409
+        if b.get("action") == "confirm_all":            # every technique still pending in this advisory (advisory_attack.py)
+            done, e = advisory_attack.confirm_all(adv, attack_of(adv, auto_of(x, network)), b.get("keys"))
+            if e:
+                return jsonify(error=e), 400
+            user = me()[0]
+            adv["updated"] = _now()
+            adv["history"].append({"at": _now(), "user": user, "what": f"ATT&CK confirm all: {len(done)} technique{'s' if len(done) != 1 else ''} confirmed for this advisory"})
+            try:
+                store.save(adv)
+            except Changed:
+                return jsonify(error=CHANGED), 409
+            for k in done:                              # one audit entry per technique, as a single confirm
+                ctx["audit"].add("advisory_attack_confirm", user=user, target=adv["ref"] or f"finding #{x['id']}", detail=k[:120] + " (confirm all)")
+            return jsonify(ok=True, confirmed=len(done), advisory=view(adv, x, with_devices=True))
         e = advisory_attack.decide(adv, attack_of(adv, auto_of(x, network)), b.get("key"), b.get("action"))
         if e:
             return jsonify(error=e), 400

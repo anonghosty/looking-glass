@@ -60,6 +60,7 @@ import mail_auth  # noqa: E402  who signed each report e-mail (DKIM), recorded; 
 import report_api  # noqa: E402  the reports from Shadowserver's report API (REPORT_SOURCE=api)
 import report_types  # noqa: E402  a report type that never arrived before is logged as new
 import worker_settings  # noqa: E402  Settings → Workers: the platform's requests, checked and applied here
+import retention  # noqa: E402  old sorted copies removed once in MongoDB (SORTED_KEEP_DAYS); the run's status and free disk
 
 log = logging.getLogger("shadowserver")
 
@@ -1290,6 +1291,27 @@ def fetch_reports(s: Settings, stats: Counter, refetch: bool = False) -> None:
         log.error("%s failed too: %s (continuing with files already on disk)", names[1], exc)
 
 
+def prune_sorted_backup(s: Settings, stats: Counter) -> None:
+    """SORTED_KEEP_DAYS: remove sorted copies older than that whose rows are in MongoDB (retention.py). Never stops a run."""
+    days = retention.keep_days(_env)
+    if not days:
+        return
+    try:
+        client = mongo_client(s.mongo, serverSelectionTimeoutMS=10000)
+        client.admin.command("ping")
+        db = client[s.mongo_db]
+        pending = set()
+        if s.journal_path.exists():
+            j = Journal(s.journal_path); pending = j.pending(); j.close()
+
+        def loaded_of(report):
+            return loaded_filenames(db[report]) if report_names.valid(report) else None
+        n, size = retention.prune_sorted(str(s.sorting_dir), str(s.base_dir), days, loaded_of, pending, log)
+        stats["retention_files"] += n; stats["retention_bytes"] += size
+    except Exception as exc:  # noqa: BLE001
+        log.warning("[RETENTION] skipped this run: %s", exc.__class__.__name__)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stage", choices=("all", "email", "load"), default="all")
@@ -1338,11 +1360,24 @@ def main(argv=None) -> int:
 
     stats: Counter = Counter()
     t0 = time.monotonic()
-    if args.stage in ("all", "email"):
-        fetch_reports(s, stats, refetch=args.all)
-        unzip_and_sort(s, stats)
-    if args.stage in ("all", "load"):
-        load_into_mongo(s, stats)
+    failed = False
+    try:
+        if args.stage in ("all", "email"):
+            fetch_reports(s, stats, refetch=args.all)
+            unzip_and_sort(s, stats)
+        if args.stage in ("all", "load"):
+            load_into_mongo(s, stats)
+            prune_sorted_backup(s, stats)
+    except BaseException:
+        failed = True
+        raise
+    finally:
+        # what the platform's bell shows: when this run finished, whether it went well, and the free disk (retention.py)
+        st = retention.status(str(s.base_dir), not failed and not stats["file_errors"] and not stats["email_failed"],
+                              stats, retention.min_free_gb(_env))
+        if st["disk_low"]:
+            log.warning("[DISK] only %.1f GB free where the reports are kept (warning below %g GB, DISK_MIN_FREE_GB)",
+                        st["free_gb"], st["min_free_gb"])
     log.info("Done in %.1fs", time.monotonic() - t0)
     return 1 if stats["file_errors"] or stats["email_failed"] else 0
 

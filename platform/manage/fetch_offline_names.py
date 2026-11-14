@@ -231,16 +231,20 @@ CRON_TAG = "# looking-glass-name-sources"
 
 def schedule(on):
     """Add (or remove) the weekly refresh to this user's crontab, like the pipeline's schedule: Mondays 04:17."""
+    import shlex
     import shutil
     import subprocess
+    me = os.path.abspath(__file__)
+    line = f"17 4 * * 1  {shlex.quote(me)} --by schedule >/dev/null 2>&1 {CRON_TAG}"   # quoted: a folder may hold a space
     if not shutil.which("crontab"):
         log("crontab is not installed (Ubuntu: sudo apt install cron). The line to add by hand:")
-        log(f"  17 4 * * 1  {os.path.abspath(__file__)} --by schedule >/dev/null 2>&1 {CRON_TAG}")
+        log(f"  {line}")
         return 1
     cur = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
-    lines = [ln for ln in (cur.stdout.splitlines() if cur.returncode == 0 else []) if CRON_TAG not in ln]
+    # this folder's line is replaced; another installation's line (another folder) is kept
+    lines = [ln for ln in (cur.stdout.splitlines() if cur.returncode == 0 else []) if not (CRON_TAG in ln and me in ln)]
     if on:
-        lines.append(f"17 4 * * 1  {os.path.abspath(__file__)} --by schedule >/dev/null 2>&1 {CRON_TAG}")
+        lines.append(line)
     subprocess.run(["crontab", "-"], input="\n".join(lines) + "\n", text=True, check=True)
     log("weekly refresh scheduled: Mondays at 04:17 (crontab)" if on else "weekly refresh removed from the crontab")
     return 0

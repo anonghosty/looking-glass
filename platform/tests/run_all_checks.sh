@@ -84,9 +84,14 @@ run "settings: Settings permission only" $PY tests/check_settings_access.py
 run "network list: every network in the reports" $PY tests/check_networks_list.py
 run "values of the wrong kind: refused, never a 500" $PY tests/check_wrong_types.py
 run "services report names are never malware names" $PY tests/check_kb_report_names.py
+run "slow requests logged by route only; one name-index rebuild" $PY tests/check_slow_log.py
+run "locked sign-ins: limits, admin list and unlock" $PY tests/check_lockouts.py
+run "system alerts in the admins' bell" $PY tests/check_system_alerts.py
 run "offline names: MISP Galaxy + ATT&CK, nothing sent" $PY tests/check_offline_names.py
 run "ATT&CK mappings, versions, CVE links" $PY tests/check_attack_map.py
 run "ATT&CK in advisories (reviewed only)" $PY tests/check_advisory_attack.py
+run "ATT&CK Confirm all (Definitions, advisory)" $PY tests/check_confirm_all.py
+run "ATT&CK on CVE and issue cards, CTID trust" $PY tests/check_cve_attack.py
 run "failed-login counter (locks, clean-up)" $PY tests/check_login_throttle.py
 run "request times in UTC (one day copy)" $PY tests/check_time_offsets.py
 run "masked views: no host-name filter" $PY tests/check_masked_hostname.py

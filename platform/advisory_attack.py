@@ -17,13 +17,23 @@ REVIEWED = ("reviewed", "confirmed for this advisory")
 
 
 def key_of(t):
-    """One technique in one place: 'T1133|scan_rdp' (from a report's mapping) or 'T1568.002|name:tinba-dga'."""
+    """One technique in one place: 'T1133|scan_rdp' (a report's mapping), 'T1568.002|name:tinba-dga' (Shadowserver's
+    name) or 'T1190|cve:CVE-2024-1234:how attackers exploit it' (CTID's KEV mapping of a CVE)."""
+    if t.get("cve"):
+        return f"{t['id']}|cve:{t['cve']}:{t.get('kind_key') or ''}"
     return f"{t['id']}|{t.get('report_key') or 'name:' + str(t.get('category') or '')}"
 
 
 def _why(t, devices):
     """"Why it is in this advisory", in Looking Glass's words: the mapping and the advisory's figures (no address)."""
     role = t.get("role") or ""
+    if t.get("cve"):
+        hit = [d for d in devices if t["cve"] in (d.get("cves") or [])]
+        src = (f"MITRE CTID maps {t['cve']} to this technique ({t.get('kind') or 'mapped'}): {role}."
+               + (" Looking Glass's administrators trust CTID's mappings." if t.get("trusted") else ""))
+        if hit:
+            src += f" {len(hit)} {'host' if len(hit) == 1 else 'hosts'} in this advisory {'has' if len(hit) == 1 else 'have'} it."
+        return src
     if t.get("report_key"):
         title = t.get("report") or t["report_key"]
         hit = [d for d in devices if title in (d.get("reports") or [])]
@@ -52,6 +62,11 @@ def build(am, auto, adv):
         items = am.for_reports([r["key"] for r in auto.get("reports") or []])
         for c in auto.get("categories") or []:
             items += [dict(it, category=c) for it in am.name_items(c)]
+        # the CVEs the advisory names: CTID's KEV mappings, suggestions until reviewed, unless the admins trust CTID
+        trusted = bool((am.ctid_trust() or {}).get("on"))
+        for c in auto.get("cves") or []:
+            for t in (am.cve_attack(c) or {}).get("techniques") or []:
+                items.append(dict(t, cve=c, status="reviewed" if trusted else "suggested", trusted=trusted))
     except Exception:                                     # noqa: BLE001  (a damaged copy must never break an advisory)
         return None
     if not items:
@@ -110,9 +125,26 @@ def decide(adv, att, key, action):
     return ""
 
 
+def confirm_all(adv, att, keys=None):
+    """"Confirm all for this advisory": confirms the techniques still pending in THIS advisory (only those of `keys`, the
+    ones the advisor saw, when given). Kept in the advisory only: the researchers' mappings are not touched. Returns
+    (confirmed keys, error)."""
+    pending = [t["key"] for t in (att or {}).get("pending") or []]
+    if keys is not None:
+        if not isinstance(keys, list) or len(keys) > 500 or not all(isinstance(k, str) for k in keys):
+            return [], "keys: the list of techniques shown"
+        pending = [k for k in pending if k in set(keys)]
+    if not pending:
+        return [], "Nothing left to confirm: every technique of this advisory is decided."
+    dec = adv.setdefault("attack_decisions", {})
+    for k in pending:
+        dec[k] = "confirm"
+    return pending, ""
+
+
 def snapshot(att):
     """What a generated report carries, kept with it: the recipients' techniques with their texts."""
     keep = ("id", "name", "tactics", "url", "certainty", "certainty_label", "role", "status", "report", "category", "desc",
-            "detect", "defend", "why_here", "key")
+            "detect", "defend", "why_here", "key", "cve", "kind", "note", "comment", "trusted", "mapped_id")
     r = for_recipients(att)
     return {"version": r["version"], "techniques": [{k: t.get(k) for k in keep if t.get(k) not in (None, "", [])} for t in r["techniques"]]} if r else None

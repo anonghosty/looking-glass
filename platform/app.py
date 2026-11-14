@@ -116,6 +116,10 @@ import offline_names  # noqa: E402  (MISP Galaxy + MITRE ATT&CK, read from data/
 OFFLINE_NAMES = offline_names.OfflineNames(os.path.join(BASE_DIR, "data"), needles=Malpedia.needles)
 cve_intel = cves.CveIntel(os.path.join(BASE_DIR, "data", "cve_cache.json"), os.environ.get("NVD_API_KEY", ""), logger=app.logger)
 PUBLIC_DEMO = os.environ.get("PUBLIC_DEMO") == "1"   # force demo masking for every request
+# requests slower than SLOW_REQUEST_S, by route pattern only, so slow pages in real use can be found (slow_log.py);
+# first, so it times the whole request
+import slow_log  # noqa: E402
+slow_log.install(app, os.path.join(BASE_DIR, "data"))
 # who may connect, host names, cross-site writes, security headers, request size (security.py, docs/SECURITY_REPORT.md)
 security.install(app, app.logger)
 # login, accounts, roles and sessions (auth.py): every page and API needs a login
@@ -123,6 +127,10 @@ AUTH = auth.install(app, BASE_DIR, app.logger)
 # the security self-test clears this computer's login counters itself, so it never restarts the service (retest_reset.py)
 import retest_reset  # noqa: E402
 retest_reset.install(app, {"throttle": AUTH["throttle"], "audit": AUTH["audit"]})
+# admins see locked sign-ins and can lift one (lockouts.py)
+import lockouts  # noqa: E402
+lockouts.install(app, {"throttle": AUTH["throttle"], "audit": AUTH["audit"], "has_perm": AUTH["has_perm"],
+                       "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"]})
 # definitions, notes and network corrections name the person by their registered full name, not the username (people.py)
 from people import People  # noqa: E402
 people = People(AUTH["users"])
@@ -2060,6 +2068,9 @@ _EVIDENCE = {"at": 0.0, "data": {}}
 # instead of reading stored days, so the Definitions to-do list still lists its names (external review, 2026-11-14:
 # with MongoDB down the list came back empty)
 _EV_OFFLINE = threading.local()
+# one rebuild at a time: the others use the copy they have (2026-11-14: eight requests after the minute ran out each
+# rebuilt it, four times the time of one)
+_EV_BUILD = threading.Lock()
 from seen_index import SeenIndex  # noqa: E402
 SEEN = SeenIndex(os.path.join(BASE_DIR, "data", "seen_names.json"), logger=app.logger)
 
@@ -2070,6 +2081,21 @@ def _name_evidence():
         return _EVIDENCE["data"] or {}
     if time.time() - _EVIDENCE["at"] < 60 and _EVIDENCE["data"]:
         return _EVIDENCE["data"]
+    if _EVIDENCE["data"]:
+        if not _EV_BUILD.acquire(blocking=False):
+            return _EVIDENCE["data"]                 # another request is rebuilding it: this one uses the last copy
+    else:
+        _EV_BUILD.acquire()                          # the first build: wait for it rather than build it twice
+        if _EVIDENCE["data"]:
+            _EV_BUILD.release()
+            return _EVIDENCE["data"]
+    try:
+        return _build_name_evidence()
+    finally:
+        _EV_BUILD.release()
+
+
+def _build_name_evidence():
     labels = {x["name"]: x["label"] for x in registry.get()}
     ev = {}
     for d in list(store.days.values()):
@@ -2307,7 +2333,9 @@ NAME_SOURCES.attack = ATTACK
 attack_map.install(app, {"map": ATTACK, "allowed": lambda: _kb_allowed(), "change_allowed": lambda: _kb_change_allowed(),
                          "fresh": AUTH["fresh"], "me": lambda: _me(),
                          # MITRE's full text of a technique: everyone who reads ATT&CK in Looking Glass
-                         "readers": lambda: any(AUTH["has_perm"](p) for p in ("view", "definitions", "advisory", "management"))})
+                         "readers": lambda: any(AUTH["has_perm"](p) for p in ("view", "definitions", "advisory", "management")),
+                         # admins: the "trust CTID's CVE mappings in advisories" setting (off by default)
+                         "can_admin": lambda: AUTH["has_perm"]("settings"), "csrf_ok": AUTH["csrf_ok"]})
 
 
 def _mp_card(r):
@@ -2346,9 +2374,9 @@ def mp_resolve(name):  # noqa: F811
 
 
 def _with_attack(card, name):
-    """A CVE's ATT&CK techniques (CTID's KEV mappings, local copy; attack_map.py), when it has any."""
+    """ATT&CK techniques of a CVE, or of the CVEs an issue names (CTID's KEV mappings, local copy; attack_map.py)."""
     try:
-        att = ATTACK.cve_attack(name) if card.get("kind") == "cve" else None
+        att = ATTACK.issue_attack(card, name)
     except Exception:                              # noqa: BLE001  (a damaged copy must never break a look-up)
         att = None
     if att:
@@ -2881,9 +2909,13 @@ GREETED = _greetings.install(app, {"base_dir": BASE_DIR, "people_name": lambda u
 import overview as _overview  # noqa: E402
 _overview.install(app, {"has_perm": AUTH["has_perm"]})     # the Overview page of every role
 import notifications as _notifications  # noqa: E402
+import system_alerts as _system_alerts  # noqa: E402  (restarts, pipeline runs, disk, name refresh: admins' bell)
+if os.path.basename(sys.argv[0] or "").startswith("gunicorn"):     # the service starting, not a test importing app
+    _system_alerts.note_start(os.path.join(BASE_DIR, "data"))
 NOTIFS = _notifications.install(app, {"base_dir": BASE_DIR, "findings": FINDINGS, "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"],
                                       "people_name": lambda u: people.name(u, ""),
-                                      "labels": lambda s: _findings.LABEL.get(s, s)})
+                                      "labels": lambda s: _findings.LABEL.get(s, s),
+                                      "system": _system_alerts.Alerts(BASE_DIR)})
 import tlp as _tlp  # noqa: E402
 _tlp.install(app)               # the Traffic Light Protocol levels, for the Definitions page's card
 ORG = _organisation.install(app, {"base_dir": BASE_DIR, "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"],

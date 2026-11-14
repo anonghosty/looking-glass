@@ -216,12 +216,13 @@ try:
 
     print("CVEs (CTID KEV mappings)")
     kev = AM.build_kev(fx("kev.json"), "mappings/kev/x.json")
-    ok("KEV file: CVEs and techniques, duplicates and junk dropped", kev["cves"] == {"CVE-2099-0001": [["T1190", "exploitation_technique"], ["T1071.001", "primary_impact"]]}
+    ok("KEV file: CVEs and techniques, duplicates and junk dropped", [m[:2] for m in kev["cves"]["CVE-2099-0001"]["maps"]]
+       == [["T1190", "exploitation_technique"], ["T1071.001", "primary_impact"]] and list(kev["cves"]) == ["CVE-2099-0001"]
        and kev["attack_version"] == "1.0", kev["cves"])
     json.dump(kev, open(os.path.join(tmp, AM.KEV_FILE), "w", encoding="utf-8"))
     ca = am.cve_attack("cve-2099-0001")
     ok("a CVE card: its techniques, what each is, the source and its licence",
-       [(t["id"], t["kind"]) for t in ca["techniques"]] == [("T1190", "how it is exploited"), ("T1071.001", "main impact")]
+       [(t["id"], t["kind"]) for t in ca["techniques"]] == [("T1190", "how attackers exploit it"), ("T1071.001", "what attackers gain first")]
        and "Apache License 2.0" in ca["licence"] and ca["mapped_with"] == "1.0", ca)
     ok("a CVE with no mapping: nothing", am.cve_attack("CVE-2099-0009") is None)
     tree = {"tree": [{"path": "mappings/kev/attack-15.1/kev-02.13.2025/enterprise/a.json"}, {"path": "mappings/kev/attack-16.1/kev-07.28.2025/enterprise/b.json"},

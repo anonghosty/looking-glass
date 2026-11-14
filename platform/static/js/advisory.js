@@ -52,6 +52,7 @@
     if (kind === "pending") head.append(el("span", "av-flag critical", "Suggested, not reviewed"));
     if (kind === "removed") head.append(el("span", "av-flag low", "Removed from this advisory"));
     if (t.status === "confirmed for this advisory") head.append(el("span", "av-flag low", "Confirmed for this advisory"));
+    if (t.cve) head.append(el("span", "av-flag low", t.trusted ? `${t.cve} · CTID mapping (trusted)` : `${t.cve} · CTID mapping`));
     box.append(head, el("p", "av-tech-role", t.role || ""));
     if (t.desc) {
       const p = el("p", "av-tech-line"); p.append(el("b", null, "What it is (MITRE): "), document.createTextNode(t.desc));
@@ -71,6 +72,9 @@
       box.append(p, more, full);
     }
     if (t.why_here) { const p = el("p", "av-tech-line"); p.append(el("b", null, "Why it is in this advisory (Looking Glass): "), document.createTextNode(t.why_here)); box.append(p); }
+    // a CVE's technique (MITRE CTID's KEV mappings): CTID's own words, and a note when ATT&CK changed since it mapped
+    if (t.comment) { const p = el("p", "av-tech-line"); p.append(el("b", null, `How ${t.cve || "the CVE"} maps (MITRE CTID): `), document.createTextNode(t.comment)); box.append(p); }
+    if (t.note) box.append(el("p", "av-tech-line av-tech-note", `ATT&CK version: ${t.note}.`));
     if (t.defend?.length) {
       box.append(el("p", "av-tech-line av-tech-dh", "How to defend (MITRE mitigations):"));
       const ul = el("ul", "av-tech-def");
@@ -111,6 +115,30 @@
       const w = el("div", "av-tech-warn");
       w.append(el("b", null, `${A.pending.length} suggested mapping${A.pending.length === 1 ? "" : "s"} to decide on`),
         el("span", null, " Researchers have not reviewed these yet. Confirm each for this advisory, or remove it: the report cannot be generated until you have."));
+      if (!a.locked && A.pending.length > 1 && window.LGConfirmList) {
+        // "Confirm all": the techniques shown, for this advisory only (the researchers' mappings stay as they are).
+        // The organisation, the page state and the request are the ones this form was drawn for (check_workflow_fixes).
+        const anet = NET, aseq = SEQ, ahere = D, keys = A.pending.map((t) => t.key);
+        const all = el("button", "pill-btn primary av-tech-all", `Confirm all ${A.pending.length} for this advisory`); all.type = "button";
+        all.addEventListener("click", async () => {
+          if (BUSY) return;
+          const go = await window.LGConfirmList.open({
+            title: `Confirm ${A.pending.length} ATT&CK mappings for this advisory`,
+            intro: "These suggested techniques will go to the recipients with this advisory. Researchers' mappings are not changed: they stay suggested for other advisories. You can still remove one afterwards.",
+            rows: A.pending.map((t) => ({ title: `${t.id} ${t.name}`, sub: t.report ? `Report: ${t.report}` : t.category ? `Infection: ${t.category}` : "", techs: [] })),
+            confirm: `Confirm all ${A.pending.length}`,
+          });
+          if (!go) return;
+          BUSY = true; all.disabled = true; window.LGLoader?.busy("Confirming the mappings");
+          try {
+            const d = await post(`/api/advisory/${fid}/attack`, { network: anet, action: "confirm_all", keys });
+            if (aseq !== SEQ) return;
+            ahere.advisory = d.advisory; draw();
+          } catch (e) { all.disabled = false; w.append(el("span", "av-err", ` ${e.message}`)); }
+          finally { BUSY = false; window.LGLoader?.ready(); }
+        });
+        w.append(el("div", "av-tech-acts", null)); w.lastChild.append(all);
+      }
       at.append(w);
       for (const t of A.pending) at.append(techBox(t, a, "pending"));
     }

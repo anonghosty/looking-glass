@@ -276,7 +276,8 @@ names** on the analysis lists (the table and the CSV get *What it is* and *Sourc
 and Executive PDFs (description, then *Source: …* with the licence, then *Also described by*), the Executive portal's
 **Explain**, and the advisories' **Technical Details**.
 
-**Keeping the copies current.** The installer schedules a weekly refresh (Mondays 04:17, the user's crontab;
+**Keeping the copies current.** The installer downloads the first copies, so a new installation has them from the
+start (without internet it goes on without them and says so), and schedules a weekly refresh (Mondays 04:17, the user's crontab;
 `manage/fetch_offline_names.py --schedule`, `--unschedule` to remove it). A download is used only if it is valid, has
 enough entries and is not suddenly much smaller than the copy in use (under 70%); otherwise the old copy stays and the
 reason is logged. On the Definitions page the line above the table shows each copy's entries, download date and the
@@ -306,6 +307,19 @@ CVE stands for, always with how sure that is and what the constituent's part was
   exposure for it* (the host is the tool; the victim is someone else); an open RDP service: *T1133, T1021*.
 - **CVEs**: the techniques MITRE's Center for Threat-Informed Defense maps to CISA KEV vulnerabilities (Mappings
   Explorer, Apache 2.0): how it is exploited, its main and further impact.
+
+**CVE and issue cards.** A CVE card on the Services page shows CTID's techniques as chips (ID, readable name, tactic),
+each with what the mapping means in plain words (*how attackers exploit it*, *what attackers gain first*, *what attackers
+can do next*), CTID's own comment, and MITRE's definition and mitigations on hover or with **What it is and how to
+defend**. An issue card gets the techniques of every CVE it names, each marked with its CVE. CTID mapped KEV with an
+older ATT&CK version (the source line says which, for example *CTID Mappings Explorer, KEV mappings (ATT&CK 16.1)*); when
+MITRE has since renamed a technique the card shows the current name and the old one, when MITRE revoked it the card shows
+MITRE's named replacement with a note naming both, and a deprecated technique is noted as such.
+
+In advisories, the techniques of the CVEs the advisory names come under the same **reviewed-only** rule: they are
+*suggested* and the advisor confirms or removes them, unless an administrator has chosen to **trust CTID's mappings**
+(Definitions page, below the toolbar; permission *settings*, off by default, CSRF token, fresh sign-in, audited). Trusted
+CVE techniques go out as reviewed and say so in their "why" line.
 
 Every Shadowserver report has a **mapping**. A shipped rule table (`data/attack_rules.json`) suggests the technique
 from the report's name, type and group when the report first arrives; it is *suggested* until a researcher reviews it.

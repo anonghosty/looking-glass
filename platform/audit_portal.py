@@ -40,7 +40,7 @@ for _tab, _events in {
     "auth": ("login", "login_failed", "login_locked", "login_refused", "logout", "mfa_enrolled", "recovery_code_used",
              "reset_requested", "reset_failed", "password_reset", "setup_code_wrong", "register_limited"),
     "accounts": ("registered", "user_approve", "user_role", "user_revoke", "user_restore", "user_reset_mfa", "user_delete",
-                 "user_allow_reset", "roles_changed"),
+                 "user_allow_reset", "roles_changed", "login_unlocked"),
     "sessions": ("kicked", "session_misuse", "user_kick"),
     "config": ("settings_changed", "networks_identify", "network_edited", "network_type_added", "definition_saved",
                "peace_of_mind", "organisation_set"),
@@ -54,6 +54,7 @@ for _tab, _events in {
     for _e in _events:
         TAB_OF[_e] = _tab
 LABEL = {"login": "Signed in", "login_failed": "Failed sign-in", "login_locked": "Locked out", "login_refused": "Sign-in refused",
+         "login_unlocked": "Sign-in lock lifted by an admin",
          "logout": "Signed out", "registered": "Account registered", "mfa_enrolled": "Authenticator set up",
          "recovery_code_used": "Recovery code used", "session_misuse": "Session misuse", "kicked": "Session ended by an admin",
          "user_kick": "Sessions ended by an admin", "user_approve": "Account approved", "user_role": "Role changed",
@@ -119,7 +120,8 @@ ALERT = re.compile(r"failed|locked|misuse|refused|revoke|delete|limited|wrong")
 PRIVILEGED = {"user_role", "roles_changed", "user_approve", "user_revoke", "user_restore", "user_delete", "user_reset_mfa",
               "user_allow_reset", "settings_changed", "peace_of_mind", "kicked", "user_kick",
               "pipeline_unlock", "pipeline_settings_saved", "pipeline_apikey_saved", "sender_release",
-              "pipeline_change_requested", "pipeline_request_applied", "password_policy_changed", "password_change_forced"}
+              "pipeline_change_requested", "pipeline_request_applied", "password_policy_changed", "password_change_forced",
+              "login_unlocked"}
 MAX_DAYS = 800
 
 

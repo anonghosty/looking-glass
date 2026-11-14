@@ -80,8 +80,10 @@
     }
     $("amStatus").textContent = !s.version ? "MITRE ATT&CK is not downloaded yet: an administrator refreshes the sources above."
       : `MITRE ATT&CK v${s.version}` + (s.kev ? ` · CVEs: CTID KEV mappings (made with ATT&CK v${s.kev.attack_version}, ${fmt(s.kev.count)} CVEs)` : "");
+    ctidLine();
     const box = $("amList"); box.replaceChildren();
     const list = rows();
+    bulkBar(list);
     if (!list.length) {
       box.append(el("p", "am-empty", $("amSearch").value.trim() ? "Nothing matches the search." : tab === "reviewed" ? "No mapping reviewed yet."
         : tab === "check" ? "Nothing to check: no report or ATT&CK change touches a mapping." : "Nothing here: every report in this group has been looked at."));
@@ -93,6 +95,72 @@
       more.addEventListener("click", () => { shown += PAGE; render(); });
       box.append(more);
     }
+  }
+  // CVE techniques in advisories: MITRE CTID's KEV mappings are suggestions the advisor confirms, unless an
+  // administrator trusts CTID (off by default; audited). Admins get the switch, everyone else sees the state.
+  function ctidLine() {
+    let row = $("amCtid");
+    if (!row) { row = el("div", "am-ctid"); row.id = "amCtid"; $("amStatus").closest(".dz-toolbar").after(row); }
+    row.replaceChildren();
+    const s = data.summary || {}, tr = s.ctid_trust || { on: false };
+    if (!s.kev) { row.hidden = true; return; }
+    row.hidden = false;
+    const state = tr.on ? `trusted${tr.by_name ? ` by ${tr.by_name}` : ""}${tr.at ? ` on ${String(tr.at).slice(0, 10)}` : ""}: they go into advisories as reviewed`
+      : "not trusted: in advisories each one is a suggestion the advisor confirms";
+    row.append(el("span", "dz-by", `CVE techniques (MITRE CTID's KEV mappings, ${fmt(s.kev.count)} CVEs): ${state}.`));
+    if (!data.can_admin || !window.LGConfirmList) return;
+    const b = el("button", "lg-btn sm", tr.on ? "Stop trusting CTID" : "Trust CTID's mappings"); b.type = "button";
+    b.addEventListener("click", async () => {
+      const go = await window.LGConfirmList.open({
+        title: tr.on ? "Stop trusting CTID's CVE mappings?" : "Trust CTID's CVE mappings in advisories?",
+        intro: tr.on ? "From now on, CVE techniques in advisories are suggestions again: the advisor confirms or removes each before the report is generated. Advisories already generated keep what they carry."
+          : "From now on, the ATT&CK techniques MITRE's Center for Threat-Informed Defense maps to a CVE go into advisories as reviewed, without the advisor confirming each. The change is in the audit log and can be undone here.",
+        rows: [{ title: "MITRE CTID Mappings Explorer, KEV to ATT&CK", sub: `${fmt(s.kev.count)} CVEs, mapped with ATT&CK v${s.kev.attack_version}`, techs: [] }],
+        confirm: tr.on ? "Stop trusting" : "Trust CTID",
+      });
+      if (!go) return;
+      b.disabled = true; window.LGLoader?.busy("Saving the setting");
+      try { await post("/api/attack/ctid-trust", { trust: !tr.on }); data = await get("/api/attack"); render(); }
+      catch (e) { $("amStatus").className = "dz-status bad"; $("amStatus").textContent = `Not changed: ${e.message}`; b.disabled = false; }
+      finally { window.LGLoader?.ready(); }
+    });
+    row.append(b);
+  }
+  // "Confirm all N": the suggestions the list holds now (after the search; every page of it, not only the first 40),
+  // listed in a confirmation dialog first. Not mapped yet and Please check are never included: they need a person.
+  function bulkBar(list) {
+    let bar = $("amBulk");
+    if (!bar) { bar = el("div", "am-bulk"); bar.id = "amBulk"; $("amList").before(bar); }
+    bar.replaceChildren();
+    const q = $("amSearch").value.trim();
+    const sug = list.filter((x) => x.status === "suggested" && (x.techniques || []).length);
+    if (!sug.length || !(tab === "suggested" || q) || !window.LGConfirmList) { bar.hidden = true; return; }
+    bar.hidden = false;
+    const b = el("button", "lg-btn sm primary", `Confirm all ${fmt(sug.length)}${q ? " shown" : ""}`); b.type = "button";
+    b.title = q ? `Confirm the ${sug.length} suggested mappings that match "${q}"` : `Confirm all ${sug.length} suggested mappings`;
+    b.addEventListener("click", async () => {
+      const go = await window.LGConfirmList.open({
+        title: `Confirm ${fmt(sug.length)} suggested ATT&CK mapping${sug.length === 1 ? "" : "s"}`,
+        intro: "Each of these reports will be marked reviewed with the techniques shown. Reports whose suggestion changes meanwhile are skipped and named. You can still change any of them one by one afterwards.",
+        rows: sug.map((x) => ({ title: x.title, sub: x.report, techs: (x.techniques || []).map((t) => ({ id: t.id, name: t.name })) })),
+        confirm: `Confirm ${fmt(sug.length)}`,
+      });
+      if (!go) return;
+      b.disabled = true; b.classList.add("is-busy"); window.LGLoader?.busy(`Confirming ${sug.length} mappings`);
+      try {
+        const j = await post("/api/attack/mapping/bulk", { items: sug.map((x) => ({ report: x.report, techniques: (x.techniques || []).map((t) => t.id) })) });
+        data = await get("/api/attack");
+        render();
+        const sk = j.skipped || [];
+        $("amStatus").className = `dz-status ${sk.length ? "warn" : "ok"}`;
+        $("amStatus").textContent = `Confirmed ${fmt(j.confirmed.length)}` + (sk.length
+          ? `, skipped ${sk.length}: ${sk.map((s) => `${s.title} (${s.reason})`).join("; ")}. Please look at ${sk.length === 1 ? "it" : "them"} again.` : ".");
+      } catch (e) {
+        $("amStatus").className = "dz-status bad"; $("amStatus").textContent = `Nothing was confirmed: ${e.message}`;
+        b.disabled = false; b.classList.remove("is-busy");
+      } finally { window.LGLoader?.ready(); }
+    });
+    bar.append(b, el("p", "dz-by", q ? "Only the suggestions that match the search." : "Not mapped yet and Please check are not included: they need a person to look."));
   }
   function item(x) {
     const card = el("article", `am-report am-${x.status}`);

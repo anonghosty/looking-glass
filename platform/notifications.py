@@ -13,6 +13,9 @@ Clearing is per person: one notification (opened from the bell) or all of them. 
 No address is ever in a notification: findings hold none. The texts are the findings' own (titles, comments), shown
 as text by the page, never as HTML.
 
+Administrators also get the system's alerts (system_alerts.py: restarts, pipeline runs, disk, the name refresh), first
+in the list, cleared the same way.
+
 API: GET /api/notifications · POST /api/notifications/clear {ids: [...]} or {all: true}. Installed from app.py.
 """
 import json
@@ -65,6 +68,16 @@ def install(app, ctx):
     F, hp = ctx["findings"], ctx["has_perm"]
     seen = Seen(os.path.join(ctx["base_dir"], "data", "notifications.json"))
     label = ctx["labels"]
+    system = ctx.get("system")                  # system_alerts.Alerts: restarts, pipeline runs, disk, name refresh
+
+    def system_for(user):
+        """Administrators only ('settings'): the system's alerts, first (system_alerts.py)."""
+        if not system or not hp("settings"):
+            return []
+        try:
+            return system.for_user(user)
+        except Exception:  # noqa: BLE001  (an unreadable status file never breaks the bell)
+            return []
 
     def me():
         return (getattr(g, "user", None) or {}).get("user", "")
@@ -125,7 +138,7 @@ def install(app, ctx):
             return jsonify(error="Sign in."), 401
         if (getattr(g, "user", None) or {}).get("peace"):       # Peace of mind: no findings notification comes in
             return jsonify(count=0, waiting=0, items=[], peace=True)
-        items = items_for(user)
+        items = system_for(user) + items_for(user)
         return jsonify(count=len(items), waiting=sum(1 for n in items if n["waiting"]), items=items[:MAX_ITEMS])
 
     @app.route("/api/notifications/clear", methods=["POST"])
@@ -138,14 +151,17 @@ def install(app, ctx):
             return jsonify(error="Refused (the request did not come from this page)."), 403
         b = request.get_json(silent=True) or {}
         current = {n["id"]: n["at"] for n in items_for(user)}
+        sys_now = [n["id"] for n in system_for(user)]
         if b.get("all"):
-            ids = list(current)
+            ids = list(current) + sys_now
         else:
             ids = [str(i) for i in (b.get("ids") or [])][:200]
         upto = {i: current[i] for i in ids if i in current}          # only their own notifications, never another finding
         if upto:
             seen.clear(user, upto)
-        left = items_for(user)
+        n_sys = system.clear(user, [i for i in ids if i in sys_now]) if system else 0
+        upto.update({i: 0 for i in ids if i in sys_now and n_sys})
+        left = system_for(user) + items_for(user)
         return jsonify(ok=True, cleared=len(upto), count=len(left), waiting=sum(1 for n in left if n["waiting"]))
 
     return seen

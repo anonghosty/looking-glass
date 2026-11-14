@@ -276,11 +276,14 @@ def front(doc, a):
         f.para(f"MITRE ATT&CK v{att.get('version') or '?'}. Observed: the report saw it; Possible: an exposure an attacker "
                "could use. \"What it is\" and \"How to defend\" are MITRE's words; \"Why it is in this advisory\" is ours. "
                "© The MITRE Corporation, reproduced and distributed with its permission.", 8.8, DIM)
+        if any(t.get("cve") for t in att["techniques"]):
+            f.para("CVE techniques: MITRE Center for Threat-Informed Defense, Mappings Explorer (KEV to ATT&CK). © MITRE, "
+                   "Apache License 2.0.", 8.8, DIM)
         seen = set()
         for t in att["techniques"]:
-            if (t["id"], t.get("report"), t.get("category")) in seen:
+            if (t["id"], t.get("report"), t.get("category"), t.get("cve"), t.get("kind")) in seen:
                 continue
-            seen.add((t["id"], t.get("report"), t.get("category")))
+            seen.add((t["id"], t.get("report"), t.get("category"), t.get("cve"), t.get("kind")))
             cert = (t.get("certainty_label") or "").split(" (")[0] or str(t.get("certainty") or "").capitalize()
             # the technique's lines as (text, size, colour, bold, x), measured first so the whole block is kept on one
             # page (a technique split from its "How to defend" was seen in a render, 2026-11-13); a block taller than
@@ -290,6 +293,10 @@ def front(doc, a):
                 rows.append((f"What it is (MITRE): {t['desc']}", 9, TXT, False, M + 10))
             if t.get("why_here"):
                 rows.append((f"Why it is in this advisory (Looking Glass): {t['why_here']}", 9, TXT, False, M + 10))
+            if t.get("comment"):                      # CTID's own words on how the CVE maps (KEV mappings, Apache 2.0)
+                rows.append((f"How {t.get('cve') or 'the vulnerability'} maps (MITRE CTID): {t['comment']}", 9, TXT, False, M + 10))
+            if t.get("note"):                         # the ATT&CK version CTID mapped with differs: renamed / revoked
+                rows.append((f"ATT&CK version: {t['note']}.", 8.8, DIM, False, M + 10))
             if t.get("defend"):
                 rows.append(("How to defend (MITRE mitigations):", 9, TXT, False, M + 10))
                 for m in t["defend"]:

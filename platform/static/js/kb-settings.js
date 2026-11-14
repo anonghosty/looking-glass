@@ -88,6 +88,14 @@
     if (!r.ok) { $("cardInf").hidden = true; $("cardIss").hidden = true; return; }
     data = await r.json();
     $("cardInf").hidden = false; $("cardIss").hidden = false;
+    // the report database could not be read: the names are listed, "seen in" may be missing (review 2026-11-14)
+    let dbNote = $("kbDbNote");
+    if (!dbNote) {
+      dbNote = document.createElement("p"); dbNote.id = "kbDbNote"; dbNote.className = "kb-db-note"; dbNote.setAttribute("role", "status");
+      $("cardInf").before(dbNote);
+    }
+    dbNote.textContent = data.database === false ? (data.database_note || "The report database cannot be read just now.") : "";
+    dbNote.hidden = data.database !== false;
     $("infN1").textContent = fmt(data.unresolved.length); $("infN2").textContent = fmt(data.unchecked.length);
     $("infN3").textContent = fmt(data.defined.length); $("infN4").textContent = fmt((data.all || []).length);
     const iss = data.issues || [];

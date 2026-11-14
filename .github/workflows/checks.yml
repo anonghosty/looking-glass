@@ -36,7 +36,7 @@ jobs:
                    check_first_admin_proxy check_retest_reset check_workflow_fixes check_calc_offline \
                    check_audit_portal check_auditor_portal check_pipeline_settings check_scope_reload check_libraries \
                    check_cve_backoff check_uninstall check_timezones check_special_reports check_report_map \
-                   check_findings_ui check_notifications check_overview check_greetings check_peace check_networks_list check_wrong_types check_kb_report_names check_offline_names check_attack_map check_advisory_attack; do
+                   check_findings_ui check_notifications check_overview check_greetings check_peace check_networks_list check_wrong_types check_kb_report_names check_slow_log check_lockouts check_system_alerts check_offline_names check_attack_map check_advisory_attack check_confirm_all check_cve_attack; do
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
           done
       - name: Pipeline checks
@@ -44,7 +44,7 @@ jobs:
         run: |
           set -e
           for t in test_mail_auth test_mail_auth_pipeline test_worker_settings_effective test_link_downloads test_zip_limits test_report_api \
-                   test_report_types test_report_names test_equivalence test_refetch_and_rows; do
+                   test_report_types test_report_names test_equivalence test_refetch_and_rows test_retention; do
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
           done
           python -m unittest tests.test_mail_sources

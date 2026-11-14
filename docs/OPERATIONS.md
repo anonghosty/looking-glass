@@ -106,7 +106,9 @@ found in reports to the map regions (needs Ubuntu's `iso-codes` package).
 MISP Galaxy (Malpedia, Botnet and Tool clusters) and MITRE ATT&CK (malware and tools) explain names that neither the
 researchers nor Malpedia explain, and appear under "Also described by" on every card (see the User Guide, Definitions).
 `manage/fetch_offline_names.py` downloads them (at most once a week; `--force` now, `--status` to see what is installed).
-The installer schedules it weekly (`--schedule`: Mondays 04:17 in the user's crontab, tagged `# looking-glass-name-sources`;
+The installer downloads the first copies (about a minute; an install without internet goes on without them and says so)
+and schedules the refresh weekly (`--schedule`: Mondays 04:17 in the user's crontab, tagged `# looking-glass-name-sources`,
+one line per installation folder; the uninstaller removes this folder's line;
 `--unschedule` removes it). A download that is invalid, too small, or under 70% of the copy in use is refused and the old
 copy kept; the reason is in `data/names_refresh.log` and `data/names_refresh.json`, and every refresh (with counts and the
 ATT&CK version) is in the audit log. Administrators can also refresh from the Definitions page (**Refresh sources**,

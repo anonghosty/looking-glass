@@ -1429,6 +1429,42 @@
     }
     return x.curated ? x.title : "no definition yet";
   }
+  // MITRE ATT&CK on a CVE card, or on an issue card through the CVEs it names (CTID's KEV mappings; attack_map.py):
+  // each technique as a chip (ID, readable name, tactic; MITRE's "what it is / how to defend" on hover and one click
+  // away), what the mapping means in plain words, CTID's comment, and a note when MITRE renamed or retired it since
+  function issueAttack(card, att, isCve) {
+    const box = el("div", "mp-attack");
+    box.append(el("p", "mp-meta mp-attack-h", isCve ? `MITRE ATT&CK (v${att.version || "?"}): what attackers can use this vulnerability for`
+      : `MITRE ATT&CK (v${att.version || "?"}) of the CVE${(att.cves || []).length === 1 ? "" : "s"} it names: ${(att.cves || []).join(", ")}`));
+    if (att.weakness) box.append(el("p", "mp-meta", `Weakness (CTID): ${att.weakness}`));
+    const ul = el("ul", "mp-attack-list");
+    const said = {};                     // CTID often writes one comment per CVE: show it once, not under every technique
+    for (const t of att.techniques) {
+      const li = el("li"), chip = el("span", "mp-tech");
+      const tip = [t.desc && `What it is (MITRE): ${t.desc}`, t.defend?.length && `How to defend: ${t.defend.map((m) => `${m.id} ${m.name}`).join("; ")}`].filter(Boolean).join("\n");
+      if (tip) chip.title = tip;
+      chip.append(extLink(t.url, t.id), document.createTextNode(` ${t.name}`));
+      if (t.tactics?.length) chip.append(el("small", "muted", ` · ${t.tactics.join(", ")}`));
+      li.append(el("span", "mp-cert mp-cert-possible", t.kind || "Possible"), chip);
+      if (!isCve && t.cve) li.append(el("small", "muted", ` · ${t.cve}`));
+      if (t.note) li.append(el("p", "mp-meta mp-attack-note", `ATT&CK version: ${t.note}.`));
+      if (t.comment && said[t.cve || ""] !== t.comment) { said[t.cve || ""] = t.comment; li.append(el("p", "mp-meta", `How it maps (MITRE CTID): ${t.comment}`)); }
+      if (t.desc || t.defend?.length) {
+        const det = el("details", "mp-attack-what"); det.append(el("summary", null, "What it is and how to defend"));
+        if (t.desc) det.append(el("p", "mp-meta", `What it is (MITRE): ${t.desc}`));
+        if (t.defend?.length) {
+          const dl = el("ul", "mp-refs");
+          for (const m of t.defend) { const d = el("li"); d.append(extLink(m.url, `${m.id} ${m.name}`)); if (m.text) d.append(document.createTextNode(`: ${m.text}`)); dl.append(d); }
+          det.append(el("p", "mp-meta", "How to defend (MITRE):"), dl);
+        }
+        det.addEventListener("click", (ev) => ev.stopPropagation());
+        li.append(det);
+      }
+      ul.append(li);
+    }
+    box.append(ul, el("p", "mp-meta mp-licence", `Source: ${att.source || "CTID Mappings Explorer, KEV mappings"}. ${att.licence || ""} ATT&CK © The MITRE Corporation.`));
+    card.append(box);
+  }
   function issueCard(x, name) {
     const card = el("div", "mp-card"), head = el("div", "mp-head");
     if (x.kind === "cve") {
@@ -1451,18 +1487,6 @@
       if (x.cwes?.length) card.append(el("p", "mp-meta", `Weakness: ${x.cwes.join(", ")}`));
       if (x.note) card.append(el("p", "mp-meta", `Note by ${x.note_by || "a researcher"}: ${x.note}`));
       refList(card, [x.kev_url, x.nvd ? "" : x.cveorg_url, ...(x.references || []).slice(0, 6), ...(x.curated_references || [])], "References:");
-      if (x.attack?.techniques?.length) {          // MITRE ATT&CK for the CVE: CTID's KEV mappings (attack_map.py)
-        const box = el("div", "mp-attack");
-        box.append(el("p", "mp-meta mp-attack-h", `MITRE ATT&CK (v${x.attack.version || "?"}): what attackers can use this vulnerability for`));
-        const ul = el("ul", "mp-attack-list");
-        for (const t of x.attack.techniques) {
-          const li = el("li"); li.append(el("span", "mp-cert mp-cert-possible", t.kind || "Possible"), extLink(t.url, t.id), document.createTextNode(` ${t.name}`));
-          if (t.tactics?.length) li.append(el("small", "muted", ` · ${t.tactics.join(", ")}`));
-          ul.append(li);
-        }
-        box.append(ul, el("p", "mp-meta mp-licence", `Source: ${x.attack.licence || x.attack.source}${x.attack.mapped_with ? ` Mapped with ATT&CK v${x.attack.mapped_with}.` : ""}`));
-        card.append(box);
-      }
     } else if (x.curated) {
       card.classList.add("mp-curated");
       head.append(el("span", "badge mp-badge mp-badge-kb", "Looking Glass definition"), el("b", null, `${name}: ${x.title}`)); card.append(head);
@@ -1474,6 +1498,7 @@
       head.append(el("span", "badge mp-badge mp-badge-no", "No definition yet"), el("b", null, name)); card.append(head);
       if (x.text) card.append(el("p", "mp-desc", x.text));
     }
+    if (x.attack?.techniques?.length) issueAttack(card, x.attack, x.kind === "cve");
     for (const n of x.notes || []) {               // researchers' notes on the issue (notes.py), newest first
       const p = el("p", "mp-note"); p.append(el("b", null, `Notes shared by ${n.role || "Researcher"}: ${n.by || "a researcher"}${n.date ? ` (${n.date})` : ""}: `), document.createTextNode(n.text));
       card.append(p);

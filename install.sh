@@ -1190,8 +1190,19 @@ if [ $WANT_PF = 1 ]; then
     env_set "$PF_DIR/.env" REF_SECRET "$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
   fi
   gauge 60 "Setting up the platform's Python environment and packages..."
-  iargs=(--port "$LG_PORT" --name "$SERVICE_NAME"); [ "$ACCESS_MODE" != local ] && [ "$HTTPS" != proxy ] && iargs+=(--network)
+  # --no-sources: the name sources are downloaded below as a step of their own, which never stops the installation
+  iargs=(--port "$LG_PORT" --name "$SERVICE_NAME" --no-sources); [ "$ACCESS_MODE" != local ] && [ "$HTTPS" != proxy ] && iargs+=(--network)
   run "platform install (deploy/install.sh)" bash -c "cd '$PF_DIR' && deploy/install.sh ${iargs[*]}"
+  # MISP Galaxy and MITRE ATT&CK (public files from GitHub): what explains malware names Malpedia and the researchers do
+  # not, and the ATT&CK techniques of reports, advisories and CVEs. Refreshed weekly by cron (deploy/install.sh step 5).
+  gauge 66 "Downloading MISP Galaxy and MITRE ATT&CK (public lists that explain malware names; about a minute)..."
+  SOURCES_WARN=""
+  if bg_wait bash -c "cd '$PF_DIR' && manage/fetch_offline_names.py --by installer"; then
+    log "name sources downloaded"
+  else
+    SOURCES_WARN="MISP Galaxy / MITRE ATT&CK not (all) downloaded (no internet?): the weekly refresh tries again, or run platform/manage/fetch_offline_names.py."
+    log "$SOURCES_WARN"
+  fi
   if [ "$KEEP_PF_ENV" = no ] && [ "$READONLY" = yes ]; then
     gauge 70 "Creating a read-only database account for the platform..."
     run "read-only MongoDB account" bash -c "cd '$PF_DIR' && .venv/bin/python deploy/create_readonly_db_user.py"
@@ -1216,6 +1227,7 @@ if [ $WANT_PF = 1 ]; then
   fi
   PF_URL="$scheme://localhost:$LG_PORT"
   [ -z "$MAPBOX_TOKEN" ] && PF_WARN="No Mapbox token yet: add MAPBOX_TOKEN to platform/.env, then platform/deploy/reload.sh."
+  [ -n "$SOURCES_WARN" ] && PF_WARN="${PF_WARN:+$PF_WARN }$SOURCES_WARN"
 fi
 
 # ---- checks

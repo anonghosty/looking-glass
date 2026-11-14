@@ -433,7 +433,8 @@
         ts.forEach((t, i) => {
           if (i) dd.append(document.createTextNode("; "));
           const a = link(t.url); a.textContent = t.id;   // link() keeps only http(s); the text is the technique ID
-          const tip = [t.desc && `What it is (MITRE): ${t.desc}`, t.defend?.length && `How to defend: ${t.defend.map((m) => `${m.id} ${m.name}`).join("; ")}`].filter(Boolean).join("\n");
+          const tip = [t.desc && `What it is (MITRE): ${t.desc}`, t.defend?.length && `How to defend: ${t.defend.map((m) => `${m.id} ${m.name}`).join("; ")}`,
+            t.note && `ATT&CK version: ${t.note}`].filter(Boolean).join("\n");
           if (tip) a.title = tip;
           dd.append(a, document.createTextNode(` ${t.name} (${t.kind || (t.certainty_label || "").split(" (")[0]}${t.status === "suggested" ? ", suggested" : ""})`));
         });

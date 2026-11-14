@@ -43,7 +43,8 @@ CERTAINTY = {"observed": "Observed (the report saw it)", "known": "Known for thi
 ROLE = {"used": "this device was used for it", "target": "this address was the target of it",
         "host": "this host was used for it", "exposure": "attackers can use this exposure for it",
         "known": "MITRE links this technique to the malware", "cve": "attackers can use this vulnerability for it"}
-KEV_KIND = {"exploitation_technique": "how it is exploited", "primary_impact": "main impact", "secondary_impact": "further impact"}
+KEV_KIND = {"exploitation_technique": "how attackers exploit it", "primary_impact": "what attackers gain first",
+            "secondary_impact": "what attackers can do next"}     # CTID's mapping types, in plain words
 STATES = ("suggested", "reviewed", "none", "check")
 # "How to defend": MITRE's mitigations of a technique, the ones that suit the kind of report first (a simple preference
 # per role): an exposed service is closed or limited first; an infection or C2 is filtered and cleaned on the endpoint first
@@ -55,8 +56,10 @@ MIT_PREF = {
     "target": ["M1037", "M1031", "M1030"],
 }
 DEFEND_MAX = 3
+CVE_RX = re.compile(r"CVE-\d{4}-\d{4,7}", re.I)
 MAX_NOTE = 600
 MAX_PICK = 12
+MAX_BULK = 500               # "Confirm all": reports confirmed in one go at most
 
 
 def _now():
@@ -361,18 +364,85 @@ class AttackMap:
         return self._kev[1]
 
     def cve_attack(self, cve):
+        """A CVE's ATT&CK techniques from CTID's KEV mappings: each with what the mapping means in plain words, CTID's
+        comment, and, when the installed ATT&CK differs from the one CTID mapped with, a note: renamed since (the old
+        name), or revoked since with MITRE's named replacement used instead, or deprecated with no replacement."""
         k = self.kev()
-        rows = (k.get("cves") or {}).get(str(cve or "").upper()) or []
-        if not rows:
+        cve = str(cve or "").upper()
+        raw = (k.get("cves") or {}).get(cve)
+        if not raw:
             return None
-        techs = self.techniques()
+        if isinstance(raw, list):                         # an index written before the names were kept
+            raw = {"group": "", "desc": "", "maps": [list(r) + ["", ""] for r in raw]}
+        techs, mv = self.techniques(), k.get("attack_version", "") or "?"
         items = []
-        for tid, kind in rows:
-            it = self._items([tid], "possible", "cve", "CTID", KEV_KIND.get(kind, kind), "", techs)[0]
-            it["kind"] = KEV_KIND.get(kind, kind)
+        for tid, kind, then_name, comment in raw.get("maps") or []:
+            cur = techs.get(tid) or {}
+            note, use = "", tid
+            if not cur:
+                note = f"not in the installed ATT&CK copy (CTID mapped it with ATT&CK v{mv})"
+            elif cur.get("state") == "revoked":
+                rep = cur.get("revoked_by", "")
+                if rep and (techs.get(rep) or {}).get("state") == "active":
+                    use = rep
+                    note = (f"CTID mapped {tid}{f' {then_name}' if then_name else ''} (ATT&CK v{mv}); MITRE has revoked it since "
+                            f"and names {rep} as its replacement, shown here")
+                else:
+                    note = f"revoked by MITRE since ATT&CK v{mv}, with no current replacement"
+            elif cur.get("state") == "deprecated":
+                note = f"deprecated by MITRE since ATT&CK v{mv}, with no replacement"
+            elif then_name and then_name != cur.get("name"):
+                note = f"renamed since ATT&CK v{mv} (was “{then_name}”)"
+            it = self._items([use], "possible", "cve", "CTID", KEV_KIND.get(kind, kind), "", techs)[0]
+            if not cur and then_name:
+                it["name"] = then_name
+            it.update(kind=KEV_KIND.get(kind, kind), kind_key=kind, cve=cve, note=note, comment=comment or "",
+                      mapped_id=tid if use != tid else "")
             items.append(it)
+        grp = raw.get("group") or ""
         return {"version": self.version(), "mapped_with": k.get("attack_version", ""), "kev_date": k.get("kev_date", ""),
-                "techniques": items, "source": "MITRE CTID Mappings Explorer (KEV)", "licence": KEV_LICENCE}
+                "techniques": items, "cve": cve, "weakness": (k.get("groups") or {}).get(grp) or grp.replace("_", " "),
+                "source": f"CTID Mappings Explorer, KEV mappings (ATT&CK {k.get('attack_version') or '?'})", "licence": KEV_LICENCE}
+
+    def ctid_trust(self):
+        """The admin setting: CTID's CVE mappings count as reviewed in advisories (off by default)."""
+        return (self._read().get("settings") or {}).get("trust_ctid") or {"on": False}
+
+    def set_ctid_trust(self, on, user, name=""):
+        def go(d):
+            d.setdefault("settings", {})["trust_ctid"] = {"on": bool(on), "by": user, "by_name": name or user, "at": _now()}
+            return d["settings"]["trust_ctid"]
+        rec = self._locked(go)
+        if self.audit:
+            self.audit.add("attack_ctid_trust", user=user, target="CTID KEV to ATT&CK mappings",
+                           detail="trusted: CVE techniques go into advisories as reviewed" if on else "not trusted: CVE techniques are suggestions in advisories")
+        return rec
+
+    def issue_attack(self, card, name):
+        """ATT&CK for a services card: a CVE's own mappings, or, for another issue, those of the CVEs it names (in its
+        name, title, description, note or references)."""
+        if card.get("kind") == "cve":
+            return self.cve_attack(name)
+        text = " ".join([str(name or "")] + [str(card.get(k) or "") for k in ("title", "description", "note", "text")]
+                        + [str(u) for u in (card.get("references") or []) + (card.get("cves") or [])])
+        found = CVE_RX.findall(text)
+        return self.cves_attack(found) if found else None
+
+    def cves_attack(self, cves):
+        """Several CVEs (an issue card that names them): their techniques together, each marked with its CVE."""
+        out, seen = None, set()
+        for c in dict.fromkeys(str(x).upper() for x in cves or []):
+            a = self.cve_attack(c)
+            if not a:
+                continue
+            if out is None:
+                out = dict(a, techniques=[], cves=[])
+                out.pop("cve", None)
+            out["cves"].append(c)
+            for t in a["techniques"]:
+                if (t["id"], c, t["kind_key"]) not in seen:
+                    seen.add((t["id"], c, t["kind_key"])); out["techniques"].append(t)
+        return out
 
     # ---------------------------------------------------------------------------------------------- the picker
     def search(self, q, limit=30):
@@ -440,6 +510,57 @@ class AttackMap:
                            detail=("no ATT&CK technique fits" if nofit else ", ".join(ids)) + (f"; note: {note[:120]}" if note else ""))
         return m, ""
 
+    def review_bulk(self, items, user, name=""):
+        """"Confirm all": [{report, techniques}] as the researcher saw them. Every entry is checked first; a report whose
+        suggestion is no longer exactly what was shown (changed, reviewed meanwhile, no longer "suggested") is skipped and
+        named; only then is everything confirmed in ONE write (nothing half-applied). One audit entry per report, the same
+        event as a single confirm. Returns ({confirmed: [..], skipped: [{report, title, reason}]}, error)."""
+        if not isinstance(items, list) or not items:
+            return None, "Nothing to confirm."
+        if len(items) > MAX_BULK:
+            return None, f"At most {MAX_BULK} reports at a time."
+        clean, seen = [], set()
+        for it in items:
+            key = str((it or {}).get("report") or "")[:80] if isinstance(it, dict) else ""
+            tl = it.get("techniques") if isinstance(it, dict) else None
+            if not key or not isinstance(tl, list) or not tl or len(tl) > MAX_PICK \
+                    or not all(isinstance(t, str) and TID.match(t.strip().upper()) for t in tl):
+                return None, f"Not a valid entry ({key or 'no report'}): nothing was confirmed."
+            if key in seen:
+                return None, f"{key} is listed twice: nothing was confirmed."
+            seen.add(key)
+            clean.append((key, sorted({t.strip().upper() for t in tl})))
+        try:
+            self.sync()
+        except OSError:
+            pass
+        techs, rm, ver = self.techniques(), self.report_map(), version_of(self.attack_doc())
+
+        def go(d):
+            ok_, skipped = [], []
+            for key, tl in clean:                          # 1. check every one
+                m = d["reports"].get(key)
+                title = (rm.get(key) or {}).get("title") or key
+                if not m or m.get("status") != "suggested":
+                    skipped.append({"report": key, "title": title, "reason": "it is no longer a suggestion (reviewed or changed meanwhile)"})
+                elif sorted(m.get("techniques") or []) != tl:
+                    skipped.append({"report": key, "title": title, "reason": "its suggested techniques changed"})
+                elif any((techs.get(t) or {}).get("state") != "active" for t in tl):
+                    skipped.append({"report": key, "title": title, "reason": "a technique is no longer current in ATT&CK"})
+                else:
+                    ok_.append((key, m))
+            now = _now()
+            for key, m in ok_:                             # 2. then apply them all, in this one write
+                m.update(status="reviewed", nofit=False, note="", by=user, by_name=name or user, at=now, version=ver)
+                for k in ("previous", "check_reason", "check_suggest", "check_offer", "retired"):
+                    m.pop(k, None)
+            return [(k, list(m.get("techniques") or [])) for k, m in ok_], skipped
+        done, skipped = self._locked(go)
+        if self.audit:
+            for key, tl in done:
+                self.audit.add("attack_mapping_reviewed", user=user, target=key, detail=", ".join(tl) + " (confirmed with Confirm all)")
+        return {"confirmed": [k for k, _ in done], "skipped": skipped}, ""
+
     def todo(self):
         """The reports to look at: suggestions to confirm, not mapped yet, and please check."""
         d = self._read()
@@ -464,6 +585,7 @@ class AttackMap:
         for m in d["reports"].values():
             st[m.get("status", "none")] = st.get(m.get("status", "none"), 0) + 1
         return {"version": self.version(), "counts": st, "notice": (d["notices"] or [None])[-1],
+                "ctid_trust": (d.get("settings") or {}).get("trust_ctid") or {"on": False},
                 "kev": {k: self.kev().get(k) for k in ("attack_version", "kev_date", "count")} if self.kev() else None}
 
     def reviewed(self):
@@ -522,20 +644,28 @@ def apply_update(data_dir, old_doc, new_doc):
     return am._locked(go)
 
 
+def _plain(s, n):
+    return re.sub(r"\s+", " ", str(s or "")).strip()[:n] if isinstance(s, (str, int, float)) else ""
+
+
 def build_kev(doc, path=""):
-    """A CTID Mappings Explorer KEV file -> {cves: {CVE: [[technique, kind]]}, attack_version, kev_date, count}."""
+    """A CTID Mappings Explorer KEV file -> {cves: {CVE: {group, desc, maps: [[technique, kind, name then, comment]]}},
+    groups: {code: readable}, attack_version, kev_date, count}. The technique's name as CTID mapped it (ATT&CK then) is
+    kept, so the card can say when MITRE renamed or retired it since."""
     meta = (doc or {}).get("metadata") or {}
+    groups = {_plain(k, 40): _plain(v, 80) for k, v in (meta.get("capability_groups") or {}).items()} if isinstance(meta.get("capability_groups"), dict) else {}
     cves = {}
     for m in (doc or {}).get("mapping_objects") or []:
         if not isinstance(m, dict):
             continue
         cve, tid, kind = str(m.get("capability_id") or "").upper(), str(m.get("attack_object_id") or "").upper(), m.get("mapping_type")
         if re.match(r"^CVE-\d{4}-\d{4,7}$", cve) and TID.match(tid) and kind in KEV_KIND:
-            row = [tid, kind]
-            if row not in cves.setdefault(cve, []):
-                cves[cve].append(row)
+            c = cves.setdefault(cve, {"group": _plain(m.get("capability_group"), 40), "desc": _plain(m.get("capability_description"), 200), "maps": []})
+            if not any(r[0] == tid and r[1] == kind for r in c["maps"]):
+                c["maps"].append([tid, kind, _plain(m.get("attack_object_name"), 120), _plain(m.get("comments"), 400)])
     return {"source": "ctid-kev", "attack_version": str(meta.get("attack_version") or "")[:20],
-            "kev_date": str(meta.get("mapping_framework_version") or "")[:20], "path": path[:200], "count": len(cves), "cves": cves}
+            "kev_date": str(meta.get("mapping_framework_version") or "")[:20], "path": path[:200], "count": len(cves),
+            "groups": groups, "cves": cves}
 
 
 def latest_kev_path(tree):
@@ -565,7 +695,9 @@ def attack_lines(att):
     if obs:
         bits = []
         for t in obs:
-            s = f"{t['id']} {t['name']} ({t['certainty_label'].split(' (')[0].lower()}: {t['role']}"
+            s = (f"{t['cve']}: " if att.get("cves") and t.get("cve") else "") + f"{t['id']} {t['name']} ("
+            s += f"{t['kind']}" if t.get("kind") else f"{t['certainty_label'].split(' (')[0].lower()}: {t['role']}"
+            s += f"; {t['note']}" if t.get("note") else ""
             s += f"; {t['status']}" if t.get("status") in ("suggested", "please check") else ""
             s += f"; retired in {t['retired_in']}" if t.get("retired_in") else ""
             bits.append(s + ")")
@@ -620,7 +752,7 @@ def install(app, ctx):
         except OSError:
             pass
         return jsonify(summary=am.summary(), todo=am.todo(), reviewed=am.reviewed(),
-                       certainty=CERTAINTY, roles=ROLE)
+                       certainty=CERTAINTY, roles=ROLE, can_admin=bool(ctx.get("can_admin", lambda: False)()))
 
     @app.route("/api/attack/search")
     def api_attack_search():
@@ -644,6 +776,39 @@ def install(app, ctx):
         if not d:
             return jsonify(error="No such technique in the local copy of ATT&CK."), 404
         return jsonify(**d, notice="© The MITRE Corporation. Reproduced and distributed with the permission of The MITRE Corporation.")
+
+    @app.route("/api/attack/ctid-trust", methods=["POST"])
+    def api_attack_ctid_trust():
+        """Admins: trust CTID's CVE mappings in advisories (they then go out as reviewed), or not (the default: the advisor
+        confirms each). Security token, fresh sign-in, audited."""
+        if not ctx.get("can_admin", lambda: False)():
+            return jsonify(error="Only administrators change this setting."), 403
+        if not ctx.get("csrf_ok", lambda: False)():
+            return jsonify(error="The page is out of date (security token): reload it and try again."), 403
+        if not ctx["fresh"]():
+            return jsonify(error="Sign in again to make changes (your session is older than 12 hours)."), 403
+        b = request.get_json(silent=True)
+        if not isinstance(b, dict) or not isinstance(b.get("trust"), bool):
+            return jsonify(error="trust: true or false"), 400
+        user, name = ctx["me"]()
+        return jsonify(ok=True, ctid_trust=am.set_ctid_trust(b["trust"], user, name))
+
+    @app.route("/api/attack/mapping/bulk", methods=["POST"])
+    def api_attack_mapping_bulk():
+        """Confirm all the suggestions shown: {items: [{report, techniques}]} as the researcher saw them. The same
+        permission, security token and fresh sign-in as a single Confirm; changed ones are skipped and named."""
+        if not ctx["change_allowed"]():
+            return jsonify(error="Only researchers and admins can change mappings."), 403
+        if not ctx["fresh"]():
+            return jsonify(error="Sign in again to make changes (your session is older than 12 hours)."), 403
+        b = request.get_json(silent=True)
+        if not isinstance(b, dict) or not isinstance(b.get("items"), list):
+            return jsonify(error="JSON with items expected"), 400
+        user, name = ctx["me"]()
+        res, err = am.review_bulk(b["items"], user, name)
+        if err:
+            return jsonify(error=err), 400
+        return jsonify(ok=True, **res, summary=am.summary())
 
     @app.route("/api/attack/mapping", methods=["POST"])
     def api_attack_mapping():

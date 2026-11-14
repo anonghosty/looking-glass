@@ -51,6 +51,9 @@ def setup(tmp, cmd_owner="self", mongo_conf=None):
     cron = tmp / "cron.txt"
     cron.write_text(f"*/30 * * * * {root}/database/run.sh --quiet # shadowserver-pipeline\n"
                     "0 5 * * * /srv/elsewhere/database/run.sh # shadowserver-pipeline\n"
+                    # the platform's weekly refresh of MISP Galaxy / MITRE ATT&CK (manage/fetch_offline_names.py --schedule)
+                    f"17 4 * * 1  {root}/platform/manage/fetch_offline_names.py --by schedule >/dev/null 2>&1 # looking-glass-name-sources\n"
+                    "17 4 * * 1  /srv/elsewhere/platform/manage/fetch_offline_names.py --by schedule # looking-glass-name-sources\n"
                     "15 3 * * * /usr/bin/backup-job\n")
     st = tmp / "stubs"
     log = tmp / "calls.log"
@@ -163,6 +166,8 @@ def main():
         c = cron.read_text() if cron.exists() else ""
         check("this folder's cron line removed", str(root) not in c, c)
         check("another installation's cron line kept", "/srv/elsewhere/database/run.sh" in c, c)
+        check("this folder's weekly refresh of the name sources removed", f"{root}/platform/manage/fetch_offline_names.py" not in c, c)
+        check("another installation's name-sources refresh kept", "/srv/elsewhere/platform/manage/fetch_offline_names.py" in c, c)
         check("unrelated cron job kept", "/usr/bin/backup-job" in c, c)
         check("command, man page, completion removed", not any((tmp / p).exists() for p in
               ("sys/bin/shadowserver", "sys/man/shadowserver.1", "sys/compl/shadowserver")))
@@ -245,11 +250,14 @@ def main():
         tmp = Path(t) / "my lg"; tmp.mkdir(); root, env, cron, log = setup(tmp)
         # as bin/shadowserver writes it: printf %q of the path, a space escaped with a backslash
         cron.write_text("*/30 * * * * " + str(root / "database/run.sh").replace(" ", "\\ ") + " --quiet >/dev/null 2>&1 # shadowserver-pipeline\n"
+                        # as fetch_offline_names.py --schedule writes it: shlex.quote, single quotes around a path with a space
+                        "17 4 * * 1  '" + str(root / "platform/manage/fetch_offline_names.py") + "' --by schedule >/dev/null 2>&1 # looking-glass-name-sources\n"
                         "15 3 * * * /usr/bin/backup-job\n")
         r = run(root, env, "--yes")
         left = cron.read_text() if cron.exists() else ""
         check("a folder with a space: its schedule (written shell-quoted) is removed, other jobs kept",
               r.returncode == 0 and "shadowserver-pipeline" not in left and "backup-job" in left, (r.stdout + r.stderr)[-300:] + " | " + left)
+        check("...and its name-sources refresh (single-quoted) too", "looking-glass-name-sources" not in left, left)
     for how, orig, note in (("marked", None, True), ("older install, original kept", "# someone else's config\nnet:\n  port: 27017\n", False)):
         with tempfile.TemporaryDirectory() as t:
             tmp = Path(t)

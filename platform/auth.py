@@ -18,7 +18,8 @@ export + malpedia, admin = all. Enforced on the server: masking (no "unmasked" -
 Malpedia, Settings, users, audit.
 
 Against password guessing: 5 wrong passwords or codes for an account from one address lock that pair for 15 minutes;
-20 failures from one address in an hour lock the address; registrations: 5 per address per hour.
+20 failures from one address in an hour lock the address (both adjustable in .env, within bounds: Throttle); an admin
+sees current locks on /admin and can lift one (lockouts.py); registrations: 5 per address per hour.
 
 Against session hijacking: server-side sessions (the browser holds a random 256-bit id, the server only its SHA-256);
 a new id at every login; cookie HttpOnly + SameSite=Strict (+ Secure and __Host- over HTTPS); a session works only from
@@ -624,10 +625,28 @@ class Sessions:
                 self.s.pop(k, None)
 
 
+def _env_int(name, default, low, high):
+    try:
+        return min(high, max(low, int(os.environ.get(name, "") or default)))
+    except ValueError:
+        return default
+
+
 class Throttle:
+    """Failed sign-ins in memory. The limits come from .env, within bounds that keep guessing slow (2026-11-14: one
+    office or partner behind a single public address can lock itself out; an admin can now see and lift locks):
+    LOGIN_ACCOUNT_FAILS (5, 3..20) wrong tries for an account from one address lock that pair for LOGIN_ACCOUNT_LOCK_MIN
+    (15, 5..240) minutes; LOGIN_ADDRESS_FAILS (20, 10..500) failures from one address within LOGIN_ADDRESS_WINDOW_MIN
+    (60, 15..1440) minutes lock the address."""
+
     def __init__(self):
         self.fail, self.lock = {}, threading.Lock()
-        self.sweeper = throttle_prune.Sweeper()     # old records are cleared out (throttle_prune.py)
+        self.account_fails = _env_int("LOGIN_ACCOUNT_FAILS", 5, 3, 20)
+        self.account_window = 60 * _env_int("LOGIN_ACCOUNT_LOCK_MIN", 15, 5, 240)
+        self.address_fails = _env_int("LOGIN_ADDRESS_FAILS", 20, 10, 500)
+        self.address_window = 60 * _env_int("LOGIN_ADDRESS_WINDOW_MIN", 60, 15, 1440)
+        # old records are cleared out (throttle_prune.py), never before the longest window has passed
+        self.sweeper = throttle_prune.Sweeper(longest=max(throttle_prune.LONGEST_WINDOW, self.account_window, self.address_window))
 
     def _recent(self, key, window):
         now = _now()
@@ -640,12 +659,43 @@ class Throttle:
 
     def locked(self, ip, name):
         with self.lock:
-            return len(self._recent((ip, (name or "").lower()), 900)) >= 5 or len(self._recent((ip, None), 3600)) >= 20
+            return (len(self._recent((ip, (name or "").lower()), self.account_window)) >= self.account_fails
+                    or len(self._recent((ip, None), self.address_window)) >= self.address_fails)
 
     def left(self, ip, name):
-        """Attempts left before the 15-minute lock for this name from this address."""
+        """Attempts left before the lock for this name from this address."""
         with self.lock:
-            return max(0, min(5 - len(self._recent((ip, (name or "").lower()), 900)), 20 - len(self._recent((ip, None), 3600))))
+            return max(0, min(self.account_fails - len(self._recent((ip, (name or "").lower()), self.account_window)),
+                              self.address_fails - len(self._recent((ip, None), self.address_window))))
+
+    def lockouts(self):
+        """What is locked right now: [{kind: account|address, ip, name, failures, until}] (only real sign-in counters,
+        never the registration or reset ones, which share this table under a label)."""
+        out = []
+        with self.lock:
+            for key in list(self.fail):
+                if not (isinstance(key, tuple) and len(key) == 2 and _is_ip(key[0])):
+                    continue
+                ip, name = key
+                if name is None:
+                    r, need, win, kind = self._recent(key, self.address_window), self.address_fails, self.address_window, "address"
+                else:
+                    r, need, win, kind = self._recent(key, self.account_window), self.account_fails, self.account_window, "account"
+                if len(r) >= need:
+                    out.append({"kind": kind, "ip": ip, "name": name or "", "failures": len(r),
+                                "until": round(sorted(r)[len(r) - need] + win)})
+        return sorted(out, key=lambda x: (x["kind"], x["ip"], x["name"]))
+
+    def unlock(self, ip, name=None):
+        """Lift a lock: one account from one address (name), or the whole address (every account tried from it).
+        Returns how many counters were cleared. Registration and reset counters stay."""
+        with self.lock:
+            if name:
+                return 1 if self.fail.pop((ip, name.lower()), None) is not None else 0
+            gone = [k for k in self.fail if isinstance(k, tuple) and len(k) == 2 and k[0] == ip]
+            for k in gone:
+                del self.fail[k]
+            return len(gone)
 
     def failed(self, ip, name):
         with self.lock:
@@ -675,6 +725,14 @@ class Throttle:
                 self.fail[key] = r
                 self.sweeper.maybe(self.fail, now)
             return len(r)
+
+
+def _is_ip(addr):
+    try:
+        ipaddress.ip_address(addr or "")
+        return True
+    except ValueError:
+        return False
 
 
 def _is_loopback(addr):

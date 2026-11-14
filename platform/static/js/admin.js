@@ -28,8 +28,9 @@
     for (const b of tabs) b.setAttribute("aria-pressed", String(b.dataset.tab === tab));
     for (const p of document.querySelectorAll(".adm-pane")) p.hidden = p.id !== `pane-${tab}`;
     // each tab shows its loading animation while its data comes (the users pane has its own line on the first visit)
-    const fn = ({ users: loadUsers, roles: loadRoles })[tab];
-    const label = { users: "Opening the accounts and their roles…", roles: "Opening the roles and their permissions…" }[tab];
+    const fn = ({ users: loadUsers, roles: loadRoles, locks: loadLocks })[tab];
+    const label = { users: "Opening the accounts and their roles…", roles: "Opening the roles and their permissions…",
+      locks: "Looking for locked sign-ins…" }[tab];
     if (fn) { if ((tab === "users" && $("adLoading")) || !window.LGLoader?.pane) fn(); else window.LGLoader.pane($(`pane-${tab}`), label, fn); }
     try { history.replaceState(null, "", `#${tab}`); } catch { /* */ }
   }
@@ -165,11 +166,45 @@
     catch (e) { banner(e.message, true); }
   });
 
+  // ---------------- locked sign-ins (lockouts.py): what is locked now, and lifting a lock (audited, fresh sign-in)
+  async function loadLocks(quiet) {
+    let d; try { d = await getJSON("/api/admin/lockouts"); } catch (e) { if (!quiet) banner(`Could not load the locks: ${e.message}`, true); return; }
+    finally { if (!quiet) window.LGLoader?.ready(); }
+    drawLocks(d.locked || [], d.limits || {});
+  }
+  function drawLocks(rows, lim) {
+    $("locksBadge").hidden = !rows.length; $("locksBadge").textContent = rows.length;
+    if (lim.account_fails) {
+      $("locksRule").textContent = `An account is locked after ${lim.account_fails} wrong tries from one address, for ${lim.account_minutes} minutes; `
+        + `an address after ${lim.address_fails} failures within ${lim.address_minutes} minutes. Lift a lock only when you know who was trying.`;
+    }
+    const tb = $("locksTable").querySelector("tbody"); tb.replaceChildren();
+    if (!rows.length) { const tr = el("tr"); const td = el("td", "muted", "Nothing is locked."); td.colSpan = 6; tr.append(td); tb.append(tr); return; }
+    for (const r of rows) {
+      const tr = el("tr");
+      tr.append(el("td", null, r.kind === "address" ? "The whole address" : "One account from one address"),
+        el("td", "mono", r.ip), el("td", null, r.name || "every account"), el("td", null, String(r.failures)),
+        el("td", null, `${r.minutes_left} min`));
+      const td = el("td"); const b = el("button", "pill-btn", "Unlock"); b.type = "button";
+      b.addEventListener("click", async () => {
+        const what = r.kind === "address" ? `every sign-in from ${r.ip}` : `${r.name} from ${r.ip}`;
+        if (!window.confirm(`Lift the lock on ${what}? It is written to the audit log.`)) return;
+        b.disabled = true;
+        try { const x = await post("/api/admin/lockouts/unlock", r.kind === "address" ? { ip: r.ip } : { ip: r.ip, name: r.name });
+          banner(`Unlocked: ${what}.`); drawLocks(x.locked || [], lim); }
+        catch (e) { b.disabled = false; banner(e.message, true); }
+      });
+      td.append(b); tr.append(td); tb.append(tr);
+    }
+  }
+
   // ---------------- start
   const first = (location.hash || "").slice(1);
   if (first === "audit" || first === "sessions") { location.replace(first === "sessions" ? "/audit#sessions" : "/audit"); return; }   // moved to the audit page
   const avail = tabs.map((b) => b.dataset.tab);
   show(avail.includes(first) ? first : avail[0]);
-  setInterval(() => { const t = tabs.find((b) => b.getAttribute("aria-pressed") === "true")?.dataset.tab; if (t === "users") loadUsers(); }, 30000);
+  if ($("locksBadge")) loadLocks(true);                   // the badge shows locks from any tab
+  setInterval(() => { const t = tabs.find((b) => b.getAttribute("aria-pressed") === "true")?.dataset.tab; if (t === "users") loadUsers();
+    if ($("locksBadge")) loadLocks(true); }, 30000);
   void PERMS;
 })();

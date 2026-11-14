@@ -7,16 +7,18 @@
 #   deploy/install.sh --network       other screens too (0.0.0.0:5000; also set ACCESS_MODE in .env and use HTTPS)
 #   deploy/install.sh --port N        listen on port N instead of 5000
 #   deploy/install.sh --name NAME     service name (default: looking-glass)
+#   deploy/install.sh --no-sources    do not download MISP Galaxy and MITRE ATT&CK now (the weekly refresh does)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 project="$(pwd)"
-name="looking-glass"; host="127.0.0.1"; port=5000
+name="looking-glass"; host="127.0.0.1"; port=5000; sources=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --network) host="0.0.0.0"; shift ;;
+    --no-sources) sources=0; shift ;;
     --port) port="${2:?--port needs a number}"; shift 2 ;;
     --name) name="${2:?--name needs a value}"; shift 2 ;;
-    -h|--help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option $1 (deploy/install.sh --help)"; exit 1 ;;
   esac
 done
@@ -62,9 +64,21 @@ if ! pidof systemd >/dev/null 2>&1 && [ ! -d /run/systemd/system ]; then
   echo "systemd is not running here. On WSL, enable it first (docs/INSTALLATION.md, part A1)."
 fi
 
-step "5. Weekly refresh of the name sources (MISP Galaxy, MITRE ATT&CK)"
-# public lists that explain malware names Malpedia and the researchers do not; only these downloads leave the server
-manage/fetch_offline_names.py --schedule || echo "not scheduled: see docs/OPERATIONS.md (Offline name sources)"
+step "5. Name sources: MISP Galaxy and MITRE ATT&CK"
+# public lists that explain malware names Malpedia and the researchers do not, and the ATT&CK techniques of reports,
+# advisories and CVEs. Only these downloads of public files leave the server; nothing about the constituency is sent.
+manage/fetch_offline_names.py --schedule || echo "weekly refresh not scheduled: see docs/OPERATIONS.md (Offline name sources)"
+sources_ok=1
+if [ "$sources" = 1 ]; then
+  echo "downloading the first copies now (about a minute)..."
+  # never stops the installation: without them look-ups work as before, and the weekly refresh tries again
+  if manage/fetch_offline_names.py --by installer; then
+    manage/fetch_offline_names.py --status
+  else
+    sources_ok=0
+    echo "not (all) downloaded now (no internet?): what was saved is kept; the weekly refresh tries again, or run manage/fetch_offline_names.py later"
+  fi
+fi
 
 step "Next steps"
 cat <<EOF
@@ -77,5 +91,7 @@ cat <<EOF
 4. Open http://localhost:$port in a browser and choose "Let's get started" to create the first administrator.
    It asks for the one-time setup code: cat $(pwd)/data/setup_code
 5. Other screens: deploy/make_tls_cert.sh (HTTPS), ACCESS_MODE in .env, firewall (docs/INSTALLATION.md).
-6. First copy of the name sources now (otherwise on Monday's weekly refresh):  $project/manage/fetch_offline_names.py
 EOF
+if [ "$sources" = 0 ] || [ "$sources_ok" = 0 ]; then
+  echo "6. MISP Galaxy and MITRE ATT&CK are not downloaded yet: $project/manage/fetch_offline_names.py (or wait for Monday's refresh)"
+fi

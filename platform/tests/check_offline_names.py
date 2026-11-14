@@ -357,6 +357,35 @@ try:
                                                     for u in [ON.MISP_URL.format(c) for c in ON.MISP_CLUSTERS] + list(ON.ATTACK_URLS.values())
                                                     + [AMAP.KEV_TREE, AMAP.KEV_RAW]))
     ok("the downloads carry no name or host", all("{" not in u for u in ON.ATTACK_URLS.values()) and ON.MISP_URL.count("{}") == 1)
+    print("the weekly refresh in the crontab (a stand-in crontab; a folder with a space)")
+    import subprocess
+    sch = os.path.join(tmp, "my lg")
+    os.makedirs(os.path.join(sch, "manage")); os.makedirs(os.path.join(sch, "bin"))
+    for f in ("offline_names.py", "attack_map.py"):
+        shutil.copy(os.path.join(ROOT, f), os.path.join(sch, f))
+    shutil.copy(os.path.join(ROOT, "manage", "fetch_offline_names.py"), os.path.join(sch, "manage", "fetch_offline_names.py"))
+    crontxt = os.path.join(tmp, "cron.txt")
+    with open(crontxt, "w") as f:
+        f.write("17 4 * * 1  /srv/elsewhere/manage/fetch_offline_names.py --by schedule # looking-glass-name-sources\n15 3 * * * /usr/bin/backup-job\n")
+    with open(os.path.join(sch, "bin", "crontab"), "w") as f:
+        f.write(f'#!/bin/sh\nf="{crontxt}"\ncase "$1" in -l) [ -f "$f" ] && cat "$f" || exit 1 ;; -r) rm -f "$f" ;; -) cat > "$f" ;; esac\n')
+    os.chmod(os.path.join(sch, "bin", "crontab"), 0o755)
+    env = dict(os.environ, PATH=os.path.join(sch, "bin") + os.pathsep + os.environ.get("PATH", ""), LG_OFFLINE_NAMES_DIR=os.path.join(tmp, "schdata"))
+    os.makedirs(env["LG_OFFLINE_NAMES_DIR"])
+    script = os.path.join(sch, "manage", "fetch_offline_names.py")
+    for _ in range(2):
+        subprocess.run([sys.executable, script, "--schedule"], env=env, capture_output=True, text=True, timeout=60)
+    cron_now = open(crontxt).read()
+    mine = [ln for ln in cron_now.splitlines() if script in ln]
+    ok("--schedule writes one line for this folder, the path quoted (a space in it)", len(mine) == 1 and f"'{script}'" in mine[0]
+       and "# looking-glass-name-sources" in mine[0], cron_now)
+    ok("...another installation's refresh and other jobs kept", "/srv/elsewhere/manage" in cron_now and "backup-job" in cron_now, cron_now)
+    subprocess.run([sys.executable, script, "--unschedule"], env=env, capture_output=True, text=True, timeout=60)
+    cron_now = open(crontxt).read()
+    ok("--unschedule removes only this folder's line", script not in cron_now and "/srv/elsewhere/manage" in cron_now and "backup-job" in cron_now, cron_now)
+    inst = open(os.path.join(ROOT, "deploy", "install.sh"), encoding="utf-8").read()
+    ok("the installer schedules the refresh and downloads the first copies, never stopping on a failure",
+       "fetch_offline_names.py --schedule" in inst and "if manage/fetch_offline_names.py --by installer; then" in inst and "--no-sources" in inst)
     ok("still nothing left the server", not OUT, OUT[:3])
 finally:
     socket.socket.connect, socket.create_connection = _real_connect, _real_create
