@@ -92,6 +92,12 @@ The pipeline's sender check is set in the pipeline's `.env` (or Settings → Wor
 report e-mail's DKIM result, hold nothing back), `enforce` (hold back reports that do not pass until an administrator
 releases them) or `off`; `MAIL_AUTH_DOMAIN` = the expected signer (`shadowserver.org`).
 
+**Recommended for production: `enforce`** (Block), or the report API instead of e-mail. Start with `log` for a few days
+and look at **Audit portal → Sender check**: when every genuine report passes (no footer or forwarding rule breaks the
+signatures on the way), switch to Block in **Settings → Workers**. With `log`, a forged report e-mail would be loaded
+and only flagged. `REPORT_SOURCE=api` (Shadowserver's report API) does not use e-mail at all, so the question does not
+arise; the e-mail path stays as a fallback.
+
 ## Executive portal: 7-day baseline
 
 The Executive page compares each figure with the 7 days before; a selection seen for the first time builds that

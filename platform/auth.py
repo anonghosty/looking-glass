@@ -53,6 +53,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 import throttle_prune
 import password_policy
+import system_alerts
 
 PUBLIC_PATHS = ("/login", "/register", "/forgot", "/logout", "/healthz", "/static/", "/favicon.ico")
 # sign-up attempts whose e-mail domain is looked up in DNS, per address and hour (room for typing mistakes)
@@ -150,6 +151,10 @@ EXPORT_PATHS = ("/api/svc/hosts.csv",)
 
 def _now():
     return time.time()
+
+
+def _utc(t):
+    return time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(t))
 
 
 def _h(token):
@@ -457,6 +462,7 @@ class Audit:
         self.path, self.log, self.lock = path, logger, threading.Lock()
         import audit_chain                      # tamper-evident lines, archives kept for the retention (audit_chain.py)
         self.chain = audit_chain.Chain(path)
+        self.failing = None                     # {since, last, count, error} while entries cannot be written
 
     def add(self, event, user="", target="", detail="", ip=None, ua=None):
         try:
@@ -466,11 +472,30 @@ class Audit:
             ip, ua = ip or "", ua or ""
         rec = {"t": round(_now(), 3), "event": event, "user": user or "", "target": target or "", "detail": str(detail)[:300],
                "ip": ip, "location": location(ip), "ua": (ua or "")[:200]}
+        # A write that fails (a full disk, a read-only folder) no longer vanishes (review 2026-11-15): it is logged as an
+        # error and shown in the admins' bell while it lasts (system_alerts.py), and the first entry written once the log
+        # works again is the gap itself (audit_write_failed: how many entries, between when and when, why), so the
+        # evidence log records its own hole and the chain stays whole.
         with self.lock:
             try:
+                if self.failing:
+                    f = self.failing
+                    n = f["count"]
+                    self.chain.append({"t": round(_now(), 3), "event": "audit_write_failed", "user": "", "target": "",
+                                       "detail": (f"{n} audit entr{'y' if n == 1 else 'ies'} could not be written between "
+                                                  f"{_utc(f['since'])} and {_utc(f['last'])}: {f['error']}")[:300],
+                                       "ip": "", "location": location(""), "ua": ""})
+                    self.failing = None
+                    system_alerts.note_audit_write(None, recovered=f, now=_now())
                 self.chain.append(rec)          # chained to the line before; rotated into the archive, never deleted early
-            except OSError:
-                pass
+            except OSError as e:
+                f = self.failing or {"since": _now(), "count": 0}
+                f.update(last=_now(), count=f["count"] + 1, error=f"{type(e).__name__}: {e.strerror or e}"[:120])
+                self.failing = f
+                system_alerts.note_audit_write(dict(f))
+                if self.log:
+                    self.log.error("audit log NOT written (%s entries since %s): %s; event %s user=%s",
+                                   f["count"], _utc(f["since"]), f["error"], event, user)
         if self.log:
             self.log.warning("audit %s user=%s target=%s ip=%s %s", event, user, target, ip, rec["detail"])
 
@@ -663,6 +688,23 @@ class Throttle:
         with self.lock:
             return (len(self._recent((ip, (name or "").lower()), self.account_window)) >= self.account_fails
                     or len(self._recent((ip, None), self.address_window)) >= self.address_fails)
+
+    def wait_minutes(self, ip, name=None):
+        """Whole minutes until this name from this address may try again (the longer lock if both the account and the
+        address are locked); the configured lock when nothing is locked yet (review 2026-11-15: the messages said "15
+        minutes" whatever LOGIN_ACCOUNT_LOCK_MIN was)."""
+        now, waits = _now(), []
+        with self.lock:
+            for key, need, win in (((ip, (name or "").lower()), self.account_fails, self.account_window) if name else (None, 0, 0),
+                                   ((ip, None), self.address_fails, self.address_window)):
+                if key is None:
+                    continue
+                r = sorted(self._recent(key, win))
+                if len(r) >= need:
+                    waits.append(r[len(r) - need] + win - now)
+        if not waits:
+            return self.account_window // 60
+        return max(1, -(-int(max(waits)) // 60))
 
     def left(self, ip, name):
         """Attempts left before the lock for this name from this address."""
@@ -928,8 +970,13 @@ def install(app, base_dir, logger):
     def attempts_msg(base, ip, name):
         n = throttle.left(ip, name)
         if n <= 0:
-            return "Too many failed attempts. Try again in 15 minutes."
-        return f"{base} {n} attempt{'s' if n != 1 else ''} left before a 15-minute lock."
+            return locked_msg(ip, name)
+        return f"{base} {n} attempt{'s' if n != 1 else ''} left before a {throttle.account_window // 60}-minute lock."
+
+    def locked_msg(ip, name=None):
+        """The lock message with the real time left (LOGIN_ACCOUNT_LOCK_MIN, or the address lock if longer)."""
+        m = throttle.wait_minutes(ip, name)
+        return f"Too many failed attempts. Try again in {m} minute{'s' if m != 1 else ''}."
 
     def remote_needs_tls():
         ip, _ = client()
@@ -1035,7 +1082,7 @@ def install(app, base_dir, logger):
                 audit.add("login_refused", user=name, detail="account no longer active at the authenticator step")
                 return page("login.html", 403, next=nxt, view="signin", error="This account cannot sign in.")
             if not u or throttle.locked(ip, name):
-                return page("login.html", 429, next=nxt, view="signin", error="Too many failed attempts. Try again in 15 minutes.")
+                return page("login.html", 429, next=nxt, view="signin", error=locked_msg(ip, name))
             code = (request.form.get("code") or "").strip()
             stp = totp_check(u.get("totp"), code, u.get("totp_last"))
             used_recovery = False
@@ -1084,7 +1131,7 @@ def install(app, base_dir, logger):
         remember = request.form.get("remember") == "1"      # stay signed in for 5 days
         if throttle.locked(ip, name):
             audit.add("login_locked", user=name)
-            return page("login.html", 429, next=nxt, view="signin", error="Too many failed attempts. Try again in 15 minutes.")
+            return page("login.html", 429, next=nxt, view="signin", error=locked_msg(ip, name))
         u = users.get(name) if NAME_RE.match(name) else None
         ok = check_password_hash(u["hash"], pw) if u and u.get("hash") else (check_password_hash(_DUMMY_HASH, pw) and False)
         if not ok:
@@ -1122,7 +1169,7 @@ def install(app, base_dir, logger):
             audit.add("login_refused", user=name, detail="account no longer active at the expired-password step")
             return page("login.html", 403, next=nxt, view="signin", error="This account cannot sign in.")
         if not u or throttle.locked(ip, name):
-            return page("login.html", 429, next=nxt, view="signin", error="Too many failed attempts. Try again in 15 minutes.")
+            return page("login.html", 429, next=nxt, view="signin", error=locked_msg(ip, name))
         pw, pw2 = request.form.get("password") or "", request.form.get("password2") or ""
         prof = u.get("profile") or {}
         problem = password_problem(name, pw, pw2, avoid=(prof.get("full_name", ""), (prof.get("email") or "").split("@")[0],
@@ -1154,7 +1201,7 @@ def install(app, base_dir, logger):
             return page("login.html", 401, next=nxt, view="signin", error="The set-up step expired. Start again.")
         ip, _ = client()
         if throttle.locked(ip, st["user"]):
-            return page("login.html", 429, next=nxt, view="signin", error="Too many failed attempts. Try again in 15 minutes.")
+            return page("login.html", 429, next=nxt, view="signin", error=locked_msg(ip, st["user"]))
         stp = totp_check(st["secret"], request.form.get("code"))
         if stp is None:
             throttle.failed(ip, st["user"])
@@ -1300,7 +1347,7 @@ def install(app, base_dir, logger):
                                                            "Once they allow it, come back here and use your authenticator.")
         # ---- reset with the authenticator
         if throttle.locked(ip, name):
-            return page("forgot.html", 429, mode=mode, error="Too many failed attempts. Try again in 15 minutes.")
+            return page("forgot.html", 429, mode=mode, error=locked_msg(ip, name))
         pw, pw2 = request.form.get("password") or "", request.form.get("password2") or ""
         u = users.get(name) if NAME_RE.match(name) else None
         code = (request.form.get("code") or "").strip()

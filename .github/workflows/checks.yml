@@ -1,6 +1,11 @@
-# The checks that need no database, no live data and no secrets, on every push and pull request (external review,
-# 2026-11-12: there was no CI). The full suite (platform/tests/run_all_checks.sh) and the security retest need a running
-# installation with its MongoDB, so they run on the server, not here.
+# The checks that need no live data and no secrets, on every push and pull request (external review, 2026-11-12: there
+# was no CI). The full suite (platform/tests/run_all_checks.sh) and the security retest need a running installation with
+# its data, so they run on the server, not here.
+# Hardened 2026-11-15 (review follow-up item 7): every action is pinned to a full commit (a moved tag cannot run new code
+# here), MongoDB runs in a container pinned to its image digest for the checks that need a database, and the libraries
+# are checked against known vulnerabilities (pip-audit). Update a pin on purpose, with its version in the comment, and
+# confirm it is the action's own tag (a fork's commit can be reached by the same URL):
+#   git ls-remote --tags https://github.com/actions/checkout | grep <commit>
 name: checks
 on:
   push:
@@ -8,6 +13,59 @@ on:
 permissions:
   contents: read
 jobs:
+  database:
+    # the checks that make a throwaway database of their own: MongoDB 8.0 (pinned by digest) with an administrator whose
+    # password is made new in each run (never stored anywhere), handed over as tests/_throwaway_mongo.py expects
+    runs-on: ubuntu-24.04
+    env:
+      MONGO_HOST: 127.0.0.1
+      MONGO_PORT: "27017"
+      LG_QUIET: "1"
+      THREATMAP_SCHEDULE: "0"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262      # v4.4.0 (tag in actions/checkout)
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0 (tag in actions/setup-python)
+        with:
+          python-version: "3.12"
+      - name: Install the platform's libraries
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r platform/requirements.txt
+      - name: Start MongoDB 8.0 with a one-run administrator
+        run: |
+          set -e
+          PW="$(openssl rand -hex 24)"; echo "::add-mask::$PW"
+          docker run -d --name mongo -p 127.0.0.1:27017:27017 \
+            -e MONGO_INITDB_ROOT_USERNAME=ci -e MONGO_INITDB_ROOT_PASSWORD="$PW" \
+            mongo@sha256:d97fea17ccb8d004cd137be8dab54d70d0df11be69c9f422aefe4484c8414ab7
+          umask 077
+          printf 'MONGO_USER=ci\nMONGO_PASSWORD=%s\nMONGO_AUTH_SOURCE=admin\n' "$PW" > "$RUNNER_TEMP/mongo-admin.env"
+          echo "LG_MONGO_ADMIN_FILE=$RUNNER_TEMP/mongo-admin.env" >> "$GITHUB_ENV"
+          for i in $(seq 1 30); do docker exec mongo mongosh --quiet --eval 'db.runCommand({ping: 1}).ok' >/dev/null 2>&1 && exit 0; sleep 2; done
+          echo "MongoDB did not start"; docker logs mongo | tail -20; exit 1
+      - name: Checks that need a database
+        working-directory: platform
+        run: |
+          set -e
+          for t in test_new_collections test_new_service_collections; do
+            echo "::group::$t"
+            # here the database is there: a skip (exit 77) is a failure
+            if ! python tests/$t.py; then echo "$t did not pass"; exit 1; fi
+            echo "::endgroup::"
+          done
+  dependencies:
+    # known vulnerabilities in the platform's and the pipeline's libraries (PyPI advisory data, OSV)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262      # v4.4.0 (tag in actions/checkout)
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0 (tag in actions/setup-python)
+        with:
+          python-version: "3.12"
+      - name: pip-audit
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pip-audit==2.10.1
+          pip-audit -r platform/requirements.txt -r database/requirements.txt --progress-spinner off
   unit:
     runs-on: ubuntu-24.04
     env:
@@ -16,8 +74,8 @@ jobs:
       LG_QUIET: "1"
       THREATMAP_SCHEDULE: "0"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262      # v4.4.0 (tag in actions/checkout)
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0 (tag in actions/setup-python)
         with:
           python-version: "3.12"
       - name: Install the platform's and the pipeline's libraries
@@ -32,11 +90,11 @@ jobs:
         run: |
           set -e
           for t in test_privacy_roles test_schedule check_ip_find check_host_label_text check_masked_fields check_banner_inbound check_data_access \
-                   check_auth_offline check_login_throttle check_password_policy check_csrf_routes check_settings_access \
+                   check_auth_offline check_login_throttle check_single_worker check_audit_write_failure check_csp_sources check_proxy_chain check_password_policy check_csrf_routes check_settings_access \
                    check_first_admin_proxy check_retest_reset check_workflow_fixes check_calc_offline \
-                   check_audit_portal check_device_note check_audit_checkpoint check_backup_scripts check_auditor_portal check_pipeline_settings check_scope_reload check_libraries \
+                   check_audit_portal check_device_note check_cve_titles check_ci_pins check_audit_checkpoint check_backup_scripts check_auditor_portal check_pipeline_settings check_scope_reload check_libraries \
                    check_cve_backoff check_uninstall check_timezones check_special_reports check_report_map \
-                   check_findings_ui check_notifications check_overview check_greetings check_peace check_networks_list check_wrong_types check_kb_report_names check_slow_log check_lockouts check_system_alerts check_response_cache check_task_monitor check_acode_chain check_intelligence check_code_collisions check_finding_watch check_acode_issue check_db_connect check_install_db check_installer_anim check_offline_names check_attack_map check_advisory_attack check_confirm_all check_cve_attack; do
+                   check_findings_ui check_notifications check_overview check_greetings check_peace check_networks_list check_wrong_types check_kb_report_names check_slow_log check_lockouts check_system_alerts check_response_cache check_task_monitor check_acode_chain check_intelligence check_code_collisions check_finding_watch check_acode_issue check_db_connect check_install_db check_install_cert check_installer_anim check_offline_names check_attack_map check_advisory_attack check_confirm_all check_cve_attack; do
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
           done
       - name: Pipeline checks

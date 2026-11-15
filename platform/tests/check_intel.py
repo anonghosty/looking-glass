@@ -48,6 +48,18 @@ d = json.loads(body)
 ok(f"researcher: leads answer ({len(d.get('leads', []))} leads over {', '.join(d.get('days', []))})", code == 200 and "leads" in d)
 ok("leads are matches between places (two names, two reports or both platforms)",
    all(len(x["names"]) > 1 or len(x["reports"]) > 1 for x in d.get("leads", [])))
+# how much was compared, day by day (2026-11-15: "nothing to ask" must not read as "nothing there"): counts only
+cmp_ = d.get("compared") or []
+ok("it says how much it compared, day by day (counts only)",
+   cmp_ and all(set(c) == {"day", "events", "records"} and isinstance(c["events"], int) and isinstance(c["records"], int) for c in cmp_),
+   json.dumps(cmp_)[:200])
+# Explore (2026-11-15) opens Intel gathered on the first "where" of a lead: it needs a name, a section and a report
+ok("every lead can be explored (its strongest place has a name, a section and a report)",
+   all((x.get("where") or [{}])[0].get("name") and (x.get("where") or [{}])[0].get("section") in ("infections", "issues")
+       and (x.get("where") or [{}])[0].get("report") for x in d.get("leads", [])))
+_js = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "static", "js", "intel.js"), encoding="utf-8").read()
+ok("the page has the Explore button, opening Intel gathered with the indicator searched",
+   '"ig-explore"' in _js and "open(top.name, top.section, top.report, x.value)" in _js)
 answers = [body]
 for sec, n in (("infections", top_inf), ("issues", issue)):
     code, b = call(f"/api/intel?section={sec}&name={n}", RESEARCHER)

@@ -66,6 +66,21 @@ import time
 time.sleep(1.1)
 open(os.path.join(proj, "data", "settings.json"), "w").write('{"changed": true}')
 rc, out, B = backup()
+
+print("The newest signed backup? (an older genuine one still verifies: security review of a40f17a)")
+rc, out = run("manage/verify_backup.sh", B)
+ok("the newest backup: said so", rc == 0 and "freshness: the newest signed backup" in out, out)
+rc, out = run("manage/verify_backup.sh", A)
+ok("an older one: verifies, with a warning naming the newer one", rc == 0 and "NOT THE NEWEST" in out
+   and os.path.basename(B) in out, out)
+os.utime(A, None); os.utime(A + ".sha256", None)          # the attack: the old archive given a newer file date
+newest_by_date = sorted((os.path.getmtime(os.path.join(tmp, "backups", p)), p) for p in os.listdir(os.path.join(tmp, "backups"))
+                        if p.endswith(".tar.gz"))[-1][1]
+rc, out = run("manage/verify_backup.sh")                     # the default: the newest by file date
+ok("an old backup made to look newest by its file date: the warning still says it is not",
+   newest_by_date == os.path.basename(A) and "NOT THE NEWEST" in out, out)
+rc, out = run("manage/restore_check.sh", A)
+ok("restore_check.sh: a WARN row for it, still restorable", rc == 0 and "WARN  freshness" in out and "NOT THE NEWEST" in out, out[-600:])
 other = os.path.join(tmp, "elsewhere"); os.makedirs(other)
 fake = os.path.join(other, os.path.basename(B))
 shutil.copy(B, fake)

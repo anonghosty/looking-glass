@@ -99,6 +99,7 @@ run "findings over time: reported day, repeats, time to act" $PY tests/check_fin
 run "a CVE ticked on an analyst code's page" $PY tests/check_acode_issue.py
 run "the reports database: loopback or internal only, TLS" $PY tests/check_db_connect.py
 run "the installer's database check: internal only, TLS, structure" $PY tests/check_install_db.py
+run "Bought certificate: checks, install, bell" $PY tests/check_install_cert.py
 run "the installer's animated logo" $PY tests/check_installer_anim.py
 run "offline names: MISP Galaxy + ATT&CK, nothing sent" $PY tests/check_offline_names.py
 run "ATT&CK mappings, versions, CVE links" $PY tests/check_attack_map.py
@@ -106,6 +107,10 @@ run "ATT&CK in advisories (reviewed only)" $PY tests/check_advisory_attack.py
 run "ATT&CK Confirm all (Definitions, advisory)" $PY tests/check_confirm_all.py
 run "ATT&CK on CVE and issue cards, CTID trust" $PY tests/check_cve_attack.py
 run "failed-login counter (locks, clean-up)" $PY tests/check_login_throttle.py
+run "one worker process (gunicorn refuses more)" $PY tests/check_single_worker.py
+run "audit write failures: bell, then the gap in the log" $PY tests/check_audit_write_failure.py
+run "CSP: exact outside files, no whole CDN; local globe map" $PY tests/check_csp_sources.py
+run "reverse proxy: the right-most address, never a visitor's 127.0.0.1" $PY tests/check_proxy_chain.py
 run "request times in UTC (one day copy)" $PY tests/check_time_offsets.py
 run "masked views: no host-name filter" $PY tests/check_masked_hostname.py
 run "researchers: no code below 5 hosts" $PY tests/check_small_codes.py
@@ -124,6 +129,8 @@ run "overview of every role" $PY tests/check_overview.py
 run "peace of mind (admins)" $PY tests/check_peace.py
 run "Audit portal permission" $PY tests/check_audit_portal.py
 run "Devices matched by IP note" $PY tests/check_device_note.py
+run "CVE titles in full" $PY tests/check_cve_titles.py
+run "CI stays pinned" $PY tests/check_ci_pins.py
 run "Audit checkpoints and signed backups" $PY tests/check_audit_checkpoint.py
 run "Backup scripts: bound and signed" $PY tests/check_backup_scripts.py
 run "auditor role + Audit portal (evidence)" $PY tests/check_auditor_portal.py

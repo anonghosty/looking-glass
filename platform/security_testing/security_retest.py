@@ -116,6 +116,9 @@ def client():
     if TLS:
         import ssl
         ctx = ssl.create_default_context(cafile=os.path.join(ROOT, "data", "tls", "cert.pem")); ctx.check_hostname = False
+        # the server's own certificate is trusted by itself: a bought one comes with its chain but not its root
+        # (2026-11-15: a domain certificate failed "unable to get issuer certificate"; self-signed worked)
+        ctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
         handlers.append(urllib.request.HTTPSHandler(context=ctx))
     op = urllib.request.build_opener(*handlers)
     op.addheaders = [("User-Agent", UA)]
@@ -252,6 +255,7 @@ try:
     if TLS:                                   # the attacker's browser connects over HTTPS like everyone else
         import ssl
         tctx = ssl.create_default_context(cafile=os.path.join(ROOT, "data", "tls", "cert.pem")); tctx.check_hostname = False
+        tctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN          # (a bought certificate's chain: see above)
         th.append(urllib.request.HTTPSHandler(context=tctx))
     thief = urllib.request.build_opener(*th)
     thief.addheaders = [("User-Agent", "Mozilla/5.0 (attacker)")]
@@ -278,6 +282,7 @@ try:
     if TLS:
         import ssl
         pctx = ssl.create_default_context(cafile=os.path.join(ROOT, "data", "tls", "cert.pem")); pctx.check_hostname = False
+        pctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN          # (a bought certificate's chain: see above)
         ph2.append(urllib.request.HTTPSHandler(context=pctx))
     pthief = urllib.request.build_opener(*ph2); pthief.addheaders = [("User-Agent", "Mozilla/5.0 (attacker)")]
     s, _, _ = req(pthief, "/api/clock"); ok("a stolen 5-day cookie from another browser is refused, and the session ends", s == 401 and req(pop, "/api/clock")[0] == 401, str(s))

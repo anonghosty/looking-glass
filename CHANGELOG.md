@@ -5,14 +5,56 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-15 (7)
+### Added
+- Guided installer: HTTPS with a certificate bought for a domain. The certificate is checked before anything is
+  installed (its key, the domain, its dates and its chain), installed for port 443 with only the one capability that
+  needs, the port opened in the firewall when ufw is on, and the site checked by its name over verified HTTPS.
+  `manage/install_cert.sh` installs renewals the same way, and the bell warns 30, 14 and 3 days before expiry.
+- An Explore button on each "Looking Glass asks" match: it opens Intel gathered on the name and report where the
+  indicator is seen most, with the indicator already searched.
+- README: Quick start step 6, "Before you hand it to anyone", with what the installer leaves to you and a link to
+  the operator checklist; "Using it, step by step" now goes on to Definitions, combinations, findings, advisories,
+  Abused or Compromised and the Audit portal.
+
+### Fixed
+- Executive portal and insight panels: a CVE's description is shown as its whole first sentence, never cut mid-word.
+- The security retest and the checks accept a certificate bought for a domain (with its chain), not only a
+  self-signed one; a service installed under another name than looking-glass is reloaded by its own name.
+- Moving between pages, the loading logo draws itself once and carries on until the new page is ready (it drew twice).
+- After a restart, the day before the replay day is loaded again at once, so "Looking Glass asks" and the
+  across-reports figures compare the same days as before; when Looking Glass has nothing to ask, the card says how much
+  it compared, day by day.
+- Sign-in lock messages and the Audit portal's sign-in check (LG-06) give the lock times actually set in `.env`, and
+  the time really left, instead of always "15 minutes".
+
+### Changed
+- The installer and the documentation recommend blocking reports that fail the sender check in production, once the
+  Sender check shows every genuine report passing, or Shadowserver's report API, which does not use e-mail.
+
+### Security
+- An internet-facing installation always uses HTTPS: the installer no longer offers "No HTTPS" for it, and a
+  self-signed certificate on a public site must be confirmed by typing it.
+- GitHub checks: every action is pinned to a full commit, the checks that need a database run against MongoDB pinned by
+  its image digest with a password made new in each run, and the libraries are checked for known vulnerabilities.
+- Checking a backup says whether it is the newest one this installation signed, from the audit log, so an older
+  genuine backup made to look newest by its file date is noticed.
+- An audit entry that cannot be written (a full disk) no longer disappears silently: the administrators' bell says so
+  while it lasts, and once the log can be written again the gap itself is recorded in it (how many entries, between
+  when and when, and why), shown in the Audit portal as an alert.
+- The service refuses to start with more than one gunicorn worker: sessions and sign-in limits live in one process,
+  and more workers would sign people out at random.
+- The sign-in page's globe reads its land map from Looking Glass itself; the content security policy no longer allows
+  fetches from a whole public CDN.
+- Behind a reverse proxy, the documentation says which address is believed (the last one, added by your proxy) and
+  what to do with two proxies in a row; a new check confirms a visitor cannot pass as this computer.
+
 ## 2026-11-15 (6)
+
 ### Added
 - Release notes: each release has a signed tag named by its date and its notes on GitHub's Releases page.
 
 ### Changed
-- The README points readers who want the global picture to ICHI, the Internet Cyber Health Index, with credit.
-- The licence notes say that NIST SP 800-53, a work of the U.S. Government, may be adopted by anyone, and credit NIST.
-
 - Every card that loads data as a page opens shows the loading animation until it has everything it needs, so no
   card shows "0", appears late, grows or is drawn twice; the platforms and the overview keep the logo until their
   figures, filters and lists are in, also after a reload. Windows and maps opened with a click (a record, an event, a
@@ -20,6 +62,8 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
   once, when the baseline is complete, instead of filling in piece by piece.
 - "Looking Glass asks" shows Looking Glass thinking while it compares the reports: a detective looks through them, a
   light bulb when he finds matches, a shrug when Looking Glass has nothing to ask (still for reduced motion).
+- The README points readers who want the global picture to ICHI, the Internet Cyber Health Index, with credit.
+- The licence notes say that NIST SP 800-53, a work of the U.S. Government, may be adopted by anyone, and credit NIST.
 
 ### Fixed
 - Combinations: the busiest devices' "Also seen in" names each report as people read it (for example "Device

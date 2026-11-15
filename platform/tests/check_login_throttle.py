@@ -61,6 +61,22 @@ try:
     clock[0] += 1000
     ok("a name failure from 18 minutes ago no longer counts, the address one still does",
        t.left("10.9.9.9", "daniel") == 5 and len(t.fail.get(("10.9.9.9", None), [])) == 1)
+
+    # review 2026-11-15: the messages said "15 minutes" whatever LOGIN_ACCOUNT_LOCK_MIN was
+    print("The message tells the real time left")
+    os.environ["LOGIN_ACCOUNT_LOCK_MIN"] = "60"
+    try:
+        t = auth.Throttle()
+    finally:
+        os.environ.pop("LOGIN_ACCOUNT_LOCK_MIN", None)
+    for _ in range(5):
+        t.failed("10.5.0.1", "grace")
+    ok("a 60-minute lock: 60 minutes left at once", t.wait_minutes("10.5.0.1", "grace") == 60, t.wait_minutes("10.5.0.1", "grace"))
+    clock[0] += 25 * 60 + 30
+    ok("…35 after 25 and a half minutes (rounded up)", t.wait_minutes("10.5.0.1", "grace") == 35, t.wait_minutes("10.5.0.1", "grace"))
+    ok("nothing locked: the configured lock", t.wait_minutes("10.5.0.2", "grace") == 60)
+    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "auth.py"), encoding="utf-8").read()
+    ok("no sign-in message says a fixed 15 minutes", "Try again in 15 minutes" not in src and "a 15-minute lock" not in src)
 finally:
     auth._now = real_now
 

@@ -26,6 +26,7 @@ a new key, recorded in the chain); the public key stays in the chain and in the 
     python audit_checkpoint.py key                       the public key and its fingerprint (makes the key if needed)
     python audit_checkpoint.py sign-file FILE NAMESPACE  sign a file (backup.sh); prints the signature's path
     python audit_checkpoint.py verify-file FILE NAMESPACE [PUBKEY]   check a signature (verify_backup.sh)
+    python audit_checkpoint.py backup-age ARCHIVE [SHA256]   is it the newest backup this installation signed?
 """
 import fcntl
 import glob
@@ -276,6 +277,32 @@ def loop(signer, audit, logger=None):
         time.sleep(3600)
 
 
+def backup_freshness(data_dir, archive_name, sha256=None):
+    """Is this backup the newest one this installation signed? From the audit log's "backup_signed" entries (security
+    review of a40f17a: an older genuine backup still verifies, and someone who can write to the backup folder could make
+    it look newest by its file date). Returns {"recorded", "at", "newest", "newest_at", "is_newest", "newer"}: newer is
+    how many backups were signed after it. Not recorded: a backup from another installation, or from before signing."""
+    sys.path.insert(0, HERE)
+    import audit_chain
+    rows = []
+    for ln in audit_chain.Chain(os.path.join(data_dir, "audit.log")).lines():
+        if '"backup_signed"' not in ln:
+            continue
+        try:
+            rec = json.loads(ln)
+        except ValueError:
+            continue
+        if rec.get("event") == "backup_signed":
+            rows.append(rec)
+    mine = [r for r in rows if r.get("target") == archive_name and (not sha256 or sha256 in str(r.get("detail") or ""))]
+    newest = rows[-1] if rows else None
+    out = {"recorded": bool(mine), "at": mine[-1].get("t") if mine else None,
+           "newest": newest.get("target") if newest else None, "newest_at": newest.get("t") if newest else None}
+    out["is_newest"] = bool(mine) and newest is mine[-1]
+    out["newer"] = (len(rows) - 1 - rows.index(mine[-1])) if mine else None
+    return out
+
+
 class _CliAudit:
     """The audit log as the command line writes it: the same file, chain and entry format as the service (auth.Audit),
     without loading the web application."""
@@ -323,6 +350,18 @@ def main(argv):
             a.add("backup_signed", user="Looking Glass", target=os.path.basename(argv[1])[:-len(".sha256")] if argv[1].endswith(".sha256") else os.path.basename(argv[1]),
                   detail=f"backup checksum SHA-256 {sums[0] if sums else '?'} signed · key {fp}")
         print(sig)
+        return 0
+    if cmd == "backup-age" and len(argv) in (2, 3):
+        f = backup_freshness(data_dir, os.path.basename(argv[1]), argv[2] if len(argv) == 3 else None)
+        when = lambda t: time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(t)) if t else "?"
+        if not f["recorded"]:
+            print("NOT RECORDED: this installation's audit log has no signed backup of this name and checksum "
+                  "(another installation's backup, or one made before backups were signed)")
+        elif f["is_newest"]:
+            print(f"the newest signed backup (signed {when(f['at'])})")
+        else:
+            print(f"NOT THE NEWEST: signed {when(f['at'])}; {f['newer']} newer backup(s) signed since, the latest "
+                  f"{f['newest']} ({when(f['newest_at'])}). Restoring it brings back an older state.")
         return 0
     if cmd == "verify-file" and len(argv) in (3, 4):
         if len(argv) == 4:

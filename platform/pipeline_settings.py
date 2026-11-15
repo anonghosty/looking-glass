@@ -222,7 +222,7 @@ def install(app, ctx):
         if not u or (getattr(g, "user", None) or {}).get("automation"):
             return jsonify(error="Unlocking needs a signed-in administrator's own password."), 403
         if throttle.locked(ip, name):
-            return jsonify(error="Too many wrong passwords. Try again in 15 minutes."), 429
+            return jsonify(error=f"Too many wrong passwords. Try again in {throttle.wait_minutes(ip, name)} minutes."), 429
         pw = str((request.get_json(silent=True) or {}).get("password") or "")
         if not (u.get("hash") and check_password_hash(u["hash"], pw)):
             throttle.failed(ip, name)

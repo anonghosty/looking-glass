@@ -162,6 +162,19 @@
     // what Looking Glass saw, in words
     const say = el("div", "ig-lead-say");
     say.append(el("p", null, x.text));
+    // Explore (the user, 2026-11-15): Intel gathered on the name and report where the indicator is seen most, with the
+    // indicator already searched, so the researcher lands on it with everything around it
+    const top = (x.where || [])[0];
+    // inside Intel gathered for that same name, Explore would only reopen it: the search box above does that
+    if (top && !(current && top.name.toLowerCase() === String(current).toLowerCase())) {
+      const go = el("button", "ig-explore");
+      go.type = "button";
+      go.append(svg(ICON.ask, 14), document.createTextNode("Explore"));
+      go.title = `Open Intel gathered for ${top.name} in ${top.report}, searched for ${x.value}`;
+      go.setAttribute("aria-label", `Explore ${x.value}: Intel gathered for ${top.name}`);
+      go.addEventListener("click", () => open(top.name, top.section, top.report, x.value));
+      say.append(go);
+    }
     li.append(say);
     return li;
   }
@@ -655,11 +668,11 @@
   }
 
   let openGen = 0;     // only the newest open fills the window, and not once it is closed (review 2026-11-13)
-  async function open(name, section, report) {
+  async function open(name, section, report, q) {
     const gen = ++openGen;
     shell();
     $("igName").textContent = name; $("igSec").textContent = SEC[section] || SEC.infections; $("igMeta").replaceChildren();
-    $("igQ").value = "";
+    $("igQ").value = q || "";                     // Explore (a match): the indicator searched for at once (2026-11-15)
     body.replaceChildren(el("div", "ig-loading lg-loading", "Gathering the indicators from the reports…"));   // the searching logo (loader.js)
     back.hidden = false; box.hidden = false; document.documentElement.classList.add("ig-open");
     let d; try { d = await get(`/api/intel?section=${encodeURIComponent(section || "infections")}&name=${encodeURIComponent(name)}`); }
@@ -728,9 +741,11 @@
     rail.append(el("p", "ig-keys", "[ ]  switch report · /  search · Esc  close"));
     const pane = el("div", "ig-pane");
     layout.append(rail, pane); body.append(layout, el("p", "ig-note", "Indicators only: the hosts themselves are never shown here. Addresses inside URLs and banners are masked."));
-    st = { d, i: report === "*across*" && cross ? -1 : report === "*fields*" && svc ? -2 : Math.max(0, report ? d.reports.findIndex((r) => r.report === report) : 0), q: "", sort: "count", focus: null, open: {}, rail, pane,
+    st = { d, i: report === "*across*" && cross ? -1 : report === "*fields*" && svc ? -2 : Math.max(0, report ? d.reports.findIndex((r) => r.report === report) : 0), q: (q || "").trim().toLowerCase(), sort: "count", focus: null, open: {}, rail, pane,
       min: cross ? -1 : 0 };
     paint(true);
+    // Explore: straight to the reports with the indicator searched, past "Looking Glass asks" above them
+    if (st.q) requestAnimationFrame(() => body.scrollTo({ top: Math.max(0, layout.offsetTop - 12), behavior: "instant" }));
   }
 
   // ---------------- "Seen in" as report cards: intel found there, or the name only (one click opens that report)
@@ -778,8 +793,14 @@
       return;
     }
     if (!d.leads.length) {
-      // the user's words (2026-11-15): "Looking Glass has nothing to ask"
-      $("leadSub").textContent = `No matches between names and reports in ${d.days.join(", ") || "the days in memory"}.`;
+      // the user's words (2026-11-15): "Looking Glass has nothing to ask"; and how much it compared, so a day that holds
+      // only its first reports is said to (2026-11-15: after a restart it compared one day's first five reports)
+      const said = (d.compared || []).map((c) => {
+        const day = new Date(`${c.day}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+        return c.events || c.records ? `${day} (${fmt(c.events)} network events, ${fmt(c.records)} services records so far)` : `${day} (no reports yet)`;
+      });
+      $("leadSub").textContent = said.length ? `No matches between names and reports in what Looking Glass compared: ${said.join(", ")}.`
+        : `No matches between names and reports in ${d.days.join(", ") || "the days in memory"}.`;
       if (det) await det.nothing("Looking Glass has nothing to ask."); else card.hidden = true;
       return;
     }

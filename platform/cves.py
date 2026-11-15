@@ -40,6 +40,28 @@ def is_cve(name):
     return bool(CVE_RE.match((name or "").strip().upper()))
 
 
+_SENTENCE_END = re.compile(r"(?<=[a-z0-9\)\]])[.!?](?=\s+[A-Z(\"']|\s*$)")
+
+
+def short_title(description):
+    """A CVE's description as a title: its first sentence, WHOLE, never cut mid-word (the user's rule: text is shown in
+    full; 2026-11-15 the Executive portal showed "...found in OpenSSH before 9.6 an" from a 90-character cut). A
+    description with no sentence end is given whole; the page wraps it. "e.g." and version numbers ("9.6.") do not end a
+    sentence: only a full stop after a lower-case letter, digit or bracket, followed by a capital, a bracket or the end."""
+    text = " ".join(str(description or "").split())
+    if not text:
+        return ""
+    for m in _SENTENCE_END.finditer(text):
+        word = text[:m.start()].rsplit(" ", 1)[-1].lower().lstrip("(")
+        if word in _NOT_AN_END:                      # "e.g. Apache", "Inc. The": an abbreviation, not the end
+            continue
+        return text[:m.end()]
+    return text
+
+
+_NOT_AN_END = {"e.g", "i.e", "etc", "vs", "inc", "ltd", "corp", "co", "no", "approx", "incl", "mr", "ms", "dr", "st"}
+
+
 class CveIntel:
     def __init__(self, cache_path, api_key="", logger=None):
         self.path, self.key, self.log = cache_path, (api_key or "").strip(), logger

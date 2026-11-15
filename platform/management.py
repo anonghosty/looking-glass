@@ -521,7 +521,8 @@ def register(app, ctx):
             d = ikb.get(i.lower()) or {}
             issues.append({**row, "cve": i in cards, "exploited": bool(c.get("exploited")), "cvss": (c.get("cvss") or {}).get("score"),
                            "severity": (c.get("cvss") or {}).get("severity", ""), "epss": c.get("epss"),
-                           "title": (c.get("kev") or {}).get("name") or d.get("title") or (c.get("description") or "")[:90]})
+                           # the first sentence whole, never cut mid-word (cves.short_title, 2026-11-15)
+                           "title": (c.get("kev") or {}).get("name") or d.get("title") or __import__("cves").short_title(c.get("description"))})
         # the infections and categories these hosts also call botnet sinkholes as (the communications reports): they belong
         # among the top issues of a services selection too
         infections_on = []                 # kept apart from the issues (those are the reports' own, as MongoDB holds them)

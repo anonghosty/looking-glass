@@ -34,6 +34,9 @@ have="$(sha256sum "$f" | cut -d' ' -f1)"
 if [ "$(basename "${named:-?}")" != "$(basename "$f")" ]; then row FAIL checksum "the checksum file is for $(basename "${named:-nothing}"), not for this archive"
 elif [ "$have" != "${want:-}" ]; then row FAIL checksum "does not match: the archive changed or is damaged"
 else row OK checksum "matches"; fi
+# the newest signed backup? (a warning: restoring an older one on purpose is allowed; security review of a40f17a)
+age="$("$py" "$project/audit_checkpoint.py" backup-age "$f" "${want:-}" 2>/dev/null || echo 'not checked')"
+case "$age" in "the newest"*) row OK freshness "$age" ;; *) row WARN freshness "$age" ;; esac
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 chmod 700 "$tmp"

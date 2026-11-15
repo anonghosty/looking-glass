@@ -56,6 +56,14 @@ manage/manage_users.py add NAME --admin     # new administrator (asks for the pa
 manage/manage_users.py help                 # every command: passwd, mfa, role, remove
 ```
 
+## The HTTPS certificate
+
+A certificate bought for a domain (INSTALLATION.md, B4a) is renewed with `manage/install_cert.sh`, run as Looking
+Glass's user. It checks the new certificate first (key, domain, dates, chain) and changes nothing if a check fails;
+otherwise it keeps the previous pair in `data/tls/previous-<time>/`, records the renewal in the audit log, reloads the
+service and checks the site over HTTPS. The bell warns administrators 30, 14 and 3 days before expiry, and once it has
+expired. `manage/install_cert.sh --status` shows the installed certificate and its days left.
+
 ## Backups
 
 Run these as the service's own user (the owner of `data/`):

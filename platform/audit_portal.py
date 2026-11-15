@@ -82,6 +82,10 @@ LABEL["audit_archive_removed"] = "Old audit archive removed by the retention"
 TAB_OF["audit_archive_removed"] = "system"
 LABEL["audit_archive_deleted_early"] = "Audit archive deleted BEFORE its retention ended"   # an alert (ALERT: "delete")
 TAB_OF["audit_archive_deleted_early"] = "system"
+# entries lost while the log could not be written (a full disk, ...): recorded as soon as it can be written again
+# (auth.Audit, review 2026-11-15); "failed" makes it an alert in the log
+LABEL["audit_write_failed"] = "Audit entries could not be written (the gap)"
+TAB_OF["audit_write_failed"] = "system"
 LABEL["audit_archived"] = "Audit log archived (rotation recorded)"
 TAB_OF["audit_archived"] = "system"
 LABEL["audit_retention_set"] = "Audit log retention setting recorded"
@@ -444,6 +448,11 @@ def install(app, ctx):
         # LG-06: the failures, lockouts and the most failures from one address in one day, against the configured alert level.
         worst = ov.get("worst_day")
         guess = bool(worst and worst["n"] >= FAIL_ALERT)
+        # the limits in force, from the running throttle (review 2026-11-15: the text said 5 / 15 min / 20 / 1 h whatever .env set)
+        th = ctx.get("throttle")
+        lim = ({"account_fails": th.account_fails, "account_minutes": th.account_window // 60,
+                "address_fails": th.address_fails, "address_minutes": th.address_window // 60} if th
+               else {"account_fails": 5, "account_minutes": 15, "address_fails": 20, "address_minutes": 60})
         ia1 = (f"{k['failed']} failed of {k['signins'] + k['failed']} attempts ({k['failure_rate']} %), {k['lockouts']} lockout(s); "
                + (f"most from one address in a day: {worst['n']} ({worst['ip']}, {worst['day']})" if worst else "no failure")
                + f". Configured alert level (AUDIT_FAIL_ALERT): {FAIL_ALERT} failures from one address in one day, "
@@ -506,8 +515,9 @@ def install(app, ctx):
               "delete audit entries. Reading the log needs the 'audit' permission (auditors and administrators).") if fixed
              else "The auditor role does not hold exactly 'audit'."),
             ("Access control", "LG-06", "Unsuccessful sign-ins are limited and show no password guessing", ["AC-7"],
-             "Enforced: 5 wrong attempts for an account from one address lock it for 15 minutes; 20 from one address in an hour lock "
-             "the address. In the period: " + ia1),
+             f"Enforced: {lim['account_fails']} wrong attempts for an account from one address lock it for {lim['account_minutes']} "
+             f"minutes; {lim['address_fails']} from one address in {lim['address_minutes']} minutes lock the address (the limits "
+             "set in .env now). In the period: " + ia1),
             ("System and communications protection", "LG-07", "Sessions cannot be taken over and end on their own", ["SC-23", "AC-12"],
              f"Each session is bound to the address and browser that signed in (used elsewhere, it ends and is logged as misuse); it "
              f"ends after {idle} minutes idle and {max_h} hours in any case. Misuse events in the period: {k['misuse']}."),

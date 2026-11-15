@@ -171,8 +171,9 @@ These risks are known and accepted, or left to the operator. They are listed her
   (mode 600 and 700). Use disk encryption on the server, and keep backups somewhere equally protected. The CIS map
   says the same (LG-10 → 3.11: not backed).
 - **The sender check only records by default** (`MAIL_AUTH=log`). Until an installation switches to `enforce`, a
-  forged e-mail would be loaded and only flagged in the run log and the Audit portal. Using the report API avoids the
-  mailbox altogether.
+  forged e-mail would be loaded and only flagged in the run log and the Audit portal. For production, switch to
+  `enforce` once the Sender check shows every genuine report passing, or use the report API, which avoids the mailbox
+  altogether ([CONFIGURATION.md](CONFIGURATION.md)).
 - **Advisories carry no digital signature.** The PDF names the CSIRT, but an organisation can't check cryptographically
   that it came from the CSIRT. It has to trust the channel the advisory arrives by.
 - **`REF_SECRET` is the key to masking.** The address space of a constituency is small, so anyone who holds the secret

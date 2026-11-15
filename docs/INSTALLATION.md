@@ -85,6 +85,11 @@ In every mode, everything behind the sign-in page needs an account with MFA, and
 over HTTPS. The service must also listen on the network (`deploy/install.sh --network`, or a reverse proxy) and the
 firewall must let the traffic through (A6, A7, B6).
 
+**An internet-facing site always uses HTTPS.** For `public`, the guided installer does not offer "No HTTPS", and a
+self-signed certificate must be confirmed by typing `self-signed`: every visitor's browser would warn, and people who
+learn to click through warnings are what a look-alike site needs. The recommended choice is a certificate bought for a
+domain (B4a).
+
 ---
 
 ## Where the database runs **(security)**
@@ -292,6 +297,36 @@ proxy below is set up, its HTTPS address; choose **Let's get started** and type 
 sudo -u lookingglass manage/manage_users.py add YOURNAME --admin
 ```
 
+### B4a. HTTPS with a certificate bought for a domain **(security)**
+The recommended way for an internet-facing site, and the guided installer's first choice for it (HTTPS: "A
+certificate bought for a domain name"). You need the domain (for example `lookingglass.example.org`), the certificate
+your provider sent, its private key (without a passphrase) and, usually, a file of intermediate certificates.
+
+The installer checks them before anything is installed, and installs nothing if a check fails:
+
+| Check | Refused when |
+|---|---|
+| key | it is not the certificate's own key, is protected by a passphrase, or is weaker than RSA 2048 / EC 256 bits |
+| domain | the certificate does not name the domain (a wildcard `*.example.org` covers one label) |
+| dates | it has expired or is not valid yet (fewer than 30 days left is said, not refused) |
+| chain | it does not verify against the trusted roots, even with the intermediate certificates given |
+| DNS | (a note only) the domain does not point to an address of this computer; nothing is asked of an outside service |
+
+Then it copies the certificate with its chain and the key into `platform/data/tls/` (the key readable only by
+Looking Glass's user), listens on port 443 (the service gets only the one capability needed for a port under 1024,
+`CAP_NET_BIND_SERVICE`, and nothing else), opens 443 in `ufw` when it is active, and checks
+`https://lookingglass.example.org` by its name, with the certificate verified as a browser does. The installation is
+recorded in the audit log. Point the domain's DNS record at the server's public address.
+
+**Renewal:** the bell warns administrators 30, 14 and 3 days before the certificate expires. Install the renewed one
+as Looking Glass's user; the same checks run first, the previous pair is kept in `data/tls/previous-<time>/`, the
+service reloads and the site is checked again:
+```bash
+manage/install_cert.sh lookingglass.example.org new.crt new.key ca-bundle.crt
+manage/install_cert.sh --check lookingglass.example.org new.crt new.key ca-bundle.crt   # the checks only
+manage/install_cert.sh --status                                                       # domain, days left
+```
+
 ### B5. HTTPS with a reverse proxy **(security)**
 **Caddy** (simplest: it gets and renews certificates by itself when the name is reachable from the internet; on an
 internal network use your CA or `tls internal`). In `/etc/caddy/Caddyfile`:
@@ -322,7 +357,7 @@ server {
 server { listen 80; server_name lookingglass.example.org; return 301 https://$host$request_uri; }
 ```
 In `.env`:
-- `TRUST_PROXY=1`: the real client address and `https` come from the proxy's headers, so session binding, address checks and Secure cookies work. The proxy **must** send `X-Forwarded-For` (Caddy does by itself; for nginx keep the `proxy_set_header` lines above): a request without it is refused, because it would look like it came from the server itself. The headers are believed only from a proxy on this computer. With `TRUST_PROXY=1`, an SSH tunnel to port 5000 is refused too (it carries no such header): use the proxy's address;
+- `TRUST_PROXY=1`: the real client address and `https` come from the proxy's headers, so session binding, address checks and Secure cookies work. The proxy **must** send `X-Forwarded-For` (Caddy does by itself; for nginx keep the `proxy_set_header` lines above): a request without it is refused, because it would look like it came from the server itself. The headers are believed only from a proxy on this computer. With `TRUST_PROXY=1`, an SSH tunnel to port 5000 is refused too (it carries no such header): use the proxy's address. **One proxy, on this computer:** Looking Glass takes the **last** address in `X-Forwarded-For` (the one your proxy added) and the last `X-Forwarded-Proto`, so a proxy that appends to what the visitor sent (nginx's `$proxy_add_x_forwarded_for`) still gives the visitor's real address, never a forged `127.0.0.1`. With two proxies in a row (a CDN or load balancer in front of nginx), the last address is the first proxy's: have the outer one's address replace the header at the inner proxy (nginx `real_ip` module), or the sign-in limits and session binding will see that proxy, not your visitors;
 - `ALLOWED_HOSTS=lookingglass.example.org`;
 - `ACCESS_MODE=private` with `VIEWER_NETWORKS=` your CSIRT's address ranges, or `ACCESS_MODE=public` for an internet-facing site.
 

@@ -74,9 +74,20 @@ MALPEDIA_TOKEN=
 ACCESS_MODE=local
 # private only: allowed addresses and ranges
 #VIEWER_NETWORKS=10.20.0.0/24
-# private / public only: selfsigned | proxy | none
+# private only: selfsigned | domain | proxy | none
 #HTTPS=selfsigned
+# public only (internet-facing: no "none"): domain | proxy | selfsigned
+#PUBLIC_HTTPS=domain
+# public + selfsigned: every visitor sees a warning, so it must be confirmed in so many words
+#CONFIRM_SELF_SIGNED=self-signed
+# domain: a certificate bought for the domain (checked before it is installed: key, names, dates, chain)
+#TLS_DOMAIN=lookingglass.example.org
+#TLS_CERT_FILE=/home/you/certs/lookingglass.example.org.crt
+#TLS_KEY_FILE=/home/you/certs/lookingglass.example.org.key
+# the intermediate certificates (empty when the certificate file already holds them)
+#TLS_CHAIN_FILE=/home/you/certs/ca-bundle.crt
 #ALLOWED_HOSTS=lookingglass.example.org
+# 443 with a domain certificate (what browsers use for https://), else 5000
 LG_PORT=5000
 REGISTRATION=yes
 SERVICE_NAME=looking-glass

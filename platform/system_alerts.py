@@ -7,6 +7,8 @@ like them so the bell shows them as they are:
   - the pipeline's last run failed, or no run finished for PIPELINE_STALE_HOURS (default 26), or its disk is low
     (the pipeline's pipeline_status.json, retention.py in the pipeline's folder; read only)
   - the weekly MISP Galaxy / ATT&CK refresh failed (data/names_refresh.json)
+  - the HTTPS certificate (data/tls) expires within 30 days: again at 14 and at 3 days, and once it has expired
+  - the audit log cannot be written (a full disk...), and for 7 days after, that entries were lost (auth.Audit)
 Each alert has an id that changes when something new happens; clearing one hides that alert for that person only
 (data/system_alerts_seen.json). Nothing here holds an address or a report's content.
 """
@@ -19,6 +21,20 @@ import time
 import pipeline_link
 
 RESTART_SHOW_S = 24 * 3600
+GAP_SHOW_S = 7 * 24 * 3600
+
+# The audit log's write failures (auth.Audit, review 2026-11-15), kept in memory: the disk may be what is failing.
+_AUDIT = {"failing": None, "recovered": None, "at": 0}
+_AUDIT_LOCK = threading.Lock()
+
+
+def note_audit_write(failing, recovered=None, now=None):
+    """auth.Audit tells: failing = {since, last, count, error} while entries cannot be written; None with `recovered`
+    (the same shape) once they can again and the gap has been written into the log."""
+    with _AUDIT_LOCK:
+        _AUDIT["failing"] = failing
+        if recovered:
+            _AUDIT["recovered"], _AUDIT["at"] = dict(recovered), now or time.time()
 
 
 def _read_json(path):
@@ -114,7 +130,53 @@ class Alerts:
                 t = now
             out.append({"key": f"names-failed:{at}", "problem": True, "title": "The MISP Galaxy / ATT&CK refresh failed",
                         "text": "the old copies stay in use. The Definitions page says why.", "at": t, "link": "/definitions"})
+        with _AUDIT_LOCK:
+            fa, rec, rec_at = _AUDIT["failing"], _AUDIT["recovered"], _AUDIT["at"]
+        if fa:
+            out.append({"key": f"audit-write:{round(fa['since'])}", "problem": True,
+                        "title": "The audit log cannot be written",
+                        "text": (f"since {_when(fa['since'])}, {fa['count']} audit entr{'y' if fa['count'] == 1 else 'ies'} could not "
+                                 f"be written ({fa['error']}). Free disk space or fix the data folder's permissions; once it "
+                                 "works again, the gap is written into the log."),
+                        "at": fa["last"], "link": "/audit"})
+        elif rec and now - rec_at < GAP_SHOW_S:
+            out.append({"key": f"audit-gap:{round(rec['since'])}", "problem": True,
+                        "title": "Audit entries were lost",
+                        "text": (f"{rec['count']} audit entr{'y' if rec['count'] == 1 else 'ies'} could not be written between "
+                                 f"{_when(rec['since'])} and {_when(rec['last'])} ({rec['error']}). The gap is recorded in the "
+                                 "audit log; tell your auditor."),
+                        "at": rec_at, "link": "/audit"})
+        cert = self._certificate()
+        if cert and cert["days_left"] <= 30:
+            days = cert["days_left"]
+            step = 0 if days < 0 else 3 if days <= 3 else 14 if days <= 14 else 30     # a new alert at each step
+            when = time.strftime("%Y-%m-%d", time.gmtime(cert["not_after"]))
+            out.append({"key": f"tls-expiry:{cert['fingerprint'][:23]}:{step}", "problem": True,
+                        "title": ("The HTTPS certificate has EXPIRED" if days < 0 else f"The HTTPS certificate expires in {days} day(s)"),
+                        "text": (f"the certificate for {cert['domain'] or 'this site'} {'expired' if days < 0 else 'expires'} on {when}. "
+                                 "Install the renewed one with manage/install_cert.sh (docs/OPERATIONS.md)."),
+                        "at": now, "link": "/settings#monitor"})
         return out
+
+    def _certificate(self):
+        """The installed HTTPS certificate (data/tls), read with deploy/install_cert.py: domain, expiry, days left."""
+        paths = [os.path.join(self.data, "tls", n) for n in ("cert.pem", "meta.json")]
+        if not os.path.exists(paths[0]):
+            return None
+        stamp = tuple(os.path.getmtime(p) if os.path.exists(p) else 0 for p in paths)
+        cached = getattr(self, "_cert_cache", None)
+        if cached and cached[0] == stamp:            # read again only when the certificate files change
+            c = cached[1]
+            return dict(c, days_left=int((c["not_after"] - time.time()) // 86400)) if c else None
+        try:
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("lg_install_cert", os.path.join(self.base_dir, "deploy", "install_cert.py"))
+            mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+            c = mod.status(self.base_dir)
+        except Exception:                            # noqa: BLE001  never break the bell over the certificate
+            c = None
+        self._cert_cache = (stamp, c)
+        return c
 
     def _seen(self):
         return _read_json(self.seen_path) or {}

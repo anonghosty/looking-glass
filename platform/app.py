@@ -486,7 +486,11 @@ def schedule_loop():
         try:
             registry.check()             # a new report (collection) is picked up within one tick
             pos, _ = schedule.position()
-            days = [d for d in {day_start(pos), day_start(pos) + timedelta(days=1), schedule.target()} if d <= utcnow()]
+            # the day before too: it stays in memory anyway while the replay runs, but a restart used to lose it until a page
+            # asked for it, and what Looking Glass compares (its "asks", the across-reports figures) shrank to the
+            # replay day's first reports (2026-11-15: after a restart Looking Glass "had nothing to ask")
+            days = [d for d in {day_start(pos) - timedelta(days=1), day_start(pos), day_start(pos) + timedelta(days=1),
+                                schedule.target()} if d <= utcnow()]
             for d in days:
                 store.get(d)
                 store.check(d)
@@ -1286,7 +1290,7 @@ def _short(x):
             bits.append("not looked up yet")
         elif not x.get("found"):
             bits.append("no public record")
-        name = (x.get("kev") or {}).get("name") or (x.get("description") or "")[:90]
+        name = (x.get("kev") or {}).get("name") or __import__("cves").short_title(x.get("description"))   # whole first sentence
         return f"{name} ({', '.join(bits)})" if name else ", ".join(bits)
     if x.get("found") and x.get("kind") == "actor":
         return f"{x.get('name')} (threat actor)"
@@ -2905,7 +2909,7 @@ import audit_portal as _audit_portal  # noqa: E402
 import audit_checkpoint as _audit_checkpoint  # noqa: E402
 AUDIT_SIGNER = _audit_checkpoint.Signer(os.path.join(BASE_DIR, "data"))
 _audit_portal.install(app, {"has_perm": AUTH["has_perm"], "users": AUTH["users"], "roles": AUTH["roles"], "sessions": AUTH["sessions"],
-                            "signer": lambda: AUDIT_SIGNER,
+                            "signer": lambda: AUDIT_SIGNER, "throttle": AUTH["throttle"],
                             "audit": AUTH["audit"], "people": people, "perms_catalog": auth.PERMS, "auditor_role": auth.AUDITOR_ROLE,
                             "access_mode": security.access_mode,
                             "tls": lambda: os.path.exists(os.path.join(BASE_DIR, "data", "tls", "cert.pem")) or os.environ.get("TRUST_PROXY") == "1"})

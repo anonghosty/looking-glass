@@ -4,6 +4,8 @@
 # The service name is LG_SERVICE, else the first installed of: looking-glass, threatmap.
 set -u
 svc="${LG_SERVICE:-}"
+# else the name deploy/install.sh wrote into .env (a service named otherwise than looking-glass; 2026-11-15)
+[ -z "$svc" ] && svc="$(grep -E '^LG_SERVICE=' "$(dirname "$0")/../.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"'"'"' ')"
 if [ -z "$svc" ]; then
   for s in looking-glass threatmap; do
     if [ "$(systemctl show -p LoadState --value "$s" 2>/dev/null)" = "loaded" ]; then svc="$s"; break; fi

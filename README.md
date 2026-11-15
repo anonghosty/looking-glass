@@ -240,6 +240,18 @@ No Shadowserver reports yet? [Sign up your CSIRT](https://www.shadowserver.org/w
    authenticator app. It asks for a one-time setup code: `cat platform/data/setup_code` (the installer shows this). On **Ubuntu Server** (no browser on the machine), create the first administrator through an SSH
    tunnel: `ssh -L 5000:127.0.0.1:5000 user@server`, then open http://localhost:5000 on your own computer (use the
    port you chose in the installer if it is not 5000).
+6. **Before you hand it to anyone.** The installer already sets up the hardened service, the read-only database
+   account and the pipeline's own account. These are left to you:
+   - [ ] Approve each new account in **Admin → Users** with the right role, and no more.
+   - [ ] Once genuine Shadowserver mail passes the sender check, block what fails it (`MAIL_AUTH=enforce`), or take
+         the reports by Shadowserver's API instead.
+   - [ ] Restrict your Mapbox token to your host names in your Mapbox account.
+   - [ ] Other screens: choose who may open it (`ACCESS_MODE`), switch on HTTPS, and open the firewall for those
+         only. On WSL, remove any Windows firewall rule that opens the port wider than that.
+   - [ ] Check the installation: `platform/security_testing/security_retest.py`.
+   - [ ] Take a backup (`platform/manage/backup.sh`) and keep a copy off the server.
+
+   The whole list: [SECURITY.md → Operator checklist](docs/SECURITY.md#3-operator-checklist).
 
 `./install.sh --text` asks the same questions as plain prompts; `./install.sh --answers FILE` installs unattended
 (see [`install.answers.example`](install.answers.example)). Manual installation:
@@ -261,6 +273,12 @@ confirmation. `./uninstall.sh --dry-run` shows what would happen first.
 | <img src="docs/media/screens/31-services-view-kenya-regions.png" alt="Regions" width="420"> | **5. Switch to the services platform** and its regions view to see exposure by region and city. |
 | <img src="docs/media/screens/33-services-host.png" alt="Host details" width="420"> | **6. Follow a host up:** every service, issue and report for it, ready to export. |
 | <img src="docs/media/screens/41-executive-services.png" alt="Executive" width="420"> | **7. Share with management:** the Executive portal and its one-click report. |
+| <img src="docs/media/screens/62-definitions-leads.png" alt="Definitions and Looking Glass asks" width="420"> | **8. Researchers define what the reports name** on the Definitions page. *Looking Glass asks* shows indicators shared by two names, two reports or both platforms; **Explore** opens the intel gathered on one. |
+| <img src="docs/media/screens/64-intel-combinations.png" alt="Combinations and codes" width="420"> | **9. Find the combinations that travel together:** each exact set of tags and CVEs gets a code (`LG-C-…`), which an analyst looks up to get exactly those devices, with a PDF and CSV. |
+| <img src="docs/media/screens/70-findings-case.png" alt="A finding moving through the team" width="420"> | **10. Hand it on as a finding:** from the analyst to a named person in management, who approves it to an advisor or rejects it. Only the people it passed through see it. |
+| <img src="docs/media/screens/73-advisory-report.png" alt="Advisory" width="420"> | **11. Send the advisory:** the advisor writes one per organisation, with its TLP, signed by the CSIRT, and the finding closes. |
+| <img src="docs/media/screens/90-abused-compromised.png" alt="Abused or Compromised" width="420"> | **12. Watch what is abused or compromised:** what Shadowserver's Intelligence reports say about your constituency, each group on the latest report day against the 7 days before, for analysts. |
+| <img src="docs/media/screens/52-admin-audit.png" alt="Audit portal" width="420"> | **13. Let the auditor check it:** the Audit portal with the tamper-evident log, the sessions and the control checks LG-01 to LG-15, read only. |
 
 The complete guide, with every screen and button: [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
 
@@ -391,7 +409,9 @@ Copyright © 2026 Ike Owuraku Amponsah. Looking Glass is free and open source so
 - It comes with **no warranty** (sections 15–16 of the licence).
 
 The browser libraries are loaded from their own sites and keep their own licences: deck.gl and qrcode-generator (MIT)
-and Mapbox GL JS (Mapbox terms of service).
+and Mapbox GL JS (Mapbox terms of service). The sign-in page's globe uses the land map of
+[world-atlas](https://github.com/topojson/world-atlas) 2.0.2 (ISC), made from Natural Earth (public domain), served by
+Looking Glass itself (`platform/static/data/land-110m.json`).
 
 Data and services keep their own terms: region boundaries from [geoBoundaries](https://www.geoboundaries.org/)
 (CC BY 4.0 — credit geoBoundaries when you show the maps); Shadowserver reports, Mapbox, RIPEstat, PeeringDB, Malpedia,

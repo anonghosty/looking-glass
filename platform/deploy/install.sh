@@ -53,12 +53,21 @@ else
 fi
 chmod 600 .env
 if grep -qE '^LG_PORT=' .env; then sed -i "s/^LG_PORT=.*/LG_PORT=$port/" .env; else printf '\n# Port the service listens on (set by deploy/install.sh)\nLG_PORT=%s\n' "$port" >> .env; fi
+# the service's name, so deploy/reload.sh (and the certificate renewal) reload the right one when it is not looking-glass
+if grep -qE '^LG_SERVICE=' .env; then sed -i "s/^LG_SERVICE=.*/LG_SERVICE=$name/" .env; else printf '# Name of the systemd service (set by deploy/install.sh)\nLG_SERVICE=%s\n' "$name" >> .env; fi
 mkdir -p data && chmod 700 data
 find deploy manage security_testing tests tools -maxdepth 1 \( -name '*.sh' -o -name '*.py' \) -exec chmod +x {} +
 
 step "4. Service unit (deploy/$name.service)"
 sed -e "s|@USER@|$(id -un)|g" -e "s|@PROJECT@|$project|g" -e "s|@BIND@|$bind|g" \
   deploy/looking-glass.service.template > "deploy/$name.service"
+# a port under 1024 (443 for a domain with its certificate): the service may bind it, and nothing more. Only that one
+# capability is given; every other stays out of reach (CapabilityBoundingSet), the rest of the sandbox is unchanged
+if [ "$port" -lt 1024 ]; then
+  sed -i -e 's/^CapabilityBoundingSet=$/CapabilityBoundingSet=CAP_NET_BIND_SERVICE/' \
+         -e 's/^AmbientCapabilities=$/AmbientCapabilities=CAP_NET_BIND_SERVICE/' "deploy/$name.service"
+  echo "port $port is under 1024: the service gets CAP_NET_BIND_SERVICE only (to listen on it), nothing else"
+fi
 echo "written for user $(id -un), folder $project, listening on $bind"
 if ! pidof systemd >/dev/null 2>&1 && [ ! -d /run/systemd/system ]; then
   echo "systemd is not running here. On WSL, enable it first (docs/INSTALLATION.md, part A1)."

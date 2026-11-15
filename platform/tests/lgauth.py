@@ -38,6 +38,9 @@ _ctx = None
 if TLS:
     _ctx = ssl.create_default_context(cafile=_CERT)
     _ctx.check_hostname = False          # the certificate may name the machine, not 127.0.0.1
+    # the server's own certificate is trusted by itself: a bought one comes with its chain but not its root (2026-11-15:
+    # the self-signed case worked, a domain certificate failed "unable to get issuer certificate")
+    _ctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
 
 _opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=_ctx)) if _ctx else urllib.request.build_opener()
 # X-Forwarded-For: behind a reverse proxy (TRUST_PROXY=1) the app refuses direct requests that do not say who the

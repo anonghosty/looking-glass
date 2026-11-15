@@ -13,7 +13,9 @@
   const ctx = cv.getContext("2d");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const TAU = Math.PI * 2, rad = Math.PI / 180;
-  const LAND_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/land-110m.json";
+  // world-atlas 2.0.2 land-110m (ISC; Natural Earth, public domain), served by Looking Glass itself (review 2026-11-15):
+  // the sign-in page makes no outside request, and the CSP needs no CDN. The hash below still checks it.
+  const LAND_URL = "/static/data/land-110m.json";
   const LAND_SRI = "sha384-5oFOGoMd0tkagYW08lVco4uAi7XDEDBwBxOdeKx+SA1ihbsHiR/aFAJGretluTzG";
   let W = 0, H = 0, dpr = 1;
 

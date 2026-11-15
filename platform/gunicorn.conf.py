@@ -51,3 +51,16 @@ def _no_server_header():
 
 
 _no_server_header()
+
+
+# One worker process, always (review 2026-11-15). Sessions, the failed-sign-in counters, the sign-in steps and the days
+# in memory live in that one process: with --workers 4 a session made in one worker is unknown to the other three, and
+# people would be signed out at random. The service runs "--workers 1 --threads 8"; the command line overrides this
+# file, so a setting here could not stop "--workers 4" - refusing to start does. For more load, raise --threads.
+def on_starting(server):
+    if server.cfg.workers != 1:
+        msg = (f"Looking Glass runs in exactly one worker process (asked for {server.cfg.workers}): sessions and sign-in "
+               "limits live in that process, so more workers would sign people out at random. Use --workers 1 and raise "
+               "--threads for more load (gunicorn.conf.py).")
+        server.log.error(msg)
+        raise SystemExit(msg)

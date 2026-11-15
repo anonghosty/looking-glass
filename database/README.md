@@ -605,6 +605,8 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
   (`temperror`) is simply tried again at the next run. An administrator releases a genuine one in Settings → Workers
   (after their password), or here: `python3 mail_auth.py held` lists them, `python3 mail_auth.py release <id>` releases
   one; the next run then loads it like any other. Released folders stay under `quarantine/mail_auth/released/` as the record.
+  **Recommended for production:** switch to blocking once the record shows, for a few days, that every genuine report
+  passes; or use the report API (`REPORT_SOURCE=api`), which does not depend on e-mail at all.
 - **The pipeline has its own MongoDB account**, `lookingglass_pipeline`: read and write on its database (`MONGO_DB`) and
   read-only server status, nothing else. It cannot change any other database, create accounts or change the server.
   `deploy.sh` creates the administrator (`root`) account the first time; `./create_pipeline_db_user.py` then makes the

@@ -472,7 +472,16 @@ class Intel:
             x["where"] = sorted(({"section": p, "name": n, "report": r, "records": c, "defined": bool(defined.get(low((p, n))))}
                                  for (p, n), reps in (x.get("_seen") or {}).items() for r, c in reps.items()), key=lambda w: -w["records"])
             x["verdict"] = VERDICT[x["priority"]]
-        return {"days": data["days"], "leads": kept[:60]}
+        # how much was compared, day by day: "nothing to ask" must never read as "nothing there" when a day holds only
+        # its first reports (2026-11-15: after a restart the card compared one day's first five reports)
+        comms, svc = self._days()
+        per = collections.defaultdict(lambda: {"events": 0, "records": 0})
+        for d in comms:
+            per[d.start.date().isoformat()]["events"] += len(d.events)
+        for d in svc:
+            per[d.start.date().isoformat()]["records"] += len(d.events)
+        compared = [{"day": k, **v} for k, v in sorted(per.items())]
+        return {"days": data["days"], "leads": kept[:60], "compared": compared}
 
 
 def _refresh_inbound(ctx):
@@ -524,6 +533,7 @@ def install(app, ctx):
         if not ctx["allowed"]():
             return jsonify(error="Intel gathered is for researchers and admins."), 403
         d = intel.leads()
-        return jsonify(days=d["days"], leads=[{k: v for k, v in x.items() if k not in ("names_key", "_seen")} for x in d["leads"]])
+        return jsonify(days=d["days"], compared=d.get("compared", []),
+                       leads=[{k: v for k, v in x.items() if k not in ("names_key", "_seen")} for x in d["leads"]])
 
     return intel

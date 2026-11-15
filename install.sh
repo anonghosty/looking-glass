@@ -369,6 +369,12 @@ v_internal_host() {
   return 1
 }
 v_ca_file() { [ -z "$1" ] || [ -f "$1" ] || { echo "No such file: $1"; return 1; }; }
+v_file() { [ -n "$1" ] && [ -f "$1" ] && [ -r "$1" ] || { echo "No readable file at: ${1:-(empty)}"; return 1; }; }
+v_domain() {  # a domain name people type: letters, digits, dashes, dots, a top-level name; no scheme, port or path
+  [[ $1 == *://* || $1 == */* || $1 == *:* ]] && { echo "Type only the domain (for example lookingglass.example.org), without https://, a port or a path."; return 1; }
+  [[ ${1,,} =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]] || { echo "That is not a domain name (for example lookingglass.example.org)."; return 1; }
+}
+v_confirm_self_signed() { [ "$1" = "self-signed" ] || { echo "Type self-signed exactly to go ahead, or go back and choose a certificate for a domain."; return 1; }; }
 v_networks() { python3 - "$1" <<'EOF' || return 1
 import ipaddress, sys
 items = [x.strip() for x in sys.argv[1].split(",") if x.strip()]
@@ -1063,9 +1069,11 @@ and recorded either way (Audit portal → Sender check).
 
 Block reports that do not pass? A report that is not validly signed is then held back,
 and not loaded, until an administrator releases it (Settings → Workers).
-Recommended: No at first. A footer or forwarding rule added on the way also breaks a
-genuine signature; switch blocking on in Settings → Workers once the Sender check shows
-that every genuine report passes." no && MAIL_AUTH=$([ "$REPLY" = yes ] && echo enforce || echo log)
+Recommended: No at first, Yes in production. A footer or forwarding rule added on the way
+also breaks a genuine signature, so first let the Sender check show for a few days that
+every genuine report passes; then switch blocking on in Settings → Workers. Without it, a
+forged report e-mail would be loaded and only flagged. Shadowserver's report API avoids
+e-mail altogether (asked earlier: report source)." no && MAIL_AUTH=$([ "$REPLY" = yes ] && echo enforce || echo log)
   ask_yesno RUN_PIPELINE_NOW "First run" "Fetch the reports of the last days right after installing?
 (Recommended: the platform needs at least yesterday's reports.)" yes; RUN_PIPELINE_NOW="$REPLY"
   if [ "$RUN_PIPELINE_NOW" = yes ]; then ask_input FIRST_DAYS "First run" "How many days of e-mail to fetch the first time?" 7 v_days; FIRST_DAYS="$REPLY"; fi
@@ -1119,19 +1127,62 @@ The token is checked with Malpedia next."
     ask_input VIEWER_NETWORKS "Allowed networks" "Addresses and ranges allowed to reach Looking Glass, comma separated
 (for example 10.20.0.0/24, 192.168.1.40):" "" v_networks; VIEWER_NETWORKS="$REPLY"
   fi
-  if [ "$ACCESS_MODE" != local ]; then
+  TLS_DOMAIN=""; TLS_CERT_FILE=""; TLS_KEY_FILE=""; TLS_CHAIN_FILE=""; PORT_DEFAULT=5000
+  if [ "$ACCESS_MODE" = public ]; then
+    # reachable from the internet: HTTPS is not optional (review follow-up item 5, 2026-11-15): "No HTTPS" is not offered,
+    # and a self-signed certificate (every visitor sees a warning, and learns to click through it) needs a typed yes
+    ask_menu PUBLIC_HTTPS "HTTPS" "Anyone on the internet can reach this site, so it must use HTTPS. How?" domain \
+      domain     "A certificate bought for a domain name (recommended)" \
+      proxy      "A reverse proxy here does HTTPS (Caddy / nginx; you set it up)" \
+      selfsigned "Certificate made here (self-signed: every visitor sees a warning)"
+    HTTPS="$REPLY"
+    if [ "$HTTPS" = selfsigned ]; then
+      ask_input CONFIRM_SELF_SIGNED "Self-signed on the internet?" "With a self-signed certificate every visitor's browser warns that the site may not
+be what it claims, and people learn to click through such warnings: exactly what a
+look-alike site needs. A certificate for a domain avoids it.
+
+To go ahead anyway, type: self-signed" "" v_confirm_self_signed
+    fi
+  elif [ "$ACCESS_MODE" != local ]; then
     ask_menu HTTPS "HTTPS" "Other computers must use HTTPS to sign in. How?" selfsigned \
       selfsigned "Certificate made here (self-signed; screens warn once)" \
+      domain     "A certificate bought for a domain name" \
       proxy      "A reverse proxy here does HTTPS (Caddy / nginx; you set it up)" \
       none       "No HTTPS: closed lab only (passwords readable on the network)"
     HTTPS="$REPLY"
+  fi
+  if [ "$ACCESS_MODE" != local ]; then
     [ "$HTTPS" = proxy ] && TRUST_PROXY=1
     [ "$HTTPS" = none ] && INSECURE=1
+    if [ "$HTTPS" = domain ]; then
+      PORT_DEFAULT=443
+      while :; do
+        ask_input TLS_DOMAIN "Domain" "The domain name people will type, the one the certificate is for
+(for example lookingglass.example.org):" "" v_domain; TLS_DOMAIN="${REPLY,,}"
+        ask_input TLS_CERT_FILE "Certificate" "Path to the certificate file your provider sent (PEM: BEGIN CERTIFICATE).
+If it already holds the intermediate certificates, leave the next question empty:" "" v_file; TLS_CERT_FILE="$REPLY"
+        ask_input TLS_KEY_FILE "Private key" "Path to the certificate's private key (PEM, without a passphrase).
+It is copied into Looking Glass, readable only by its user; keep the original safe:" "" v_file; TLS_KEY_FILE="$REPLY"
+        ask_input TLS_CHAIN_FILE "Intermediate certificates" "Path to the intermediate (chain or CA bundle) file your provider sent.
+Leave empty if the certificate file already holds them:" "" v_ca_file; TLS_CHAIN_FILE="$REPLY"
+        checking "the certificate for $TLS_DOMAIN"
+        cargs=(check --domain "$TLS_DOMAIN" --cert "$TLS_CERT_FILE" --key "$TLS_KEY_FILE")
+        [ -n "$TLS_CHAIN_FILE" ] && cargs+=(--chain "$TLS_CHAIN_FILE")
+        if reason="$(python3 "$PF_DIR/deploy/install_cert.py" "${cargs[@]}" 2>&1)"; then
+          passed "The certificate passed every check:\n$(printf '%s' "$reason" | grep -vE '^RESULT' | head -9)"; break
+        fi
+        # never installed with a failing check: change the answers or stop (no "continue anyway" here)
+        after_failure TLS_CERT_FILE "the certificate" "$(printf '%s' "$reason" | grep -E 'REFUSED|note' | head -6)" \
+          TLS_DOMAIN TLS_CERT_FILE TLS_KEY_FILE TLS_CHAIN_FILE \
+          || fail "A certificate that does not pass its checks is never installed. Fix it and run the installer again."
+      done
+    fi
     ask_input ALLOWED_HOSTS "Host names" "Extra names people will type to reach it (comma separated), for example
 lookingglass.example.org. This computer's own names and addresses always work.
 Leave empty if none." "" ""; ALLOWED_HOSTS="$REPLY"
+    if [ -n "$TLS_DOMAIN" ] && [[ ",$ALLOWED_HOSTS," != *",$TLS_DOMAIN,"* ]]; then ALLOWED_HOSTS="$TLS_DOMAIN${ALLOWED_HOSTS:+,$ALLOWED_HOSTS}"; fi
   fi
-  ask_input LG_PORT "Port" "Port for Looking Glass (5000 unless something else uses it):" 5000 v_lg_port; LG_PORT="$REPLY"
+  ask_input LG_PORT "Port" "Port for Looking Glass ($PORT_DEFAULT unless something else uses it$([ "$HTTPS" = domain ] && echo '; 443 is what browsers use for https://')):" "$PORT_DEFAULT" v_lg_port; LG_PORT="$REPLY"
   in_use "$LG_PORT" && passed "Port $LG_PORT is used by Looking Glass itself (a re-install): it will be kept." \
                     || passed "Port $LG_PORT is free for Looking Glass."
   ask_yesno REGISTRATION "Accounts" "Let people request an account on the sign-in page?
@@ -1182,7 +1233,7 @@ Fetching:         $SCHED_DESC, each run looks back $EMAIL_DAYS day(s) · first r
 Sender check:     DKIM signature of every report checked; $([ "${MAIL_AUTH:-log}" = enforce ] && echo "reports that do not pass are HELD BACK" || echo "recorded only, nothing held back")"; fi
 if [ $WANT_PF = 1 ]; then S+="
 Country:          $COUNTRY · map token $([ -n "$MAPBOX_TOKEN" ] && echo given || echo 'NOT given (add later)') · Malpedia $([ -n "$MALPEDIA_TOKEN" ] && echo given || echo skipped)
-Access:           $ACCESS_MODE$([ -n "$VIEWER_NETWORKS" ] && echo " ($VIEWER_NETWORKS)") · HTTPS: $HTTPS · port $LG_PORT · service $SERVICE_NAME
+Access:           $ACCESS_MODE$([ -n "$VIEWER_NETWORKS" ] && echo " ($VIEWER_NETWORKS)") · HTTPS: $HTTPS$([ -n "$TLS_DOMAIN" ] && echo " ($TLS_DOMAIN, certificate checked)") · port $LG_PORT · service $SERVICE_NAME
 Accounts:         sign-up on the sign-in page: $([ "$REGISTRATION" = 1 ] && echo on || echo off) · MFA for everyone
 Database account: $([ "$READONLY" = yes ] && echo "a read-only account for the platform$([ $WANT_DB = 1 ] && echo ", and the pipeline's own (its database only)")" || echo "'$MONGO_ADMIN_USER' used as it is")"; fi
 S+="
@@ -1319,6 +1370,13 @@ if [ $WANT_PF = 1 ]; then
     gauge 74 "Making the HTTPS certificate..."
     run "HTTPS certificate" bash -c "cd '$PF_DIR' && deploy/make_tls_cert.sh"
   fi
+  if [ "$HTTPS" = domain ]; then
+    # checked again as it is installed (the files may have changed since the questions); recorded in the audit log
+    gauge 74 "Installing the certificate for $TLS_DOMAIN..."
+    iargs=(install --domain "$TLS_DOMAIN" --cert "$TLS_CERT_FILE" --key "$TLS_KEY_FILE" --by installer)
+    [ -n "$TLS_CHAIN_FILE" ] && iargs+=(--chain "$TLS_CHAIN_FILE")
+    run "certificate for $TLS_DOMAIN" python3 "$PF_DIR/deploy/install_cert.py" "${iargs[@]}"
+  fi
   gauge 78 "Installing and starting the $SERVICE_NAME service..."
   run "service file" sudo install -m 644 "$PF_DIR/deploy/$SERVICE_NAME.service" "/etc/systemd/system/$SERVICE_NAME.service"
   run "systemd reload" sudo systemctl daemon-reload
@@ -1331,6 +1389,26 @@ if [ $WANT_PF = 1 ]; then
     gauge_close; fail "The $SERVICE_NAME service did not start."
   fi
   PF_URL="$scheme://localhost:$LG_PORT"
+  FW_NOTE=""
+  if [ "$HTTPS" = domain ]; then
+    # the firewall: when ufw is on, the HTTPS port is opened (the service listens on no other port); otherwise say so
+    if command -v ufw >/dev/null 2>&1 && sudo ufw status 2>/dev/null | grep -q "^Status: active"; then
+      run "firewall: allow $LG_PORT/tcp" sudo ufw allow "$LG_PORT/tcp" comment "Looking Glass HTTPS"
+    else
+      FW_NOTE="No active ufw firewall here: make sure only port $LG_PORT (HTTPS) of this server is open to the internet."
+    fi
+    # SELF_CHECK_HTTPS: the site, by its domain, over HTTPS with the certificate verified the way a browser does (no -k);
+    # the domain is pointed at this computer for the check only (--resolve), so it works before DNS has changed.
+    # LG_CA_BUNDLE: a private certificate authority's roots (test installations), else the system's
+    gauge 80 "Checking https://$TLS_DOMAIN with its certificate..."
+    cab=(); [ -n "${LG_CA_BUNDLE:-}" ] && cab=(--cacert "$LG_CA_BUNDLE")
+    if curl -sf --max-time 15 "${cab[@]}" --resolve "$TLS_DOMAIN:$LG_PORT:127.0.0.1" "https://$TLS_DOMAIN:$LG_PORT/healthz" >/dev/null 2>>"$LOG"; then
+      log "HTTPS self-check passed for $TLS_DOMAIN:$LG_PORT"
+    else
+      gauge_close; fail "Looking Glass runs, but https://$TLS_DOMAIN:$LG_PORT does not answer with a certificate a browser would accept. The log says why."
+    fi
+    PF_URL="https://$TLS_DOMAIN$([ "$LG_PORT" = 443 ] || echo ":$LG_PORT")"
+  fi
   [ -z "$MAPBOX_TOKEN" ] && PF_WARN="No Mapbox token yet: add MAPBOX_TOKEN to platform/.env, then platform/deploy/reload.sh."
   [ -n "$SOURCES_WARN" ] && PF_WARN="${PF_WARN:+$PF_WARN }$SOURCES_WARN"
 fi
@@ -1391,8 +1469,14 @@ Next: open $PF_URL on this computer and choose \"Let's get started\" to create t
 first administrator (with an authenticator app). It asks for the one-time setup code; read it with:
   cat platform/data/setup_code
 Guides: docs/USER_GUIDE.md"
-[ "${ACCESS_MODE:-local}" != local ] && OUT+="
+if [ "${HTTPS:-none}" = domain ]; then OUT+="
+HTTPS:   https://$TLS_DOMAIN$([ "$LG_PORT" = 443 ] || echo ":$LG_PORT") answers with its certificate (checked here). Point the
+         domain's DNS record at this server's public address if it does not yet. The bell warns 30, 14 and 3 days
+         before the certificate expires; install the renewed one with platform/manage/install_cert.sh.${FW_NOTE:+
+         $FW_NOTE}"
+elif [ "${ACCESS_MODE:-local}" != local ]; then OUT+="
 Other computers: allow port $LG_PORT in the firewall for them only (docs/INSTALLATION.md)."
+fi
 OUT+="
 
 Log of this installation: install-logs/$(basename "$LOG")"

@@ -87,11 +87,16 @@
     }
     return o;
   }
-  function show(label) {
+  // the logo draws itself ONCE (2026-11-15: "it seems it loads twice"): already on screen, only its words change; arriving
+  // from another page (which drew it as it left) it carries on, already drawn, instead of drawing again
+  function show(label, carryOn) {
     const o = overlay(); o.querySelector(".lg-transition-label").textContent = label || "";
+    const w = o.querySelector(".lg-logo-wrap");
+    const already = o.classList.contains("on") && !o.classList.contains("leaving");
     o.classList.remove("leaving"); o.classList.add("on");
-    // restart the drawing animation
-    const w = o.querySelector(".lg-logo-wrap"); w.classList.remove("drawing"); void w.offsetWidth; w.classList.add("drawing");
+    if (already) return o;
+    if (carryOn) { w.classList.remove("drawing"); w.classList.add("searching"); return o; }
+    w.classList.remove("searching", "drawing"); void w.offsetWidth; w.classList.add("drawing");
     return o;
   }
   function hide() {
@@ -105,7 +110,7 @@
     "/services": "Opening publicly accessible / vulnerable services", "/settings": "Opening settings",
     "/definitions": "Opening definitions and intel", "/admin": "Opening administration", "/?intro": "Opening the overview", "/": "Opening reported network communications" };
   const labelFor = (url) => LABELS[Object.keys(LABELS).find((k) => url.startsWith(k) && (k !== "/" || url === "/" || url.startsWith("/?") && !url.startsWith("/?intro")))] || "Opening";
-  let arrived = null, arriveTimer = null, ownedByWait = false;
+  let arrived = null, arriveTimer = null, ownedByWait = false, cameDrawn = 0;
   const pending = new Set();       // the cards still loading as the page opens (LGLoader.wait)
   window.LGLoader = {
     /** a card that loads when the page opens (2026-11-15: "any card loading with data uses the loading animation, so
@@ -136,12 +141,13 @@
       let text = null;
       try { text = sessionStorage.getItem("lg.arrive"); sessionStorage.removeItem("lg.arrive"); } catch { /* */ }
       if (!text) return;
+      cameDrawn = Date.now();       // the last page drew the logo: a busy() in the next moments carries it on
       // a page with its own loading line (st-loading, i-loading, lg-loading) shows that, with the searching logo: the
       // opening logo again on top of it would look like a second load
       // (only a line that is showing: the platforms keep a hidden one in their insight panel, which used to stop the
       // logo on / and /services altogether; 2026-11-15)
       if ([...document.querySelectorAll(".st-loading, .i-loading, .lg-loading")].some((e) => e.offsetParent !== null)) return;
-      arrived = Date.now(); show(text);
+      arrived = Date.now(); show(text, true);      // the same logo the last page drew, carrying on
       arriveTimer = setTimeout(() => window.LGLoader.ready(), calm() ? 0 : 1600);
     },
     /** the page has its data: let the logo finish (at least ~0.7 s on screen) and fade into the platform */
@@ -168,7 +174,9 @@
     },
     /** within one page while data loads: the drawing logo until ready() (at least ~0.7 s on screen) */
     busy(label) {
-      clearTimeout(arriveTimer); arrived = Date.now(); show(label);
+      // arriving from another page, the first busy() carries on the logo that page drew (it does not draw again)
+      const carry = cameDrawn && Date.now() - cameDrawn < 4000; cameDrawn = 0;
+      clearTimeout(arriveTimer); arrived = Date.now(); show(label, carry);
       arriveTimer = setTimeout(() => window.LGLoader.ready(), 20000);
     },
     /** within one page (intro -> map): logo, then the platform appears */

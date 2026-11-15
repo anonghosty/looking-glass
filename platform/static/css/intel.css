@@ -83,6 +83,12 @@ html.ig-open { overflow: hidden; }
 .ig-lead-say p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-2); overflow-wrap: anywhere; }
 .ig-lead-say .ig-lead-adv { color: var(--text); }
 .ig-lead-adv b { color: var(--lc); font-weight: 600; }
+/* Explore: opens Intel gathered on the indicator */
+.ig-explore { justify-self: start; display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; padding: 6px 14px; border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--lc, #6ea0ff) 55%, transparent); background: color-mix(in srgb, var(--lc, #6ea0ff) 14%, transparent);
+  color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.ig-explore:hover { background: color-mix(in srgb, var(--lc, #6ea0ff) 26%, transparent); }
+.ig-explore:focus-visible { outline: 2px solid var(--lc, #6ea0ff); outline-offset: 2px; }
 /* the page card: summary and filters above the boxes */
 .ig-lead-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 2px 0 12px; }
 .ig-lead-sum { display: flex; gap: 22px; }

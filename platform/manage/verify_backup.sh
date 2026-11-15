@@ -39,6 +39,9 @@ elif [ "$have" != "$want" ]; then
 else
   echo "checksum: matches ($have)"
 fi
+# the newest one? an older genuine backup still verifies, and a file date can be changed: the audit log says (a warning,
+# not a failure: restoring an older backup on purpose is allowed; security review of a40f17a)
+echo "freshness: $("$py" "$project/audit_checkpoint.py" backup-age "$f" "${want:-}" 2>/dev/null || echo 'not checked')"
 if tar -xzOf "$f" "$name/.env" | cmp -s - "$project/.env"; then echo ".env: included and identical"; else echo ".env: MISSING OR DIFFERENT"; fi
 echo "files: $(tar -tzf "$f" | grep -vc '/$')"
 exit $rc
