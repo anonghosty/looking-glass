@@ -325,6 +325,89 @@ def mode(env=None) -> str:
     return "enforce" if v in ("enforce", "block", "on") else "log"
 
 
+def hint(result: str, reason: str) -> str:
+    """What a failure usually means and what to do, in plain words (2026-11-15): most genuine reports that fail were
+    changed on the way by the receiving side's own mail system, and the fix is there, not in Looking Glass."""
+    r, why = (result or "").lower(), (reason or "").lower()
+    if r in ("pass", ""):
+        return ""
+    if "body hash differs" in why:
+        return ("Something on the way changed the message after Shadowserver signed it: usually a mail gateway or security "
+                "filter (a banner or footer, rewritten links, re-encoded attachments) or a forwarding rule. Ask your mail "
+                "team to deliver Shadowserver's mail to this mailbox unmodified.")
+    if "l= tag" in why:
+        return ("The signature covers only part of the message, so text could have been added after it. Looking Glass does "
+                "not accept that; if every report does this, tell Shadowserver.")
+    if "signed headers" in why:
+        return ("A signed header was changed on the way, often the subject (a gateway adding a tag such as [EXTERNAL]) or the "
+                "sender. Exempt Shadowserver's mail from that rewriting, or deliver it unmodified.")
+    if r == "none":
+        return ("The message carries no signature: it was not sent by Shadowserver as it arrived here, or a forwarder rebuilt "
+                "it. If it looks genuine, check how it reaches this mailbox (a forward, a copy from another mailbox).")
+    if r == "other":
+        return ("It was signed by another domain, not Shadowserver: typical of a forward or a mailing list that signs again. "
+                "Deliver Shadowserver's mail to this mailbox directly, or check where it came from.")
+    if r == "temperror":
+        return "DNS did not answer for the key: the message is checked again at the next run. Nothing to do unless it repeats."
+    if "header block is ambiguous" in why:
+        return ("The message's headers are malformed or doubled, which is how a forgery tries to pass a check. Treat it with "
+                "suspicion and release it only if you know it is genuine.")
+    if "key at" in why or "no key published" in why:
+        return "Shadowserver's signing key could not be used. If this happens to every report, tell Shadowserver."
+    return "The signature is not in a form Looking Glass can check. If every report does this, tell Shadowserver."
+
+
+READY_DAYS = 7
+
+
+def readiness(db_path, days: int = READY_DAYS, now=None) -> dict:
+    """Is it safe to switch blocking on (2026-11-15)? Over the last `days` days (UTC), day by day: messages passed,
+    failed, and not checked (DNS did not answer for the key), and every kind of failure with its hint. Ready only when
+    on each of those days messages passed and none failed: a message that could not be checked proves nothing.
+    `not_checking` is set when the newest day with mail had no message checked at all: the check has stopped working
+    (seen 2026-11-15: a network that drops DNS TXT look-ups), and with blocking on, reports would wait at every run.
+    Read only; {} without a mail state."""
+    p = Path(db_path)
+    if not p.exists():
+        return {}
+    now = now or dt.datetime.now(dt.timezone.utc)
+    first = (now - dt.timedelta(days=days - 1)).date()
+    try:
+        con = sqlite3.connect(f"file:{p}?mode=ro", uri=True, timeout=5)
+        try:
+            rows = list(con.execute("SELECT substr(at, 1, 10), result, reason FROM mail_auth WHERE at >= ?",
+                                    (first.isoformat(),)))
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return {}
+    per = {(first + dt.timedelta(days=i)).isoformat(): {"total": 0, "passed": 0, "failed": 0, "unchecked": 0}
+           for i in range(days)}
+    kinds = {}
+    for day, result, reason in rows:
+        if day not in per:
+            continue
+        per[day]["total"] += 1
+        if result == "pass":
+            per[day]["passed"] += 1
+        elif result == "temperror":
+            per[day]["unchecked"] += 1
+        else:
+            per[day]["failed"] += 1
+            k = (result, reason or "")
+            kinds[k] = kinds.get(k, 0) + 1
+    total, passed, failed, unchecked = (sum(v[x] for v in per.values()) for x in ("total", "passed", "failed", "unchecked"))
+    days_passing = sum(1 for v in per.values() if v["passed"] and not v["failed"])
+    newest = next((v for _, v in sorted(per.items(), reverse=True) if v["total"]), None)
+    return {"days": days, "from": first.isoformat(), "to": now.date().isoformat(), "total": total, "passed": passed,
+            "failed": failed, "unchecked": unchecked, "days_passing": days_passing,
+            "not_checking": bool(newest and newest["unchecked"] and not newest["passed"] and not newest["failed"]),
+            "per_day": [dict(day=d, **v) for d, v in per.items()],
+            "failures": [{"result": r, "reason": why, "count": n, "hint": hint(r, why)}
+                         for (r, why), n in sorted(kinds.items(), key=lambda x: -x[1])],
+            "ready": failed == 0 and days_passing == days}
+
+
 # results that are quarantined when blocking is on; temperror (DNS did not answer) is tried again next run instead
 BLOCK = ("fail", "none", "other", "permerror")
 
@@ -448,6 +531,15 @@ def main(argv):
         for at, frm, signer, result, reason, subject, files, action in odd:
             print(f"  {at}  {result:<9} {action or 'kept':<11} from {frm or '?'}  {reason}  | {(subject or '')[:60]}"
                   + (f"  | files: {files[:80]}" if files else ""))
+        seen = []
+        for _, _, _, result, reason, _, _, _ in odd:      # each kind of failure explained once
+            tip = hint(result, reason)
+            if tip and tip not in seen:
+                seen.append(tip)
+        if seen:
+            print("What these usually mean:")
+            for tip in seen:
+                print(f"  - {tip}")
     return 0
 
 

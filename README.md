@@ -235,7 +235,9 @@ No Shadowserver reports yet? [Sign up your CSIRT](https://www.shadowserver.org/w
 3. **Answer its questions.** What to install, where MongoDB runs, how to reach the mailbox (with step-by-step help for
    Google, Microsoft or IMAP credentials), how often to fetch and **how many days each run looks back**, your
    country, tokens, who may open the platform, and the port. **Every answer is checked on the spot** — a real mailbox
-   login, real token checks, a real MongoDB login, port conflicts.
+   login, real token checks, a real MongoDB login, port conflicts. **For the mailbox, give it a folder (or Gmail label)
+   only for Shadowserver's reports**, filled by a mail rule: Looking Glass reads every message in that folder, so other
+   mail is never read and anything that does not belong stands out.
 4. **Let it install.** System packages, MongoDB, Python environments, services and the scheduled fetch; then, if you
    ask it to, it checks the installation and shows the result.
 5. **Open the address it shows** and choose **Let's get started** to create the first administrator with an

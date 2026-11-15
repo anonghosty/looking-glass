@@ -9,6 +9,7 @@ like them so the bell shows them as they are:
   - the weekly MISP Galaxy / ATT&CK refresh failed (data/names_refresh.json)
   - the HTTPS certificate (data/tls) expires within 30 days: again at 14 and at 3 days, and once it has expired
   - the audit log cannot be written (a full disk...), and for 7 days after, that entries were lost (auth.Audit)
+  - the sender check has stopped checking (DNS does not answer for the key), or, once, that blocking can be switched on
 Each alert has an id that changes when something new happens; clearing one hides that alert for that person only
 (data/system_alerts_seen.json). Nothing here holds an address or a report's content.
 """
@@ -146,6 +147,7 @@ class Alerts:
                                  f"{_when(rec['since'])} and {_when(rec['last'])} ({rec['error']}). The gap is recorded in the "
                                  "audit log; tell your auditor."),
                         "at": rec_at, "link": "/audit"})
+        out += self._sender_check(now)
         cert = self._certificate()
         if cert and cert["days_left"] <= 30:
             days = cert["days_left"]
@@ -157,6 +159,35 @@ class Alerts:
                                  "Install the renewed one with manage/install_cert.sh (docs/OPERATIONS.md)."),
                         "at": now, "link": "/settings#monitor"})
         return out
+
+    def _sender_check(self, now):
+        """The sender check over the last 7 days (the pipeline's mail_auth.readiness, 2026-11-15): a problem when it has
+        stopped checking (DNS does not answer for the key); once, a note that blocking can be switched on safely."""
+        try:
+            pdir = pipeline_link.find_dir(self.base_dir)
+            ma = pipeline_link.mail_auth(pdir) if pdir else None
+            if not (ma and hasattr(ma, "readiness")):
+                return []
+            mode = ma.mode(pipeline_link.read_env(pdir / ".env"))
+            if mode == "off":
+                return []
+            week = ma.readiness(pipeline_link.data_dir(pdir) / ".mail_state.sqlite") or {}
+        except Exception:  # noqa: BLE001  (an unreadable mail state never breaks the bell)
+            return []
+        if week.get("not_checking"):
+            day = next((d["day"] for d in reversed(week["per_day"]) if d["total"]), week.get("to", ""))
+            return [{"key": f"sender-not-checking:{day}:{mode}", "problem": True,
+                     "title": "The sender check is not working" + (": reports are being held" if mode == "enforce" else ""),
+                     "text": ("the latest report e-mails could not be checked: this server's DNS does not answer the look-up of "
+                              "Shadowserver's signing key. " + ("With blocking on, those reports wait at every run and are not loaded. "
+                                                                 if mode == "enforce" else "Reports are loaded, but none is verified. ")
+                              + "Settings → Workers says more."), "at": now, "link": "/settings#workers"}]
+        if mode == "log" and week.get("ready"):
+            return [{"key": "sender-ready", "problem": False, "title": "Blocking can be switched on",
+                     "text": f"every report e-mail passed the sender check on each of the last {week['days']} days. Settings → "
+                             "Workers can switch blocking on, so unsigned or changed reports are held back.",
+                     "at": now, "link": "/settings#workers"}]
+        return []
 
     def _certificate(self):
         """The installed HTTPS certificate (data/tls), read with deploy/install_cert.py: domain, expiry, days left."""

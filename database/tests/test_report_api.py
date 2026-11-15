@@ -39,12 +39,13 @@ LIST = [{"id": "id-good-0001", "file": "2026-11-11-scan_http-example-geo.csv", "
         {"id": "id-gone-00006", "file": "2026-11-11-scan_smb-example-geo.csv"},
         {"id": "id-evil-00007", "file": "../../etc/passwd.csv"},
         {"id": "x/../y z", "file": "2026-11-11-scan_dns-example-geo.csv"}]
-calls, mode = [], {"down": False, "refuse": False}
+calls, mode = [], {"down": False, "refuse": False, "many": False, "redirect": False}
 
 
 class R:
-    def __init__(self, code, body=b"", js=None):
-        self.status_code, self.body, self.js = code, body, js
+    def __init__(self, code, body=b"", js=None, url="https://dl.shadowserver.org/x", history=()):
+        self.status_code, self.body, self.js, self.url, self.history = code, body, js, url, list(history)
+        self.is_redirect = self.is_permanent_redirect = code in (301, 302, 303, 307, 308)
     def json(self):
         if self.js is None:
             raise ValueError
@@ -59,10 +60,14 @@ class R:
 import requests  # noqa: E402
 
 
-def post(url, data=None, headers=None, timeout=None):
+def post(url, data=None, headers=None, timeout=None, allow_redirects=True):
     calls.append((url, data, headers.get("HMAC2")))
+    if allow_redirects:
+        raise AssertionError("an API call must never follow redirects (it carries the key)")
     if mode["down"]:
         raise requests.ConnectionError("down")
+    if mode["redirect"]:
+        return R(307)
     if mode["refuse"] or headers.get("HMAC2") != hmac.new(SECRET.encode(), data, hashlib.sha256).hexdigest():
         return R(401, js={"error": "authentication failed"})
     method = url.split("/api2/", 1)[1]
@@ -71,12 +76,16 @@ def post(url, data=None, headers=None, timeout=None):
     if method == "reports/subscribed":
         return R(200, js=["example"])
     if method == "reports/list":
+        if mode["many"]:
+            return R(200, js=[{"id": f"id-many-{i:05d}", "file": "bad name"} for i in range(json.loads(data)["limit"])])
         return R(200, js=LIST)
     return R(404, js={"error": "no such method"})
 
 
 def get(url, stream=True, timeout=None, headers=None):
     i = url[len(RA.DL_URL):]
+    if mode["redirect"]:                         # the download ends on plain http
+        return R(200, FILES.get(i, CSV), url="http://dl.example.org/" + i, history=[R(302, url=url)])
     return R(200, FILES[i]) if i in FILES else R(404)
 
 
@@ -97,9 +106,13 @@ with tempfile.TemporaryDirectory() as d:
     base = Path(d); att = base / "attachments_backup"
     st = Counter(); calls.clear()
     n = RA.pull(base, att, 3, 4, st, log, ENV, max_mb=1)
-    listed = json.loads(calls[0][1])
-    ok("reports/list asks for the last N days, as a date range ending today (UTC)", calls[0][0].endswith("/reports/list")
-       and ":" in listed["date"] and len(listed["date"]) == 21, listed["date"])
+    import datetime as _dt
+    asked = [json.loads(b) for u, b, _ in calls if u.endswith("/reports/list")]
+    today = _dt.datetime.now(_dt.timezone.utc).date()
+    ok("reports/list is asked one day at a time, the last N days to today (UTC), each with an explicit limit",
+       [a["date"] for a in asked] == [(today - _dt.timedelta(days=3 - i)).isoformat() for i in range(4)]
+       and all(a["limit"] == 5000 for a in asked), str(asked)[:200])
+    ok("a report listed on several days is downloaded once", st["api_downloaded"] == 2 and st["api_failed"] == 4, str(dict(st)))
     got = sorted(p.name for p in att.iterdir())
     ok("the two good reports are downloaded under their own names, where e-mail attachments go", got == ["2026-11-11-scan_http-example-geo.csv", "2026-11-11-scan_ssh-example-geo.csv"]
        and (att / got[0]).read_bytes() == CSV and n == 2, str(got))
@@ -121,6 +134,40 @@ with tempfile.TemporaryDirectory() as d:
         ok("no key: the API is not used", False)
     except RA.ApiError as e:
         ok("no key: the API is not used (the run is told why)", "no Shadowserver API key" in str(e))
+
+print("Limits, https and redirects (2026-11-15)")
+with tempfile.TemporaryDirectory() as d:
+    base = Path(d); att = base / "attachments_backup"
+    warned = []
+    wlog = logging.getLogger("t-warn"); wlog.propagate = False
+    wlog.addHandler(type("H", (logging.Handler,), {"emit": lambda self, r: warned.append(r.getMessage())})())
+    mode["many"] = True
+    st = Counter()
+    RA.pull(base, att, 1, 2, st, wlog, dict(ENV, REPORT_API_LIST_LIMIT="100"), max_mb=1)
+    mode["many"] = False
+    ok("a day whose list reaches the limit is warned about, never missed in silence",
+       st["api_list_full"] == 2 and sum("reached the limit of 100" in w for w in warned) == 2, str(warned)[:200])
+    ok("REPORT_API_LIST_LIMIT is kept within 100..100000", RA.LIST_LIMIT({"REPORT_API_LIST_LIMIT": "5"}) == 100
+       and RA.LIST_LIMIT({"REPORT_API_LIST_LIMIT": "9999999"}) == 100000 and RA.LIST_LIMIT({}) == 5000)
+    calls.clear()
+    try:
+        RA.call("test/ping", {}, KEY, SECRET, url="http://transform.example.org/api2/"); refused = ""
+    except RA.ApiError as e:
+        refused = str(e)
+    ok("an API address that is not https is refused before anything is sent", "https://" in refused and not calls, refused)
+    mode["redirect"] = True
+    try:
+        RA.call("test/ping", {}, KEY, SECRET); refused = ""
+    except RA.ApiError as e:
+        refused = str(e)
+    ok("an API answer that redirects is not followed (the key stays here)", "redirect" in refused and KEY not in refused, refused)
+    try:
+        RA._download({"file": "2026-11-11-scan_http-example-geo.csv", "id": "id-good-0001"}, base, 2**20); refused = ""
+    except RA.ApiError as e:
+        refused = str(e)
+    mode["redirect"] = False
+    ok("a download redirected to plain http is refused, and nothing is kept",
+       "away from https" in refused and not list(base.glob("*.csv")), refused)
 
 print("API or e-mail, and falling back")
 used = []

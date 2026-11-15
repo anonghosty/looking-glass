@@ -16,6 +16,12 @@ https://www.shadowserver.org/what-we-do/network-reporting/ . Shadowserver also w
 (https://www.shadowserver.org/partner-with-us/). A dedicated mailbox (for example `shadowserver@your-csirt.org`)
 keeps the reports separate from people's mail.
 
+**Give Looking Glass a folder (or Gmail label) only for Shadowserver's reports.** The pipeline reads every message in
+the folder you name, so a folder filled by a mail rule (sender ending in `@shadowserver.org`) means other mail is never
+read, and a message that does not belong stands out. Deliver those messages **unmodified**: a gateway that adds a
+banner or footer, rewrites links or re-encodes attachments breaks Shadowserver's signature, and the sender check then
+says so (Settings → Workers, *Sender check, last 7 days*). Exempt Shadowserver's mail from such rewriting.
+
 ---
 
 ## A. Gmail or Google Workspace with an app password

@@ -323,12 +323,26 @@ def install(app, ctx):
             return jsonify(held=[])
         asked = {r.get("qid") for r in (ws.pending(ddir()) if ws else []) if r.get("kind") == "release"}
         out = []
-        for q, m in ma.held(d):
+        for q, m in ma.held(pipeline_link.data_dir(d)):
             out.append({"id": q.name, "at": m.get("at"), "result": m.get("result"), "reason": m.get("reason"),
+                        "hint": ma.hint(m.get("result"), m.get("reason")) if hasattr(ma, "hint") else "",
                         "from_domain": m.get("from_domain"), "signer": m.get("signer"), "subject": m.get("subject"),
                         "files": len(m.get("files") or []), "links": len(m.get("links") or []),
                         "release_asked": (q / ma.RELEASE_FILE).exists() or q.name in asked})
         return jsonify(held=out, mode=ma.mode(pipeline_link.read_env(d / ".env")))
+
+    @app.route("/api/pipeline/sender-week")
+    def api_pipeline_sender_week():
+        """The sender check over the last 7 days, day by day, and whether blocking can be switched on (2026-11-15)."""
+        bad = guard()
+        if bad:
+            return bad
+        d, _ = pipe()
+        ma = pipeline_link.mail_auth(d)
+        if not (ma and hasattr(ma, "readiness")):
+            return jsonify(found=False)
+        week = ma.readiness(pipeline_link.data_dir(d) / ".mail_state.sqlite")
+        return jsonify(found=bool(week), mode=ma.mode(pipeline_link.read_env(d / ".env")), **(week or {}))
 
     @app.route("/api/pipeline/release", methods=["POST"])
     def api_pipeline_release():
@@ -338,7 +352,7 @@ def install(app, ctx):
         d, ws = pipe()
         ma = pipeline_link.mail_auth(d)
         qid = str((request.get_json(silent=True) or {}).get("id") or "")
-        match = [(q, m) for q, m in (ma.held(d) if ma else []) if q.name == qid]
+        match = [(q, m) for q, m in (ma.held(pipeline_link.data_dir(d)) if ma else []) if q.name == qid]
         if not (ws and re.fullmatch(r"[0-9a-f]{20}", qid) and match):
             return jsonify(error="No such held-back report."), 404
         m = match[0][1]

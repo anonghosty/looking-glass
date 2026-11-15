@@ -5,6 +5,33 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-15 (9)
+### Added
+- Settings → Workers: **Sender check, last 7 days**. Day by day, the report e-mails that passed, did not pass or could
+  not be checked, and each kind of failure with what it usually means. When every e-mail passed on each of the 7 days
+  while blocking is off, it says blocking can be switched on safely (with a button that ticks it), and the bell says so
+  once.
+- The sender check explains its failures in plain words, in the run log, the held-back list and `mail_auth.py`'s
+  report: a changed body usually means a mail gateway or forwarding rule, so deliver Shadowserver's mail unmodified.
+- The installer's mailbox questions, Quick start and the mail set-up guide advise a folder (or Gmail label) only for
+  Shadowserver's reports, filled by a mail rule.
+
+### Fixed
+- The sender check now says when it has stopped working: when the newest report e-mails could not be checked at all
+  (the server's DNS does not answer the look-up of Shadowserver's signing key), Settings → Workers and the bell say so,
+  and more urgently with blocking on, where those reports would wait at every run. Such e-mails never count as passed.
+- With `DATA_DIR` set in the pipeline's `.env`, the platform read the sender check's results and the held-back reports
+  from the wrong folder (and showed none); it now reads them where the pipeline keeps them.
+- Shadowserver's report API is asked one day at a time with an explicit limit (`REPORT_API_LIST_LIMIT`, default 5000),
+  and a day whose list reaches it is warned about, so no report is missed in silence; a report listed on two days is
+  downloaded once.
+
+### Security
+- The pipeline's own report API calls now also use https only: an `http://` address is refused, an answer that
+  redirects is not followed (the key is never sent on), and a report download that ends on plain http is refused.
+- GitHub checks: the actions are pinned to their current releases on Node 24 (checkout v7.0.1, setup-python v7.1.0),
+  replacing the Node 20 ones GitHub has deprecated.
+
 ## 2026-11-15 (8)
 ### Added
 - Static code analysis on every push, pull request and release: Bandit for the Python code (no medium or high finding

@@ -86,15 +86,17 @@ by `PLATFORM_DIR` in the pipeline's `.env`.
 | Setting | Default | Meaning |
 |---|---|---|
 | `PIPELINE_DIR` | empty | the pipeline's folder, when it is not beside the platform. On another computer: leave empty, its settings stay in its own `.env` |
-| `SHADOWSERVER_API_URL` | `https://transform.shadowserver.org/api2/` | Shadowserver's report API, used to check an API key before it is saved |
+| `SHADOWSERVER_API_URL` | `https://transform.shadowserver.org/api2/` | Shadowserver's report API, used to check an API key before it is saved. Must start with `https://`; a redirect away from https is refused |
 
 The pipeline's sender check is set in the pipeline's `.env` (or Settings → Workers): `MAIL_AUTH` = `log` (record each
 report e-mail's DKIM result, hold nothing back), `enforce` (hold back reports that do not pass until an administrator
 releases them) or `off`; `MAIL_AUTH_DOMAIN` = the expected signer (`shadowserver.org`).
 
-**Recommended for production: `enforce`** (Block), or the report API instead of e-mail. Start with `log` for a few days
-and look at **Audit portal → Sender check**: when every genuine report passes (no footer or forwarding rule breaks the
-signatures on the way), switch to Block in **Settings → Workers**. With `log`, a forged report e-mail would be loaded
+**Recommended for production: `enforce`** (Block), or the report API instead of e-mail. Start with `log` for a week:
+**Settings → Workers → Sender check, last 7 days** counts, day by day, the report e-mails that passed and those that did
+not, with what each failure usually means. When every e-mail has passed on each of the 7 days (no footer, gateway or
+forwarding rule breaks the signatures on the way), the card and the bell say blocking can be switched on, and the card's
+button ticks it for you. With `log`, a forged report e-mail would be loaded
 and only flagged. `REPORT_SOURCE=api` (Shadowserver's report API) does not use e-mail at all, so the question does not
 arise; the e-mail path stays as a fallback.
 

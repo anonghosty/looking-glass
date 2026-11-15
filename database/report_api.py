@@ -37,6 +37,16 @@ ID_RX = re.compile(r"^[A-Za-z0-9_\-?=&.%~+]{8,512}$")
 SOURCES = ("email", "api")
 
 
+def LIST_LIMIT(env=None) -> int:  # noqa: N802  (reads like the constant it is)
+    """How many reports one day's reports/list may return (REPORT_API_LIST_LIMIT, default 5000, 100..100000): far more
+    than a country receives in a day, and a day that reaches it is warned about."""
+    try:
+        v = int(((env if env is not None else os.environ).get("REPORT_API_LIST_LIMIT") or 5000))
+    except ValueError:
+        v = 5000
+    return max(100, min(v, 100000))
+
+
 class ApiError(Exception):
     """The API cannot be used this run (the message says why, without the key or secret)."""
 
@@ -67,15 +77,21 @@ def mail_configured(env=None) -> bool:
 def call(method: str, body: dict, key: str, secret: str, url: str = None, timeout: int = 45):
     """One API call; the answer as JSON. Raises ApiError (never with the key or secret in it)."""
     import requests
+    base = (url or os.environ.get("SHADOWSERVER_API_URL") or API_URL).rstrip("/")
+    if not base.lower().startswith("https://"):    # SHADOWSERVER_API_URL comes from .env: the key goes only over https
+        raise ApiError("the report API address must start with https:// (SHADOWSERVER_API_URL)")
     payload = dict(body or {}, apikey=key)
     raw = json.dumps(payload).encode()
     sig = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
     try:
-        r = requests.post((url or os.environ.get("SHADOWSERVER_API_URL") or API_URL).rstrip("/") + "/" + method, data=raw,
+        # never redirected: a 307/308 would send the same body, with the key, wherever it pointed (review 2026-11-15)
+        r = requests.post(base + "/" + method, data=raw, allow_redirects=False,
                           headers={"HMAC2": sig, "Content-Type": "application/json", "User-Agent": "LookingGlass-pipeline"},
                           timeout=timeout)
     except requests.RequestException as exc:
         raise ApiError(f"Shadowserver's API could not be reached ({type(exc).__name__})") from None
+    if r.is_redirect or r.is_permanent_redirect:
+        raise ApiError(f"Shadowserver's API answered {method} with a redirect (HTTP {r.status_code}): not followed, the key stays here")
     try:
         ans = r.json()
     except ValueError:
@@ -136,6 +152,8 @@ def _download(it: dict, dest_dir: Path, max_bytes: int, timeout: int = 120):
     try:
         with requests.get(DL_URL + it["id"], stream=True, timeout=timeout,
                           headers={"User-Agent": "LookingGlass-pipeline"}) as r:
+            if not (r.url or "").lower().startswith("https://") or any(not (x.url or "").lower().startswith("https://") for x in r.history):
+                raise ApiError("the download was redirected away from https: refused")
             if r.status_code != 200:
                 raise ApiError(f"HTTP {r.status_code}")
             with open(part, "wb") as fh:
@@ -169,19 +187,35 @@ def pull(base_dir: Path, attach_dir: Path, days: int, threads: int, stats, log, 
     today = dt.datetime.now(dt.timezone.utc).date()
     start = today - dt.timedelta(days=max(1, days))
     t0 = time.monotonic()
-    items = call("reports/list", {"date": f"{start.isoformat()}:{today.isoformat()}"}, *c)
-    if not isinstance(items, list):
-        raise ApiError("reports/list did not answer with a list")
+    # One call per day with an explicit limit (2026-11-15): Shadowserver documents "limit" for reports/list but no
+    # default, maximum or paging, so a long window in one call could come back cut short without saying so. A day whose
+    # answer reaches the limit is reported, so it is never missed in silence (raise REPORT_API_LIST_LIMIT then).
+    items, full = [], []
+    for i in range((today - start).days + 1):
+        day = (start + dt.timedelta(days=i)).isoformat()
+        got = call("reports/list", {"date": day, "limit": LIST_LIMIT(env)}, *c)
+        if not isinstance(got, list):
+            raise ApiError("reports/list did not answer with a list")
+        if len(got) >= LIST_LIMIT(env):
+            full.append(day)
+        items += got
+    for day in full:
+        stats["api_list_full"] += 1
+        log.warning("Shadowserver API: the list for %s reached the limit of %d reports: some may be missing; raise "
+                    "REPORT_API_LIST_LIMIT in .env", day, LIST_LIMIT(env))
     attach_dir.mkdir(parents=True, exist_ok=True)
     files = Files(base_dir / ".mail_state.sqlite")
     try:
         done = set() if refetch else files.done()
-        todo, bad = [], 0
+        todo, bad, queued = [], 0, set()
         for it in items:
             f, i = str((it or {}).get("file") or ""), str((it or {}).get("id") or "")
             if not (FILE_RX.match(f) and ID_RX.match(i)):
                 bad += 1
                 continue
+            if f in queued:                         # listed on two days: downloaded once
+                continue
+            queued.add(f)
             if f in done:
                 stats["api_known"] += 1
                 continue

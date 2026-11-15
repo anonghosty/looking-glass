@@ -394,6 +394,11 @@ try:
     print("Held-back reports")
     h = c.get("/api/pipeline/held", headers=H).json
     ok("listed for administrators, with result and reason", len(h["held"]) == 1 and h["held"][0]["result"] == "fail" and h["mode"] == "enforce", str(h)[:160])
+    ok("…and what the failure usually means (2026-11-15)", bool(h["held"][0].get("hint")), h["held"][0].get("hint"))
+    w = c.get("/api/pipeline/sender-week", headers=H).json or {}
+    ok("Sender check, last 7 days: day by day, with each kind of failure and its hint; not ready while one failed",
+       w.get("found") and len(w.get("per_day", [])) == 7 and w.get("failed", 0) >= 1 and not w.get("ready")
+       and all(f.get("hint") for f in w.get("failures", [])), str({k: w.get(k) for k in ("found", "failed", "ready")}))
     qid = h["held"][0]["id"]
     r = c.post("/api/pipeline/release", json={"id": qid}, headers=H)
     ok("releasing while locked is refused", r.status_code == 403 and not WS.pending(PLAT))

@@ -261,10 +261,12 @@ All settings live in `.env` in the project folder. Its permissions are `600`, so
 | `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_MAILBOX`, `MS_FOLDER` | Microsoft Graph app registration and mailbox | –, –, –, –, `inbox` |
 | `IMAP_SERVER` | mail server | – |
 | `IMAP_USER` / `IMAP_PASSWORD` | mailbox login | – |
-| `IMAP_FOLDER` | folder to read | `inbox` |
+| `IMAP_FOLDER` | folder to read; best a folder only for Shadowserver's reports, filled by a mail rule (every message in it is read) | `inbox` |
 | `IMAP_VERIFY_TLS` | verify the mail server certificate (`false` only for a self-signed certificate) | `true` in `.env.example` |
 | `MAIL_AUTH` | sender check: `log` verifies and records each report e-mail's DKIM signature without holding anything back; `enforce` also holds back reports that do not pass; `off` switches it off | `log` |
 | `SHADOWSERVER_API_KEY` / `SHADOWSERVER_API_SECRET` | Shadowserver report API key and secret, saved from the platform's Settings → Workers after Shadowserver accepted them | – |
+| `SHADOWSERVER_API_URL` | the report API's address: must start with `https://`; its answers are never followed to another address (the key stays) | `https://transform.shadowserver.org/api2/` |
+| `REPORT_API_LIST_LIMIT` | how many reports one day's list may return; the API is asked one day at a time, and a day that reaches the limit is warned about in the run log, so no report is missed in silence (100 to 100000) | `5000` |
 | `PLATFORM_DIR` | where the platform is, when not beside the pipeline (`../platform` or `../threatmap`): each run applies the changes requested in its Settings → Workers (`worker_settings.py`) | – |
 | `MAIL_AUTH_DOMAIN` | the domain that must have signed a genuine report | `shadowserver.org` |
 | `EMAIL_DAYS` | default for `--days`: how many days back every run (also the scheduled ones) looks | `7` in `.env.example` (asked by the installer); `1` when unset |

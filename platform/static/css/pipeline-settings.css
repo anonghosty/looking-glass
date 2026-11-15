@@ -26,6 +26,19 @@
 .wk-msg { min-height: 1.4em; margin: 10px 0 0; }
 .wk-msg.bad, .wk-err { color: #ff8f8f; }
 .wk-card { margin-top: 14px; }
+/* the sender check, last 7 days (2026-11-15) */
+.wk-week-state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 0 12px; padding: 12px 14px;
+  border-radius: 10px; border: 1px solid var(--line, rgba(255, 255, 255, .12)); background: rgba(255, 255, 255, .03); line-height: 1.5; }
+.wk-week-state > span { flex: 1 1 320px; color: var(--text-2, #b9bcc6); }
+.wk-week-state.is-ready { border-color: rgba(70, 200, 140, .55); background: rgba(70, 200, 140, .08); }
+.wk-week-state.is-on { border-color: rgba(110, 160, 255, .5); background: rgba(110, 160, 255, .07); }
+.wk-week-state.is-bad { border-color: rgba(229, 72, 77, .6); background: rgba(229, 72, 77, .09); }
+.wk-week .wk-num, .wk-week th.wk-num { text-align: right; font-variant-numeric: tabular-nums; }
+.wk-week .is-warn { color: #f5b25a; font-weight: 600; }
+.wk-why { margin: 4px 0 0; padding-left: 18px; }
+.wk-why li { margin: 0 0 8px; overflow-wrap: anywhere; }
+.wk-why p { margin: 2px 0 0; }
+.wk-hint { display: block; margin-top: 3px; line-height: 1.45; }
 /* Settings → Password policy (password-policy.js) */
 .pp-state { font-weight: 600; margin: 4px 0; }
 .pp-row { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin: 10px 0 0; }

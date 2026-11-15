@@ -24,8 +24,8 @@ jobs:
       LG_QUIET: "1"
       THREATMAP_SCHEDULE: "0"
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262      # v4.4.0 (tag in actions/checkout)
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0 (tag in actions/setup-python)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1      # v7.0.1, Node 24 (tag in actions/checkout)
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0, Node 24 (tag in actions/setup-python)
         with:
           python-version: "3.12"
       - name: Install the platform's libraries
@@ -58,8 +58,8 @@ jobs:
     # known vulnerabilities in the platform's and the pipeline's libraries (PyPI advisory data, OSV)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262      # v4.4.0 (tag in actions/checkout)
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0 (tag in actions/setup-python)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1      # v7.0.1, Node 24 (tag in actions/checkout)
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0, Node 24 (tag in actions/setup-python)
         with:
           python-version: "3.12"
       - name: pip-audit
@@ -74,8 +74,8 @@ jobs:
     # "# nosec B310  # why" (Bandit) or "# shellcheck disable=SC2024  # why" (ShellCheck).
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262      # v4.4.0 (tag in actions/checkout)
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0 (tag in actions/setup-python)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1      # v7.0.1, Node 24 (tag in actions/checkout)
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0, Node 24 (tag in actions/setup-python)
         with:
           python-version: "3.12"
       - name: Install Bandit and ShellCheck
@@ -99,8 +99,8 @@ jobs:
       LG_QUIET: "1"
       THREATMAP_SCHEDULE: "0"
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262      # v4.4.0 (tag in actions/checkout)
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0 (tag in actions/setup-python)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1      # v7.0.1, Node 24 (tag in actions/checkout)
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0, Node 24 (tag in actions/setup-python)
         with:
           python-version: "3.12"
       - name: Install the platform's and the pipeline's libraries
@@ -126,7 +126,7 @@ jobs:
         working-directory: database
         run: |
           set -e
-          for t in test_mail_auth test_mail_auth_pipeline test_worker_settings_effective test_link_downloads test_zip_limits test_line_hash test_report_api \
+          for t in test_mail_auth test_mail_auth_pipeline test_sender_readiness test_worker_settings_effective test_link_downloads test_zip_limits test_line_hash test_report_api \
                    test_report_types test_report_names test_equivalence test_refetch_and_rows test_retention test_no_ip_reports; do
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
           done

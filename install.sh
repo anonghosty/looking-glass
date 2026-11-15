@@ -139,6 +139,11 @@ _pre() {  # KEY DEFAULT -> sets REPLY and returns 0 when answered without asking
 }
 cancelled() { save_answers; clear 2>/dev/null || true; echo "Installation cancelled. Your answers (not passwords) are offered again next time. Nothing after this point was changed. Log: $LOG"; exit 130; }
 
+# the advice under every "which folder holds the reports" question (2026-11-15)
+FOLDER_TIP="Best: a folder (or label) only for Shadowserver's reports, filled by a mail rule
+(sender ends in @shadowserver.org). Looking Glass reads every message in it, so other
+mail is then never read, and a message that does not belong stands out."
+
 msg() {  # TITLE TEXT
   [ "$UI" = dialog ] && fit_windows
   if [ "$INTERACTIVE" = 0 ] || [ "$ASSUME_YES" = 1 ]; then log "[$1] $2"; [ "$UI" = text ] && printf '\n%s%s%s\n%s\n' "$B" "$1" "$R" "$2"; return 0; fi
@@ -978,7 +983,8 @@ credentials (full guide: docs/MAIL_SETUP.md)."
       while :; do
         ask_input IMAP_USER "Gmail address" "Gmail / Google Workspace address that receives the reports:" "" v_nonempty; IMAP_USER="$REPLY"
         ask_secret IMAP_PASSWORD "App password" "The 16-letter app password of $IMAP_USER (spaces are ignored):"; IMAP_PASSWORD="${REPLY// /}"
-        ask_input IMAP_FOLDER "Gmail label" "Label (folder) holding the reports (INBOX, or e.g. Shadowserver):" INBOX v_nonempty; IMAP_FOLDER="$REPLY"
+        ask_input IMAP_FOLDER "Gmail label" "Label (folder) holding the reports (INBOX, or e.g. Shadowserver).
+$FOLDER_TIP" INBOX v_nonempty; IMAP_FOLDER="$REPLY"
         checking "the Gmail login of $IMAP_USER"
         if reason="$(check_mail)"; then passed "Mailbox login succeeded.\n\n   $reason"; break; fi
         after_failure IMAP_USER "Gmail login" "$reason" IMAP_USER IMAP_PASSWORD IMAP_FOLDER || break
@@ -1000,7 +1006,8 @@ credentials (full guide: docs/MAIL_SETUP.md)."
       while :; do
         ask_input GMAIL_KEY_FILE "Service account key" "Path of the JSON key file on this computer:" "" v_keyfile; GMAIL_KEY_SRC="$(readlink -f "${REPLY/#\~/$HOME}")"
         ask_input GMAIL_USER "Mailbox" "Address of the Workspace mailbox that receives the reports:" "" v_nonempty; GMAIL_USER="$REPLY"
-        ask_input GMAIL_LABEL "Gmail label" "Label holding the reports (INBOX, or e.g. Shadowserver):" INBOX v_nonempty; GMAIL_LABEL="$REPLY"
+        ask_input GMAIL_LABEL "Gmail label" "Label holding the reports (INBOX, or e.g. Shadowserver).
+$FOLDER_TIP" INBOX v_nonempty; GMAIL_LABEL="$REPLY"
         checking "the Gmail API access to $GMAIL_USER"
         if reason="$(check_mail)"; then passed "Mailbox login succeeded.\n\n   $reason"; break; fi
         after_failure GMAIL_USER "Gmail API" "$reason" GMAIL_KEY_FILE GMAIL_USER GMAIL_LABEL || break
@@ -1023,7 +1030,8 @@ reads the mailbox through Microsoft Graph with an app registration:
         ask_input MS_CLIENT_ID "Client ID" "Application (client) ID:" "" v_guid; MS_CLIENT_ID="$REPLY"
         ask_secret MS_CLIENT_SECRET "Client secret" "The client secret's Value:"; MS_CLIENT_SECRET="$REPLY"
         ask_input MS_MAILBOX "Mailbox" "Address of the mailbox that receives the reports:" "" v_nonempty; MS_MAILBOX="$REPLY"
-        ask_input MS_FOLDER "Mail folder" "Folder holding the reports (inbox, or the name of a folder):" inbox v_nonempty; MS_FOLDER="$REPLY"
+        ask_input MS_FOLDER "Mail folder" "Folder holding the reports (inbox, or the name of a folder).
+$FOLDER_TIP" inbox v_nonempty; MS_FOLDER="$REPLY"
         checking "the Microsoft Graph access to $MS_MAILBOX"
         if reason="$(check_mail)"; then passed "Mailbox login succeeded.\n\n   $reason"; break; fi
         after_failure MS_TENANT_ID "Microsoft 365" "$reason" MS_TENANT_ID MS_CLIENT_ID MS_CLIENT_SECRET MS_MAILBOX MS_FOLDER || break
@@ -1035,7 +1043,8 @@ reads the mailbox through Microsoft Graph with an app registration:
 Ask your mail administrator, or look in your webmail's settings:" "" v_host; IMAP_SERVER="$REPLY"
         ask_input IMAP_USER "Mailbox login" "Login (usually the e-mail address) of that mailbox:" "" v_nonempty; IMAP_USER="$REPLY"
         ask_secret IMAP_PASSWORD "Mailbox password" "Password of $IMAP_USER:"; IMAP_PASSWORD="$REPLY"
-        ask_input IMAP_FOLDER "Mailbox folder" "Folder holding the reports:" inbox v_nonempty; IMAP_FOLDER="$REPLY"
+        ask_input IMAP_FOLDER "Mailbox folder" "Folder holding the reports.
+$FOLDER_TIP" inbox v_nonempty; IMAP_FOLDER="$REPLY"
         ask_yesno IMAP_VERIFY_TLS "Mail server certificate" "Check the mail server's certificate?
 Choose No only if the mail server uses a self-signed certificate." yes; IMAP_VERIFY_TLS=$([ "$REPLY" = yes ] && echo true || echo false)
         checking "the login of $IMAP_USER on $IMAP_SERVER"

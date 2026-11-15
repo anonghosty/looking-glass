@@ -46,6 +46,7 @@
     try { S = await api("/api/pipeline/settings"); } catch (e) { body.replaceChildren(el("p", "fd-empty", e.message)); return; }
     if (!keepMsg) say("");
     draw();
+    loadWeek();
     loadHeld();
   }
 
@@ -244,6 +245,69 @@
     c.append(f, el("small", "muted", "Kept only if Shadowserver accepts it; the pipeline then saves it at its next run. Only the key and a signature made with the secret are sent to Shadowserver."));
   }
 
+  // ---------------- the sender check, last 7 days: is it safe to block? (2026-11-15)
+  // Day by day, how many report e-mails passed, failed or could not be checked; each kind of failure with what it
+  // usually means; and, once every day passed with none failing while blocking is off, a prompt to switch it on.
+  async function loadWeek() {
+    const c = $("wkWeek"); if (!c) return;
+    c.replaceChildren(el("h3", null, "Sender check, last 7 days"));
+    const wait = el("p", "lg-loading", "Counting the report e-mails of the last 7 days…"); c.append(wait);
+    let d; try { d = await api("/api/pipeline/sender-week"); } catch (e) { wait.remove(); c.append(el("p", "fd-empty", e.message)); return; }
+    wait.remove();
+    if (!d.found) { c.append(el("p", "muted", "No report e-mail has been checked yet (the sender check starts with the pipeline's next run).")); return; }
+    if (d.mode === "off") { c.append(el("p", "muted", "The sender check is off, so nothing is counted. Switch on “Check the sender of every report” above.")); return; }
+    // the state first, in words
+    const state = el("div", "wk-week-state");
+    if (d.not_checking) {
+      state.classList.add("is-bad");
+      state.append(el("b", null, "The check is not working: the latest report e-mails could not be checked."),
+        el("span", null, " This server's DNS does not answer the look-up of Shadowserver's signing key (a TXT record). "
+          + (d.mode === "enforce" ? "With blocking on, these reports are held for the next run, again and again, and not loaded. "
+                                  : "Reports are still loaded, but none is verified. ")
+          + "Ask your network team to let this server's DNS answer TXT look-ups, or point it at a resolver that does."));
+    } else if (d.mode === "enforce") {
+      state.classList.add("is-on");
+      state.append(el("b", null, "Blocking is on."), el("span", null, " Reports that do not pass are held back below until an administrator releases them."));
+    } else if (d.ready) {
+      state.classList.add("is-ready");
+      state.append(el("b", null, `Every report e-mail passed on each of the last ${d.days} days.`),
+        el("span", null, " Nothing on the way changes Shadowserver's mail, so blocking can be switched on safely: unsigned or changed reports are then held back instead of loaded."));
+      const go = el("button", "lg-btn primary", "Switch blocking on"); go.type = "button";
+      go.addEventListener("click", () => {
+        if (!S.unlocked) { say("Edit (with your password) first, then switch blocking on.", true); askPassword(); return; }
+        const b = $("wkAuthBlock"); if (b && !b.disabled) { b.checked = true; b.focus(); b.scrollIntoView({ block: "center", behavior: "smooth" }); say("“Block reports that do not pass” is ticked: save to apply."); }
+      });
+      state.append(go);
+    } else {
+      state.append(el("b", null, `${d.days_passing} of ${d.days} days with every checked e-mail passing.`),
+        el("span", null, d.failed ? ` ${fmt(d.failed)} e-mail(s) did not pass: see why below. Keep blocking off until every day passes.`
+          : ` Blocking can be suggested once all ${d.days} days pass (days without mail, or with nothing checked, do not count).`));
+    }
+    c.append(state);
+    // the days
+    const t = el("table", "hosts adm-table wk-week"); const th = el("thead"); const hr = el("tr");
+    ["Day (UTC)", "E-mails", "Passed", "Did not pass", "Not checked"].forEach((x, i) => hr.append(el("th", i ? "wk-num" : null, x))); th.append(hr); t.append(th);
+    const tb = el("tbody");
+    for (const day of d.per_day) {
+      const tr = el("tr");
+      [day.day, fmt(day.total), fmt(day.passed), fmt(day.failed), fmt(day.unchecked)].forEach((x, i) => {
+        const td = el("td", i && i > 2 && Number(String(x).replace(/,/g, "")) ? "wk-num is-warn" : i ? "wk-num" : null, x); tr.append(td); });
+      tb.append(tr);
+    }
+    t.append(tb); const wrap = el("div", "table-wrap"); wrap.append(t); c.append(wrap);
+    // why they did not pass, and what it usually means
+    if (d.failures.length) {
+      c.append(el("h4", null, "Why e-mails did not pass"));
+      const ul = el("ul", "wk-why");
+      for (const f of d.failures) {
+        const li = el("li"); li.append(el("b", null, `${fmt(f.count)} × ${f.reason || f.result}`));
+        if (f.hint) li.append(el("p", "muted", f.hint));
+        ul.append(li);
+      }
+      c.append(ul);
+    }
+  }
+
   // ---------------- held-back reports
   async function loadHeld() {
     const c = $("wkHeld"); c.replaceChildren(el("h3", null, "Reports held back by the sender check"));
@@ -256,7 +320,9 @@
     const tb = el("tbody");
     for (const h of d.held) {
       const tr = el("tr");
-      [`${String(h.at || "").replace("T", " ").slice(0, 16)} UTC`, h.result, h.reason, h.from_domain || "?", h.subject, `${h.files} file(s), ${h.links} link(s)`].forEach((x) => tr.append(el("td", null, x)));
+      [`${String(h.at || "").replace("T", " ").slice(0, 16)} UTC`, h.result].forEach((x) => tr.append(el("td", null, x)));
+      const why = el("td", null, h.reason); if (h.hint) why.append(el("small", "muted wk-hint", h.hint)); tr.append(why);   // what it usually means
+      [h.from_domain || "?", h.subject, `${h.files} file(s), ${h.links} link(s)`].forEach((x) => tr.append(el("td", null, x)));
       const td = el("td");
       if (h.release_asked) td.append(el("span", "muted", "Release requested: goes through at the pipeline's next run"));
       else {

@@ -82,6 +82,49 @@ try:
     except Exception as e:  # noqa: BLE001
         ok("broken status and restart files: no crash", False, repr(e))
 
+    print("The sender check (2026-11-15): stopped checking, or ready to block")
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    real_ma = next((os.path.join(os.path.dirname(here), n, "mail_auth.py") for n in ("database", "shadowserver")
+                    if os.path.exists(os.path.join(os.path.dirname(here), n, "mail_auth.py"))), None)
+    if not real_ma:
+        print("  (the pipeline's mail_auth.py is not beside the platform: these checks are skipped)")
+    else:
+        import datetime as _dt, sqlite3 as _sq
+        shutil.copy(real_ma, os.path.join(pipe, "mail_auth.py"))
+        db = os.path.join(pipe, "reports", ".mail_state.sqlite")      # in DATA_DIR, where the pipeline writes it
+
+        def mail_state(rows):
+            if os.path.exists(db):
+                os.remove(db)
+            c = _sq.connect(db)
+            c.execute("CREATE TABLE mail_auth (key TEXT PRIMARY KEY, at TEXT, from_domain TEXT, signer TEXT, result TEXT, reason TEXT, subject TEXT, files TEXT)")
+            for i, (back, res) in enumerate(rows):
+                at = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=back)).isoformat(timespec="seconds")
+                c.execute("INSERT INTO mail_auth (key, at, result, reason) VALUES (?, ?, ?, ?)", (f"k{i}", at, res, "DNS did not answer" if res == "temperror" else ""))
+            c.commit(); c.close()
+
+        def sender(env_line):
+            open(os.path.join(pipe, ".env"), "w").write(f"DATA_DIR={os.path.join(pipe, 'reports')}\n{env_line}\n")
+            return [a for a in A.current(time.time()) if a["key"].startswith("sender-")]
+        mail_state([(b, "pass") for b in (6, 5, 4, 3)] + [(b, "temperror") for b in (2, 1, 0)])
+        s = sender("MAIL_AUTH=log")
+        ok("the newest e-mails could not be checked: a problem, read from DATA_DIR", len(s) == 1 and s[0]["problem"]
+           and s[0]["key"].startswith("sender-not-checking") and "DNS" in s[0]["text"], str(s)[:200])
+        s = sender("MAIL_AUTH=enforce")
+        ok("…with blocking on, it says reports are being held", s and "held" in s[0]["title"] and "not loaded" in s[0]["text"], str(s)[:200])
+        mail_state([(b, "pass") for b in range(7) for _ in range(2)])
+        s = sender("MAIL_AUTH=log")
+        ok("every day passed, blocking off: a note (not a problem) that blocking can be switched on",
+           len(s) == 1 and s[0]["key"] == "sender-ready" and not s[0]["problem"], str(s)[:200])
+        ok("…not when blocking is already on", sender("MAIL_AUTH=enforce") == [])
+        ok("…nothing when the check is off", sender("MAIL_AUTH=off") == [])
+        open(db, "w").write("not a database")
+        try:
+            sender("MAIL_AUTH=log"); ok("a broken mail state: no crash", True)
+        except Exception as e:  # noqa: BLE001
+            ok("a broken mail state: no crash", False, repr(e))
+        open(os.path.join(pipe, ".env"), "w").write(f"DATA_DIR={os.path.join(pipe, 'reports')}\n")
+
     print("In the bell: admins only")
     import app as APP
     import auth

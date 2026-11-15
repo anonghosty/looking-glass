@@ -105,7 +105,7 @@ def install(app, ctx):
         mode_now = ma.mode(env) if ma else "off"
         lo, hi = fr.isoformat(), (to + timedelta(days=1)).isoformat()
         rows, api_rows, type_rows = [], [], []
-        db = d / ".mail_state.sqlite"
+        db = pipeline_link.data_dir(d) / ".mail_state.sqlite"
         if db.exists():
             con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
             con.row_factory = sqlite3.Row
@@ -141,7 +141,7 @@ def install(app, ctx):
             days.append({"day": k, **{res: per_day[k][res] for res in RESULTS}, "api": per_day[k]["api"]})
             cur += timedelta(days=1)
         keys = Counter((r["signer"], r["selector"], r["alg"], r["bits"]) for r in rows if r["result"] in ("pass", "other"))
-        held = ma.held(d) if ma else []
+        held = ma.held(pipeline_link.data_dir(d)) if ma else []
         odd = [{k: r[k] for k in ("at", "result", "action", "from_domain", "signer", "reason", "subject", "files")}
                | {"meaning": MEANING.get(r["result"], ""), "action_label": ACTIONS.get(r["action"], r["action"])}
                for r in rows if r["result"] != "pass"][-300:][::-1]

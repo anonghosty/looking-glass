@@ -19,6 +19,16 @@ def find_dir(base_dir):
     return None
 
 
+def data_dir(pdir):
+    """Where the pipeline keeps its data: DATA_DIR from its .env, else its own folder (as shadowserver_pipeline.py
+    decides). The mail state (.mail_state.sqlite) and the held-back reports (quarantine/) are there (2026-11-15: they
+    were read from the pipeline's folder only, so a pipeline with DATA_DIR set looked empty here)."""
+    if not pdir:
+        return None
+    d = read_env(Path(pdir) / ".env").get("DATA_DIR")
+    return Path(d).expanduser().resolve() if d else Path(pdir)
+
+
 def read_env(path):
     """{KEY: value} of an .env file (values as the pipeline reads them: literal, optional quotes)."""
     out = {}

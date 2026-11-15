@@ -464,6 +464,9 @@ def _sender_record(auth, key, res, msg, names, stats, action) -> None:
                     "retry": "not processed this run: tried again next run"}.get(action, action)
             log.warning("    [SENDER %s] from %s: %s (%s)", res["result"].upper(), res["from_domain"] or "?",
                         res["reason"] or "no reason given", what)
+            tip = mail_auth.hint(res["result"], res["reason"])
+            if tip:
+                log.warning("    [SENDER] what it usually means: %s", tip)
     except Exception as exc:  # noqa: BLE001
         log.warning("    [SENDER] could not be recorded: %s", exc)
 
