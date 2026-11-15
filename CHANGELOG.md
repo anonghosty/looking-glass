@@ -5,6 +5,12 @@ Notable changes to Looking Glass, newest first. Releases are named by date. To u
 
 ## Unreleased
 
+### Security
+- A code made by ticking a CVE on an analyst code's page now opens only for the people of its parent's finding (and
+  administrators), like the code it was made from.
+
+## 2026-11-15
+
 ### Added
 - Internal database on another server: the installer can use an existing MongoDB of your network, checks that it is
   a Looking Glass database, and otherwise offers a new database there or MongoDB on this computer.

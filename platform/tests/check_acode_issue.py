@@ -51,7 +51,8 @@ class Findings:
     asked_of = None
 
     def of_code(self, c):
-        return {"id": "7", "participants": ["rachel"]} if c == SRC else None
+        return ({"id": "7", "participants": ["rachel"], "title": "a finding", "status": "analyst", "user": "rachel"}
+                if c == SRC else None)
 
     def sees(self, f, user, admin, strict=False):
         return admin or user in (f.get("participants") or [])
@@ -121,6 +122,34 @@ ok("a role that does not read codes: refused", tick("CVE-2024-6387", role="exter
 CSRF[0] = False
 ok("without the page's token: refused", tick("CVE-2024-6387")[0] == 403)
 CSRF[0] = True
+
+print("The ticked code belongs to its parent's channel (security review of 7db98d1)")
+perms["analyst"] = {"unmasked", "export"}
+
+
+def as_user(user, role, fn):
+    with app.test_request_context("/"):
+        g.user = {"user": user, "role": role}
+        return fn()
+
+
+def listed(user):
+    def f():
+        rv = app.view_functions["api_acode_list"]()
+        rv = rv[0] if isinstance(rv, tuple) else rv
+        return [c["code"] for c in (rv.get_json() or {}).get("codes") or []]
+    return as_user(user, "analyst", f)
+
+
+ok("an analyst outside the channel cannot open it (pages, searches, Executive)", not as_user("grace", "analyst", lambda: api.allowed(code)))
+ok("…nor sees it in the analysts' list", code not in listed("grace") and SRC not in listed("grace"), str(listed("grace")))
+ok("a participant can open it and sees it listed", as_user("rachel", "analyst", lambda: api.allowed(code)) and code in listed("rachel"))
+ok("an admin can open it", as_user("ann", "admin", lambda: api.allowed(code)))
+book.put("LG-A-0000CCCC", {"kind": "a", "platform": "services", "day": "2026-11-13", "sel": {"from_code": code, "issue": "x"}})
+ok("a code ticked on the ticked code: still the first finding's channel", not as_user("grace", "analyst", lambda: api.allowed("LG-A-0000CCCC")))
+book.put("LG-A-0000DDDD", {"kind": "a", "platform": "services", "day": "2026-11-13", "sel": {"from_code": "LG-A-0000DDDD"}})
+ok("a code whose chain loops back on itself: no endless walk, open as a code without a finding",
+   as_user("grace", "analyst", lambda: api.allowed("LG-A-0000DDDD")))
 
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))
 sys.exit(1 if fails else 0)

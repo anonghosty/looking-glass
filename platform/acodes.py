@@ -416,10 +416,24 @@ def install(app, ctx):
             cur = parent
         return out[::-1]
 
+    def owner(code):
+        """The finding a code belongs to: its own, or else the nearest one up its sel.from_code chain (a CVE ticked on
+        a code's page makes a code with no finding of its own; it belongs to its parent's channel - security review of
+        7db98d1, 2026-11-15). None: no finding anywhere up the chain."""
+        cur, seen = code, set()
+        while cur and cur not in seen and len(seen) < 32:
+            seen.add(cur)
+            f = ctx["findings"].of_code(cur)
+            if f:
+                return f
+            e = book.get(cur) or {}
+            cur = ((e.get("sel") or {}).get("from_code") or "").strip().upper()
+        return None
+
     def in_channel(code, f=None):
         """Whether this user may open the code: one of the people of its finding (a channel, like a ticket), or an admin;
-        a code made before channels is open to the roles that read codes, as it was."""
-        f = f if f is not None else ctx["findings"].of_code(code)
+        a code with no finding anywhere up its chain (made before channels) is open to the roles that read codes."""
+        f = f if f is not None else owner(code)
         return not f or ctx["findings"].sees(f, user()[0], hp("settings"))
 
     _cd_cache, _cd_lock = {}, threading.Lock()
@@ -495,7 +509,7 @@ def install(app, ctx):
             items = [(c, dict(e)) for c, e in book.data.items() if e.get("kind") == "a"]
         out = []
         for c, e in items:
-            f = ctx["findings"].of_code(c)
+            f = owner(c)
             if not in_channel(c, f):
                 continue
             out.append({"code": c, "day": e["day"], "platform": e["platform"], "label": e.get("label", ""), "records": e.get("records"),
