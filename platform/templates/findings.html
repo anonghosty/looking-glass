@@ -33,9 +33,6 @@
         (several at once open a case, one sub-finding each). Management decides, an analyst pulls the devices, management approves
         each organisation to an advisor, who writes the advisory and marks it as sent here. Each step is its own action;
         the finding closes when its advisory is sent, and its case when all its sub-findings are closed. No address is ever shown here.</p>
-      <ol class="fd-flow" aria-label="The steps">
-        {% for k, label in statuses %}<li class="s-{{ k }}">{{ label }}</li>{% endfor %}
-      </ol>
     </section>
     <div class="fd-bar">
       <div class="fd-tabs" role="tablist" aria-label="Which findings">

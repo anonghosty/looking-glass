@@ -167,11 +167,11 @@ class Settings:
 def load_settings(args: argparse.Namespace) -> Settings:
     env_file = Path(args.env_file).expanduser().resolve()
     load_env_file(env_file)
-    mongo = {
-        "host": _env("MONGO_HOST", "127.0.0.1"),
-        "port": int(_env("MONGO_PORT", "27017")),
-        "appname": "shadowserver-pipeline",
-    }
+    import db_connect                  # where the database is: loopback or internal only; TLS for another computer
+    try:
+        mongo = {**db_connect.kwargs(lambda k: _env(k) or None), "appname": "shadowserver-pipeline"}
+    except db_connect.Refused as why:
+        raise SystemExit(f"The pipeline will not run: {why} ({env_file}, see README.md)") from None
     if _env("MONGO_USER"):
         mongo.update(username=_env("MONGO_USER"), password=_env("MONGO_PASSWORD"),
                      authSource=_env("MONGO_AUTH_SOURCE", "admin"))

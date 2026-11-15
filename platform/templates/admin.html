@@ -41,9 +41,9 @@
     </section>
     {% endif %}
     <div class="seg adm-tabs" role="tablist">
-      {% if "users" in lg_perms %}<button type="button" role="tab" data-tab="users" aria-pressed="true">Users <span class="adm-badge" id="pendingBadge" hidden></span></button>{% endif %}
-      {% if "users" in lg_perms %}<button type="button" role="tab" data-tab="roles" aria-pressed="false">Roles &amp; permissions</button>{% endif %}
-      {% if "users" in lg_perms %}<button type="button" role="tab" data-tab="locks" aria-pressed="false">Locked sign-ins <span class="adm-badge" id="locksBadge" hidden></span></button>{% endif %}
+      {% if "users" in lg_perms %}<button type="button" role="tab" data-tab="users" aria-selected="true">Users <span class="adm-badge" id="pendingBadge" hidden></span></button>{% endif %}
+      {% if "users" in lg_perms %}<button type="button" role="tab" data-tab="roles" aria-selected="false">Roles &amp; permissions</button>{% endif %}
+      {% if "users" in lg_perms %}<button type="button" role="tab" data-tab="locks" aria-selected="false">Locked sign-ins <span class="adm-badge" id="locksBadge" hidden></span></button>{% endif %}
     </div>
     <div class="st-banner" id="banner" role="status" hidden></div>
 

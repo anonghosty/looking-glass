@@ -398,13 +398,15 @@ class Findings:
             self._load()
             return [dict(x) for x in self.data["items"].values() if self.sees(x, user, admin, strict)]
 
-    def set_reported(self, fid, first, last):
-        """The days its records were reported (kept, so the page and the expiry need no database)."""
+    def set_reported(self, fid, first, last, seen=None):
+        """The days its records were reported, and the last day its devices were seen (the latest report while it shows
+        them again): kept, so the page and the expiry need no database."""
+        new = {"first": first, "last": last, "seen": seen or last}
         with self.lock:
             self._load()
             item = self.data["items"].get(str(fid))
-            if item and item.get("reported") != {"first": first, "last": last}:
-                item["reported"] = {"first": first, "last": last}
+            if item and item.get("reported") != new:
+                item["reported"] = new
                 self._save()
 
     def expire(self, fid, why, user):

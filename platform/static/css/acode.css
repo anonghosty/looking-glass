@@ -86,7 +86,12 @@
 .ax-seenin { display: grid; gap: 2px; font-size: 12px; min-width: 0; }
 .ax-seenin > div { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 8px; }
 .ax-seenin b { color: var(--text-2); } .ax-seenin span { color: var(--muted); overflow-wrap: anywhere; }
-.ax-iss-list li { grid-template-columns: minmax(150px, max-content) minmax(0, 1fr); }
+.ax-iss-list li { grid-template-columns: minmax(150px, max-content) minmax(150px, max-content) minmax(0, 1fr); align-items: center; }
+/* a CVE / issue to tick (2026-11-14): its code appears once made; an error says why, in full */
+.ax-iss-tick .ax-code { white-space: normal; overflow-wrap: anywhere; }
+.ax-iss-tick .ax-code-wait { color: var(--muted); font-weight: 500; }
+.ax-iss-tick .ax-code.bad { color: #ffb4b4; }
+@media (max-width: 720px) { .ax-iss-list li { grid-template-columns: 1fr; } }
 .ax-iss-list .ax-issue { justify-self: start; }
 .ax-issue em { font-style: normal; font-size: 10.5px; font-weight: 700; padding: 0 5px; border-radius: 5px; background: rgba(0, 0, 0, .3); }
 .ax-nonefound { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 4px 10px; padding: 9px 12px; border-radius: 10px; cursor: pointer;

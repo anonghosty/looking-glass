@@ -504,6 +504,54 @@ def install(app, ctx):
         out.sort(key=lambda x: (x["first"], x["day"]), reverse=True)
         return jsonify(codes=out)
 
+    @app.route("/api/intel/acode/<code>/issue", methods=["POST"])
+    def api_acode_issue(code):
+        """A CVE or issue ticked on an analyst code's page (user, 2026-11-14): an analyst code for exactly the devices of
+        this selection that carry it, in the services reports of the days in memory, so the researcher can answer with
+        it like any other code. The same CVE ticked again gives the same code. No address leaves: the code and counts."""
+        if not reader():
+            return jsonify(error="Analyst codes are for researchers, management, analysts and admins."), 403
+        if not ctx["csrf_ok"]():
+            return jsonify(error="Refused (the request did not come from this page)."), 403
+        # no Demo-mode refusal here: researchers are masked viewers (is_demo() is true for them) and they are the ones
+        # who tick; the answer is a code and counts only, never an address (2026-11-14: the first version refused them)
+        code = (code or "").strip().upper()
+        if not ACODE_RX.match(code) or not in_channel(code):
+            return jsonify(error="No such analyst code."), 404
+        name = str((request.get_json(silent=True) or {}).get("name") or "").strip()[:120]
+        if not name:
+            return jsonify(error="Which CVE or issue?"), 400
+        entry = book.get(code)
+        if not entry or entry.get("kind") != "a":
+            return jsonify(error="No such analyst code."), 404
+        with book.lock:                                    # ticked before: the same code
+            book._load()
+            for c, e in book.data.items():
+                s = e.get("sel") or {}
+                if e.get("kind") == "a" and s.get("from_code") == code and s.get("issue") == name:
+                    return jsonify(code=c, hosts=e.get("hosts"), records=e.get("records"), name=name)
+        host = (lambda e: e.get("src_ip") or "") if entry["platform"] == "comms" else (lambda e: e.get("ip") or "")
+        hosts = {host(e) for e in records(entry) if host(e)}
+        if not hosts or not ctx.get("cross_hosts"):
+            return jsonify(error="None of this selection's devices is in the services reports of the days in memory."), 409
+        cr = ctx["cross_hosts"](hosts)
+        it = next((i for i in cr.get("issues") or [] if i["name"] == name), None)
+        if not it or not it.get("ips"):
+            return jsonify(error=f"None of this selection's devices carries {name} in the days in memory."), 409
+        ips = set(it["ips"])
+        evs = []
+        for iso in cr.get("days") or []:
+            d = ctx["day"]("services", iso)
+            for e in (d.events if d is not None else []):
+                if e.get("ip") in ips and (name in (e.get("issues") or []) or name in (e.get("tags") or [])
+                                           or name.lower() in str(e.get("tag") or "").lower().split(";")):
+                    evs.append(e)
+        if not evs:
+            return jsonify(error=f"The records of {name} on these devices could not be read just now: try again."), 409
+        c = make_selection("services", evs, code, f"{name} on the devices of {code}", extra={"issue": name})
+        ctx["audit"].add("analyst_code", user=user()[0], target=c, detail=f"{name} ticked on {code} · {len(evs)} records")
+        return jsonify(code=c, hosts=len({e.get("ip") for e in evs}), records=len(evs), name=name)
+
     @app.route("/intel/<code>")
     def acode_page(code):
         if not reader():
@@ -513,14 +561,14 @@ def install(app, ctx):
     class API:
         pass
     api = API()
-    def make_selection(platform, evs, from_code, label):
+    def make_selection(platform, evs, from_code, label, extra=None):
         """An analyst code standing for exactly these records (combo_review.py: the devices an analyst drilled down to,
         so management's Executive figures are of that selection, not the whole combination). No finding of its own: it
         joins the review's finding, whose channel alone opens it. Returns the code, or None for no records."""
         days = sorted({str(e.get("extracted_date") or e.get("timestamp") or "")[:10] for e in evs} - {""})
         if not evs or not days:
             return None
-        sel = {"from_code": from_code, "days": days, "drill": True}
+        sel = {"from_code": from_code, "days": days, "drill": True, **(extra or {})}
         code = new_acode(book, platform, days[-1], sel)
         host = (lambda e: e.get("src_ip")) if platform == "comms" else (lambda e: e.get("ip"))
         names = collections.Counter(n for e in evs for n in ([(e.get("infection") or "").lower()] if platform == "comms" else (e.get("issues") or [])) if n)

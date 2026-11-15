@@ -141,6 +141,11 @@ st, tot = call("/api/intelligence/totals", MG)
 ok("…and gets the counts only: totals and the 7-day trend per group, no address", st == 200 and tot["groups"] and not IP_RX.search(json.dumps(tot))
    and all(len(gr["per_day"]) == 8 for gr in tot["groups"]))
 ok("a researcher gets no totals either", call("/api/intelligence/totals", RS)[0] == 403)
+import auth as _auth  # noqa: E402
+# the sign-in path gate lets the management role through to it (sweep 2026-11-14: the route allowed management, but
+# the gate refused it before, so the Executive portal never showed the totals)
+ok("…and the management role's path gate lets it through", "/api/intelligence/totals".startswith(_auth.MANAGEMENT_PATHS)
+   and not "/api/intelligence/report".startswith(_auth.MANAGEMENT_PATHS) and not "/api/intelligence?x".startswith(_auth.MANAGEMENT_PATHS))
 ok("an administrator opens it too", call("/api/intelligence", AN | {"settings", "users"}, role="admin")[0] == 200)
 ok("another role that sees addresses and exports does not (analysts and administrators only)",
    call("/api/intelligence", AN, role="custom-hunter")[0] == 403 and call("/intelligence", AN, raw=True, role="custom-hunter")[0] == 403)

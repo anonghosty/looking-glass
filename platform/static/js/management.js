@@ -142,7 +142,9 @@
     const top = rows.slice(0, 7), rest = rows.slice(7).reduce((a, r) => a + r.count, 0);
     const parts = rest ? [...top, { label: "Other", value: "", count: rest }] : top;
     const tot = parts.reduce((a, r) => a + r.count, 0), R = 64, r0 = 42, C = 80;
-    const svg = sv("svg", { viewBox: "0 0 160 160", class: "mg-donut-svg", role: "img" });
+    // the chart's name for screen readers: every part with its share (sweep 2026-11-14: an image without a name)
+    const svg = sv("svg", { viewBox: "0 0 160 160", class: "mg-donut-svg", role: "img",
+      "aria-label": parts.map((p) => `${p.label || p.value || "Unknown"} ${Math.round((100 * p.count) / tot)}%`).join(", ") });
     let a0 = -Math.PI / 2;
     parts.forEach((p, i) => {
       const a1 = a0 + (2 * Math.PI * p.count) / tot, large = a1 - a0 > Math.PI ? 1 : 0;
@@ -347,6 +349,7 @@
       p.addEventListener("mousemove", (ev) => showTip(ev, reg, r));
       p.addEventListener("mouseleave", () => { tip.hidden = true; });
       if (r) p.addEventListener("click", () => setFilter("region", r.value));
+      p.setAttribute("role", "img");
       p.setAttribute("aria-label", `${window.LGRegions.shortName(reg.name)}: ${r ? `${fmt(v)} ${comms ? "devices" : "hosts"}` : "nothing reported"}`);
       svg.append(p);
       const bb = p.getBBox(), lab = reg.label ? P(reg.label[0], reg.label[1]) : [bb.x + bb.width / 2, bb.y + bb.height / 2];
@@ -607,7 +610,7 @@
     const d = state.data, comms = d.platform === "comms";
     window.LGTime?.set(d.tz);              // the CSIRT's time zone that day (Settings > Country)
     document.body.dataset.plat = d.platform;
-    for (const b of document.querySelectorAll("[data-plat]")) b.setAttribute("aria-selected", String(b.dataset.plat === d.platform));
+    for (const b of document.querySelectorAll("button[data-plat]")) b.setAttribute("aria-selected", String(b.dataset.plat === d.platform));
     $("mgScope").textContent = `${d.scope}${d.demo ? " · Demo mode" : ""}`;
     // rebuilt whenever the days differ, not only their number: at midnight the window moves by a day and keeps its length
     // (review 2026-11-13: the list went stale)
@@ -742,7 +745,7 @@
   const countryName = (c) => { try { return new Intl.DisplayNames(["en"], { type: "region" }).of(c) || c; } catch { return c; } };
 
   // ---------------- controls
-  for (const b of document.querySelectorAll("[data-plat]")) b.addEventListener("click", () => { if (state.plat !== b.dataset.plat) { state.plat = b.dataset.plat; load(true); } });
+  for (const b of document.querySelectorAll("button[data-plat]")) b.addEventListener("click", () => { if (state.plat !== b.dataset.plat) { state.plat = b.dataset.plat; load(true); } });
   $("mgDay").addEventListener("change", () => { state.day = $("mgDay").value; load(); });
   // back on the page after midnight (UTC): the days have moved on, so the list and the figures are fetched again,
   // quietly (review 2026-11-13: the day picker stayed on the old days until the page was reloaded)
@@ -825,7 +828,7 @@
     const many = code.split(",").map((x) => x.trim()).filter((x) => /^LG-[CXA]-[0-9A-F]{8}$/.test(x));
     if (many.length > 1) {                     // several codes (a review's views): their devices together, on the platform given
       state.plat = qs.get("plat") === "services" ? "services" : "comms";
-      for (const b of document.querySelectorAll("[data-plat]")) b.setAttribute("aria-pressed", String(b.dataset.plat === state.plat));
+      for (const b of document.querySelectorAll("button[data-plat]")) b.setAttribute("aria-pressed", String(b.dataset.plat === state.plat));
       state.filters[state.plat] = { code: many.join(",") };
       if (qs.get("embed") !== "1") toast(`Showing ${many.length} combinations together`);
     } else if (/^LG-[CXA]-[0-9A-F]{8}$/.test(code)) {
@@ -835,7 +838,7 @@
         if (r.ok) {
           state.plat = x.section === "issues" || x.section === "services" ? "services" : "comms";
           if (x.kind === "a" && x.day) state.day = x.day;      // an analyst's selection is of one day: open that day
-          for (const b of document.querySelectorAll("[data-plat]")) b.setAttribute("aria-pressed", String(b.dataset.plat === state.plat));
+          for (const b of document.querySelectorAll("button[data-plat]")) b.setAttribute("aria-pressed", String(b.dataset.plat === state.plat));
           state.filters[state.plat] = { code };
           toast(`Showing combination ${code}: ${x.text}`);
         } else toast(x.error || `Unknown combination code ${code}`, "bad");

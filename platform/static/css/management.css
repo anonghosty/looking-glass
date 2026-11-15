@@ -404,3 +404,8 @@ body.is-loading .mg-grid, body.is-loading .mg-kpis { opacity: 1; }
 .mg-grid.mg-grid-intel { grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
 .mg-intel-note { margin: -6px 0 0; font-size: 12.5px; color: var(--muted); max-width: 980px; }
 .mg-intel-card .mg-steps { min-height: 120px; }
+
+/* text shows in full (sweep 2026-11-14): wraps instead of being cut with "…" */
+.mg-bar .l, .mg-legend span, .mg-rank-row .nm b, .mg-rank-row .nm small, .mg-maptip li span, .mg-tree-row .l,
+.mg-kpi-trend-row .mg-delta, .mg-kpi-trend-row small {
+  white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; max-width: none; }

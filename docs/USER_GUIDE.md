@@ -431,6 +431,10 @@ demonstration data, are in [Use case scenarios: a needle through the haystack](U
 one report, **`LG-X-…`** for a cross-report pattern (what a device carried in each of several reports). A code
 carries no address. Click a code to copy it.
 
+**Ticking a CVE.** On an analyst code's page, a CVE or issue under *CVEs and issues* can be ticked like a combination: it becomes a code of exactly this selection's devices that carry it, sent with the reply.
+
+![CVEs ticked on an analyst code's page](media/screens/94-cve-tick.png)
+
 **Attaching codes to a note.** The Notes window has a **Combinations for this note** section with three ways in:
 - **Seen in the reports:** every combination of the name, grouped by report like a detailed drop-down list, with
   records, devices and repeating devices, and a filter. One click attaches it.
@@ -584,9 +588,18 @@ search on the day it was reported, so an old finding can still be worked on. Ana
 advisors (in the advisory's device list) see the devices reported again marked **again**, with a line above the list;
 the Findings page itself never shows an address.
 
-**Time to act.** An open finding closes on its own once its time to act has passed: `FINDING_ACT_DAYS` days after its
-records were reported (30 unless set in `.env`; `0` turns it off). Its history then says *Time to act expired*, by
-Looking Glass, and everyone in its channel sees it in the bell.
+![A finding with the day it was reported, its devices in the latest report and its time to act](media/screens/92-finding-watch.png)
+
+**Time to act.** A finding nobody is acting on yet (new, with management, back with the researcher, or with the
+analyst) closes on its own once its time to act has passed: `FINDING_ACT_DAYS` days (30 unless set in `.env`; `0`
+turns it off) after its devices were last seen. While the latest report still shows them, the clock starts again. A
+finding approved by management, with the advisor, or with an advisory not yet sent never closes this way, and a finding
+always has at least `FINDING_GRACE_DAYS` (7) days from the day it was opened. Its history then says *Time to act
+expired*, by Looking Glass; everyone in its channel sees it in the bell, and it is in the audit log.
+
+**The review.** Management's final look at a combination the analyst sent: what the researcher is saying, what the analyst ticked, and the drill-down, the whole combination and the analyst's view as the Executive portal shows them, each on the day its records were reported.
+
+![A review: the drill-down and the views as the Executive portal shows them](media/screens/93-review-drilldown.png)
 
 **The page is a ticket tree.** A case shows its sub-findings beneath it, one per organisation. Closed sub-findings fold
 into their own group, and every level opens and closes with a click. The **state pill** says where each one stands
@@ -594,6 +607,8 @@ and who holds it (*With management · Efua Owusu*). The filters at the top count
 between work in progress and everything.
 
 ## Abused or Compromised (analysts)
+
+![Abused or Compromised: each group today against the usual](media/screens/90-abused-compromised.png)
 
 Shadowserver sends a group of **Intelligence** reports beside the two platforms: compromised systems and victims
 (compromised websites and devices, ransomware victims), malicious content hosted in the constituency (malware and
@@ -606,6 +621,8 @@ sandbox URLs, spam links), addresses on block lists or targeted, leaked accounts
   records with filters on that report's own fields (for example URL, application, tag, detail, sector and server for
   compromised websites; vendor, type, model, tag and sector for devices; source and reason for block lists) and a
   search over every field.
+![A report's records, laid out like the platforms' analysis window](media/screens/91-abused-records.png)
+
 - **An address** opens what else that host carries: the other Intelligence reports of the week and the services
   platform's categories for it.
 - **Export CSV** downloads every record of the view; it is in the audit log.

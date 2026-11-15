@@ -100,7 +100,9 @@ DEFINITIONS_PATHS = ("/definitions", "/api/kb/", "/api/networks", "/api/lookups"
                      "/api/attack", "/api/name-sources")      # ATT&CK mappings and the name sources' status (attack_map.py, name_sources.py)
 MANAGEMENT_PATHS = ("/management", "/api/mgmt/", "/api/lookups", "/api/combo-codes/", "/findings", "/api/findings",
                     "/intel/", "/api/intel/acode/", "/review/", "/api/review/", "/api/notifications", "/overview",
-                    "/api/attack/technique/")  # all the management role can open
+                    "/api/attack/technique/",
+                    # the Executive portal's Abused or Compromised totals (counts only; sweep 2026-11-14: refused here)
+                    "/api/intelligence/totals")  # all the management role can open
 MANAGEMENT_ONLY = "management"            # the permission (and role) that cannot be given to any other role   # all a researcher (no 'view') can open
 LOWEST_ROLE = "external"
 # "Peace of mind" (peace.py): an admin who ticks it keeps only the admin and audit duties and Settings; the platforms,

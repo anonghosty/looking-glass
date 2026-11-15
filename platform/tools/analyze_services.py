@@ -14,10 +14,12 @@ from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 from pymongo import MongoClient
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import db_connect  # noqa: E402  (where the database is; TLS for one on another computer)
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 day = sys.argv[1] if len(sys.argv) > 1 else (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
-client = MongoClient(host=os.environ["MONGO_HOST"], port=int(os.environ.get("MONGO_PORT", 27017)),
+client = MongoClient(**db_connect.kwargs(os.environ.get),
                      username=os.environ.get("MONGO_USER"), password=os.environ.get("MONGO_PASSWORD"),
                      authSource=os.environ.get("MONGO_AUTH_SOURCE", "admin"), serverSelectionTimeoutMS=8000)
 db = client[os.environ["MONGO_DB"]]

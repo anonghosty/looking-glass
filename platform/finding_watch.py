@@ -6,8 +6,13 @@ report shows again, and closing a finding whose time to act has passed.
     again       of the finding's devices, those in the latest report day for the same combination (a combination code:
                 its own exact pattern; an analyst's selection: the same reports). Counts for everyone in the channel;
                 the addresses only for the roles that already see them (analysts, advisors, admins)
-    expiry      an open finding whose last reported day is more than FINDING_ACT_DAYS days ago (.env, default 30;
-                0 = never) is closed: "Time to act expired". The channel sees it in the history and the bell.
+    expiry      a finding nobody is acting on (new, with management, back with the researcher, with the analyst) closes
+                once FINDING_ACT_DAYS days (.env, default 30; 0 = never) have passed since its devices were LAST SEEN:
+                the last reported day, or the latest report while it still shows them again. Never one approved, with
+                the advisor, or with an advisory not yet sent (organisations waiting for it would never get it), and
+                never within FINDING_GRACE_DAYS (7) of being opened (a review of older records). "Time to act
+                expired", in its history, the bell and the audit log (finding_status by looking-glass). External
+                review, 2026-11-14.
 
 Everything heavy (loading past days from MongoDB) runs in one background worker, one finding at a time; the pages
 read what is ready and say "counting" until then. Nothing here is written but the finding's reported days and its
@@ -32,6 +37,17 @@ def act_days():
         return 30
 
 
+def grace_days():
+    try:
+        return max(0, int(os.environ.get("FINDING_GRACE_DAYS", "7") or 7))
+    except ValueError:
+        return 7
+
+
+# the states in which nobody is acting on a finding yet: only these may expire (approved / with the advisor never)
+EXPIRABLE = {"new", "management", "researcher", "analyst"}
+
+
 def install(app, ctx):
     """ctx: findings (Findings), book (combination codes), acodes, labels(), svc_matcher(entry), comms_matcher(entry),
     stores {"comms","services"}, replay_now(), network(asn), has_perm(p), logger."""
@@ -42,12 +58,9 @@ def install(app, ctx):
 
     # ---------------- what a finding is about
     def latest_iso(platform):
-        st = ctx["stores"][platform]
-        days = sorted(st.days)
-        if not days:
-            st.get(ctx["replay_now"]())
-            days = sorted(st.days)
-        return days[-1].date().isoformat() if days else ""
+        """The latest report day: the day the platform replays, the same day latest_hosts() reads (sweep 2026-11-14: the
+        newest day in memory could be a later, partly loaded one, so a finding of the replay day was "seen again")."""
+        return ctx["stores"][platform].get(ctx["replay_now"]()).start.date().isoformat()
 
     def subject(x):
         """(platform, hosts, reported days, how to match the latest day) of a finding, or None (a finding from a name)."""
@@ -125,7 +138,9 @@ def install(app, ctx):
                     with lock:
                         cache[fid] = {"key": key_of(x), "at": time.time(), "result": res}
                     if res.get("reported_last"):
-                        F.set_reported(fid, res["reported_first"], res["reported_last"])
+                        # last seen: the latest report while it still shows the devices, else the last reported day
+                        seen = res["latest"] if res.get("again") else res["reported_last"]
+                        F.set_reported(fid, res["reported_first"], res["reported_last"], max(seen, res["reported_last"]))
             except Exception:                              # noqa: BLE001  (one finding never stops the others)
                 if log:
                     log.exception("finding %s: reported days / repeats not worked out", fid)
@@ -153,28 +168,45 @@ def install(app, ctx):
 
     # ---------------- time to act
     def act_until(x):
+        """The day its time to act runs out: FINDING_ACT_DAYS after its devices were last seen (or it was opened, for a
+        finding from a name), and never sooner than FINDING_GRACE_DAYS after it was opened. "" = never."""
         n = act_days()
         if not n:
             return ""
-        rep = (x.get("reported") or {}).get("last")
-        base = datetime.fromisoformat(rep).replace(tzinfo=timezone.utc) if rep else datetime.fromtimestamp(x["at"], timezone.utc)
-        return (base + timedelta(days=n)).date().isoformat()
+        rp = x.get("reported") or {}
+        seen = max(filter(None, (rp.get("seen"), rp.get("last"))), default="")
+        opened = datetime.fromtimestamp(x["at"], timezone.utc)
+        base = datetime.fromisoformat(seen).replace(tzinfo=timezone.utc) if seen else opened
+        return max(base + timedelta(days=n), opened + timedelta(days=grace_days())).date().isoformat()
+
+    def waiting_advisory(x):
+        """An advisory of this finding not sent yet: an organisation is still waiting for it."""
+        try:
+            return any(a.get("status") != "sent" for a in (F.advisories_of(x["id"]) or []))
+        except Exception:                                  # noqa: BLE001  (unknown: never close it)
+            return True
 
     def expire_due():
-        """Close every open finding whose time to act has passed. Returns the numbers closed."""
+        """Close every finding nobody is acting on whose time to act has passed. Returns the numbers closed."""
         n = act_days()
         if not n:
             return []
         today = datetime.now(timezone.utc).date().isoformat()
         out = []
         for x in F.all_open():
+            if x["status"] not in EXPIRABLE or x.get("kind") == "case" or waiting_advisory(x):
+                continue
             until = act_until(x)
             if until and until < today:
-                rep = (x.get("reported") or {}).get("last")
-                why = (f"{EXPIRED}: its records were reported on {rep}, more than {n} days ago." if rep else
+                rp = x.get("reported") or {}
+                seen = max(filter(None, (rp.get("seen"), rp.get("last"))), default="")
+                why = (f"{EXPIRED}: its devices were last seen in the reports of {seen}, more than {n} days ago." if seen else
                        f"{EXPIRED}: opened more than {n} days ago.")
                 if F.expire(x["id"], why, SYSTEM_USER):
                     out.append(x["id"])
+                    if ctx.get("audit"):                   # in the audit trail, like every other status change
+                        ctx["audit"].add("finding_status", user=SYSTEM_USER, target=f"#{x['id']} {x.get('name', '')}"[:120],
+                                         detail=f"closed · {why}")
         return out
 
     def loop():
@@ -199,6 +231,16 @@ def install(app, ctx):
         u = getattr(g, "user", None) or {}
         return u.get("user", ""), u.get("role", "")
 
+    def approved_for_advisor(x):
+        """The rule of advisory.ready(): a decided review, or a finding with the advisor that management approved."""
+        import finding_rules
+        if x.get("kind") == "case":
+            return False
+        if x.get("review"):
+            return x["review"].get("decision") in ("both", "researcher", "analyst")
+        with_advisor = x["status"] in ("advisor", "advisory") or any(h.get("status") == "advisor" for h in x.get("history") or [])
+        return with_advisor and finding_rules.management_approved(x)
+
     def sees_addresses():
         return bool((hp("unmasked") and hp("export")) or hp("advisory") or hp("settings"))
 
@@ -219,7 +261,8 @@ def install(app, ctx):
             fid = str(x["id"])
             r = result(fid) if x["status"] in F.OPEN or (x.get("reported") or {}).get("last") else {"state": "none"}
             out[fid] = {k: v for k, v in (r or {}).items() if k != "again_ips"} | {
-                "act_days": act_days(), "act_until": act_until(x) if x["status"] in F.OPEN else "",
+                "act_days": act_days(),
+                "act_until": act_until(x) if x["status"] in EXPIRABLE and x.get("kind") != "case" and not waiting_advisory(x) else "",
                 "reported_first": (x.get("reported") or {}).get("first", "") or (r or {}).get("reported_first", ""),
                 "reported_last": (x.get("reported") or {}).get("last", "") or (r or {}).get("reported_last", "")}
         return jsonify(findings=out)
@@ -231,6 +274,10 @@ def install(app, ctx):
             return jsonify(error="The addresses are for analysts, advisors and administrators."), 403
         x = visible(str(fid)[:12])
         if not x:
+            return jsonify(error="No such finding."), 404
+        if hp("advisory") and not (hp("settings") or (hp("unmasked") and hp("export"))) and not approved_for_advisor(x):
+            # an advisor gets a finding's addresses only once management approved it, as on the advisory pages
+            # (Security Reviewer, 2026-11-14: a finding from before channels is visible to every team role)
             return jsonify(error="No such finding."), 404
         r = result(str(x["id"]))
         return jsonify(r or {"state": "none"})

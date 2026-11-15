@@ -7,7 +7,8 @@
 # both | database | platform
 COMPONENTS=both
 
-# ---- MongoDB: local = install on this computer; remote = use an existing server
+# ---- MongoDB: local = install on this computer; remote = an internal MongoDB on another server of your network
+# (loopback or a private address only: a database on the internet is refused)
 MONGO_MODE=local
 MONGO_PORT=27017
 MONGO_ADMIN_USER=shadowserver_admin
@@ -16,9 +17,16 @@ MONGO_ADMIN_USER=shadowserver_admin
 MONGO_ADMIN_PASSWORD=
 MONGO_AUTH_SOURCE=admin
 MONGO_DB=shadowserver
-# remote only:
+# remote only (an internal server):
 #MONGO_HOST=10.0.0.5
 #READONLY_DB=yes
+# TLS to that server (recommended); the CA that signed its certificate, empty = a CA this computer already trusts
+#MONGO_TLS_ON=yes
+#MONGO_TLS_CA_FILE=/etc/ssl/certs/my-internal-ca.pem
+# without TLS: yes only on a link you trust (a direct cable or an isolated network between the two servers)
+#MONGO_PLAINTEXT=no
+# when the database there is not a Looking Glass database: newdb (a new one there, named in MONGO_DB) | local | retry
+#DB_MISMATCH=newdb
 # local, with the platform on another computer only: this server's address for MongoDB to listen on
 #MONGO_BIND_ADDR=10.0.0.5
 

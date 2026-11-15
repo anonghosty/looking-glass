@@ -1,0 +1,55 @@
+name: Accessibility barrier
+description: Something that keeps you, or someone on your team, from using Looking Glass.
+labels: ["accessibility"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you: barriers are treated like bugs (see ACCESSIBILITY.md). **Do not include real data.**
+  - type: input
+    id: where
+    attributes:
+      label: Page or document
+      placeholder: "Findings page, the 'Reply' box"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: input
+    id: tools
+    attributes:
+      label: Browser, operating system and assistive technology (with versions)
+      placeholder: "Firefox 133, Windows 11, NVDA 2024.4"
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: How much it blocks you
+      options:
+        - Critical - I cannot do a task at all
+        - High - I can do it only with great difficulty or help
+        - Medium - it is harder than it should be
+        - Low - an annoyance
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: |
+        If it is Critical and stops your team's work, say so in the issue title; it is looked at first.

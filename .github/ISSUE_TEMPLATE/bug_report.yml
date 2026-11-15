@@ -1,0 +1,62 @@
+name: Bug report
+description: Something in Looking Glass does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. **Do not include real data**: no real IP addresses, host names, e-mail addresses or report extracts.
+        Use 192.0.2.x / 203.0.113.x and example.org instead. **Security problems** go to the private report, not here.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The commit you run (git log -1 --format=%h), or the release date.
+    validations:
+      required: true
+  - type: dropdown
+    id: part
+    attributes:
+      label: Where
+      options:
+        - Platform (web pages)
+        - Database pipeline (fetching, loading)
+        - Installer / updating
+        - Reports (PDF / CSV)
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Sign in as an analyst\n2. Open ...\n3. Click ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Error messages and log lines, with any constituent data removed.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: "Ubuntu 24.04 on WSL 2, Chrome 131"
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Before sending
+      options:
+        - label: This report contains no real constituent data.
+          required: true
+        - label: This is not a security vulnerability (those go to the private report).
+          required: true

@@ -55,9 +55,13 @@ DAY_RELOAD_SECONDS = int(os.environ.get("DAY_RELOAD_SECONDS", "600"))
 # once a day's report starts arriving, wait this long (so every report is imported) before replaying it from 00:00
 SETTLE_SECONDS = int(os.environ.get("REPORT_SETTLE_SECONDS", "600"))
 
+import db_connect  # noqa: E402  (where the database is: loopback or internal only; TLS for one on another computer)
+try:
+    _DB_KW = db_connect.kwargs(os.environ.get)
+except db_connect.Refused as _why:     # a public or unencrypted database: the service does not start, and says why
+    raise SystemExit(f"Looking Glass will not start: {_why} (platform/.env, see docs/CONFIGURATION.md)") from None
 client = MongoClient(
-    host=os.environ.get("MONGO_HOST", "localhost"),
-    port=int(os.environ.get("MONGO_PORT", "27017")),
+    **_DB_KW,
     username=os.environ.get("MONGO_USER") or None,
     password=os.environ.get("MONGO_PASSWORD") or None,
     authSource=os.environ.get("MONGO_AUTH_SOURCE", "admin"),
@@ -166,7 +170,7 @@ def _database_unavailable(exc):
     if isinstance(exc, _MongoAuthError) and getattr(exc, "code", None) in (13, 18):
         why = "MongoDB refuses the account in platform/.env (MONGO_USER / MONGO_PASSWORD / MONGO_AUTH_SOURCE)"
     else:
-        why = f"MongoDB at {os.environ.get('MONGO_HOST', '127.0.0.1')}:{os.environ.get('MONGO_PORT', '27017')} cannot be reached"
+        why = f"MongoDB at {db_connect.describe(os.environ.get)} cannot be reached"
     if time.time() - _DB_WARNED["at"] > 60:
         _DB_WARNED["at"] = time.time()
         app.logger.error("Report database unavailable: %s (%s: %s). See docs/OPERATIONS.md.", why, exc.__class__.__name__, str(exc)[:200])
@@ -2857,7 +2861,9 @@ ACODES = _acodes.install(app, {
     "labels": lambda: {**{x["name"]: x["label"] for x in registry.get()}, **{x["name"]: x["label"] for x in svc["registry"].get()}},
     "network": lambda asn: asn_registry.company(asn, False) if asn else "", "defined": _defined_titles,
     "people_name": lambda u: people.name(u, ""), "base_dir": BASE_DIR,
-    "cross": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"])})     # every category for the code's hosts
+    "cross": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"]),     # every category for the code's hosts
+    # the same with each CVE's / issue's hosts (server side only: a CVE ticked on the code's page, 2026-11-14)
+    "cross_hosts": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"], with_hosts=True)})
 COMBOS.acode_records = ACODES.records          # the Combinations page searches analyst codes too
 COMBOS.acode_allowed = ACODES.allowed          # …only those of the channels this user is in (findings.py)
 
@@ -2877,7 +2883,7 @@ _combo_review.install(app, {"book": COMBOS, "findings": FINDINGS, "notes": NOTES
 import finding_watch as _finding_watch  # noqa: E402
 _combo_labels = lambda: {**{x["name"]: x["label"] for x in registry.get()}, **{x["name"]: x["label"] for x in svc["registry"].get()}}
 FINDING_WATCH = _finding_watch.install(app, {
-    "findings": FINDINGS, "book": COMBOS, "acodes": ACODES, "has_perm": AUTH["has_perm"], "replay_now": replay_now,
+    "findings": FINDINGS, "book": COMBOS, "acodes": ACODES, "has_perm": AUTH["has_perm"], "replay_now": replay_now, "audit": AUTH["audit"],
     "stores": {"comms": store, "services": svc["store"]}, "network": lambda asn: asn_registry.company(asn, False) if asn else "",
     "svc_matcher": lambda entry: SVC_INTEL.matcher(entry), "comms_matcher": lambda entry: _combos.Matcher(entry, _combo_labels()),
     "logger": app.logger, "no_loop": not os.path.basename(sys.argv[0] or "").startswith("gunicorn")})

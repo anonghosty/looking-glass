@@ -46,7 +46,8 @@ def db_stats():
     try:
         from pymongo import MongoClient
         env = os.environ
-        kw = dict(host=env.get("MONGO_HOST", "127.0.0.1"), port=int(env.get("MONGO_PORT") or 27017), serverSelectionTimeoutMS=5000)
+        import db_connect
+        kw = dict(**db_connect.kwargs(env.get), serverSelectionTimeoutMS=5000)
         if env.get("MONGO_USER"):
             kw.update(username=env["MONGO_USER"], password=env.get("MONGO_PASSWORD"),
                       authSource=env.get("MONGO_AUTH_SOURCE") or env.get("MONGO_DB") or "admin")

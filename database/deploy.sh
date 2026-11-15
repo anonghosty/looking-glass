@@ -19,7 +19,8 @@
 # If the earlier Docker container 'shadowserver-mongo' exists, its data is dumped,
 # restored into the native server, verified, and the container is stopped.
 #
-# MONGO_LOCAL=false in .env: MongoDB runs on another server (MONGO_HOST). Nothing is installed or configured for
+# MONGO_LOCAL=false in .env: MongoDB runs on an internal server of this network (MONGO_HOST: a private address, never
+# a public one; MONGO_TLS=1 to encrypt the connection: db_connect.py). Nothing is installed or configured for
 # MongoDB here; deploy only checks that the account in .env can log in.
 # MONGO_BIND in .env: addresses the local mongod listens on (default 127.0.0.1; add this server's address when the
 # Looking Glass platform runs on another computer, and allow only that computer in the firewall).
@@ -77,6 +78,12 @@ CACHE_GB=$(env_get MONGO_CACHE_GB 1.5)
 MEM=$(env_get MONGO_MEMORY_LIMIT 3g); MEM=${MEM^^}          # systemd wants 3G
 LOCAL=$(env_get MONGO_LOCAL true); LOCAL=${LOCAL,,}
 BIND=$(env_get MONGO_BIND 127.0.0.1)
+# MongoDB listens on this computer and internal addresses only, never a public one (2026-11-14): the database must not
+# be reachable from the internet
+for a in ${BIND//,/ }; do
+  python3 -c 'import sys, db_connect as d; sys.exit(0 if d.is_local(sys.argv[1]) or d.is_internal_address(sys.argv[1]) else 1)' "$a" 2>/dev/null \
+    || die "MONGO_BIND has $a, which is not an internal address of this server: MongoDB must never listen on a public address (use 127.0.0.1, or this server's private address on your network)."
+done
 OLD_CONTAINER=$(env_get MONGO_CONTAINER shadowserver-mongo)
 OLD_VOLUME=$(env_get MONGO_VOLUME shadowserver-mongo-data)
 MIGRATED_MARK="$PROJECT_DIR/.migrated-from-container"
@@ -102,7 +109,7 @@ if [[ ${#base_pkgs[@]} -gt 0 ]]; then
 fi
 
 if [[ $LOCAL == false ]]; then
-  info "MongoDB is on another server ($(env_get MONGO_HOST):$PORT): nothing to install for it here"
+  info "MongoDB is on an internal server ($(env_get MONGO_HOST):$PORT): nothing to install for it here"
 elif ! command -v mongod >/dev/null || ! command -v mongosh >/dev/null || ! command -v mongorestore >/dev/null; then
   CODENAME=$(. /etc/os-release && echo "${VERSION_CODENAME:-noble}")
   ARCH=$(dpkg --print-architecture)
@@ -297,15 +304,15 @@ info "Setting up Python virtualenv (.venv)"
 chmod +x run.sh check.sh deploy.sh shadowserver_pipeline.py 2>/dev/null || true
 mkdir -p attachments_backup unzipped_backup sorting_backup logs backups
 if [[ $LOCAL == false ]]; then
-  info "Checking the login to the remote MongoDB"
-  .venv/bin/python - <<'EOF' || die "Cannot log in to the remote MongoDB with the account in .env (address, firewall, user, password?)"
+  info "Checking the login to the internal MongoDB (address and TLS: db_connect.py)"
+  .venv/bin/python - <<'EOF' || die "Cannot log in to the internal MongoDB with the account in .env (address, TLS, firewall, user, password?)"
 import sys
 from pathlib import Path
 sys.path.insert(0, ".")
 import shadowserver_pipeline as sp
 s = sp.load_settings(sp.argparse.Namespace(env_file=str(Path(".env").resolve()), workers=None, days=None))
 sp.mongo_client(s.mongo).admin.command("ping")
-print("  remote MongoDB login OK")
+print("  internal MongoDB login OK")
 EOF
 fi
 

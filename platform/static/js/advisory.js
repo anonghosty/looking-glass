@@ -195,7 +195,7 @@
   function picker() {
     const c = card("1 · The organisation it goes to", "Pick the network (organisation) the advisory is for: its data and its advisory open below. Each organisation gets its own advisory and report.");
     const row = el("div", "av-netrow");
-    const sel = el("select", "av-in av-netsel");
+    const sel = el("select", "av-in av-netsel"); sel.setAttribute("aria-label", "Organisation");
     sel.append(new Option("Choose the organisation (network)…", ""));
     for (const n of IDX.networks) {
       const st = n.status === "sent" ? " · sent" : n.status === "drafted" ? " · drafted" : n.ref ? " · draft" : "";

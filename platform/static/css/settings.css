@@ -246,3 +246,7 @@ body.settings-page .hud { position: sticky; top: 0; }
 
 /* the cards wait behind the loading line until the settings arrive */
 .st-main.st-pending > :not(#stLoading):not(#banner) { display: none !important; }
+
+/* touch targets at least 24 px high (WCAG 2.2: target size; sweep 2026-11-14) */
+.dz-pill, .svc-ip { min-height: 24px; display: inline-flex; align-items: center; }
+.svc-more { min-height: 24px; min-width: 24px; }

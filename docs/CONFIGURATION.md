@@ -15,7 +15,11 @@ The database pipeline has its own `.env` in `../database` ([../../database/READM
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `MONGO_HOST`, `MONGO_PORT` | `127.0.0.1`, `27017` | where MongoDB runs |
+| `MONGO_HOST`, `MONGO_PORT` | `127.0.0.1`, `27017` | where MongoDB runs: this computer, or an internal server of your network. A public address (or a name that resolves to one) is refused; the platform and the pipeline do not start |
+| `MONGO_TLS` | `0` | `1`: TLS to the database. Needed for MongoDB on another server; its certificate and name are always checked |
+| `MONGO_TLS_CA_FILE` | empty | the CA certificate (PEM) that signed the database's certificate; empty = the system's trusted CAs |
+| `MONGO_TLS_CERT_KEY_FILE` | empty | a client certificate and key (one PEM file), when the database asks for one |
+| `MONGO_ALLOW_PLAINTEXT` | `0` | `1`: allow an internal MongoDB on another server without TLS, only on a link you trust. Never allows a public address |
 | `MONGO_USER`, `MONGO_PASSWORD` | empty | the account Looking Glass uses. Use the read-only `lookingglass_ro` made by `deploy/create_readonly_db_user.py` |
 | `MONGO_AUTH_SOURCE` | `admin` | the database the account is defined in |
 | `MONGO_DB` | `shadowserver` | the database the pipeline fills |
@@ -112,7 +116,8 @@ Set these to what your own audits and laws require; the defaults suit a yearly I
 | `AUDIT_PENDING_DAYS` | `7` | control check LG-04 (NIST AC-2): registrations waiting longer than this are listed |
 | `AUDIT_WORK_HOURS` | `07-19` | working hours in UTC: sign-ins outside them are counted on the dashboard |
 | `AUDIT_FAIL_ALERT` | `10` | control check LG-06 (NIST AC-7): the evidence says whether this many failed sign-ins from one address in one day was reached |
-| `FINDING_ACT_DAYS` | `30` | days after a finding's records were reported before an open finding closes on its own ("Time to act expired"); `0` never closes one |
+| `FINDING_ACT_DAYS` | `30` | days after a finding's devices were last seen before a finding nobody is acting on closes on its own ("Time to act expired"); never one approved, with the advisor or with an advisory not yet sent; `0` never closes one |
+| `FINDING_GRACE_DAYS` | `7` | a finding is never closed this way sooner than this many days after it was opened (a review of older records) |
 | `DATA_ACCESS_LOG` | `1` | `0` stops logging views of host-level data (one host's activity, host lists, record details, analyses) in the audit log; exports are always logged. Off, CIS safeguard 3.14 shows as "related", not backed |
 | `AUDIT_REVIEW_DAYS` | `7` | control check LG-13 (NIST AU-6): the review interval the check names (integrity check or evidence export). 7 is CIS's figure (weekly, safeguard 8.11); above it, 8.11 shows as "related", not backed |
 

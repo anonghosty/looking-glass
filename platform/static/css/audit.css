@@ -83,3 +83,6 @@ button.au-check:focus-visible { outline: 2px solid var(--accent); outline-offset
 .au-ct-out.ok { border-color: rgba(48, 164, 108, .35); background: rgba(48, 164, 108, .07); }
 .au-ct-out.bad { border-color: rgba(255, 122, 127, .4); background: rgba(255, 122, 127, .07); }
 .au-ct-out p { margin: 4px 0 0; }
+
+/* text shows in full (sweep 2026-11-14): wraps instead of being cut with "…" */
+.au-bar-l, .au-card td { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }

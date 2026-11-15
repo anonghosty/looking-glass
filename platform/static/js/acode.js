@@ -127,7 +127,28 @@
       const w = el("div", "ax-seenin");
       for (const g of i.seen_in || []) { const r = el("div"); r.append(el("b", null, `${g.kind} ${g.reports.length}`), el("span", null, g.reports.map((y) => `${y.title} (${fmt(y.hosts)})`).join(" · "))); w.append(r); }
       if (!w.children.length) w.append(el("span", null, `in ${(i.reports || []).map((r) => `${r.title} (${fmt(r.hosts)})`).join(", ") || "the services reports"}`));
-      li.append(b, w);
+      // tickable like the combinations (2026-11-14): the first tick makes (or finds) the analyst code of exactly this
+      // selection's devices that carry it, which then goes with the reply
+      const lab = el("label", "ax-tick ax-iss-tick"), cb = el("input"); cb.type = "checkbox";
+      cb.setAttribute("aria-label", `Tick ${i.name}: send its devices' code with the reply`);
+      const cc = el("code", "ax-code", "tick for a code"); cc.classList.add("ax-code-wait");
+      lab.append(cb, cc);
+      let got = "";
+      cb.addEventListener("change", async () => {
+        if (!cb.checked) { if (got) { picked.delete(got); drawPicked(); } return; }
+        if (got) { picked.set(got, `${i.name} on ${pl(i.hosts, "host")} of this selection`); drawPicked(); return; }
+        cb.disabled = true; cc.textContent = "making the code…";
+        try {
+          const r = await fetch(`/api/intel/acode/${encodeURIComponent(code)}/issue`, { method: "POST",
+            headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() }, body: JSON.stringify({ name: i.name }) });
+          const y = await r.json().catch(() => ({}));
+          if (!r.ok) { cb.checked = false; cc.textContent = y.error || `not made (HTTP ${r.status})`; cc.classList.add("bad"); return; }
+          got = y.code; cc.textContent = y.code; cc.classList.remove("ax-code-wait", "bad");
+          picked.set(got, `${i.name} on ${pl(y.hosts, "host")} of this selection`); drawPicked();
+        } catch { cb.checked = false; cc.textContent = "the connection was interrupted"; cc.classList.add("bad"); }
+        finally { cb.disabled = false; }
+      });
+      li.append(lab, b, w);
       ul.append(li);
     }
     sec.append(ul);

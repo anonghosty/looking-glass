@@ -11,7 +11,8 @@ The details of each control are in [Security](SECURITY.md), and the logic of the
 
 ## 1. The parts
 
-Looking Glass is two programs that share one database. Everything except the browsers runs on one server:
+Looking Glass is two programs that share one database. By default everything except the browsers runs on one server;
+the database can instead be an internal MongoDB on another server of your network (see below):
 
 ```
  Shadowserver
@@ -22,7 +23,8 @@ Looking Glass is two programs that share one database. Everything except the bro
          → sort → load
    │  read and write, its own database only
    ▼
- MongoDB     127.0.0.1 only, login required
+ MongoDB     127.0.0.1 (default), or an internal server of your
+             network over TLS; never a public address; login required
    │  read only
    ▼
  platform/   the web app: a sandboxed systemd service
@@ -37,9 +39,18 @@ Looking Glass is two programs that share one database. Everything except the bro
 | Part | What it does | Runs as | Can write |
 |---|---|---|---|
 | **Pipeline** (`database/`) | On its schedule (every 30 minutes recommended): fetches the reports (mailbox read-only, or Shadowserver's report API), checks who sent each e-mail, unzips within limits, sorts and loads each CSV row into MongoDB | its own user, cron | its folders, and its own database through `lookingglass_pipeline` |
-| **MongoDB** | Holds the reports: one document per row, per report type | `mongod`, bound to 127.0.0.1 | n/a |
+| **MongoDB** | Holds the reports: one document per row, per report type | `mongod`, bound to 127.0.0.1 (or an internal server: see below) | n/a |
 | **Platform** (`platform/`) | The web app: the map, services, Intel gathered, findings, the Executive portal, advisories and the Audit portal | a systemd service with `NoNewPrivileges`, `ProtectSystem=strict` and `ProtectHome=read-only`; writable only in `data/` | only `data/`; the database through the read-only account `lookingglass_ro` |
 | **Browser** | Shows the pages; all report data is inserted as text, under a strict Content-Security-Policy | the user's computer | nothing on the server, except through the signed-in API |
+
+**Where the database may be.** On this server (127.0.0.1, the default), or an internal MongoDB on another server of
+your own network. Both programs refuse anything else: a database whose address, or any address its name resolves to,
+is public is never used, and there is no setting that allows it. A database on another server is reached over TLS
+(`MONGO_TLS=1`, its certificate and name always checked); without TLS it is refused unless `MONGO_ALLOW_PLAINTEXT=1`
+says the link between the two servers is trusted. A local MongoDB listens on 127.0.0.1, plus an internal address of
+the server only when the platform runs on another computer. The installer checks that an existing database has the
+Looking Glass structure; if it holds something else it offers a new database for Looking Glass on that server, or
+MongoDB on this computer instead. Looking Glass never writes into another program's data.
 
 There is one way back from the web app to the pipeline: Settings → Workers. The web app can't write the pipeline's
 folder. A setting change is a request file in the web app's own `data/pipeline_requests/`, which the pipeline checks

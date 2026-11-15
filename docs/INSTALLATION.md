@@ -2,6 +2,8 @@
 
 ## The easy way: the guided installer
 
+![The guided installer](media/screens/95-guided-installer.png)
+
 On Windows, do [A1](#a1-wsl-with-systemd-and-mirrored-networking) first (systemd and mirrored networking), then
 run these steps in the Ubuntu window. On Ubuntu, run them in a terminal, as the ordinary user who will run Looking Glass
 (not as root).
@@ -53,6 +55,10 @@ Security is described in [../docs/SECURITY.md](SECURITY.md). Steps marked
 
 ---
 
+![The guided installer while it installs](media/screens/96-guided-installer-progress.png)
+
+For a plain screen without the logo's movement, use `./install.sh --no-animation`.
+
 ## What you need
 
 | | |
@@ -80,6 +86,29 @@ over HTTPS. The service must also listen on the network (`deploy/install.sh --ne
 firewall must let the traffic through (A6, A7, B6).
 
 ---
+
+## Where the database runs **(security)**
+
+By default the installer puts MongoDB on the same computer, reached on 127.0.0.1 only. If your organisation already
+runs MongoDB, the installer can use an **internal** MongoDB on another server of your network instead
+(*Use an internal MongoDB on another server of your network*):
+
+- **Internal only.** Its address must be a private one (10.x, 172.16–31.x, 192.168.x, or a name that resolves to
+  one). A database on the internet is refused by the installer, the platform and the pipeline alike, and no setting
+  allows it.
+- **Encrypted.** The installer asks whether it accepts TLS (recommended) and for the CA that signed its certificate;
+  the certificate and the server's name are always checked. Without TLS it goes on only after you confirm the link
+  between the two servers is trusted (`MONGO_ALLOW_PLAINTEXT=1`).
+- **A Looking Glass database.** It tests the login, then checks that the database has the Looking Glass structure
+  (each report collection with its unique row index). A new, empty name is fine: the pipeline creates it. A database
+  that holds something else is never written into: the installer offers to **create a new database for Looking Glass
+  on that server**, or to **install MongoDB on this computer instead**.
+- **Accounts.** Given an administrator account there, it creates the platform's read-only account and the pipeline's
+  own account, as on one server. For a MongoDB run by someone else, `--print` on the account scripts (below) shows the
+  commands for its administrator.
+
+The settings are in [CONFIGURATION.md](CONFIGURATION.md) (`MONGO_HOST`, `MONGO_TLS`, `MONGO_TLS_CA_FILE`,
+`MONGO_ALLOW_PLAINTEXT`).
 
 ## A. Windows with WSL 2
 

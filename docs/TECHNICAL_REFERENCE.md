@@ -107,9 +107,11 @@ server side is in small modules called from `app.py`:
   `combo_code`, `combo_export`.
 - **`finding_watch.py`, findings over time.** A finding's reported days (its review's kept search, or its analyst
   code's day), kept with the finding; how many of its devices the latest day shows again for the same combination
-  (computed in one background worker, one finding at a time); and the expiry: an open finding whose last reported day
-  is more than `FINDING_ACT_DAYS` (30) days ago is closed with "Time to act expired" (history kind `expired`, by
-  Looking Glass). Routes: `GET /api/findings/watch` (counts and days of the findings in the user's channel, never an
+  (computed in one background worker, one finding at a time); and the expiry: a finding in a state where nobody is acting on it
+  (`new`, `management`, `researcher`, `analyst`; never `approved`, `advisor`, or one with an advisory not yet sent)
+  whose devices were last seen more than `FINDING_ACT_DAYS` (30) days ago, and opened more than `FINDING_GRACE_DAYS`
+  (7) days ago, is closed with "Time to act expired" (history kind `expired`, audit `finding_status` by
+  `looking-glass`). "Last seen" is the latest report while it still shows the devices again. Routes: `GET /api/findings/watch` (counts and days of the findings in the user's channel, never an
   address), `GET /api/findings/<id>/again` (the addresses, for analysts, advisors and admins in the channel). The
   Executive portal loads a past day of the last week for a view filtered to a code (`/api/mgmt/<platform>?code=?&day=?`),
   one such day at a time.

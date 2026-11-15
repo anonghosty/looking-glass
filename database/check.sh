@@ -21,7 +21,7 @@ OLD_CONTAINER=$(env_get MONGO_CONTAINER shadowserver-mongo)
 LOCAL=$(env_get MONGO_LOCAL true); LOCAL=${LOCAL,,}
 BIND=$(env_get MONGO_BIND 127.0.0.1)
 if [[ $LOCAL == false ]]; then
-echo "== MongoDB (on another server: $(env_get MONGO_HOST):$(env_get MONGO_PORT 27017); its login is checked below)"
+echo "== MongoDB (on an internal server: $(env_get MONGO_HOST):$(env_get MONGO_PORT 27017), TLS $( [ "$(env_get MONGO_TLS 0)" = 1 ] && echo on || echo OFF); its login is checked below)"
 else
 echo "== MongoDB (native)"
 if command -v mongod >/dev/null; then row OK "mongod binary" "$(mongod --version | head -n1) ($(command -v mongod))"

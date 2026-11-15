@@ -261,6 +261,8 @@ Do this on every installation (details in [INSTALLATION.md](INSTALLATION.md)):
 - [ ] Approve registered accounts in Admin → Users with the right role.
 - [ ] Use the read-only MongoDB account for the platform and the pipeline's own account (the installer does both;
       `deploy/create_readonly_db_user.py` and `database/create_pipeline_db_user.py` on a manual installation).
+- [ ] Keep MongoDB internal: on 127.0.0.1, or on a server of your own network reached over TLS (`MONGO_TLS=1`).
+      Never give it a public address or open its port to the internet; Looking Glass refuses a public one.
 - [ ] Check the mail server's certificate (`IMAP_VERIFY_TLS=true`, the default) and, once genuine Shadowserver mail
       passes the sender check, block what fails it (`MAIL_AUTH=enforce`), or take the reports by Shadowserver's API.
 - [ ] WSL only: remove Windows firewall rules that open the port to the network, unless other screens need it.

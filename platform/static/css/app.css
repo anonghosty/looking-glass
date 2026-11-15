@@ -1214,3 +1214,18 @@ details.mp-mini.kev > summary { color: #ff9a9e; }
 
 /* LGLoader.pane(): a tab loading its data shows only its heading and the loading line */
 .lg-pane-busy > :not(h2):not(.lg-pane-loading) { display: none !important; }
+
+/* text shows in full (sweep 2026-11-14): wraps instead of being cut with "…" */
+.checklist .name, .toplist .lbl span:last-child, .sh-title .mono, .r-inf b, .r-src-label, .r-ep .ip, .r-ep .place, .r-ep .sub,
+.r-req .host, .r-req .url, .intro-reports li .nm, .intro-gear-wrap .intro-scope, .brk .bl span:last-child, .hosts td, .lgs-value,
+.lgs-opt span, .account-btn .acct-name, .intro-gear .acct-name, .fchip.part .part-open {
+  white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+/* contrast (WCAG AA): the red of Critical and the severity labels, lighter as text on the dark cards */
+.kpi.crit .kpi-value { color: #ff7a7e; }
+.sev { color: color-mix(in srgb, var(--sevc) 62%, #ffffff); }
+/* a scrolling area the keyboard can reach shows where the focus is */
+[data-lg-scroll]:focus-visible { outline: 2px solid #a78bfa; outline-offset: 2px; }
+/* a panel heading and its figure: a gap between them, the figure on its own line when there is no room (sweep) */
+.ib-head { gap: 2px 10px; flex-wrap: wrap; }
+/* every cell of a stream row stays inside its column and wraps there (sweep: the last tags spilled past the edge) */
+.row > *, .stream-cols > * { min-width: 0; overflow-wrap: anywhere; }

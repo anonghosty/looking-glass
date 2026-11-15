@@ -13,12 +13,13 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dotenv import load_dotenv  # noqa: E402
-from pymongo import MongoClient  # noqa: E402
+from pymongo import MongoClient
+import db_connect  # noqa: E402  (where the database is; TLS for one on another computer)
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(os.path.join(BASE, ".env"))
 client = MongoClient(
-    host=os.environ["MONGO_HOST"], port=int(os.environ.get("MONGO_PORT", "27017")),
+    **db_connect.kwargs(os.environ.get),
     username=os.environ.get("MONGO_USER"), password=os.environ.get("MONGO_PASSWORD"),
     authSource=os.environ.get("MONGO_AUTH_SOURCE", "admin"), serverSelectionTimeoutMS=5000, tz_aware=True,
 )

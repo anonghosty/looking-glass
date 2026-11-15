@@ -272,7 +272,9 @@ All settings live in `.env` in the project folder. Its permissions are `600`, so
 | `MONGO_USER` / `MONGO_PASSWORD` | MongoDB login (created by `deploy` as a root user) | – |
 | `MONGO_AUTH_SOURCE` | authentication database | `admin` |
 | `MONGO_DB` | database name | `shadowserver` |
-| `MONGO_LOCAL` | `true` = MongoDB on this computer (installed by `deploy`); `false` = on another server, nothing installed here | `true` |
+| `MONGO_LOCAL` | `true` = MongoDB on this computer (installed by `deploy`); `false` = an internal MongoDB on another server of your network, nothing installed here | `true` |
+| `MONGO_TLS`, `MONGO_TLS_CA_FILE`, `MONGO_TLS_CERT_KEY_FILE` | TLS to a MongoDB on another server (needed there); the CA that signed its certificate; a client certificate and key when it asks for one. The certificate and name are always checked | `0`, empty, empty |
+| `MONGO_ALLOW_PLAINTEXT` | `1` = an internal MongoDB on another server without TLS, only on a link you trust. A public address is refused whatever this says (`db_connect.py`) | `0` |
 | `MONGO_BIND` | addresses the local MongoDB listens on (add this server's address when the platform runs elsewhere; firewall it) | `127.0.0.1` |
 | `MONGO_TAKE_OVER` | `true` lets `deploy` reconfigure a MongoDB that was installed before Looking Glass; otherwise it refuses, and such a MongoDB is used as it is with `MONGO_LOCAL=false` | `false` |
 | `MONGO_SERIES` | MongoDB release installed by `deploy` | `8.0` |

@@ -25,7 +25,7 @@
   // ---------------- tabs
   const tabs = [...document.querySelectorAll(".adm-tabs [data-tab]")];
   function show(tab) {
-    for (const b of tabs) b.setAttribute("aria-pressed", String(b.dataset.tab === tab));
+    for (const b of tabs) b.setAttribute("aria-selected", String(b.dataset.tab === tab));
     for (const p of document.querySelectorAll(".adm-pane")) p.hidden = p.id !== `pane-${tab}`;
     // each tab shows its loading animation while its data comes (the users pane has its own line on the first visit)
     const fn = ({ users: loadUsers, roles: loadRoles, locks: loadLocks })[tab];
@@ -204,7 +204,7 @@
   const avail = tabs.map((b) => b.dataset.tab);
   show(avail.includes(first) ? first : avail[0]);
   if ($("locksBadge")) loadLocks(true);                   // the badge shows locks from any tab
-  setInterval(() => { const t = tabs.find((b) => b.getAttribute("aria-pressed") === "true")?.dataset.tab; if (t === "users") loadUsers();
+  setInterval(() => { const t = tabs.find((b) => b.getAttribute("aria-selected") === "true")?.dataset.tab; if (t === "users") loadUsers();
     if ($("locksBadge")) loadLocks(true); }, 30000);
   void PERMS;
 })();

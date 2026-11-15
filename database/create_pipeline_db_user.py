@@ -88,7 +88,8 @@ Then, in this pipeline's .env:
 
 
 def client(e, user, pw, source):
-    return MongoClient(host=e.get("MONGO_HOST") or "127.0.0.1", port=int(e.get("MONGO_PORT") or 27017), username=user,
+    import db_connect
+    return MongoClient(**db_connect.kwargs(e.get), username=user,
                        password=pw, authSource=source, serverSelectionTimeoutMS=8000)
 
 

@@ -1,0 +1,48 @@
+name: Feature request
+description: An idea that would help a CSIRT team work with Looking Glass.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem first, then the idea. **Do not include real data.**
+  - type: dropdown
+    id: role
+    attributes:
+      label: Who it helps
+      multiple: true
+      options:
+        - Analyst
+        - Researcher
+        - Management
+        - Advisor
+        - Auditor
+        - Administrator
+        - Everyone
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What is hard or impossible today, and how often it comes up.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: How you would like it to work. Screenshots or sketches with made-up data are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today instead
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Before sending
+      options:
+        - label: This request contains no real constituent data.
+          required: true

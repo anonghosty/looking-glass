@@ -96,6 +96,10 @@ run "combinations: ticked infections and CVEs go into the report" $PY tests/chec
 run "Intelligence portal: who sees what, counts, views, export" $PY tests/check_intelligence.py
 run "combination codes never stand for two combinations" $PY tests/check_code_collisions.py
 run "findings over time: reported day, repeats, time to act" $PY tests/check_finding_watch.py
+run "a CVE ticked on an analyst code's page" $PY tests/check_acode_issue.py
+run "the reports database: loopback or internal only, TLS" $PY tests/check_db_connect.py
+run "the installer's database check: internal only, TLS, structure" $PY tests/check_install_db.py
+run "the installer's animated logo" $PY tests/check_installer_anim.py
 run "offline names: MISP Galaxy + ATT&CK, nothing sent" $PY tests/check_offline_names.py
 run "ATT&CK mappings, versions, CVE links" $PY tests/check_attack_map.py
 run "ATT&CK in advisories (reviewed only)" $PY tests/check_advisory_attack.py

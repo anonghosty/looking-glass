@@ -6,6 +6,7 @@
 #   ./install.sh --answers FILE      unattended: answers from FILE (KEY=value lines, see install.answers.example);
 #                                    questions it does not answer are asked, or take their default with --yes
 #   ./install.sh --yes               accept the default of every question that has one
+#   ./install.sh --no-animation      no animated logo (the splash and the progress screen)
 #
 # Run it as the ordinary user who will own and run Looking Glass (not root). It asks for your sudo password once,
 # for the system packages, MongoDB and the services. Passwords you type are written only to the two .env files
@@ -23,18 +24,25 @@ LOG="$ROOT/install-logs/install-$(date +%Y%m%d-%H%M%S).log"
 : > "$LOG"; chmod 600 "$LOG"
 
 # ---------------------------------------------------------------------------------------------------------- options
-UI=auto; ANSWERS=""; ASSUME_YES=0
+UI=auto; ANSWERS=""; ASSUME_YES=0; NO_ANIM=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --text) UI=text; shift ;;
     --answers) ANSWERS="${2:?--answers needs a file}"; shift 2 ;;
     --yes|-y) ASSUME_YES=1; shift ;;
-    -h|--help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --no-animation) NO_ANIM=1; shift ;;
+    -h|--help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option $1 (./install.sh --help)"; exit 1 ;;
   esac
 done
 UI_WANTED="$UI"; UI=text          # plain text until the requirements (whiptail among them) are in place
 INTERACTIVE=1; { [ -t 0 ] && [ -t 1 ]; } || INTERACTIVE=0
+# the animated logo (installer_anim.py, like the platform's loading screen): only for a person at a real terminal; never
+# for an unattended installation, with NO_COLOR, on a dumb terminal, or with --no-animation
+anim_ok() {
+  [ "$NO_ANIM" = 0 ] && [ "$INTERACTIVE" = 1 ] && [ -z "$ANSWERS" ] && [ "$ASSUME_YES" = 0 ] && [ -z "${NO_COLOR:-}" ] \
+    && [ "${TERM:-dumb}" != dumb ] && [ -f "$ROOT/installer_anim.py" ] && command -v python3 >/dev/null 2>&1
+}
 
 # answers file: KEY=value lines, read literally (never executed)
 declare -A ANS=()
@@ -219,9 +227,14 @@ ask_menu() {  # KEY TITLE TEXT DEFAULT tag item [tag item...]
 }
 
 # ---------------------------------------------------------------------------------------------------------- progress
-GAUGE_OPEN=0; PCT=0; GAUGE_MSG="Starting..."; GAUGE_PID=""
+GAUGE_OPEN=0; PCT=0; GAUGE_MSG="Starting..."; GAUGE_PID=""; GAUGE_STATUS=""
+gauge_status() { printf '%s\n%s\n' "$1" "$2" > "$GAUGE_STATUS.tmp" && mv -f "$GAUGE_STATUS.tmp" "$GAUGE_STATUS"; }
 gauge_open() {
-  if [ "$UI" = dialog ] && [ "$INTERACTIVE" = 1 ]; then
+  if [ "$UI" = dialog ] && [ "$INTERACTIVE" = 1 ] && anim_ok; then
+    GAUGE_STATUS="$(mktemp)"; gauge_status "$PCT" "$GAUGE_MSG"
+    python3 "$ROOT/installer_anim.py" progress "$GAUGE_STATUS" "$LOG" < /dev/null &
+    GAUGE_PID=$!; GAUGE_OPEN=2
+  elif [ "$UI" = dialog ] && [ "$INTERACTIVE" = 1 ]; then
     fit_windows
     exec 3> >(exec whiptail --title " Installing " --backtitle "$TITLE" --gauge "$GAUGE_MSG" 9 $W "$PCT")
     GAUGE_PID=$!
@@ -231,12 +244,20 @@ gauge_open() {
 gauge() {  # PERCENT MESSAGE
   PCT="$1"; GAUGE_MSG="$2"; log "== [$1%] $2"
   if [ $GAUGE_OPEN = 1 ]; then printf 'XXX\n%s\n%s\nXXX\n' "$1" "$2" >&3
+  elif [ $GAUGE_OPEN = 2 ]; then gauge_status "$1" "$2"
   else printf '\n%s[%3s%%]%s %s%s%s\n' "$CYN" "$1" "$R" "$B" "$2" "$R"; fi
 }
-gauge_close() { if [ $GAUGE_OPEN = 1 ]; then exec 3>&-; GAUGE_OPEN=0; sleep 0.3; fi; }
+gauge_close() {
+  if [ $GAUGE_OPEN = 1 ]; then exec 3>&-; GAUGE_OPEN=0; sleep 0.3
+  elif [ $GAUGE_OPEN = 2 ]; then          # the progress screen ends and gives the terminal back as it was
+    echo STOP > "$GAUGE_STATUS"; GAUGE_OPEN=0
+    for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$GAUGE_PID" 2>/dev/null || break; sleep 0.1; done
+    kill "$GAUGE_PID" 2>/dev/null || true; wait "$GAUGE_PID" 2>/dev/null || true; rm -f "$GAUGE_STATUS"
+  fi
+}
 # the terminal was resized: draw the progress window again at the new size, same percentage and step
 gauge_redraw() {
-  [ $GAUGE_OPEN = 1 ] || return 0
+  [ $GAUGE_OPEN = 1 ] || return 0           # (the progress screen redraws itself at the new size)
   exec 3>&-; GAUGE_OPEN=0
   [ -n "$GAUGE_PID" ] && { wait "$GAUGE_PID" 2>/dev/null || true; }
   clear; gauge_open
@@ -255,7 +276,7 @@ bg_wait() {
 run() {  # LABEL command...   output to the log; on failure show the end of the log and stop
   local label="$1"; shift
   log "\$ $label"
-  if bg_wait "$@"; then [ $GAUGE_OPEN = 1 ] || printf '       %s✔%s %s\n' "$GRN" "$R" "$label"; return 0; fi
+  if bg_wait "$@"; then [ $GAUGE_OPEN != 0 ] || printf '       %s✔%s %s\n' "$GRN" "$R" "$label"; return 0; fi
   local rc=$?
   gauge_close
   fail "$label failed (exit code $rc)."
@@ -339,6 +360,15 @@ v_host() {
   [[ $1 == *://* || $1 == */* ]] && { echo "Type only the server's name, without https:// or a path (for example mail.example.org)."; return 1; }
   [[ $1 =~ ^[A-Za-z0-9.-]+$ || $1 =~ ^[0-9A-Fa-f:]+$ ]] || { echo "A host name or IP address, for example 10.0.0.5 or mail.example.org."; return 1; }
 }
+# the reports database is internal (user, 2026-11-14): this computer or a private network address, never public
+v_internal_host() {
+  v_host "$1" || return 1
+  local why
+  why="$(PYTHONPATH="$PF_DIR:$DB_DIR" python3 -c 'import sys, db_connect as d; w = d.check_internal(sys.argv[1]); print(w or ""); sys.exit(1 if w else 0)' "$1" 2>&1)" && return 0
+  echo "${why:-$1 is neither this computer nor an internal network address.} Use this computer, or a server in your own network (10.x, 172.16-31.x, 192.168.x, or a name that resolves to one)."
+  return 1
+}
+v_ca_file() { [ -z "$1" ] || [ -f "$1" ] || { echo "No such file: $1"; return 1; }; }
 v_networks() { python3 - "$1" <<'EOF' || return 1
 import ipaddress, sys
 items = [x.strip() for x in sys.argv[1].split(",") if x.strip()]
@@ -355,6 +385,7 @@ EOF
 # ======================================================================================================================
 # 0. Checks before anything is asked
 # ======================================================================================================================
+if anim_ok; then python3 "$ROOT/installer_anim.py" splash || true; fi
 banner
 [ "$(id -u)" != 0 ] || { echo "Run ./install.sh as the ordinary user who will run Looking Glass (not root, not with sudo)."; exit 1; }
 [ -d "$DB_DIR" ] && [ -d "$PF_DIR" ] || { echo "Run it from the Looking Glass folder (it needs database/ and platform/ next to it)."; exit 1; }
@@ -382,7 +413,13 @@ REQ_WHY=("Python 3" "Python environments (venv)" "Python packages (pip)" "downlo
          "trusted certificates" "MongoDB's signing key (gnupg)" "scheduled runs (cron)" "country names (iso-codes)"
          "locking (util-linux)" "the installer's windows (whiptail)" "port checks (iproute2)" "report fonts (DejaVu)")
 pkg_ok() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'; }
-row() { printf '  %b  %-34s %s\n' "$1" "$2" "$3"; }
+row() {  # MARK LABEL VALUE: a long value wraps at the terminal's width, under the value column (never a stray line)
+  local w line first=1
+  w=$(( $(tput cols 2>/dev/null || echo 100) - 41 )); [ "$w" -ge 30 ] || w=30
+  while IFS= read -r line; do
+    if [ $first = 1 ]; then printf '  %b  %-34s %s\n' "$1" "$2" "$line"; first=0; else printf '%41s%s\n' "" "$line"; fi
+  done < <(printf '%s\n' "$3" | fold -s -w "$w")
+}
 OKM="${GRN}✔${R}"; NOM="${RED}✘${R}"; WRN="${YEL}!${R}"; INF="${CYN}•${R}"
 requirements() {  # prints the checklist; sets MISSING
   MISSING=()
@@ -471,12 +508,13 @@ log "ui $UI, window ${W}x${H}"
 msg "Welcome" "This installs Looking Glass on this computer:
 
   • the Shadowserver database pipeline  (database/)
-      fetches your Shadowserver report e-mails into MongoDB every 30 minutes
+      fetches your Shadowserver reports (by e-mail or Shadowserver's API)
+      into MongoDB, every 30 minutes
   • the Looking Glass platform  (platform/)
       replays them on the two live platforms, with sign-in and MFA
 
 The requirements are in place. Next come the questions; each answer is checked
-on the spot (mailbox login, map and Malpedia keys, database, ports). Nothing is
+on the spot (mailbox or API key, map and Malpedia keys, database, ports). Nothing is
 installed until you confirm the summary. About 15 minutes.
 
 Folder: $ROOT"
@@ -563,13 +601,23 @@ EOF
 }
 check_mongo() {  # HOST PORT USER AUTHSOURCE DB NEED_USERADMIN(yes|no) NEED_WRITE(yes|no)   (password in MPW)
   # Prints what it found (version, login, the reports database) and returns 0; or the reason and returns 1.
-  MPW="$MONGO_ADMIN_PASSWORD" chk_py "$@" <<'EOF'
+  # exit 0: fine; 1: the reason; 3: it answers, but the database is not a Looking Glass reports database
+  MPW="$MONGO_ADMIN_PASSWORD" MTLS="${MONGO_TLS:-0}" MCA="${MONGO_TLS_CA_FILE:-}" MPLAIN="${MONGO_ALLOW_PLAINTEXT:-0}" \
+    MDBPATH="$PF_DIR:$DB_DIR" chk_py "$@" <<'EOF'
 import os, sys
+sys.path[:0] = [p for p in os.environ.get("MDBPATH", "").split(":") if p]
+import db_connect
 from pymongo import MongoClient
 from pymongo.errors import OperationFailure, PyMongoError
 host, port, user, src, db = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5]
 need_useradmin, need_write = sys.argv[6] == "yes", sys.argv[7] == "yes"
-kw = dict(host=host, port=port, serverSelectionTimeoutMS=8000)
+env = {"MONGO_HOST": host, "MONGO_PORT": str(port), "MONGO_TLS": os.environ.get("MTLS", ""),
+       "MONGO_TLS_CA_FILE": os.environ.get("MCA", ""), "MONGO_ALLOW_PLAINTEXT": os.environ.get("MPLAIN", "")}
+try:
+    base = db_connect.kwargs(env.get)
+except db_connect.Refused as e:
+    print(str(e)); sys.exit(1)
+kw = dict(base, serverSelectionTimeoutMS=8000)
 if user:
     if not os.environ.get("MPW"):
         print(f"No password was given for the MongoDB account {user} (the first installation kept it in "
@@ -590,7 +638,7 @@ except Exception as e:  # noqa: BLE001  never a bare traceback: always a reason 
 # a MongoDB without access control accepts anyone: find out, and say so
 open_access = False
 try:
-    MongoClient(host=host, port=port, serverSelectionTimeoutMS=5000).list_database_names()
+    MongoClient(**dict(base, serverSelectionTimeoutMS=5000)).list_database_names()
     open_access = True
 except PyMongoError:
     pass
@@ -611,6 +659,20 @@ found = []
 try:
     names_ = [n for n in c[db].list_collection_names() if not n.startswith(("files_", "discovered_fields_", "system."))]
     if names_:
+        # the Looking Glass layout (as the pipeline's own check): every report collection has the unique row index
+        # (filename, category, line_hash) and rows carrying those fields, category = the collection's name
+        bad = []
+        for n in names_[:300]:
+            idx = c[db][n].index_information().values()
+            has = any(i.get("unique") and [k for k, _ in i["key"]] == ["filename", "category", "line_hash"] for i in idx)
+            s = c[db][n].find_one({"line_hash": {"$exists": True}}) or c[db][n].find_one()
+            if not has or (s is not None and (not all(k in s for k in ("filename", "category", "line_hash")) or s.get("category") != n)):
+                bad.append(n)
+        if bad:
+            print(f"The database '{db}' on {host} already exists but is not a Looking Glass reports database: {len(bad)} of its "
+                  f"{len(names_)} collection(s) do not have the Looking Glass layout (for example {', '.join(bad[:3])}). "
+                  "Looking Glass never writes into another program's data.")
+            sys.exit(3)
         docs = sum(c[db][n].estimated_document_count() for n in names_)
         found.append(f"The database '{db}' already holds {len(names_)} report collection(s) and {docs:,} rows: new reports "
                      "are added to it, rows already there are skipped.")
@@ -618,7 +680,7 @@ try:
         found.append(f"The database '{db}' is new (or empty): it is created on the first load.")
 except PyMongoError:
     found.append(f"(Could not list the database '{db}' with this account.)")
-print(f"MongoDB {version} at {host}:{port}, login {'as ' + user if user else 'not required'}.  " + "  ".join(found)
+print(f"MongoDB {version} at {db_connect.describe(env.get)}, login {'as ' + user if user else 'not required'}.  " + "  ".join(found)
       + ("  WARNING: this MongoDB does not require a login, so anyone who can reach it can read or change it. "
          "Turn on authorization (security: authorization: enabled in /etc/mongod.conf) when you can." if open_access else ""))
 EOF
@@ -674,40 +736,41 @@ COMPONENTS="$REPLY"; WANT_DB=0; WANT_PF=0
 # local    install MongoDB here (deploy.sh installs and configures it; only when no MongoDB is installed, or when the
 #          one here was set up by Looking Glass before: a re-install keeps its port)
 # existing a MongoDB already on this computer (installed by someone else, or in Docker): used as it is, never reconfigured
-# remote   a MongoDB on another server
-MONGO_BIND=127.0.0.1; READONLY=yes
+# remote   an internal MongoDB on another server of this network (loopback or private address only, never public)
+MONGO_BIND=127.0.0.1; READONLY=yes; MONGO_TLS=0; MONGO_TLS_CA_FILE=""; MONGO_ALLOW_PLAINTEXT=0; SWITCH_LOCAL=0
 if [ $WANT_DB = 1 ]; then
   if [ "$MDB_INSTALLED" = 1 ] && [ "$MDB_MANAGED" = 1 ]; then
     ask_menu MONGO_MODE "MongoDB" "MongoDB $MDB_VERSION is installed here, set up by Looking Glass before (port $MDB_PORT).
 Where should the reports be stored?" local \
       local  "Keep using this MongoDB (port $MDB_PORT; recommended for a re-install)" \
-      remote "Use a MongoDB on another server instead"
+      remote "Use an internal MongoDB on another server of your network instead"
   elif [ "$MDB_INSTALLED" = 1 ]; then
     ask_menu MONGO_MODE "MongoDB" "MongoDB $MDB_VERSION is already installed on this computer ($([ "$MDB_ACTIVE" = 1 ] && echo "running on port $MDB_PORT" || echo "not running; port $MDB_PORT")$([ "$MDB_AUTH" = 1 ] && echo ', login required' || echo ', no login required')).
 Looking Glass can use it as it is: its configuration is not changed. Where should the reports be stored?" existing \
       existing "Use the MongoDB on this computer (recommended)" \
-      remote   "Use a MongoDB on another server"
+      remote   "Use an internal MongoDB on another server of your network"
   elif [ -n "$MDB_OTHER" ]; then
     ask_menu MONGO_MODE "MongoDB" "No MongoDB service is installed here, but something answers on port(s)$MDB_OTHER
 (a MongoDB in Docker, or another system). Where should the reports be stored?" existing \
       existing "Use the MongoDB answering on this computer (you give its port and account)" \
       local    "Install MongoDB on this computer (on a free port)" \
-      remote   "Use a MongoDB on another server"
+      remote   "Use an internal MongoDB on another server of your network"
   else
     ask_menu MONGO_MODE "MongoDB" "Where should the reports be stored (MongoDB)?" local \
       local  "Install MongoDB on this computer (recommended)" \
-      remote "Use an existing MongoDB on another server"
+      remote "Use an internal MongoDB on another server of your network"
   fi
 else
   REPLY=remote
-  msg "MongoDB" "The platform will read the MongoDB filled by the database pipeline.
+  msg "MongoDB" "The platform will read the internal MongoDB filled by the database pipeline
+(on this computer, or on a server of your own network: never one on the internet).
 Next: its address and an account.
 
 Best is an administrator account: the installer then creates a separate
 read-only account for the platform and stores only that one here."
 fi
 MONGO_MODE="$REPLY"
-if [ "$MONGO_MODE" = local ]; then
+mongo_local_questions() {
   MONGO_HOST=127.0.0.1
   if [ "$MDB_MANAGED" = 1 ]; then
     MONGO_PORT="$MDB_PORT"; passed "Re-install: MongoDB keeps port $MONGO_PORT and its data."
@@ -746,7 +809,8 @@ Leave it empty to generate a strong random one (stored in database/.env)." yes
   if [ $WANT_PF = 0 ]; then
     ask_input MONGO_BIND_ADDR "MongoDB network access" "The platform will run on another computer, so MongoDB must listen on this
 server's network address too. Which address should it listen on?
-(Only that computer should be allowed through the firewall to port $MONGO_PORT.)" "$(hostname -I 2>/dev/null | awk '{print $1}')" v_host
+(Only that computer should be allowed through the firewall to port $MONGO_PORT. It must be an
+internal address of this server: MongoDB is never reachable from the internet.)" "$(hostname -I 2>/dev/null | awk '{print $1}')" v_internal_host
     MONGO_BIND="127.0.0.1,$REPLY"
   fi
   ask_input MONGO_AUTH_SOURCE "MongoDB account database" "Database the account is defined in (almost always admin):" admin v_nonempty; MONGO_AUTH_SOURCE="$REPLY"
@@ -762,6 +826,9 @@ server's network address too. Which address should it listen on?
     # never go on with an empty password: it would be written into both .env files and cut them off the database
     [ -n "$MONGO_ADMIN_PASSWORD" ] || { echo "The MongoDB password of '$MONGO_ADMIN_USER' is needed for a re-install (the first installation kept it in /etc/looking-glass/mongo-admin.env: sudo cat it; or in database/.env.before-pipeline-account or database/.env)." >&2; exit 1; }
   fi
+}
+if [ "$MONGO_MODE" = local ]; then
+  mongo_local_questions
 else
   if [ "$MONGO_MODE" = existing ] && [ "$MDB_INSTALLED" = 1 ] && [ "$MDB_ACTIVE" = 0 ]; then
     ask_yesno START_MONGO "MongoDB is not running" "The MongoDB installed here is not running. Start it now (and at every boot)?" yes
@@ -778,8 +845,25 @@ else
       if [ -n "$MONGO_ADMIN_USER" ]; then ask_secret MONGO_ADMIN_PASSWORD "MongoDB password" "Password of '$MONGO_ADMIN_USER':"; MONGO_ADMIN_PASSWORD="$REPLY"
       else MONGO_ADMIN_PASSWORD=""; fi
     else
-      ask_input MONGO_HOST "MongoDB server" "Address of the MongoDB server (host name or IP):" "" v_host; MONGO_HOST="$REPLY"
+      ask_input MONGO_HOST "Internal MongoDB server" "Address of the internal MongoDB server: a server of your own network
+(a private address such as 10.0.0.5, or a name that resolves to one). The reports database is
+never on the internet: a public address is refused." "" v_internal_host; MONGO_HOST="$REPLY"
       ask_input MONGO_PORT "MongoDB port" "MongoDB port on $MONGO_HOST:" 27017 v_port; MONGO_PORT="$REPLY"
+      ask_yesno MONGO_TLS_ON "Encrypted connection (TLS)" "Does the MongoDB on $MONGO_HOST accept TLS connections?
+Strongly recommended: the account's password and every report cross your network.
+(Its certificate and name are always checked.)" yes
+      if [ "$REPLY" = yes ]; then
+        MONGO_TLS=1; MONGO_ALLOW_PLAINTEXT=0
+        ask_input MONGO_TLS_CA_FILE "TLS certificate authority" "Path to the CA certificate (PEM file) that signed the certificate of $MONGO_HOST.
+Leave it empty when that certificate is from a CA this computer already trusts." "" v_ca_file; MONGO_TLS_CA_FILE="$REPLY"
+      else
+        MONGO_TLS=0; MONGO_TLS_CA_FILE=""
+        ask_yesno MONGO_PLAINTEXT "Without encryption" "Without TLS the password and every report cross the network readable by
+anyone on the way. Only on a link you trust (a direct cable or an isolated network between
+the two servers). Continue without encryption?" no
+        if [ "$REPLY" = yes ]; then MONGO_ALLOW_PLAINTEXT=1
+        else msg "TLS needed" "Turn on TLS on $MONGO_HOST (net.tls in its mongod.conf), then answer Yes to the TLS question."; continue; fi
+      fi
       ask_input MONGO_ADMIN_USER "MongoDB account" "MongoDB account name on $MONGO_HOST:" "" v_nonempty; MONGO_ADMIN_USER="$REPLY"
       ask_secret MONGO_ADMIN_PASSWORD "MongoDB password" "Password of '$MONGO_ADMIN_USER':"; MONGO_ADMIN_PASSWORD="$REPLY"
     fi
@@ -793,12 +877,31 @@ No: the platform uses '$MONGO_ADMIN_USER' as it is (it should be read-only)." ye
     fi
     [ -z "$MONGO_ADMIN_USER" ] && READONLY=no     # no access control: a read-only account would protect nothing
     checking "the MongoDB login on $MONGO_HOST:$MONGO_PORT"
+    # (set -e: a failed check must not end the installer, so its code is taken inside the if)
     if reason="$(check_mongo "$MONGO_HOST" "$MONGO_PORT" "$MONGO_ADMIN_USER" "$MONGO_AUTH_SOURCE" "$MONGO_DB" \
-                 "$([ $WANT_PF = 1 ] && echo "$READONLY" || echo no)" "$([ $WANT_DB = 1 ] && echo yes || echo no)")"; then
-      passed "MongoDB login succeeded.\n\n$reason"; break
+                 "$([ $WANT_PF = 1 ] && echo "$READONLY" || echo no)" "$([ $WANT_DB = 1 ] && echo yes || echo no)")"; then rc=0; else rc=$?; fi
+    if [ $rc = 0 ]; then passed "MongoDB login succeeded.\n\n$reason"; break; fi
+    if [ $rc = 3 ]; then
+      # it answers, but '$MONGO_DB' holds something else: a database of its own for Looking Glass there, or this computer
+      opts=(newdb "Create a new database for Looking Glass on $MONGO_HOST (recommended)")
+      [ "$MONGO_MODE" = remote ] && opts+=(local "Install MongoDB on this computer instead (the reports stay on this server)")
+      opts+=(retry "Give another server, account or database name")
+      ask_menu DB_MISMATCH "Not a Looking Glass database" "$reason
+
+What should be done?" newdb "${opts[@]}"
+      case "$REPLY" in
+        newdb) ask_input MONGO_DB "New database" "Name of the new database for Looking Glass on $MONGO_HOST (one that does not exist yet;
+the database pipeline creates its collections on the first load):" looking_glass v_user; MONGO_DB="$REPLY"; continue ;;
+        local) SWITCH_LOCAL=1; break ;;
+        *) continue ;;
+      esac
     fi
     after_failure MONGO_HOST "MongoDB" "$reason" MONGO_HOST MONGO_PORT MONGO_ADMIN_USER MONGO_ADMIN_PASSWORD MONGO_AUTH_SOURCE MONGO_DB READONLY_DB || break
   done
+fi
+if [ "$SWITCH_LOCAL" = 1 ]; then          # chosen above: MongoDB and the pipeline on this computer instead
+  MONGO_MODE=local; WANT_DB=1; COMPONENTS=both; MONGO_TLS=0; MONGO_TLS_CA_FILE=""; MONGO_ALLOW_PLAINTEXT=0; READONLY=yes
+  mongo_local_questions
 fi
 
 # ---- how the reports are fetched (e-mail or Shadowserver's report API), the mailbox, and the schedule
@@ -1071,7 +1174,7 @@ case "${SCHEDULE:-off}" in
 esac
 yesno() { [ "$1" = yes ] && echo yes || echo no; }
 S="Install:          $([ $WANT_DB = 1 ] && echo -n 'database pipeline ')$([ $WANT_PF = 1 ] && echo -n 'platform')
-MongoDB:          $(case "$MONGO_MODE" in local) [ "$MDB_MANAGED" = 1 ] && echo "keep the one set up before, port $MONGO_PORT" || echo "install here, port $MONGO_PORT$([ "$MONGO_BIND" != 127.0.0.1 ] && echo ", also on ${MONGO_BIND#127.0.0.1,}")" ;; existing) echo "the one already on this computer, port $MONGO_PORT (not reconfigured)" ;; *) echo "existing, $MONGO_HOST:$MONGO_PORT" ;; esac) · database $MONGO_DB · account ${MONGO_ADMIN_USER:-(none)}"
+MongoDB:          $(case "$MONGO_MODE" in local) [ "$MDB_MANAGED" = 1 ] && echo "keep the one set up before, port $MONGO_PORT" || echo "install here, port $MONGO_PORT$([ "$MONGO_BIND" != 127.0.0.1 ] && echo ", also on ${MONGO_BIND#127.0.0.1,}")" ;; existing) echo "the one already on this computer, port $MONGO_PORT (not reconfigured)" ;; *) echo "internal, $MONGO_HOST:$MONGO_PORT, $([ "$MONGO_TLS" = 1 ] && echo 'TLS' || echo 'NOT encrypted (trusted link)')" ;; esac) · database $MONGO_DB · account ${MONGO_ADMIN_USER:-(none)}"
 if [ $WANT_DB = 1 ]; then S+="
 Reports from:     $SOURCE_DESC
 Mailbox:          $MAIL_DESC
@@ -1132,7 +1235,8 @@ if [ $WANT_DB = 1 ]; then
               "MS_TENANT_ID=$MS_TENANT_ID" "MS_CLIENT_ID=$MS_CLIENT_ID" "MS_MAILBOX=$MS_MAILBOX" "MS_FOLDER=$MS_FOLDER" "EMAIL_DAYS=$EMAIL_DAYS" \
               "MAIL_AUTH=${MAIL_AUTH:-log}" "REPORT_SOURCE=${REPORT_SOURCE:-email}" \
               "MONGO_HOST=$MONGO_HOST" "MONGO_PORT=$MONGO_PORT" "MONGO_USER=$MONGO_ADMIN_USER" "MONGO_AUTH_SOURCE=$MONGO_AUTH_SOURCE" \
-              "MONGO_DB=$MONGO_DB" "MONGO_LOCAL=$([ "$MONGO_MODE" = local ] && echo true || echo false)" "MONGO_BIND=$MONGO_BIND"; do
+              "MONGO_DB=$MONGO_DB" "MONGO_LOCAL=$([ "$MONGO_MODE" = local ] && echo true || echo false)" "MONGO_BIND=$MONGO_BIND" \
+              "MONGO_TLS=$MONGO_TLS" "MONGO_TLS_CA_FILE=$MONGO_TLS_CA_FILE" "MONGO_ALLOW_PLAINTEXT=$MONGO_ALLOW_PLAINTEXT"; do
       env_set "$DB_DIR/.env" "${kv%%=*}" "${kv#*=}"
     done
     env_set "$DB_DIR/.env" IMAP_PASSWORD "$IMAP_PASSWORD"
@@ -1179,6 +1283,7 @@ if [ $WANT_PF = 1 ]; then
     [ -f "$PF_DIR/.env" ] && cp -p "$PF_DIR/.env" "$PF_DIR/.env.before-install-$(date +%Y%m%d-%H%M%S)"
     install -m 600 "$PF_DIR/.env.example" "$PF_DIR/.env"
     for kv in "MONGO_HOST=$MONGO_HOST" "MONGO_PORT=$MONGO_PORT" "MONGO_USER=$MONGO_ADMIN_USER" "MONGO_AUTH_SOURCE=$MONGO_AUTH_SOURCE" \
+              "MONGO_TLS=$MONGO_TLS" "MONGO_TLS_CA_FILE=$MONGO_TLS_CA_FILE" "MONGO_ALLOW_PLAINTEXT=$MONGO_ALLOW_PLAINTEXT" \
               "MONGO_DB=$MONGO_DB" "COUNTRY=$COUNTRY" "ACCESS_MODE=$ACCESS_MODE" "VIEWER_NETWORKS=$VIEWER_NETWORKS" \
               "ALLOWED_HOSTS=$ALLOWED_HOSTS" "TRUST_PROXY=$TRUST_PROXY" "ALLOW_INSECURE_REMOTE_LOGIN=$INSECURE" \
               "REGISTRATION=$REGISTRATION" "LG_PORT=$LG_PORT"; do

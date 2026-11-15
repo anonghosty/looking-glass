@@ -747,7 +747,8 @@ def _cli():
         from dotenv import dotenv_values
         from pymongo import MongoClient
         env = dotenv_values(os.path.join(base, ".env"))
-        db = MongoClient(host=env.get("MONGO_HOST", "127.0.0.1"), port=int(env.get("MONGO_PORT", 27017)), username=env.get("MONGO_USER"),
+        import db_connect
+        db = MongoClient(**db_connect.kwargs(env.get), username=env.get("MONGO_USER"),
                          password=env.get("MONGO_PASSWORD"), authSource=env.get("MONGO_AUTH_SOURCE", "admin"),
                          serverSelectionTimeoutMS=8000)[env.get("MONGO_DB", "shadowserver")]
         cols = db.list_collection_names

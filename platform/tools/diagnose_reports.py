@@ -8,12 +8,13 @@ import sys
 
 from dotenv import load_dotenv
 from pymongo import MongoClient
+import db_connect  # noqa: E402  (where the database is; TLS for one on another computer)
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from sources import Registry  # noqa: E402
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
-client = MongoClient(host=os.environ["MONGO_HOST"], port=int(os.environ.get("MONGO_PORT", 27017)),
+client = MongoClient(**db_connect.kwargs(os.environ.get),
                      username=os.environ.get("MONGO_USER"), password=os.environ.get("MONGO_PASSWORD"),
                      authSource=os.environ.get("MONGO_AUTH_SOURCE", "admin"), serverSelectionTimeoutMS=8000)
 db = client[os.environ["MONGO_DB"]]

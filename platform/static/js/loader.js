@@ -182,3 +182,21 @@
     document.head.append(s);
   }
 })();
+
+// a scrolling table or list the keyboard can reach (WCAG: scrollable region focusable; sweep 2026-11-14): any
+// .table-wrap or scrolling list, as it appears, gets tabindex 0 and a name from its card's heading
+(() => {
+  const SEL = ".table-wrap, .cb-table-wrap, .av-ipwrap, .it-tablewrap, .intro-svc-reports";
+  const mark = (root) => {
+    for (const e of (root.querySelectorAll ? root.querySelectorAll(SEL) : [])) {
+      if (e.hasAttribute("tabindex")) continue;
+      e.tabIndex = 0; e.setAttribute("data-lg-scroll", "");
+      if (!e.getAttribute("aria-label")) {
+        const h = e.closest("section, article, .au-card, .card, div")?.querySelector("h2, h3, h4");
+        e.setAttribute("aria-label", h ? h.textContent.trim().slice(0, 80) : "Scrolling table");
+      }
+    }
+  };
+  const start = () => { mark(document); new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) mark(n.parentElement || n); }).observe(document.body, { childList: true, subtree: true }); };
+  if (document.body) start(); else document.addEventListener("DOMContentLoaded", start);
+})();

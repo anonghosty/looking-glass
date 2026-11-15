@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability (privately)
+    url: https://github.com/anonghosty/looking-glass/security/advisories/new
+    about: Never in a public issue. Use the Security tab's private report, as the security policy describes.
+  - name: Documentation
+    url: https://looking-glass-gh.readthedocs.io/
+    about: Installation, configuration, the user guide and the security model.

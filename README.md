@@ -363,6 +363,10 @@ searchable site, with the films. The same guides are in the [`docs/`](docs) fold
 | Day-to-day running, backups, checks | [docs/OPERATIONS.md](docs/OPERATIONS.md) |
 | How it works inside | [docs/TECHNICAL_REFERENCE.md](docs/TECHNICAL_REFERENCE.md) |
 | Security | [docs/SECURITY.md](docs/SECURITY.md) |
+| What changed in each release | [CHANGELOG.md](CHANGELOG.md) |
+| Contributing (how changes are reviewed) | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Code of conduct | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) |
+| Accessibility statement | [ACCESSIBILITY.md](ACCESSIBILITY.md) |
 | The database pipeline | [database/README.md](database/README.md) |
 
 ## Contributing and reporting problems

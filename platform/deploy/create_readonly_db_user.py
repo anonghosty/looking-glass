@@ -25,6 +25,8 @@ import shutil
 import sys
 
 from dotenv import dotenv_values
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import db_connect  # noqa: E402  (where the database is; TLS for one on another computer)
 from pymongo import MongoClient
 from pymongo.errors import OperationFailure
 
@@ -36,7 +38,7 @@ NEW_USER = "lookingglass_ro"
 
 
 def client(user, pw, source):
-    return MongoClient(host=E.get("MONGO_HOST", "localhost"), port=int(E.get("MONGO_PORT") or 27017), username=user, password=pw,
+    return MongoClient(**db_connect.kwargs(E.get), username=user, password=pw,
                        authSource=source, serverSelectionTimeoutMS=8000)
 
 

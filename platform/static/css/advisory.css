@@ -134,3 +134,6 @@
 .av-again.calm { color: #9fe3bf; border-color: rgba(90,200,140,.35); background: rgba(90,200,140,.06); }
 .av-ips tr.av-rep-again td { background: rgba(255,170,60,.05); }
 .av-again-tag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; font: 600 10.5px Inter, sans-serif; color: #1b1203; background: #ffc46b; vertical-align: 1px; }
+
+/* text shows in full (sweep 2026-11-14): wraps instead of being cut with "…" */
+.av-portal td, .adv-table td { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
