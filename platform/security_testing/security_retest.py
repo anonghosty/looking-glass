@@ -184,8 +184,8 @@ def must(label, s):
     ok(label, s == 302, str(s))
     if s == 429:
         raise Stop("the login limits are still counting the failed logins of an earlier run (by design: 20 per address "
-                   "per hour). Restart the service to clear them (platform/deploy/reload.sh, or sudo systemctl restart "
-                   "looking-glass) and run the test again.")
+                   "per hour, kept across restarts). Clear this computer's counters (an administrator: Admin, Sign-in "
+                   "locks, Unlock; or run the test again: it clears its own counters first) and run the test again.")
     if s != 302:
         raise Stop(f"'{label}' was refused ({s}), so the checks that depend on it cannot run. See the audit log for the reason.")
 

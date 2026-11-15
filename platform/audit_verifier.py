@@ -8,7 +8,7 @@ short on purpose: read it before you rely on it.
     python verify_audit_log.py                         check the package this script is in
     python verify_audit_log.py --earlier HASH@ENTRY    and prove the log up to an earlier audit's head is unchanged
     python verify_audit_log.py --checkpoints DIR       and check the signed checkpoints you keep (copies from the server)
-    python verify_audit_log.py --key FILE              accept this signing public key (the one you noted) for them
+    python verify_audit_log.py --key FILE              trust ONLY this signing public key (the one you noted) for them
     python verify_audit_log.py --json                  the result as JSON
 
 The format it checks
@@ -194,12 +194,14 @@ def signature(path, namespace, keys):
 def check_checkpoints(folder, hashes, gone, lines, extra_keys):
     """The signed checkpoints (checkpoint-*.json with .sig, audit_checkpoint.py): each one's head hash must be the hash
     of the entry it names. A checkpoint copied away from the server proves the log up to it was not rewritten later.
-    Signatures are checked against the keys recorded in the chain and any key given with --key (the one noted by the
-    auditor). Problems: a hash that is not at its entry, a checkpoint beyond the end of the log, a bad signature."""
+    Signatures are checked against the keys recorded in the chain, or only the key given with --key (the one noted by the
+    auditor). Problems: a hash that is not at its entry, a checkpoint beyond the end of the log, a bad signature.
+    With --key, ONLY that key is trusted (review of d82a436: a log rewritten in full can record a key of its own, so
+    trusting the log's keys besides the one the auditor noted added nothing against a rewrite)."""
+    keys = list(extra_keys) if extra_keys else _keys_in(lines)
     out = {"folder": folder, "count": 0, "matched": 0, "older_than_kept": 0, "signatures": {}, "latest": None, "problems": [],
-           "keys": len(set(_keys_in(lines) + list(extra_keys)))}
+           "keys": len(set(keys)), "trusted": "the key given with --key only" if extra_keys else "the keys recorded in the log"}
     paths = sorted(glob.glob(os.path.join(folder, "checkpoint-*.json"))) if os.path.isdir(folder) else []
-    keys = _keys_in(lines) + list(extra_keys)
     for p in paths:
         name = os.path.basename(p)
         ck = _json(p)
@@ -212,7 +214,7 @@ def check_checkpoints(folder, hashes, gone, lines, extra_keys):
         out["signatures"][sig] = out["signatures"].get(sig, 0) + 1
         if sig == "INVALID":
             out["problems"].append({"entry": n, "t": ck.get("made"), "what": f"checkpoint {name}: its signature does not match "
-                                    "any signing key recorded in the log (or given with --key)"})
+                                    + ("the key given with --key" if extra_keys else "any signing key recorded in the log")})
         if n <= gone:
             out["older_than_kept"] += 1               # its entry went with the retention: nothing left to compare
         elif n - gone > len(hashes):
@@ -230,7 +232,8 @@ def check_checkpoints(folder, hashes, gone, lines, extra_keys):
 def check(folder, earlier=None, gap_days=30, checkpoints=None, extra_keys=None):
     """Check the log in `folder` (the folder holding audit.log and audit_archive/). `earlier` = (hash, entry or None);
     gap_days: a jump in time around a removed archive longer than this is reported; checkpoints: a folder of signed
-    checkpoints (default: audit_checkpoints/ beside the log); extra_keys: public keys to accept besides the chain's."""
+    checkpoints (default: audit_checkpoints/ beside the log); extra_keys: the public keys to trust INSTEAD of the
+    chain's (the auditor's own copy: a rewritten log can record keys of its own)."""
     archives = sorted(glob.glob(os.path.join(folder, "audit_archive", "audit-*.log.gz")))
     lines, damaged = [], []
     for p in archives + [os.path.join(folder, "audit.log")]:
@@ -535,7 +538,8 @@ def main():
     ap.add_argument("--json", action="store_true", help="print the result as JSON")
     ap.add_argument("--gap-days", type=int, default=30, help="report a jump in time around a removed archive longer than this")
     ap.add_argument("--checkpoints", help="a folder of signed checkpoints kept away from the server (default: the package's own)")
-    ap.add_argument("--key", help="a file with the signing public key you noted (ssh-ed25519 ...), accepted besides the log's")
+    ap.add_argument("--key", help="a file with the signing public key you noted (ssh-ed25519 ...): ONLY this key is trusted, "
+                                  "not the keys the log records")
     a = ap.parse_args()
     root = os.path.abspath(a.folder)
     log = os.path.join(root, "log") if os.path.isdir(os.path.join(root, "log")) else root

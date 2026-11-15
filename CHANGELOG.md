@@ -5,6 +5,38 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-15 (12)
+> **Before your next backup:** `manage/backup.sh` now refuses to run without your public key in
+> `platform/data/backup_public_key` (see [OPERATIONS.md, Backups](docs/OPERATIONS.md#backups)). Make the key pair on
+> your own computer and keep the private key off the server.
+
+### Security
+- **Encrypted backups.** `manage/backup.sh` encrypts each backup to your own public key (age or GnuPG, in
+  `data/backup_public_key`), as it is written: no readable copy is ever on disk, and the private key stays with you,
+  off the server. Without a key it refuses (`--unencrypted` makes a plain one on purpose). `verify_backup.sh` checks
+  the signature and checksum without the private key; `--identity` opens the archive too, as `restore_check.sh` does.
+- **Encryption at rest.** Settings → Task monitor shows whether the database, the report copies, Looking Glass's data
+  and the backups are on an encrypted volume (LUKS; inside WSL it says to check BitLocker), and the guided installer
+  says so at the end. OPERATIONS.md explains how to set it up.
+- **Strict-Transport-Security** on every answer over HTTPS, from Looking Glass itself (Caddy and Looking Glass's own
+  HTTPS sent none): one year; `includeSubDomains` and `preload` only when asked.
+- **Heavy views per person.** At most 3 at once (the rest wait their turn) and 240 a minute, so one person can no longer
+  hold every thread; tunable in `.env`, counted in the Task monitor.
+- The audit verifier's `--key` now trusts **only** the key given, not also the keys the log records.
+- Failed sign-ins are kept across a restart (`data/login_counters.json`), so restarting no longer lifts a lock.
+- gunicorn 26.2 or newer (the version tested), still below 27.
+
+### Changed
+- **The pipeline marks what it loads** (`lg_load_stamps`), and the 15-second check counts every report's rows only when
+  a mark moved, or every 10 minutes (`COUNT_EVERY_SECONDS`).
+- **Kept answers stay right.** The heavy answers' cache now follows the days in memory (new report data is never
+  answered from before it), is not emptied by look-ups, record views and other read-only requests, and does not keep an
+  answer worked out while the database could not be read. The services filter lists also follow the network names,
+  the report list and the administrator's region matches, and are worked out once for everyone asking together.
+- More checks run on GitHub: a made-up week of reports (documentation addresses only) lets the combination, analyst
+  code and Executive portal checks run there too.
+- Python modules are no longer marked executable; a check keeps it so.
+
 ## 2026-11-15 (11)
 ### Changed
 - **Faster while nothing changes.** A loaded day is checked against the database every 10 minutes and kept, with every

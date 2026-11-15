@@ -77,6 +77,33 @@ try:
     ok("nothing locked: the configured lock", t.wait_minutes("10.5.0.2", "grace") == 60)
     src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "auth.py"), encoding="utf-8").read()
     ok("no sign-in message says a fixed 15 minutes", "Try again in 15 minutes" not in src and "a 15-minute lock" not in src)
+
+    # review of d82a436: a restart wiped the counters
+    print("Kept across a restart (data/login_counters.json)")
+    import stat
+    import tempfile
+    d = tempfile.mkdtemp()
+    p = os.path.join(d, "login_counters.json")
+    t = auth.Throttle(p)
+    for _ in range(5):
+        t.failed("10.6.0.1", "kofi")
+    t.count(("register", "10.6.0.2"), 3600, add=True)
+    ok("written as they happen, readable only by the service (0600)", os.path.exists(p) and stat.S_IMODE(os.stat(p).st_mode) == 0o600)
+    t2 = auth.Throttle(p)                       # the service restarted
+    ok("after a restart the account is still locked", t2.locked("10.6.0.1", "kofi"), t2.left("10.6.0.1", "kofi"))
+    ok("…and the sign-up counter kept too", t2.count(("register", "10.6.0.2"), 3600) == 1)
+    t2.unlock("10.6.0.1", "kofi")
+    ok("an administrator's unlock is kept as well", not auth.Throttle(p).locked("10.6.0.1", "kofi"))
+    t2.clear_address("10.6.0.2")
+    ok("the self-test's clearing of its own address is kept", auth.Throttle(p).count(("register", "10.6.0.2"), 3600) == 0)
+    t3 = auth.Throttle(p)
+    for _ in range(5):
+        t3.failed("10.6.0.3", "ama")
+    clock[0] += 24 * 3600 + 60                  # a day later (longer than every window)
+    ok("failures older than the longest window are not read back", not auth.Throttle(p).fail)
+    open(p, "w").write("{not json")
+    ok("a damaged file starts empty, never an error", auth.Throttle(p).fail == {})
+    ok("without a path (scripts, checks): memory only, as before", auth.Throttle().path is None)
 finally:
     auth._now = real_now
 

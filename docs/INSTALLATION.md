@@ -363,6 +363,15 @@ In `.env`:
 
 Then `sudo systemctl restart looking-glass`.
 
+**Strict-Transport-Security.** Looking Glass sends it itself on every answer over HTTPS (behind the proxy too, from
+its `X-Forwarded-Proto`): one year, `HSTS_MAX_AGE` in seconds; `HSTS_INCLUDE_SUBDOMAINS=1` and `HSTS_PRELOAD=1` only if
+every name under the domain is on HTTPS for good. The nginx line above may stay (the same value).
+
+**Requests per person.** Looking Glass limits each person's heavy views itself (`HEAVY_PER_USER`, `HEAVY_PER_MINUTE`;
+[CONFIGURATION.md](CONFIGURATION.md)). For an internet-facing site you can also limit at the proxy: nginx
+`limit_req_zone $binary_remote_addr zone=lg:10m rate=20r/s;` in `http {}` and `limit_req zone=lg burst=60 nodelay;` in
+the `location`; for Caddy, the `rate_limit` plug-in.
+
 ### B6. Firewall
 ```bash
 sudo ufw default deny incoming && sudo ufw allow OpenSSH
@@ -389,7 +398,12 @@ Port 5000 and MongoDB's 27017 stay closed to the network.
    .venv/bin/python manage/asn_registry.py 7
    ```
 5. In your Mapbox account, restrict the token to your site's address.
-6. Back up (`manage/backup.sh`) and copy the archive off the computer. Day-to-day running: [OPERATIONS.md](OPERATIONS.md).
+6. Make a backup key on your own computer and put its public half in `data/backup_public_key`, then back up
+   (`manage/backup.sh`: the archive is encrypted to it) and copy the archive off the computer
+   ([OPERATIONS.md, Backups](OPERATIONS.md#backups)).
+7. Put the server's disk on an encrypted volume (LUKS; BitLocker for Windows with WSL): MongoDB does not encrypt its
+   files ([OPERATIONS.md, Encryption at rest](OPERATIONS.md#encryption-at-rest)). **Settings → Task monitor** shows
+   whether it is. Day-to-day running: [OPERATIONS.md](OPERATIONS.md).
 
 ## Updating
 
@@ -401,6 +415,13 @@ git pull
 deploy/reload.sh                     # or: sudo systemctl restart looking-glass
 security_testing/security_retest.py && tests/run_all_checks.sh
 ```
+> **Backups need your public key (from 2026-11-15).** `manage/backup.sh` encrypts every backup to a public key and
+> **refuses to run without one** (it exits with "NOT BACKED UP" and says how to make the key). Before the first backup
+> after this update, make a key pair on your own computer and copy its public half to `data/backup_public_key`
+> ([OPERATIONS.md, Backups](OPERATIONS.md#backups)). Keep the private key off the server: without it the backups cannot
+> be restored. `manage/backup.sh --unencrypted` still makes a plain backup if you must, but it holds `.env` and the
+> accounts in the clear.
+
 `requirements.txt` lets each library update within its major version only, so an update brings fixes but no big
 changes. If `check_libraries.py` fails, its line names the library.
 If `deploy/looking-glass.service.template` changed, run `deploy/install.sh` again and copy the service file again (A4 / B3).
@@ -423,8 +444,9 @@ it. It shows what it will remove and what it keeps, and asks before it starts.
   `--yes --i-understand-data-loss`.
 - It removes only what belongs to **this** folder. Another installation's service, schedule or command, other cron
   jobs, and a MongoDB that Looking Glass did not install are left alone.
-- **Back up first** if you may want the data again: `platform/manage/backup.sh` for the platform, and `mongodump`
-  for the reports.
+- **Back up first** if you may want the data again: `platform/manage/backup.sh` for the platform (it needs your public
+  key in `platform/data/backup_public_key` and refuses without one: [OPERATIONS.md, Backups](OPERATIONS.md#backups)),
+  and `mongodump` for the reports.
 - Firewall rules you added for the platform's port (A7 / B6) are not removed: remove them yourself.
 - After `./uninstall.sh` without options, `./install.sh` in the same folder installs again with the kept settings
   and data.

@@ -1,19 +1,32 @@
 #!/usr/bin/env bash
 # Verify a backup archive: the signature of its checksum file (this installation's key, or the public key you give),
-# that the signed checksum is THIS archive's (its name and its SHA-256, computed here), .env identical to the live file,
-# and the number of files. Exits non-zero if any of the first three fail. A backup without a signature, or with no
-# public key to check it, fails too, unless --allow-unsigned is given (for backups made before they were signed).
-# Usage: manage/verify_backup.sh [--allow-unsigned] [archive] [public key file]
+# that the signed checksum is THIS archive's (its name and its SHA-256, computed here), and, for an encrypted backup
+# opened with your private key (--identity) or an unencrypted one, .env identical to the live file and the number of
+# files. Exits non-zero if the signature or the checksum fail. A backup without a signature, or with no public key to
+# check it, fails too, unless --allow-unsigned is given (for backups made before they were signed).
+# The signature and checksum are over the encrypted file: they are checked without any private key.
+# Usage: manage/verify_backup.sh [--allow-unsigned] [--identity YOUR-PRIVATE-KEY] [archive] [public key file]
 #        (default: the newest backup of this project in ~/backups, and this installation's data/audit_signing/signing_key.pub)
 set -euo pipefail
 project="$(cd "$(dirname "$0")/.." && pwd)"
 name="$(basename "$project")"
-allow_unsigned=0
-[ "${1:-}" = "--allow-unsigned" ] && { allow_unsigned=1; shift; }
-f="${1:-$(ls -t "$HOME/backups/$name"-*.tar.gz | head -1)}"
+. "$project/manage/backup_crypt.sh"
+allow_unsigned=0; identity=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --allow-unsigned) allow_unsigned=1; shift ;;
+    --identity) identity="${2:-}"; shift 2 ;;
+    *) break ;;
+  esac
+done
+# (ls fails when one of the three kinds has no file yet: that is not an error here)
+newest() { { ls -t "$HOME/backups/$name"-*.tar.gz "$HOME/backups/$name"-*.tar.gz.age "$HOME/backups/$name"-*.tar.gz.gpg 2>/dev/null || true; } | head -1; }
+f="${1:-$(newest)}"
+[ -n "$f" ] && [ -f "$f" ] || { echo "No backup archive given or found in ~/backups." >&2; exit 2; }
 pub="${2:-$project/data/audit_signing/signing_key.pub}"
 py="$project/.venv/bin/python"; [ -x "$py" ] || py=python3
-echo "archive: $f ($(stat -c %s "$f") bytes)"
+case "$f" in *.age|*.gpg) enc="encrypted (${f##*.})" ;; *) enc="NOT encrypted" ;; esac
+echo "archive: $f ($(stat -c %s "$f") bytes, $enc)"
 rc=0
 unsigned() {
   if [ "$allow_unsigned" = 1 ]; then echo "signature: $1 (accepted: --allow-unsigned)"; else echo "signature: $1: NOT VERIFIED (--allow-unsigned accepts it)"; rc=1; fi
@@ -42,6 +55,15 @@ fi
 # the newest one? an older genuine backup still verifies, and a file date can be changed: the audit log says (a warning,
 # not a failure: restoring an older backup on purpose is allowed; security review of a40f17a)
 echo "freshness: $("$py" "$project/audit_checkpoint.py" backup-age "$f" "${want:-}" 2>/dev/null || echo 'not checked')"
-if tar -xzOf "$f" "$name/.env" | cmp -s - "$project/.env"; then echo ".env: included and identical"; else echo ".env: MISSING OR DIFFERENT"; fi
-echo "files: $(tar -tzf "$f" | grep -vc '/$')"
+case "$f" in
+  *.age|*.gpg)
+    if [ -z "$identity" ]; then
+      echo "contents: not opened (encrypted; give your private key with --identity to compare .env and count the files)"
+      exit $rc
+    fi ;;
+esac
+tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT; chmod 600 "$tmp"
+if ! bc_decrypt "$f" "$identity" > "$tmp"; then echo "contents: CANNOT BE OPENED with that key"; exit 1; fi
+if tar -xzOf "$tmp" "$name/.env" | cmp -s - "$project/.env"; then echo ".env: included and identical"; else echo ".env: MISSING OR DIFFERENT"; fi
+echo "files: $(tar -tzf "$tmp" | grep -vc '/$')"
 exit $rc

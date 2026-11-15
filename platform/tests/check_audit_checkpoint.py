@@ -144,8 +144,16 @@ os.remove(fp1 + ".sig")
 subprocess.run(["ssh-keygen", "-q", "-Y", "sign", "-f", other, "-n", ac.CHECKPOINT_NS, fp1], check=True, capture_output=True)
 r = audit_verifier.check(data, checkpoints=forged)
 ok("a checkpoint signed by another key: INVALID", r["checkpoints"]["signatures"].get("INVALID") == 1)
-r = audit_verifier.check(data, checkpoints=forged, extra_keys=[open(other + ".pub").read().split(" ")[0] + " " + open(other + ".pub").read().split(" ")[1]])
-ok("…unless the auditor gives that key (--key): then valid", r["checkpoints"]["signatures"].get("INVALID") is None)
+ok("…unless the auditor gives that key (--key): then that checkpoint is valid",
+   audit_verifier.signature(fp1, "looking-glass-audit", [" ".join(open(other + ".pub").read().split(" ")[:2])]) == "valid")
+other_pub = " ".join(open(other + ".pub").read().split(" ")[:2])
+r = audit_verifier.check(data, extra_keys=[other_pub])
+ok("with --key, ONLY that key is trusted: the log's own (recorded) key no longer vouches (review of d82a436)",
+   r["checkpoints"]["signatures"].get("INVALID", 0) >= 1 and r["checkpoints"]["trusted"] == "the key given with --key only",
+   json.dumps(r["checkpoints"]["signatures"]))
+r = audit_verifier.check(data)
+ok("…without --key, the keys the log records are used (and the report says which)",
+   r["checkpoints"]["signatures"].get("INVALID") is None and r["checkpoints"]["trusted"] == "the keys recorded in the log")
 
 print("Backups")
 sums = os.path.join(tmp, "lg-20261115.tar.gz.sha256")

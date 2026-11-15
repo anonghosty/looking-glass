@@ -132,6 +132,15 @@ security.install(app, app.logger)
 # login, accounts, roles and sessions (auth.py): every page and API needs a login
 AUTH = auth.install(app, BASE_DIR, app.logger)
 request_tracker.install_tag(app)     # after the sign-in check: the running request knows its account
+# heavy views per person: at most HEAVY_PER_USER at once (the rest wait their turn), HEAVY_PER_MINUTE a minute
+# (request_limits.py; review of d82a436: one person could hold every thread)
+import request_limits  # noqa: E402
+HEAVY_LIMITS = request_limits.install(
+    app, ("/api/stats", "/api/geo", "/api/insight", "/api/insight/drill", "/api/svc/stats", "/api/svc/insight",
+          "/api/svc/drill", "/api/svc/regions", "/api/svc/hosts.csv", "/api/mgmt/report", "/api/insight/report",
+          "/api/svc/report", "/api/intelligence/host"),
+    lambda: (None if (getattr(g, "user", None) or {}).get("automation")
+             else ("u:" + g.user["user"]) if getattr(g, "user", None) else ("a:" + (request.remote_addr or ""))))
 # the security self-test clears this computer's login counters itself, so it never restarts the service (retest_reset.py)
 import retest_reset  # noqa: E402
 retest_reset.install(app, {"throttle": AUTH["throttle"], "audit": AUTH["audit"]})
@@ -255,6 +264,8 @@ _DAY_SERIAL = _itertools.count(1)
 # full reload of every day took 13-16 s each time and threw away every cached filter)
 DAY_MAX_AGE_SECONDS = int(os.environ.get("DAY_MAX_AGE_SECONDS", "3600"))
 from respcache import settled  # noqa: E402  (the settle rule for new rows, shared with the services store)
+import load_stamps  # noqa: E402  (the pipeline's marks: count rows only when one moved)
+_STAMPS = load_stamps.Stamps(db)
 
 
 class Day:
@@ -339,6 +350,7 @@ class DayStore:
         t0 = time.time()
         end = start + timedelta(days=1)
         srcs = registry.get()
+        stamp = _STAMPS.of([start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")])   # the pipeline's marks, before anything
         try:
             sig = self.signature(start)   # taken before the rows, so anything inserted meanwhile triggers a reload
         except Exception:
@@ -401,6 +413,8 @@ class DayStore:
         day.arrived = arrived
         day.sig = sig
         day.by_src, day.gen, day.settings_version = by_src, self.gen, settings.version
+        if sig is not None:
+            load_stamps.counted(day, stamp, t0)
         day.raw_total, day.asn_raw = raw_total, asn_raw
         day.version = hashlib.md5(json.dumps([sorted(per.items()), settings.version]).encode(), usedforsecurity=False).hexdigest()[:10]
         return day
@@ -437,11 +451,17 @@ class DayStore:
         day = self.days.get(start)
         if day is None or start > utcnow():
             return False
+        # the pipeline's marks first: counting every report's rows only when one moved (load_stamps.py)
+        now = time.time()
+        stamp = _STAMPS.of([start.strftime("%Y-%m-%d"), (start + timedelta(days=1)).strftime("%Y-%m-%d")])
+        if load_stamps.skip_count(day, stamp, now):
+            return False
         try:
             sig = self.signature(start)
         except Exception:
             app.logger.exception("Report check failed for %s", start.date())
             return False
+        load_stamps.counted(day, stamp, now)
         if sig == day.sig:
             day.pending = None
             return False
@@ -2759,6 +2779,7 @@ svc = services_api.register(app, {
     "country_chosen_names": lambda: [k for k, v in (globals().get("REGION_MATCHES").of(settings.data["country"])
                                                     if globals().get("REGION_MATCHES") else {}).items() if v == "__country__"],
     "map_region_names": lambda: __import__("region_matches").map_region_names(ADM1_DIR, settings.data["country"]),
+    "region_version": lambda: globals()["REGION_MATCHES"].version() if globals().get("REGION_MATCHES") else 0,
 })
 
 
@@ -3482,11 +3503,13 @@ INTELLIGENCE = _intelligence.install(app, {
 import response_cache as _response_cache  # noqa: E402
 RESPONSE_CACHE = _response_cache.install(app, ("api_kb_services", "api_intel_summary", "api_intel_leads", "api_kb_unresolved",
                                                "api_attack"), live={"api_kb_unresolved": lambda: {"check": dict(_AUTOCHECK)}},
-                                        data_dir=os.path.join(BASE_DIR, "data"))
+                                        data_dir=os.path.join(BASE_DIR, "data"),
+                                        days_key=lambda: __import__("warmup").days_key([store, svc["store"]]))
 # Settings → Task monitor: the service, its jobs, requests, cache, database, machine and pipeline, for admins (task_monitor.py)
 import task_monitor as _task_monitor  # noqa: E402
 _task_monitor.install(app, {"base_dir": BASE_DIR, "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"],
                             "audit": AUTH["audit"], "cache": RESPONSE_CACHE, "throttle": AUTH["throttle"],
+                            "heavy_limits": HEAVY_LIMITS,
                             "alerts": NOTIFS_ALERTS if "NOTIFS_ALERTS" in globals() else None})
 
 # Not when app.py is merely imported by a script or check: the schedule state file belongs to the server.

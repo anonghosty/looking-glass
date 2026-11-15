@@ -5,7 +5,9 @@ flask>=3.0,<4
 werkzeug>=3.0,<4
 pymongo>=4.8,<5
 python-dotenv>=1.0,<2
-gunicorn>=23.0,<27
+# gunicorn: 26.2 is the version tested (no known advisory from 23.0 to 26.2, pip-audit 2026-11-15); 27 waits for its
+# own test run (review of d82a436)
+gunicorn>=26.2,<27
 reportlab>=4.0,<6
 # the IANA time-zone database for local times (timezones.py): Python's zoneinfo reads the server's own copy, which
 # minimal servers and containers can lack; versions are years (2025.2...), so the cap is far away on purpose

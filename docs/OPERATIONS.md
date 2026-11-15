@@ -69,12 +69,33 @@ expired. `manage/install_cert.sh --status` shows the installed certificate and i
 Run these as the service's own user (the owner of `data/`):
 
 ```bash
-manage/backup.sh [folder]                    # default ~/backups; archive mode 600, a .sha256 file and its signature
-manage/verify_backup.sh [archive] [key.pub]  # the signature, the checksum, .env, the number of files
-manage/restore_check.sh [archive] [key.pub]  # rehearse a restore, without touching this installation
+manage/backup.sh [folder]                                          # default ~/backups; encrypted, mode 600, a .sha256 file and its signature
+manage/verify_backup.sh [--identity KEY] [archive] [key.pub]       # the signature and checksum; with your private key, .env and the files
+manage/restore_check.sh --identity KEY [archive] [key.pub]         # rehearse a restore, without touching this installation
 ```
 The archive holds the code, `.env` and all of `data/` (accounts, sessions, audit log, settings, certificates), not
-`.venv`. It contains secrets: copy it to safe storage off the computer, with its `.sha256` and `.sha256.sig`.
+`.venv`. Those are secrets, so the archive is **encrypted to your own key** and copied to safe storage off the computer,
+with its `.sha256` and `.sha256.sig`.
+
+> **Condition: no public key, no backup.** `manage/backup.sh` refuses to run until your public key is in
+> `data/backup_public_key` (or `BACKUP_PUBLIC_KEY` in `.env`): it exits with "NOT BACKED UP" (exit code 3) and
+> prints how to make one. Do this once, right after installing or updating. A scheduled backup made before
+> 2026-11-15 also stops until the key is there: check its output.
+
+**Encrypted.** The server keeps only a public key; the private key stays with you, off the server, so a backup that
+leaves the server, or the server itself if it is broken into, cannot be read with what is on it. Make a key once, on
+your own computer, with [age](https://age-encryption.org) or GnuPG:
+
+```bash
+age-keygen -o looking-glass-backup-key.txt                         # keep this file safe: it opens every backup
+age-keygen -y looking-glass-backup-key.txt > backup_public_key     # the public half, for the server
+#   or, with GnuPG:  gpg --export --armor you@example.org > backup_public_key
+```
+Copy `backup_public_key` to `data/backup_public_key` on the server (or point `BACKUP_PUBLIC_KEY` in `.env` at it).
+`backup.sh` then streams the archive straight into encryption (`.tar.gz.age` or `.tar.gz.gpg`): no readable copy is
+ever written. Without a public key it refuses, and says how to make one; `manage/backup.sh --unencrypted` makes a
+plain archive on purpose (not recommended). `age` is `sudo apt install age`; GnuPG is on most servers already. Keep the
+private key where you keep other recovery secrets: without it the backups cannot be restored.
 
 **Signed.** The checksum is signed with the installation's key (the same key as the
 [audit checkpoints](#audit-checkpoints)) and each backup is recorded in the audit log ("Backup checksum signed", with
@@ -84,16 +105,20 @@ the audit log. Keep a copy of `signing_key.pub` with your backups, and give it t
 archive you give them (its name and its SHA-256), and both fail for a backup with no signature or no public key to
 check it; for a backup made before backups were signed, add `--allow-unsigned` (first) and they say it was accepted.
 
-**Rehearse the restore.** `manage/restore_check.sh` checks the signature and checksum, unpacks the archive into a
-temporary folder, and checks what a restore needs: `.env`, the accounts (at least one administrator), roles, settings,
+The signature and checksum are over the encrypted file, so `verify_backup.sh` checks them without any private key;
+give it `--identity <your private key>` to also open the archive, compare `.env` with the live one and count the files.
+
+**Rehearse the restore.** `manage/restore_check.sh --identity <your private key>` checks the signature and checksum,
+opens the archive straight into a temporary folder, and checks what a restore needs: `.env`, the accounts (at least one administrator), roles, settings,
 the TLS certificate, and the audit log, with the same verifier an auditor runs (chain and signed checkpoints). It ends
 with "RESULT: restorable" or says what is missing, and removes the temporary folder. Do it after each change to how
 backups are made, and from time to time.
 
 **Restore.**
-1. Check the archive: `manage/verify_backup.sh <archive> <signing_key.pub>`.
+1. Check the archive: `manage/verify_backup.sh --identity <your private key> <archive> <signing_key.pub>`.
 2. Stop the service (`sudo systemctl stop looking-glass`) and move the current folder aside.
-3. Unpack the archive in the parent folder (`tar -xzf <archive>`).
+3. Open and unpack the archive in the parent folder: `age -d -i <your private key> <archive> | tar -xz` (or
+   `gpg --decrypt <archive> | tar -xz`; an unencrypted one: `tar -xzf <archive>`).
 4. Run `deploy/install.sh` (it recreates `.venv` and keeps `.env`) and start the service.
 5. Sign in, open **Audit portal → Integrity and evidence** and verify the log. The restored installation makes a new
    signing key on first use, recorded in the audit log: note its fingerprint.
@@ -104,6 +129,24 @@ heads noted after the backup then point beyond the end of the restored log, and 
 restore, not tampering: note the restore, the archive and the old and new key fingerprints with the audit papers.
 
 MongoDB itself is backed up with the pipeline ([../../database/README.md](../database/README.md)).
+
+## Encryption at rest
+
+MongoDB Community does not encrypt its files, and neither do the pipeline's report copies or Looking Glass's `data/`
+(accounts, sessions, audit log, settings). On a server they are protected at rest by an **encrypted volume**:
+
+- **Linux:** put the database, the report copies and Looking Glass on a LUKS volume (the installer of Ubuntu and most
+  distributions offers "encrypt the disk"; for an existing server, a new LUKS volume for `/var/lib/mongodb` and the
+  install folder). An encrypted server needs its key to start: typed at boot, or unlocked by the machine's TPM or a key
+  server on your network (Clevis and Tang) for unattended restarts.
+- **Windows with WSL:** turn on BitLocker (or Device encryption) for the Windows drive that holds WSL: WSL's disk is a
+  file on it.
+
+**Settings → Task monitor → Encryption at rest** shows, for the database, the report copies, Looking Glass's data and
+the backups, whether each is on an encrypted volume (looked at every 10 minutes; `at_rest.py`), and the guided
+installer says so at the end. Inside WSL it cannot see BitLocker and says to check it in Windows. Backups are
+encrypted on their own, to your key ([Backups](#backups)), wherever they are kept. NIST SP 800-53 SC-28 (protection of
+information at rest) is met by these two together.
 
 ## Audit checkpoints
 

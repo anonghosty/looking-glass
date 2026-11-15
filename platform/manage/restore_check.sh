@@ -3,14 +3,23 @@
 # temporary folder, and check what a restore needs is there and sound: .env, the accounts and roles, the settings, the
 # TLS certificate, and the audit log, whose chain and signed checkpoints are checked by the same verifier an auditor
 # runs. The temporary folder is removed at the end. Exits non-zero if anything a restore needs fails; an unsigned
-# backup, or one with no public key to check it, fails too unless --allow-unsigned is given.
-# Usage: manage/restore_check.sh [--allow-unsigned] [archive] [public key file]     (defaults as manage/verify_backup.sh)
+# backup, or one with no public key to check it, fails too unless --allow-unsigned is given. An encrypted backup
+# (manage/backup_crypt.sh) is opened with your private key, --identity, straight into the temporary folder.
+# Usage: manage/restore_check.sh [--allow-unsigned] [--identity YOUR-PRIVATE-KEY] [archive] [public key file]
+#        (defaults as manage/verify_backup.sh)
 set -uo pipefail
 project="$(cd "$(dirname "$0")/.." && pwd)"
 name="$(basename "$project")"
-allow_unsigned=0
-[ "${1:-}" = "--allow-unsigned" ] && { allow_unsigned=1; shift; }
-f="${1:-$(ls -t "$HOME/backups/$name"-*.tar.gz 2>/dev/null | head -1)}"
+. "$project/manage/backup_crypt.sh"
+allow_unsigned=0; identity=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --allow-unsigned) allow_unsigned=1; shift ;;
+    --identity) identity="${2:-}"; shift 2 ;;
+    *) break ;;
+  esac
+done
+f="${1:-$(ls -t "$HOME/backups/$name"-*.tar.gz "$HOME/backups/$name"-*.tar.gz.age "$HOME/backups/$name"-*.tar.gz.gpg 2>/dev/null | head -1)}"
 [ -n "$f" ] && [ -f "$f" ] || { echo "No backup archive given or found in ~/backups." >&2; exit 2; }
 pub="${2:-$project/data/audit_signing/signing_key.pub}"
 py="$project/.venv/bin/python"; [ -x "$py" ] || py=python3
@@ -38,9 +47,18 @@ else row OK checksum "matches"; fi
 age="$("$py" "$project/audit_checkpoint.py" backup-age "$f" "${want:-}" 2>/dev/null || echo 'not checked')"
 case "$age" in "the newest"*) row OK freshness "$age" ;; *) row WARN freshness "$age" ;; esac
 
+case "$f" in
+  *.age|*.gpg)
+    if [ -z "$identity" ]; then
+      row FAIL encryption "encrypted (${f##*.}): give your private key with --identity to rehearse the restore"
+      echo "RESULT: NOT checked (the backup is encrypted)"; exit 1
+    fi
+    row OK encryption "encrypted (${f##*.}), opened with the key given" ;;
+  *) row WARN encryption "NOT encrypted: anyone with this file can read .env and the accounts (manage/backup.sh encrypts by default)" ;;
+esac
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 chmod 700 "$tmp"
-if tar -xzf "$f" -C "$tmp" 2>/dev/null; then row OK unpack "$(find "$tmp" -type f | wc -l) files"; else row FAIL unpack "the archive cannot be unpacked"; echo "RESULT: NOT restorable"; exit 1; fi
+if bc_decrypt "$f" "$identity" | tar -xzf - -C "$tmp" 2>/dev/null; then row OK unpack "$(find "$tmp" -type f | wc -l) files"; else row FAIL unpack "the archive cannot be opened or unpacked (wrong key?)"; echo "RESULT: NOT restorable"; exit 1; fi
 r="$tmp/$name"
 [ -f "$r/.env" ] && row OK ".env" "present ($(grep -c '=' "$r/.env") settings)" || row FAIL ".env" "missing: the database and mail credentials would be lost"
 cd "$project" || { echo "RESULT: cannot open $project"; exit 1; }

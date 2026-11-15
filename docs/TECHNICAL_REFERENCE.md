@@ -364,7 +364,9 @@ Every setting, with examples: [CONFIGURATION.md](CONFIGURATION.md). The main one
 | `REPLAY_OFFSET_HOURS` | `24` | which day counts as "yesterday", and the schedule used on a fresh start when yesterday's report is already in |
 | `REPORT_SETTLE_SECONDS` | `600` | after a day's report starts arriving, wait this long before replaying that day from 00:00 |
 | `MAX_EVENTS_PER_POLL` | `400` | cap per poll window; any extra events are randomly sampled |
-| `DAY_RELOAD_SECONDS` | `600` | how often the in-memory day is reloaded from Mongo |
+| `DAY_RELOAD_SECONDS` | `600` | how often an in-memory day is checked against Mongo; it is kept (with every cached answer) while the rows per report are the same, and read again in full at least every `DAY_MAX_AGE_SECONDS` (3600) |
+| `SETTLE_MAX_SECONDS` | `120` | new rows load once the counts are the same on two checks in a row, or at least this often; only the changed reports are read again, the others taken over from the copy in memory |
+| `COUNT_EVERY_SECONDS` | `600` | the 15-second check reads the pipeline's marks (`lg_load_stamps`, one small query) and counts every report's rows only when a mark moved, or this often |
 | `FALLBACK_SCAN` | off | set to `1` to query by `extracted_date` when no `YYYY-MM-DD-*` file exists; this does a full collection scan unless that field is indexed |
 
 ## How it works
@@ -685,4 +687,4 @@ Security scripts:
 - `tools/list_infections.py [YYYY-MM-DD]` lists every infection of that day (any day, not only the replay day).
 - `tools/discover.py` surveys every collection: size, indexes, src/dst fields, latest document and yesterday's row count. It writes `tools/discovery.json`, and `tools/show_srcdst.py` prints the matching collections from it.
 - `deploy/reload.sh` restarts the systemd service without sudo. It kills the main process and systemd starts it again; `sudo systemctl restart looking-glass` does the same.
-- `manage/backup.sh [dest]` creates a timestamped archive of the project, including `.env` and everything in `data/` but not `.venv`, saved as `~/backups/<project folder>-<UTC time>.tar.gz` with a `.sha256` file and mode 600.
+- `manage/backup.sh [dest]` creates a timestamped archive of the project, including `.env` and everything in `data/` but not `.venv`, encrypted as it is written to the public key in `data/backup_public_key` (age or GnuPG; `manage/backup_crypt.sh`), saved as `~/backups/<project folder>-<UTC time>.tar.gz.age` (or `.gpg`) with a signed `.sha256` file and mode 600. Without a key it refuses; `--unencrypted` writes a plain `.tar.gz` on purpose.

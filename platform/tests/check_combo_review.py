@@ -69,8 +69,20 @@ def search(code, user="lg-check-analyst"):
     return jid, s
 
 
+def first_with_combinations():
+    """MikroTik (the report this check was written on), else the first services report with combinations (the GitHub
+    checks' made-up week has no MikroTik report: tests/ci_seed.py)."""
+    for name in ["scan_mikrotik_service"] + sorted({x["name"] for x in A.svc["registry"].get()}):
+        g = A.SVC_INTEL.gathered(name)
+        if g.get("combinations"):
+            return name, g
+    return None, {"combinations": []}
+
+
 try:
-    g0 = A.SVC_INTEL.gathered("scan_mikrotik_service")
+    rep0, g0 = first_with_combinations()
+    if not g0["combinations"]:
+        raise SystemExit("FAILED: no services report has a combination of pattern items to search for")
     code = g0["combinations"][0]["code"]
     print(f"An analyst opens a researcher's code ({code}) whose devices turn up in other reports")
     jid, s = search(code)

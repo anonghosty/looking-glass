@@ -1508,6 +1508,23 @@ HTTPS:   https://$TLS_DOMAIN$([ "$LG_PORT" = 443 ] || echo ":$LG_PORT") answers 
 elif [ "${ACCESS_MODE:-local}" != local ]; then OUT+="
 Other computers: allow port $LG_PORT in the firewall for them only (docs/INSTALLATION.md)."
 fi
+# encryption at rest (platform/at_rest.py): MongoDB Community does not encrypt its files; an encrypted volume does
+if [ -f "$PF_DIR/at_rest.py" ]; then
+  AT_REST="$(python3 "$PF_DIR/at_rest.py" "data=$PF_DIR/data" "database=$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import at_rest; print(at_rest.mongo_dbpath())' "$PF_DIR" 2>/dev/null || echo /var/lib/mongodb)" \
+              ${DB_DIR:+"reports=$DB_DIR"} 2>/dev/null | sed -n 's/^SUMMARY //p')"
+  log "encryption at rest: ${AT_REST:-not checked}"
+  case "$AT_REST" in
+    encrypted) OUT+="
+Encryption at rest: the database, the reports and the platform's data are on encrypted volumes." ;;
+    "check Windows") OUT+="
+Encryption at rest: inside WSL, turn on BitLocker for the Windows drive that holds WSL (Windows Settings, Privacy and
+         security, Device encryption or BitLocker): the database and the reports are not encrypted otherwise." ;;
+    *) OUT+="
+Encryption at rest: ${AT_REST:-not checked}. MongoDB does not encrypt its files: put this server's disk on an encrypted
+         volume (LUKS), see platform/docs/SECURITY.md, Encryption at rest. Backups: put your public key in
+         platform/data/backup_public_key so platform/manage/backup.sh can encrypt them." ;;
+  esac
+fi
 OUT+="
 
 Log of this installation: install-logs/$(basename "$LOG")"

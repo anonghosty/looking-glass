@@ -138,10 +138,23 @@ The control checks give evidence, not a pass or fail: the conclusion is the audi
 | Setting | Default | Meaning |
 |---|---|---|
 | `REF_SECRET` | random at each start | secret for the short host references shown instead of addresses when masked. Set a long random value (`openssl rand -hex 32`) to keep references the same across restarts |
-| `DAY_RELOAD_SECONDS` | `600` | how often the replay day is reloaded from MongoDB |
+| `DAY_RELOAD_SECONDS` | `600` | how often a loaded day is checked against MongoDB; it is kept, with every answer worked out from it, while the database holds the same rows |
+| `DAY_MAX_AGE_SECONDS` | `3600` | a loaded day is read again in full at least this often, even with the same rows |
+| `SETTLE_MAX_SECONDS` | `120` | new rows are loaded once their counts stop changing (two checks in a row), or at least this often while a pipeline run keeps adding them; only the reports that changed are read again |
+| `COUNT_EVERY_SECONDS` | `600` | with the pipeline's marks (`lg_load_stamps`), the 15-second check counts every report's rows only when a mark moved, or at least this often |
 | `MGMT_PAST_RECORDS` | `3000000` | records of past days the Executive portal keeps in memory for its 7-day baselines (roughly 200 to 300 MB per million); above it, older days are loaded from MongoDB when needed |
 | `REGISTRY_REFRESH_SECONDS` | `3600` | how often the list of reports is fully re-checked (new reports are found within 15 s anyway) |
-| `FALLBACK_SCAN` | `0` | `1` loads reports without a `filename` index with a slower scan. Better: create the index ([OPERATIONS.md](OPERATIONS.md)) |
+| `HEAVY_PER_USER` | `3` | heavy views (statistics, map, analysis, drill-down lists, regions, reports) one person may have worked on at once; more wait their turn. `0`: no limit |
+| `HEAVY_PER_MINUTE` | `240` | heavy views one person may ask for in a minute; more get 429 with Retry-After. `0`: no limit |
+| `HEAVY_WAIT_S` | `20` | how long a heavy view waits for its turn before 429 |
+| `HSTS_MAX_AGE` | `31536000` | Strict-Transport-Security on answers over HTTPS, in seconds (`0` tells browsers to forget it); `HSTS_INCLUDE_SUBDOMAINS=1`, `HSTS_PRELOAD=1` only when every name under the domain is on HTTPS for good |
+| `BACKUP_PUBLIC_KEY` | `data/backup_public_key` | the public key backups are encrypted to (an age recipient or a GnuPG public key; [OPERATIONS.md](OPERATIONS.md#backups)) |
+| `FALLBACK_SCAN` | `0` | `1` loads reports without a `filename` index by `extracted_date`, which has no index: **every row of the report is read** for each day. Leave it off; create the `filename` index instead ([OPERATIONS.md](OPERATIONS.md)) |
+
+**Memory.** Up to four days are held per platform (the day before, the replay day, the next, and the target). A full
+reload builds the new copy beside the old one, so memory briefly rises by about one day's size; reloading only the
+reports that changed keeps that small. Roughly 1 GB of web-service memory per million records held, plus the Executive
+portal's past records above.
 | `LG_PORT` | `5000` | the port the service listens on. Set by the installer or `deploy/install.sh --port`; the checks read it |
 | `PORT` | `5000` | port for `python app.py` (development only) |
 
@@ -153,6 +166,9 @@ Created and kept by the service; private to its user and never committed:
 |---|---|
 | `users.json`, `roles.json` | accounts (scrypt password hashes, authenticator keys, recovery code hashes), roles and permissions |
 | `sessions.json`, `automation.key` | signed-in sessions (only hashes of the cookies), the key the local check scripts use |
+| `login_counters.json` | failed sign-ins per address and account (the sign-in locks), kept across restarts; only failures within the longest lock window |
+| `region_matches.json` | the administrator's region matches (Settings → Country) |
+| `backup_public_key` | the public key backups are encrypted to (you put it there; [OPERATIONS.md](OPERATIONS.md#backups)) |
 | `audit.log`, `audit.head`, `audit_archive/` | sign-ins, account and settings changes, exports, findings and advisories; each entry chained to the one before by its SHA-256 (tamper evident). Archived at `AUDIT_ROTATE_MB`, kept for `AUDIT_RETENTION_DAYS`; `audit.head` holds the newest link and the number of entries |
 | `settings.json`, `schedule.json` | Settings page values, replay schedule |
 | `geocache.json`, `malpedia_cache.json` | look-up caches |

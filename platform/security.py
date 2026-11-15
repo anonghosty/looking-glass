@@ -9,7 +9,8 @@
   own pages: a foreign Origin, or Sec-Fetch-Site "cross-site", gets 403.
 * Security headers (report #8): Content-Security-Policy with a per-request nonce for the few inline scripts,
   frame-ancestors 'none' (no clickjacking; the one exception: /management?embed=1 may be framed by this same site, for
-  the review page), nosniff, Referrer-Policy, COOP, Permissions-Policy.
+  the review page), nosniff, Referrer-Policy, COOP, Permissions-Policy; Strict-Transport-Security over HTTPS
+  (hsts_value()).
 * Request size (report #7): MAX_CONTENT_LENGTH 64 KB.
 """
 import ipaddress
@@ -36,6 +37,23 @@ def public_error(exc, fallback="That request could not be completed. Try again, 
     where = os.path.abspath(tb.tb_frame.f_code.co_filename) if tb is not None else ""
     ours = where.startswith(_HERE) and os.sep + "site-packages" + os.sep not in where and os.sep + ".venv" + os.sep not in where
     return str(exc)[:300] if ours else fallback
+
+
+def hsts_value():
+    """Strict-Transport-Security for answers sent over HTTPS (review of d82a436: only the nginx example sent it, so a
+    Caddy install, or Looking Glass serving HTTPS itself, could be downgraded to HTTP on a later visit). One year by
+    default (HSTS_MAX_AGE, seconds; 0 sends max-age=0, which tells browsers to forget it). includeSubDomains and
+    preload only when asked (HSTS_INCLUDE_SUBDOMAINS=1, HSTS_PRELOAD=1): they bind every name under the domain."""
+    try:
+        age = max(0, int(os.environ.get("HSTS_MAX_AGE", "31536000") or 0))
+    except ValueError:
+        age = 31536000
+    v = f"max-age={age}"
+    if age and os.environ.get("HSTS_INCLUDE_SUBDOMAINS") == "1":
+        v += "; includeSubDomains"
+    if age and os.environ.get("HSTS_PRELOAD") == "1":
+        v += "; preload"
+    return v
 
 
 def _csv(v):
@@ -201,6 +219,9 @@ def install(app, logger=None):
         h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")   # Mapbox URL-restricted tokens need the origin
         h.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         h.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+        hsts = hsts_value()
+        if hsts and request.is_secure:
+            h.setdefault("Strict-Transport-Security", hsts)
         h["Server"] = "Looking Glass"
         return resp
 

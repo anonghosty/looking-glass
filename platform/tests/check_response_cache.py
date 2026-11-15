@@ -50,8 +50,21 @@ def save():
     return jsonify(ok=True)
 
 
+@app.route("/api/intelligence/host", methods=["POST"])
+def look_host():
+    return jsonify(ok=True)
+
+
+@app.route("/degraded")
+def degraded():
+    calls["n"] += 1
+    return jsonify(items=[], database=False)
+
+
+DAYS = {"k": (("2026-11-14", 1, 10),)}
 os.environ["CACHE_TTL_S"] = "60"
-rc = RC.install(app, ("heavy", "broken"), live={"heavy": lambda: {"progress": LIVE["progress"]}})
+rc = RC.install(app, ("heavy", "broken", "degraded"), live={"heavy": lambda: {"progress": LIVE["progress"]}},
+                days_key=lambda: DAYS["k"])
 c = app.test_client()
 print("Kept, and computed once")
 a = c.get("/heavy").json; b = c.get("/heavy").json
@@ -74,6 +87,19 @@ ok("a failed change does not throw the cache away", calls["n"] == n0)
 print("Errors are never kept")
 c.get("/broken"); c.get("/broken")
 ok("a 503 is computed again each time", calls["n"] == n0 + 2)
+print("Review of d82a436")
+n1 = calls["n"]; c.get("/degraded"); c.get("/degraded")
+ok("an answer worked out without the database (database: false) is not kept", calls["n"] == n1 + 2)
+c.get("/heavy"); n2 = calls["n"]
+ok("a read-only POST (a host look-up) does not empty the cache", c.post("/api/intelligence/host").status_code == 200 and (c.get("/heavy") and calls["n"] == n2))
+ok("…the list of read-only writes: look-ups, record views, own notifications, a search started or stopped",
+   not RC.changes_cached("/api/networks/lookup") and not RC.changes_cached("/api/combos/search")
+   and not RC.changes_cached("/api/combos/search/j1/stop") and not RC.changes_cached("/api/admin/sessions/abc/end"))
+ok("…but a real change still does (a definition, a note, a mapping, settings, a search's review)",
+   all(RC.changes_cached(p) for p in ("/api/kb/entry", "/api/notes", "/api/attack/mapping", "/api/settings",
+                                       "/api/combos/search/j1/review", "/api/combos/search/j1/enrich", "/api/lookups")))
+DAYS["k"] = (("2026-11-14", 2, 12),)
+ok("new report data (a new copy of the day) is never answered from before it", c.get("/heavy").json["n"] == n2 + 1)
 print("Many at once after it ran out")
 rc.bump(); calls["n"] = 0
 c.get("/heavy?sleep=0.05")                              # an answer exists (this generation)

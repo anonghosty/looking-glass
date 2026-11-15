@@ -27,6 +27,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
+import load_stamps
 from respcache import settled
 from sources import Registry, _is_time
 import special_reports
@@ -327,6 +328,7 @@ class ServiceStore:
         are taken over as they are and only the others are read again (speed review, 2026-11-15)."""
         t0 = time.time()
         end = start + timedelta(days=1)
+        stamp = self._stamp_of(start)              # the marks before the counts and rows (load_stamps.py)
         try:
             sig = self.signature(start)
         except Exception:
@@ -372,6 +374,8 @@ class ServiceStore:
         day = Day(start, events)
         day.per_source, day.arrived, day.sig = per, arrived, sig
         day.by_src, day.gen, day.settings_version = by_src, getattr(self, "gen", 0), sv
+        if sig is not None:
+            load_stamps.counted(day, stamp, t0)
         day.raw_total, day.asn_raw, day.region_raw = raw_total, asn_raw, region_raw
         day.version = hashlib.md5(json.dumps([sorted(per.items()), sv]).encode(), usedforsecurity=False).hexdigest()[:10]
         if self.log:
@@ -461,15 +465,26 @@ class ServiceStore:
             self.changes.clear()
             self.gen = getattr(self, "gen", 0) + 1
 
+    def _stamp_of(self, start):
+        if getattr(self, "_stamps", None) is None:
+            self._stamps = load_stamps.Stamps(self.db) if self.db is not None else False
+        return self._stamps.of(self._prefixes(start)) if self._stamps else None
+
     def check(self, dt):
         start = self.day_start(dt)
         day = self.days.get(start)
         if day is None:
             return False
+        # the pipeline's marks first: counting every report's rows only when one moved (load_stamps.py)
+        now = time.time()
+        stamp = self._stamp_of(start)
+        if load_stamps.skip_count(day, stamp, now):
+            return False
         try:
             sig = self.signature(start)
         except Exception:
             return False
+        load_stamps.counted(day, stamp, now)
         if sig == day.sig:
             day.pending = None
             return False

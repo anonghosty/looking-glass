@@ -700,16 +700,59 @@ class Throttle:
     office or partner behind a single public address can lock itself out; an admin can now see and lift locks):
     LOGIN_ACCOUNT_FAILS (5, 3..20) wrong tries for an account from one address lock that pair for LOGIN_ACCOUNT_LOCK_MIN
     (15, 5..240) minutes; LOGIN_ADDRESS_FAILS (20, 10..500) failures from one address within LOGIN_ADDRESS_WINDOW_MIN
-    (60, 15..1440) minutes lock the address."""
+    (60, 15..1440) minutes lock the address.
+    With a path (data/login_counters.json, 0600) the counters are kept on disk and read back at start, so a restart
+    does not wipe them (review of d82a436); the security retest clears this computer's own (retest_reset.py)."""
 
-    def __init__(self):
+    def __init__(self, path=None):
         self.fail, self.lock = {}, threading.Lock()
+        self.path = path
         self.account_fails = _env_int("LOGIN_ACCOUNT_FAILS", 5, 3, 20)
         self.account_window = 60 * _env_int("LOGIN_ACCOUNT_LOCK_MIN", 15, 5, 240)
         self.address_fails = _env_int("LOGIN_ADDRESS_FAILS", 20, 10, 500)
         self.address_window = 60 * _env_int("LOGIN_ADDRESS_WINDOW_MIN", 60, 15, 1440)
         # old records are cleared out (throttle_prune.py), never before the longest window has passed
         self.sweeper = throttle_prune.Sweeper(longest=max(throttle_prune.LONGEST_WINDOW, self.account_window, self.address_window))
+        self._read()
+
+    def _longest(self):
+        return max(throttle_prune.LONGEST_WINDOW, self.account_window, self.address_window)
+
+    def _read(self):
+        """The counters kept before a restart, without the failures older than the longest window."""
+        if not self.path:
+            return
+        try:
+            with open(self.path, encoding="utf-8") as f:
+                rows = json.load(f).get("fail") or []
+        except (OSError, ValueError, AttributeError):
+            return
+        now, longest = _now(), self._longest()
+        for row in rows:
+            try:
+                a, b, times = row
+                kept = [float(t) for t in times if now - float(t) < longest]
+            except (TypeError, ValueError):
+                continue
+            if kept:
+                self.fail[(a, b)] = kept
+
+    def _save(self):
+        """Write the counters (called with the lock held; best effort: a failed write only means a restart forgets)."""
+        if not self.path:
+            return
+        now, longest = _now(), self._longest()
+        rows = [[k[0], k[1], [t for t in v if now - t < longest]] for k, v in self.fail.items()
+                if isinstance(k, tuple) and len(k) == 2]
+        rows = [r for r in rows if r[2]]
+        try:
+            tmp = self.path + ".tmp"
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump({"fail": rows}, f)
+            os.replace(tmp, self.path)
+        except OSError:
+            pass
 
     def _recent(self, key, window):
         now = _now()
@@ -771,10 +814,13 @@ class Throttle:
         Returns how many counters were cleared. Registration and reset counters stay."""
         with self.lock:
             if name:
-                return 1 if self.fail.pop((ip, name.lower()), None) is not None else 0
+                n = 1 if self.fail.pop((ip, name.lower()), None) is not None else 0
+                self._save()
+                return n
             gone = [k for k in self.fail if isinstance(k, tuple) and len(k) == 2 and k[0] == ip]
             for k in gone:
                 del self.fail[k]
+            self._save()
             return len(gone)
 
     def failed(self, ip, name):
@@ -783,10 +829,12 @@ class Throttle:
             self.fail.setdefault((ip, (name or "").lower()), []).append(now)
             self.fail.setdefault((ip, None), []).append(now)
             self.sweeper.maybe(self.fail, now)
+            self._save()
 
     def ok(self, ip, name):
         with self.lock:
-            self.fail.pop((ip, (name or "").lower()), None)
+            if self.fail.pop((ip, (name or "").lower()), None) is not None:
+                self._save()
 
     def clear_address(self, ip):
         """Forget every failure counted for one address (retest_reset.py: this computer's own, after the self-test)."""
@@ -794,6 +842,7 @@ class Throttle:
             gone = [k for k in self.fail if ip in (k[0], k[1])]
             for k in gone:
                 del self.fail[k]
+            self._save()
             return len(gone)
 
     def count(self, key, window, add=False):
@@ -804,6 +853,7 @@ class Throttle:
                 r.append(now)
                 self.fail[key] = r
                 self.sweeper.maybe(self.fail, now)
+                self._save()
             return len(r)
 
 
@@ -849,7 +899,7 @@ def install(app, base_dir, logger):
     sessions = Sessions(os.path.join(data_dir, "sessions.json"),
                         idle=int(os.environ.get("SESSION_IDLE_MINUTES", "60")) * 60,
                         maximum=int(os.environ.get("SESSION_MAX_HOURS", "12")) * 3600)
-    throttle = Throttle()
+    throttle = Throttle(os.path.join(data_dir, "login_counters.json"))     # kept across restarts (review of d82a436)
     pw_policy = password_policy.Policy(data_dir)        # password expiry (Settings → Password policy)
     insecure_remote = os.environ.get("ALLOW_INSECURE_REMOTE_LOGIN") == "1"
     mfa_required = os.environ.get("MFA_REQUIRED", "1") != "0"

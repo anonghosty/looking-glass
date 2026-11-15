@@ -79,6 +79,7 @@ class ResponseCache:
         self.locks = {}
         self.lock = threading.Lock()
         self.stats = {"hit": 0, "stale": 0, "miss": 0}
+        self.days_key = None
 
     def bump(self):
         with self.lock:
@@ -87,7 +88,10 @@ class ResponseCache:
     def _key(self, endpoint):
         from flask import g, request
         u = getattr(g, "user", None) or {}
-        return (endpoint, request.full_path, u.get("role", ""), tuple(sorted(u.get("perms", ()) or ())), bool(u.get("peace")))
+        # the copies of the days in memory are part of the key: an answer from before new report data is not served
+        # after it (review of d82a436: Intel could lag the map by the whole cache time)
+        days = self.days_key() if self.days_key else ()
+        return (endpoint, request.full_path, u.get("role", ""), tuple(sorted(u.get("perms", ()) or ())), bool(u.get("peace")), days)
 
     def _get(self, key):
         with self.lock:
@@ -147,7 +151,7 @@ class ResponseCache:
                 self.stats["miss"] += 1
                 started_gen = self.gen
                 resp = app.make_response(view(*a, **kw))
-                if resp.status_code == 200 and not resp.is_streamed and started_gen == self.gen:
+                if resp.status_code == 200 and not resp.is_streamed and started_gen == self.gen and not _degraded(resp):
                     headers = [(k, v) for k, v in resp.headers.items() if k.lower() not in ("content-length", "set-cookie")]
                     self._put(key, (time.time(), started_gen, 200, headers, resp.get_data()))
                 return resp
@@ -157,20 +161,49 @@ class ResponseCache:
         app.view_functions[endpoint] = cached
 
 
-def install(app, endpoints, live=None, data_dir=None):
+def _degraded(resp):
+    """An answer worked out while the report database could not be read ("database": false) is not kept: the next
+    request tries again instead of serving it for the whole cache time (review of d82a436)."""
+    if resp.mimetype != "application/json":
+        return False
+    try:
+        d = json.loads(resp.get_data())
+    except (ValueError, TypeError):
+        return False
+    return isinstance(d, dict) and d.get("database") is False
+
+
+# requests that change nothing these answers are made of (look-ups, record views, exports, a person's own
+# notifications, a search started or stopped, sessions and sign-in locks): they no longer empty the cache (review of
+# d82a436: every POST did). Any other write still starts a new generation, so a change never shows an old answer.
+READ_ONLY_WRITES = ("/api/intelligence/report", "/api/intelligence/export.csv", "/api/intelligence/host",
+                    "/api/notifications/clear", "/api/networks/lookup", "/api/asns/identify", "/api/pipeline/apikey/check",
+                    "/api/selftest/reset-login-counters", "/api/admin/sessions/", "/api/admin/lockouts/unlock", "/api/peace",
+                    "/api/password-policy", "/api/admin/monitor/cache")
+
+
+def changes_cached(path):
+    if path == "/api/combos/search" or (path.startswith("/api/combos/search/") and path.endswith("/stop")):
+        return False
+    return not any(path == p or (p.endswith("/") and path.startswith(p)) for p in READ_ONLY_WRITES)
+
+
+def install(app, endpoints, live=None, data_dir=None, days_key=None):
     """Wrap these endpoints; every successful change starts a new generation. live: {endpoint: fn() -> dict}.
-    data_dir: where the time chosen in Settings is kept (performance.json)."""
+    data_dir: where the time chosen in Settings is kept (performance.json). days_key(): the copies of the days in
+    memory (warmup.days_key), part of every key."""
     from flask import request
     if data_dir:
         OVERRIDE["path"] = os.path.join(data_dir, "performance.json")
     rc = ResponseCache()
+    rc.days_key = days_key
     for ep in endpoints:
         if ep in app.view_functions:
             rc.wrap(app, ep, (live or {}).get(ep))
 
     @app.after_request
     def _cache_new_generation(resp):
-        if request.method in ("POST", "PUT", "PATCH", "DELETE") and resp.status_code < 400:
+        if request.method in ("POST", "PUT", "PATCH", "DELETE") and resp.status_code < 400 and changes_cached(request.path):
             rc.bump()
         return resp
 

@@ -43,6 +43,9 @@ def register(app, ctx):
 
     # ------------------------------------------------------------------ helpers
     country_upper = {"t": 0.0, "v": set()}
+    # the administrator's region matches (region_matches.py): part of every cached services answer that names regions,
+    # so a new match shows at once, not at the next reload (review of d82a436)
+    region_version = ctx.get("region_version") or (lambda: 0)
 
     def _fold(s):
         import unicodedata
@@ -415,7 +418,7 @@ def register(app, ctx):
         day = day_for(request.args.get("at"))
         # shared by every viewer of the same selection, until the day is reloaded (see respcache.py)
         args = cache_args(request.args)
-        key = ("svc_stats", day_key(day), demo, n, registry.version, asns.mtime, args)
+        key = ("svc_stats", day_key(day), demo, n, registry.version, asns.mtime, region_version(), args)
         return jsonify(svc_cache.get(key, lambda: svc_stats_core(request.args, demo, n)))
 
     def svc_stats_core(args, demo, n):
@@ -428,25 +431,18 @@ def register(app, ctx):
                     multi_issue_hosts=sum(1 for ip in sel if len(day_host_issues(day).get(ip, ())) > 1),
                     breakdowns=breakdowns(evs, demo, n))
 
-    facets_cache = {}
+    # masked and unmasked viewers each keep their own lists (review 2026-11-13); worked out once for everyone asking at
+    # the same moment (ResultCache; review of d82a436: simultaneous requests computed it twice)
+    facets_cache = ResultCache(size=8)
 
     @app.route("/api/svc/facets")
     def svc_facets():
         demo = is_demo()
         day = day_for(request.args.get("at"))
-        # whole-day lists only change when the day is reloaded: cached per day version, demo mode and country
-        key = (day.start, day.version, demo, ctx["country_name"]())
-        b = facets_cache.get(key)
-        if b is None:
-            b = breakdowns(day.events, demo, 400)
-            # masked and unmasked viewers each keep their own lists (review 2026-11-13: one entry only, so the two
-            # kinds of viewer worked the whole day out again for each other, request after request)
-            try:
-                while len(facets_cache) >= 4:
-                    facets_cache.pop(next(iter(facets_cache)))
-            except (StopIteration, KeyError, RuntimeError):      # another request trimmed it at the same moment
-                facets_cache.clear()
-            facets_cache[key] = b
+        # whole-day lists change when the day is reloaded, the network names change (asns), a report type is added,
+        # or an administrator matches a region name (review of d82a436: those three were left out of the key)
+        key = (day_key(day), demo, ctx["country_name"](), asns.mtime, registry.version, region_version())
+        b = facets_cache.get(key, lambda: breakdowns(day.events, demo, 400))
         return jsonify(day=day.start.date().isoformat(), total=len(day.events), facets=b,
                        reports=[{"name": s["name"], "label": s["label"], "family": s["family"],
                                  "rows": day.per_source.get(s["name"], 0), "warnings": s["diagnostic"]["warnings"]}
@@ -461,7 +457,7 @@ def register(app, ctx):
 
     def view_key(name, args, demo):
         day = day_for(args.get("at"))
-        return (name, day_key(day), demo, registry.version, asns.mtime, ctx["country_name"](), cache_args(args))
+        return (name, day_key(day), demo, registry.version, asns.mtime, ctx["country_name"](), region_version(), cache_args(args))
 
     @app.route("/api/svc/insight")
     def svc_insight():

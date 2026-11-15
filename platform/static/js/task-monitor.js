@@ -57,6 +57,18 @@
       tile("Memory free", mc.memory_available_mb != null ? gb(mc.memory_available_mb) : "?", mc.memory_total_mb ? `of ${gb(mc.memory_total_mb)} · swap ${fmt(mc.swap_used_mb)} MB used` : "",
         mc.memory_total_mb && mc.memory_available_mb < mc.memory_total_mb * 0.1 ? "warn" : ""),
       tile("Disk free", mc.disk_free_gb != null ? `${mc.disk_free_gb} GB` : "?", mc.disk_total_gb ? `of ${mc.disk_total_gb} GB` : "", mc.disk_free_gb != null && mc.disk_free_gb < 5 ? "bad" : ""));
+    // encryption at rest (at_rest.py): the database, the report copies, Looking Glass's data and the backups
+    const ar = d.at_rest || {};
+    if (ar.summary) {
+      const word = { "encrypted": "Encrypted", "not encrypted": "Not encrypted", "check Windows": "Check BitLocker", "unknown": "Unknown" }[ar.summary] || ar.summary;
+      const t = tile("Encrypted at rest", word,
+        ar.summary === "encrypted" ? "the database, report copies, data and backups are on encrypted volumes"
+          : ar.summary === "check Windows" ? "inside WSL: turn on BitLocker for the Windows drive (see the details below)"
+            : ar.summary === "not encrypted" ? "some of what Looking Glass keeps is on a plain disk (see the details below)"
+              : "could not be checked (see the details below)",
+        ar.summary === "not encrypted" ? "bad" : ar.summary === "encrypted" ? "" : "warn");
+      top.append(t);
+    }
     const mem = el("div", "tm-memrow");
     if (mc.memory_total_mb) { mem.append(el("span", "muted", "Memory in use"), meter(mc.memory_total_mb - mc.memory_available_mb, mc.memory_total_mb)); }
 
@@ -117,7 +129,22 @@
 
     const grid = el("div", "tm-grid");
     grid.append(card("Background jobs", jobs), reqs, card("Report pipeline", pipe), card("Starts, locks and alerts", misc));
-    $("tmBody").replaceChildren(top, mem, grid, card("Slowest requests, last day", slow));
+    const extra = [];
+    if ((ar.rows || []).length) {                       // where each part of what Looking Glass keeps is, and whether encrypted
+      const ul = el("ul", "tm-jobs");
+      for (const r of ar.rows) {
+        const li = el("li", r.state === "encrypted" ? "tm-ok" : r.state === "not encrypted" ? "tm-bad" : "tm-done");
+        li.append(el("span", "tm-dot"), el("span", null, r.what), el("small", "muted", `${r.path}: ${r.detail}`));
+        ul.append(li);
+      }
+      extra.push(card("Encryption at rest", ul, el("p", "muted tm-note",
+        "MongoDB Community does not encrypt its files: an encrypted volume does (LUKS on Linux, BitLocker for Windows with WSL). "
+        + "Backups are also encrypted to your own key by manage/backup.sh. How: docs/SECURITY.md, Encryption at rest.")));
+    }
+    const hl = d.heavy_limits;
+    if (hl) extra.push(el("p", "muted tm-note", `Heavy views per person: at most ${hl.per_user || "any number"} at once and ${hl.per_minute || "any number"} a minute`
+      + ` · ${fmt(hl.waited)} waited their turn · ${fmt(hl.refused_busy + hl.refused_rate)} refused since the start.`));
+    $("tmBody").replaceChildren(top, mem, grid, ...extra, card("Slowest requests, last day", slow));
     drawCache(c);
     $("tmAt").textContent = `Read at ${d.at}${paused ? " · paused" : ""}`;
   }

@@ -41,8 +41,11 @@ class Store(S.ServiceStore):
 
     def _load(self, start, old=None):
         self.loads += 1
+        stamp = self._stamp_of(start) if getattr(self, "db", None) is not None else None
         d = S.Day(start, [{"_t": start.timestamp() + i} for i in range(self.counts.get("scan_http", 0))])
         d.sig = dict(self.counts)
+        import load_stamps
+        load_stamps.counted(d, stamp, time.time())
         return d
 
 
@@ -94,6 +97,49 @@ e1 = empty.get(start); e1.checked_at -= 61
 empty.get(start)
 ok("an empty day (report not in yet) is still tried every minute", empty.loads == 2)
 
+print("The pipeline's marks (load_stamps.py): count only when one moved")
+import load_stamps as LS  # noqa: E402
+
+
+class FakeDB:
+    def __init__(self):
+        self.marks = []
+        self.names = ["lg_load_stamps"]
+
+    def list_collection_names(self):
+        return self.names
+
+    def __getitem__(self, name):
+        db = self
+
+        class C:
+            def find(self, q, proj=None):
+                return [m for m in db.marks if m["day"] in q["day"]["$in"]]
+        return C()
+
+
+fdb = FakeDB()
+ks = Store(); ks.db = fdb; ks._stamps = LS.Stamps(fdb)
+ks.counts = {"scan_http": 5}
+kd = ks.get(start)
+c0 = ks.sig_calls
+ks.check(start); ks.check(start); ks.check(start)
+ok("the marks are taken when the day loads: the checks after it count nothing", ks.sig_calls == c0, str(ks.sig_calls - c0))
+fdb.marks.append({"_id": "scan_http|2026-11-14", "day": "2026-11-14", "at": "t1", "rows": 3})
+ks.counts = {"scan_http": 8}
+ks.check(start)
+ok("a mark moved: counted (and the settle rule waits)", ks.sig_calls == c0 + 1 and ks.loads == 1)
+ks.check(start)
+ok("…while new rows are pending, every check counts; settled: loaded", ks.sig_calls == c0 + 2 and ks.loads == 2)
+n = ks.sig_calls; ks.check(start)
+ok("settled and loaded: back to counting nothing", ks.sig_calls == n)
+ks.days[start].counted_at -= LS.COUNT_EVERY + 1
+ks.check(start)
+ok("every COUNT_EVERY seconds it counts anyway (rows removed leave no mark)", ks.sig_calls == n + 1)
+fdb.names = []; ks._stamps = LS.Stamps(fdb)
+n = ks.sig_calls; ks.check(start); ks.check(start)
+ok("no marks at all (an older pipeline): every check counts, as before", ks.sig_calls == n + 2)
+
 print("Only the reports that changed are read again")
 
 
@@ -133,6 +179,13 @@ ok("…the kept reports' rows are the very same (not read or prepared again)",
    all(e in d0.events for e in d1.events if e["report"] != "scan_rdp"))
 ok("…totals before the constituency add up (rows, networks, regions)", d1.raw_total == 12 and d1.asn_raw["64512"] == 12 and d1.region_raw["ACCRA"] == 12)
 ok("…in time order", [e["_t"] for e in d1.events] == sorted(e["_t"] for e in d1.events))
+full = p._load(start)                     # the same day loaded in full, every report read
+same = lambda a, b: ([(e["report"], e["_t"], e["ip"]) for e in a.events] == [(e["report"], e["_t"], e["ip"]) for e in b.events]  # noqa: E731
+                     and a.per_source == b.per_source and a.raw_total == b.raw_total and a.asn_raw == b.asn_raw
+                     and a.region_raw == b.region_raw and a.sig == b.sig and a.version == b.version)
+ok("a partial reload gives exactly the same day as a full one (rows, order, per report, totals, networks, regions, version)",
+   same(d1, full))
+ok("…yet it is a new copy with its own cache key (no cached answer from before it is served)", day_key(d1) != day_key(d0) and d1.serial != d0.serial)
 p.read.clear(); p.gen = 1
 p._load(start, old=d1)
 ok("the constituency changed since: everything is read again", len(p.read) == 3)

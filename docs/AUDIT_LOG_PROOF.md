@@ -96,7 +96,7 @@ that always says "verified". So do not take it on trust:
   PowerShell) with the one published here, outside the server:
 
   ```text
-  648f46955db8c8971d2911d5840c845827124989765d7b31ce25e96cd03a08dd
+  1b6800ee7028d45701a21fc0695937dcf3f888e1c720191be7b9e63fdcbf460b
   ```
 
   This is the verifier of the current release on GitHub. An installation of an older release ships the verifier of
@@ -164,7 +164,11 @@ python verify_audit_log.py --checkpoints FOLDER_OF_YOUR_COPIES --key signing_key
 | **found at their entry** | the log up to each checkpoint is the log as it was when the checkpoint was made |
 | **entry N is not the one it recorded** | the log up to it was changed or rewritten after the checkpoint |
 | **beyond the end of the log** | entries were cut from the end |
-| **signature INVALID** | the checkpoint was altered, or signed by a key the log does not record (and you did not give with `--key`) |
+| **signature INVALID** | the checkpoint was altered, or signed by another key: without `--key`, one the log does not record; with `--key`, any key other than the one you gave |
+
+With `--key`, **only** the key you give is trusted, not the keys the log records: a log rewritten in full could record a
+key of its own and sign with it, so the key you noted earlier is what tells. Without `--key`, the keys recorded in the
+log are used (and the report says which).
 
 What the signature proves, and what it does not: it shows a copy came from this installation and was not changed on
 the way or where it is kept. The key is on the server, so someone who controls the server could sign new

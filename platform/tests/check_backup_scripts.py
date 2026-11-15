@@ -31,7 +31,7 @@ proj = os.path.join(tmp, "platform")
 os.makedirs(os.path.join(proj, "manage")); os.makedirs(os.path.join(proj, "data"))
 for f in ("audit_checkpoint.py", "audit_verifier.py", "audit_chain.py"):
     shutil.copy(os.path.join(HERE, f), proj)
-for f in ("backup.sh", "verify_backup.sh", "restore_check.sh"):
+for f in ("backup.sh", "verify_backup.sh", "restore_check.sh", "backup_crypt.sh"):
     shutil.copy(os.path.join(HERE, "manage", f), os.path.join(proj, "manage", f))
     os.chmod(os.path.join(proj, "manage", f), 0o755)
 open(os.path.join(proj, ".env"), "w").write("SECRET_KEY=test-only-not-a-secret\nPORT=5000\n")
@@ -47,12 +47,17 @@ def run(*cmd):
 
 
 def backup():
-    rc, out = run("manage/backup.sh", os.path.join(tmp, "backups"))
+    rc, out = run("manage/backup.sh", "--unencrypted", os.path.join(tmp, "backups"))
     arch = sorted(p for p in os.listdir(os.path.join(tmp, "backups")) if p.endswith(".tar.gz"))[-1]
     return rc, out, os.path.join(tmp, "backups", arch)
 
 
-print("A signed backup")
+print("No public key: no backup (review of d82a436)")
+rc, out = run("manage/backup.sh", os.path.join(tmp, "refused"))
+ok("refused with exit 3, saying how to make a key", rc == 3 and "NOT BACKED UP" in out and "age-keygen" in out, out[-400:])
+ok("…and nothing written", not os.path.exists(os.path.join(tmp, "refused")) or not os.listdir(os.path.join(tmp, "refused")))
+
+print("A signed (unencrypted, --unencrypted) backup")
 rc, out, A = backup()
 ok("backup.sh makes the archive, its checksum and the signature", rc == 0 and os.path.exists(A + ".sha256.sig"), out[-300:])
 ok("…and records it in the audit log", '"backup_signed"' in open(os.path.join(proj, "data", "audit.log")).read())
@@ -111,6 +116,64 @@ rc, out = run("manage/restore_check.sh", "--allow-unsigned", u)
 ok("…and passes with --allow-unsigned", rc == 0 and "RESULT: restorable" in out, out[-400:])
 rc, out = run("manage/verify_backup.sh", A, os.path.join(tmp, "no-such-key.pub"))
 ok("no public key to check it: NOT VERIFIED, exit 1", rc == 1 and "NOT CHECKED" in out, out)
+rc, out = run("manage/restore_check.sh", A)
+ok("restore_check.sh says an unencrypted backup is not encrypted (a warning)", "WARN  encryption" in out, out[-500:])
+
+
+def encrypted(kind, pub_text, identity):
+    open(os.path.join(proj, "data", "backup_public_key"), "w").write(pub_text)
+    time.sleep(1.1)
+    d = os.path.join(tmp, "enc-" + kind)
+    rc, out = run("manage/backup.sh", d)
+    files = sorted(p for p in os.listdir(d) if p.endswith(".tar.gz." + kind)) if os.path.isdir(d) else []
+    ok(f"{kind}: the backup is encrypted (.tar.gz.{kind}), with its checksum and signature",
+       rc == 0 and files and os.path.exists(os.path.join(d, files[-1]) + ".sha256.sig"), out[-400:])
+    if not files:
+        return
+    E = os.path.join(d, files[-1])
+    raw = open(E, "rb").read()
+    ok(f"{kind}: nothing readable in it (.env, accounts)", b"SECRET_KEY" not in raw and b"admin1" not in raw and not raw.startswith(b"\x1f\x8b"))
+    ok(f"{kind}: only the owner may read it (0600)", oct(os.stat(E).st_mode & 0o777) == "0o600")
+    rc, out = run("manage/verify_backup.sh", E)
+    ok(f"{kind}: verify without the private key: signature and checksum checked, contents not opened",
+       rc == 0 and "signature: valid" in out and "checksum: matches" in out and "not opened" in out, out)
+    rc, out = run("manage/verify_backup.sh", "--identity", identity, E)
+    ok(f"{kind}: verify with the private key: .env included and identical", rc == 0 and ".env: included and identical" in out, out)
+    rc, out = run("manage/restore_check.sh", E)
+    ok(f"{kind}: restore rehearsal without the key: refused, saying why", rc != 0 and "give your private key with --identity" in out, out[-400:])
+    rc, out = run("manage/restore_check.sh", "--identity", identity, E)
+    ok(f"{kind}: restore rehearsal with the key: restorable", rc == 0 and "RESULT: restorable" in out and "OK    encryption" in out, out[-600:])
+    wrong = os.path.join(tmp, f"wrong-{kind}")
+    if kind == "age":
+        subprocess.run(["age-keygen", "-o", wrong], capture_output=True)
+    else:
+        open(wrong, "w").write("not a key")
+    rc, out = run("manage/restore_check.sh", "--identity", wrong, E)
+    ok(f"{kind}: the wrong key: not restorable", rc != 0 and "cannot be opened" in out, out[-300:])
+
+
+print("Encrypted backups (GnuPG)")
+if shutil.which("gpg"):
+    gh = os.path.join(tmp, "gnupg"); os.makedirs(gh); os.chmod(gh, 0o700)
+    g = lambda *a: subprocess.run(["gpg", "--homedir", gh, "--batch", *a], capture_output=True, text=True)  # noqa: E731
+    g("--passphrase", "", "--pinentry-mode", "loopback", "--quick-gen-key", "LG backup test <test@example.invalid>", "default", "default", "never")
+    pub = g("--export", "--armor").stdout
+    sec_path = os.path.join(tmp, "secret.asc")
+    open(sec_path, "w").write(g("--export-secret-keys", "--armor", "--pinentry-mode", "loopback", "--passphrase", "").stdout)
+    encrypted("gpg", pub, sec_path)
+else:
+    print("  gpg not installed: skipped")
+print("Encrypted backups (age)")
+if shutil.which("age") and shutil.which("age-keygen"):
+    idf = os.path.join(tmp, "age-key.txt")
+    subprocess.run(["age-keygen", "-o", idf], capture_output=True)
+    rec = subprocess.run(["age-keygen", "-y", idf], capture_output=True, text=True).stdout
+    encrypted("age", rec, idf)
+else:
+    print("  age not installed here: skipped (GnuPG checked above)")
+open(os.path.join(proj, "data", "backup_public_key"), "w").write("hello")
+rc, out = run("manage/backup.sh", os.path.join(tmp, "badkey"))
+ok("a public key file that is neither age nor GnuPG: refused", rc == 3 and "neither an age recipient" in out, out[-300:])
 
 shutil.rmtree(tmp, ignore_errors=True)
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))

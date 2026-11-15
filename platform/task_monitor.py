@@ -89,6 +89,25 @@ def _machine(path):
     return out
 
 
+_AT_REST = {"at": 0.0, "data": None}
+
+
+def _at_rest(data_dir, pipeline_dir):
+    """Is what Looking Glass keeps on an encrypted volume (at_rest.py)? Looked at again at most every 10 minutes."""
+    if time.time() - _AT_REST["at"] > 600 or _AT_REST["data"] is None:
+        import at_rest
+        copies = None
+        if pipeline_dir:                                  # where the pipeline keeps its report copies (its DATA_DIR)
+            penv = pipeline_link.read_env(os.path.join(str(pipeline_dir), ".env"))
+            copies = os.path.join(os.path.expanduser(penv.get("DATA_DIR") or str(pipeline_dir)), "sorting_backup")
+        rows = at_rest.status({"Looking Glass data (accounts, sessions, audit log, settings)": data_dir,
+                               "Report database (MongoDB)": at_rest.mongo_dbpath(),
+                               "Report copies (the pipeline)": copies,
+                               "Backups": os.path.expanduser("~/backups")})
+        _AT_REST.update(at=time.time(), data={"rows": rows, "summary": at_rest.summary(rows)})
+    return _AT_REST["data"]
+
+
 def _cron():
     """The schedules of this account (pipeline, name refresh), read at most once a minute; only Looking Glass's lines.
     readable False: the service's sandbox does not let it run crontab (NoNewPrivileges), which says nothing about
@@ -241,6 +260,8 @@ def snapshot(ctx):
                    "entries": len(rc.entries), "generation": rc.gen, **rc.stats} if rc else None),
         "mongodb": _mongod(),
         "machine": _machine(data_dir),
+        "at_rest": _at_rest(data_dir, pdir),
+        "heavy_limits": (ctx["heavy_limits"] if ctx.get("heavy_limits") else None),
         "pipeline": {"found": bool(pdir), "last": pstat, "schedule": sched, "schedule_readable": sched_ok},
         "restarts": _restarts(data_dir),
         "locks": len(ctx["throttle"].lockouts()) if ctx.get("throttle") else 0,

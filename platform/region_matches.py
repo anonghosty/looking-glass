@@ -67,6 +67,14 @@ class Matches:
     def of(self, cc):
         return dict(self.all().get(str(cc or "").upper(), {}))
 
+    def version(self):
+        """Changes whenever the choices change (the file's time and size): part of the cached services answers' keys."""
+        try:
+            st = os.stat(self.path)
+            return (st.st_mtime_ns, st.st_size)
+        except OSError:
+            return 0
+
     def set(self, cc, name, target):
         with self.lock:
             d = {k: dict(v) for k, v in self.all().items()}

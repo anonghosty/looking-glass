@@ -885,6 +885,24 @@ def _insert_docs(coll, docs: list) -> tuple[int, int, int]:
     raise RuntimeError("MongoDB unavailable after retries")
 
 
+STAMPS = "lg_load_stamps"
+
+
+def stamp_loaded(category: str, filename: str, inserted: int) -> None:
+    """Mark that rows of this report were added for the day its file is named after (the file name starts with the
+    date). Looking Glass reads these marks every 15 seconds instead of counting every report's rows (review of d82a436),
+    and counts only when a mark moved. Best effort: a mark that cannot be written only makes the platform count."""
+    day = filename[:10]
+    if not re.match(r"\d{4}-\d{2}-\d{2}$", day):
+        return
+    try:
+        _WORKER_DB[STAMPS].update_one({"_id": f"{category}|{day}"},
+                                      {"$set": {"coll": category, "day": day, "at": dt.datetime.now(dt.timezone.utc)},
+                                       "$inc": {"rows": int(inserted)}}, upsert=True)
+    except Exception as exc:  # noqa: BLE001
+        log.debug("load stamp not written for %s %s: %s", category, day, exc)
+
+
 def load_file(category: str, path: str, filename: str, chunk: int) -> dict:
     coll = _WORKER_DB[category]
     started = time.monotonic()
@@ -897,6 +915,8 @@ def load_file(category: str, path: str, filename: str, chunk: int) -> dict:
         res["inserted"] += ins
         res["duplicates"] += dup
         res["failed"] += bad
+        if ins:
+            stamp_loaded(category, filename, ins)
 
     if filename.endswith(".csv"):
         own = 0

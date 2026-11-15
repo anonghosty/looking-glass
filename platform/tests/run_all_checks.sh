@@ -53,6 +53,10 @@ run "world maps (every country)" $PY tests/check_world_maps.py
 run "region matches (Settings)" $PY tests/check_region_matches.py
 run "days kept while unchanged; settle" $PY tests/check_day_keep.py
 run "warm-up after the days change" $PY tests/check_warmup.py
+run "Strict-Transport-Security" $PY tests/check_hsts.py
+run "heavy views per person" $PY tests/check_request_limits.py
+run "encryption at rest (check)" $PY tests/check_at_rest.py
+run "file modes (only scripts executable)" $PY tests/check_file_modes.py
 run "special reports kept out of the replay" $PY tests/check_special_reports.py
 run "views of host data in the audit log" $PY tests/check_data_access.py
 run "CVE look-ups: KEV backoff, time budget" $PY tests/check_cve_backoff.py

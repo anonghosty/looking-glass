@@ -105,7 +105,8 @@ for role, perms in (("analyst", {"view", "unmasked", "export", "malpedia"}), ("r
 import shutil, tempfile  # noqa: E401,E402
 from auth import Roles  # noqa: E402
 tmpdir = tempfile.mkdtemp()
-shutil.copy(A.AUTH["roles"].path, os.path.join(tmpdir, "roles.json"))
+if os.path.exists(A.AUTH["roles"].path):      # a fresh installation (the GitHub checks) has the built-in roles only
+    shutil.copy(A.AUTH["roles"].path, os.path.join(tmpdir, "roles.json"))
 open(os.path.join(tmpdir, ".roles_networks_added"), "w").close()
 roles = Roles(os.path.join(tmpdir, "roles.json"))
 roles.save({**roles.roles, "analyst": list(roles.roles.get("analyst", [])) + ["management"], "custom-x": ["view", "management"],
