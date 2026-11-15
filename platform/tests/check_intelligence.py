@@ -34,7 +34,9 @@ class Coll:
     def __init__(self, rows): self.rows = rows
     def _m(self, r, q):
         for k, v in q.items():
-            if isinstance(v, dict) and "$regex" in v:
+            if k == "$or":                                  # one prefix per day (intelligence.py host look-up)
+                if not any(self._m(r, sub) for sub in v): return False
+            elif isinstance(v, dict) and "$regex" in v:
                 if not re.match(v["$regex"], str(r.get(k, ""))): return False
             elif r.get(k) != v: return False
         return True

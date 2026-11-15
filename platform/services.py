@@ -17,7 +17,9 @@ kept as `extras` for the details view.
 """
 import functools
 import hashlib
+import itertools
 import json
+import os
 import re
 import threading
 import time
@@ -25,6 +27,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
+from respcache import settled
 from sources import Registry, _is_time
 import special_reports
 
@@ -243,11 +246,19 @@ def normalise_service(doc, src):
     }
 
 
+_DAY_SERIAL = itertools.count(1)
+# kept with every cached answer while MongoDB holds the same rows; reloaded in full at least this often anyway
+DAY_MAX_AGE_SECONDS = int(os.environ.get("DAY_MAX_AGE_SECONDS", "3600"))
+
+
 class Day:
     def __init__(self, start, events):
         self.start, self.events = start, events
         self.keys = [e["_t"] for e in events]
         self.loaded_at = time.time()
+        self.checked_at = self.loaded_at        # last time MongoDB was found to hold the same rows
+        self.serial = next(_DAY_SERIAL)         # identity of this copy (respcache.day_key)
+        self.force = False                      # reload at the next get()
         self.per_source, self.arrived, self.sig, self.version = {}, {}, None, "0"
         self.raw_total, self.asn_raw, self.region_raw = 0, Counter(), Counter()
 
@@ -311,39 +322,61 @@ class ServiceStore:
                     last = gt
         return out, last
 
-    def _load(self, start):
+    def _load(self, start, old=None):
+        """Load a day; with `old` (the copy in memory, same constituency) the reports whose row count has not changed
+        are taken over as they are and only the others are read again (speed review, 2026-11-15)."""
         t0 = time.time()
         end = start + timedelta(days=1)
         try:
             sig = self.signature(start)
         except Exception:
             sig = None
-        srcs = self.registry.get()
-        with ThreadPoolExecutor(max_workers=6) as pool:
-            parts = list(pool.map(lambda s: (s, *self._fetch(s, start, end)), srcs))
-        events, per, arrived = [], {}, {}
-        raw_total, asn_raw, region_raw = 0, Counter(), Counter()
         st = self.settings
+        sv = st.version if st else 0
+        srcs = self.registry.get()
+        keep = {}
+        if old is not None and sig and old.sig and getattr(old, "gen", None) == getattr(self, "gen", 0) \
+                and getattr(old, "by_src", None) is not None and getattr(old, "settings_version", None) == sv:
+            keep = {n: b for n, b in old.by_src.items() if sig.get(n) and old.sig.get(n) == sig.get(n)}
+        fetch = [s for s in srcs if s["name"] not in keep]
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            parts = list(pool.map(lambda s: (s, *self._fetch(s, start, end)), fetch))
+        by_src = {}
         for s, rows, last in parts:
-            raw_total += len(rows)
+            asn, region = Counter(), Counter()
             for e in rows:                 # before the constituency: what the Settings page offers and matches
                 if e["asn"]:
-                    asn_raw[str(e["asn"])] += 1
-                region_raw[e["region"]] += 1
+                    asn[str(e["asn"])] += 1
+                region[e["region"]] += 1
+            raw = len(rows)
             if st is not None and st.restricted:
                 rows = [e for e in rows if st.in_scope(e["asn"], e["ip"])]
-            events += rows
-            if rows:
-                per[s["name"]] = len(rows)
-                if last:
-                    arrived[s["name"]] = _s(last)
+            by_src[s["name"]] = {"raw": raw, "asn": asn, "region": region, "rows": rows, "last": last}
+        names = {s["name"] for s in srcs}
+        for n, b in keep.items():
+            if n in names:
+                by_src[n] = b
+        events, per, arrived = [], {}, {}
+        raw_total, asn_raw, region_raw = 0, Counter(), Counter()
+        for s in srcs:
+            b = by_src.get(s["name"])
+            if not b:
+                continue
+            raw_total += b["raw"]; asn_raw.update(b["asn"]); region_raw.update(b["region"])
+            events += b["rows"]
+            if b["rows"]:
+                per[s["name"]] = len(b["rows"])
+                if b["last"]:
+                    arrived[s["name"]] = _s(b["last"])
         events.sort(key=lambda e: e["_t"])
         day = Day(start, events)
         day.per_source, day.arrived, day.sig = per, arrived, sig
+        day.by_src, day.gen, day.settings_version = by_src, getattr(self, "gen", 0), sv
         day.raw_total, day.asn_raw, day.region_raw = raw_total, asn_raw, region_raw
-        day.version = hashlib.md5(json.dumps([sorted(per.items()), st.version if st else 0]).encode(), usedforsecurity=False).hexdigest()[:10]
+        day.version = hashlib.md5(json.dumps([sorted(per.items()), sv]).encode(), usedforsecurity=False).hexdigest()[:10]
         if self.log:
-            self.log.warning("Services: loaded %s: %d records from %d reports in %.1fs", start.date(), len(events), len(per), time.time() - t0)
+            self.log.warning("Services: loaded %s: %d records from %d reports in %.1fs%s", start.date(), len(events), len(per), time.time() - t0,
+                             f" ({len(keep)} unchanged reports kept, {len(fetch)} read)" if keep else "")
         return day
 
     def _record_changes(self, start, old, new):
@@ -359,13 +392,32 @@ class ServiceStore:
                             "new": before == 0, "arrived_at": new.arrived.get(name), "seen_at": now})
         del log[:-50]
 
+    def _still_same(self, start, day):
+        """The day's time is up: if MongoDB holds the same rows per report (and the copy is not too old), keep it,
+        with every answer worked out from it (speed review, 2026-11-15)."""
+        if day is None or day.force or not day.events or day.sig is None:
+            return False
+        if time.time() - day.loaded_at >= DAY_MAX_AGE_SECONDS:
+            return False
+        try:
+            same = self.signature(start) == day.sig
+        except Exception:
+            return False
+        if same:
+            day.checked_at = time.time()
+        return same
+
     def get(self, dt):
         start = self.day_start(dt)
         with self.lock:
             day = self.days.get(start)
             ttl = self.reload_seconds if day and day.events else 60
-            if day and time.time() - day.loaded_at < ttl:
+            if day and not day.force and time.time() - day.checked_at < ttl:
                 return day
+        if self._still_same(start, day):
+            return day
+        with self.lock:
+            day = self.days.get(start)
             ev = self.loading.get(start)
             leader = ev is None
             if leader:
@@ -376,11 +428,14 @@ class ServiceStore:
             ev.wait(120)
             return self.days.get(start) or Day(start, [])
         try:
+            # unchanged reports are taken over from the copy in memory, unless it is due its hourly full reload
+            base = day if day is not None and time.time() - day.loaded_at < DAY_MAX_AGE_SECONDS else None
             for _ in range(3):
                 gen = getattr(self, "gen", 0)
-                new = self._load(start)
+                new = self._load(start, old=base)
                 with self.lock:
                     if getattr(self, "gen", 0) != gen:   # the constituency changed while loading: load again with it
+                        base = None
                         day = None
                         continue
                     self._record_changes(start, day, new)
@@ -416,9 +471,12 @@ class ServiceStore:
         except Exception:
             return False
         if sig == day.sig:
+            day.pending = None
+            return False
+        if not settled(day, sig, time.time()):          # wait until the pipeline has finished with it (respcache.settled)
             return False
         with self.lock:
-            day.loaded_at = 0
+            day.force = True
         self.get(start)
         return True
 

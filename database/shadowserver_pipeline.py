@@ -102,6 +102,7 @@ TS_FMT = "%Y-%m-%d %H:%M:%S"
 _TS_FAST = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2}) ([0-9]{2}):([0-9]{2}):([0-9]{2})\Z")
 
 ROW_INDEX = [("filename", 1), ("category", 1), ("line_hash", 1)]
+HOST_INDEX = [("ip", 1), ("filename", 1)]
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
 
@@ -1002,6 +1003,9 @@ def load_into_mongo(s: Settings, stats: Counter) -> None:
             cat_path = os.path.join(root, category)
             coll = db[category]
             coll.create_index(ROW_INDEX, unique=True)
+            # one host's rows by address and day (the Abused or Compromised look-up; speed review 2026-11-15: without it
+            # a look-up read every row of the week). Only rows that have an address are in it.
+            coll.create_index(HOST_INDEX, name="ip_filename", partialFilterExpression={"ip": {"$exists": True}})
             loaded = loaded_filenames(coll)
             files_coll = db[f"files_{category}"]
             registered = {d.get("filename") for d in files_coll.find({}, {"filename": 1, "_id": 0})}

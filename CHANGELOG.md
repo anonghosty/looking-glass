@@ -5,6 +5,26 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-15 (11)
+### Changed
+- **Faster while nothing changes.** A loaded day is checked against the database every 10 minutes and kept, with every
+  answer already worked out from it, while its rows are the same; it is reloaded in full at most once an hour
+  (`DAY_MAX_AGE_SECONDS`). Filtered views, the analysis and the summaries no longer start from scratch every 10 minutes.
+- **Faster while reports arrive.** New rows are loaded once their counts stop changing (two checks in a row, or at
+  least every two minutes during a long pipeline run, `SETTLE_MAX_SECONDS`), and only the reports that changed are read
+  again; the rest of the day is kept as it is.
+- **The Definitions page opens quickly.** Intel gathered, the services definitions, the sinkholes per report and the
+  names seen are worked out in the background whenever the days in memory change, as are the first unfiltered views of
+  both platforms (masked and not), so nobody waits for them. "Looking Glass asks" waits for the page's loading logo to
+  go, however long the page takes, instead of playing underneath it.
+- **Host look-up in Abused or Compromised.** The pipeline adds an index on address and day to the report collections
+  (built once, on its next run), and the look-up asks for each day separately: from seconds per report to a few
+  milliseconds.
+- The README shows the Looking Glass mark at a readable size, with a dark rim on GitHub's light theme.
+
+### Security
+- Saving a region match accepts JSON only (415 otherwise), as the Settings save does.
+
 ## 2026-11-15 (10)
 ### Added
 - **Every country in the world.** Settings → Country and the guided installer now ask for the continent first (Africa,

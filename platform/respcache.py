@@ -9,6 +9,7 @@ changes and the next request recomputes from the fresh data; nothing is ever ser
 When several requests for the same key come in at once, one computes and the others wait for its result instead of
 repeating the work. Values are treated as read-only by the callers (they copy before adding per-request fields).
 """
+import os
 import threading
 from collections import OrderedDict
 
@@ -56,9 +57,30 @@ class ResultCache:
             self.data.clear()
 
 
+SETTLE_MAX_SECONDS = int(os.environ.get("SETTLE_MAX_SECONDS", "120"))
+
+
+def settled(day, sig, now):
+    """New row counts for a loaded day: reload now? Yes when the same new counts were seen at the previous check (the
+    pipeline has finished with this day for now), or SETTLE_MAX_SECONDS after the first change (a long run still shows
+    its progress every couple of minutes). Otherwise the change is remembered on the day (day.pending) and it waits.
+    Shared by both platforms' day stores (speed review, 2026-11-15)."""
+    p = getattr(day, "pending", None)
+    if p is None:
+        day.pending = {"sig": dict(sig), "since": now}
+        return False
+    if p["sig"] == sig or now - p["since"] >= SETTLE_MAX_SECONDS:
+        day.pending = None
+        return True
+    p["sig"] = dict(sig)
+    return False
+
+
 def day_key(day):
-    """Identity of one loaded day: a reload (new rows, a changed constituency, the periodic refresh) changes it."""
-    return (day.start, getattr(day, "loaded_at", 0), getattr(day, "version", ""), len(day.events))
+    """Identity of one loaded copy of a day: a reload (new rows, a changed constituency, the hourly refresh) makes a
+    new copy with a new serial; a copy kept because MongoDB still holds the same rows keeps its key, so cached answers
+    stay valid (speed review, 2026-11-15: they were thrown away every 10 minutes)."""
+    return (day.start, getattr(day, "serial", None) or getattr(day, "loaded_at", 0), getattr(day, "version", ""), len(day.events))
 
 
 def filters_key(flt):

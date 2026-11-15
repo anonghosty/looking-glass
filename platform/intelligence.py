@@ -431,7 +431,9 @@ def install(app, ctx):
         for e in entries():
             if e["name"] not in have or e.get("has_ip") is False:
                 continue
-            rows = scoped(list(db[e["name"]].find({"ip": ip, "filename": {"$regex": "^(" + "|".join(re.escape(d) for d in days()) + ")"}},
+            # one prefix per day (an alternation cannot narrow the index; speed review 2026-11-15: 3.5 s down to
+            # about 0.5 s per report without the pipeline's ip index, a few ms with it)
+            rows = scoped(list(db[e["name"]].find({"ip": ip, "$or": [{"filename": {"$regex": "^" + re.escape(d)}} for d in days()]},
                                                   {"_id": 0, "line_hash": 0}).limit(200)))
             if rows:
                 ds = sorted({_s(x.get("filename"))[:10] for x in rows})

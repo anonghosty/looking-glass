@@ -83,9 +83,11 @@ class ServicesIntel:
             pass
         svc = list(self.ctx["svc_store"].days.values())
         comms = list(self.ctx["comms_store"].days.values())
-        key = tuple((d.start, len(d.events)) for d in svc) + tuple((d.start, len(d.events)) for d in comms)
+        # kept while the same copies of the days are in memory (speed review, 2026-11-15); an hour at most
+        key = (tuple((d.start, getattr(d, "serial", 0), len(d.events)) for d in svc)
+               + tuple((d.start, getattr(d, "serial", 0), len(d.events)) for d in comms))
         with self.lock:
-            if self.cache["key"] == key and time.time() - self.cache["at"] < 300:
+            if self.cache["key"] == key and time.time() - self.cache["at"] < 3600:
                 return self.cache["data"]
         pat = self.ctx["patterns"]
         fields = {}

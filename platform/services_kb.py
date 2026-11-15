@@ -31,7 +31,8 @@ from services import banner_mask
 from services_intel import SINK
 from svc_patterns import MIN_HOSTS
 
-CACHE_SECONDS = 60
+CACHE_SECONDS = 60             # kept for older callers; the cache now follows the days in memory (MAX_AGE_SECONDS)
+MAX_AGE_SECONDS = 3600
 TOP = 12
 _STATS = {"at": 0.0, "data": None, "days": []}
 _LOCK = threading.Lock()
@@ -41,13 +42,16 @@ def _stats(store, load_day=None):
     """report -> aggregates over the services days in memory (counts only; the host sets never leave this function).
     load_day() brings the current replay day into memory first (after a restart nothing is loaded until asked)."""
     with _LOCK:
-        if time.time() - _STATS["at"] < CACHE_SECONDS and _STATS["data"]:
-            return _STATS["data"], _STATS["days"]
         if load_day:
             try:
                 load_day()
             except Exception:                              # noqa: BLE001  (the days already in memory still count)
                 pass
+        # kept while the same copies of the days are in memory (speed review, 2026-11-15: it was worked out again every
+        # minute, 8 s and more on a busy day); an hour at most
+        key = tuple((k, getattr(d, "serial", 0), len(d.events)) for k, d in sorted(list(store.days.items())))
+        if _STATS["data"] and _STATS.get("key") == key and time.time() - _STATS["at"] < MAX_AGE_SECONDS:
+            return _STATS["data"], _STATS["days"]
         acc = {}
         days = []
         for key, d in sorted(list(store.days.items())):
@@ -91,7 +95,7 @@ def _stats(store, load_day=None):
                       "issues": sorted(((i, len(h)) for i, h in x["issues"].items()), key=lambda t: -t[1]),
                       "per_day": dict(x["per_day"])}
         if out:                                            # an empty answer is never kept: the day may still be loading
-            _STATS.update(at=time.time(), data=out, days=days)
+            _STATS.update(at=time.time(), data=out, days=days, key=key)
         return out, days
 
 

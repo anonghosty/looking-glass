@@ -1,4 +1,9 @@
-<p align="center"><img src="platform/static/img/logo.svg" alt="Looking Glass" width="110"></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="platform/static/img/logo-mark.svg">
+    <img src="platform/static/img/logo-mark-light.svg" alt="Looking Glass" width="160">
+  </picture>
+</p>
 
 <h1 align="center">Looking Glass</h1>
 

@@ -248,12 +248,24 @@ def matches(ev, flt):
 
 
 # ---------------------------------------------------------------- day store
+import itertools as _itertools  # noqa: E402
+_DAY_SERIAL = _itertools.count(1)
+# a loaded day is checked against MongoDB every DAY_RELOAD_SECONDS and kept, with every cached answer, when its rows
+# are the same; reloaded in full at least every DAY_MAX_AGE_SECONDS anyway (speed review, 2026-11-15: the 10-minute
+# full reload of every day took 13-16 s each time and threw away every cached filter)
+DAY_MAX_AGE_SECONDS = int(os.environ.get("DAY_MAX_AGE_SECONDS", "3600"))
+from respcache import settled  # noqa: E402  (the settle rule for new rows, shared with the services store)
+
+
 class Day:
     def __init__(self, start, events):
         self.start = start
         self.events = events                       # sorted by extracted_date
         self.keys = [e["_t"] for e in events]       # epoch seconds, for bisect
         self.loaded_at = time.time()
+        self.checked_at = self.loaded_at           # last time MongoDB was found to hold the same rows (see DayStore.get)
+        self.serial = next(_DAY_SERIAL)            # identity of this copy: the response caches key on it (respcache.day_key)
+        self.force = False                         # reload at the next get(), whatever the counts say
         self.per_source = {}
         self.arrived = {}          # report -> time its newest row was inserted in MongoDB (from the ObjectId)
         self.sig = None            # rows per report in MongoDB when loaded (see DayStore.signature)
@@ -320,7 +332,10 @@ class DayStore:
                 sig[s["name"]] = n
         return sig
 
-    def _load(self, start):
+    def _load(self, start, old=None):
+        """Load a day. With `old` (the copy in memory, same constituency), the reports whose row count has not changed
+        are taken over from it as they are, and only the others are read and prepared again (speed review, 2026-11-15:
+        a pipeline batch touches one or two reports, but every report was read, prepared and geocoded again)."""
         t0 = time.time()
         end = start + timedelta(days=1)
         srcs = registry.get()
@@ -328,45 +343,64 @@ class DayStore:
             sig = self.signature(start)   # taken before the rows, so anything inserted meanwhile triggers a reload
         except Exception:
             sig = None
+        keep = {}
+        if old is not None and sig and old.sig and getattr(old, "gen", None) == self.gen and getattr(old, "by_src", None) is not None \
+                and getattr(old, "settings_version", None) == settings.version:
+            keep = {n: b for n, b in old.by_src.items() if sig.get(n) and old.sig.get(n) == sig.get(n)}
+        fetch = [s for s in srcs if s["name"] not in keep]
         with ThreadPoolExecutor(max_workers=6) as pool:
-            parts = list(pool.map(lambda s: (s, *self._fetch_collection(s, start, end)), srcs))
-        events, per, arrived = [], {}, {}
-        raw_total, asn_raw = 0, Counter()
+            parts = list(pool.map(lambda s: (s, *self._fetch_collection(s, start, end)), fetch))
+        by_src, fresh = {}, []
         for s, rows, last in parts:
-            raw_total += len(rows)
+            asn = Counter()
             for e in rows:                      # every network seen (for the Settings page), before the constituency
                 for side in ("src", "dst"):
                     if e[f"{side}_asn"]:
-                        asn_raw[str(e[f"{side}_asn"])] += 1
+                        asn[str(e[f"{side}_asn"])] += 1
+            raw = len(rows)
             # constituency (Settings): keep events whose source or destination host is in it
             if settings.restricted:
                 rows = [e for e in rows if settings.in_scope(e["src_asn"], e["src_ip"]) or settings.in_scope(e["dst_asn"], e["dst_ip"])]
-            events += rows
-            if rows:
-                per[s["name"]] = len(rows)
-                if last:
-                    arrived[s["name"]] = iso(last)
-        # geocode every distinct place once, in parallel
-        places = {(e[f"{s}_geo"], e[f"{s}_region"], e[f"{s}_city"]) for e in events for s in ("src", "dst")}
+            by_src[s["name"]] = {"raw": raw, "asn": asn, "rows": rows, "last": last}
+            fresh += rows
+        names = {s["name"] for s in srcs}
+        for n, b in keep.items():               # taken over: already prepared, geocoded and referenced
+            if n in names:
+                by_src[n] = b
+        # geocode every distinct place of the new rows once, in parallel
+        places = {(e[f"{s}_geo"], e[f"{s}_region"], e[f"{s}_city"]) for e in fresh for s in ("src", "dst")}
         with ThreadPoolExecutor(max_workers=8) as pool:
             resolved = dict(zip(places, pool.map(lambda p: geocoder.lookup(*p), places)))
         geocoder.flush()
-        for e in events:
+        for e in fresh:
             for f, v in e.items():
                 if isinstance(v, datetime):
                     e[f] = iso(v)
             e["src_coords"] = resolved.get((e["src_geo"], e["src_region"], e["src_city"]))
             e["dst_coords"] = resolved.get((e["dst_geo"], e["dst_region"], e["dst_city"]))
-        for e in events:
             e["src_ref"] = host_refs.ref(e["src_ip"])
             e["request"] = _request_path(e["http_url"]) if e.get("http_url") else ""   # filterable request path
+        events, per, arrived = [], {}, {}
+        raw_total, asn_raw = 0, Counter()
+        for s in srcs:
+            b = by_src.get(s["name"])
+            if not b:
+                continue
+            raw_total += b["raw"]; asn_raw.update(b["asn"])
+            events += b["rows"]
+            if b["rows"]:
+                per[s["name"]] = len(b["rows"])
+                if b["last"]:
+                    arrived[s["name"]] = iso(b["last"])
         events.sort(key=lambda e: e["_t"])
-        app.logger.warning("Loaded %s: %d events from %d collections %s, %d places in %.1fs",
-                           start.date(), len(events), len(per), per, len(places), time.time() - t0)
+        app.logger.warning("Loaded %s: %d events from %d collections %s, %d places in %.1fs%s",
+                           start.date(), len(events), len(per), per, len(places), time.time() - t0,
+                           f" ({len(keep)} unchanged reports kept, {len(fetch)} read)" if keep else "")
         day = Day(start, events)
         day.per_source = per
         day.arrived = arrived
         day.sig = sig
+        day.by_src, day.gen, day.settings_version = by_src, self.gen, settings.version
         day.raw_total, day.asn_raw = raw_total, asn_raw
         day.version = hashlib.md5(json.dumps([sorted(per.items()), settings.version]).encode(), usedforsecurity=False).hexdigest()[:10]
         return day
@@ -395,7 +429,10 @@ class DayStore:
         del log[:-50]
 
     def check(self, dt):
-        """Reload a day straight away if MongoDB has more (or different) rows than the loaded copy."""
+        """Reload a day when MongoDB has more (or different) rows than the loaded copy, once the counts have settled:
+        the same new counts on two checks in a row (15 s apart), or SETTLE_MAX_SECONDS after the first change while a
+        pipeline run keeps adding rows (speed review, 2026-11-15: a run inserting in batches made the day reload back to
+        back). Only the reports that changed are read again (_load with the copy in memory)."""
         start = day_start(dt)
         day = self.days.get(start)
         if day is None or start > utcnow():
@@ -406,6 +443,9 @@ class DayStore:
             app.logger.exception("Report check failed for %s", start.date())
             return False
         if sig == day.sig:
+            day.pending = None
+            return False
+        if not settled(day, sig, time.time()):
             return False
         self.invalidate(start)
         self.get(start)
@@ -421,7 +461,21 @@ class DayStore:
         with self.lock:
             day = self.days.get(day_start(dt))
             if day:
-                day.loaded_at = 0          # next get() reloads it
+                day.force = True           # next get() reloads it
+
+    def _still_same(self, start, day):
+        """The day's time is up: if MongoDB holds the same rows per report (and the copy is not too old), keep it."""
+        if day is None or day.force or not day.events or day.sig is None:
+            return False
+        if time.time() - day.loaded_at >= DAY_MAX_AGE_SECONDS:
+            return False
+        try:
+            same = self.signature(start) == day.sig
+        except Exception:
+            return False
+        if same:
+            day.checked_at = time.time()
+        return same
 
     def get(self, dt):
         start = day_start(dt)
@@ -429,9 +483,13 @@ class DayStore:
             day = self.days.get(start)
             # an empty day (file not imported yet) is retried every minute
             ttl = DAY_RELOAD_SECONDS if day and day.events else 60
-            fresh = day and time.time() - day.loaded_at < ttl
+            fresh = day and not day.force and time.time() - day.checked_at < ttl
             if fresh:
                 return day
+        if self._still_same(start, day):
+            return day
+        with self.lock:
+            day = self.days.get(start)
             ev = self.loading.get(start)
             leader = ev is None
             if leader:
@@ -442,11 +500,14 @@ class DayStore:
             ev.wait(120)
             return self.days.get(start) or Day(start, [])
         try:
+            # unchanged reports are taken over from the copy in memory, unless it is due its hourly full reload
+            base = day if day is not None and time.time() - day.loaded_at < DAY_MAX_AGE_SECONDS else None
             for _ in range(3):
                 gen = self.gen
-                new = self._load(start)
+                new = self._load(start, old=base)
                 with self.lock:
                     if self.gen != gen:          # the constituency changed while loading: load again with it
+                        base = None
                         day = None
                         continue
                     self._record_changes(start, day, new)
@@ -3439,6 +3500,32 @@ if _SERVING:
     threading.Thread(target=REPORT_MAP.loop, daemon=True, name="report-map").start()
     threading.Thread(target=_audit_checkpoint.loop, args=(AUDIT_SIGNER, AUTH["audit"], app.logger), daemon=True,
                      name="audit-checkpoint").start()
+
+# The Definitions page's heavy summaries, worked out in the background whenever the days in memory change, so nobody
+# waits for them (warmup.py; speed review 2026-11-15)
+import warmup as _warmup  # noqa: E402
+# the views everyone opens first, unfiltered: worked out once per copy of the day, masked (researchers, partners) and
+# not (analysts, admins), so the first person after a reload does not wait (speed review 2026-11-15: 3.5 s)
+_WARM_VIEWS = ("/api/svc/stats?n=80", "/api/svc/facets", "/api/stats", "/api/facets", "/api/geo")
+
+
+def _warm_views():
+    adapter = app.url_map.bind("localhost")
+    for path in _WARM_VIEWS:
+        for masked in (False, True):
+            url = path + (("&" if "?" in path else "?") + "demo=1" if masked else "")
+            ep, va = adapter.match(path.split("?")[0])
+            with app.test_request_context(url):
+                app.view_functions[ep](**va)
+
+
+WARMUP = _warmup.install({
+    "stores": lambda: [store, svc["store"]], "logger": app.logger, "start": _SERVING,
+    "jobs": [("first views", _warm_views),
+             ("Intel gathered", lambda: INTEL.index()),
+             ("services definitions", lambda: _services_kb._stats(svc["store"], lambda: svc["store"].get(replay_now()))),
+             ("sinkholes per report", lambda: SVC_INTEL.index()),
+             ("names seen", _name_evidence)]})
 
 if __name__ == "__main__":
     # `python app.py` (tests, development) listens on this computer only unless BIND_HOST says otherwise; the service

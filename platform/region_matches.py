@@ -260,6 +260,8 @@ def install(app, ctx):
             return jsonify(error="Refused (the request did not come from this page)."), 403
         if not ctx["fresh"]():
             return jsonify(error="Sign in again to make changes (your session is older than 12 hours)."), 403
+        if request.mimetype != "application/json":          # as the Settings save (security review of d82a436)
+            return jsonify(error="Send the match as JSON (Content-Type: application/json)."), 415
         b = request.get_json(silent=True) or {}
         cc = str(b.get("country") or "").upper()
         name = norm(b.get("name"))

@@ -101,7 +101,9 @@
     const shown = new Promise((resolve) => {
       if (started) return resolve();
       const t0 = Date.now();
-      const tick = () => { if (!covered() || Date.now() - t0 > 20000) { started = Date.now(); resolve(); } else setTimeout(tick, 120); };
+      // the whole act waits for the logo, however long the page takes (2026-11-15: after 20 s it began anyway and played
+      // unseen under the logo on a slow first visit); two minutes only as a safety net
+      const tick = () => { if (!covered() || Date.now() - t0 > 120000) { started = Date.now(); resolve(); } else setTimeout(tick, 120); };
       tick();
     });
     const atLeast = async (ms) => { await shown; await new Promise((r) => setTimeout(r, calm() ? 0 : Math.max(0, ms - (Date.now() - started)))); };

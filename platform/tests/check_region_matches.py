@@ -134,6 +134,8 @@ with tempfile.TemporaryDirectory() as d:
     ok("'the whole country' can be chosen", post({"country": "GH", "name": "Ashantii", "target": RM.COUNTRY}).status_code == 200)
     ok("a region not on the map is refused", post({"country": "GH", "name": "X", "target": "VOLTA"}).status_code == 400)
     ok("an unknown country is refused", post({"country": "ZZ", "name": "X", "target": ""}).status_code == 400)
+    rr = c.post("/api/settings/region-matches", data="country=GH&name=X&target=", content_type="application/x-www-form-urlencoded")
+    ok("anything but JSON is refused (415), as the Settings save", rr.status_code == 415)
     ok("an empty name is refused", post({"country": "GH", "name": " ", "target": RM.COUNTRY}).status_code == 400)
     ok("a name over 120 letters is refused", post({"country": "GH", "name": "A" * 121, "target": RM.COUNTRY}).status_code == 400)
     ok("a path in the country is refused", post({"country": "../GH", "name": "X", "target": ""}).status_code == 400)

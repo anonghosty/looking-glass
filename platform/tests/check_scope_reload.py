@@ -27,7 +27,7 @@ def ok(label, cond, info=""):
 def race(store, label, day_cls):
     calls = []
 
-    def fake_load(start):
+    def fake_load(start, old=None):          # old: the copy in memory (unchanged reports are taken over from it)
         n = len(calls)
         calls.append(n)
         if n == 0:
