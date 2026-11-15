@@ -147,9 +147,25 @@ ok("a participant can open it and sees it listed", as_user("rachel", "analyst", 
 ok("an admin can open it", as_user("ann", "admin", lambda: api.allowed(code)))
 book.put("LG-A-0000CCCC", {"kind": "a", "platform": "services", "day": "2026-11-13", "sel": {"from_code": code, "issue": "x"}})
 ok("a code ticked on the ticked code: still the first finding's channel", not as_user("grace", "analyst", lambda: api.allowed("LG-A-0000CCCC")))
+print("A chain that cannot be followed to its end stays closed (security review of c0f9311)")
 book.put("LG-A-0000DDDD", {"kind": "a", "platform": "services", "day": "2026-11-13", "sel": {"from_code": "LG-A-0000DDDD"}})
-ok("a code whose chain loops back on itself: no endless walk, open as a code without a finding",
-   as_user("grace", "analyst", lambda: api.allowed("LG-A-0000DDDD")))
+ok("a chain that loops back on itself: no endless walk, closed to analysts",
+   not as_user("grace", "analyst", lambda: api.allowed("LG-A-0000DDDD")))
+ok("…an admin can still open it", as_user("ann", "admin", lambda: api.allowed("LG-A-0000DDDD")))
+prev = code
+for i in range(40):                                        # 40 codes, each ticked on the one before
+    c_ = f"LG-A-1{i:07X}"
+    book.put(c_, {"kind": "a", "platform": "services", "day": "2026-11-13", "sel": {"from_code": prev, "issue": "x"}})
+    prev = c_
+ok("a chain longer than the walk: closed to analysts, even participants", not as_user("rachel", "analyst", lambda: api.allowed(prev)))
+book.put("LG-A-0000EEEE", {"kind": "a", "platform": "services", "day": "2026-11-13", "sel": {"from_code": "LG-A-0000GONE"}})
+ok("a parent code no longer kept: closed to analysts", not as_user("grace", "analyst", lambda: api.allowed("LG-A-0000EEEE")))
+book.put("LG-A-0000FFFF", {"kind": "a", "platform": "services", "day": "2026-11-13", "sel": {"query": []}})
+ok("a code made before channels (no parent, no finding): open to analysts, as before",
+   as_user("grace", "analyst", lambda: api.allowed("LG-A-0000FFFF")))
+perms["admin"] = {"settings", "unmasked", "export"}         # an admin reads the analysts' list too
+admin_list = as_user("ann", "admin", lambda: [c["code"] for c in app.view_functions["api_acode_list"]().get_json()["codes"]])
+ok("the admins' list still works with closed chains in it", "LG-A-0000DDDD" in admin_list)
 
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))
 sys.exit(1 if fails else 0)

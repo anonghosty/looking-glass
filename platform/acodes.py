@@ -419,21 +419,31 @@ def install(app, ctx):
     def owner(code):
         """The finding a code belongs to: its own, or else the nearest one up its sel.from_code chain (a CVE ticked on
         a code's page makes a code with no finding of its own; it belongs to its parent's channel - security review of
-        7db98d1, 2026-11-15). None: no finding anywhere up the chain."""
+        7db98d1, 2026-11-15). None: the chain ends at a code with no parent and no finding. CLOSED: the walk could not
+        finish (a loop, more than 32 steps, or a parent code no longer kept), so nobody but an admin opens it (fail
+        closed - security review of c0f9311)."""
         cur, seen = code, set()
-        while cur and cur not in seen and len(seen) < 32:
+        while cur:
+            if cur in seen or len(seen) >= 32:
+                return CLOSED
             seen.add(cur)
             f = ctx["findings"].of_code(cur)
             if f:
                 return f
-            e = book.get(cur) or {}
+            e = book.get(cur)
+            if e is None:
+                return CLOSED if cur != code else None
             cur = ((e.get("sel") or {}).get("from_code") or "").strip().upper()
         return None
+
+    CLOSED = {"id": "", "closed_chain": True}
 
     def in_channel(code, f=None):
         """Whether this user may open the code: one of the people of its finding (a channel, like a ticket), or an admin;
         a code with no finding anywhere up its chain (made before channels) is open to the roles that read codes."""
         f = f if f is not None else owner(code)
+        if f is CLOSED:
+            return hp("settings")
         return not f or ctx["findings"].sees(f, user()[0], hp("settings"))
 
     _cd_cache, _cd_lock = {}, threading.Lock()
@@ -512,6 +522,8 @@ def install(app, ctx):
             f = owner(c)
             if not in_channel(c, f):
                 continue
+            if f is CLOSED:                                # an admin: listed, with no finding to name
+                f = None
             out.append({"code": c, "day": e["day"], "platform": e["platform"], "label": e.get("label", ""), "records": e.get("records"),
                         "hosts": e.get("hosts"), "names": e.get("names", [])[:6], "first": e.get("first", ""),
                         "finding": {"number": f"#{f['id']}", "title": f["title"], "status": f["status"], "by": ctx["people_name"](f["user"])} if f else None})

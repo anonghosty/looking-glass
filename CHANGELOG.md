@@ -6,6 +6,11 @@ Notable changes to Looking Glass, newest first. Releases are named by date. To u
 ## Unreleased
 
 ### Security
+- An analyst code whose chain of parent codes cannot be followed to its end opens for administrators only.
+
+## 2026-11-15 (2)
+
+### Security
 - A code made by ticking a CVE on an analyst code's page now opens only for the people of its parent's finding (and
   administrators), like the code it was made from.
 
