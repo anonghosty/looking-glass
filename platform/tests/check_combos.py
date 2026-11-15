@@ -145,6 +145,9 @@ try:
     if xa.get("patterns"):
         code_x, dx = call(f"/api/combo-codes/{xa['patterns'][0]['code']}", ANALYST)
         ok("…and those codes resolve, so the analyst can search them next", code_x == 200 and dx.get("kind") == "x")
+    also = [a for dv in s.get("top_devices") or [] for a in dv.get("also") or []]
+    ok("the busiest devices' 'Also seen in' names reports as people read them, never a report key (2026-11-15)",
+       not [a for a in also if re.fullmatch(r"[a-z0-9]+(_[a-z0-9]+)+", a)], ", ".join(sorted(set(also))[:6]))
     ok("devices per region are counted", sum(r["devices"] for r in s.get("regions") or []) <= s.get("devices", 0) and s.get("regions"),
        ", ".join(f"{r['label']} {r['devices']}" for r in (s.get("regions") or [])[:3]))
     code, z = call(f"/api/combos/search/{d['id']}/download", ANALYST, raw=True)

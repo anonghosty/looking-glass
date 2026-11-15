@@ -366,10 +366,12 @@
     const c = el("section", "ce-box");
     // the search's own state: across-report data (needs management's decision) or not
     const dl0 = document.querySelector(".cb-dl"); if (dl0) dl0.hidden = false;
-    fetch(`/api/combos/search/${job}`, { cache: "no-store" }).then((r) => r.json()).then((st) => {
+    const stP = fetch(`/api/combos/search/${job}`, { cache: "no-store" }).then((r) => r.json()).then((st) => {
       if (st.needs_review) { c.replaceChildren(); reviewBox(job, st, entry, c); }
       else if (!entry || !String(entry.code || "").startsWith("LG-A-")) plainSend(job, st, entry, c);
     }).catch(() => { c.append(el("p", "cb-hint", "Could not read this search's state: reload the page to send it to management.")); });   // (review 2026-11-13)
+    // the box under its loading line until the search's state is known: it used to be drawn, then replaced (2026-11-15)
+    window.LGLoader?.pane?.(c, "Reading this search's state…", () => stP);
     c.append(el("h3", null, "Across every category"),
       el("p", "cb-hint", `What these ${pl(s.devices, "device")} show in the other categories: the services reports they are in (with their pattern codes), the CVEs and issues on them, the infections they call sinkholes as. Added to this report for its generation.`));
     const out = el("div", "ce-out");

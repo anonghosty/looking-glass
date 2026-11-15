@@ -333,7 +333,9 @@
     title.textContent = label || cur.name; eyebrow.textContent = `Notes · ${svc ? "services report" : cur.section === "issues" ? "issue" : "infection / category"}`;
     title.classList.toggle("kbn-title-text", !!label);
     ta.value = ""; msg.textContent = ""; msg.className = "kbn-msg";
-    render([]); renderPicked(); renderPane(); load();
+    // the list says it is loading, not "No notes yet.", until the notes are in (2026-11-15)
+    list.replaceChildren(el("li", "kbn-loading", "Loading the notes…")); listHead.querySelector(".kbn-count").textContent = "";
+    renderPicked(); renderPane(); load();
     if (codes.length) { msg.textContent = `${codes.length === 1 ? "The combination is" : `${codes.length} combinations are`} attached: write what you found and add the note.`; msg.className = "kbn-msg ok"; }
     box.hidden = false; back.hidden = false; document.body.classList.add("kbn-open");
     setTimeout(() => ta.focus(), 30);

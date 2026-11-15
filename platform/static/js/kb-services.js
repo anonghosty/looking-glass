@@ -273,5 +273,7 @@
   }
   window.LGServices = { overview, reload: () => load() };
 
-  load().catch((e) => { $("svcStatus").textContent = `Could not load the services: ${e.message}`; });
+  // the page's logo stays until this card has its data (LGLoader.wait, 2026-11-15)
+  (window.LGLoader?.wait || ((p) => p))(load(), "Opening definitions and intel")
+    .catch((e) => { $("svcStatus").textContent = `Could not load the services: ${e.message}`; });
 })();

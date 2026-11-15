@@ -56,7 +56,8 @@ try:
     print("Tabs load with the animation")
     rd = lambda p: open(os.path.join(os.path.dirname(A.__file__), "static", p), encoding="utf-8").read()
     ok("loader.js has LGLoader.pane", "async pane(el, label, work)" in rd("js/loader.js"))
-    ok("a busy pane hides all but its heading and loading line", ".lg-pane-busy > :not(h2):not(.lg-pane-loading)" in rd("css/app.css"))
+    # its heading: an h2, or a card's header with its title in it (2026-11-15)
+    ok("a busy pane hides all but its heading and loading line", ".lg-pane-busy > :not(h2):not(header):not(.lg-pane-loading)" in rd("css/app.css"))
     ok("Admin: Users and Roles tabs use it", 'LGLoader.pane($(`pane-${tab}`)' in rd("js/admin.js") and "Opening the roles and their permissions" in rd("js/admin.js"))
     ok("Audit portal: every tab opens with it", "window.LGLoader.pane($(`pane-${pane}`)" in rd("js/audit.js"))
 finally:

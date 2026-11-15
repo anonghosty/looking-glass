@@ -409,3 +409,6 @@ body.is-loading .mg-grid, body.is-loading .mg-kpis { opacity: 1; }
 .mg-bar .l, .mg-legend span, .mg-rank-row .nm b, .mg-rank-row .nm small, .mg-maptip li span, .mg-tree-row .l,
 .mg-kpi-trend-row .mg-delta, .mg-kpi-trend-row small {
   white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; max-width: none; }
+
+/* a row with no Focus (a botnet-sinkhole row on services) keeps the button's place: every row lines up (2026-11-15) */
+.mg-mini-ph { visibility: hidden; pointer-events: none; }

@@ -1,9 +1,32 @@
 # Changelog
 
-Notable changes to Looking Glass, newest first. Releases are named by date. To update an installation, follow
+Notable changes to Looking Glass, newest first. Releases are named by date: the release of 2026-11-15 is tagged
+`v2026.11.15`, a second one that day `v2026.11.15.2`, and each has its notes on GitHub's
+[Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
-## Unreleased
+## 2026-11-15 (6)
+### Added
+- Release notes: each release has a signed tag named by its date and its notes on GitHub's Releases page.
+
+### Changed
+- The README points readers who want the global picture to ICHI, the Internet Cyber Health Index, with credit.
+- The licence notes say that NIST SP 800-53, a work of the U.S. Government, may be adopted by anyone, and credit NIST.
+
+- Every card that loads data as a page opens shows the loading animation until it has everything it needs, so no
+  card shows "0", appears late, grows or is drawn twice; the platforms and the overview keep the logo until their
+  figures, filters and lists are in, also after a reload. Windows and maps opened with a click (a record, an event, a
+  definition, a country or region map, a log search) show it too, and the Executive portal's 7-day trends are drawn
+  once, when the baseline is complete, instead of filling in piece by piece.
+- "Looking Glass asks" shows Looking Glass thinking while it compares the reports: a detective looks through them, a
+  light bulb when he finds matches, a shrug when Looking Glass has nothing to ask (still for reduced motion).
+
+### Fixed
+- Combinations: the busiest devices' "Also seen in" names each report as people read it (for example "Device
+  Identification") and shows the whole list, wrapped.
+- Executive portal: in Top issues, rows without a Focus button line up with the others.
+
+## 2026-11-15 (5)
 
 ### Security
 - Checking a backup now ties the signed checksum to the archive being checked, and a backup without a signature fails
@@ -132,6 +155,6 @@ Notable changes to Looking Glass, newest first. Releases are named by date. To u
 ## 2026-11-09
 
 ### Added
-- First public release: Shadowserver reports replayed as two live platforms (network communications on a 3D map, and
-  publicly accessible / vulnerable services), the Executive portal, Definitions, researchers' notes, roles with MFA,
-  server-side masking and the audit log.
+- First public release, for testing: Shadowserver reports replayed as two live platforms (network communications on
+  a 3D map, and publicly accessible / vulnerable services), the Executive portal, Definitions, researchers' notes,
+  roles with MFA, server-side masking and the audit log.

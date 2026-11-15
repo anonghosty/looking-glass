@@ -54,9 +54,13 @@ for platform, filt in (("comms", {}), ("comms", {"attack": "Botnet C2"}), ("serv
     print("       ", {x: k[x] for x in list(k)[:6]})
     if platform == "comms":
         top = (d.get("c2") or {}).get("top") or []
-        # domains by their name (the user, 2026-11-13), an IP address never: "IP address N" instead
-        ok(f"{platform} {filt or 'everything'}: C2 domains by name, never an IP address",
-           top and all(not IPV4.search(str(x.get("value"))) and not IPV6.search(str(x.get("value"))) and x.get("value") == x.get("label")
+        # domains by their name (the user, 2026-11-13), an IP address never: "IP address N" instead. Minutes into a
+        # replay day nothing may have contacted a C2 domain yet (2026-11-15: the release gate ran at 00:10 replay time):
+        # an empty list is right only when the same answer counts no C2 domain either
+        none_yet = not top and not (d.get("c2") or {}).get("domains")
+        ok(f"{platform} {filt or 'everything'}: C2 domains by name, never an IP address"
+           + (" (none replayed yet this day)" if none_yet else ""),
+           none_yet or top and all(not IPV4.search(str(x.get("value"))) and not IPV6.search(str(x.get("value"))) and x.get("value") == x.get("label")
                        and not re.fullmatch(r"Domain \d+", str(x.get("value"))) for x in top), json.dumps(top[:3])[:200])
 print("Ranked by devices, every value in the menus, the 7-day memory complete, the time zone (review, 2026-11-12)")
 nonincr = lambda rows: all(a.get("hosts", 0) >= b.get("hosts", 0) for a, b in zip(rows, rows[1:]))

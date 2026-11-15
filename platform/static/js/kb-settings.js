@@ -107,7 +107,7 @@
       : data.unchecked.length ? `${data.unchecked.length} new name${data.unchecked.length === 1 ? "" : "s"} from the reports not checked yet.` : "Every name in the loaded reports has been checked.",
       data.unchecked.length ? "warn" : "ok");
     renderInf(); renderIss();
-    sourcesPanel();
+    await sourcesPanel().catch(() => {});      // inside the card: part of its first load, so it never pops in after
   }
 
   // ---------------- the local copies of MISP Galaxy and MITRE ATT&CK: last refresh, entries; "Refresh sources" for admins
@@ -303,10 +303,12 @@
     if (name) {
       // a failed read must not open an empty form: saving it would wipe the stored definition (review 2026-11-13)
       let err = "";
+      window.LGLoader?.busy(`Opening “${name}”`);       // the logo until the form opens (2026-11-15: nothing showed)
       try {
         const r = await fetch(`/api/kb/entry?name=${encodeURIComponent(name)}&section=${section}`, { cache: "no-store", headers: hdr(false) });
         if (r.ok) e = await r.json(); else err = (await r.json().catch(() => ({}))).error || `HTTP ${r.status}`;
       } catch (x) { err = x.message || "The connection was interrupted. Try again."; }
+      finally { window.LGLoader?.ready(); }
       if (mine !== openSeq) return;           // another name was opened meanwhile: its own call fills the form
       if (err) { flash($(isIssue ? "issStatus" : "infStatus"), `Could not open “${name}”: ${err}`, "bad"); return; }
       const row = !isIssue && [...data.unresolved, ...data.unchecked, ...data.defined, ...(data.all || [])].find((x) => x.name === name);

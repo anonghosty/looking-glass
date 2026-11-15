@@ -51,7 +51,8 @@
   }
 
   // ---- 1. loading messages get the searching logo
-  const SELECTOR = ".i-loading, .st-loading, .stream-empty, .lg-loading";
+  // svc-loading, kbn-loading, mp-loading: the services, notes and Malpedia panes' own lines (2026-11-15: they had no logo)
+  const SELECTOR = ".i-loading, .st-loading, .stream-empty, .lg-loading, .svc-loading, .kbn-loading, .mp-loading";
   function decorate(node) {
     if (!node || node.querySelector?.(":scope > .lg-logo-wrap")) return;
     if (node.classList.contains("stream-empty") && !/waiting|loading/i.test(node.textContent)) return;
@@ -104,8 +105,24 @@
     "/services": "Opening publicly accessible / vulnerable services", "/settings": "Opening settings",
     "/definitions": "Opening definitions and intel", "/admin": "Opening administration", "/?intro": "Opening the overview", "/": "Opening reported network communications" };
   const labelFor = (url) => LABELS[Object.keys(LABELS).find((k) => url.startsWith(k) && (k !== "/" || url === "/" || url.startsWith("/?") && !url.startsWith("/?intro")))] || "Opening";
-  let arrived = null, arriveTimer = null;
+  let arrived = null, arriveTimer = null, ownedByWait = false;
+  const pending = new Set();       // the cards still loading as the page opens (LGLoader.wait)
   window.LGLoader = {
+    /** a card that loads when the page opens (2026-11-15: "any card loading with data uses the loading animation, so
+        cards never break"): the page's logo stays until it, and every other card registered this way, has its data,
+        so nothing pops in, grows or is drawn twice in front of the reader. On a reload (no logo yet) it starts the
+        logo itself. Returns the promise it was given. */
+    wait(p, label) {
+      // never longer than 15 s for one card: a request that hangs must not keep the page covered
+      const q = Promise.race([Promise.resolve(p).catch(() => {}), new Promise((r) => setTimeout(r, 15000))]);
+      pending.add(q);
+      if (arrived == null) { window.LGLoader.busy(label || "Loading"); ownedByWait = true; }
+      q.finally(() => {
+        pending.delete(q);
+        if (!pending.size && ownedByWait) { ownedByWait = false; window.LGLoader.ready(); }
+      });
+      return p;
+    },
     svg,
     /** leave for another page with the logo animation */
     go(url, label) {
@@ -121,16 +138,33 @@
       if (!text) return;
       // a page with its own loading line (st-loading, i-loading, lg-loading) shows that, with the searching logo: the
       // opening logo again on top of it would look like a second load
-      if (document.querySelector(".st-loading, .i-loading, .lg-loading")) return;
+      // (only a line that is showing: the platforms keep a hidden one in their insight panel, which used to stop the
+      // logo on / and /services altogether; 2026-11-15)
+      if ([...document.querySelectorAll(".st-loading, .i-loading, .lg-loading")].some((e) => e.offsetParent !== null)) return;
       arrived = Date.now(); show(text);
       arriveTimer = setTimeout(() => window.LGLoader.ready(), calm() ? 0 : 1600);
     },
     /** the page has its data: let the logo finish (at least ~0.7 s on screen) and fade into the platform */
     ready() {
       if (arrived == null) return;
+      if (pending.size) {                          // cards still loading: the logo stays until they are in
+        Promise.allSettled([...pending]).then(() => window.LGLoader.ready());
+        return;
+      }
       const wait = calm() ? 0 : Math.max(0, 700 - (Date.now() - arrived));
       arrived = null; clearTimeout(arriveTimer);
       setTimeout(hide, wait);
+    },
+    /** a card that fills itself from the server (2026-11-15: "any card loading with data uses the loading animation,
+        so cards never break"): it is shown at once with its loading line, its body hidden, and only drawn when
+        everything it needs has come; hidden again if work() says there is nothing for this person (returns false) */
+    async card(el, label, work) {
+      if (!el) return work();
+      el.hidden = false;
+      let shown;
+      await window.LGLoader.pane(el, label, async () => { shown = await work(); });
+      if (shown === false) el.hidden = true;
+      return shown;
     },
     /** within one page while data loads: the drawing logo until ready() (at least ~0.7 s on screen) */
     busy(label) {
@@ -148,7 +182,7 @@
       el.querySelector(":scope > .lg-pane-loading")?.remove();
       const line = document.createElement("div"); line.className = "st-loading lg-pane-loading"; line.setAttribute("role", "status");
       line.textContent = label || "Loading…";
-      const head = el.querySelector(":scope > h2"); if (head) head.after(line); else el.prepend(line);
+      const head = el.querySelector(":scope > header, :scope > h2"); if (head) head.after(line); else el.prepend(line);
       el.classList.add("lg-pane-busy");
       const t0 = Date.now();
       try { return await work(); } finally {

@@ -16,6 +16,11 @@ CIS Controls content (the safeguard numbers and titles below, unchanged): CIS Cr
 International licence (https://creativecommons.org/licenses/by-nc-nd/4.0/). It is not covered by Looking Glass's AGPL
 licence; commercial use of the CIS Controls needs CIS's prior approval. The current CIS Controls are at
 https://www.cisecurity.org/controls/.
+
+NIST SP 800-53 Rev. 5 (the control identifiers and titles, quoted from NIST's official OSCAL catalogue, Release 5.2.0) is
+a publication of the U.S. National Institute of Standards and Technology: as a work of the U.S. Government it is not
+subject to copyright in the United States, and anyone may adopt it, for any purpose and without permission. NIST is
+credited as its source.
 """
 
 CIS_RELEASE = "CIS Critical Security Controls v8.1"

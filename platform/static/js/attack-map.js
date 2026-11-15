@@ -42,6 +42,9 @@
   const certBadge = (c) => { const [w, why] = CERT[c] || []; if (!w) return null; const b = el("span", `am-cert am-cert-${c}`, w); b.title = `${w}: ${why}`; return b; };
 
   async function load(first) {
+    if (first && window.LGLoader?.wait && !load.waiting) {   // the page's logo stays until this card has its data
+      load.waiting = true; return window.LGLoader.wait(load(first), "Opening definitions and intel");
+    }
     try { data = await get("/api/attack"); }
     catch (e) { if (first) { $("cardAttack").hidden = true; return; } $("amStatus").textContent = `Could not load: ${e.message}`; return; }
     $("cardAttack").hidden = false;

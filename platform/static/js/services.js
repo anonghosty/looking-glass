@@ -1069,11 +1069,14 @@
     const key = `${ev.id}|${ev.extracted_date}`;
     if (openModal.loading === key) return;
     const seq = ++openModal.seq; openModal.loading = key;
+    // the logo from the click until the record is open (2026-11-15: nothing showed while it loaded)
+    window.LGLoader?.busy("Opening the record");
     let d;
     try { d = await getJSON(`/api/svc/detail?id=${encodeURIComponent(ev.id)}&at=${encodeURIComponent(ev.extracted_date)}`); }
-    catch (err) { if (seq === openModal.seq) toast(`Could not load the record: ${err.message}`); return; }
+    catch (err) { window.LGLoader?.ready(); if (seq === openModal.seq) toast(`Could not load the record: ${err.message}`); return; }
     finally { if (openModal.loading === key && seq === openModal.seq) openModal.loading = null; }
     if (seq !== openModal.seq) return;
+    queueMicrotask(() => window.LGLoader?.ready());         // after the window below is drawn
     const e = d.event; state.modalEv = e; refLabels.set(e.ip_ref, e.ip);
     $("modal").style.setProperty("--mc", famColor(e.family));
     const sw = el("span", "swatch"); sw.style.background = famColor(e.family);
@@ -1617,11 +1620,13 @@
     placeIntel(); explainAll();
     if (ls.get("lg.svc.collapsed", false)) setStreamCollapsed(true, false);
     stage.resize(); setView(state.view);
+    // the logo until the figures, the filters and the lists are all in (2026-11-15: they showed "0" and empty bodies)
+    window.LGLoader?.busy("Loading publicly accessible / vulnerable services");
     await loadGlossary();
     try { await syncClock(); } catch (err) { toast(`Could not reach the server: ${err.message}`); }
     if (state.sched) { state.anchorReplay = Date.parse(state.sched.replay_now); state.anchorWall = Date.now(); }
     state.cursor = replayNow();
-    await Promise.all([loadFacets(), refreshStats()]);
+    try { await Promise.all([loadFacets(), refreshStats()]); } finally { window.LGLoader?.ready(); }
     renderFilterBar(); refreshReplayed(); backfill();
     setInterval(poll, POLL_MS); setInterval(refreshReplayed, 3000); setInterval(refreshStats, 30000);
     setInterval(() => syncClock().catch(() => {}), 15000); setInterval(tickHud, 250);

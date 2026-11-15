@@ -735,7 +735,10 @@
 
   // ---------------- "Seen in" as report cards: intel found there, or the name only (one click opens that report)
   let summary = null;
-  const summaryReady = get("/api/intel/summary").then((s) => { summary = s; decorate(document); return s; }).catch(() => null);
+  // the tables' "Seen in" and "Across reports" come from here: the page's logo stays until it is in, so the tables are
+  // drawn once with their report cards instead of being drawn plain and then redrawn (2026-11-15)
+  const summaryReady = (window.LGLoader?.wait || ((p) => p))(
+    get("/api/intel/summary").then((s) => { summary = s; decorate(document); return s; }).catch(() => null), "Opening definitions and intel");
   function decorate(root) {
     if (!summary) return;
     for (const cell of (root || document).querySelectorAll("[data-intel-name]")) {
@@ -760,11 +763,29 @@
   // the card on the Definitions page: a summary of what Looking Glass found, filters by kind, then the analysis boxes
   async function leads() {
     const card = $("cardLeads"); if (!card) return;
-    let d; try { d = await get("/api/intel/leads"); } catch { return; }
-    const ul = $("leadList"); ul.replaceChildren();
-    $("leadSub").textContent = d.leads.length
-      ? `Looking Glass compared every indicator across names and reports of ${d.days.join(", ")} and found ${plural(d.leads.length, "match")} worth a researcher's eye.`
-      : `No matches between names and reports in ${d.days.join(", ") || "the days in memory"}.`;
+    const ul = $("leadList");
+    // Looking Glass is thinking (lg-detective.js, 2026-11-15): the detective walks the report sheets while it compares;
+    // a light bulb when it finds matches, a shrug when it finds none (the card stays, saying so)
+    $("leadBar")?.remove(); $("leadMore")?.remove(); ul.replaceChildren();
+    card.querySelector(".dt-stage")?.remove();
+    card.hidden = false;
+    $("leadSub").textContent = "Comparing every indicator across names and reports.";
+    const det = window.LGDetective?.mount(card, "comparing every indicator across names and reports");
+    if (det) card.querySelector(".dz-head").after(det.el);
+    let d; try { d = await get("/api/intel/leads"); } catch {
+      if (det) await det.nothing("Looking Glass could not compare the reports just now. Open the page again in a moment.");
+      else card.hidden = true;
+      return;
+    }
+    if (!d.leads.length) {
+      // the user's words (2026-11-15): "Looking Glass has nothing to ask"
+      $("leadSub").textContent = `No matches between names and reports in ${d.days.join(", ") || "the days in memory"}.`;
+      if (det) await det.nothing("Looking Glass has nothing to ask."); else card.hidden = true;
+      return;
+    }
+    if (det) { await det.found(`Looking Glass found ${plural(d.leads.length, "match")} worth a look.`); det.remove(); }
+    ul.replaceChildren();
+    $("leadSub").textContent = `Looking Glass compared every indicator across names and reports of ${d.days.join(", ")} and found ${plural(d.leads.length, "match")} worth a researcher's eye.`;
     let bar = $("leadBar"); if (bar) bar.remove();
     bar = el("div", "ig-lead-bar"); bar.id = "leadBar";
     const names = new Set(d.leads.flatMap((x) => x.names.map((n) => n.name)));

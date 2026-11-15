@@ -247,7 +247,9 @@
   // ---------------- held-back reports
   async function loadHeld() {
     const c = $("wkHeld"); c.replaceChildren(el("h3", null, "Reports held back by the sender check"));
-    let d; try { d = await api("/api/pipeline/held"); } catch (e) { c.append(el("p", "fd-empty", e.message)); return; }
+    const wait = el("p", "lg-loading", "Loading the reports held back…"); c.append(wait);   // never an empty card (2026-11-15)
+    let d; try { d = await api("/api/pipeline/held"); } catch (e) { wait.remove(); c.append(el("p", "fd-empty", e.message)); return; }
+    wait.remove();
     if (!d.held.length) { c.append(el("p", "muted", d.mode === "enforce" ? "None held back." : "None held back (blocking is off: reports that do not pass are recorded, not held back).")); return; }
     const t = el("table", "hosts adm-table"); const th = el("thead"); const hr = el("tr");
     ["Held since", "Result", "Why", "From", "Subject", "Files", ""].forEach((x) => hr.append(el("th", null, x))); th.append(hr); t.append(th);

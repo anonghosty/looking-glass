@@ -190,6 +190,11 @@
     if (reset) logOffset = 0;
     const q = encodeURIComponent($("logSearch").value.trim());
     const more = $("logMore"); more.disabled = true;
+    // a new search or filter: the old rows give way to the searching line at once (2026-11-15: they stayed on screen)
+    if (reset) {
+      const tr = el("tr"), td = el("td", "lg-loading", "Searching the log…"); td.colSpan = 8; tr.append(td);
+      $("logTable").querySelector("tbody").replaceChildren(tr);
+    }
     let d;
     try {
       d = await getJSON(`/api/audit/events?tab=${logTab}&${per()}&q=${q}&limit=200&offset=${logOffset}&alerts=${$("logAlerts").checked ? 1 : 0}&selftests=${$("logTests").checked ? 1 : 0}`);
@@ -362,7 +367,9 @@
     }
     try { history.replaceState(null, "", tab === "overview" ? location.pathname : `#${tab}`); } catch { /* */ }
     const run = () => work(tab)().catch((e) => banner(`Could not load: ${e.message}`, true));
-    if (first) return run().finally(() => { $("auLoading")?.remove(); window.LGLoader?.ready(); });
+    // the first tab (also one opened straight from a link, whose pane has no loading line of its own): under the page's
+    // logo until it has its data (2026-11-15)
+    if (first) return (window.LGLoader?.wait || ((p) => p))(run(), "Opening the Audit portal").finally(() => { $("auLoading")?.remove(); window.LGLoader?.ready(); });
     if (window.LGLoader?.pane) window.LGLoader.pane($(`pane-${pane}`), `Opening ${TAB_NAMES[tab] || tab}…`, run); else run();
   }
   function reloadCurrent() { show(current); }
@@ -370,8 +377,8 @@
   const want = (location.hash || "").slice(1);
   show(tabs.some((b) => b.dataset.tab === want) ? want : "overview", true);
   // the tab counts appear from the start (the overview does not load the log)
-  getJSON(`/api/audit/events?tab=none&${per()}&limit=1`).then((d) => {
+  (window.LGLoader?.wait || ((p) => p))(getJSON(`/api/audit/events?tab=none&${per()}&limit=1`).then((d) => {
     document.querySelectorAll("[data-n]").forEach((s) => { s.textContent = fmt((d.counts || {})[s.dataset.n] || 0); });
-  }).catch(() => {});
+  }).catch(() => {}));                                   // the counts are in before the page shows (2026-11-15)
   setInterval(() => { if (current === "live") loadSessions().catch(() => {}); }, 30000);
 })();

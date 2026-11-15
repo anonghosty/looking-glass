@@ -41,9 +41,13 @@
   // the role picked for an account waiting for approval, kept across the 30-second refresh (external review,
   // 2026-11-12: the refresh put the box back to the stored role, so Approve could use a role nobody picked)
   const CHOSEN = {};
+  // the accounts table stays out of sight under the loading line until the accounts are in (2026-11-15: its empty header
+  // showed under the line)
+  const usersWrap = $("usersTable")?.closest(".table-wrap") || $("usersTable");
+  if ($("adLoading") && usersWrap) usersWrap.hidden = true;
   async function loadUsers() {
     let d; try { d = await getJSON("/api/admin/users"); } catch (e) { banner(`Could not load users: ${e.message}`, true); return; }
-    finally { $("adLoading")?.remove(); window.LGLoader?.ready(); }
+    finally { $("adLoading")?.remove(); if (usersWrap) usersWrap.hidden = false; window.LGLoader?.ready(); }
     roleNames = d.roles; ROLE_INFO = d.info || {};
     drawRoleLegend();
     const pend = d.users.filter((u) => u.status === "pending").length;

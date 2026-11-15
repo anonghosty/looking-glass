@@ -1213,7 +1213,7 @@ details.mp-mini.kev > summary { color: #ff9a9e; }
 .ac-sub { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 
 /* LGLoader.pane(): a tab loading its data shows only its heading and the loading line */
-.lg-pane-busy > :not(h2):not(.lg-pane-loading) { display: none !important; }
+.lg-pane-busy > :not(h2):not(header):not(.lg-pane-loading) { display: none !important; }   /* the card's title stays */
 
 /* text shows in full (sweep 2026-11-14): wraps instead of being cut with "…" */
 .checklist .name, .toplist .lbl span:last-child, .sh-title .mono, .r-inf b, .r-src-label, .r-ep .ip, .r-ep .place, .r-ep .sub,

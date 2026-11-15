@@ -273,7 +273,11 @@
     const country = s.country;
     if (!country || !window.LGRegions) { box.classList.add("nomap"); return; }
     if (shapesFor !== country) { shapesFor = country; shapesP = fetch(`/static/data/adm1/${country}.json`).then((r) => (r.ok ? r.json() : null)).catch(() => null); }
+    // the map's place shows the loading line until its regions are in (2026-11-15: an empty map showed)
+    box.querySelector(".cb-map-wait")?.remove();
+    const wait = el("p", "lg-loading cb-map-wait", "Loading the map…"); svg.before(wait); svg.style.visibility = "hidden";
     const shapes = await shapesP;
+    wait.remove(); svg.style.visibility = "";
     if (seq !== drawSeq) return;
     if (!shapes) { box.classList.add("nomap"); return; }
     box.classList.remove("nomap");
@@ -363,11 +367,16 @@
       t.append(hd);
       for (const x of s.top_devices) {
         const tr = el("tr");
-        for (const [v, cls] of [[x.ip, "mono"], [x.network], [x.region], [x.city], [fmt(x.records), "num"], [fmt(x.days), "num"], [x.last, "mono"], [x.also.join(", ") || "–"]]) tr.append(el("td", cls || null, v));
+        for (const [v, cls] of [[x.ip, "mono"], [x.network], [x.region], [x.city], [fmt(x.records), "num"], [fmt(x.days), "num"], [x.last, "mono"], [x.also.join(", ") || "–", "cb-also"]]) tr.append(el("td", cls || null, v));
         t.append(tr);
       }
-      const sc = el("div", "cb-table-wrap"); sc.append(t); c.append(sc);
+      const sc = el("div", "cb-table-wrap"); sc.append(t);
+      // opened from a finding: the banner's place held with the loading line, so the table never moves down (2026-11-15)
+      const hold = FINDING ? el("p", "cb-again-banner lg-loading", "Checking the latest report…") : null;
+      if (hold) c.append(hold);
+      c.append(sc);
       againOf().then((x) => {
+        hold?.remove();
         if (!x || x.state !== "ready" || x.again == null) return;
         const set = new Set(x.again_ips || []);
         let n = 0;
@@ -457,7 +466,7 @@
     if (e.key === "ArrowDown" && i < items.length - 1) { e.preventDefault(); items[i + 1].focus(); }
     if (e.key === "ArrowUp") { e.preventDefault(); (i > 0 ? items[i - 1] : $("cbAcQ")).focus(); }
   });
-  loadAcodes();
+  (window.LGLoader?.wait || ((p) => p))(loadAcodes(), "Opening the combination search");   // the picker is in before the page shows
   $("cbCodeForm").addEventListener("submit", (e) => { e.preventDefault(); look($("cbCode").value); });
   $("cbSearch").addEventListener("click", () => { autoDownload = false; start(); });   // a search the analyst starts never downloads on its own
   $("cbStop").addEventListener("click", async () => {

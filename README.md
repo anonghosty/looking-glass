@@ -410,6 +410,13 @@ without permission. The control identifiers and titles the Audit portal shows ar
 **Credits:** data — the Shadowserver Foundation (your CSIRT's own reports) · region boundaries — geoBoundaries ·
 maps — Mapbox · 3D arcs — deck.gl · network names — RIPEstat and PeeringDB · malware look-ups — Malpedia (Fraunhofer FKIE).
 
+**Global context (third-party): ICHI.** To see how things look globally, the
+[Internet Cyber Health Index (ICHI)](https://ichi.global), maintained by Joe Bernik, publishes a free composite score of
+global cyber-risk conditions, updated through the day, with its sources and methodology. It is global and outside-in:
+it says nothing about your own constituency, which is what Looking Glass shows. Looking Glass does not call ICHI, use its
+score or show its data; this is a pointer for readers who want the wider picture. Credit: ICHI — Internet Cyber Health
+Index (https://ichi.global).
+
 ## Author
 
 Looking Glass was built by **Ike Owuraku Amponsah**, Cybersecurity Threat Intelligence Analyst.

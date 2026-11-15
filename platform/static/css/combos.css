@@ -120,6 +120,8 @@
 .cb-table th { text-align: left; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .cb-table td { padding: 6px 8px; border-bottom: 1px solid rgba(255, 255, 255, .04); white-space: nowrap; }
 .cb-table td.mono { font-family: "Geist Mono", ui-monospace, monospace; font-size: 12px; } .cb-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+/* "Also seen in": every report's readable title, wrapped in full, never cut at the card's edge (2026-11-15) */
+.cb-table td.cb-also { white-space: normal; min-width: 220px; overflow-wrap: anywhere; line-height: 1.45; }
 .cb-table tr:hover td { background: rgba(255, 255, 255, .025); }
 @media (max-width: 760px) { .cb-geo-card { grid-template-columns: 1fr; } .cb-tip { width: 220px; } }
 .cb-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }

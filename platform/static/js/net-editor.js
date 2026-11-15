@@ -259,7 +259,9 @@
   });
   $("netTypeLabel").addEventListener("keydown", (e) => { if (e.key === "Enter") $("netTypeAdd").click(); });
   $("netTypeAlias").addEventListener("keydown", (e) => { if (e.key === "Enter") $("netTypeAdd").click(); });
-  load().catch((e) => { console.error("Network names could not be loaded:", e); flash($("netStatus"), `Could not load: ${e.message}`, "bad"); });
+  // the page's logo stays until this card has its data (LGLoader.wait, 2026-11-15)
+  (window.LGLoader?.wait || ((p) => p))(load())
+    .catch((e) => { console.error("Network names could not be loaded:", e); flash($("netStatus"), `Could not load: ${e.message}`, "bad"); });
   // Settings: redraw the ticks when the constituency changes in the Constituency card (or here), only when it did
   if (RO && window.LGConstituency) window.LGConstituency.onChange(() => {
     if (rows.length && view !== "types" && window.LGConstituency.key() !== lastKey) render();

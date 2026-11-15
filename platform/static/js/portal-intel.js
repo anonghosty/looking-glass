@@ -6,7 +6,8 @@
   const box = document.getElementById("pcIntel");
   if (!box) return;
   const fmt = (n) => Number(n || 0).toLocaleString("en-US");
-  fetch("/api/intelligence/totals", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+  // the page's logo stays until the card has its line (LGLoader.wait, 2026-11-15: it used to appear after the page)
+  (window.LGLoader?.wait || ((p) => p))(fetch("/api/intelligence/totals", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((d) => {
     if (!d || !d.groups) return;
     const today = d.groups.reduce((s, g) => s + g.today, 0);
     const usual = d.groups.reduce((s, g) => s + g.median, 0);
@@ -15,5 +16,5 @@
     box.textContent = `${day}: ${fmt(today)} record${today === 1 ? "" : "s"} (usually ${fmt(usual)})`
       + ` · today's reports so far: ${a.in} of the usual ${a.usual}`;
     box.hidden = false;
-  }).catch(() => { /* the card stays as it is */ });
+  }).catch(() => { /* the card stays as it is */ }));
 })();

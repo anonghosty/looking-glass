@@ -1516,7 +1516,9 @@
       }
       body.append(xs);
     }
-    const related = section("This host yesterday", [["Status", "Loading…"]]);
+    // its own loading line with the logo, as tall as the seven rows that replace it: the window does not grow (2026-11-15)
+    const related = section("This host yesterday", ev.src_ip ? [] : [["Status", "No source address in this record"]]);
+    if (ev.src_ip) { const hold = el("div", "lg-loading", "Looking up this host's day…"); hold.style.minHeight = "11.5em"; related.append(hold); }
     body.append(related);
     body.append(section("Provenance", [["Timestamp", ev.timestamp], ["Logged", ev.logged_date], ["Extracted", ev.extracted_date], ["Report file", ev.filename], ["Line hash", ev.line_hash], ["Public source", ev.public_source], ["Forwarded by", ev.forwarded_by], ["Event ID", ev.event_id], ["Detail", ev.detail]], true));
 
@@ -2541,14 +2543,17 @@
     setTimeout(() => { node.textContent = fmt(value) + suffix; }, dur + 300);   // in case animation frames are paused
   }
   async function loadIntro(first) {
+    // the first time, the logo until every card of the overview has what it needs (its figures, then the services
+    // reports, a second request): no card is shown empty and then grows (2026-11-15)
+    if (first) window.LGLoader?.busy("Opening the overview");
     let o;
     try { o = await getJSON("/api/overview"); } catch {   // say so; the minute timer retries (review 2026-11-13)
       const k = $("introKicker"); if (k) k.textContent = "Could not load the overview (retrying every minute)";
+      window.LGLoader?.ready();
       return;
     }
     window.__lgIntroData = o;
     window.LGTime?.set(o.tz);              // the intro can open before the first clock sync
-    window.LGLoader?.ready();   // arriving from another page: the logo hands over once the overview has its figures
     const dayTxt = new Date(o.day + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
     const sst = o.schedule && o.schedule.state;
     $("introKicker").textContent = sst === "waiting" ? `Shadowserver threat intelligence · waiting for the report of ${dayTxt}`
@@ -2596,7 +2601,7 @@
       ? `${fmt(o.reports_total)} reports monitored · ${fmt(o.total)} events on ${o.day}`
       : `${fmt(o.reports_total)} reports monitored · waiting for reports from Shadowserver for ${o.day}`;
     // no ?at=: the server uses its own replay position (the browser's clock may not be synced yet on a fresh load)
-    getJSON("/api/svc/facets").then(async (f) => {
+    await getJSON("/api/svc/facets").then(async (f) => {
       const ok = f.total > 0;
       setBadge("trackServicesBadge", ok);
       const withData = f.reports.filter((r) => r.rows);
@@ -2629,6 +2634,7 @@
         ub.append(list);
       }
     }).catch(() => {});
+    window.LGLoader?.ready();   // the overview has everything (arriving from another page: the logo hands over now)
     // Shadowserver's one-off Special Reports: apart from the daily ones, counts only (special_reports.py)
     const sp = o.special || [], spCard = document.getElementById("introSpecialCard");
     if (spCard) {
@@ -2901,11 +2907,16 @@
   // ------------------------------------------------------------------ boot
   (async () => {
     renderPins();
+    // the first load fills the figures, the filters and every list in turn: the logo stays until they are all in, so
+    // no card shows "0" or an empty body on the way (2026-11-15); the intro page has its own loading
+    const covering = $("intro").hidden && window.LGLoader;
+    if (covering) window.LGLoader.busy("Loading reported network communications");
     try { await syncClock(); } catch (err) { toast(`Cannot reach server: ${err.message}`); }
     await loadKb();
     setInterval(loadKb, 10 * 60000);   // pick up new definitions without a reload
     await loadFacets();
     await refreshStats();
+    if (covering) window.LGLoader.ready();
     await backfill();
     poll();
     setInterval(poll, POLL_MS);

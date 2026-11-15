@@ -225,7 +225,8 @@
       main.append(name, tags, bar);
       // its own 7-day trend: the line, and how today compares (new this week, rising, falling, steady)
       const b = state.data && state.data.baseline, vals = b && b.items[r.value];
-      if (vals) {
+      if (b && b.building) main.append(el("div", "mg-rank-trend lg-loading", "7-day trend: building…"));   // drawn once, when complete
+      else if (vals) {
         const today = r.hosts || r.count, g = bReady(b) ? b.assess.items[r.value] : null, a = bAvg(vals);
         const tw = el("div", "mg-rank-trend");
         tw.append(spark(vals, today, { w: 120, h: 26 }), gradePill(g, b),
@@ -241,6 +242,9 @@
       const x = el("button", "mg-mini mg-explain-btn"); x.type = "button";
       const acts = el("div", "acts"); acts.append(x);
       if (!(plat === "services" && r.infection)) acts.append(f);           // no infection filter on the services platform
+      else {        // its place kept, so the bar, the figure and Explain line up with the other rows (the user, 2026-11-15)
+        const ph = el("span", "mg-mini mg-mini-ph", "Focus"); ph.setAttribute("aria-hidden", "true"); acts.append(ph);
+      }
       // the explanation opens under this row (and stays open while the selection changes)
       const openSet = state.open[plat], cache = state.explained[plat];
       const show = async (on) => {
@@ -514,6 +518,12 @@
     st.textContent = b && b.building && b.progress ? `Building the baseline… ${b.progress.done}/${b.progress.total} days` : b && b.building ? "Building the baseline…" : b ? `${b.available} of 7 days with reports` : "";
     st.classList.toggle("busy", !!(b && b.building));
     if (!b) return empty(box, "No baseline for this selection.");
+    // still building: one loading line in its place, the charts drawn once, when the days are in (2026-11-15: they
+    // filled in piece by piece with every quiet refresh)
+    if (b.building) {
+      const w = el("div", "lg-loading mg-base-wait", st.textContent || "Building the 7-day baseline…"); w.style.minHeight = "120px";
+      box.append(w); return;
+    }
     const label = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", timeZone: "UTC" });
     for (const [key, name] of BASE_FIGS[d.platform]) {
       const vals = b.kpis[key] || [], today = d.kpis[key] ?? 0, g = bReady(b) ? b.assess.kpis[key] : null, a = bAvg(vals);
@@ -577,7 +587,8 @@
       // against the 7-day baseline: a small trend line (7 days and the report day) and the change on the average
       const tr = t.querySelector(".mg-kpi-trend"); tr.replaceChildren();
       const vals = b && b.kpis[id];
-      if (vals) {
+      if (b && b.building) tr.append(el("span", "lg-loading mg-kpi-wait", "7-day trend: building…"));   // drawn once, when complete
+      else if (vals) {
         const g = bReady(b) ? b.assess.kpis[id] : null, a = bAvg(vals);
         const ln = spark(vals, v, { w: 200, h: 26 }); ln.setAttribute("preserveAspectRatio", "none");
         // the average first, on its own line (the full number), then the grade under it
@@ -839,6 +850,8 @@
       state.filters[state.plat] = { code: many.join(",") };
       if (qs.get("embed") !== "1") toast(`Showing ${many.length} combinations together`);
     } else if (/^LG-[CXA]-[0-9A-F]{8}$/.test(code)) {
+      // the logo while the code is looked up too, not only while the figures load after it (2026-11-15)
+      window.LGLoader?.busy("Opening the Executive portal");
       try {
         const r = await fetch(`/api/combo-codes/${code}`, { cache: "no-store" });
         const x = await r.json();
@@ -854,7 +867,8 @@
     // a day given in the address (a review's drill-down opens on its own last reported day)
     if (/^\d{4}-\d{2}-\d{2}$/.test(qs.get("day") || "")) state.day = qs.get("day");
     load(true);
-    if (qs.get("embed") !== "1" && !code) intelligence();
+    // its cards at the bottom used to appear after the page: the page's logo now waits for them (2026-11-15)
+    if (qs.get("embed") !== "1" && !code) (window.LGLoader?.wait || ((p) => p))(intelligence());
   })();
   // Shadowserver's Intelligence reports: each group's total today against the usual, and its 7 days (counts only, never a
   // host: /api/intelligence/totals, intelligence.py)

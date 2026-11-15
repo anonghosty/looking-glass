@@ -631,6 +631,11 @@ def install(app, ctx):
             per_dev[m.host(e)][m.report(e)].update(items_of(m, section, e))
         xcode = {h: I.cross_code(section, entry["name"], [(r, tuple(sorted(i))) for r, i in reps.items()])
                  for h, reps in per_dev.items() if len(reps) > 1}
+
+        def also_of(d):
+            """The device's other reports as people read them (a services report's title, never its key: "Device
+            Identification", not device_id), sorted. The CSV keeps the keys, beside its reports column."""
+            return sorted({T(r) for r in set(per_dev.get(d["ip"], {})) - d["reports"]})
         dev_cols = ["ip", "asn", "network", "country", "region", "city", "records", "days", "first_seen", "last_seen", "reports",
                     "also_seen_in", "combination_code", "cross_report_code"]
         dev_rows = [[d["ip"], d["asn"], d["network"], d["country"] or "", (d["region"] or "").title(), (d["city"] or "").title(), d["records"],
@@ -907,7 +912,7 @@ def install(app, ctx):
                 "cities": [{"label": f"{c} · {r}" if r else c, "hosts": n} for (c, r), n in city_rows.most_common(20)],
                 "devices": [{"ip": d["ip"], "network": d["network"], "asn": str(d["asn"] or ""), "region": (d["region"] or "").title(),
                              "city": (d["city"] or "").title(), "records": d["records"], "days": len(d["days"]),
-                             "last": (d["last"] or "")[:16].replace("T", " "), "also": ", ".join(sorted(set(per_dev.get(d["ip"], {})) - d["reports"]))}
+                             "last": (d["last"] or "")[:16].replace("T", " "), "also": ", ".join(also_of(d))}
                             for d in devs[:60]],
                 "csv_devices": f"{base}_devices.csv", "csv_records": f"{base}_records.csv",
                 "across": {"multi": x["multi"], "patterns_total": x["patterns_total"],     # reports by their titles
@@ -980,7 +985,7 @@ def install(app, ctx):
                           "ports": [{"label": k, "records": n} for k, n in ports.most_common(6)],
                           "top_devices": [{"ip": d["ip"], "network": d["network"], "region": (d["region"] or "").title(), "city": (d["city"] or "").title(),
                                            "records": d["records"], "days": len(d["days"]), "last": (d["last"] or "")[:16].replace("T", " "),
-                                           "also": sorted(set(per_dev.get(d["ip"], {})) - d["reports"])} for d in devs[:15]],
+                                           "also": also_of(d)} for d in devs[:15]],
                           "across": {"multi": x["multi"], "patterns": x["patterns"][:10], "patterns_total": x["patterns_total"], "sets": x["sets"][:6]},
                           "enrich": enr or None}
         if summary_only:                          # the figures only (the page filtered to one network)

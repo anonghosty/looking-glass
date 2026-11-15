@@ -180,6 +180,8 @@
       w.replaceChildren(...parts);
     });
     w.addEventListener("lg-refresh", draw);
+    // its place held with the loading line until the figures come (2026-11-15: the line used to appear empty, then fill)
+    w.append(el("span", "fd-w-again lg-loading", "Checking the latest report…"));
     draw();
     return w;
   }

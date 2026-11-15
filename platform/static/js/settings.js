@@ -97,9 +97,17 @@
     const iso = $("country").value, info = data.countries.find((c) => c.iso2 === iso) || {};
     $("countryMeta").textContent = info.regions ? `${info.regions} first-level regions · geoBoundaries ADM1` : "No region boundaries available for this country";
     const svg = $("preview"); svg.replaceChildren(); shapes = null;
+    // the map's place shows the loading line until its regions are in (2026-11-15: an empty map showed)
+    document.getElementById("previewWait")?.remove();
+    let wait = null;
+    if (info.regions) {
+      wait = el("p", "lg-loading", `Loading the map of ${info.country || iso}…`); wait.id = "previewWait";
+      svg.before(wait); svg.style.visibility = "hidden";
+    }
     let got = null;
     if (info.regions) { try { got = await (await fetch(`/static/data/adm1/${iso}.json`)).json(); } catch { got = null; } }
     if (mine !== countrySeq) return;           // another country was picked meanwhile: its own call draws the map (review 2026-11-13)
+    wait?.remove(); svg.style.visibility = "";
     shapes = got;
     const keys = shapes ? Object.keys(shapes.regions) : [];
     const country = norm(info.country || "");
