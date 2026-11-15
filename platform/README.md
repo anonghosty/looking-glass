@@ -10,7 +10,8 @@ loads into MongoDB, and replays the previous day, at the same time of day, as tw
 - **Publicly accessible / vulnerable services:** exposed and vulnerable services, devices, compromised and
   blocklisted hosts, by service, region, network and issue, with the hosts to follow up first.
 
-Built for African national and sector CSIRTs: any of the 54 countries, with its own regions map, your
+Built in Africa for national and sector CSIRTs in every country: choose the continent, then the country, and get its
+own regions map, your
 constituency's networks only if you wish, masked views for partners and public screens, and sign-in with MFA.
 
 **Documentation:** [looking-glass-gh.readthedocs.io](https://looking-glass-gh.readthedocs.io/), every guide in one
@@ -46,7 +47,7 @@ platform/
 ├── intel.py, notes.py, people.py, ...  researchers' intel and notes, names, CSV safety, last seen (one module each)
 ├── gunicorn.conf.py, requirements.txt
 ├── .env.example                        configuration template (copy to .env)
-├── templates/, static/                 pages, styles, scripts, logo, region maps of all 54 African countries
+├── templates/, static/                 pages, styles, scripts, logo, region maps of every country in the world
 ├── data/                               reference data shipped (infections.json, issues.json, service_reports.json);
 │                                       accounts, sessions, settings, notes and caches are created here at run time
 ├── deploy/                             install.sh, service template, HTTPS certificate, reload, read-only DB account

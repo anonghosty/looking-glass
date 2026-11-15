@@ -5,6 +5,43 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-15 (10)
+### Added
+- **Every country in the world.** Settings → Country and the guided installer now ask for the continent first (Africa,
+  Asia, Europe, North America, South America, Oceania, Antarctica), then the country: all 249 ISO 3166-1 countries
+  and territories, and Kosovo. About 200 have a map of their first-level regions; the others are drawn as one area,
+  where every record lands. Countries that cross the 180° line (Fiji, Russia, New Zealand, Kiribati) draw in one
+  piece, and the communications map opens framed on the chosen country.
+- **Region matches (Settings → Country).** Yesterday's region names from the reports are listed against the map with
+  a "Match" column. A name the map does not know gets a suggestion ("doesn't match, but this is what we found");
+  an administrator confirms it, picks another region, or marks the name as the whole country, and can undo it. The
+  choices apply to the regions map, the Executive report and the unknown-region checks, need a fresh sign-in and are
+  recorded in the audit trail.
+- **Zoom on the regions map.** Scroll (or pinch) to zoom in where the pointer is, drag to move, and use the +, − and
+  Fit buttons. The map is redrawn at each step, so names stay readable and more of them appear as you zoom in.
+- **Maps open where the records are.** When the regions holding almost all the records (98%) cover clearly less than
+  the whole country, as with islands far apart (Seychelles, Kiribati, the Bahamas), the services map, the Executive
+  portal and the Executive PDF open framed on them, with a note. Fit (or the note's link on the Executive portal)
+  shows the whole country.
+- Regions too small to see at the map's scale get a dot that can be seen, hovered and clicked like the region.
+- Time zones for every country, the capital's zone first where a country has several.
+- `manage/fetch_world_boundaries.py` downloads every country's map again (geoBoundaries, Natural Earth for a few
+  small territories), simplifies the largest ones and links the region names.
+
+### Changed
+- Executive portal cards show their notes in full instead of cutting them off.
+
+### Fixed
+- A region named like its country (Belize District, Djibouti, Guatemala, the State of México) now lands on that
+  region instead of "Region unknown"; an administrator can still mark the name as the whole country.
+- Regions listed twice in the open map data (two Latvian counties) are drawn as one, so their records show.
+- An audit trail that cannot be written is still reported after the service restarts: the gap is kept on disk until
+  writing works again, and the closing entry says how many restarts happened meanwhile.
+
+### Security
+- The service refuses to start with gunicorn's `--max-requests`, which would restart the worker and reset the sign-in
+  and look-up limits held in memory.
+
 ## 2026-11-15 (9)
 ### Added
 - Settings → Workers: **Sender check, last 7 days**. Day by day, the report e-mails that passed, did not pass or could

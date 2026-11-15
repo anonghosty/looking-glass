@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Display time zones (timezones.py, Settings > Country): every country with a region map has a zone that loads, each
+"""Display time zones (timezones.py, Settings > Country): every country in the world with a map has a zone that loads
+(the capital's first, Kosovo and the half-hour and UTC+14 zones included), each
 conversion is right (whole-hour zones, daylight saving in Egypt, Morocco's Ramadan change, Cape Verde behind UTC, DR
 Congo's two zones), Settings accepts only a country's own zones, and a settings file from before time zones gets the
 country's usual zone. Shadowserver's times are UTC: the day and every stored time stay UTC; only the display changes.
@@ -29,12 +30,29 @@ def ok(label, cond, info=""):
 U = lambda s: datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
 
 print("Every country with a region map has its zone, and every zone loads")
-countries = sorted(f[:-5] for f in os.listdir(os.path.join(HERE, "static", "data", "adm1")) if len(f) == 7 and f.endswith(".json"))
-ok(f"{len(countries)} countries with maps, {len(T.ZONES)} with zones", set(countries) <= set(T.ZONES),
-   str(sorted(set(countries) - set(T.ZONES))))
-broken = [z for zs in T.ZONES.values() for z in zs if T._zone(z) is None]
+ADM1 = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "static", "data", "adm1")
+countries = sorted(f[:-5] for f in os.listdir(ADM1) if len(f) == 7 and f.endswith(".json"))
+no_zone = [c for c in countries if not T.zones_of(c)]
+ok(f"{len(countries)} countries with maps all have zones (Bouvet Island, uninhabited, has UTC only)",
+   set(no_zone) <= {"BV"}, str(no_zone))
+ok("the 54 African countries keep their hand-checked zones", len(T.ZONES) == 54 and all(T.zones_of(c) == T.ZONES[c] for c in T.ZONES))
+broken = [z for c in countries for z in T.zones_of(c) if T._zone(z) is None]
 ok("every zone is in this computer's time-zone database", not broken, str(broken))
 ok("UTC can always be chosen", all(T.choices(c)[-1] == "UTC" for c in countries))
+
+print("The whole world: the capital's zone comes first")
+for cc, want in (("BR", "America/Sao_Paulo"), ("RU", "Europe/Moscow"), ("AU", "Australia/Sydney"), ("US", "America/New_York"),
+                 ("CA", "America/Toronto"), ("ID", "Asia/Jakarta"), ("IN", "Asia/Kolkata"), ("GB", "Europe/London"),
+                 ("NZ", "Pacific/Auckland"), ("KI", "Pacific/Tarawa"), ("XK", "Europe/Belgrade"), ("JM", "America/Jamaica")):
+    ok(f"{cc}: usual zone {want}", T.default_zone(cc) == want, T.default_zone(cc))
+ok("Brazil offers its other zones too (Manaus)", "America/Manaus" in T.choices("BR"))
+ok("Bouvet Island: UTC", T.default_zone("BV") == "UTC")
+t0 = U("2026-11-11T12:15:41")
+kir = T.info("Pacific/Kiritimati", t0)
+ok("Kiribati's Line Islands are UTC+14 (the date ahead of UTC)", kir["offset"] == "UTC+14", kir["offset"])
+ok("New York: UTC-5 in winter, UTC-4 in summer", (T.info("America/New_York", U("2026-01-15T12:00:00"))["offset"],
+   T.info("America/New_York", U("2026-07-15T12:00:00"))["offset"]) == ("UTC-5", "UTC-4"))
+ok("Kolkata's half hour: UTC+5:30", T.info("Asia/Kolkata", t0)["offset"] in ("UTC+5:30", "UTC+05:30"), T.info("Asia/Kolkata", t0)["offset"])
 
 print("Conversions (a Shadowserver time is UTC; the same moment shown locally)")
 t = U("2026-11-11T12:15:41")

@@ -48,7 +48,9 @@ run "constituency"                    $PY tests/verify_constituency.py
 run "demo masking"                    $PY tests/test_demo.py
 # the database pipeline beside the platform (database/ in a release install)
 run "one address finder for every masker" $PY tests/check_ip_find.py
-run "display time zones (all 54 countries)" $PY tests/check_timezones.py
+run "display time zones (every country)" $PY tests/check_timezones.py
+run "world maps (every country)" $PY tests/check_world_maps.py
+run "region matches (Settings)" $PY tests/check_region_matches.py
 run "special reports kept out of the replay" $PY tests/check_special_reports.py
 run "views of host data in the audit log" $PY tests/check_data_access.py
 run "CVE look-ups: KEV backoff, time budget" $PY tests/check_cve_backoff.py

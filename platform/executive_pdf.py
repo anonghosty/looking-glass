@@ -425,20 +425,39 @@ class Doc:
         """The country's first-level regions, coloured by activity, with their names."""
         if not shapes:
             self.text(x, y - 12, "No region map for this country.", 8.5, MUTE); return
-        norm = lambda s: re.sub(r"[^A-Z]", "", re.sub(r"\b(REGION|PROVINCE|STATE|COUNTY|DISTRICT|GOVERNORATE)\b", "", str(s).upper()))
-        keys = {norm(v["name"]): k for k, v in shapes["regions"].items()}
+        import unicodedata
+        fold = lambda s: unicodedata.normalize("NFKD", str(s or "")).encode("ascii", "ignore").decode()
+        norm = lambda s: re.sub(r"[^A-Z]", "", re.sub(r"\b(REGION|PROVINCE|STATE|COUNTY|DISTRICT|GOVERNORATE|PREFECTURE|DEPARTMENT|WILAYA|ATOLL)\b", "", fold(s).upper()))
+        keys = {}
+        # the map's names and its aliases, as the browser matches them: keys first, then names, then aliases
+        for pick in (lambda k, v: [k], lambda k, v: [v.get("name", "")], lambda k, v: list(v.get("aliases") or [])):
+            for k, v in shapes["regions"].items():
+                for a in pick(k, v):
+                    if norm(a):
+                        keys.setdefault(norm(a), k)
         byk = {}
+        only = next(iter(shapes["regions"]), None) if shapes.get("whole") else None
         for r in rows:
+            if only:                                       # the whole country as one area: every row adds to it
+                b = byk.setdefault(only, dict(r, count=0, hosts=0))
+                b["count"] += r.get("count") or 0; b["hosts"] = (b.get("hosts") or 0) + (r.get("hosts") or 0)
+                continue
             k = keys.get(norm(r["value"])) or next((kk for nn, kk in keys.items() if nn and (nn in norm(r["value"]) or norm(r["value"]) in nn)), None)
             if k:
                 byk[k] = r
         mx = max([r.get("hosts") or r["count"] for r in byk.values()] or [1])
-        x0, y0, x1, y1 = shapes["bbox"]
+        # the frame: where the records are when that is clearly smaller than the whole country (islands far apart:
+        # Seychelles, Kiribati), as the web maps do by default (region_matches.focus_bbox, regions.js focusBox)
+        from region_matches import focus_bbox
+        (x0, y0, x1, y1), zoomed = focus_bbox(shapes, {k: (r.get("hosts") or r.get("count") or 0) for k, r in byk.items()})
         kx = math.cos(math.radians((y0 + y1) / 2)); s = min((w - 10) / ((x1 - x0) * kx), (h - 10) / (y1 - y0))
         ox, oy = x + (w - (x1 - x0) * kx * s) / 2, y - h + (h - (y1 - y0) * s) / 2
         P = lambda lo, la: (ox + (lo - x0) * kx * s, oy + (la - y0) * s)
         c = self.c
-        labels = []
+        labels, dots = [], []
+        c.saveState()
+        if zoomed:                                        # regions outside the frame are cut at its edge
+            clip = c.beginPath(); clip.rect(x, y - h, w, h); c.clipPath(clip, stroke=0, fill=0)
         for k, reg in shapes["regions"].items():
             r = byk.get(k); v = (r.get("hosts") or r["count"]) if r else 0; t = v / mx
             c.setFillColor(Color((91 + 148 * t) / 255, (141 - 70 * t) / 255, (239 - 162 * t) / 255, .28 + .65 * t) if r else Color(1, 1, 1, .05))
@@ -452,8 +471,17 @@ class Doc:
                     path.close()
             c.drawPath(path, stroke=1, fill=1, fillMode=0)
             lx, ly = P(*reg["label"]) if reg.get("label") else ((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2)
+            if r and xs and max(xs) - min(xs) < 4 and max(ys) - min(ys) < 4:   # a region too small to see: a dot
+                dots.append(((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2, t))
             name = re.sub(r"\s+(Region|Province|State)$", "", reg["name"])
-            labels.append((v, lx, ly, name, r))
+            if x <= lx <= x + w and y - h <= ly <= y:
+                labels.append((v, lx, ly, name, r))
+        for dx, dy, t in dots:
+            c.setFillColor(Color((91 + 148 * t) / 255, (141 - 70 * t) / 255, (239 - 162 * t) / 255, .95))
+            c.setStrokeColor(TXT); c.setLineWidth(.6); c.circle(dx, dy, 3.2, stroke=1, fill=1)
+        c.restoreState()
+        if zoomed:
+            self.text(x + 4, y - h + 4, "Zoomed to the regions with records", 6.4, MUTE)
         placed = []
         for v, lx, ly, name, r in sorted(labels, key=lambda z: -z[0]):        # busiest first; skip overlapping names
             tw = c.stringWidth(self.s(name), self.F["b"], 6.6)
@@ -805,5 +833,22 @@ _COUNTRIES = {
     "VN": "Vietnam", "TH": "Thailand", "ID": "Indonesia", "MY": "Malaysia", "TW": "Taiwan", "MX": "Mexico", "AR": "Argentina"}
 
 
+_ISO_NAMES = None
+
+
 def _country(code):
-    return _COUNTRIES.get(str(code or "").upper(), code)
+    """A country's name: the short table above first (familiar forms), then every ISO 3166-1 country (the system's
+    iso-codes list, 2026-11-15: the whole world), else the code itself."""
+    global _ISO_NAMES
+    c = str(code or "").upper()
+    if c in _COUNTRIES:
+        return _COUNTRIES[c]
+    if _ISO_NAMES is None:
+        try:
+            import json as _json
+            with open("/usr/share/iso-codes/json/iso_3166-1.json", encoding="utf-8") as fh:
+                _ISO_NAMES = {r["alpha_2"]: r.get("common_name") or r["name"] for r in _json.load(fh)["3166-1"]}
+        except (OSError, ValueError, KeyError):
+            _ISO_NAMES = {}
+        _ISO_NAMES.setdefault("XK", "Kosovo")
+    return _ISO_NAMES.get(c, code)

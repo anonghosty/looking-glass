@@ -82,6 +82,11 @@ LABEL["audit_archive_removed"] = "Old audit archive removed by the retention"
 TAB_OF["audit_archive_removed"] = "system"
 LABEL["audit_archive_deleted_early"] = "Audit archive deleted BEFORE its retention ended"   # an alert (ALERT: "delete")
 TAB_OF["audit_archive_deleted_early"] = "system"
+# region names as the reports write them, matched to the map by an administrator (region_matches.py, 2026-11-15)
+LABEL["region_match_set"] = "Region name matched to the map"
+TAB_OF["region_match_set"] = "config"
+LABEL["region_match_removed"] = "Region name match removed"
+TAB_OF["region_match_removed"] = "config"
 # entries lost while the log could not be written (a full disk, ...): recorded as soon as it can be written again
 # (auth.Audit, review 2026-11-15); "failed" makes it an alert in the log
 LABEL["audit_write_failed"] = "Audit entries could not be written (the gap)"

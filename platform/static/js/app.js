@@ -583,8 +583,14 @@
     const vw = window.innerWidth, vh = window.innerHeight;
     if (vw - pad.left - pad.right < 160 || vh - pad.top - pad.bottom < 120) { pad.left = pad.right = 10; pad.top = 40; pad.bottom = 40; }
     // the Americas to Europe (where most sinkholes and attackers are), widened to take in the country set in Settings
-    const c = state.countryBox, w = Math.min(-125, c ? c[0] : -125), s = Math.min(-2, c ? c[1] : -2), e = Math.max(32, c ? c[2] : 32);
-    map.fitBounds([[w, s], [e, 60]], { padding: pad, pitch: state.lite ? 0 : isPhone() ? 30 : 48, bearing: state.lite ? 0 : -8, duration: animate && !state.lite ? 1800 : 0 });
+    // the chosen country together with North America and Europe (where most destinations are), wherever in the world it
+    // is (2026-11-15): its north past 60 degrees (the Nordics, Canada, Russia), east past 32 (Asia, Oceania), east past
+    // 180 for a country across the 180th meridian; a frame that would span nearly the whole globe opens on the world
+    const c = state.countryBox;
+    let w = Math.min(-125, c ? c[0] : -125), s = Math.min(-2, c ? c[1] : -2), e = Math.max(32, c ? c[2] : 32), n = Math.max(60, c ? c[3] : 60);
+    if (e - w > 300) { w = -170; e = 190; s = Math.min(s, -50); n = Math.max(n, 72); }
+    n = Math.min(n, 84); s = Math.max(s, -80);
+    map.fitBounds([[w, s], [e, n]], { padding: pad, pitch: state.lite ? 0 : isPhone() ? 30 : 48, bearing: state.lite ? 0 : -8, duration: animate && !state.lite ? 1800 : 0 });
   }
   function markInteract() { state.interacting = true; clearTimeout(map._tmI); map._tmI = setTimeout(() => { state.interacting = false; }, 6000); }
   for (const e of ["mousedown", "touchstart", "wheel", "dragstart"]) map.on(e, markInteract);

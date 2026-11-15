@@ -64,3 +64,12 @@ def on_starting(server):
                "--threads for more load (gunicorn.conf.py).")
         server.log.error(msg)
         raise SystemExit(msg)
+    # No recycling after a number of requests (review 2026-11-15): --max-requests replaces the worker after N requests,
+    # and the request count is something anyone can drive, so a visitor could send requests until the worker is
+    # replaced, which clears the failed-sign-in counters held in memory (their own lock included), and carry on
+    # guessing. A recycle would also drop sign-ins in their second step, the kept answers and the loaded days.
+    if getattr(server.cfg, "max_requests", 0):
+        msg = (f"Looking Glass refuses --max-requests ({server.cfg.max_requests}): a worker replaced after a number of "
+               "requests would clear the sign-in limits, and anyone can send requests. Leave it unset (gunicorn.conf.py).")
+        server.log.error(msg)
+        raise SystemExit(msg)

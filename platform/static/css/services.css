@@ -7,6 +7,20 @@
 #ghana path.rg:hover, #ghana path.rg.hot { stroke: #ededef; stroke-width: 2; filter: brightness(1.25); }
 #ghana path.rg.sel { stroke: var(--med); stroke-width: 2.4; }
 #ghana path.rg.pulse { animation: rgPulse .9s ease-out; }
+/* a region only a few pixels across (small islands) also gets a dot that can be seen and clicked */
+#ghana circle.rg-dot { stroke: #ededef; stroke-width: 1.2; stroke-opacity: .7; cursor: pointer; vector-effect: non-scaling-stroke; }
+#ghana circle.rg-dot:hover { stroke-opacity: 1; stroke-width: 2; filter: brightness(1.25); }
+#ghana circle.rg-dot.sel { stroke: var(--med); stroke-width: 2.4; stroke-opacity: 1; }
+/* zoom on the regions map: scroll or the buttons; drag to move once zoomed in */
+#ghana.zoomed { cursor: grab; } #ghana.dragging { cursor: grabbing; }
+.map-zoom { position: fixed; z-index: 6; right: calc(var(--right-w) + var(--gutter) * 2); bottom: calc(var(--stream-h) + var(--gutter) * 2);
+  display: flex; flex-direction: column; gap: 4px; }
+.map-zoom[hidden] { display: none; }
+.map-zoom button { min-width: 36px; height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--line, rgba(255,255,255,.14));
+  background: rgba(17, 18, 22, .88); color: #ededef; font: 600 14px var(--font); cursor: pointer; }
+.map-zoom button:hover { background: rgba(40, 42, 50, .95); }
+.map-zoom button:focus-visible { outline: 2px solid var(--accent, #5b8def); outline-offset: 2px; }
+.map-zoom #zoomFit { font-size: 12px; }
 @keyframes rgPulse { 0% { filter: brightness(1.9) drop-shadow(0 0 6px rgba(245, 181, 74, .9)); } 100% { filter: none; } }
 #ghana text { font: 600 12px var(--font); fill: #ededef; paint-order: stroke; stroke: rgba(11,11,13,.85); stroke-width: 3px; pointer-events: none; }
 #ghana text.n { font: 500 11px var(--mono); fill: #d6d6db; }

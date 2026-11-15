@@ -44,8 +44,8 @@ read more. Dates are UTC.
 
 - **Time zone (Settings > Country).** Shadowserver's times are UTC and stay UTC (days, storage, totals), and each
   time is now **also shown in your zone**: the clocks, the record stream, details, chart hours, messages and the
-  Executive report ("12:15:41 UTC (15:15:41 Nairobi time)"). All 54 countries have their zone (DR Congo two),
-  daylight saving included; for a UTC zone such as Ghana's nothing changes.
+  Executive report ("12:15:41 UTC (15:15:41 Nairobi time)"). Every country has its zones (the
+  capital's first where there are several, such as DR Congo, Brazil or Russia), daylight saving included; for a UTC zone such as Ghana's nothing changes.
 - **Executive portal ranked by devices.** Networks, regions, reports, services, sectors, infections and issues are
   ranked by distinct devices (IP addresses), records breaking ties, so one chatty device can no longer put its network
   on top. Every infection, issue, service and network of the day is in the filter menus (they stopped at 80 or 40).

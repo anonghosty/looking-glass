@@ -13,7 +13,7 @@ For every region on every map this script adds:
            common English / local alternatives (EXTRA)
   label    [lon, lat] of a point well inside the region's largest part, for its label
 
-Needs the iso-codes package (/usr/share/iso-codes/json/iso_3166-2.json). Re-run after fetch_africa_boundaries.py.
+Needs the iso-codes package (/usr/share/iso-codes/json/iso_3166-2.json). fetch_world_boundaries.py runs it after downloading.
 Usage: python3 manage/region_aliases.py [ISO2 ...]   prints, per country, ISO subdivisions that matched no region.
 """
 import difflib

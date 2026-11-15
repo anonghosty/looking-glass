@@ -250,3 +250,9 @@ body.settings-page .hud { position: sticky; top: 0; }
 /* touch targets at least 24 px high (WCAG 2.2: target size; sweep 2026-11-14) */
 .dz-pill, .svc-ip { min-height: 24px; display: inline-flex; align-items: center; }
 .svc-more { min-height: 24px; min-width: 24px; }
+
+/* region matches (2026-11-15): the suggestion, a region picker, undo */
+.st-matchcell { white-space: normal; }
+.st-matchcell .st-use { padding: 4px 10px; font-size: 12.5px; margin: 0 6px 4px 0; }
+.st-matchcell .st-pick { max-width: 220px; font-size: 12.5px; padding: 3px 6px; border-radius: 6px; background: var(--panel, #15171c); color: var(--text, #e8e9ee); border: 1px solid var(--line, rgba(255, 255, 255, .15)); }
+#matchHint.bad { color: #f2a3a5; }

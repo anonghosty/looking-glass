@@ -1093,12 +1093,30 @@ fi
 
 # ---- platform
 if [ $WANT_PF = 1 ]; then
+  # every country in the world (2026-11-15): the continent first, then its countries (one list of ~250 is too long)
+  IDX="$PF_DIR/static/data/adm1/index.json"
+  CONT_OF() { python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["countries"].get(sys.argv[2].upper(), {}).get("continent", ""))' "$IDX" "$1" 2>/dev/null; }
+  mapfile -t CONTS < <(python3 -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+for c in d.get("continents") or sorted({v.get("continent") or "Africa" for v in d["countries"].values()}):
+    print(c); print(c)' "$IDX")
+  if [ -n "${ANS[COUNTRY]+x}" ] && [ -z "${ANS[CONTINENT]+x}" ]; then
+    ANS[CONTINENT]="$(CONT_OF "${ANS[COUNTRY]}")"    # an answers file with COUNTRY only: its continent, not asked
+  fi
+  CDEF="$(CONT_OF "$(prev COUNTRY GH)")"; CDEF="${CDEF:-Africa}"
+  ask_menu CONTINENT "Continent" "Which continent is your CSIRT's country on? (the next question lists its countries)" "$CDEF" "${CONTS[@]}"
+  CONTINENT="$REPLY"
   mapfile -t CTRY < <(python3 -c '
 import json, sys
 d = json.load(open(sys.argv[1]))["countries"]
 for k, v in sorted(d.items(), key=lambda x: x[1]["country"]):
-    print(k); print(v["country"])' "$PF_DIR/static/data/adm1/index.json")
-  ask_menu COUNTRY "Country" "Which country does your CSIRT cover? (regions map and labels; changeable later in Settings)" GH "${CTRY[@]}"
+    if (v.get("continent") or "Africa") == sys.argv[2]:
+        r = v.get("regions") or 0
+        extra = "  (%d regions)" % r if r else ("  (one area)" if v.get("kind") == "whole" else "")
+        print(k); print(v["country"] + extra)' "$IDX" "$CONTINENT")
+  CTDEF="$(prev COUNTRY GH)"; printf '%s\n' "${CTRY[@]}" | grep -qx "$CTDEF" || CTDEF="${CTRY[0]}"
+  ask_menu COUNTRY "Country" "Which country does your CSIRT cover? (regions map and labels; changeable later in Settings)" "$CTDEF" "${CTRY[@]}"
   COUNTRY="$REPLY"
   msg "Map (Mapbox): how to get a token" "The map needs a free Mapbox public token (starts with pk.):
 

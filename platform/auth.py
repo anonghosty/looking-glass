@@ -462,7 +462,39 @@ class Audit:
         self.path, self.log, self.lock = path, logger, threading.Lock()
         import audit_chain                      # tamper-evident lines, archives kept for the retention (audit_chain.py)
         self.chain = audit_chain.Chain(path)
-        self.failing = None                     # {since, last, count, error} while entries cannot be written
+        # {since, last, count, error} while entries cannot be written; also kept on disk beside the log (best effort:
+        # a full disk may refuse that too), so a restart in the middle does not lose the gap (review 2026-11-15)
+        self.gap_path = os.path.join(os.path.dirname(os.path.abspath(path)), "audit_write_failed.json")
+        self.failing = self._read_gap()
+        if self.failing:
+            system_alerts.note_audit_write(dict(self.failing))
+
+    def _read_gap(self):
+        try:
+            with open(self.gap_path, encoding="utf-8") as fh:
+                f = json.load(fh)
+            if isinstance(f, dict) and all(k in f for k in ("since", "last", "count", "error")):
+                return {"since": float(f["since"]), "last": float(f["last"]), "count": int(f["count"]), "error": str(f["error"])[:120],
+                        "restarts": int(f.get("restarts", 0)) + 1}
+        except (OSError, ValueError, TypeError):
+            pass
+        return None
+
+    def _write_gap(self, f):
+        try:
+            tmp = self.gap_path + ".tmp"
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(f, fh)
+            os.replace(tmp, self.gap_path)
+        except OSError:
+            pass                                # the disk refuses this too: the gap stays in memory and in the bell
+
+    def _clear_gap(self):
+        try:
+            os.remove(self.gap_path)
+        except OSError:
+            pass
 
     def add(self, event, user="", target="", detail="", ip=None, ua=None):
         try:
@@ -481,17 +513,21 @@ class Audit:
                 if self.failing:
                     f = self.failing
                     n = f["count"]
+                    rs = f.get("restarts", 0)
                     self.chain.append({"t": round(_now(), 3), "event": "audit_write_failed", "user": "", "target": "",
                                        "detail": (f"{n} audit entr{'y' if n == 1 else 'ies'} could not be written between "
-                                                  f"{_utc(f['since'])} and {_utc(f['last'])}: {f['error']}")[:300],
+                                                  f"{_utc(f['since'])} and {_utc(f['last'])}: {f['error']}"
+                                                  + (f" (the service restarted {rs} time{'s' if rs != 1 else ''} meanwhile)" if rs else ""))[:300],
                                        "ip": "", "location": location(""), "ua": ""})
                     self.failing = None
+                    self._clear_gap()
                     system_alerts.note_audit_write(None, recovered=f, now=_now())
                 self.chain.append(rec)          # chained to the line before; rotated into the archive, never deleted early
             except OSError as e:
                 f = self.failing or {"since": _now(), "count": 0}
                 f.update(last=_now(), count=f["count"] + 1, error=f"{type(e).__name__}: {e.strerror or e}"[:120])
                 self.failing = f
+                self._write_gap(f)
                 system_alerts.note_audit_write(dict(f))
                 if self.log:
                     self.log.error("audit log NOT written (%s entries since %s): %s; event %s user=%s",

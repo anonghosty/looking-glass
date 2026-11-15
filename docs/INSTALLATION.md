@@ -63,7 +63,7 @@ For a plain screen without the logo's movement, use `./install.sh --no-animation
 
 | | |
 |---|---|
-| Countries | the 54 African countries today (regions maps, settings, constituency); global coverage is in the pipeline |
+| Countries | every country and territory (ISO 3166-1), chosen by continent then country; regions maps for about 200 of them, the rest drawn as one area |
 | Operating system | Ubuntu 24.04 or later, Desktop or Server, with systemd (on the computer itself, in a virtual machine, or Ubuntu on WSL 2 on Windows 10/11) |
 | Python | 3.12 or newer, with `venv` |
 | MongoDB | 6 or newer, with authentication on, filled by the database pipeline |

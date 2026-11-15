@@ -301,7 +301,7 @@
     state.mapMismatch = null;
     if (!country) { if ($("mgMapNote")) $("mgMapNote").hidden = true; return; }
     if (state.shapesFor !== country) {           // load once; every map drawn meanwhile waits for the same download
-      state.shapesFor = country;
+      state.shapesFor = country; state.mapWhole = false;
       state.shapesP = fetch(`/static/data/adm1/${country}.json`).then((r) => r.json()).catch(() => null);
     }
     const shapes = state.shapes = await state.shapesP;
@@ -326,10 +326,16 @@
       }
     }
     const max = Math.max(1, ...[...byKey.values()].map((r) => r.hosts || r.count));
-    const [x0, y0, x1, y1] = shapes.bbox, W = 520, H = 420;
+    // the frame: where the records are when that is clearly smaller than the whole country (islands far apart:
+    // Seychelles, Kiribati), as the services map and the PDF do; the note under the map switches to the whole country
+    const fb = !state.mapWhole && window.LGRegions.focusBox
+      ? window.LGRegions.focusBox(shapes, Object.fromEntries([...byKey].map(([k, r]) => [k, r.hosts || r.count]))) : { bbox: shapes.bbox, zoomed: false };
+    const [x0, y0, x1, y1] = fb.bbox, W = 520, H = 420;
     const kx = Math.cos((((y0 + y1) / 2) * Math.PI) / 180), s = Math.min((W - 20) / ((x1 - x0) * kx), (H - 20) / (y1 - y0));
     const ox = (W - (x1 - x0) * kx * s) / 2, oy = (H - (y1 - y0) * s) / 2, P = (lo, la) => [ox + (lo - x0) * kx * s, oy + (y1 - la) * s];
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    const clip = sv("clipPath", { id: "mgClip" }); clip.append(sv("rect", { x: 0, y: 0, width: W, height: H }));
+    const defs = sv("defs", {}); defs.append(clip); svg.append(defs);
     const details = state.data.region_details || {}, comms = state.plat === "comms", labels = [];
     const tip = $("mgMapTip"), wrap = svg.closest(".mg-mapwrap");
     const showTip = (ev, reg, r) => {
@@ -361,8 +367,16 @@
       if (r) p.addEventListener("click", () => setFilter("region", r.value));
       p.setAttribute("role", "img");
       p.setAttribute("aria-label", `${window.LGRegions.shortName(reg.name)}: ${r ? `${fmt(v)} ${comms ? "devices" : "hosts"}` : "nothing reported"}`);
+      p.setAttribute("clip-path", "url(#mgClip)");
       svg.append(p);
       const bb = p.getBBox(), lab = reg.label ? P(reg.label[0], reg.label[1]) : [bb.x + bb.width / 2, bb.y + bb.height / 2];
+      if (r && bb.width < 7 && bb.height < 7) {    // a region too small to see (small islands): a dot that works like it
+        const dot = sv("circle", { cx: (bb.x + bb.width / 2).toFixed(1), cy: (bb.y + bb.height / 2).toFixed(1), r: 5, class: `rg dot${state.filters[state.plat].region === r.value ? " on" : ""}` });
+        dot.style.fill = p.style.fill; dot.setAttribute("clip-path", "url(#mgClip)");
+        dot.addEventListener("mousemove", (ev) => showTip(ev, reg, r)); dot.addEventListener("mouseleave", () => { tip.hidden = true; });
+        dot.addEventListener("click", () => setFilter("region", r.value));
+        svg.append(dot);
+      }
       labels.push({ x: lab[0], y: lab[1], lines: [window.LGRegions.shortName(reg.name)], size: Object.keys(shapes.regions).length > 12 ? 9 : 10.5,
         prio: (r ? 1e9 + v : 0) + bb.width * bb.height, n: r ? v : null });
     }
@@ -372,6 +386,14 @@
       const t = sv("text", { x: it.x, y: it.y + it.size * 0.35, class: "rl", "text-anchor": "middle" }); t.style.fontSize = `${it.size}px`; t.textContent = it.lines[0];
       svg.append(t);
       if (it.n != null) { const c = sv("text", { x: it.x, y: it.y + it.size * 1.5, class: "rn", "text-anchor": "middle" }); c.style.fontSize = `${it.size - 0.5}px`; c.textContent = fmt(it.n); svg.append(c); }
+    }
+    // which frame: a small link under the map switches between where the records are and the whole country
+    if (fb.zoomed || state.mapWhole) {
+      const a = sv("text", { x: 8, y: H - 8, class: "rn mg-frame", role: "button", tabindex: "0" }); a.style.fontSize = "10px";
+      a.textContent = state.mapWhole ? "Whole country · show where the records are" : "Zoomed to the regions with records · show the whole country";
+      const flip = () => { state.mapWhole = !state.mapWhole; regionMap(svg, rows, country); };
+      a.addEventListener("click", flip); a.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(); } });
+      svg.append(a);
     }
   }
 

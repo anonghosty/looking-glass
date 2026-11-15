@@ -6,11 +6,13 @@ changes is how a time is shown: next to UTC, the same moment in the zone chosen 
 for 12:15 UTC), worked out by the IANA time-zone database, so daylight saving (Egypt, Morocco's Ramadan change) is
 right on every date.
 
-ZONES     ISO country code -> its zones, the usual one first (DR Congo has two). Every one of the 54 countries with a
-          region map (static/data/adm1) is here; "UTC" can always be chosen too.
+ZONES     ISO country code -> its zones, the usual one first (DR Congo has two): the 54 African countries, checked
+          by hand. Every other country (2026-11-15: the whole world) takes its zones from the IANA database's own
+          country table (zone.tab), in its order; "UTC" can always be chosen too.
 default_zone(country), valid(country, zone), info(zone, at) -> {"zone", "city", "offset_minutes", "offset", "abbr",
 "same_as_utc"}, local(dt, zone), label(zone, at) -> "Nairobi time (UTC+3)".
 """
+import os
 from datetime import datetime, timezone
 
 try:
@@ -35,15 +37,64 @@ ZONES = {
     "ZA": ["Africa/Johannesburg"], "ZM": ["Africa/Lusaka"], "ZW": ["Africa/Harare"],
 }
 UTC_NAME = "UTC"
+_WORLD = None
+
+
+def _world():
+    """{ISO2: [zones]} from the IANA database's zone.tab (the system's, else the tzdata package's), read once."""
+    global _WORLD
+    if _WORLD is None:
+        _WORLD = {}
+        paths = ["/usr/share/zoneinfo/zone.tab"]
+        try:
+            import tzdata
+            paths.append(os.path.join(os.path.dirname(tzdata.__file__), "zoneinfo", "zone.tab"))
+        except ImportError:
+            pass
+        for p in paths:
+            try:
+                with open(p, encoding="utf-8") as fh:
+                    for line in fh:
+                        if line.startswith("#") or not line.strip():
+                            continue
+                        parts = line.split("\t")
+                        if len(parts) >= 3:
+                            _WORLD.setdefault(parts[0].strip().upper(), []).append(parts[2].strip())
+                break
+            except OSError:
+                continue
+    return _WORLD
+
+
+# countries with several zones where zone.tab does not list the capital's first: the capital's zone is the default
+CAPITAL = {"RU": "Europe/Moscow", "AU": "Australia/Sydney", "BR": "America/Sao_Paulo", "CA": "America/Toronto",
+           "MX": "America/Mexico_City", "ID": "Asia/Jakarta", "KZ": "Asia/Almaty", "CN": "Asia/Shanghai",
+           "AR": "America/Argentina/Buenos_Aires", "CL": "America/Santiago", "ES": "Europe/Madrid", "PT": "Europe/Lisbon",
+           "EC": "America/Guayaquil", "UA": "Europe/Kyiv", "MN": "Asia/Ulaanbaatar", "NZ": "Pacific/Auckland",
+           "US": "America/New_York", "DE": "Europe/Berlin", "MY": "Asia/Kuala_Lumpur", "UZ": "Asia/Tashkent",
+           "CY": "Asia/Nicosia", "PS": "Asia/Hebron", "FM": "Pacific/Pohnpei", "KI": "Pacific/Tarawa", "PF": "Pacific/Tahiti",
+           "GL": "America/Nuuk", "AQ": "Antarctica/McMurdo"}
+# places zone.tab does not list: Kosovo keeps Belgrade's time; Heard and McDonald Islands are UTC+5. Bouvet Island
+# (uninhabited) has UTC only.
+EXTRA = {"XK": ["Europe/Belgrade"], "HM": ["Indian/Kerguelen"]}
+
+
+def zones_of(country):
+    c = str(country or "").upper()
+    z = list(ZONES.get(c) or _world().get(c) or EXTRA.get(c) or [])
+    cap = CAPITAL.get(c)
+    if cap in z:
+        z.remove(cap); z.insert(0, cap)
+    return z
 
 
 def choices(country):
     """The zones offered for a country: its own, then UTC."""
-    return list(ZONES.get(str(country or "").upper(), [])) + [UTC_NAME]
+    return zones_of(country) + [UTC_NAME]
 
 
 def default_zone(country):
-    return (ZONES.get(str(country or "").upper()) or [UTC_NAME])[0]
+    return (zones_of(country) or [UTC_NAME])[0]
 
 
 def valid(country, zone):

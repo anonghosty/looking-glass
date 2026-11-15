@@ -104,6 +104,9 @@ html:has(body.mg) { overflow: auto; height: auto; }
 .mg-map .rg { stroke: rgba(7, 10, 18, .9); stroke-width: 1.2; vector-effect: non-scaling-stroke; cursor: pointer; transition: filter .15s, stroke .15s; }
 .mg-map .rg.none { fill: rgba(255, 255, 255, .05); cursor: default; }
 .mg-map .rg:hover:not(.none) { filter: brightness(1.3); } .mg-map .rg.on { stroke: #fff; stroke-width: 2.4; }
+.mg-map .rg.dot { stroke: #ededef; stroke-opacity: .75; stroke-width: 1.2; }
+.mg-map .mg-frame { cursor: pointer; fill: #aeb8d6; text-decoration: underline; }
+.mg-map .mg-frame:hover, .mg-map .mg-frame:focus { fill: #fff; outline: none; }
 
 .mg-bars { display: grid; gap: 4px; }
 /* the Reports card: every report, in as many columns as fit (none left out, no scroll box) */
@@ -368,7 +371,7 @@ body.is-loading .mg-grid, body.is-loading .mg-kpis { opacity: 1; }
 .mg-kpi-trend-row .mg-delta { max-width: 64%; overflow: hidden; text-overflow: ellipsis; }
 .mg-kpi-trend-row small { color: var(--mg-mute, #9aa0ab); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mg-kpi-note, .mg-rank-note, .mg-base-note { margin: 8px 0 0; font-size: 12px; line-height: 1.45; color: #c9cdd6; }
-.mg-kpi-note { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.mg-kpi-note { display: block; overflow: visible; overflow-wrap: anywhere; }   /* in full, never cut with "…" (2026-11-15) */
 .mg-rank-note { padding: 7px 10px; border-radius: 8px; border-left: 3px solid rgba(255,255,255,.18); background: rgba(255,255,255,.03); }
 .mg-rank-note.lv-watch, .mg-base-note.lv-watch, .mg-kpi-note.lv-watch { border-left-color: #f5b54a; }
 .mg-rank-note.lv-high, .mg-base-note.lv-high, .mg-kpi-note.lv-high { border-left-color: #e5484d; }

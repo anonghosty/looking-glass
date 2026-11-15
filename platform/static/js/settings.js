@@ -33,14 +33,29 @@
     chosen = new Set(s.networks.map(String));
     mode = s.restricted ? "some" : "all";
     $("cidrs").value = s.cidrs.join("\n");
-    const sel = $("country"); sel.replaceChildren();
-    for (const c of data.countries) { const o = el("option", null, `${c.country}${c.regions ? ` · ${c.regions} regions` : " · no region map"}`); o.value = c.iso2; sel.append(o); }
-    sel.value = s.country;
+    // continent first, then its countries (2026-11-15: every country in the world)
+    const conts = (data.continents && data.continents.length) ? data.continents : [...new Set(data.countries.map((c) => c.continent).filter(Boolean))];
+    const cs = $("continent"); cs.replaceChildren();
+    for (const k of conts) { const o = el("option", null, k); o.value = k; cs.append(o); }
+    cs.closest("label").hidden = !conts.length;          // an older region-map index without continents: one list
+    const mine = data.countries.find((c) => c.iso2 === s.country);
+    cs.value = (mine && mine.continent) || conts[0] || "";
+    fillCountries(s.country);
     fillZones(s.timezone);
     access();
     setMode(mode); buildTypes(); renderNets(); await renderCountry(); refresh();
     const unknown = data.networks.filter((n) => /^AS\d+$/.test(n.name)).length;
     $("unknownCount").textContent = unknown ? `· ${unknown} unidentified` : "";
+  }
+
+  function countryLabel(c) {
+    return `${c.country} · ${c.regions ? `${c.regions} regions` : c.kind === "whole" ? "the whole country as one area" : "no region map"}`;
+  }
+  function fillCountries(pick) {
+    const cont = $("continent").value, sel = $("country"); sel.replaceChildren();
+    const list = data.countries.filter((c) => !cont || !c.continent || c.continent === cont);
+    for (const c of list) { const o = el("option", null, countryLabel(c)); o.value = c.iso2; sel.append(o); }
+    sel.value = list.some((c) => c.iso2 === pick) ? pick : (list[0] || {}).iso2 || "";
   }
 
   // ---------------- Identify networks: background look-up with a progress window
@@ -90,22 +105,66 @@
     box.append(document.createTextNode("Read only: changing settings needs an account with the Settings permission (administrators)."));
   }
 
+  // ---------------- region names as Shadowserver spells them: the administrator's matches (region_matches.py)
+  async function setMatch(iso, name, target, btn) {
+    if (btn) btn.disabled = true;
+    try {
+      const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
+      const r = await fetch("/api/settings/region-matches", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ country: iso, name, target }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      await renderCountry();
+    } catch (e) {
+      const h = $("matchHint"); h.textContent = `Not saved: ${e.message}`; h.classList.add("bad");
+      if (btn) btn.disabled = false;
+    }
+  }
+  function matchCell(x, iso, regionName, rm) {
+    const td = el("td", "st-matchcell");
+    if (!data.writable || !rm || !x.r) { td.textContent = x.status === "chosen" ? "your choice" : ""; return td; }
+    if (x.status === "map") { td.append(el("span", "muted", "the map's own name")); return td; }
+    if (x.status === "country") { td.append(el("span", "muted", "the country's name")); return td; }
+    if (x.status === "chosen") {
+      td.append(el("span", null, "your choice "));
+      const undo = el("button", "pill-btn", "Undo"); undo.type = "button";
+      undo.title = `Forget that "${x.r}" means ${regionName(x.hit || "__country__")}`;
+      undo.addEventListener("click", () => setMatch(iso, x.r, "", undo)); td.append(undo); return td;
+    }
+    // not matched: the suggestion, or a choice of region, or "the country itself"
+    if (x.suggestion) {
+      const use = el("button", "lg-btn primary st-use", `Use ${regionName(x.suggestion)}`); use.type = "button";
+      use.title = `Count "${x.r}" as ${regionName(x.suggestion)} (similarity ${Math.round((x.score || 0) * 100)}%)`;
+      use.addEventListener("click", () => setMatch(iso, x.r, x.suggestion, use)); td.append(use);
+    }
+    const pick = el("select", "st-pick"); pick.setAttribute("aria-label", `Choose the region for ${x.r}`);
+    pick.append(el("option", null, x.suggestion ? "or choose…" : "Choose the region…"));
+    const c = el("option", null, "The country itself (region unknown)"); c.value = "__country__"; pick.append(c);
+    for (const r of rm.regions || []) { const o = el("option", null, window.LGRegions ? window.LGRegions.shortName(r.name) : r.name); o.value = r.key; pick.append(o); }
+    pick.addEventListener("change", () => { if (pick.value) setMatch(iso, x.r, pick.value, pick); });
+    td.append(pick);
+    return td;
+  }
+
   // ---------------- country
   let countrySeq = 0;
   async function renderCountry() {
     const mine = ++countrySeq;
     const iso = $("country").value, info = data.countries.find((c) => c.iso2 === iso) || {};
-    $("countryMeta").textContent = info.regions ? `${info.regions} first-level regions · geoBoundaries ADM1` : "No region boundaries available for this country";
+    const hasMap = !!(info.regions || info.kind);
+    $("countryMeta").textContent = info.regions ? `${info.regions} first-level regions · ${info.continent || ""}`.replace(/ · $/, "")
+      : info.kind === "whole" ? "Drawn as one area: the open data has no first-level regions for it, so every record counts for the whole country"
+      : "No map available for this country: its records are still counted";
     const svg = $("preview"); svg.replaceChildren(); shapes = null;
     // the map's place shows the loading line until its regions are in (2026-11-15: an empty map showed)
     document.getElementById("previewWait")?.remove();
     let wait = null;
-    if (info.regions) {
+    if (hasMap) {
       wait = el("p", "lg-loading", `Loading the map of ${info.country || iso}…`); wait.id = "previewWait";
       svg.before(wait); svg.style.visibility = "hidden";
     }
     let got = null;
-    if (info.regions) { try { got = await (await fetch(`/static/data/adm1/${iso}.json`)).json(); } catch { got = null; } }
+    if (hasMap) { try { got = await (await fetch(`/static/data/adm1/${iso}.json`)).json(); } catch { got = null; } }
     if (mine !== countrySeq) return;           // another country was picked meanwhile: its own call draws the map (review 2026-11-13)
     wait?.remove(); svg.style.visibility = "";
     shapes = got;
@@ -115,20 +174,30 @@
     const resolve = shapes && window.LGRegions ? window.LGRegions.index(shapes)
       : (r) => { const k = norm(r); return keys.find((x) => x === k) || keys.find((x) => x.replace(/[^A-Z]/g, "") === k.replace(/[^A-Z]/g, "")) || null; };
     const shortName = (k) => (window.LGRegions ? window.LGRegions.shortName(shapes.regions[k].name) : shapes.regions[k].name);
-    const rows = data.data_regions.map(([r, n]) => {
-      const k = norm(r), unknown = !r || k === country;
-      const hit = unknown || !shapes ? null : resolve(r);
-      return { r, n, unknown, hit };
-    });
+    const whole = !!(shapes && shapes.whole);
+    // what each report name matched, from the server (region_matches.py): the map's own names, the administrator's
+    // choices, the country itself, or nothing yet with the closest region suggested (2026-11-15)
+    let rm = null;
+    try { rm = await (await fetch(`/api/settings/region-matches?country=${encodeURIComponent(iso)}`, { cache: "no-store" })).json(); } catch { rm = null; }
+    if (mine !== countrySeq) return;
+    const rows = rm && Array.isArray(rm.rows) ? rm.rows.map((x) => ({ r: x.name, n: x.records, status: x.status, suggestion: x.suggestion, score: x.score,
+        unknown: !whole && x.target === "__country__", hit: x.target && x.target !== "__country__" ? x.target : (whole && shapes ? Object.keys(shapes.regions)[0] : null) }))
+      : data.data_regions.map(([r, n]) => {
+        const unknown = !whole && (window.LGRegions ? window.LGRegions.isCountry(r, { ...info, regionNames: window.LGRegions.regionNames(shapes) }) : (!r || norm(r) === country));
+        return { r, n, unknown, hit: unknown || !shapes ? null : resolve(r), status: "map" };
+      });
     const perRegion = new Map(); for (const x of rows) if (x.hit) perRegion.set(x.hit, (perRegion.get(x.hit) || 0) + x.n);
     const tb = $("matchTable").querySelector("tbody"); tb.replaceChildren();
+    const regionName = (k) => (k === "__country__" ? "the country itself (region unknown)" : shapes && shapes.regions[k] ? shortName(k) : k);
     for (const x of rows) {
       const tr = el("tr");
       tr.append(el("td", null, x.r ? titleCase(x.r) : "(empty)"), el("td", "mono", fmt(x.n)),
         el("td", x.unknown ? "" : x.hit ? "ok" : "no", x.unknown ? "Region unknown (country only)" : x.hit ? shortName(x.hit) : "not on this map"));
+      tr.append(matchCell(x, iso, regionName, rm));
       tb.append(tr);
     }
     const known = rows.filter((x) => !x.unknown), matched = known.filter((x) => x.hit).length;
+    $("matchHint").classList.remove("bad");
     $("matchHint").textContent = !data.data_regions.length ? "No records loaded yet for yesterday."
       : matched === 0 && known.length
         ? `None of the ${known.length} regions in yesterday's reports are on ${info.country}'s map: the reports seem to be for another country. The map will still be shown, with a note asking to select the right country.`
@@ -160,6 +229,7 @@
     $("countryMeta").textContent = `${keys.length} first-level regions · geoBoundaries ADM1 · ${L.length} labelled here, hover a region for any name`;
   }
   $("country").addEventListener("change", () => { fillZones(""); renderCountry(); refresh(); });
+  $("continent").addEventListener("change", () => { fillCountries(""); fillZones(""); renderCountry(); refresh(); });
   // ---------------- time zone: the country's own zones (DR Congo has two), then UTC; a new country takes its usual zone
   function fillZones(pick) {
     const zs = (data.zones || {})[$("country").value] || [];
@@ -271,7 +341,10 @@
     $("revert").hidden = !dirty;
   }
   $("revert").addEventListener("click", () => {
-    chosen = new Set(saved.networks); $("cidrs").value = saved.cidrs.join("\n"); $("country").value = saved.country; fillZones(saved.timezone);
+    chosen = new Set(saved.networks); $("cidrs").value = saved.cidrs.join("\n");
+    const sc = data.countries.find((c) => c.iso2 === saved.country);
+    if (sc && sc.continent) $("continent").value = sc.continent;
+    fillCountries(saved.country); fillZones(saved.timezone);
     setMode(saved.networks.length || saved.cidrs.length ? "some" : "all"); renderNets(); renderCountry();
   });
 

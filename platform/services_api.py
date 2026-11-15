@@ -42,15 +42,24 @@ def register(app, ctx):
     replay_counts = ReplayCounts()  # the replayed counter of a selection, polled every few seconds (replay_counts.py)
 
     # ------------------------------------------------------------------ helpers
-    country_upper = {"t": 0.0, "v": ""}
+    country_upper = {"t": 0.0, "v": set()}
+
+    def _fold(s):
+        import unicodedata
+        return unicodedata.normalize("NFKD", str(s or "")).encode("ascii", "ignore").decode().upper().strip()
 
     def region_unknown(v):
-        """Shadowserver writes the country name (for example GHANA) when only the country is known.
-        The country name is looked up at most once a second (this runs for every record)."""
+        """Shadowserver writes the country name (for example GHANA, or COTE D'IVOIRE without its accents) when only
+        the country is known. The country's spellings are looked up at most once a second (this runs for every record)."""
         now = time.monotonic()
         if now - country_upper["t"] > 1:
-            country_upper.update(t=now, v=ctx["country_name"]().upper())
-        return not v or v.upper() == country_upper["v"]
+            names = {_fold(ctx["country_name"]())} | {_fold(n) for n in (ctx.get("country_names") or (lambda: []))()}
+            # a region of the map named like the country (Belize District, Djibouti...) is that region, unless the
+            # administrator said the name means the country itself (2026-11-15)
+            names -= {_fold(n) for n in (ctx.get("map_region_names") or (lambda: ()))()}
+            names |= {_fold(n) for n in (ctx.get("country_chosen_names") or (lambda: ()))()}
+            country_upper.update(t=now, v=names - {""})
+        return not v or _fold(v) in country_upper["v"]
 
     def region_label(v):
         return "Region unknown" if region_unknown(v) else v.title()

@@ -1,4 +1,4 @@
-﻿/* Looking Glass Â· the Intelligence portal (/intelligence, intelligence.js) */
+/* Looking Glass Â· the Intelligence portal (/intelligence, intelligence.js) */
 .it-main { max-width: 1400px; margin: 0 auto; display: grid; gap: 18px; padding: 0 clamp(12px, 2vw, 32px) 60px; grid-template-columns: minmax(0, 1fr); }
 .it-hero { display: grid; gap: 6px; padding: 22px 24px; border-radius: 20px; border: 1px solid rgba(124, 156, 255, .35);
   background: linear-gradient(135deg, rgba(91, 141, 239, .12), rgba(139, 92, 246, .08)); min-width: 0; }

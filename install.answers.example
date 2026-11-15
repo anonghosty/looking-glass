@@ -66,8 +66,10 @@ RUN_PIPELINE_NOW=yes
 FIRST_DAYS=7
 
 # ---- Platform
-# ISO 3166 two-letter code of an African country
+# ISO 3166 two-letter code of the country your CSIRT covers (any country in the world; the continent is worked out from
+# it, or give it too: Africa, Asia, Europe, North America, South America, Oceania, Antarctica)
 COUNTRY=GH
+#CONTINENT=Africa
 MAPBOX_TOKEN=
 MALPEDIA_TOKEN=
 # local | private | public

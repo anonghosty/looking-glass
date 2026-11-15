@@ -36,11 +36,13 @@
   };
   const hhmm = (m) => `${String(Math.floor(m / 60) % 25).padStart(2, "0")}:${String(Math.floor(m) % 60).padStart(2, "0")}`;
   // the country comes from Settings (both platforms); Shadowserver writes the country name when only it is known
-  const COUNTRY = { code: "GH", name: "Ghana", hasRegions: true, restricted: false, networks: 0, cidrs: 0 };
+  const COUNTRY = { code: "GH", name: "Ghana", hasRegions: true, mapKind: "regions", names: [], restricted: false, networks: 0, cidrs: 0 };
   const SUFFIXES = [" REGION", " PROVINCE", " STATE", " GOVERNORATE", " COUNTY", " DISTRICT", " PREFECTURE", " DEPARTMENT", " WILAYA", " ATOLL"];
   const normRegion = window.LGRegions ? window.LGRegions.norm
     : (n) => { let s = String(n || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toUpperCase().trim(); for (const x of SUFFIXES) if (s.endsWith(x)) s = s.slice(0, -x.length).trim(); return s; };
-  const regionUnknown = (r) => !r || normRegion(r) === normRegion(COUNTRY.name);
+  // the country's own name in any spelling (with or without accents: COTE D'IVOIRE) means "the region is not known"
+  const regionUnknown = (r) => (window.LGRegions ? window.LGRegions.isCountry(r, { country: COUNTRY.name, names: COUNTRY.names, matches: COUNTRY.matches, regionNames: COUNTRY.regionNames })
+    : !r || normRegion(r) === normRegion(COUNTRY.name));
   const regionLabel = (r) => (regionUnknown(r) ? "Region unknown" : titleCase(r));
   const POLL_MS = 1500, LOOKAHEAD_MS = 6000, MAX_ROWS = 150;
 
@@ -109,7 +111,7 @@
     timeline: ["Activity yesterday", "Records per 15 minutes over the whole day. Click a bar to analyse those 15 minutes."],
     stream: ["Record stream", "Records as they replay, newest first. Click one for all its fields, the report's definition and analysis links."],
     constellation: ["Services constellation", "One bubble per service, sized by its records for the day (with the active filters). A dot flies into a bubble each time one of its records replays, coloured by severity. Click a bubble to analyse that service."],
-    ghana: ["Regions map", "The regions of the country chosen in Settings (any African country). Each region is coloured by its records for the day (with the active filters). Regions flash when one of their records replays. Hover to see which reports and issues make up a region; click to analyse it."],
+    ghana: ["Regions map", "The regions of the country chosen in Settings (any country in the world; one area for a country without first-level regions in the open map data). Each region is coloured by its records for the day (with the active filters). Regions flash when one of their records replays. Hover to see which reports and issues make up a region; click to analyse it. Scroll or use + and − to zoom, drag to move; it opens where the records are, and Fit shows the whole country."],
     cross: ["Hosts in several reports", "Hosts that appear in more than one Shadowserver report on the same day, for example an exposed admin panel and an outdated SSH server on the same address."],
     multi: ["Hosts with multiple issues", "Hosts carrying more than one issue across all their reports of the day (several CVEs, or a CVE plus an exposed admin panel...). These have the largest attack surface. As a filter it shows these hosts with all their reports."],
     share: ["Share of all records", "This selection's records as a share of all the day's records."],
@@ -662,16 +664,46 @@
     const svg = $("ghana"), NS = "http://www.w3.org/2000/svg";
     let shapes = null, data = null, paths = new Map();
     let bbox = null, loadedFor = null, file = null;
+    // zoom (2026-11-15): small island regions (Seychelles, Marshall Islands, Kiribati) are a few pixels at the whole
+    // country's frame. Scroll or +/− zooms around the pointer (or the middle), drag moves once zoomed in, Fit shows
+    // the whole country. The map is redrawn at the new scale, so labels stay readable and more of them fit.
+    let Z = { k: 1, tx: 0, ty: 0 }, drag = null, dragged = false, raf = 0, frameMode = "auto";   // auto: where the records are; full: the whole country
+    const redraw = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); };
+    function zoomAt(mx, my, f) {
+      const k = Math.max(1, Math.min(80, Z.k * f));
+      if (k === Z.k) return;
+      Z.tx = mx - (mx - Z.tx) * (k / Z.k); Z.ty = my - (my - Z.ty) * (k / Z.k); Z.k = k;
+      if (k === 1) { Z.tx = 0; Z.ty = 0; }
+      redraw();
+    }
+    const middle = () => { const a = freeArea(76, 30); return [(a.x0 + a.x1) / 2, (a.y0 + a.y1) / 2]; };
+    svg.addEventListener("wheel", (e) => { if (state.view !== "ghana") return; e.preventDefault(); zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+    svg.addEventListener("pointerdown", (e) => { if (Z.k === 1 || e.button !== 0) return; drag = { x: e.clientX, y: e.clientY, tx: Z.tx, ty: Z.ty }; dragged = false; });
+    addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (!dragged && Math.hypot(dx, dy) < 4) return;
+      dragged = true; svg.classList.add("dragging"); hideTip(); Z.tx = drag.tx + dx; Z.ty = drag.ty + dy; redraw();
+    });
+    addEventListener("pointerup", () => { drag = null; svg.classList.remove("dragging"); });
+    svg.addEventListener("click", (e) => { if (dragged) { e.stopPropagation(); e.preventDefault(); dragged = false; } }, true);   // a drag is not a click
+    $("zoomIn").addEventListener("click", () => zoomAt(...middle(), 2));
+    $("zoomOut").addEventListener("click", () => zoomAt(...middle(), 0.5));
+    $("zoomFit").addEventListener("click", () => { Z = { k: 1, tx: 0, ty: 0 }; frameMode = "full"; redraw(); });
     // report region name -> map region key, through the names, ISO names and aliases in the map file (static/js/regions.js)
     let resolve = (n) => { const k = normRegion(n); return shapes && shapes[k] ? k : null; };
     async function load() {
-      if (shapes && loadedFor === COUNTRY.code) return shapes;
+      const want = `${COUNTRY.code}|${JSON.stringify(COUNTRY.matches || {})}`;   // the admin's matches redraw the map too
+      if (shapes && loadedFor === want) return shapes;
       try {
-        file = await (await fetch(`/static/data/adm1/${COUNTRY.code}.json`)).json();
-        shapes = Object.fromEntries(Object.entries(file.regions).map(([k, v]) => [k, v.polys])); bbox = file.bbox;
-        if (window.LGRegions) resolve = window.LGRegions.index(file);
+        if (!file || !shapes || !loadedFor || loadedFor.split("|")[0] !== COUNTRY.code) {
+          file = await (await fetch(`/static/data/adm1/${COUNTRY.code}.json`)).json();
+          shapes = Object.fromEntries(Object.entries(file.regions).map(([k, v]) => [k, v.polys])); bbox = file.bbox;
+          Z = { k: 1, tx: 0, ty: 0 }; frameMode = "auto";   // another country: framed on its records again
+        }
+        if (window.LGRegions) { resolve = window.LGRegions.index(file, COUNTRY.matches); COUNTRY.regionNames = window.LGRegions.regionNames(file); }
       } catch { shapes = {}; bbox = null; file = null; }
-      loadedFor = COUNTRY.code;
+      loadedFor = want;
       return shapes;
     }
     const nameOf = (key) => (file && file.regions[key] ? (window.LGRegions ? window.LGRegions.shortName(file.regions[key].name) : file.regions[key].name) : titleCase(key));
@@ -694,20 +726,31 @@
       await load(); svg.replaceChildren(); paths = new Map();
       if (!shapes || !Object.keys(shapes).length || !bbox) return;
       const { x0, x1, y0, y1 } = freeArea(76, 30);
-      // the chosen country's bounding box, equirectangular with a cos(latitude) correction
-      const [lon0, lat0, lon1, lat1] = bbox, kx = Math.cos((((lat0 + lat1) / 2) * Math.PI) / 180);
-      const s = Math.min((x1 - x0) / ((lon1 - lon0) * kx), (y1 - y0) / (lat1 - lat0));
-      const ox = x0 + ((x1 - x0) - (lon1 - lon0) * kx * s) / 2, oy = y0 + ((y1 - y0) - (lat1 - lat0) * s) / 2;
-      const P = (lon, lat) => [ox + (lon - lon0) * kx * s, oy + (lat1 - lat) * s];
       // the reports' region names (e.g. GREATER ACCRA, Alger, Al Qāhirah) matched to the map's regions through its aliases;
       // names that are on no region of this map stay in `off` (they still count in the region list and the analysis)
       const regs = {}, off = [], raw = (data && data.regions) || {};
       let unknownRegion = null;
+      const whole = !!(file && file.whole);       // the country drawn as one area: every record lands on it
       for (const [k, v] of Object.entries(raw)) {
-        if (!k || regionUnknown(k)) { unknownRegion = mergeRegion(unknownRegion, { ...v, raw: k }); continue; }
+        if (!whole && (!k || regionUnknown(k))) { unknownRegion = mergeRegion(unknownRegion, { ...v, raw: k }); continue; }
         const key = resolve(k);
         if (key) regs[key] = mergeRegion(regs[key], { ...v, raw: k }); else off.push(k);
       }
+      // the frame: where the records are (regions holding 98% of them) when that is clearly smaller than the whole
+      // country (islands far apart: Seychelles, Kiribati), so the default view is readable; Fit shows the whole country
+      const fb = frameMode === "auto" && window.LGRegions && window.LGRegions.focusBox
+        ? window.LGRegions.focusBox(file, Object.fromEntries(Object.entries(regs).map(([k, v]) => [k, v.events]))) : { bbox, zoomed: false };
+      // the chosen frame, equirectangular with a cos(latitude) correction
+      const [lon0, lat0, lon1, lat1] = fb.bbox, kx = Math.cos((((lat0 + lat1) / 2) * Math.PI) / 180);
+      const s = Math.min((x1 - x0) / ((lon1 - lon0) * kx), (y1 - y0) / (lat1 - lat0));
+      const ox = x0 + ((x1 - x0) - (lon1 - lon0) * kx * s) / 2, oy = y0 + ((y1 - y0) - (lat1 - lat0) * s) / 2;
+      const P = (lon, lat) => [(ox + (lon - lon0) * kx * s) * Z.k + Z.tx, (oy + (lat1 - lat) * s) * Z.k + Z.ty];
+      svg.classList.toggle("zoomed", Z.k > 1);
+      // regions, dots and labels stay inside the map's free area when zoomed in (not under the panels)
+      const clip = document.createElementNS(NS, "clipPath"); clip.id = "rgClip";
+      const cr = document.createElementNS(NS, "rect"); cr.setAttribute("x", x0); cr.setAttribute("y", y0 - 40); cr.setAttribute("width", x1 - x0); cr.setAttribute("height", y1 - y0 + 70);
+      clip.append(cr); const defs = document.createElementNS(NS, "defs"); defs.append(clip); svg.append(defs);
+      const layer = document.createElementNS(NS, "g"); if (Z.k > 1 || fb.zoomed) layer.setAttribute("clip-path", "url(#rgClip)"); svg.append(layer);
       const max = Math.max(1, ...Object.values(regs).map((v) => v.events));
       const selKey = state.filters.region ? resolve(state.filters.region) : null;
       const labels = [], n = Object.keys(shapes).length, size = n > 30 ? 10.5 : 12;
@@ -722,18 +765,30 @@
         path.setAttribute("fill", v ? rampColor(Math.log1p(v) / Math.log1p(max)) : "#16181f");
         path.addEventListener("mousemove", (e) => showTip(e, tipFor(name, r)));
         path.addEventListener("mouseleave", hideTip);
-        path.addEventListener("click", () => openInsight(narrow(filterPairs(), "region", r ? r.raw : nameOf(name))));
-        svg.append(path);
+        // one area for the whole country: its analysis is the whole country's (the reports name many regions, or none)
+        path.addEventListener("click", () => openInsight(whole ? filterPairs() : narrow(filterPairs(), "region", r ? r.raw : nameOf(name))));
+        path.dataset.region = name;
+        layer.append(path);
         if (!lab) { const b = path.getBBox(); lab = [b.x + b.width / 2, b.y + b.height / 2]; }
         paths.set(name, { path, lab });
         // regions with records get their labels first; the rest by size of the region on screen
         const bb = path.getBBox();
+        // a region a few pixels across (small islands: Seychelles, Marshall Islands, Kiribati) also gets a dot that can
+        // be seen, hovered and clicked like the region itself
+        if (bb.width < 8 && bb.height < 8) {
+          const dot = document.createElementNS(NS, "circle");
+          dot.setAttribute("cx", (bb.x + bb.width / 2).toFixed(1)); dot.setAttribute("cy", (bb.y + bb.height / 2).toFixed(1)); dot.setAttribute("r", "6");
+          dot.setAttribute("class", "rg rg-dot" + (selKey === name ? " sel" : "")); dot.setAttribute("fill", path.getAttribute("fill"));
+          dot.dataset.region = name;
+          for (const ev of ["mousemove", "mouseleave", "click"]) dot.addEventListener(ev, (e) => path.dispatchEvent(new MouseEvent(e.type, e)));
+          layer.append(dot);
+        }
         labels.push({ key: name, x: lab[0], y: lab[1] + 3, lines: [nameOf(name), v ? fmt(v) : "–"], size, prio: (v ? 1e9 + v : 0) + bb.width * bb.height });
       }
-      const L = window.LGRegions ? window.LGRegions.placeLabels(labels, { x0: 0, x1: innerWidth, y0: 0, y1: innerHeight }) : labels;
+      const L = window.LGRegions ? window.LGRegions.placeLabels(labels, Z.k > 1 ? { x0, x1, y0: y0 - 40, y1: y1 + 30 } : { x0: 0, x1: innerWidth, y0: 0, y1: innerHeight }) : labels;
       for (const it of L) {
-        const t = document.createElementNS(NS, "text"); t.setAttribute("x", it.x); t.setAttribute("y", it.y - size * 0.35); t.setAttribute("text-anchor", "middle"); t.style.fontSize = `${size}px`; t.textContent = it.lines[0]; svg.append(t);
-        const c = document.createElementNS(NS, "text"); c.setAttribute("x", it.x); c.setAttribute("y", it.y + size * 0.85); c.setAttribute("text-anchor", "middle"); c.setAttribute("class", "n"); c.style.fontSize = `${size - 1}px`; c.textContent = it.lines[1]; svg.append(c);
+        const t = document.createElementNS(NS, "text"); t.setAttribute("x", it.x); t.setAttribute("y", it.y - size * 0.35); t.setAttribute("text-anchor", "middle"); t.style.fontSize = `${size}px`; t.textContent = it.lines[0]; layer.append(t);
+        const c = document.createElementNS(NS, "text"); c.setAttribute("x", it.x); c.setAttribute("y", it.y + size * 0.85); c.setAttribute("text-anchor", "middle"); c.setAttribute("class", "n"); c.style.fontSize = `${size - 1}px`; c.textContent = it.lines[1]; layer.append(c);
       }
       // reports that do not fit this country's map: the map stays, with a note to choose the right country
       const known = [...Object.keys(regs), ...off], onMap = Object.keys(regs);
@@ -742,6 +797,7 @@
       if (!note.hidden) note.querySelector("span").textContent =
         `None of the ${known.length} regions in these reports are on ${COUNTRY.name}'s map. Kindly select the right country in Settings to populate the regions.`;
       const notes = [];
+      if (fb.zoomed && Z.k === 1) notes.push("Zoomed to the regions with records · Fit shows the whole country");
       if (unknownRegion) notes.push(`Region unknown: ${fmt(unknownRegion.events)} records`);
       if (off.length && onMap.length) notes.push(`Not on this map: ${off.slice(0, 4).map(titleCase).join(", ")}${off.length > 4 ? ` and ${off.length - 4} more` : ""}`);
       notes.forEach((s, i) => { const t = document.createElementNS(NS, "text"); t.setAttribute("x", x0 + 4); t.setAttribute("y", y1 - (notes.length - 1 - i) * 15); t.setAttribute("class", "n"); t.textContent = s; svg.append(t); });
@@ -895,6 +951,7 @@
     state.view = v; ls.set("lg.svc.view", v);
     for (const b of $("viewSeg").querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.view === v));
     $("ghana").toggleAttribute("hidden", v !== "ghana");   // an <svg> has no .hidden property: use the attribute
+    $("mapZoom").hidden = v !== "ghana";
     if (v !== "ghana") $("regionNotice").hidden = true;
     $("stageHint").textContent = stageHint();
     if (v === "ghana") ghana.draw();
@@ -1579,9 +1636,11 @@
     const changed = scopeVersion != null && st.version !== scopeVersion;
     scopeVersion = st.version;
     const countryChanged = COUNTRY.code !== st.country;
-    Object.assign(COUNTRY, { code: st.country, name: st.country_name, hasRegions: st.has_regions, restricted: st.restricted, networks: st.networks, cidrs: st.cidrs });
-    document.querySelector('[data-view="ghana"]').textContent = `${st.country_name} regions`;
-    $("ghana").setAttribute("aria-label", `${st.country_name} regions heatmap`);
+    Object.assign(COUNTRY, { code: st.country, name: st.country_name, hasRegions: st.has_regions || st.map_kind === "whole",
+      mapKind: st.map_kind || (st.has_regions ? "regions" : null), names: st.country_names || [], matches: st.region_matches || {},
+      restricted: st.restricted, networks: st.networks, cidrs: st.cidrs });
+    document.querySelector('[data-view="ghana"]').textContent = `${st.country_name} ${COUNTRY.mapKind === "whole" ? "map" : "regions"}`;
+    $("ghana").setAttribute("aria-label", `${st.country_name} ${COUNTRY.mapKind === "whole" ? "map (the whole country as one area)" : "regions heatmap"}`);
     const pill = $("scopePill"); pill.hidden = !st.restricted;
     pill.textContent = `Constituency: ${st.networks} network${st.networks === 1 ? "" : "s"}${st.cidrs ? ` + ${st.cidrs} range${st.cidrs === 1 ? "" : "s"}` : ""}`;
     pill.title = "Only the networks of your constituency are shown on both platforms (Settings)";

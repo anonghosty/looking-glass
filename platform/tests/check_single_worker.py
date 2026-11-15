@@ -22,8 +22,8 @@ class _Log:
 
 
 class _Server:
-    def __init__(self, workers):
-        self.cfg = type("C", (), {"workers": workers})(); self.log = _Log()
+    def __init__(self, workers, max_requests=0):
+        self.cfg = type("C", (), {"workers": workers, "max_requests": max_requests})(); self.log = _Log()
 
 
 conf = runpy.run_path(os.path.join(ROOT, "gunicorn.conf.py"))
@@ -44,6 +44,13 @@ if callable(hook):
     except SystemExit:
         started = False
     ok("--workers 1: starts", started and not s.log.lines)
+    # review 2026-11-15: a worker recycled after N requests clears the sign-in counters, and anyone can send requests
+    s = _Server(1, max_requests=1000)
+    try:
+        hook(s); stopped = False
+    except SystemExit:
+        stopped = True
+    ok("--max-requests 1000: refuses to start, and says why", stopped and any("max-requests" in l for l in s.log.lines))
 for unit in ("deploy/looking-glass.service.template",):
     text = open(os.path.join(ROOT, unit), encoding="utf-8").read()
     ok(f"{unit} runs --workers 1", "--workers 1 " in text)

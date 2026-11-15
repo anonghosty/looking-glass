@@ -2692,6 +2692,12 @@ svc = services_api.register(app, {
     "reload_seconds": DAY_RELOAD_SECONDS, "fallback": os.environ.get("FALLBACK_SCAN") == "1",
     "settings": settings,
     "country_name": lambda: _country_index().get(settings.data["country"], {}).get("country", settings.data["country"]),
+    "country_names": lambda: _country_index().get(settings.data["country"], {}).get("names", []),
+    # names the administrator said mean the country itself (region_matches.py), and the map's own region names: a
+    # region named like the country (Belize District, Djibouti) is that region, not "region unknown"
+    "country_chosen_names": lambda: [k for k, v in (globals().get("REGION_MATCHES").of(settings.data["country"])
+                                                    if globals().get("REGION_MATCHES") else {}).items() if v == "__country__"],
+    "map_region_names": lambda: __import__("region_matches").map_region_names(ADM1_DIR, settings.data["country"]),
 })
 
 
@@ -3114,17 +3120,25 @@ _COUNTRY_INDEX = {"mtime": None, "data": {}}
 
 
 def _country_index():
-    """The 54 African countries with region boundaries (static/data/adm1/index.json), read once and cached:
-    it is consulted for every record when deciding whether a region is 'unknown'."""
+    """Every country and territory in the world (static/data/adm1/index.json, manage/fetch_world_boundaries.py), with
+    its continent and its region map (regions, or the whole country as one area), read once and cached: it is
+    consulted for every record when deciding whether a region is 'unknown'."""
     path = os.path.join(ADM1_DIR, "index.json")
     try:
         m = os.path.getmtime(path)
         if m != _COUNTRY_INDEX["mtime"]:
             with open(path, encoding="utf-8") as f:
-                _COUNTRY_INDEX.update(mtime=m, data=json.load(f).get("countries", {}))
+                raw = json.load(f)
+            _COUNTRY_INDEX.update(mtime=m, data=raw.get("countries", {}),
+                                  continents=raw.get("continents") or sorted({c.get("continent") or "" for c in raw.get("countries", {}).values()} - {""}))
     except (OSError, ValueError):
         pass
     return _COUNTRY_INDEX["data"]
+
+
+def _continents():
+    _country_index()
+    return _COUNTRY_INDEX.get("continents") or []
 
 
 _COUNTRY_BBOX = {}
@@ -3132,7 +3146,8 @@ _COUNTRY_BBOX = {}
 
 def _country_bbox(cc):
     """[west, south, east, north] of the country (from its region boundaries file), cached; None if unknown. The map
-    opens on a view that includes it, wherever in Africa the country is."""
+    opens on a view that includes it, wherever in the world the country is (east may pass 180 for a country across
+    the 180th meridian)."""
     cc = (cc or "").upper()
     if cc not in _COUNTRY_BBOX:
         box = None
@@ -3157,8 +3172,9 @@ def settings_page():
 
 @app.route("/api/settings", methods=["GET"])
 def api_settings():
-    """Current settings, plus what can be chosen: African countries with region boundaries, and every network seen
-    in yesterday's data on either platform (grouped by company, with their record counts before the constituency)."""
+    """Current settings, plus what can be chosen: every country in the world by continent (with its region map, or
+    the whole country as one area), and every network seen in yesterday's data on either platform (grouped by company,
+    with their record counts before the constituency)."""
     # it lists network company names: admins only (viewers and public screens: security report #6)
     if not _settings_writable():
         return jsonify(error="Settings are for admin accounts."), 403
@@ -3181,7 +3197,8 @@ def api_settings():
     nets = sorted(companies.values(), key=lambda c: (-c["records"], c["name"]))
     return jsonify(settings=settings.public(), writable=_settings_writable(),
                    type_labels=netypes.labels(DATA_DIR),
-                   countries=sorted(_country_index().values(), key=lambda c: c["country"]), networks=nets,
+                   countries=sorted(_country_index().values(), key=lambda c: c["country"]), continents=_continents(),
+                   networks=nets,
                    # the time zones each country offers (its own, then UTC), with today's offset: Settings > Country
                    zones={c: [{**timezones.info(z), "label": f"{timezones.city(z)} ({timezones.info(z)['offset']})"}
                               for z in timezones.choices(c)] for c in _country_index()},
@@ -3286,6 +3303,16 @@ def api_settings_save():
     return jsonify(settings=settings.public())
 
 
+# Region names as Shadowserver writes them, matched to the map by the administrator (region_matches.py, 2026-11-15)
+import region_matches as _region_matches  # noqa: E402
+_RM_CTX = {"data_dir": DATA_DIR, "adm1_dir": ADM1_DIR, "country_index": lambda: _country_index(), "settings": settings,
+           "settings_writable": lambda: _settings_writable(), "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"],
+           "audit": AUTH["audit"],
+           "region_raw": lambda: getattr(svc["store"].days.get(day_start(replay_now())), "region_raw", {}) or {}}
+_region_matches.install(app, _RM_CTX)
+REGION_MATCHES = _RM_CTX["region_matches"]
+
+
 @app.route("/api/settings/public")
 def api_settings_public():
     """What the portals show: the country and a summary of the constituency (never the AS list in demo mode)."""
@@ -3293,6 +3320,11 @@ def api_settings_public():
     out = {"country": settings.data["country"], "country_name": idx.get("country", settings.data["country"]),
            "restricted": settings.restricted, "networks": len(settings.data["networks"]), "cidrs": len(settings.data["cidrs"]),
            "has_regions": bool(idx.get("regions")), "bbox": _country_bbox(settings.data["country"]),
+           # 2026-11-15, the whole world: "regions", or "whole" (drawn as one area), or None (no map at all)
+           "map_kind": idx.get("kind") or ("regions" if idx.get("regions") else None), "continent": idx.get("continent", ""),
+           "country_names": idx.get("names", []),
+           # the administrator's matches of report region names to this map (region_matches.py): every map uses them
+           "region_matches": REGION_MATCHES.of(settings.data["country"]),
            "tz": settings.tz(),                       # the display time zone today (timezones.py)
            # changes when settings are saved, and stays the same across service restarts
            "version": settings.data.get("updated_at") or "env"}

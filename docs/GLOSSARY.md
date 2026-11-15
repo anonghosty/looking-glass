@@ -352,7 +352,7 @@ A report listing every host that answers a protocol (for example Accessible ISAK
 The networks (AS numbers) and address ranges your CSIRT is responsible for, chosen on the Settings page. When set, both platforms show only records whose host is in the constituency; the top bar then shows 'Constituency: N networks'. Without it they show the whole country.
 
 **Country (Settings)**  
-The country your CSIRT covers, chosen on the Settings page from all 54 African countries. The publicly accessible / vulnerable services platform draws its regions map for it (boundaries from geoBoundaries, CC BY 4.0).
+The country your CSIRT covers, chosen on the Settings page by continent, then country: any country or territory in the world. The publicly accessible / vulnerable services platform draws its regions map for it (boundaries from geoBoundaries, open data; a country without first-level regions there is drawn as one area).
 
 **Regions heatmap**  
 The first-level regions of the country chosen in Settings (provinces, regions, states or counties), coloured by records with the active filters. Hover a region to see which reports, issues, cities and networks make it up; click it to analyse it. Records whose location is known only at country level are counted as Region unknown.

@@ -187,9 +187,13 @@ Plain-language definitions of every Shadowserver report, with Shadowserver's sev
 Shadowserver adds a report type, add an entry with the collection name as key.
 
 ### Region maps (`static/data/adm1/`)
-First-level regions of all 54 African countries (geoBoundaries, CC BY 4.0), with the names geolocation uses.
-`manage/fetch_africa_boundaries.py` downloads them again, and `manage/region_aliases.py` re-links the region names
-found in reports to the map regions (needs Ubuntu's `iso-codes` package).
+A map for every country and territory in the world, grouped by continent in `index.json`. About 200 countries have
+first-level regions (geoBoundaries ADM1); the rest are drawn as one area (geoBoundaries ADM0, or Natural Earth for the
+few geoBoundaries lacks). Each file carries its own source licence. `manage/fetch_world_boundaries.py --out
+static/data/adm1` downloads them all again, and `manage/region_aliases.py` re-links the region names found in reports
+to the map regions (needs Ubuntu's `iso-codes` package). Where a report spells a region in a way the map does not
+know, an administrator links it on the Settings page (Region names, "Match"); the choices are kept in
+`data/region_matches.json`.
 
 ### Offline name sources (`data/names_misp_galaxy.json`, `data/names_attack.json`)
 MISP Galaxy (Malpedia, Botnet and Tool clusters) and MITRE ATT&CK (malware and tools) explain names that neither the

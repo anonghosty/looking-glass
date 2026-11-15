@@ -3,7 +3,7 @@
 <h1 align="center">Looking Glass</h1>
 
 <p align="center"><b>Your Shadowserver reports, replayed as a living picture of your country.</b><br>
-Free and open source (AGPL-3.0) · built in Africa, for African CSIRTs · worldwide coverage in the pipeline<br>
+Free and open source (AGPL-3.0) · built in Africa, for CSIRTs in every country<br>
 <sub>Built by <a href="https://www.linkedin.com/in/iowuraku">Ike Owuraku Amponsah</a>, Cybersecurity Threat Intelligence Analyst</sub></p>
 
 <p align="center"><a href="https://www.bestpractices.dev/projects/16699"><img src="https://www.bestpractices.dev/projects/16699/badge" alt="OpenSSF Best Practices"></a></p>
@@ -21,8 +21,10 @@ Free and open source (AGPL-3.0) · built in Africa, for African CSIRTs · worldw
 
 
 > [!NOTE]
-> **Coverage:** Looking Glass is currently implemented for the **54 African countries** — each with its regions map,
-> settings and constituency filters. **Global coverage (every country) is in the pipeline.**
+> **Coverage:** **every country and territory in the world.** In Settings (and the guided installer) choose the
+> continent, then the country. Countries with first-level regions in the open map data (about 200) get their regions
+> map; the others are drawn as one area. Shadowserver's own spelling of a region is matched to the map, and where it
+> differs, Settings suggests the closest region for the administrator to confirm.
 
 ---
 
@@ -183,7 +185,7 @@ says what changed and takes you there. Administrators can tick <b>Peace of mind<
 </tr>
 </table>
 
-**Also:** all 54 African countries with their regions maps · your constituency only (networks and address ranges) ·
+**Also:** every country in the world, chosen by continent, with its regions map · your constituency only (networks and address ranges) ·
 network names and sectors identified automatically · works on TVs, tablets and phones · PDF reports on every list ·
 a tamper-evident audit log with control checks mapped to NIST SP 800-53 and CIS Controls.
 
@@ -362,7 +364,7 @@ See the [security policy](.github/SECURITY.md).
 
 | | |
 |---|---|
-| Countries | the **54 African countries** today; global coverage is in the pipeline |
+| Countries | **every country and territory** (ISO 3166-1), chosen by continent; regions maps for about 200 of them, the rest drawn as one area |
 | Operating system | **Ubuntu 24.04 or later, Desktop or Server** — on the computer itself, in a virtual machine, or Ubuntu on WSL 2 on Windows 10/11. On Ubuntu Server, create the first administrator through an SSH tunnel (`ssh -L 5000:127.0.0.1:5000 user@server`, then open http://localhost:5000) |
 | Memory and disk | about 2 GB RAM for the platform. Disk: about 100 MB to download (the code itself is about 9 MB; the rest is screenshots, film posters and the history) and about 120 MB for the two Python environments; MongoDB needs space for your reports |
 | Network | the mailbox (IMAP, Gmail API or Microsoft Graph) or Shadowserver's report API, Mapbox for the map tiles; optional Malpedia, RIPEstat, PeeringDB, NVD, CISA KEV and EPSS look-ups |
@@ -420,7 +422,11 @@ and Mapbox GL JS (Mapbox terms of service). The sign-in page's globe uses the la
 Looking Glass itself (`platform/static/data/land-110m.json`).
 
 Data and services keep their own terms: region boundaries from [geoBoundaries](https://www.geoboundaries.org/)
-(CC BY 4.0 — credit geoBoundaries when you show the maps); Shadowserver reports, Mapbox, RIPEstat, PeeringDB, Malpedia,
+(Runfola et al., 2020), each country under the open licence its source gives (CC BY, CC BY-SA, ODbL, public domain
+and national open licences; every map file in `platform/static/data/adm1/` names its source and licence, and
+`index.json` lists them all); maps that are CC BY-SA or ODbL stay under those terms, also in their simplified form.
+A few small territories come from [Natural Earth](https://www.naturalearthdata.com/) (public domain). Credit
+geoBoundaries when you show the maps. Shadowserver reports, Mapbox, RIPEstat, PeeringDB, Malpedia,
 NVD, CISA KEV and FIRST EPSS under their providers' terms.
 
 The Audit portal and its report cite **CIS Critical Security Controls® v8.1** safeguard numbers and titles, unchanged,
@@ -433,7 +439,7 @@ U.S. Government it is not subject to copyright in the United States, and anyone 
 without permission. The control identifiers and titles the Audit portal shows are quoted from NIST's official catalogue
 (Release 5.2.0); please credit NIST as the source.
 
-**Credits:** data — the Shadowserver Foundation (your CSIRT's own reports) · region boundaries — geoBoundaries ·
+**Credits:** data — the Shadowserver Foundation (your CSIRT's own reports) · region boundaries — geoBoundaries, Natural Earth ·
 maps — Mapbox · 3D arcs — deck.gl · network names — RIPEstat and PeeringDB · malware look-ups — Malpedia (Fraunhofer FKIE).
 
 **Global context (third-party): ICHI.** To see how things look globally, the

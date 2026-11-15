@@ -1,8 +1,9 @@
 """Settings shared by both platforms (network communications map and publicly accessible / vulnerable services).
 
-  country       ISO-3166 alpha-2 code of the country the CSIRT covers (default GH). The services platform draws
-                that country's regions (static/data/adm1/<ISO2>.json) and labels; region values equal to the
-                country name mean "region unknown".
+  country       ISO-3166 alpha-2 code of the country the CSIRT covers (default GH): any country in the world, chosen by
+                continent then country. The services platform draws that country's regions (static/data/adm1/
+                <ISO2>.json; a country without first-level regions in the open data is one area) and labels; region
+                values equal to the country name (in any of its spellings) mean "region unknown".
   networks      the constituency: AS numbers the CSIRT is responsible for. Empty = the whole country (everything
                 in the reports).
   cidrs         extra address ranges in the constituency (for example a government network without its own AS).
@@ -81,7 +82,7 @@ class Settings:
         if len(country) != 2 or not country.isalpha():
             errors.append("country must be a two-letter code")
         elif countries and country not in countries:
-            errors.append(f"country {country} is not one of the {len(countries)} countries with region maps")
+            errors.append(f"country {country} is not a country Looking Glass knows (ISO 3166-1, {len(countries)} countries)")
         # the time zone: one of the country's own (or UTC); not given = the country's usual zone
         zone = d.get("timezone")
         if zone in (None, ""):

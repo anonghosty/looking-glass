@@ -41,9 +41,10 @@
 
     <section class="st-card" id="cardCountry">
       <h2>Country <span class="st-for">publicly accessible / vulnerable services</span></h2>
-      <p class="st-hint">The country your CSIRT covers. The publicly accessible / vulnerable services platform draws this country's regions for its regions map and uses its name in labels.
-        Region boundaries for all 54 African countries come from geoBoundaries (open data, CC BY 4.0).</p>
+      <p class="st-hint">The country your CSIRT covers: choose its continent, then the country. The publicly accessible / vulnerable services platform draws this country's regions for its regions map and uses its name in labels.
+        Every country and territory in the world can be chosen. Region boundaries come from geoBoundaries (open data, each country under its own open licence); a country without regions there is drawn as one area, its outline from geoBoundaries or Natural Earth (public domain).</p>
       <div class="st-row">
+        <label class="st-field"><span>Continent</span><select id="continent" class="lg-enhance"></select></label>
         <label class="st-field"><span>Country</span><select id="country" class="lg-enhance"></select></label>
         <div class="st-meta" id="countryMeta"></div>
       </div>
@@ -59,7 +60,10 @@
         <div class="st-match">
           <h3>Regions in the reports and on the map</h3>
           <p class="st-hint" id="matchHint"></p>
-          <div class="table-wrap"><table class="hosts" id="matchTable"><thead><tr><th>Region in the reports</th><th>Records yesterday</th><th>Drawn as</th></tr></thead><tbody></tbody></table></div>
+          <p class="st-hint">Shadowserver spells region names its own way. A name this map does not know gets a suggestion:
+            <b>Use it</b>, choose another region, or say it is the country itself. Your choices are kept for this
+            installation, every map uses them, and each one is in the audit log.</p>
+          <div class="table-wrap"><table class="hosts" id="matchTable"><thead><tr><th>Region in the reports</th><th>Records yesterday</th><th>Drawn as</th><th>Match</th></tr></thead><tbody></tbody></table></div>
         </div>
       </div>
     </section>

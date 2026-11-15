@@ -56,6 +56,22 @@ with tempfile.TemporaryDirectory() as tmp:
     ok("the chain is still whole", v["ok"] and not v["break"], v.get("break"))
     ok("the Audit portal names the event and marks it as an alert",
        audit_portal.LABEL.get("audit_write_failed") and audit_portal.ALERT.search("audit_write_failed"))
+    print("A restart while writes fail (review 2026-11-15: the gap lived in memory only)")
+    a2 = auth.Audit(os.path.join(plat, "data", "audit.log"), logger=log)
+    a2.chain.append = full
+    a2.add("login", user="ann", ip="127.0.0.1", ua="t"); a2.add("login", user="ben", ip="127.0.0.1", ua="t")
+    gap_file = os.path.join(plat, "data", "audit_write_failed.json")
+    ok("the gap is kept on disk while it lasts (owner-only)", os.path.exists(gap_file) and oct(os.stat(gap_file).st_mode & 0o777) == "0o600")
+    a3 = auth.Audit(os.path.join(plat, "data", "audit.log"), logger=log)        # the service restarts
+    ok("after the restart it is picked up again, with its count", (a3.failing or {}).get("count") == 2, str(a3.failing))
+    keys = {x["key"].split(":")[0] for x in alerts.current()}
+    ok("…and the bell says so again at once", "audit-write" in keys)
+    a3.add("logout", user="ann", ip="127.0.0.1", ua="t")
+    recs = a3.records()
+    ok("the next entry written records the gap, with the restart", recs[-2]["event"] == "audit_write_failed"
+       and "2 audit entries" in recs[-2]["detail"] and "restarted 1 time" in recs[-2]["detail"], recs[-2]["detail"])
+    ok("…and the file is gone", not os.path.exists(gap_file))
+    ok("the chain is still whole", a3.chain.verify()["ok"])
     SA.note_audit_write(None)
     SA._AUDIT["recovered"] = None
 

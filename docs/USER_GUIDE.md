@@ -213,6 +213,10 @@ The same layout, without a map:
 - **Services constellation:** one bubble per service, sized by its records; a dot flies in as each record replays.
   Click a bubble to analyse that service.
 - **Regions map:** your country's regions coloured by records; hover for what makes up a region, click to analyse it.
+  Scroll (or pinch) to zoom in where the pointer is, drag to move, or use the +, − and Fit buttons. When the records
+  sit in a small part of the country (islands far apart, such as Seychelles or Kiribati), the map opens framed on
+  them and says so; Fit shows the whole country. A region too small to see gets a dot you can hover and click. The
+  Executive portal and its PDF use the same frame; on the portal, the link under the map switches to the whole country.
 - **Filters:** only hosts with issues, report family (exposed, population, identified device, compromised,
   blocklisted), report, severity, issue (CVE, POODLE, expired certificate, exposed admin panel...), region, city,
   network, port, vendor, device type, **Hosts in several reports** and **Hosts with multiple issues**.
@@ -810,7 +814,12 @@ platform full screen. The display adapts to TVs and weaker devices by itself (`?
 ![Settings](media/screens/60-settings.png)
 
 **Settings** (gear on the intro page, or the button in the top bar):
-- **Country:** any of the 54 African countries. The services platform shows its regions and uses its name.
+- **Continent and country:** any country or territory in the world: choose its continent, then the country. The
+  services platform shows its regions (or the whole country as one area, where the open map data has no regions) and
+  uses its name. Below the map, **Regions in the reports and on the map** lists each region name in yesterday's
+  reports as Shadowserver spells it. A name the map does not know gets the closest region as a suggestion: **Use** it,
+  choose another region, or say it is the country itself. Your choices are kept for this installation, every map uses
+  them, and each one is in the audit log.
 - **Time zone:** the zone your team reads its times in, next to the country (it starts at the country's usual zone;
   DR Congo offers Kinshasa and Lubumbashi; UTC can always be chosen). Shadowserver writes every time in UTC and a day
   runs 00:00 to 24:00 UTC, as its reports do, so Looking Glass keeps that and **also** shows each time in this zone:
