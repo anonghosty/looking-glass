@@ -53,7 +53,7 @@ def _get(url, timeout=20):
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
     for attempt in range(4):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with urllib.request.urlopen(req, timeout=timeout) as r:  # nosec B310  # fixed https sources (RIPEstat, PeeringDB)
                 return json.load(r)
         except urllib.error.HTTPError as e:
             if e.code in (429, 502, 503, 504) and attempt < 3:

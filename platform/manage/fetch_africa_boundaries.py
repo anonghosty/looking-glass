@@ -59,7 +59,7 @@ def compact(geom, step):
 def fetch(entry):
     iso2, iso3, name = entry
     try:
-        with urllib.request.urlopen(URL.format(iso3=iso3), timeout=120) as r:
+        with urllib.request.urlopen(URL.format(iso3=iso3), timeout=120) as r:  # nosec B310  # fixed https URL (geoBoundaries)
             g = json.load(r)
     except Exception as e:
         return iso2, None, f"download failed: {e}"

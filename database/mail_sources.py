@@ -142,7 +142,7 @@ class ImapSource:
                 seq = item[0].split()[0]
                 hdr = email.message_from_bytes(item[1])
                 mid = (hdr.get("Message-ID") or "").strip()
-                old = "imap:" + (mid or hashlib.sha1(item[1]).hexdigest())
+                old = "imap:" + (mid or hashlib.sha1(item[1], usedforsecurity=False).hexdigest())
                 m = re.search(rb"\bUID (\d+)", item[0])
                 key = f"imap:{getattr(self, 'uidvalidity', '0')}:{m.group(1).decode()}" if m else old
                 self.legacy[key] = old
@@ -160,7 +160,7 @@ class ImapSource:
             for item in data:
                 if isinstance(item, tuple) and len(item) > 1:
                     seq = item[0].split()[0]
-                    yield keys.get(seq, "imap:" + hashlib.sha1(item[1]).hexdigest()), item[1]
+                    yield keys.get(seq, "imap:" + hashlib.sha1(item[1], usedforsecurity=False).hexdigest()), item[1]
 
     def close(self):
         if self.imap:

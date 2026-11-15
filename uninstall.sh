@@ -227,6 +227,7 @@ if [ $RM_DB = 1 ]; then
   [ -n "$PY" ] || [ $DRY = 1 ] || die "no Python environment with pymongo here (database/.venv, platform/.venv): the database was NOT deleted."
   # the administrator account: where the installer keeps it (root only), else database/.env when it is not one of ours
   ADMIN_ENV=$(mktemp); chmod 600 "$ADMIN_ENV"; trap 'rm -f "$ADMIN_ENV"' EXIT
+  # shellcheck disable=SC2024  # only reading needs root; the copy goes to this user's own temporary file
   if [ $DRY = 0 ] && sudo -n test -f "$ETC_LG/mongo-admin.env" 2>/dev/null; then sudo -n cat "$ETC_LG/mongo-admin.env" > "$ADMIN_ENV"
   elif [ -f "$DB_DIR/.env" ] && ! [[ $(env_get "$DB_DIR/.env" MONGO_USER) =~ ^(lookingglass_pipeline|lookingglass_ro)?$ ]]; then cp "$DB_DIR/.env" "$ADMIN_ENV"
   fi

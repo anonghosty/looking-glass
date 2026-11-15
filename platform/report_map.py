@@ -46,6 +46,8 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
+import https_only
+
 REPO = "The-Shadowserver-Foundation/report_schema"
 API_COMMIT = f"https://api.github.com/repos/{REPO}/commits/main"
 RAW = "https://raw.githubusercontent.com/" + REPO + "/{sha}/{file}"
@@ -101,9 +103,10 @@ def _write(path, data):
 
 def _get(url, headers=None, timeout=25):
     """(status, body bytes, response headers); 304 gives an empty body. Raises on network errors."""
+    # REPORT_MAP_FEED_URL comes from .env: https only, redirects included (https_only.py; NotHttps is a ValueError)
     req = urllib.request.Request(url, headers={"User-Agent": UA, **(headers or {})})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with https_only.open(req, timeout=timeout) as r:
             body = r.read(MAX_BYTES + 1)
             if len(body) > MAX_BYTES:
                 raise ValueError(f"{url}: larger than {MAX_BYTES} bytes")

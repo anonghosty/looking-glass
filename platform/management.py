@@ -661,7 +661,7 @@ def register(app, ctx):
     def fkey(platform, args, d_mask):
         sel = {k: args.get(k, "") for k in FILTERS[platform] if args.get(k)}
         raw = json.dumps([sel, bool(d_mask), ctx["scope_text"]()], sort_keys=True)
-        return hashlib.sha1(raw.encode()).hexdigest()[:12]
+        return hashlib.sha1(raw.encode(), usedforsecurity=False).hexdigest()[:12]
 
     def sig_of(platform, start):
         """Rows per report of a day in MongoDB (cheap indexed counts), cached for 10 minutes."""

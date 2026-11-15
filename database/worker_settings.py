@@ -129,7 +129,7 @@ CONFIRM_DIR = "confirmed_requests"
 ZIP_HIGHER_IS_LOOSER = ("ZIP_MAX_UNPACKED_MB", "ZIP_MAX_RATIO", "ZIP_MAX_FILES")
 ZIP_LOWER_IS_LOOSER = ("ZIP_KEEP_FREE_MB",)
 # control characters (C0, DEL, C1 such as \x9b) and the bidirectional overrides that reorder what a terminal shows
-_UNSAFE = re.compile(r"[\x00-\x1f\x7f-\x9f‎‏‪-‮⁦-⁩]")
+_UNSAFE = re.compile(r"[\x00-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u2066-\u2069]")
 
 
 def clean(value, limit=300) -> str:

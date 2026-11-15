@@ -30,6 +30,8 @@ the few devices that matter, and reports you can send. One modest server and a g
 [Read the user guide](USER_GUIDE.md){ .md-button }
 [See it used](USE_CASES.md){ .md-button }
 
+<p class="lg-badges"><a href="https://www.bestpractices.dev/projects/16699"><img src="https://www.bestpractices.dev/projects/16699/badge" alt="OpenSSF Best Practices"></a></p>
+
 </div>
 
 <div class="lg-hero-film" markdown>

@@ -114,7 +114,7 @@ def install(app, ctx):
                 if cols:
                     sel = ", ".join(c if c in cols else f"'' AS {c}" for c in
                                     ("at", "from_domain", "signer", "result", "reason", "subject", "files", "action", "alg", "bits", "selector"))
-                    rows = [dict(r) for r in con.execute(f"SELECT {sel} FROM mail_auth WHERE at >= ? AND at < ? ORDER BY at", (lo, hi))]
+                    rows = [dict(r) for r in con.execute(f"SELECT {sel} FROM mail_auth WHERE at >= ? AND at < ? ORDER BY at", (lo, hi))]  # nosec B608  # column names from the fixed list above, values bound
                 # reports fetched through Shadowserver's report API (report_api.py): no e-mail, so no DKIM; the
                 # requests are signed with the API secret (HMAC2) and the files come from Shadowserver over HTTPS
                 if con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='api_files'").fetchone():

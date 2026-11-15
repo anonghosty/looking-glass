@@ -60,7 +60,7 @@ def download(url):
     fd, tmp = tempfile.mkstemp(prefix=".lg-dl-", dir=DATA)
     try:
         size = 0
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as r, os.fdopen(fd, "wb") as out:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r, os.fdopen(fd, "wb") as out:  # nosec B310  # fixed https sources; the final address is checked below
             if not r.geturl().startswith("https://"):
                 raise RuntimeError(f"redirected away from https: {r.geturl()}")
             while True:

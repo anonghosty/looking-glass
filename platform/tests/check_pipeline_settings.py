@@ -338,7 +338,8 @@ try:
         seen.append((req.full_url, req.data, req.get_header("Hmac2")))
         ans = {"pong": "2026-11-12 10:00:00"} if req.full_url.endswith("/test/ping") else ["example"]
         return Resp(json.dumps(ans).encode())
-    PS.urllib.request.urlopen = fake_urlopen
+    # the call goes through https_only (https, redirects included): its opener is the one replaced
+    PS.https_only._OPENER = type("FakeOpener", (), {"open": staticmethod(lambda req, timeout=None: fake_urlopen(req, timeout))})()
     okp, m = PS.ping("KEY12345678", "SECRET-abc-123")
     sign = lambda b: hmac.new(b"SECRET-abc-123", b, hashlib.sha256).hexdigest()
     ok("the check is test/ping then reports/subscribed on Shadowserver's API, the key in the JSON body, each body signed with the secret (HMAC2)",

@@ -111,6 +111,7 @@ run "one worker process (gunicorn refuses more)" $PY tests/check_single_worker.p
 run "audit write failures: bell, then the gap in the log" $PY tests/check_audit_write_failure.py
 run "CSP: exact outside files, no whole CDN; local globe map" $PY tests/check_csp_sources.py
 run "reverse proxy: the right-most address, never a visitor's 127.0.0.1" $PY tests/check_proxy_chain.py
+run "addresses from .env: https only (feed, report API)" $PY tests/check_https_only.py
 run "request times in UTC (one day copy)" $PY tests/check_time_offsets.py
 run "masked views: no host-name filter" $PY tests/check_masked_hostname.py
 run "researchers: no code below 5 hosts" $PY tests/check_small_codes.py

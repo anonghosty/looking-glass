@@ -708,7 +708,7 @@ after_failure() {  # KEY WHAT REASON
   else
     printf '\n%sCheck failed: %s%s\n%s\n' "$RED$B" "$2" "$R" "$reason"
     local c; read -rp "  [r]etry, [c]ontinue anyway, [q]uit? [r]: " c; c="${c:-r}"
-    case "${c,,}" in c*) c=continue ;; q*) c=cancel ;; *) c=retry ;; esac
+    case "${c,,}" in c*) c="continue" ;; q*) c="cancel" ;; *) c="retry" ;; esac
   fi
   case "$c" in retry) for k in "${@:4}"; do unset "ANS[$k]"; done; return 0 ;; continue) return 1 ;; *) cancelled ;; esac
 }
@@ -788,7 +788,9 @@ mongo_local_questions() {
     ADMIN_ENV="$DB_DIR/.env"; [ -f "$DB_DIR/.env.before-pipeline-account" ] && ADMIN_ENV="$DB_DIR/.env.before-pipeline-account"
     ETC_TMP=""
     if sudo -n test -f /etc/looking-glass/mongo-admin.env 2>/dev/null; then
-      ETC_TMP="$(umask 077; mktemp)"; sudo -n cat /etc/looking-glass/mongo-admin.env > "$ETC_TMP" 2>/dev/null && ADMIN_ENV="$ETC_TMP"
+      ETC_TMP="$(umask 077; mktemp)"
+      # shellcheck disable=SC2024  # only reading needs root; the copy goes to this user's own 0600 temporary file
+      sudo -n cat /etc/looking-glass/mongo-admin.env > "$ETC_TMP" 2>/dev/null && ADMIN_ENV="$ETC_TMP"
     fi
     OLD_MUSER="$(env_get "$ADMIN_ENV" MONGO_USER)"; OLD_MPW="$(env_get "$ADMIN_ENV" MONGO_PASSWORD)"
     ADMIN_FROM="${ADMIN_ENV#"$ROOT/"}"; [ -n "$ETC_TMP" ] && [ "$ADMIN_ENV" = "$ETC_TMP" ] && ADMIN_FROM=/etc/looking-glass/mongo-admin.env
@@ -839,6 +841,7 @@ else
   if [ "$MONGO_MODE" = existing ] && [ "$MDB_INSTALLED" = 1 ] && [ "$MDB_ACTIVE" = 0 ]; then
     ask_yesno START_MONGO "MongoDB is not running" "The MongoDB installed here is not running. Start it now (and at every boot)?" yes
     if [ "$REPLY" = yes ]; then
+      # shellcheck disable=SC2024  # the installer's log is this user's own file: only systemctl needs root
       sudo systemctl enable --now mongod >> "$LOG" 2>&1 && sleep 3 && MDB_ACTIVE=1 && passed "MongoDB started (port $MDB_PORT)." \
         || msg "MongoDB did not start" "sudo systemctl start mongod failed. See: sudo journalctl -u mongod -n 30"
     fi
@@ -1385,6 +1388,7 @@ if [ $WANT_PF = 1 ]; then
   scheme=http; [ -f "$PF_DIR/data/tls/cert.pem" ] && scheme=https
   ok=0; for _ in $(seq 1 60); do curl -sfk "$scheme://127.0.0.1:$LG_PORT/healthz" >/dev/null 2>&1 && { ok=1; break; }; sleep 1; done
   if [ $ok = 0 ]; then
+    # shellcheck disable=SC2024  # the installer's log is this user's own file: only reading the journal needs root
     sudo journalctl -u "$SERVICE_NAME" -n 40 --no-pager >> "$LOG" 2>&1 || true
     gauge_close; fail "The $SERVICE_NAME service did not start."
   fi

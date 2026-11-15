@@ -6,6 +6,8 @@
 Free and open source (AGPL-3.0) · built in Africa, for African CSIRTs · worldwide coverage in the pipeline<br>
 <sub>Built by <a href="https://www.linkedin.com/in/iowuraku">Ike Owuraku Amponsah</a>, Cybersecurity Threat Intelligence Analyst</sub></p>
 
+<p align="center"><a href="https://www.bestpractices.dev/projects/16699"><img src="https://www.bestpractices.dev/projects/16699/badge" alt="OpenSSF Best Practices"></a></p>
+
 <p align="center">
   <a href="https://looking-glass-gh.readthedocs.io/"><b>Documentation</b></a> ·
   <a href="#quick-start">Quick start</a> ·
@@ -334,7 +336,9 @@ from the other permissions. Details: [User guide → Roles](docs/USER_GUIDE.md#r
   checks each protection on your own installation. See [SECURITY.md](docs/SECURITY.md).
 - **No secrets in the code:** credentials live only in `.env` files, which `.gitignore` keeps out of the repository.
 
-Please report security problems **privately** to the maintainers rather than in a public issue.
+Please report security problems **privately** through the repository's Security tab
+([Report a vulnerability](https://github.com/anonghosty/looking-glass/security/advisories/new)), not in a public issue.
+See the [security policy](.github/SECURITY.md).
 
 ## Looking Glass, IntelMQ and Elastic
 

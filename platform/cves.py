@@ -114,7 +114,7 @@ class CveIntel:
     def _get(self, url, headers=None, timeout=30):
         h = {"User-Agent": "LookingGlass/1.0", "Accept": "application/json", **(headers or {})}
         try:
-            with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=timeout) as r:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=timeout) as r:  # nosec B310  # fixed https sources (NVD, KEV, EPSS, CVE.org)
                 return json.load(r)
         except urllib.error.HTTPError as e:
             if e.code == 404:

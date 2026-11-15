@@ -3,7 +3,7 @@
 # its data, so they run on the server, not here.
 # Hardened 2026-11-15 (review follow-up item 7): every action is pinned to a full commit (a moved tag cannot run new code
 # here), MongoDB runs in a container pinned to its image digest for the checks that need a database, and the libraries
-# are checked against known vulnerabilities (pip-audit). Update a pin on purpose, with its version in the comment, and
+# are checked against known vulnerabilities (pip-audit). Static analysis (Bandit, ShellCheck) runs in its own job. Update a pin on purpose, with its version in the comment, and
 # confirm it is the action's own tag (a fork's commit can be reached by the same URL):
 #   git ls-remote --tags https://github.com/actions/checkout | grep <commit>
 name: checks
@@ -20,6 +20,7 @@ jobs:
     env:
       MONGO_HOST: 127.0.0.1
       MONGO_PORT: "27017"
+      MONGO_DB: shadowserver     # empty here: the checks use made-up rows when it has none
       LG_QUIET: "1"
       THREATMAP_SCHEDULE: "0"
     steps:
@@ -66,6 +67,30 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pip-audit==2.10.1
           pip-audit -r platform/requirements.txt -r database/requirements.txt --progress-spinner off
+  static-analysis:
+    # Static code analysis on every push and pull request, so on every release (OpenSSF Best Practices, 2026-11-15):
+    # Bandit for the Python code (fails on medium or high severity; the low ones are listed) and ShellCheck for the
+    # shell scripts (fails on warnings). A finding kept on purpose is marked where it is, with the reason:
+    # "# nosec B310  # why" (Bandit) or "# shellcheck disable=SC2024  # why" (ShellCheck).
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262      # v4.4.0 (tag in actions/checkout)
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0 (tag in actions/setup-python)
+        with:
+          python-version: "3.12"
+      - name: Install Bandit and ShellCheck
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install bandit==1.9.4 shellcheck-py==0.11.0.1
+      - name: Bandit (Python)
+        run: |
+          bandit -r platform database -x '*/tests/*' -ll
+          echo "::group::Low-severity notes (listed, not failing)"
+          bandit -r platform database -x '*/tests/*' -q --exit-zero -f custom --msg-template '{test_id} {relpath}:{line} {msg}'
+          echo "::endgroup::"
+      - name: ShellCheck (shell scripts)
+        run: |
+          find . -name '*.sh' -not -path './.git/*' -print0 | xargs -0 shellcheck -S warning
   unit:
     runs-on: ubuntu-24.04
     env:
@@ -90,7 +115,7 @@ jobs:
         run: |
           set -e
           for t in test_privacy_roles test_schedule check_ip_find check_host_label_text check_masked_fields check_banner_inbound check_data_access \
-                   check_auth_offline check_login_throttle check_single_worker check_audit_write_failure check_csp_sources check_proxy_chain check_password_policy check_csrf_routes check_settings_access \
+                   check_auth_offline check_login_throttle check_single_worker check_audit_write_failure check_csp_sources check_proxy_chain check_https_only check_password_policy check_csrf_routes check_settings_access \
                    check_first_admin_proxy check_retest_reset check_workflow_fixes check_calc_offline \
                    check_audit_portal check_device_note check_cve_titles check_ci_pins check_audit_checkpoint check_backup_scripts check_auditor_portal check_pipeline_settings check_scope_reload check_libraries \
                    check_cve_backoff check_uninstall check_timezones check_special_reports check_report_map \

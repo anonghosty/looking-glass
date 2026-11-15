@@ -43,7 +43,7 @@ chmod 700 "$tmp"
 if tar -xzf "$f" -C "$tmp" 2>/dev/null; then row OK unpack "$(find "$tmp" -type f | wc -l) files"; else row FAIL unpack "the archive cannot be unpacked"; echo "RESULT: NOT restorable"; exit 1; fi
 r="$tmp/$name"
 [ -f "$r/.env" ] && row OK ".env" "present ($(grep -c '=' "$r/.env") settings)" || row FAIL ".env" "missing: the database and mail credentials would be lost"
-cd "$project"
+cd "$project" || { echo "RESULT: cannot open $project"; exit 1; }
 "$py" - "$r/data" <<'EOF' || fails=$((fails + 1))
 import json, os, sys
 d = sys.argv[1]

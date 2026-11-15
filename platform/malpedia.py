@@ -56,7 +56,7 @@ class Malpedia:
         req = urllib.request.Request(BASE + path, headers={"Authorization": "apitoken " + self.token,
                                                            "User-Agent": "LookingGlass/1.0", "Accept": "application/json"})
         try:
-            with urllib.request.urlopen(req, timeout=20) as r:
+            with urllib.request.urlopen(req, timeout=20) as r:  # nosec B310  # fixed https BASE (Malpedia)
                 data = json.load(r)
         except urllib.error.HTTPError as e:
             if e.code == 404:

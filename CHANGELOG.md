@@ -5,6 +5,26 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-15 (8)
+### Added
+- Static code analysis on every push, pull request and release: Bandit for the Python code (no medium or high finding
+  allowed) and ShellCheck for the shell scripts (no warning allowed), as a job in the GitHub checks. Each finding kept
+  on purpose is marked in the code with its reason; CONTRIBUTING.md names both as the project's code standard.
+- A security policy GitHub shows under Security → Policy, pointing to private vulnerability reporting.
+- README and the documentation site's home page: the OpenSSF Best Practices badge.
+
+### Fixed
+- GitHub checks: the two checks that need a database now run against the empty database the checks start (made-up
+  rows, documentation addresses only); before, they failed there because they expected a database with reports.
+- Three maintenance scripts (the restore check, the administrator-database tests and the pipeline's set-up check) stop
+  when they cannot change into their folder, instead of running on in the wrong one.
+
+### Security
+- The report API address and the report feed address (both settable in `.env`) are refused unless they use https, and
+  a redirect away from https is refused too, so neither can read a local file or send the API key in clear.
+- Two patterns in the code that held invisible text-direction characters are now written as visible escapes (same
+  behaviour).
+
 ## 2026-11-15 (7)
 ### Added
 - Guided installer: HTTPS with a certificate bought for a domain. The certificate is checked before anything is

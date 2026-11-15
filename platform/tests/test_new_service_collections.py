@@ -21,7 +21,7 @@ if client is None:
     print("SKIPPED: needs a MongoDB account that may create databases. The platform's and the pipeline's are limited, "
           "as they should be, and the administrator account is root-only: run tests/run_admin_db_tests.sh (asks for sudo once).")
     sys.exit(77)
-real = client[os.environ["MONGO_DB"]]
+real = client[os.environ.get("MONGO_DB", "shadowserver")]
 name = f"lg_svctest_{os.getpid()}"
 test = client[name]
 fails = 0
@@ -35,6 +35,11 @@ def ok(label, cond, info=""):
 
 try:
     sample = [{k: v for k, v in d.items() if k != "_id"} for d in real["scan_ssh"].find().limit(3)]
+    if not sample:            # an empty database (the GitHub checks): made-up rows, documentation addresses only
+        import datetime
+        sample = [{"extracted_date": datetime.datetime(2026, 1, 1, 9, i), "filename": "2026-01-01-scan_ssh-example.csv",
+                   "ip": f"203.0.113.{30 + i}", "geo": "GH", "city": "ACCRA", "region": "GREATER ACCRA", "asn": 64501,
+                   "port": 22, "severity": "medium", "tag": "ssh"} for i in range(3)]
     test["scan_ssh"].insert_many([dict(d) for d in sample]); test["scan_ssh"].create_index("filename")
     reg = ServiceRegistry(test)
     ok("start: 1 report", [i["name"] for i in reg.get()] == ["scan_ssh"])

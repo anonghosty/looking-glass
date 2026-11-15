@@ -23,7 +23,7 @@ sig = app.store.signature(start)
 print(f"MongoDB check for {day}: {len(sig)} reports, {sum(sig.values())} rows (files of {day} and the next day), {time.time() - t0:.2f}s")
 for k, v in sorted(sig.items(), key=lambda x: -x[1]):
     print(f"  {k:40s} {v:7d}")
-clock = json.load(urllib.request.urlopen("http://127.0.0.1:5000/api/clock", timeout=30))
+clock = json.load(urllib.request.urlopen("http://127.0.0.1:5000/api/clock", timeout=30))  # nosec B310  # this computer's own service
 if clock["replay_day"] == day:
     served = {r["source"]: r["rows"] for r in clock["reports"]}
     missing = [k for k in sig if k not in served]

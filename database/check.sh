@@ -3,7 +3,7 @@
 # MongoDB auth, indexes, document structure, data folders and the IMAP login.
 # Exit code 0 = everything required is OK. Needs no sudo.
 set -uo pipefail
-cd "$(dirname "$(readlink -f "$0")")"
+cd "$(dirname "$(readlink -f "$0")")" || exit 1
 
 env_get() {
   local v

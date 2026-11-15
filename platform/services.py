@@ -341,7 +341,7 @@ class ServiceStore:
         day = Day(start, events)
         day.per_source, day.arrived, day.sig = per, arrived, sig
         day.raw_total, day.asn_raw, day.region_raw = raw_total, asn_raw, region_raw
-        day.version = hashlib.md5(json.dumps([sorted(per.items()), st.version if st else 0]).encode()).hexdigest()[:10]
+        day.version = hashlib.md5(json.dumps([sorted(per.items()), st.version if st else 0]).encode(), usedforsecurity=False).hexdigest()[:10]
         if self.log:
             self.log.warning("Services: loaded %s: %d records from %d reports in %.1fs", start.date(), len(events), len(per), time.time() - t0)
         return day

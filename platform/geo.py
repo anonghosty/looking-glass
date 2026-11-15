@@ -55,7 +55,7 @@ class Geocoder:
             params["country"] = cc.lower()
         url = GEOCODE_URL + "?" + urllib.parse.urlencode(params)
         try:
-            with urllib.request.urlopen(url, timeout=5) as resp:
+            with urllib.request.urlopen(url, timeout=5) as resp:  # nosec B310  # fixed https GEOCODE_URL (Mapbox)
                 data = json.load(resp)
             feats = data.get("features") or []
             if feats:

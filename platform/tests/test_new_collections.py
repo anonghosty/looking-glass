@@ -20,7 +20,7 @@ if client is None:
     print("SKIPPED: needs a MongoDB account that may create databases. The platform's and the pipeline's are limited, "
           "as they should be, and the administrator account is root-only: run tests/run_admin_db_tests.sh (asks for sudo once).")
     sys.exit(77)
-real = client[os.environ["MONGO_DB"]]
+real = client[os.environ.get("MONGO_DB", "shadowserver")]
 name = f"lg_selftest_{os.getpid()}"
 test = client[name]
 fails = 0
@@ -34,6 +34,11 @@ def ok(label, cond):
 
 try:
     sample = [{k: v for k, v in d.items() if k != "_id"} for d in real["event4_sinkhole_http"].find().limit(3)]
+    if not sample:            # an empty database (the GitHub checks): made-up rows, documentation addresses only
+        import datetime
+        sample = [{"extracted_date": datetime.datetime(2026, 1, 1, 10, i), "filename": "2026-01-01-event4_sinkhole_http-example.csv",
+                   "src_ip": f"192.0.2.{10 + i}", "src_geo": "GH", "src_city": "ACCRA", "src_asn": 64500,
+                   "dst_ip": f"198.51.100.{20 + i}", "dst_geo": "DE", "severity": "medium", "infection": "example-bot"} for i in range(3)]
     test["event4_sinkhole_http"].insert_many([dict(d) for d in sample])
     test["event4_sinkhole_http"].create_index("filename")
     reg = Registry(test)

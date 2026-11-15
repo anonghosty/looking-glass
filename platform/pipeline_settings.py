@@ -35,6 +35,8 @@ import time
 import urllib.error
 import urllib.request
 
+import https_only
+
 from flask import g, jsonify, request
 from werkzeug.security import check_password_hash
 
@@ -49,13 +51,18 @@ NOT_HERE = "The database pipeline is not on this computer: its settings are in i
 def _api(method, key, secret, url=None, timeout=15):
     """(answer, error): one call to Shadowserver's report API, the JSON body (with apikey) signed with HMAC-SHA256 of
     the secret in the HMAC2 header, as Shadowserver documents it. The key and secret never appear in an error."""
+    base = (url or API_URL).rstrip("/")
+    if not base.lower().startswith("https://"):       # SHADOWSERVER_API_URL comes from .env: the key goes only over https
+        return None, "The report API address must start with https://."
     body = json.dumps({"apikey": key}).encode()
     sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-    req = urllib.request.Request((url or API_URL).rstrip("/") + "/" + method, data=body, method="POST",
+    req = urllib.request.Request(base + "/" + method, data=body, method="POST",
                                  headers={"Content-Type": "application/json", "HMAC2": sig, "User-Agent": "LookingGlass"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with https_only.open(req, timeout=timeout) as r:     # redirects away from https refused too
             return json.loads(r.read(65536).decode("utf-8", "replace") or "null"), ""
+    except https_only.NotHttps:
+        return None, "Shadowserver's answer redirected away from https; the call was stopped."
     except urllib.error.HTTPError as exc:
         try:
             ans = json.loads(exc.read(65536).decode("utf-8", "replace") or "{}")

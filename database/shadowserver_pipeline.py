@@ -362,7 +362,7 @@ def _filename_from_response(url: str, headers) -> str:
     if match:
         return match[0]
     name = os.path.basename(urlparse(url).path)
-    return name or f"download_{hashlib.sha1(url.encode()).hexdigest()[:16]}.bin"
+    return name or f"download_{hashlib.sha1(url.encode(), usedforsecurity=False).hexdigest()[:16]}.bin"
 
 
 def _download_link(session, url: str, dest: Path, max_bytes: int = 2048 * 2**20):

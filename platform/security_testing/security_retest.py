@@ -53,7 +53,7 @@ def _clear_login_counters():
     try:
         req = urllib.request.Request(f"{B}/api/selftest/reset-login-counters", data=b"{}", method="POST",
                                      headers={"Content-Type": "application/json"})
-        d = json.load(urllib.request.urlopen(req, timeout=30))
+        d = json.load(urllib.request.urlopen(req, timeout=30))  # nosec B310  # this installation's own address (B)
         print(f"Cleared this computer's login counters first ({d.get('cleared', 0)}); the service keeps running.")
         return True
     except urllib.error.HTTPError as e:

@@ -8,10 +8,11 @@
 #
 #   tests/run_admin_db_tests.sh
 set -uo pipefail
-cd "$(dirname "$(readlink -f "$0")")/.."
+cd "$(dirname "$(readlink -f "$0")")/.." || exit 1
 ETC=/etc/looking-glass/mongo-admin.env
 tmp=$(umask 077; mktemp)
 trap 'shred -u "$tmp" 2>/dev/null || rm -f "$tmp"' EXIT
+# shellcheck disable=SC2024  # only reading needs root; the copy goes to this user's own 0600 temporary file
 sudo cat "$ETC" > "$tmp" || { echo "Could not read $ETC with sudo."; exit 1; }
 export LG_MONGO_ADMIN_FILE=$tmp
 fail=0

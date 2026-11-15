@@ -42,6 +42,10 @@ reports. The demo data (`lg_demo`) is enough for nearly every change.
 - **Text shows in full.** No cut-off text on pages or in PDFs; lists wrap.
 - **Readable names, not internal identifiers**, wherever people read them.
 - **Documentation** is updated in the same pull request when behaviour or a setting changes.
+- **Code standard:** Python passes [Bandit](https://bandit.readthedocs.io/) with no medium or high finding and shell
+  scripts pass [ShellCheck](https://www.shellcheck.net/) with no warning (both run in CI). A finding kept on purpose is
+  marked where it is, with the reason: `# nosec B310  # why` or `# shellcheck disable=SC2024  # why`. Follow the style
+  of the file you change (PEP 8 for new Python modules).
 
 ## Checks to run
 

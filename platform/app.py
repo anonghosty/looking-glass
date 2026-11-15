@@ -368,7 +368,7 @@ class DayStore:
         day.arrived = arrived
         day.sig = sig
         day.raw_total, day.asn_raw = raw_total, asn_raw
-        day.version = hashlib.md5(json.dumps([sorted(per.items()), settings.version]).encode()).hexdigest()[:10]
+        day.version = hashlib.md5(json.dumps([sorted(per.items()), settings.version]).encode(), usedforsecurity=False).hexdigest()[:10]
         return day
 
     def reset(self):
