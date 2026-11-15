@@ -118,6 +118,13 @@ class FakeDB:
         return C()
 
 
+_mono = LS.time.monotonic
+LS.time.monotonic = lambda: 5.0          # a machine up for 5 seconds (GitHub's fresh runners, a server just rebooted)
+_fresh = FakeDB(); _fresh.marks = [{"_id": "scan_http|x", "day": start.strftime("%Y-%m-%d"), "at": 1, "rows": 1}]
+ok("just after the machine starts, the marks are read too (not taken as 'looked, none there')",
+   LS.Stamps(_fresh).of([start.strftime("%Y-%m-%d")]) is not None)
+LS.time.monotonic = _mono
+
 fdb = FakeDB()
 ks = Store(); ks.db = fdb; ks._stamps = LS.Stamps(fdb)
 ks.counts = {"scan_http": 5}

@@ -77,6 +77,18 @@ ok("qsnatch: its 1 record with the domain looked up, its own tags", qs.get("reco
 ok("…the sets that travel with it on the same record are given per place",
    any(SHARED in c_["items"] for c_ in (av.get("combinations") or []) + ([av["single"]] if av.get("single") else [])))
 ok("what Looking Glass stated comes with it", d.get("verdict") == "Shared by two names" and SHARED in d.get("text", ""))
+print("The 5-device rule for codes, per viewer (review of 6da6a80)")
+import small_codes  # noqa: E402
+_sees = small_codes.viewer_sees_hosts
+codes = lambda ans: [c_.get("code") for p in ans.get("places", []) for c_ in (p.get("combinations") or []) + ([p["single"]] if p.get("single") else [])]
+small_codes.viewer_sees_hosts = lambda: True            # an admin (sees the devices) opens it first...
+admin = c.get(f"/api/intel/match?kind=domain&value={SHARED}").get_json()
+small_codes.viewer_sees_hosts = lambda: False           # ...then a researcher, within the hour, from the cache
+res = c.get(f"/api/intel/match?kind=domain&value={SHARED}").get_json()
+small_codes.viewer_sees_hosts = _sees
+ok("the admin gets the codes of patterns on fewer than 5 devices", any(codes(admin)), str(codes(admin)))
+ok("…the researcher after them does not (the cache keeps the scan, not the admin's answer)",
+   codes(res) and not any(codes(res)), str(codes(res)))
 print("No hosts, no free search")
 body = r.get_data(as_text=True)
 ok("no device address in the answer", not any(ip in body for ip in ("192.0.2.", "198.51.100.")))

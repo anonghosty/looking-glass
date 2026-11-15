@@ -20,11 +20,12 @@ EXISTS_EVERY = 600
 class Stamps:
     def __init__(self, db):
         self.db = db
-        self._exists = (0.0, False)
+        self._exists = None              # not looked yet (a clock value of 0 read as "just looked" on a machine up for
+                                         # less than EXISTS_EVERY: GitHub's fresh runners, a server just rebooted)
 
     def _there(self):
-        at, ok = self._exists
-        if time.monotonic() - at > EXISTS_EVERY:
+        at, ok = self._exists or (None, False)
+        if at is None or time.monotonic() - at > EXISTS_EVERY:
             try:
                 ok = COLLECTION in self.db.list_collection_names()
             except Exception:                                  # noqa: BLE001

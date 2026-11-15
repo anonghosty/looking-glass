@@ -141,12 +141,19 @@ class MatchView:
         comms, svc = self.intel._days()
         days_key = (tuple((d.start, getattr(d, "serial", 0), len(d.events)) for d in comms)
                     + tuple((d.start, getattr(d, "serial", 0), len(d.events)) for d in svc))
+        # only the scan is kept, never a finished answer: what a viewer may see (combination codes under small_codes'
+        # rule) is worked out for each request, as Intel.gathered does (review of 6da6a80: an admin's answer reached
+        # a researcher from the cache)
         ck = (days_key, kind, value)
         with self.lock:
             hit = self.cache.get(ck)
-            if hit and time.time() - hit[0] < 3600:
-                return hit[1]
-        slots = self._scan(lead)
+            slots = hit[1] if hit and time.time() - hit[0] < 3600 else None
+        if slots is None:
+            slots = self._scan(lead)
+            with self.lock:
+                if len(self.cache) > 64:
+                    self.cache.clear()
+                self.cache[ck] = (time.time(), slots)
         places = []
         for w in lead.get("where") or ():
             pk = (w["section"], w["name"] if w["section"] == "issues" else w["name"].lower(), w["report"])
@@ -155,10 +162,6 @@ class MatchView:
         out = {"kind": lead["kind"], "value": lead["value"], "verdict": lead.get("verdict", ""), "text": lead.get("text", ""),
                "priority": lead.get("priority"), "count": lead.get("count", 0), "days": self.intel.index()["days"],
                "places": places}
-        with self.lock:
-            if len(self.cache) > 64:
-                self.cache.clear()
-            self.cache[ck] = (time.time(), out)
         return out
 
 

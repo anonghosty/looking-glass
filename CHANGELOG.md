@@ -5,6 +5,16 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-15 (14)
+### Fixed
+- **The pipeline's marks are used from the start.** In the first 10 minutes after the computer started, the 15-second
+  check did not look for the pipeline's marks and counted every report's rows each time, as before the marks existed.
+  Harmless, but it did the work the marks are there to save; it also failed a check on GitHub's freshly started runners.
+- **Explore follows each viewer's code rule.** Explore kept its finished answer for an hour, so a combination code on
+  fewer than 5 devices, shown to someone who sees the devices, could reach a researcher who opened the same match
+  after them (and the other way round, blank codes for the admin). It now keeps only what it read, and works out what
+  each viewer may see on every request, as the rest of Intel gathered does. No address or host value was affected.
+
 ## 2026-11-15 (13)
 ### Security
 - The audit verifier's `--key` now **fails closed**: a key file with no `ssh-ed25519` key in it (empty, a fingerprint,
