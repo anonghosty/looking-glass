@@ -125,6 +125,7 @@ run "peace of mind (admins)" $PY tests/check_peace.py
 run "Audit portal permission" $PY tests/check_audit_portal.py
 run "Devices matched by IP note" $PY tests/check_device_note.py
 run "Audit checkpoints and signed backups" $PY tests/check_audit_checkpoint.py
+run "Backup scripts: bound and signed" $PY tests/check_backup_scripts.py
 run "auditor role + Audit portal (evidence)" $PY tests/check_auditor_portal.py
 run "Findings page wording" $PY tests/check_findings_ui.py
 run "greetings by name" $PY tests/check_greetings.py

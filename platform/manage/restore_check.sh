@@ -2,11 +2,14 @@
 # Rehearse a restore without touching this installation: check the backup's signature and checksum, unpack it into a
 # temporary folder, and check what a restore needs is there and sound: .env, the accounts and roles, the settings, the
 # TLS certificate, and the audit log, whose chain and signed checkpoints are checked by the same verifier an auditor
-# runs. The temporary folder is removed at the end. Exits non-zero if anything a restore needs fails.
-# Usage: manage/restore_check.sh [archive] [public key file]     (defaults as manage/verify_backup.sh)
+# runs. The temporary folder is removed at the end. Exits non-zero if anything a restore needs fails; an unsigned
+# backup, or one with no public key to check it, fails too unless --allow-unsigned is given.
+# Usage: manage/restore_check.sh [--allow-unsigned] [archive] [public key file]     (defaults as manage/verify_backup.sh)
 set -uo pipefail
 project="$(cd "$(dirname "$0")/.." && pwd)"
 name="$(basename "$project")"
+allow_unsigned=0
+[ "${1:-}" = "--allow-unsigned" ] && { allow_unsigned=1; shift; }
 f="${1:-$(ls -t "$HOME/backups/$name"-*.tar.gz 2>/dev/null | head -1)}"
 [ -n "$f" ] && [ -f "$f" ] || { echo "No backup archive given or found in ~/backups." >&2; exit 2; }
 pub="${2:-$project/data/audit_signing/signing_key.pub}"
@@ -15,14 +18,22 @@ fails=0
 row() { printf '  %-5s %-22s %s\n' "$1" "$2" "$3"; [ "$1" = FAIL ] && fails=$((fails + 1)); return 0; }
 
 echo "Restore rehearsal: $f"
-if [ ! -f "$f.sha256.sig" ]; then row WARN signature "none (an older or unsigned backup)"
-elif [ ! -f "$pub" ]; then row WARN signature "not checked: no public key at $pub"
+unsigned_state=$([ "$allow_unsigned" = 1 ] && echo WARN || echo FAIL)
+unsigned_tail=$([ "$allow_unsigned" = 1 ] && echo "(accepted: --allow-unsigned)" || echo "(--allow-unsigned accepts it)")
+if [ ! -f "$f.sha256.sig" ]; then row "$unsigned_state" signature "none: an older or unsigned backup $unsigned_tail"
+elif [ ! -f "$pub" ]; then row "$unsigned_state" signature "not checked: no public key at $pub $unsigned_tail"
 else
   state="$("$py" "$project/audit_checkpoint.py" verify-file "$f.sha256" looking-glass-backup "$pub" 2>/dev/null || true)"
   fp="$(LG_P="$project" LG_K="$pub" "$py" -c 'import os, sys; sys.path.insert(0, os.environ["LG_P"]); import audit_checkpoint as a; print(a.fingerprint(open(os.environ["LG_K"]).read()))' 2>/dev/null || echo '?')"
   [ "$state" = valid ] && row OK signature "valid (key $fp)" || row FAIL signature "$state"
 fi
-if (cd "$(dirname "$f")" && sha256sum -c --status "$(basename "$f").sha256"); then row OK checksum "matches"; else row FAIL checksum "does not match: the archive changed or is damaged"; fi
+# the checksum file must be about THIS archive: its name, and the SHA-256 of the archive given here (security review of edd2d57)
+read -r want named < "$f.sha256" 2>/dev/null || true
+named="${named#\*}"
+have="$(sha256sum "$f" | cut -d' ' -f1)"
+if [ "$(basename "${named:-?}")" != "$(basename "$f")" ]; then row FAIL checksum "the checksum file is for $(basename "${named:-nothing}"), not for this archive"
+elif [ "$have" != "${want:-}" ]; then row FAIL checksum "does not match: the archive changed or is damaged"
+else row OK checksum "matches"; fi
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 chmod 700 "$tmp"

@@ -72,7 +72,9 @@ The archive holds the code, `.env` and all of `data/` (accounts, sessions, audit
 [audit checkpoints](#audit-checkpoints)) and each backup is recorded in the audit log ("Backup checksum signed", with
 its SHA-256). The private key is **not** in the backup; its public key is (`data/audit_signing/signing_key.pub`) and in
 the audit log. Keep a copy of `signing_key.pub` with your backups, and give it to `verify_backup.sh` or
-`restore_check.sh` when you check a backup on another computer.
+`restore_check.sh` when you check a backup on another computer. Both check that the signed checksum is for the very
+archive you give them (its name and its SHA-256), and both fail for a backup with no signature or no public key to
+check it; for a backup made before backups were signed, add `--allow-unsigned` (first) and they say it was accepted.
 
 **Rehearse the restore.** `manage/restore_check.sh` checks the signature and checksum, unpacks the archive into a
 temporary folder, and checks what a restore needs: `.env`, the accounts (at least one administrator), roles, settings,

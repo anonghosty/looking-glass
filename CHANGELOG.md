@@ -5,6 +5,12 @@ Notable changes to Looking Glass, newest first. Releases are named by date. To u
 
 ## Unreleased
 
+### Security
+- Checking a backup now ties the signed checksum to the archive being checked, and a backup without a signature fails
+  unless `--allow-unsigned` is given.
+
+## 2026-11-15 (4)
+
 ### Added
 - Signed audit checkpoints: every day the audit log's head is signed with the installation's own key, recorded in the
   log, and copied to a folder on another computer if one is set. The verifier checks each checkpoint at its entry, so

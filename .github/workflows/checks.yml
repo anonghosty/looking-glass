@@ -34,7 +34,7 @@ jobs:
           for t in test_privacy_roles test_schedule check_ip_find check_host_label_text check_masked_fields check_banner_inbound check_data_access \
                    check_auth_offline check_login_throttle check_password_policy check_csrf_routes check_settings_access \
                    check_first_admin_proxy check_retest_reset check_workflow_fixes check_calc_offline \
-                   check_audit_portal check_device_note check_audit_checkpoint check_auditor_portal check_pipeline_settings check_scope_reload check_libraries \
+                   check_audit_portal check_device_note check_audit_checkpoint check_backup_scripts check_auditor_portal check_pipeline_settings check_scope_reload check_libraries \
                    check_cve_backoff check_uninstall check_timezones check_special_reports check_report_map \
                    check_findings_ui check_notifications check_overview check_greetings check_peace check_networks_list check_wrong_types check_kb_report_names check_slow_log check_lockouts check_system_alerts check_response_cache check_task_monitor check_acode_chain check_intelligence check_code_collisions check_finding_watch check_acode_issue check_db_connect check_install_db check_installer_anim check_offline_names check_attack_map check_advisory_attack check_confirm_all check_cve_attack; do
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
