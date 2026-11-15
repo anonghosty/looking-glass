@@ -49,6 +49,7 @@ with tempfile.TemporaryDirectory() as d:
                 pass
         srv = http.server.HTTPServer(("localhost", 0), _H)
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.load_cert_chain(f"{d}/c.pem", f"{d}/k.pem")
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2          # never an old TLS, even in a test (CodeQL alert 32)
         srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         port, real = srv.server_address[1], https_only._OPENER

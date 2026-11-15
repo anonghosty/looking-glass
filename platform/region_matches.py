@@ -223,10 +223,20 @@ def install(app, ctx):
     ctx["region_matches"] = M
 
     def map_file(cc):
+        """A country's map file. The code must be two capital letters AND a country the map index knows; the file name is
+        taken from the index's own key (not from the request), and the path must stay inside the maps folder
+        (CodeQL py/path-injection, alert 33: the two-letter check alone was not recognised)."""
         if not re.fullmatch(r"[A-Z]{2}", cc or ""):
             return None
+        known = next((k for k in ctx["country_index"]() if k == cc), None)
+        if known is None:
+            return None
+        base = os.path.realpath(ctx["adm1_dir"])
+        path = os.path.realpath(os.path.join(base, known + ".json"))
+        if not path.startswith(base + os.sep):
+            return None
         try:
-            with open(os.path.join(ctx["adm1_dir"], f"{cc}.json"), encoding="utf-8") as fh:
+            with open(path, encoding="utf-8") as fh:
                 return json.load(fh)
         except (OSError, ValueError):
             return None

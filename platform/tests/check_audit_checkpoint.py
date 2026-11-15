@@ -154,6 +154,20 @@ ok("with --key, ONLY that key is trusted: the log's own (recorded) key no longer
 r = audit_verifier.check(data)
 ok("…without --key, the keys the log records are used (and the report says which)",
    r["checkpoints"]["signatures"].get("INVALID") is None and r["checkpoints"]["trusted"] == "the keys recorded in the log")
+r = audit_verifier.check(data, extra_keys=[])
+ok("--key that gave no key: the log's own keys are NOT used instead (review of f6bbce9)",
+   r["checkpoints"]["trusted"] == "the key given with --key only" and r["checkpoints"]["signatures"].get("valid", 0) == 0,
+   json.dumps(r["checkpoints"]["signatures"]))
+empty = os.path.join(tmp, "not-a-key.txt")
+open(empty, "w").write("SHA256:a fingerprint, not the key itself\n")
+p = subprocess.run([sys.executable, audit_verifier.__file__, data, "--key", empty], capture_output=True, text=True)
+ok("…and the command refuses a --key file with no ssh-ed25519 key in it, saying why",
+   p.returncode == 2 and "no signing public key" in p.stderr, p.stderr.strip()[-200:])
+bom = os.path.join(tmp, "key-bom.pub")
+open(bom, "w", encoding="utf-8-sig", newline="\r\n").write(other_pub + "\n")
+p = subprocess.run([sys.executable, audit_verifier.__file__, data, "--key", bom, "--json"], capture_output=True, text=True)
+ok("…a key file saved on Windows (byte-order mark, CR LF) is read", p.returncode in (0, 1)
+   and json.loads(p.stdout)["checkpoints"]["trusted"] == "the key given with --key only", p.stderr.strip()[-200:])
 
 print("Backups")
 sums = os.path.join(tmp, "lg-20261115.tar.gz.sha256")

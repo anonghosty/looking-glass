@@ -407,6 +407,15 @@ conclusions to the researcher. At the top of the card: how many matches, names i
 and chips to show one kind of match. Values that are common to everything (stock browser user agents, "/", usernames
 such as *root*) are never raised.
 
+**Explore** on a match opens exactly what Looking Glass stated. Every name and report of the match is listed, each
+worked out over **only the records that carry the indicator**. For example, a domain shared by *avalanche-generic* in
+Sinkhole HTTP and *qsnatch* in Sinkhole DNS shows both names. The **Side by side** view gives each place its own
+column: its tags (a tag found in every place is marked), the sets that come with the indicator on the same record, and
+its other indicators (user agent, URL, DNS lookup). The indicator itself is highlighted. Open one place for its full
+cards and combinations, or **All of** *name* for that name's whole picture. A match in two reports for one name shows
+the two reports the same way. Explore works only for matches Looking Glass is asking about. As everywhere in Intel
+gathered, devices are counted and never listed.
+
 **Across reports** (first in the report rail when a name is seen in two or more reports) looks at the reports together:
 **combinations across reports** (for the devices seen in more than one report, exactly what each carried in each report,
 for example *iot + router-os* in one report **and** the same set in another, with the number of devices), the

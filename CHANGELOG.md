@@ -5,6 +5,31 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-15 (13)
+### Security
+- The audit verifier's `--key` now **fails closed**: a key file with no `ssh-ed25519` key in it (empty, a fingerprint,
+  the wrong file) is refused with a message, instead of quietly falling back to the keys the log records. A key file
+  saved on Windows (byte-order mark, Windows line endings) is read.
+- Four code-scanning findings fixed: a region map is only read from the map folder for a known country code, and three
+  test-only fixes (TLS 1.2 or newer, a safely made temporary file, a test route that answers JSON).
+
+### Added
+- **Explore shows exactly the match.** Explore on a "Looking Glass asks" match now opens every name and report of the
+  match side by side, each worked out over only the records that carry the indicator: their tags, what comes with the
+  indicator on the same record, and their other indicators. Two names sharing a domain show both names; one name in two
+  reports shows both reports. Before, Explore opened the first name only, with the indicator typed into the search.
+
+### Changed
+- **Backup keys saved on Windows work as they are.** A public key or private key file with a byte-order mark, in UTF-16
+  (what PowerShell's `>` writes) or with Windows line endings is cleaned before age or GnuPG reads it; before, age
+  refused such a file.
+- **Looking Glass asks:** when the detective finds something, the animation folds away and the results ease in, one
+  after another, instead of appearing all at once (no motion when the system asks for reduced motion).
+
+### Documentation
+- OPERATIONS.md, Backups: **Making the backup key, step by step**, for Linux or macOS and for Windows with Looking
+  Glass in WSL, including where to keep the private key and how to rehearse a restore with it.
+
 ## 2026-11-15 (12)
 > **Before your next backup:** `manage/backup.sh` now refuses to run without your public key in
 > `platform/data/backup_public_key` (see [OPERATIONS.md, Backups](docs/OPERATIONS.md#backups)). Make the key pair on

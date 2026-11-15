@@ -6,7 +6,7 @@ visitor who reaches the app port directly has the headers ignored. A throwaway F
 Run: .venv/bin/python tests/check_proxy_chain.py"""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from flask import Flask, request  # noqa: E402
+from flask import Flask, jsonify, request  # noqa: E402
 import proxy_guard  # noqa: E402
 
 checks, fails = 0, []
@@ -24,7 +24,8 @@ app = Flask(__name__)
 
 @app.route("/")
 def _r():
-    return f"{request.remote_addr} {request.scheme}"
+    # JSON, never the request echoed into HTML (CodeQL alert 31: a test-only route, but no reason to reflect it)
+    return jsonify(addr=request.remote_addr, scheme=request.scheme)
 
 
 proxy_guard.install(app, True)
@@ -34,7 +35,8 @@ c = app.test_client()
 def see(xff=None, proto=None, peer="127.0.0.1"):
     h = {k: v for k, v in (("X-Forwarded-For", xff), ("X-Forwarded-Proto", proto)) if v is not None}
     r = c.get("/", headers=h, environ_base={"REMOTE_ADDR": peer})
-    return r.status_code, r.get_data(as_text=True)
+    d = r.get_json(silent=True) or {}
+    return r.status_code, (f"{d['addr']} {d['scheme']}" if r.status_code == 200 and "addr" in d else r.get_data(as_text=True))
 
 
 print("Through the proxy on this computer")

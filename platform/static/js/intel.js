@@ -162,17 +162,16 @@
     // what Looking Glass saw, in words
     const say = el("div", "ig-lead-say");
     say.append(el("p", null, x.text));
-    // Explore (the user, 2026-11-15): Intel gathered on the name and report where the indicator is seen most, with the
-    // indicator already searched, so the researcher lands on it with everything around it
-    const top = (x.where || [])[0];
-    // inside Intel gathered for that same name, Explore would only reopen it: the search box above does that
-    if (top && !(current && top.name.toLowerCase() === String(current).toLowerCase())) {
+    // Explore (the user, 2026-11-15): exactly what Looking Glass stated. Every name and report of the match, side by
+    // side, each with the tags and patterns of only the records that carry the indicator (intel_match.py)
+    if ((x.where || []).length) {
       const go = el("button", "ig-explore");
       go.type = "button";
       go.append(svg(ICON.ask, 14), document.createTextNode("Explore"));
-      go.title = `Open Intel gathered for ${top.name} in ${top.report}, searched for ${x.value}`;
-      go.setAttribute("aria-label", `Explore ${x.value}: Intel gathered for ${top.name}`);
-      go.addEventListener("click", () => open(top.name, top.section, top.report, x.value));
+      const places = x.where.map((w) => `${w.name} in ${w.report}`).join(" and ");
+      go.title = `Open ${places}: only the records that carry ${x.value}, side by side`;
+      go.setAttribute("aria-label", `Explore ${x.value}: ${places}`);
+      go.addEventListener("click", () => openMatch(x));
       say.append(go);
     }
     li.append(say);
@@ -217,7 +216,7 @@
       const li = valueRow(v, k.kind);
       const hit = !st.q || v.value.toLowerCase().includes(st.q);
       if (!hit) li.classList.add("out");
-      if (st.focus && v.value === st.focus) li.classList.add("focused");
+      if ((st.focus && v.value === st.focus) || (st.mark && v.value.toLowerCase() === st.mark)) li.classList.add("focused");
       if (hit && !st.q && ++shown > SHOW && !card.dataset.all && !(st.open || {})[k.kind]) li.classList.add("more");
       ul.append(li);
     }
@@ -307,7 +306,7 @@
         });
         blk.append(set);
         if (c.code) {
-          const what = `${st.d.title || st.d.name} in ${rn(r.report)}: ${c.items.join(" + ") || "the name only"}`;
+          const what = `${r.name || st.d.title || st.d.name} in ${rn(r.report)}: ${c.items.join(" + ") || "the name only"}`;
           const codes = el("div", "ig-code-row"); codes.append(codeChip(c.code, what), noteBtn(c.code, `${rn(r.report)}: ${c.items.join(" + ") || "the name only"}`));
           blk.append(codes);
         }
@@ -628,13 +627,19 @@
   function paint(scrollTop) {
     const d = st.d;
     st.rail.querySelectorAll(".ig-rep-btn").forEach((b) => { const on = +b.dataset.i === st.i; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; });
-    if (st.i === -1) { st.pane.replaceChildren(); acrossView(st.pane); if (scrollTop) keepPlace(); return; }
+    if (st.i === -1) { st.pane.replaceChildren(); (st.match ? compareView : acrossView)(st.pane); if (scrollTop) keepPlace(); return; }
     if (st.i < -1) { if (scrollTop) servicePane(st.i); if (scrollTop) keepPlace(); return; }    // drawn once (forms keep their state)
     const r = d.reports[st.i];
     const pane = st.pane; pane.replaceChildren();
     const path = el("div", "ig-path");
-    path.append(el("code", null, d.title || d.name), el("span", "ig-sep", "›"), el("b", null, rn(r.report)), el("span", "ig-sep", "›"),
-      el("span", null, `${plural(r.records, "record")} · what comes with it here`));
+    path.append(el("code", null, r.name || d.title || d.name), el("span", "ig-sep", "›"), el("b", null, rn(r.report)), el("span", "ig-sep", "›"),
+      el("span", null, st.match ? `${plural(r.records, "record")} carrying ${st.match.value} · what comes with it` : `${plural(r.records, "record")} · what comes with it here`));
+    if (st.match) {                                  // the name's whole picture is one click away
+      const all = el("button", "ig-more ig-all", `All of ${r.name}`); all.type = "button";
+      all.title = `Intel gathered for ${r.name} in ${rn(r.report)}: every record, not only those carrying ${st.match.value}`;
+      all.addEventListener("click", () => open(r.name, r.section, r.report));
+      path.append(all);
+    }
     if (st.focus) {
       const f = el("button", "ig-focus"); f.type = "button"; f.title = "Clear the focus (Esc)";
       f.append(svg(ICON.focus, 13), el("span", null, "Focus"), el("code", null, st.focus), svg(ICON.close, 12, 2.2));
@@ -647,8 +652,8 @@
     else if (r.single?.code) {
       // one combination only: no card, but its code, so an analyst can still pull exactly these devices
       const one = el("div", "ig-one-code");
-      one.append(el("span", null, `Every record here carries the same set${r.single.items.length ? `: ${r.single.items.join(" + ")}` : ""}`),
-        codeChip(r.single.code, `${d.name} in ${r.report}: ${r.single.items.join(" + ") || "the name only"}`),
+      one.append(el("span", null, `Every record ${st.match ? "carrying it" : "here"} carries the same set${r.single.items.length ? `: ${r.single.items.join(" + ")}` : ""}`),
+        codeChip(r.single.code, `${r.name || d.name} in ${r.report}: ${r.single.items.join(" + ") || "the name only"}`),
         noteBtn(r.single.code, `${rn(r.report)}: ${r.single.items.join(" + ") || "the name only"}`));
       pane.append(one);
     }
@@ -748,6 +753,124 @@
     if (st.q) requestAnimationFrame(() => body.scrollTo({ top: Math.max(0, layout.offsetTop - 12), behavior: "instant" }));
   }
 
+  // ---------------- Explore a match (the user, 2026-11-15): exactly what Looking Glass stated
+  // Every name and report of the match, each worked out over only the records that carry the indicator: two names
+  // sharing a domain show both, with their own tags and patterns, side by side; a match in two reports shows both reports
+  async function openMatch(x) {
+    const gen = ++openGen;
+    shell();
+    $("igName").textContent = x.value; $("igSec").textContent = `Looking Glass asks · ${KIND_OF[x.priority] || "Match"}`;
+    $("igMeta").replaceChildren(); $("igQ").value = "";
+    body.replaceChildren(el("div", "ig-loading lg-loading", "Gathering the records that carry it…"));
+    back.hidden = false; box.hidden = false; document.documentElement.classList.add("ig-open");
+    let d; try { d = await get(`/api/intel/match?kind=${encodeURIComponent(x.kind)}&value=${encodeURIComponent(x.value)}`); }
+    catch (e) { if (gen === openGen && !box.hidden) body.replaceChildren(el("p", "ig-empty", `Could not gather the match: ${e.message}`)); return; }
+    if (gen !== openGen || box.hidden) return;
+    const places = d.places || [];
+    const meta = $("igMeta");
+    const names = new Set(places.map((p) => p.name)), reps = new Set(places.map((p) => p.report));
+    for (const [n, l] of [[plural(names.size, "name"), ""], [plural(reps.size, "report"), ""],
+                          [plural(places.reduce((s, p) => s + p.records, 0), "record"), " carrying it"],
+                          [(d.days || []).map((y) => y.slice(5)).join(" · "), " in memory"]])
+      { const s = el("span"); s.append(el("b", null, n), document.createTextNode(l)); meta.append(s); }
+    body.replaceChildren();
+    // what Looking Glass stated, as on the card
+    const said = el("section", `ig-lead p${d.priority} ig-match-said`);
+    const h = el("div", "ig-lead-h");
+    h.append(el("span", "ig-lead-tag", KIND_OF[d.priority] || "Match"), el("b", "ig-lead-v", d.verdict || ""), el("span", "ig-lead-n", plural(d.count, "record")));
+    const ind = el("div", "ig-lead-ind");
+    ind.append(el("span", "ig-lead-k", d.kind === "domain" ? "Domain" : d.kind), el("code", null, d.value),
+      iconBtn(ICON.copy, `Copy ${d.value}`, () => copy(d.value, "the indicator")));
+    said.append(h, ind, el("p", "ig-match-text", d.text || ""));
+    body.append(said);
+    if (!places.length) { body.append(el("p", "ig-empty", "The records behind this match are no longer in the days in memory. Open the page again to see what Looking Glass asks now.")); return; }
+    const layout = el("div", "ig-layout");
+    const rail = el("nav", "ig-rail"); rail.setAttribute("role", "tablist"); rail.setAttribute("aria-label", "Names and reports of the match");
+    rail.append(el("div", "ig-rail-h", "Only the records carrying it"));
+    const many = places.length > 1;
+    if (many) {
+      const b = el("button", "ig-rep-btn ig-rep-x"); b.type = "button"; b.setAttribute("role", "tab"); b.dataset.i = -1;
+      b.append(el("span", "ig-rep-n", "Side by side"), el("span", "ig-rep-m", `${plural(places.length, "place")} · tags and patterns compared`));
+      b.addEventListener("click", () => pick(-1)); rail.append(b);
+    }
+    const maxRec = Math.max(1, ...places.map((p) => p.records));
+    places.forEach((p, i) => {
+      const b = el("button", "ig-rep-btn"); b.type = "button"; b.setAttribute("role", "tab"); b.dataset.i = i;
+      b.append(el("span", "ig-rep-n", p.name), el("span", "ig-rep-m", `${rn(p.report)} · ${plural(p.records, "record")}`));
+      const bar = el("i", "ig-rep-bar"); bar.style.width = `${Math.max(3, (p.records / maxRec) * 100)}%`; b.append(bar);
+      if (!p.indicators.length) b.classList.add("bare");
+      b.addEventListener("click", () => pick(i)); rail.append(b);
+    });
+    rail.append(el("p", "ig-keys", "[ ]  switch · Esc  close"));
+    const pane = el("div", "ig-pane");
+    layout.append(rail, pane);
+    body.append(layout, el("p", "ig-note", "Indicators only: the hosts themselves are never shown here. Devices are counted, never listed."));
+    st = { d: { name: d.value, reports: places, min_hosts: 5 }, match: d, mark: String(d.value).toLowerCase(), i: many ? -1 : 0,
+           q: "", sort: "count", focus: null, open: {}, rail, pane, min: many ? -1 : 0 };
+    paint(true);
+  }
+
+  // the places of a match side by side: per name and report, its tags, the sets that travel with the indicator and its
+  // other indicators; a tag found in every place is marked "in all"
+  function compareView(pane) {
+    const m = st.match, places = m.places;
+    const path = el("div", "ig-path");
+    path.append(el("b", null, "Side by side"), el("span", "ig-sep", "›"), el("span", null, "only the records that carry"), el("code", null, m.value));
+    pane.append(path);
+    const tagsOf = (p) => (p.indicators.find((k) => k.kind === "Associated tags")?.values || []).map((v) => v.value);
+    const sets = places.map((p) => new Set(tagsOf(p).map((t) => t.toLowerCase())));
+    const inAll = new Set([...(sets[0] || [])].filter((t) => sets.every((s) => s.has(t))));
+    const grid = el("div", "ig-cmp");
+    places.forEach((p, i) => {
+      const col = el("article", "ig-card ig-cmp-col");
+      const head = el("header", "ig-cmp-h");
+      head.append(el("code", "ig-cmp-name", p.name), el("span", `ig-def ${p.defined ? "yes" : "no"}`, p.defined ? "defined" : "no definition"),
+        el("span", "ig-cmp-rep", rn(p.report)));
+      const figs = el("div", "ig-cmp-fig");
+      figs.append(el("span", null, `${fmt(p.records)} ${p.records === 1 ? "record" : "records"}`), el("span", null, `${fmt(p.devices)} ${p.devices === 1 ? "device" : "devices"} (counted)`));
+      col.append(head, figs);
+      // its tags
+      const tags = tagsOf(p);
+      const tb = el("div", "ig-cmp-sec"); tb.append(el("div", "ig-cmp-k", "Tags"));
+      if (tags.length) {
+        const chips = el("div", "ig-cmp-chips");
+        for (const t of tags) { const c = el("span", `ig-chip${inAll.has(t.toLowerCase()) && places.length > 1 ? " all" : ""}`, t); if (c.classList.contains("all")) c.title = "In every place of this match"; chips.append(c); }
+        tb.append(chips);
+      } else tb.append(el("p", "ig-cmp-none", "No tags on these records."));
+      col.append(tb);
+      // what travels with the indicator: the exact sets on the same record
+      const combos = p.combinations.length ? p.combinations : p.single ? [p.single] : [];
+      const cb = el("div", "ig-cmp-sec"); cb.append(el("div", "ig-cmp-k", "Comes with it on the same record"));
+      if (combos.length) {
+        const ul = el("ul", "ig-cmp-sets");
+        for (const c of combos.slice(0, 6)) {
+          const li = el("li");
+          li.append(el("span", null, c.items.filter((v) => v.toLowerCase() !== st.mark).join(" + ") || "the indicator only"), el("b", null, fmt(c.count)));
+          ul.append(li);
+        }
+        cb.append(ul);
+        if (combos.length > 6) cb.append(el("p", "ig-cmp-none", `and ${plural(combos.length - 6, "more set")}: open this place to see them all.`));
+      } else cb.append(el("p", "ig-cmp-none", "Nothing else on these records."));
+      col.append(cb);
+      // its other indicators: each kind with its most frequent value
+      const others = p.indicators.filter((k) => k.kind !== "Associated tags");
+      if (others.length) {
+        const ob = el("div", "ig-cmp-sec"); ob.append(el("div", "ig-cmp-k", "Other indicators"));
+        const dl = el("dl", "ig-cmp-kinds");
+        for (const k of others) {
+          const top = k.values[0];
+          dl.append(el("dt", null, k.kind), el("dd", top && top.value.toLowerCase() === st.mark ? "mark" : null,
+            top ? `${top.value}${k.distinct > 1 ? `  (+${fmt(k.distinct - 1)} more)` : ""}` : `${fmt(k.hidden)} on fewer than 5 devices`));
+        }
+        ob.append(dl); col.append(ob);
+      }
+      const go = el("button", "ig-more", "Open this place"); go.type = "button"; go.addEventListener("click", () => pick(i));
+      col.append(go);
+      grid.append(col);
+    });
+    pane.append(grid);
+  }
+
   // ---------------- "Seen in" as report cards: intel found there, or the name only (one click opens that report)
   let summary = null;
   // the tables' "Seen in" and "Across reports" come from here: the page's logo stays until it is in, so the tables are
@@ -804,7 +927,25 @@
       if (det) await det.nothing("Looking Glass has nothing to ask."); else card.hidden = true;
       return;
     }
-    if (det) { await det.found(`Looking Glass found ${plural(d.leads.length, "match")} worth a look.`); det.remove(); }
+    // what was found eases in (2026-11-15: after the bulb the matches popped up all at once): the detective fades out while
+    // its space closes, then the summary and the first matches fade and rise in, one after another
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (det) {
+      await det.found(`Looking Glass found ${plural(d.leads.length, "match")} worth a look.`);
+      const st = det.el;
+      if (!calm && st.animate) {
+        const h = st.offsetHeight;
+        await st.animate([{ opacity: 1, height: `${h}px` }, { opacity: 0, height: "0px", marginTop: "0px", marginBottom: "0px" }],
+          { duration: 320, easing: "cubic-bezier(.4,0,.2,1)", fill: "forwards" }).finished.catch(() => {});
+      }
+      det.remove();
+    }
+    const easeIn = (node, i) => {
+      if (calm || !node?.animate) return;
+      node.animate([{ opacity: 0, transform: "translateY(10px)" }, { opacity: 1, transform: "none" }],
+        { duration: 380, delay: i * 90, easing: "cubic-bezier(.2,.7,.2,1)", fill: "backwards" });
+    };
+    let revealed = false;
     ul.replaceChildren();
     $("leadSub").textContent = `Looking Glass compared every indicator across names and reports of ${d.days.join(", ")} and found ${plural(d.leads.length, "match")} worth a researcher's eye.`;
     let bar = $("leadBar"); if (bar) bar.remove();
@@ -821,6 +962,12 @@
       list.forEach((x, i) => { const li = leadItem(x); if (!opened && i >= 4) li.hidden = true; ul.append(li); });
       more.hidden = list.length <= 4; more.textContent = opened ? "Show fewer" : `Show all ${list.length}`;
       chips.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.p === filter)));
+      if (!revealed) {                        // the first time only: the filters and "Show all" stay instant
+        revealed = true;
+        easeIn(bar, 0);
+        [...ul.children].filter((li) => !li.hidden).forEach((li, i) => easeIn(li, i + 1));
+        if (!more.hidden) easeIn(more, Math.min(5, ul.children.length) + 1);
+      }
     };
     for (const p of [0, 1, 2, 3, 4]) {
       const n = p ? d.leads.filter((x) => x.priority === p).length : d.leads.length;

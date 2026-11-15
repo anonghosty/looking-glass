@@ -169,6 +169,20 @@ if shutil.which("age") and shutil.which("age-keygen"):
     subprocess.run(["age-keygen", "-o", idf], capture_output=True)
     rec = subprocess.run(["age-keygen", "-y", idf], capture_output=True, text=True).stdout
     encrypted("age", rec, idf)
+    print("Keys saved on Windows (a byte-order mark, UTF-16, CR LF line ends)")
+    for label, data in (("UTF-8 with a byte-order mark and CR LF", b"\xef\xbb\xbf" + rec.strip().encode() + b"\r\n"),
+                        ("UTF-16 (PowerShell 5's >)", ("﻿" + rec.strip() + "\r\n").encode("utf-16-le"))):
+        open(os.path.join(proj, "data", "backup_public_key"), "wb").write(data)
+        time.sleep(1.1)
+        d = os.path.join(tmp, "win-" + str(len(data)))
+        rc, out = run("manage/backup.sh", d)
+        made = sorted(p for p in os.listdir(d) if p.endswith(".tar.gz.age")) if os.path.isdir(d) else []
+        ok(f"a public key in {label}: the backup is made", rc == 0 and made, out[-300:])
+        if made:
+            winid = os.path.join(tmp, "win-identity.txt")
+            open(winid, "wb").write(("﻿" + open(idf).read().replace("\n", "\r\n")).encode("utf-16-le"))
+            rc, out = run("manage/restore_check.sh", "--identity", winid, os.path.join(d, made[-1]))
+            ok(f"…and opens with a private key saved as UTF-16 with CR LF", rc == 0 and "RESULT: restorable" in out, out[-300:])
 else:
     print("  age not installed here: skipped (GnuPG checked above)")
 open(os.path.join(proj, "data", "backup_public_key"), "w").write("hello")

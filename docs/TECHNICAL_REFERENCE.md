@@ -84,6 +84,11 @@ server side is in small modules called from `app.py`:
   ever returned; addresses inside free text are masked. `GET /api/intel?section=infections|issues&name=…`,
   `GET /api/intel/leads`, `GET /api/intel/summary` (per name and report: how many kinds of indicator, for the
   *Seen in* cards). Cached for five minutes per set of days.
+- **`intel_match.py`, Explore a match.** `GET /api/intel/match?kind=…&value=…` (the Definitions permission) answers
+  only for a match currently in the leads: for every name and report of the match, the indicators, tags and
+  combinations of only the records that carry the indicator, in the same shape as a report of `/api/intel`, with the
+  same masking, the 5-device rule on the services side and the same combination codes. Devices are counted, never
+  returned. Kept per set of days for up to an hour; a heavy view (per-person limits).
 - **`notes.py`, researchers' notes.** New findings per name in `data/notes.json` (run-time data: never shipped, never
   overwritten by an update), each with author, role and date. The look-ups `mp_resolve`, `issue_resolve` and
   `issues_resolve` attach the notes to every explanation card, so the map, services, Executive and both PDF builders

@@ -138,7 +138,7 @@ import request_limits  # noqa: E402
 HEAVY_LIMITS = request_limits.install(
     app, ("/api/stats", "/api/geo", "/api/insight", "/api/insight/drill", "/api/svc/stats", "/api/svc/insight",
           "/api/svc/drill", "/api/svc/regions", "/api/svc/hosts.csv", "/api/mgmt/report", "/api/insight/report",
-          "/api/svc/report", "/api/intelligence/host"),
+          "/api/svc/report", "/api/intelligence/host", "/api/intel/match"),
     lambda: (None if (getattr(g, "user", None) or {}).get("automation")
              else ("u:" + g.user["user"]) if getattr(g, "user", None) else ("a:" + (request.remote_addr or ""))))
 # the security self-test clears this computer's login counters itself, so it never restarts the service (retest_reset.py)
@@ -2833,6 +2833,9 @@ INTEL = _intel.install(app, {"store": store, "svc_store": svc["store"], "allowed
                              # Spam URL: the link's host is a "Spam link host", masked when in the country (review 2026-11-13)
                              "inbound": lambda: {x["name"] for x in registry.get() if x.get("layout") == "inbound"},
                              "country": lambda: settings.data["country"]})
+# Explore a match of "Looking Glass asks": only the records that carry the indicator, per name and report (intel_match.py)
+import intel_match as _intel_match  # noqa: E402
+INTEL_MATCH = _intel_match.install(app, INTEL, {"allowed": _kb_allowed, "labels": INTEL.ctx["labels"]})
 
 
 # combination codes and the analyst's combination search (combos.py)

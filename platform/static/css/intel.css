@@ -547,3 +547,30 @@ body.kbn-open { overflow: hidden; }
 .dz-xflag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 8px; border-radius: 999px; cursor: pointer; font: inherit; font-size: 12px;
   color: #e6d9ff; background: rgba(177, 140, 245, .13); border: 1px solid rgba(177, 140, 245, .45); }
 .dz-xflag b { color: #d2b8ff; } .dz-xflag:hover { background: rgba(177, 140, 245, .24); }
+
+/* Explore a match (2026-11-15): what Looking Glass stated, then every place of the match side by side */
+.ig-match-said { list-style: none; display: grid; gap: 10px; margin: 0 0 16px; padding: 14px 16px; border-radius: 14px; }
+.ig-match-text { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-2); }
+.ig-all { margin-left: auto; }
+.ig-cmp { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; align-items: start; }
+.ig-cmp-col { gap: 12px; }
+.ig-cmp-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.ig-cmp-name { font: 600 14px "Geist Mono", ui-monospace, monospace; color: var(--text); overflow-wrap: anywhere; }
+.ig-cmp-rep { flex-basis: 100%; font-size: 12.5px; color: var(--muted); }
+.ig-cmp-fig { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.ig-cmp-sec { display: grid; gap: 6px; padding-top: 10px; border-top: 1px dashed var(--ig-line); }
+.ig-cmp-k { font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.ig-cmp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ig-cmp-chips .ig-chip { cursor: default; white-space: normal; overflow-wrap: anywhere; }
+.ig-cmp-chips .ig-chip:hover { border-color: var(--ig-line); }
+.ig-cmp-chips .ig-chip.all { border-color: color-mix(in srgb, var(--ig-tag) 55%, transparent); background: color-mix(in srgb, var(--ig-tag) 14%, transparent); }
+.ig-cmp-sets { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.ig-cmp-sets li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 5px 8px; border-radius: 8px; background: rgba(255, 255, 255, .03);
+  font: 500 11.5px/1.4 "Geist Mono", ui-monospace, monospace; color: var(--text); }
+.ig-cmp-sets li span { overflow-wrap: anywhere; }
+.ig-cmp-sets li b { font-variant-numeric: tabular-nums; color: var(--text-2); }
+.ig-cmp-kinds { display: grid; grid-template-columns: minmax(90px, auto) minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: 12px; }
+.ig-cmp-kinds dt { color: var(--muted); }
+.ig-cmp-kinds dd { margin: 0; font-family: "Geist Mono", ui-monospace, monospace; color: var(--text); overflow-wrap: anywhere; }
+.ig-cmp-kinds dd.mark { color: #f5d9a8; }
+.ig-cmp-none { margin: 0; font-size: 12px; color: var(--muted); }

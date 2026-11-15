@@ -58,8 +58,17 @@ ok("every lead can be explored (its strongest place has a name, a section and a 
    all((x.get("where") or [{}])[0].get("name") and (x.get("where") or [{}])[0].get("section") in ("infections", "issues")
        and (x.get("where") or [{}])[0].get("report") for x in d.get("leads", [])))
 _js = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "static", "js", "intel.js"), encoding="utf-8").read()
-ok("the page has the Explore button, opening Intel gathered with the indicator searched",
-   '"ig-explore"' in _js and "open(top.name, top.section, top.report, x.value)" in _js)
+ok("the page has the Explore button, opening the match itself (every place, only its records: intel_match.py)",
+   '"ig-explore"' in _js and "openMatch(x)" in _js and "/api/intel/match?kind=" in _js)
+# and the server answers Explore for a real lead, with its places
+if d.get("leads"):
+    x0 = d["leads"][0]
+    import urllib.parse as _u
+    code, b = call(f"/api/intel/match?kind={_u.quote(x0['kind'])}&value={_u.quote(x0['value'])}", RESEARCHER)
+    m = json.loads(b) if code == 200 else {}
+    ok("Explore on the first lead: every place it names, only the records carrying it", code == 200 and m.get("places")
+       and all(p["records"] <= w["records"] for p in m["places"] for w in x0["where"]
+               if (w["name"], w["report"]) == (p["name"], p["report"])), f"{code} {str(b)[:200]}")
 answers = [body]
 for sec, n in (("infections", top_inf), ("issues", issue)):
     code, b = call(f"/api/intel?section={sec}&name={n}", RESEARCHER)

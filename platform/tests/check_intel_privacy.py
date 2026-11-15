@@ -112,11 +112,24 @@ for section, names in (("issues", issues), ("infections", infections)):
                     for v in (vals if isinstance(vals, list) else []):
                         if isinstance(v, dict) and int(v.get("hosts") or 0) < 5:
                             small += 1
-for s in strings(json.loads(call("/api/intel/leads")), []):
+_leads = json.loads(call("/api/intel/leads"))
+for s in strings(_leads, []):
     t = low(s)
     if (t in constituent and hostmask.mask(t) != t) or t in ips:
         leaks.append(("leads", "host name" if t in constituent else "address"))
-ok(f"no constituent host name, address or e-mail in {answers} Intel gathered answers and the leads", not leaks,
+# Explore on each match (intel_match.py): only the records carrying the indicator, the same rules
+for x in (_leads.get("leads") or [])[:20]:
+    m = json.loads(call(f"/api/intel/match?kind={urllib.parse.quote(x['kind'])}&value={urllib.parse.quote(x['value'])}"))
+    answers += 1
+    for s in strings(m, []):
+        t = low(s)
+        if (t in constituent and hostmask.mask(t) != t) or t in ips:
+            leaks.append(("explore", "host name" if t in constituent else "address"))
+    for p_ in m.get("places") or []:
+        if p_.get("section") == "issues":
+            for k in p_.get("indicators") or []:
+                small += sum(1 for v in k.get("values") or [] if int(v.get("hosts") or 0) < 5)
+ok(f"no constituent host name, address or e-mail in {answers} Intel gathered answers, the leads and Explore", not leaks,
    ", ".join(f"{a}: {b}" for a, b in sorted(set(leaks))[:5]) + (f" ({len(leaks)} values)" if leaks else ""))
 print("3. Services: only values shared by 5 hosts or more")
 ok("every services value shown is shared by at least 5 hosts", small == 0, f"{small} value(s) on fewer hosts")

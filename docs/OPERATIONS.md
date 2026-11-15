@@ -84,7 +84,7 @@ with its `.sha256` and `.sha256.sig`.
 
 **Encrypted.** The server keeps only a public key; the private key stays with you, off the server, so a backup that
 leaves the server, or the server itself if it is broken into, cannot be read with what is on it. Make a key once, on
-your own computer, with [age](https://age-encryption.org) or GnuPG:
+your own computer, with [age](https://age-encryption.org) or GnuPG (step by step below):
 
 ```bash
 age-keygen -o looking-glass-backup-key.txt                         # keep this file safe: it opens every backup
@@ -92,6 +92,7 @@ age-keygen -y looking-glass-backup-key.txt > backup_public_key     # the public 
 #   or, with GnuPG:  gpg --export --armor you@example.org > backup_public_key
 ```
 Copy `backup_public_key` to `data/backup_public_key` on the server (or point `BACKUP_PUBLIC_KEY` in `.env` at it).
+
 `backup.sh` then streams the archive straight into encryption (`.tar.gz.age` or `.tar.gz.gpg`): no readable copy is
 ever written. Without a public key it refuses, and says how to make one; `manage/backup.sh --unencrypted` makes a
 plain archive on purpose (not recommended). `age` is `sudo apt install age`; GnuPG is on most servers already. Keep the
@@ -129,6 +130,51 @@ heads noted after the backup then point beyond the end of the restored log, and 
 restore, not tampering: note the restore, the archive and the old and new key fingerprints with the audit papers.
 
 MongoDB itself is backed up with the pipeline ([../../database/README.md](../database/README.md)).
+
+### Making the backup key, step by step
+
+You make the key **once**. It has two halves: the **private key**, which opens every backup and never goes on the
+server, and the **public key**, which the server uses to lock each backup.
+
+**On Linux or macOS**
+
+1. Install age: `sudo apt install age` (Debian or Ubuntu) or `brew install age` (macOS).
+2. On your own computer, not the server, make the key: `age-keygen -o looking-glass-backup-key.txt`.
+3. Take out the public half: `age-keygen -y looking-glass-backup-key.txt > backup_public_key`. It is one line
+   starting with `age1`.
+4. Copy `backup_public_key` to the server as `data/backup_public_key` in the Looking Glass folder, owned by the
+   service's user (for example `scp backup_public_key server:` and then `sudo -u <service user> cp ...`).
+5. Run `manage/backup.sh` once and check that it ends with an `.age` file.
+6. Put `looking-glass-backup-key.txt` somewhere safe and off the server: a password manager, or an encrypted USB stick
+   kept with your other recovery secrets. Keep a second copy somewhere else. Without it the backups cannot be opened.
+7. Rehearse a restore with it: `manage/restore_check.sh --identity /path/to/looking-glass-backup-key.txt`, which should
+   end with "RESULT: restorable". Then take the key away again.
+
+**On Windows, with Looking Glass in WSL**
+
+1. In the WSL terminal, install age for the server: `sudo apt install age`.
+2. In PowerShell on Windows, install age for yourself: `winget install FiloSottile.age` (open a new PowerShell
+   afterwards so it is found).
+3. In PowerShell, make the key in your own folder: `age-keygen -o looking-glass-backup-key.txt`.
+4. Take out the public half: `age-keygen -y looking-glass-backup-key.txt | Out-File -Encoding ascii backup_public_key`.
+5. Copy it into Looking Glass's `data` folder. From the WSL terminal, with your Windows folder under `/mnt/c/Users/...`:
+   `cp /mnt/c/Users/<you>/backup_public_key ~/<looking glass folder>/data/backup_public_key`.
+6. Run `manage/backup.sh` once in WSL and check that it ends with an `.age` file.
+7. Rehearse a restore, reading the private key from Windows:
+   `manage/restore_check.sh --identity /mnt/c/Users/<you>/looking-glass-backup-key.txt`. It should end with
+   "RESULT: restorable".
+8. Move `looking-glass-backup-key.txt` off the computer (a password manager or an encrypted USB stick, with a second
+   copy elsewhere) and delete it from the Windows folder.
+
+A key file saved on Windows works as it is: a byte-order mark, UTF-16 (what PowerShell's `>` writes) and Windows line
+endings are all accepted, for the public key and for the private key given with `--identity`.
+
+**With GnuPG instead:** export your public key with `gpg --export --armor you@example.org > backup_public_key` and copy
+it the same way; to open a backup, export your secret key (`gpg --export-secret-keys --armor you@example.org`) to a
+file you give with `--identity`.
+
+**If the private key is lost:** the public key is safe to show; the private key is not. If you lose the private key, make a new
+pair, replace `data/backup_public_key` and make a fresh backup at once: the older backups stay locked to the lost key.
 
 ## Encryption at rest
 

@@ -79,7 +79,8 @@ secs, rc, out = run_in_pty(["splash"], cols=30, rows=10)
 ok("a terminal too small for it: nothing drawn, no error", rc == 0 and "▀" not in out)
 
 print("The progress screen")
-st = tempfile.mktemp()
+fd, st = tempfile.mkstemp(prefix="lg-anim-")      # made safely (CodeQL alert 30: mktemp only names a file)
+os.close(fd)
 open(st, "w").write("40\nFetching the reports of the last 7 days\n")
 secs, rc, out = run_in_pty(["progress", st, "/tmp/install.log"], cols=100, rows=36,
                            during=(1.2, lambda: open(st, "w").write("STOP\n")))

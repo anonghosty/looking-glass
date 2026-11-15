@@ -128,6 +128,7 @@ run "researchers: no code below 5 hosts" $PY tests/check_small_codes.py
 run "masked text: every address labelled" $PY tests/check_host_label_text.py
 run "self-test resets its own counters" $PY tests/check_retest_reset.py
 run "intel gathered (researchers)"    $PY tests/check_intel.py
+run "Explore a match (only its records)" $PY tests/check_intel_match.py
 run "researchers' notes"              $PY tests/check_notes.py
 run "combination codes + search"      $PY tests/check_combos.py
 run "findings (researcher → advisory)" $PY tests/check_findings.py

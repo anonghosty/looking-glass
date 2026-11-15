@@ -198,9 +198,12 @@ def check_checkpoints(folder, hashes, gone, lines, extra_keys):
     auditor). Problems: a hash that is not at its entry, a checkpoint beyond the end of the log, a bad signature.
     With --key, ONLY that key is trusted (review of d82a436: a log rewritten in full can record a key of its own, so
     trusting the log's keys besides the one the auditor noted added nothing against a rewrite)."""
-    keys = list(extra_keys) if extra_keys else _keys_in(lines)
+    # None: no --key given. A list, even an empty one, means --key was given: never fall back to the log's own keys
+    # (review of f6bbce9: an empty or wrong key file must not quietly trust the log)
+    given = extra_keys is not None
+    keys = list(extra_keys) if given else _keys_in(lines)
     out = {"folder": folder, "count": 0, "matched": 0, "older_than_kept": 0, "signatures": {}, "latest": None, "problems": [],
-           "keys": len(set(keys)), "trusted": "the key given with --key only" if extra_keys else "the keys recorded in the log"}
+           "keys": len(set(keys)), "trusted": "the key given with --key only" if given else "the keys recorded in the log"}
     paths = sorted(glob.glob(os.path.join(folder, "checkpoint-*.json"))) if os.path.isdir(folder) else []
     for p in paths:
         name = os.path.basename(p)
@@ -214,7 +217,7 @@ def check_checkpoints(folder, hashes, gone, lines, extra_keys):
         out["signatures"][sig] = out["signatures"].get(sig, 0) + 1
         if sig == "INVALID":
             out["problems"].append({"entry": n, "t": ck.get("made"), "what": f"checkpoint {name}: its signature does not match "
-                                    + ("the key given with --key" if extra_keys else "any signing key recorded in the log")})
+                                    + ("the key given with --key" if given else "any signing key recorded in the log")})
         if n <= gone:
             out["older_than_kept"] += 1               # its entry went with the retention: nothing left to compare
         elif n - gone > len(hashes):
@@ -485,7 +488,7 @@ def check(folder, earlier=None, gap_days=30, checkpoints=None, extra_keys=None):
            "head_file": head_file, "seal": dict(seal, state=seal_state) if seal else None, "archives": len(archives), "break": brk}
 
     out["checkpoints"] = check_checkpoints(checkpoints if checkpoints is not None else os.path.join(folder, "audit_checkpoints"),
-                                           hashes, gone, lines, extra_keys or [])
+                                           hashes, gone, lines, extra_keys)
     cp = out["checkpoints"]
     if cp["problems"] and not brk:
         brk = cp["problems"][0]
@@ -547,12 +550,14 @@ def main():
         earlier = parse_earlier(a.earlier) if a.earlier else None
     except ValueError as e:
         ap.error(f"--earlier: {e}")
-    extra = []
+    extra = None
     if a.key:
         try:
-            extra = _KEY_RX.findall(open(a.key, encoding="utf-8").read())
-        except OSError as e:
-            ap.error(f"--key: {e.strerror}")
+            extra = _KEY_RX.findall(open(a.key, encoding="utf-8-sig").read())
+        except (OSError, UnicodeDecodeError) as e:
+            ap.error(f"--key: {getattr(e, 'strerror', None) or e}")
+        if not extra:
+            ap.error(f"--key: no signing public key (ssh-ed25519 ...) found in {a.key}")
     r = check(log, earlier, a.gap_days, os.path.abspath(a.checkpoints) if a.checkpoints else None, extra)
     r["manifest"] = check_manifest(root)
     good = r["ok"] and (not r["manifest"] or not r["manifest"]["problems"]) and (not earlier or r["earlier"]["proven"])
