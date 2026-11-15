@@ -5,6 +5,19 @@ Notable changes to Looking Glass, newest first. Releases are named by date. To u
 
 ## Unreleased
 
+### Added
+- Signed audit checkpoints: every day the audit log's head is signed with the installation's own key, recorded in the
+  log, and copied to a folder on another computer if one is set. The verifier checks each checkpoint at its entry, so
+  a copy kept away from the server shows if the log was rewritten later.
+- Signed backups: each backup's checksum is signed and recorded in the audit log, and a new restore rehearsal checks a
+  backup can be restored without touching the installation.
+
+### Changed
+- Where Looking Glass links reports by device (Across reports, the Executive portal's cross-report cards and the
+  PDFs), a line says devices are matched by IP address and one address can sometimes be several devices.
+
+## 2026-11-15 (3)
+
 ### Security
 - An analyst code whose chain of parent codes cannot be followed to its end opens for administrators only.
 

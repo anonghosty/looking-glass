@@ -720,6 +720,8 @@ def build(d, enr, meta):
     cr = d["cross"]
     yy = doc.hero(x2 + 14, top, cw3 - 28, [(fmt(cr["devices"] if comms else cr["hosts"]), ("devices" if comms else "hosts") + " in several reports", HexColor("#a9c3ff")),
                                            (pct(cr["share"]), "of the devices" if comms else "of the hosts", TXT)])
+    from device_note import DEVICE_IP_NOTE              # devices are matched by IP address (review follow-up)
+    yy = doc.wrap(x2 + 14, yy - 2, DEVICE_IP_NOTE, cw3 - 28, 7.4, DIM) + 6
     yy = doc.steps(x2 + 14, yy, cw3 - 28, 92, cr["by_count"], "devices")
     doc.text(x2 + 14, yy - 4, f"Top findings · {fmt(cr.get('combinations', 0))} combinations in all (CSV)", 8.4, DIM, True)
     doc.bars(x2 + 14, yy - 10, cw3 - 28, cr.get("combos") or (d["report_pairs"] if comms else cr["pairs"]), metric="count", n=5, stack=True)

@@ -681,7 +681,9 @@ try:
     ok("the README gives the verifier's own SHA-256, to compare with the one published on GitHub",
        hashlib.sha256(z.read("verify_audit_log.py")).hexdigest() in z.read("README.txt").decode()
        and re.search(r"https://github\.com/[\w.-]+/[\w.-]+", z.read("README.txt").decode()))   # the full link to the repository
-    ok("the verifier needs the Python standard library only", mods <= {"argparse", "glob", "gzip", "hashlib", "json", "os", "re", "sys", "time"}, ", ".join(sorted(mods)))
+    # shutil, subprocess and tempfile: the signed checkpoints, checked with the auditor's own ssh-keygen (2026-11-15)
+    ok("the verifier needs the Python standard library only", mods <= {"argparse", "glob", "gzip", "hashlib", "json", "os", "re", "shutil",
+                                                                      "subprocess", "sys", "tempfile", "time"}, ", ".join(sorted(mods)))
     pkg = os.path.join(tmp, "pkg"); z.extractall(pkg)
 
     def run(*args):

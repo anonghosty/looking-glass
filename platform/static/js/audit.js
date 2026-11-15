@@ -277,12 +277,23 @@
     if ((v.removals || []).length) row("Removed by the retention", `${v.removals.length} archive(s), each recorded in the chain`
       + (early.length ? ` · ${early.length} removed BEFORE their retention ended: ${early.map((x) => x.archive).join(", ")}` : " · all old enough"));
     if ((v.retention_history || []).length) row("Retention setting", v.retention_history.map((h) => `${h.days} days from ${fmtT(h.t)}`).join(" · "));
+    // signed checkpoints (audit_checkpoint.py): each one's hash found at its entry; the key that signs them
+    const cp = v.checkpoints || {}, sg = v.signing || {};
+    if (cp.count || sg.key) {
+      const sigs = Object.entries(cp.signatures || {}).map(([k, n]) => `${n} ${k}`).join(", ");
+      row("Signed checkpoints", `${fmt(cp.count || 0)} · ${fmt(cp.matched || 0)} found at their entry`
+        + (cp.older_than_kept ? ` · ${fmt(cp.older_than_kept)} older than the entries kept` : "") + (sigs ? ` · signatures: ${sigs}` : "")
+        + (sg.latest ? ` · latest ${sg.latest.made}, entry ${fmt(sg.latest.entry)}` : "") + ` · every ${sg.every_hours ?? 24} h`);
+      row("Copy away from this server", sg.copy_dir ? "a copy folder is set (AUDIT_CHECKPOINT_COPY_DIR)" : "no copy folder set: fetch data/audit_checkpoints/ from another computer, or set AUDIT_CHECKPOINT_COPY_DIR");
+      if (sg.key) row("Signing key", sg.key, true);
+    }
     b.append(st, dl);
+    for (const p of cp.problems || []) b.append(el("p", "au-vf bad", `${p.what}.`));
     for (const x of early) b.append(el("p", "au-vf bad", `${x.archive}: ${x.why}.`));
     for (const g of v.removal_gaps || []) {
       b.append(el("p", "au-vf bad", `Attention: ${g.days} days without any entry after ${g.after}. Real use writes more often: ask why, or whether entries were removed and the retention note's dates changed.`));
     }
-    b.append( el("p", "st-hint", "Note the head (hash@entry) with your evidence. At the next audit, compare it (Proof to take away): if it is still at that entry, the log up to it is unchanged."));
+    b.append( el("p", "st-hint", "Note the head (hash@entry) and the signing key with your evidence. At the next audit, compare it (Proof to take away): if it is still at that entry, the log up to it is unchanged. Between audits, the daily signed checkpoints kept away from this server do the same."));
   }
   $("vfRun").addEventListener("click", async () => {
     $("vfRun").disabled = true; window.LGLoader?.busy("Verifying the audit log");

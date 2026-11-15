@@ -178,6 +178,7 @@
   // every name's cross-report patterns in one list; those that run through every report of the name marked, and the
   // values carried in every report of a pattern outlined
   function acrossRows(sec, d) {
+    sec.append(window.lgDeviceNote());                     // devices are matched by IP address (review follow-up)
     const w = d.section === "issues" ? "host" : "device";
     const rows = [];
     for (const n of d.names) {

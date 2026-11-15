@@ -993,7 +993,9 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
   integrity). Evidence only, no verdict.
 - **Integrity and evidence:** **Verify the audit log** walks every entry. Each one carries the fingerprint (SHA-256)
   of the one before it, so a changed, inserted or removed entry breaks the chain and the check says where. It shows
-  the **head** (hash@entry). Then download the **evidence report (PDF)** or **every event (CSV)** for the period. After
+  the **head** (hash@entry), and the **signed checkpoints**: the daily signed copies of the head, each found at its
+  entry or not, the signing key's fingerprint, and whether a copy goes away from the server
+  ([AUDIT_LOG_PROOF.md](AUDIT_LOG_PROOF.md#between-audits-signed-checkpoints)). Then download the **evidence report (PDF)** or **every event (CSV)** for the period. After
   each download the page shows the file's own SHA-256 to note with it. Every check and every export is itself in the
   audit log.
 - **Proof to take away:** Verify is Looking Glass checking itself. The **proof package (ZIP)** lets the auditor check

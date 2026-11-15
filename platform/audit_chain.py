@@ -568,6 +568,7 @@ class Chain:
                 "retention_history": r["retention_history"], "entries": r["kept"], "chained": r["chained"],
                 "before_chain": r["before_chain"], "first": r["first"], "last": r["last"], "break": r["break"],
                 "head": r["head"], "head_entry": r["head_entry"], "removed_entries": r["removed_by_retention"],
+                "checkpoints": r.get("checkpoints"),
                 "head_file": r["head_file"] != "missing", "archives": r["archives"],
                 "removed_archives": len(self.removed()), "retention_days": self.retention_days,
                 "rotate_mb": round(self.rotate_bytes / 1_000_000, 1)}

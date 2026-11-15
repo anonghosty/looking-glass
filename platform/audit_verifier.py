@@ -7,6 +7,8 @@ short on purpose: read it before you rely on it.
 
     python verify_audit_log.py                         check the package this script is in
     python verify_audit_log.py --earlier HASH@ENTRY    and prove the log up to an earlier audit's head is unchanged
+    python verify_audit_log.py --checkpoints DIR       and check the signed checkpoints you keep (copies from the server)
+    python verify_audit_log.py --key FILE              accept this signing public key (the one you noted) for them
     python verify_audit_log.py --json                  the result as JSON
 
 The format it checks
@@ -25,6 +27,11 @@ The format it checks
                                      "audit_retention_set", recorded at start-up and whenever it changes); the archive's
                                      own dates come from the rotation entry written into the next file when it was
                                      archived (event "audit_archived"), which the note must agree with
+  log/audit_checkpoints/             signed checkpoints: checkpoint-*.json {"head": hash of entry N, "entry": N, ...} and
+                                     its SSH signature (.sig, namespace "looking-glass-audit"); the signing public key is
+                                     recorded in the chain (event "audit_signing_key"). Each head must be the hash of the
+                                     entry it names. Copies kept away from the server are checked with --checkpoints DIR;
+                                     signatures need ssh-keygen (OpenSSH 8.0+), otherwise they are reported as not checked
   MANIFEST.json                      the SHA-256 of every file in the package when it was made
 
 What a whole chain proves: no entry was changed, inserted or removed after it was written, and nothing was cut from the
@@ -139,9 +146,91 @@ def parse_earlier(text):
     return m.group(1).lower(), (int(m.group(2)) if m.group(2) else None)
 
 
-def check(folder, earlier=None, gap_days=30):
+_KEY_RX = re.compile(r"(ssh-ed25519 [A-Za-z0-9+/]+=*)")
+
+
+def _keys_in(lines):
+    """The public keys the chain recorded for checkpoints (event audit_signing_key), oldest first."""
+    keys = []
+    for ln in lines:
+        if '"audit_signing_key"' not in ln:
+            continue
+        try:
+            rec = json.loads(ln)
+        except ValueError:
+            continue
+        m = _KEY_RX.search(str(rec.get("detail") or "")) if isinstance(rec, dict) and rec.get("event") == "audit_signing_key" else None
+        if m:
+            keys.append(m.group(1))
+    return keys
+
+
+def signature(path, namespace, keys):
+    """ssh-keygen -Y verify of path.sig by one of these public keys (OpenSSH 8.0 or newer, on Linux, macOS and Windows
+    10+): "valid", "INVALID", "no signature" or "not checked (ssh-keygen not found)"."""
+    import shutil
+    import subprocess
+    import tempfile
+    if not os.path.exists(path + ".sig"):
+        return "no signature"
+    kg = shutil.which("ssh-keygen")
+    if not kg:
+        return "not checked (ssh-keygen not found)"
+    if not keys:
+        return "INVALID"
+    fd, allowed = tempfile.mkstemp(suffix=".allowed")
+    try:
+        with os.fdopen(fd, "w") as f:
+            for k in keys:
+                f.write(f'looking-glass namespaces="{namespace}" {k}\n')
+        with open(path, "rb") as data:
+            r = subprocess.run([kg, "-Y", "verify", "-f", allowed, "-I", "looking-glass", "-n", namespace, "-s", path + ".sig"],
+                               stdin=data, capture_output=True, timeout=60)
+        return "valid" if r.returncode == 0 else "INVALID"
+    finally:
+        os.remove(allowed)
+
+
+def check_checkpoints(folder, hashes, gone, lines, extra_keys):
+    """The signed checkpoints (checkpoint-*.json with .sig, audit_checkpoint.py): each one's head hash must be the hash
+    of the entry it names. A checkpoint copied away from the server proves the log up to it was not rewritten later.
+    Signatures are checked against the keys recorded in the chain and any key given with --key (the one noted by the
+    auditor). Problems: a hash that is not at its entry, a checkpoint beyond the end of the log, a bad signature."""
+    out = {"folder": folder, "count": 0, "matched": 0, "older_than_kept": 0, "signatures": {}, "latest": None, "problems": [],
+           "keys": len(set(_keys_in(lines) + list(extra_keys)))}
+    paths = sorted(glob.glob(os.path.join(folder, "checkpoint-*.json"))) if os.path.isdir(folder) else []
+    keys = _keys_in(lines) + list(extra_keys)
+    for p in paths:
+        name = os.path.basename(p)
+        ck = _json(p)
+        if not isinstance(ck, dict) or not isinstance(ck.get("head"), str) or _int(ck.get("entry")) < 1:
+            out["problems"].append({"entry": gone + 1, "what": f"checkpoint {name} cannot be read"})
+            continue
+        out["count"] += 1
+        n, h = _int(ck["entry"]), ck["head"]
+        sig = signature(p, "looking-glass-audit", keys)
+        out["signatures"][sig] = out["signatures"].get(sig, 0) + 1
+        if sig == "INVALID":
+            out["problems"].append({"entry": n, "t": ck.get("made"), "what": f"checkpoint {name}: its signature does not match "
+                                    "any signing key recorded in the log (or given with --key)"})
+        if n <= gone:
+            out["older_than_kept"] += 1               # its entry went with the retention: nothing left to compare
+        elif n - gone > len(hashes):
+            out["problems"].append({"entry": n, "t": ck.get("made"), "what": f"checkpoint {name} names entry {n}, beyond the "
+                                    f"end of the log ({gone + len(hashes)} entries): entries were cut from the end"})
+        elif hashes[n - gone - 1] != h:
+            out["problems"].append({"entry": n, "t": ck.get("made"), "what": f"checkpoint {name}: entry {n} is not the one it "
+                                    "recorded: the log up to it was changed or rewritten after the checkpoint"})
+        else:
+            out["matched"] += 1
+        out["latest"] = {"file": name, "entry": n, "made": ck.get("made"), "signature": sig}
+    return out
+
+
+def check(folder, earlier=None, gap_days=30, checkpoints=None, extra_keys=None):
     """Check the log in `folder` (the folder holding audit.log and audit_archive/). `earlier` = (hash, entry or None);
-    gap_days: a jump in time around a removed archive longer than this is reported."""
+    gap_days: a jump in time around a removed archive longer than this is reported; checkpoints: a folder of signed
+    checkpoints (default: audit_checkpoints/ beside the log); extra_keys: public keys to accept besides the chain's."""
     archives = sorted(glob.glob(os.path.join(folder, "audit_archive", "audit-*.log.gz")))
     lines, damaged = [], []
     for p in archives + [os.path.join(folder, "audit.log")]:
@@ -392,6 +481,13 @@ def check(folder, earlier=None, gap_days=30):
            "before_chain": before, "first": first_t, "last": last_t, "head": head, "head_entry": head_entry,
            "head_file": head_file, "seal": dict(seal, state=seal_state) if seal else None, "archives": len(archives), "break": brk}
 
+    out["checkpoints"] = check_checkpoints(checkpoints if checkpoints is not None else os.path.join(folder, "audit_checkpoints"),
+                                           hashes, gone, lines, extra_keys or [])
+    cp = out["checkpoints"]
+    if cp["problems"] and not brk:
+        brk = cp["problems"][0]
+        out.update(ok=False, **{"break": brk})
+
     if earlier:
         h, n = earlier
         found = None
@@ -438,6 +534,8 @@ def main():
     ap.add_argument("--earlier", help="the head hash noted at an earlier audit, as HASH or HASH@ENTRY")
     ap.add_argument("--json", action="store_true", help="print the result as JSON")
     ap.add_argument("--gap-days", type=int, default=30, help="report a jump in time around a removed archive longer than this")
+    ap.add_argument("--checkpoints", help="a folder of signed checkpoints kept away from the server (default: the package's own)")
+    ap.add_argument("--key", help="a file with the signing public key you noted (ssh-ed25519 ...), accepted besides the log's")
     a = ap.parse_args()
     root = os.path.abspath(a.folder)
     log = os.path.join(root, "log") if os.path.isdir(os.path.join(root, "log")) else root
@@ -445,7 +543,13 @@ def main():
         earlier = parse_earlier(a.earlier) if a.earlier else None
     except ValueError as e:
         ap.error(f"--earlier: {e}")
-    r = check(log, earlier, a.gap_days)
+    extra = []
+    if a.key:
+        try:
+            extra = _KEY_RX.findall(open(a.key, encoding="utf-8").read())
+        except OSError as e:
+            ap.error(f"--key: {e.strerror}")
+    r = check(log, earlier, a.gap_days, os.path.abspath(a.checkpoints) if a.checkpoints else None, extra)
     r["manifest"] = check_manifest(root)
     good = r["ok"] and (not r["manifest"] or not r["manifest"]["problems"]) and (not earlier or r["earlier"]["proven"])
     if a.json:
@@ -476,6 +580,16 @@ def main():
         for g in r["removal_gaps"]:
             print(f"  ATTENTION         {g['days']} days without any entry after {g['after']} ({when(g['from'])} to {when(g['to'])}): "
                   "real use writes more often; ask why, or whether entries were removed and the note's dates changed")
+    cp = r["checkpoints"]
+    if cp["count"] or cp["problems"]:
+        sigs = ", ".join(f"{v} {k}" for k, v in sorted(cp["signatures"].items()))
+        print(f"  checkpoints       {cp['count']} in {cp['folder']}: {cp['matched']} found at their entry"
+              + (f", {cp['older_than_kept']} older than the entries kept" if cp["older_than_kept"] else "")
+              + (f" · signatures: {sigs}" if sigs else ""))
+        if cp["latest"]:
+            print(f"                    latest: entry {cp['latest']['entry']}, made {when(cp['latest'].get('made'))}")
+        for p in cp["problems"]:
+            print(f"  ATTENTION         {p['what']}")
     if r["ok"]:
         print("  chain             WHOLE: no entry was changed, inserted or removed, and nothing was cut from the end")
     else:

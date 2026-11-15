@@ -86,6 +86,13 @@ LABEL["audit_archived"] = "Audit log archived (rotation recorded)"
 TAB_OF["audit_archived"] = "system"
 LABEL["audit_retention_set"] = "Audit log retention setting recorded"
 TAB_OF["audit_retention_set"] = "config"
+# signed checkpoints and backup checksums (audit_checkpoint.py, review follow-up 2026-11-14)
+LABEL["audit_signing_key"] = "Signing key for checkpoints and backups made"
+TAB_OF["audit_signing_key"] = "config"
+LABEL["audit_checkpoint"] = "Audit log checkpoint signed"
+TAB_OF["audit_checkpoint"] = "system"
+LABEL["backup_signed"] = "Backup checksum signed"
+TAB_OF["backup_signed"] = "system"
 # Settings → Workers (pipeline_settings.py) and the sender check's releases (2026-11-12)
 for _e, _l in (("pipeline_unlock", "Workers settings unlocked (password)"),
                ("pipeline_unlock_failed", "Workers settings: wrong password"),
@@ -362,7 +369,10 @@ def install(app, ctx):
         v = integrity(fresh=True)
         audit.add("audit_verified", user=(g.user or {}).get("user", ""), detail=("chain whole" if v["ok"] else f"BROKEN at entry {v['break']['entry']}")
                   + f" · {v['entries']} entries · head {v['head'][:16]}")
-        return jsonify(dict(v, first=_when(v["first"]), last=_when(v["last"]), checked=_when(time.time())))
+        signing = ctx["signer"]().status() if ctx.get("signer") else None      # signed checkpoints (audit_checkpoint.py)
+        if signing and signing.get("latest"):
+            signing["latest"] = dict(signing["latest"], made=_when(signing["latest"].get("made")))
+        return jsonify(dict(v, first=_when(v["first"]), last=_when(v["last"]), checked=_when(time.time()), signing=signing))
 
     # ------------------------------------------------------------------ the dashboard and the control checks
     def overview(t0, t1):

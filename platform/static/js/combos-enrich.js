@@ -59,6 +59,7 @@
     const xs = e.cross || [];
     const svc = sec("Across reports", xs.length ? `${pl(e.multi_hosts || 0, "device")} in 2+ reports · ${pl(e.cross_total || xs.length, "exact pattern")}` : "none", "svc");
     if (!xs.length) svc.append(el("p", "cb-hint", "None of these devices is in more than one report in the days in memory."));
+    else svc.append(window.lgDeviceNote());
     xs.forEach((x, idx) => {
       const r = el("div", "ce-svc"); if (idx >= 6) r.hidden = true;     // the six patterns with most devices; the rest on request
       for (const p of x.parts) {
@@ -116,7 +117,7 @@
     const xs = e.cross || [];
     const sec = el("article", "ce-sec svc ce-x");
     const h = el("header"); h.append(el("i"), el("b", null, "Across reports, by IP address"), el("span", null, `${fmt(e.multi_hosts || 0)} IP address${(e.multi_hosts || 0) === 1 ? "" : "es"} in 2+ reports`));
-    sec.append(h); out.append(sec);
+    sec.append(h, window.lgDeviceNote()); out.append(sec);
     // by IP address: the patterns over the same reports are one row (the reports, then the addresses found in all of
     // them); the pattern values are the researcher's view and stay out of it
     const groups = new Map();

@@ -58,15 +58,75 @@ manage/manage_users.py help                 # every command: passwd, mfa, role, 
 
 ## Backups
 
+Run these as the service's own user (the owner of `data/`):
+
 ```bash
-manage/backup.sh [folder]        # default ~/backups; archive mode 600 with a .sha256 file
-manage/verify_backup.sh [archive]
+manage/backup.sh [folder]                    # default ~/backups; archive mode 600, a .sha256 file and its signature
+manage/verify_backup.sh [archive] [key.pub]  # the signature, the checksum, .env, the number of files
+manage/restore_check.sh [archive] [key.pub]  # rehearse a restore, without touching this installation
 ```
 The archive holds the code, `.env` and all of `data/` (accounts, sessions, audit log, settings, certificates), not
-`.venv`. It contains secrets: copy it to safe storage off the computer. **Restore:** unpack it in the parent folder
-(`tar -xzf <archive>`), run `deploy/install.sh` (recreates `.venv`, keeps `.env`) and restart the service.
+`.venv`. It contains secrets: copy it to safe storage off the computer, with its `.sha256` and `.sha256.sig`.
+
+**Signed.** The checksum is signed with the installation's key (the same key as the
+[audit checkpoints](#audit-checkpoints)) and each backup is recorded in the audit log ("Backup checksum signed", with
+its SHA-256). The private key is **not** in the backup; its public key is (`data/audit_signing/signing_key.pub`) and in
+the audit log. Keep a copy of `signing_key.pub` with your backups, and give it to `verify_backup.sh` or
+`restore_check.sh` when you check a backup on another computer.
+
+**Rehearse the restore.** `manage/restore_check.sh` checks the signature and checksum, unpacks the archive into a
+temporary folder, and checks what a restore needs: `.env`, the accounts (at least one administrator), roles, settings,
+the TLS certificate, and the audit log, with the same verifier an auditor runs (chain and signed checkpoints). It ends
+with "RESULT: restorable" or says what is missing, and removes the temporary folder. Do it after each change to how
+backups are made, and from time to time.
+
+**Restore.**
+1. Check the archive: `manage/verify_backup.sh <archive> <signing_key.pub>`.
+2. Stop the service (`sudo systemctl stop looking-glass`) and move the current folder aside.
+3. Unpack the archive in the parent folder (`tar -xzf <archive>`).
+4. Run `deploy/install.sh` (it recreates `.venv` and keeps `.env`) and start the service.
+5. Sign in, open **Audit portal → Integrity and evidence** and verify the log. The restored installation makes a new
+   signing key on first use, recorded in the audit log: note its fingerprint.
+
+A restore brings the audit log back as it was when the backup was made: what was written after it is gone (the backup's
+own "Backup checksum signed" entry is written just after the archive, so it is always one of those). Checkpoints and
+heads noted after the backup then point beyond the end of the restored log, and the verifier says so. That is the
+restore, not tampering: note the restore, the archive and the old and new key fingerprints with the audit papers.
 
 MongoDB itself is backed up with the pipeline ([../../database/README.md](../database/README.md)).
+
+## Audit checkpoints
+
+Every day (`AUDIT_CHECKPOINT_HOURS`, default 24) the service writes a signed checkpoint of the audit log's head to
+`data/audit_checkpoints/`, and records it in the log. How it proves the log was not rewritten:
+[AUDIT_LOG_PROOF.md](AUDIT_LOG_PROOF.md#between-audits-signed-checkpoints). The checkpoints only protect once a copy is
+kept **away from this server**; choose one way:
+
+- **A copy folder:** set `AUDIT_CHECKPOINT_COPY_DIR` to a folder on another computer, mounted here (a network share, a
+  disk). Best is a share where the service's user can write new files but not change or delete them. The service may
+  write only to `data/` unless told otherwise, so add the folder to its sandbox once:
+  ```bash
+  sudo systemctl edit looking-glass      # add the two lines below, save, then: sudo systemctl restart looking-glass
+  [Service]
+  ReadWritePaths=/mnt/lg-checkpoints
+  ```
+  A copy that fails (the share is not mounted, or not writable) is said in the audit log; the next checkpoint tries
+  again.
+- **Fetched by another computer:** from a computer of your own, copy the folder regularly with an account that can only
+  read it, for example once a day:
+  ```bash
+  rsync -a --ignore-existing lgcopy@looking-glass-server:/path/to/platform/data/audit_checkpoints/ ~/lg-checkpoints/
+  ```
+
+To make one now, or to see the public key and its fingerprint:
+
+```bash
+.venv/bin/python audit_checkpoint.py now
+.venv/bin/python audit_checkpoint.py key
+```
+
+Checkpoints need `ssh-keygen` (package `openssh-client`, on Ubuntu servers by default). Without it they are written
+unsigned and the Audit portal says so.
 
 ## Reference data
 

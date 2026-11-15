@@ -14,6 +14,7 @@ Looking Glass, and to carry the proof away. So:
 
 Both only read (GET), need the 'audit' permission, and are logged (audit_export / audit_verified).
 """
+import glob
 import hashlib
 import io
 import json
@@ -64,6 +65,13 @@ At the next audit
   exactly the one in this package: nothing was changed, inserted or removed in between, even by someone able to
   rewrite the whole log on the server. The Audit portal does the same check (Integrity and evidence).
 
+Between audits: the signed checkpoints
+  Looking Glass writes a checkpoint of the head every day (log/audit_checkpoints/), signed with the installation's key;
+  the public key is in the log itself (event audit_signing_key). The verifier checks that each checkpoint's hash is
+  still at its entry. Checkpoints kept away from the server (a copy folder, or another computer that fetches them) are
+  the ones a rewrite on the server cannot reach: check yours with
+    python verify_audit_log.py --checkpoints FOLDER_OF_YOUR_COPIES --key THE_PUBLIC_KEY_YOU_NOTED.pub
+
 What it does not prove
   That the log was complete when written: entries are made by the application. The entries written before the chain
   started are covered from their seal on, not before it. A log rewritten before your first package cannot be told
@@ -97,6 +105,12 @@ def snapshot(chain, dest):
         for p in chain.archives() + [os.path.join(chain.dir, "removed.jsonl"), os.path.join(chain.dir, "removed.recorded")]:
             if os.path.exists(p):
                 shutil.copyfile(p, os.path.join(dest, "audit_archive", os.path.basename(p)))
+        # the signed checkpoints and their signatures (audit_checkpoint.py), checked by the verifier against the log
+        cks = sorted(glob.glob(os.path.join(src, "audit_checkpoints", "checkpoint-*.json*")))
+        if cks:
+            os.makedirs(os.path.join(dest, "audit_checkpoints"))
+            for p in cks:
+                shutil.copyfile(p, os.path.join(dest, "audit_checkpoints", os.path.basename(p)))
     finally:
         os.close(lock_fd)
 

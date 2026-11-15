@@ -111,6 +111,8 @@ Set these to what your own audits and laws require; the defaults suit a yearly I
 | `AUDIT_RETENTION_DAYS` | `400` | days archived audit entries are kept (compressed, `data/audit_archive/`) before they are deleted. The last link of each deleted archive is noted, so the integrity check still covers what is left |
 | `AUDIT_GAP_DAYS` | `30` | a removed archive followed by this many days without any entry is reported for the auditor (an archive removed and its note's dates faked to look old leaves such a jump; real use writes more often) |
 | `AUDIT_ROTATE_MB` | `5` | size at which `data/audit.log` is archived and a new file started; the tamper-evident chain goes on across files |
+| `AUDIT_CHECKPOINT_HOURS` | `24` | how often a signed checkpoint of the log's head is written to `data/audit_checkpoints/` (`0` = never). See [OPERATIONS.md](OPERATIONS.md#audit-checkpoints) |
+| `AUDIT_CHECKPOINT_COPY_DIR` | empty | a folder on another computer, mounted here, that gets a copy of every checkpoint (never replacing a file there). Empty: no copy; fetch `data/audit_checkpoints/` from another computer instead |
 | `AUDIT_DORMANT_DAYS` | `45` | control check LG-02 (NIST AC-2(3)): an active account unused this long is listed as dormant. 45 is CIS's figure (safeguard 5.3); above it, 5.3 shows as "related", not backed |
 | `AUDIT_MAX_ADMINS` | `3` | control check LG-03 (NIST AC-6(5)): the administrator limit the check names |
 | `AUDIT_PENDING_DAYS` | `7` | control check LG-04 (NIST AC-2): registrations waiting longer than this are listed |

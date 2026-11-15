@@ -431,6 +431,8 @@ def build(d, meta):
         yy = doc.hero(M + 14, top, lw - 28, [(fmt(d["across"]["multi"]), "devices also in other reports", HexColor("#a9c3ff")),
                                              (fmt(d["across"]["patterns_total"]), "exact patterns", TXT),
                                              (_share(d["across"]["multi"], k["devices"]), "of the devices", HexColor("#ffd38a"))])
+        from device_note import DEVICE_IP_NOTE          # devices are matched by IP address (review follow-up)
+        yy = doc.wrap(M + 14, yy - 4, DEVICE_IP_NOTE, lw - 28, 8, DIM)
         if not d["across"]["patterns"] and is_a:
             doc.wrap(M + 14, yy - 6, "An analyst code covers the whole selection, with several names: the researchers' view of the code gives each "
                                      "name's cross-report patterns and their codes.", lw - 28, 8.8, DIM)

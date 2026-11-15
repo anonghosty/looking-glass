@@ -218,7 +218,7 @@
     // across reports: what the devices found carried in the name's other reports, each pattern with its own code
     const x = s.across || {};
     if (x.patterns?.length) {
-      days.append(el("h3", null, `Across reports: ${fmt(x.multi)} of these devices ${x.multi === 1 ? "was" : "were"} also seen in other reports`));
+      days.append(el("h3", null, `Across reports: ${fmt(x.multi)} of these devices ${x.multi === 1 ? "was" : "were"} also seen in other reports`), window.lgDeviceNote());
       const ul = el("ul", "cb-x");
       for (const p of x.patterns) {
         const li = el("li"); const parts = el("div", "cb-x-parts");

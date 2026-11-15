@@ -197,6 +197,10 @@
       }
     }
   };
+  // devices are matched by IP address (external review follow-up, 2026-11-14): one sentence wherever Looking Glass links
+  // reports by device; the same text as device_note.py (tests/check_device_note.py keeps them equal)
+  window.LG_DEVICE_NOTE = "Devices are matched by IP address, as Shadowserver reports them: one address can sometimes be several devices (NAT, shared mobile connections).";
+  window.lgDeviceNote = () => { const p = document.createElement("p"); p.className = "lg-device-note"; p.textContent = window.LG_DEVICE_NOTE; return p; };
   const start = () => { mark(document); new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) mark(n.parentElement || n); }).observe(document.body, { childList: true, subtree: true }); };
   if (document.body) start(); else document.addEventListener("DOMContentLoaded", start);
 })();

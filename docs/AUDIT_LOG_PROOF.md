@@ -96,7 +96,7 @@ that always says "verified". So do not take it on trust:
   PowerShell) with the one published here, outside the server:
 
   ```text
-  6e169444581c5e056d2cf47512c34cf63f0595d00dd3aadceda3d26551aa16b3
+  648f46955db8c8971d2911d5840c845827124989765d7b31ce25e96cd03a08dd
   ```
 
   This is the verifier of the current release on GitHub. An installation of an older release ships the verifier of
@@ -143,6 +143,35 @@ added before it or dropped.
 
 The proof rests on the earlier head being kept where the server's operator cannot change it. A head kept only on the
 server could be replaced along with the log.
+
+### Between audits: signed checkpoints
+
+Looking Glass notes the head for you every day: a **checkpoint** (`data/audit_checkpoints/checkpoint-<time>.json`)
+holds the head's hash and entry number, signed with the installation's own key (an SSH signature, `.sig` beside it).
+The key is made on first use, and its **public key is written into the log itself** ("Signing key for checkpoints and
+backups made"), so anyone can check the signatures. Each checkpoint is also recorded in the log.
+
+The verifier checks every checkpoint it is given against the log, exactly like an earlier head: its hash must be the
+hash of the entry it names. The proof package carries the server's checkpoints; the ones that matter most are the
+**copies kept away from the server**:
+
+```bash
+python verify_audit_log.py --checkpoints FOLDER_OF_YOUR_COPIES --key signing_key.pub
+```
+
+| Result | What it means |
+|---|---|
+| **found at their entry** | the log up to each checkpoint is the log as it was when the checkpoint was made |
+| **entry N is not the one it recorded** | the log up to it was changed or rewritten after the checkpoint |
+| **beyond the end of the log** | entries were cut from the end |
+| **signature INVALID** | the checkpoint was altered, or signed by a key the log does not record (and you did not give with `--key`) |
+
+What the signature proves, and what it does not: it shows a copy came from this installation and was not changed on
+the way or where it is kept. The key is on the server, so someone who controls the server could sign new
+checkpoints; they cannot change the copies already kept elsewhere. **Keep the copies away from the server**: set
+`AUDIT_CHECKPOINT_COPY_DIR` to a folder on another computer (a share the server can write but not delete from), or let
+another computer fetch `data/audit_checkpoints/` regularly ([OPERATIONS.md](OPERATIONS.md#audit-checkpoints)). Note
+the key's fingerprint (shown in **Integrity and evidence**) with your working papers.
 
 ## 7. Retention and the entries before the chain
 
@@ -191,9 +220,10 @@ is detected. Nothing can prove they were unchanged before the seal, and the evid
 - **Completeness when written.** Entries are made by the application. An action it never logged cannot be shown by any
   hash. The control checks (LG-08, LG-15) and the auditor's own testing address what is logged.
 - **The time before the auditor's first head.** A rewrite made before then cannot be told apart. From the first head
-  kept outside the server on, it can.
-- **What lies outside the application:** the server's operating system, its clock (LG-12 reports the NTP status),
-  backups and network.
+  (or the first signed checkpoint) kept outside the server on, it can.
+- **What lies outside the application:** the server's operating system, its clock (LG-12 reports the NTP status) and
+  network. Backups are signed and recorded in the log, but where they are kept and whether they can be restored is the
+  operator's part ([OPERATIONS.md](OPERATIONS.md#backups)).
 
 ## 9. An auditor's routine
 
@@ -201,5 +231,6 @@ is detected. Nothing can prove they were unchanged before the seal, and the evid
    `python verify_audit_log.py` on your own computer. Keep the ZIP's SHA-256 and the head (`hash@entry`) with your
    working papers.
 2. **Next audit.** Download a new proof package and run `python verify_audit_log.py --earlier HASH@ENTRY` with the head
-   you kept (or use **Compare with an earlier audit**). Keep the new head for the audit after.
+   you kept (or use **Compare with an earlier audit**). Keep the new head for the audit after. If checkpoints are kept
+   away from the server, also run it with `--checkpoints` on those copies and `--key` with the public key you noted.
 3. **Every comparison and download is itself in the audit log**, with who did it and when.

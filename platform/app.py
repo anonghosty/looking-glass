@@ -2901,7 +2901,11 @@ import advisory as _advisory  # noqa: E402
 import audit_portal as _audit_portal  # noqa: E402
 # the Audit portal (auditor role and admins, read only): the log by tab, dashboard and control checks, access review,
 # the log's integrity and evidence exports (audit_portal.py, audit_chain.py, audit_report.py)
+# signed checkpoints of the audit log and signed backup checksums (audit_checkpoint.py; its daily job starts below)
+import audit_checkpoint as _audit_checkpoint  # noqa: E402
+AUDIT_SIGNER = _audit_checkpoint.Signer(os.path.join(BASE_DIR, "data"))
 _audit_portal.install(app, {"has_perm": AUTH["has_perm"], "users": AUTH["users"], "roles": AUTH["roles"], "sessions": AUTH["sessions"],
+                            "signer": lambda: AUDIT_SIGNER,
                             "audit": AUTH["audit"], "people": people, "perms_catalog": auth.PERMS, "auditor_role": auth.AUDITOR_ROLE,
                             "access_mode": security.access_mode,
                             "tls": lambda: os.path.exists(os.path.join(BASE_DIR, "data", "tls", "cert.pem")) or os.environ.get("TRUST_PROXY") == "1"})
@@ -3397,6 +3401,8 @@ if _SERVING:
     threading.Thread(target=_cve_loop, daemon=True, name="cve-lookups").start()
     threading.Thread(target=_mgmt["prewarm"], daemon=True, name="mgmt-baseline-prewarm").start()
     threading.Thread(target=REPORT_MAP.loop, daemon=True, name="report-map").start()
+    threading.Thread(target=_audit_checkpoint.loop, args=(AUDIT_SIGNER, AUTH["audit"], app.logger), daemon=True,
+                     name="audit-checkpoint").start()
 
 if __name__ == "__main__":
     # `python app.py` (tests, development) listens on this computer only unless BIND_HOST says otherwise; the service

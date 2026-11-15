@@ -4,6 +4,12 @@
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
+  // devices are matched by IP address: the note under a card's subtitle where it links reports by device, once
+  const devNote = (id, on) => {
+    const p = $(id); if (!p) return;
+    const n = p.nextElementSibling;
+    if (n?.classList.contains("lg-device-note")) n.hidden = !on; else if (on) p.after(window.lgDeviceNote());
+  };
   const NS = "http://www.w3.org/2000/svg";
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
   const sv = (t, a = {}) => { const e = document.createElementNS(NS, t); for (const [k, v] of Object.entries(a)) e.setAttribute(k, v); return e; };
@@ -638,6 +644,7 @@
     const reps = d.reports || [];
     bars($("chReports"), reps, { key: comms ? "report" : "service", unit: comms ? "devices" : "hosts", n: Infinity });
     $("tReports").textContent = `All ${fmt(reps.length)} report${reps.length === 1 ? "" : "s"} with data in this selection, ranked by ${comms ? "devices" : "hosts"} · click one to focus on it`;
+    devNote("tX1", comms);                                 // only this card links reports by device on comms
     if (comms) {
       $("tX1Title").textContent = "Devices in two reports"; $("tX1").textContent = "The same device seen by different sensors";
       bars($("chX1"), d.report_pairs, { metric: "count", unit: "devices", stack: true });
@@ -713,7 +720,7 @@
       steps($("chMultiCount"), d.multi.by_count, "devices");
       $("tCombos").textContent = "Top findings: infections on the same device";
       comboList($("chCombos"), d.multi.combos, d.multi.combinations, "devices", "icombo");
-      $("tCross").textContent = "The same device seen by different sensors";
+      $("tCross").textContent = "The same device seen by different sensors"; devNote("tCross", true);
       hero($("sCross"), [[d.cross.devices, "devices in several reports", "blue"], [Math.round(100 * d.cross.share), "% of the devices", ""]]);
       steps($("chCrossCount"), d.cross.by_count, "devices");
       $("tPairs").textContent = "Top findings: reports seeing the same device";
@@ -729,7 +736,7 @@
       steps($("chMultiCount"), d.multi.by_count, "hosts");
       $("tCombos").textContent = "Top findings: issues on the same host";
       comboList($("chCombos"), d.multi.combos, d.multi.combinations, "hosts", "icombo");
-      $("tCross").textContent = "The same host in several reports";
+      $("tCross").textContent = "The same host in several reports"; devNote("tCross", true);
       hero($("sCross"), [[d.cross.hosts, "hosts in several reports", "blue"], [Math.round(100 * d.cross.share), "% of the hosts", ""]]);
       steps($("chCrossCount"), d.cross.by_count, "hosts");
       $("tPairs").textContent = "Top findings: services (reports) on the same host";
