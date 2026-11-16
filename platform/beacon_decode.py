@@ -579,6 +579,30 @@ def _decode_cached(url):
     return tuple(out)
 
 
+SENDABLE_STATES = ("unknown", "cut")      # a known family not decoded yet, or a known format whose value did not decode
+
+
+def sendable(url, host=None):
+    """Every value a decoding request may carry (beacon_unknown.py): the long values nothing decodes and no family names
+    (unknown()), and those of a known family that is not decoded yet or whose value did not decode (the user,
+    2026-11-16: sustat could not be asked for). Encrypted values, hashes, IDs and tokens are left out: decoding cannot
+    come of sending them. [{param, path, value, shape, known: the family's title or ""}]"""
+    out = [dict(u, known="") for u in unknown(url, host)]
+    url = str(url or "")
+    if len(url) > MAX_URL:
+        return out
+    states = {s.get("param"): s for s in seen(url, host) if s.get("state") in SENDABLE_STATES}
+    if not states:
+        return out
+    path, parts = _query(url)
+    for param, _raw, value in parts:
+        s = states.get(param)
+        if s and len(value) >= 16:
+            out.append({"param": param, "path": path[:200], "value": value, "shape": shape(value),
+                        "known": f"{s.get('title', '')} ({status_text(s.get('state'))})"})
+    return out
+
+
 def unknown(url, host=None):
     """The long values of a request that nothing decodes and no known family names: [{param, path, value, shape}]. The
     value stays on the server (beacon_unknown.py groups them into families and counts them)."""

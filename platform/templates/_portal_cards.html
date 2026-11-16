@@ -25,7 +25,7 @@
 {%- for g_, key, ok, href, name, text, d in _g %}
   <a class="portal-card pc-{{ key }}" href="{{ href }}">
     <span class="pc-ic"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="{{ d }}"/></svg></span>
-    <span class="pc-body"><b>{{ name }}</b><small>{{ text }}</small>{% if key == "intelligence" %}<small class="pc-live" id="pcIntel" hidden></small>{% endif %}</span>
+    <span class="pc-body"><b>{{ name }}</b><small>{{ text }}</small>{% if key == "intelligence" %}<small class="pc-live" id="pcIntel" hidden></small>{% endif %}{% if key in ("executive", "definitions") %}<small class="pc-live pc-spike" data-spike="both" role="status" hidden></small>{% endif %}</span>
   </a>
 {%- endfor %}
 </div>

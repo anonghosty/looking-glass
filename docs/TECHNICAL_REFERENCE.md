@@ -178,6 +178,16 @@ server side is in small modules called from `app.py`:
   (`beacon_decode.STATUS`: decoded, encrypted, hash, id, token, unknown, cut), in `public()`, `seen()` and the Decoded
   beacons list's Status column. Findings page section: `static/js/beacon-unknown.js`. Test:
   `tests/check_beacon_unknown.py`.
+- **`features.py`, where new features install themselves.** app.py calls `features.install(app, core)` once, at the
+  end, with the shared parts (`db`, `registry`, `svc`, `replay_now`, `day_start`, `AUTH`); each new feature has its own
+  module and one entry there, so app.py does not grow.
+- **`spike_notice.py`, the spike notice on the Overview's buttons.** For each platform, the latest report day (the
+  replay day) against the day before: `count_documents` per report on `extracted_date` (date or ISO string), and for a
+  spike or a drop what moved most (communications: `$group` by `infection` per report; services: the reports). Scope
+  `all` when the platform's total moved, `part` when only one report or infection did. Kept per day for
+  `SPIKE_CACHE_SECONDS`. `GET /api/overview/spikes` ('view', 'management', 'definitions' or 'settings'; in
+  `auth.DEFINITIONS_PATHS` and `MANAGEMENT_PATHS`); `static/js/spike-notice.js` fills every `[data-spike]` line
+  (`comms`, `services` or `both`). Test: `tests/check_spike_notice.py` (no database; also in CI).
 - **`beacon_stats.py`, beacons on the analyst's map.** `label(e)` is a record's beacon as the *Beacon* filter shows it
   (`"<format title>, <OS>"` from `beacon_decode.field()`, or `"<title> (not decoded)"`), kept on the record as `_bc`
   so a loaded day is decoded once (`app.public()` strips it). A decodable check-in takes about 14 ms, so `ready(day)`

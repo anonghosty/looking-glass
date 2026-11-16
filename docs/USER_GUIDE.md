@@ -160,6 +160,14 @@ Below the day at a glance, **Your pages** lists exactly what your role opens, in
 work (Findings, Combinations, the Advisory portal, Executive, Definitions, as your role allows) and administration
 (Admin, Audit, Settings). Each card says what the page is for.
 
+**Spike notice.** When the latest report day moved sharply against the day before, the cards say so, with what is
+behind it: analysts and admins on the two platform cards, management on the Executive portal's, researchers on
+Definitions'. For example *Spike on 15 Nov: 2,400 events, +100% on 14 Nov (1,200). Mostly example.loader in
+Sinkhole (+900).* (made-up figures). A spike (amber) is at least one and a half times the day
+before and at least 500 more; a drop (blue) the other way round. When the platform's total is steady but one report
+(services) or one infection (communications) jumped on its own, the notice names it and says the total is steady. On
+an ordinary day there is no notice. It holds counts and names only, never an address.
+
 At the top left: **Display** quality (Auto / Full / Lite, see section 6). At the top right: your pages as buttons, the
 **bell** (see [Notifications](#notifications-the-bell)), **Settings**, and **Log out** last; under them, whether both
 platforms show the whole country or your constituency.
@@ -676,8 +684,11 @@ with its notes. Until that button is pressed the page shows no address, and open
 audit log.
 
 **Requests Looking Glass could not decode** (analysts and admins, below the findings). The encoded request values in
-the days in memory that no known format decodes, no known family names and the generic fallback cannot read, grouped
-into families. A family is one request shape: the path, the query parameter, the encoding and what the value looks like
+the days in memory that Looking Glass cannot decode yet, grouped into families: those no known format decodes, no
+known family names and the generic fallback cannot read, and those of a known family that is not decoded yet (for
+example *sustat statistics request*) or of a known format whose value did not decode, shown with their *Known family*.
+Encrypted values, hashes, IDs and tokens are not listed: sending them cannot lead to decoding. An event's Decoded beacon
+and the Decoded beacons list point here (*Ask to send it for decoding*) for every family that can be sent. A family is one request shape: the path, the query parameter, the encoding and what the value looks like
 (*hash-sized*, *whole 16-byte blocks: likely a block cipher*, *random-looking*), with the C2 hosts it was sent to (one
 family often spans many generated domains), the names it is filed under, the reports, the days, and how many records
 and devices carry it. Devices are counted, never listed. Each family also shows **What would be sent**: the exact

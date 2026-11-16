@@ -30,6 +30,12 @@
       // what the value is: encrypted, not decoded yet, or not encoded at all (a hash, an ID, a token)
       rows(dl, [["Family", `${b.title} (${b.status || "not decoded"})`], ["Found in", b.param && `query value "${b.param}"`], ["What it is", b.what]]);
       box.append(dl);
+      // not decoded yet, or a known format whose value did not decode: it can be sent for decoding automation
+      if (b.unknown || ["unknown", "cut"].includes(b.state)) {
+        const a = el("a", "bh-ask", "Ask to send it for decoding (Findings page) ›");
+        a.href = "/findings#beaconUnknown";
+        box.append(a);
+      }
       return box;
     }
     if (b.generic) {                    // the generic fallback: how it came off, and what it says

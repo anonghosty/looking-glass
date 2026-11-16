@@ -101,10 +101,12 @@ DEFINITIONS_PATHS = ("/definitions", "/api/kb/", "/api/networks", "/api/lookups"
                      "/findings", "/api/findings", "/intel/", "/api/notifications", "/overview",
                      "/api/attack", "/api/name-sources",      # ATT&CK mappings and the name sources' status (attack_map.py, name_sources.py)
                      "/api/beacon/finding",                   # handing decoded beacons over, and a finding's beacons (counts)
+                     "/api/overview/spikes",                  # the spike notice on the Overview's buttons (counts only)
                      "/api/beacon/code")                      # a beacon selection's LG-B code, for Move to notes (5+ devices)
 MANAGEMENT_PATHS = ("/management", "/api/mgmt/", "/api/lookups", "/api/combo-codes/", "/findings", "/api/findings",
                     "/intel/", "/api/intel/acode/", "/review/", "/api/review/", "/api/notifications", "/overview",
                     "/api/attack/technique/",
+                    "/api/overview/spikes",       # the spike notice on the Overview's buttons (counts only)
                     # the Executive portal's Abused or Compromised totals (counts only; sweep 2026-11-14: refused here)
                     "/api/intelligence/totals",
                     "/api/beacon/finding/")      # a finding's decoded beacons, counts only (beacon_findings.py)   # all the management role can open

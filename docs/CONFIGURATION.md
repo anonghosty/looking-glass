@@ -117,6 +117,14 @@ baseline in the background.
 | `EXEC_BASELINE_WORKERS` | `2` | baselines built at the same time (each reads up to 7 days of data) |
 | `EXEC_BASELINE_QUEUE` | `20` | baselines waiting their turn beyond those; when the list is full the page shows "building" and asks again on its next refresh |
 
+The Overview's spike notice compares the latest report day with the day before (counts only, from MongoDB).
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `SPIKE_RATIO` | `1.5` | a day is a spike at this many times the day before or more (a drop: the day before is this many times the day) |
+| `SPIKE_MIN_EVENTS` | `500` | and the difference is at least this many records, so a small report doubling is not a spike |
+| `SPIKE_CACHE_SECONDS` | `600` | how long the comparison is kept before it is counted again |
+
 ## Audit portal and the audit log
 
 Set these to what your own audits and laws require; the defaults suit a yearly IT audit.

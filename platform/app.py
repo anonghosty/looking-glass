@@ -3591,6 +3591,11 @@ WARMUP = _warmup.install({
              ("sinkholes per report", lambda: SVC_INTEL.index()),
              ("names seen", _name_evidence)]})
 
+# New features install themselves from features.py with these shared parts, so this file does not grow (2026-11-16)
+import features as _features  # noqa: E402
+FEATURES = _features.install(app, {"db": db, "registry": registry, "svc": svc, "replay_now": replay_now,
+                                   "day_start": day_start, "AUTH": AUTH, "app_logger": app.logger})
+
 if __name__ == "__main__":
     # `python app.py` (tests, development) listens on this computer only unless BIND_HOST says otherwise; the service
     # runs under gunicorn (deploy/), which has its own bind setting (external review, 2026-11-12)

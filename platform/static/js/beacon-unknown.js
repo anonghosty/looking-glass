@@ -49,7 +49,7 @@
     if (f.state !== "open") h.append(el("span", `bu-state st-${f.state}`, STATE_LINE(f)));
     c.append(h);
     const dl = el("dl", "bu-dl");
-    const rows = [["What it looks like", `${f.encoding}, ${f.lengths[0] === f.lengths[1] ? f.lengths[0] : `${f.lengths[0]}–${f.lengths[1]}`} bytes: ${f.hint}${f.constant ? " (the same value every time: a token, not device data)" : ""}`],
+    const rows = [...(f.known ? [["Known family", f.known]] : []), ["What it looks like", `${f.encoding}, ${f.lengths[0] === f.lengths[1] ? f.lengths[0] : `${f.lengths[0]}–${f.lengths[1]}`} bytes: ${f.hint}${f.constant ? " (the same value every time: a token, not device data)" : ""}`],
       ["Sent to", `${f.hosts.join(", ")}${f.hosts_total > f.hosts.length ? ` and ${fmt(f.hosts_total - f.hosts.length)} more` : ""}`],
       ["Filed under", f.names.join(", ")], ["Reports", f.reports.join(", ")], ["User agents", f.agents.join(" · ")],
       ["Days", f.days.join(", ")], ["Distinct values", fmt(f.distinct)]];
@@ -135,12 +135,14 @@
       d = await r.json(); if (!r.ok) throw new Error(d.error || r.status);
     } catch (e) { holder.hidden = false; holder.replaceChildren(el("h2", null, "Requests Looking Glass could not decode"), el("p", "fd-msg", `Could not load them: ${e.message}`)); return; }
     holder.hidden = false;
+    // arrived from a pointer (an event's Decoded beacon, the Decoded beacons list): bring the section into view
+    if (location.hash === "#beaconUnknown") setTimeout(() => holder.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     const AWAY = ["sent", "dismissed"];
     const open = d.families.filter((f) => !AWAY.includes(f.state)), away = d.families.filter((f) => AWAY.includes(f.state));
     const waiting = open.filter((f) => f.state === "asked").length;
     holder.replaceChildren(el("h2", null, "Requests Looking Glass could not decode"),
       el("p", "bu-intro", open.length
-        ? `${plural(open.length, "family")} of encoded requests in the days in memory that no known format and no generic layer decodes. Look at each and its request lines: ask to send the real ones to the Looking Glass creator for future automated decoding (an administrator approves first), and put away what is not a beacon.${waiting ? ` ${plural(waiting, "family")} ${waiting === 1 ? "waits" : "wait"} for an administrator's approval.` : ""}`
+        ? `${plural(open.length, "family")} of encoded requests in the days in memory that Looking Glass cannot decode yet: no known format and no generic layer reads them, or a known family is not decoded yet. Look at each and its request lines: ask to send the real ones to the Looking Glass creator for future automated decoding (an administrator approves first), and put away what is not a beacon.${waiting ? ` ${plural(waiting, "family")} ${waiting === 1 ? "waits" : "wait"} for an administrator's approval.` : ""}`
         : "Every encoded request in the days in memory is decoded or known. Nothing waits for the Looking Glass creator."));
     const redraw = () => mount(holder);
     // waiting for approval first, so an administrator sees them at the top

@@ -132,14 +132,16 @@
             <span class="pc-ic"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M3 12h4l3-8 4 16 3-8h4"/></svg></span>
             <span class="pc-body"><b>Reported network communications</b>
               <small>Infected devices calling botnet sinkholes and attacks, replayed on the map one day later.</small>
-              <span class="pc-meta mono" id="trackCommsMeta"></span></span>
+              <span class="pc-meta mono" id="trackCommsMeta"></span>
+              <small class="pc-live pc-spike" data-spike="comms" role="status" hidden></small></span>
             <span class="it-badge on pc-badge" id="trackCommsBadge">Available</span>
           </button>
           <a class="portal-card pc-services" id="btnServices" href="/services"{% if lg_peace %} hidden{% endif %}>
             <span class="pc-ic"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01"/></svg></span>
             <span class="pc-body"><b>Publicly accessible / vulnerable services</b>
               <small>What anyone on the internet can reach in the constituency, and what is vulnerable.</small>
-              <span class="pc-meta mono" id="trackServicesMeta"></span></span>
+              <span class="pc-meta mono" id="trackServicesMeta"></span>
+              <small class="pc-live pc-spike" data-spike="services" role="status" hidden></small></span>
             <span class="it-badge on pc-badge" id="trackServicesBadge">Available</span>
           </a>
         </div>        {#- demo mode is switched on inside each platform (its Demo button); app.js still binds these, so they stay, hidden -#}
@@ -483,5 +485,6 @@
   <script src="{{ url_for('static', filename='js/acode-make.js') }}"></script>
   <script src="{{ url_for('static', filename='js/hud-fit.js') }}"></script>
   <script src="{{ url_for('static', filename='js/portal-intel.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/spike-notice.js') }}" defer></script>
 </body>
 </html>

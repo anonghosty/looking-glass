@@ -190,11 +190,11 @@ class Unknown:
                 if "=" not in url or len(url) < B.MIN_BLOB:
                     continue
                 host = (e.get("http_host") or "").lower() or None
-                for u in B.unknown(url, host):
+                for u in B.sendable(url, host):          # with known families not decoded yet (2026-11-16)
                     k = family_key(u["path"], u["param"], u["shape"])
                     f = fam.get(k)
                     if f is None:
-                        f = fam[k] = {"key": k, "records": 0, "devices": set(), "hosts": collections.Counter(),
+                        f = fam[k] = {"key": k, "known": u.get("known", ""), "records": 0, "devices": set(), "hosts": collections.Counter(),
                                       "agents": collections.Counter(), "names": collections.Counter(), "reports": collections.Counter(),
                                       "days": set(), "lengths": [10 ** 9, 0], "values": collections.Counter(), "requests": []}
                     f["records"] += 1
@@ -217,7 +217,7 @@ class Unknown:
         for k, f in fam.items():
             path, param, enc, hint, _ = k
             distinct = len(f["values"])
-            out.append({"id": family_id(k), "path": path, "param": param, "encoding": enc, "hint": hint,
+            out.append({"id": family_id(k), "known": f.get("known", ""), "path": path, "param": param, "encoding": enc, "hint": hint,
                         "lengths": f["lengths"], "records": f["records"], "devices": len(f["devices"]),
                         "distinct": distinct, "constant": distinct == 1 and f["records"] > 1,
                         "hosts": [h for h, _ in f["hosts"].most_common(TOP_HOSTS)], "hosts_total": len(f["hosts"]),

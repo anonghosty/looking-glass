@@ -104,6 +104,10 @@ evs.append({"src_ip": "192.0.2.91", "infection": "android.badbox2", "source": "e
             "http_url": f"GET /api/desk/getData?a={aes} HTTP/1.1"})
 evs.append({"src_ip": "192.0.2.92", "infection": "x.test", "source": "event4_sinkhole_http", "http_host": "h.example",
             "http_url": f"GET /api/report?data={b64json} HTTP/1.1"})
+# a known family not decoded yet (sustat): listed too, so it can be asked for (the user, 2026-11-16)
+sus = base64.b64encode(bytes(rnd.randrange(256) for _ in range(24))).decode()
+evs.append({"src_ip": "192.0.2.93", "infection": "android.badbox2", "source": "event4_sinkhole_http", "http_host": "v.sustat.com",
+            "http_url": f"GET /u.php?p={sus} HTTP/1.1"})
 tmp = tempfile.mkdtemp()
 audit = []
 ctx = {"store": type("S", (), {"days": {0: Day(evs)}})(), "labels": lambda: {"event4_sinkhole_http": "Sinkhole HTTP"}, "base_dir": tmp,
@@ -118,7 +122,13 @@ ok("one family across 7 generated domains, 7 devices counted", len(dga) == 1 and
    and dga[0]["names"] == ["dga.test"], json.dumps([{k: v for k, v in f.items() if k != "_requests"} for f in fams])[:300])
 cst = [f for f in fams if f["param"] == "d"]
 ok("a constant token is marked as one", cst and cst[0]["constant"] and cst[0]["distinct"] == 1)
-ok("known format, undecodable family and generic decode are not listed", {f["param"] for f in fams} == {"q", "d"}, str({f["param"] for f in fams}))
+ok("a decoded check-in, an encrypted family and a generic decode are not listed; a family not decoded yet is",
+   {f["param"] for f in fams} == {"q", "d", "p"}, str({f["param"] for f in fams}))
+susf = [f for f in fams if f["param"] == "p"]
+ok("... with its known name and status, so it can be asked for like the others",
+   susf and susf[0]["known"] == "sustat statistics request (not decoded yet)" and all(f["known"] == "" for f in fams if f["param"] != "p"),
+   str(susf and susf[0]["known"]))
+ok("... and its request line keeps only that value", susf and all(sus in x["request"] for x in susf[0]["_requests"]))
 listing_text = json.dumps(un.listing())
 ok("no device address in the listing, and the value only in the request lines the administrator checks before approving",
    "192.0.2." not in listing_text and tok not in json.dumps([{k: v for k, v in f.items() if k != "requests"} for f in un.listing()]))
@@ -138,7 +148,7 @@ print("4. The API")
 ok("refused to a researcher", call("rita", RES, "GET", "/api/beacon/unknown")[0] == 403)
 code, r = call("ana", ANA, "GET", "/api/beacon/unknown")
 lst = r.get_json()
-ok("an analyst gets the families", code == 200 and lst["open"] == 2)
+ok("an analyst gets the families (the sustat one among them)", code == 200 and lst["open"] == 3, str(lst["open"]))
 ok("the send link opens a private report on the separate decoding repository, never a public issue, and names no host",
    all(f["issue_url"] == "https://github.com/anonghosty/http-requests-decoding/security/advisories/new" for f in lst["families"]))
 fid = dga[0]["id"]
@@ -228,7 +238,8 @@ ok("marked as sent", call("ana", ANA, "POST", f"/api/beacon/unknown/{fid}/state"
 ok("put away as not a beacon", call("ana", ANA, "POST", f"/api/beacon/unknown/{cst[0]['id']}/state", {"state": "dismissed", "why": "a campaign token"})[0] == 200)
 lst = call("ana", ANA, "GET", "/api/beacon/unknown")[1].get_json()
 st = {f["param"]: (f["state"], f["state_by"]) for f in lst["families"]}
-ok("kept, with the readable name of who did it", st == {"q": ("sent", "Ana Analyst"), "d": ("dismissed", "Ana Analyst")} and lst["open"] == 0, str(st))
+ok("kept, with the readable name of who did it", st == {"q": ("sent", "Ana Analyst"), "d": ("dismissed", "Ana Analyst"), "p": ("open", "")}
+   and lst["open"] == 1, str(st))
 ok("... and who approved it", next(f for f in lst["families"] if f["id"] == fid)["approved_by"] == "Adam Admin")
 # security review of f9a4d0d: a second "sent" at the same moment is refused under the lock, and the lines stay
 ok("a second 'sent' is refused, checked again under the lock", post("ana", ANA, "sent") == 409
@@ -237,7 +248,7 @@ kept = json.loads(open(os.path.join(tmp, "data", "beacon_unknown.json")).read())
 ok("... and the approved lines are still kept with it", kept["state"] == "sent" and kept.get("approved_requests") == approved_lines)
 ok("a sent family is not reopened", post("ana", ANA, "open") == 409)
 ok("a family put away is reopened", call("ana", ANA, "POST", f"/api/beacon/unknown/{cst[0]['id']}/state", {"state": "open"})[0] == 200
-   and call("ana", ANA, "GET", "/api/beacon/unknown")[1].get_json()["open"] == 1)
+   and call("ana", ANA, "GET", "/api/beacon/unknown")[1].get_json()["open"] == 2)
 ok("every change is in the audit log (asked, not approved, asked, approved, sent, put away, reopened)",
    sum(1 for a, k in audit if a and a[0] == "beacon_family_state") == 7, str(sum(1 for a, k in audit if a and a[0] == "beacon_family_state")))
 ok("the state file is the owner's only (0600)", oct(os.stat(os.path.join(tmp, "data", "beacon_unknown.json")).st_mode & 0o777) == "0o600")

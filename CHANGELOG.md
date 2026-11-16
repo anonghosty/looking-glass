@@ -5,6 +5,26 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-16 (13)
+### Added
+- **A spike notice on the Overview's buttons.** When the latest report day moved sharply against the day before,
+  the cards say so and what is behind it: the infections that moved (with their report) for network communications,
+  the reports for services. Analysts and admins see it on the two platform cards, management on the Executive
+  portal's, researchers on Definitions'. A single report or infection that jumped is noticed even when the total is
+  steady. Counts and names only. Settings: `SPIKE_RATIO`, `SPIKE_MIN_EVENTS`, `SPIKE_CACHE_SECONDS`.
+
+- **The Glossary** (the in-app tab and the documentation's, generated from it) explains the new terms: Encoded
+  request, Decoded beacon, Beacon status, Decoded beacons, Spike notice, Beacon code (LG-B) and Decoding request.
+
+- **Known families not decoded yet can be asked for too.** *Requests Looking Glass could not decode* now also lists the
+  requests of a known family that is not decoded yet (for example sustat) and of a known format whose value did not
+  decode, with their known name, so an analyst can ask to send them for decoding automation and an administrator
+  approves as for the others. An event's Decoded beacon and the Decoded beacons list point there. Encrypted values,
+  hashes, IDs and tokens are still left out.
+
+### Changed
+- New features now install themselves from `features.py`, so `app.py` no longer grows with each one.
+
 ## 2026-11-16 (12)
 ### Added
 - The film **Decoded beacons** (3:10, narrated, with captions) on the documentation site: on the home page and in the

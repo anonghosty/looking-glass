@@ -7,12 +7,12 @@ the platform: the **Glossary** tab on the overview page and the **Glossary** but
 
 - [The basics](#the-basics) (8 terms)
 - [Who and where](#who-and-where) (10 terms)
-- [Threats](#threats) (15 terms)
-- [Numbers and measures](#numbers-and-measures) (13 terms)
+- [Threats](#threats) (18 terms)
+- [Numbers and measures](#numbers-and-measures) (14 terms)
 - [Using the platform](#using-the-platform) (11 terms)
-- [Accounts, roles and permissions](#accounts-roles-and-permissions) (34 terms)
+- [Accounts, roles and permissions](#accounts-roles-and-permissions) (48 terms)
 - [Publicly accessible / vulnerable services](#publicly-accessible--vulnerable-services) (13 terms)
-- [Security, audit and the pipeline](#security-audit-and-the-pipeline) (21 terms)
+- [Security, audit and the pipeline](#security-audit-and-the-pipeline) (23 terms)
 - [Related tools](#related-tools)
 - [A–Z index](#az-index)
 
@@ -122,6 +122,15 @@ Events rated critical: usually confirmed infections or active attacks that need 
 **Tag**  
 An extra label from the report, often a campaign name or an alternative family name.
 
+**Encoded request**  
+An HTTP request to a sinkhole that carries a long encoded string in one of its values (for example Base64, or text scrambled with a key). Some bots pack what they know about the device into it. Looking Glass reads it where it can and says what the request holds, never what to do about it: that is the analyst's call.
+
+**Decoded beacon**  
+What Looking Glass read out of an encoded request: the format (for example a CLogin check-in), the operator and version, the operating system the request reports, notes, and the decoded data itself. It says what the request says: "the decoded request says Windows" is a fact about the request, not proof of what the device is. Analysts and admins see it in an event's details.
+
+**Beacon status**  
+What a family's value is. Decoded: Looking Glass read it. Encoded, cannot be decoded: encrypted with a key kept in the malware, not in the request. Encoded, not decoded yet: a known family Looking Glass cannot read yet. Did not decode: a known format, but this value was cut short or is a new variant. Not encoded: a one-way hash, a device ID or a campaign token, with nothing in it to decode.
+
 **Residential proxy**  
 Software that lets strangers route their internet traffic through a subscriber's connection, often hidden in free apps or cheap devices. Abuse then appears to come from that subscriber.
 
@@ -157,8 +166,10 @@ For hosts seen at least three times, the typical time between their events (the 
 Malware contacting its server at regular intervals to ask for instructions. Regular repeat intervals are a sign of it.
 
 **Decoded beacons**  
-Records whose request carries an encoded check-in that Looking Glass decoded (for example a *CLogin check-in*), with
-the kind of beacon and the system it reports. Analysts and admins see the figure, its list and the *Beacon* filter.
+In an analysis: how many records of the selection carry a beacon Looking Glass decoded. Its Details list gives each kind of beacon with its status, operators, versions, records, devices, the names Shadowserver filed it under and its C2 domains. Analysts and admins only.
+
+**Spike notice**  
+On the Overview's cards: the latest report day against the day before. A spike is at least one and a half times the day before and at least 500 more; a drop the other way round. It says what is behind it: the infections that moved, with their report, for network communications; the reports that moved, for services. One report or infection that jumped on its own is named even when the total is steady. Counts and names only.
 
 **Activity level**  
 How busy the last 5 replayed minutes were compared with the whole day's average per minute. More filled bars means busier than usual; it says nothing about how dangerous the events are.
@@ -265,13 +276,19 @@ A match the platform found in the reports and asks a researcher to look into: th
 A new finding a researcher records on a name (the C2 moved, seen together with another family…), dated and signed. It appears on every card of that name and in the PDF reports as Notes shared by Researcher: full name (date). Notes are kept apart from the definitions and are never replaced by an update.
 
 **Combination code (LG-C, LG-X)**  
-A short code for one exact combination Intel gathered shows: LG-C-… for one report (the records that carry exactly these indicators), LG-X-… for a cross-report pattern (what a device carried in each of several reports). A code carries no address, so researchers and management can pass it on in notes and reports; an analyst pastes it on the Combinations page to get exactly those devices.
+A short code for one exact combination Intel gathered shows: LG-C-… for one report (the records that carry exactly these indicators), LG-X-… for a cross-report pattern (what a device carried in each of several reports). The same combination always has the same code, and a code carries no address, so researchers and management can pass it on in notes and reports; an analyst pastes it on the Combinations page to get exactly those devices.
 
 **Combination search**  
 The analysts' page (/combinations) that turns a combination code into the devices behind it, over the days in memory or up to 31 days of stored history, with a PDF summary (region map, across reports, each name and CVE explained with its references, and the researchers' notes on every name) and CSV files of the devices and records. A chart with nothing to show is left out of the PDF. It lists real addresses, so it is only for roles that see them and may export, and is off in Demo mode.
 
 **Analyst code (LG-A)**  
 A code for exactly the records of an analyst's selection on one day (for example a network and one host), made in an analysis window. It becomes a finding: researchers open it without any address and answer with their own codes, management filters the Executive portal by it, and analysts report on it again from the Combinations page.
+
+**Beacon code (LG-B)**  
+A code for the decoded beacons under one name that share a part (for example every beacon that says Windows under android.badbox2). Researchers move it to their notes, and a finding about decoded beacons shows it with what it means. Below 5 devices it is shown only to analysts and admins. Show in Executive opens the Executive portal on exactly those records.
+
+**Decoding request**  
+For a family of encoded requests Looking Glass cannot decode yet (nothing reads it, a known family not decoded yet, or a known format whose value did not decode; never encrypted values, hashes, IDs or tokens): an analyst asks, with a reason, to send it to the Looking Glass creator; an administrator checks the exact request lines and approves, or does not with a reason. Only then is it downloaded and pasted into a private report on the HTTP Requests Decoding repository, so a later release decodes it automatically. It holds only the request lines, each with its infection name: every other value in them, and any address, is replaced by a placeholder.
 
 **Needle through the haystack**  
 The way Looking Glass is meant to be used: instead of forwarding a network operator thousands of reported addresses, narrow the day's reports step by step (actively exploited, seen by several reports, the same exact combination on many devices, repeating) to the few devices most likely to matter, send that operator a short explained report, then take the next. The numbers drop day by day.
@@ -301,7 +318,34 @@ FIRST's TLP 2.0 labels how far an advisory may travel: RED (the named recipients
 The reports a name appears in. Each report shows whether it carries intel for the name (intel · N kinds) or only the name. A name not in today's reports shows where and when it was last seen (the last 30 days are remembered).
 
 **Malpedia**  
-The malware encyclopedia of Fraunhofer FKIE (malpedia.caad.fkie.fraunhofer.de): malware families and threat actors with descriptions and references. Looking Glass looks infections up there when a Malpedia API token is set; otherwise the Looking Glass definitions answer.
+The malware encyclopedia of Fraunhofer FKIE (malpedia.caad.fkie.fraunhofer.de): malware families and threat actors with descriptions and references. Looking Glass looks infections up there when a Malpedia API token is set, after the researchers' own definitions and before MISP Galaxy and MITRE ATT&CK. Its content is licensed CC BY-NC-SA 3.0.
+
+**ATT&CK technique**  
+One way attackers act, as MITRE ATT&CK names it, with an ID such as T1071.001 (Web Protocols) and its tactic (the goal, such as Command and Control). Cards and documents show the techniques a report, a malware name or a CVE stands for, with the ATT&CK version used.
+
+**Observed / Known for this malware / Possible**  
+How sure an ATT&CK technique is. Observed: the report saw it happen. Known for this malware: MITRE links it to that malware. Possible: an exposure an attacker could use. The wording says the constituent's part: "this device was used for it", "this address was the target of it", "attackers can use this exposure for it".
+
+**ATT&CK mapping**  
+Which ATT&CK techniques a Shadowserver report stands for. Looking Glass suggests one from the report's type; researchers confirm or change it on the Definitions page, or record that none fits. A reviewed mapping never changes by itself: a new ATT&CK version or a changed report only puts it back to "please check".
+
+**CTID mapping (CVE techniques)**  
+MITRE's Center for Threat-Informed Defense (CTID) maps the vulnerabilities in CISA's Known Exploited Vulnerabilities list to ATT&CK techniques (Mappings Explorer, Apache License 2.0): how attackers exploit it, what they gain first, what they can do next. CVE and issue cards show them; in advisories they are suggestions the advisor confirms, unless an administrator trusts CTID's mappings (off by default, audited).
+
+**Mitigation (How to defend)**  
+MITRE ATT&CK's name for a defence against a technique, with an ID such as M1035 (Limit Access to Resource Over Network). Advisories and cards show up to three for each technique, the ones that suit the kind of report first.
+
+**No source knows this name**  
+None of the sources (the researchers' definitions, Malpedia, MISP Galaxy, MITRE ATT&CK) describes the name. The card explains it from the evidence in the reports, and the name is listed on the Definitions page for the researchers to define.
+
+**Also described by**  
+On a card explaining a name: the other sources that know it, besides the one in the headline, each folded with its own text, references and licence. The researchers' definition, when there is one, is always the headline.
+
+**MISP Galaxy**  
+Free, public lists of malware, botnets and tools kept by the MISP Project (github.com/MISP/misp-galaxy). Looking Glass keeps a copy on the server and uses it for names that neither the researchers nor Malpedia explain. Its Malpedia cluster is Malpedia's content (CC BY-NC-SA 3.0); the card says which list answered.
+
+**MITRE ATT&CK**  
+MITRE's public knowledge base of attacker behaviour, including descriptions of malware and tools (attack.mitre.org). Looking Glass keeps a copy of its malware and tool entries on the server and uses it after MISP Galaxy. © The MITRE Corporation, reproduced with its permission.
 
 **Threat actor**  
 A group of attackers (for example Tick, also called BRONZE BUTLER) rather than a malware program. When a name is a group, the look-up shows the group, its aliases, suspected origin, targets and the malware it uses.
@@ -476,14 +520,19 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Advisory](#accounts-roles-and-permissions) · 
 [Affected city](#who-and-where) · 
 [All of the day's connections (map)](#using-the-platform) · 
+[Also described by](#accounts-roles-and-permissions) · 
 [Analysis view](#using-the-platform) · 
 [Analyst (role)](#accounts-roles-and-permissions) · 
 [Analyst code (LG-A)](#accounts-roles-and-permissions) · 
+[ATT&CK mapping](#accounts-roles-and-permissions) · 
+[ATT&CK technique](#accounts-roles-and-permissions) · 
 [Attack type](#threats) · 
 [Audit log (hash chain)](#security-audit-and-the-pipeline) · 
 [Audit portal](#security-audit-and-the-pipeline) · 
 [Auditor (role)](#accounts-roles-and-permissions) · 
 [Authenticator code (two-step sign-in)](#security-audit-and-the-pipeline) · 
+[Beacon code (LG-B)](#accounts-roles-and-permissions) · 
+[Beacon status](#threats) · 
 [Beaconing](#numbers-and-measures) · 
 [Botnet](#threats) · 
 [Botnet C2](#threats) · 
@@ -501,19 +550,25 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Country (Settings)](#publicly-accessible--vulnerable-services) · 
 [Critical](#threats) · 
 [Cross-report hosts](#numbers-and-measures) · 
-[Decoded beacons](#numbers-and-measures) · 
 [CSIRT](#the-basics) · 
+[CTID mapping (CVE techniques)](#accounts-roles-and-permissions) · 
 [Current time (UTC)](#the-basics) · 
 [CVE](#accounts-roles-and-permissions) · 
 [CVSS score](#accounts-roles-and-permissions) · 
+[Data access log](#security-audit-and-the-pipeline) · 
 [Database pipeline](#security-audit-and-the-pipeline) · 
 [DDoS](#threats) · 
+[Decoded beacon](#threats) · 
+[Decoded beacons](#numbers-and-measures) · 
+[Decoding request](#accounts-roles-and-permissions) · 
 [Demo mode](#using-the-platform) · 
 [Destination](#who-and-where) · 
 [Destination IPs](#who-and-where) · 
 [Devices and repeating devices (↻)](#accounts-roles-and-permissions) · 
 [Display quality (Auto / Full / Lite)](#using-the-platform) · 
 [DNS Open Resolvers](#publicly-accessible--vulnerable-services) · 
+[Drafted / Sent (advisory)](#accounts-roles-and-permissions) · 
+[Encoded request](#threats) · 
 [EPSS](#accounts-roles-and-permissions) · 
 [Event](#the-basics) · 
 [Event stream](#using-the-platform) · 
@@ -546,11 +601,16 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Masking](#security-audit-and-the-pipeline) · 
 [Median](#numbers-and-measures) · 
 [Median repeat interval](#numbers-and-measures) · 
+[MISP Galaxy](#accounts-roles-and-permissions) · 
+[Mitigation (How to defend)](#accounts-roles-and-permissions) · 
+[MITRE ATT&CK](#accounts-roles-and-permissions) · 
 [Needle through the haystack](#accounts-roles-and-permissions) · 
 [Network (ASN)](#who-and-where) · 
 [New report type](#security-audit-and-the-pipeline) · 
 [NIST SP 800-53](#security-audit-and-the-pipeline) · 
+[No source knows this name](#accounts-roles-and-permissions) · 
 [Note (researcher)](#accounts-roles-and-permissions) · 
+[Observed / Known for this malware / Possible](#accounts-roles-and-permissions) · 
 [Password expiry](#security-audit-and-the-pipeline) · 
 [Peak](#numbers-and-measures) · 
 [Permission](#accounts-roles-and-permissions) · 
@@ -568,12 +628,14 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Report](#the-basics) · 
 [Report (PDF + CSV)](#accounts-roles-and-permissions) · 
 [Report family](#publicly-accessible--vulnerable-services) · 
+[Report out of date (advisory)](#accounts-roles-and-permissions) · 
 [Report per network provider](#accounts-roles-and-permissions) · 
 [Report source (e-mail or Shadowserver API)](#security-audit-and-the-pipeline) · 
 [Reports](#numbers-and-measures) · 
 [Request path](#who-and-where) · 
 [Researcher (role)](#accounts-roles-and-permissions) · 
 [Residential proxy](#threats) · 
+[Retention note and rotation entry](#security-audit-and-the-pipeline) · 
 [Role](#accounts-roles-and-permissions) · 
 [Scanning](#threats) · 
 [Seen in / Last seen](#accounts-roles-and-permissions) · 
@@ -584,7 +646,9 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Share of all events](#numbers-and-measures) · 
 [Sinkhole](#threats) · 
 [Source host](#who-and-where) · 
+[Spam link host](#accounts-roles-and-permissions) · 
 [Special report](#security-audit-and-the-pipeline) · 
+[Spike notice](#numbers-and-measures) · 
 [Tag](#threats) · 
 [Target country](#who-and-where) · 
 [Target port](#who-and-where) · 
