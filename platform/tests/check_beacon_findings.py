@@ -221,12 +221,22 @@ ok("management's normal view: the finding carries an analyst selection of exactl
    f"{item.get('beacon_selection')} {made_sel[-1:] and {k: v for k, v in made_sel[-1].items() if k != 'ips'}}")
 ok("... its label says what it is, with the finding's number",
    made_sel and made_sel[-1]["label"].startswith("BADBOX 2.0 beacons from Windows machines") and f"#{item['id']}" in made_sel[-1]["label"])
+shown_ = fnd.shown(item, C.describe and (lambda c: C.describe(book.get(c))))
+ok("the Findings page shows the beacon code (LG-B), with the analyst selection behind Show in Executive kept apart (2026-11-16)",
+   shown_["beacon_code"] == bcode and shown_["beacon_selection"] == item["beacon_selection"]
+   and shown_["beacon_text"].startswith("Decoded beacons:"), str({k: shown_.get(k) for k in ("beacon_code", "beacon_selection", "beacon_text")}))
 n_before = len(made_sel)
 import beacon_findings  # noqa: E402
 ok("... made once: asking again gives the same code, no second selection",
    beacon_findings.attach_selection(item["id"]) == item["beacon_selection"] and len(made_sel) == n_before)
+with fnd.lock:                                          # a finding handed over before findings kept their beacon code
+    fnd._load(); fnd.data["items"][item["id"]].pop("beacon_code", None); fnd._save()
 code, r = call2("max", "GET", f"/api/beacon/finding/{item['id']}")
 ok("the manager it went to opens it on the Findings page: counts and the selection", code == 200 and r["records"] == 7 and not r.get("records_list"), str(r)[:200])
+item = fnd.get(item["id"])
+ok("... an older finding without its beacon code gets it then, once, and keeps its one selection (2026-11-16)",
+   item.get("beacon_code") == bcode and len(made_sel) == n_before
+   and [c for c in item.get("codes", []) if c.startswith("LG-A-")] == [item["beacon_selection"]], item.get("beacon_code"))
 import auth  # noqa: E402
 ok("researchers' pages may reach the code (auth.py's list for their role, or Move to notes stays empty)",
    any("/api/beacon/code".startswith(p) for p in auth.DEFINITIONS_PATHS))
@@ -261,6 +271,9 @@ ok("... the code book's own rule says the same: hidden from a researcher, shown 
    visible_to("rita", hcode) is False and visible_to("ana", hcode) is True and visible_to("rita", bcode) is True)
 # the selection's label follows the held-back rule (security review of 3ba9e60)
 call2("ana", "POST", "/api/beacon/finding", {"name": "android.badbox2", "operator": "HTM", "kind": "management", "to": "max"})
+ho = max(fnd.data["items"].values(), key=lambda x: int(x["id"]))
+ok("an analyst's hand-over gets its own beacon code too, so every beacon finding reads the same way",
+   str(ho.get("beacon_code", "")).startswith("LG-B-"), str(ho.get("beacon_code")))
 ok("an analyst's hand-over of beacons fewer than 5 devices carry: the selection's label names no part of them",
    made_sel and "HTM" not in made_sel[-1]["label"] and made_sel[-1]["label"].startswith("BADBOX 2.0 decoded beacons"), made_sel[-1:] and made_sel[-1]["label"])
 import acodes  # noqa: E402

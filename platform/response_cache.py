@@ -179,7 +179,8 @@ def _degraded(resp):
 READ_ONLY_WRITES = ("/api/intelligence/report", "/api/intelligence/export.csv", "/api/intelligence/host",
                     "/api/notifications/clear", "/api/networks/lookup", "/api/asns/identify", "/api/pipeline/apikey/check",
                     "/api/selftest/reset-login-counters", "/api/admin/sessions/", "/api/admin/lockouts/unlock", "/api/peace",
-                    "/api/password-policy", "/api/admin/monitor/cache")
+                    "/api/password-policy", "/api/admin/monitor/cache",
+                    "/api/beacon/decode")        # decoding a record's request changes nothing (beacon_decode.py)
 
 
 def changes_cached(path):

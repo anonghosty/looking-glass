@@ -55,7 +55,7 @@
   const SET_KEYS = ["source", "attack_class", "infection", "severity", "protocol"];   // multi-select filters
   // single-value filters; the last ones are set from an analysis ("Filter map") and shown as chips
   const SINGLE_KEYS = ["src_city", "dst_geo", "tag", "dst_port", "http_host", "src_ip",
-    "src_asn", "dst_asn", "dst_ip", "dst_city", "src_geo", "http_agent", "request"];
+    "src_asn", "dst_asn", "dst_ip", "dst_city", "src_geo", "http_agent", "request", "beacon"];
   const labelCache = new Map();   // "key\u0000value" -> readable label (for references and names)
   const cacheLabel = (k, v, label) => { if (label) labelCache.set(`${k}\u0000${v}`, String(label)); };
   // attack types get fixed, distinct colors (used for chips, intel bars and popups)
@@ -463,7 +463,7 @@
     facets: null, stats: null,
     filters: { source: new Set(), attack_class: new Set(), infection: new Set(), severity: new Set(), protocol: new Set(),
       src_city: "", dst_geo: "", tag: "", dst_port: "", http_host: "", src_ip: "",
-      src_asn: "", dst_asn: "", dst_ip: "", dst_city: "", src_geo: "", http_agent: "", request: "" },
+      src_asn: "", dst_asn: "", dst_ip: "", dst_city: "", src_geo: "", http_agent: "", request: "", beacon: "" },
     liveAdded: 0, liveCritical: 0, recentRate: [],   // [replayMs, weight]
     buffer: [], paused: false, pauseAt: 0, pauseReplay: 0, behind: false, autoPaused: false,
     // replay schedule from the server: playing | waiting (report not in yet) | settling (report arriving)
@@ -870,7 +870,7 @@
   const FILTER_NAMES = { source: "Report", attack_class: "Attack type", infection: "Infection / category", severity: "Severity", protocol: "Protocol",
     src_city: "Affected city", dst_geo: "Target country", tag: "Tag", dst_port: "Port", http_host: "C2 domain", src_ip: "Host",
     src_asn: "Source network", dst_asn: "Destination network", dst_ip: "Destination IP", dst_city: "Destination city", src_geo: "Source country",
-    http_agent: "User agent", request: "Request path", time: "Time" };
+    http_agent: "User agent", request: "Request path", time: "Time", beacon: "Beacon" };
   // readable value for a filter chip or a selection title
   function filterValueLabel(k, v) {
     const cached = labelCache.get(`${k}\u0000${v}`);
@@ -1151,7 +1151,20 @@
       for (const r of state.facets.infection || []) infColor(r.value);
       buildFilters();
       renderPins();   // pinned rows can now show report labels
+      if (state.facets.beacon_pending) setTimeout(loadBeaconFacet, 20000);
     } catch (err) { toast(`Could not load filters: ${err.message}`); }
+  }
+  // the day's beacons are decoded in the background on the server (beacon_stats.ready): only the Beacon filter is
+  // filled in when they are done, so nothing else the analyst set changes
+  async function loadBeaconFacet() {
+    try {
+      const f = await getJSON(`/api/facets?at=${encodeURIComponent(new Date(replayNow()).toISOString())}`);
+      if (f.beacon_pending) { setTimeout(loadBeaconFacet, 30000); return; }
+      if (!f.beacon || !state.facets) return;
+      state.facets.beacon = f.beacon; delete state.facets.beacon_pending;
+      $("fBeaconLabel").hidden = false;
+      fillSelect($("fBeacon"), f.beacon.length ? "All records" : "No decoded beacons today", f.beacon, (v) => v, "beacon");
+    } catch (err) { /* the next page load asks again */ }
   }
 
   // ------------------------------------------------------------------ HUD
@@ -1613,6 +1626,12 @@
     fillSelect($("fPort"), "All ports", f.dst_port || [], (v) => v, "dst_port");
     fillSelect($("fSrcAsn"), "All networks", f.src_asn || [], (v) => v, "src_asn");
     fillSelect($("fDstAsn"), "All networks", f.dst_asn || [], (v) => v, "dst_asn");
+    // the beacons Looking Glass decoded (analysts and admins: the server sends no list to masked viewers)
+    const bLabel = $("fBeaconLabel");
+    if (bLabel) {
+      bLabel.hidden = !f.beacon;
+      if (f.beacon) fillSelect($("fBeacon"), f.beacon.length ? "All records" : "No decoded beacons today", f.beacon, (v) => v, "beacon");
+    }
   }
   function chip(value, key, dotColor, count) {
     const b = el("button", "chip"); b.type = "button";
@@ -1963,6 +1982,8 @@
     const multi = flatAll.length !== seen.size;   // a multi-select field with several values
     if (multi) return openInsight("filters", new URLSearchParams(flatAll).toString());
     const flat = [...seen];
+    // the beacon is not a stored field: only the filter analysis knows it (app.py matches)
+    if (seen.has("beacon")) return openInsight("filters", new URLSearchParams(flat).toString());
     if (flat.length === 1) return openInsight(flat[0][0], flat[0][1]);
     const has = (...ks) => ks.every((k) => seen.has(k));
     // keep the dedicated analyses when they fit exactly
@@ -2029,7 +2050,7 @@
   // every breakdown in the analysis view can be analysed further. In demo mode concealed values
   // (destination IPs, domains, user agents, paths) arrive as opaque references the server resolves.
   const PIVOT_KEYS = ["source", "attack_class", "infection", "src_city", "src_asn", "dst_asn", "http_host", "dst_ip", "dst_geo",
-    "dst_port", "http_agent", "request", "severity", "tag", "protocol", "route", "dst_place", "filters", "time"];
+    "dst_port", "http_agent", "request", "severity", "tag", "protocol", "route", "dst_place", "filters", "time", "beacon"];
   const PIVOTS = { has: (k) => PIVOT_KEYS.includes(k) };
   const insightStack = [];
   function entityLabel(kind, v) {
@@ -2059,6 +2080,8 @@
   }
   // opts.drill: open this figure's list straight away (e.g. "hosts" from the top bar's Source hosts)
   async function openInsight(kind, value, push = true, opts = {}) {
+    // the beacon is not a stored field: only the filter analysis knows it (app.py matches), from wherever it is opened
+    if (kind === "beacon") { value = new URLSearchParams([["beacon", value]]).toString(); kind = "filters"; }
     hideTip();
     state.pendingDrill = opts.drill || null;
     if (push) insightStack.push([kind, value]);
@@ -2127,6 +2150,7 @@
     if (d.kind !== "src_ip") kpi(fmt(d.multi_infected), "Hosts with multiple threats", "multi");
     kpi(fmt(d.reports), "Reports", "reports");
     if (d.kind !== "src_ip") kpi(fmt(d.cross_report_hosts), "Cross-report hosts", "cross");
+    if (d.decoded_beacons != null) kpi(fmt(d.decoded_beacons), "Decoded beacons", d.decoded_beacons ? "beacons" : null);   // analysts and admins
     body.append(kpis);
     if (d.total) body.append(el("div", "i-kpi-hint", "Click any figure for the list behind it, such as the hosts that need follow-up."));
     body.append(drill);
@@ -2349,7 +2373,7 @@
       if (canOpen && target) {
         tr.classList.add("click");
         tr.title = hostRows ? "Open this host's analysis" : "Open the analysis for this entry";
-        const rowLabel = row.ip || row.domain || row.dst || row.report || row.infection || "";
+        const rowLabel = row.ip || row.domain || row.dst || row.report || row.infection || row.beacon || "";
         tr.addEventListener("click", () => drillTo(d, r.row_kind, target, rowLabel));
       }
       tb.append(tr);

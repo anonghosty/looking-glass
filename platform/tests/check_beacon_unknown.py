@@ -151,7 +151,18 @@ ok("the decoding request holds only HTTP request lines (at most 5), each with it
 ok("... no host, address, user agent or count in it", not any(w in text for w in ("192.0.2.", ".example", "Mozilla", "devices", "hosts")),
    text[:300])
 ok("every download is logged as an export", any(a and a[0] == "data_exported" for a, k in audit))
-ok("an absolute request line loses its host", U.request_line("GET http://c2.example/x.php?q=abc HTTP/1.1") == "GET /x.php?q=abc HTTP/1.1")
+ok("an absolute request line loses its host", U.request_line("GET http://c2.example/x.php?q=abc HTTP/1.1", "q") == "GET /x.php?q=abc HTTP/1.1")
+line_ = U.request_line("GET /gate.php?ip=41.66.1.2&host=MINISTRY-PC01&d=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo HTTP/1.1", "d")
+ok("the reviewer's line: the device's address and machine name never leave, the undecoded value does (2026-11-16)",
+   line_ == "GET /gate.php?ip=<value>&host=<value>&d=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo HTTP/1.1", line_)
+ok("... an address anywhere else in the line (the path) reads <address>",
+   U.request_line("GET /41.66.1.2/check?d=QUJD HTTP/1.1", "d") == "GET /<address>/check?d=QUJD HTTP/1.1",
+   U.request_line("GET /41.66.1.2/check?d=QUJD HTTP/1.1", "d"))
+ok("... a bare value with no name, and a fragment, are not kept",
+   U.request_line("GET /x?MINISTRY-PC01&d=QUJD#frag HTTP/1.1", "d") == "GET /x?<value>&d=QUJD HTTP/1.1",
+   U.request_line("GET /x?MINISTRY-PC01&d=QUJD#frag HTTP/1.1", "d"))
+import response_cache  # noqa: E402
+ok("decoding a record's request no longer empties the shared answers (it changes nothing)", not response_cache.changes_cached("/api/beacon/decode"))
 ok("state change refused without the page's token", call("ana", ANA, "POST", f"/api/beacon/unknown/{fid}/state", {"state": "sent"}, tok_="")[0] == 403)
 ok("marked as sent", call("ana", ANA, "POST", f"/api/beacon/unknown/{fid}/state", {"state": "sent"})[0] == 200)
 ok("put away as not a beacon", call("ana", ANA, "POST", f"/api/beacon/unknown/{cst[0]['id']}/state", {"state": "dismissed", "why": "a campaign token"})[0] == 200)

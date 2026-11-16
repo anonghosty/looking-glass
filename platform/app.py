@@ -105,7 +105,8 @@ EVENT_FIELDS = STD_FIELDS + ["source", "source_label", "attack_class"]
 # src_asn / dst_asn take a company name, demo alias or AS number; "request" is the request path (GET /x/).
 FILTER_FIELDS = ("source", "attack_class", "infection", "severity", "tag", "src_city", "dst_geo", "dst_port",
                  "protocol", "src_geo", "http_host", "src_ip", "src_asn", "dst_asn", "dst_ip", "dst_city",
-                 "http_agent", "request")
+                 "http_agent", "request", "beacon")
+# "beacon" is not a stored field: the decoded beacon's label ("CLogin check-in, Android"), beacon_stats.label()
 FACET_FIELDS = ("source", "attack_class", "infection", "severity", "tag", "src_city", "dst_geo", "dst_port", "protocol", "src_geo")
 EMPTY_LABEL = {"infection": "unknown", "tag": "untagged", "severity": "unrated"}
 
@@ -253,11 +254,12 @@ def parse_filters(args):
 
 
 def matches(ev, flt):
-    return all(ev.get(f) in vals for f, vals in flt.items())
+    return all((beacon_stats.label(ev) if f == "beacon" else ev.get(f)) in vals for f, vals in flt.items())
 
 
 # ---------------------------------------------------------------- day store
 import itertools as _itertools  # noqa: E402
+import beacon_stats  # noqa: E402  (the Beacon filter, the Decoded beacons figure and its Details list)
 _DAY_SERIAL = _itertools.count(1)
 # a loaded day is checked against MongoDB every DAY_RELOAD_SECONDS and kept, with every cached answer, when its rows
 # are the same; reloaded in full at least every DAY_MAX_AGE_SECONDS anyway (speed review, 2026-11-15: the 10-minute
@@ -587,7 +589,7 @@ def schedule_loop():
 
 def public(ev):
     """Event as sent to the browser: company names added, and masked when demo mode is on."""
-    out = {k: v for k, v in ev.items() if k != "_t"}
+    out = {k: v for k, v in ev.items() if k not in ("_t", "_bc")}      # _bc: beacon_stats' per-record label
     out["src_asn_name"] = asn_registry.label(ev["src_asn"], False)
     out["dst_asn_name"] = asn_registry.label(ev["dst_asn"], False)
     if is_demo():
@@ -677,11 +679,12 @@ def api_facets():
     """Filter values (with counts) for the whole replay day."""
     day = store.get(parse_iso(request.args.get("at"), replay_now()))
     demo = is_demo()
-    key = ("facets", day_key(day), demo, asn_registry.mtime, registry.version)
-    return jsonify(RCACHE.get(key, lambda: _facets_core(day, demo)))
+    beacons = not demo and beacon_stats.ready(day)      # labelled in the background once per loaded day
+    key = ("facets", day_key(day), demo, asn_registry.mtime, registry.version, beacons)
+    return jsonify(RCACHE.get(key, lambda: _facets_core(day, demo, beacons)))
 
 
-def _facets_core(day, demo):
+def _facets_core(day, demo, beacons=False):
     result = {}
     for field in FACET_FIELDS:
         c = Counter(e[field] for e in day.events)
@@ -697,6 +700,10 @@ def _facets_core(day, demo):
     for side in ("src", "dst"):
         c = Counter(asn_registry.company(e[f"{side}_asn"], demo) for e in day.events if e[f"{side}_asn"])
         result[f"{side}_asn"] = [{"value": v, "count": n} for v, n in c.most_common(300) if v]
+    if beacons:                           # analysts and admins: the beacons Looking Glass decoded (beacon_stats.py)
+        result["beacon"] = beacon_stats.facet_rows(day.events)
+    elif not demo:
+        result["beacon_pending"] = True   # still being labelled: the page asks again shortly
     result["source_labels"] = {s["name"]: s["label"] for s in registry.get()}
     result["source_class"] = {s["name"]: s["class"] for s in registry.get()}
     result["day"] = day.start.date().isoformat()
@@ -1111,7 +1118,7 @@ def _hhmmss(t):
     return datetime.fromtimestamp(t, timezone.utc).strftime("%H:%M:%S")
 
 
-DRILL_METRICS = ("events", "share", "hosts", "c2", "dst_ips", "interval", "multi", "reports", "cross")
+DRILL_METRICS = ("events", "share", "hosts", "c2", "dst_ips", "interval", "multi", "reports", "cross", "beacons")
 DRILL_LIMIT = 300
 
 
@@ -1304,6 +1311,14 @@ def api_insight_drill():
         if demo:
             for r in rows:
                 r["value"] = host_refs.ref(r["value"])   # concealed, but still clickable
+
+    elif metric == "beacons":
+        if demo:                          # analysts and admins only, like the figure
+            out.update(title="Decoded beacons", rows=[], empty="Decoded beacons are shown to analysts and administrators.")
+        elif not beacon_stats.ready(day):
+            out.update(title="Decoded beacons", rows=[], empty="The day's beacons are still being decoded. Try again in a minute.")
+        else:
+            out.update(beacon_stats.drill(ev, mt))
 
     rows = out.get("rows", [])
     out["total"] = len(rows)
@@ -1535,6 +1550,8 @@ def api_insight_report_pdf():
             (f"{I.get('regular_beacons', 0):,}", "hosts beaconing regularly"), (I.get("beacon_median_label") or "", "typical repeat interval"),
             (f"{I.get('c2_hosts', 0):,}", "C2 / sinkhole domains"), (f"{I.get('dst_ips', 0):,}", "destination IPs"),
             (f"{peak:02d}:00 UTC" if peak is not None else "", "peak hour"), (f"{len(rows):,}", f"entries in this list")]
+    if I.get("decoded_beacons") is not None:
+        kpis.append((f"{I['decoded_beacons']:,}", "decoded beacons"))
     B = I.get("breakdowns") or {}
     for r in B.get("src_city") or []:
         r["label"] = str(r.get("label") or "").title()
@@ -1820,6 +1837,8 @@ def api_insight():
         first=ev[0]["extracted_date"] if ev else None, last=ev[-1]["extracted_date"] if ev else None,
         beacon_median=_median(intervals), beacon_median_label=_fmt_dur(_median(intervals)), regular_beacons=regular,
         multi_infected=multi, hours=hours, peak_hour=peak_hour,
+        # decoded_beacons, beacon_devices: analysts and admins, once the day is labelled (beacon_stats.ready)
+        **({} if is_demo() or not beacon_stats.ready(day) else beacon_stats.counts(ev)),
         hours_by_class=hours_by_class, current_hour=cur_hour, timeline=timeline, severity=severity,        insights=insights, breakdowns=breakdowns, top_hosts=top_hosts,
         cross_report_hosts=len(cross_hosts), reports=len({e["source"] for e in ev}),
         value_label=_value_label(kind, value, demo, labels),
@@ -2970,7 +2989,8 @@ ACODES = _acodes.install(app, {
     "labels": lambda: {**{x["name"]: x["label"] for x in registry.get()}, **{x["name"]: x["label"] for x in svc["registry"].get()}},
     "network": lambda asn: asn_registry.company(asn, False) if asn else "", "defined": _defined_titles,
     "people_name": lambda u: people.name(u, ""), "base_dir": BASE_DIR,
-    "cross": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"]),     # every category for the code's hosts
+    "cross": lambda hosts, hold_small=False: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"],
+                                                       hold_small=hold_small),     # every category for the code's hosts
     # the same with each CVE's / issue's hosts (server side only: a CVE ticked on the code's page, 2026-11-14)
     "cross_hosts": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"], with_hosts=True)})
 BEACON_FINDINGS_CTX["acodes"] = ACODES       # a beacon finding's records as an analyst selection (Show in Executive)

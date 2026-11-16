@@ -382,7 +382,9 @@ def install(app, ctx):
         cross = None
         if ctx.get("cross") and hosts:
             try:
-                cross = ctx["cross"](hosts)
+                # a beacon selection seen by a viewer who does not see hosts: small patterns keep no code here either
+                # (security review of d3e2bf6; Intel gathered does the same)
+                cross = ctx["cross"](hosts, hold_small=True) if masked else ctx["cross"](hosts)
             except Exception:                              # noqa: BLE001  (the page still shows the selection itself)
                 cross = None
         f = ctx["findings"].of_code(code)

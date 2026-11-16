@@ -51,7 +51,7 @@ class Findings:
     asked_of = None
 
     def of_code(self, c):
-        return ({"id": "7", "participants": ["rachel"], "title": "a finding", "status": "analyst", "user": "rachel"}
+        return ({"id": "7", "participants": ["rachel"], "title": "a finding", "text": "", "status": "analyst", "user": "rachel"}
                 if c == SRC else None)
 
     def sees(self, f, user, admin, strict=False):
@@ -59,6 +59,7 @@ class Findings:
 
 
 SRC = "LG-A-00000AAA"
+CROSS_CALLS = []          # how the every-category section was asked for (hold_small or not)
 # the selection: three services records on three hosts; .1 and .2 carry the CVE, .3 another one
 EVS = [{"id": "r1", "ip": "192.0.2.1", "issues": ["CVE-2023-48795"], "extracted_date": "2026-11-13"},
        {"id": "r2", "ip": "192.0.2.2", "issues": ["CVE-2023-48795"], "extracted_date": "2026-11-13"},
@@ -87,6 +88,7 @@ api = acodes.install(app, {"book": book, "findings": Findings(), "base_dir": tmp
                            "has_perm": lambda p: p in perms.get(getattr(g, "user", {}).get("role", ""), set()),
                            "audit": type("A", (), {"add": staticmethod(lambda *a, **k: audited.append((a, k)))})(),
                            "day": lambda platform, iso: Day(EVS), "cross_hosts": cross_hosts, "labels": dict,
+                           "cross": lambda hosts, **kw: CROSS_CALLS.append(kw) or {},
                            "network": lambda a: "", "defined": dict, "people_name": lambda u: u})
 api.paths["ids"] = os.path.join(tmp, "acodes")
 os.makedirs(api.paths["ids"], exist_ok=True)
@@ -206,6 +208,16 @@ small = sorted({c for c in json.dumps(as_analyst).split('"') if c.startswith(("L
 ok("the devices of a beacon selection: an analyst's answer is not served to a researcher afterwards (review of 04696d5)",
    bool(small) and not any(c in json.dumps(as_researcher) for c in small) and "null" not in json.dumps(as_researcher),
    f"{as_analyst} / {as_researcher}")
+SRCB2 = "LG-A-0000BEA2"                      # a fresh beacon selection: nothing of it cached yet
+book.put(SRCB2, dict(book.get(SRCB), label="beacons again"))
+with open(os.path.join(api.paths["ids"], f"{SRCB2}.json"), "w") as fh:
+    json.dump(["r1", "r2", "r3"], fh)
+CROSS_CALLS.clear(); devices_as("researcher", ["definitions"], SRCB2)
+ok("…its every-category section holds small patterns back for a researcher too (review of d3e2bf6)",
+   any(c.get("hold_small") for c in CROSS_CALLS), str(CROSS_CALLS))
+CROSS_CALLS.clear(); devices_as("analyst", ["unmasked", "export"], SRC)
+ok("…an analyst's handed-over selection keeps every code there, as before", CROSS_CALLS and not any(c.get("hold_small") for c in CROSS_CALLS),
+   str(CROSS_CALLS))
 ok("…and the code made from it carries the beacon mark on (the rule follows it)",
    ((book.get(d_a.get("code", "")) or {}).get("sel") or {}).get("beacon") == {"name": "android.badbox2", "os_family": "windows"})
 

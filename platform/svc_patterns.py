@@ -66,10 +66,15 @@ class Patterns:
         except OSError:
             m = None
         c = self._c.get(key)
+        # the modification time alone can miss a change: two writes inside one tick of a coarse file-system clock keep
+        # the same time, so every write here also drops its own copy (_written)
         if not c or c[0] != m:
             c = (m, _read(p, default))
             self._c[key] = c
         return c[1]
+
+    def _written(self, key):
+        self._c.pop(key, None)
 
     def shipped(self):
         return self._load("fields", {"reports": {}, "all_reports": [], "never": [], "never_patterns": []})
@@ -219,6 +224,7 @@ class Patterns:
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(d, f, indent=1, ensure_ascii=False)
             os.replace(tmp, self.paths["local"])
+            self._written("local")
         return clean
 
     def reset(self, report):
@@ -229,6 +235,7 @@ class Patterns:
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(d, f, indent=1, ensure_ascii=False)
             os.replace(tmp, self.paths["local"])
+            self._written("local")
 
     def add_rule(self, contains, product, version, user):
         contains, product = str(contains or "").strip()[:60], str(product or "").strip()[:60]
@@ -244,3 +251,4 @@ class Patterns:
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(d, f, indent=1, ensure_ascii=False)
             os.replace(tmp, self.paths["rules_local"])
+            self._written("rules_local")

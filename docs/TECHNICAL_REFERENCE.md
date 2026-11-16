@@ -158,7 +158,9 @@ server side is in small modules called from `app.py`:
   memory into families keyed by (path with numbers and long parts folded, parameter, encoding, shape hint, length in
   16-byte steps up to 256, then 128); per family: records, devices (counted), distinct values (`constant` when one
   value repeats), C2 hosts (12 shown, all counted), top user agents and names, reports, days, length range, and up to 5
-  distinct (infection name, request line) pairs kept on the server (`request_line()`: an absolute `GET http://host/...` cut to its path).
+  distinct (infection name, request line) pairs kept on the server (`request_line(url, param)`: an absolute
+  `GET http://host/...` cut to its path; only the undecoded parameter keeps its value, every other value reads
+  `<value>` with its name kept, and any address `ip_find` finds reads `<address>`).
   Kept per set of days for up to an hour. `GET /api/beacon/unknown` (the *unmasked* permission, demo off): the families
   without their request lines, each with its state and the link to send it: a private report on the separate
   `anonghosty/http-requests-decoding` repository (`SEND_URL`, its *security/advisories/new* form; never a public issue). `GET /api/beacon/unknown/<id>/request`: the decoding request as a JSON
@@ -167,6 +169,16 @@ server side is in small modules called from `app.py`:
   /api/beacon/unknown/<id>/state` (`dismissed` | `sent` | `open`, CSRF token; audit event `beacon_family_state`), kept in
   `data/beacon_unknown.json` (0600, run-time data). Findings page section: `static/js/beacon-unknown.js`. Test:
   `tests/check_beacon_unknown.py`.
+- **`beacon_stats.py`, beacons on the analyst's map.** `label(e)` is a record's beacon as the *Beacon* filter shows it
+  (`"<format title>, <OS>"` from `beacon_decode.field()`, or `"<title> (not decoded)"`), kept on the record as `_bc`
+  so a loaded day is decoded once (`app.public()` strips it). A decodable check-in takes about 14 ms, so `ready(day)`
+  labels a loaded day in one background thread (one day at a time) and the options (`beacon_pending` until then), the
+  figure and the list wait for it rather than slowing a request. `app.py` adds `beacon` to `FILTER_FIELDS` (`matches()`
+  compares the label), the options to `/api/facets` (`beacon`), `decoded_beacons` / `beacon_devices` to `/api/insight`
+  and the `beacons` metric to `/api/insight/drill` (`drill()`: one row per label, `row_kind` `beacon`). Options, figure
+  and list are left out for masked viewers (`is_demo()`); the filter itself is applied for every viewer, so a code
+  made with it selects the same records for whoever opens it. Test: `tests/check_beacon_stats.py` (the module part
+  also runs in CI with `LG_UNIT_ONLY=1`).
 - **`notes.py`, researchers' notes.** New findings per name in `data/notes.json` (run-time data: never shipped, never
   overwritten by an update), each with author, role and date. The look-ups `mp_resolve`, `issue_resolve` and
   `issues_resolve` attach the notes to every explanation card, so the map, services, Executive and both PDF builders
@@ -471,7 +483,7 @@ Every setting, with examples: [CONFIGURATION.md](CONFIGURATION.md). The main one
 | `GET /api/facets?at=` | filter values with counts for the replay day, plus the severity of each infection |
 | `GET /api/stats?at=&…filters` | totals, unique hosts, families and C2 IPs, top infections / categories, affected cities, C2 / sinkhole domains and targets, and 15-minute timeline buckets |
 | `GET /api/insight?kind=&value=&at=` | analytics for one entity (`kind` = `source`, `attack_class`, `infection`, `src_city`, `http_host`, `dst_geo`, `src_ip`, `src_asn` or `dst_ip`): connections, share, hosts, C2 domains, median beacon interval and how many hosts beacon regularly, multi-infected hosts, hourly profile, breakdowns, most active hosts and plain-language findings |
-| `GET /api/insight/drill?kind=&value=&metric=&at=[&all=1]` | the list behind one figure of the analysis view (`metric` = `events`, `share`, `hosts`, `c2`, `dst_ips`, `interval`, `multi`, `reports`, `cross`). Host lists are ranked for follow-up (several kinds of activity, several reports, several infections, regular beaconing, critical). Returns the first 300 rows, or all with `all=1` (used by Download CSV). Demo mode masks IPs and networks |
+| `GET /api/insight/drill?kind=&value=&metric=&at=[&all=1]` | the list behind one figure of the analysis view (`metric` = `events`, `share`, `hosts`, `c2`, `dst_ips`, `interval`, `multi`, `reports`, `cross`, `beacons`: decoded beacons, analysts and admins). Host lists are ranked for follow-up (several kinds of activity, several reports, several infections, regular beaconing, critical). Returns the first 300 rows, or all with `all=1` (used by Download CSV). Demo mode masks IPs and networks |
 | `GET /api/related?src_ip=&at=` | what one infected host did today: connection count, first and last seen, infections, contacted hosts |
 | `GET /healthz` | liveness |
 

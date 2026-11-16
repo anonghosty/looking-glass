@@ -5,6 +5,33 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-16 (7)
+### Security
+- **A decoding request keeps only the value that could not be decoded.** A bot's own parameters can carry the
+  device's address or machine name (`ip=…&host=…`): in the file sent to the Looking Glass creator every other
+  parameter's value now reads `<value>` (names kept) and any address `<address>`, so it holds no host or address, as
+  documented (reported by the external reviewer).
+- A beacon selection's code page holds small patterns back in its *every other category* section too, for researchers:
+  no code for a pattern fewer than 5 devices carry, as on the rest of the page and in Intel gathered (security review
+  of v2026.11.16.6; codes and counts only, never an address). An analyst's handed-over selection keeps every code.
+
+### Added
+- **Beacons on the analyst's map.** A **Beacon** filter lists the day's decoded beacons by kind and system (for example
+  *CLogin check-in, Windows*) and narrows the map, stream, Intel and figures to them. The analysis has a **Decoded
+  beacons** figure whose list gives each kind's operators, versions, records, devices, the names it is filed under and
+  its C2 domains; a row narrows the analysis to it. Analysts and admins only; each record is decoded once per loaded
+  day.
+
+### Fixed
+- Opening a decoded beacon on the map no longer empties the cache of shared answers (decoding changes nothing).
+- A beacon finding shows its beacon code (`LG-B-…`) and what it means, not the analyst selection behind *Show in
+  Executive*, which keeps working as before. A beacon finding handed over before this release gets its beacon code
+  the first time it is opened.
+- The map's *Hand over these beacons* form and buttons use the Looking Glass styling.
+- A services report's pattern fields taken back to the shipped ones (or a new product rule) show at once on every
+  server. Where the file system keeps coarse modification times, a reset made right after a save could be missed until
+  the next change (found by `tests/check_svc_patterns.py` on a server that installed the release).
+
 ## 2026-11-16 (6)
 ### Security
 - The device counts behind an analyst code's page are kept per viewer level: what is worked out for an analyst is no

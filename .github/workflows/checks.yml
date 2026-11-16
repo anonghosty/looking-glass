@@ -137,6 +137,8 @@ jobs:
                    check_beacon_decode check_beacon_findings check_beacon_unknown; do
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
           done
+          # the module part only: the filter and who sees it need the platform (run_all_checks.sh on the server)
+          echo "::group::check_beacon_stats"; LG_UNIT_ONLY=1 python tests/check_beacon_stats.py; echo "::endgroup::"
       - name: Pipeline checks
         working-directory: database
         run: |

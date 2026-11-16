@@ -70,6 +70,18 @@ try:
        and P.choice("scan6_snmp")["by"] == "lg-selftest")
     P.reset("scan_snmp")
     ok("…and can be taken back to the shipped one", "sysdesc" in [f["field"] for f in P.fields_for("scan_snmp")])
+    # a coarse file-system clock (reported from a server that pulled the release, 2026-11-16): a save and a reset in
+    # the same tick leave the same modification time; what is shown must still follow the last write
+    local = os.path.join(tmp, "data", "pattern_fields_local.json")
+    P.save("scan_snmp", [{"field": "community", "kind": "exact"}], "lg-selftest")
+    P.fields_for("scan_snmp")                                     # read and cached at this modification time
+    st = os.stat(local)
+    P.reset("scan_snmp")
+    os.utime(local, ns=(st.st_atime_ns, st.st_mtime_ns))          # the reset in the same clock tick
+    ok("…even when the reset lands in the same tick of a coarse file-system clock",
+       "sysdesc" in [f["field"] for f in P.fields_for("scan_snmp")] and P.choice("scan_snmp") is None)
+    P.add_rule("Zeta-OS", "Zeta OS", True, "lg-selftest")
+    ok("…and a new product rule is used at once", P.product("Zeta-OS 3.0") == "Zeta OS 3.0")
     try:
         P.add_rule("router.example.org", "X", True, "lg-selftest"); refused = False
     except ValueError:

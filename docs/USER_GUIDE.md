@@ -191,6 +191,11 @@ Come back to it at any time with the **Overview** button, which is in every page
   as it happens. Hover anything to see what it is; click to analyse it.
 - **Filters** (left): attack type, report, severity, infection, affected city, target country, source network,
   destination network, tag, port and protocol. Networks are grouped by company (all AS numbers of one operator).
+  Analysts and admins also get **Beacon**: the beacons Looking Glass decoded that day, each as its kind and the system
+  it reports (for example *CLogin check-in, Windows*), with how many records carry it. Picking one shows only those
+  records on the map, the stream, Intel and the figures. A known family whose value did not decode is listed as, for
+  example, *CLogin check-in (not decoded)*. Right after a day is loaded its beacons are decoded in the background;
+  the filter appears by itself once that is done, usually within a minute or two.
 - **Intel** (right): attack types, events by hour, severity mix, networks, infections, cities, C2 domains...
   Every line is clickable.
 - **Stream** (bottom): every event as it replays. Click a row for the full details (the raw request, the infected
@@ -257,6 +262,12 @@ whole platform.
 
 **Hosts in several reports** and **Hosts with multiple issues** compare each host across all its reports of the
 day, so a blocklisted host that also runs an outdated web server shows up in both.
+
+**Decoded beacons** (analysts and admins): how many records of the selection carry a beacon Looking Glass decoded.
+Its **Details ›** lists each kind of beacon with the system it reports, its operators and versions, the records and
+devices, the names Shadowserver filed it under, the C2 domains and the first and last time seen. Click a row to narrow
+the analysis to that beacon. Like the beacon on the map, the list says what the beacons hold, never what to do about
+them. Researchers and Demo mode don't get the figure or the list; they see beacons in Intel gathered.
 
 **Explaining names** (analysts and admins; permission *malpedia*): host lists with infections have **Explain the
 names**, which looks up every infection / category of the list once (the researchers' definitions, Malpedia with a
@@ -662,8 +673,10 @@ family often spans many generated domains), the names it is filed under, the rep
 and devices carry it. Devices are counted, never listed. For each family:
 
 - **Send to the Looking Glass creator.** Download the *decoding request*: a JSON file holding only the family's HTTP
-  requests (up to 5, as the sinkhole recorded them), each with the infection name it is filed under, and no host,
-  address, user agent or count. Then open the private report on the separate **HTTP Requests Decoding** repository
+  requests (up to 5), each with the infection name it is filed under, and no host, address, user agent or count.
+  In each request only the value Looking Glass could not decode is kept: every other parameter's value reads
+  `<value>` (a bot's own parameters can carry the device's address or machine name), and any address left reads
+  `<address>`. Then open the private report on the separate **HTTP Requests Decoding** repository
   (only you and the Looking Glass creator see it), title it *Decoding request* and paste the file's contents into it,
   so a future release can decode the family automatically. Looking Glass sends nothing itself. Decoded, a request's value may hold the device's own data, so the
   download asks you to confirm your organisation's rules (TLP) allow sharing it, and every download is recorded in the

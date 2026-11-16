@@ -134,6 +134,7 @@ run "Explore a match (only its records)" $PY tests/check_intel_match.py
 run "beacon decoder (who sees what)"   $PY tests/check_beacon_decode.py
 run "beacons handed over (per role)"   $PY tests/check_beacon_findings.py
 run "generic decode + undecoded families" $PY tests/check_beacon_unknown.py
+run "beacon filter + decoded beacons"     $PY tests/check_beacon_stats.py
 run "researchers' notes"              $PY tests/check_notes.py
 run "combination codes + search"      $PY tests/check_combos.py
 run "findings (researcher → advisory)" $PY tests/check_findings.py

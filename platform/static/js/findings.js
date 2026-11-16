@@ -191,8 +191,11 @@
     const cs = el("div", "fd-codes");
     for (const x of codes) {
       const isA = x.code.startsWith("LG-A-");
-      const row = el("div", `fd-code${isA ? " a" : ""}`);
-      const what = el("span", null, x.text || "");
+      // a beacon finding's selection: shown as its beacon code (LG-B) and what it means; the LG-A behind it only does the
+      // work (device count, Show in Executive, the analyst's report)
+      const asBeacon = !!(f && f.beacon_code && f.beacon_selection && x.code === f.beacon_selection);
+      const row = el("div", `fd-code${isA && !asBeacon ? " a" : ""}${asBeacon ? " b" : ""}`);
+      const what = el("span", null, asBeacon ? (f.beacon_text || x.text || "") : (x.text || ""));
       // the number of devices: within the analyst's selection for a researcher's answer, all of it for the analyst code
       const acode = isA ? x.code : within;
       if (acode) {
@@ -205,15 +208,15 @@
           n.textContent = isA ? `${Number(k).toLocaleString("en-US")} device${k === 1 ? "" : "s"}` : `${Number(k).toLocaleString("en-US")} device${k === 1 ? "" : "s"} in the selection`;
         });
       }
-      if (x.asked) {                      // what the analyst asked for when making the code (acodes.py)
+      if (x.asked && !asBeacon) {         // what the analyst asked for when making the code (acodes.py)
         const [head, ...rest] = x.asked.split(": ");
         const ask = el("span", "fd-asked"); ask.append(el("b", null, "Asked for: "), document.createTextNode(head));
         ask.title = rest.join(": ") || head; what.append(ask);
       }
-      row.append(el("code", null, x.code), what);
+      row.append(el("code", null, asBeacon ? f.beacon_code : x.code), what);
       const acts = el("div", "fd-code-acts");
       const link = (label, href, title) => { const a = el("a", "lg-btn sm", label); a.href = href; a.title = title; acts.append(a); };
-      if (isA && data.can_research) link("Open as researcher", `/intel/${x.code}`, "The names, definitions and intel of exactly these records, never an address; pick codes for your reply");
+      if (isA && !asBeacon && data.can_research) link("Open as researcher", `/intel/${x.code}`, "The names, definitions and intel of exactly these records, never an address; pick codes for your reply");
       if (data.can_portal) link("Show in Executive", `/management?code=${x.code}${dayQ(f)}`, "Filter the Executive portal to exactly this, on the day it was reported (aggregated figures, no addresses)");
       const inA = !isA && within ? `&within=${encodeURIComponent(within)}` : "";
       if (data.can_search) link(isA ? "Report (PDF + CSV)" : inA ? "Search within the selection" : "Search", `/combinations?code=${x.code}${inA}${dayQ(f)}`,

@@ -466,6 +466,10 @@ class Findings:
                 # a decoded beacon handed over (beacon_findings.py): which beacons, never a device; the page asks for them
                 # at the viewer's level (/api/beacon/finding/<id>)
                 "beacon": bool(x.get("beacon")),
+                # its beacon code (LG-B) is what people see; the analyst selection behind Show in Executive stays a
+                # mechanism (beacon_findings.attach), shown under the beacon code
+                "beacon_code": x.get("beacon_code") or "", "beacon_selection": x.get("beacon_selection") or "",
+                "beacon_text": ((describe(x["beacon_code"]) if describe and x.get("beacon_code") else "") or ""),
                 # its advisories (advisory.py): reference, organisation, state; the advisor marks a drafted one as sent here
                 "advisories": self.advisories_of(x["id"]) if x.get("review") else []}
 

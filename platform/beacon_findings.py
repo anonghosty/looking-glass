@@ -232,6 +232,18 @@ def install(app, ctx):
         finding (its channel alone opens it, acodes.py), so "Show in Executive" filters the Executive portal to them."""
         x = f.get(fid)
         acodes = ctx.get("acodes")
+        if x and x.get("beacon") and not x.get("beacon_code") and ctx.get("book") is not None:
+            # handed over before findings kept their beacon code (2026-11-16): worked out once and kept, so the finding
+            # shows its LG-B like every newer one
+            bcode = beacon_code(ctx["book"], x["beacon"], display_of(ctx, x["beacon"]["name"]))
+            if bcode:
+                with f.lock:
+                    f._load()
+                    it = f.data["items"].get(fid)
+                    if it is not None and not it.get("beacon_code"):
+                        it["beacon_code"] = bcode
+                        f._save()
+                x = f.get(fid)
         if not x or not x.get("beacon") or not acodes or x.get("beacon_selection"):
             return (x or {}).get("beacon_selection")
         sel = x["beacon"]
@@ -324,8 +336,11 @@ def install(app, ctx):
                            f"{len(hosts)} device{'s' if len(hosts) != 1 else ''} in {', '.join(reps)}. These requests need a "
                            f"serious look: what the devices are, and whether the records are filed under the right name.")
         user, role = me()
+        book = ctx.get("book")                         # its beacon code, as for a note's (what the Findings page shows)
+        bcode = beacon_code(book, sel, display_of(ctx, sel["name"])) if book is not None else ""
         item = f.create({"id": None, "text": text, "codes": []}, "infections", sel["name"], title, user, role, to, kind,
-                        extra={"beacon": sel, "beacon_at_create": {"records": n, "devices": len(hosts), "at": round(time.time(), 3)}})
+                        extra={"beacon": sel, "beacon_code": bcode,
+                               "beacon_at_create": {"records": n, "devices": len(hosts), "at": round(time.time(), 3)}})
         ctx["audit"].add("finding_created", user=user, target=f"#{item['id']} {sel['name']}",
                          detail=f"decoded beacons · to {to} · " + item["title"][:120])
         attach_selection(item["id"])
@@ -340,8 +355,9 @@ def install(app, ctx):
         x = f.get(fid)
         if not x or not x.get("beacon") or not f.sees(x, user, hp("settings"), strict=not team()):
             return jsonify(error="No such finding."), 404
-        if not x.get("beacon_selection"):
-            # a beacon finding made before its analyst selection was (2026-11-16): made once, now, from the same records
+        if not x.get("beacon_selection") or not x.get("beacon_code"):
+            # a beacon finding made before its analyst selection, or before it kept its beacon code (2026-11-16): made
+            # once, now, from the same records
             attach_selection(x["id"])
         # the Findings page shows no address until an analyst asks for the devices (records=1; logged, data_access.py)
         full = ctx["sees_hosts"]()

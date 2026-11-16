@@ -10,6 +10,19 @@
 .bh-form .fd-in:focus, .bh-form select:focus, .bh-form textarea:focus { outline: none; border-color: #b18cf5;
   box-shadow: 0 0 0 3px rgba(177, 140, 245, .18); }
 .bh-form .lg-btn.primary { justify-self: start; }
+/* Looking Glass's buttons (settings.css, which the map page does not load), for the beacon blocks wherever they appear */
+:is(.bh-wrap, .bh-block) .lg-btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 9px;
+  border: 1px solid var(--border-strong, #3a3a44); background: var(--surface-2, #1b1b20); color: var(--text, #e8e8ee);
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; width: auto; align-self: flex-start;
+  transition: background .15s, border-color .15s, transform .1s; }
+:is(.bh-wrap, .bh-block) .lg-btn:hover:not(:disabled) { background: #23242c; border-color: #4a4f5f; }
+:is(.bh-wrap, .bh-block) .lg-btn:active:not(:disabled) { transform: translateY(1px) scale(.98); }
+:is(.bh-wrap, .bh-block) .lg-btn:focus-visible { outline: 2px solid #5b8def; outline-offset: 2px; }
+:is(.bh-wrap, .bh-block) .lg-btn:disabled { opacity: .6; cursor: progress; }
+:is(.bh-wrap, .bh-block) .lg-btn.sm { padding: 5px 11px; font-size: 12px; border-radius: 7px; }
+:is(.bh-wrap, .bh-block) .lg-btn.primary { background: linear-gradient(180deg, #4f7fe6, #3f6fd8); border-color: #5b8def; color: #fff;
+  box-shadow: 0 4px 14px rgba(63, 111, 216, .28); }
+:is(.bh-wrap, .bh-block) .lg-btn.primary:hover:not(:disabled) { background: linear-gradient(180deg, #5b8def, #4a79e0); }
 .bh-l { font-size: 12px; color: var(--muted, #8a8a94); }
 .ig-beacon-code { margin-top: 8px; }
 .ig-beacon-ops { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border, #2a2a30); }

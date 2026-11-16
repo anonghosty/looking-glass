@@ -8,7 +8,7 @@ the platform: the **Glossary** tab on the overview page and the **Glossary** but
 - [The basics](#the-basics) (8 terms)
 - [Who and where](#who-and-where) (10 terms)
 - [Threats](#threats) (15 terms)
-- [Numbers and measures](#numbers-and-measures) (12 terms)
+- [Numbers and measures](#numbers-and-measures) (13 terms)
 - [Using the platform](#using-the-platform) (11 terms)
 - [Accounts, roles and permissions](#accounts-roles-and-permissions) (34 terms)
 - [Publicly accessible / vulnerable services](#publicly-accessible--vulnerable-services) (13 terms)
@@ -155,6 +155,10 @@ For hosts seen at least three times, the typical time between their events (the 
 
 **Beaconing**  
 Malware contacting its server at regular intervals to ask for instructions. Regular repeat intervals are a sign of it.
+
+**Decoded beacons**  
+Records whose request carries an encoded check-in that Looking Glass decoded (for example a *CLogin check-in*), with
+the kind of beacon and the system it reports. Analysts and admins see the figure, its list and the *Beacon* filter.
 
 **Activity level**  
 How busy the last 5 replayed minutes were compared with the whole day's average per minute. More filled bars means busier than usual; it says nothing about how dangerous the events are.
@@ -497,6 +501,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Country (Settings)](#publicly-accessible--vulnerable-services) · 
 [Critical](#threats) · 
 [Cross-report hosts](#numbers-and-measures) · 
+[Decoded beacons](#numbers-and-measures) · 
 [CSIRT](#the-basics) · 
 [Current time (UTC)](#the-basics) · 
 [CVE](#accounts-roles-and-permissions) · 

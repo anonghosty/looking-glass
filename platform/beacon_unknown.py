@@ -33,6 +33,7 @@ import urllib.parse
 from flask import Response, g, jsonify, request
 
 import beacon_decode as B
+import ip_find
 
 # decoding requests go to their own repository, apart from the platform, and only through GitHub's private reporting
 # (only the sender and the maintainer see a report; public issues there are switched off): the user, 2026-11-16
@@ -57,18 +58,37 @@ def family_key(path, param, shp):
     return (_path_norm(path), param, shp["encoding"], shp["hint"], _bucket(shp["length"]))
 
 
-def request_line(url):
-    """The request as the sinkhole recorded it, without a host: "GET http://c2.example/p?k=v HTTP/1.1" -> "GET /p?k=v HTTP/1.1"."""
+def request_line(url, keep=None):
+    """The request as it goes to the Looking Glass creator: the method, the path and the parameter NAMES as the sinkhole
+    recorded them, with only the undecoded value (the parameter `keep`) as it is. Every other parameter's value reads
+    <value>, because a bot's own parameters can carry the device's address or machine name ("ip=41.66.1.2&host=
+    MINISTRY-PC01", the reviewer, 2026-11-16); any address left anywhere reads <address>; an absolute URL loses its host.
+    "GET http://c2.example/p?ip=1.2.3.4&k=QUJD HTTP/1.1", keep "k" -> "GET /p?ip=<value>&k=QUJD HTTP/1.1"."""
     parts = str(url).strip().split(" ")
     i = next((n for n, x in enumerate(parts) if "://" in x or x.startswith("/")), None)
     if i is None:
-        return str(url).strip()[:4000]
+        return ip_find.sub(str(url).strip()[:4000], lambda _a: "<address>")
     target = parts[i]
     if "://" in target:
         s = urllib.parse.urlsplit(target)
         target = (s.path or "/") + (f"?{s.query}" if s.query else "")
+    path, _, query = target.partition("?")
+    path = path.split("#", 1)[0]
+    if query:
+        kept = []
+        for pair in query.split("#", 1)[0].split("&"):
+            name, eq, value = pair.partition("=")
+            if eq and keep is not None and urllib.parse.unquote(name) == keep:
+                kept.append(pair)                         # the value to decode, exactly as recorded
+            elif eq:
+                kept.append(f"{name}=<value>")
+            elif pair:
+                kept.append("<value>")                    # a bare value with no name
+        target = path + "?" + "&".join(kept)
+    else:
+        target = path
     parts[i] = target
-    return " ".join(parts)[:4000]
+    return ip_find.sub(" ".join(parts), lambda _a: "<address>")[:4000]
 
 
 def family_id(key):
@@ -140,7 +160,7 @@ class Unknown:
                     f["lengths"] = [min(f["lengths"][0], n), max(f["lengths"][1], n)]
                     if len(f["values"]) < 10000:
                         f["values"][u["value"]] += 1
-                    item = {"infection": e.get("infection") or "", "request": request_line(url)}
+                    item = {"infection": e.get("infection") or "", "request": request_line(url, u["param"])}
                     if len(f["requests"]) < MAX_SAMPLES and item not in f["requests"]:
                         f["requests"].append(item)
         out = []
