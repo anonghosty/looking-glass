@@ -47,9 +47,14 @@ def run(*cmd):
 
 
 def backup():
-    rc, out = run("manage/backup.sh", "--unencrypted", os.path.join(tmp, "backups"))
-    arch = sorted(p for p in os.listdir(os.path.join(tmp, "backups")) if p.endswith(".tar.gz"))[-1]
-    return rc, out, os.path.join(tmp, "backups", arch)
+    """The archive this run made: the one new in the folder, not the last name in order (a clock stepped back, as WSL's
+    resync does, gives a new name that sorts first; the old way then took the first backup for the second)."""
+    d = os.path.join(tmp, "backups")
+    before = set(os.listdir(d)) if os.path.isdir(d) else set()
+    rc, out = run("manage/backup.sh", "--unencrypted", d)
+    new = sorted(p for p in set(os.listdir(d)) - before if p.endswith(".tar.gz"))
+    arch = new[-1] if new else sorted(p for p in os.listdir(d) if p.endswith(".tar.gz"))[-1]
+    return rc, out, os.path.join(d, arch)
 
 
 print("No public key: no backup (review of d82a436)")
@@ -71,6 +76,7 @@ import time
 time.sleep(1.1)
 open(os.path.join(proj, "data", "settings.json"), "w").write('{"changed": true}')
 rc, out, B = backup()
+ok("a second backup is made beside the first (a new archive, not the first one again)", rc == 0 and B != A, f"rc {rc}: {out[-600:]}")
 
 print("The newest signed backup? (an older genuine one still verifies: security review of a40f17a)")
 rc, out = run("manage/verify_backup.sh", B)
@@ -78,7 +84,10 @@ ok("the newest backup: said so", rc == 0 and "freshness: the newest signed backu
 rc, out = run("manage/verify_backup.sh", A)
 ok("an older one: verifies, with a warning naming the newer one", rc == 0 and "NOT THE NEWEST" in out
    and os.path.basename(B) in out, out)
-os.utime(A, None); os.utime(A + ".sha256", None)          # the attack: the old archive given a newer file date
+# the attack: the old archive given a newer file date. Set past every other backup's date, not to "now": file times
+# move in coarse clock ticks, so "now" can equal the newer backup's own time (a flaky result under load)
+_later = max(os.path.getmtime(os.path.join(tmp, "backups", p)) for p in os.listdir(os.path.join(tmp, "backups"))) + 5
+os.utime(A, (_later, _later)); os.utime(A + ".sha256", (_later, _later))
 newest_by_date = sorted((os.path.getmtime(os.path.join(tmp, "backups", p)), p) for p in os.listdir(os.path.join(tmp, "backups"))
                         if p.endswith(".tar.gz"))[-1][1]
 rc, out = run("manage/verify_backup.sh")                     # the default: the newest by file date

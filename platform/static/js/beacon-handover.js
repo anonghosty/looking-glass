@@ -111,7 +111,7 @@
         for (const row of d.records_list) {
           const tr = el("tr");
           const b = row.beacons[0] || {};
-          const says = b.decoded === false ? `${b.title} (not decoded)` : b.generic ? b.title : [b.operator, b.version, b.os].filter(Boolean).join(" · ");
+          const says = b.decoded === false ? `${b.title} (${b.status || "not decoded"})` : b.generic ? b.title : [b.operator, b.version, b.os].filter(Boolean).join(" · ");
           tr.append(el("td", "bh-mono", `${row.host}${row.port ? ":" + row.port : ""}`), el("td", "bh-mono", row.time.replace("T", " ")),
             el("td", null, row.report), el("td", "bh-mono", row.c2));
           const td = el("td"); td.append(el("div", null, says));

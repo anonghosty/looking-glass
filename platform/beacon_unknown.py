@@ -14,11 +14,15 @@ itself). It carries ONLY up to 5 distinct HTTP request lines, as the sinkhole re
 decoder to its family: no host, user agent, report or count, so as little data as possible leaves (the user,
 2026-11-16). Decoded, a value may hold the device's own data, so the analyst confirms the CSIRT's rules (TLP) allow
 sharing them; every download is logged as an export.
-A family can be marked "not a beacon" (a session token, an ID) or "sent"; both are kept in data/beacon_unknown.json and
-are in the audit log.
+A family goes to the Looking Glass creator only once an administrator approves it (the user, 2026-11-16):
+open -> asked (an analyst or admin, with a reason) -> approved or rejected (an administrator; a rejection gives its
+reason and the family is open again) -> sent. The page shows the exact request lines before anything is asked; the
+decoding request can be downloaded only once approved. A family can also be put away ("not a beacon"). Every step is
+kept in data/beacon_unknown.json and in the audit log.
 
-API (analysts and admins: the 'unmasked' permission, demo off): GET /api/beacon/unknown,
-GET /api/beacon/unknown/<id>/request, POST /api/beacon/unknown/<id>/state {state: dismissed|sent|open, why}.
+API (analysts and admins: the 'unmasked' permission, demo off): GET /api/beacon/unknown (with each family's request
+lines), GET /api/beacon/unknown/<id>/request (approved or sent only), POST /api/beacon/unknown/<id>/state
+{state: asked|approved|rejected|sent|dismissed|open, why}; approved and rejected need the 'settings' permission.
 Installed from app.py: beacon_unknown.install(app, ctx).
 """
 import collections
@@ -58,13 +62,17 @@ def family_key(path, param, shp):
     return (_path_norm(path), param, shp["encoding"], shp["hint"], _bucket(shp["length"]))
 
 
-def request_line(url, keep=None):
+_ENCODED = re.compile(r"[A-Za-z0-9+/%=_-]{16,}")      # a value that looks encoded (as beacon_decode's prefilter)
+
+
+def request_line(url, keep=None, value=None):
     """The request as it goes to the Looking Glass creator: the method, the path and the parameter NAMES as the sinkhole
     recorded them, with only the undecoded value (the parameter `keep`, its longest copy if the name repeats) as it is.
     Every other parameter's value reads <value>, because a bot's own parameters can carry the device's address or
     machine name ("ip=41.66.1.2&host=MINISTRY-PC01", the reviewer, 2026-11-16); any address left anywhere reads
-    <address>; an absolute URL loses its host. Whatever the shape: "&" or ";" between parameters, raw spaces inside the
-    query, a target without a leading "/" (security review of bc92a26).
+    <address>; an absolute URL loses its host. The shapes handled: "&" or ";" between parameters, raw spaces inside the
+    query (the kept value ends at the first one), a target without a leading "/", a repeated name (the copy that looks
+    encoded is kept) (security reviews of bc92a26 and 84bfb69).
     "GET http://c2.example/p?ip=1.2.3.4&k=QUJD HTTP/1.1", keep "k" -> "GET /p?ip=<value>&k=QUJD HTTP/1.1"."""
     toks = str(url or "").split()
     if not toks:
@@ -82,12 +90,21 @@ def request_line(url, keep=None):
         pairs, seps = pieces[0::2], pieces[1::2]
         named = lambda p: urllib.parse.unquote(p.partition("=")[0]).strip()      # noqa: E731
         mine = [n for n, p in enumerate(pairs) if "=" in p and keep is not None and named(p) == keep]
-        keep_at = max(mine, key=lambda n: len(pairs[n])) if mine else None      # one copy only: the longest
+        # one copy only: the one whose value (up to the first space) looks encoded, longest first; plain text never wins
+        # over the blob (security review of 84bfb69)
+        head = lambda n: pairs[n].partition("=")[2].strip().split(" ")[0]       # noqa: E731
+        # the copy holding the very value the decoder could not decode (`value`), when it is known
+        exact = [n for n in mine if value is not None and urllib.parse.unquote(head(n)).replace(" ", "+") == str(value)]
+        keep_at = exact[0] if exact else \
+            max(mine, key=lambda n: (bool(_ENCODED.fullmatch(head(n))), len(head(n)))) if mine else None
         out = []
         for n, pair in enumerate(pairs):
             name, eq, _value = pair.partition("=")
             if n == keep_at:
-                out.append(pair.replace(" ", "+"))        # the value to decode, as recorded (a raw space reads +)
+                # the value to decode, as recorded, up to the first raw space: what follows a space is another word,
+                # which may name the device (security review of 84bfb69)
+                rest = pair.partition("=")[2].strip()
+                out.append(f"{name}={rest.split(' ')[0]}" + ("+<value>" if " " in rest else ""))
             elif eq:
                 out.append(f"{name.replace(' ', '+')}=<value>")
             elif pair.strip():
@@ -124,10 +141,18 @@ class Unknown:
     def set_state(self, fid, state, why, user):
         with self.lock:
             st = self.states()
+            prev = st.get(fid) or {}
             if state == "open":
                 st.pop(fid, None)
             else:
-                st[fid] = {"state": state, "by": user, "at": round(time.time(), 3), "why": why[:300]}
+                rec = {"state": state, "by": user, "at": round(time.time(), 3), "why": why[:300]}
+                if state == "asked":                       # who asked and why stays with the family until it is sent
+                    rec.update(asked_by=user, asked_why=why[:300], asked_at=rec["at"])
+                elif prev.get("asked_by") and state in ("approved", "rejected", "sent"):
+                    rec.update({k: prev[k] for k in ("asked_by", "asked_why", "asked_at") if k in prev})
+                if state == "sent" and prev.get("state") == "approved":
+                    rec.update(approved_by=prev.get("by"), approved_at=prev.get("at"))
+                st[fid] = rec
             os.makedirs(os.path.dirname(self.path), exist_ok=True)
             tmp = f"{self.path}.{os.getpid()}.tmp"
             fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -171,7 +196,7 @@ class Unknown:
                     f["lengths"] = [min(f["lengths"][0], n), max(f["lengths"][1], n)]
                     if len(f["values"]) < 10000:
                         f["values"][u["value"]] += 1
-                    item = {"infection": e.get("infection") or "", "request": request_line(url, u["param"])}
+                    item = {"infection": e.get("infection") or "", "request": request_line(url, u["param"], u["value"])}
                     if len(f["requests"]) < MAX_SAMPLES and item not in f["requests"]:
                         f["requests"].append(item)
         out = []
@@ -196,9 +221,15 @@ class Unknown:
         fams = []
         for f in self.families():
             s = st.get(f["id"]) or {}
+            day = lambda t: time.strftime("%Y-%m-%d", time.gmtime(t)) if t else ""     # noqa: E731
             fams.append({**{k: v for k, v in f.items() if not k.startswith("_")}, "state": s.get("state", "open"),
                          "state_by": people(s["by"]) if s.get("by") else "", "state_why": s.get("why", ""),
-                         "state_at": time.strftime("%Y-%m-%d", time.gmtime(s["at"])) if s.get("at") else "",
+                         "state_at": day(s.get("at")),
+                         "asked_by": people(s["asked_by"]) if s.get("asked_by") else "", "asked_why": s.get("asked_why", ""),
+                         "asked_at": day(s.get("asked_at")),
+                         "approved_by": people(s["approved_by"]) if s.get("approved_by") else "",
+                         # exactly what the decoding request would hold, shown before anyone asks to send it
+                         "requests": [dict(x) for x in f["_requests"]],
                          "label": f"{f['path']} ?{f['param']}=",
                          "issue_url": SEND_URL})
         return fams
@@ -223,18 +254,25 @@ def install(app, ctx):
     def me():
         return (getattr(g, "user", None) or {}).get("user", "")
 
+    def approver():
+        """Administrators approve what goes to the Looking Glass creator."""
+        return allowed() and bool(ctx.get("can_approve") and ctx["can_approve"]())
+
     @app.route("/api/beacon/unknown")
     def api_beacon_unknown():
         if not allowed():
             return jsonify(error="Requests Looking Glass could not decode are for analysts and admins."), 403
         fams = un.listing()
-        return jsonify(families=fams, open=sum(1 for f in fams if f["state"] == "open"), repo=REPO)
+        return jsonify(families=fams, open=sum(1 for f in fams if f["state"] == "open"), repo=REPO,
+                       can_approve=approver(), waiting=sum(1 for f in fams if f["state"] == "asked"))
 
     @app.route("/api/beacon/unknown/<fid>/request")
     def api_beacon_unknown_request(fid):
         if not allowed():
             return jsonify(error="Requests Looking Glass could not decode are for analysts and admins."), 403
         fid = re.sub(r"[^0-9a-f]", "", fid)[:12]
+        if (un.states().get(fid) or {}).get("state") not in ("approved", "sent"):
+            return jsonify(error="An administrator approves this family before its decoding request can be downloaded."), 409
         req = un.request_file(fid)
         if req is None:
             return jsonify(error="No such family in the days in memory."), 404
@@ -252,12 +290,22 @@ def install(app, ctx):
             return jsonify(error="Refused (the request did not come from this page)."), 403
         b = request.get_json(silent=True) or {}
         state = b.get("state")
-        if state not in ("dismissed", "sent", "open"):
-            return jsonify(error="dismissed, sent or open"), 400
+        if state not in ("asked", "approved", "rejected", "sent", "dismissed", "open"):
+            return jsonify(error="asked, approved, rejected, sent, dismissed or open"), 400
         fid = re.sub(r"[^0-9a-f]", "", fid)[:12]
         if not any(f["id"] == fid for f in un.families()) and state != "open":
             return jsonify(error="No such family in the days in memory."), 404
         why = str(b.get("why") or "").replace("\r", "").strip()[:300]
+        now = (un.states().get(fid) or {}).get("state", "open")
+        # the steps in order: ask (with a reason), an administrator approves or rejects (with a reason), then it is sent
+        steps = {"asked": ("open", "rejected"), "approved": ("asked",), "rejected": ("asked",), "sent": ("approved",),
+                 "dismissed": ("open", "rejected", "asked"), "open": ("dismissed", "rejected")}
+        if now not in steps[state]:
+            return jsonify(error=f"Not possible now: this family is {now}."), 409
+        if state in ("approved", "rejected") and not approver():
+            return jsonify(error="An administrator approves or rejects what goes to the Looking Glass creator."), 403
+        if state in ("asked", "rejected") and not why:
+            return jsonify(error="Say why." if state == "asked" else "Say why it is not approved."), 400
         un.set_state(fid, state, why, me())
         ctx["audit"].add("beacon_family_state", user=me(), target=fid, detail=state + (f" · {why[:100]}" if why else ""))
         return jsonify(ok=True)

@@ -193,8 +193,9 @@ Come back to it at any time with the **Overview** button, which is in every page
   destination network, tag, port and protocol. Networks are grouped by company (all AS numbers of one operator).
   Analysts and admins also get **Beacon**: the beacons Looking Glass decoded that day, each as its kind and the system
   it reports (for example *CLogin check-in, Windows*), with how many records carry it. Picking one shows only those
-  records on the map, the stream, Intel and the figures. A known family whose value did not decode is listed as, for
-  example, *CLogin check-in (not decoded)*. Right after a day is loaded its beacons are decoded in the background;
+  records on the map, the stream, Intel and the figures. A known family that is not decoded says what its value is,
+  for example *ttyunos API request (encrypted)*, *adoverocean OTA task request (one-way hash, not encoded)* or *CLogin
+  check-in (did not decode)*. Right after a day is loaded its beacons are decoded in the background;
   the filter appears by itself once that is done, usually within a minute or two.
 - **Intel** (right): attack types, events by hour, severity mix, networks, infections, cities, C2 domains...
   Every line is clickable.
@@ -264,7 +265,9 @@ whole platform.
 day, so a blocklisted host that also runs an outdated web server shows up in both.
 
 **Decoded beacons** (analysts and admins): how many records of the selection carry a beacon Looking Glass decoded.
-Its **Details ›** lists each kind of beacon with the system it reports, its operators and versions, the records and
+Its **Details ›** lists each kind of beacon with the system it reports and its **Status**: *Decoded*; *Encoded,
+cannot be decoded* (encrypted with a key the app keeps); *Encoded, not decoded yet*; or *Not encoded* (a one-way hash,
+an ID or a campaign token, with nothing in it to decode). Then its operators and versions, the records and
 devices, the names Shadowserver filed it under, the C2 domains and the first and last time seen. Click a row to narrow
 the analysis to that beacon. Like the beacon on the map, the list says what the beacons hold, never what to do about
 them. Researchers and Demo mode don't get the figure or the list; they see beacons in Intel gathered.
@@ -432,7 +435,8 @@ Indicators only: researchers never see the hosts themselves, and addresses insid
 beacon* on the map), Intel gathered lists its threat-side parts as indicators: **Beacon format**, **Beacon operator**,
 **Beacon version** and **Beacon OS** (the operating system family only), each with its records and devices, so the
 records of the *Beacon format* card are the number of decoded check-ins. A family that cannot be decoded shows in
-*Beacon format* as, for example, *ttyunos API request (not decoded)*. The XOR key is not an indicator: every check-in
+*Beacon format* with what its value is, for example *ttyunos API request (encrypted)* or *pixellog device registration
+(device ID, not encoded)*. The XOR key is not an indicator: every check-in
 draws a new one. A researcher sees a value only when 5 or more devices carry it; below that it is counted as held
 back. The rest of the beacon (MAC address, hardware UUID, CPU id, CPU hash, memory) identifies one device and is never
 shown to researchers. In the *URL* card the encoded value reads `<clogin beacon>`.
@@ -670,9 +674,15 @@ the days in memory that no known format decodes, no known family names and the g
 into families. A family is one request shape: the path, the query parameter, the encoding and what the value looks like
 (*hash-sized*, *whole 16-byte blocks: likely a block cipher*, *random-looking*), with the C2 hosts it was sent to (one
 family often spans many generated domains), the names it is filed under, the reports, the days, and how many records
-and devices carry it. Devices are counted, never listed. For each family:
+and devices carry it. Devices are counted, never listed. Each family also shows **What would be sent**: the exact
+request lines its decoding request holds. Nothing goes to the Looking Glass creator until an administrator approves it.
+For each family:
 
-- **Send to the Looking Glass creator.** Download the *decoding request*: a JSON file holding only the family's HTTP
+- **Ask to send to the Looking Glass creator.** An analyst (or admin) asks, saying why it should be decoded. Every
+  administrator's bell then says *A decoding request waits for your approval*, leading to the family.
+- **Approve sending / Do not approve** (administrators). The administrator checks the request lines and approves, or
+  does not approve with the reason, which the analyst sees; the family is open again and can be asked for once more.
+- **Send to the Looking Glass creator** (once approved). Download the *decoding request*: a JSON file holding only the family's HTTP
   requests (up to 5), each with the infection name it is filed under, and no host, address, user agent or count.
   In each request only the value Looking Glass could not decode is kept: every other parameter's value reads
   `<value>` (a bot's own parameters can carry the device's address or machine name), and any address left reads
@@ -682,7 +692,8 @@ and devices carry it. Devices are counted, never listed. For each family:
   download asks you to confirm your organisation's rules (TLP) allow sharing it, and every download is recorded in the
   audit log as an export. Then **Mark as sent**.
 - **Not a beacon.** Puts away a family that is a session token, an ID or the like. Put-away and sent families are listed
-  under *Sent or put away*, and **Reopen** brings one back. Every change is in the audit log.
+  under *Sent or put away*, with who asked, who approved and who sent it; **Reopen** brings a put-away one back. Every
+  step is in the audit log.
 
 ![A finding with the day it was reported, its devices in the latest report and its time to act](media/screens/92-finding-watch.png)
 

@@ -180,8 +180,8 @@ class Opaque:
     """A request family seen in the sinkhole reports whose value cannot be decoded from the request alone (encrypted
     with a key the app keeps, a one-way hash, an opaque ID): recognised, named, masked like a beacon, never decoded."""
 
-    def __init__(self, name, title, host, path, params, what):
-        self.name, self.title, self.what = name, title, what
+    def __init__(self, name, title, host, path, params, what, state="unknown"):
+        self.name, self.title, self.what, self.state = name, title, what, state
         self.host, self.path = re.compile(host, re.I), re.compile(path, re.I)
         self.params = {p.lower() for p in params}
 
@@ -190,18 +190,37 @@ class Opaque:
             (host is None or bool(self.host.search(host or "")))
 
 
+# what a family's value is, in words (STATUS[state] = (short, long)): the short one follows the family's title (filter,
+# Intel gathered), the long one is the Decoded beacons list's Status column
+STATUS = {
+    "decoded": ("decoded", "Decoded"),
+    "encrypted": ("encrypted", "Encoded, cannot be decoded: encrypted with a key the app keeps"),
+    "hash": ("one-way hash, not encoded", "Not encoded: a one-way hash, which cannot be reversed"),
+    "id": ("device ID, not encoded", "Not encoded: an ID, with nothing in it to decode"),
+    "token": ("campaign token, not encoded", "Not encoded: a campaign token, the same on every device"),
+    "unknown": ("not decoded yet", "Encoded, not decoded yet"),
+    "cut": ("did not decode", "Encoded in a known format, but this value did not decode (cut short, or a new variant)"),
+}
+
+
+def status_text(state, long=False):
+    s = STATUS.get(state) or STATUS["unknown"]
+    return s[1] if long else s[0]
+
+
 _BLOCKS = ("whole 16-byte blocks of random-looking bytes: a block cipher (AES-like) with a key kept in the app, not in "
            "the request")
 OPAQUE = [
-    Opaque("ttyunos", "ttyunos API request", r"ttyunos\.com$", r"/api/(desk/getdata|language/getlist)$", ("a", "b"), _BLOCKS),
+    Opaque("ttyunos", "ttyunos API request", r"ttyunos\.com$", r"/api/(desk/getdata|language/getlist)$", ("a", "b"), _BLOCKS,
+           "encrypted"),
     Opaque("weatherlive", "weatherlive widget configuration request", r"weatherlive\.world$", r"/br_upgrade/widget/getconfigs$",
-           ("scsl",), _BLOCKS),
+           ("scsl",), _BLOCKS, "encrypted"),
     Opaque("adoverocean", "adoverocean OTA task request", r"adoverocean\.com$", r"/ota/api/tasks/v2$", ("m",),
-           "32 hex characters: a hash (MD5-sized) of a device value; one-way, it cannot be decoded"),
+           "32 hex characters: a hash (MD5-sized) of a device value; one-way, it cannot be decoded", "hash"),
     Opaque("pixellog", "pixellog device registration", r"pixellog\.io$", r"/regdev$", ("userid",),
-           "27 random-looking bytes (URL-safe Base64): an opaque per-device ID"),
+           "27 random-looking bytes (URL-safe Base64): an opaque per-device ID", "id"),
     Opaque("clickby", "clickby statistics request", r"clickby\.net$", r"/s2?\.php$", ("d",),
-           "the same value on every record seen: a campaign token, not device data"),
+           "the same value on every record seen: a campaign token, not device data", "token"),
     Opaque("sustat", "sustat statistics request", r"sustat\.com$", r"/(u|pic)\.php$", ("p",),
            "a few distinct short binary values: not decoded"),
 ]
@@ -615,12 +634,14 @@ def first(url):
 def public(d):
     """What a researcher may see of a decoded beacon: the format (its readable title), operator, version and OS family.
     Not the XOR key: a new one per check-in, it would single out one record. Of a family seen but not decoded: its
-    title only."""
+    title, with what its value is in a few words, e.g. "ttyunos API request (encrypted)"; "state" says the same as a key
+    (STATUS)."""
     if not d:
         return None
-    title = d.get("title", "") if d.get("decoded", True) else f"{d.get('title', '')} (not decoded)"
+    state = "decoded" if d.get("decoded", True) else (d.get("state") or "unknown")
+    title = d.get("title", "") if state == "decoded" else f"{d.get('title', '')} ({status_text(state)})"
     return {"format": title, "id": d.get("format", ""), "operator": d.get("operator", ""),
-            "version": d.get("version", ""), "os_family": d.get("os_family", "")}
+            "version": d.get("version", ""), "os_family": d.get("os_family", ""), "state": state}
 
 
 def _query(url):
@@ -654,12 +675,14 @@ def seen(url, host=None):
             continue
         f = next((f for f in FORMATS if f.at(path, param)), None)
         if f:
-            out.append({"format": f.name, "title": f.title, "decoded": False, "param": param,
+            out.append({"format": f.name, "title": f.title, "decoded": False, "param": param, "state": "cut",
+                        "status": status_text("cut"),
                         "what": "At this format's place, but the value did not decode (cut short, or a variant not known yet)."})
             continue
         o = next((o for o in OPAQUE if o.at(path, param, host)), None)
         if o:
-            out.append({"format": o.name, "title": o.title, "decoded": False, "param": param, "what": o.what})
+            out.append({"format": o.name, "title": o.title, "decoded": False, "param": param, "what": o.what,
+                        "state": o.state, "status": status_text(o.state)})
     return out
 
 

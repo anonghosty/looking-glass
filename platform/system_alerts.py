@@ -148,6 +148,7 @@ class Alerts:
                                  "audit log; tell your auditor."),
                         "at": rec_at, "link": "/audit"})
         out += self._sender_check(now)
+        out += self._decoding_asks()
         cert = self._certificate()
         if cert and cert["days_left"] <= 30:
             days = cert["days_left"]
@@ -188,6 +189,23 @@ class Alerts:
                              "Workers can switch blocking on, so unsigned or changed reports are held back.",
                      "at": now, "link": "/settings#workers"}]
         return []
+
+    def _decoding_asks(self):
+        """A family of undecoded requests an analyst asked to send to the Looking Glass creator: an administrator approves
+        it first (beacon_unknown.py; the user, 2026-11-16). One alert per ask, until it is decided."""
+        fams = (_read_json(os.path.join(self.data, "beacon_unknown.json")) or {}).get("families") or {}
+        out = []
+        for fid, s in fams.items():
+            if not isinstance(s, dict) or s.get("state") != "asked":
+                continue
+            why = " ".join(str(s.get("asked_why") or "").split())[:160]
+            out.append({"key": f"decode-ask:{fid}:{round(float(s.get('asked_at') or 0))}", "problem": True,
+                        "title": "A decoding request waits for your approval",
+                        "text": ("an analyst asked to send a family of requests Looking Glass could not decode to the Looking "
+                                 "Glass creator" + (f": {why}" if why else "") + ". Check its request lines on the Findings "
+                                 "page, then approve or not."),
+                        "at": float(s.get("asked_at") or 0), "link": "/findings#beaconUnknown"})
+        return out
 
     def _certificate(self):
         """The installed HTTPS certificate (data/tls), read with deploy/install_cert.py: domain, expiry, days left."""

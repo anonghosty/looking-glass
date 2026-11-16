@@ -4,7 +4,8 @@ Each record's beacon label ("CLogin check-in, Android") comes from beacon_decode
 and is kept on the record as "_bc" so a loaded day is decoded once. Analysts and admins only: app.py leaves all of this
 out for masked viewers (is_demo()).
 
-label(e)          -> "" or "<format title>, <OS>"; a family seen but not decoded ends in "(not decoded)"
+label(e)          -> "" or "<format title>, <OS>"; a family seen but not decoded says what its value is, e.g.
+                     "ttyunos API request (encrypted)" (beacon_decode.STATUS); state(e) -> its STATUS key
 decoded(e)        -> True when the record carries a beacon that decoded
 facet_rows(evs)   -> [{"value", "count"}] for the Beacon filter, most common first
 counts(evs)       -> {"decoded_beacons": records, "beacon_devices": source hosts}
@@ -20,7 +21,6 @@ from collections import Counter
 
 import beacon_decode
 
-NOT_DECODED = "(not decoded)"
 _done = weakref.WeakKeyDictionary()       # day -> True when every record is labelled
 _busy = weakref.WeakKeyDictionary()       # day -> True while its labelling runs
 _lock = threading.Lock()
@@ -52,27 +52,35 @@ def ready(day):
     return False
 
 
-def label(e):
+def _read(e):
     got = e.get("_bc")
     if got is not None:
         return got
-    out = ""
+    out = ("", "")
     if e.get("http_url"):
         title = beacon_decode.field(e, "format")
         if title:
+            st = beacon_decode.field(e, "state") or "unknown"
             fam = beacon_decode.field(e, "os_family")
             os_name = beacon_decode.OS_TITLE.get(fam, fam)
-            out = f"{title}, {os_name}" if os_name and not title.endswith(NOT_DECODED) else title
+            out = (f"{title}, {os_name}" if os_name and st == "decoded" else title, st)
     try:
-        e["_bc"] = out
+        e["_bc"] = out                    # (label, state), kept on the record: a loaded day is decoded once
     except TypeError:                     # a read-only mapping: no cache, the answer is the same
         pass
     return out
 
 
+def label(e):
+    return _read(e)[0]
+
+
+def state(e):
+    return _read(e)[1]
+
+
 def decoded(e):
-    lb = label(e)
-    return bool(lb) and not lb.endswith(NOT_DECODED)
+    return state(e) == "decoded"
 
 
 def facet_rows(events, limit=300):
@@ -100,12 +108,12 @@ def drill(events, mt=lambda s: s):
     it under and the C2 domains it called. Rows are clickable: their value is the Beacon filter's."""
     g = {}
     for e in events:
-        lb = label(e)
+        lb, st = _read(e)
         if not lb:
             continue
         x = g.get(lb)
         if x is None:
-            x = g[lb] = {"events": 0, "hosts": set(), "ops": Counter(), "vers": Counter(), "inf": set(), "dom": set(),
+            x = g[lb] = {"state": st, "events": 0, "hosts": set(), "ops": Counter(), "vers": Counter(), "inf": set(), "dom": set(),
                          "t0": e.get("_t"), "t1": e.get("_t")}
         x["events"] += 1
         if e.get("src_ip"):
@@ -123,8 +131,9 @@ def drill(events, mt=lambda s: s):
             x["t0"] = t if x["t0"] is None else min(x["t0"], t)
             x["t1"] = t if x["t1"] is None else max(x["t1"], t)
     rows = []
-    for lb, x in sorted(g.items(), key=lambda kv: (kv[0].endswith(NOT_DECODED), -kv[1]["events"])):
-        rows.append({"value": lb, "beacon": lb, "decoded": "No" if lb.endswith(NOT_DECODED) else "Yes",
+    for lb, x in sorted(g.items(), key=lambda kv: (kv[1]["state"] != "decoded", -kv[1]["events"])):
+        rows.append({"value": lb, "beacon": lb, "decoded": "Yes" if x["state"] == "decoded" else "No",
+                     "status": beacon_decode.status_text(x["state"], long=True),
                      "operators": [k for k, _ in x["ops"].most_common(5)], "versions": [k for k, _ in x["vers"].most_common(5)],
                      "events": x["events"], "hosts": len(x["hosts"]), "infections": sorted(x["inf"]),
                      "domains": sorted(x["dom"])[:5], "first": _when(x["t0"]), "last": _when(x["t1"])})
@@ -134,8 +143,8 @@ def drill(events, mt=lambda s: s):
         title="Decoded beacons", row_kind="beacon",
         intro=(f"{n_dec:,} records in this selection carry a beacon Looking Glass decoded, from {devs:,} devices. "
                "Each row is one kind of beacon and the system it reports; open a row to show only those beacons on the map. "
-               "Rows marked not decoded are known families whose value did not decode."),
-        columns=[["beacon", "Beacon"], ["decoded", "Decoded"], ["operators", "Operators"], ["versions", "Versions"],
+               "Status says what each value is: decoded, encoded but not decodable (and why), or not encoded at all."),
+        columns=[["beacon", "Beacon"], ["status", "Status"], ["operators", "Operators"], ["versions", "Versions"],
                  ["events", "Records"], ["hosts", "Devices"], ["infections", "Filed by Shadowserver as"],
                  ["domains", "C2 domains"], ["first", "First seen"], ["last", "Last seen"]],
         rows=rows, empty="No record in this selection carries a beacon Looking Glass can read.")

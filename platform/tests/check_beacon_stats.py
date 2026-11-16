@@ -61,8 +61,8 @@ ok("a Windows check-in is labelled with its format and system", lw == f"{title},
 ok("an Android one too", la == f"{title}, Android", la)
 ok("a record without a beacon has no label", BS.label(plain[0]) == "" and BS.label(plain[1]) == "")
 lc = BS.label(cut[0])
-ok("a value at the format's place that does not decode is labelled not decoded, and not counted as decoded",
-   lc.endswith("(not decoded)") and not BS.decoded(cut[0]), lc)
+ok("a value at the format's place that does not decode says so, and is not counted as decoded",
+   lc == f"{title} (did not decode)" and BS.state(cut[0]) == "cut" and not BS.decoded(cut[0]), lc)
 with mock.patch.object(B, "field", side_effect=AssertionError("decoded again")):
     try:
         again = BS.label(win[0])
@@ -77,7 +77,7 @@ ok("Decoded beacons counts decoded records only (5 Windows + 2 Android)", c["dec
 ok("...and devices once each (4 Windows + 2 Android)", c["beacon_devices"] == 6, c)
 d = BS.drill(events, mt=lambda s: "masked:" + s)
 r0 = d["rows"][0]
-ok("the Details list: one row per beacon kind, decoded first, not decoded last",
+ok("the Details list: one row per beacon kind, decoded first, the rest last",
    [r["value"] for r in d["rows"]] == [lw, la, lc], [r["value"] for r in d["rows"]])
 ok("a row gives operators, versions, records and devices",
    r0["operators"] == ["WT"] and set(r0["versions"]) == {"WT:1.0.0", "WT:1.0.1"} and r0["events"] == 5 and r0["hosts"] == 4, r0)
@@ -85,6 +85,9 @@ ok("...the names Shadowserver filed it under and the C2 domains (through the cal
    r0["infections"] == ["android.badbox2"] and r0["domains"] == ["masked:c2.example"], r0)
 ok("rows open the Beacon filter (row_kind beacon) and every column has a heading",
    d["row_kind"] == "beacon" and all(k in r0 for k, _ in d["columns"]))
+ok("its Status column says what each value is (decoded, or encoded but did not decode)",
+   d["rows"][0]["status"] == "Decoded" and d["rows"][-1]["status"].startswith("Encoded in a known format")
+   and ["status", "Status"] in d["columns"], str([r["status"] for r in d["rows"]]))
 ok("the introduction counts the same records and devices as the figure", "7 records" in d["intro"] and "6 devices" in d["intro"], d["intro"])
 ok("no device identifier from the check-in is in the list",
    not any(str(v) in json.dumps(d) for o in [made_up(0, operator="WT", version="WT:1.0.0")] for k, v in o.items()
@@ -100,7 +103,8 @@ while not BS.ready(day) and time.time() - t0 < 60:
     time.sleep(0.1)
 ok("a loaded day is labelled in the background: not ready at first, ready soon after", first_answer is False and BS.ready(day))
 ok("...every record then has its label", all("_bc" in e for e in day.events)
-   and [e["_bc"] for e in day.events] == [BS.label(e) for e in events])
+   and [BS.label(e) for e in day.events] == [BS.label(e) for e in events]
+   and [BS.state(e) for e in day.events] == [BS.state(e) for e in events])
 
 print("2. The map's filter logic")
 try:

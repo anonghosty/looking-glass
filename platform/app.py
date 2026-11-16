@@ -2960,7 +2960,8 @@ _beacon_findings.install(app, BEACON_FINDINGS_CTX)      # "acodes" is added belo
 # requests Looking Glass could not decode, as families on the Findings page, to send to its creator (beacon_unknown.py)
 import beacon_unknown as _beacon_unknown  # noqa: E402
 _beacon_unknown.install(app, {"store": store, "labels": INTEL.ctx["labels"], "base_dir": BASE_DIR, "sees_hosts": lambda: not is_demo(),
-                              "csrf_ok": AUTH["csrf_ok"], "audit": AUTH["audit"], "people_name": lambda u: people.name(u)})
+                              "csrf_ok": AUTH["csrf_ok"], "audit": AUTH["audit"], "people_name": lambda u: people.name(u),
+                              "can_approve": lambda: AUTH["has_perm"]("settings")})
 
 # analyst codes: an analyst's selection passed to researchers and management without an address (acodes.py)
 import acodes as _acodes  # noqa: E402

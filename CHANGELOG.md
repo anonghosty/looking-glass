@@ -5,6 +5,26 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-16 (9)
+### Added
+- **An administrator approves every decoding request.** On the Findings page, *Requests Looking Glass could not
+  decode* now shows each family's exact request lines (*What would be sent*). An analyst asks to send a family, saying
+  why; every administrator's bell says it waits; the administrator approves, or does not with a reason. Only then can
+  the decoding request be downloaded and sent. Who asked, approved and sent it is shown and audited.
+- **Each beacon family says what its value is.** In the Beacon filter, the Decoded beacons list (a new *Status*
+  column), Intel gathered and an event's details: *decoded*, *encrypted* (encoded, cannot be decoded), *not decoded
+  yet*, *did not decode* (a known format cut short), or *not encoded* (a one-way hash, a device ID, a campaign token).
+
+### Fixed
+- The backup scripts' check (`tests/check_backup_scripts.py`) no longer fails now and then: it takes the archive each
+  run made, not the last name in order (a clock stepped back gave the first backup twice), and dates the "old archive
+  made to look newest" past every other backup instead of "now".
+
+### Security
+- A decoding request keeps the undecoded value only up to the first raw space (what follows may name the device), and
+  of a repeated parameter the copy holding the undecoded value; an analyst code's page no longer shows even the code
+  of a beacon code held back for its viewer (security review of v2026.11.16.8, candidates below the reporting bar).
+
 ## 2026-11-16 (8)
 ### Security
 - A beacon finding's beacon code (`LG-B-…`) and what it stands for reach only those who may see them: analysts and

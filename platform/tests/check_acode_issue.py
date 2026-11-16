@@ -242,6 +242,8 @@ ch_r = page_as("researcher", ["definitions"], SRCB3).get("chain") or []
 ch_a = page_as("analyst", ["unmasked", "export"], SRCB3).get("chain") or []
 ok("a selection made from a held beacon code: the chain names it to nobody who may not see it",
    ch_r and ch_r[0].get("hidden") is True and "HTM" not in json.dumps(ch_r) and "label" not in ch_r[0], str(ch_r))
+ok("...not even its code (it would confirm a guess offline; security review of 84bfb69)",
+   ch_r and ch_r[0].get("code") == "" and HELDB not in json.dumps(ch_r) and ch_r[0].get("held") is True, str(ch_r))
 ok("…an analyst still sees where it came from", ch_a and ch_a[0]["code"] == HELDB and "HTM" in ch_a[0].get("label", ""), str(ch_a))
 del book.describe
 ok("…and the code made from it carries the beacon mark on (the rule follows it)",

@@ -245,8 +245,9 @@
       for (const s of d.chain) {
         const li = el("li", s.hidden ? "ax-chain-hidden" : null);
         const top = el("div", "ax-chain-top");
-        if (s.page && !s.hidden) { const a = el("a", null, s.code); a.href = s.page; top.append(a); } else top.append(el("code", null, s.code));
-        if (s.hidden) top.append(el("small", "muted", "in a finding you are not part of"));
+        if (s.page && !s.hidden) { const a = el("a", null, s.code); a.href = s.page; top.append(a); } else if (s.code) top.append(el("code", null, s.code));
+        if (s.held) top.append(el("small", "muted", "Decoded beacons, shown once 5 or more devices carry them"));
+        else if (s.hidden) top.append(el("small", "muted", "in a finding you are not part of"));
         else top.append(el("small", "muted", [s.kind === "analyst" ? "analyst code" : "combination code", s.day, s.finding && `finding ${s.finding}`, s.by && `by ${s.by}`, s.at].filter(Boolean).join(" · ")));
         li.append(top);
         if (!s.hidden && s.label) li.append(el("p", "ax-chain-label", s.label));

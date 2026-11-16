@@ -27,7 +27,8 @@
     const box = el("div", "bc-one");
     if (b.decoded === false) {          // a known family that cannot be decoded from the request: named, and why
       const dl = el("dl");
-      rows(dl, [["Family", `${b.title} (not decoded)`], ["Found in", b.param && `query value "${b.param}"`], ["What it is", b.what]]);
+      // what the value is: encrypted, not decoded yet, or not encoded at all (a hash, an ID, a token)
+      rows(dl, [["Family", `${b.title} (${b.status || "not decoded"})`], ["Found in", b.param && `query value "${b.param}"`], ["What it is", b.what]]);
       box.append(dl);
       return box;
     }
@@ -74,7 +75,9 @@
         if (!r.ok) { s.replaceChildren(el("h3", null, "Decoded beacon"), el("p", "bc-msg", d.error || `Could not decode (${r.status}).`)); return; }
         if (!d.beacons?.length) { s.remove(); return; }       // a long value that is no known beacon: nothing to show
         const n = d.beacons.filter((b) => b.decoded !== false).length;
-        s.replaceChildren(el("h3", null, n ? (d.beacons.length > 1 ? `Decoded beacon (${d.beacons.length} values)` : "Decoded beacon") : "Encoded request (not decoded)"));
+        const plain = !n && d.beacons.every((b) => ["hash", "id", "token"].includes(b.state));     // nothing encoded in it
+        s.replaceChildren(el("h3", null, n ? (d.beacons.length > 1 ? `Decoded beacon (${d.beacons.length} values)` : "Decoded beacon")
+          : plain ? "Request value (not encoded)" : "Encoded request (not decoded)"));
         for (const b of d.beacons) s.append(one(b, ev.infection || ""));
       } catch (err) {
         if (still()) s.replaceChildren(el("h3", null, "Decoded beacon"), el("p", "bc-msg", `Could not decode: ${err.message}`));

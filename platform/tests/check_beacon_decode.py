@@ -95,8 +95,9 @@ ok("a value built to keep many keys open stays within the budget", time.monotoni
 
 print("3. Researchers: what leaves the server")
 p = B.public(d)
-ok("public() is format, operator, version and OS family only (no key: one per check-in)",
-   set(p) == {"format", "id", "operator", "version", "os_family"} and p["format"] == "CLogin check-in" and k not in json.dumps(p))
+ok("public() is format, operator, version, OS family and whether it decoded only (no key: one per check-in)",
+   set(p) == {"format", "id", "operator", "version", "os_family", "state"} and p["format"] == "CLogin check-in"
+   and p["state"] == "decoded" and k not in json.dumps(p))
 ident = [str(obj[f]) for f in B.DEVICE_FIELDS] + [obj["cpuid"], bytes.fromhex(obj["cpuid"]).decode()]
 ok("public() carries no MAC, UUID, cpuid, cpumd5 or memory", not any(v and v in json.dumps(p) for v in ident if len(v) > 4))
 m = B.mask_url(line(blob))
@@ -114,11 +115,20 @@ ok("an encrypted family's values are masked (<ttyunos value>)", aes not in mt an
 sv = B.view(tl, "android.badbox2", "txy.ttyunos.com")
 ok("analysts: the family is named, not decoded, with what it is", sv and sv[0]["decoded"] is False and sv[0]["format"] == "ttyunos" and "block cipher" in sv[0]["what"])
 ok("the same path on another host is not named (the host decides)", B.seen(tl, "example.org") == [])
-ok("Intel gathered: its format reads '(not decoded)'", B.field({"http_url": tl, "http_host": "txy.ttyunos.com"}, "format") == "ttyunos API request (not decoded)")
+ok("Intel gathered: its format says what the value is: '(encrypted)'", B.field({"http_url": tl, "http_host": "txy.ttyunos.com"}, "format") == "ttyunos API request (encrypted)")
+ok("...and its state", B.field({"http_url": tl, "http_host": "txy.ttyunos.com"}, "state") == "encrypted" and sv[0]["status"] == "encrypted")
+# each family says whether its value is encoded at all (the user, 2026-11-16)
+st = {o.name: o.state for o in B.OPAQUE}
+ok("encrypted, a one-way hash, an ID, a token, not decoded yet: each family has its state",
+   st == {"ttyunos": "encrypted", "weatherlive": "encrypted", "adoverocean": "hash", "pixellog": "id", "clickby": "token", "sustat": "unknown"}, str(st))
+ok("...the ones with nothing encoded in them say 'not encoded'",
+   all("not encoded" in B.status_text(s) and B.status_text(s, long=True).startswith("Not encoded") for s in ("hash", "id", "token"))
+   and all(B.status_text(s, long=True).startswith("Encoded") for s in ("encrypted", "unknown", "cut")))
 md5 = "".join(rnd.choice("0123456789abcdef") for _ in range(32))
 ok("a hash family (adoverocean m=) is named as one-way", "one-way" in (B.seen(f"GET /ota/api/tasks/v2?m={md5}&n=MOBILE(0) HTTP/1.1", "www.adoverocean.com") or [{}])[0].get("what", ""))
 cut = B.view(line(blob[:len(blob) // 2 // 4 * 4]), "android.badbox2", "zcky.example")     # the JSON cut in half
-ok("a CLogin value cut short is named 'not decoded', never guessed", cut and cut[0]["decoded"] is False and cut[0]["format"] == "clogin")
+ok("a CLogin value cut short is named 'did not decode', never guessed", cut and cut[0]["decoded"] is False and cut[0]["format"] == "clogin"
+   and cut[0]["state"] == "cut" and cut[0]["status"] == "did not decode")
 import privacy  # noqa: E402
 
 

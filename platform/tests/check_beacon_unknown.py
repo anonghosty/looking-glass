@@ -108,7 +108,8 @@ tmp = tempfile.mkdtemp()
 audit = []
 ctx = {"store": type("S", (), {"days": {0: Day(evs)}})(), "labels": lambda: {"event4_sinkhole_http": "Sinkhole HTTP"}, "base_dir": tmp,
        "sees_hosts": lambda: "unmasked" in g.user["perms"], "csrf_ok": lambda: g.user.get("tok") == "T",
-       "audit": type("A", (), {"add": lambda self, *a, **k: audit.append((a, k))})(), "people_name": lambda u: {"ana": "Ana Analyst"}.get(u, u)}
+       "audit": type("A", (), {"add": lambda self, *a, **k: audit.append((a, k))})(), "people_name": lambda u: {"ana": "Ana Analyst", "adam": "Adam Admin"}.get(u, u),
+       "can_approve": lambda: "settings" in g.user["perms"]}
 app = Flask(__name__)
 un = U.install(app, ctx)
 fams = un.families()
@@ -119,7 +120,8 @@ cst = [f for f in fams if f["param"] == "d"]
 ok("a constant token is marked as one", cst and cst[0]["constant"] and cst[0]["distinct"] == 1)
 ok("known format, undecodable family and generic decode are not listed", {f["param"] for f in fams} == {"q", "d"}, str({f["param"] for f in fams}))
 listing_text = json.dumps(un.listing())
-ok("no device address and no value in the listing", "192.0.2." not in listing_text and tok not in listing_text)
+ok("no device address in the listing, and the value only in the request lines the administrator checks before approving",
+   "192.0.2." not in listing_text and tok not in json.dumps([{k: v for k, v in f.items() if k != "requests"} for f in un.listing()]))
 
 
 def call(user, perms, method, path, body=None, tok_="T"):
@@ -140,6 +142,33 @@ ok("an analyst gets the families", code == 200 and lst["open"] == 2)
 ok("the send link opens a private report on the separate decoding repository, never a public issue, and names no host",
    all(f["issue_url"] == "https://github.com/anonghosty/http-requests-decoding/security/advisories/new" for f in lst["families"]))
 fid = dga[0]["id"]
+# an administrator approves a family before its decoding request can be downloaded (the user, 2026-11-16)
+ADM = ANA | {"settings"}
+post = lambda u, p, st, why="": call(u, p, "POST", f"/api/beacon/unknown/{fid}/state", {"state": st, "why": why})[0]  # noqa: E731
+ok("nothing can be downloaded before an administrator approves", call("ana", ANA, "GET", f"/api/beacon/unknown/{fid}/request")[0] == 409)
+pre = next(f for f in lst["families"] if f["id"] == fid)["requests"]
+ok("the page shows the exact request lines first (masked, with their infection names)",
+   pre and all(set(x) == {"infection", "request"} for x in pre) and "192.0.2." not in json.dumps(pre), json.dumps(pre)[:200])
+ok("asking to send needs a reason", post("ana", ANA, "asked") == 400)
+ok("an analyst asks, with a reason", post("ana", ANA, "asked", "new DGA family on 7 devices") == 200)
+ok("... an analyst cannot approve it", post("ana", ANA, "approved") == 403)
+ok("... nor can it be marked as sent before approval", post("ana", ANA, "sent") == 409)
+ok("an administrator does not approve without saying why", post("adam", ADM, "rejected") == 400)
+ok("... does not approve, with a reason", post("adam", ADM, "rejected", "TLP:AMBER source, ask the provider first") == 200)
+f_ = next(f for f in call("ana", ANA, "GET", "/api/beacon/unknown")[1].get_json()["families"] if f["id"] == fid)
+ok("... the analyst sees who did not approve it and why, and who asked",
+   f_["state"] == "rejected" and f_["state_by"] == "Adam Admin" and f_["state_why"].startswith("TLP:AMBER") and f_["asked_by"] == "Ana Analyst", str(f_)[:300])
+ok("asked again", post("ana", ANA, "asked", "the provider agreed") == 200)
+lst_adm = call("adam", ADM, "GET", "/api/beacon/unknown")[1].get_json()
+ok("the administrator is told it waits for them", lst_adm["can_approve"] is True and lst_adm["waiting"] == 1
+   and call("ana", ANA, "GET", "/api/beacon/unknown")[1].get_json()["can_approve"] is False)
+import system_alerts  # noqa: E402
+asks = [a for a in system_alerts.Alerts(tmp).current() if a["key"].startswith("decode-ask:")]
+ok("the administrators' bell says a decoding request waits for approval, with the reason, and leads to it",
+   len(asks) == 1 and asks[0]["problem"] and "provider agreed" in asks[0]["text"] and asks[0]["link"] == "/findings#beaconUnknown"
+   and "192.0.2." not in json.dumps(asks), str(asks)[:300])
+ok("approved by the administrator", post("adam", ADM, "approved") == 200)
+ok("... and the bell no longer asks", not [a for a in system_alerts.Alerts(tmp).current() if a["key"].startswith("decode-ask:")])
 code, r = call("ana", ANA, "GET", f"/api/beacon/unknown/{fid}/request")
 req = json.loads(r.get_data(as_text=True))
 text = json.dumps(req)
@@ -170,9 +199,15 @@ shapes = {
     "a target without a leading /": (f"GET gate.php?host=MINISTRY-PC01&d={B64} HTTP/1.1", f"GET gate.php?host=<value>&d={B64} HTTP/1.1"),
     "no method or protocol": (f"/gate.php?host=MINISTRY-PC01&d={B64}", f"/gate.php?host=<value>&d={B64}"),
 }
+# security review of 84bfb69: words after a raw space following the kept value, and a longer plain copy of its name
+shapes["words after a space following the kept value"] = (f"GET /gate.php?d={B64} host=MINISTRY-PC01 HTTP/1.1",
+                                                           f"GET /gate.php?d={B64}+<value> HTTP/1.1")
 for what, (raw, want) in shapes.items():
     got = U.request_line(raw, "d")
     ok(f"... {what}: only the undecoded value leaves", got == want and "MINISTRY" not in got and "Jane" not in got, got)
+got = U.request_line(f"GET /gate.php?d=MINISTRY-PC01-WORKSTATION-NAME-LONG&d={B64} HTTP/1.1", "d", B64)
+ok("... a longer plain copy of the kept name: the copy holding the undecoded value is the one kept",
+   got == f"GET /gate.php?d=<value>&d={B64} HTTP/1.1", got)
 import response_cache  # noqa: E402
 ok("decoding a record's request no longer empties the shared answers (it changes nothing)", not response_cache.changes_cached("/api/beacon/decode"))
 ok("state change refused without the page's token", call("ana", ANA, "POST", f"/api/beacon/unknown/{fid}/state", {"state": "sent"}, tok_="")[0] == 403)
@@ -181,9 +216,12 @@ ok("put away as not a beacon", call("ana", ANA, "POST", f"/api/beacon/unknown/{c
 lst = call("ana", ANA, "GET", "/api/beacon/unknown")[1].get_json()
 st = {f["param"]: (f["state"], f["state_by"]) for f in lst["families"]}
 ok("kept, with the readable name of who did it", st == {"q": ("sent", "Ana Analyst"), "d": ("dismissed", "Ana Analyst")} and lst["open"] == 0, str(st))
-ok("reopened", call("ana", ANA, "POST", f"/api/beacon/unknown/{fid}/state", {"state": "open"})[0] == 200
+ok("... and who approved it", next(f for f in lst["families"] if f["id"] == fid)["approved_by"] == "Adam Admin")
+ok("a sent family is not reopened", post("ana", ANA, "open") == 409)
+ok("a family put away is reopened", call("ana", ANA, "POST", f"/api/beacon/unknown/{cst[0]['id']}/state", {"state": "open"})[0] == 200
    and call("ana", ANA, "GET", "/api/beacon/unknown")[1].get_json()["open"] == 1)
-ok("every change is in the audit log", sum(1 for a, k in audit if a and a[0] == "beacon_family_state") == 3)
+ok("every change is in the audit log (asked, not approved, asked, approved, sent, put away, reopened)",
+   sum(1 for a, k in audit if a and a[0] == "beacon_family_state") == 7, str(sum(1 for a, k in audit if a and a[0] == "beacon_family_state")))
 ok("the state file is the owner's only (0600)", oct(os.stat(os.path.join(tmp, "data", "beacon_unknown.json")).st_mode & 0o777) == "0o600")
 
 print(f"\n{checks - len(fails)}/{checks} checks passed")

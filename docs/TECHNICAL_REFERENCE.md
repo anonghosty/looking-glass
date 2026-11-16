@@ -171,7 +171,12 @@ server side is in small modules called from `app.py`:
   allows; `findings.shown()` and `acodes.chain_of()` drop the code wherever it gives nothing. Every
   download is audit event `data_exported`; the page asks the analyst to confirm the TLP rules allow it. `POST
   /api/beacon/unknown/<id>/state` (`dismissed` | `sent` | `open`, CSRF token; audit event `beacon_family_state`), kept in
-  `data/beacon_unknown.json` (0600, run-time data). Findings page section: `static/js/beacon-unknown.js`. Test:
+  `data/beacon_unknown.json` (0600, run-time data). The steps: `asked` (a reason) by an analyst or admin, then
+  `approved` or `rejected` (a reason) by an administrator (`settings`), then `sent`; the request download answers 409
+  until approved. `system_alerts._decoding_asks()` puts each waiting ask in the administrators' bell. The listing
+  carries each family's request lines (`requests`), as the file would hold them. Each family's value has a state
+  (`beacon_decode.STATUS`: decoded, encrypted, hash, id, token, unknown, cut), in `public()`, `seen()` and the Decoded
+  beacons list's Status column. Findings page section: `static/js/beacon-unknown.js`. Test:
   `tests/check_beacon_unknown.py`.
 - **`beacon_stats.py`, beacons on the analyst's map.** `label(e)` is a record's beacon as the *Beacon* filter shows it
   (`"<format title>, <OS>"` from `beacon_decode.field()`, or `"<title> (not decoded)"`), kept on the record as `_bc`
