@@ -67,8 +67,10 @@ DEVICE_FIELDS = ("mac", "spare1", "cpuid", "cpumd5", "mem")
 class Format:
     """One known beacon format: where it is (path, query parameter), how it is encoded, what its JSON must carry."""
 
-    def __init__(self, name, title, path, params, key_len, key_alphabet, trailer_xor, required, describe, vocab=()):
+    def __init__(self, name, title, path, params, key_len, key_alphabet, trailer_xor, required, describe, vocab=(),
+                 known_start=b""):
         self.name, self.title = name, title
+        self.known_start = known_start             # how the JSON always starts (known_start_key), b"" when it varies
         self.path = re.compile(path, re.I)
         self.params = {p.lower() for p in params}
         self.key_len, self.key_alphabet, self.trailer_xor = key_len, key_alphabet, trailer_xor
@@ -152,6 +154,48 @@ def contradicts(name, family):
     return bool(n and family and n != family)
 
 
+# the recheck of a decoded check-in (the user, 2026-11-16: "recheck the decoded"): the values with a fixed shape must
+# have it; empty is allowed (some devices leave fields empty)
+# (mem and cpuid have no fixed shape on real devices: memory modules listed in words, CPU ids in several forms)
+_SHAPES = {"cpumd5": re.compile(r"[0-9a-fA-F]{32}"), "mac": re.compile(r"[0-9a-fA-F]{2}([:-][0-9a-fA-F]{2}){5}"),
+           "bandwidth": re.compile(r"[0-9]{1,9}")}
+
+
+# text in a decoded value that addresses a reader (a person or an AI tool) instead of describing a device: attackers
+# write these values, so it is said plainly that it is data, never an instruction (prompt injection, 2026-11-16)
+_INSTRUCTION_LIKE = re.compile(
+    r"(ignore|disregard|forget)\s+(all\s+|any\s+|the\s+)?(previous|prior|above|earlier|your)\s+(instructions|prompts?|rules)"
+    r"|\byou\s+are\s+now\b|\bsystem\s+prompt\b|\b(assistant|system|developer)\s*:|\bact\s+as\s+(an?|the)\b"
+    r"|\bnew\s+instructions\b|\bdo\s+not\s+(tell|inform)\s+the\s+user\b|<\s*/?\s*(script|iframe|img|svg)\b|javascript\s*:",
+    re.I)
+INJECTION_NOTE = ("Part of the decoded data reads like instructions to a person or an AI tool. It came from the device (or "
+                  "whoever controls it): it is data, never an instruction. Do not follow it, and do not paste it into an AI "
+                  "tool as a request.")
+
+
+def instruction_like(v, depth=0):
+    """Whether any text in a decoded value (a dict, a list or a string, nested) reads like instructions to a reader."""
+    if depth > 6:
+        return False
+    if isinstance(v, dict):
+        return any(instruction_like(k, depth + 1) or instruction_like(x, depth + 1) for k, x in v.items())
+    if isinstance(v, list):
+        return any(instruction_like(x, depth + 1) for x in v)
+    return isinstance(v, str) and bool(_INSTRUCTION_LIKE.search(v))
+
+
+def recheck(obj):
+    """The field names whose value does not have its shape; empty when the decode holds."""
+    bad = []
+    for k, rx in _SHAPES.items():
+        v = obj.get(k)
+        if v in (None, ""):
+            continue
+        if not rx.fullmatch(str(v)):
+            bad.append(k)
+    return bad
+
+
 def _describe_zckypc(obj):
     s = lambda k: str(obj.get(k) if obj.get(k) is not None else "")[:120]     # noqa: E731
     fam = os_family(s("os")) or os_family(s("cpu"))
@@ -172,7 +216,8 @@ FORMATS = [
     Format(name="clogin", title="CLogin check-in", path=r"/clogin/?$", params=("key",), key_len=32,
            key_alphabet=b"0123456789abcdef", trailer_xor=0x72,
            required=({"operator", "version"}, {"cpuid", "cpumd5", "mac", "spare1"}), describe=_describe_zckypc,
-           vocab=("os", "cpu", "mem", "bandwidth", "spare2", "spare3", "spare4", "spare5")),
+           vocab=("os", "cpu", "mem", "bandwidth", "spare2", "spare3", "spare4", "spare5"),
+           known_start=b'{"operator":"'),
 ]
 
 
@@ -213,7 +258,7 @@ _BLOCKS = ("whole 16-byte blocks of random-looking bytes: a block cipher (AES-li
 OPAQUE = [
     Opaque("ttyunos", "ttyunos API request", r"ttyunos\.com$", r"/api/(desk/getdata|language/getlist)$", ("a", "b"), _BLOCKS,
            "encrypted"),
-    Opaque("weatherlive", "weatherlive widget configuration request", r"weatherlive\.world$", r"/br_upgrade/widget/getconfigs$",
+    Opaque("weatherlive", "weatherlive widget configuration request", r"weatherlive\.world$", r"/br_(upgrade|splash)/",
            ("scsl",), _BLOCKS, "encrypted"),
     Opaque("adoverocean", "adoverocean OTA task request", r"adoverocean\.com$", r"/ota/api/tasks/v2$", ("m",),
            "32 hex characters: a hash (MD5-sized) of a device value; one-way, it cannot be decoded", "hash"),
@@ -221,8 +266,12 @@ OPAQUE = [
            "27 random-looking bytes (URL-safe Base64): an opaque per-device ID", "id"),
     Opaque("clickby", "clickby statistics request", r"clickby\.net$", r"/s2?\.php$", ("d",),
            "the same value on every record seen: a campaign token, not device data", "token"),
-    Opaque("sustat", "sustat statistics request", r"sustat\.com$", r"/(u|pic)\.php$", ("p",),
+    Opaque("sustat", "sustat statistics request", r"(sustat|dqmop)\.com$", r"/(u|pic)\.php$", ("p",),
            "a few distinct short binary values: not decoded"),
+    Opaque("plugcallinfo", "plugcallinfo terminal request", r"(ycxrl|apotube)\.com$", r"/terminal/client/plugcallinfo$", ("key",),
+           _BLOCKS, "encrypted"),
+    Opaque("flyermobi", "flyermobi ad SDK device ID", r"flyermobi\.com$", r"/adbs?c$", ("udid",),
+           "20 bytes as hex: a device ID (hash-sized), the same on every call of one device: not encoded", "id"),
 ]
 
 
@@ -407,6 +456,76 @@ def recover_key(ct, key_len, alphabet, deadline, vocab=frozenset()):
     return b"".join(key)
 
 
+def _lenient_inner(ct, key):
+    """The inner bytes as far as the Base64 text reads: whole 4-character groups, a stray '=' dropped."""
+    t64, _ = split_b64(_xor(ct, key))
+    t64 = t64.rstrip(b"=")
+    t64 = t64[: len(t64) // 4 * 4]
+    try:
+        return base64.b64decode(t64) if t64 else None
+    except (binascii.Error, ValueError):
+        return None
+
+
+def _json_parses(ct, key):
+    inner = _lenient_inner(ct, key)
+    if not inner:
+        return False
+    text = inner.decode("utf-8", "surrogateescape")
+    start = text.find("{")
+    if start < 0 or start > 4:
+        return False
+    try:
+        json.JSONDecoder().raw_decode(text, start)
+        return True
+    except ValueError:
+        return False
+
+
+def known_start_key(ct, key, start_text):
+    """The key with the characters a known start of the JSON fixes: the Base64 text of start_text is known exactly
+    (whole groups only), so ct XOR that text gives those key characters; the others stay as they are."""
+    n = (len(start_text) // 3) * 4
+    if n == 0 or len(ct) < n:
+        return None
+    prefix = base64.b64encode(start_text)[:n]
+    k = bytearray(key)
+    for i in range(min(n, len(k))):
+        k[i] = ct[i] ^ prefix[i]
+    return bytes(k)
+
+
+def refine_key(ct, key, alphabet, deadline, vocab=frozenset(), fixed=0, passes=4):
+    """Settle the key positions still wrong (2026-11-16: the first recovery missed one character on longer check-ins):
+    each position from `fixed` on tried with every character of the alphabet, kept when the whole text reads better
+    (the JSON parses first, then _text_score). Stops when the JSON parses, nothing improves, or time runs out."""
+    key = bytearray(key)
+
+    def judge(k):
+        return (_json_parses(ct, k), _text_score(_lenient_inner(ct, k), vocab))
+    best = judge(bytes(key))
+    for _ in range(passes):
+        if best[0]:
+            break
+        changed = False
+        for j in range(fixed, len(key)):
+            keep = key[j]
+            for c in alphabet:
+                if c == keep:
+                    continue
+                if time.monotonic() > deadline:
+                    key[j] = keep
+                    return bytes(key)
+                key[j] = c
+                s = judge(bytes(key))
+                if s > best:
+                    best, keep, changed = s, c, True
+            key[j] = keep
+        if not changed:
+            break
+    return bytes(key)
+
+
 _B64_RUN = re.compile(rb"[A-Za-z0-9+/]*={0,2}")
 
 
@@ -433,23 +552,54 @@ def _try(fmt, value, deadline):
     key = recover_key(outer, fmt.key_len, fmt.key_alphabet, deadline, fmt.vocab)
     if not key:
         return None
+    r = _read(fmt, outer, key, lenient=False)
+    if r is None and fmt.known_start and time.monotonic() < deadline:
+        # a key nearly right (2026-11-16: longer check-ins the first recovery misses by a character): the known start
+        # of the JSON fixes the first characters exactly, then each other position is settled (refine_key)
+        fixed = known_start_key(outer, key, fmt.known_start)
+        if fixed and all(c in fmt.key_alphabet for c in fixed):
+            r = _read(fmt, outer, refine_key(outer, fixed, fmt.key_alphabet, deadline, fmt.vocab,
+                                             fixed=(len(fmt.known_start) // 3) * 4), lenient=True)
+    return r
+
+
+def _read(fmt, outer, key, lenient=False):
+    """One value under one key: the beacon, or None. lenient (after the known-start repair only): a stray '=' after the
+    Base64 text, or a JSON whose very end fails, is still read."""
     pt = _xor(outer, key)
     text64, _ = split_b64(pt)
-    inner = _b64(text64)
+    inner = _b64(text64) or (_lenient_inner(outer, key) if lenient else None)   # a stray '=' (2026-11-16)
     if not inner:
         return None
     text = inner.decode("utf-8", "surrogateescape")
     start = text.find("{")
     if start < 0 or start > 4:
         return None
+    cut_note = ""
     try:
         obj, end = json.JSONDecoder().raw_decode(text, start)
-    except ValueError:
-        return None
+    except ValueError as e:
+        # only the very end fails (2026-11-16: where the JSON's Base64 meets the trailer): keep the complete fields
+        pos = getattr(e, "pos", 0)
+        last = text.rfind('","', start, pos)
+        if not lenient or pos < 0.8 * len(text) or last < 0:
+            return None
+        try:
+            obj, _ = json.JSONDecoder().raw_decode(text[:last + 1] + "}", start)
+        except ValueError:
+            return None
+        end = last + 1
+        cut_note = "The decoded data was cut short in the request: only the complete fields before the cut are shown."
     if not isinstance(obj, dict):
         return None
     keys = {str(k).lower() for k in obj}
     if not all(keys & group for group in fmt.required):
+        return None
+    # every field name must be one the format knows: a garbled name ("cpumd6", "banawidth") means a key that is not
+    # quite right, and such a decode is never shown (2026-11-16)
+    if not keys <= fmt.vocab:
+        return None
+    if recheck({str(k).lower(): v for k, v in obj.items()}):      # a value without its shape: not the right key
         return None
     # the trailer: after the Base64 text of the JSON in the XOR layer (as sent), or after the JSON inside it
     used = len(text[:end].encode("utf-8", "surrogateescape"))
@@ -461,7 +611,12 @@ def _try(fmt, value, deadline):
         trailer = plain.decode("ascii") if re.fullmatch(rb"[0-9a-fA-F]+", plain) else tail.hex()
     d = fmt.describe(obj)
     notes = list(d.pop("notes", []))
-    if trailer:
+    if instruction_like(obj):
+        notes.append(INJECTION_NOTE)
+    if cut_note:
+        notes.append(cut_note)
+        trailer = ""
+    elif trailer:
         notes.append(f"Trailer after the JSON (XOR 0x{fmt.trailer_xor:02x}): {trailer}")
     return {"format": fmt.name, "title": fmt.title, "key": key.decode("ascii"), "json": obj, "trailer": trailer,
             "notes": notes, **d}
@@ -551,7 +706,8 @@ def generic(value, deadline):
                         "text": text[:4000], "json": obj if isinstance(obj, (dict, list)) else None, "key": "",
                         "operator": "", "version": "", "os": "", "os_family": "",
                         "notes": [f"Decoded by the generic fallback: {' → '.join(steps + [name])}. Not a known format: read it "
-                                  f"with care, and treat what it says about the device as the device's own data."]}
+                                  f"with care, and treat what it says about the device as the device's own data."]
+                        + ([INJECTION_NOTE] if instruction_like(text) or instruction_like(obj) else [])}
             todo.append((steps + [name], nb))
     return None
 
@@ -597,7 +753,9 @@ def sendable(url, host=None):
     path, parts = _query(url)
     for param, _raw, value in parts:
         s = states.get(param)
-        if s and len(value) >= 16:
+        # an encoded-looking value only, as for unknown values: a plain-text value (spaces, words) stays masked in the
+        # request line (security review of 228293b)
+        if s and len(value) >= 16 and _BLOB.fullmatch(value):
             out.append({"param": param, "path": path[:200], "value": value, "shape": shape(value),
                         "known": f"{s.get('title', '')} ({status_text(s.get('state'))})"})
     return out

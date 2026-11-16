@@ -137,6 +137,7 @@ run "generic decode + undecoded families" $PY tests/check_beacon_unknown.py
 run "beacon filter + decoded beacons"     $PY tests/check_beacon_stats.py
 run "spike notice on the Overview"      $PY tests/check_spike_notice.py
 run "glossary: docs page = in-app"      $PY tests/check_glossary_sync.py
+run "decoder on the latest day (counts)" $PY tests/verify_beacon_decode.py
 run "researchers' notes"              $PY tests/check_notes.py
 run "combination codes + search"      $PY tests/check_combos.py
 run "findings (researcher → advisory)" $PY tests/check_findings.py

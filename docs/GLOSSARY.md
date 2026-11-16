@@ -126,7 +126,7 @@ An extra label from the report, often a campaign name or an alternative family n
 An HTTP request to a sinkhole that carries a long encoded string in one of its values (for example Base64, or text scrambled with a key). Some bots pack what they know about the device into it. Looking Glass reads it where it can and says what the request holds, never what to do about it: that is the analyst's call.
 
 **Decoded beacon**  
-What Looking Glass read out of an encoded request: the format (for example a CLogin check-in), the operator and version, the operating system the request reports, notes, and the decoded data itself. It says what the request says: "the decoded request says Windows" is a fact about the request, not proof of what the device is. Analysts and admins see it in an event's details.
+What Looking Glass read out of an encoded request: the format (for example a CLogin check-in), the operator and version, the operating system the request reports, notes, and the decoded data itself. It says what the request says: "the decoded request says Windows" is a fact about the request, not proof of what the device is. Every decode is rechecked before it is shown, and a decoded value that reads like instructions to a person or an AI tool is marked as data, never an instruction. Analysts and admins see it in an event's details.
 
 **Beacon status**  
 What a family's value is. Decoded: Looking Glass read it. Encoded, cannot be decoded: encrypted with a key kept in the malware, not in the request. Encoded, not decoded yet: a known family Looking Glass cannot read yet. Did not decode: a known format, but this value was cut short or is a new variant. Not encoded: a one-way hash, a device ID or a campaign token, with nothing in it to decode.

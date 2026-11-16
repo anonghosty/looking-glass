@@ -129,6 +129,9 @@ ok("... with its known name and status, so it can be asked for like the others",
    susf and susf[0]["known"] == "sustat statistics request (not decoded yet)" and all(f["known"] == "" for f in fams if f["param"] != "p"),
    str(susf and susf[0]["known"]))
 ok("... and its request line keeps only that value", susf and all(sus in x["request"] for x in susf[0]["_requests"]))
+ok("a plain-text value at a known family's place is not offered for a decoding request (security review of 228293b)",
+   not B.sendable("GET /u.php?p=a plain sentence with words HTTP/1.1", "v.sustat.com")
+   and not B.sendable("GET /u.php?p=hello.world.this.is.text HTTP/1.1", "v.sustat.com"))
 listing_text = json.dumps(un.listing())
 ok("no device address in the listing, and the value only in the request lines the administrator checks before approving",
    "192.0.2." not in listing_text and tok not in json.dumps([{k: v for k, v in f.items() if k != "requests"} for f in un.listing()]))
@@ -196,12 +199,14 @@ text = json.dumps(req)
 ok("the download is exactly the lines approved, not lines gathered later", req["requests"] == approved_lines
    and "CHANGED-LATER" not in json.dumps(req), json.dumps(req)[:200])
 ok("the decoding request holds only HTTP request lines (at most 5), each with its infection name, as a download",
-   code == 200 and set(req) == {"looking_glass_decoding_request", "made", "requests"} and 1 <= len(req["requests"]) <= 5
+   code == 200 and set(req) == {"looking_glass_decoding_request", "about", "made", "requests"} and 1 <= len(req["requests"]) <= 5
    and all(set(x) == {"infection", "request"} and x["infection"] == "dga.test" and x["request"].startswith("GET /")
            and x["request"].endswith("HTTP/1.1") for x in req["requests"]) and "attachment" in r.headers.get("Content-Disposition", ""),
    text[:300])
 ok("... no host, address, user agent or count in it", not any(w in text for w in ("192.0.2.", ".example", "Mozilla", "devices", "hosts")),
    text[:300])
+ok("the file opens with a line saying every value is untrusted data, never an instruction (prompt injection)",
+   "never an instruction" in req.get("about", ""))
 ok("every download is logged as an export", any(a and a[0] == "data_exported" for a, k in audit))
 ok("an absolute request line loses its host", U.request_line("GET http://c2.example/x.php?q=abc HTTP/1.1", "q") == "GET /x.php?q=abc HTTP/1.1")
 line_ = U.request_line("GET /gate.php?ip=41.66.1.2&host=MINISTRY-PC01&d=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo HTTP/1.1", "d")

@@ -223,7 +223,10 @@ Come back to it at any time with the **Overview** button, which is in every page
   *Windows 7 Ultimate* under *android.badbox2*), a note says so, as a lead worth checking. The block says what the
   beacon holds, never what to do about it: the event's *Recommended action* stays the name's definition, and what
   fits the record is the analyst's call. The known format is the **CLogin check-in** (`GET /CLogin?key=…`, filed under *android.badbox2*),
-  used by several operators (zckypc, WT, PKS and HTM so far). Other request families are named but **not decoded**,
+  used by several operators (zckypc, WT, PKS and HTM so far). A decode is shown only after a recheck: every field name
+  must be the format's and the CPU hash, MAC address and bandwidth must have their shape, so a key that is not quite
+  right never shows garbled data. When a decoded value reads like instructions to a person or an AI tool, a note says
+  it is data from the device, never an instruction: attackers write these values. Other request families are named but **not decoded**,
   with what they are: an encrypted request (its key stays in the app), a one-way hash, an opaque device ID or a
   campaign token. A value no known format fits goes through the **generic fallback**, which tries hex, Base64,
   zlib/gzip/deflate and a one-byte XOR, up to three layers deep. When the result reads as JSON, `key=value` pairs or

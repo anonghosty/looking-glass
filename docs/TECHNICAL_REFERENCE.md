@@ -178,6 +178,14 @@ server side is in small modules called from `app.py`:
   (`beacon_decode.STATUS`: decoded, encrypted, hash, id, token, unknown, cut), in `public()`, `seen()` and the Decoded
   beacons list's Status column. Findings page section: `static/js/beacon-unknown.js`. Test:
   `tests/check_beacon_unknown.py`.
+- **`beacon_decode.py`, reading again and rechecking (2026-11-16).** `_try` reads a value with the first recovered key
+  (`_read`, strict); only when that fails does it fix the first key characters from the format's `known_start` (the
+  CLogin JSON starts with `{"operator":"`, so its Base64 text is known; `known_start_key`) and settle the others
+  (`refine_key`, judged by whether the JSON parses, then `_text_score`), then read again leniently (a stray `=`, and a
+  JSON whose very end was cut short: the complete fields kept, with a note). Every decode passes `recheck`: field names
+  within the format's vocabulary, and `cpumd5`, `mac`, `bandwidth` with their shape. `instruction_like` adds
+  `INJECTION_NOTE` to a decode whose text reads like instructions to a reader. `tests/verify_beacon_decode.py` checks
+  the installation's latest day (counts only).
 - **`features.py`, where new features install themselves.** app.py calls `features.install(app, core)` once, at the
   end, with the shared parts (`db`, `registry`, `svc`, `replay_now`, `day_start`, `AUTH`); each new feature has its own
   module and one entry there, so app.py does not grow.

@@ -5,6 +5,27 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-16 (14)
+### Added
+- **More CLogin check-ins decode.** Longer check-ins whose key the first recovery missed by a character are now read:
+  the known start of their JSON fixes the first key characters exactly and the others are settled one by one, only
+  after the normal reading fails (so nothing else is slower). When only the very end of the JSON was cut short in the
+  request, the complete fields are kept with a note saying so.
+- **Every decode is rechecked.** A decoded check-in is kept only when all its field names are the format's and the
+  values with a fixed shape have it (the CPU hash, the MAC address, the bandwidth); a key that is not quite right never
+  shows garbled data.
+- **More families named:** flyermobi's ad SDK device ID (not encoded), weatherlive's other request paths (encrypted),
+  the plugcallinfo terminal request (encrypted), and sustat's second host (not decoded yet).
+- **A daily check of the decoder** (`tests/verify_beacon_decode.py`): on the installation's latest report day, how many
+  CLogin check-ins decode, and that every one passes the recheck. Counts only.
+
+### Security
+- **Prompt injection in decoded data.** Encoded values are written by attackers. A decoded value that reads like
+  instructions to a person or an AI tool is noted on the Decoded beacon as data, never an instruction, and a decoding
+  request file opens with a line saying every value in it is untrusted data.
+- A known family's value is offered for a decoding request only when it looks encoded, like unknown values: plain text
+  at its place stays masked (security review of v2026.11.16.13, a point below the reporting bar).
+
 ## 2026-11-16 (13)
 ### Added
 - **A spike notice on the Overview's buttons.** When the latest report day moved sharply against the day before,
