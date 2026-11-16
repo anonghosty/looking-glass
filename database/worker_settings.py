@@ -533,8 +533,8 @@ def _apply_all(dfd, done_fd, names, env_file, base_dir, log):
                     raise ValueError("no such held-back report")
                 for i in found:
                     mail_auth.request_release(held_now[i][0], clean(req.get("by") or "?", 120))
-                names = [n for i in found for n in (held_now[i][1].get("files") or [])]
-                changed = [f"{len(found)} held-back report(s) released: " + clean(", ".join(names) or ", ".join(found), 600)]
+                released_files = [f for i in found for f in (held_now[i][1].get("files") or [])]
+                changed = [f"{len(found)} held-back report(s) released: " + clean(", ".join(released_files) or ", ".join(found), 600)]
                 if len(found) < len(ids):
                     changed.append(f"{len(ids) - len(found)} no longer held back (released or removed meanwhile)")
             else:

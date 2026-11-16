@@ -335,6 +335,8 @@
     c.append(h, meta);
     if (f.kind !== "case") c.append(watchLine(f));
     if (!f.parent) c.append(el("p", "fd-text", f.text));       // a sub-finding carries its case's text: said once, on the case
+    // decoded beacons handed over: at this viewer's level (records for analysts, counts for the rest; beacon-handover.js)
+    if (f.beacon && window.LGBeaconHandover) c.append(window.LGBeaconHandover.block(f));
     if (f.origin === "analyst" && !f.parent) meta.prepend(el("span", "fd-origin", "From an analyst"));
     if (f.kind === "case") {
       c.classList.add("fd-case");

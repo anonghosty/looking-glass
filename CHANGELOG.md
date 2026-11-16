@@ -5,6 +5,58 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-16 (2)
+### Security
+- **Encoded beacons never reach a masked view.** An encoded check-in in a request decodes to the device's MAC address,
+  hardware UUID and CPU id. In Demo mode, for the external role and in Intel gathered's URL values it now reads
+  `<clogin beacon>`; the encrypted or opaque values of other request families read `<ttyunos value>` and the like,
+  and any other long encoded value `<encoded value>`.
+
+### Added
+- **Decoded beacons.** Some bots pack what they know about the machine into one encoded query value of their check-in.
+  Looking Glass now finds these in the HTTP request the sinkhole reports carry and decodes the formats it knows, starting
+  with the **CLogin check-in** (`GET /CLogin?key=…`, filed under *android.badbox2*; operators zckypc, WT, PKS and HTM),
+  recovering the XOR key from each check-in itself. Other request families seen in the reports (encrypted requests,
+  hashes, opaque device IDs) are named, with what they are, but not decoded. Analysts and admins see a **Decoded
+  beacon** block in the event details, under the HTTP request: the format, operator, version, operating system, XOR key,
+  notes (the CPU id as text, what the MAC prefix means, a name the beacon contradicts) and the whole JSON. Researchers see
+  only the threat-side parts in Intel gathered (*Beacon format*, *operator*, *version* and *OS*), each once 5 or more
+  devices carry it, and a new **Beacon vs name** match in "Looking Glass asks" when decoded beacons name a different
+  operating system than the infection they are filed under.
+- **What the beacon says, not what to do.** When a decoded beacon names a different operating system than the
+  infection it is filed under (a Windows 7 beacon under *android.badbox2*, for example), a note says so as a lead worth
+  checking. The decoder adds no action of its own: the event keeps the name's recommended action, and what fits the
+  record is the analyst's call.
+- **Handing decoded beacons over.** A researcher (from Intel gathered or a *Beacon vs name* match) or an analyst (from
+  the event details) sends decoded beacons to a named analyst or manager as a finding. On the Findings page everyone in
+  the channel sees what was handed over and how many records and devices carry it; analysts and admins can also **Show
+  the devices** (every record with its host and decoded JSON; recorded in the audit log). The beacons' parts are held
+  back from the others while fewer than 5 devices carry them.
+- **Generic fallback decoding.** A long encoded value no known format fits is tried with hex, Base64, zlib/gzip/deflate
+  and a one-byte XOR, up to three layers deep. When the result reads as JSON, `key=value` pairs or words, analysts see
+  it as a **Generic decode** with its layers. Real encryption is left alone.
+- **Requests Looking Glass could not decode.** A section on the Findings page (analysts and admins) lists what still
+  does not decode as families of one request shape, with the C2 hosts, names, reports and counts. Each can be sent to
+  the Looking Glass creator for future automated decoding: a decoding request file holding only the HTTP requests (up
+  to 5, each with its infection name; no host, address, user agent or count; confirmed against your TLP rules and
+  recorded as an export), pasted into a private report on the separate HTTP Requests Decoding repository. A family that is not a beacon can be
+  put away.
+
+### Fixed
+- Page files (scripts, styles and templates) are no longer marked executable; v2026.11.16 shipped some that were.
+- The held-back reports list (Settings → Workers) no longer fails while the report database is unreachable: it lists the
+  reports by their Shadowserver file names only, without the readable report names.
+- The HTTPS look-up of the sender check's signing key only ever opens `https://` addresses (a code scanning finding).
+- The checks on GitHub for v2026.11.16 failed on both of these; they pass again.
+- A check of the services filters no longer fails early in the day, before the DNS Open Resolvers report has arrived:
+  that part is skipped until there is something to check.
+- **Architecture and threat model corrected.** The platform and the pipeline run as one Linux user (the page said the
+  pipeline had its own): what keeps them apart is the web app's sandbox and their separate database accounts, and a
+  shell as that user is now listed as a remaining risk. Also brought up to date: the lock time is a setting (5 to 240
+  minutes), the audit log's signed daily checkpoints and their copy on another computer, the HTTPS look-up of the
+  DKIM key, `pip-audit` on GitHub, encrypted backups, the per-person limits on heavy views, how the caches keep each
+  role's answers apart, the decoded beacons and the decoding request.
+
 ## 2026-11-16
 ### Fixed
 - **The sender check works on networks that drop DNS TXT look-ups.** It looks up Shadowserver's signing key in DNS (a

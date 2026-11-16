@@ -54,9 +54,11 @@ def txt(name: str, timeout: float = 5.0, servers_=None) -> bytes:
     for ip in (servers_ if servers_ is not None else servers()):
         host = f"[{ip}]" if ":" in ip else ip
         url = f"https://{host}{PATHS.get(ip, '/dns-query')}?" + urllib.parse.urlencode({"name": name, "type": "TXT"})
+        if not url.startswith("https://"):                 # only ever HTTPS to a resolver's IP address, never file: or others
+            continue
         req = urllib.request.Request(url, headers={"accept": "application/dns-json", "User-Agent": "looking-glass-sender-check"})
         try:
-            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
+            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:  # nosec B310  # https only, to a resolver's IP address (checked above)
                 d = json.loads(r.read(65536).decode("utf-8", "replace"))
         except (OSError, ValueError) as exc:
             last = exc

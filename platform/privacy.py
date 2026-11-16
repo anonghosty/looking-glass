@@ -199,6 +199,9 @@ def mask_event(ev, asns):
             out[f] = "hidden"
     for f in ("http_url", "http_host", "http_referer", "http_agent", "ssl_servername", "detail", "filename"):
         out[f] = mask_text(out.get(f, ""))
+    # an encoded beacon in the request decodes to the device's MAC, UUID and CPU id (beacon_decode.py): replaced
+    import beacon_decode
+    out["http_url"] = beacon_decode.mask_url(out["http_url"])
     # the line hash is a hash of the raw report line: anyone holding a guess of the line (an address, a port, a
     # time) can hash it and confirm the address; the event ID is an ID. Neither is sent (review 2026-11-13)
     for f in ("line_hash", "event_id", "_id"):

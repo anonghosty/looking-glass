@@ -104,8 +104,9 @@ class Findings:
         os.replace(tmp, self.path)
         self.mtime = os.path.getmtime(self.path)
 
-    def create(self, note, section, name, title, user, role, to=None, kind="management"):
-        """A finding from a saved note (notes.Notes.add's raw note: id, text, codes), sent to `to` (a manager)."""
+    def create(self, note, section, name, title, user, role, to=None, kind="management", extra=None):
+        """A finding from a saved note (notes.Notes.add's raw note: id, text, codes), sent to `to` (a manager).
+        extra: fields of its own (beacon_findings.py: "beacon", what the finding is about; no address in it)."""
         now = round(time.time(), 3)
         status = TO_STATUS.get(kind, "new") if to else "new"
         with self.lock:
@@ -115,6 +116,7 @@ class Findings:
             item = {"id": fid, "note": note["id"], "section": section, "name": name, "title": (title or "").strip()[:MAX_TITLE] or name,
                     "text": note.get("text", ""), "codes": list(note.get("codes") or []), "user": user, "role": role,
                     "at": now, "status": status, "history": [{"status": status, "user": user, "role": role, "at": now, "comment": "", "to": to or ""}]}
+            item.update({k: v for k, v in (extra or {}).items() if k not in item})
             self._join(item, to)
             self.data["items"][fid] = item
             self._save()
@@ -461,6 +463,9 @@ class Findings:
                 "children": list(x.get("children") or []),
                 # when its records were reported (finding_watch.py), and whether it closed because time to act ran out
                 "reported": dict(x.get("reported") or {}), "expired": bool(x.get("expired")),
+                # a decoded beacon handed over (beacon_findings.py): which beacons, never a device; the page asks for them
+                # at the viewer's level (/api/beacon/finding/<id>)
+                "beacon": bool(x.get("beacon")),
                 # its advisories (advisory.py): reference, organisation, state; the advisor marks a drafted one as sent here
                 "advisories": self.advisories_of(x["id"]) if x.get("review") else []}
 

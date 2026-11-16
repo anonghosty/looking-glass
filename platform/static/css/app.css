@@ -720,6 +720,12 @@ body.demo .pin, body.demo #mPin, body.demo #mCopy { display: none !important; }
 .m-sec pre { margin: 0; padding: 10px 12px; border-radius: 7px; background: #0e0e10; border: 1px solid var(--border); font: 12px/1.6 var(--mono); color: var(--text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
 .m-sec pre .verb { color: var(--accent); }
 .m-sec pre .hk { color: var(--muted); }
+/* the decoded beacon (beacon.js): its facts, the notes, the whole JSON */
+.bc-one + .bc-one { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.bc-h { margin: 12px 0 6px; color: var(--muted); font-size: 12px; }
+.bc-notes { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.55; color: var(--text); }
+.bc-notes li + li { margin-top: 3px; }
+.bc-msg { margin: 0; font-size: 12px; color: var(--muted); }
 .m-foot { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; padding: 12px 20px; border-top: 1px solid var(--border); }
 
 /* analytics */

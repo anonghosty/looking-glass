@@ -27,6 +27,7 @@ import time
 from flask import jsonify, request
 
 from privacy import partial_mask_text
+import beacon_decode
 import hostmask
 import small_codes
 
@@ -58,6 +59,11 @@ COMBO_KINDS = {"Associated tags", "Other CVEs on the same hosts"}
 # Sinkhole DNS record would look like "the name only" although it carries the domain looked up.
 COMMS_COMBO_KINDS = COMBO_KINDS | {"C2 domain", "User agent", "DNS lookup", "TLS server name (SNI)"}
 COMMS_FIELDS.append(("Associated tags", "tag"))
+# a beacon decoded from the request (beacon_decode.py): only its threat-side parts, each shown to a viewer who does not
+# see hosts only when MIN_HOSTS devices carry the value (held()); the device's own details never come here
+COMMS_FIELDS.extend((k, "beacon:" + beacon_decode.FIELD_OF_KIND[k]) for k in beacon_decode.KINDS)
+BEACON_KINDS = set(beacon_decode.KINDS)
+BEACON_NO_MATCH = {"Beacon format", "Beacon OS"}      # shared by every beacon of a format: never a match between names
 # Inbound reports (sources.py layout "inbound": Shadowserver's Spam URL report). The constituent is the sender: src_ip is
 # the spam relay that delivered the message (last hop). ip / hostname (dst_* here) and url are where a link found in
 # the spam points: often a spammer's site, sometimes a legitimate one hidden among them, and never a C2. So those hosts
@@ -106,7 +112,17 @@ def _get(e, key):
         return " ".join(x for x in (e.get("vendor"), e.get("product")) if x)
     if key.startswith("x:"):
         return (e.get("extras") or {}).get(key[2:])
+    if key.startswith("beacon:"):
+        return beacon_decode.field(e, key[7:])
     return e.get(key)
+
+
+def held(section, kind, c, slot, full):
+    """The values to hold back: services values and, for a viewer who does not see hosts, decoded beacon values that
+    fewer than MIN_HOSTS devices carry (counted, never shown)."""
+    if section == "issues" or (kind in BEACON_KINDS and not full):
+        return {v for v in c if len(slot["vh"].get((kind, v)) or ()) < MIN_HOSTS}
+    return set()
 
 
 def _values(e, key, kind, svc=False, raw=False):
@@ -129,6 +145,8 @@ def _values(e, key, kind, svc=False, raw=False):
             if not s or hostmask.looks_like_host(s):
                 continue                          # nothing left but "<host>": it named a host and nothing else
         elif kind not in KEEP_AS_IS and kind not in EXACT_KINDS:
+            if kind == "URL":
+                s = beacon_decode.mask_url(s)     # a beacon blob decodes to the device's MAC, UUID...: never shown
             # IP addresses inside threat data are partly masked; the C2 host itself is kept as it is, an IP literal
             # too: researchers need the C2 servers for their analysis (the user's decision, 2026-11-12, after the
             # external review raised it; written in SECURITY.md). A C2 server is the threat's side, not a constituent.
@@ -143,6 +161,7 @@ VERDICT = {
     2: "Shared with a name that has no definition",
     3: "Shared by two names",
     4: "Seen in two reports",
+    5: "Decoded beacon contradicts its name",
 }
 
 
@@ -326,10 +345,10 @@ class Intel:
             kinds = []
             for k, c in slot["kinds"].items():
                 c = collections.Counter({v: n for v, n in c.items() if _norm(v) != me})   # not itself
-                hidden = 0
-                if section == "issues":            # services: a value is shown only when MIN_HOSTS hosts share it
-                    rare = {v for v in c if len(slot["vh"].get((k, v)) or ()) < MIN_HOSTS}
-                    hidden = len(rare)
+                # services, and decoded beacons for viewers who do not see hosts: shown when MIN_HOSTS hosts share it
+                rare = held(section, k, c, slot, full)
+                hidden = len(rare)
+                if rare:
                     c = collections.Counter({v: n for v, n in c.items() if v not in rare})
                 if c or hidden:
                     kinds.append({"kind": k, "distinct": len(c), "hidden": hidden,
@@ -377,15 +396,17 @@ class Intel:
         devices = sum(sets.values()) or 1
         report_sets = [{"reports": list(rs), "devices": n, "share": round(n / devices, 4)} for rs, n in sets.most_common(12)]
         seen = collections.defaultdict(lambda: {"kinds": set(), "value": "", "where": collections.Counter()})
+        full = small_codes.viewer_sees_hosts()
         for rep, slot in data["by"].get(key, {}).items():
             for kind, c in slot["kinds"].items():
                 if kind == "Family named by the report":
                     continue
+                rare = held(key[0], kind, c, slot, full)
                 for v, n in c.items():
                     if _norm(v) == me:
                         continue
-                    if key[0] == "issues" and len(slot["vh"].get((kind, v)) or ()) < MIN_HOSTS:
-                        continue                  # services: only values MIN_HOSTS hosts share
+                    if v in rare:
+                        continue                  # services, and beacons for researchers: only values MIN_HOSTS hosts share
                     s = seen[_match_key(kind, v)]
                     s["kinds"].add(kind); s["value"] = s["value"] or v; s["where"][rep] += n
         shared = [{"value": s["value"], "kinds": sorted(s["kinds"]), "where": dict(s["where"].most_common()), "records": sum(s["where"].values())}
@@ -422,10 +443,16 @@ class Intel:
     def leads(self):
         data = self.index()
         defined = self.ctx["defined"]()           # {("infections"|"issues", name): title}
+        full = small_codes.viewer_sees_hosts()
         out = []
         for (kind, value), names in data["match"].items():
             if len(names) > TOO_COMMON or (kind == "User agent" and (GENERIC_UA.match(value) or BROWSER_UA.match(value))):
                 continue
+            if kind in BEACON_NO_MATCH:
+                continue
+            if kind in BEACON_KINDS and not full and len(set().union(*(
+                    slot["vh"].get((kind, value)) or () for nm in names for slot in data["by"].get(nm, {}).values()))) < MIN_HOSTS:
+                continue                              # a decoded beacon value fewer than MIN_HOSTS devices carry
             if kind == "URL" and len(re.sub(r"^(GET|POST|HEAD|PUT|OPTIONS)\s+|\s+HTTP/[\d.]+$", "", value).strip("/ ")) < 4:
                 continue                              # "/" and other bare paths: every scanner asks for them
             reps = {r for rs in names.values() for r in rs}
@@ -468,6 +495,8 @@ class Intel:
                 if per[tuple(x["names_key"])] > 3:
                     continue
             kept.append(x)
+        # a decoded beacon whose contents contradict the name it is filed under (beacon_decode.py), first in the list
+        kept = beacon_decode.contradiction_leads(data["by"], full, MIN_HOSTS) + kept
         for x in kept:
             low = lambda pn: (pn[0], pn[1].lower())
             x["names"] = [{"section": p, "name": n, "defined": defined.get(low((p, n)), "")} for p, n in x["names_key"]]

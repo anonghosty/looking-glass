@@ -18,7 +18,7 @@ the database can instead be an internal MongoDB on another server of your networ
  Shadowserver
    │  e-mail to the mailbox, or the report API (HTTPS)
    ▼
- database/   the pipeline: its own Linux user and database account
+ database/   the pipeline: its own database account (cron)
    fetch → check the sender (DKIM) → unzip within limits
          → sort → load
    │  read and write, its own database only
@@ -38,7 +38,7 @@ the database can instead be an internal MongoDB on another server of your networ
 
 | Part | What it does | Runs as | Can write |
 |---|---|---|---|
-| **Pipeline** (`database/`) | On its schedule (every 30 minutes recommended): fetches the reports (mailbox read-only, or Shadowserver's report API), checks who sent each e-mail, unzips within limits, sorts and loads each CSV row into MongoDB | its own user, cron | its folders, and its own database through `lookingglass_pipeline` |
+| **Pipeline** (`database/`) | On its schedule (every 30 minutes recommended): fetches the reports (mailbox read-only, or Shadowserver's report API), checks who sent each e-mail, unzips within limits, sorts and loads each CSV row into MongoDB | the installing user's cron, outside the web app's sandbox | its folders, and its own database through `lookingglass_pipeline` |
 | **MongoDB** | Holds the reports: one document per row, per report type | `mongod`, bound to 127.0.0.1 (or an internal server: see below) | n/a |
 | **Platform** (`platform/`) | The web app: the map, services, Intel gathered, findings, the Executive portal, advisories and the Audit portal | a systemd service with `NoNewPrivileges`, `ProtectSystem=strict` and `ProtectHome=read-only`; writable only in `data/` | only `data/`; the database through the read-only account `lookingglass_ro` |
 | **Browser** | Shows the pages; all report data is inserted as text, under a strict Content-Security-Policy | the user's computer | nothing on the server, except through the signed-in API |
@@ -51,6 +51,11 @@ says the link between the two servers is trusted. A local MongoDB listens on 127
 the server only when the platform runs on another computer. The installer checks that an existing database has the
 Looking Glass structure; if it holds something else it offers a new database for Looking Glass on that server, or
 MongoDB on this computer instead. Looking Glass never writes into another program's data.
+
+**One Linux user.** The platform and the pipeline run as the same Linux user: the ordinary user who ran the installer
+(never root). What keeps them apart is the platform's systemd sandbox (it can write only its `data/`, and can't see
+`/run/user` or D-Bus) and their separate database accounts, not two Linux users. Someone who gets a shell as that user,
+outside the sandbox, has the pipeline's account: guard it as you would any administrator login.
 
 There is one way back from the web app to the pipeline: Settings → Workers. The web app can't write the pipeline's
 folder. A setting change is a request file in the web app's own `data/pipeline_requests/`, which the pipeline checks
@@ -89,8 +94,9 @@ server, on the pipeline's own account ([Security, section 1](SECURITY.md#pipelin
 | B4 | Network → platform | HTTP requests | `ACCESS_MODE` and the allow list; the host-name check (against DNS rebinding); HTTPS for remote sign-in; a 64 KB request limit |
 | B5 | Signed-in user → data | API calls | role permissions enforced on the server; masking done on the server; CSRF token and same-origin checks on changes |
 | B6 | Platform → pipeline | setting requests | re-checked by the pipeline; loosening needs a confirmation on the server, bound to the request's SHA-256 |
-| B7 | Platform → outside services | look-ups | only what each service needs: AS numbers (PeeringDB, RIPEstat), CVE IDs (NVD, FIRST, CISA), malware hashes and families (Malpedia), place names (Mapbox geocoding). No constituent IP address is sent to any of them |
-| B8 | Server → auditor | the proof package | the auditor's own verifier, standard library only, run off the server; the head is kept off the server |
+| B7 | Platform and pipeline → outside services | look-ups | only what each service needs: AS numbers (PeeringDB, RIPEstat), CVE IDs (NVD, FIRST, CISA), malware hashes and families (Malpedia), place names (Mapbox geocoding); the pipeline asks Cloudflare and Google over HTTPS (1.1.1.1, 1.0.0.1, 8.8.8.8, 8.8.4.4, by IP address, certificates checked) for Shadowserver's DKIM key when the network drops DNS TXT look-ups, sending only that key's name (`MAIL_AUTH_DNS_SERVERS`). No constituent IP address is sent to any of them |
+| B8 | Server → auditor | the proof package | the auditor's own verifier, standard library only, run off the server; an earlier head kept by the auditor; signed daily checkpoints, optionally copied to another computer (`AUDIT_CHECKPOINT_COPY_DIR`), which the verifier and the proof package check |
+| B9 | Analyst → the Looking Glass creator | a decoding request | sent by hand, never by Looking Glass: only the HTTP request lines (up to 5) with their infection names, no host, address, user agent or count; the analyst confirms the TLP rules allow it; recorded as an export; pasted into a private report on the separate [HTTP Requests Decoding](https://github.com/anonghosty/http-requests-decoding) repository, never a public issue |
 
 ## 4. What an attacker would want
 
@@ -114,7 +120,7 @@ Each row below names a threat and the control that stops it.
 |---|---|
 | Reach pages or the API without signing in | Every page and API needs a sign-in: password (scrypt) plus TOTP |
 | Replay an authenticator code, or reuse a recovery code | Each code works once, checked again when it is recorded; recovery codes are removed when used |
-| Guess passwords | 5 failures per account and address, then a 15-minute lock; 20 per address per hour; same answer and timing for wrong names |
+| Guess passwords | 5 failures per account and address, then a lock of 15 minutes by default (`LOGIN_ACCOUNT_LOCK_MIN`, 5 to 240); 20 per address per hour; same answer and timing for wrong names |
 | Steal or plant a session | Server-side sessions (only a hash is stored); a new ID at sign-in; HttpOnly, SameSite=Strict, Secure, `__Host-`; bound to address and browser |
 | Make a signed-in user's browser change things (CSRF, DNS rebinding) | CSRF token, JSON only, `Origin` and `Sec-Fetch-Site` checks, host-name allow list |
 | Become the first administrator | A one-time setup code readable only on the server; over HTTPS only from another computer; a wrongly set up reverse proxy can't make everyone look local |
@@ -140,17 +146,21 @@ Each row below names a threat and the control that stops it.
 | Change Settings, roles or accounts | Permissions checked on the server; exclusive and fixed roles; the last administrator kept; on a 5-day session, changes need a fresh sign-in after 12 hours |
 | Look at or download host data quietly | Every export, and every view of host-level data with every filter of it, is an audit entry, with hosts by reference |
 | Tie up the server's CPU with one request (a long run of colons for the address finder) | The finder reads candidates of at most 45 characters; logged values are cut before it reads them |
+| Slow everyone down with many heavy requests (one process answers everyone) | At most 3 heavy requests of one person at a time and 240 a minute (`HEAVY_PER_USER`, `HEAVY_PER_MINUTE`); more get 429 with Retry-After |
+| Get another role's answer out of a cache | The response cache's key holds the role, the permissions (masking), Peace of mind and the full address; answers that differ per person are never cached. The day-results cache is keyed on the loaded day, the filters and the masked mode |
+| A researcher reads a device's decoded beacon (its MAC address, hardware ID, CPU id) | Decoding is answered only with the *unmasked* permission; researchers get the threat-side parts (format, operator, version, OS) once 5 or more devices carry them; masked views read `<clogin beacon>` or `<encoded value>`; the devices of a hand-over open only for analysts and admins, and each opening is logged |
 | Send an organisation a report that no longer says what the advisory's record says (edited text or TLP) | The report keeps a fingerprint of its text; drafted and sent are refused until it is generated again |
 | Register a look-alike name ("Grace" beside "grace") | Names and e-mail addresses that differ only in letter case are one |
 
-### A4. A takeover of the web app (a bug, or its Linux account)
+### A4. A takeover of the web app through a bug
 
 | Threat | Control |
 |---|---|
 | Switch off the sender check or the unzip limits, or swap the API key | Requests that loosen the pipeline wait for a confirmation on the pipeline's account, bound to the request's SHA-256. The request folder is untrusted (no symlinks, plain small files, fixed result fields), and control characters are removed before display |
 | Write to the database | The platform's account is read-only; `deploy/create_readonly_db_user.py` checks that it can't write |
 | Read the database administrator's password | It is kept in `/etc/looking-glass/mongo-admin.env`, which only root can read |
-| Write outside `data/` | systemd sandbox (rated by `systemd-analyze security`) |
+| Write outside `data/` | systemd sandbox (rated by `systemd-analyze security`); `/run/user` and D-Bus are hidden from it, so it can't confirm its own requests |
+| A shell as the Linux user, outside the sandbox | **Not stopped by these controls.** Platform and pipeline share that user, so it can edit the pipeline's `.env` and confirm requests itself. Protect the account (SSH keys, no shared password, no passwordless sudo); see section 6 |
 
 ### A5. Someone who edits the audit log
 
@@ -158,7 +168,7 @@ Each row below names a threat and the control that stops it.
 |---|---|
 | Change, insert or remove an entry | Each entry carries the SHA-256 of the one before it; `audit.head` catches entries cut from the end; archives removed by retention leave their last link |
 | Delete an archive and plant notes to hide it | The chain must be whole from the seal to the head, in the portal and in the standalone verifier alike; notes are matched to their archive's rotation entry by last link and name, and every kept rotation entry must have its archive or a matching note |
-| Rewrite the whole chain, with full control of the server | Not preventable on the server itself. The auditor keeps an earlier head off the server, and at the next audit it must still be at its entry number ([How the audit log proves itself](AUDIT_LOG_PROOF.md)) |
+| Rewrite the whole chain, with full control of the server | Not preventable on the server itself. A signed checkpoint of the head is made every day and, when `AUDIT_CHECKPOINT_COPY_DIR` is set, copied to another computer; the auditor also keeps an earlier head. At the next audit each must still be at its entry number. The signing key is on the server, so only copies kept elsewhere can't be redone ([How the audit log proves itself](AUDIT_LOG_PROOF.md)) |
 
 ## 6. What remains
 
@@ -167,9 +177,12 @@ These risks are known and accepted, or left to the operator. They are listed her
 - **Root on the server can do anything.** It can read every secret and every report, and it can rewrite the audit log.
   The audit log's protection against that lies off the server: an earlier head kept by the auditor. A user with
   passwordless sudo counts as root.
-- **Data at rest is not encrypted by Looking Glass.** MongoDB, `data/` and the backups rely on file permissions
-  (mode 600 and 700). Use disk encryption on the server, and keep backups somewhere equally protected. The CIS map
-  says the same (LG-10 → 3.11: not backed).
+- **Data at rest is not encrypted by Looking Glass, except the backups.** MongoDB and `data/` rely on file permissions
+  (mode 600 and 700): use disk encryption on the server (the Task monitor and the guided installer show whether the
+  volume is encrypted). Backups (`manage/backup.sh`) are encrypted to your own public key (age or GnuPG) as they are
+  written, and refused without one unless you ask for `--unencrypted`. The CIS map says the same (LG-10 → 3.11).
+- **One Linux user runs both programs.** A shell as that user, outside the web app's sandbox, can change the
+  pipeline's settings and confirm its own requests. Keep that account as guarded as an administrator's.
 - **The sender check only records by default** (`MAIL_AUTH=log`). Until an installation switches to `enforce`, a
   forged e-mail would be loaded and only flagged in the run log and the Audit portal. For production, switch to
   `enforce` once the Sender check shows every genuine report passing, or use the report API, which avoids the mailbox
@@ -189,7 +202,8 @@ These risks are known and accepted, or left to the operator. They are listed her
 - **One server.** There is no failover. Availability depends on the server, and recovery on the backups
   (`manage/backup.sh`) being taken and kept elsewhere.
 - **Dependencies come from PyPI and the CDNs** with version ranges (Python) or pinned versions with hashes (browser).
-  A compromised upstream package is not something Looking Glass would catch.
+  The checks on GitHub run `pip-audit` against known advisories; a compromised upstream package with no advisory yet
+  is not something Looking Glass would catch.
 - **The audit portal shows evidence, not verdicts.** Its 15 control checks give the facts, and the auditor decides.
 
 ## 7. Keeping this page true

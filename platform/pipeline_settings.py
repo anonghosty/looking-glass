@@ -326,7 +326,13 @@ def install(app, ctx):
         for r in (ws.pending(ddir()) if ws else []):
             if r.get("kind") == "release":
                 asked.update(x for x in ([r.get("qid")] + list(r.get("qids") or [])) if x)
-        labels = ctx["labels"]() if ctx.get("labels") else {}
+        # the reports' readable names come from the report database; without it (down, or not yet set up) the list still
+        # shows every held-back report, by its Shadowserver file name only
+        try:
+            labels = ctx["labels"]() if ctx.get("labels") else {}
+        except Exception as exc:  # noqa: BLE001 - any database failure: the names are a nicety, the list is not
+            labels = {}
+            app.logger.warning("Held-back reports listed without readable report names: %s", type(exc).__name__)
         out = []
         for q, m in ma.held(pipeline_link.data_dir(d)):
             out.append({"id": q.name, "at": m.get("at"), "result": m.get("result"), "reason": m.get("reason"),

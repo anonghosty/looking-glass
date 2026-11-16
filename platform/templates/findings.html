@@ -13,6 +13,7 @@
   <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/settings.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/findings.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/beacon.css') }}" rel="stylesheet">
 </head>
 <body class="settings-page fd-page" data-user="{{ lg_user }}">
   <header class="hud">
@@ -32,7 +33,8 @@
         (an analyst code sent to a researcher) or from a combination's devices sent to management for the organisations they concern
         (several at once open a case, one sub-finding each). Management decides, an analyst pulls the devices, management approves
         each organisation to an advisor, who writes the advisory and marks it as sent here. Each step is its own action;
-        the finding closes when its advisory is sent, and its case when all its sub-findings are closed. No address is ever shown here.</p>
+        the finding closes when its advisory is sent, and its case when all its sub-findings are closed. No address is shown here,
+        unless an analyst opens the devices of decoded beacons handed over (Show the devices, recorded in the audit log).</p>
     </section>
     <div class="fd-bar">
       <div class="fd-tabs" role="tablist" aria-label="Which findings">
@@ -43,10 +45,14 @@
       <input class="fd-q" id="fdQ" type="text" spellcheck="false" placeholder="Search findings (name, title, code)" aria-label="Search findings">
     </div>
     <div class="fd-list" id="fdList"><div class="st-loading">Opening the findings and their trails…</div></div>
+    {# encoded requests nothing decodes, to send to the Looking Glass creator (analysts and admins; beacon-unknown.js) #}
+    <section class="bu-section" id="beaconUnknown" hidden aria-label="Requests Looking Glass could not decode"></section>
   </main>
   <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
   <script src="{{ url_for('static', filename='js/notifications.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/people-pick.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/beacon-handover.js') }}"></script>
   <script src="{{ url_for('static', filename='js/findings.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/beacon-unknown.js') }}"></script>
 </body>
 </html>

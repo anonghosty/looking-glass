@@ -109,10 +109,10 @@ class MatchView:
         kinds = []
         for k, c in slot["kinds"].items():
             c = collections.Counter({v: n for v, n in c.items() if I._norm(v) != me})
-            hidden = 0
-            if section == "issues":                  # services: shown only when MIN_HOSTS devices share it
-                rare = {v for v in c if len(slot["vh"].get((k, v)) or ()) < I.MIN_HOSTS}
-                hidden = len(rare)
+            # services, and decoded beacons for viewers who do not see hosts: shown only when MIN_HOSTS devices share it
+            rare = I.held(section, k, c, slot, full)
+            hidden = len(rare)
+            if rare:
                 c = collections.Counter({v: n for v, n in c.items() if v not in rare})
             if c or hidden:
                 kinds.append({"kind": k, "distinct": len(c), "hidden": hidden,

@@ -144,7 +144,12 @@ print("\nService seed: DNS Open Resolvers + several reports, then another report
 sp = [("service", "DNS Open Resolvers")]
 st = get("/api/svc/stats", sp + [seed(sp), ("n", "200")])
 others = [r for r in st["breakdowns"]["service"] if r["value"] != "DNS Open Resolvers"]
-ok("the widened view includes the resolvers' other reports", len(others) > 0, f"{len(others)} other reports")
+if not st.get("hosts"):
+    # early in the day the DNS Open Resolvers report may not have arrived yet (reports land about 00:30-10:00 UTC):
+    # nothing to widen is not a failure; the other sections still run (2026-11-16: it stopped a release at 08:06 UTC)
+    print("  SKIP no DNS Open Resolvers in the day in memory yet: the widened view has nothing to show")
+else:
+    ok("the widened view includes the resolvers' other reports", len(others) > 0, f"{len(others)} other reports")
 if others:
     o = others[0]
     c = get("/api/svc/stats", sp + [seed(sp), ("service", o["value"])])

@@ -47,7 +47,11 @@ code, body = call("/api/intel/leads", RESEARCHER)
 d = json.loads(body)
 ok(f"researcher: leads answer ({len(d.get('leads', []))} leads over {', '.join(d.get('days', []))})", code == 200 and "leads" in d)
 ok("leads are matches between places (two names, two reports or both platforms)",
-   all(len(x["names"]) > 1 or len(x["reports"]) > 1 for x in d.get("leads", [])))
+   all(len(x["names"]) > 1 or len(x["reports"]) > 1 for x in d.get("leads", []) if x.get("priority") != 5))
+# a decoded beacon that contradicts its name is a lead about that one name (beacon_decode.contradiction_leads)
+ok("... except a decoded beacon contradicting its name: one name, said so in words",
+   all(x.get("kind") == "Beacon OS" and "filed under" in x.get("text", "") and " a Android" not in x.get("text", "")
+       for x in d.get("leads", []) if x.get("priority") == 5))
 # how much was compared, day by day (2026-11-15: "nothing to ask" must not read as "nothing there"): counts only
 cmp_ = d.get("compared") or []
 ok("it says how much it compared, day by day (counts only)",

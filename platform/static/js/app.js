@@ -1502,6 +1502,9 @@
     const body = $("mBody"); body.replaceChildren();
     const req = [ev.http_url || "", ev.http_host && `Host: ${ev.http_host}`, ev.http_agent && `User-Agent: ${ev.http_agent}`, ev.http_referer && `Referer: ${ev.http_referer}`].filter(Boolean).join("\n");
     if (req) body.append(section("HTTP request (as seen by the sinkhole)", null, true, req));
+    // an encoded check-in in the request, decoded on the server (beacon.js, beacon_decode.py); never in masked views
+    const beacon = !state.demo && window.LGBeacon?.section(ev, () => state.modalEv === ev);
+    if (beacon) body.append(beacon);
     body.append(
       section(roles.src, [["IP", ev.src_ip], ["Port", ev.src_port], ["Hostname", ev.src_hostname], [state.demo ? "Network" : "Network (ASN)", ev.src_asn_name || (ev.src_asn && `AS${ev.src_asn}`)], ["City", titleCase(ev.src_city)], ["Region", titleCase(ev.src_region)], ["Country", ev.src_geo && `${countryName(ev.src_geo)} (${ev.src_geo})`], ["Sector", ev.src_sector], ["NAICS", ev.src_naics]]),
       section(roles.dst, [["IP", ev.dst_ip], ["Port", ev.dst_port], ["Hostname", ev.dst_hostname], [state.demo ? "Network" : "Network (ASN)", ev.dst_asn_name || (ev.dst_asn && `AS${ev.dst_asn}`)], ["City", titleCase(ev.dst_city)], ["Region", titleCase(ev.dst_region)], ["Country", ev.dst_geo && `${countryName(ev.dst_geo)} (${ev.dst_geo})`], ["Sector", ev.dst_sector], ["NAICS", ev.dst_naics]]),

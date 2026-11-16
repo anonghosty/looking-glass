@@ -40,6 +40,8 @@ SENSITIVE = {
     "/advisory/<fid>/preview": ("data_viewed", "an organisation's advisory report (preview)"),
     # the Abused or Compromised portal's records of one report on one day, with their host addresses (review 2026-11-14)
     "/api/intelligence/report": ("data_viewed", "a report's records (Abused or Compromised)"),
+    # the devices behind decoded beacons handed over as a finding (beacon_findings.py): their addresses for analysts
+    "/api/beacon/finding/<fid>": ("data_viewed", "the devices behind decoded beacons (finding)"),
 }
 # Every request parameter says what was looked at, except these display and time options (review 2026-11-13: a list
 # of the parameters to keep missed src_ip and most services filters, so different hosts' views were one "whole

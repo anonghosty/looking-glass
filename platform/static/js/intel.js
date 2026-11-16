@@ -26,7 +26,9 @@
     "Other CVEs on the same hosts": "cve", "Associated tags": "tag", "SSH fingerprint (HASSH)": "fp",
     "TLS fingerprint (JARM)": "fp", "Certificate SHA-256": "fp", "Web page hash": "fp", "Server software": "sw", "SSH software": "sw", "Product": "sw",
     "Certificate issuer": "sw", "Family named by the report": "meta", "Application": "meta" };
-  const ORDER = ["C2 domain", "DNS lookup", "TLS server name (SNI)", "URL", "User agent", "Request pattern", "SSH client", "Brute-force username",
+  const ORDER = ["C2 domain", "DNS lookup", "TLS server name (SNI)", "URL", "User agent",
+    // a beacon decoded from the request (beacon_decode.py): its threat-side parts only, each from 5 devices
+    "Beacon format", "Beacon operator", "Beacon version", "Beacon OS", "Request pattern", "SSH client", "Brute-force username",
     "Brute-force password", "Other CVEs on the same hosts", "Associated tags", "Product", "Certificate name", "Server software", "SSH software",
     "TLS fingerprint (JARM)", "SSH fingerprint (HASSH)", "Certificate SHA-256", "Web page hash", "Certificate issuer", "Family named by the report", "Application"];
   const SHOW = 6, MATRIX_MAX = 14;
@@ -131,7 +133,7 @@
   function close() { back.hidden = true; box.hidden = true; document.documentElement.classList.remove("ig-open"); st = null; }
 
   // ---------------- "Looking Glass asks": one analysis box per match
-  const KIND_OF = { 1: "Both platforms", 2: "Undefined name", 3: "Two names", 4: "Two reports" };
+  const KIND_OF = { 1: "Both platforms", 2: "Undefined name", 3: "Two names", 4: "Two reports", 5: "Beacon vs name" };
   function leadItem(x, current) {
     const li = el("li", `ig-lead p${x.priority}`);
     // header: what kind of match, what Looking Glass concludes, how much evidence
@@ -162,6 +164,9 @@
     // what Looking Glass saw, in words
     const say = el("div", "ig-lead-say");
     say.append(el("p", null, x.text));
+    // a decoded beacon that contradicts its name: hand it over to an analyst or a manager (beacon-handover.js)
+    if (x.priority === 5 && window.LGBeaconHandover)
+      for (const n of x.names || []) say.append(window.LGBeaconHandover.button({ name: n.name, os_family: x.value }, (x.names.length > 1 ? `Hand over (${n.name})` : "Hand over")));
     // Explore (the user, 2026-11-15): exactly what Looking Glass stated. Every name and report of the match, side by
     // side, each with the tags and patterns of only the records that carry the indicator (intel_match.py)
     if ((x.where || []).length) {
@@ -660,7 +665,14 @@
     const grid = el("div", "ig-grid");
     for (const k of ks) grid.append(kindCard(k));
     pane.append(grid);
-    if (st.q && !pane.querySelector(".ig-card:not(.empty) li.ig-v:not(.out), .ig-mrow:not(.dim):not(.ig-mhead), .ig-sets li:not(.dim)"))
+    // decoded beacons here (5 or more devices per value): hand one operator's beacons over (beacon-handover.js)
+    const ops = (r.indicators.find((k) => k.kind === "Beacon operator") || {}).values || [];
+    if (ops.length && window.LGBeaconHandover && (r.section || d.section) !== "services" && (r.section || d.section) !== "issues") {
+      const bar = el("div", "bh-handover"); bar.append(el("span", null, "Decoded beacons here need a serious look:"));
+      for (const v of ops.slice(0, 6)) bar.append(window.LGBeaconHandover.button({ name: r.name || d.name, operator: v.value }, `Hand over operator ${v.value}`));
+      pane.append(bar);
+    }
+    if (st.q &&!pane.querySelector(".ig-card:not(.empty) li.ig-v:not(.out), .ig-mrow:not(.dim):not(.ig-mhead), .ig-sets li:not(.dim)"))
       pane.append(el("p", "ig-empty", `Nothing in ${rn(r.report)} matches “${st.q}”.`));
     if (scrollTop) keepPlace();
   }
@@ -969,7 +981,7 @@
         if (!more.hidden) easeIn(more, Math.min(5, ul.children.length) + 1);
       }
     };
-    for (const p of [0, 1, 2, 3, 4]) {
+    for (const p of [0, 5, 1, 2, 3, 4]) {           // 5: a decoded beacon contradicts its name (listed first)
       const n = p ? d.leads.filter((x) => x.priority === p).length : d.leads.length;
       if (p && !n) continue;
       const b = el("button", `ig-lchip p${p}`); b.type = "button"; b.dataset.p = p;

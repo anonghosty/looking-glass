@@ -199,6 +199,27 @@ Come back to it at any time with the **Overview** button, which is in every page
   filter's events all come later in the day, the stream says so and when: "None of the 6 matching events of 2026-01-15
   has been replayed yet: the first is at 09:30:00 UTC and the replay is at 07:30:00 UTC, so it appears in about 2 hours.
   Their 5 IP addresses are already in the charts and statistics: click them to analyse them, or find them on the map."
+- **Decoded beacon** (in the details, under *HTTP request (as seen by the sinkhole)*; analysts and admins). Some bots
+  pack what they know about the machine into one encoded query value of their check-in. When the request carries one
+  in a format Looking Glass knows, it is decoded on the server and shown here: the format, operator, version and
+  operating system, the **XOR key** recovered from the beacon itself (a new one for every check-in), **notes** (the CPU
+  id written out as text, what the MAC address prefix means, for example *00:FF: a TAP-Windows virtual adapter*, and
+  when the beacon names a different operating system than the infection name it is filed under) and the **whole
+  decoded JSON**. When the beacon names a different operating system than the infection it is filed under (for example
+  *Windows 7 Ultimate* under *android.badbox2*), a note says so, as a lead worth checking. The block says what the
+  beacon holds, never what to do about it: the event's *Recommended action* stays the name's definition, and what
+  fits the record is the analyst's call. The known format is the **CLogin check-in** (`GET /CLogin?key=…`, filed under *android.badbox2*),
+  used by several operators (zckypc, WT, PKS and HTM so far). Other request families are named but **not decoded**,
+  with what they are: an encrypted request (its key stays in the app), a one-way hash, an opaque device ID or a
+  campaign token. A value no known format fits goes through the **generic fallback**, which tries hex, Base64,
+  zlib/gzip/deflate and a one-byte XOR, up to three layers deep. When the result reads as JSON, `key=value` pairs or
+  words, it is shown as **Generic decode** with its layers (for example *Base64 → zlib*). Real encryption, whose key
+  stays in the app, never comes out readable and is left alone. What still does not decode is shown as **Unknown
+  encoding**, with what the value looks like, and listed on the Findings page (see *Requests Looking Glass could not
+  decode*). **Hand over these beacons** sends every record of the same beacon under that name to an analyst or
+  a manager as a finding (see *Findings*). In Demo mode, and for the external role, the request line shows
+  `<clogin beacon>` (or `<ttyunos value>` and the like) in place of the encoded value, because it decodes to the
+  device's MAC address, hardware UUID and CPU id.
   (The services record stream does the same, for records and hosts.)
 
   ![An event's details](media/screens/23-comms-event.png)
@@ -396,11 +417,30 @@ card to open *Intel gathered* on that report. A name that is not in today's repo
 
 Indicators only: researchers never see the hosts themselves, and addresses inside URLs and banners are masked.
 
+**Decoded beacons.** When records of a name carry an encoded check-in that Looking Glass can decode (see *Decoded
+beacon* on the map), Intel gathered lists its threat-side parts as indicators: **Beacon format**, **Beacon operator**,
+**Beacon version** and **Beacon OS** (the operating system family only), each with its records and devices, so the
+records of the *Beacon format* card are the number of decoded check-ins. A family that cannot be decoded shows in
+*Beacon format* as, for example, *ttyunos API request (not decoded)*. The XOR key is not an indicator: every check-in
+draws a new one. A researcher sees a value only when 5 or more devices carry it; below that it is counted as held
+back. The rest of the beacon (MAC address, hardware UUID, CPU id, CPU hash, memory) identifies one device and is never
+shown to researchers. In the *URL* card the encoded value reads `<clogin beacon>`.
+
+**Handing decoded beacons over.** Decoded beacons need a serious look, so the researcher can send them on: **Hand
+over operator …** under a report's cards (one button per operator 5 or more devices carry), or **Hand over** on a
+*Beacon vs name* match. Choose an analyst or a manager, the person, and add a comment if you like. It becomes a finding
+in that person's hands (see *Findings*), with only the two of you, and later whoever it is sent on to, in its
+channel.
+
+
 **Looking Glass asks: can you look into this?** The card at the top of the Definitions page lists matches the platform
 found in the reports: the same indicator under two names (possibly one family under two names, or shared
 infrastructure; it says so when one of them has no definition yet), the same indicator in two reports for one name (a
-probable indicator of that name, worth putting in its notes), and an infection's C2 domain that is also the certificate
-name of a service in the constituency. Each match is an analysis box: what kind of match, the indicator (with copy),
+probable indicator of that name, worth putting in its notes), an infection's C2 domain that is also the certificate
+name of a service in the constituency, and **Beacon vs name**: decoded beacons whose operating system contradicts the
+name they are filed under (for example beacons saying *Windows* under *android.badbox2*: the records may be filed under
+the wrong name, or the family runs on more than one system). Researchers get a *Beacon vs name* match once 5 or more
+devices carry it; analysts and admins see it at once. Each match is an analysis box: what kind of match, the indicator (with copy),
 **where Looking Glass saw it** (every name and report with its records, and whether the name is defined; click a name to
 open its intel on that report) and what Looking Glass saw, in words. Looking Glass states what it saw and leaves the
 conclusions to the researcher. At the top of the card: how many matches, names involved and names without a definition,
@@ -600,6 +640,31 @@ the same combination, and the day its time to act runs out. Its links open the E
 search on the day it was reported, so an old finding can still be worked on. Analysts (on the combination search) and
 advisors (in the advisory's device list) see the devices reported again marked **again**, with a line above the list;
 the Findings page itself never shows an address.
+
+**Decoded beacons handed over.** A finding made with *Hand over* (Intel gathered, *Beacon vs name*, or the map's
+*Decoded beacon*) shows a **Decoded beacons** block: what was handed over in words, its parts (format, operator,
+version, OS), and how many records, devices, reports and days carry it in the days in memory. Everyone in the channel
+sees that much; while fewer than 5 devices carry the beacons, only analysts and admins see the parts. Analysts and
+admins also get **Show the devices**: every record with its host, time, report, C2 host and the whole decoded JSON
+with its notes. Until that button is pressed the page shows no address, and opening the devices is recorded in the
+audit log.
+
+**Requests Looking Glass could not decode** (analysts and admins, below the findings). The encoded request values in
+the days in memory that no known format decodes, no known family names and the generic fallback cannot read, grouped
+into families. A family is one request shape: the path, the query parameter, the encoding and what the value looks like
+(*hash-sized*, *whole 16-byte blocks: likely a block cipher*, *random-looking*), with the C2 hosts it was sent to (one
+family often spans many generated domains), the names it is filed under, the reports, the days, and how many records
+and devices carry it. Devices are counted, never listed. For each family:
+
+- **Send to the Looking Glass creator.** Download the *decoding request*: a JSON file holding only the family's HTTP
+  requests (up to 5, as the sinkhole recorded them), each with the infection name it is filed under, and no host,
+  address, user agent or count. Then open the private report on the separate **HTTP Requests Decoding** repository
+  (only you and the Looking Glass creator see it), title it *Decoding request* and paste the file's contents into it,
+  so a future release can decode the family automatically. Looking Glass sends nothing itself. Decoded, a request's value may hold the device's own data, so the
+  download asks you to confirm your organisation's rules (TLP) allow sharing it, and every download is recorded in the
+  audit log as an export. Then **Mark as sent**.
+- **Not a beacon.** Puts away a family that is a session token, an ID or the like. Put-away and sent families are listed
+  under *Sent or put away*, and **Reopen** brings one back. Every change is in the audit log.
 
 ![A finding with the day it was reported, its devices in the latest report and its time to act](media/screens/92-finding-watch.png)
 

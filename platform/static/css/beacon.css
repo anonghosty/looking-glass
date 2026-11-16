@@ -1,0 +1,36 @@
+/* Decoded beacons handed over (beacon-handover.js): the hand-over form and a finding's beacons. Text wraps, never cut. */
+.bh-wrap { display: inline-flex; flex-direction: column; gap: 6px; max-width: 100%; }
+.bh-form { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--border, #2a2a30); border-radius: 8px; min-width: min(320px, 100%); }
+.bh-form .fd-in, .bh-form select, .bh-form textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 12px; }
+.bh-l { font-size: 12px; color: var(--muted, #8a8a94); }
+.bh-block { margin: 10px 0; padding: 12px 14px; border: 1px solid var(--border, #2a2a30); border-radius: 9px; }
+.bh-block h3 { margin: 0 0 8px; font-size: 13px; }
+.bh-said { margin: 0 0 8px; font-weight: 600; overflow-wrap: anywhere; }
+.bh-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.bh-chip { display: inline-flex; gap: 6px; align-items: baseline; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border, #2a2a30); font-size: 12px; overflow-wrap: anywhere; }
+.bh-chip small { color: var(--muted, #8a8a94); }
+.bh-facts, .bh-note { margin: 4px 0; font-size: 12px; line-height: 1.5; }
+.bh-note { color: var(--muted, #8a8a94); }
+.bh-scroll { overflow-x: auto; margin-top: 8px; }
+.bh-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.bh-table th, .bh-table td { text-align: left; vertical-align: top; padding: 5px 8px; border-top: 1px solid var(--border, #2a2a30); overflow-wrap: anywhere; }
+.bh-mono, .bh-key, .bh-pre { font-family: var(--mono, ui-monospace, monospace); }
+.bh-pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11.5px; margin: 6px 0 0; }
+.bh-key { font-size: 11.5px; margin-top: 4px; overflow-wrap: anywhere; }
+/* Requests Looking Glass could not decode (beacon-unknown.js) */
+.bu-section { margin-top: 28px; display: grid; gap: 12px; }
+.bu-section h2 { margin: 0; font-size: 16px; }
+.bu-intro { margin: 0; font-size: 13px; line-height: 1.55; color: var(--muted, #8a8a94); }
+.bu-fam { padding: 12px 14px; border: 1px solid var(--border, #2a2a30); border-radius: 9px; display: grid; gap: 8px; }
+.bu-fam.s-dismissed { opacity: .7; }
+.bu-h { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.bu-label { font-family: var(--mono, ui-monospace, monospace); font-weight: 600; overflow-wrap: anywhere; }
+.bu-n, .bu-state { font-size: 12px; color: var(--muted, #8a8a94); }
+.bu-dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 0; font-size: 12px; }
+.bu-dl dt { color: var(--muted, #8a8a94); }
+.bu-dl dd { margin: 0; overflow-wrap: anywhere; }
+.bu-act { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+.bu-send { flex: 1 1 320px; font-size: 12px; }
+.bu-send p, .bu-chk { display: block; margin: 6px 0; line-height: 1.5; }
+.bu-away > summary { cursor: pointer; font-size: 13px; }
+.bh-handover { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; margin: 10px 0; font-size: 12px; }

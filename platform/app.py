@@ -2836,6 +2836,10 @@ INTEL = _intel.install(app, {"store": store, "svc_store": svc["store"], "allowed
 # Explore a match of "Looking Glass asks": only the records that carry the indicator, per name and report (intel_match.py)
 import intel_match as _intel_match  # noqa: E402
 INTEL_MATCH = _intel_match.install(app, INTEL, {"allowed": _kb_allowed, "labels": INTEL.ctx["labels"]})
+# the decoded beacon in a record's HTTP request, for analysts and admins (beacon_decode.py; researchers get its public
+# parts through Intel gathered, masked views never the blob)
+import beacon_decode as _beacon_decode  # noqa: E402
+_beacon_decode.install(app, {"csrf_ok": AUTH["csrf_ok"], "sees_hosts": lambda: not is_demo()})
 
 
 # combination codes and the analyst's combination search (combos.py)
@@ -2928,6 +2932,15 @@ def _people_of(kind):
 
 FINDINGS.people_of = _people_of
 FINDINGS.title_of = lambda n: SVC_KB["title_of"](n)     # a services report's finding shows its title
+# decoded beacons handed over to an analyst or a manager as a finding, each seeing them at their level (beacon_findings.py)
+import beacon_findings as _beacon_findings  # noqa: E402
+_beacon_findings.install(app, {"store": store, "labels": INTEL.ctx["labels"], "findings": FINDINGS, "has_perm": AUTH["has_perm"],
+                               "sees_hosts": lambda: not is_demo(), "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"],
+                               "audit": AUTH["audit"]})
+# requests Looking Glass could not decode, as families on the Findings page, to send to its creator (beacon_unknown.py)
+import beacon_unknown as _beacon_unknown  # noqa: E402
+_beacon_unknown.install(app, {"store": store, "labels": INTEL.ctx["labels"], "base_dir": BASE_DIR, "sees_hosts": lambda: not is_demo(),
+                              "csrf_ok": AUTH["csrf_ok"], "audit": AUTH["audit"], "people_name": lambda u: people.name(u)})
 
 # analyst codes: an analyst's selection passed to researchers and management without an address (acodes.py)
 import acodes as _acodes  # noqa: E402

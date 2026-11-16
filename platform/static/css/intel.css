@@ -56,6 +56,7 @@ html.ig-open { overflow: hidden; }
   background: linear-gradient(135deg, color-mix(in srgb, var(--lc) 7%, transparent), rgba(255, 255, 255, .015) 55%); border: 1px solid var(--ig-line); }
 .ig-lead::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--lc); box-shadow: 0 0 18px var(--lc); }
 .ig-lead.p1 { --lc: #e5484d; } .ig-lead.p2 { --lc: #f5b54a; } .ig-lead.p3 { --lc: #b18cf5; } .ig-lead.p4 { --lc: #5b8def; }
+.ig-lead.p5 { --lc: #2fb8a6; }
 .ig-lead-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .ig-lead-tag { padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
   color: var(--lc); background: color-mix(in srgb, var(--lc) 14%, transparent); border: 1px solid color-mix(in srgb, var(--lc) 40%, transparent); }
@@ -102,6 +103,7 @@ html.ig-open { overflow: hidden; }
 .ig-lchip em { font-style: normal; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .ig-lchip.p0 i { background: linear-gradient(135deg, #e5484d, #f5b54a, #b18cf5, #5b8def); }
 .ig-lchip.p1 { --lc: #e5484d; } .ig-lchip.p2 { --lc: #f5b54a; } .ig-lchip.p3 { --lc: #b18cf5; } .ig-lchip.p4 { --lc: #5b8def; }
+.ig-lchip.p5 { --lc: #2fb8a6; }
 .ig-lchip:hover { color: #fff; border-color: var(--lc); }
 .ig-lchip[aria-pressed="true"] { color: #fff; border-color: var(--lc); background: color-mix(in srgb, var(--lc) 16%, transparent); }
 .ig-lchip[aria-pressed="true"] em { color: var(--text-2); }

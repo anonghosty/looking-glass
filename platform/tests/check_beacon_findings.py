@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""Decoded beacons handed over as a finding (beacon_findings.py): who sees what, per role.
+
+Made-up check-ins only (encoded by tests/check_beacon_decode.py's encoder), in a throwaway findings file.
+
+1. Handing over: refused without the page's token, a recipient, or for a role that may not; a researcher may hand
+   over only what 5 or more devices carry; the finding names the person and lands in their channel.
+2. Opening it, per role: the analyst it went to gets every record with the host, the time, the report's readable name
+   and the decoded JSON; a manager gets counts and the selection, no address, MAC, UUID, cpuid, cpumd5 or memory; a
+   researcher outside the channel gets nothing (the same answer as no such finding).
+3. Fewer than 5 devices (an analyst's hand-over to a manager): the manager sees counts only, the selection held back,
+   and the title names no operator or version.
+4. The path gate: the researchers', management's and advisors' paths include it; Peace of mind closes it.
+Run: .venv/bin/python tests/check_beacon_findings.py"""
+import datetime
+import json
+import os
+import sys
+import tempfile
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import logging  # noqa: E402
+logging.disable(logging.WARNING)
+from flask import Flask, g  # noqa: E402
+
+import beacon_decode as B  # noqa: E402
+import beacon_findings as BF  # noqa: E402
+import findings as F  # noqa: E402
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from beacon_samples import encode, line, made_up, rkey  # noqa: E402
+
+checks, fails = 0, []
+
+
+def ok(label, cond, info=""):
+    global checks
+    checks += 1
+    if not cond:
+        fails.append(label)
+    print(f"  {'ok  ' if cond else 'FAIL'} {label}" + (f"  [{info}]" if info and not cond else ""), flush=True)
+
+
+class Day:
+    def __init__(self, events):
+        self.start, self.serial, self.events = datetime.datetime(2026, 11, 14), 1, events
+
+
+class People:
+    def name(self, u, default=None):
+        return {"rita": "Rita Researcher", "ana": "Ana Analyst", "max": "Max Manager"}.get(u, u)
+
+
+events, made = [], []
+for i in range(6):
+    o = made_up(i, operator="WT", version="WT:1.0.0")
+    made.append(o)
+    events.append({"src_ip": f"192.0.2.{20 + i}", "src_port": "4431", "timestamp": "2026-11-14T08:00:00", "infection": "android.badbox2",
+                   "source": "event4_sinkhole_http", "http_url": line(encode(o, rkey())), "http_host": "c2.example"})
+o = made_up(99, operator="HTM", version="HTM:1.0.0")       # one device only
+made.append(o)
+events.append({"src_ip": "192.0.2.99", "src_port": "4431", "timestamp": "2026-11-14T09:00:00", "infection": "android.badbox2",
+               "source": "event4_sinkhole_http", "http_url": line(encode(o, rkey())), "http_host": "c2.example"})
+store = type("S", (), {"days": {0: Day(events)}})()
+
+tmp = tempfile.mkdtemp()
+fnd = F.Findings(os.path.join(tmp, "findings.json"), People())
+fnd.people_of = lambda kind: {"analyst": [{"user": "ana", "name": "Ana Analyst"}], "management": [{"user": "max", "name": "Max Manager"}],
+                              "researcher": [{"user": "rita", "name": "Rita Researcher"}, {"user": "rob", "name": "Rob"}]}.get(kind, [])
+audit = []
+ROLES = {"rita": ("researcher", {"definitions"}), "rob": ("researcher", {"definitions"}), "ana": ("analyst", {"unmasked", "export", "view"}),
+         "max": ("management", {"management"}), "adele": ("advisor", {"advisory"})}
+app = Flask(__name__)
+BF.install(app, {"store": store, "labels": lambda: {"event4_sinkhole_http": "Sinkhole HTTP"}, "findings": fnd,
+                 "has_perm": lambda p: p in g.user["perms"], "sees_hosts": lambda: "unmasked" in g.user["perms"],
+                 "csrf_ok": lambda: g.user.get("tok") == "T", "fresh": lambda: True,
+                 "audit": type("A", (), {"add": lambda self, *a, **k: audit.append((a, k))})()})
+
+
+def call(user, method, path, body=None, tok="T"):
+    role, perms = ROLES[user]
+    with app.test_request_context(path, method=method, json=body):
+        g.user = {"user": user, "role": role, "perms": perms, "tok": tok}
+        ep, args = app.url_map.bind("localhost").match(path.split("?")[0], method=method)
+        r = app.view_functions[ep](**args)
+        r, code = (r if isinstance(r, tuple) else (r, 200))
+        return code, r.get_json()
+
+
+WT = {"name": "android.badbox2", "operator": "WT", "version": "WT:1.0.0", "os_family": "windows"}
+print("1. Handing over")
+ok("refused without the page's token", call("rita", "POST", "/api/beacon/finding", {**WT, "kind": "analyst", "to": "ana"}, tok="")[0] == 403)
+ok("refused without a recipient", call("rita", "POST", "/api/beacon/finding", {**WT, "kind": "analyst"})[0] == 400)
+ok("refused to management (it decides, it does not hand beacons over)", call("max", "POST", "/api/beacon/finding", {**WT, "kind": "analyst", "to": "ana"})[0] == 403)
+HTM = {"name": "android.badbox2", "operator": "HTM"}
+ok("a researcher cannot hand over what fewer than 5 devices carry", call("rita", "POST", "/api/beacon/finding", {**HTM, "kind": "analyst", "to": "ana"})[0] == 403)
+ok("nothing matching: 404", call("rita", "POST", "/api/beacon/finding", {"name": "android.badbox2", "operator": "NOPE", "kind": "analyst", "to": "ana"})[0] == 404)
+code, j = call("rita", "POST", "/api/beacon/finding", {**WT, "kind": "analyst", "to": "ana", "comment": "Windows beacons under an Android name."})
+ok("a researcher hands 6 devices' beacons to a named analyst", code == 200 and j["finding"]["number"].startswith("#"), json.dumps(j))
+fid = j["finding"]["id"]
+item = fnd.get(fid)
+ok("the finding is in the analyst's hands, its channel is the two of them", item["status"] == "analyst" and item["assignee"] == "ana"
+   and item["participants"] == ["rita", "ana"])
+ok("it holds the selection, never a device", item["beacon"] == WT and "192.0.2" not in json.dumps(item))
+ok("the hand-over is in the audit log", any("finding_created" in a for a, k in audit))
+ok("the Findings page marks it as carrying beacons", fnd.shown(item)["beacon"] is True)
+
+print("2. Opening it, per role")
+code, a0 = call("ana", "GET", f"/api/beacon/finding/{fid}")
+ok("the Findings page shows the analyst no address until asked (Show the devices)", code == 200 and a0["can_records"]
+   and "records_list" not in a0 and "192.0.2" not in json.dumps(a0) and a0["selection"])
+code, a = call("ana", "GET", f"/api/beacon/finding/{fid}?records=1")
+recs = a.get("records_list") or []
+ok("the analyst gets every record: host, time, report's readable name", code == 200 and len(recs) == 6
+   and {r["host"] for r in recs} == {f"192.0.2.{20 + i}" for i in range(6)} and all(r["report"] == "Sinkhole HTTP" for r in recs))
+ok("... with the decoded JSON of each device", sorted(r["beacons"][0]["json"]["mac"] for r in recs) == sorted(x["mac"] for x in made[:6]))
+# it is sent on to a manager (a hand-over names the person); then the manager opens it
+it, err = fnd.set_status(fid, "management", "Please decide.", "rita", "researcher", to="max", is_manager=True)
+ok("sent on to a manager", it is not None and "max" in it["participants"], err)
+code, m = call("max", "GET", f"/api/beacon/finding/{fid}")
+text = json.dumps(m)
+ok("the manager gets counts and the selection", code == 200 and m["records"] == 6 and m["devices"] == 6 and m["reports"] == ["Sinkhole HTTP"]
+   and {x["value"] for x in m["selection"]} == {"WT", "WT:1.0.0", "Windows"} and not m["held"])
+ok("... the parts by their readable names, never their codes", "clogin" not in {x["value"] for x in m["selection"]}
+   and all(x["value"] != "windows" for x in m["selection"]), str(m["selection"]))
+ok("... and no record list", "records_list" not in m)
+leak = [f for o in made for f in B.DEVICE_FIELDS if len(str(o[f])) > 4 and str(o[f]) in text] + [ip for ip in (e["src_ip"] for e in events) if ip in text]
+ok("... and no address, MAC, UUID, cpuid, cpumd5 or memory", not leak, ",".join(leak))
+ok("a researcher outside the channel gets nothing", call("rob", "GET", f"/api/beacon/finding/{fid}")[0] == 404)
+ok("the researcher who sent it sees counts, no records", "records_list" not in call("rita", "GET", f"/api/beacon/finding/{fid}")[1])
+code, m2 = call("max", "GET", f"/api/beacon/finding/{fid}?records=1")
+ok("asking for the records without seeing hosts gives none", code == 200 and "records_list" not in m2 and not m2["can_records"])
+
+print("3. Fewer than 5 devices: an analyst's hand-over to a manager")
+code, j = call("ana", "POST", "/api/beacon/finding", {**HTM, "kind": "management", "to": "max"})
+ok("an analyst may hand over a single device's beacon", code == 200, json.dumps(j))
+fid2 = j["finding"]["id"]
+ok("the title names no operator or version", "HTM" not in fnd.get(fid2)["title"] and "HTM" not in fnd.get(fid2)["text"], fnd.get(fid2)["title"])
+code, m = call("max", "GET", f"/api/beacon/finding/{fid2}")
+ok("the manager sees counts only, the selection held back", code == 200 and m["held"] and m["selection"] == [] and m["records"] == 1
+   and "HTM" not in json.dumps(m) and "192.0.2.99" not in json.dumps(m))
+code, a = call("ana", "GET", f"/api/beacon/finding/{fid2}?records=1")
+ok("the analyst sees the record", code == 200 and len(a["records_list"]) == 1 and a["records_list"][0]["host"] == "192.0.2.99")
+
+print("4. The path gate")
+import auth  # noqa: E402
+ok("researchers, management and advisors may reach it", any("/api/beacon/finding".startswith(p) or p.startswith("/api/beacon/finding") for p in auth.DEFINITIONS_PATHS)
+   and "/api/beacon/finding/" in auth.MANAGEMENT_PATHS and "/api/beacon/finding/" in auth.ADVISORY_PATHS)
+ok("Peace of mind closes it", "/api/beacon/" in auth.PEACE_CLOSED)
+import data_access  # noqa: E402
+ok("an analyst's view of the devices is in the audit log (data_access)", "/api/beacon/finding/<fid>" in data_access.SENSITIVE)
+
+print(f"\n{checks - len(fails)}/{checks} checks passed")
+if fails:
+    print("FAILED: " + "; ".join(fails))
+    sys.exit(1)

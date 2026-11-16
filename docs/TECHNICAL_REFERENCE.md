@@ -89,6 +89,73 @@ server side is in small modules called from `app.py`:
   combinations of only the records that carry the indicator, in the same shape as a report of `/api/intel`, with the
   same masking, the 5-device rule on the services side and the same combination codes. Devices are counted, never
   returned. Kept per set of days for up to an hour; a heavy view (per-person limits).
+- **`beacon_decode.py`, decoded beacons.** Finds encoded C2 check-ins in a record's `http_url` and decodes them. Pure
+  functions: no network, no files; a request line over 16,384 characters or a query value over 8,192 is not looked at,
+  values under 40 characters are not candidates, at most 4 values per line, 0.25 s per line for all formats together;
+  results cached by request line (4,096). A **registry of formats** (`FORMATS`): each has its usual path and query
+  parameter (tried there first, elsewhere too), its key length and key alphabet, its trailer XOR byte, the JSON fields it
+  must carry and a `describe` function for its notes. The first is the **CLogin check-in** (`clogin`, `GET
+  /CLogin?key=…`; operators zckypc, WT, PKS, HTM): Base64 → repeating XOR with a 32-character lowercase hex key, a new
+  key per check-in → the Base64 text of the JSON followed by a trailer (46–52 hex characters, each XORed with 0x72).
+  The key is recovered from the beacon: per key position, the hex characters that map that column into the Base64
+  alphabet up to the trailer (`boundary_columns`: each character is judged up to the first byte it cannot map, three key
+  lengths short of the longest stretch); per 4-character group (Base64 groups and the key line up, the key length being
+  a multiple of 4), the 12 best choices by how JSON-like the bytes they decode to read; then up to three passes trying
+  each group's other choices against the whole text (valid JSON, the format's field names, any `"name":"` pair, hex
+  values that stay hex). **Families that cannot be decoded** (`OPAQUE`, by C2 host, path and
+  parameter): ttyunos (`/api/desk/getData`, `/api/language/getList`, `a`/`b`) and weatherlive
+  (`/br_upgrade/widget/getConfigs`, `scsl`), whole 16-byte blocks of a block cipher whose key the app keeps;
+  adoverocean (`/ota/api/tasks/v2`, `m`), a 32-hex hash; pixellog (`/regdev`, `userid`), an opaque device ID; clickby
+  (`/s.php`, `/s2.php`, `d`), one constant campaign token; sustat (`/u.php`, `/pic.php`, `p`), a few short binary
+  values. `seen()` names them for analysts ("not decoded", with what they are); `mask_url()` replaces their values
+  (`<ttyunos value>`) wherever the path and parameter match. **Generic fallback** (`generic()`, for a candidate no
+  format fits and no `OPAQUE` family sits at): up to 3 layers of hex, Base64 (standard or URL-safe), zlib / gzip /
+  deflate (64 KiB out at most) and a one-byte XOR (binary only, the three most text-like keys), kept only when the
+  result reads as JSON, at least two `key=value` pairs, or words (97% printable, 60% letters, two distinct words); the
+  result is `format: "generic"`, its title names the layers, its text is cut at 4,000 characters. `unknown()` lists the
+  candidates nothing decodes or names, with `shape()` (encoding, decoded length, 16-byte alignment, entropy, a hint:
+  hash-sized, block cipher, random-looking, structured binary); the analysts' view says "Unknown encoding" with that
+  shape and never the value. In masked views every candidate that is not a known format reads `<encoded value>`. Notes: `cpuid` written out as ASCII; the MAC
+  prefix (00:FF TAP-Windows, VirtualBox, VMware, Hyper-V, QEMU/KVM, Xen); the trailer; the OS the beacon names against
+  the OS the infection name points to (`name_os`: *android*, *badbox*… → Android; *win32*… → Windows). Such a
+  contradiction is a note only: the decoder says what the beacon holds and never adds an action; the event's
+  *Recommended action* stays the name's definition. Who sees what:
+  `POST /api/beacon/decode` (`{url, name}` in the body, so the request line stays out of URLs and logs; the page's CSRF
+  token and the *unmasked* permission, demo off) answers the whole JSON, key and notes for the map's *Decoded beacon*
+  block (`static/js/beacon.js`, called from `app.js`). `mask_url()` replaces an encoded value with `<clogin beacon>`
+  in every masked view (`privacy.mask_event`) and in Intel gathered's URL values; a value at a format's own path and
+  parameter is replaced even when it does not decode. For researchers, `intel.py` adds the kinds *Beacon format* (the
+  readable title; "(not decoded)" for an `OPAQUE` family), *Beacon operator*, *Beacon version* and *Beacon OS* (family)
+  (`public()`: nothing else of the beacon), each value shown only when 5 or more devices carry it (`intel.held()`, also
+  in Explore and Across reports), and the lead kind *Beacon vs name* (priority 5, listed first): per OS family, the
+  decoded beacons whose OS contradicts the names they are filed under, for researchers from 5 devices. Format and OS
+  are never matched between names (shared by every beacon of a format). The XOR key is not an indicator: a new one per
+  check-in. Never shown to researchers: MAC, hardware UUID (`spare1`), `cpuid`, `cpumd5`, `mem`, the key. Test:
+  `tests/check_beacon_decode.py` (made-up beacons from `tests/beacon_samples.py`, random keys).
+- **`beacon_findings.py`, decoded beacons handed over.** `POST /api/beacon/finding` (`{name, format, operator, version,
+  os_family, kind: analyst|management, to, comment, title}`; the *definitions*, *settings* or *unmasked* permission,
+  CSRF token, a fresh sign-in) makes a finding (`findings.Findings.create(..., extra={"beacon": selection})`) in the
+  named person's hands. The finding holds the selection (name and threat-side parts), never a device. A viewer who does
+  not see hosts may hand over only a selection 5 or more devices carry. `GET /api/beacon/finding/<id>` (people in the
+  channel and admins; on the researchers', management's and advisors' paths in `auth.py`, closed in Peace of mind)
+  works the selection out again over the days in memory: counts (records, devices, reports, days) and the parts, held
+  back while fewer than 5 devices carry them, for viewers who do not see hosts; with `records=1`, for analysts and
+  admins only, every record (host, port, time, report's readable name, C2 host, `beacon_decode.view`), at most 500.
+  That view is in `data_access.SENSITIVE`. Findings page block: `static/js/beacon-handover.js` (also the *Hand over*
+  buttons of Intel gathered and the map), `static/css/beacon.css`. Test: `tests/check_beacon_findings.py`.
+- **`beacon_unknown.py`, requests Looking Glass could not decode.** Groups `beacon_decode.unknown()` over the days in
+  memory into families keyed by (path with numbers and long parts folded, parameter, encoding, shape hint, length in
+  16-byte steps up to 256, then 128); per family: records, devices (counted), distinct values (`constant` when one
+  value repeats), C2 hosts (12 shown, all counted), top user agents and names, reports, days, length range, and up to 5
+  distinct (infection name, request line) pairs kept on the server (`request_line()`: an absolute `GET http://host/...` cut to its path).
+  Kept per set of days for up to an hour. `GET /api/beacon/unknown` (the *unmasked* permission, demo off): the families
+  without their request lines, each with its state and the link to send it: a private report on the separate
+  `anonghosty/http-requests-decoding` repository (`SEND_URL`, its *security/advisories/new* form; never a public issue). `GET /api/beacon/unknown/<id>/request`: the decoding request as a JSON
+  download holding only `requests` (`{infection, request}` pairs) and when it was made: no host, user agent or count. Every
+  download is audit event `data_exported`; the page asks the analyst to confirm the TLP rules allow it. `POST
+  /api/beacon/unknown/<id>/state` (`dismissed` | `sent` | `open`, CSRF token; audit event `beacon_family_state`), kept in
+  `data/beacon_unknown.json` (0600, run-time data). Findings page section: `static/js/beacon-unknown.js`. Test:
+  `tests/check_beacon_unknown.py`.
 - **`notes.py`, researchers' notes.** New findings per name in `data/notes.json` (run-time data: never shipped, never
   overwritten by an update), each with author, role and date. The look-ups `mp_resolve`, `issue_resolve` and
   `issues_resolve` attach the notes to every explanation card, so the map, services, Executive and both PDF builders
