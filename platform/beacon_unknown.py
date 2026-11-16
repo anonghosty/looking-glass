@@ -21,7 +21,7 @@ decoding request can be downloaded only once approved. A family can also be put 
 kept in data/beacon_unknown.json and in the audit log.
 
 API (analysts and admins: the 'unmasked' permission, demo off): GET /api/beacon/unknown (with each family's request
-lines), GET /api/beacon/unknown/<id>/request (approved or sent only), POST /api/beacon/unknown/<id>/state
+lines), GET /api/beacon/unknown/<id>/request (approved or sent only: exactly the lines approved), POST /api/beacon/unknown/<id>/state
 {state: asked|approved|rejected|sent|dismissed|open, why}; approved and rejected need the 'settings' permission.
 Installed from app.py: beacon_unknown.install(app, ctx).
 """
@@ -119,6 +119,11 @@ def request_line(url, keep=None, value=None):
     return ip_find.sub(line, lambda _a: "<address>")[:4000]
 
 
+def lines_hash(lines):
+    """A fingerprint of request lines: the page sends the one it showed, so an approval is for exactly those lines."""
+    return hashlib.sha256(json.dumps(lines, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:32]
+
+
 def family_id(key):
     return hashlib.sha256("\x1f".join(key).encode()).hexdigest()[:12]
 
@@ -138,7 +143,7 @@ class Unknown:
         except (OSError, ValueError):
             return {}
 
-    def set_state(self, fid, state, why, user):
+    def set_state(self, fid, state, why, user, lines=None):
         with self.lock:
             st = self.states()
             prev = st.get(fid) or {}
@@ -150,8 +155,11 @@ class Unknown:
                     rec.update(asked_by=user, asked_why=why[:300], asked_at=rec["at"])
                 elif prev.get("asked_by") and state in ("approved", "rejected", "sent"):
                     rec.update({k: prev[k] for k in ("asked_by", "asked_why", "asked_at") if k in prev})
+                if state == "approved":                    # exactly the lines the administrator approved
+                    rec["approved_requests"] = [dict(x) for x in (lines or [])]
                 if state == "sent" and prev.get("state") == "approved":
-                    rec.update(approved_by=prev.get("by"), approved_at=prev.get("at"))
+                    rec.update(approved_by=prev.get("by"), approved_at=prev.get("at"),
+                               approved_requests=prev.get("approved_requests") or [])
                 st[fid] = rec
             os.makedirs(os.path.dirname(self.path), exist_ok=True)
             tmp = f"{self.path}.{os.getpid()}.tmp"
@@ -230,18 +238,25 @@ class Unknown:
                          "approved_by": people(s["approved_by"]) if s.get("approved_by") else "",
                          # exactly what the decoding request would hold, shown before anyone asks to send it
                          "requests": [dict(x) for x in f["_requests"]],
+                         "requests_hash": lines_hash([dict(x) for x in f["_requests"]]),
                          "label": f"{f['path']} ?{f['param']}=",
                          "issue_url": SEND_URL})
         return fams
 
     def request_file(self, fid):
-        """The HTTP request lines of one family, nothing else."""
-        f = next((x for x in self.families() if x["id"] == fid), None)
-        if not f:
-            return None
+        """The HTTP request lines of one family, nothing else. Once approved: exactly the lines the administrator
+        approved, never lines gathered later from other days."""
+        s = self.states().get(fid) or {}
+        if s.get("state") in ("approved", "sent") and s.get("approved_requests"):
+            reqs = [dict(x) for x in s["approved_requests"]]
+        else:
+            f = next((x for x in self.families() if x["id"] == fid), None)
+            if not f:
+                return None
+            reqs = [dict(x) for x in f["_requests"]]
         return {"looking_glass_decoding_request": 2,
                 "made": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "requests": [dict(x) for x in f["_requests"]]}
+                "requests": reqs}
 
 
 def install(app, ctx):
@@ -306,7 +321,15 @@ def install(app, ctx):
             return jsonify(error="An administrator approves or rejects what goes to the Looking Glass creator."), 403
         if state in ("asked", "rejected") and not why:
             return jsonify(error="Say why." if state == "asked" else "Say why it is not approved."), 400
-        un.set_state(fid, state, why, me())
+        lines = None
+        if state == "approved":                    # bind the approval to the lines on the administrator's screen now
+            f = next((x for x in un.families() if x["id"] == fid), None)
+            lines = [dict(x) for x in (f or {}).get("_requests") or []]
+            if not lines:
+                return jsonify(error="No request lines to approve in the days in memory."), 409
+            if str(b.get("seen") or "") != lines_hash(lines):
+                return jsonify(error="The request lines have changed since this page was opened. Reload it and check them again."), 409
+        un.set_state(fid, state, why, me(), lines)
         ctx["audit"].add("beacon_family_state", user=me(), target=fid, detail=state + (f" · {why[:100]}" if why else ""))
         return jsonify(ok=True)
 

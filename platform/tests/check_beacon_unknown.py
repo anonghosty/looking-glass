@@ -144,7 +144,7 @@ ok("the send link opens a private report on the separate decoding repository, ne
 fid = dga[0]["id"]
 # an administrator approves a family before its decoding request can be downloaded (the user, 2026-11-16)
 ADM = ANA | {"settings"}
-post = lambda u, p, st, why="": call(u, p, "POST", f"/api/beacon/unknown/{fid}/state", {"state": st, "why": why})[0]  # noqa: E731
+post = lambda u, p, st, why="", seen="": call(u, p, "POST", f"/api/beacon/unknown/{fid}/state", {"state": st, "why": why, "seen": seen})[0]  # noqa: E731
 ok("nothing can be downloaded before an administrator approves", call("ana", ANA, "GET", f"/api/beacon/unknown/{fid}/request")[0] == 409)
 pre = next(f for f in lst["families"] if f["id"] == fid)["requests"]
 ok("the page shows the exact request lines first (masked, with their infection names)",
@@ -167,11 +167,24 @@ asks = [a for a in system_alerts.Alerts(tmp).current() if a["key"].startswith("d
 ok("the administrators' bell says a decoding request waits for approval, with the reason, and leads to it",
    len(asks) == 1 and asks[0]["problem"] and "provider agreed" in asks[0]["text"] and asks[0]["link"] == "/findings#beaconUnknown"
    and "192.0.2." not in json.dumps(asks), str(asks)[:300])
-ok("approved by the administrator", post("adam", ADM, "approved") == 200)
+seen_now = next(f for f in lst_adm["families"] if f["id"] == fid)["requests_hash"]
+# security review of 2df65c3: an approval is for exactly the lines the administrator saw
+ok("an approval for lines other than those now on file is refused (the page must be reloaded)",
+   post("adam", ADM, "approved", seen="0" * 32) == 409)
+ok("approved by the administrator, for the lines on their screen", post("adam", ADM, "approved", seen=seen_now) == 200)
+approved_lines = json.loads(open(os.path.join(tmp, "data", "beacon_unknown.json")).read())["families"][fid]["approved_requests"]
+ok("... those lines are kept with the approval", approved_lines and U.lines_hash(approved_lines) == seen_now)
+fam_cache = un.cache.get("data")
+if fam_cache:                                # later days bring other lines for the family: the file must not change
+    for f_ in fam_cache:
+        if f_["id"] == fid:
+            f_["_requests"] = [{"infection": "dga.test", "request": "GET /other?q=CHANGED-LATER HTTP/1.1"}]
 ok("... and the bell no longer asks", not [a for a in system_alerts.Alerts(tmp).current() if a["key"].startswith("decode-ask:")])
 code, r = call("ana", ANA, "GET", f"/api/beacon/unknown/{fid}/request")
 req = json.loads(r.get_data(as_text=True))
 text = json.dumps(req)
+ok("the download is exactly the lines approved, not lines gathered later", req["requests"] == approved_lines
+   and "CHANGED-LATER" not in json.dumps(req), json.dumps(req)[:200])
 ok("the decoding request holds only HTTP request lines (at most 5), each with its infection name, as a download",
    code == 200 and set(req) == {"looking_glass_decoding_request", "made", "requests"} and 1 <= len(req["requests"]) <= 5
    and all(set(x) == {"infection", "request"} and x["infection"] == "dga.test" and x["request"].startswith("GET /")

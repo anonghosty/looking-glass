@@ -5,6 +5,18 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-16 (10)
+### Added
+- **For reviewers.** A short box at the top of the README and a page, [For reviewers](docs/REVIEWERS.md), for
+  anyone assessing the project: what it is and is not, how it is built, who sees what, its trust boundaries and how
+  every release is checked (including the AI-assisted security review, whose every point is checked against the code), with the
+  page to read for each.
+
+### Security
+- An administrator's approval of a decoding request is for exactly the request lines on their screen: they are kept
+  with the approval and are what the download holds, and an approval is refused if the lines changed after the page
+  was opened (security review of v2026.11.16.9, a point below the reporting bar).
+
 ## 2026-11-16 (9)
 ### Added
 - **An administrator approves every decoding request.** On the Findings page, *Requests Looking Glass could not

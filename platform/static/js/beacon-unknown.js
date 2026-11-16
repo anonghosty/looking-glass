@@ -13,9 +13,10 @@
   const fmt = (n) => Number(n || 0).toLocaleString("en-GB");
   const plural = (n, w) => `${fmt(n)} ${w}${n === 1 ? "" : "s"}`;
 
-  async function state(id, st, why) {
+  // seen: the fingerprint of the request lines on screen, so an approval is for exactly those lines
+  async function state(id, st, why, seen) {
     const r = await fetch(`/api/beacon/unknown/${encodeURIComponent(id)}/state`, { method: "POST", credentials: "same-origin",
-      headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() }, body: JSON.stringify({ state: st, why: why || "" }) });
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() }, body: JSON.stringify({ state: st, why: why || "", seen: seen || "" }) });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
   }
 
@@ -76,7 +77,7 @@
         const rv = el("div", "bu-review");
         const ok = el("button", "lg-btn sm primary", "Approve sending"); ok.type = "button";
         const msg = el("span", "fd-msg"); msg.setAttribute("role", "status");
-        ok.addEventListener("click", async () => { ok.disabled = true; try { await state(f.id, "approved", ""); redraw(); } catch (e) { msg.textContent = e.message; ok.disabled = false; } });
+        ok.addEventListener("click", async () => { ok.disabled = true; try { await state(f.id, "approved", "", f.requests_hash); redraw(); } catch (e) { msg.textContent = e.message; ok.disabled = false; } });
         const no = el("details", "bu-send"); no.append(el("summary", null, "Do not approve"));
         no.append(reasonForm("Why it is not approved", "e.g. TLP:RED source, or not a beacon", "Do not approve", false,
           async (why) => { await state(f.id, "rejected", why); redraw(); }));

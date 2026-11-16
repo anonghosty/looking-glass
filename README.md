@@ -13,6 +13,19 @@ Free and open source (AGPL-3.0) · built in Africa, for CSIRTs in every country<
 
 <p align="center"><a href="https://www.bestpractices.dev/projects/16699"><img src="https://www.bestpractices.dev/projects/16699/badge" alt="OpenSSF Best Practices"></a></p>
 
+> [!IMPORTANT]
+> **For reviewers: what this is, in one minute.** Looking Glass turns a national CSIRT's free daily
+> [Shadowserver](https://www.shadowserver.org/) reports into one place to see, follow up and act: a replayed map of
+> the country, analysis, findings handed between named people, and advisories to the affected organisations.
+> - **It is not** a scanner (it never touches a device), a SIEM (it reads only Shadowserver's reports, not your own
+>   logs) or a mailer (advisories are sent by people, not by Looking Glass).
+> - **Two programs, one database:** a pipeline that fetches and checks the reports, and a web platform that reads them
+>   through a read-only account. Each role sees only its part, and the masking is done on the server.
+> - **Read in this order:** [For reviewers](docs/REVIEWERS.md) ·
+>   [Architecture and threat model](docs/ARCHITECTURE.md) · [Security](docs/SECURITY.md) ·
+>   [How the audit log proves itself](docs/AUDIT_LOG_PROOF.md) ·
+>   [Checking a release's signature](docs/INSTALLATION.md#checking-a-releases-signature)
+
 <p align="center">
   <a href="https://looking-glass-gh.readthedocs.io/"><b>Documentation</b></a> ·
   <a href="#quick-start">Quick start</a> ·

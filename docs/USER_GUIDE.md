@@ -682,6 +682,8 @@ For each family:
   administrator's bell then says *A decoding request waits for your approval*, leading to the family.
 - **Approve sending / Do not approve** (administrators). The administrator checks the request lines and approves, or
   does not approve with the reason, which the analyst sees; the family is open again and can be asked for once more.
+  An approval is for exactly the lines on the administrator's screen: the download holds those lines and no others,
+  and if new ones arrived after the page was opened, the page asks to be reloaded and checked again.
 - **Send to the Looking Glass creator** (once approved). Download the *decoding request*: a JSON file holding only the family's HTTP
   requests (up to 5), each with the infection name it is filed under, and no host, address, user agent or count.
   In each request only the value Looking Glass could not decode is kept: every other parameter's value reads
