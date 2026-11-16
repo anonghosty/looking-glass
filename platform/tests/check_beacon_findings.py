@@ -50,6 +50,9 @@ class People:
     def name(self, u, default=None):
         return {"rita": "Rita Researcher", "ana": "Ana Analyst", "max": "Max Manager"}.get(u, u)
 
+    def full_name(self, u, default=None):          # notes.py names a note's author this way
+        return self.name(u, default)
+
 
 events, made = [], []
 for i in range(6):
@@ -93,8 +96,11 @@ ok("refused without the page's token", call("rita", "POST", "/api/beacon/finding
 ok("refused without a recipient", call("rita", "POST", "/api/beacon/finding", {**WT, "kind": "analyst"})[0] == 400)
 ok("refused to management (it decides, it does not hand beacons over)", call("max", "POST", "/api/beacon/finding", {**WT, "kind": "analyst", "to": "ana"})[0] == 403)
 HTM = {"name": "android.badbox2", "operator": "HTM"}
-ok("a researcher cannot hand over what fewer than 5 devices carry", call("rita", "POST", "/api/beacon/finding", {**HTM, "kind": "analyst", "to": "ana"})[0] == 403)
-ok("nothing matching: 404", call("rita", "POST", "/api/beacon/finding", {"name": "android.badbox2", "operator": "NOPE", "kind": "analyst", "to": "ana"})[0] == 404)
+few = call("rita", "POST", "/api/beacon/finding", {**HTM, "kind": "analyst", "to": "ana"})
+none = call("rita", "POST", "/api/beacon/finding", {"name": "android.badbox2", "operator": "NOPE", "kind": "analyst", "to": "ana"})
+ok("a researcher cannot hand over what fewer than 5 devices carry", few[0] == 404)
+ok("... and gets exactly the answer for nothing matching: a guess can't tell a held-back value from a missing one",
+   few[0] == none[0] == 404 and few[1] == none[1], f"{few} / {none}")
 code, j = call("rita", "POST", "/api/beacon/finding", {**WT, "kind": "analyst", "to": "ana", "comment": "Windows beacons under an Android name."})
 ok("a researcher hands 6 devices' beacons to a named analyst", code == 200 and j["finding"]["number"].startswith("#"), json.dumps(j))
 fid = j["finding"]["id"]
@@ -149,6 +155,78 @@ ok("researchers, management and advisors may reach it", any("/api/beacon/finding
 ok("Peace of mind closes it", "/api/beacon/" in auth.PEACE_CLOSED)
 import data_access  # noqa: E402
 ok("an analyst's view of the devices is in the audit log (data_access)", "/api/beacon/finding/<fid>" in data_access.SENSITIVE)
+
+print("4. Beacon codes (LG-B): Move to notes, and a note sent on as a finding (the user, 2026-11-16)")
+import combos as C  # noqa: E402
+import notes as N  # noqa: E402
+book = C.CodeBook(os.path.join(tmp, "combo_codes.json"))
+os.makedirs(os.path.join(tmp, "data"), exist_ok=True)          # notes.py keeps data/notes.json
+app2 = Flask("lgb")
+BF.install(app2, {"store": store, "labels": lambda: {"event4_sinkhole_http": "Sinkhole HTTP"}, "findings": fnd, "book": book,
+                  "defined": lambda: {("infections", "android.badbox2"): "BADBOX 2.0"},
+                  "has_perm": lambda p: p in g.user["perms"], "sees_hosts": lambda: "unmasked" in g.user["perms"],
+                  "csrf_ok": lambda: g.user.get("tok") == "T", "fresh": lambda: True,
+                  "audit": type("A", (), {"add": lambda self, *a, **k: audit.append((a, k))})()})
+notes = N.install(app2, {"people": People(), "audit": type("A", (), {"add": lambda self, *a, **k: audit.append((a, k))})(),
+                         "allowed": lambda: True, "change_allowed": lambda: "definitions" in g.user["perms"], "fresh": lambda: True,
+                         "base_dir": tmp})
+book.resolve = book.get
+book.describe = lambda c: C.describe(book.get(c))
+notes.codes, notes.findings = book, fnd
+
+
+def call2(user, method, path, body=None):
+    role, perms = ROLES[user]
+    with app2.test_request_context(path, method=method, json=body):
+        g.user = {"user": user, "role": role, "perms": perms, "tok": "T"}
+        ep, args = app2.url_map.bind("localhost").match(path.split("?")[0], method=method)
+        r = app2.view_functions[ep](**args)
+        r, code = (r if isinstance(r, tuple) else (r, 200))
+        return code, r.get_json()
+
+
+q = "/api/beacon/code?name=android.badbox2&os_family=windows"
+code, r = call2("rita", "GET", q)
+bcode = (r or {}).get("code", "")
+ok("a researcher gets the code of a selection 7 devices carry, with what it stands for in words",
+   code == 200 and C.ANY_RX.match(bcode) and bcode.startswith("LG-B-") and "say Windows" in r["text"] and r["devices"] == 7, str(r))
+ok("... the same selection always has the same code", call2("rita", "GET", q)[1].get("code") == bcode)
+ok("... and the code carries no address", "192.0.2." not in json.dumps(book.get(bcode)))
+few_c = call2("rita", "GET", "/api/beacon/code?name=android.badbox2&operator=HTM")
+none_c = call2("rita", "GET", "/api/beacon/code?name=android.badbox2&operator=NOPE")
+ok("fewer than 5 devices: no code for a researcher, the same answer as nothing at all", few_c[0] == none_c[0] == 404 and few_c[1] == none_c[1],
+   f"{few_c} / {none_c}")
+ok("... an analyst, who sees the devices, gets it", call2("ana", "GET", "/api/beacon/code?name=android.badbox2&operator=HTM")[0] == 200)
+ok("management gets no code (it decides, it does not drill down)", call2("max", "GET", q)[0] == 403)
+ok("the code book says what it is, in words", C.describe(book.get(bcode)).startswith("Decoded beacons:") and "android.badbox2" in C.describe(book.get(bcode)))
+code, r = call2("rita", "POST", "/api/notes", {"section": "infections", "name": "android.badbox2", "text": "Windows beacons under an Android name",
+                                              "codes": [bcode], "finding": {"to": "max", "title": "Windows beacons under android.badbox2"}})
+ok("the note carrying it is saved and sent on as a finding", code == 200 and r.get("saved"), str(r)[:200])
+item = max(fnd.data["items"].values(), key=lambda x: int(x["id"]))
+ok("the finding holds exactly that drill-down (the name and the OS), never a device",
+   item.get("beacon") == {"name": "android.badbox2", "os_family": "windows"} and item.get("beacon_code") == bcode
+   and "192.0.2." not in json.dumps(item), str(item.get("beacon")))
+ok("... and its combination codes stay combination codes only", bcode not in item.get("codes", []))
+code, r = call2("max", "GET", f"/api/beacon/finding/{item['id']}")
+ok("the manager it went to opens it on the Findings page: counts and the selection", code == 200 and r["records"] == 7 and not r.get("records_list"), str(r)[:200])
+import auth  # noqa: E402
+ok("researchers' pages may reach the code (auth.py's list for their role, or Move to notes stays empty)",
+   any("/api/beacon/code".startswith(p) for p in auth.DEFINITIONS_PATHS))
+code, r = call2("rita", "POST", "/api/notes", {"section": "infections", "name": "android.badbox2", "text": "No title typed",
+                                              "codes": [bcode], "finding": {"to": "max"}})
+item2 = max(fnd.data["items"].values(), key=lambda x: int(x["id"]))
+ok("no title typed: the finding reads at a glance for management and advisors",
+   item2["title"] == "BADBOX 2.0 beacons from Windows machines (android.badbox2)", item2["title"])
+ok("... a typed title wins", item["title"] == "Windows beacons under android.badbox2", item["title"])
+ok("... and a title for parts held back names none of them",
+   BF.finding_title({"name": "android.badbox2", "os_family": "windows"}, "BADBOX 2.0", held=True) == "BADBOX 2.0 decoded beacons (android.badbox2)")
+ok("every beacon case gets a title that reads at a glance (OS, operator, format, generic decoding)",
+   [BF.finding_title({"name": "android.badbox2", **s}, "BADBOX 2.0") for s in
+    ({"operator": "WT"}, {"format": "clogin"}, {"format": "generic"})] ==
+   ["BADBOX 2.0 beacons from operator WT (android.badbox2)", "BADBOX 2.0 CLogin check-in beacons (android.badbox2)",
+    "BADBOX 2.0 values found by generic decoding (android.badbox2)"])
+ok("a paste of the code on the Combinations page is told where it is worked on",
+   C.ANY_RX.match(bcode) and C.describe(book.get(bcode)) and N.CODE_RX.match(bcode))
 
 print(f"\n{checks - len(fails)}/{checks} checks passed")
 if fails:

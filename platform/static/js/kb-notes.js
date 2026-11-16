@@ -14,7 +14,7 @@
   const post = (url, body) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() }, body: JSON.stringify(body) });
   const me = document.body.dataset.user || "";
   const admin = document.body.dataset.admin === "1";
-  const CODE_RX = /^LG-[CX]-[0-9A-F]{8}$/;
+  const CODE_RX = /^LG-[CXB]-[0-9A-F]{8}$/;   // combinations, and decoded beacons (LG-B)
   // the kinds a combination is made of (intel.py: COMMS_COMBO_KINDS, COMBO_KINDS)
   const KINDS = { infections: ["C2 domain", "DNS lookup", "TLS server name (SNI)", "User agent", "Associated tags"],
                   issues: ["Associated tags", "Other CVEs on the same hosts"], services: null };   // services: every pattern field
@@ -277,7 +277,7 @@
     const b = el("button", "lg-btn sm", "Attach"); b.type = "button"; const out = el("div", "kbn-res");
     const run = async () => {
       const code = inp.value.trim().toUpperCase();
-      if (!CODE_RX.test(code)) { out.replaceChildren(el("span", "kbn-msg bad", "A code looks like LG-C-1A2B3C4D or LG-X-1A2B3C4D.")); return; }
+      if (!CODE_RX.test(code)) { out.replaceChildren(el("span", "kbn-msg bad", "A code looks like LG-C-1A2B3C4D, LG-X-1A2B3C4D or LG-B-1A2B3C4D.")); return; }
       if (b.disabled) return;                  // Enter while it runs (review 2026-11-13)
       b.disabled = true;
       try {
@@ -336,7 +336,11 @@
     // the list says it is loading, not "No notes yet.", until the notes are in (2026-11-15)
     list.replaceChildren(el("li", "kbn-loading", "Loading the notes…")); listHead.querySelector(".kbn-count").textContent = "";
     renderPicked(); renderPane(); load();
-    if (codes.length) { msg.textContent = `${codes.length === 1 ? "The combination is" : `${codes.length} combinations are`} attached: write what you found and add the note.`; msg.className = "kbn-msg ok"; }
+    if (codes.length) {
+      const beacons = codes.every((c) => String(c.code).startsWith("LG-B-"));
+      msg.textContent = `${codes.length === 1 ? (beacons ? "The decoded beacons are" : "The combination is") : `${codes.length} codes are`} attached: write what you found and add the note${beacons ? "; track it as a finding to have it worked on" : ""}.`;
+      msg.className = "kbn-msg ok";
+    }
     box.hidden = false; back.hidden = false; document.body.classList.add("kbn-open");
     setTimeout(() => ta.focus(), 30);
   }

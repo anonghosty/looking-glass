@@ -426,6 +426,27 @@ security_testing/security_retest.py && tests/run_all_checks.sh
 changes. If `check_libraries.py` fails, its line names the library.
 If `deploy/looking-glass.service.template` changed, run `deploy/install.sh` again and copy the service file again (A4 / B3).
 
+## Checking a release's signature
+
+Every release tag and every commit on `main` is signed with the maintainer's SSH key. GitHub lists it as **Looking Glass
+commit signing**, with this fingerprint:
+
+```
+SHA256:OgsRca17219/hsf7eF8MztBJXbPMgEYzatsAqKWznlU (ED25519)
+```
+
+To check a release tag (here `v2026.11.16`) in your copy of the repository:
+
+```bash
+curl -s https://api.github.com/users/anonghosty/ssh_signing_keys \
+  | python3 -c 'import json,sys; [print("* namespaces=\"git\"", k["key"]) for k in json.load(sys.stdin)]' > allowed_signers
+ssh-keygen -lf <(cut -d' ' -f3- allowed_signers)        # must show the fingerprint above
+git -c gpg.ssh.allowedSignersFile=allowed_signers tag -v v2026.11.16
+```
+
+A good tag ends with `Good "git" signature ... with ED25519 key SHA256:OgsRca...`. Compare the fingerprint with the one
+on this page before you trust it. On GitHub, signed commits and tags show **Verified**.
+
 ## Uninstalling
 
 Run `./uninstall.sh` from the top of the Looking Glass folder (the one with `install.sh`), as the user who installed

@@ -86,6 +86,9 @@ nav:
       - Security: SECURITY.md
       - How the audit log proves itself: AUDIT_LOG_PROOF.md
   - Comparison with IntelMQ and Elastic: COMPARISON.md
+  - Project:
+      - Governance: GOVERNANCE.md
+      - Roadmap: ROADMAP.md
 
 extra_javascript:
   - assets/javascripts/films.js

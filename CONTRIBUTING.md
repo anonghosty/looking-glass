@@ -25,6 +25,9 @@ Use the forms offered when you click **New issue**: a bug report, a feature requ
 - For a feature: the problem it solves for an analyst, researcher, manager, advisor or administrator, before the
   solution.
 
+How decisions are made and who does what: [Governance](docs/GOVERNANCE.md). What is planned next:
+[Roadmap](docs/ROADMAP.md).
+
 ## Setting up
 
 Follow [docs/INSTALLATION.md](docs/INSTALLATION.md) on a test machine, never on an installation that holds real

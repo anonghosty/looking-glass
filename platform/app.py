@@ -2934,7 +2934,8 @@ FINDINGS.people_of = _people_of
 FINDINGS.title_of = lambda n: SVC_KB["title_of"](n)     # a services report's finding shows its title
 # decoded beacons handed over to an analyst or a manager as a finding, each seeing them at their level (beacon_findings.py)
 import beacon_findings as _beacon_findings  # noqa: E402
-_beacon_findings.install(app, {"store": store, "labels": INTEL.ctx["labels"], "findings": FINDINGS, "has_perm": AUTH["has_perm"],
+_beacon_findings.install(app, {"store": store, "labels": INTEL.ctx["labels"], "findings": FINDINGS, "has_perm": AUTH["has_perm"], "book": COMBOS,
+                               "defined": INTEL.ctx["defined"],
                                "sees_hosts": lambda: not is_demo(), "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"],
                                "audit": AUTH["audit"]})
 # requests Looking Glass could not decode, as families on the Findings page, to send to its creator (beacon_unknown.py)

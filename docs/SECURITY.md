@@ -307,3 +307,21 @@ Security fixes are made on the latest version (the `main` branch). Update with t
 - **In Looking Glass itself:** report it privately through the repository's Security tab (**Report a vulnerability**),
   not in a public issue. Include the steps to reproduce and the version (commit) you run.
 - **In an installation:** report it to the CSIRT team that runs it.
+
+### How a report is handled
+
+1. **Acknowledged** within 5 working days, in the private report.
+2. **Assessed** within 14 days: whether it is a vulnerability, which versions it affects and how severe it is (CVSS).
+   You are told the outcome and the reason.
+3. **Fixed** on the latest version: critical or high severity within 30 days, medium within 60 days, low within 90
+   days. When a fix takes longer, you are told why and when to expect it.
+4. **Released and disclosed together:** the fix ships in a release whose CHANGELOG has a *Security* entry, and the
+   GitHub security advisory is published with it, with a CVE when one applies. Details stay private until the fix is
+   out, unless we agree otherwise.
+
+Please give us the time above before disclosing it yourself.
+
+### Credit
+
+Reporters are credited by the name or handle they choose, in the release's CHANGELOG entry and in the security
+advisory, unless they ask not to be. Reports that turn out not to be vulnerabilities are answered too, but not listed.

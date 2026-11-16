@@ -100,7 +100,8 @@ ADVISORY_PATHS = ("/findings", "/api/findings", "/advisory", "/api/advisory", "/
 DEFINITIONS_PATHS = ("/definitions", "/api/kb/", "/api/networks", "/api/lookups", "/api/intel", "/api/notes", "/api/combo-codes/",
                      "/findings", "/api/findings", "/intel/", "/api/notifications", "/overview",
                      "/api/attack", "/api/name-sources",      # ATT&CK mappings and the name sources' status (attack_map.py, name_sources.py)
-                     "/api/beacon/finding")                   # handing decoded beacons over, and a finding's beacons (counts)
+                     "/api/beacon/finding",                   # handing decoded beacons over, and a finding's beacons (counts)
+                     "/api/beacon/code")                      # a beacon selection's LG-B code, for Move to notes (5+ devices)
 MANAGEMENT_PATHS = ("/management", "/api/mgmt/", "/api/lookups", "/api/combo-codes/", "/findings", "/api/findings",
                     "/intel/", "/api/intel/acode/", "/review/", "/api/review/", "/api/notifications", "/overview",
                     "/api/attack/technique/",

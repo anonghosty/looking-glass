@@ -426,11 +426,13 @@ draws a new one. A researcher sees a value only when 5 or more devices carry it;
 back. The rest of the beacon (MAC address, hardware UUID, CPU id, CPU hash, memory) identifies one device and is never
 shown to researchers. In the *URL* card the encoded value reads `<clogin beacon>`.
 
-**Handing decoded beacons over.** Decoded beacons need a serious look, so the researcher can send them on: **Hand
-over operator …** under a report's cards (one button per operator 5 or more devices carry), or **Hand over** on a
-*Beacon vs name* match. Choose an analyst or a manager, the person, and add a comment if you like. It becomes a finding
-in that person's hands (see *Findings*), with only the two of you, and later whoever it is sent on to, in its
-channel.
+**Moving decoded beacons to notes.** Decoded beacons need a serious look, so they go to notes like every other
+pattern: under a report's cards, *Decoded beacons here need a serious look* lists each operator 5 or more devices
+carry, and a *Beacon vs name* match has its own line. Each has a **beacon code** (`LG-B-…`) and **Move to notes**,
+which opens a new note with the code attached. Write what you found, and **track it as a finding** to send it to a
+manager: the finding carries exactly that drill-down (the name and the beacon's parts), so it is worked on in
+*Findings*, where analysts open its devices. Without a title of your own, the finding is titled for management and
+advisors to read at a glance, for example *BADBOX 2.0 beacons from Windows machines (android.badbox2)*.
 
 
 **Looking Glass asks: can you look into this?** The card at the top of the Definitions page lists matches the platform
@@ -481,8 +483,9 @@ the analyst pulls exactly those devices and writes the advisory. Two complete wa
 demonstration data, are in [Use case scenarios: a needle through the haystack](USE_CASES.md).
 
 **Combination codes.** Every combination in Intel gathered carries a code: **`LG-C-…`** for one exact combination in
-one report, **`LG-X-…`** for a cross-report pattern (what a device carried in each of several reports). A code
-carries no address. Click a code to copy it.
+one report, **`LG-X-…`** for a cross-report pattern (what a device carried in each of several reports), and
+**`LG-B-…`** for decoded beacons under a name (every record whose beacon says, for example, *Windows*). A code
+carries no address. Click a code to copy it. A beacon code is worked on in *Findings*, not on the Combinations page.
 
 **Ticking a CVE.** On an analyst code's page, a CVE or issue under *CVEs and issues* can be ticked like a combination: it becomes a code of exactly this selection's devices that carry it, sent with the reply.
 
@@ -641,8 +644,8 @@ search on the day it was reported, so an old finding can still be worked on. Ana
 advisors (in the advisory's device list) see the devices reported again marked **again**, with a line above the list;
 the Findings page itself never shows an address.
 
-**Decoded beacons handed over.** A finding made with *Hand over* (Intel gathered, *Beacon vs name*, or the map's
-*Decoded beacon*) shows a **Decoded beacons** block: what was handed over in words, its parts (format, operator,
+**Decoded beacons handed over.** A finding about decoded beacons (a note with a beacon code tracked as a finding, or
+an analyst's *Hand over* from the map's *Decoded beacon*) shows a **Decoded beacons** block: what was handed over in words, its parts (format, operator,
 version, OS), and how many records, devices, reports and days carry it in the days in memory. Everyone in the channel
 sees that much; while fewer than 5 devices carry the beacons, only analysts and admins see the parts. Analysts and
 admins also get **Show the devices**: every record with its host, time, report, C2 host and the whole decoded JSON

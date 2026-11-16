@@ -35,7 +35,7 @@
     const act = el("div", "bu-act");
     if (f.state !== "sent") {
       const ask = el("details", "bu-send"); ask.append(el("summary", null, "Send to the Looking Glass creator"));
-      ask.append(el("p", null, "Looking Glass could not decode this family. Send it to the Looking Glass creator so a future release decodes it automatically: download the decoding request, then paste its contents into the private report that opens on the HTTP Requests Decoding repository (only you and the Looking Glass creator see it). The file holds only the HTTP requests (up to 5), with no host, address, name or count."));
+      ask.append(el("p", null, "Looking Glass could not decode this family. Send it to the Looking Glass creator so a future release decodes it automatically: download the decoding request, then paste its contents into the private report that opens on the HTTP Requests Decoding repository (only you and the Looking Glass creator see it). The file holds only the HTTP requests (up to 5), each with the infection name it is filed under, and no host, address, user agent or count."));
       const lab = el("label", "bu-chk"); const cb = el("input"); cb.type = "checkbox";
       lab.append(cb, document.createTextNode(" Our organisation's rules (TLP) allow sharing these requests. Decoded, a value may hold the device's own data. The download is recorded in the audit log."));
       const go = el("button", "lg-btn sm primary", "Download the decoding request"); go.type = "button"; go.disabled = true;

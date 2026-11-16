@@ -141,8 +141,15 @@ server side is in small modules called from `app.py`:
   works the selection out again over the days in memory: counts (records, devices, reports, days) and the parts, held
   back while fewer than 5 devices carry them, for viewers who do not see hosts; with `records=1`, for analysts and
   admins only, every record (host, port, time, report's readable name, C2 host, `beacon_decode.view`), at most 500.
-  That view is in `data_access.SENSITIVE`. Findings page block: `static/js/beacon-handover.js` (also the *Hand over*
-  buttons of Intel gathered and the map), `static/css/beacon.css`. Test: `tests/check_beacon_findings.py`.
+  That view is in `data_access.SENSITIVE`. Findings page block: `static/js/beacon-handover.js` (also the map's *Hand
+  over* button), `static/css/beacon.css`. **Beacon codes:** `GET /api/beacon/code?name=&format=&operator=&version=&os_family=`
+  (the *definitions*, *settings* or *unmasked* permission) answers the selection's `LG-B-XXXXXXXX` code, made from the
+  selection (`code_key`, SHA-256) and kept in the combination code book (`combos.CodeBook.put`, kind `b`: name and
+  parts, no address); a viewer who does not see hosts gets it only for a selection 5 or more devices carry, with the
+  same answer as for no records at all. Intel gathered shows it with *Move to notes*; `notes.py` accepts `LG-B` codes,
+  and a note tracked as a finding passes the selection on (`findings.create(..., extra={"beacon": ..., "beacon_code":
+  ...})`), keeping it out of the finding's combination codes. The Combinations page answers an `LG-B` code with where
+  it is worked on. Test: `tests/check_beacon_findings.py`.
 - **`beacon_unknown.py`, requests Looking Glass could not decode.** Groups `beacon_decode.unknown()` over the days in
   memory into families keyed by (path with numbers and long parts folded, parameter, encoding, shape hint, length in
   16-byte steps up to 256, then 128); per family: records, devices (counted), distinct values (`constant` when one

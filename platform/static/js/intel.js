@@ -77,6 +77,26 @@
     });
     return b;
   }
+  // a decoded beacon's operating system, as people read it (never the code "windows")
+  const OS_NAME = { android: "Android", windows: "Windows", linux: "Linux", macos: "macOS", ios: "iOS" };
+  const shownValue = (kind, v) => (kind === "Beacon OS" ? OS_NAME[String(v).toLowerCase()] || v : v);
+  // decoded beacons under a name (beacon_findings.py): their LG-B code, and "Move to notes" with it attached. A note sent
+  // on as a finding carries exactly that drill-down to the Findings page (the user, 2026-11-16)
+  function beaconChip(code, what) {
+    const b = el("button", "ig-code"); b.type = "button";
+    b.title = `Beacon code ${code}: move it to a note. Sent on as a finding, it takes exactly these records to the Findings page, where analysts open the devices.`;
+    b.setAttribute("aria-label", `Copy the beacon code ${code}`);
+    b.append(el("span", "ig-code-k", "Code"), el("code", null, code), svg(ICON.copy, 11));
+    b.addEventListener("click", (e) => { e.stopPropagation(); copy(`${code} (${what})`, `the code ${code}`); });
+    return b;
+  }
+  function noteBtnFor(name, section, title, code, text) {
+    const b = el("button", "ig-tonote"); b.type = "button"; b.hidden = !window.LGNotes;
+    b.title = `Open a new note on ${title} with ${code} attached`;
+    b.append(svg("M5 4h11l3 3v13H5zM9 9h6M9 13h6M9 17h3", 13), el("span", null, "Move to notes"));
+    b.addEventListener("click", (e) => { e.stopPropagation(); if (st) close(); window.LGNotes?.open(name, section, title, [{ code, text }]); });
+    return b;
+  }
   function copySeg(getValues, what) {
     const seg = el("div", "ig-seg"); seg.setAttribute("role", "group"); seg.setAttribute("aria-label", `Copy ${what}`);
     const ic = el("span", "ig-seg-ic"); ic.append(svg(ICON.copy, 13)); seg.append(ic);
@@ -141,7 +161,7 @@
     h.append(el("span", "ig-lead-tag", KIND_OF[x.priority] || "Match"), el("b", "ig-lead-v", x.verdict || ""), el("span", "ig-lead-n", plural(x.count, "record")));
     // the indicator itself
     const ind = el("div", "ig-lead-ind");
-    ind.append(el("span", "ig-lead-k", x.kind === "domain" ? "Domain" : x.kind), el("code", null, x.value),
+    ind.append(el("span", "ig-lead-k", x.kind === "domain" ? "Domain" : x.kind), el("code", null, shownValue(x.kind, x.value)),
       iconBtn(ICON.copy, `Copy ${x.value}`, () => copy(x.value, "the indicator")));
     li.append(h, ind);
     // the evidence: where Looking Glass saw it
@@ -164,9 +184,20 @@
     // what Looking Glass saw, in words
     const say = el("div", "ig-lead-say");
     say.append(el("p", null, x.text));
-    // a decoded beacon that contradicts its name: hand it over to an analyst or a manager (beacon-handover.js)
-    if (x.priority === 5 && window.LGBeaconHandover)
-      for (const n of x.names || []) say.append(window.LGBeaconHandover.button({ name: n.name, os_family: x.value }, (x.names.length > 1 ? `Hand over (${n.name})` : "Hand over")));
+    // a decoded beacon that contradicts its name: its code and "Move to notes", like every other pattern; a note sent on as
+    // a finding takes exactly this drill-down to the Findings page (beacon_findings.py, notes.py)
+    if (x.priority === 5)
+      for (const n of x.names || []) {
+        const row = el("div", "ig-code-row ig-beacon-code"); say.append(row);
+        fetch(`/api/beacon/code?name=${encodeURIComponent(n.name)}&os_family=${encodeURIComponent(x.value)}`, { credentials: "same-origin" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => {
+            if (!d) { row.remove(); return; }
+            if (x.names.length > 1) row.append(el("span", "ig-every-in", n.name));
+            row.append(beaconChip(d.code, `${d.text}`), noteBtnFor(n.name, "infections", n.name, d.code, d.text));
+          })
+          .catch(() => row.remove());
+      }
     // Explore (the user, 2026-11-15): exactly what Looking Glass stated. Every name and report of the match, side by
     // side, each with the tags and patterns of only the records that carry the indicator (intel_match.py)
     if ((x.where || []).length) {
@@ -200,7 +231,7 @@
     const li = el("li", "ig-v"); li.dataset.value = v.value;
     li.style.setProperty("--w", String(Math.max(1.5, v.share * 100)));   // a number: the CSS multiplies it
     const main = el("div", "ig-v-main");
-    const code = el("code", null, v.value); code.title = `${v.value}\nClick to focus: dim everything that does not carry it`;
+    const code = el("code", null, shownValue(kind, v.value)); code.title = `${v.value}\nClick to focus: dim everything that does not carry it`;
     main.append(code);
     li.append(main, figures(v), iconBtn(ICON.copy, `Copy ${v.value}`, () => copy(v.value, kind === "Other CVEs on the same hosts" ? v.value : "the value"), "ig-v-copy"));
     li.addEventListener("click", () => { st.focus = st.focus === v.value ? null : v.value; paint(); });
@@ -665,11 +696,19 @@
     const grid = el("div", "ig-grid");
     for (const k of ks) grid.append(kindCard(k));
     pane.append(grid);
-    // decoded beacons here (5 or more devices per value): hand one operator's beacons over (beacon-handover.js)
+    // decoded beacons here (5 or more devices per value): each operator's code and "Move to notes", like every other
+    // pattern; a note sent on as a finding takes exactly those records to the Findings page (beacon_findings.py)
     const ops = (r.indicators.find((k) => k.kind === "Beacon operator") || {}).values || [];
-    if (ops.length && window.LGBeaconHandover && (r.section || d.section) !== "services" && (r.section || d.section) !== "issues") {
-      const bar = el("div", "bh-handover"); bar.append(el("span", null, "Decoded beacons here need a serious look:"));
-      for (const v of ops.slice(0, 6)) bar.append(window.LGBeaconHandover.button({ name: r.name || d.name, operator: v.value }, `Hand over operator ${v.value}`));
+    if (ops.length && (r.section || d.section) !== "services" && (r.section || d.section) !== "issues") {
+      const nm = r.name || d.name;
+      const bar = el("div", "ig-sec-block ig-beacon-ops"); bar.append(el("div", "ig-cmp-k", "Decoded beacons here need a serious look"));
+      for (const v of ops.slice(0, 6)) {
+        const row = el("div", "ig-code-row ig-beacon-code"); row.append(el("span", "ig-every-in", `Operator ${v.value}`)); bar.append(row);
+        fetch(`/api/beacon/code?name=${encodeURIComponent(nm)}&operator=${encodeURIComponent(v.value)}`, { credentials: "same-origin" })
+          .then((x) => (x.ok ? x.json() : null))
+          .then((c) => { if (!c) { row.remove(); return; } row.append(beaconChip(c.code, c.text), noteBtnFor(nm, "infections", d.title || nm, c.code, c.text)); })
+          .catch(() => row.remove());
+      }
       pane.append(bar);
     }
     if (st.q &&!pane.querySelector(".ig-card:not(.empty) li.ig-v:not(.out), .ig-mrow:not(.dim):not(.ig-mhead), .ig-sets li:not(.dim)"))
@@ -791,7 +830,7 @@
     const h = el("div", "ig-lead-h");
     h.append(el("span", "ig-lead-tag", KIND_OF[d.priority] || "Match"), el("b", "ig-lead-v", d.verdict || ""), el("span", "ig-lead-n", plural(d.count, "record")));
     const ind = el("div", "ig-lead-ind");
-    ind.append(el("span", "ig-lead-k", d.kind === "domain" ? "Domain" : d.kind), el("code", null, d.value),
+    ind.append(el("span", "ig-lead-k", d.kind === "domain" ? "Domain" : d.kind), el("code", null, shownValue(d.kind, d.value)),
       iconBtn(ICON.copy, `Copy ${d.value}`, () => copy(d.value, "the indicator")));
     said.append(h, ind, el("p", "ig-match-text", d.text || ""));
     body.append(said);
@@ -872,7 +911,7 @@
         for (const k of others) {
           const top = k.values[0];
           dl.append(el("dt", null, k.kind), el("dd", top && top.value.toLowerCase() === st.mark ? "mark" : null,
-            top ? `${top.value}${k.distinct > 1 ? `  (+${fmt(k.distinct - 1)} more)` : ""}` : `${fmt(k.hidden)} on fewer than 5 devices`));
+            top ? `${shownValue(k.kind, top.value)}${k.distinct > 1 ? `  (+${fmt(k.distinct - 1)} more)` : ""}` : `${fmt(k.hidden)} on fewer than 5 devices`));
         }
         ob.append(dl); col.append(ob);
       }

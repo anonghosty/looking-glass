@@ -5,6 +5,38 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-16 (3)
+### Security
+- A researcher handing over decoded beacons that fewer than 5 devices carry now gets the same answer as for beacons
+  that don't exist, so guessing their parts can no longer show that a held-back value exists (security review of
+  v2026.11.16.2; threat-side values only, never device data).
+
+### Added
+- **Governance and roadmap.** How decisions are made, who does what and what happens if the maintainer is not
+  available ([Governance](docs/GOVERNANCE.md)); what is planned over the next year ([Roadmap](docs/ROADMAP.md)).
+- **How vulnerability reports are handled:** acknowledged within 5 working days, assessed within 14 days, fixed within
+  30 days (critical or high), 60 days (medium) or 90 days (low), disclosed with the release, and reporters credited unless they ask not to be
+  ([Security, section 6](docs/SECURITY.md#6-reporting-a-vulnerability)).
+- **Checking a release's signature**, with the signing key's fingerprint
+  ([Installation](docs/INSTALLATION.md#checking-a-releases-signature)).
+
+### Changed
+- **Decoded beacons go to notes like every other pattern.** A *Beacon vs name* match, and each beacon operator under a
+  report's cards, now has its own code (`LG-B-…`) and **Move to notes**, in place of the separate hand-over form. A
+  note carrying it, tracked as a finding, takes exactly that drill-down to the Findings page, where analysts open its
+  devices. Like every code it carries no address, and researchers get it once 5 or more devices carry the beacons.
+- **A beacon finding's title says what it is.** Without a title typed, it reads like *BADBOX 2.0 beacons from Windows
+  machines (android.badbox2)*: the family's readable name, what the beacons report and the infection name, so
+  management and advisors see at a glance what they are deciding on.
+- Beacon operating systems read as people write them (*Windows*, not `windows`) in *Looking Glass asks* and Explore,
+  and the match's record count has its thousands separator.
+
+### Fixed
+- The analysts' hand-over form beside the map uses the same fields as the rest of Looking Glass, not the browser's
+  bare controls.
+- The "could not decode" section said the decoding request holds no infection name; it holds each request's infection
+  name, and no host, address, user agent or count.
+
 ## 2026-11-16 (2)
 ### Security
 - **Encoded beacons never reach a masked view.** An encoded check-in in a request decodes to the device's MAC address,

@@ -42,7 +42,7 @@ import issue_tags
 import intel as I
 
 CODE_RX = re.compile(r"^LG-[CX]-[0-9A-F]{8}$")          # the researchers' codes (this module)
-ANY_RX = re.compile(r"^LG-[CXA]-[0-9A-F]{8}$")          # and the analysts' (acodes.py)
+ANY_RX = re.compile(r"^LG-[CXAB]-[0-9A-F]{8}$")         # and the analysts' (acodes.py) and decoded beacons (beacon_findings.py)
 MAX_DAYS = 31                 # one history search reads at most this many days
 KEEP_CODES = 20000            # codes kept in data/combo_codes.json (the least recently shown go first)
 JOB_TTL = 3600                # a finished search can be downloaded for an hour
@@ -199,6 +199,8 @@ def describe(entry):
     """One line for people: what the code stands for."""
     if not entry:
         return ""
+    if entry["kind"] == "b":                              # decoded beacons under a name (beacon_findings.py)
+        return f"Decoded beacons: {entry.get('text') or entry['name']}"
     if entry["kind"] == "a":
         days = entry.get("days") or [entry["day"]]
         on = days[0] if len(days) == 1 else f"{days[0]} to {days[-1]}"
@@ -1063,6 +1065,9 @@ def install(app, ctx):
             entry = None                          # another channel's analyst code
         if not entry:
             return jsonify(error=f"{code} is not known here: it was never shown in Intel gathered on this platform."), 404
+        if entry.get("kind") == "b":
+            return jsonify(error=f"{code} stands for decoded beacons: it is worked on in Findings, where a note carrying it "
+                                 "becomes a finding and analysts open its devices (Show the devices)."), 400
         days = None
         if entry.get("kind") != "a" and (b.get("from") or b.get("to")):     # an analyst code is always its own day
             try:

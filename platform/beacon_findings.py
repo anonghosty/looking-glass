@@ -15,9 +15,16 @@ the days in memory each time:
 Every hand-over names a person; only the people in the finding's channel and admins see it (findings.py). A researcher
 may hand over only what they can see: a selection 5 or more devices carry.
 
+A selection also has a code, LG-B-XXXXXXXX, kept in the combination code book (combos.py) like the LG-C and LG-X
+codes: a researcher moves it to a note ("Move to notes" on a "Beacon vs name" match), and a note sent on as a finding
+carries the selection (notes.py), so that exact drill-down is worked on in Findings. Like every code it carries no
+address, and a viewer who does not see hosts gets it only for a selection 5 or more devices carry (small_codes.py).
+
 API: POST /api/beacon/finding {name, format, operator, version, os_family, kind: analyst|management, to, comment, title},
-GET /api/beacon/finding/<id>. Installed from app.py: beacon_findings.install(app, ctx).
+GET /api/beacon/finding/<id>, GET /api/beacon/code?name=&format=&operator=&version=&os_family=.
+Installed from app.py: beacon_findings.install(app, ctx).
 """
+import hashlib
 import time
 
 from flask import g, jsonify, request
@@ -80,8 +87,69 @@ def describe(sel, held=False):
     if "operator" in sel and sel["operator"].lower() not in parts.lower():
         parts += f", operator {sel['operator']}"
     if "os_family" in sel:
-        parts += f" ({beacon_decode.OS_TITLE.get(sel['os_family'], sel['os_family'])})"
+        os_name = beacon_decode.OS_TITLE.get(sel["os_family"], sel["os_family"])
+        if parts == "decoded beacons":        # the OS alone: "decoded beacons that say Windows, under android.badbox2"
+            return f"decoded beacons that say {os_name}, under {sel['name']}"
+        parts += f" ({os_name})"
     return f"{parts} under {sel['name']}"
+
+
+def finding_title(sel, display="", held=False):
+    """A finding's title people read at a glance: "BADBOX 2.0 beacons from Windows machines (android.badbox2)". The
+    family's readable name (its definition's title) first, the infection name for reference; held: the parts are
+    held back (fewer than 5 devices, a viewer who does not see hosts), so the title names none of them."""
+    name = sel["name"]
+    fam = display or name
+    ref = f" ({name})" if display and display.lower() != name.lower() else ""
+    if held:
+        return f"{fam} decoded beacons{ref}"[:140]
+    if sel.get("os_family"):
+        what = f"beacons from {beacon_decode.OS_TITLE.get(sel['os_family'], sel['os_family'])} machines"
+    elif sel.get("operator"):
+        what = f"beacons from operator {sel['operator']}"
+    elif sel.get("format") == "generic":
+        what = "values found by generic decoding"
+    elif sel.get("format"):
+        what = f"{format_title(sel['format'])} beacons"
+    else:
+        what = "decoded beacons"
+    return f"{fam} {what}{ref}"[:140]
+
+
+def display_of(ctx, name):
+    """The definition's title of an infection name ("BADBOX 2.0"), or "" when it has none."""
+    try:
+        return (ctx.get("defined") or (lambda: {}))().get(("infections", name.lower()), "") or ""
+    except Exception:  # noqa: BLE001 - a title is a nicety: the finding is made without it
+        return ""
+
+
+def code_key(sel):
+    """What a selection is, as the code book keys it: the name (any case) and its parts."""
+    return "b|" + sel["name"].lower() + "|" + "|".join(f"{p}={sel[p]}" for p in PARTS if p in sel)
+
+
+def beacon_code(book, sel, display=""):
+    """The selection's LG-B code: made from the selection, so the same drill-down always has the same code; recorded in
+    the code book (once a day at most) so notes and findings can read what it stands for."""
+    key = code_key(sel)
+    for n in range(1, 50):
+        code = "LG-B-" + hashlib.sha256(f"{key}#{n}".encode() if n > 1 else key.encode()).hexdigest()[:8].upper()
+        e = book.get(code)
+        if e is None or e.get("key") == key:
+            break
+    if e is None or e.get("last") != time.strftime("%Y-%m-%d", time.gmtime()):
+        book.put(code, {"kind": "b", "section": "infections", "name": sel["name"], "key": key, "text": describe(sel),
+                        "title": finding_title(sel, display), "beacon": {p: sel[p] for p in PARTS if p in sel}})
+    return code
+
+
+def selection_of(book, code):
+    """The selection an LG-B code stands for, or None."""
+    e = book.get(code) if code.startswith("LG-B-") else None
+    if not e or e.get("kind") != "b":
+        return None
+    return {"name": e["name"], **{p: v for p, v in (e.get("beacon") or {}).items() if p in PARTS}}
 
 
 class BeaconFindings:
@@ -141,6 +209,26 @@ def install(app, ctx):
     def team():
         return hp("definitions") or hp("management") or hp("settings") or (hp("unmasked") and hp("export")) or hp("advisory")
 
+    @app.route("/api/beacon/code")
+    def api_beacon_code():
+        """The LG-B code of a selection, for "Move to notes": researchers (5 or more devices), analysts and admins."""
+        if not (hp("definitions") or hp("settings") or hp("unmasked")):
+            return jsonify(error="Researchers, analysts and admins move decoded beacons to notes."), 403
+        book = ctx.get("book")
+        sel = selection(request.args)
+        if not sel["name"] or not book:
+            return jsonify(error="Name the infection the beacons are filed under."), 400
+        n, hosts, _, _, _ = bf.scan(sel, False)
+        if not ctx["sees_hosts"]() and len(hosts) < MIN_HOSTS:
+            # the same answer as no record at all (security review of 5b232a7): a guess learns nothing
+            return jsonify(error=f"No selection of {MIN_HOSTS} or more devices carries these beacons in the days in memory: "
+                                 "an analyst can hand them over."), 404
+        if not n:
+            return jsonify(error="No record in the days in memory carries these beacons."), 404
+        display = display_of(ctx, sel["name"])
+        code = beacon_code(book, sel, display)
+        return jsonify(code=code, text=describe(sel), title=finding_title(sel, display), records=n, devices=len(hosts))
+
     @app.route("/api/beacon/finding", methods=["POST"])
     def api_beacon_finding():
         """Hand decoded beacons over to an analyst or a manager, as a finding."""
@@ -162,14 +250,17 @@ def install(app, ctx):
             return jsonify(error=err), 400
         full = ctx["sees_hosts"]()
         n, hosts, reps, days, _ = bf.scan(sel, False)
+        if not full and len(hosts) < MIN_HOSTS:
+            # the researcher was never shown a selection fewer than 5 devices carry: it cannot come from their page. The
+            # same answer as "no record at all", so guessing parts can't tell a held-back value from one that does not
+            # exist (security review of 5b232a7)
+            return jsonify(error=f"No selection of {MIN_HOSTS} or more devices carries these beacons in the days in memory: "
+                                 "an analyst can hand them over."), 404
         if not n:
             return jsonify(error="No record in the days in memory carries these beacons."), 404
-        if not full and len(hosts) < MIN_HOSTS:
-            # the researcher was never shown a selection fewer than 5 devices carry: it cannot come from their page
-            return jsonify(error=f"Fewer than {MIN_HOSTS} devices carry these beacons: an analyst can hand them over."), 403
         comment = str(b.get("comment") or "").replace("\r", "").strip()[:1000]
         held = len(hosts) < MIN_HOSTS                  # the title is read by everyone in the channel
-        title = (str(b.get("title") or "").strip()[:140] or f"Decoded beacons: {describe(sel, held)}")[:140]
+        title = (str(b.get("title") or "").strip()[:140] or finding_title(sel, display_of(ctx, sel["name"]), held))[:140]
         text = comment or (f"Looking Glass decoded {n} beacon check-in{'s' if n != 1 else ''} ({describe(sel, held)}) from "
                            f"{len(hosts)} device{'s' if len(hosts) != 1 else ''} in {', '.join(reps)}. These requests need a "
                            f"serious look: what the devices are, and whether the records are filed under the right name.")

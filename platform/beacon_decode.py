@@ -778,7 +778,7 @@ def contradiction_leads(by, full, min_hosts):
         an = lambda w: ("an " if str(w)[:1].lower() in "aeiou" else "a ") + str(w)      # noqa: E731 - an Android name
         said = " and ".join(f"{n} ({an(OS_TITLE.get(name_os(n), name_os(n)))} name)" for _, n in names)
         out.append({"priority": 5, "kind": "Beacon OS", "value": fam, "names_key": names, "reports": reps_, "count": total,
-                    "text": f"Looking Glass decoded {total} beacon check-in{'s' if total != 1 else ''} that say the operating "
+                    "text": f"Looking Glass decoded {total:,} beacon check-in{'s' if total != 1 else ''} that say the operating "
                             f"system is {OS_TITLE.get(fam, fam)}, filed under {said} in {', '.join(reps_)}: the records may be "
                             f"filed under the wrong name, or the family runs on more than one system.",
                     "_seen": {k: dict(v) for k, v in p["seen"].items()}})

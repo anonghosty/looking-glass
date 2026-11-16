@@ -20,10 +20,12 @@ import time
 
 from flask import g, jsonify, request
 
+import beacon_findings     # a note carrying an LG-B code becomes a finding about that exact selection
+
 ROLE_LABEL = {"researcher": "Researcher", "admin": "Administrator", "analyst": "Analyst", "management": "Management"}
 MAX_LEN = 2000
 MAX_CODES = 10                 # combination codes on one note (combos.py)
-CODE_RX = re.compile(r"^LG-[CX]-[0-9A-F]{8}$")
+CODE_RX = re.compile(r"^LG-[CXB]-[0-9A-F]{8}$")   # combinations, and decoded beacons (beacon_findings.py)
 
 
 SECTIONS = ("infections", "issues", "services")       # services: the reports themselves (services_kb.py)
@@ -174,7 +176,14 @@ def install(app, ctx):
                          detail=text[:120] + (f" · {', '.join(codes)}" if codes else ""))
         if fnd and track:                  # "Track as a finding": the team follows it up on the Findings page (findings.py)
             title = str((fnd or {}).get("title") or "").strip() if isinstance(fnd, dict) else ""
-            item = track.create({"id": n["id"], "text": text, "codes": codes}, section, name, title, user, role, to, "management")
+            # decoded beacons (LG-B): the finding holds that exact selection, opened on the Findings page at each viewer's
+            # level (beacon_findings.py); the combination codes go on as before
+            sel = next((s for s in (beacon_findings.selection_of(book, c) for c in codes if c.startswith("LG-B-")) if s), None)
+            if sel and not title:          # no title typed: the beacons' own, read at a glance by management and advisors
+                title = (book.get(next(c for c in codes if c.startswith("LG-B-"))) or {}).get("title") or ""
+            item = track.create({"id": n["id"], "text": text, "codes": [c for c in codes if not c.startswith("LG-B-")]},
+                                section, name, title, user, role, to, "management",
+                                extra={"beacon": sel, "beacon_code": next(c for c in codes if c.startswith("LG-B-"))} if sel else None)
             ctx["audit"].add("finding_created", user=user, target=f"#{item['id']} {name}", detail=f"to {to} · " + item["title"][:120])
         return jsonify(saved=True, note=n, notes=notes.list(section, name))
 

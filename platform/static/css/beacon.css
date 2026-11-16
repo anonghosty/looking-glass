@@ -1,8 +1,18 @@
 /* Decoded beacons handed over (beacon-handover.js): the hand-over form and a finding's beacons. Text wraps, never cut. */
 .bh-wrap { display: inline-flex; flex-direction: column; gap: 6px; max-width: 100%; }
-.bh-form { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--border, #2a2a30); border-radius: 8px; min-width: min(320px, 100%); }
-.bh-form .fd-in, .bh-form select, .bh-form textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 12px; }
+.bh-form { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border, #2a2a30); border-radius: 10px;
+  background: var(--surface-2, rgba(255, 255, 255, .03)); min-width: min(340px, 100%); }
+/* the same fields as the Findings page (findings.css is not loaded beside the map): never the browser's bare controls */
+.bh-form .fd-in, .bh-form select, .bh-form textarea { width: 100%; box-sizing: border-box; padding: 7px 10px; border-radius: 9px;
+  border: 1px solid var(--border-strong, #3a3a44); background: var(--surface-2, #1b1b20); color: var(--text, #e8e8ee);
+  font: inherit; font-size: 13px; min-width: 0; }
+.bh-form textarea { resize: vertical; min-height: 64px; }
+.bh-form .fd-in:focus, .bh-form select:focus, .bh-form textarea:focus { outline: none; border-color: #b18cf5;
+  box-shadow: 0 0 0 3px rgba(177, 140, 245, .18); }
+.bh-form .lg-btn.primary { justify-self: start; }
 .bh-l { font-size: 12px; color: var(--muted, #8a8a94); }
+.ig-beacon-code { margin-top: 8px; }
+.ig-beacon-ops { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border, #2a2a30); }
 .bh-block { margin: 10px 0; padding: 12px 14px; border: 1px solid var(--border, #2a2a30); border-radius: 9px; }
 .bh-block h3 { margin: 0 0 8px; font-size: 13px; }
 .bh-said { margin: 0 0 8px; font-weight: 600; overflow-wrap: anywhere; }
