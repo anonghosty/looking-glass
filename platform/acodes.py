@@ -456,12 +456,15 @@ def install(app, ctx):
 
     def code_devices(code):
         """{code: devices}: for an analyst code, how many of its devices each code the researcher can answer with stands
-        for (the same figures as its page), and the code itself with all its devices. Kept ten minutes."""
-        hit = _cd_cache.get(code)
+        for (the same figures as its page), and the code itself with all its devices. Kept ten minutes, per viewer level:
+        what is worked out for a viewer who sees hosts is never served to one who does not (security review of 04696d5:
+        a beacon selection's small patterns keep no code for researchers)."""
+        key = (code, bool(small_codes.viewer_sees_hosts()))
+        hit = _cd_cache.get(key)
         if hit and time.time() - hit[0] < 600:
             return hit[1]
         with _cd_lock:
-            hit = _cd_cache.get(code)
+            hit = _cd_cache.get(key)
             if hit and time.time() - hit[0] < 600:
                 return hit[1]
             v = view(code)
@@ -470,9 +473,11 @@ def install(app, ctx):
                 out[code] = v["devices"]
                 for n in v["names"]:
                     for c in n["combinations"]:
-                        out.setdefault(c["code"], c["devices"])
+                        if c["code"]:                              # a code held back (fewer than 5 devices): not listed
+                            out.setdefault(c["code"], c["devices"])
                     for x in n["across"]:
-                        out.setdefault(x["code"], x["devices"])
+                        if x["code"]:
+                            out.setdefault(x["code"], x["devices"])
                 cr = v.get("cross") or {}
                 for s in cr.get("services") or []:
                     for c in s.get("combinations") or []:
@@ -487,7 +492,7 @@ def install(app, ctx):
                             out.setdefault(r["code"], r["hosts"])
             if len(_cd_cache) > 64:
                 _cd_cache.pop(min(_cd_cache, key=lambda k: _cd_cache[k][0]))
-            _cd_cache[code] = (time.time(), out)
+            _cd_cache[key] = (time.time(), out)
             return out
 
     @app.route("/api/intel/acode/<code>/devices")

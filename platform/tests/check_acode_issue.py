@@ -190,6 +190,22 @@ ok("a researcher ticking a CVE 2 of its devices carry: refused, no code (fewer t
    st_r == 409 and "code" not in d_r and "5" in d_r.get("error", ""), f"{st_r} {d_r}")
 st_a, d_a = tick_as("CVE-2023-48795", "analyst", ["unmasked", "export"], SRCB)
 ok("…an analyst, who sees the devices, gets its code", st_a == 200 and d_a.get("code", "").startswith("LG-A-"), f"{st_a} {d_a}")
+def devices_as(role, perms_, code):
+    path = f"/api/intel/acode/{code}/devices"
+    with app.test_request_context(path):
+        g.user = {"user": "rachel", "role": role, "perms": perms_}
+        ep, kw = app.url_map.bind("localhost").match(path)
+        rv = app.view_functions[ep](**kw)
+        rv = rv[0] if isinstance(rv, tuple) else rv
+        return rv.get_json() or {}
+
+
+as_analyst = devices_as("analyst", ["unmasked", "export"], SRCB)           # an analyst opens it first (the cache warms)
+as_researcher = devices_as("researcher", ["definitions"], SRCB)
+small = sorted({c for c in json.dumps(as_analyst).split('"') if c.startswith(("LG-C-", "LG-X-"))})
+ok("the devices of a beacon selection: an analyst's answer is not served to a researcher afterwards (review of 04696d5)",
+   bool(small) and not any(c in json.dumps(as_researcher) for c in small) and "null" not in json.dumps(as_researcher),
+   f"{as_analyst} / {as_researcher}")
 ok("…and the code made from it carries the beacon mark on (the rule follows it)",
    ((book.get(d_a.get("code", "")) or {}).get("sel") or {}).get("beacon") == {"name": "android.badbox2", "os_family": "windows"})
 

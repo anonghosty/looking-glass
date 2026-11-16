@@ -5,6 +5,12 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-16 (6)
+### Security
+- The device counts behind an analyst code's page are kept per viewer level: what is worked out for an analyst is no
+  longer served to a researcher who opens the same code within ten minutes, so a beacon selection's small patterns keep
+  no code for researchers there either (security review of v2026.11.16.5; codes and counts only, never an address).
+
 ## 2026-11-16 (5)
 ### Security
 - A beacon finding's analyst selection names no part of the beacons in its label while fewer than 5 devices carry
