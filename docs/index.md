@@ -116,16 +116,19 @@ sources for each fact are in the film's description on YouTube.
 
 ## See it working
 
-First the use cases, a needle through the haystack; then the new role, the advisor, from finding to advisory.
+First the use cases, a needle through the haystack; then the new role, the advisor, from finding to advisory; then
+decoded beacons, what an encoded request holds.
 
 <div class="lg-films" markdown>
 <!-- film: use-cases compact -->
 <!-- film: finding-to-advisory compact -->
+<!-- film: decoded-beacons compact -->
 </div>
 
-The chapters of each film are on its page: the use cases at the top of [Use cases](USE_CASES.md), and From finding
+The chapters of each film are on its page: the use cases at the top of [Use cases](USE_CASES.md), From finding
 to advisory under
-[Advisories](USER_GUIDE.md#advisories-the-advisor) in the user guide.
+[Advisories](USER_GUIDE.md#advisories-the-advisor) in the user guide, and Decoded beacons under
+[the map](USER_GUIDE.md#3-reported-network-communications-the-map) in the user guide.
 
 ## How it works
 

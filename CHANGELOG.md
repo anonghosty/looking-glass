@@ -5,6 +5,15 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-16 (12)
+### Added
+- The film **Decoded beacons** (3:10, narrated, with captions) on the documentation site: on the home page and in the
+  user guide beside the map's Decoded beacon, with its chapters.
+
+### Fixed
+- The user guide's *Playback* line on the map page shows as a list item again on the documentation site (it read
+  "- Playback" as plain text).
+
 ## 2026-11-16 (11)
 ### Security
 - Each step of a decoding request (asked, approved, sent) is checked again as it is saved, so two clicks at the same

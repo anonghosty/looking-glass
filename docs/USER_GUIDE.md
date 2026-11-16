@@ -229,8 +229,14 @@ Come back to it at any time with the **Overview** button, which is in every page
   (The services record stream does the same, for records and hosts.)
 
   ![An event's details](media/screens/23-comms-event.png)
+
 - **Playback:** pause, speed (1×, 5×, 15×, 60×) and **Catch up**. A hidden browser tab pauses itself and resumes
   where it stopped.
+
+**Decoded beacons, in 3 minutes:** the Beacon filter, the Decoded beacon in an event, the Decoded beacons figure, a
+finding with its LG-B code, and what happens to a request that cannot be decoded yet.
+
+[![Watch Decoded beacons (3:10) on YouTube](media/films/decoded-beacons.jpg)](https://www.youtube.com/watch?v=d5JWSGn_gt8) <!-- film: decoded-beacons -->
 
 ## 4. Publicly accessible / vulnerable services
 

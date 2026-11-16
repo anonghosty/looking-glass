@@ -146,6 +146,18 @@ extra:
         - [0, "The takedowns: the devices kept calling"]
         - [121, "Part 1: the question that kept coming up"]
         - [246, "Still calling, now found"]
+    decoded-beacons:
+      id: d5JWSGn_gt8
+      title: "Decoded beacons: what an encoded request holds"
+      length: "3:10"
+      sound: "narrated, with captions"
+      chapters:
+        - [0, "The call, and what it holds"]
+        - [24, "Part 1: every beacon, found"]
+        - [72, "Part 2: the numbers drop"]
+        - [109, "Part 3: a finding with a name"]
+        - [143, "Part 4: when a request can't be read"]
+        - [172, "The analyst's call"]
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/anonghosty/looking-glass
