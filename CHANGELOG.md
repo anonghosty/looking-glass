@@ -5,6 +5,17 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-16 (8)
+### Security
+- A beacon finding's beacon code (`LG-B-…`) and what it stands for reach only those who may see them: analysts and
+  admins, and everyone else in the finding's channel while 5 or more devices carry the beacons. Below that, managers,
+  researchers and advisors see the held analyst selection, as the title and summary already did, and an analyst code's
+  page no longer names the beacon code it came from. The code book itself now gives a beacon code's meaning only to
+  viewers who may see it (security review of v2026.11.16.7; threat-side values only, never an address).
+- A decoding request masks every request shape: parameters split by `;`, raw spaces inside the query, a repeated
+  parameter name (only the longest copy of the undecoded one is kept) and a target without a leading `/` (security
+  review of v2026.11.16.7).
+
 ## 2026-11-16 (7)
 ### Security
 - **A decoding request keeps only the value that could not be decoded.** A bot's own parameters can carry the

@@ -164,7 +164,11 @@ server side is in small modules called from `app.py`:
   Kept per set of days for up to an hour. `GET /api/beacon/unknown` (the *unmasked* permission, demo off): the families
   without their request lines, each with its state and the link to send it: a private report on the separate
   `anonghosty/http-requests-decoding` repository (`SEND_URL`, its *security/advisories/new* form; never a public issue). `GET /api/beacon/unknown/<id>/request`: the decoding request as a JSON
-  download holding only `requests` (`{infection, request}` pairs) and when it was made: no host, user agent or count. Every
+  download holding only `requests` (`{infection, request}` pairs) and when it was made: no host, user agent or count.
+  `request_line()` reads method, target and protocol whatever the shape (`&` or `;`, raw spaces, no leading `/`), keeps
+  only the longest copy of the undecoded parameter and writes `<value>` for every other value and `<address>` for any
+  address. An LG-B code's meaning comes from `combos.described()`, which answers only viewers `book.beacon_visible()`
+  allows; `findings.shown()` and `acodes.chain_of()` drop the code wherever it gives nothing. Every
   download is audit event `data_exported`; the page asks the analyst to confirm the TLP rules allow it. `POST
   /api/beacon/unknown/<id>/state` (`dismissed` | `sent` | `open`, CSRF token; audit event `beacon_family_state`), kept in
   `data/beacon_unknown.json` (0600, run-time data). Findings page section: `static/js/beacon-unknown.js`. Test:

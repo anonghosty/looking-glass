@@ -276,6 +276,29 @@ ok("an analyst's hand-over gets its own beacon code too, so every beacon finding
    str(ho.get("beacon_code", "")).startswith("LG-B-"), str(ho.get("beacon_code")))
 ok("an analyst's hand-over of beacons fewer than 5 devices carry: the selection's label names no part of them",
    made_sel and "HTM" not in made_sel[-1]["label"] and made_sel[-1]["label"].startswith("BADBOX 2.0 decoded beacons"), made_sel[-1:] and made_sel[-1]["label"])
+
+
+def shown_to(user, item):
+    """The finding as the Findings page sends it to this viewer (book.describe as combos.install sets it)."""
+    role, perms = ROLES[user]
+    with app2.test_request_context("/"):
+        g.user = {"user": user, "role": role, "perms": perms, "tok": "T"}
+        return fnd.shown(fnd.get(item["id"]), lambda c: C.described(book, c, book.get(c)))
+
+
+# security review of bc92a26: the finding's JSON gave the beacon code and its parts to anyone in the channel
+mx, an = shown_to("max", ho), shown_to("ana", ho)
+ok("... the manager it went to gets neither its beacon code nor its parts (fewer than 5 devices)",
+   mx["beacon_code"] == "" and mx["beacon_text"] == "" and "HTM" not in json.dumps(mx) and ho["beacon_code"] not in json.dumps(mx),
+   str({k: mx.get(k) for k in ("beacon_code", "beacon_text")}))
+ok("... the analyst still gets both", an["beacon_code"] == ho["beacon_code"] and "HTM" in an["beacon_text"], an["beacon_text"])
+big = fnd.get(item["id"])
+ok("... and a hand-over 5 or more devices carry shows its beacon code to the manager as before",
+   shown_to("max", big)["beacon_code"] == bcode and shown_to("max", big)["beacon_text"].startswith("Decoded beacons:"))
+with app2.test_request_context("/"):
+    g.user = {"user": "max", "role": "management", "perms": {"management"}, "tok": "T"}
+    ok("the code book itself describes a held beacon code to nobody who may not see it",
+       C.described(book, ho["beacon_code"], book.get(ho["beacon_code"])) == "")
 import acodes  # noqa: E402
 import small_codes  # noqa: E402
 src = open(acodes.__file__, encoding="utf-8").read()

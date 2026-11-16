@@ -60,35 +60,46 @@ def family_key(path, param, shp):
 
 def request_line(url, keep=None):
     """The request as it goes to the Looking Glass creator: the method, the path and the parameter NAMES as the sinkhole
-    recorded them, with only the undecoded value (the parameter `keep`) as it is. Every other parameter's value reads
-    <value>, because a bot's own parameters can carry the device's address or machine name ("ip=41.66.1.2&host=
-    MINISTRY-PC01", the reviewer, 2026-11-16); any address left anywhere reads <address>; an absolute URL loses its host.
+    recorded them, with only the undecoded value (the parameter `keep`, its longest copy if the name repeats) as it is.
+    Every other parameter's value reads <value>, because a bot's own parameters can carry the device's address or
+    machine name ("ip=41.66.1.2&host=MINISTRY-PC01", the reviewer, 2026-11-16); any address left anywhere reads
+    <address>; an absolute URL loses its host. Whatever the shape: "&" or ";" between parameters, raw spaces inside the
+    query, a target without a leading "/" (security review of bc92a26).
     "GET http://c2.example/p?ip=1.2.3.4&k=QUJD HTTP/1.1", keep "k" -> "GET /p?ip=<value>&k=QUJD HTTP/1.1"."""
-    parts = str(url).strip().split(" ")
-    i = next((n for n, x in enumerate(parts) if "://" in x or x.startswith("/")), None)
-    if i is None:
-        return ip_find.sub(str(url).strip()[:4000], lambda _a: "<address>")
-    target = parts[i]
+    toks = str(url or "").split()
+    if not toks:
+        return ""
+    method = toks[0] if len(toks) > 1 and re.fullmatch(r"[A-Za-z]{3,10}", toks[0]) else ""
+    proto = toks[-1] if len(toks) > 1 and re.fullmatch(r"HTTP/\d(?:\.\d)?", toks[-1], re.I) else ""
+    target = " ".join(toks[(1 if method else 0):(len(toks) - 1 if proto else len(toks))])
     if "://" in target:
         s = urllib.parse.urlsplit(target)
         target = (s.path or "/") + (f"?{s.query}" if s.query else "")
     path, _, query = target.partition("?")
     path = path.split("#", 1)[0]
     if query:
-        kept = []
-        for pair in query.split("#", 1)[0].split("&"):
-            name, eq, value = pair.partition("=")
-            if eq and keep is not None and urllib.parse.unquote(name) == keep:
-                kept.append(pair)                         # the value to decode, exactly as recorded
+        pieces = re.split(r"([&;])", query.split("#", 1)[0])
+        pairs, seps = pieces[0::2], pieces[1::2]
+        named = lambda p: urllib.parse.unquote(p.partition("=")[0]).strip()      # noqa: E731
+        mine = [n for n, p in enumerate(pairs) if "=" in p and keep is not None and named(p) == keep]
+        keep_at = max(mine, key=lambda n: len(pairs[n])) if mine else None      # one copy only: the longest
+        out = []
+        for n, pair in enumerate(pairs):
+            name, eq, _value = pair.partition("=")
+            if n == keep_at:
+                out.append(pair.replace(" ", "+"))        # the value to decode, as recorded (a raw space reads +)
             elif eq:
-                kept.append(f"{name}=<value>")
-            elif pair:
-                kept.append("<value>")                    # a bare value with no name
-        target = path + "?" + "&".join(kept)
+                out.append(f"{name.replace(' ', '+')}=<value>")
+            elif pair.strip():
+                out.append("<value>")                     # a bare value with no name
+            else:
+                out.append("")
+        q = out[0] + "".join(s + v for s, v in zip(seps, out[1:]))
+        target = path + "?" + q
     else:
         target = path
-    parts[i] = target
-    return ip_find.sub(" ".join(parts), lambda _a: "<address>")[:4000]
+    line = " ".join(x for x in (method, target, proto) if x)
+    return ip_find.sub(line, lambda _a: "<address>")[:4000]
 
 
 def family_id(key):

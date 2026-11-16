@@ -35,7 +35,7 @@ import time
 import zipfile
 from datetime import datetime, timedelta, timezone
 
-from flask import Response, g, jsonify, render_template, request
+from flask import Response, g, jsonify, render_template, request, has_request_context
 
 import csvsafe
 import issue_tags
@@ -193,6 +193,16 @@ def items_of(m, section, e):
 
 class _SummaryOnly(Exception):
     """package(summary_only=True): skip the PDF."""
+
+
+def described(book, code, entry):
+    """describe(entry) for the viewer of this request. A beacon code says what it stands for only to a viewer who may see
+    it: analysts and admins, everyone else while 5 or more devices carry its beacons (beacon_findings' visible, set as
+    book.beacon_visible; security review of bc92a26). book.describe goes through here, so no caller can skip it."""
+    if entry and entry.get("kind") == "b" and has_request_context() and hasattr(book, "beacon_visible") \
+            and not book.beacon_visible(code):
+        return ""
+    return describe(entry)
 
 
 def describe(entry):
@@ -1236,7 +1246,7 @@ def install(app, ctx):
     book.own_job = own                    # acodes.py: an analyst's request made from a finished search
     book.jobs = jobs                      # tests: a service restart is the search gone from memory
     book.package = package                # combo_review.py: the report again, with the views management chose
-    book.describe = lambda code: (describe(resolve(code)) if CODE_RX.match(code or "") else
-                                  describe(book.get(code)) if ANY_RX.match(code or "") else "")
+    book.describe = lambda code: described(book, code, resolve(code) if CODE_RX.match(code or "") else
+                                           book.get(code) if ANY_RX.match(code or "") else None)
     book.resolve_any = lambda code: resolve(code) if CODE_RX.match(code or "") else book.get(code) if ANY_RX.match(code or "") else None
     return book

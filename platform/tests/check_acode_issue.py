@@ -218,6 +218,32 @@ ok("…its every-category section holds small patterns back for a researcher too
 CROSS_CALLS.clear(); devices_as("analyst", ["unmasked", "export"], SRC)
 ok("…an analyst's handed-over selection keeps every code there, as before", CROSS_CALLS and not any(c.get("hold_small") for c in CROSS_CALLS),
    str(CROSS_CALLS))
+# security review of bc92a26: the page's chain named the beacon code a selection came from, with its parts. The code
+# book describes a held beacon code to nobody who may not see it (combos.described); the chain follows that answer.
+HELDB = "LG-B-0000HE1D"
+book.put(HELDB, {"kind": "b", "section": "infections", "name": "android.badbox2", "text": "beacons of operator HTM"})
+book.describe = lambda c: ("Decoded beacons: beacons of operator HTM" if "unmasked" in g.user["perms"] else "") if c == HELDB else ""
+SRCB3 = "LG-A-0000BEA3"
+book.put(SRCB3, dict(book.get(SRCB), label="beacons handed over", sel={"from_code": HELDB, "beacon": {"name": "android.badbox2", "operator": "HTM"}}))
+with open(os.path.join(api.paths["ids"], f"{SRCB3}.json"), "w") as fh:
+    json.dump(["r1", "r2", "r3"], fh)
+def page_as(role, perms_, code):
+    """The analyst code's page (/api/intel/acode/<code>), where the chain is."""
+    path = f"/api/intel/acode/{code}"
+    with app.test_request_context(path):
+        g.user = {"user": "rachel", "role": role, "perms": perms_}
+        ep, kw = app.url_map.bind("localhost").match(path)
+        rv = app.view_functions[ep](**kw)
+        rv = rv[0] if isinstance(rv, tuple) else rv
+        return rv.get_json() or {}
+
+
+ch_r = page_as("researcher", ["definitions"], SRCB3).get("chain") or []
+ch_a = page_as("analyst", ["unmasked", "export"], SRCB3).get("chain") or []
+ok("a selection made from a held beacon code: the chain names it to nobody who may not see it",
+   ch_r and ch_r[0].get("hidden") is True and "HTM" not in json.dumps(ch_r) and "label" not in ch_r[0], str(ch_r))
+ok("…an analyst still sees where it came from", ch_a and ch_a[0]["code"] == HELDB and "HTM" in ch_a[0].get("label", ""), str(ch_a))
+del book.describe
 ok("…and the code made from it carries the beacon mark on (the rule follows it)",
    ((book.get(d_a.get("code", "")) or {}).get("sel") or {}).get("beacon") == {"name": "android.badbox2", "os_family": "windows"})
 

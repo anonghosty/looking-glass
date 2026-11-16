@@ -410,7 +410,9 @@ def install(app, ctx):
             seen.add(parent)
             pe = book.get(parent) or {}
             f = ctx["findings"].of_code(parent)
-            if f is not None and not ctx["findings"].sees(f, user()[0], hp("settings")):
+            # a beacon code the viewer may not see described (5-device rule) is not named either
+            held_b = parent.startswith("LG-B-") and hasattr(book, "describe") and not book.describe(parent)
+            if held_b or (f is not None and not ctx["findings"].sees(f, user()[0], hp("settings"))):
                 out.append({"code": parent, "hidden": True})
                 cur = parent
                 continue

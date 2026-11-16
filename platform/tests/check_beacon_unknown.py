@@ -161,6 +161,18 @@ ok("... an address anywhere else in the line (the path) reads <address>",
 ok("... a bare value with no name, and a fragment, are not kept",
    U.request_line("GET /x?MINISTRY-PC01&d=QUJD#frag HTTP/1.1", "d") == "GET /x?<value>&d=QUJD HTTP/1.1",
    U.request_line("GET /x?MINISTRY-PC01&d=QUJD#frag HTTP/1.1", "d"))
+# every request shape (security review of bc92a26): the machine name never leaves, the undecoded value does
+B64 = "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo"
+shapes = {
+    "parameters split by ;": (f"GET /gate.php?host=MINISTRY-PC01;d={B64} HTTP/1.1", f"GET /gate.php?host=<value>;d={B64} HTTP/1.1"),
+    "a raw space inside the query": (f"GET /gate.php?user=Jane Doe MINISTRY-PC01&d={B64} HTTP/1.1", f"GET /gate.php?user=<value>&d={B64} HTTP/1.1"),
+    "the kept name repeated": (f"GET /gate.php?d=MINISTRY-PC01&d={B64} HTTP/1.1", f"GET /gate.php?d=<value>&d={B64} HTTP/1.1"),
+    "a target without a leading /": (f"GET gate.php?host=MINISTRY-PC01&d={B64} HTTP/1.1", f"GET gate.php?host=<value>&d={B64} HTTP/1.1"),
+    "no method or protocol": (f"/gate.php?host=MINISTRY-PC01&d={B64}", f"/gate.php?host=<value>&d={B64}"),
+}
+for what, (raw, want) in shapes.items():
+    got = U.request_line(raw, "d")
+    ok(f"... {what}: only the undecoded value leaves", got == want and "MINISTRY" not in got and "Jane" not in got, got)
 import response_cache  # noqa: E402
 ok("decoding a record's request no longer empties the shared answers (it changes nothing)", not response_cache.changes_cached("/api/beacon/decode"))
 ok("state change refused without the page's token", call("ana", ANA, "POST", f"/api/beacon/unknown/{fid}/state", {"state": "sent"}, tok_="")[0] == 403)

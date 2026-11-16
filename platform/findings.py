@@ -468,8 +468,11 @@ class Findings:
                 "beacon": bool(x.get("beacon")),
                 # its beacon code (LG-B) is what people see; the analyst selection behind Show in Executive stays a
                 # mechanism (beacon_findings.attach), shown under the beacon code
-                "beacon_code": x.get("beacon_code") or "", "beacon_selection": x.get("beacon_selection") or "",
-                "beacon_text": ((describe(x["beacon_code"]) if describe and x.get("beacon_code") else "") or ""),
+                # the code and its parts only where the code book describes it to this viewer (the 5-device rule,
+                # combos.py described()); otherwise the page shows the held analyst selection
+                **(lambda bt: {"beacon_code": x["beacon_code"] if bt else "", "beacon_text": bt})(
+                    ((describe(x["beacon_code"]) if describe and x.get("beacon_code") else "") or "")),
+                "beacon_selection": x.get("beacon_selection") or "",
                 # its advisories (advisory.py): reference, organisation, state; the advisor marks a drafted one as sent here
                 "advisories": self.advisories_of(x["id"]) if x.get("review") else []}
 
