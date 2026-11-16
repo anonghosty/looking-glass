@@ -161,7 +161,8 @@ def install(app, ctx):
             return jsonify(error=f"At most {MAX_CODES} combinations on one note."), 400
         book = getattr(notes, "codes", None)
         for c in codes:
-            if not CODE_RX.match(c) or not (book and book.resolve(c)):
+            hidden = c.startswith("LG-B-") and hasattr(book, "beacon_visible") and not book.beacon_visible(c)
+            if not CODE_RX.match(c) or not (book and book.resolve(c)) or hidden:
                 return jsonify(error=f"{c} is not a combination code known here."), 400
         user, role, _ = me()
         fnd = b.get("finding")
@@ -185,6 +186,8 @@ def install(app, ctx):
                                 section, name, title, user, role, to, "management",
                                 extra={"beacon": sel, "beacon_code": next(c for c in codes if c.startswith("LG-B-"))} if sel else None)
             ctx["audit"].add("finding_created", user=user, target=f"#{item['id']} {name}", detail=f"to {to} · " + item["title"][:120])
+            if sel:                        # management's normal view: the Executive portal on exactly these records
+                beacon_findings.attach_selection(item["id"])
         return jsonify(saved=True, note=n, notes=notes.list(section, name))
 
     @app.route("/api/notes/delete", methods=["POST"])

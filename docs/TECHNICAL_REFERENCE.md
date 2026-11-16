@@ -149,7 +149,11 @@ server side is in small modules called from `app.py`:
   same answer as for no records at all. Intel gathered shows it with *Move to notes*; `notes.py` accepts `LG-B` codes,
   and a note tracked as a finding passes the selection on (`findings.create(..., extra={"beacon": ..., "beacon_code":
   ...})`), keeping it out of the finding's combination codes. The Combinations page answers an `LG-B` code with where
-  it is worked on. Test: `tests/check_beacon_findings.py`.
+  it is worked on. **Management's view:** when a beacon finding is made (from a note or a hand-over), `attach()` makes
+  an analyst selection of exactly its records (`acodes.make_selection("comms", records, LG-B code, title)`) and adds the
+  `LG-A` code to the finding (`beacon_selection`); its channel alone opens it, and the Findings page's *Show in
+  Executive* filters the Executive portal to it. A beacon finding made before this gets it the first time its beacons
+  are opened. Test: `tests/check_beacon_findings.py`.
 - **`beacon_unknown.py`, requests Looking Glass could not decode.** Groups `beacon_decode.unknown()` over the days in
   memory into families keyed by (path with numbers and long parts folded, parameter, encoding, shape hint, length in
   16-byte steps up to 256, then 128); per family: records, devices (counted), distinct values (`constant` when one

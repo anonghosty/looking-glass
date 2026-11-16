@@ -432,7 +432,9 @@ carry, and a *Beacon vs name* match has its own line. Each has a **beacon code**
 which opens a new note with the code attached. Write what you found, and **track it as a finding** to send it to a
 manager: the finding carries exactly that drill-down (the name and the beacon's parts), so it is worked on in
 *Findings*, where analysts open its devices. Without a title of your own, the finding is titled for management and
-advisors to read at a glance, for example *BADBOX 2.0 beacons from Windows machines (android.badbox2)*.
+advisors to read at a glance, for example *BADBOX 2.0 beacons from Windows machines (android.badbox2)*. The finding
+also carries an analyst code (`LG-A-…`) made of exactly its records, so management opens it with **Show in
+Executive** and sees the normal Executive portal on those devices: networks, regions, days and devices, counts only.
 
 
 **Looking Glass asks: can you look into this?** The card at the top of the Definitions page lists matches the platform

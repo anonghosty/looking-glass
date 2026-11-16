@@ -160,10 +160,17 @@ print("4. Beacon codes (LG-B): Move to notes, and a note sent on as a finding (t
 import combos as C  # noqa: E402
 import notes as N  # noqa: E402
 book = C.CodeBook(os.path.join(tmp, "combo_codes.json"))
+made_sel = []                                   # the analyst selections asked for (acodes.make_selection stands in)
+
+
+class ACodes:
+    def make_selection(self, platform, evs, from_code, label, extra=None):
+        made_sel.append({"platform": platform, "n": len(evs), "ips": {e["src_ip"] for e in evs}, "from": from_code, "label": label, "extra": extra})
+        return f"LG-A-{len(made_sel):08X}"
 os.makedirs(os.path.join(tmp, "data"), exist_ok=True)          # notes.py keeps data/notes.json
 app2 = Flask("lgb")
 BF.install(app2, {"store": store, "labels": lambda: {"event4_sinkhole_http": "Sinkhole HTTP"}, "findings": fnd, "book": book,
-                  "defined": lambda: {("infections", "android.badbox2"): "BADBOX 2.0"},
+                  "defined": lambda: {("infections", "android.badbox2"): "BADBOX 2.0"}, "acodes": ACodes(),
                   "has_perm": lambda p: p in g.user["perms"], "sees_hosts": lambda: "unmasked" in g.user["perms"],
                   "csrf_ok": lambda: g.user.get("tok") == "T", "fresh": lambda: True,
                   "audit": type("A", (), {"add": lambda self, *a, **k: audit.append((a, k))})()})
@@ -207,6 +214,17 @@ ok("the finding holds exactly that drill-down (the name and the OS), never a dev
    item.get("beacon") == {"name": "android.badbox2", "os_family": "windows"} and item.get("beacon_code") == bcode
    and "192.0.2." not in json.dumps(item), str(item.get("beacon")))
 ok("... and its combination codes stay combination codes only", bcode not in item.get("codes", []))
+item = fnd.get(item["id"])
+ok("management's normal view: the finding carries an analyst selection of exactly its records (Show in Executive)",
+   item.get("beacon_selection", "").startswith("LG-A-") and item["beacon_selection"] in item.get("codes", [])
+   and made_sel and made_sel[-1]["n"] == 7 and made_sel[-1]["platform"] == "comms" and made_sel[-1]["from"] == bcode,
+   f"{item.get('beacon_selection')} {made_sel[-1:] and {k: v for k, v in made_sel[-1].items() if k != 'ips'}}")
+ok("... its label says what it is, with the finding's number",
+   made_sel and made_sel[-1]["label"].startswith("BADBOX 2.0 beacons from Windows machines") and f"#{item['id']}" in made_sel[-1]["label"])
+n_before = len(made_sel)
+import beacon_findings  # noqa: E402
+ok("... made once: asking again gives the same code, no second selection",
+   beacon_findings.attach_selection(item["id"]) == item["beacon_selection"] and len(made_sel) == n_before)
 code, r = call2("max", "GET", f"/api/beacon/finding/{item['id']}")
 ok("the manager it went to opens it on the Findings page: counts and the selection", code == 200 and r["records"] == 7 and not r.get("records_list"), str(r)[:200])
 import auth  # noqa: E402
@@ -225,6 +243,22 @@ ok("every beacon case gets a title that reads at a glance (OS, operator, format,
     ({"operator": "WT"}, {"format": "clogin"}, {"format": "generic"})] ==
    ["BADBOX 2.0 beacons from operator WT (android.badbox2)", "BADBOX 2.0 CLogin check-in beacons (android.badbox2)",
     "BADBOX 2.0 values found by generic decoding (android.badbox2)"])
+# a code worked out offline for a selection fewer than 5 devices carry: as unknown as any other (review of 373c1e2)
+hcode = call2("ana", "GET", "/api/beacon/code?name=android.badbox2&operator=HTM")[1]["code"]      # an analyst records it
+ghost = "LG-B-" + "0" * 8
+saw = [call2(u, "POST", "/api/notes", {"section": "infections", "name": "android.badbox2", "text": "guess", "codes": [c]})
+       for u, c in (("rita", hcode), ("rita", ghost))]
+ok("a researcher attaching a recorded code of fewer than 5 devices gets exactly the answer for an unknown code",
+   saw[0][0] == saw[1][0] == 400 and saw[0][1]["error"].replace(hcode, "X") == saw[1][1]["error"].replace(ghost, "X"), str(saw))
+def visible_to(user, c):
+    role, perms = ROLES[user]
+    with app2.test_request_context("/"):
+        g.user = {"user": user, "role": role, "perms": perms, "tok": "T"}
+        return book.beacon_visible(c)
+
+
+ok("... the code book's own rule says the same: hidden from a researcher, shown to an analyst; 5+ devices shown to both",
+   visible_to("rita", hcode) is False and visible_to("ana", hcode) is True and visible_to("rita", bcode) is True)
 ok("a paste of the code on the Combinations page is told where it is worked on",
    C.ANY_RX.match(bcode) and C.describe(book.get(bcode)) and N.CODE_RX.match(bcode))
 

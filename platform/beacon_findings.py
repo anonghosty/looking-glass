@@ -152,9 +152,27 @@ def selection_of(book, code):
     return {"name": e["name"], **{p: v for p, v in (e.get("beacon") or {}).items() if p in PARTS}}
 
 
+# set by install(): makes a finding's analyst selection (notes.py calls it for a note tracked as a finding)
+_ATTACH = {"fn": None}
+
+
+def attach_selection(fid):
+    """The finding's records as an analyst selection (LG-A) on the finding, so management opens it in the Executive
+    portal like every drill-down. None when it cannot be made (no records in memory, analyst codes not installed)."""
+    fn = _ATTACH["fn"]
+    try:
+        return fn(fid) if fn else None
+    except Exception:  # noqa: BLE001 - the finding stands without it; the Findings page still shows its beacons
+        return None
+
+
 class BeaconFindings:
     def __init__(self, ctx):
         self.ctx = ctx
+
+    def events(self, sel):
+        """Every record of the days in memory behind a selection (the analyst selection is made of exactly these)."""
+        return [e for d in self.ctx["store"].days.values() for e in d.events if matches(e, sel)]
 
     def scan(self, sel, want_records):
         """(records, hosts, reports, days, [record views]) for a selection over the days in memory."""
@@ -208,6 +226,44 @@ def install(app, ctx):
 
     def team():
         return hp("definitions") or hp("management") or hp("settings") or (hp("unmasked") and hp("export")) or hp("advisory")
+
+    def attach(fid):
+        """Management's normal view of a beacon finding: an analyst code (LG-A) for exactly its records, added to the
+        finding (its channel alone opens it, acodes.py), so "Show in Executive" filters the Executive portal to them."""
+        x = f.get(fid)
+        acodes = ctx.get("acodes")
+        if not x or not x.get("beacon") or not acodes or x.get("beacon_selection"):
+            return (x or {}).get("beacon_selection")
+        sel = x["beacon"]
+        evs = bf.events(sel)
+        if not evs:
+            return None
+        label = f"{finding_title(sel, display_of(ctx, sel['name']))}: the records behind finding #{fid}"
+        code = acodes.make_selection("comms", evs, x.get("beacon_code") or "", label, {"beacon": sel})
+        if not code:
+            return None
+        with f.lock:
+            f._load()
+            it = f.data["items"].get(fid)
+            if it is not None:
+                it.setdefault("codes", []).append(code)
+                it["beacon_selection"] = code
+                f._save()
+        return code
+
+    _ATTACH["fn"] = attach
+
+    def visible(code):
+        """May this viewer learn that an LG-B code stands for something? Viewers who see hosts always; everyone else only
+        while 5 or more devices carry its selection, so a code worked out offline answers like an unknown one
+        (security review of 373c1e2)."""
+        if ctx["sees_hosts"]():
+            return True
+        sel = selection_of(ctx.get("book"), code) if ctx.get("book") else None
+        return bool(sel) and len(bf.scan(sel, False)[1]) >= MIN_HOSTS
+
+    if ctx.get("book") is not None:
+        ctx["book"].beacon_visible = visible
 
     @app.route("/api/beacon/code")
     def api_beacon_code():
@@ -269,6 +325,7 @@ def install(app, ctx):
                         extra={"beacon": sel, "beacon_at_create": {"records": n, "devices": len(hosts), "at": round(time.time(), 3)}})
         ctx["audit"].add("finding_created", user=user, target=f"#{item['id']} {sel['name']}",
                          detail=f"decoded beacons · to {to} · " + item["title"][:120])
+        attach_selection(item["id"])
         return jsonify(finding={"id": item["id"], "number": f"#{item['id']}", "title": item["title"]})
 
     @app.route("/api/beacon/finding/<fid>")
@@ -280,6 +337,9 @@ def install(app, ctx):
         x = f.get(fid)
         if not x or not x.get("beacon") or not f.sees(x, user, hp("settings"), strict=not team()):
             return jsonify(error="No such finding."), 404
+        if not x.get("beacon_selection"):
+            # a beacon finding made before its analyst selection was (2026-11-16): made once, now, from the same records
+            attach_selection(x["id"])
         # the Findings page shows no address until an analyst asks for the devices (records=1; logged, data_access.py)
         full = ctx["sees_hosts"]()
         out = bf.summary(x["beacon"], full, x.get("beacon_at_create"), records=request.args.get("records") == "1")

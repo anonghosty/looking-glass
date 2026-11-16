@@ -5,6 +5,18 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-16 (4)
+### Security
+- A beacon code (`LG-B-…`) worked out by hand now answers a researcher exactly like an unknown code, in the code look-up
+  and when attached to a note, unless 5 or more devices carry its beacons, so it can't show that a held-back value
+  exists (security review of v2026.11.16.3; threat-side values only, never device data).
+
+### Changed
+- **Management sees a beacon finding the normal way.** A finding about decoded beacons now carries an analyst code
+  made of exactly its records, so **Show in Executive** opens the Executive portal on those devices: networks, regions,
+  days and devices, counts only, like every other drill-down. Beacon findings made before this get it the first time
+  they are opened.
+
 ## 2026-11-16 (3)
 ### Security
 - A researcher handing over decoded beacons that fewer than 5 devices carry now gets the same answer as for beacons

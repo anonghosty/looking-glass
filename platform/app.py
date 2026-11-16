@@ -2934,10 +2934,10 @@ FINDINGS.people_of = _people_of
 FINDINGS.title_of = lambda n: SVC_KB["title_of"](n)     # a services report's finding shows its title
 # decoded beacons handed over to an analyst or a manager as a finding, each seeing them at their level (beacon_findings.py)
 import beacon_findings as _beacon_findings  # noqa: E402
-_beacon_findings.install(app, {"store": store, "labels": INTEL.ctx["labels"], "findings": FINDINGS, "has_perm": AUTH["has_perm"], "book": COMBOS,
-                               "defined": INTEL.ctx["defined"],
-                               "sees_hosts": lambda: not is_demo(), "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"],
-                               "audit": AUTH["audit"]})
+BEACON_FINDINGS_CTX = {"store": store, "labels": INTEL.ctx["labels"], "findings": FINDINGS, "has_perm": AUTH["has_perm"],
+                       "book": COMBOS, "defined": INTEL.ctx["defined"], "sees_hosts": lambda: not is_demo(),
+                       "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"], "audit": AUTH["audit"]}
+_beacon_findings.install(app, BEACON_FINDINGS_CTX)      # "acodes" is added below, once the analyst codes exist
 # requests Looking Glass could not decode, as families on the Findings page, to send to its creator (beacon_unknown.py)
 import beacon_unknown as _beacon_unknown  # noqa: E402
 _beacon_unknown.install(app, {"store": store, "labels": INTEL.ctx["labels"], "base_dir": BASE_DIR, "sees_hosts": lambda: not is_demo(),
@@ -2973,6 +2973,7 @@ ACODES = _acodes.install(app, {
     "cross": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"]),     # every category for the code's hosts
     # the same with each CVE's / issue's hosts (server side only: a CVE ticked on the code's page, 2026-11-14)
     "cross_hosts": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"], with_hosts=True)})
+BEACON_FINDINGS_CTX["acodes"] = ACODES       # a beacon finding's records as an analyst selection (Show in Executive)
 COMBOS.acode_records = ACODES.records          # the Combinations page searches analyst codes too
 COMBOS.acode_allowed = ACODES.allowed          # …only those of the channels this user is in (findings.py)
 

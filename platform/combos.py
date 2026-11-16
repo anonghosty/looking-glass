@@ -402,6 +402,8 @@ def install(app, ctx):
         entry = book.resolve_any(code)
         if entry and entry.get("kind") == "a" and hasattr(book, "acode_allowed") and not book.acode_allowed(code):
             entry = None                          # another channel's analyst code: as unknown as any other
+        if entry and entry.get("kind") == "b" and hasattr(book, "beacon_visible") and not book.beacon_visible(code):
+            entry = None                          # decoded beacons fewer than 5 devices carry: as unknown as any other
         if not entry:
             return jsonify(error=f"{code} is not known here: it was never shown in Intel gathered on this platform."), 404
         if entry.get("kind") == "a":              # an analyst's selection: what it stands for, without an address
