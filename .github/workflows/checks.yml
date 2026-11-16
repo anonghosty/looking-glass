@@ -140,7 +140,7 @@ jobs:
         working-directory: database
         run: |
           set -e
-          for t in test_mail_auth test_mail_auth_pipeline test_sender_readiness test_worker_settings_effective test_link_downloads test_zip_limits test_line_hash test_report_api \
+          for t in test_mail_auth test_dns_https test_mail_auth_pipeline test_sender_readiness test_worker_settings_effective test_link_downloads test_zip_limits test_line_hash test_report_api \
                    test_report_types test_report_names test_equivalence test_refetch_and_rows test_retention test_no_ip_reports test_load_stamps; do
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
           done

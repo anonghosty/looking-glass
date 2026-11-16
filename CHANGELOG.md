@@ -5,6 +5,23 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-16
+### Fixed
+- **The sender check works on networks that drop DNS TXT look-ups.** It looks up Shadowserver's signing key in DNS (a
+  TXT record); some networks block TXT look-ups, and then every report e-mail was "not checked". When this server's
+  own DNS does not answer, the key is now asked over HTTPS from Cloudflare and Google (`MAIL_AUTH_DNS_SERVERS`, default
+  `1.1.1.1,1.0.0.1,8.8.8.8,8.8.4.4`, by IP address, certificates checked; only the key's name is sent). `none` turns it
+  off. Nothing to change on update.
+- Installing a bought certificate twice within the same second (or after the clock stepped back) stopped with an
+  error, because the previous pair's folder name was already taken; the second one now gets its own folder.
+
+### Changed
+- **Held-back reports, chosen one by one or all.** Settings → Workers lists each report the sender check held back by
+  its files' **Shadowserver names** (the day, the report and its readable name), and flags a file that is not named like
+  a Shadowserver report. Tick the ones to process, or **Select all**, then **Process selected**: Looking Glass lists
+  them and asks first. The chosen reports go to the pipeline as one request, so one confirmation on the server lets
+  them all through at its next run. Before, each report had its own Release button and its own confirmation.
+
 ## 2026-11-15 (14)
 ### Fixed
 - **The pipeline's marks are used from the start.** In the first 10 minutes after the computer started, the 15-second

@@ -209,8 +209,15 @@ def install(project, result, key_path, by="installer"):
     os.chmod(tls, 0o700)
     kept = ""
     if os.path.exists(os.path.join(tls, "cert.pem")):
-        kept = os.path.join(tls, f"previous-{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}")
-        os.makedirs(kept, mode=0o700)
+        stamp = os.path.join(tls, f"previous-{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}")
+        kept, n = stamp, 1
+        while True:                    # two installs in the same second: the second keeps its own folder (-2, -3, ...)
+            try:
+                os.makedirs(kept, mode=0o700)
+                break
+            except FileExistsError:
+                n += 1
+                kept = f"{stamp}-{n}"
         for n in ("cert.pem", "key.pem", "meta.json"):
             if os.path.exists(os.path.join(tls, n)):
                 shutil.move(os.path.join(tls, n), os.path.join(kept, n))

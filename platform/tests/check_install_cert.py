@@ -150,6 +150,17 @@ long_c, long_k = leaf("long", [D], days=200)
 time.sleep(1.1)
 ic.install(proj, ic.check(D, long_c, long_k, P("int.pem"), CA), long_k, by="tester")
 ok("a certificate with 200 days left: no alert", not [x for x in a.current() if x["key"].startswith("tls-expiry")])
+_strf = ic.time.strftime
+ic.time.strftime = lambda fmt, t=None: "20261115-234900"     # two installs within one second (or a clock that steps back)
+try:
+    ic.install(proj, ic.check(D, long_c, long_k, P("int.pem"), CA), long_k, by="tester")
+    ic.install(proj, ic.check(D, long_c, long_k, P("int.pem"), CA), long_k, by="tester")
+    kept = sorted(n for n in os.listdir(os.path.join(proj, "data", "tls")) if n.startswith("previous-20261115-234900"))
+    ok("two installs in the same second: each previous pair kept in its own folder, no error", len(kept) == 2 and kept[1].endswith("-2"), str(kept))
+except Exception as e:  # noqa: BLE001
+    ok("two installs in the same second: each previous pair kept in its own folder, no error", False, repr(e))
+finally:
+    ic.time.strftime = _strf
 
 print("The installer")
 inst = next((p for p in (os.path.join(HERE, "..", "install.sh"), os.path.join(HERE, "tools", "release_root", "install.sh")) if os.path.isfile(p)))

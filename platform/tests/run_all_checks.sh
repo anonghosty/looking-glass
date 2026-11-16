@@ -74,6 +74,8 @@ else run "pipeline: report names (quarantine)" bash -c 'echo "SKIPPED: database 
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/tests/test_no_ip_reports.py" ]; then run "pipeline: reports without an IP address" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_no_ip_reports.py"; fi
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/mail_auth.py" ]; then run "pipeline: sender check (DKIM)" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_mail_auth.py"
 else run "pipeline: sender check (DKIM)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
+if [ -n "$DBDIR" ] && [ -f "$DBDIR/tests/test_dns_https.py" ]; then run "pipeline: sender check key over HTTPS" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_dns_https.py"
+else run "pipeline: sender check key over HTTPS" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/tests/test_mail_auth_pipeline.py" ]; then run "pipeline: sender check blocks and releases" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_mail_auth_pipeline.py"
 else run "pipeline: sender check blocks and releases" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/tests/test_sender_readiness.py" ]; then run "pipeline: sender check week, hints, ready to block" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_sender_readiness.py"

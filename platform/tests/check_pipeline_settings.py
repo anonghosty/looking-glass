@@ -36,7 +36,8 @@ def ok(label, cond, info=""):
 
 
 # the throwaway pipeline: its .env (with passwords that must never come out), mail_auth.py, a held-back report, results
-real_pipe = next(p for p in (Path(A.BASE_DIR).parent / "database", Path(A.BASE_DIR).parent / "shadowserver") if (p / "mail_auth.py").exists())
+real_pipe = next(p for p in ([Path(os.environ["LG_TEST_PIPELINE_SRC"])] if os.environ.get("LG_TEST_PIPELINE_SRC") else [])
+                 + [Path(A.BASE_DIR).parent / "database", Path(A.BASE_DIR).parent / "shadowserver"] if (p / "mail_auth.py").exists())
 shutil.copy(real_pipe / "mail_auth.py", PIPE / "mail_auth.py")
 shutil.copy(real_pipe / "worker_settings.py", PIPE / "worker_settings.py")
 PLAT = tmp / "platform-data"                        # the platform's data folder for this check (requests go here)
@@ -415,6 +416,38 @@ try:
     confirm(r.json["request"])
     apply_now()
     ok("…once confirmed, the pipeline's next run marks it released (its fetch step then lets it through)", (qdir / MA.RELEASE_FILE).exists())
+
+    print("Held-back reports: by Shadowserver's file names, chosen one by one or all (2026-11-15)")
+    q2, q3 = MA.quarantine_dir(PIPE, "k2"), MA.quarantine_dir(PIPE, "k3")
+    MA.write_meta(q2, "k2", dict(base, result="fail", reason="body changed"), "Report: scan_http",
+                  ["2026-11-15-scan_http-example-geo.csv", "2026-11-15-event4_sinkhole_http-example-geo.csv.zip"], set())
+    MA.write_meta(q3, "k3", dict(base, result="none", reason="no DKIM signature"), "Odd", ["invoice.pdf.exe"], set())
+    h = c.get("/api/pipeline/held", headers=H).json["held"]
+    by = {x["id"]: x for x in h}
+    n2 = by.get(q2.name, {}).get("names", [])
+    ok("each held-back e-mail lists its report files by their Shadowserver names, with the day and the report",
+       [x["file"] for x in n2] == ["2026-11-15-scan_http-example-geo.csv", "2026-11-15-event4_sinkhole_http-example-geo.csv.zip"]
+       and n2[0]["date"] == "2026-11-15" and n2[0]["report"] == "scan_http" and all(x["shadowserver"] for x in n2), str(n2))
+    ok("…a file not named like a Shadowserver report is flagged", by.get(q3.name, {}).get("names", [{}])[0].get("shadowserver") is False)
+    c.post("/api/pipeline/unlock", json={"password": PW}, headers=H)
+    r = c.post("/api/pipeline/release", json={"ids": [q2.name, "../../etc"]}, headers=H)
+    ok("a list with anything that is not a held-back report is refused whole", r.status_code == 404
+       and not any(set(x.get("qids") or []) & {q2.name} for x in WS.pending(PLAT)), str(r.status_code))
+    r = c.post("/api/pipeline/release", json={"ids": [q2.name, q3.name]}, headers=H)
+    pend = [x for x in WS.pending(PLAT) if x.get("kind") == "release" and x.get("qids")]
+    ok("two chosen at once: ONE request naming both (one confirmation on the server), each logged",
+       r.status_code == 200 and r.json.get("count") == 2 and len(r.json.get("requests", [])) == 1 and len(pend) == 1
+       and sorted(pend[0]["qids"]) == sorted([q2.name, q3.name])
+       and sum(1 for e, *rest in logged if e == "sender_release") >= 3, str(r.json))
+    ok("…both shown as asked", all(x["release_asked"] for x in c.get("/api/pipeline/held", headers=H).json["held"] if x["id"] in (q2.name, q3.name)))
+    apply_now()
+    ok("…not released before it is confirmed", not (q2 / MA.RELEASE_FILE).exists() and not (q3 / MA.RELEASE_FILE).exists())
+    confirm(r.json["request"])
+    apply_now()
+    last = WS.results(PLAT, 1)[0]
+    ok("…once confirmed, the next run releases both, and the result names the files",
+       (q2 / MA.RELEASE_FILE).exists() and (q3 / MA.RELEASE_FILE).exists() and last.get("status") == "applied"
+       and "2026-11-15-scan_http-example-geo.csv" in " ".join(last.get("changes") or [str(last)]), str(last)[:300])
 
     print("Audit portal → Sender check")
     a, HA = client(AUDITOR)

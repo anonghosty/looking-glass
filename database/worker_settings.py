@@ -43,6 +43,19 @@ KEY_RX = re.compile(r"^[A-Z][A-Z0-9_]{1,63}$")
 API_KEYS = ("SHADOWSERVER_API_KEY", "SHADOWSERVER_API_SECRET")
 REQ_ID_RX = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{12}$")
 QID_RX = re.compile(r"^[0-9a-f]{20}$")
+RELEASE_MAX = 500            # held-back reports in one release request (the user, 2026-11-15: select one by one or all)
+
+
+def release_ids(req):
+    """The held-back reports a release request names: "qids" (several, chosen on the page) or "qid" (one, older
+    requests). None when anything in it is not a held-back report's id, so a bad list is refused whole."""
+    raw = req.get("qids") if "qids" in req else [req.get("qid")]
+    if not isinstance(raw, list) or not 0 < len(raw) <= RELEASE_MAX:
+        return None
+    ids = [str(x) for x in raw if isinstance(x, str)]
+    if len(ids) != len(raw) or not all(QID_RX.match(x) for x in ids):
+        return None
+    return list(dict.fromkeys(ids))
 
 # (key, group, label, kind, default, lo|choices, hi, help, shown for MAIL_PROVIDER)
 FIELDS = [
@@ -146,7 +159,7 @@ def problems(req, env):
     if kind == "apikey":
         return [] if valid_api(req.get("key"), req.get("secret")) else ["not an API key and secret"]
     if kind == "release":
-        return [] if QID_RX.match(str(req.get("qid") or "")) else ["no such held-back report"]
+        return [] if release_ids(req) else ["no such held-back report"]
     return [f"unknown request {clean(kind, 40)!r}"]
 
 
@@ -329,8 +342,9 @@ def public(req: dict, provider="imap") -> dict:
         out["values"] = validate(vals, provider)[0]
     elif kind == "apikey":
         out["values"] = "Shadowserver API key and secret (not shown)"
-    elif kind == "release" and QID_RX.match(str(req.get("qid") or "")):
-        out["qid"] = str(req["qid"])
+    elif kind == "release" and release_ids(req):
+        out["qids"] = release_ids(req)
+        out["qid"] = out["qids"][0]                       # older pages read one id
     return out
 
 
@@ -511,13 +525,18 @@ def _apply_all(dfd, done_fd, names, env_file, base_dir, log):
                 write_env(env_file, {API_KEYS[0]: str(req["key"]).strip(), API_KEYS[1]: str(req["secret"]).strip()})
                 changed = ["Shadowserver API key and secret (values not recorded)"]
             elif kind == "release":
-                qid = str(req.get("qid") or "")
+                ids = release_ids(req)
                 import mail_auth
-                match = [q for q, _ in mail_auth.held(base_dir) if q.name == qid] if QID_RX.match(qid) else []
-                if not match:
+                held_now = {q.name: (q, m) for q, m in mail_auth.held(base_dir)}
+                found = [i for i in (ids or []) if i in held_now]
+                if not found:
                     raise ValueError("no such held-back report")
-                mail_auth.request_release(match[0], clean(req.get("by") or "?", 120))
-                changed = [f"held-back report {qid} released"]
+                for i in found:
+                    mail_auth.request_release(held_now[i][0], clean(req.get("by") or "?", 120))
+                names = [n for i in found for n in (held_now[i][1].get("files") or [])]
+                changed = [f"{len(found)} held-back report(s) released: " + clean(", ".join(names) or ", ".join(found), 600)]
+                if len(found) < len(ids):
+                    changed.append(f"{len(ids) - len(found)} no longer held back (released or removed meanwhile)")
             else:
                 raise ValueError(f"unknown request {kind!r}")
             status = "applied"
@@ -556,7 +575,8 @@ def _describe(req):
         vals = req.get("values") if isinstance(req.get("values"), dict) else {}
         return clean("; ".join(f"{k} = {v}" for k, v in vals.items()), 600)
     if req.get("kind") == "release":
-        return clean(f"release held-back report {req.get('qid')}", 80)
+        ids = release_ids(req) or []
+        return clean(f"release {len(ids)} held-back report(s): {', '.join(ids)}", 600)
     return clean(public(req).get("values") or req.get("kind"), 120)
 
 

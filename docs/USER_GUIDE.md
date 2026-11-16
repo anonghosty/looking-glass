@@ -915,9 +915,11 @@ holds). Making the pipeline stricter (including stricter unzip limits), folders 
   gateway or forwarding rule on the way, so deliver Shadowserver's mail unmodified). When every e-mail passed on each of
   the 7 days and blocking is off, the card says blocking can be switched on safely, with a button that ticks it (save to
   apply), and the bell says so once. Days without mail, or whose e-mails could not be checked, do not count. If the
-  newest e-mails could not be checked at all, the card and the bell say **the check is not working**: this server's DNS
-  does not answer the look-up of Shadowserver's signing key (a TXT record), so no report is verified, and with blocking
-  on they would wait at every run. The fix is on the network: let this server's DNS answer TXT look-ups.
+  newest e-mails could not be checked at all, the card and the bell say **the check is not working**: neither this
+  server's DNS nor the resolvers asked over HTTPS (`MAIL_AUTH_DNS_SERVERS`, by default Cloudflare and Google) answered
+  the look-up of Shadowserver's signing key (a TXT record), so no report is verified, and with blocking on they would
+  wait at every run. When the server's own DNS drops TXT look-ups, the HTTPS look-up gets the key anyway; when that is
+  blocked too, let this server reach those resolvers over HTTPS, or its DNS answer TXT look-ups.
 - **E-mail settings** (in the same group): the mailbox folder (or Gmail label), messages per fetch, the mail server's
   certificate check, the timeout.
 - **Loading performance:** loader processes, records per insert, download threads.
@@ -926,9 +928,13 @@ holds). Making the pipeline stricter (including stricter unzip limits), folders 
   asks Shadowserver first (is the key accepted, and which report lists may it fetch) and saves them only if it accepts
   them; afterwards the page only says they are set and when they were last checked, never the values. **Check with
   Shadowserver now** checks the saved ones again. The key is what *Shadowserver report API* above uses.
-- **Reports held back by the sender check:** each with why it was held back and what that usually means. **Release** (after your password) lets a
-  report you know is genuine through once it is confirmed on the server (above): the pipeline loads it at its next run.
-  Released reports stay on record.
+- **Reports held back by the sender check:** each held-back e-mail with its report files **by their Shadowserver
+  names** (for example `2026-11-15-scan_http-example-geo.csv`, with the report it is and its day), why it was held back
+  and what that usually means. A file that is not named like a Shadowserver report is flagged: check that e-mail before
+  processing it. Tick the reports to process, one by one or **Select all**, then **Process selected** (after your
+  password): Looking Glass lists what you chose and asks before going on. The chosen reports go to the pipeline as one
+  request, so one confirmation on the server (above) lets them all through, and the pipeline loads them at its next
+  run. Process only reports you know are genuine. Processed reports stay on record, each in the audit log.
 
 The pipeline uses the settings from its next run. When the pipeline runs on another computer, the tab says so and its
 settings stay in its own `.env`.

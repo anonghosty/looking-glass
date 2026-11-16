@@ -41,6 +41,7 @@ from flask import g, jsonify, request
 from werkzeug.security import check_password_hash
 
 import pipeline_link
+import report_files
 
 UNLOCK_SECONDS = 600
 API_URL = os.environ.get("SHADOWSERVER_API_URL", "https://transform.shadowserver.org/api2/")
@@ -321,13 +322,19 @@ def install(app, ctx):
         ma = pipeline_link.mail_auth(d)
         if not ma:
             return jsonify(held=[])
-        asked = {r.get("qid") for r in (ws.pending(ddir()) if ws else []) if r.get("kind") == "release"}
+        asked = set()
+        for r in (ws.pending(ddir()) if ws else []):
+            if r.get("kind") == "release":
+                asked.update(x for x in ([r.get("qid")] + list(r.get("qids") or [])) if x)
+        labels = ctx["labels"]() if ctx.get("labels") else {}
         out = []
         for q, m in ma.held(pipeline_link.data_dir(d)):
             out.append({"id": q.name, "at": m.get("at"), "result": m.get("result"), "reason": m.get("reason"),
                         "hint": ma.hint(m.get("result"), m.get("reason")) if hasattr(ma, "hint") else "",
                         "from_domain": m.get("from_domain"), "signer": m.get("signer"), "subject": m.get("subject"),
                         "files": len(m.get("files") or []), "links": len(m.get("links") or []),
+                        # the report files by their Shadowserver names (the user, 2026-11-15), flagged when not one
+                        "names": [report_files.parse(n, labels) for n in (m.get("files") or [])[:200]],
                         "release_asked": (q / ma.RELEASE_FILE).exists() or q.name in asked})
         return jsonify(held=out, mode=ma.mode(pipeline_link.read_env(d / ".env")))
 
@@ -351,17 +358,31 @@ def install(app, ctx):
             return bad
         d, ws = pipe()
         ma = pipeline_link.mail_auth(d)
-        qid = str((request.get_json(silent=True) or {}).get("id") or "")
-        match = [(q, m) for q, m in (ma.held(pipeline_link.data_dir(d)) if ma else []) if q.name == qid]
-        if not (ws and re.fullmatch(r"[0-9a-f]{20}", qid) and match):
-            return jsonify(error="No such held-back report."), 404
-        m = match[0][1]
+        body = request.get_json(silent=True) or {}
+        # one report ("id") or several chosen on the page ("ids", the user 2026-11-15: one by one, or all)
+        raw = body.get("ids") if isinstance(body.get("ids"), list) else [body.get("id")]
+        ids = list(dict.fromkeys(str(x or "") for x in raw))
+        held_now = {q.name: m for q, m in (ma.held(pipeline_link.data_dir(d)) if ma else [])}
+        if not (ws and ids and len(ids) <= 500 and all(re.fullmatch(r"[0-9a-f]{20}", i) and i in held_now for i in ids)):
+            return jsonify(error="No such held-back report." if len(ids) < 2 else
+                           "One of the chosen reports is no longer held back: reload the list and choose again."), 404
         why = weak(ws, {"kind": "release"}, {})
-        rid = ws.make_request(ddir(), "release", {"qid": qid}, me()[0])
-        audit.add("sender_release", user=me()[0], target=qid,
-                  detail=f"release requested ({m.get('result')}: {m.get('reason')}) | {(m.get('subject') or '')[:120]}"
-                         + (f" | request {rid} waits for confirmation on the server" if why else ""))
-        return jsonify(ok=True, request=rid, confirm=bool(why),
-                       note=confirm_note(ws, d, rid, why) if why else "Release requested: the pipeline's next run lets it through.")
+        if hasattr(ws, "release_ids"):           # one request for all of them: one confirmation on the server
+            rids = [ws.make_request(ddir(), "release", {"qids": ids, "qid": ids[0]}, me()[0])]
+        else:                                    # a pipeline from before 2026-11-15 reads one id per request
+            rids = [ws.make_request(ddir(), "release", {"qid": i}, me()[0]) for i in ids]
+        for i in ids:
+            m = held_now[i]
+            audit.add("sender_release", user=me()[0], target=i,
+                      detail=f"release requested ({m.get('result')}: {m.get('reason')}) | "
+                             f"{', '.join(m.get('files') or [])[:200] or (m.get('subject') or '')[:120]}"
+                             + (f" | request {', '.join(rids)} waits for confirmation on the server" if why else ""))
+        rid = rids[0]
+        many = f"{len(ids)} reports" if len(ids) > 1 else "the report"
+        return jsonify(ok=True, request=rid, requests=rids, confirm=bool(why), count=len(ids),
+                       note=confirm_note(ws, d, rid, why) if why and len(rids) == 1 else
+                       (f"Release of {many} requested; each request waits for confirmation on the server: "
+                        + "; ".join(confirm_note(ws, d, r, why) for r in rids)) if why else
+                       f"Release of {many} requested: the pipeline's next run processes {'them' if len(ids) > 1 else 'it'}.")
 
     return {"is_unlocked": is_unlocked, "ctx": ctx}      # ctx: the checks point data_dir at a temporary folder

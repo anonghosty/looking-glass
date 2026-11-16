@@ -110,6 +110,29 @@ class Checker:
         self.keys = {}                                    # one DNS look-up per signing key and run
         self.timeout = timeout
         self._resolver = resolver
+        self.via = {}                                     # how each key was found: "system DNS" or "HTTPS via 1.1.1.1"
+
+    def _lookup(self, name: str):
+        """(TXT record, how it was found). The system's resolver first; when it does not answer (a network that drops
+        DNS TXT look-ups, 2026-11-15), the resolvers of MAIL_AUTH_DNS_SERVERS over HTTPS (dns_https.py). A name that
+        does not exist is never retried elsewhere: that is "no key published"."""
+        import dns.resolver
+        try:
+            r = dns.resolver.Resolver()
+            r.lifetime = self.timeout
+            return b"".join(b"".join(x.strings) for x in r.resolve(name, "TXT")), "system DNS"
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
+            raise
+        except Exception as first:                        # noqa: BLE001  (timed out, refused, no server)
+            import dns_https
+            for ip in dns_https.servers():
+                try:
+                    return dns_https.txt(name, self.timeout, [ip]), f"HTTPS via {ip}"
+                except LookupError:
+                    raise
+                except OSError:
+                    continue
+            raise first
 
     def _key(self, selector: str, domain: str):
         """(public key or None, error result or None)."""
@@ -120,10 +143,8 @@ class Checker:
             if self._resolver is not None:
                 txt = self._resolver(name)
             else:
-                import dns.resolver
-                r = dns.resolver.Resolver()
-                r.lifetime = self.timeout
-                txt = b"".join(b"".join(x.strings) for x in r.resolve(name, "TXT"))
+                txt, via = self._lookup(name)
+                self.via[name] = via
         except Exception as exc:                            # noqa: BLE001
             kind = type(exc).__name__
             out = (None, ("permerror", f"no key published at {name}") if kind in ("NXDOMAIN", "NoAnswer", "LookupError")

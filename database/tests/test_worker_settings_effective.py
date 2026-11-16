@@ -58,7 +58,10 @@ RID = "20261113T070000Z-abcdefabcdef"
 shapes = [{"kind": "settings", "values": ["MAIL_AUTH"]}, {"kind": "settings", "values": "MAIL_AUTH=off"},
           {"kind": "settings", "values": {"MAIL_AUTH": ["off"]}}, {"kind": "settings", "values": {"ZIP_MAX_UNPACKED_MB": {"a": 1}}},
           {"kind": "settings", "values": {"MAIL_AUTH": None}}, {"kind": "settings", "values": {"ZIP_MAX_UNPACKED_MB": "nan"}},
-          {"kind": ["settings"]}, {"kind": {"a": 1}}, {"kind": "release", "qid": ["../../x"]}, {"kind": "apikey", "key": {"a": 1}}]
+          {"kind": ["settings"]}, {"kind": {"a": 1}}, {"kind": "release", "qid": ["../../x"]}, {"kind": "apikey", "key": {"a": 1}},
+          {"kind": "release", "qids": "0123456789abcdef0123"}, {"kind": "release", "qids": [{"a": 1}]},
+          {"kind": "release", "qids": ["../../x"]}, {"kind": "release", "qids": []},
+          {"kind": "release", "qids": ["0123456789abcdef0123", "../../x"]}]
 crashed, confirmed = [], []
 try:
     for b in shapes:
@@ -73,6 +76,16 @@ try:
                 crashed.append((b, type(e).__name__))
 finally:
     WS.find_platform_data, WS.read_env = real
+print("Several held-back reports in one release request (2026-11-15)")
+A_, B_ = "0123456789abcdef0123", "fedcba9876543210fedc"
+ok("a list of held-back report ids is read, duplicates once", WS.release_ids({"qids": [A_, B_, A_]}) == [A_, B_])
+ok("…one id, the older shape, still works", WS.release_ids({"qid": A_}) == [A_])
+ok("…a list with anything else in it is refused whole (None)", all(WS.release_ids(x) is None for x in (
+   {"qids": [A_, "../../x"]}, {"qids": [A_, 5]}, {"qids": []}, {"qids": "x"}, {"qids": [A_] * 0 + ["0" * 20] * 501})))
+ok("…and is malformed for the pipeline too", WS.problems({"kind": "release", "qids": [A_, "../x"]}, {}) and not WS.problems({"kind": "release", "qids": [A_, B_]}, {}))
+ok("…what is shown or kept names the ids only", WS.public({"kind": "release", "qids": [A_, B_], "x": "secret"}).get("qids") == [A_, B_]
+   and "x" not in WS.public({"kind": "release", "qids": [A_, B_], "x": "secret"}))
+ok("…releasing several still waits for confirmation on the server", bool(WS.weakens({"kind": "release", "qids": [A_, B_]}, {})))
 ok(f"confirm_request.sh on {len(shapes)} forged request shapes: no crash", not crashed, str(crashed[:2]))
 ok("…and none of them is confirmed", not confirmed, str(confirmed[:2]))
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))

@@ -582,7 +582,11 @@ The audit log and its evidence, module by module:
 The pipeline from Settings → Workers: `pipeline_settings.py` (the page's API: unlock with the administrator's password,
 requests, the API key check, held-back reports) and `pipeline_link.py` (finds the pipeline beside the platform). The
 rules themselves live in the pipeline's `worker_settings.py`, which the platform loads read-only; a request that
-weakens the pipeline also needs `./confirm_request.sh` on the pipeline's account.
+weakens the pipeline also needs `./confirm_request.sh` on the pipeline's account. Held-back reports are listed by their
+report files' Shadowserver names (`report_files.py`: day, report and readable report name; a name of any other shape
+is flagged). `POST /api/pipeline/release` takes one id (`id`) or several chosen on the page (`ids`, up to 500); several
+become one release request (`qids`), refused whole when any id is not a held-back report, so one confirmation on the
+server releases them all.
 
 - **`docs/SECURITY.md`:** how Looking Glass is secured, the operator checklist, checking an installation and reporting a vulnerability.
 - **`docs/INSTALLATION.md`:** installing on Windows with WSL or on a Linux server, HTTPS, firewall, updating, troubleshooting.

@@ -92,6 +92,13 @@ The pipeline's sender check is set in the pipeline's `.env` (or Settings → Wor
 report e-mail's DKIM result, hold nothing back), `enforce` (hold back reports that do not pass until an administrator
 releases them) or `off`; `MAIL_AUTH_DOMAIN` = the expected signer (`shadowserver.org`).
 
+The check looks up the signer's public key in DNS (a TXT record, for example `mail._domainkey.shadowserver.org`). It
+asks this server's own resolver first. Some networks drop DNS TXT look-ups (a rule against DNS tunnelling); when the
+resolver does not answer, the key is asked over HTTPS (DNS over HTTPS) from `MAIL_AUTH_DNS_SERVERS`: IP addresses, in
+order, default `1.1.1.1,1.0.0.1,8.8.8.8,8.8.4.4` (Cloudflare and Google), with their certificates checked. Only the
+key's name is sent, nothing about the reports. `none` switches the HTTPS look-up off. A key that does not exist is
+never asked again elsewhere.
+
 **Recommended for production: `enforce`** (Block), or the report API instead of e-mail. Start with `log` for a week:
 **Settings → Workers → Sender check, last 7 days** counts, day by day, the report e-mails that passed and those that did
 not, with what each failure usually means. When every e-mail has passed on each of the 7 days (no footer, gateway or

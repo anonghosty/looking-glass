@@ -261,10 +261,11 @@
     if (d.not_checking) {
       state.classList.add("is-bad");
       state.append(el("b", null, "The check is not working: the latest report e-mails could not be checked."),
-        el("span", null, " This server's DNS does not answer the look-up of Shadowserver's signing key (a TXT record). "
+        el("span", null, " Neither this server's DNS nor the resolvers asked over HTTPS (Cloudflare and Google, MAIL_AUTH_DNS_SERVERS) answered the look-up of Shadowserver's signing key (a TXT record). "
           + (d.mode === "enforce" ? "With blocking on, these reports are held for the next run, again and again, and not loaded. "
                                   : "Reports are still loaded, but none is verified. ")
-          + "Ask your network team to let this server's DNS answer TXT look-ups, or point it at a resolver that does."));
+          + "Ask your network team to let this server reach those resolvers over HTTPS, or its DNS answer TXT look-ups. "
+          + "(Before 2026-11-15 the check asked this server's DNS only: e-mails of earlier days stay “not checked”.)"));
     } else if (d.mode === "enforce") {
       state.classList.add("is-on");
       state.append(el("b", null, "Blocking is on."), el("span", null, " Reports that do not pass are held back below until an administrator releases them."));
@@ -314,29 +315,66 @@
     const wait = el("p", "lg-loading", "Loading the reports held back…"); c.append(wait);   // never an empty card (2026-11-15)
     let d; try { d = await api("/api/pipeline/held"); } catch (e) { wait.remove(); c.append(el("p", "fd-empty", e.message)); return; }
     wait.remove();
-    if (!d.held.length) { c.append(el("p", "muted", d.mode === "enforce" ? "None held back." : "None held back (blocking is off: reports that do not pass are recorded, not held back).")); return; }
-    const t = el("table", "hosts adm-table"); const th = el("thead"); const hr = el("tr");
-    ["Held since", "Result", "Why", "From", "Subject", "Files", ""].forEach((x) => hr.append(el("th", null, x))); th.append(hr); t.append(th);
-    const tb = el("tbody");
+    if (!d.held.length) { c.append(el("p", "muted", d.mode === "enforce" ? "None held back." : `None held back (${d.mode === "off" ? "the sender check is off" : "blocking is off: reports that do not pass are recorded, not held back"}).`)); return; }
+    // the user (2026-11-15): list them by their Shadowserver file names, ask before processing, one by one or all
+    c.append(el("p", "muted", "Each held-back e-mail with its report files, by Shadowserver's names. Tick the ones to process, or all of them: they are loaded like any other at the pipeline's next run. Process only reports you know are genuine."));
+    const open = d.held.filter((h) => !h.release_asked);
+    const bar = el("div", "wk-held-bar");
+    const all = el("input"); all.type = "checkbox"; all.id = "wkHeldAll"; all.setAttribute("aria-label", "Select every held-back report");
+    const allL = el("label", "check-row"); allL.append(all, el("span", null, "Select all"));
+    const count = el("span", "muted", "");
+    const go = el("button", "lg-btn primary", "Process selected"); go.type = "button"; go.disabled = true;
+    bar.append(allL, count, go);
+    if (open.length) c.append(bar);
+    const t = el("table", "hosts adm-table wk-held"); const th = el("thead"); const hr = el("tr");
+    ["", "Report files (Shadowserver names)", "Held since", "Why", "From", "Subject"].forEach((x) => hr.append(el("th", null, x))); th.append(hr); t.append(th);
+    const tb = el("tbody"); const boxes = [];
+    const names = (h) => (h.names || []).map((n) => n.file).join(", ") || `${h.files} file(s)`;
+    const sync = () => {
+      const n = boxes.filter((b) => b.checked).length;
+      go.disabled = !n; go.textContent = n ? `Process selected (${n})` : "Process selected";
+      count.textContent = n ? `${n} of ${boxes.length} chosen` : "";
+      all.checked = n > 0 && n === boxes.length; all.indeterminate = n > 0 && n < boxes.length;
+    };
     for (const h of d.held) {
       const tr = el("tr");
-      [`${String(h.at || "").replace("T", " ").slice(0, 16)} UTC`, h.result].forEach((x) => tr.append(el("td", null, x)));
-      const why = el("td", null, h.reason); if (h.hint) why.append(el("small", "muted wk-hint", h.hint)); tr.append(why);   // what it usually means
-      [h.from_domain || "?", h.subject, `${h.files} file(s), ${h.links} link(s)`].forEach((x) => tr.append(el("td", null, x)));
-      const td = el("td");
-      if (h.release_asked) td.append(el("span", "muted", "Release requested: goes through at the pipeline's next run"));
+      const pick = el("td");
+      if (h.release_asked) pick.append(el("span", "muted", "Asked: next run"));
       else {
-        const b = el("button", "pill-btn", "Release"); b.type = "button";
-        b.addEventListener("click", async () => {
-          if (!S.unlocked) { say("Edit (with your password) first, then release.", true); askPassword(); return; }
-          if (!confirm(`Release this report?\n\n${h.subject}\n${h.result}: ${h.reason}\n\nIt is loaded like any other at the pipeline's next run. Release only a report you know is genuine.`)) return;
-          b.disabled = true;
-          try { const r = await api("/api/pipeline/release", { id: h.id }); say(r.note); loadHeld(); } catch (e) { say(e.message, true); b.disabled = false; }
-        });
-        td.append(b);
+        const b = el("input"); b.type = "checkbox"; b.value = h.id; b.setAttribute("aria-label", `Choose ${names(h)}`);
+        b.addEventListener("change", sync); boxes.push(b); pick.append(b);
       }
-      tr.append(td); tb.append(tr);
+      tr.append(pick);
+      // the report files, each in full: the Shadowserver name, the day and the report it is; a name that is not
+      // Shadowserver's is flagged
+      const files = el("td", "wk-held-files");
+      for (const n of h.names || []) {
+        const row = el("div", `wk-file${n.shadowserver ? "" : " is-odd"}`);
+        row.append(el("code", null, n.file));
+        row.append(el("small", "muted", n.shadowserver ? `${n.label} · ${n.date}` : "Not a Shadowserver report name: check this e-mail before processing it"));
+        files.append(row);
+      }
+      if (!(h.names || []).length) files.append(el("span", "muted", h.links ? `${h.links} download link(s), no attached file` : "No report file"));
+      tr.append(files);
+      tr.append(el("td", null, `${String(h.at || "").replace("T", " ").slice(0, 16)} UTC`));
+      const why = el("td", null, `${h.result}: ${h.reason}`); if (h.hint) why.append(el("small", "muted wk-hint", h.hint)); tr.append(why);   // what it usually means
+      [h.from_domain || "?", h.subject].forEach((x) => tr.append(el("td", null, x)));
+      tb.append(tr);
     }
+    all.addEventListener("change", () => { boxes.forEach((b) => { b.checked = all.checked; }); sync(); });
+    go.addEventListener("click", async () => {
+      const chosen = d.held.filter((h) => boxes.some((b) => b.checked && b.value === h.id));
+      if (!chosen.length) return;
+      if (!S.unlocked) { say("Edit (with your password) first, then process.", true); askPassword(); return; }
+      const odd = chosen.some((h) => (h.names || []).some((n) => !n.shadowserver));
+      const list = chosen.map((h) => `• ${names(h)}  (${h.result}: ${h.reason})`).join("\n");
+      if (!confirm(`Process ${chosen.length === 1 ? "this held-back report" : `these ${chosen.length} held-back reports`}?\n\n${list}\n\n`
+        + (odd ? "Some files do NOT have Shadowserver report names.\n\n" : "")
+        + "They are loaded like any other at the pipeline's next run. Process only reports you know are genuine.")) return;
+      go.disabled = true;
+      try { const r = await api("/api/pipeline/release", { ids: chosen.map((h) => h.id) }); say(r.note); loadHeld(); }
+      catch (e) { say(e.message, true); sync(); }
+    });
     t.append(tb); const wrap = el("div", "table-wrap"); wrap.append(t); c.append(wrap);
   }
 

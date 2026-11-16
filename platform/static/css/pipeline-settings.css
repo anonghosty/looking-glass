@@ -57,3 +57,13 @@
 .wk-pw { display: flex; gap: 8px; flex-wrap: wrap; }
 .wk-pw .wk-in { flex: 1 1 200px; }
 @media (max-width: 640px) { .wk-groups { grid-template-columns: 1fr; } }
+
+/* held-back reports: chosen one by one or all, listed by their Shadowserver file names (2026-11-15) */
+.wk-held-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 10px 0; }
+.wk-held-bar .check-row { margin: 0; }
+.wk-held td:first-child { width: 1%; white-space: nowrap; }
+.wk-held-files { min-width: 260px; }
+.wk-file { display: grid; gap: 2px; padding: 4px 0; }
+.wk-file + .wk-file { border-top: 1px dashed var(--border, rgba(255, 255, 255, .08)); }
+.wk-file code { font-size: 12.5px; overflow-wrap: anywhere; white-space: normal; }
+.wk-file.is-odd code { color: var(--warn, #f5b54a); }

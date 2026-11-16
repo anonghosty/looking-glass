@@ -3014,7 +3014,9 @@ _sender_audit.install(app, {"base_dir": BASE_DIR, "has_perm": AUTH["has_perm"], 
 PIPELINE_SETTINGS = _pipeline_settings.install(app, {   # it writes requests only into its own data/ (the pipeline applies them)
     "base_dir": BASE_DIR, "data_dir": os.path.join(BASE_DIR, "data"), "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"],
     "fresh": AUTH["fresh"], "audit": AUTH["audit"], "users": AUTH["users"], "throttle": AUTH["throttle"],
-    "client": lambda: (request.remote_addr or "", request.headers.get("User-Agent", ""))})
+    "client": lambda: (request.remote_addr or "", request.headers.get("User-Agent", "")),
+    # readable report names for the held-back files (scan_http -> its title in the report list)
+    "labels": lambda: {**{x["name"]: x["label"] for x in registry.get()}, **{x["name"]: x["label"] for x in svc["registry"].get()}}})
 # Settings → Password policy (password_policy.py): expiry after N days, and "every account changes its password now"
 import password_policy as _password_policy  # noqa: E402
 _password_policy.install(app, {"policy": AUTH["password_policy"], "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"],
