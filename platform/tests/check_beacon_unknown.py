@@ -230,6 +230,11 @@ lst = call("ana", ANA, "GET", "/api/beacon/unknown")[1].get_json()
 st = {f["param"]: (f["state"], f["state_by"]) for f in lst["families"]}
 ok("kept, with the readable name of who did it", st == {"q": ("sent", "Ana Analyst"), "d": ("dismissed", "Ana Analyst")} and lst["open"] == 0, str(st))
 ok("... and who approved it", next(f for f in lst["families"] if f["id"] == fid)["approved_by"] == "Adam Admin")
+# security review of f9a4d0d: a second "sent" at the same moment is refused under the lock, and the lines stay
+ok("a second 'sent' is refused, checked again under the lock", post("ana", ANA, "sent") == 409
+   and un.set_state(fid, "sent", "", "ana", allowed_from=("approved",)) is False)
+kept = json.loads(open(os.path.join(tmp, "data", "beacon_unknown.json")).read())["families"][fid]
+ok("... and the approved lines are still kept with it", kept["state"] == "sent" and kept.get("approved_requests") == approved_lines)
 ok("a sent family is not reopened", post("ana", ANA, "open") == 409)
 ok("a family put away is reopened", call("ana", ANA, "POST", f"/api/beacon/unknown/{cst[0]['id']}/state", {"state": "open"})[0] == 200
    and call("ana", ANA, "GET", "/api/beacon/unknown")[1].get_json()["open"] == 1)

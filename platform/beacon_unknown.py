@@ -143,10 +143,14 @@ class Unknown:
         except (OSError, ValueError):
             return {}
 
-    def set_state(self, fid, state, why, user, lines=None):
+    def set_state(self, fid, state, why, user, lines=None, allowed_from=None):
+        """Records a step. allowed_from: the states it may follow, checked again here under the lock, so two clicks at
+        the same moment cannot both pass (security review of f9a4d0d). False when the step is no longer possible."""
         with self.lock:
             st = self.states()
             prev = st.get(fid) or {}
+            if allowed_from is not None and prev.get("state", "open") not in allowed_from:
+                return False
             if state == "open":
                 st.pop(fid, None)
             else:
@@ -158,8 +162,9 @@ class Unknown:
                 if state == "approved":                    # exactly the lines the administrator approved
                     rec["approved_requests"] = [dict(x) for x in (lines or [])]
                 if state == "sent" and prev.get("state") == "approved":
-                    rec.update(approved_by=prev.get("by"), approved_at=prev.get("at"),
-                               approved_requests=prev.get("approved_requests") or [])
+                    rec.update(approved_by=prev.get("by"), approved_at=prev.get("at"))
+                if state == "sent" and prev.get("approved_requests"):     # never dropped once kept
+                    rec["approved_requests"] = prev["approved_requests"]
                 st[fid] = rec
             os.makedirs(os.path.dirname(self.path), exist_ok=True)
             tmp = f"{self.path}.{os.getpid()}.tmp"
@@ -167,6 +172,7 @@ class Unknown:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump({"families": st}, f, indent=1)
             os.replace(tmp, self.path)
+        return True
 
     # ---- the families in the days in memory
     def families(self):
@@ -329,7 +335,8 @@ def install(app, ctx):
                 return jsonify(error="No request lines to approve in the days in memory."), 409
             if str(b.get("seen") or "") != lines_hash(lines):
                 return jsonify(error="The request lines have changed since this page was opened. Reload it and check them again."), 409
-        un.set_state(fid, state, why, me(), lines)
+        if not un.set_state(fid, state, why, me(), lines, allowed_from=steps[state]):
+            return jsonify(error="Not possible now: this family changed meanwhile. Reload the page."), 409
         ctx["audit"].add("beacon_family_state", user=me(), target=fid, detail=state + (f" · {why[:100]}" if why else ""))
         return jsonify(ok=True)
 
