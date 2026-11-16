@@ -167,5 +167,31 @@ perms["admin"] = {"settings", "unmasked", "export"}         # an admin reads the
 admin_list = as_user("ann", "admin", lambda: [c["code"] for c in app.view_functions["api_acode_list"]().get_json()["codes"]])
 ok("the admins' list still works with closed chains in it", "LG-A-0000DDDD" in admin_list)
 
+print("A selection made from decoded beacons keeps the 5-device rule for researchers (security review of 3ba9e60)")
+SRCB = "LG-A-0000BEAC"
+book.put(SRCB, {"kind": "a", "platform": "services", "day": "2026-11-13", "label": "beacons",
+                "sel": {"from_code": SRC, "beacon": {"name": "android.badbox2", "os_family": "windows"}}})
+with open(os.path.join(api.paths["ids"], f"{SRCB}.json"), "w") as fh:
+    json.dump(["r1", "r2", "r3"], fh)
+
+
+def tick_as(name, role, perms_, code):
+    path = f"/api/intel/acode/{code}/issue"
+    with app.test_request_context(path, method="POST", json={"name": name}):
+        g.user = {"user": "rachel", "role": role, "perms": perms_}
+        ep, kw = app.url_map.bind("localhost").match(path, method="POST")
+        rv = app.view_functions[ep](**kw)
+        rv, st = rv if isinstance(rv, tuple) else (rv, 200)
+        return st, rv.get_json()
+
+
+st_r, d_r = tick_as("CVE-2023-48795", "researcher", ["definitions"], SRCB)
+ok("a researcher ticking a CVE 2 of its devices carry: refused, no code (fewer than 5 devices)",
+   st_r == 409 and "code" not in d_r and "5" in d_r.get("error", ""), f"{st_r} {d_r}")
+st_a, d_a = tick_as("CVE-2023-48795", "analyst", ["unmasked", "export"], SRCB)
+ok("…an analyst, who sees the devices, gets its code", st_a == 200 and d_a.get("code", "").startswith("LG-A-"), f"{st_a} {d_a}")
+ok("…and the code made from it carries the beacon mark on (the rule follows it)",
+   ((book.get(d_a.get("code", "")) or {}).get("sel") or {}).get("beacon") == {"name": "android.badbox2", "os_family": "windows"})
+
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))
 sys.exit(1 if fails else 0)

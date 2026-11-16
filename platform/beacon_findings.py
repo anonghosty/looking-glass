@@ -238,7 +238,10 @@ def install(app, ctx):
         evs = bf.events(sel)
         if not evs:
             return None
-        label = f"{finding_title(sel, display_of(ctx, sel['name']))}: the records behind finding #{fid}"
+        # the label is read by everyone in the channel: the parts stay out of it while fewer than 5 devices carry them,
+        # as in the finding's title and summary (security review of 3ba9e60)
+        held = len({e.get("src_ip") for e in evs if e.get("src_ip")}) < MIN_HOSTS
+        label = f"{finding_title(sel, display_of(ctx, sel['name']), held)}: the records behind finding #{fid}"
         code = acodes.make_selection("comms", evs, x.get("beacon_code") or "", label, {"beacon": sel})
         if not code:
             return None

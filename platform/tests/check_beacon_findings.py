@@ -259,6 +259,15 @@ def visible_to(user, c):
 
 ok("... the code book's own rule says the same: hidden from a researcher, shown to an analyst; 5+ devices shown to both",
    visible_to("rita", hcode) is False and visible_to("ana", hcode) is True and visible_to("rita", bcode) is True)
+# the selection's label follows the held-back rule (security review of 3ba9e60)
+call2("ana", "POST", "/api/beacon/finding", {"name": "android.badbox2", "operator": "HTM", "kind": "management", "to": "max"})
+ok("an analyst's hand-over of beacons fewer than 5 devices carry: the selection's label names no part of them",
+   made_sel and "HTM" not in made_sel[-1]["label"] and made_sel[-1]["label"].startswith("BADBOX 2.0 decoded beacons"), made_sel[-1:] and made_sel[-1]["label"])
+import acodes  # noqa: E402
+import small_codes  # noqa: E402
+src = open(acodes.__file__, encoding="utf-8").read()
+ok("a selection made from beacons keeps the 5-device rule on the code's page (codes and ticking a CVE)",
+   "small_codes.code_for(I.combo_code" in src and "small_codes.code_for(I.cross_code" in src and "return jsonify(error=small_codes.HELD), 409" in src)
 ok("a paste of the code on the Combinations page is told where it is worked on",
    C.ANY_RX.match(bcode) and C.describe(book.get(bcode)) and N.CODE_RX.match(bcode))
 

@@ -31,6 +31,7 @@ from urllib.parse import parse_qsl
 from flask import g, jsonify, render_template, request
 
 import intel as I
+import small_codes
 
 ACODE_RX = re.compile(r"^LG-A-[0-9A-F]{8}$")
 # what the analyst asked for when making the code (the two choices on "Make an analyst code"), shown on the finding
@@ -328,6 +329,9 @@ def install(app, ctx):
         rep = (lambda e: labels.get(e.get("source"), e.get("source") or "")) if section == "infections" else (lambda e: e.get("report_label") or e.get("report") or "")
         names_of = (lambda e: [(e.get("infection") or "").lower()] if e.get("infection") else []) if section == "infections" else (lambda e: e.get("issues") or [])
         defined = ctx["defined"]()
+        # a selection made from decoded beacons (beacon_findings.py) was not handed over by an analyst: a viewer who does
+        # not see hosts gets no code for a pattern fewer than 5 devices carry, as in Intel gathered (security review of 3ba9e60)
+        masked = bool((entry.get("sel") or {}).get("beacon")) and not small_codes.viewer_sees_hosts()
         per = collections.defaultdict(lambda: {"records": 0, "hosts": set(), "reports": collections.Counter(),
                                                "combos": collections.defaultdict(lambda: {"records": 0, "hosts": collections.Counter()}),
                                                "dev": collections.defaultdict(lambda: collections.defaultdict(set))})
@@ -355,8 +359,9 @@ def install(app, ctx):
         for n, p in sorted(per.items(), key=lambda kv: -kv[1]["records"]):
             combos = []
             for (r, items), c in sorted(p["combos"].items(), key=lambda kv: -kv[1]["records"])[:12]:
-                cc = I.combo_code(section, n, r, items)
-                book.record(section, n, r, [items])
+                cc = small_codes.code_for(I.combo_code(section, n, r, items), len(c["hosts"]), full=not masked)
+                if cc:
+                    book.record(section, n, r, [items])
                 combos.append({"report": r, "items": list(items), "records": c["records"], "devices": len(c["hosts"]),
                                "repeat": sum(1 for v in c["hosts"].values() if v > 1), "code": cc})
             pats = collections.Counter(tuple(sorted((r, tuple(sorted(i))) for r, i in reps.items())) for reps in p["dev"].values() if len(reps) > 1)
@@ -365,7 +370,8 @@ def install(app, ctx):
             out.append({"name": n, "defined": defined.get((section, n.lower()), ""), "records": p["records"], "devices": len(p["hosts"]),
                         "reports": [{"report": r, "records": k} for r, k in p["reports"].most_common()],
                         "combinations": combos, "combinations_total": len(p["combos"]),
-                        "across": [{"code": I.cross_code(section, n, pt), "devices": k, "parts": [{"report": r, "items": list(i)} for r, i in pt]}
+                        "across": [{"code": small_codes.code_for(I.cross_code(section, n, pt), k, full=not masked), "devices": k,
+                                    "parts": [{"report": r, "items": list(i)} for r, i in pt]}
                                    for pt, k in pats.most_common(8)],
                         "across_total": len(pats),
                         "multi_devices": sum(1 for reps in p["dev"].values() if len(reps) > 1),
@@ -565,6 +571,10 @@ def install(app, ctx):
         if not it or not it.get("ips"):
             return jsonify(error=f"None of this selection's devices carries {name} in the days in memory."), 409
         ips = set(it["ips"])
+        beacon = (entry.get("sel") or {}).get("beacon")
+        if beacon and not small_codes.viewer_sees_hosts() and len(ips) < small_codes.MIN_HOSTS:
+            # a selection made from decoded beacons: never narrowed below 5 devices for a viewer who does not see hosts
+            return jsonify(error=small_codes.HELD), 409
         evs = []
         for iso in cr.get("days") or []:
             d = ctx["day"]("services", iso)
@@ -574,7 +584,8 @@ def install(app, ctx):
                     evs.append(e)
         if not evs:
             return jsonify(error=f"The records of {name} on these devices could not be read just now: try again."), 409
-        c = make_selection("services", evs, code, f"{name} on the devices of {code}", extra={"issue": name})
+        c = make_selection("services", evs, code, f"{name} on the devices of {code}",
+                           extra={"issue": name, **({"beacon": beacon} if beacon else {})})
         ctx["audit"].add("analyst_code", user=user()[0], target=c, detail=f"{name} ticked on {code} · {len(evs)} records")
         return jsonify(code=c, hosts=len({e.get("ip") for e in evs}), records=len(evs), name=name)
 
