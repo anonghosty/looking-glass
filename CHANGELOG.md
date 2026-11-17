@@ -5,6 +5,18 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-17
+### Security
+- **A decoding request carries only the path's shape.** The query was already masked, but the path left as it was, so a
+  machine name, e-mail address or dashed address in it (`/u/MINISTRY-PC01/bot.php`) could reach the creator if the
+  administrator missed it. Now plain path words and file names stay (`/api/v1/check`, `gate.php`); every other segment
+  reads `<seg>`, `<n>`, `<long>`, `<address>` or `<email>`, and `;` parameters keep only their names. Lines approved
+  before this release are folded the same way when downloaded (external review of v2026.11.16.10).
+
+### Fixed
+- `check_password_policy` no longer fails now and then when the suite runs under load: its throwaway administrator's
+  password is dated a minute before the policy is switched on, not the same second.
+
 ## 2026-11-16 (14)
 ### Added
 - **More CLogin check-ins decode.** Longer check-ins whose key the first recovery missed by a character are now read:

@@ -76,7 +76,7 @@ Two boundaries reviewers often ask about:
   someone to confirm it on the server.
 - **Nothing goes out by itself.** A request that Looking Glass could not decode goes to its creator only after an
   administrator approves it, by hand, through a private report, holding only the request lines with every other value
-  masked.
+  masked and the path reduced to its shape (a machine name, e-mail address or address in the path never leaves).
 
 ## 6. How a release is checked
 

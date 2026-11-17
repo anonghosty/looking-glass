@@ -64,6 +64,51 @@ def family_key(path, param, shp):
 
 _ENCODED = re.compile(r"[A-Za-z0-9+/%=_-]{16,}")      # a value that looks encoded (as beacon_decode's prefilter)
 
+# The path of a request, as it goes out: its shape only (security review of b556cf7). A path segment can name the
+# device ("/u/MINISTRY-PC01/bot.php"), its user ("/reg/john.mensah@ministry.gov.gh/x") or its address ("/41-66-1-2/x"),
+# and the undecoded value is never in the path (beacon_decode only takes query values). So a segment is kept only when
+# it reads like a plain path word or a file name (api, v1, getTask, Panel, gate.php); everything else is folded.
+_FILE_EXT = r"php\d?|aspx?|ashx|asmx|jsp|do|action|cgi|pl|py|s?html?|js|json|xml|txt|bin|dat|exe|dll|apk|zip|gz|jpe?g|png|gif|ico|css"
+_SAFE_SEGMENT = re.compile(
+    r"(?:[a-z]{1,24}(?:[A-Z][a-z]{1,23}){0,3}|[A-Z][a-z]{1,23}(?:[A-Z][a-z]{1,23}){0,3}|v\d{1,2}|[a-z]{2,16}\d{1,2})"
+    r"(?:[_-][a-z]{1,24}){0,3}"
+    rf"(?:\.(?:{_FILE_EXT}))?")
+_DASHED_ADDRESS = re.compile(r"\d{1,3}(?:[-_]\d{1,3}){3}")
+_EMAIL = re.compile(r"[^@/\s]+@[\w-]+(?:\.[\w-]+)+")
+_FOLDED = {"<n>", "<long>", "<seg>", "<address>", "<email>", "<value>"}
+
+
+def _segment_shape(seg):
+    if seg in _FOLDED or not seg:
+        return seg
+    plain = urllib.parse.unquote(seg)
+    if _EMAIL.search(plain):
+        return "<email>"
+    if _DASHED_ADDRESS.search(plain) or ip_find.sub(plain, lambda _a: "\0") != plain:
+        return "<address>"
+    if plain.isdigit():
+        return "<n>"
+    if len(plain) >= 20:
+        return "<long>"
+    return seg if plain == seg and _SAFE_SEGMENT.fullmatch(seg) else "<seg>"
+
+
+def path_shape(path):
+    """'/u/MINISTRY-PC01/12345/bot.php;id=PC01' -> '/u/<seg>/<n>/bot.php;id=<value>': plain path words and file names
+    stay; numbers read <n>, long tokens <long>, addresses <address> (dotted or dashed), e-mail addresses <email>, any
+    other segment <seg>. ";" parameters keep their names (when plain) and lose their values, as query parameters do."""
+    out = []
+    for seg in str(path or "").split("/"):
+        name, semi, params = seg.partition(";")
+        shaped = _segment_shape(name)
+        if semi:
+            for p in params.split(";"):
+                k, eq, _v = p.partition("=")
+                k_ok = bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]{0,31}", k)) and _segment_shape(k) not in ("<email>", "<address>")
+                shaped += ";" + ((k if k_ok else "<seg>") + "=<value>" if eq else "<value>")
+        out.append(shaped)
+    return "/".join(out)[:400]
+
 
 def request_line(url, keep=None, value=None):
     """The request as it goes to the Looking Glass creator: the method, the path and the parameter NAMES as the sinkhole
@@ -84,7 +129,7 @@ def request_line(url, keep=None, value=None):
         s = urllib.parse.urlsplit(target)
         target = (s.path or "/") + (f"?{s.query}" if s.query else "")
     path, _, query = target.partition("?")
-    path = path.split("#", 1)[0]
+    path = path_shape(path.split("#", 1)[0])
     if query:
         pieces = re.split(r"([&;])", query.split("#", 1)[0])
         pairs, seps = pieces[0::2], pieces[1::2]
@@ -117,6 +162,18 @@ def request_line(url, keep=None, value=None):
         target = path
     line = " ".join(x for x in (method, target, proto) if x)
     return ip_find.sub(line, lambda _a: "<address>")[:4000]
+
+
+def shape_line(line):
+    """A request line already made by request_line, with its path folded again by path_shape: lines an administrator
+    approved before paths were folded leave in their folded form (never more than the approval showed)."""
+    toks = str(line or "").split(" ")
+    i = 1 if len(toks) > 1 and re.fullmatch(r"[A-Za-z]{3,10}", toks[0]) else 0
+    if i >= len(toks):
+        return str(line or "")
+    path, q, query = toks[i].partition("?")
+    toks[i] = path_shape(path) + q + query
+    return " ".join(toks)
 
 
 def lines_hash(lines):
@@ -217,7 +274,7 @@ class Unknown:
         for k, f in fam.items():
             path, param, enc, hint, _ = k
             distinct = len(f["values"])
-            out.append({"id": family_id(k), "known": f.get("known", ""), "path": path, "param": param, "encoding": enc, "hint": hint,
+            out.append({"id": family_id(k), "known": f.get("known", ""), "path": path_shape(path), "param": param, "encoding": enc, "hint": hint,
                         "lengths": f["lengths"], "records": f["records"], "devices": len(f["devices"]),
                         "distinct": distinct, "constant": distinct == 1 and f["records"] > 1,
                         "hosts": [h for h, _ in f["hosts"].most_common(TOP_HOSTS)], "hosts_total": len(f["hosts"]),
@@ -254,7 +311,7 @@ class Unknown:
         approved, never lines gathered later from other days."""
         s = self.states().get(fid) or {}
         if s.get("state") in ("approved", "sent") and s.get("approved_requests"):
-            reqs = [dict(x) for x in s["approved_requests"]]
+            reqs = [{**x, "request": shape_line(x.get("request"))} for x in s["approved_requests"]]
         else:
             f = next((x for x in self.families() if x["id"] == fid), None)
             if not f:

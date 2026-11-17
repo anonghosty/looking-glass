@@ -236,6 +236,25 @@ for what, (raw, want) in shapes.items():
 got = U.request_line(f"GET /gate.php?d=MINISTRY-PC01-WORKSTATION-NAME-LONG&d={B64} HTTP/1.1", "d", B64)
 ok("... a longer plain copy of the kept name: the copy holding the undecoded value is the one kept",
    got == f"GET /gate.php?d=<value>&d={B64} HTTP/1.1", got)
+# security review of b556cf7: identity in the PATH (the query was already masked); the path leaves as its shape only
+paths = {
+    "a machine name in the path": (f"GET /u/MINISTRY-PC01/bot.php?d={B64} HTTP/1.1", f"GET /u/<seg>/bot.php?d={B64} HTTP/1.1"),
+    "an e-mail address in the path": (f"GET /reg/john.mensah@ministry.gov.gh/x?d={B64} HTTP/1.1", f"GET /reg/<email>/x?d={B64} HTTP/1.1"),
+    "a dashed address in the path": (f"GET /41-66-1-2/x.php?d={B64} HTTP/1.1", f"GET /<address>/x.php?d={B64} HTTP/1.1"),
+    "; parameters in the path": (f"GET /x.php;id=PC01;d={B64} HTTP/1.1", "GET /x.php;id=<value>;d=<value> HTTP/1.1"),
+    "a percent-encoded name": (f"GET /u/john%40ministry/x?d={B64} HTTP/1.1", f"GET /u/<seg>/x?d={B64} HTTP/1.1"),
+    "a percent-encoded e-mail address": (f"GET /u/john%40ministry.gov.gh/x?d={B64} HTTP/1.1", f"GET /u/<email>/x?d={B64} HTTP/1.1"),
+    "a lowercase machine name with digits": (f"GET /desktop-ab12cd/x?d={B64} HTTP/1.1", f"GET /<seg>/x?d={B64} HTTP/1.1"),
+    "a number and a long token": (f"GET /u/123456/abcdefabcdefabcdefabcd/x?d={B64} HTTP/1.1", f"GET /u/<n>/<long>/x?d={B64} HTTP/1.1"),
+}
+for what, (raw, want) in paths.items():
+    got = U.request_line(raw, "d")
+    ok(f"... {what}: only the path's shape leaves", got == want and not any(w in got for w in ("MINISTRY", "PC01", "john", "41-66", "ab12cd")), got)
+for plain in ("/gate.php", "/api/v1/check", "/Panel/getTask.aspx", "/pixel/ad_track/index.html", "/"):
+    ok(f"... a plain path stays as it is: {plain}", U.path_shape(plain) == plain, U.path_shape(plain))
+ok("... folding twice changes nothing (lines approved earlier are folded again on download)",
+   U.shape_line(U.request_line(f"GET /u/MINISTRY-PC01/bot.php?h=x&d={B64} HTTP/1.1", "d")) == f"GET /u/<seg>/bot.php?h=<value>&d={B64} HTTP/1.1"
+   and U.shape_line(f"GET /u/MINISTRY-PC01/bot.php?h=<value>&d={B64} HTTP/1.1") == f"GET /u/<seg>/bot.php?h=<value>&d={B64} HTTP/1.1")
 import response_cache  # noqa: E402
 ok("decoding a record's request no longer empties the shared answers (it changes nothing)", not response_cache.changes_cached("/api/beacon/decode"))
 ok("state change refused without the page's token", call("ana", ANA, "POST", f"/api/beacon/unknown/{fid}/state", {"state": "sent"}, tok_="")[0] == 403)

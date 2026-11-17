@@ -49,7 +49,11 @@ SEC_U, SEC_A = base64.b32encode(os.urandom(20)).decode().rstrip("="), base64.b32
 PW_U, PW_A, NEW_U = "Old-pass-phrase-41!", "Admin-pass-phrase-77!", "Fresh-Kettle-Morning-58!"
 with open(os.path.join(tmp, "users.json"), "w") as fh:
     json.dump({"users": {
-        "chkadmin": {"hash": generate_password_hash(PW_A), "role": "admin", "status": "active", "totp": SEC_A, "pw_set_at": int(time.time()), "changed": 0},
+        "chkadmin": {"hash": generate_password_hash(PW_A), "role": "admin", "status": "active", "totp": SEC_A,
+                     # set a minute ago, not this second: the policy switched on below must start AFTER it, and under
+                     # load (or a WSL clock step back) "this second" could land on or after the switch, so the account
+                     # did not count as due (failed once in a CI rehearsal, 2026-11-16)
+                     "pw_set_at": int(time.time()) - 60, "changed": 0},
         "chkuser": {"hash": generate_password_hash(PW_U), "role": "external", "status": "active", "totp": SEC_U, "changed": 0}}}, fh)
 users.path, users.mtime = os.path.join(tmp, "users.json"), None
 # the throwaway accounts hold an administrator: the first-run code must follow them to the throwaway folder, or the
@@ -93,7 +97,8 @@ try:
     ok("…not with 0 days", r.status_code == 400)
     r = a.post("/api/password-policy", json={"enabled": True, "days": 90, "password": PW_A}, headers=H)
     ok("…with their own password: on, 90 days, every account due", r.status_code == 200 and r.json["enabled"] and r.json["days"] == 90
-       and r.json["due"] == 2, str(r.json))
+       and r.json["due"] == 2, f"{r.json} " + str({n: (u.get("pw_set_at"), policy.get()["enforced_at"], policy.expired(u)[0])
+                                                   for n, u in users.all().items()}))
     ok("…logged as a privileged change", any(e == "password_policy_changed" and "every account" in d for e, _, d in logged))
     u2 = A.app.test_client()
     ok("an account without the Settings permission cannot read or change it",
