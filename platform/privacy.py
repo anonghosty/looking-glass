@@ -123,6 +123,8 @@ class HostRefs:
 
     def __init__(self, secret=None):
         self.secret = (secret or os.urandom(16).hex()).encode()
+        global _ID_SECRET
+        _ID_SECRET = self.secret                # masked_id: the record ids of masked views, under the same secret
         self.to_ip = {}
         # set by the app: True when the current request is in demo mode. Then only references this server issued are
         # accepted, never a raw address, so a viewer cannot test whether a given IP is in the data (security report #6)
@@ -149,6 +151,28 @@ class HostRefs:
         except Exception:      # outside a request
             strict = False
         return "\x00unknown-reference" if strict and value else value
+
+
+_ID_SECRET = os.urandom(16).hex().encode()       # replaced by the server's REF_SECRET when HostRefs is made
+_REPORT_FILE = re.compile(r"^(\d{4}-\d{2}-\d{2})-([^-]+)-")
+
+
+def masked_id(record_id):
+    """A record's id as masked viewers get it: still one per record (the page keys its list, pins and highlight on it),
+    but no longer the database record ("event4_sinkhole_http:6af0…" -> "ev-3f9a2c41b07e5d1a"). Same secret as the
+    host labels, so it stays the same across requests (security test of v2026.11.17.4)."""
+    if not record_id:
+        return ""
+    return "ev-" + hmac.new(_ID_SECRET, str(record_id).encode(), hashlib.sha256).hexdigest()[:16]
+
+
+def masked_filename(name):
+    """A report file's name as masked viewers get it: its date and report type only. Shadowserver adds "details based
+    on the organization and filters used to generate the report" (report_schema, report-filename.md), which can name a
+    constituent's organisation when reports are filtered per network ("2026-11-16-scan_http-lakeside-asn.csv")
+    while the masked view shows that network as "Telco 3" (security test of v2026.11.17.4)."""
+    m = _REPORT_FILE.match(str(name or ""))
+    return f"{m.group(1)}-{m.group(2)}" if m else ""
 
 
 def mask_ip(ip):
@@ -197,8 +221,11 @@ def mask_event(ev, asns):
     for f in HIDE_FIELDS:
         if out.get(f):
             out[f] = "hidden"
-    for f in ("http_url", "http_host", "http_referer", "http_agent", "ssl_servername", "detail", "filename"):
+    for f in ("http_url", "http_host", "http_referer", "http_agent", "ssl_servername", "detail"):
         out[f] = mask_text(out.get(f, ""))
+    # the report file: date and type only; the record: an id that is not the database record (masked_filename/_id)
+    out["filename"] = masked_filename(ev.get("filename"))
+    out["id"] = masked_id(ev.get("id"))
     # an encoded beacon in the request decodes to the device's MAC, UUID and CPU id (beacon_decode.py): replaced
     import beacon_decode
     out["http_url"] = beacon_decode.mask_url(out["http_url"])

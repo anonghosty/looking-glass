@@ -5,6 +5,21 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-17 (5)
+### Security
+- **Masked viewers get less of each record.** External viewers and demo mode received two fields they never needed:
+  the report's file name and the record's database id. A Shadowserver file name carries "details based on the
+  organization and filters used to generate the report", so where reports are filtered per network it can name a
+  constituent's organisation while the masked view shows that network as "Telco 3". Masked viewers now get the file
+  name as its date and report type only (`2026-11-16-event4_sinkhole_http`) and a masked record id (`ev-…`, unique per
+  record, under the same secret as the host labels). The services platform's record details accept the masked id.
+  Analysts see both as before. Found in the security tests of 2026-11-17.
+- **The security retest meets the 2026-11-17 security tests' probes on every release:** open-redirect tricks on the
+  sign-in page (tab, newline, backslash, `javascript:`), sign-in and sign-out posted from another site, reflected
+  `form=`/`mode=` values, researchers asking for host-level data, the 5-host value threshold lowered through the
+  address, external viewers asking for exports or unmasking through the address, masked record ids and file names,
+  and an SVG or disguised image as the organisation's logo.
+
 ## 2026-11-17 (4)
 ### Added
 - **AI attack frameworks are an issue.** Since 2026-11-16 Shadowserver's Device Identification report also names hosts

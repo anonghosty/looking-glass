@@ -485,6 +485,72 @@ try:
     ok("CDN scripts carry integrity hashes", html.count('integrity="sha384-') >= 3)
     ok("inline scripts carry the nonce", "<script>" not in html and 'nonce="' in html)
 
+    # the probes of the 2026-11-17 security tests (Nuclei, ZAP signed out and in, an AI pentest with the claude-red
+    # skills), kept so every release meets them again (the user, 2026-11-17)
+    print("\nProbes from the 2026-11-17 security tests")
+    for trick in ("/\t/evil.example", "/\n/evil.example", "/\\evil.example", "/\\/evil.example", " //evil.example",
+                  "https://evil.example", "javascript:alert(1)", "\\\\evil.example"):
+        _, _, lp_ = req(anon, "/login?next=" + urllib.parse.quote(trick, safe=""))
+        nv = re.search(r'name="next" value="([^"]*)"', lp_)
+        ok(f"sign-in keeps no foreign next= ({trick!r})", bool(nv) and not re.match(r"^\s*(/[\\/\t\r\n]|[\\/]{2}|\w+:)", nv.group(1) if nv else "x"),
+           nv.group(1) if nv else "no next field")
+    s, _, _ = req(anon, "/login", {"username": "x", "password": "y"}, {"Origin": "https://evil.example"})
+    ok("sign-in posted from another site -> 403", s == 403, str(s))
+    s, _, _ = req(anon, "/logout", b"", {"Origin": "https://evil.example"}, "POST")
+    ok("sign-out posted from another site -> 403", s == 403, str(s))
+    for path in ('/login?form="><script>alert(1)</script>', "/login?form=%22%20onmouseover%3D%22alert(1)",
+                 "/forgot?mode=%22%3E%3Cscript%3Ealert(1)%3C/script%3E"):
+        _, _, page__ = req(anon, path)
+        ok(f"no reflection of {path.split('?')[1][:24]}…", "<script>alert(1)" not in page__ and 'onmouseover="alert' not in page__)
+    RES, EXT = "lg-selftest-res", "lg-selftest-ext"
+    rpw, rsec, _ = make_user(RES, "researcher")
+    epw, esec, _ = make_user(EXT, "external")
+    rop, (s, _), _ = login(RES, rpw, rsec)
+    must("researcher logged in", s)
+    for p in ("/api/events", "/api/svc/events?latest=1&limit=1", "/api/intelligence", "/api/svc/hosts.csv", "/api/geo",
+              "/api/svc/drill?metric=hosts", "/api/insight", "/api/combos/search"):
+        s, _, _ = req(rop, p); ok(f"researcher: host-level {p.split('?')[0]} refused", s in (403, 405), str(s))
+    try:
+        names = list(json.load(open(os.path.join(ROOT, "data", "service_reports.json"))).get("reports") or {})
+    except (OSError, ValueError):
+        names = []
+    probed = False
+    for nm in ["scan_http", "scan_ssl", "scan_ftp", "device_id"] + names:
+        s, _, b_ = req(rop, f"/api/kb/service/intel?name={urllib.parse.quote(nm)}&min_hosts=1&min=1&show_hidden=1&all=1&name=x")
+        if s == 200:
+            d_ = json.loads(b_)
+            ok(f"researcher: the 5-host value threshold cannot be lowered through the address ({nm})", d_.get("min_hosts") == 5, str(d_.get("min_hosts")))
+            probed = True
+            break
+    if not probed:
+        skip("researcher: the 5-host value threshold cannot be lowered through the address", "no services report loaded yet")
+    eop, (s, _), _ = login(EXT, epw, esec)
+    must("external logged in", s)
+    for p in ("/api/intelligence/export.csv", "/api/svc/report.pdf", "/api/insight/report.pdf", "/api/networks", "/api/combo-codes/LG-C-00000000"):
+        s, _, _ = req(eop, p); ok(f"external: {p.split('?')[0]} refused", s in (403, 404) and s != 200, str(s))
+    evx = json.loads(req(eop, "/api/events?mask=0&raw=1&unmask=1&reveal=1&unmasked=1&unmasked=1&demo=0")[2] or "{}").get("events") or []
+    svx = events(eop, "/api/svc/events?latest=1&limit=20&demo=0&unmask=1&mask=0", tries=2)
+    if evx or svx:
+        ok("external: unmasking through the address changes nothing (map and services)",
+           all(masked(e.get("src_ip")) or not e.get("src_ip") for e in evx) and all(masked(e.get("ip")) for e in svx))
+        ok("external: record ids are masked ids, never the database record", all(str(e.get("id", "")).startswith("ev-") for e in evx + svx),
+           str([e.get("id") for e in (evx + svx)[:2]]))
+        ok("external: a report file name is its date and type only",
+           all(re.fullmatch(r"(\d{4}-\d{2}-\d{2}-[^-]+)?", str(e.get("filename") or "")) for e in evx), str([e.get("filename") for e in evx[:2]]))
+        if svx:
+            s, _, _ = req(eop, f"/api/svc/detail?id={urllib.parse.quote(svx[0]['id'])}")
+            ok("external: a record's details open with its masked id", s == 200, str(s))
+    else:
+        skip("external: unmasking through the address changes nothing", "no records in the replay window yet")
+    aop3, (s, _), _ = login(ADMIN, apw, asec)
+    must("admin logged in (logo checks)", s)
+    t3 = csrf(aop3)
+    svg = "data:image/png;base64," + __import__("base64").b64encode(b"<svg xmlns='http://www.w3.org/2000/svg' onload='alert(1)'/>").decode()
+    for what, logo in (("an SVG", "data:image/svg+xml;base64,PHN2Zy8+"), ("an SVG labelled as a PNG", svg)):
+        s, _, _ = req(aop3, "/api/organisation", json.dumps({"name": "Retest", "logo": logo}),
+                      {"Content-Type": "application/json", "X-CSRF-Token": t3}, "POST")
+        ok(f"organisation logo: {what} refused (nothing saved)", s == 400, str(s))
+
     print("\nNetwork access (report #1)")
     import socket
     lan = [a for a in socket.gethostbyname_ex(socket.gethostname())[2] if not a.startswith("127.")] or []
@@ -510,10 +576,10 @@ except Stop as why:
     print(f"\nSTOPPED: {why}")
 finally:
     users._load()
-    for n in (ADMIN, VIEWER, "lg-selftest-new"):
+    for n in (ADMIN, VIEWER, "lg-selftest-new", "lg-selftest-res", "lg-selftest-ext"):
         users.data["users"].pop(n, None)
     users.save()
-    print(f"\ntemporary accounts removed: {not any(n in users.all() for n in (ADMIN, VIEWER))}")
+    print(f"\ntemporary accounts removed: {not any(n in users.all() for n in (ADMIN, VIEWER, 'lg-selftest-res', 'lg-selftest-ext'))}")
 print(("\nALL PASSED" if not fails else f"\n{fails} FAILED")
       + (f" ({len(SKIPS)} skipped until reports are loaded: run it again later)" if SKIPS else ""))
 sys.exit(1 if fails else 0)

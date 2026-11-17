@@ -16,7 +16,7 @@ from flask import Response, jsonify, render_template, request
 from werkzeug.datastructures import MultiDict
 
 import masked_fields
-from privacy import mask_ip
+from privacy import mask_ip, masked_id
 from respcache import ResultCache, day_key
 from replay_counts import ReplayCounts
 from services import (BANNER, banner_mask, EMPTY,FAMILIES, FILTER_KEYS, SEV_ORDER, ServiceRegistry, ServiceStore, matches, parse_filters,
@@ -95,6 +95,7 @@ def register(app, ctx):
             out["ip"] = mask_ip(e["ip"])
             out["hostname"] = "hidden" if e["hostname"] else ""
             out["asn"] = ""
+            out["id"] = masked_id(e["id"])      # not the database record (privacy.masked_id); /api/svc/detail takes it back
             for k in BANNER:            # banners can carry the host's own name or address (review 2026-11-13)
                 out[k] = banner_mask(out.get(k) or "")
             out["demo"] = True
@@ -382,7 +383,9 @@ def register(app, ctx):
         demo = is_demo()
         eid = request.args.get("id", "")
         day = day_for(request.args.get("at"))
-        e = next((x for x in day.events if x["id"] == eid), None)
+        # a masked viewer holds the masked id (privacy.masked_id), never the record's own
+        match = (lambda x: masked_id(x["id"]) == eid) if demo else (lambda x: x["id"] == eid)
+        e = next((x for x in day.events if match(x)), None)
         if not e:
             return jsonify(error="not found"), 404
         same = [x for x in day.events if x["ip"] == e["ip"]]
