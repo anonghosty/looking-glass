@@ -108,7 +108,7 @@
   }
   // infections from the services side: the hosts calling botnet sinkholes, with the sinkhole code per services report
   function sinkholeRows(sec, x) {
-    if (!x.infections.length) { sec.append(empty("None of these hosts is in the network communications reports of the days in memory.")); return; }
+    if (!x.infections.length) { sec.append(empty("None of these hosts is in the network communications reports of the report day.")); return; }
     sec.append(el("p", "ax-xsum", `${pl(x.infections_hosts, "host")} of the selection call botnet sinkholes:`));
     const ul = el("ul", "ax-list");
     for (const i of x.infections) for (const r of i.reports) {
@@ -119,7 +119,7 @@
   }
   // CVEs and issues from the services side, on the hosts of a network communications code
   function issueChips(sec, x) {
-    if (!x.issues.length) { sec.append(empty("No CVE or issue on these hosts in the services reports of the days in memory.")); return; }
+    if (!x.issues.length) { sec.append(empty("No CVE or issue on these hosts in the services reports of the report day.")); return; }
     // each CVE or issue with the services reports it was found in
     const ul = el("ul", "ax-list ax-iss-list");
     for (const i of x.issues) {
@@ -156,7 +156,7 @@
   }
   // the services reports these hosts are in, with their pattern combinations
   function serviceRows(sec, x) {
-    if (!x.services.length) { sec.append(empty("None of these hosts is in the services reports of the days in memory.")); return; }
+    if (!x.services.length) { sec.append(empty("None of these hosts is in the services reports of the report day.")); return; }
     for (const s of x.services) {
       const c = el("article", "ax-card");
       const hd = el("header", "ax-card-h"); hd.append(el("div", "ax-card-t"), el("span", "ax-fig", pl(s.hosts, "host")));
@@ -270,7 +270,7 @@
     main.append(focusBar);
     if (!d.records) { main.append(el("p", "ax-empty", `The selection has no records on ${d.day} any more (the day may no longer be in the database).`)); return; }
     const x = d.cross || { infections: [], issues: [], services: [], days: [] };
-    const mem = (x.days || []).length ? ` (the days in memory: ${x.days.join(", ")})` : "";
+    const mem = (x.days || []).length ? ` (the report day: ${x.days.join(", ")})` : "";
     // where these hosts were seen: every report, grouped by kind
     if ((x.sources || []).length) {
       const w = el("section", "ax-src");

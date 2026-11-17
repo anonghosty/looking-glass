@@ -137,3 +137,7 @@
 
 /* text shows in full (sweep 2026-11-14): wraps instead of being cut with "…" */
 .av-portal td, .adv-table td { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+/* the other days in memory (2026-11-17): the same combination there too, or what changed */
+.av-ips td.av-other { white-space: normal; min-width: 200px; line-height: 1.45; }
+.av-ips td.av-other div + div { margin-top: 4px; }
+.av-ips .av-changed { color: #ffd38a; }

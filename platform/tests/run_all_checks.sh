@@ -142,6 +142,8 @@ run "glossary: docs page = in-app"      $PY tests/check_glossary_sync.py
 run "decoder on the latest day (counts)" $PY tests/verify_beacon_decode.py
 run "researchers' notes"              $PY tests/check_notes.py
 run "combination codes + search"      $PY tests/check_combos.py
+run "Intel gathered: the report day"  $PY tests/check_report_day.py
+run "Combinations: the report day"   $PY tests/check_combo_report_day.py
 run "findings (researcher → advisory)" $PY tests/check_findings.py
 run "analyst codes (analyst → researcher)" $PY tests/check_acodes.py
 run "report views, cases and advisories" $PY tests/check_combo_review.py

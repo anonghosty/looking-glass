@@ -5,6 +5,24 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-17 (7)
+### Changed
+- **The Combinations search counts the report day by default.** An analyst pasting a researcher's code now gets
+  exactly the devices the researcher and the Executive portal counted (the report day), not every day in memory.
+  The days in memory and the stored date range are still there, and every day is now matched on its own: a device
+  counts on a day when it carried the whole combination that day.
+- **Each device says what else it is, and what it did on the other days.** The device lists of the search (page,
+  PDF, devices CSV) and of the advisory name each device's infections, issues and CVEs that day. On the report day
+  an **Other days** column says, per device, whether it carried the same combination on the other days in memory, or
+  changed and what it carried there instead. Reviews sent before this release keep their old device lists.
+- **Intel gathered counts the report day only.** Patterns, exact combinations, **Across reports** and the sinkholes a
+  report's devices call, on the infections and the services platforms, now count the report day (the day being
+  replayed, or the newest day in memory), not every day in memory. Before, a device seen in one report on one day and
+  calling a sinkhole on another could be counted together, so Across reports could show more devices than the Executive
+  portal for the same day. The Executive portal's code filter matches on the day it shows; code look-ups still read
+  every day in memory, so a code shown on an earlier day keeps its meaning.
+  Nothing to do when updating.
+
 ## 2026-11-17 (6)
 ### Changed
 - **sustat is named a campaign token, not "not decoded yet".** Its `p=` value is a few short random-looking values,

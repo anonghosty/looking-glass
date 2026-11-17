@@ -367,11 +367,20 @@ def build(d, meta):
     doc.bars(x2 + 14, top, w2 - 28, d["cities"], n=max(1, int((h2 - 56) // 37)), stack=True)
 
     # ---------------- page 3 (and 4): the devices
-    cols = [("IP address", .13, "l", True), ("Network", .2, "l", False), ("AS", .06, "l", False), ("Region", .11, "l", False),
-            ("City", .1, "l", False), (unit, .06, "r", False), ("Days", .05, "r", False), ("Last seen (UTC)", .12, "l", True),
-            ("Also seen in", .17, "l", False)]
+    # each device's infections, issues and CVEs that day, and (the report day) the other days in memory: the same
+    # combination there too, or what it carried instead (2026-11-17)
+    other = any(x.get("earlier") for x in d["devices"])
+    flag = lambda x: "; ".join(s for s in (", ".join((x.get("flags") or {}).get("infections") or []),                # noqa: E731
+                                           ", ".join(((x.get("flags") or {}).get("issues") or []) + ((x.get("flags") or {}).get("cves") or []))) if s) or "–"
+    cols = ([("IP address", .1, "l", True), ("Network", .1, "l", False), ("AS", .045, "l", False), ("Region", .075, "l", False),
+             ("City", .065, "l", False), (unit, .05, "r", False), ("Days", .035, "r", False), ("Last seen (UTC)", .1, "l", True),
+             ("Infections, issues, CVEs", .15, "l", False), ("Also seen in", .08, "l", False), ("Other days", .2, "l", False)] if other else
+            [("IP address", .11, "l", True), ("Network", .14, "l", False), ("AS", .05, "l", False), ("Region", .08, "l", False),
+             ("City", .07, "l", False), (unit, .05, "r", False), ("Days", .04, "r", False), ("Last seen (UTC)", .1, "l", True),
+             ("Infections, issues, CVEs", .22, "l", False), ("Also seen in", .14, "l", False)])
     devs = d["devices"][:2 * DEVICE_ROWS]
-    row = lambda x: [x["ip"], x["network"], x["asn"], x["region"], x["city"], fmt(x["records"]), fmt(x["days"]), x["last"], x["also"] or "–"]
+    row = lambda x: ([x["ip"], x["network"], x["asn"], x["region"], x["city"], fmt(x["records"]), fmt(x["days"]), x["last"], flag(x),   # noqa: E731
+                      x["also"] or "–"] + ([x.get("earlier") or "–"] if other else []))
     tw = W - 2 * M - 28
     room = H - M - 44 - 30 - 56                      # the table's height on one page
     pages, cur = [], []

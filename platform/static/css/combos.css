@@ -264,3 +264,8 @@
 .cb-again-banner.calm { color: #9fe3bf; border-color: rgba(90,200,140,.35); background: rgba(90,200,140,.06); }
 .cb-table tr.cb-again td { background: rgba(255,170,60,.05); }
 .cb-again-tag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; font: 600 10.5px Inter, sans-serif; color: #1b1203; background: #ffc46b; vertical-align: 1px; }
+/* the report day's devices (2026-11-17): the other days in memory, and each device's infections, issues and CVEs */
+.cb-table td.cb-other div + div { margin-top: 4px; }
+.cb-table .cb-changed { color: #ffd38a; }
+.cb-table .cb-same { color: var(--muted, #a0a3ad); }
+.cb-table .cb-flag { white-space: nowrap; }

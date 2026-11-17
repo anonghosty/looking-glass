@@ -417,10 +417,20 @@ def install(app, ctx):
         for inf in ((x.get("review") or {}).get("sent_infections") or []):
             for dv in inf.get("devices") or []:
                 ticked.setdefault(dv.get("ip"), set()).add(str(inf.get("name") or ""))
+        # what the search said about each device on its report day (kept with the review, combos.py): its infections,
+        # issues and CVEs that day, and whether it carried the same combination on the other days, or changed
+        flags, earlier = k.get("flags") or {}, k.get("earlier") or {}
+        for h, d in devs.items():
+            f_ = flags.get(h) or {}
+            d["cves"].update(str(c).upper() for c in f_.get("cves") or [])
+            d["issues"].update(str(i) for i in f_.get("issues") or [] if not CVE_RX.search(str(i)))
+            ticked.setdefault(h, set()).update(str(n) for n in f_.get("infections") or [])
+        report_day = k.get("report_day") or ""
         return sorted(({**d, "ports": sorted(d["ports"], key=lambda p: (len(p), p)), "reports": sorted(d["reports"]), "cves": sorted(d["cves"]),
                         "issues": clean(d), "labels": sorted(d["labels"]), "categories": sorted(d["categories"]),
                         "infections": sorted((d["categories"] | ticked.get(d["ip"], set())) - {""}),
-                        "last": d["last"][:16].replace("T", " ")} for d in devs.values()),
+                        "last": d["last"][:16].replace("T", " "), "report_day": report_day,
+                        "earlier": [str(n.get("text") or "") for n in earlier.get(d["ip"]) or []]} for d in devs.values()),
                       key=lambda d: (-d["records"], d["ip"]))
 
     # ---------------- what fills in on its own, for one organisation

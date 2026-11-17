@@ -104,7 +104,7 @@ def install(app, ctx):
         hs = hosts_of(job)
         if not hs:
             return
-        job["preview"] = ctx["cross"](hs, True)
+        job["preview"] = ctx["cross"](hs, True, job.get("flags_day") or "memory")     # the search's own day(s)
         # the analyst works with addresses: each pattern's devices, with the network they are on (from the search's records)
         found, section = job["inputs"][1], entry.get("section")
         asn_of = {}
@@ -180,7 +180,10 @@ def install(app, ctx):
         tmp = kept_path(fid) + ".tmp"
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump({"code": entry["code"], "section": entry.get("section"), "per_day": per_day, "by_day": by_day}, fh)
+            # with the report day's notes (the same combination, or changed, on the other days in memory) and each
+            # device's infections, issues and CVEs, so the advisory says what the search said (2026-11-17)
+            json.dump({"code": entry["code"], "section": entry.get("section"), "per_day": per_day, "by_day": by_day,
+                       "report_day": j.get("flags_day"), "earlier": j.get("earlier") or {}, "flags": j.get("dev_flags") or {}}, fh)
         os.replace(tmp, kept_path(fid))
 
     def records_of(fid):
@@ -226,7 +229,9 @@ def install(app, ctx):
             per_day = [(dd, n_by_day.get(dd, 0)) for dd, _ in per_day]
             if not found:
                 return None, "None of the devices the analyst ticked are in the kept records: no report is made."
-        return {"entry": entry, "found": found, "around": around, "per_day": per_day, "m": m, "plat": plat}, ""
+        return {"entry": entry, "found": found, "around": around, "per_day": per_day, "m": m, "plat": plat,
+                "report_day": kept.get("report_day"), "earlier": kept.get("earlier") or {},
+                "flags": kept.get("flags") if isinstance(kept.get("flags"), dict) else None}, ""
 
     def drill_build(source, comms, evs, label):
         """Management's figures of exactly these records (the devices an analyst drilled down to), counts only, and an
@@ -335,7 +340,8 @@ def install(app, ctx):
         if asns is not None and not org_records(x, k, {str(a) for a in asns}):
             return None, (f"None of {network or 'this organisation'}'s devices are in the finding's records any more: "
                           "no report is made (it would not be about them).")
-        job = {"id": f"review{fid}", "user": me, "log": [], "state": "done", "advisory": advisory, "file_base": file_base}
+        job = {"id": f"review{fid}", "user": me, "log": [], "state": "done", "advisory": advisory, "file_base": file_base,
+               "flags_day": k.get("report_day"), "earlier": k.get("earlier") or {}, "kept_flags": k.get("flags")}
         apply(job, x)
         res = book.package(job, k["entry"], k["found"], k["per_day"], None, k["around"], k["m"], network=network or None,
                            asns=asns)

@@ -2843,7 +2843,8 @@ import notes as _notes  # noqa: E402
 NOTES = _notes.install(app, {"people": people, "audit": AUTH["audit"], "allowed": _kb_allowed, "change_allowed": _kb_change_allowed,
                              "fresh": AUTH["fresh"], "base_dir": BASE_DIR, "logger": app.logger})
 
-INTEL = _intel.install(app, {"store": store, "svc_store": svc["store"], "allowed": _kb_allowed, "defined": _defined_titles,
+INTEL = _intel.install(app, {"store": store, "svc_store": svc["store"], "replay_now": replay_now,   # the report day
+                             "allowed": _kb_allowed, "defined": _defined_titles,
                              "services_view": lambda n: SVC_KB["view"](n),     # Services in Intel gathered (services_kb.py)
                              "cross": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"],   # every category
                                                                         hold_small=True),     # researchers: no code below 5 hosts
@@ -2922,9 +2923,12 @@ COMBOS = _combos.install(app, {
     "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"], "is_demo": is_demo, "audit": AUTH["audit"], "notes": NOTES,
     "explain": _combo_explain, "build_pdf": _combo_pdf, "scope_text": lambda: _scope_text(), "base_dir": BASE_DIR,
     "can_note": _kb_change_allowed, "shapes": lambda: _adm1_shapes(), "country": lambda: settings.data["country"],
-    "svc_matcher": lambda entry: SVC_INTEL.matcher(entry), "svc_new_code": lambda r, items: SVC_INTEL.new_code(r, items),
+    "svc_matcher": lambda entry, scope="memory": SVC_INTEL.matcher(entry, scope), "svc_new_code": lambda r, items: SVC_INTEL.new_code(r, items),
+    # each device's infections, issues and CVEs on a day; the report day (report_day.py)
+    "host_flags": lambda hosts, scope=None: SVC_INTEL.host_flags(hosts, scope), "replay_now": replay_now,
     "title_of": lambda n: SVC_KB["title_of"](n),
-    "cross": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"]),     # a search's devices across every category
+    "cross": lambda hosts, scope="memory": SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"],   # a search's devices
+                                                              scope=scope),          # across every category, on the search's day(s)
     "logger": app.logger})
 NOTES.codes = COMBOS            # notes carry combination codes; their meaning is read from the code book
 
@@ -3007,8 +3011,8 @@ _combo_review.install(app, {"book": COMBOS, "findings": FINDINGS, "notes": NOTES
                             "people_name": lambda u: people.name(u, ""),
                             "network": lambda asn: asn_registry.company(asn, False) if asn else "",
                             "acodes": ACODES,      # the drill-down's own analyst code (management's figures of that selection)
-                            "cross": lambda hosts, with_hosts=False: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"],
-                                                                                         with_hosts=with_hosts)})
+                            "cross": lambda hosts, with_hosts=False, scope="memory": SVC_INTEL.for_hosts(
+                                hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"], with_hosts=with_hosts, scope=scope)})
 
 # findings over time: the day their records were reported, their devices in the latest report again, time to act
 import finding_watch as _finding_watch  # noqa: E402
@@ -3481,7 +3485,8 @@ def _combo_filter(code, section, events, day=None):
         return []
     entry = COMBOS.resolve(code)
     if entry and entry["section"] == "services" and section == "issues":     # a services pattern code (services_intel.py)
-        return SVC_INTEL.matcher(entry).match(events)
+        # on the day the portal shows: a host calls a sinkhole, and a value may be shown, as on that day (report_day.py)
+        return SVC_INTEL.matcher(entry, day.start.date().isoformat() if day is not None else None).match(events)
     if not entry or entry["section"] != section:
         return []
     labels = {**{x["name"]: x["label"] for x in registry.get()}, **{x["name"]: x["label"] for x in svc["registry"].get()}}
@@ -3520,6 +3525,7 @@ SVC_INTEL = _services_intel.ServicesIntel({
     "svc_store": svc["store"], "comms_store": store, "patterns": PATTERNS,
     "labels": lambda: {x["name"]: x["label"] for x in registry.get()},     # the sinkhole reports' names
     "load_day": lambda: (svc["store"].get(replay_now()), store.get(replay_now())),     # both: sinkholes are compared too
+    "replay_now": replay_now,                          # Intel gathered counts the report day (report_day.py)
     "on_codes": lambda *a: getattr(INTEL, "on_codes", None) and INTEL.on_codes(*a)})
 SVC_KB = _services_kb.install(app, {
     "patterns": PATTERNS, "services_intel": SVC_INTEL, "change_allowed": _kb_change_allowed, "fresh": AUTH["fresh"],

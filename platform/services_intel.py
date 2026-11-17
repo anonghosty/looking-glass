@@ -1,5 +1,7 @@
 """Intel gathered for a publicly accessible / vulnerable services report (the researchers' Services section): what its
-pattern fields (svc_patterns.py) show across the hosts of the days in memory, and what else those hosts do.
+pattern fields (svc_patterns.py) show across the hosts of the report day, and what else those hosts do. One day, the
+report day (report_day.py, the user 2026-11-17), as the Executive portal counts it; the analysts' combination search
+keeps its own range ("memory"), and the Executive portal's code filter matches on the day it shows.
 
 For one report (its IPv6 twin included):
 * patterns: per pattern field, the values shared by at least MIN_HOSTS hosts (masked: never a host), and how many
@@ -21,9 +23,11 @@ ServicesIntel(ctx): ctx svc_store, comms_store, patterns (svc_patterns.Patterns)
 report, combos) (combos.py records the codes a researcher was shown).
 """
 import collections
+import re
 import threading
 import time
 
+import report_day
 import small_codes
 from intel import combo_code, cross_code
 from report_map import sibling
@@ -32,6 +36,8 @@ from svc_patterns import MIN_HOSTS
 SECTION = "services"
 SINK = "Botnet sinkholes"     # the part of a sinkhole code: the host also calls a sinkhole as this infection
 TOP = 15
+CVE_RX = re.compile(r"^CVE-\d{4}-\d{4,7}$", re.I)
+CVE_FIND = re.compile(r"CVE-\d{4}-\d{4,7}", re.I)
 MIN_NETWORKS = 2      # free text (templates) must also be seen in two networks: one organisation's own wording is not shown
 
 
@@ -74,21 +80,32 @@ class ServicesIntel:
         self.title_of = lambda n: n                       # services_kb.py sets the readable titles and kinds of reports
         self.kind_of = lambda n: "Services reports"
         self.lock = threading.Lock()
-        self.cache = {"key": None, "at": 0.0, "data": None}
+        self.cache = {"key": None, "at": 0.0, "data": None}       # the report day's (what is shown)
+        self.others = {}                                           # the other scopes' (report_day.py)
 
-    def index(self):
+    def index(self, scope=None):
+        """scope (report_day.py): None, the report day (what is shown); "memory", every day in memory (the analysts'
+        search); "YYYY-MM-DD", that day (the Executive portal's code filter)."""
         try:
             self.ctx.get("load_day") and self.ctx["load_day"]()
         except Exception:                                  # noqa: BLE001  (the days already in memory still count)
             pass
-        svc = list(self.ctx["svc_store"].days.values())
-        comms = list(self.ctx["comms_store"].days.values())
-        # kept while the same copies of the days are in memory (speed review, 2026-11-15); an hour at most
+        rn = self.ctx.get("replay_now")
+        svc = report_day.select(list(self.ctx["svc_store"].days.values()), scope, rn)
+        comms = report_day.select(list(self.ctx["comms_store"].days.values()), scope, rn)
+        # kept while the same copies of the days are in memory (speed review, 2026-11-15); an hour at most. One cache
+        # per scope; services_kb's "count again" (cache["key"] = None) empties them all
         key = (tuple((d.start, getattr(d, "serial", 0), len(d.events)) for d in svc)
                + tuple((d.start, getattr(d, "serial", 0), len(d.events)) for d in comms))
+        sk = report_day.scope_key(scope)
         with self.lock:
-            if self.cache["key"] == key and time.time() - self.cache["at"] < 3600:
-                return self.cache["data"]
+            if self.cache["key"] is None:
+                self.others.clear()
+            if sk != "report" and sk not in self.others and len(self.others) >= 6:
+                self.others.pop(next(iter(self.others)))   # days that left memory: their counts are not kept forever
+            slot = self.cache if sk == "report" else self.others.setdefault(sk, {"key": None, "at": 0.0, "data": None})
+            if slot["key"] == key and time.time() - slot["at"] < 3600:
+                return slot["data"]
         pat = self.ctx["patterns"]
         fields = {}
         vals = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))   # base -> item -> host -> records
@@ -101,6 +118,7 @@ class ServicesIntel:
         # host -> CVE / issue -> the reports it was seen in (for_hosts looked through every record for each call: one
         # host's cross-view took 0.3 s alone and ~8 s when ten were opened at once; performance test 2026-11-14)
         host_issues = collections.defaultdict(lambda: collections.defaultdict(set))
+        host_cves = collections.defaultdict(set)                                  # host -> CVEs named in its tags
         records = collections.Counter()
         for d in svc:
             for e in d.events:
@@ -121,6 +139,11 @@ class ServicesIntel:
                 combo_hosts[base][items][ip] += 1
                 for i in e.get("issues") or []:
                     host_issues[ip][i].add(base)
+                tags = e.get("tags") or []
+                for t in (tags.split(",") if isinstance(tags, str) else tags):
+                    cv = CVE_FIND.search(str(t))
+                    if cv:                                         # a CVE named in a tag (the advisory's rule)
+                        host_cves[ip].add(cv.group(0).upper())
         infected = collections.defaultdict(set)                                   # host -> infection names
         sink_rep = collections.defaultdict(lambda: collections.defaultdict(set))  # host -> sinkhole report -> names
         labels = self.ctx["labels"]() if self.ctx.get("labels") else {}
@@ -135,10 +158,10 @@ class ServicesIntel:
                         (it[0] not in template_labels.get(b, ()) or len(nets[b][it] - {""}) >= MIN_NETWORKS)}
                     for b, v in vals.items()}
         data = {"fields": fields, "vals": vals, "showable": showable, "combos": combos, "combo_hosts": combo_hosts, "hosts": hosts,
-                "host_reports": host_reports, "host_items": host_items, "host_issues": host_issues, "infected": infected, "sink_rep": sink_rep, "records": records,
+                "host_reports": host_reports, "host_items": host_items, "host_issues": host_issues, "host_cves": host_cves, "infected": infected, "sink_rep": sink_rep, "records": records,
                 "days": sorted({d.start.date().isoformat() for d in svc})}
         with self.lock:
-            self.cache.update(key=key, at=time.time(), data=data)
+            slot.update(key=key, at=time.time(), data=data)
         return data
 
     # ---------------------------------------------------------------- the sinkholes of a report's hosts
@@ -285,7 +308,7 @@ class ServicesIntel:
         data = self.index()
         base = sibling(report)
         if base not in data["hosts"]:
-            return None, "This report is not in the days in memory."
+            return None, "This report is not in the report day."
         show = data["showable"].get(base, set())
         allowed = {_label(i): i for i in show}
         bad = [x for x in items if x not in allowed]
@@ -300,7 +323,7 @@ class ServicesIntel:
         return {"report": base, "items": sorted(items), "records": n, "devices": len(ch), "repeat_devices": _repeat(ch),
                 "days": data["days"]}, None
 
-    def for_hosts(self, hosts, title_of=None, top=8, kind_of=None, with_hosts=False, hold_small=False):
+    def for_hosts(self, hosts, title_of=None, top=8, kind_of=None, with_hosts=False, hold_small=False, scope=None):
         """An analyst's selection (acodes.py) across every category, for a set of host addresses that never leaves this
         module: the services reports the hosts are in, with their exact pattern combinations and codes; the CVEs and
         issues on them; the infections they call sinkholes as, with the sinkhole code per services report. Counts and
@@ -308,7 +331,7 @@ class ServicesIntel:
         title_of = title_of or self.title_of
         kind_of = kind_of or self.kind_of
         hosts = {h for h in hosts if h}
-        data = self.index()
+        data = self.index(scope)          # the report day; "memory" for the analysts' search (its own range)
         # hold_small (Intel gathered): a researcher browsing gets no lasting code for a pattern fewer than MIN_HOSTS hosts
         # carry (small_codes.py). An analyst's code page keeps every code: there the analyst handed the selection over.
         full = not hold_small or small_codes.viewer_sees_hosts()
@@ -415,8 +438,23 @@ class ServicesIntel:
                            for i, h in sorted(issues.items(), key=lambda kv: -len(kv[1]))][:40],
                 "issues_total": len(issues), "infections": infections[:20], "infections_hosts": len({h for hs in names.values() for h in hs})}
 
-    def matcher(self, entry):
-        return Matcher(self, entry)
+    def host_flags(self, hosts, scope=None):
+        """{host: {"infections", "issues", "cves"}} on a day (report_day.py scope): the infections each device calls a
+        sinkhole as, and the issues and CVEs the services reports name on it, so an analyst or an advisor sees what each
+        device in a list is (the user, 2026-11-17). For a search's own device list only; never sent to a researcher."""
+        data = self.index(scope)
+        out = {}
+        for h in {h for h in hosts if h}:
+            iss = (data["host_issues"].get(h) or {}).keys()
+            out[h] = {"infections": sorted(data["infected"].get(h, ())),
+                      "cves": sorted({i.upper() for i in iss if CVE_RX.match(i)} | data.get("host_cves", {}).get(h, set())),
+                      "issues": sorted(i for i in iss if not CVE_RX.match(i))}
+        return out
+
+    def matcher(self, entry, scope="memory"):
+        """The records of a code. scope: "memory" for the analysts' search (its own range), a day (YYYY-MM-DD) for the
+        Executive portal's code filter: whether a host calls a sinkhole, and which values may be shown, as on that day."""
+        return Matcher(self, entry, scope)
 
     def infections_of(self, hosts, n=10):
         """[(infection / category, hosts)] these hosts call botnet sinkholes as (network communications, days in memory)."""
@@ -427,7 +465,7 @@ class ServicesIntel:
     def patterns_of(self, events, m):
         """(records with a host, {host: its exact cross-report pattern}) for a list of events, computed once and shared by
         every cross-report code matched against the same list (the Executive portal filters by several at a time)."""
-        key = (id(events), len(events), id(events[0]) if events else 0, id(events[-1]) if events else 0, id(self.index()))
+        key = (id(events), len(events), id(events[0]) if events else 0, id(events[-1]) if events else 0, id(m.data))
         with self.lock:
             hit = self.cache.get("patterns_of")
             if not (hit and hit["key"] == key):
@@ -481,11 +519,11 @@ class Matcher:
     the counts above (the projection of the days in memory). A sinkhole code: the report's records of the hosts that
     call a sinkhole as that infection in the network communications reports of the days in memory."""
 
-    def __init__(self, sv, entry):
+    def __init__(self, sv, entry, scope="memory"):
         self.sv, self.e = sv, entry
         self.section, self.name = SECTION, entry["name"]
         self.me, self.lname = "", ""
-        data = sv.index()
+        data = self.data = sv.index(scope)
         self.show = data["showable"]
         self.fields = {}
         parts = entry.get("parts") or []

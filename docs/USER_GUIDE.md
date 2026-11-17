@@ -562,13 +562,18 @@ reports, with how many; click the flag to open that name's cross-report view.
 or the Findings page) is for roles that see addresses and may export:
 1. Paste the code and **Look up**: what it stands for, the name, the report(s), and the researchers' notes (the ones on
    this code are marked).
-2. Choose where to look: **the days in memory** (exactly the counts the researcher saw) or **a date range of the stored
-   history** (up to 31 days, read from the database one day at a time; the progress shows each day).
+2. Choose where to look: **the report day** (the default: exactly the devices the researcher counted in Intel
+   gathered and the Executive portal shows), **the days in memory**, or **a date range of the stored history** (up to
+   31 days, read from the database one day at a time; the progress shows each day). Every day is matched on its own:
+   a device counts on a day when it carried the whole combination that day (a router seen on one day and a sinkhole
+   call on the next is not that device carrying the combination).
 3. The result: the key figures (devices, records, repeating, on several days, in other reports, networks, regions and
    cities, peak hour); a **map** of the country's regions coloured by devices (hover a region for its devices,
    records, cities, networks and IP addresses) with each region and its cities beside it; networks, cities, activity
    by hour, what the devices are and ports; **the busiest devices** (address, network, region, city, records, last
-   seen, other reports); and **across reports**: what these devices carried in the name's other reports, each exact
+   seen, each device's **infections**, **issues** and **CVEs** that day, other reports and, on the report day,
+   **Other days**: whether the device carried the same combination on the other days in memory, or *changed* and what
+   it carried there instead); and **across reports**: what these devices carried in the name's other reports, each exact
    pattern with its own `LG-X` code to search next.
 4. **Download PDF + CSV (ZIP)**: a PDF in the Executive report's design (overview with key findings and activity, the
    region map with its cities, networks and cities, the devices with their addresses, across reports, and the
@@ -576,7 +581,8 @@ or the Findings page) is for roles that see addresses and may export:
    references as links and where it comes from, and the researchers' notes on those names, or a line saying there are
    none yet; a chart with nothing to show, such as across reports when no device was in another report, is left out)
    and two CSV files: one
-   row per device (with the other reports it was seen in and its cross-report code) and one row per record. The columns
+   row per device (with the other reports it was seen in, its infections, issues and CVEs, the other days, and its
+   cross-report code) and one row per record. The columns
    have fixed names, ready for enrichment and dashboards. If the search has expired (after an hour), the button runs it
    again and then downloads.
 5. **A report for one network provider**, to attach to the advisory sent to that operator: choose it in **Report for**
@@ -854,7 +860,8 @@ The **advisor** role turns approved findings into advisories for the organisatio
 organisation's IP addresses (chosen by the organisation's network numbers, its ASNs, kept on the finding when it was
 sent: a network renamed since still finds exactly its devices, and if none of them are left in the finding's records
 the advisory is refused rather than made about anyone else's devices): the reports they appear in, what the devices are (*Seen as*), their CVEs and weaknesses
-(*issues*), and the **impact** of each report (for example *Unauthorised remote access*, *Botnet recruitment*).
+(*issues*), the infections they call sinkholes as, **Other days** (when the analyst searched the report day: the same
+combination on the other days in memory, or what changed), and the **impact** of each report (for example *Unauthorised remote access*, *Botnet recruitment*).
 
 **Never from a blank page.** The advisor writes only the short part: a description and the actions to take. The
 report brings the rest by itself:

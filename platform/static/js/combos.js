@@ -47,10 +47,15 @@
     // an analyst code is its selection on its own day: no choice of days
     const isA = d.kind === "a";
     document.querySelector('input[name="cbWhere"][value="history"]').closest(".cb-opt").hidden = isA;
-    if (isA) { document.querySelector('input[name="cbWhere"][value="memory"]').checked = true; $("cbDates").hidden = true; }
+    document.querySelector('input[name="cbWhere"][value="report"]').closest(".cb-opt").hidden = isA;
+    // the report day first (2026-11-17: the same devices the researcher counted); an analyst code: its own day
+    document.querySelector(`input[name="cbWhere"][value="${isA ? "memory" : "report"}"]`).checked = true; $("cbDates").hidden = true;
+    const rep = d.memory_days?.length ? d.memory_days[d.memory_days.length - 1] : "";
+    $("cbRepDay").textContent = rep ? `${d.report_day || rep}: exactly the devices the researcher counted; each says whether it carried the same combination on the other days in memory, or what changed`
+      : "no day in memory yet";
     document.querySelector('input[name="cbWhere"][value="memory"]').nextElementSibling.querySelector("b").textContent = isA ? `The selection on ${d.day}` : "The days in memory";
     $("cbMemDays").textContent = isA ? "exactly the records the analysis window showed, read again from that day"
-      : d.memory_days?.length ? `${d.memory_days.join(", ")}: exactly the counts the researcher saw` : "no day in memory yet";
+      : d.memory_days?.length ? `${d.memory_days.join(", ")}: every day held in memory, each day on its own` : "no day in memory yet";
   }
 
   function chips(items) {
@@ -117,7 +122,7 @@
     if (where() === "history") {
       const n = span(); if (n < 1 || n > MAX) return;
       body.from = $("cbFrom").value; body.to = $("cbTo").value;
-    }
+    } else body.where = where();                  // "report" (the default) or "memory"
     $("cbSearch").disabled = true; $("cbStop").hidden = false; $("cbStep3Box").hidden = true;
     $("cbProgress").hidden = false; $("cbLog").replaceChildren(); $("cbBar").style.width = "2%";
     // the previous search is let go before the new one starts: its next poll would otherwise still count as the current
@@ -363,11 +368,23 @@
     if (s.top_devices?.length) {
       const c = card("The busiest devices", `the ${s.top_devices.length} with the most records; all ${fmt(s.devices)} are in the CSV`); c.classList.add("wide");
       const t = el("table", "cb-table"); const hd = el("tr");
-      for (const h of ["IP address", "Network", "Region", "City", "Records", "Days", "Last seen", "Also seen in"]) hd.append(el("th", null, h));
+      // the report day (2026-11-17): the other days in memory say whether each device carried the same combination, or
+      // what it carried instead; every device names its infections, issues and CVEs, so the analyst sees what it is
+      const repDay = !!s.report_day;
+      for (const h of ["IP address", "Network", "Region", "City", "Records", ...(repDay ? [] : ["Days"]), "Last seen", "Infections", "Issues", "CVEs", "Also seen in", ...(repDay ? ["Other days"] : [])]) hd.append(el("th", null, h));
       t.append(hd);
+      const names = (xs, cls) => { const td = el("td", `cb-also ${cls || ""}`.trim()); if (!(xs || []).length) td.textContent = "–";
+        (xs || []).forEach((x, i) => td.append(el("span", "cb-flag", x), ...(i < xs.length - 1 ? [document.createTextNode(", ")] : []))); return td; };
       for (const x of s.top_devices) {
         const tr = el("tr");
-        for (const [v, cls] of [[x.ip, "mono"], [x.network], [x.region], [x.city], [fmt(x.records), "num"], [fmt(x.days), "num"], [x.last, "mono"], [x.also.join(", ") || "–", "cb-also"]]) tr.append(el("td", cls || null, v));
+        for (const [v, cls] of [[x.ip, "mono"], [x.network], [x.region], [x.city], [fmt(x.records), "num"], ...(repDay ? [] : [[fmt(x.days), "num"]]), [x.last, "mono"]]) tr.append(el("td", cls || null, v));
+        tr.append(names(x.infections), names(x.issues), names(x.cves, "mono"), el("td", "cb-also", x.also.join(", ") || "–"));
+        if (repDay) {
+          const td = el("td", "cb-also cb-other");
+          if (!(x.earlier || []).length) td.textContent = "–";
+          for (const n of x.earlier || []) td.append(el("div", n.same ? "cb-same" : "cb-changed", n.text));
+          tr.append(td);
+        }
         t.append(tr);
       }
       const sc = el("div", "cb-table-wrap"); sc.append(t);

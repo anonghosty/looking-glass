@@ -189,7 +189,7 @@
     if (sk.length) groups.push({ label: "Calling sinkholes", sub: "hosts also in the network communications reports", rows: sk.map((x) => ({ code: x.code,
       text: `${d.title || cur.name}: hosts also calling botnet sinkholes as ${x.name}`, show: `Also calling botnet sinkholes as ${x.name}`,
       figs: () => [stat(pl(x.hosts, "device")), stat("sinkholes", "x")] })) });
-    if (!groups.length) { pane.append(el("p", "kbn-empty", "Intel gathered saw no combination for this name in the days in memory. Build one, or paste a code.")); return; }
+    if (!groups.length) { pane.append(el("p", "kbn-empty", "Intel gathered saw no combination for this name on the report day. Build one, or paste a code.")); return; }
     // one tab per report, and "Across reports" as a tab of its own; the list shows the chosen one
     if (!groups.some((g) => g.label === groupSel)) groupSel = groups[0].label;
     const tabsG = el("div", "kbn-gtabs"); tabsG.setAttribute("role", "tablist"); tabsG.setAttribute("aria-label", "Combinations of which report");
@@ -208,8 +208,8 @@
       if (g.empty) {
         const reps = (d.reports || []).map((r) => r.report), v6 = reps.filter((r) => /ipv6/i.test(r));
         const why = [cur.section === "services"
-          ? `No exact pattern across reports is shared by ${d.min_hosts || 5} or more of this report's devices in the days in memory, so there is none to attach.`
-          : `No device of ${cur.name} was seen in more than one report in the days in memory, so there is no cross-report combination to attach.`];
+          ? `No exact pattern across reports is shared by ${d.min_hosts || 5} or more of this report's devices on the report day, so there is none to attach.`
+          : `No device of ${cur.name} was seen in more than one report on the report day, so there is no cross-report combination to attach.`];
         if (v6.length && v6.length < reps.length) why.push(`${v6.join(", ")} records a different IP address for a machine than the other reports, so their devices never match.`);
         if (reps.some((r) => /dns/i.test(r)) && reps.some((r) => !/dns/i.test(r))) why.push("A DNS report often sees the resolver that looked the name up, not the infected machine, so it rarely shares a device with the other reports.");
         const box = el("div", "kbn-empty kbn-why"); for (const t of why) box.append(el("p", null, t)); lists.append(box);
@@ -221,14 +221,14 @@
       b.addEventListener("click", () => { groupSel = g.label; filt.value = ""; draw(); }); tabsG.append(b);
     }
     filt.addEventListener("input", draw);
-    pane.append(tabsG, head, filt, lists, el("p", "kbn-foot", `Every combination Intel gathered saw for ${cur.name} in the days in memory (${(d.days || []).join(", ")}), the most frequent first.`));
+    pane.append(tabsG, head, filt, lists, el("p", "kbn-foot", `Every combination Intel gathered saw for ${cur.name} on the report day (${(d.days || []).join(", ")}), the most frequent first.`));
     draw();
   }
   function buildPane(d) {
     pane.replaceChildren();
     const reps = (d.reports || []).filter((r) => r.indicators.some(ofKinds));
     if (!reps.length) { pane.append(el("p", "kbn-empty", cur.section === "services"
-      ? "There is nothing to build from yet: no pattern value of this report is shared by 5 or more hosts in the days in memory."
+      ? "There is nothing to build from yet: no pattern value of this report is shared by 5 or more hosts on the report day."
       : "There is nothing to build from: the reports in memory carry no C2 domain, lookup, user agent or tag for this name.")); return; }
     const form = el("div", "kbn-build");
     const sel = el("select", "kbn-sel"); sel.setAttribute("aria-label", "Report");
@@ -261,7 +261,7 @@
         const line = el("div", "kbn-made");
         line.append(el("code", "kbn-c", x.code), el("span", null, x.text),
           el("span", `kbn-stat${x.records ? "" : " warn"}`, x.records ? `${pl(x.records, "record")} · ${pl(x.devices, "device")} carry exactly this now`
-            : "No record carries exactly this set in the days in memory: an analyst may still find it in older days"));
+            : "No record carries exactly this set on the report day: an analyst may still find it in other days"));
         const a = el("button", "lg-btn sm primary", "Attach"); a.type = "button"; a.addEventListener("click", () => pick({ code: x.code, text: x.text }));
         line.append(a); res.append(line);
       } finally { go.disabled = false; }

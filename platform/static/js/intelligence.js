@@ -372,7 +372,7 @@
       for (const [k, vs] of Object.entries(s.facts || {})) { const p = el("p"); p.append(el("span", null, `${k}: `), document.createTextNode(vs.join(", "))); c.append(p); }
       body.append(c);
     }
-    body.append(el("h4", null, "On the services platform (the days in memory)"));
+    body.append(el("h4", null, "On the services platform (the report day)"));
     const svc = d.services || [];
     if (!svc.length && !(d.issues || []).length && !(d.infections || []).length) body.append(el("p", "fd-empty", "Nothing else known for this host on those days."));
     if (svc.length) body.append(el("p", null, `Services reports: ${svc.map((s) => s.title || s.report).join(", ")}`));

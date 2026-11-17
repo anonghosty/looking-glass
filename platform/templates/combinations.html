@@ -29,7 +29,7 @@
       <div class="cb-eyebrow">Analyst · combination search</div>
       <h1>Get exactly the devices behind a researcher's finding</h1>
       <p>A researcher's note or report names a combination by its code (<code>LG-C-…</code> for one report, <code>LG-X-…</code> across reports).
-        Paste it here: Looking Glass finds every device that carried exactly that combination, in the days in memory or in up to {{ max_days }} days
+        Paste it here: Looking Glass finds every device that carried exactly that combination, on the report day, in the days in memory or in up to {{ max_days }} days
         of stored history, and gives you a PDF summary (each name explained with its references, and the researchers' notes) and two CSV files (devices, records) for enrichment and dashboards.</p>
     </section>
 
@@ -54,7 +54,8 @@
     <section class="cb-card" id="cbStep2Box" aria-labelledby="cbStep2" hidden>
       <h2 id="cbStep2"><span class="cb-n">2</span>Where to look</h2>
       <div class="cb-range" role="radiogroup" aria-label="Where to look">
-        <label class="cb-opt"><input type="radio" name="cbWhere" value="memory" checked><span><b>The days in memory</b><small id="cbMemDays">exactly the counts the researcher saw</small></span></label>
+        <label class="cb-opt"><input type="radio" name="cbWhere" value="report" checked><span><b>The report day</b><small id="cbRepDay">exactly the devices the researcher counted; each says whether it carried the same combination on the other days in memory, or what changed</small></span></label>
+        <label class="cb-opt"><input type="radio" name="cbWhere" value="memory"><span><b>The days in memory</b><small id="cbMemDays">every day held in memory, each day on its own</small></span></label>
         <label class="cb-opt"><input type="radio" name="cbWhere" value="history"><span><b>A date range from the stored history</b><small>up to {{ max_days }} days, read from the database one day at a time</small></span></label>
       </div>
       <div class="cb-dates" id="cbDates" hidden>

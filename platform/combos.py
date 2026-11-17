@@ -13,15 +13,20 @@ combination: a ZIP with a PDF summary, the records (CSV) and one row per device 
 and dashboards (Elastic). The matching rule is intel.record_items, the one Intel gathered counts with, so the numbers
 agree with what the researcher saw.
 
-The search runs over the days in memory, or over a date range of the stored history (MongoDB, at most MAX_DAYS days):
-then only the reports of that combination are read, one day at a time, in a background job.
+The search runs over the report day (the default: the day the researchers' Intel gathered counts, report_day.py), the
+days in memory, or a date range of the stored history (MongoDB, at most MAX_DAYS days: then only the reports of that
+combination are read), one day at a time, in a background job. Each day is matched on its own: a device counts on a day
+when it carried the whole combination that day (the user, 2026-11-17: a router seen on 15 Nov and a sinkhole call on 16
+Nov is not one device carrying the combination). On the report day, each device also says whether it carried the same
+combination on the other days in memory, or what it carried there instead (changed); and every device row names its
+infections, issues and CVEs that day.
 
 Codes a researcher was shown are kept in data/combo_codes.json (run-time data, never shipped), so they still resolve when
 the days that produced them have left memory.
 
 API: GET /api/combo-codes/<code> (what a code means, no address: researchers, management, analysts, admins),
 POST /api/combo-codes/new {section, name, report, items} (a researcher builds one for a note: researchers, admins),
-POST /api/combos/search {code, from?, to?} (analysts, admins), GET /api/combos/search/<id>,
+POST /api/combos/search {code, where?: report|memory, from?, to?} (analysts, admins), GET /api/combos/search/<id>,
 GET /api/combos/search/<id>/download. Page: /combinations. Installed from app.py: combos.install(app, ctx).
 """
 import collections
@@ -40,6 +45,8 @@ from flask import Response, g, jsonify, render_template, request, has_request_co
 import csvsafe
 import issue_tags
 import intel as I
+import report_day
+from services_intel import SINK                # a services code's part "the host calls a sinkhole as …"
 
 CODE_RX = re.compile(r"^LG-[CX]-[0-9A-F]{8}$")          # the researchers' codes (this module)
 ANY_RX = re.compile(r"^LG-[CXAB]-[0-9A-F]{8}$")         # and the analysts' (acodes.py) and decoded beacons (beacon_findings.py)
@@ -376,7 +383,7 @@ def install(app, ctx):
         entry = book.get(code)
         if entry:
             return entry
-        data = ctx["intel"].index()
+        data = ctx["intel"].index("memory")       # a code's meaning: every day in memory (report_day.py)
         if code.startswith("LG-C-"):
             for (section, name), reps in data["by"].items():
                 for rep, slot in reps.items():
@@ -422,8 +429,11 @@ def install(app, ctx):
                             "records": entry.get("records"), "hosts": entry.get("hosts"), "names": entry.get("names", []), "notes": []})
         out = public_entry(entry)
         out["notes"] = [{k: v for k, v in n.items() if k != "user"} for n in ctx["notes"].list(entry["section"], entry["name"])]
-        mem = sorted(d.date().isoformat() for d in (ctx["store"] if entry["section"] == "infections" else ctx["svc_store"]).days)
+        st = ctx["store"] if entry["section"] == "infections" else ctx["svc_store"]
+        mem = sorted(d.date().isoformat() for d in st.days)
         out["memory_days"] = mem
+        rd = report_day.select(list(st.days.values()), None, ctx.get("replay_now"))
+        out["report_day"] = rd[0].start.date().isoformat() if rd else None
         return jsonify(out)
 
     @app.route("/api/combo-codes/new", methods=["POST"])
@@ -453,7 +463,7 @@ def install(app, ctx):
         key = (section, name if section == "issues" else name.lower())
         slot = (data["by"].get(key) or {}).get(report)
         if slot is None:
-            return jsonify(error=f"{name} is not in {report} in the days in memory."), 404
+            return jsonify(error=f"{name} is not in {report} on the report day."), 404
         kinds = I.COMMS_COMBO_KINDS if section == "infections" else I.COMBO_KINDS
         me = I._norm(name)
         allowed = {v for k, c in slot["kinds"].items() if k in kinds for v in c if I._norm(v) != me}
@@ -494,19 +504,92 @@ def install(app, ctx):
             job["state"], job["error"] = "failed", "The search failed; the service log has the details."
             job["log"].append(f"Failed: {type(exc).__name__}")
 
-    def run(job, entry, days):
+    def day_matcher(entry, labels, day_iso, mem_isos):
+        """The code's matcher for one day: a services code asks whether a host calls a sinkhole, and which values may be
+        shown, as on that day (a day not in memory: as over the days in memory, the only sinkhole calls there are)."""
+        if entry["section"] == "services" and ctx.get("svc_matcher"):
+            return ctx["svc_matcher"](entry, day_iso if day_iso in mem_isos else "memory")
+        return Matcher(entry, labels)
+
+    def what_carried(entry, md, events, hosts):
+        """{host: what it carried on that day in the code's reports, in words} for hosts that did not carry the code:
+        the combination changed (or the device was in only part of it)."""
+        if not hosts:
+            return {}
+        T = _TITLE["of"] if entry["section"] == "services" else (lambda n: n)
+        per = collections.defaultdict(lambda: collections.defaultdict(set))
+        for e in events:
+            h = md.host(e)
+            if h in hosts and md.of_name(e) and md.report(e) in md.reports:
+                per[h][md.report(e)].update(items_of(md, entry["section"], e))
+        want = ([(entry["report"], list(entry["items"]))] if entry["kind"] == "r" else [(r, list(i)) for r, i in entry["parts"]])
+        sink = getattr(md, "infected", None)
+        out = {}
+        for h in hosts:
+            bits, seen = [], False
+            for r, _items in want:
+                if sink is not None and r == SINK:
+                    names = sorted(sink.get(h, ()))
+                    if names:
+                        seen = True
+                    bits.append(f"calls sinkholes as {', '.join(names)}" if names else "no sinkhole call")
+                    continue
+                got = per[h].get(r) if h in per else None
+                if got is None:
+                    bits.append(f"not in {T(r)}")
+                else:
+                    seen = True
+                    bits.append(f"in {T(r)}" + (f" with {' + '.join(sorted(got))}" if got else ""))
+            if seen:
+                out[h] = "; ".join(bits)
+        return out
+
+    def earlier_notes(entry, labels, hosts, rep_day, mem_days, mem_isos):
+        """Per device found on the report day, for each other day in memory: whether it carried the same combination
+        that day, or what it carried instead (the user, 2026-11-17: "if it changed also state it"). A day where the
+        device was in none of the code's reports says nothing."""
+        out = collections.defaultdict(list)
+        for d in sorted(mem_days, key=lambda d: d.start):
+            if d.start == rep_day.start:
+                continue
+            di = d.start.date().isoformat()
+            md = day_matcher(entry, labels, di, mem_isos)
+            same = {md.host(e) for e in md.match(d.events)} & hosts
+            other = what_carried(entry, md, d.events, hosts - same)
+            for h in hosts:
+                if h in same:
+                    out[h].append({"day": di, "same": True, "text": f"{di}: carried this same combination"})
+                elif h in other:
+                    out[h].append({"day": di, "same": False, "text": f"{di}: changed: {other[h]}"})
+        return dict(out)
+
+    def flags_of(hosts, day_iso):
+        """{host: {infections, issues, cves}} on a day (services_intel.host_flags), {} when not available."""
+        try:
+            return ctx["host_flags"](hosts, day_iso) if ctx.get("host_flags") and hosts else {}
+        except Exception:                                     # noqa: BLE001  (the list still shows without them)
+            if ctx.get("logger"):
+                ctx["logger"].exception("device flags failed")
+            return {}
+
+    def run(job, entry, days, scope="report"):
         if entry.get("kind") == "a":
             return run_acode(job, entry)
         labels = ctx["labels"]()
         svc_code = entry["section"] == "services" and ctx.get("svc_matcher")
-        m = ctx["svc_matcher"](entry) if svc_code else Matcher(entry, labels)
         store = ctx["store"] if entry["section"] == "infections" else ctx["svc_store"]
+        mem_days = sorted(list(store.days.values()), key=lambda d: d.start)
+        mem_isos = {d.start.date().isoformat() for d in mem_days}
+        rep = report_day.select(mem_days, None, ctx.get("replay_now")) if days is None and scope == "report" else []
+        # the matcher the package reads hosts, reports and items with: the report day's, or the search's own range
+        m = (day_matcher(entry, labels, rep[0].start.date().isoformat(), mem_isos) if rep else
+             ctx["svc_matcher"](entry) if svc_code else Matcher(entry, labels))
         if svc_code:                                          # services: the code's reports (services_intel.Matcher)
             cols = m.collections(labels)
         else:
             # every report the name turns up in (memory), so the devices found can be followed into the name's other reports
             key = (entry["section"], entry["name"] if entry["section"] == "issues" else entry["name"].lower())
-            reps = set((ctx["intel"].index()["by"].get(key) or {}).keys()) | m.reports
+            reps = set((ctx["intel"].index("memory")["by"].get(key) or {}).keys()) | m.reports   # the search's own range
             cols = {c for c, lbl in labels.items() if lbl in reps}
         found, around, per_day = [], [], []
 
@@ -514,13 +597,20 @@ def install(app, ctx):
             hs = {m.host(e) for e in hit}
             around.extend(e for e in evs if m.of_name(e) and m.host(e) in hs)
         try:
-            if days is None:                                  # the days in memory, together (as Intel gathered counts)
-                evs = [e for d in list(store.days.values()) for e in d.events]
-                job["log"].append(f"Searching the {len(store.days)} days in memory")
-                found = m.match(evs)
-                keep(evs, found)
-                by_day = collections.Counter(str(e.get("extracted_date") or "")[:10] for e in found)
-                per_day = sorted(by_day.items())
+            if days is None:                                  # the report day, or the days in memory, each day on its own
+                look = rep if scope == "report" else mem_days
+                job["log"].append(f"Searching the report day, {look[0].start.date()}" if scope == "report" and look else
+                                  "No day in memory yet" if not look else f"Searching the {len(look)} days in memory, each day on its own")
+                for d in look:
+                    di = d.start.date().isoformat()
+                    hit = (m if scope == "report" else day_matcher(entry, labels, di, mem_isos)).match(d.events)
+                    found += hit
+                    keep(d.events, hit)
+                    per_day.append((di, len(hit)))
+                    job["log"].append(f"{di}: {len(hit):,} records")
+                if scope == "report" and look:                # the other days in memory: the same, or changed
+                    job["earlier"] = earlier_notes(entry, labels, {m.host(e) for e in found}, look[0], mem_days, mem_isos)
+                    job["flags_day"] = look[0].start.date().isoformat()
                 job["done"] = job["total"] = 1
             else:
                 wset = job.get("_within_hosts")           # drilled down within an analyst's selection: only its devices
@@ -532,7 +622,7 @@ def install(app, ctx):
                         break
                     mem = store.days.get(day)
                     evs = mem.events if mem is not None else ctx["fetch"](entry["section"], cols, day)
-                    hit = m.match(evs)
+                    hit = day_matcher(entry, labels, day.date().isoformat(), mem_isos).match(evs)
                     if wset is not None:
                         hit = [e for e in hit if m.host(e) in wset]
                     found += hit
@@ -637,6 +727,25 @@ def install(app, ctx):
             d["reports"].add(extra["_report"])
             d["days"].add(str(e.get("extracted_date") or "")[:10])
         devs = sorted(devices.values(), key=lambda d: (-d["records"], d["ip"]))
+        # what each device is that day: its infections, issues and CVEs (on its last day with the combination), and on
+        # the report day whether it carried the same combination on the other days in memory, or what instead
+        earlier = job.get("earlier") or {}
+        mem_isos = {dd.date().isoformat() for dd in (ctx["store"] if section == "infections" else ctx["svc_store"]).days}
+        by_last = collections.defaultdict(set)
+        for d in devs:
+            last_day = job.get("flags_day") or max(d["days"] - {""}, default="")
+            by_last[last_day if last_day in mem_isos else "memory"].add(d["ip"])
+        flags = {}
+        kept_flags = job.get("kept_flags")                # a review's report: the flags kept when it was sent
+        for dd, hs in by_last.items():
+            flags.update({h: kept_flags[h] for h in hs if h in kept_flags} if kept_flags is not None else flags_of(hs, dd))
+        for d in devs:
+            f_ = flags.get(d["ip"]) or {}
+            d["flags"] = {k: list(f_.get(k) or []) for k in ("infections", "issues", "cves")}
+            d["earlier"] = earlier.get(d["ip"]) or []
+        if not network and asns is None and not summary_only:
+            job["dev_flags"] = {d["ip"]: d["flags"] for d in devs}      # kept with a review (combo_review.keep_search)
+        earlier_text = lambda d: "; ".join(n["text"] for n in d["earlier"])     # noqa: E731
         # an analyst's selection has several names: no cross-report codes of one name for it
         x = ({"devices": 0, "multi": 0, "sets": [], "patterns": [], "patterns_total": 0} if is_a else across(entry, m, around))
         # per device: the other reports of the name it was seen in, and its cross-report pattern code
@@ -651,10 +760,12 @@ def install(app, ctx):
             Identification", not device_id), sorted. The CSV keeps the keys, beside its reports column."""
             return sorted({T(r) for r in set(per_dev.get(d["ip"], {})) - d["reports"]})
         dev_cols = ["ip", "asn", "network", "country", "region", "city", "records", "days", "first_seen", "last_seen", "reports",
-                    "also_seen_in", "combination_code", "cross_report_code"]
+                    "also_seen_in", "infections", "issues", "cves", "other_days", "combination_code", "cross_report_code"]
         dev_rows = [[d["ip"], d["asn"], d["network"], d["country"] or "", (d["region"] or "").title(), (d["city"] or "").title(), d["records"],
                      len(d["days"]), d["first"] or "", d["last"] or "", ", ".join(sorted(d["reports"])),
-                     ", ".join(sorted(set(per_dev.get(d["ip"], {})) - d["reports"])), entry["code"], xcode.get(d["ip"], "")] for d in devs]
+                     ", ".join(sorted(set(per_dev.get(d["ip"], {})) - d["reports"])), ", ".join(d["flags"]["infections"]),
+                     ", ".join(d["flags"]["issues"]), ", ".join(d["flags"]["cves"]), earlier_text(d),
+                     entry["code"], xcode.get(d["ip"], "")] for d in devs]
         countries, regions, details, city_rows = geography(devs, section)
         shapes = ctx["shapes"]() if devs else None
 
@@ -670,11 +781,13 @@ def install(app, ctx):
             d0, d1 = (entry.get("days") or [entry["day"]])[0], (entry.get("days") or [entry["day"]])[-1]
         elif days:
             d0, d1 = days[0].date().isoformat(), days[-1].date().isoformat()
+        elif job.get("flags_day"):                # the report day
+            d0 = d1 = job["flags_day"]
         else:
             mem = sorted(dd.date().isoformat() for dd in (ctx["store"] if section == "infections" else ctx["svc_store"]).days)
             d0, d1 = (mem[0], mem[-1]) if mem else ("", "")
         span = d0 if d0 == d1 else f"{d0} to {d1}"
-        base = "looking-glass_" + entry["code"] + "_" + (d0 if is_a else f"{d0}_{d1}" if days else "memory")
+        base = "looking-glass_" + entry["code"] + "_" + (d0 if is_a else f"{d0}_{d1}" if days else d0 if job.get("flags_day") else "memory")
         if network:
             base += "_" + (re.sub(r"[^\w.-]+", "-", network).strip("-")[:40] or "network")
         if job.get("file_base"):                  # an advisory names its files itself (advisory.py: CSIRT_network_title_date)
@@ -706,6 +819,17 @@ def install(app, ctx):
             asn_n = next((d["asn"] for d in devs if d["asn"]), "")
             pts.insert(1, f"This report covers one network provider: {network}" + (f" (AS{asn_n})" if asn_n else "")
                        + ". Every figure, the map and both CSV files are limited to its devices and records.")
+        if job.get("flags_day") and devs:                  # the report day: what the other days in memory say about them
+            same_n = sum(1 for d in devs if any(n_["same"] for n_ in d["earlier"]))
+            chg_n = sum(1 for d in devs if d["earlier"] and not any(n_["same"] for n_ in d["earlier"]))
+            other_days = sorted({n_["day"] for d in devs for n_ in d["earlier"]})
+            if same_n or chg_n:
+                pts.append(f"Counted on the report day, {job['flags_day']}. On the other day{'s' if len(other_days) != 1 else ''} in memory "
+                           f"({', '.join(other_days)}): {dv(same_n)} carried this same combination"
+                           + (f", and {dv(chg_n)} carried something else in its reports (changed); each device's row says what." if chg_n else "."))
+            else:
+                pts.append(f"Counted on the report day, {job['flags_day']}: none of these devices carried it, or anything in its reports, "
+                           "on another day in memory.")
         top_r = [r for r in regions if r["value"] != "Unknown region"][:3]
         if top_r:
             if len(top_r) == 1 and len(regions) == 1:
@@ -926,7 +1050,8 @@ def install(app, ctx):
                 "cities": [{"label": f"{c} · {r}" if r else c, "hosts": n} for (c, r), n in city_rows.most_common(20)],
                 "devices": [{"ip": d["ip"], "network": d["network"], "asn": str(d["asn"] or ""), "region": (d["region"] or "").title(),
                              "city": (d["city"] or "").title(), "records": d["records"], "days": len(d["days"]),
-                             "last": (d["last"] or "")[:16].replace("T", " "), "also": ", ".join(also_of(d))}
+                             "last": (d["last"] or "")[:16].replace("T", " "), "also": ", ".join(also_of(d)),
+                             "flags": d["flags"], "earlier": earlier_text(d)}
                             for d in devs[:60]],
                 "csv_devices": f"{base}_devices.csv", "csv_records": f"{base}_records.csv",
                 "across": {"multi": x["multi"], "patterns_total": x["patterns_total"],     # reports by their titles
@@ -999,7 +1124,9 @@ def install(app, ctx):
                           "ports": [{"label": k, "records": n} for k, n in ports.most_common(6)],
                           "top_devices": [{"ip": d["ip"], "network": d["network"], "region": (d["region"] or "").title(), "city": (d["city"] or "").title(),
                                            "records": d["records"], "days": len(d["days"]), "last": (d["last"] or "")[:16].replace("T", " "),
-                                           "also": also_of(d)} for d in devs[:15]],
+                                           "also": also_of(d), "infections": d["flags"]["infections"], "issues": d["flags"]["issues"],
+                                           "cves": d["flags"]["cves"], "earlier": d["earlier"]} for d in devs[:15]],
+                          "report_day": job.get("flags_day") or None,
                           "across": {"multi": x["multi"], "patterns": x["patterns"][:10], "patterns_total": x["patterns_total"], "sets": x["sets"][:6]},
                           "enrich": enr or None}
         if summary_only:                          # the figures only (the page filtered to one network)
@@ -1081,6 +1208,7 @@ def install(app, ctx):
             return jsonify(error=f"{code} stands for decoded beacons: it is worked on in Findings, where a note carrying it "
                                  "becomes a finding and analysts open its devices (Show the devices)."), 400
         days = None
+        scope = "memory" if b.get("where") == "memory" else "report"      # the report day unless asked (2026-11-17)
         if entry.get("kind") != "a" and (b.get("from") or b.get("to")):     # an analyst code is always its own day
             try:
                 f = datetime.fromisoformat(str(b.get("from") or b.get("to"))[:10]).replace(tzinfo=timezone.utc)
@@ -1121,7 +1249,7 @@ def install(app, ctx):
                 job.update(within=within, _within_hosts=wset)
         def in_app():
             with app.app_context():           # the explanation look-ups and the PDF builder run as in a request
-                run(job, entry, days)
+                run(job, entry, days, scope)
         threading.Thread(target=in_app, daemon=True, name=f"combo-{jid}").start()
         return jsonify(id=jid, entry=public_entry(entry), within=within or None)
 
@@ -1173,7 +1301,7 @@ def install(app, ctx):
         hosts = {m.host(e) for e in found if m.host(e)}
         if not hosts:
             return jsonify(error="The search found no device."), 400
-        j["enrich"] = ctx["cross"](hosts)
+        j["enrich"] = ctx["cross"](hosts, j.get("flags_day") or "memory")     # the search's own day(s)
         j["result"] = package(j, *j["inputs"][:5], m=j["inputs"][5])     # the report again, with the analysis in it
         ctx["audit"].add("combo_enrich", user=user(), target=entry.get("code", ""), detail=f"{len(hosts)} devices across every category")
         return jsonify(enrich=j["enrich"], summary=j.get("summary"), file=j["result"]["name"])

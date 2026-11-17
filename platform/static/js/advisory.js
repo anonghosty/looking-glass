@@ -263,7 +263,9 @@
     dc.append(g);
     if ((a.devices || []).length) {
       const t = el("table", "hosts av-ips"), h = el("tr");
-      ["IP address", "Host name", "Ports", "Reports", "CVEs", "Issues", "Infections", "Seen as", "Records", "Last seen (UTC)"].forEach((x) => h.append(el("th", null, x)));
+      // the other days in memory (2026-11-17): the same combination there too, or what the device carried instead
+      const other = a.devices.some((d) => (d.earlier || []).length);
+      ["IP address", "Host name", "Ports", "Reports", "CVEs", "Issues", "Infections", "Seen as", "Records", "Last seen (UTC)", ...(other ? ["Other days"] : [])].forEach((x) => h.append(el("th", null, x)));
       const th = el("thead"); th.append(h); t.append(th);
       const tb = el("tbody");
       // a list cell: every name whole (never split at a hyphen), the line breaking only between names (2026-11-14)
@@ -280,6 +282,12 @@
                   list("mono", d.cves), list(null, d.issues),
                   list("mono", d.infections || d.categories || []),     // what it calls botnet sinkholes as
                   list("muted", d.labels || []), el("td", "num", fmt(d.records)), el("td", "mono", d.last || ""));
+        if (other) {
+          const td = el("td", "av-other");
+          if (!(d.earlier || []).length) td.textContent = "–";
+          for (const n of d.earlier || []) td.append(el("div", /: changed:/.test(n) ? "av-changed" : null, n));
+          tr.append(td);
+        }
         tb.append(tr);
       });
       t.append(tb);

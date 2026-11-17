@@ -384,7 +384,7 @@
       if (st.q) c0.append(el("p", "ig-empty", `Nothing matches “${st.q}”.`));
       else if (d.section === "services") c0.append(el("p", "ig-empty", (a.multi_devices || 0)
         ? `${plural(a.multi_devices, "device")} of this report ${a.multi_devices === 1 ? "is" : "are"} in other services reports too, but no exact pattern is shared by ${d.min_hosts || 5} or more: smaller groups are not shown, to keep hosts unidentifiable.`
-        : "None of this report's devices is in another services report in the days in memory."));
+        : "None of this report's devices is in another services report on the report day."));
       else if (a.multi_devices || 0) c0.append(el("p", "ig-empty", "No exact pattern to show."));
       else c0.append(noOverlap(st.d.reports.map((r) => r.report)));
     }
@@ -492,7 +492,7 @@
     const h = el("header", "ig-card-h"), t = el("div", "ig-card-t");
     t.append(el("i"), el("b", null, "Also calling botnet sinkholes"),
       el("span", null, s.hosts ? `${plural(s.hosts, "device")} (${pct(s.share)} of this report's) are in the network communications reports too: an exposed service on a device that is already infected`
-        : "None of this report's devices is in the network communications reports of the days in memory"));
+        : "None of this report's devices is in the network communications reports of the report day"));
     h.append(t); c.append(h);
     if ((s.reports || []).length) {                // which sinkhole reports these hosts are in
       const reps = el("div", "ig-set ig-sink-reps");
@@ -556,7 +556,7 @@
     const infs = svcSec ? [] : (x.infections || []).filter((i) => i.name.toLowerCase() !== me && qOk(i.name));
     const bi = svcSec ? el("div") : block(d.section === "issues" ? "Infections" : "Other infections", !infs.length ? "none"
       : d.section === "issues" ? `${plural(x.infections_hosts, "host")} calling botnet sinkholes` : `${plural(infs.length, "other infection")} on these devices`, "inf");
-    if (!infs.length && !svcSec) bi.append(el("p", "ig-empty", d.section === "issues" ? "None of these hosts calls a botnet sinkhole in the days in memory." : "These devices call no other infection's sinkhole in the days in memory."));
+    if (!infs.length && !svcSec) bi.append(el("p", "ig-empty", d.section === "issues" ? "None of these hosts calls a botnet sinkhole on the report day." : "These devices call no other infection's sinkhole on the report day."));
     for (const i of infs) {
       const row = el("div", `ig-every-r${st.focus && st.focus !== i.name ? " dim" : ""}`);
       const nm = el("button", "ig-where-name", i.name); nm.type = "button"; nm.title = `Intel gathered for ${i.name}`;
@@ -572,7 +572,7 @@
     // CVEs and issues (other than this one)
     const iss = (x.issues || []).filter((i) => i.name !== d.name && qOk(i.name));
     const bc = block("CVEs and issues", iss.length ? `${fmt(x.issues_total)} on these hosts` : "none", "cve");
-    if (!iss.length) bc.append(el("p", "ig-empty", "No CVE or other issue on these hosts in the services reports of the days in memory."));
+    if (!iss.length) bc.append(el("p", "ig-empty", "No CVE or other issue on these hosts in the services reports of the report day."));
     else {
       // each CVE or issue with the services reports it was found in (what a researcher is about to send)
       const ul = el("div", "ig-every-iss"), openI = (st.open || {}).iss;
@@ -591,7 +591,7 @@
     // services, with their pattern combinations
     const svc = (x.services || []).filter((s) => s.report !== d.name && (qOk(s.title) || s.combinations.some((k) => k.items.some(qOk))));
     const bs = block(svcSec ? "Other services reports" : "Services", svc.length ? plural(svc.length, "report") : "none", "svc");
-    if (!svc.length) bs.append(el("p", "ig-empty", "None of these hosts is in the services reports of the days in memory."));
+    if (!svc.length) bs.append(el("p", "ig-empty", "None of these hosts is in the services reports of the report day."));
     const open_ = (st.open || {}).every;
     // grouped by kind of report, each kind with its count and names: vulnerability, services, other categories
     const KORD = ["Vulnerability reports", "Services reports"];
@@ -627,7 +627,7 @@
       const more = el("button", "ig-more", `Show all ${svc.length} reports`); more.type = "button";
       more.addEventListener("click", () => { st.open = { ...(st.open || {}), every: true }; paint(); }); bs.append(more);
     }
-    c.append(el("p", "ig-foot", `In the days in memory (${(x.days || []).join(", ")}). A pattern value is shown only when 5 or more hosts share it; hosts are counted, never shown.`));
+    c.append(el("p", "ig-foot", `On the report day (${(x.days || []).join(", ")}). A pattern value is shown only when 5 or more hosts share it; hosts are counted, never shown.`));
     return c;
   }
   // services: the report's overview (kb-services.js) and its pattern fields (kb-services-patterns.js) in the same window
@@ -834,7 +834,7 @@
       iconBtn(ICON.copy, `Copy ${d.value}`, () => copy(d.value, "the indicator")));
     said.append(h, ind, el("p", "ig-match-text", d.text || ""));
     body.append(said);
-    if (!places.length) { body.append(el("p", "ig-empty", "The records behind this match are no longer in the days in memory. Open the page again to see what Looking Glass asks now.")); return; }
+    if (!places.length) { body.append(el("p", "ig-empty", "The records behind this match are no longer on the report day. Open the page again to see what Looking Glass asks now.")); return; }
     const layout = el("div", "ig-layout");
     const rail = el("nav", "ig-rail"); rail.setAttribute("role", "tablist"); rail.setAttribute("aria-label", "Names and reports of the match");
     rail.append(el("div", "ig-rail-h", "Only the records carrying it"));
@@ -974,7 +974,7 @@
         return c.events || c.records ? `${day} (${fmt(c.events)} network events, ${fmt(c.records)} services records so far)` : `${day} (no reports yet)`;
       });
       $("leadSub").textContent = said.length ? `No matches between names and reports in what Looking Glass compared: ${said.join(", ")}.`
-        : `No matches between names and reports in ${d.days.join(", ") || "the days in memory"}.`;
+        : `No matches between names and reports in ${d.days.join(", ") || "the report day"}.`;
       if (det) await det.nothing("Looking Glass has nothing to ask."); else card.hidden = true;
       return;
     }

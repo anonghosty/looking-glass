@@ -238,11 +238,16 @@ def front(doc, a):
     if devs:
         f.heading(f"Affected IP addresses ({len(devs):,})")
         # infections apart from CVEs and issues (2026-11-14): what the device calls botnet sinkholes as
-        f.table([("IP address", .13, True), ("Host name", .12, False), ("Ports", .06, True), ("Reports", .2, False),
-                 ("CVEs and issues", .23, False), ("Infections", .14, False), ("Last seen (UTC)", .12, True)],
+        # the other days in memory (2026-11-17): the same combination there too, or what the device carried instead
+        other = any(d.get("earlier") for d in devs)
+        f.table([("IP address", .12 if other else .13, True), ("Host name", .1 if other else .12, False), ("Ports", .05 if other else .06, True),
+                 ("Reports", .16 if other else .2, False), ("CVEs and issues", .2 if other else .23, False),
+                 ("Infections", .12 if other else .14, False), ("Last seen (UTC)", .1 if other else .12, True)]
+                + ([("Other days", .15, False)] if other else []),
                 [[d["ip"], d.get("hostname") or "–", ", ".join(d.get("ports") or []) or "–", ", ".join(d.get("reports") or []) or "–",
                   ", ".join((d.get("cves") or []) + (d.get("issues") or [])) or "–",
-                  ", ".join(d.get("infections") or d.get("categories") or []) or "–", d.get("last") or "–"] for d in devs])
+                  ", ".join(d.get("infections") or d.get("categories") or []) or "–", d.get("last") or "–"]
+                 + (["; ".join(d.get("earlier") or []) or "–"] if other else []) for d in devs])
 
     f.heading("Description")
     if a.get("description"):

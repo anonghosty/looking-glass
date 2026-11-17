@@ -73,7 +73,9 @@ The base covers the infections and categories that Shadowserver's event reports 
 The Definitions page (`/definitions`, permissions *definitions* / *networks*, admins too) is the researchers' page. Its
 server side is in small modules called from `app.py`:
 
-- **`intel.py`, Intel gathered.** From the days in memory it collects, per name and per report, the indicators the
+- **`intel.py`, Intel gathered.** From the report day (`report_day.py`: the day being replayed, or the newest day in
+  memory when that day is not there; the Executive portal passes the day it shows; code look-ups and the analysts'
+  combination search use every day in memory) it collects, per name and per report, the indicators the
   records carry: C2 domains, destination host names, TLS server names, DNS lookups, URLs, user agents, request patterns,
   brute-force usernames and passwords; for services issues the other CVEs on the same hosts, associated tags, products,
   certificate names and fingerprints (SHA-256, JARM, HASSH), server software and web page hashes. For each value and for
@@ -216,8 +218,12 @@ server side is in small modules called from `app.py`:
   (no address). `intel.record_items` is the one matching rule: Intel gathered counts with it and the search matches with it
   so both agree for every name and report. Codes shown to a researcher go to
   `data/combo_codes.json`; a code not there is looked for in memory. The search is a background thread per
-  analyst (one at a time): over the days in memory together, or a date range (at most 31 days) read day by day from
-  MongoDB with `app._combo_fetch` (only the name's reports, inside the constituency). For the devices found it also
+  analyst (one at a time): the report day (default, `report_day.py`), the days in memory, or a date range (at most 31
+  days) read day by day from MongoDB with `app._combo_fetch` (only the name's reports, inside the constituency). Each
+  day is matched on its own (a services code with that day's sinkhole calls: `SVC_INTEL.matcher(entry, day)`). On the
+  report day each device gets its other days in memory (`earlier_notes`: the same combination, or what it carried
+  there instead), and every device its infections, issues and CVEs that day (`services_intel.host_flags`); a review
+  keeps both with its records (`combo_review.keep_search`), so the advisory shows what the search showed. For the devices found it also
   follows them into the name's other reports (cross-report patterns with their codes, sets of reports). The result is a
   ZIP (PDF from `combo_pdf.py`, drawn with `executive_pdf.Doc`'s parts: tiles, activity, findings, the region map and
   tree, bars, explanation cards for the name and every CVE in the combination, plus the devices table and note cards;

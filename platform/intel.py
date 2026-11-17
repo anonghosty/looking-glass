@@ -2,7 +2,8 @@
 
 The reports carry more than a name: the C2 domain a device called, the DNS name it looked up, the URL and user agent
 it used, the usernames a bot tried, the software and certificate fingerprints of a service. This module collects those
-indicators from the days in memory, per name and per report, and looks for the same indicator in more than one place:
+indicators from the report day (report_day.py: the day the Executive portal shows; the user, 2026-11-17), per name and
+per report, and looks for the same indicator in more than one place:
 
 * the same value under two names (one family under two names, or shared infrastructure), with a hint when one of the
   names has no definition yet and the other has;
@@ -28,6 +29,7 @@ from flask import jsonify, request
 
 from privacy import partial_mask_text
 import beacon_decode
+import report_day
 import hostmask
 import small_codes
 
@@ -229,23 +231,33 @@ class Intel:
     def __init__(self, ctx):
         self.ctx = ctx
         self.lock = threading.Lock()
-        self.cache = {"key": None, "at": 0.0, "data": None}
+        self.cache = {"key": None, "at": 0.0, "data": None}       # the report day's (what is shown)
+        self.others = {}                                           # the other scopes' (report_day.py)
 
-    def _days(self):
-        comms = list(self.ctx["store"].days.values())
-        svc = list(self.ctx["svc_store"].days.values())
+    def _days(self, scope=None):
+        """The day copies counted (report_day.py): the report day by default, as the Executive portal counts it (the
+        user, 2026-11-17); "memory" (every day in memory) for the analysts' combination search and code look-ups."""
+        rn = self.ctx.get("replay_now")
+        comms = report_day.select(list(self.ctx["store"].days.values()), scope, rn)
+        svc = report_day.select(list(self.ctx["svc_store"].days.values()), scope, rn)
         return comms, svc
 
-    def index(self):
+    def index(self, scope=None):
         """{(platform, name): {report: {"records": n, kinds: {kind: Counter}}}}, the match index and the days covered."""
-        comms, svc = self._days()
+        comms, svc = self._days(scope)
         # kept while the same copies of the days are in memory (speed review, 2026-11-15: worked out again every 5
-        # minutes, 14 s on the first visit); an hour at most
+        # minutes, 14 s on the first visit); an hour at most. One cache per scope
         key = (tuple((d.start, getattr(d, "serial", 0), len(d.events)) for d in comms)
                + tuple((d.start, getattr(d, "serial", 0), len(d.events)) for d in svc))
+        sk = report_day.scope_key(scope)
         with self.lock:
-            if self.cache["key"] == key and time.time() - self.cache["at"] < 3600:
-                return self.cache["data"]
+            if sk != "report" and sk not in self.others and len(self.others) >= 6:
+                self.others.pop(next(iter(self.others)))   # days that left memory: their counts are not kept forever
+            # its own name: "slot" below is a report's counts (2026-11-17: sharing the name, the cache was never kept and
+            # every answer counted the days again, about 3 s each)
+            cache = self.cache if sk == "report" else self.others.setdefault(sk, {"key": None, "at": 0.0, "data": None})
+            if cache["key"] == key and time.time() - cache["at"] < 3600:
+                return cache["data"]
         labels = self.ctx["labels"]()
         _refresh_inbound(self.ctx)                 # a report found since start-up
         # per value and per combination: records, and records per host (hosts are counted, never kept in an answer)
@@ -321,7 +333,7 @@ class Intel:
         del dev_items
         data = {"by": by, "match": match, "days": days, "sets": sets, "xcombos": xcombos}
         with self.lock:
-            self.cache.update(key=key, at=time.time(), data=data)
+            cache.update(key=key, at=time.time(), data=data)
         return data
 
     def hosts_of(self, section, name):
