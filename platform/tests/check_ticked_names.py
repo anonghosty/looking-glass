@@ -232,8 +232,12 @@ try:
     A3 = "lg-check-analyst3"
     jid3, s3 = search(code, user=A3)
     pv3 = s3.get("preview") or {}
-    pick3 = sorted((pv3.get("issues") or []), key=lambda x: x["hosts"])[0]
-    st, d = call(f"/api/combos/search/{jid3}/review", ANALYST, "POST", {"codes": [], "issues": [pick3["name"]], "title": "Drilled", "to": "lg-check-management"}, user=A3)
+    # an issue or an infection, as the second analyst above: what the devices carry depends on the data (the GitHub
+    # checks' made-up week has no issue on these devices on the report day, 2026-11-17)
+    small3 = sorted((pv3.get("issues") or []) + (pv3.get("infections") or []), key=lambda x: x["hosts"])
+    pick3 = small3[0]
+    kind3 = "issues" if pick3 in (pv3.get("issues") or []) else "infections"
+    st, d = call(f"/api/combos/search/{jid3}/review", ANALYST, "POST", {"codes": [], kind3: [pick3["name"]], "title": "Drilled", "to": "lg-check-management"}, user=A3)
     fid3 = (d.get("finding") or "#").lstrip("#")
     st, d = call(f"/api/findings/{fid3}/review-decision", MGMT, "POST", {"choice": "researcher", "text": "The researcher's view.", "to": "lg-check-advisor"}, **MG)
     ok("management chooses the researcher's view: marked as drilled down", st == 200 and d["finding"]["review"]["decision"] == "researcher"

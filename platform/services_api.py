@@ -7,6 +7,7 @@ import bisect
 import csvsafe
 import io
 import os
+import threading
 import time
 import urllib.parse
 from collections import Counter
@@ -17,6 +18,26 @@ from werkzeug.datastructures import MultiDict
 
 import masked_fields
 from privacy import mask_ip, masked_id
+
+_MASKED = {}            # id(day) -> ((serial, records, list), {masked id: record}); only the days someone opened a record of
+_MASKED_DAYS = 3
+_MASKED_LOCK = threading.Lock()
+
+
+def _by_masked_id(day):
+    """{masked id: record} of one loaded day, built on the first click and kept while the same copy of the day is in
+    memory (a new copy, a reload or more records, builds it again). At most _MASKED_DAYS days are kept."""
+    key = (getattr(day, "serial", 0), len(day.events), id(day.events))
+    with _MASKED_LOCK:
+        hit = _MASKED.get(id(day))
+    if hit is not None and hit[0] == key:
+        return hit[1]
+    table = {masked_id(x["id"]): x for x in day.events if x.get("id")}
+    with _MASKED_LOCK:                   # two clicks at once: each builds, the last one kept; the dict is never iterated unlocked
+        if id(day) not in _MASKED and len(_MASKED) >= _MASKED_DAYS:
+            _MASKED.pop(next(iter(_MASKED)), None)
+        _MASKED[id(day)] = (key, table)
+    return table
 from respcache import ResultCache, day_key
 from replay_counts import ReplayCounts
 from services import (BANNER, banner_mask, EMPTY,FAMILIES, FILTER_KEYS, SEV_ORDER, ServiceRegistry, ServiceStore, matches, parse_filters,
@@ -383,9 +404,10 @@ def register(app, ctx):
         demo = is_demo()
         eid = request.args.get("id", "")
         day = day_for(request.args.get("at"))
-        # a masked viewer holds the masked id (privacy.masked_id), never the record's own
-        match = (lambda x: masked_id(x["id"]) == eid) if demo else (lambda x: x["id"] == eid)
-        e = next((x for x in day.events if match(x)), None)
+        # a masked viewer holds the masked id (privacy.masked_id), never the record's own: looked up in the day's own
+        # table, built once (security review, 2026-11-17: working out every record's masked id on each click took up to
+        # ~2 s on a day of a million records, on a request thread)
+        e = _by_masked_id(day).get(eid) if demo else next((x for x in day.events if x["id"] == eid), None)
         if not e:
             return jsonify(error="not found"), 404
         same = [x for x in day.events if x["ip"] == e["ip"]]

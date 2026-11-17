@@ -777,7 +777,8 @@ Security scripts:
   no name): `report_names.special_name` cuts the name where the country part begins, learnt from the ordinary reports
   (whose names hold no hyphen), or else at the last word before `-geo`; both registries (`sources.py`, `services.py`)
   skip every `special*` collection, so they never enter the replay, totals or baselines; `/api/overview` carries
-  `special`: per collection and shared date, rows and distinct hosts (counts only, cached 10 minutes), shown on the
+  `special`: per collection and shared date, rows and distinct hosts (counts only, cached 10 minutes and counted in a
+  background thread: a page gets the last count at once, an expired one is refreshed behind it), shown on the
   intro page.
 - Executive portal figures (`management.py`): lists are ranked by distinct devices (IP addresses) when they are known,
   records breaking ties; the 7-day baseline keeps every infection and issue of each past day (`item_count` reads a

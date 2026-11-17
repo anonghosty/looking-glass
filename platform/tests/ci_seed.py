@@ -55,7 +55,9 @@ def main():
         per = {c: [] for c in COMMS + SERVICES}
         for i, ip in enumerate(H[:300]):
             region, city = REGIONS[i % len(REGIONS)]
-            asn = 64500 + i % 12
+            # not i % 12: the CVEs go to every sixth device, so each CVE pair fell in ONE network and the checks of
+            # several organisations (check_combo_review) had one to pick from (2026-11-17)
+            asn = 64500 + (i // 3) % 12
             infections = [INFECTIONS[i % 5]] + ([INFECTIONS[(i + 2) % 5]] if i % 4 == 0 else [])
             reports = [COMMS[0]] + ([COMMS[1]] if i % 3 == 0 else []) + ([COMMS[2]] if i % 7 == 0 else [])
             for rep in reports:

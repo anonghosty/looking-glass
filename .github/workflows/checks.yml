@@ -63,7 +63,8 @@ jobs:
           # the platform reads the throwaway database with the one-run administrator (never stored anywhere)
           set -a; . "$LG_MONGO_ADMIN_FILE"; set +a
           python tests/ci_seed.py
-          for t in check_combos check_acodes check_management; do
+          # check_combo_review and check_ticked_names decide which devices an advisory carries (security review, 2026-11-17)
+          for t in check_combos check_acodes check_management check_combo_review check_ticked_names; do
             echo "::group::$t"
             if ! python tests/$t.py; then echo "$t did not pass"; exit 1; fi
             echo "::endgroup::"

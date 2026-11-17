@@ -57,11 +57,35 @@ def _in_scope_groups(coll, scope):
 def listing(db, force=False, scope=None, version=0):
     """Every Special Report file in MongoDB: per collection and per shared date (the file's date prefix), the rows and
     distinct hosts. Counts only, never an address. scope(asn, ip): the constituency when one is set (version: its
-    version, part of the cache key), so a CSIRT that set its networks sees only its own part. Cached for TTL seconds."""
+    version, part of the cache key), so a CSIRT that set its networks sees only its own part. Cached for TTL seconds.
+
+    Counted in the background, never while a page waits (security review, 2026-11-17: with a constituency set, every
+    row of every Special Report is read and filtered here): a request gets the last count straight away (none yet just
+    after a start or a change of the constituency: the list then appears on the next visit) and, when it is older than
+    TTL, starts one refresh. force=True counts now and waits (the checks)."""
     key = (scope is not None, version)
     with _lock:
-        if not force and time.time() - _cache["t"] < TTL and _cache.get("key") == key:
+        fresh = time.time() - _cache["t"] < TTL and _cache.get("key") == key
+        if not force and fresh:
             return list(_cache["rows"])
+        if not force:
+            rows = list(_cache["rows"]) if _cache.get("key") == key else []
+            if not _cache.get("running"):
+                _cache["running"] = True
+                threading.Thread(target=_refresh, args=(db, scope, key), daemon=True, name="special-reports").start()
+            return rows
+    return _count(db, scope, key)
+
+
+def _refresh(db, scope, key):
+    try:
+        _count(db, scope, key)
+    finally:
+        with _lock:
+            _cache["running"] = False
+
+
+def _count(db, scope, key):
     out = []
     try:
         names = [n for n in db.list_collection_names() if is_special(n)]

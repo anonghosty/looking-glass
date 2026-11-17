@@ -5,6 +5,18 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-17 (9)
+### Changed
+- **A record's details open at once for masked viewers.** On the services platform, opening a record looked for it by
+  working out the masked id of every record of the day, up to about 2 seconds on a day of a million records. Each day
+  now keeps a table of them, built on the first click.
+- **Special Reports are counted in the background.** With a constituency set, the Overview's Special Reports list read
+  every row of every Special Report while the page waited. A page now gets the last count at once and an expired one is
+  refreshed behind it; just after a start or a change of the constituency the list appears on the next visit.
+- **The GitHub checks now test which devices an advisory carries** (`check_combo_review`, `check_ticked_names`), on a
+  made-up week whose combinations span several organisations.
+  Nothing to do when updating.
+
 ## 2026-11-17 (8)
 ### Fixed
 - **The researcher's words appear once on a review.** Under *What the researcher is saying*, a finding made from a

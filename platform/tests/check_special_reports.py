@@ -100,9 +100,31 @@ else:
         ok("with a constituency set: only its rows and hosts (90 rows, 30 hosts of 300 and 120)",
            (sp2.get("rows"), sp2.get("hosts")) == (90, 30), str(sp2))
         ok("…a special report with nothing inside it is not listed", "special_loop_dos" not in scoped, str(set(scoped)))
-        ok("…and the cached whole-country listing is never served for the constituency (or back)",
-           SR.listing(db)[0] is not None and {r["report"]: r for r in SR.listing(db)}["special"]["rows"] == 300
-           and {r["report"]: r for r in SR.listing(db, scope=inside, version=7)}["special"]["rows"] == 90)
+        # counted in the background (security review, 2026-11-17): a page never waits for the count; the first answer
+        # for another scope is empty, never the other scope's rows, and the next one has its own
+        t0 = time.perf_counter(); first = SR.listing(db); waited = time.perf_counter() - t0
+
+        def settled(**kw):
+            for _ in range(100):
+                with SR._lock:
+                    busy = SR._cache.get("running")
+                if not busy:
+                    break
+                time.sleep(0.05)
+            return {r["report"]: r for r in SR.listing(db, **kw)}
+        ok("…a page asking for another scope gets an answer at once, and never the constituency's rows", first == [] and waited < 0.05,
+           f"{len(first)} rows in {waited * 1000:.1f} ms")
+        whole = settled()
+        ok("…counted in the background: the next visit has the whole country (300)", whole.get("special", {}).get("rows") == 300, str(whole.get("special")))
+        SR.listing(db, scope=inside, version=7)
+        back = settled(scope=inside, version=7)
+        ok("…and back to the constituency: its own 90, never the whole country's", back.get("special", {}).get("rows") == 90, str(back.get("special")))
+        with SR._lock:
+            SR._cache["t"] = 0.0                       # expired: the stale count is served while one refresh runs
+        t0 = time.perf_counter(); stale = SR.listing(db, scope=inside, version=7); waited = time.perf_counter() - t0
+        ok("an expired count is still served at once while it is counted again", {r["report"]: r for r in stale}.get("special", {}).get("rows") == 90
+           and waited < 0.05, f"{waited * 1000:.1f} ms")
+        settled(scope=inside, version=7)
     finally:
         proc.terminate()
         try:
