@@ -34,9 +34,10 @@ Installed from app.py: beacon_decode.install(app, ctx) adds POST /api/beacon/dec
 """
 import base64
 import binascii
-import functools
+import collections
 import json
 import re
+import threading
 import time
 import urllib.parse
 import zlib
@@ -45,7 +46,11 @@ MAX_URL = 16384            # a request line longer than this is not looked at
 MAX_BLOB = 8192            # nor a query value longer than this
 MIN_BLOB = 40              # shorter values are ids and tokens, not beacons
 MAX_CANDIDATES = 4         # query values tried per request line
-TIME_BUDGET = 0.25         # seconds per request line, all formats together
+TIME_BUDGET = 0.25         # seconds per request line, all formats together: of this thread's own work (_now)
+# the budget counts the decoding thread's CPU time, not the clock: on a busy server (the warm-up after a reload, several
+# people at once) a decode waits for the others, and that wait used to use up its budget, so a check-in that decodes in
+# 20 ms was reported "did not decode" (2026-11-17: two CLogin records on live)
+_now = time.thread_time
 MAX_COMBOS = 4096          # key choices scored per 4-character group; more than this and the format does not fit
 
 B64_CHARS = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
@@ -266,11 +271,16 @@ OPAQUE = [
            "27 random-looking bytes (URL-safe Base64): an opaque per-device ID", "id"),
     Opaque("clickby", "clickby statistics request", r"clickby\.net$", r"/s2?\.php$", ("d",),
            "the same value on every record seen: a campaign token, not device data", "token"),
+    # a device check-in POSTed by android.badbox2 apps (u.php; pic.php with two more fields): the device's own values travel
+    # in the other parameters (names such as emc / wmc, which read as the Ethernet and Wi-Fi MAC, sdk, aid), already masked;
+    # p is a few short random-looking values, each shared by many devices, with no text under XOR: a token (the creator's
+    # request to automate it, 2026-11-17; structure only was read)
     Opaque("sustat", "sustat statistics request", r"(sustat|dqmop)\.com$", r"/(u|pic)\.php$", ("p",),
-           "a few distinct short binary values: not decoded"),
+           "a few short random-looking values, each shared by many devices: a campaign token, not device data (the "
+           "device's details travel in the request's other parameters)", "token"),
     Opaque("plugcallinfo", "plugcallinfo terminal request", r"(ycxrl|apotube)\.com$", r"/terminal/client/plugcallinfo$", ("key",),
            _BLOCKS, "encrypted"),
-    Opaque("flyermobi", "flyermobi ad SDK device ID", r"flyermobi\.com$", r"/adbs?c$", ("udid",),
+    Opaque("flyermobi", "flyermobi ad SDK device ID", r"flyermobi\.com$", r"/(adbs?c|dzzb)$", ("udid",),
            "20 bytes as hex: a device ID (hash-sized), the same on every call of one device: not encoded", "id"),
 ]
 
@@ -384,7 +394,7 @@ def key_choices(ct, key_len, alphabet, deadline):
     ct = ct[:end]
     groups = []
     for g in range(key_len // 4):
-        if time.monotonic() > deadline:
+        if _now() > deadline:
             return None
         opts = cols[4 * g:4 * g + 4]
         if len(opts[0]) * len(opts[1]) * len(opts[2]) * len(opts[3]) > MAX_COMBOS:
@@ -445,7 +455,7 @@ def recover_key(ct, key_len, alphabet, deadline, vocab=frozenset()):
         changed = False
         for gi, opts in enumerate(groups):
             for alt in opts[1:]:
-                if time.monotonic() > deadline:
+                if _now() > deadline:
                     return b"".join(key)
                 trial = key[:gi] + [alt] + key[gi + 1:]
                 s = score(trial)
@@ -513,7 +523,7 @@ def refine_key(ct, key, alphabet, deadline, vocab=frozenset(), fixed=0, passes=4
             for c in alphabet:
                 if c == keep:
                     continue
-                if time.monotonic() > deadline:
+                if _now() > deadline:
                     key[j] = keep
                     return bytes(key)
                 key[j] = c
@@ -553,7 +563,7 @@ def _try(fmt, value, deadline):
     if not key:
         return None
     r = _read(fmt, outer, key, lenient=False)
-    if r is None and fmt.known_start and time.monotonic() < deadline:
+    if r is None and fmt.known_start and _now() < deadline:
         # a key nearly right (2026-11-16: longer check-ins the first recovery misses by a character): the known start
         # of the JSON fixes the first characters exactly, then each other position is settled (refine_key)
         fixed = known_start_key(outer, key, fmt.known_start)
@@ -692,7 +702,7 @@ def generic(value, deadline):
     seen = set()
     while todo:
         steps, b = todo.pop(0)
-        if time.monotonic() > deadline or len(steps) >= GENERIC_DEPTH:
+        if _now() > deadline or len(steps) >= GENERIC_DEPTH:
             continue
         for name, nb in _layers(b):
             if nb in seen or nb == b:
@@ -712,16 +722,16 @@ def generic(value, deadline):
     return None
 
 
-@functools.lru_cache(maxsize=4096)
-def _decode_cached(url):
-    deadline = time.monotonic() + TIME_BUDGET
+def _decode_once(url):
+    """(decoded results, finished): finished is False when the budget ran out before every value was tried."""
+    deadline = _now() + TIME_BUDGET
     out = []
     for path, param, value in candidates(url):
         # the format expected at this path and parameter first, then the others (the same encoding may move)
         done = False
         for fmt in sorted(FORMATS, key=lambda f: not f.at(path, param)):
-            if time.monotonic() > deadline:
-                return tuple(out)
+            if _now() > deadline:
+                return tuple(out), False
             r = _try(fmt, value, deadline)
             if r:
                 out.append(json.dumps({**r, "param": param, "path": path[:200]}))
@@ -732,7 +742,38 @@ def _decode_cached(url):
             r = generic(value, deadline)
             if r:
                 out.append(json.dumps({**r, "param": param, "path": path[:200]}))
-    return tuple(out)
+    # a try that stopped on the deadline returned nothing without having finished: not an answer
+    return tuple(out), _now() <= deadline
+
+
+# finished answers only, by request line: a decode cut short by the budget is never kept, so it is tried again next time
+# instead of being reported for the life of the process as "did not decode" (2026-11-17)
+_CACHE, _CACHE_LOCK, _CACHE_MAX = collections.OrderedDict(), threading.Lock(), 4096
+
+
+def _decode_cached(url):
+    with _CACHE_LOCK:
+        hit = _CACHE.get(url)
+        if hit is not None:
+            _CACHE.move_to_end(url)
+            return hit
+    out, finished = _decode_once(url)
+    if finished:
+        with _CACHE_LOCK:
+            _CACHE[url] = out
+            while len(_CACHE) > _CACHE_MAX:
+                _CACHE.popitem(last=False)
+    return out
+
+
+def decode_finished(url):
+    """True when this request line's decode finished (its answer is kept): only then is a value that did not decode at a
+    format's own place reported as "did not decode"."""
+    with _CACHE_LOCK:
+        return str(url) in _CACHE
+
+
+_decode_cached.cache_clear = lambda: _CACHE.clear()
 
 
 SENDABLE_STATES = ("unknown", "cut")      # a known family not decoded yet, or a known format whose value did not decode
@@ -851,11 +892,14 @@ def seen(url, host=None):
         return []
     path, parts = _query(url)
     got = {d.get("param") for d in decode(url)}
+    finished = decode_finished(url)           # a decode cut short by the budget says nothing about the value
     out = []
     for param, _, value in parts:
         if len(value) < 16 or param in got:
             continue
         f = next((f for f in FORMATS if f.at(path, param)), None)
+        if f and not finished:
+            continue                          # not "did not decode": it is tried again next time
         if f:
             out.append({"format": f.name, "title": f.title, "decoded": False, "param": param, "state": "cut",
                         "status": status_text("cut"),
@@ -868,13 +912,32 @@ def seen(url, host=None):
     return out
 
 
-@functools.lru_cache(maxsize=16384)
+_SUMMARY, _SUMMARY_MAX = collections.OrderedDict(), 16384
+
+
 def _summary(url, host):
+    """The public summary of a request's beacon, kept only once its decode finished (a decode cut short by the budget
+    is worked out again next time, never kept as "no beacon": 2026-11-17)."""
+    k = (url, host)
+    with _CACHE_LOCK:
+        hit = _SUMMARY.get(k)
+        if hit is not None:
+            return hit
     d = first(url)
     if d:
-        return tuple(sorted(public(d).items()))
-    s = seen(url, host)
-    return tuple(sorted(public(s[0]).items())) if s else ()
+        out = tuple(sorted(public(d).items()))
+    else:
+        s = seen(url, host)
+        out = tuple(sorted(public(s[0]).items())) if s else ()
+    if decode_finished(url) or not candidates(url):
+        with _CACHE_LOCK:
+            _SUMMARY[k] = out
+            while len(_SUMMARY) > _SUMMARY_MAX:
+                _SUMMARY.popitem(last=False)
+    return out
+
+
+_summary.cache_clear = lambda: _SUMMARY.clear()
 
 
 def field(e, name):

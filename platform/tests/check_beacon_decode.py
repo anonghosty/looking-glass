@@ -120,7 +120,7 @@ ok("...and its state", B.field({"http_url": tl, "http_host": "txy.ttyunos.com"},
 # each family says whether its value is encoded at all (the user, 2026-11-16)
 st = {o.name: o.state for o in B.OPAQUE}
 ok("encrypted, a one-way hash, an ID, a token, not decoded yet: each family has its state",
-   st == {"ttyunos": "encrypted", "weatherlive": "encrypted", "adoverocean": "hash", "pixellog": "id", "clickby": "token", "sustat": "unknown",
+   st == {"ttyunos": "encrypted", "weatherlive": "encrypted", "adoverocean": "hash", "pixellog": "id", "clickby": "token", "sustat": "token",
          "plugcallinfo": "encrypted", "flyermobi": "id"}, str(st))
 ok("...the ones with nothing encoded in them say 'not encoded'",
    all("not encoded" in B.status_text(s) and B.status_text(s, long=True).startswith("Not encoded") for s in ("hash", "id", "token"))
@@ -191,7 +191,13 @@ sv3 = B.seen(f"GET /terminal/client/plugcallinfo?key={blk} HTTP/1.1", "ycxrl.com
 ok("the plugcallinfo terminal request: encrypted", sv3 and sv3[0]["format"] == "plugcallinfo" and sv3[0]["state"] == "encrypted", str(sv3))
 sus = _b64m.b64encode(bytes(rnd.randrange(256) for _ in range(24))).decode()
 sv4 = B.seen(f"GET /u.php?p={sus} HTTP/1.1", "sc.dqmop.com")
-ok("sustat's second host: the same family, not decoded yet", sv4 and sv4[0]["format"] == "sustat" and sv4[0]["state"] == "unknown", str(sv4))
+ok("sustat's second host: the same family, a campaign token (2026-11-17)", sv4 and sv4[0]["format"] == "sustat" and sv4[0]["state"] == "token"
+   and "not device data" in sv4[0]["what"], str(sv4))
+ok("... and never offered for a decoding request (sending it could not give a decoder)",
+   not B.sendable(f"GET /u.php?p={sus} HTTP/1.1", "v.sustat.com") and not B.sendable(f"GET /pic.php?p={sus} HTTP/1.1", "sc.dqmop.com"))
+sv5 = B.seen(f"GET /dzzb?pkg=x&udid={udid} HTTP/1.1", "adbsc.flyermobi.com")
+ok("flyermobi's /dzzb path: the same device ID, named, not encoded (2026-11-17)",
+   sv5 and sv5[0]["format"] == "flyermobi" and sv5[0]["state"] == "id" and not B.sendable(f"GET /dzzb?udid={udid} HTTP/1.1", "adbsc.flyermobi.com"), str(sv5))
 ok("a device ID or an encrypted family is never offered for a decoding request",
    not B.sendable(f"GET /adbsc?udid={udid} HTTP/1.1", "adbsc.flyermobi.com")
    and not B.sendable(f"GET /terminal/client/plugcallinfo?key={blk} HTTP/1.1", "ycxrl.com"))
@@ -330,6 +336,35 @@ ok("... with the C2 host and user agent given, still none", code == 200 and not 
 ok("a request line with nothing in it answers an empty list", post(ANALYST, "tok", {"url": "GET / HTTP/1.1"}) == (200, {"beacons": []}))
 ok("name to OS: android.badbox2 -> android, win32.x -> windows, mirai -> unknown",
    (B.name_os("android.badbox2"), B.name_os("win32.emotet"), B.name_os("mirai")) == ("android", "windows", ""))
+
+# ---- a busy server (2026-11-17): two CLogin check-ins that decode in 20 ms were listed "did not decode" on live. The
+# budget counted the clock, so waiting for other threads used it up, and the failure was kept for the life of the process
+print("A decode cut short by its time budget")
+ok("the budget counts this thread's own CPU time, not the clock", B._now is __import__("time").thread_time)
+tick = {"t": 0.0}
+_real_now = B._now
+
+
+def _slow_clock():                     # a clock that runs out the budget at once: as a starved thread used to see it
+    tick["t"] += 10.0
+    return tick["t"]
+
+
+fresh = line(encode(made_up(77, operator="PKS", version="PKS:2.1.0"), rkey()))
+B._decode_cached.cache_clear(); B._summary.cache_clear()
+try:
+    B._now = _slow_clock
+    cut_short = B.decode(fresh)
+    sn = B.seen(fresh, "c2.example")
+    fd = B.field({"http_url": fresh, "http_host": "c2.example"}, "format")
+finally:
+    B._now = _real_now
+ok("cut short: no decode, and it is NOT kept", cut_short == [] and not B.decode_finished(fresh))
+ok("... nor reported as 'did not decode' (so never offered for a decoding request)", sn == [] and not B.sendable(fresh, "c2.example"), str(sn))
+ok("... nor kept as 'no beacon' in the summaries (Intel, filters)", fd == "" and not B._SUMMARY)
+again = B.decode(fresh)
+ok("the next try, with time, decodes it and keeps the answer", again and again[0]["operator"] == "PKS" and B.decode_finished(fresh))
+ok("... and the summary then names it", B.field({"http_url": fresh, "http_host": "c2.example"}, "format") != "")
 
 print(f"\n{checks - len(fails)}/{checks} checks passed")
 if fails:

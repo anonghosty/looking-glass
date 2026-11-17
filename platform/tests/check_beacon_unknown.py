@@ -104,10 +104,14 @@ evs.append({"src_ip": "192.0.2.91", "infection": "android.badbox2", "source": "e
             "http_url": f"GET /api/desk/getData?a={aes} HTTP/1.1"})
 evs.append({"src_ip": "192.0.2.92", "infection": "x.test", "source": "event4_sinkhole_http", "http_host": "h.example",
             "http_url": f"GET /api/report?data={b64json} HTTP/1.1"})
-# a known family not decoded yet (sustat): listed too, so it can be asked for (the user, 2026-11-16)
+# a known family not decoded yet: listed too, so it can be asked for (the user, 2026-11-16). sustat was that example until
+# it was found to be a token (2026-11-17): a made-up family stands in for it here, sustat is checked as never listed
+B.OPAQUE.append(B.Opaque("stattest", "stattest statistics request", r"stattest\.example$", r"/u\.php$", ("p",), "not decoded"))
 sus = base64.b64encode(bytes(rnd.randrange(256) for _ in range(24))).decode()
-evs.append({"src_ip": "192.0.2.93", "infection": "android.badbox2", "source": "event4_sinkhole_http", "http_host": "v.sustat.com",
+evs.append({"src_ip": "192.0.2.93", "infection": "android.badbox2", "source": "event4_sinkhole_http", "http_host": "v.stattest.example",
             "http_url": f"GET /u.php?p={sus} HTTP/1.1"})
+evs.append({"src_ip": "192.0.2.94", "infection": "android.badbox2", "source": "event4_sinkhole_http", "http_host": "v.sustat.com",
+            "http_url": f"GET /u.php?p={base64.b64encode(bytes(rnd.randrange(256) for _ in range(24))).decode()} HTTP/1.1"})
 tmp = tempfile.mkdtemp()
 audit = []
 ctx = {"store": type("S", (), {"days": {0: Day(evs)}})(), "labels": lambda: {"event4_sinkhole_http": "Sinkhole HTTP"}, "base_dir": tmp,
@@ -126,12 +130,13 @@ ok("a decoded check-in, an encrypted family and a generic decode are not listed;
    {f["param"] for f in fams} == {"q", "d", "p"}, str({f["param"] for f in fams}))
 susf = [f for f in fams if f["param"] == "p"]
 ok("... with its known name and status, so it can be asked for like the others",
-   susf and susf[0]["known"] == "sustat statistics request (not decoded yet)" and all(f["known"] == "" for f in fams if f["param"] != "p"),
+   susf and susf[0]["known"] == "stattest statistics request (not decoded yet)" and all(f["known"] == "" for f in fams if f["param"] != "p"),
    str(susf and susf[0]["known"]))
+ok("sustat, a campaign token (2026-11-17), is not listed for decoding", len(susf) == 1 and "sustat" not in json.dumps(fams))
 ok("... and its request line keeps only that value", susf and all(sus in x["request"] for x in susf[0]["_requests"]))
 ok("a plain-text value at a known family's place is not offered for a decoding request (security review of 228293b)",
-   not B.sendable("GET /u.php?p=a plain sentence with words HTTP/1.1", "v.sustat.com")
-   and not B.sendable("GET /u.php?p=hello.world.this.is.text HTTP/1.1", "v.sustat.com"))
+   not B.sendable("GET /u.php?p=a plain sentence with words HTTP/1.1", "v.stattest.example")
+   and not B.sendable("GET /u.php?p=hello.world.this.is.text HTTP/1.1", "v.stattest.example"))
 listing_text = json.dumps(un.listing())
 ok("no device address in the listing, and the value only in the request lines the administrator checks before approving",
    "192.0.2." not in listing_text and tok not in json.dumps([{k: v for k, v in f.items() if k != "requests"} for f in un.listing()]))

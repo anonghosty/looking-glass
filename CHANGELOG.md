@@ -5,6 +5,22 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-17 (6)
+### Changed
+- **sustat is named a campaign token, not "not decoded yet".** Its `p=` value is a few short random-looking values,
+  each shared by many devices, with no text under XOR: a token, not device data. The request itself is a device check-in
+  (`u.php`; `pic.php` with two more fields) whose device details travel in its other parameters, which are masked. It is
+  no longer offered for a decoding request, since sending it could not give a decoder.
+- **flyermobi's `/dzzb` request is named too:** the same ad SDK device ID as `/adbc` and `/adbsc` (hash-sized, not
+  encoded).
+
+### Fixed
+- **A busy server no longer makes a check-in "did not decode".** The decoder's 0.25-second budget counted the clock, so
+  on a busy server (the warm-up after a reload, several people at once) a decode waiting for others used it up, and the
+  failure was kept for the life of the process: two CLogin check-ins that decode in 20 ms were listed under "Requests
+  Looking Glass could not decode" and offered for a decoding request. The budget now counts the decode's own work, a
+  decode cut short is never kept (it is tried again next time), and it is never reported as "did not decode".
+
 ## 2026-11-17 (5)
 ### Security
 - **Masked viewers get less of each record.** External viewers and demo mode received two fields they never needed:
