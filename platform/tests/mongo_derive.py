@@ -67,6 +67,8 @@ def services(db, names, labels, start):
         if S(d.get("freak_vulnerable")).upper() == "Y": issues.append("FREAK")
         if S(d.get("cert_expired")).upper() == "Y": issues.append("Expired certificate")
         issues += [MARK[x] for x in tags if x in MARK]
+        if S(d.get("device_type")).strip().lower() == "ai-attack-framework" and "AI attack framework" not in issues:
+            issues.append("AI attack framework")       # an issue by its device type (2026-11-17), written out here again
         if fam(n) == "Compromised" and not issues:
             issues.append("Compromised")
         out.append({"ip": S(d.get("ip")), "asn": S(d.get("asn")), "region": S(d.get("region")), "city": S(d.get("city")),

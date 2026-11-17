@@ -70,6 +70,15 @@
       "references": ["https://www.shadowserver.org/what-we-do/network-reporting/compromised-website-report/"],
       "status": "reviewed", "confidence": "medium", "updated": "2026-11-08", "curated_by": "Looking Glass"
     },
+    "AI attack framework": {
+      "title": "Agentic AI attack framework",
+      "type": "Attack infrastructure (device type ai-attack-framework)",
+      "description": "Shadowserver fingerprinted an agentic AI attack framework on this host: software in which AI agents carry out attacks largely on their own, such as ARTEX, CyberStrike, PentestCode or VXControl's tools. Shadowserver began reporting them on 2026-11-16, in the Device Identification report with severity high, and sees over 3,800 such addresses worldwide every day. The host is not a victim: it runs attack tooling. It may be an authorised penetration test or red team, or someone using the network to attack others. The framework's name is in the device's model, its maker in the vendor.",
+      "action": "Find out who runs the host. If it is not an expected, authorised test, investigate it as attack infrastructure: contact the network that hosts it and have it stopped, and look for what it has been aiming at.",
+      "references": ["https://www.shadowserver.org/what-we-do/network-reporting/device-identification-report/",
+                     "https://dashboard.shadowserver.org/statistics/iot-devices/time-series/?date_range=7&type=ai-attack-framework"],
+      "status": "reviewed", "confidence": "medium", "updated": "2026-11-17", "curated_by": "Looking Glass"
+    },
     "Open dir": {
       "title": "Open directory listing",
       "type": "Exposure (files listed on a web server)",

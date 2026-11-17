@@ -12,6 +12,10 @@ A day is a spike when it has at least SPIKE_RATIO times the day before (default 
 records (default 500); a drop the other way round. A spike in one report (services) or one infection (communications)
 is noticed too when the total is steady (scope "part"), so big steady reports never hide one that jumped.
 
+A day still arriving is not compared: while it has fewer than SPIKE_COMPLETE_SHARE (default 0.8) of the reports the day
+before had, the answer says so (complete false, with both report counts) and gives no notice, so the morning's first
+report is never read as a drop.
+
 Worked out in the background, never while a page waits: a request gets the last answer for the replay day (or none
 yet) and, when it is older than SPIKE_CACHE_SECONDS (default 600), starts one refresh. A refresh first compares the
 rows per report (cheap indexed counts) and the constituency's version with the last time, and counts again only when
@@ -41,6 +45,9 @@ def _env(name, default, cast):
 RATIO = _env("SPIKE_RATIO", 1.5, float)
 MIN_EVENTS = _env("SPIKE_MIN_EVENTS", 500, int)
 CACHE_S = _env("SPIKE_CACHE_SECONDS", 600, int)
+# a day still arriving is not compared: no notice until it has at least this share of the reports the day before had
+# (2026-11-17: the replay began a day when one report of about 50 had come in, and the notice read "drop")
+COMPLETE_SHARE = _env("SPIKE_COMPLETE_SHARE", 0.8, float)
 MAX_CAUSES = 3
 DAY = timedelta(days=1)
 
@@ -95,8 +102,13 @@ def compare(today_counts, before_counts, labels, start, by_infection=False):
             rows += [{"what": k, "report": labels.get(n, n), "today": t.get(k, 0), "before": b.get(k, 0)} for k in sorted(set(t) | set(b))]
         else:
             rows.append({"what": labels.get(n, n), "report": "", "today": sum(t.values()), "before": sum(b.values())})
-    kind, scope, causes = kind_of(today, before), "", []
-    if kind:
+    n_today = sum(1 for n in names if sum(today_counts.get(n, {}).values()))
+    n_before = sum(1 for n in names if sum(before_counts.get(n, {}).values()))
+    complete = n_today >= n_before * COMPLETE_SHARE
+    kind, scope, causes = (kind_of(today, before) if complete else ""), "", []
+    if not complete:
+        pass                                   # still arriving: no notice yet, and no cause
+    elif kind:
         scope = "all"
         sign = 1 if kind == "spike" else -1
         total = abs(today - before)
@@ -110,7 +122,8 @@ def compare(today_counts, before_counts, labels, start, by_infection=False):
             kind, scope = kind_of(parts[0]["today"], parts[0]["before"]), "part"
             causes = [r for r in parts if kind_of(r["today"], r["before"]) == kind][:MAX_CAUSES]
     return {"day": start.date().isoformat(), "before_day": prev.date().isoformat(), "today": today, "before": before,
-            "change": change_of(today, before), "kind": kind, "scope": scope, "causes": causes}
+            "change": change_of(today, before), "kind": kind, "scope": scope, "causes": causes,
+            "complete": complete, "reports": n_today, "reports_before": n_before}
 
 
 class Spikes:

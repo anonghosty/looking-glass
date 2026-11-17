@@ -26,8 +26,8 @@
       "title": "Device Identification Report",
       "severity": "info",
       "url": "device-identification-report/",
-      "def": "Devices fingerprinted in Shadowserver's daily internet scans, classified by vendor, type and model.",
-      "why": "An inventory of what is visible from the internet; use it to spot end-of-life or unexpected devices."
+      "def": "Devices fingerprinted in Shadowserver's daily internet scans, classified by vendor, type and model. Since 2026-11-16 it also names hosts running agentic AI attack frameworks (device type ai-attack-framework, severity high).",
+      "why": "An inventory of what is visible from the internet; use it to spot end-of-life or unexpected devices. A host with an AI attack framework is attack tooling, not a victim, and shows as the issue AI attack framework."
     },
     "event4_honeypot_brute_force": {
       "title": "Honeypot Brute Force Events Report",

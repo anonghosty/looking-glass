@@ -14,6 +14,16 @@ NAMED = {"exposed-admin-panel": "Exposed admin panel", "device-implant": "Device
          "cpanel-compromised": "Cpanel compromised", "open-dir": "Open dir", "vulnerable": "Vulnerable",
          "expired-certificate": "Expired certificate", "ssl-poodle": "POODLE (SSLv3)", "poodle": "POODLE (SSLv3)", "freak": "FREAK"}
 CVE_RX = re.compile(r"CVE-\d{4}-\d{4,7}", re.I)
+# device types that are an issue in themselves (Device Identification report, field device_type). ai-attack-framework:
+# agentic AI attack frameworks (ARTEX, CyberStrike, PentestCode, VXControl …) Shadowserver fingerprints since
+# 2026-11-16, shared with severity high; the report's own default is info, so without this they would not stand out
+# among the routers (the user, 2026-11-17; the type as Shadowserver's dashboard filters it)
+DEVICE_TYPES = {"ai-attack-framework": "AI attack framework"}
+
+
+def device_type_issue(device_type):
+    """The issue a device type stands for ("AI attack framework"), or "" for an ordinary device type (router …)."""
+    return DEVICE_TYPES.get(str(device_type or "").strip().lower(), "")
 
 
 def issue_of(tag):

@@ -33,7 +33,10 @@ def _override():
     if not p:
         return None
     try:
-        m = os.path.getmtime(p)
+        # the file's identity, size and time to the nanosecond: two writes within one clock tick share a time to the
+        # second, and a changed file was then taken for the one already read (a flaky check, 2026-11-17)
+        st = os.stat(p)
+        m = (st.st_mtime_ns, st.st_size, st.st_ino)
     except OSError:
         OVERRIDE.update(mtime=None, ttl=None)
         return None

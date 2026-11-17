@@ -63,6 +63,8 @@ def derive(d, name):
     if S(d.get("freak_vulnerable")).upper() == "Y": issues.append("FREAK")
     if S(d.get("cert_expired")).upper() == "Y": issues.append("Expired certificate")
     issues += [MARK[t] for t in tags if t in MARK]
+    if S(d.get("device_type")).strip().lower() == "ai-attack-framework" and "AI attack framework" not in issues:
+        issues.append("AI attack framework")           # an issue by its device type (2026-11-17), written out here again
     if fam(name) == "Compromised" and not issues:
         issues.append("Compromised")
     product = next((S(d.get(k)) for k in ("device_model", "server", "server_type", "serverid_software", "application") if d.get(k) not in (None, "")), "")

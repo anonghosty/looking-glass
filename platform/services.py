@@ -27,6 +27,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
+import issue_tags
 import load_stamps
 from respcache import settled
 from sources import Registry, _is_time
@@ -228,6 +229,9 @@ def normalise_service(doc, src):
     for t in tags:
         if t in ("exposed-admin-panel", "device-implant", "badcandy", "cpanel-compromised", "open-dir", "vulnerable"):
             issues.append(t.replace("-", " ").capitalize())
+    dt_issue = issue_tags.device_type_issue(g("device_type"))      # an AI attack framework (issue_tags.DEVICE_TYPES)
+    if dt_issue and dt_issue not in issues:
+        issues.append(dt_issue)
     if src["family"] == "Compromised" and not issues:
         issues.append("Compromised")
     product = next((_s(g(k)) for k in ("device_model", "server", "server_type", "serverid_software", "application")

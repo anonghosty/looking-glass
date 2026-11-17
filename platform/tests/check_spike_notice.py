@@ -106,6 +106,13 @@ dr = Platform({"r": {PREV: recs(PREV, "a", 3000), DAY: recs(DAY, "a", 1000)}}, [
 d = SN.compare(SN.count_day(dr, DAY), SN.count_day(dr, PREV), {"r": "R"}, DAY, by_infection=True)
 ok("a drop names what fell", d["kind"] == "drop" and d["causes"] and d["causes"][0]["what"] == "a", str(d))
 
+early = Platform({"a": {PREV: recs(PREV, "x", 30000), DAY: recs(DAY, "x", 2000)}, "b": {PREV: recs(PREV, "y", 20000)},
+                  "c": {PREV: recs(PREV, "z", 9000)}, "d": {PREV: recs(PREV, "w", 7000)}}, [{"name": n, "label": n} for n in "abcd"], True).parts()
+e = SN.compare(SN.count_day(early, DAY), SN.count_day(early, PREV), {}, DAY, by_infection=True)
+ok("a day still arriving (1 report of the 4 the day before had) gives no notice, and says why (2026-11-17)",
+   e["kind"] == "" and e["causes"] == [] and e["complete"] is False and (e["reports"], e["reports_before"]) == (1, 4), str(e))
+ok("... a day with its reports in is compared as before", c["complete"] is True and c["kind"] == "spike")
+
 print("3. Counted as the platform shows the day")
 src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "spike_notice.py"), encoding="utf-8").read()
 code = "\n".join(l for l in src.split('"""')[2::2])      # the code, not the docstrings

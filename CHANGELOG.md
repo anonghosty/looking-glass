@@ -5,6 +5,23 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-17 (4)
+### Added
+- **AI attack frameworks are an issue.** Since 2026-11-16 Shadowserver's Device Identification report also names hosts
+  running agentic AI attack frameworks (ARTEX, CyberStrike, PentestCode, VXControl's tools and others), as device type
+  `ai-attack-framework` with severity high, while the report's own default is info. Such a host now carries the issue
+  **AI attack framework** on the services platform, so it is flagged, counted and filterable wherever issues are (the
+  services platform, Findings, the Executive portal), instead of standing among the routers. The framework's name is
+  the device's model, its maker the vendor. The issue has its definition, the report's description names the type,
+  and the Glossary explains it.
+
+### Fixed
+- **The spike notice waits for a day's reports.** A day is compared with the one before only once it has at least
+  80% of the reports the day before had (`SPIKE_COMPLETE_SHARE`); until then there is no notice. The morning's first
+  report was read as a drop.
+- The cache time chosen on Settings → Task monitor is read again whenever its file changes, also when two changes come
+  within the same clock tick (a check failed now and then).
+
 ## 2026-11-17 (3)
 ### Fixed
 - **The spike notice counts a day as the map does, without reading every record.** It found the two days by event

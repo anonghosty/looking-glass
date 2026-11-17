@@ -11,7 +11,7 @@ the platform: the **Glossary** tab on the overview page and the **Glossary** but
 - [Numbers and measures](#numbers-and-measures) (14 terms)
 - [Using the platform](#using-the-platform) (11 terms)
 - [Accounts, roles and permissions](#accounts-roles-and-permissions) (48 terms)
-- [Publicly accessible / vulnerable services](#publicly-accessible--vulnerable-services) (13 terms)
+- [Publicly accessible / vulnerable services](#publicly-accessible--vulnerable-services) (14 terms)
 - [Security, audit and the pipeline](#security-audit-and-the-pipeline) (23 terms)
 - [Related tools](#related-tools)
 - [A–Z index](#az-index)
@@ -379,7 +379,10 @@ One host and service seen in a single-host report, for example one open RDP serv
 A distinct IP address with at least one internet-reachable service or finding in the reports.
 
 **Issue**  
-A concrete problem found on a host: a known vulnerability (CVE), weak encryption (POODLE, FREAK), an expired certificate, an exposed admin panel, a device implant or a compromise. Hosts with issues are the ones to follow up first.
+A concrete problem found on a host: a known vulnerability (CVE), weak encryption (POODLE, FREAK), an expired certificate, an exposed admin panel, a device implant, an AI attack framework or a compromise. Hosts with issues are the ones to follow up first.
+
+**AI attack framework**  
+An issue: Shadowserver fingerprinted an agentic AI attack framework on the host (ARTEX, CyberStrike, PentestCode, VXControl's tools and others), software in which AI agents carry out attacks largely on their own. It comes in the Device Identification report as device type ai-attack-framework, with severity high; the framework's name is the device's model. The host is not a victim but runs attack tooling: an authorised test, or someone using the network to attack others. If it is not expected, investigate it.
 
 **Hosts with multiple issues**  
 Hosts of the selection carrying more than one issue across all their reports of the day, for example several CVEs, or a CVE plus an exposed admin panel in another report. They have the largest attack surface. Opening this card and pressing Filter the view shows these hosts with all their reports (bubbles, regions map, stream and figures); a filter added afterwards narrows to those reports.
@@ -519,6 +522,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Advisor (role)](#accounts-roles-and-permissions) · 
 [Advisory](#accounts-roles-and-permissions) · 
 [Affected city](#who-and-where) · 
+[AI attack framework](#publicly-accessible--vulnerable-services) · 
 [All of the day's connections (map)](#using-the-platform) · 
 [Also described by](#accounts-roles-and-permissions) · 
 [Analysis view](#using-the-platform) · 
