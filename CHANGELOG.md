@@ -5,6 +5,15 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-17 (2)
+### Security
+- **The path folding is stricter, and its limit is said plainly.** Path segments with digits or dashes, the usual
+  machine and person names (`server01`, `finance-pc`, `kofi-mensah`), now fold to `<seg>`; so does a `;` parameter
+  whose name is not a plain word (`;MINISTRY-PC01=1`), and a raw space in the path of a line approved earlier no longer
+  stops the folding part-way. It stays best effort: a name that is itself a plain word (`jmensah`, `Administrator`)
+  reads like a path word and is kept, which is why the administrator still approves the exact lines (security review
+  of v2026.11.17).
+
 ## 2026-11-17
 ### Security
 - **A decoding request carries only the path's shape.** The query was already masked, but the path left as it was, so a

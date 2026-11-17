@@ -250,6 +250,16 @@ paths = {
 for what, (raw, want) in paths.items():
     got = U.request_line(raw, "d")
     ok(f"... {what}: only the path's shape leaves", got == want and not any(w in got for w in ("MINISTRY", "PC01", "john", "41-66", "ab12cd")), got)
+# security review of 8063734: names with digits or dashes fold, ";" parameter names too, and an old approved line with a
+# raw space in its path folds the whole segment
+for name in ("server01", "pc01", "finance-pc", "kofi-mensah"):
+    got = U.request_line(f"GET /users/{name}/gate.php?d={B64} HTTP/1.1", "d")
+    ok(f"... a machine or person name with digits or dashes folds: {name}", got == f"GET /users/<seg>/gate.php?d={B64} HTTP/1.1", got)
+got = U.path_shape("/x.php;MINISTRY-PC01=1;sid=abc")
+ok("... a ';' parameter NAME that is a machine name folds too", got == "/x.php;<seg>=<value>;sid=<value>", got)
+got = U.shape_line(f"GET /u/MINISTRY PC01/x?d={B64} HTTP/1.1")
+ok("... an approved line with a raw space in its path folds the whole segment",
+   got == f"GET /u/<seg>/x?d={B64} HTTP/1.1" and "PC01" not in got, got)
 for plain in ("/gate.php", "/api/v1/check", "/Panel/getTask.aspx", "/pixel/ad_track/index.html", "/"):
     ok(f"... a plain path stays as it is: {plain}", U.path_shape(plain) == plain, U.path_shape(plain))
 ok("... folding twice changes nothing (lines approved earlier are folded again on download)",

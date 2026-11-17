@@ -68,10 +68,13 @@ _ENCODED = re.compile(r"[A-Za-z0-9+/%=_-]{16,}")      # a value that looks encod
 # device ("/u/MINISTRY-PC01/bot.php"), its user ("/reg/john.mensah@ministry.gov.gh/x") or its address ("/41-66-1-2/x"),
 # and the undecoded value is never in the path (beacon_decode only takes query values). So a segment is kept only when
 # it reads like a plain path word or a file name (api, v1, getTask, Panel, gate.php); everything else is folded.
+# Best effort, not a guarantee: a name that is itself a plain word (jmensah, Administrator) reads like a path word and
+# stays, which is why an administrator still approves the exact lines. Names with digits or dashes, the usual machine
+# names (server01, pc01, finance-pc, kofi-mensah), fold (security review of 8063734).
 _FILE_EXT = r"php\d?|aspx?|ashx|asmx|jsp|do|action|cgi|pl|py|s?html?|js|json|xml|txt|bin|dat|exe|dll|apk|zip|gz|jpe?g|png|gif|ico|css"
 _SAFE_SEGMENT = re.compile(
-    r"(?:[a-z]{1,24}(?:[A-Z][a-z]{1,23}){0,3}|[A-Z][a-z]{1,23}(?:[A-Z][a-z]{1,23}){0,3}|v\d{1,2}|[a-z]{2,16}\d{1,2})"
-    r"(?:[_-][a-z]{1,24}){0,3}"
+    r"(?:[a-z]{1,24}(?:[A-Z][a-z]{1,23}){0,3}|[A-Z][a-z]{1,23}(?:[A-Z][a-z]{1,23}){0,3}|v\d{1,2})"
+    r"(?:_[a-z]{1,24}){0,3}"
     rf"(?:\.(?:{_FILE_EXT}))?")
 _DASHED_ADDRESS = re.compile(r"\d{1,3}(?:[-_]\d{1,3}){3}")
 _EMAIL = re.compile(r"[^@/\s]+@[\w-]+(?:\.[\w-]+)+")
@@ -104,7 +107,9 @@ def path_shape(path):
         if semi:
             for p in params.split(";"):
                 k, eq, _v = p.partition("=")
-                k_ok = bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]{0,31}", k)) and _segment_shape(k) not in ("<email>", "<address>")
+                # a name is kept only when it reads like a plain path word, as a segment is: ";MINISTRY-PC01=1" keeps
+                # no machine name in its NAME either (security review of 8063734)
+                k_ok = bool(k) and _segment_shape(k) == k
                 shaped += ";" + ((k if k_ok else "<seg>") + "=<value>" if eq else "<value>")
         out.append(shaped)
     return "/".join(out)[:400]
@@ -168,12 +173,15 @@ def shape_line(line):
     """A request line already made by request_line, with its path folded again by path_shape: lines an administrator
     approved before paths were folded leave in their folded form (never more than the approval showed)."""
     toks = str(line or "").split(" ")
-    i = 1 if len(toks) > 1 and re.fullmatch(r"[A-Za-z]{3,10}", toks[0]) else 0
-    if i >= len(toks):
+    method = toks[0] if len(toks) > 1 and re.fullmatch(r"[A-Za-z]{3,10}", toks[0]) else ""
+    proto = toks[-1] if len(toks) > 1 and re.fullmatch(r"HTTP/\d(?:\.\d)?", toks[-1], re.I) else ""
+    target = " ".join(toks[(1 if method else 0):(len(toks) - 1 if proto else len(toks))])
+    if not target:
         return str(line or "")
-    path, q, query = toks[i].partition("?")
-    toks[i] = path_shape(path) + q + query
-    return " ".join(toks)
+    # the whole target up to "?", raw spaces included: "/u/MINISTRY PC01/x" folds as one segment, not up to the first
+    # space (security review of 8063734)
+    path, q, query = target.partition("?")
+    return " ".join(x for x in (method, path_shape(path) + q + query, proto) if x)
 
 
 def lines_hash(lines):
