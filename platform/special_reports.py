@@ -35,11 +35,32 @@ def title(name):
     return "Special report" + (f": {rest.replace('_', ' ').replace('-', ' ')}" if rest else "")
 
 
-def listing(db, force=False):
+def _in_scope_groups(coll, scope):
+    """The same groups as the aggregation below, counted only over the rows inside the constituency (scope(asn, ip)),
+    as the platforms count everything else (review of v2026.11.17). A row without an address stays, as elsewhere."""
+    acc = {}
+    for d in coll.find({}, {"_id": 0, "filename": 1, "ip": 1, "asn": 1, "timestamp": 1}):
+        ip = d.get("ip")
+        if ip and not scope(d.get("asn"), ip):
+            continue
+        g = acc.setdefault(d.get("filename"), {"_id": d.get("filename"), "rows": 0, "ips": set(), "first": None, "last": None})
+        g["rows"] += 1
+        if ip:
+            g["ips"].add(ip)
+        t = d.get("timestamp")
+        if t is not None:
+            g["first"] = t if g["first"] is None or str(t) < str(g["first"]) else g["first"]
+            g["last"] = t if g["last"] is None or str(t) > str(g["last"]) else g["last"]
+    return [{"_id": g["_id"], "rows": g["rows"], "hosts": len(g["ips"]), "first": g["first"], "last": g["last"]} for g in acc.values()]
+
+
+def listing(db, force=False, scope=None, version=0):
     """Every Special Report file in MongoDB: per collection and per shared date (the file's date prefix), the rows and
-    distinct hosts. Counts only, never an address. Cached for TTL seconds."""
+    distinct hosts. Counts only, never an address. scope(asn, ip): the constituency when one is set (version: its
+    version, part of the cache key), so a CSIRT that set its networks sees only its own part. Cached for TTL seconds."""
+    key = (scope is not None, version)
     with _lock:
-        if not force and time.time() - _cache["t"] < TTL:
+        if not force and time.time() - _cache["t"] < TTL and _cache.get("key") == key:
             return list(_cache["rows"])
     out = []
     try:
@@ -48,7 +69,7 @@ def listing(db, force=False):
         return []
     for name in sorted(names):
         try:
-            groups = db[name].aggregate([
+            groups = _in_scope_groups(db[name], scope) if scope is not None else db[name].aggregate([
                 {"$group": {"_id": "$filename", "rows": {"$sum": 1}, "hosts": {"$addToSet": "$ip"},
                             "first": {"$min": "$timestamp"}, "last": {"$max": "$timestamp"}}},
                 {"$project": {"rows": 1, "hosts": {"$size": "$hosts"}, "first": 1, "last": 1}},
@@ -63,5 +84,5 @@ def listing(db, force=False):
             continue
     out.sort(key=lambda r: (r["shared"], r["report"]), reverse=True)
     with _lock:
-        _cache.update(t=time.time(), rows=out)
+        _cache.update(t=time.time(), rows=out, key=key)
     return list(out)

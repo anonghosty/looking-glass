@@ -919,7 +919,7 @@ def api_overview():
         services_reports=len([n for n in registry.names if re.match(r"(scan6?|population6?)_", n)]),
         schedule=schedule.status(), tz=settings.tz(day.start + timedelta(hours=12)),
         # Shadowserver's one-off Special Reports: listed apart, never replayed nor counted (special_reports.py)
-        special=special_reports.listing(db),
+        special=special_reports.listing(db, scope=settings.in_scope if settings.restricted else None, version=settings.version),
     )
 
 
@@ -3594,7 +3594,8 @@ WARMUP = _warmup.install({
 # New features install themselves from features.py with these shared parts, so this file does not grow (2026-11-16)
 import features as _features  # noqa: E402
 FEATURES = _features.install(app, {"db": db, "registry": registry, "svc": svc, "replay_now": replay_now,
-                                   "day_start": day_start, "AUTH": AUTH, "app_logger": app.logger})
+                                   "day_start": day_start, "AUTH": AUTH, "app_logger": app.logger,
+                                   "store": store, "settings": settings})
 
 if __name__ == "__main__":
     # `python app.py` (tests, development) listens on this computer only unless BIND_HOST says otherwise; the service

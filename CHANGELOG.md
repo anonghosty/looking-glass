@@ -5,6 +5,19 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-17 (3)
+### Fixed
+- **The spike notice counts a day as the map does, without reading every record.** It found the two days by event
+  time, which has no index, so each count read every record ever kept (about 7 seconds on a page request). It now
+  reads each day through the platform's own day reader: the day's report files (indexed file name), the event time
+  inside the day, and only the hosts inside the constituency when one is set, so its numbers match the map's. A day
+  the platform already holds in memory is counted from there. It is worked out in the background, never while a
+  page waits, and counted again only when a report's rows or the constituency changed.
+- **The Special Reports list on the Overview follows the constituency.** With networks set in Settings, its rows and
+  hosts count only the part inside them, as everything else does; a special report with nothing inside is not listed.
+- Two live checks no longer read whole report histories: the decoder check finds its newest day by insertion order,
+  and both read a day by its report files (`tests/verify_beacon_decode.py`, `tests/verify_replayed.py`).
+
 ## 2026-11-17 (2)
 ### Security
 - **The path folding is stricter, and its limit is said plainly.** Path segments with digits or dashes, the usual

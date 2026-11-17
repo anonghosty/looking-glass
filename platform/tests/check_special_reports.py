@@ -93,6 +93,16 @@ else:
         ok("every special collection is listed (special, special_loop_dos, special_comms)", {"special", "special_loop_dos", "special_comms"} <= set(rows), str(set(rows)))
         ok("the listing holds counts only, never an address", all("192.0.2" not in str(v) and "198.51" not in str(v) for v in rows.values()))
         ok("normal reports are not in the special listing", "scan_http" not in rows)
+        # review of v2026.11.17: with a constituency set, only its part is counted, as everywhere else
+        inside = lambda asn, ip: ip.startswith("192.0.2.") and int(ip.rsplit(".", 1)[1]) < 30     # noqa: E731
+        scoped = {r["report"]: r for r in SR.listing(db, force=True, scope=inside, version=7)}
+        sp2 = scoped.get("special", {})
+        ok("with a constituency set: only its rows and hosts (90 rows, 30 hosts of 300 and 120)",
+           (sp2.get("rows"), sp2.get("hosts")) == (90, 30), str(sp2))
+        ok("…a special report with nothing inside it is not listed", "special_loop_dos" not in scoped, str(set(scoped)))
+        ok("…and the cached whole-country listing is never served for the constituency (or back)",
+           SR.listing(db)[0] is not None and {r["report"]: r for r in SR.listing(db)}["special"]["rows"] == 300
+           and {r["report"]: r for r in SR.listing(db, scope=inside, version=7)}["special"]["rows"] == 90)
     finally:
         proc.terminate()
         try:

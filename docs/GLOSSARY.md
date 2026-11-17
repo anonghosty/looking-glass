@@ -169,7 +169,7 @@ Malware contacting its server at regular intervals to ask for instructions. Regu
 In an analysis: how many records of the selection carry a beacon Looking Glass decoded. Its Details list gives each kind of beacon with its status, operators, versions, records, devices, the names Shadowserver filed it under and its C2 domains. Analysts and admins only.
 
 **Spike notice**  
-On the Overview's cards: the latest report day against the day before. A spike is at least one and a half times the day before and at least 500 more; a drop the other way round. It says what is behind it: the infections that moved, with their report, for network communications; the reports that moved, for services. One report or infection that jumped on its own is named even when the total is steady. Counts and names only.
+On the Overview's cards: the latest report day against the day before. A spike is at least one and a half times the day before and at least 500 more; a drop the other way round. It says what is behind it: the infections that moved, with their report, for network communications; the reports that moved, for services. One report or infection that jumped on its own is named even when the total is steady. Each day is counted as its platform shows it: the day's report files, inside the constituency when one is set. Counts and names only.
 
 **Activity level**  
 How busy the last 5 replayed minutes were compared with the whole day's average per minute. More filled bars means busier than usual; it says nothing about how dangerous the events are.

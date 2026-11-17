@@ -31,7 +31,9 @@ if len(sys.argv) > 1:
 else:
     newest = None
     for col in cols:
-        d = db[col].find_one(CL, {"extracted_date": 1}, sort=[("extracted_date", -1)])
+        # the newest CLogin request by insertion order (_id, always indexed), walking back from the newest record; sorting
+        # by extracted_date read and sorted every record ever kept (no index on it: review of v2026.11.17)
+        d = db[col].find_one(CL, {"extracted_date": 1}, sort=[("_id", -1)])
         v = (d or {}).get("extracted_date")
         if isinstance(v, str):
             v = datetime.fromisoformat(v[:19]).replace(tzinfo=timezone.utc)
@@ -43,7 +45,11 @@ else:
         print("SKIPPED: no CLogin requests in the reports"); sys.exit(77)
     day = newest.replace(hour=0, minute=0, second=0, microsecond=0)
 end = day + timedelta(days=1)
-q = {"$or": [{"extracted_date": {"$gte": day, "$lt": end}}, {"extracted_date": {"$gte": day.strftime("%Y-%m-%dT"), "$lt": end.strftime("%Y-%m-%dT")}}], **CL}
+# the day as the platform reads it: the files dated that day or the next (the indexed file-name prefix), then the event
+# time inside the day; never a range over extracted_date alone, which has no index
+q = {"$and": [{"$or": [{"filename": {"$regex": "^" + p}} for p in (day.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))]},
+              {"$or": [{"extracted_date": {"$gte": day, "$lt": end}},
+                       {"extracted_date": {"$gte": day.strftime("%Y-%m-%dT"), "$lt": end.strftime("%Y-%m-%dT")}}]}], **CL}
 n = ok_n = bad = noted = 0
 for col in cols:
     for e in db[col].find(q, {"http_url": 1}):

@@ -45,10 +45,13 @@ db = client[os.environ["MONGO_DB"]]
 app = get(f"/api/replayed?at={at_s}")
 sources = get(f"/api/sources?at={at_s}")["sources"]
 mongo = 0
+# the files dated that day or the next (the indexed file-name prefix, as the platform reads a day), then the event time:
+# a range over extracted_date alone has no index and read every record ever kept (review of v2026.11.17)
+files = {"$or": [{"filename": {"$regex": "^" + d.strftime("%Y-%m-%d")}} for d in (start, start + timedelta(days=1))]}
 for s in sources:
     c = db[s["name"]]
-    mongo += c.count_documents({"extracted_date": {"$gte": start, "$lte": at}})
-    mongo += c.count_documents({"extracted_date": {"$gte": start.strftime("%Y-%m-%dT"), "$lte": at_s}})
+    mongo += c.count_documents({"$and": [files, {"extracted_date": {"$gte": start, "$lte": at}}]})
+    mongo += c.count_documents({"$and": [files, {"extracted_date": {"$gte": start.strftime("%Y-%m-%dT"), "$lte": at_s}}]})
 print(f"Replay position {at_s}")
 print(f"MongoDB records 00:00 to then: {mongo:,}")
 print(f"Platform 'Replayed so far':    {app['replayed']:,} of {app['total']:,}")

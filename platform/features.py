@@ -3,22 +3,50 @@
 app.py calls install(app, core) once, at the end, with the platform's shared parts. A new feature lives in its own
 module with its own install(app, ctx), and gets one entry below, built from `core`. Nothing else in app.py changes.
 
-core: db (the reports database, read only), registry (the communications reports), svc (the services platform: its
-"registry" and "store"), replay_now(), day_start(dt), AUTH (has_perm, csrf_ok, audit, ...), app_logger.
+core: db (the reports database, read only), registry (the communications reports), store (the communications day
+store), settings (the constituency), svc (the services platform: its "registry" and "store"), replay_now(),
+day_start(dt), AUTH (has_perm, csrf_ok, audit, ...), app_logger.
 Returns {name: what each feature's install returned}, for tests and for other modules.
 """
+
+
+def _held(store, version):
+    """A day the store holds, loaded under this constituency: {start: {report: rows}}, else None."""
+    def loaded(start):
+        day = store.days.get(start)
+        if day is None or getattr(day, "by_src", None) is None:
+            return None
+        if getattr(day, "settings_version", None) != version() or getattr(day, "gen", 0) != getattr(store, "gen", 0):
+            return None
+        return {n: b.get("rows") or [] for n, b in day.by_src.items()}
+    return loaded
 
 
 def install(app, core):
     out = {}
 
-    # the spike notice on the Overview's buttons: the latest report day against the day before (spike_notice.py)
+    # the spike notice on the Overview's buttons: the latest report day against the day before, counted as each
+    # platform shows a day (spike_notice.py)
     import spike_notice
+    st, store = core["settings"], core["store"]
+    svc_store = core["svc"]["store"]
+    svc_st = getattr(svc_store, "settings", None) or st
+    version = lambda: getattr(st, "version", 0)                # noqa: E731
+    svc_version = lambda: getattr(svc_st, "version", 0)        # noqa: E731
     out["spikes"] = spike_notice.install(app, {
-        "db": core["db"],
-        "comms_sources": lambda: core["registry"].get(),
-        "svc_sources": lambda: core["svc"]["registry"].get(),
+        "platforms": {
+            "comms": {"sources": lambda: core["registry"].get(), "signature": store.signature,
+                      "fetch": store._fetch_collection, "loaded": _held(store, version), "version": version,
+                      # as the map keeps an event: its source or its destination host in the constituency (asked at
+                      # every count, so a constituency set later applies at once)
+                      "in_scope": lambda e: not getattr(st, "restricted", False) or st.in_scope(e.get("src_asn"), e.get("src_ip"))
+                      or st.in_scope(e.get("dst_asn"), e.get("dst_ip")),
+                      "by_infection": True},
+            "services": {"sources": lambda: core["svc"]["registry"].get(), "signature": svc_store.signature,
+                         "fetch": svc_store._fetch, "loaded": _held(svc_store, svc_version), "version": svc_version,
+                         "in_scope": lambda e: not getattr(svc_st, "restricted", False) or svc_st.in_scope(e.get("asn"), e.get("ip")),
+                         "by_infection": False}},
         "day_of": lambda platform: core["day_start"](core["replay_now"]()),
-        "has_perm": core["AUTH"]["has_perm"]})
+        "has_perm": core["AUTH"]["has_perm"], "logger": core.get("app_logger")})
 
     return out

@@ -1,19 +1,28 @@
 """A spike (or a drop) on the Overview's buttons: the latest report day against the day before, per platform, with what
-is behind it (the user, 2026-11-16). Counts only, straight from MongoDB: no host, address or network name.
+is behind it (the user, 2026-11-16). Counts only: no host, address or network name.
 
-Communications: every report of the map's registry, by extracted_date; the cause is the infections that changed most.
-Services: every report of the services registry; the cause is the reports that changed most.
+A day is counted exactly as its platform shows it (external review of v2026.11.17): the rows of the files dated that
+day or the next (the indexed file-name prefix), whose event time falls in that day, inside the constituency (Settings)
+when one is set. Never by a scan of a report's whole history: extracted_date has no index, and counting by it read every
+record ever kept (about 7 s on live, on a page request). A day already in the platform's memory is counted from there.
+
+Communications: the cause is the infections that changed most. Services: the reports that changed most.
 
 A day is a spike when it has at least SPIKE_RATIO times the day before (default 1.5) and at least SPIKE_MIN_EVENTS more
-records (default 500); a drop the other way round. Worked out at most every SPIKE_CACHE_SECONDS (default 600) per day.
+records (default 500); a drop the other way round. A spike in one report (services) or one infection (communications)
+is noticed too when the total is steady (scope "part"), so big steady reports never hide one that jumped.
 
-A spike in one report (services) or one infection (communications) is noticed too when the total is steady (scope
-"part"), so big steady reports never hide one that jumped.
+Worked out in the background, never while a page waits: a request gets the last answer for the replay day (or none
+yet) and, when it is older than SPIKE_CACHE_SECONDS (default 600), starts one refresh. A refresh first compares the
+rows per report (cheap indexed counts) and the constituency's version with the last time, and counts again only when
+something changed.
 
 GET /api/overview/spikes -> {comms: {...}, services: {...}}; each: {day, before_day, today, before, change, kind
-("spike" | "drop" | ""), scope ("all" | "part" | ""), causes: [{what, report, before, today}]}. For the roles whose Overview buttons show it:
-the platforms ('view'), management, researchers ('definitions') and admins. Installed from app.py.
+("spike" | "drop" | ""), scope ("all" | "part" | ""), causes: [{what, report, before, today}]}. For the roles whose
+Overview buttons show it: the platforms ('view'), management, researchers ('definitions') and admins. Installed from
+features.py.
 """
+import collections
 import os
 import threading
 import time
@@ -33,13 +42,7 @@ RATIO = _env("SPIKE_RATIO", 1.5, float)
 MIN_EVENTS = _env("SPIKE_MIN_EVENTS", 500, int)
 CACHE_S = _env("SPIKE_CACHE_SECONDS", 600, int)
 MAX_CAUSES = 3
-
-
-def _q(start):
-    """Records of one UTC day (extracted_date stored as a date or as an ISO string, as the pipeline writes it)."""
-    end = start + timedelta(days=1)
-    return {"$or": [{"extracted_date": {"$gte": start, "$lt": end}},
-                    {"extracted_date": {"$gte": start.strftime("%Y-%m-%dT"), "$lt": end.strftime("%Y-%m-%dT")}}]}
+DAY = timedelta(days=1)
 
 
 def kind_of(today, before, ratio=None, min_events=None):
@@ -56,34 +59,43 @@ def change_of(today, before):
     return round((today - before) / before * 100) if before else None
 
 
-def _rows(db, per, start, prev, by_infection):
-    """What moved: each infection with its report (communications) or each report (services), today and the day before."""
-    if not by_infection:
-        return [{"what": p["label"], "report": "", "today": p["today"], "before": p["before"]} for p in per]
+def count_day(p, start):
+    """{report: Counter(infection -> rows)} of one day, as the platform shows it. p: the platform's parts (see
+    install). A day the platform holds in memory, loaded under the same constituency, is counted from there; any other
+    is read report by report through the platform's own day reader (indexed file-name prefix, event time in the day),
+    then the constituency is applied as the platform applies it."""
+    by_inf = p.get("by_infection")
+    tally = lambda rows: collections.Counter((e.get("infection") or "unknown") if by_inf else "" for e in rows)  # noqa: E731
+    held = p["loaded"](start) if p.get("loaded") else None
+    if held is not None:
+        return {name: tally(rows) for name, rows in held.items() if rows}
+    out = {}
+    for s in p["sources"]():
+        rows, _ = p["fetch"](s, start, start + DAY)
+        keep = p.get("in_scope")
+        if keep is not None:
+            rows = [e for e in rows if keep(e)]
+        if rows:
+            out[s["name"]] = tally(rows)
+    return out
+
+
+def compare(today_counts, before_counts, labels, start, by_infection=False):
+    """{day, before_day, today, before, change, kind, scope, causes} from two days' counts ({report: Counter}). scope
+    "all": the platform's total moved, and causes are what moved it most. scope "part": the total is steady but one
+    report (services) or one infection (communications) moved on its own; causes are those."""
+    prev = start - DAY
+    names = sorted(set(today_counts) | set(before_counts))
+    today = sum(sum(today_counts.get(n, {}).values()) for n in names)
+    before = sum(sum(before_counts.get(n, {}).values()) for n in names)
     rows = []
-    for p in per:
-        count = {}
-        for when, key in ((start, "today"), (prev, "before")):
-            for r in db[p["name"]].aggregate([{"$match": _q(when)}, {"$group": {"_id": "$infection", "n": {"$sum": 1}}}]):
-                count.setdefault(r["_id"] or "unknown", {"today": 0, "before": 0})[key] = r["n"]
-        rows += [{"what": k, "report": p["label"], **v} for k, v in count.items()]
-    return rows
-
-
-def compare(db, sources, start, by_infection=False):
-    """{today, before, change, kind, scope, causes} for these reports (registry rows {name, label}) on the day starting
-    at start. scope "all": the platform's total moved, and causes are what moved it most. scope "part": the total is
-    steady but one report (services) or one infection (communications) moved on its own; causes are those."""
-    prev = start - timedelta(days=1)
-    per = []
-    for s in sources:
-        c = db[s["name"]]
-        t, b = c.count_documents(_q(start)), c.count_documents(_q(prev))
-        if t or b:
-            per.append({"name": s["name"], "label": s.get("label") or s["name"], "today": t, "before": b})
-    today, before = sum(p["today"] for p in per), sum(p["before"] for p in per)
+    for n in names:
+        t, b = today_counts.get(n, collections.Counter()), before_counts.get(n, collections.Counter())
+        if by_infection:
+            rows += [{"what": k, "report": labels.get(n, n), "today": t.get(k, 0), "before": b.get(k, 0)} for k in sorted(set(t) | set(b))]
+        else:
+            rows.append({"what": labels.get(n, n), "report": "", "today": sum(t.values()), "before": sum(b.values())})
     kind, scope, causes = kind_of(today, before), "", []
-    rows = _rows(db, per, start, prev, by_infection) if per else []
     if kind:
         scope = "all"
         sign = 1 if kind == "spike" else -1
@@ -105,34 +117,69 @@ class Spikes:
     def __init__(self, ctx):
         self.ctx = ctx
         self.lock = threading.Lock()
-        self.cache = {}
+        self.cache = {}          # platform -> {"day", "key", "at", "res"}
+        self.running = set()     # platforms with a refresh under way (one at a time each)
 
-    def get(self):
+    def _key(self, p, start):
+        """What the answer depends on: the rows per report of both days (cheap indexed counts) and the constituency."""
+        sig = lambda d: tuple(sorted((p["signature"](d) or {}).items()))     # noqa: E731
+        return sig(start), sig(start - DAY), p["version"]() if p.get("version") else 0
+
+    def refresh(self, platform, start):
+        """Works one platform's answer out (in a background thread; tests call it directly)."""
+        p = self.ctx["platforms"][platform]
+        try:
+            key = self._key(p, start)
+            with self.lock:
+                hit = self.cache.get(platform)
+                if hit and hit["day"] == start and hit["key"] == key:
+                    hit["at"] = time.time()           # nothing changed: the answer stands
+                    return hit["res"]
+            labels = {s["name"]: s.get("label") or s["name"] for s in p["sources"]()}
+            res = compare(count_day(p, start), count_day(p, start - DAY), labels, start, by_infection=p.get("by_infection", False))
+            with self.lock:
+                self.cache[platform] = {"day": start, "key": key, "at": time.time(), "res": res}
+            return res
+        except Exception:                             # noqa: BLE001  (the buttons simply show no notice)
+            log = self.ctx.get("logger")
+            if log:
+                log.exception("Spike notice: %s could not be worked out", platform)
+            return None
+        finally:
+            with self.lock:
+                self.running.discard(platform)
+
+    def get(self, wait=False):
+        """The answers for the replay day. Never counts while a page waits (wait=True only for tests)."""
         out = {}
-        for platform, sources, by_inf in (("comms", self.ctx["comms_sources"], True), ("services", self.ctx["svc_sources"], False)):
+        for platform in self.ctx["platforms"]:
             start = self.ctx["day_of"](platform)
             if start is None:
                 continue
-            key = (platform, start.date().isoformat())
             with self.lock:
-                hit = self.cache.get(key)
-            if hit and time.time() - hit[0] < CACHE_S:
-                out[platform] = hit[1]
-                continue
-            try:
-                res = compare(self.ctx["db"], sources(), start, by_infection=by_inf)
-            except Exception:                    # noqa: BLE001  (the buttons simply show no notice)
-                continue
-            with self.lock:
-                self.cache = {k: v for k, v in self.cache.items() if k[0] != platform}   # one day per platform kept
-                self.cache[key] = (time.time(), res)
-            out[platform] = res
+                hit = self.cache.get(platform)
+                fresh = hit is not None and hit["day"] == start
+                if fresh:
+                    out[platform] = hit["res"]
+                due = not fresh or time.time() - hit["at"] >= CACHE_S
+                start_now = due and platform not in self.running
+                if start_now:
+                    self.running.add(platform)
+            if start_now:
+                if wait:
+                    res = self.refresh(platform, start)
+                    if res is not None:
+                        out[platform] = res
+                else:
+                    threading.Thread(target=self.refresh, args=(platform, start), daemon=True,
+                                     name=f"spikes-{platform}").start()
         return out
 
 
 def install(app, ctx):
-    """ctx: db, comms_sources() and svc_sources() (registry rows), day_of(platform) -> the replay day's UTC midnight,
-    has_perm(p)."""
+    """ctx: platforms {"comms" | "services": {sources(), signature(start), fetch(src, start, end) -> (rows, last),
+    loaded(start) -> {report: rows} or None, in_scope(row) or None, version(), by_infection}}, day_of(platform) -> the
+    replay day's UTC midnight, has_perm(p), logger."""
     sp = Spikes(ctx)
     hp = ctx["has_perm"]
 
