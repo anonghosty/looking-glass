@@ -5,6 +5,18 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-17 (10)
+### Changed
+- **Every page can be used with the keyboard alone.** On the map and the services platform, the chart legends (attack
+  types, report families, severity levels) were mouse-only; they are buttons now (Tab, then Enter). The hourly and
+  15-minute charts take the Left and Right arrows to choose a time and Enter to analyse it, with the time and its
+  count written under the chart for screen readers. Every control shows a visible ring when it has keyboard focus
+  (the map, the Executive portal's region map switch, sortable table headers included). See *With the keyboard only*
+  in the user guide.
+### Fixed
+- **Two backups in the same second no longer write over each other.** `manage/backup.sh` names the second one `-2`
+  (then `-3`...) instead of replacing the first archive and its checksum. Nothing to do when updating.
+
 ## 2026-11-17 (9)
 ### Changed
 - **A record's details open at once for masked viewers.** On the services platform, opening a record looked for it by

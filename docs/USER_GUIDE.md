@@ -18,7 +18,7 @@ partners see the country's situation at a glance on a wall screen.
 ## Contents
 
 - [Common tasks, step by step](#common-tasks-step-by-step)
-- [1. Signing in](#1-signing-in) · [Roles](#roles)
+- [1. Signing in](#1-signing-in) · [With the keyboard only](#with-the-keyboard-only) · [Roles](#roles)
 - [2. The intro page](#2-the-intro-page)
 - [3. Reported network communications (the map)](#3-reported-network-communications-the-map)
 - [4. Publicly accessible / vulnerable services](#4-publicly-accessible--vulnerable-services)
@@ -108,6 +108,16 @@ your name or common words. The eye button shows what you typed; the bar shows it
 The globe on the sign-in page turns with a finger (pinch to zoom, tap to launch an attack) or with a TV remote: the
 first arrow press goes to **Sign in**, Up / Down move through the form, Up from the first item reaches the globe (arrows
 turn it, OK launches an attack, Back returns to the form).
+
+### With the keyboard only
+
+Every page can be used without a mouse. **Tab** moves to the next control and **Shift+Tab** back; a blue ring shows
+where you are. **Enter** (or **Space** on a button) acts on it, and **Escape** closes a dialog. On the map and the
+services platform the chart legends (the attack types, the report families, the severity levels) are buttons too:
+Tab to one and press Enter to analyse it, as a click does. On an hourly or 15-minute chart, Tab to the chart, choose
+a time with the **Left** and **Right** arrows (**Home** and **End** for the first and last), and press **Enter** to
+analyse it; the time and its count are written under the chart and read out by a screen reader. A section that is
+folded shut (a finding's details, say) opens with Enter on its heading; what is inside is reached once it is open.
 
 ### Signing in
 **Sign in** asks for your user name and password, then the 6-digit code from your authenticator app. Tick

@@ -69,7 +69,7 @@ expired. `manage/install_cert.sh --status` shows the installed certificate and i
 Run these as the service's own user (the owner of `data/`):
 
 ```bash
-manage/backup.sh [folder]                                          # default ~/backups; encrypted, mode 600, a .sha256 file and its signature
+manage/backup.sh [folder]                                          # default ~/backups; encrypted, mode 600, a .sha256 file and its signature (a second one in the same second: -2)
 manage/verify_backup.sh [--identity KEY] [archive] [key.pub]       # the signature and checksum; with your private key, .env and the files
 manage/restore_check.sh --identity KEY [archive] [key.pub]         # rehearse a restore, without touching this installation
 ```

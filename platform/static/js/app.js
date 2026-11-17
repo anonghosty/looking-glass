@@ -1793,6 +1793,39 @@
   };
   const hhmm = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 
+  /* A clickable chart part as a keyboard control (WCAG 2.1.1, the keyboard pass of 2026-11-17): Tab reaches it, Enter
+     or Space acts, a screen reader hears a button with its name; focus highlights it as hover does. */
+  function keyable(node, act, label, on, off) {
+    node.tabIndex = 0; node.setAttribute("role", "button"); node.setAttribute("aria-label", label);
+    node.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); act(); } });
+    if (on) node.addEventListener("focus", on);
+    if (off) node.addEventListener("blur", off);
+  }
+  /* A clickable time chart by keyboard: Left / Right (Home / End) choose a slot, said aloud and written under the chart;
+     Enter or Space analyses it, as a click on that bar does. */
+  function chartKeys(canvas, slots, minutes, count, unit) {
+    if (canvas._keys) return;
+    canvas._keys = true; canvas.tabIndex = 0; canvas.setAttribute("role", "button");
+    const what = canvas.getAttribute("aria-label") || "Activity";
+    canvas.setAttribute("aria-label", `${what}: Left and Right arrows choose a time, Enter analyses it`);
+    const say = el("p", "kbd-say"); say.setAttribute("aria-live", "polite"); say.hidden = true; canvas.after(say);
+    let i = -1;
+    const show = () => { const v = count(i) || 0; say.hidden = false;
+      say.textContent = `${hhmm(i * minutes)} to ${hhmm(i * minutes + minutes)} UTC: ${fmt(v)} ${unit}${v ? " · Enter to analyse" : ""}`; };
+    canvas.addEventListener("keydown", (e) => {
+      const k = e.key;
+      if (k === "ArrowRight" || k === "ArrowLeft" || k === "Home" || k === "End") {
+        e.preventDefault();
+        i = k === "Home" ? 0 : k === "End" ? slots - 1 : Math.min(slots - 1, Math.max(0, (i < 0 ? 0 : i) + (k === "ArrowRight" ? 1 : -1) * (i < 0 ? 0 : 1)));
+        show();
+      } else if ((k === "Enter" || k === " ") && i >= 0) {
+        e.preventDefault();
+        if (count(i) && typeof canvas._pick === "function") canvas._pick(i * minutes, minutes);
+      }
+    });
+    canvas.addEventListener("blur", () => { say.hidden = true; });
+  }
+
   /* Donut with legend. rows: [{value, label?, count}]; opts: {color(v), describe(v), onClick(v), center, unit} */
   function donutChart(svg, legend, rows, opts = {}) {
     svg.replaceChildren(); svg.classList.remove("hovering"); legend.replaceChildren();
@@ -1825,6 +1858,8 @@
         n.addEventListener("mousemove", (e) => showTip(e, tip()));
         if (opts.onClick) { n.addEventListener("click", () => opts.onClick(r.value)); n.style.cursor = "pointer"; } else n.style.cursor = "default";
       }
+      path.setAttribute("aria-hidden", "true");          // the legend entry is the control; the slice repeats it
+      if (opts.onClick) keyable(li, () => opts.onClick(r.value), `${r.label || r.value}, ${pct(r.count, sum)}: analyse`, on, off);
     }
     const t = (y, cls, txt) => { const n = document.createElementNS(NS, "text"); n.setAttribute("x", cx); n.setAttribute("y", y); n.setAttribute("text-anchor", "middle"); n.setAttribute("class", cls); n.textContent = txt; return n; };
     svg.append(t(cy + 2, "d-total", fmt(rows.length ? sum : 0)), t(cy + 15, "d-sub", opts.center || "events"));
@@ -1847,6 +1882,8 @@
       if (!v) return;   // nothing happened in that window
       canvas._pick(i * minutes, minutes);
     });
+    chartKeys(canvas, slots, minutes, (i) => { const d = canvas._data;
+      return Array.isArray(d) ? d[i] : d && d.byClass ? Object.values(d.byClass).reduce((a, arr) => a + (arr[i] || 0), 0) : 0; }, "events");
   }
   function stackedHours(canvas, byClass, curHour, info, pick) {
     if (!canvas || !canvas.offsetWidth) return;
@@ -1921,10 +1958,12 @@
       const tip = () => [tipLine(titleCase(r.value)), tipLine(null, `${fmt(r.count)} events · ${pct(r.count, sum)}`), ...(opts.onClick ? [tipLine(null, "Click to analyse")] : [])];
       attachTip(seg, tip);
       if (opts.onClick) seg.addEventListener("click", () => opts.onClick(r.value)); else seg.style.cursor = "default";
+      seg.setAttribute("aria-hidden", "true");           // the legend entry is the control; the bar repeats it
       bar.append(seg);
       const s = el("span"); const d = el("span", "sevdot"); d.style.background = sevColor(r.value);
       s.append(d, document.createTextNode(r.value), el("b", null, pct(r.count, sum))); leg.append(s);
-      if (opts.onClick) { s.classList.add("click"); s.style.cursor = "pointer"; attachTip(s, tip); s.addEventListener("click", () => opts.onClick(r.value)); }
+      if (opts.onClick) { s.classList.add("click"); s.style.cursor = "pointer"; attachTip(s, tip); s.addEventListener("click", () => opts.onClick(r.value));
+        keyable(s, () => opts.onClick(r.value), `${titleCase(r.value)}, ${pct(r.count, sum)}: analyse`); }
     }
     if (!rows.length) leg.append(el("span", null, "No data yet"));
   }
@@ -2753,7 +2792,13 @@
     try { sessionStorage.setItem("lg.introSeen", "1"); } catch { /* private mode: intro shows again on refresh */ }
     if (demo !== undefined && demo !== state.demo && !state.demoForced) setDemo(demo);
     const intro = $("intro"); intro.classList.add("leaving");
-    setTimeout(() => { intro.hidden = true; }, 520);
+    // keyboard use (the keyboard pass of 2026-11-17): focus inside the intro would fall back to the top of the page when
+    // it goes; it moves on to the map instead, the next place a keyboard user wants
+    const hadFocus = intro.contains(document.activeElement);
+    setTimeout(() => {
+      intro.hidden = true;
+      if (hadFocus || document.activeElement === document.body) (document.querySelector("#map .mapboxgl-canvas") || $("map"))?.focus({ preventScroll: true });
+    }, 520);
     hideTip();
   }
   // Explore: the logo animates over the intro ("Opening …"), then the map appears

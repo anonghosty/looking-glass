@@ -35,6 +35,10 @@ mkdir -p "$dest"
 chmod 700 "$dest"
 dest="$(cd "$dest" && pwd)"
 stamp="$(date -u +%Y%m%d-%H%M%S)UTC"
+# two backups in the same second: the second gets its own name (-2, -3...), never the first one's archive and checksum
+# written over (2026-11-17: a check making two backups at once caught it)
+n=1; base="$stamp"
+while ls "$dest/$name-$stamp".tar.gz* >/dev/null 2>&1; do n=$((n + 1)); stamp="$base-$n"; done
 py="$project/.venv/bin/python"; [ -x "$py" ] || py=python3
 umask 077
 if [ "$plain" = 1 ]; then

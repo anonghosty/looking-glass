@@ -487,6 +487,36 @@
   }
 
   // ================================================================== charts (the same ones as app.js)
+  /* A clickable chart part as a keyboard control (WCAG 2.1.1, the keyboard pass of 2026-11-17): as in app.js */
+  function keyable(node, act, label, on, off) {
+    node.tabIndex = 0; node.setAttribute("role", "button"); node.setAttribute("aria-label", label);
+    node.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); act(); } });
+    if (on) node.addEventListener("focus", on);
+    if (off) node.addEventListener("blur", off);
+  }
+  /* A clickable time chart by keyboard: Left / Right (Home / End) choose a slot, Enter or Space analyses it (as app.js) */
+  function chartKeys(canvas, slots, minutes, count, unit) {
+    if (canvas._keys) return;
+    canvas._keys = true; canvas.tabIndex = 0; canvas.setAttribute("role", "button");
+    const what = canvas.getAttribute("aria-label") || "Activity";
+    canvas.setAttribute("aria-label", `${what}: Left and Right arrows choose a time, Enter analyses it`);
+    const say = el("p", "kbd-say"); say.setAttribute("aria-live", "polite"); say.hidden = true; canvas.after(say);
+    let i = -1;
+    const show = () => { const v = count(i) || 0; say.hidden = false;
+      say.textContent = `${hhmm(i * minutes)} to ${hhmm(i * minutes + minutes)} UTC: ${fmt(v)} ${unit}${v ? " · Enter to analyse" : ""}`; };
+    canvas.addEventListener("keydown", (e) => {
+      const k = e.key;
+      if (k === "ArrowRight" || k === "ArrowLeft" || k === "Home" || k === "End") {
+        e.preventDefault();
+        i = k === "Home" ? 0 : k === "End" ? slots - 1 : Math.min(slots - 1, Math.max(0, (i < 0 ? 0 : i) + (k === "ArrowRight" ? 1 : -1) * (i < 0 ? 0 : 1)));
+        show();
+      } else if ((k === "Enter" || k === " ") && i >= 0) {
+        e.preventDefault();
+        if (count(i) && typeof canvas._pick === "function") canvas._pick(i * minutes, minutes);
+      }
+    });
+    canvas.addEventListener("blur", () => { say.hidden = true; });
+  }
   function donutChart(svg, legend, rows, opts = {}) {
     svg.replaceChildren(); legend.replaceChildren();
     const NS = "http://www.w3.org/2000/svg", cx = 60, cy = 60, R = 54, r0 = 36;
@@ -510,6 +540,8 @@
         n.addEventListener("mouseenter", on); n.addEventListener("mouseleave", off); n.addEventListener("mousemove", (e) => showTip(e, tip()));
         if (opts.onClick) { n.addEventListener("click", () => opts.onClick(r.value)); n.style.cursor = "pointer"; } else n.style.cursor = "default";
       }
+      path.setAttribute("aria-hidden", "true");          // the legend entry is the control; the slice repeats it
+      if (opts.onClick) keyable(li, () => opts.onClick(r.value), `${r.label || r.value}, ${pct(r.count, sum)}: analyse`, on, off);
     }
     const t = (y, cls, txt) => { const n = document.createElementNS(NS, "text"); n.setAttribute("x", cx); n.setAttribute("y", y); n.setAttribute("text-anchor", "middle"); n.setAttribute("class", cls); n.textContent = txt; return n; };
     svg.append(t(cy + 2, "d-total", fmt(rows.length ? sum : 0)), t(cy + 15, "d-sub", opts.center || "records"));
@@ -525,6 +557,8 @@
       const v = Array.isArray(d) ? d[i] : d && d.byFam ? Object.values(d.byFam).reduce((a, arr) => a + (arr[i] || 0), 0) : 1;
       if (v) canvas._pick(i * minutes, minutes);
     });
+    chartKeys(canvas, slots, minutes, (i) => { const d = canvas._data;
+      return Array.isArray(d) ? d[i] : d && d.byFam ? Object.values(d.byFam).reduce((a, arr) => a + (arr[i] || 0), 0) : 0; }, "records");
   }
   function stackedHours(canvas, byFam, curHour, info, pick) {
     if (!canvas || !canvas.offsetWidth) return;
@@ -592,10 +626,12 @@
       const tip = () => [tipLine(titleCase(r.value)), tipLine(null, `${fmt(r.count)} records · ${pct(r.count, sum)}`), ...(opts.onClick ? [tipLine(null, "Click to analyse")] : [])];
       attachTip(seg, tip);
       if (opts.onClick) seg.addEventListener("click", () => opts.onClick(r.value)); else seg.style.cursor = "default";
+      seg.setAttribute("aria-hidden", "true");           // the legend entry is the control; the bar repeats it
       bar.append(seg);
       const s = el("span"); const d = el("span", "sevdot"); d.style.background = sevColor(r.value);
       s.append(d, document.createTextNode(r.value), el("b", null, pct(r.count, sum))); leg.append(s);
-      if (opts.onClick) { s.classList.add("click"); s.style.cursor = "pointer"; attachTip(s, tip); s.addEventListener("click", () => opts.onClick(r.value)); }
+      if (opts.onClick) { s.classList.add("click"); s.style.cursor = "pointer"; attachTip(s, tip); s.addEventListener("click", () => opts.onClick(r.value));
+        keyable(s, () => opts.onClick(r.value), `${titleCase(r.value)}, ${pct(r.count, sum)}: analyse`); }
     }
     if (!rows.length) leg.append(el("span", null, "No data yet"));
   }
