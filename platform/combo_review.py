@@ -413,7 +413,6 @@ def install(app, ctx):
         src = book.resolve_any(rv["source"]) if hasattr(book, "resolve_any") else None
         notes, rf = [], None
         if src and src.get("kind") != "a" and ctx.get("notes"):
-            notes = [{k: v for k, v in n.items() if k != "user"} for n in ctx["notes"].list(src["section"], src["name"])][:12]
             # the researcher's own finding on this combination, if any (the first that carries the code and is not a review)
             with F.lock:
                 F._load()
@@ -421,6 +420,12 @@ def install(app, ctx):
             r0 = next((y for y in items if rv["source"] in (y.get("codes") or []) and not y.get("review")), None)
             if r0:
                 rf = {"number": f"#{r0['id']}", "title": r0["title"], "text": r0["text"], "by": ctx["people_name"](r0["user"]), "status": r0["status"]}
+            # the note the finding was made from is the finding: shown once, as the finding (2026-11-17: the same words
+            # appeared twice, as "Their finding" and again as a note)
+            same = lambda n: bool(r0) and n.get("user") == r0.get("user") and " ".join(str(n.get("text") or "").split()) == \
+                " ".join(str(r0.get("text") or "").split())                                       # noqa: E731
+            notes = [{k: v for k, v in n.items() if k != "user"} for n in ctx["notes"].list(src["section"], src["name"])
+                     if not same(n)][:12]
         plat_r = plat_of(rv["source"])
         plat_a = plat_of(rv["codes"][0]) if rv.get("codes") else plat_r
         return jsonify(finding=F.shown(x, ctx.get("describe")), researcher={"notes": notes, "finding": rf,

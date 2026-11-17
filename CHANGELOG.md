@@ -5,6 +5,12 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-17 (8)
+### Fixed
+- **The researcher's words appear once on a review.** Under *What the researcher is saying*, a finding made from a
+  researcher's note was shown twice: as *Their finding* and again as the note itself. The note the finding was made from
+  is now left out; the researcher's other notes still show. Nothing to do when updating.
+
 ## 2026-11-17 (7)
 ### Changed
 - **The Combinations search counts the report day by default.** An analyst pasting a researcher's code now gets

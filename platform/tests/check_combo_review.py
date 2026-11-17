@@ -113,6 +113,27 @@ try:
        and "top_networks" in rv["researcher"])
     ok("…and the analyst's view: each ticked pattern with the hosts that share it", [p["code"] for p in rv.get("analyst", {}).get("patterns", [])] == tick
        and all(p["hosts"] >= 1 and len(p["parts"]) >= 2 for p in rv["analyst"]["patterns"]))
+    # the researcher's finding and the note it was made from are one statement: shown once (2026-11-17: the review page
+    # showed the same words as "Their finding" and again as a note). Notes made up in memory only, never written.
+    said = "Routers detected and an infection on some devices"
+    made = F.create({"id": "n-made-up-1", "text": said, "codes": [code]}, "issues", rep0, "Their finding", "lg-check-researcher", "researcher")
+    real_list = A.NOTES.list
+    A.NOTES.list = lambda section, name: [
+        {"id": "n-made-up-1", "user": "lg-check-researcher", "by": "Researcher", "role": "Researcher", "text": said + " ", "codes": [{"code": code}]},
+        {"id": "n-made-up-2", "user": "lg-check-researcher", "by": "Researcher", "role": "Researcher", "text": "Another observation", "codes": []}]
+    try:
+        st, pg = call("/api/review/1", MGMT, role="management", user="lg-check-management")
+    finally:
+        A.NOTES.list = real_list
+        with F.lock:                                  # gone again: the checks below count the findings people see
+            F._load()
+            F.data["items"].pop(made["id"], None)
+            F.data["seq"] -= 1 if F.data["seq"] == int(made["id"]) else 0
+            F._save()
+    rs_ = (pg or {}).get("researcher") or {}
+    ok("the review page shows the researcher's finding once, and their other notes",
+       (rs_.get("finding") or {}).get("text") == said and [n["text"] for n in rs_.get("notes") or []] == ["Another observation"],
+       str([n.get("text") for n in rs_.get("notes") or []]))
     ok("…with no address anywhere", not IP_RX.search(json.dumps(fl)))
     st, fl2 = call("/api/findings", MGMT, role="management", user="lg-other-manager")
     ok("another manager does not see it", st == 200 and not fl2["findings"])
