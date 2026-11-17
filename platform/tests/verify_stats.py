@@ -142,11 +142,37 @@ SUMMARY = [{"$facet": {
 KEYS = ["total", "critical", "unique_src_ip", "multi_source_hosts", "unique_dst_ip", "unique_infection", "unique_sources"]
 
 
+# Every figure is worked out by these pipelines in MongoDB, as before; but many at once, from one pass over the day
+# ($facet), instead of rebuilding the whole day for each (2026-11-17: MongoDB's slow-query log showed this check as the
+# heaviest load on the database, about 70 passes a run).
+_MSUM = {}
+FACETS_PER_PASS = 60          # 10 filters a pass: each facet holds its own groups in memory
+
+
+def _fkey(flt):
+    return json.dumps({k: sorted(v) for k, v in sorted(flt.items())}, sort_keys=True)
+
+
+def msum_many(filters):
+    """The summary figures of many filters, from as few passes as the facet limit allows; kept for msum()."""
+    todo = [f for f in {_fkey(f): f for f in filters}.values() if _fkey(f) not in _MSUM]
+    per = len(SUMMARY[0]["$facet"])
+    step = max(1, FACETS_PER_PASS // per)
+    for i in range(0, len(todo), step):
+        batch = todo[i:i + step]
+        facets = {f"q{j}_{k}": mmatch(flt) + p for j, flt in enumerate(batch) for k, p in SUMMARY[0]["$facet"].items()}
+        r = mongo([{"$facet": facets}])[0]
+        for j, flt in enumerate(batch):
+            g = lambda k, f="n": (r[f"q{j}_{k}"][0][f] if r[f"q{j}_{k}"] else 0)          # noqa: E731
+            _MSUM[_fkey(flt)] = {"total": g("total"), "critical": g("critical"), "unique_src_ip": g("src"),
+                                 "multi_source_hosts": g("src", "multi"), "unique_dst_ip": g("dst"),
+                                 "unique_infection": g("inf"), "unique_sources": g("srcs")}
+
+
 def msum(flt):
-    r = mongo(mmatch(flt) + SUMMARY)[0]
-    g = lambda k, f="n": (r[k][0][f] if r[k] else 0)
-    return {"total": g("total"), "critical": g("critical"), "unique_src_ip": g("src"), "multi_source_hosts": g("src", "multi"),
-            "unique_dst_ip": g("dst"), "unique_infection": g("inf"), "unique_sources": g("srcs")}
+    if _fkey(flt) not in _MSUM:
+        msum_many([flt])
+    return _MSUM[_fkey(flt)]
 
 
 fails, checks = [], 0
@@ -180,66 +206,14 @@ def compare(label, flt):
 
 print(f"Day {DAY}: {len(NAMES)} reports, replay {clock['state']} at {clock['replay_now'][11:19]}" + (" (demo masking forced)" if DEMO else ""))
 
-# 1 -------------------------------------------------------------------------------------------------------------
-print("1. Headline figures")
-st, m = compare("no filter", {})
-ov, _ = api("/api/overview")
-if ov["day"] == DAY:
-    for k_ov, k_m in (("total", "total"), ("critical", "critical"), ("source_hosts", "unique_src_ip"),
-                      ("cross_report_hosts", "multi_source_hosts"), ("infections", "unique_infection")):
-        ok(f"overview {k_ov} {ov[k_ov]:,}", ov[k_ov] == m[k_m], f"mongo {m[k_m]:,}")
-
-# 2 -------------------------------------------------------------------------------------------------------------
-print("2. Top lists and charts")
-fields = [("source", 12), ("attack_class", 8), ("infection", 8), ("tag", 8), ("src_city", 8), ("src_geo", 8),
-          ("dst_geo", 8), ("dst_port", 6), ("severity", 5)] + ([] if DEMO else [("http_host", 8)])
-for field, n in fields:
-    rows = mongo([{"$group": {"_id": f"${field}", "n": {"$sum": 1}}}, {"$sort": {"n": -1}}])
-    mc = {(r["_id"] or EMPTY.get(field, "unknown")): r["n"] for r in rows}
-    bad = [f"{r['value']}: {r['count']:,} vs {mc.get(r['value'])}" for r in st[field] if mc.get(r["value"]) != r["count"]]
-    ranks = [r["count"] for r in st[field]] == [r["n"] for r in rows[:n]]
-    ok(f"top {field} ({len(st[field])} of {len(rows):,} values)", not bad and ranks, "; ".join(bad[:3]) or ("" if ranks else "ranking counts differ"))
-day_ms = int(START.timestamp() * 1000)
-tl = [0] * 96
-for r in mongo([{"$group": {"_id": {"$floor": {"$divide": [{"$subtract": [{"$toLong": "$t"}, day_ms]}, 900000]}}, "n": {"$sum": 1}}}]):
-    tl[min(95, int(r["_id"]))] += r["n"]
-ok("timeline, 96 quarter hours (stats)", tl == st["timeline"])
-if ov["day"] == DAY:
-    ok("timeline, 96 quarter hours (overview)", tl == ov["timeline"])
-hours = {}
-for r in mongo([{"$group": {"_id": {"c": "$attack_class", "h": {"$hour": "$t"}}, "n": {"$sum": 1}}}]):
-    hours.setdefault(r["_id"]["c"], [0] * 24)[r["_id"]["h"]] += r["n"]
-ok(f"hourly chart, {len(st['hours_by_class'])} attack types x 24 hours", all(hours.get(c) == v for c, v in st["hours_by_class"].items()))
-if not DEMO:
-    for side in ("src", "dst"):
-        by_asn = {r["_id"]: r["n"] for r in mongo([{"$match": {f"{side}_asn": {"$ne": ""}}}, {"$group": {"_id": f"${side}_asn", "n": {"$sum": 1}}}])}
-        bad = [f"{r['value']}: {r['count']:,} vs {sum(by_asn.get(str(a), 0) for a in r['asns']):,}" for r in st[f"{side}_network"]
-               if sum(by_asn.get(str(a), 0) for a in r["asns"]) != r["count"]]
-        ok(f"top {side} networks per company ({len(st[f'{side}_network'])})", not bad, "; ".join(bad[:3]))
-
-# 3 -------------------------------------------------------------------------------------------------------------
-print("3. Every filter on its own (stats, map and replayed count)")
+# Every filter the sections below compare, worked out in MongoDB up front, many to a pass (see msum_many). The lists
+# come from the platform's own filter values (facets, networks) and from MongoDB's own top values, as before.
 fac, _ = api("/api/facets", {"at": AT})
-for field in ("source", "attack_class", "infection", "severity", "tag", "src_city", "dst_geo", "dst_port", "protocol", "src_geo"):
-    vals = [r["value"] for r in fac.get(field, [])]
-    for v in (vals[:3] + vals[-1:]) if len(vals) > 3 else vals:
-        compare(f"{field} = {v}", {field: [v]})
-if not DEMO:
-    for field in ("http_host", "dst_ip", "src_ip", "dst_city", "http_agent"):
-        for r in mongo([{"$match": {field: {"$ne": ""}}}, {"$group": {"_id": f"${field}", "n": {"$sum": 1}}}, {"$sort": {"n": -1}}, {"$limit": 2}]):
-            compare(f"{field} = (one with {r['n']:,} records)", {field: [r["_id"]]})
-    for side in ("src", "dst"):
-        for r in st[f"{side}_network"][:2]:
-            p, _ = api("/api/stats", [("at", AT), (f"{side}_asn", r["value"])])
-            mm = msum({f"{side}_asn": [str(a) for a in r["asns"]]})
-            ok(f"{side}_asn = company '{r['value']}' ({len(r['asns'])} AS numbers): {p['total']:,}", p["total"] == mm["total"], f"mongo {mm['total']:,}")
-            for form in (str(r["asns"][0]), f"AS{r['asns'][0]}"):
-                p2, _ = api("/api/stats", [("at", AT), (f"{side}_asn", form)])
-                one = msum({f"{side}_asn": [str(r["asns"][0])]})["total"]
-                ok(f"{side}_asn written as '{form}': {p2['total']:,}", p2["total"] == one, f"mongo {one:,}")
-
-# 4 -------------------------------------------------------------------------------------------------------------
-print("4. Combinations (AND across filters, OR inside one)")
+_st0, _ = api("/api/stats", [("at", AT)])
+P3 = mongo([{"$facet": {
+    **{f"top2_{f}": [{"$match": {f: {"$ne": ""}}}, {"$group": {"_id": f"${f}", "n": {"$sum": 1}}}, {"$sort": {"n": -1}}, {"$limit": 2}]
+       for f in ("http_host", "dst_ip", "src_ip", "dst_city", "http_agent")},
+    "ips": [{"$match": {"src_ip": {"$ne": ""}}}, {"$group": {"_id": "$src_ip"}}, {"$sort": {"_id": 1}}, {"$limit": 150}]}}])[0]
 
 
 def top(f, i=0):
@@ -255,10 +229,90 @@ combos = [
     {"attack_class": top("attack_class"), "dst_geo": top("dst_geo"), "dst_port": top("dst_port"), "severity": top("severity")},
     {"src_city": top("src_city"), "src_geo": top("src_geo"), "tag": top("tag"), "protocol": top("protocol")},
 ]
+combos = [c for c in ({k: sorted(set(v)) for k, v in c.items() if v} for c in combos) if c]
+ips = [r["_id"] for r in P3["ips"]]
+_want = [{}] + [{f: [v]} for f in ("source", "attack_class", "infection", "severity", "tag", "src_city", "dst_geo", "dst_port", "protocol", "src_geo")
+                for v in ((lambda vs: (vs[:3] + vs[-1:]) if len(vs) > 3 else vs)([r["value"] for r in fac.get(f, [])]))]
+_want += combos + [{"attack_class": [r["value"] for r in fac.get("attack_class", [])]}] + [{f: [label]} for f, label in EMPTY.items()]
+if not DEMO:
+    _want += [{f: [r["_id"]]} for f in ("http_host", "dst_ip", "src_ip", "dst_city", "http_agent") for r in P3[f"top2_{f}"]]
+    for side in ("src", "dst"):
+        for r in _st0.get(f"{side}_network", [])[:2]:
+            _want += [{f"{side}_asn": [str(a) for a in r["asns"]]}, {f"{side}_asn": [str(r["asns"][0])]}]
+if ips:
+    _want.append({"src_ip": ips})
+_t = time.perf_counter()
+msum_many(_want)
+print(f"   (MongoDB figures for {len(_MSUM)} filters in {time.perf_counter() - _t:.1f} s)")
+
+# 1 -------------------------------------------------------------------------------------------------------------
+print("1. Headline figures")
+st, m = compare("no filter", {})
+ov, _ = api("/api/overview")
+if ov["day"] == DAY:
+    for k_ov, k_m in (("total", "total"), ("critical", "critical"), ("source_hosts", "unique_src_ip"),
+                      ("cross_report_hosts", "multi_source_hosts"), ("infections", "unique_infection")):
+        ok(f"overview {k_ov} {ov[k_ov]:,}", ov[k_ov] == m[k_m], f"mongo {m[k_m]:,}")
+
+# 2 -------------------------------------------------------------------------------------------------------------
+print("2. Top lists and charts")
+fields = [("source", 12), ("attack_class", 8), ("infection", 8), ("tag", 8), ("src_city", 8), ("src_geo", 8),
+          ("dst_geo", 8), ("dst_port", 6), ("severity", 5)] + ([] if DEMO else [("http_host", 8)])
+day_ms = int(START.timestamp() * 1000)
+# the top lists, the timeline, the hourly chart and the networks: one pass over the day
+P2 = mongo([{"$facet": {
+    **{f"top_{field}": [{"$group": {"_id": f"${field}", "n": {"$sum": 1}}}, {"$sort": {"n": -1}}] for field, _n in fields},
+    "timeline": [{"$group": {"_id": {"$floor": {"$divide": [{"$subtract": [{"$toLong": "$t"}, day_ms]}, 900000]}}, "n": {"$sum": 1}}}],
+    "hours": [{"$group": {"_id": {"c": "$attack_class", "h": {"$hour": "$t"}}, "n": {"$sum": 1}}}],
+    **{f"asn_{side}": [{"$match": {f"{side}_asn": {"$ne": ""}}}, {"$group": {"_id": f"${side}_asn", "n": {"$sum": 1}}}]
+       for side in ("src", "dst")}}}])[0]
+for field, n in fields:
+    rows = P2[f"top_{field}"]
+    mc = {(r["_id"] or EMPTY.get(field, "unknown")): r["n"] for r in rows}
+    bad = [f"{r['value']}: {r['count']:,} vs {mc.get(r['value'])}" for r in st[field] if mc.get(r["value"]) != r["count"]]
+    ranks = [r["count"] for r in st[field]] == [r["n"] for r in rows[:n]]
+    ok(f"top {field} ({len(st[field])} of {len(rows):,} values)", not bad and ranks, "; ".join(bad[:3]) or ("" if ranks else "ranking counts differ"))
+tl = [0] * 96
+for r in P2["timeline"]:
+    tl[min(95, int(r["_id"]))] += r["n"]
+ok("timeline, 96 quarter hours (stats)", tl == st["timeline"])
+if ov["day"] == DAY:
+    ok("timeline, 96 quarter hours (overview)", tl == ov["timeline"])
+hours = {}
+for r in P2["hours"]:
+    hours.setdefault(r["_id"]["c"], [0] * 24)[r["_id"]["h"]] += r["n"]
+ok(f"hourly chart, {len(st['hours_by_class'])} attack types x 24 hours", all(hours.get(c) == v for c, v in st["hours_by_class"].items()))
+if not DEMO:
+    for side in ("src", "dst"):
+        by_asn = {r["_id"]: r["n"] for r in P2[f"asn_{side}"]}
+        bad = [f"{r['value']}: {r['count']:,} vs {sum(by_asn.get(str(a), 0) for a in r['asns']):,}" for r in st[f"{side}_network"]
+               if sum(by_asn.get(str(a), 0) for a in r["asns"]) != r["count"]]
+        ok(f"top {side} networks per company ({len(st[f'{side}_network'])})", not bad, "; ".join(bad[:3]))
+
+# 3 -------------------------------------------------------------------------------------------------------------
+print("3. Every filter on its own (stats, map and replayed count)")
+for field in ("source", "attack_class", "infection", "severity", "tag", "src_city", "dst_geo", "dst_port", "protocol", "src_geo"):
+    vals = [r["value"] for r in fac.get(field, [])]
+    for v in (vals[:3] + vals[-1:]) if len(vals) > 3 else vals:
+        compare(f"{field} = {v}", {field: [v]})
+if not DEMO:
+    for field in ("http_host", "dst_ip", "src_ip", "dst_city", "http_agent"):
+        for r in P3[f"top2_{field}"]:
+            compare(f"{field} = (one with {r['n']:,} records)", {field: [r["_id"]]})
+    for side in ("src", "dst"):
+        for r in st[f"{side}_network"][:2]:
+            p, _ = api("/api/stats", [("at", AT), (f"{side}_asn", r["value"])])
+            mm = msum({f"{side}_asn": [str(a) for a in r["asns"]]})
+            ok(f"{side}_asn = company '{r['value']}' ({len(r['asns'])} AS numbers): {p['total']:,}", p["total"] == mm["total"], f"mongo {mm['total']:,}")
+            for form in (str(r["asns"][0]), f"AS{r['asns'][0]}"):
+                p2, _ = api("/api/stats", [("at", AT), (f"{side}_asn", form)])
+                one = msum({f"{side}_asn": [str(r["asns"][0])]})["total"]
+                ok(f"{side}_asn written as '{form}': {p2['total']:,}", p2["total"] == one, f"mongo {one:,}")
+
+# 4 -------------------------------------------------------------------------------------------------------------
+print("4. Combinations (AND across filters, OR inside one)")
 for c in combos:
-    c = {k: sorted(set(v)) for k, v in c.items() if v}
-    if c:
-        compare(" & ".join(f"{k}={'|'.join(v)}" for k, v in c.items()), c)
+    compare(" & ".join(f"{k}={'|'.join(v)}" for k, v in c.items()), c)
 every, _ = compare("every attack type selected", {"attack_class": [r["value"] for r in fac["attack_class"]]})
 ok("every attack type selected = the whole day", every["total"] == st["total"])
 
@@ -279,7 +333,6 @@ def total(params):
 ok("a value that does not exist gives 0", total([("infection", "no-such-value-xyz")]) == 0)
 ok("an unknown filter name is ignored (whole day)", total([("colour", "red")]) == whole)
 ok("an empty filter value is ignored (whole day)", total([("src_city", "")]) == whole)
-ips = [r["_id"] for r in mongo([{"$match": {"src_ip": {"$ne": ""}}}, {"$group": {"_id": "$src_ip"}}, {"$sort": {"_id": 1}}, {"$limit": 150}])]
 if ips:
     ok(f"{len(ips)} source hosts in one request (OR)", total([("src_ip", i) for i in ips]) == msum({"src_ip": ips})["total"])
 prev = (START - timedelta(days=1)).date().isoformat()

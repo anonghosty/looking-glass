@@ -51,12 +51,24 @@ print(f"Day {day} (app day {app_sources['day']})\n")
 print(f"{'report':38} {'mongo':>8} {'app':>8}  ok")
 total_mongo = total_app = 0
 bad = 0
+# Counted by event time on purpose, NOT by the platform's own rule (files dated the day or the next): a record the
+# platform misses still shows here. But only in the report files dated 3 days either side of the day: no Shadowserver
+# file carries events further from its date, and MongoDB then reads those files through the file-name index instead of
+# every record ever kept (2026-11-17: MongoDB's slow-query log showed this check scanning whole collections,
+# up to 12 s a query, at every release).
+FILES = {"filename": {"$gte": (start - timedelta(days=3)).strftime("%Y-%m-%d"), "$lt": (end + timedelta(days=3)).strftime("%Y-%m-%d")}}
+
+
+def on_the_day(times):
+    return {"$and": [FILES, {"extracted_date": times}]}
+
+
 for s in app_sources["sources"]:
     name = s["name"]
     c = db[name]
     # extracted_date may be stored as a date or as an ISO string; count both forms
-    n = c.count_documents({"extracted_date": {"$gte": start, "$lt": end}})
-    n += c.count_documents({"extracted_date": {"$gte": start.strftime("%Y-%m-%dT"), "$lt": end.strftime("%Y-%m-%dT")}})
+    n = c.count_documents(on_the_day({"$gte": start, "$lt": end}))
+    n += c.count_documents(on_the_day({"$gte": start.strftime("%Y-%m-%dT"), "$lt": end.strftime("%Y-%m-%dT")}))
     a = s["rows_today"]
     total_mongo += n; total_app += a
     ok = n == a
@@ -77,8 +89,8 @@ missing_db = sorted(app_names - names)
 
 def on_day(n):
     c = db[n]
-    return bool(c.find_one({"extracted_date": {"$gte": start, "$lt": end}}, {"_id": 1})
-                or c.find_one({"extracted_date": {"$gte": start.strftime("%Y-%m-%dT"), "$lt": end.strftime("%Y-%m-%dT")}}, {"_id": 1}))
+    return bool(c.find_one(on_the_day({"$gte": start, "$lt": end}), {"_id": 1})
+                or c.find_one(on_the_day({"$gte": start.strftime("%Y-%m-%dT"), "$lt": end.strftime("%Y-%m-%dT")}), {"_id": 1}))
 
 
 left_out = sorted(n for n in names if n.startswith(("event4_", "event6_")) and n not in app_names and on_day(n))

@@ -43,7 +43,7 @@ import security
 import services_api
 from schedule import ReplaySchedule
 from services import report_info
-from sources import STD_FIELDS, Registry, normalise
+from sources import INTERNAL, STD_FIELDS, Registry, normalise
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
@@ -297,14 +297,23 @@ class DayStore:
     def _fetch_collection(self, src, start, end):
         c = db[src["name"]]
         prefixes = [start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")]
-        docs, last = [], None
-        if src["filename_index"]:
-            q = {"$or": [{"filename": {"$regex": "^" + re.escape(p)}} for p in prefixes]}
-            docs = list(c.find(q))
-        if not docs and os.environ.get("FALLBACK_SCAN") == "1":
-            docs = list(c.find({"extracted_date": {"$gte": start, "$lt": end}}))
+        last = None
         out = []
-        for d in docs:
+        # Streamed from the cursor, not first gathered into a list of whole documents (2026-11-17: the largest report
+        # of a day took 155 MB to hold raw, 86 MB streamed), and without the fields normalise() throws away
+        # (sources.INTERNAL apart from _id), the same rows and extras as before.
+        skip = {k: 0 for k in INTERNAL if k != "_id"}
+        seen = [False]
+
+        def rows():
+            if src["filename_index"]:
+                for d in c.find({"$or": [{"filename": {"$regex": "^" + re.escape(p)}} for p in prefixes]}, skip):
+                    seen[0] = True
+                    yield d
+            if not seen[0] and os.environ.get("FALLBACK_SCAN") == "1":
+                yield from c.find({"extracted_date": {"$gte": start, "$lt": end}}, skip)
+
+        for d in rows():
             ed = d.get("extracted_date")
             if isinstance(ed, str):
                 try:

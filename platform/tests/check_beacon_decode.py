@@ -337,7 +337,7 @@ ok("a request line with nothing in it answers an empty list", post(ANALYST, "tok
 ok("name to OS: android.badbox2 -> android, win32.x -> windows, mirai -> unknown",
    (B.name_os("android.badbox2"), B.name_os("win32.emotet"), B.name_os("mirai")) == ("android", "windows", ""))
 
-# ---- a busy server (2026-11-17): two CLogin check-ins that decode in 20 ms were listed "did not decode" on live. The
+# ---- a busy server (2026-11-17): two CLogin check-ins that decode in 20 ms were listed "did not decode". The
 # budget counted the clock, so waiting for other threads used it up, and the failure was kept for the life of the process
 print("A decode cut short by its time budget")
 ok("the budget counts this thread's own CPU time, not the clock", B._now is __import__("time").thread_time)

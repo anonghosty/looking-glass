@@ -56,7 +56,9 @@ try:
        and all(x["bytes"] > 0 and x["t"] for x in notes))
     ok("the note file is private (600)", oct(os.stat(os.path.join(base, "retention_removed.jsonl")).st_mode & 0o777) == "0o600")
     print("The run's status")
-    st = retention.status(base, True, {"rows_inserted": 15, "retention_files": 2, "retention_bytes": 3 * 1048576}, 5, now=now)
+    # a limit far below any disk's free space: "plenty" must not depend on how big this machine's scratch disk is
+    # (2026-11-17: a 5.8 GB /tmp with 5.0 GB free sat just under the default 5 GB and failed this check)
+    st = retention.status(base, True, {"rows_inserted": 15, "retention_files": 2, "retention_bytes": 3 * 1048576}, 0.001, now=now)
     got = json.load(open(os.path.join(base, "pipeline_status.json")))
     ok("written with when, how it went, counts and free disk", got == st and got["ok"] and got["rows_inserted"] == 15
        and got["pruned_files"] == 2 and got["pruned_mb"] == 3.0 and got["free_gb"] >= 0)

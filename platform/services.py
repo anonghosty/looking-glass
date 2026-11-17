@@ -38,6 +38,9 @@ CORE = ("ip", "port", "protocol", "asn", "geo", "region", "city", "hostname", "n
 USED = set(CORE) | {"_id", "timestamp", "extracted_date", "logged_date", "filename", "line_hash", "hostname_source",
                     "device_vendor", "device_type", "device_model", "device_version", "version"}
 EXTRA_MAX = 300
+# Read but never used nor kept by normalise_service (in USED, not read by it): left out of the day load. extracted_date
+# and _id stay (the event time and the row id); the filename is only the query.
+SKIP = {"timestamp": 0, "logged_date": 0, "filename": 0, "line_hash": 0, "hostname_source": 0}
 SEV_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4, "": 5}
 
 # readable service names (from the collection name)
@@ -298,13 +301,19 @@ class ServiceStore:
 
     def _fetch(self, src, start, end):
         c = self.db[src["name"]]
-        docs = []
-        if src["filename_index"]:
-            docs = list(c.find({"$or": [{"filename": {"$regex": "^" + re.escape(p)}} for p in self._prefixes(start)]}))
-        if not docs and self.fallback_scan:
-            docs = list(c.find({"extracted_date": {"$gte": start, "$lt": end}}))
+        seen = [False]
+
+        def rows():
+            # streamed, without the fields normalise_service() throws away (see app.DayStore._fetch_collection)
+            if src["filename_index"]:
+                for d in c.find({"$or": [{"filename": {"$regex": "^" + re.escape(p)}} for p in self._prefixes(start)]}, SKIP):
+                    seen[0] = True
+                    yield d
+            if not seen[0] and self.fallback_scan:
+                yield from c.find({"extracted_date": {"$gte": start, "$lt": end}}, SKIP)
+
         out, last = [], None
-        for d in docs:
+        for d in rows():
             ed = d.get("extracted_date")
             if isinstance(ed, str):
                 try:

@@ -20,6 +20,7 @@ from collections import deque
 
 from flask import abort, g, jsonify, make_response, request
 
+import index_refresh
 import pipeline_link
 import request_tracker
 import response_cache
@@ -270,7 +271,9 @@ def snapshot(ctx):
         "users_window_min": request_tracker.WINDOW_S // 60,
         "performance": SAMPLER.touch(),
         "sample_s": Sampler.STEP_S,
+        # the drill-down counts' failures are among them (system_alerts.count_alerts): also on the administrators' bell
         "alerts": [{"title": a["title"], "problem": a["problem"]} for a in (ctx["alerts"].current() if ctx.get("alerts") else [])],
+        "counts": index_refresh.status(),
     }
 
 

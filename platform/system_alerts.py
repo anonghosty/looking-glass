@@ -68,6 +68,29 @@ def note_start(data_dir, now=None):
         pass
 
 
+COUNT_TITLES = {"intel": "Intel gathered", "services-intel": "The services patterns"}
+
+
+def count_alerts(now=None):
+    """A drill-down count (index_refresh.py) whose last try failed and has not succeeded since: the earlier counts are
+    shown meanwhile. On the administrators' bell and in Settings → Task monitor (the user, 2026-11-17)."""
+    import index_refresh
+    now = now or time.time()
+    out = []
+    for s in index_refresh.status():
+        e = s["last_error"]
+        if not e:
+            continue
+        name = COUNT_TITLES.get(s["name"], s["name"])
+        out.append({"key": f"counts-failed:{s['name']}:{round(e['at'])}", "problem": True,
+                    "title": f"{name}: the counts could not be updated",
+                    "text": (f"counting again failed at {_when(e['at'])} ({e['error']}). The earlier counts are shown meanwhile, "
+                             f"and it is tried again at the next visit after {index_refresh.RETRY_SECONDS} s; this alert goes "
+                             "once it works. Details in the service log: journalctl -u looking-glass."),
+                    "at": e["at"], "link": "/settings#monitor"})
+    return out
+
+
 class Alerts:
     def __init__(self, base_dir, env=os.environ):
         self.base_dir, self.data = base_dir, os.path.join(base_dir, "data")
@@ -149,6 +172,7 @@ class Alerts:
                         "at": rec_at, "link": "/audit"})
         out += self._sender_check(now)
         out += self._decoding_asks()
+        out += count_alerts(now)
         cert = self._certificate()
         if cert and cert["days_left"] <= 30:
             days = cert["days_left"]

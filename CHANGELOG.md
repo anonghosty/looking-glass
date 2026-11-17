@@ -5,6 +5,38 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-17 (11)
+### Changed
+- **Intel gathered and the combination filters no longer make you wait for a recount.** The counts behind the
+  Definitions page, the services patterns and the Executive portal's code filter used to be counted again while the
+  page waited: about 22 s after a restart and 2 to 6 s after each new report or hourly refresh, all of it Python work,
+  not the database. Now the counts already made are shown at once while one recount runs behind the page, and the
+  Executive portal's day shares the report day's counts. The figures are the same; only the waiting changed.
+  After a restart the first count is quicker too: most of it was the beacon decoder working through the day's request
+  lines again, and its public answers (format, operator, version, OS family) are now kept in
+  `data/beacon_summaries.json`, keyed by a hash, without any request line, host or device detail. They are thrown
+  away whenever the decoder changes. A count that fails no longer shows an error page when earlier counts exist: those
+  stay on screen, it is tried again after 30 s, and the administrators' bell and Settings → Task monitor show an
+  alert until it succeeds.
+- **Loading a day takes less memory.** The reports are read as they arrive from MongoDB instead of first being
+  gathered whole, and without the few fields that were thrown away anyway: the largest report of a day needed 155 MB
+  while loading, now 86 MB. Every record and every field shown is the same (checked record by record on a full day);
+  a new check, `tests/check_day_skip.py`, fails if a later change starts using one of the fields left out.
+- **The installation checks put far less load on MongoDB.** `tests/verify_stats.py` works out its figures in 9 queries
+  instead of 91 (MongoDB time 53 s → 17 s), and `tests/verify_totals.py` reads only the report files around the day
+  instead of whole collections (24 s → 1 s). They check exactly what they checked before.
+- **MongoDB's own log is rotated.** `/var/log/mongodb/mongod.log` grew without end (hundreds of MB). A MongoDB
+  installed by Looking Glass now gets a rotation rule: daily, or past 100 MB; 14 old logs kept, compressed. MongoDB is
+  not restarted. **When updating:** if MongoDB was installed by Looking Glass, run once from the Looking Glass folder
+  `sudo database/mongo_log_rotation.sh --now` (adds the rule and rotates the current log; running it again changes
+  nothing). See *Updating* in the installation guide. The rest needs only the usual update steps.
+- **The installation guide states the memory needed: minimum 4 GB.** It said about 2 GB, too little above about
+  50,000 records a day. A new section, *How much memory*, gives figures measured with 50,000 to 300,000 records a day,
+  explains that memory follows the reports and not the number of users (one process with 8 threads, shared by every
+  role), and how to check and lower your own use. `ACCESSIBILITY.md` says what the keyboard check of 2026-11-17
+  covered. The 2026-11-17 (9) entry now lists its two security-review fixes under **Security**, as the security policy
+  asks. Nothing to do when updating.
+
 ## 2026-11-17 (10)
 ### Changed
 - **Every page can be used with the keyboard alone.** On the map and the services platform, the chart legends (attack
@@ -18,13 +50,16 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
   (then `-3`...) instead of replacing the first archive and its checksum. Nothing to do when updating.
 
 ## 2026-11-17 (9)
-### Changed
+### Security
+Both found by the security review of 2026-11-17: work a single page request could make the server do, which repeated
+requests could use to slow it for everyone (availability).
 - **A record's details open at once for masked viewers.** On the services platform, opening a record looked for it by
   working out the masked id of every record of the day, up to about 2 seconds on a day of a million records. Each day
   now keeps a table of them, built on the first click.
 - **Special Reports are counted in the background.** With a constituency set, the Overview's Special Reports list read
   every row of every Special Report while the page waited. A page now gets the last count at once and an expired one is
   refreshed behind it; just after a start or a change of the constituency the list appears on the next visit.
+### Changed
 - **The GitHub checks now test which devices an advisory carries** (`check_combo_review`, `check_ticked_names`), on a
   made-up week whose combinations span several organisations.
   Nothing to do when updating.

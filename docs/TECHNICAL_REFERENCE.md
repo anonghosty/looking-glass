@@ -85,7 +85,10 @@ server side is in small modules called from `app.py`:
   services host; values common to everything are filtered out. No source address, host name or constituent address is
   ever returned; addresses inside free text are masked. `GET /api/intel?section=infections|issues&name=…`,
   `GET /api/intel/leads`, `GET /api/intel/summary` (per name and report: how many kinds of indicator, for the
-  *Seen in* cards). Cached for five minutes per set of days.
+  *Seen in* cards). Cached for five minutes per set of days. These counts, and the services patterns'
+  (`services_intel.py`), are worked out behind the page (`index_refresh.Gate`): counts that are out of date are served
+  at once while one background thread counts again, and two first requests share one count. The Executive portal's day,
+  when it is the report day, uses the report day's counts.
 - **`intel_match.py`, Explore a match.** `GET /api/intel/match?kind=…&value=…` (the Definitions permission) answers
   only for a match currently in the leads: for every name and report of the match, the indicators, tags and
   combinations of only the records that carry the indicator, in the same shape as a report of `/api/intel`, with the
@@ -134,6 +137,13 @@ server side is in small modules called from `app.py`:
   are never matched between names (shared by every beacon of a format). The XOR key is not an indicator: a new one per
   check-in. Never shown to researchers: MAC, hardware UUID (`spare1`), `cpuid`, `cpumd5`, `mem`, the key. Test:
   `tests/check_beacon_decode.py` (made-up beacons from `tests/beacon_samples.py`, random keys).
+- **`beacon_keep.py`, decoded answers kept across restarts.** The public summary of each request line's beacon
+  (`beacon_decode.public`: format, operator, version, OS family, state) is kept in `data/beacon_summaries.json` (mode
+  600), keyed by a SHA-256 of the request line and host; the line, the host and the device details are never written.
+  The file carries a fingerprint of `beacon_decode.py` and is not used by a different decoder. At most 200,000 answers
+  (`BEACON_KEEP_MAX`), written at most once a minute while new answers come in, and at exit; each different summary
+  is held once in memory. Switched on by `beacon_decode.install` (the
+  running platform only). Deleting the file is safe: the answers are worked out again. Test: `tests/check_beacon_keep.py`.
 - **`beacon_findings.py`, decoded beacons handed over.** `POST /api/beacon/finding` (`{name, format, operator, version,
   os_family, kind: analyst|management, to, comment, title}`; the *definitions*, *settings* or *unmasked* permission,
   CSRF token, a fresh sign-in) makes a finding (`findings.Findings.create(..., extra={"beacon": selection})`) in the

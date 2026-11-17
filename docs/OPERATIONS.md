@@ -23,6 +23,7 @@ project's Python (`.venv`); run the others with `.venv/bin/python <script>`.
 | Logs (live) | `journalctl -u looking-glass -f` |
 | Health | `curl -s localhost:5000/healthz` (or `curl -sk https://localhost:5000/healthz` with HTTPS) |
 | HTTPS certificate for other screens | `deploy/make_tls_cert.sh [extra names or addresses]` ▶ (no sudo; renews by running it again) |
+| MongoDB's own log | `/var/log/mongodb/mongod.log`, rotated daily (or past 100 MB), 14 kept, by `/etc/logrotate.d/looking-glass-mongod`. Installed with MongoDB from 2026-11-17; an older installation adds it once: `sudo database/mongo_log_rotation.sh --now` |
 
 The replay needs nothing from you: it waits for each day's reports, then replays the day. The intro page and the
 top bar show "Waiting for the reports of …" while it waits.

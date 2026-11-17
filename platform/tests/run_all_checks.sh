@@ -144,6 +144,9 @@ run "researchers' notes"              $PY tests/check_notes.py
 run "combination codes + search"      $PY tests/check_combos.py
 run "Intel gathered: the report day"  $PY tests/check_report_day.py
 run "Combinations: the report day"   $PY tests/check_combo_report_day.py
+run "Drill-down counts behind the page" $PY tests/check_index_refresh.py
+run "Day load: skipped fields unused"  $PY tests/check_day_skip.py
+run "Beacon answers kept (restarts)"   $PY tests/check_beacon_keep.py
 run "findings (researcher → advisory)" $PY tests/check_findings.py
 run "analyst codes (analyst → researcher)" $PY tests/check_acodes.py
 run "report views, cases and advisories" $PY tests/check_combo_review.py

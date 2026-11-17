@@ -4,7 +4,7 @@ is behind it (the user, 2026-11-16). Counts only: no host, address or network na
 A day is counted exactly as its platform shows it (external review of v2026.11.17): the rows of the files dated that
 day or the next (the indexed file-name prefix), whose event time falls in that day, inside the constituency (Settings)
 when one is set. Never by a scan of a report's whole history: extracted_date has no index, and counting by it read every
-record ever kept (about 7 s on live, on a page request). A day already in the platform's memory is counted from there.
+record ever kept (about 7 s, on a page request). A day already in the platform's memory is counted from there.
 
 Communications: the cause is the infections that changed most. Services: the reports that changed most.
 

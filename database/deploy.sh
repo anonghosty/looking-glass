@@ -241,6 +241,8 @@ if [[ "$(cat /etc/systemd/system/mongod.service.d/shadowserver.conf 2>/dev/null)
 fi
 sudo systemctl daemon-reload
 sudo systemctl enable mongod >/dev/null 2>&1
+# MongoDB's own log is rotated (daily, or past 100 MB; 14 kept): without it, it grew to hundreds of MB (2026-11-17)
+sudo "$PROJECT_DIR/mongo_log_rotation.sh" || info "MongoDB log rotation not set up (see mongo_log_rotation.sh --help)"
 if [[ $changed -eq 1 ]] || ! systemctl is-active --quiet mongod; then
   info "(Re)starting mongod"
   sudo systemctl restart mongod

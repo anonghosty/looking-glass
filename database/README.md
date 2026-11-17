@@ -397,6 +397,7 @@ database/
 ├── run.sh                        runs the pipeline with a lock and a log file
 ├── check.sh                      setup checks (MongoDB service + pipeline --check)
 ├── deploy.sh                     installs/updates everything (sudo)
+├── mongo_log_rotation.sh         rotates MongoDB's own log (run by deploy.sh; older installs: sudo ./mongo_log_rotation.sh --now)
 ├── bin/
 │   ├── shadowserver              the global command (linked from /usr/local/bin)
 │   └── shadowserver-completion.bash   tab completion (linked from /etc/bash_completion.d)

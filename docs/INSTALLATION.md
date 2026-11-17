@@ -71,7 +71,34 @@ For a plain screen without the logo's movement, use `./install.sh --no-animation
 | Mapbox | a free account and a public access token (`pk.…`) for the map: https://account.mapbox.com |
 | Malpedia (optional) | an API token, so Malpedia joins the sources behind the "Look up" buttons |
 | Name sources (no account needed) | MISP Galaxy, MITRE ATT&CK and MITRE CTID's KEV mappings: the installer downloads the first copies (public files on GitHub, about 60 MB to fetch, about 6 MB kept, a minute) and schedules a weekly refresh. Without internet the installation goes on without them; look-ups then use the definitions and Malpedia until the next refresh |
-| Memory / disk | about 2 GB RAM for the platform and MongoDB together. Disk: `git clone` downloads about 50 MB (about 36 MB with `--depth 1`, the latest version only) and takes about 45 MB on disk; the code itself is under 10 MB, the rest is screenshots and film posters. The two Python environments the installer makes add about 115 MB. MongoDB needs space for your reports |
+| Memory / disk | **Minimum: 4 GB RAM** for the whole server. That is enough for up to about 50,000 records a day (about half a million records kept), which covers most countries; more records a day need more, see [How much memory](#how-much-memory). Disk: `git clone` downloads about 50 MB (about 36 MB with `--depth 1`, the latest version only) and takes about 45 MB on disk; the code itself is under 10 MB, the rest is screenshots and film posters. The two Python environments the installer makes add about 115 MB. MongoDB needs space for your reports |
+
+## How much memory
+
+**Minimum: 4 GB RAM.** What uses memory is the reports, not the people: Looking Glass runs as **one process with 8
+threads** (`gunicorn --workers 1 --threads 8`) that every user and every role shares. It holds the report day (and the
+day before) and the Executive portal's 7-day baseline in memory once, for everyone; more users only queue a moment
+when more than eight requests arrive together. Adding workers would not help: each would hold its own copy.
+
+So the size to look at is **how many records your Shadowserver reports bring a day** (both platforms together; the
+Executive portal shows it). Measured on a test installation with made-up data, from a cold start through a working
+session (the map, the services platform, the Executive portal's 7-day baseline, Intel gathered):
+
+| Records a day | Web service (peak) | MongoDB (peak) | Together | Server RAM: minimum | comfortable |
+|---|---|---|---|---|---|
+| 50,000 | 1.2 GB | 0.7 GB | 1.9 GB | **4 GB** | 6 GB |
+| 100,000 | 2.3 GB | 1.3 GB | 3.5 GB | 6 GB | 8 GB |
+| 200,000 | 4.0 GB | 1.5 GB | 5.5 GB | 8 GB | 12 GB |
+| 300,000 | 5.2 GB | 1.5 GB | 6.7 GB | 10 GB | 16 GB |
+
+The web service grows with the records (about 2 GB per 100,000 a day); MongoDB levels off, as it keeps only what it
+is reading in memory. The server figures add Ubuntu itself (about 1 GB) and room to grow: during a day of use the web
+service's caches fill, and an installation measured 1.4 GB just after a restart and 2.9 GB after a full day.
+
+After your first week, `tools/resource_check.py` prints what yours actually uses, against the budgets
+`RESOURCE_WEB_MB` and `RESOURCE_MONGO_MB` (4096 each by default; raise them for a large country). To use less memory
+on a small server, lower `MGMT_PAST_RECORDS` (records of past days the Executive portal keeps in memory, 3,000,000 by
+default): older days are then read from MongoDB when needed, a little slower.
 
 ## Who can reach Looking Glass: `ACCESS_MODE`
 
@@ -421,6 +448,18 @@ security_testing/security_retest.py && tests/run_all_checks.sh
 > ([OPERATIONS.md, Backups](OPERATIONS.md#backups)). Keep the private key off the server: without it the backups cannot
 > be restored. `manage/backup.sh --unencrypted` still makes a plain backup if you must, but it holds `.env` and the
 > accounts in the clear.
+
+> **MongoDB's log is rotated (from 2026-11-17).** MongoDB writes its own log, `/var/log/mongodb/mongod.log`, and
+> nothing rotated it: on a busy installation it reached hundreds of MB. New installations get a rotation rule (daily,
+> or past 100 MB; 14 old logs kept, compressed). If MongoDB was installed by Looking Glass before this update, add the
+> rule once, from the Looking Glass folder (the one holding `database/` and `platform/`; `git pull` there brings the
+> script):
+> ```bash
+> sudo database/mongo_log_rotation.sh --now
+> ```
+> `--now` also rotates the current log straight away. Running it again changes nothing. It writes no rule when
+> another one already rotates that log, and MongoDB is not restarted. If your MongoDB runs elsewhere or was yours
+> before Looking Glass, its log is yours to rotate; the same script can do it there too.
 
 `requirements.txt` lets each library update within its major version only, so an update brings fixes but no big
 changes. If `check_libraries.py` fails, its line names the library.

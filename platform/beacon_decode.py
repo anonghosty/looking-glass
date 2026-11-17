@@ -49,7 +49,7 @@ MAX_CANDIDATES = 4         # query values tried per request line
 TIME_BUDGET = 0.25         # seconds per request line, all formats together: of this thread's own work (_now)
 # the budget counts the decoding thread's CPU time, not the clock: on a busy server (the warm-up after a reload, several
 # people at once) a decode waits for the others, and that wait used to use up its budget, so a check-in that decodes in
-# 20 ms was reported "did not decode" (2026-11-17: two CLogin records on live)
+# 20 ms was reported "did not decode" (2026-11-17: two CLogin records)
 _now = time.thread_time
 MAX_COMBOS = 4096          # key choices scored per 4-character group; more than this and the format does not fit
 
@@ -923,6 +923,14 @@ def _summary(url, host):
         hit = _SUMMARY.get(k)
         if hit is not None:
             return hit
+    if KEEP is not None:                        # kept from before a restart (beacon_keep.py): no decoding again
+        hit = KEEP.get(url, host)
+        if hit is not None:
+            with _CACHE_LOCK:
+                _SUMMARY[k] = hit
+                while len(_SUMMARY) > _SUMMARY_MAX:
+                    _SUMMARY.popitem(last=False)
+            return hit
     d = first(url)
     if d:
         out = tuple(sorted(public(d).items()))
@@ -934,10 +942,14 @@ def _summary(url, host):
             _SUMMARY[k] = out
             while len(_SUMMARY) > _SUMMARY_MAX:
                 _SUMMARY.popitem(last=False)
+        if KEEP is not None:
+            KEEP.put(url, host, out)
     return out
 
 
 _summary.cache_clear = lambda: _SUMMARY.clear()
+# the public answers kept across restarts (beacon_keep.py): switched on by install(), in the running platform only
+KEEP = None
 
 
 def field(e, name):
@@ -1058,6 +1070,18 @@ def contradiction_leads(by, full, min_hosts):
 def install(app, ctx):
     """ctx: sees_hosts() -> the viewer has the 'unmasked' permission (demo mode off); csrf_ok()."""
     from flask import jsonify, request
+    global KEEP
+    try:
+        import os
+        import beacon_keep
+        import index_refresh
+        # the running service only (gunicorn): a check that installs the API must never read answers an earlier run
+        # kept, nor write its made-up ones into data/ (2026-11-17: a second run of check_beacon_decode found its own)
+        if index_refresh.SERVING:
+            here = os.path.dirname(os.path.abspath(__file__))
+            KEEP = beacon_keep.SummaryStore(os.path.join(here, "data", "beacon_summaries.json"), beacon_keep.fingerprint(__file__))
+    except Exception:                              # noqa: BLE001  (not kept: decoded again after a restart, as before)
+        KEEP = None
 
     @app.route("/api/beacon/decode", methods=["POST"])
     def api_beacon_decode():

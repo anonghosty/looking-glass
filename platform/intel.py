@@ -29,6 +29,7 @@ from flask import jsonify, request
 
 from privacy import partial_mask_text
 import beacon_decode
+import index_refresh
 import report_day
 import hostmask
 import small_codes
@@ -233,6 +234,7 @@ class Intel:
         self.lock = threading.Lock()
         self.cache = {"key": None, "at": 0.0, "data": None}       # the report day's (what is shown)
         self.others = {}                                           # the other scopes' (report_day.py)
+        self.gate = index_refresh.Gate("intel")                    # counted again behind the page (index_refresh.py)
 
     def _days(self, scope=None):
         """The day copies counted (report_day.py): the report day by default, as the Executive portal counts it (the
@@ -242,22 +244,43 @@ class Intel:
         svc = report_day.select(list(self.ctx["svc_store"].days.values()), scope, rn)
         return comms, svc
 
-    def index(self, scope=None):
-        """{(platform, name): {report: {"records": n, kinds: {kind: Counter}}}}, the match index and the days covered."""
+    def _slot(self, scope):
+        """(days, key, scope key, cache slot): a named day that IS the report day shares the report day's counts (the
+        Executive portal's code filter asked for its own copy of the same 22 s count, 2026-11-17)."""
         comms, svc = self._days(scope)
         # kept while the same copies of the days are in memory (speed review, 2026-11-15: worked out again every 5
         # minutes, 14 s on the first visit); an hour at most. One cache per scope
         key = (tuple((d.start, getattr(d, "serial", 0), len(d.events)) for d in comms)
                + tuple((d.start, getattr(d, "serial", 0), len(d.events)) for d in svc))
         sk = report_day.scope_key(scope)
+        if sk not in ("report", "memory"):
+            rc, rs = self._days(None)
+            if [d.start for d in comms] == [d.start for d in rc] and [d.start for d in svc] == [d.start for d in rs]:
+                sk = "report"
         with self.lock:
             if sk != "report" and sk not in self.others and len(self.others) >= 6:
                 self.others.pop(next(iter(self.others)))   # days that left memory: their counts are not kept forever
             # its own name: "slot" below is a report's counts (2026-11-17: sharing the name, the cache was never kept and
             # every answer counted the days again, about 3 s each)
             cache = self.cache if sk == "report" else self.others.setdefault(sk, {"key": None, "at": 0.0, "data": None})
+        return comms, svc, key, sk, cache
+
+    def index(self, scope=None):
+        """{(platform, name): {report: {"records": n, kinds: {kind: Counter}}}}, the match index and the days covered.
+        Out of date while the service runs: the earlier counts at once, counted again behind the page (index_refresh)."""
+        _c, _s, key, sk, cache = self._slot(scope)
+        with self.lock:
+            fresh = cache["data"] if cache["key"] == key and time.time() - cache["at"] < 3600 else None
+            stale = cache["data"]
+        return self.gate.serve(sk, fresh, stale, lambda cached_only=False: self._build(scope, cached_only))
+
+    def _build(self, scope=None, cached_only=False):
+        comms, svc, key, sk, cache = self._slot(scope)
+        with self.lock:
             if cache["key"] == key and time.time() - cache["at"] < 3600:
                 return cache["data"]
+        if cached_only:
+            return None
         labels = self.ctx["labels"]()
         _refresh_inbound(self.ctx)                 # a report found since start-up
         # per value and per combination: records, and records per host (hosts are counted, never kept in an answer)

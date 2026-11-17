@@ -274,7 +274,7 @@ if [ $RM_MONGO = 1 ]; then
   do_ sudo systemctl disable --now mongod || true
   do_ sudo env DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq 'mongodb-org*' 'mongodb-mongosh*' 'mongodb-database-tools'
   do_ sudo rm -rf /etc/systemd/system/mongod.service.d/shadowserver.conf /var/lib/mongodb /var/log/mongodb \
-    "$MONGOD_CONF" "$MONGOD_CONF.orig"
+    /etc/logrotate.d/looking-glass-mongod "$MONGOD_CONF" "$MONGOD_CONF.orig"
   if [ $DRY = 1 ]; then say "  would remove /etc/apt/sources.list.d/mongodb-org-*.list and /usr/share/keyrings/mongodb-server-*.gpg"
   else sudo bash -c 'rm -f /etc/apt/sources.list.d/mongodb-org-*.list /usr/share/keyrings/mongodb-server-*.gpg'; fi
   do_ sudo systemctl daemon-reload || true

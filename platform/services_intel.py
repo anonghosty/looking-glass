@@ -27,6 +27,7 @@ import re
 import threading
 import time
 
+import index_refresh
 import report_day
 import small_codes
 from intel import combo_code, cross_code
@@ -82,14 +83,11 @@ class ServicesIntel:
         self.lock = threading.Lock()
         self.cache = {"key": None, "at": 0.0, "data": None}       # the report day's (what is shown)
         self.others = {}                                           # the other scopes' (report_day.py)
+        self.gate = index_refresh.Gate("services-intel")           # counted again behind the page (index_refresh.py)
 
-    def index(self, scope=None):
-        """scope (report_day.py): None, the report day (what is shown); "memory", every day in memory (the analysts'
-        search); "YYYY-MM-DD", that day (the Executive portal's code filter)."""
-        try:
-            self.ctx.get("load_day") and self.ctx["load_day"]()
-        except Exception:                                  # noqa: BLE001  (the days already in memory still count)
-            pass
+    def _slot(self, scope):
+        """(services days, comms days, key, scope key, cache slot). A named day that IS the report day shares the report
+        day's counts: the Executive portal's code filter counted its own copy of them (2.4 s, 2026-11-17)."""
         rn = self.ctx.get("replay_now")
         svc = report_day.select(list(self.ctx["svc_store"].days.values()), scope, rn)
         comms = report_day.select(list(self.ctx["comms_store"].days.values()), scope, rn)
@@ -98,14 +96,40 @@ class ServicesIntel:
         key = (tuple((d.start, getattr(d, "serial", 0), len(d.events)) for d in svc)
                + tuple((d.start, getattr(d, "serial", 0), len(d.events)) for d in comms))
         sk = report_day.scope_key(scope)
+        if sk not in ("report", "memory"):
+            rs = report_day.select(list(self.ctx["svc_store"].days.values()), None, rn)
+            rc = report_day.select(list(self.ctx["comms_store"].days.values()), None, rn)
+            if [d.start for d in svc] == [d.start for d in rs] and [d.start for d in comms] == [d.start for d in rc]:
+                sk = "report"
         with self.lock:
             if self.cache["key"] is None:
                 self.others.clear()
             if sk != "report" and sk not in self.others and len(self.others) >= 6:
                 self.others.pop(next(iter(self.others)))   # days that left memory: their counts are not kept forever
             slot = self.cache if sk == "report" else self.others.setdefault(sk, {"key": None, "at": 0.0, "data": None})
+        return svc, comms, key, sk, slot
+
+    def index(self, scope=None):
+        """scope (report_day.py): None, the report day (what is shown); "memory", every day in memory (the analysts'
+        search); "YYYY-MM-DD", that day (the Executive portal's code filter). Out of date while the service runs: the
+        earlier counts at once, counted again behind the page (index_refresh.py)."""
+        try:
+            self.ctx.get("load_day") and self.ctx["load_day"]()
+        except Exception:                                  # noqa: BLE001  (the days already in memory still count)
+            pass
+        _s, _c, key, sk, slot = self._slot(scope)
+        with self.lock:
+            fresh = slot["data"] if slot["key"] == key and time.time() - slot["at"] < 3600 else None
+            stale = slot["data"]
+        return self.gate.serve(sk, fresh, stale, lambda cached_only=False: self._build(scope, cached_only))
+
+    def _build(self, scope=None, cached_only=False):
+        svc, comms, key, sk, slot = self._slot(scope)
+        with self.lock:
             if slot["key"] == key and time.time() - slot["at"] < 3600:
                 return slot["data"]
+        if cached_only:
+            return None
         pat = self.ctx["patterns"]
         fields = {}
         vals = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))   # base -> item -> host -> records
