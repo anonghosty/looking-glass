@@ -6,6 +6,15 @@
 cd "$(dirname "$0")/.." || exit 1
 PY=.venv/bin/python
 pass=0; fail=0; skip=0; failed=()
+# LG_NO_OUTSIDE=1: the outside-connection guard (tests/no_outside/sitecustomize.py) in every check, with a made-up map
+# key so the paths that reach outside are switched on: only this computer and the database may be reached, every other
+# attempt is refused and written down, and the last line below fails on any place not by design (2026-11-18)
+if [ "${LG_NO_OUTSIDE:-}" = 1 ]; then LG_NO_OUTSIDE="$(mktemp)"; fi
+if [ -n "${LG_NO_OUTSIDE:-}" ]; then
+  LG_NO_OUTSIDE_DB="$(sed -n 's/^MONGO_HOST=//p' .env 2>/dev/null | tr -d "'\"" | head -1)"
+  export LG_NO_OUTSIDE LG_NO_OUTSIDE_DB PYTHONPATH="$PWD/tests/no_outside${PYTHONPATH:+:$PYTHONPATH}" MAPBOX_TOKEN="dummy-map-key-for-checks"
+  echo "Outside-connection guard on: nothing the checks do can leave this computer."
+fi
 # Is MongoDB reachable? Without it (a fresh clone, CI, a machine without the database) a check that needs the data is
 # reported as skipped, not failed; with it, a database error is a failure like any other (external review, 2026-11-12)
 DB_UP=1
@@ -41,6 +50,7 @@ run "communications totals"           $PY tests/verify_totals.py
 run "statistics + filters vs MongoDB" $PY tests/verify_stats.py
 run "services statistics vs MongoDB"  $PY tests/verify_svc_stats.py
 run "Executive + baseline vs MongoDB" $PY tests/verify_management.py
+run "Abused or Compromised vs MongoDB" $PY tests/verify_intelligence.py
 run "reports (PDF, ZIP, CSV)"         $PY tests/check_reports.py
 run "CSV formula safety"              $PY tests/check_csv_safety.py
 run "replayed counts"                 $PY tests/verify_replayed.py
@@ -105,7 +115,7 @@ run "heavy answers cached safely (per role, afresh after changes)" $PY tests/che
 run "Settings → Task monitor (admins only, no address, actions audited)" $PY tests/check_task_monitor.py
 run "analyst code page: how the selection came about" $PY tests/check_acode_chain.py
 run "combinations: ticked infections and CVEs go into the report" $PY tests/check_ticked_names.py
-run "Intelligence portal: who sees what, counts, views, export" $PY tests/check_intelligence.py
+run "Abused or Compromised: who sees what, counts, views, export" $PY tests/check_intelligence.py
 run "combination codes never stand for two combinations" $PY tests/check_code_collisions.py
 run "findings over time: reported day, repeats, time to act" $PY tests/check_finding_watch.py
 run "a CVE ticked on an analyst code's page" $PY tests/check_acode_issue.py
@@ -177,5 +187,6 @@ run "report map (Shadowserver schema)" $PY tests/check_report_map.py
 run "services for researchers (no hosts)" $PY tests/check_services_kb.py
 run "Intel gathered privacy (no hosts)" $PY tests/check_intel_privacy.py
 run "services patterns (no hosts)"     $PY tests/check_svc_patterns.py
+[ -n "${LG_NO_OUTSIDE:-}" ] && run "nothing reached outside (guard)" $PY tests/no_outside/report.py "$LG_NO_OUTSIDE"
 echo; echo "$pass passed, $fail failed${skip:+, $skip skipped}${failed:+: ${failed[*]}}"
 [ "$fail" = 0 ]

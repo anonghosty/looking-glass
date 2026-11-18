@@ -23,6 +23,12 @@ jobs:
       MONGO_DB: shadowserver     # empty here: the checks use made-up rows when it has none
       LG_QUIET: "1"
       THREATMAP_SCHEDULE: "0"
+      # the outside-connection guard (platform/tests/no_outside), set on the check steps only (never on pip): only this
+      # runner and the database may be reached, every other attempt is refused and written down; a made-up map key
+      # switches the map look-ups on, so a check that should send nothing is seen if it tries (2026-11-18: an
+      # advisory sent place names to the geocoder)
+      GUARD_LOG: ${{ github.workspace }}/outside-database.jsonl
+      GUARD_PATH: ${{ github.workspace }}/platform/tests/no_outside
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1      # v7.0.1, Node 24 (tag in actions/checkout)
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0, Node 24 (tag in actions/setup-python)
@@ -46,6 +52,10 @@ jobs:
           echo "MongoDB did not start"; docker logs mongo | tail -20; exit 1
       - name: Checks that need a database
         working-directory: platform
+        env:
+          LG_NO_OUTSIDE: ${{ env.GUARD_LOG }}
+          PYTHONPATH: ${{ env.GUARD_PATH }}
+          MAPBOX_TOKEN: dummy-map-key-for-checks
         run: |
           set -e
           for t in test_new_collections test_new_service_collections; do
@@ -58,17 +68,26 @@ jobs:
         working-directory: platform
         env:
           LG_CI_SEED: "1"
+          LG_NO_OUTSIDE: ${{ env.GUARD_LOG }}
+          PYTHONPATH: ${{ env.GUARD_PATH }}
+          MAPBOX_TOKEN: dummy-map-key-for-checks
         run: |
           set -e
           # the platform reads the throwaway database with the one-run administrator (never stored anywhere)
           set -a; . "$LG_MONGO_ADMIN_FILE"; set +a
           python tests/ci_seed.py
           # check_combo_review and check_ticked_names decide which devices an advisory carries (security review, 2026-11-17)
-          for t in check_combos check_acodes check_management check_combo_review check_ticked_names; do
+          # check_advisory_attack and check_confirm_all here too: with report data and the map key, an advisory that
+          # loads a day would look places up, and their "nothing left the server" catches it
+          for t in check_combos check_acodes check_management check_combo_review check_ticked_names check_advisory_attack check_confirm_all; do
             echo "::group::$t"
             if ! python tests/$t.py; then echo "$t did not pass"; exit 1; fi
             echo "::endgroup::"
           done
+      - name: Nothing reached outside (the guard's list)
+        if: always()
+        working-directory: platform
+        run: python tests/no_outside/report.py "$GUARD_LOG"
   dependencies:
     # known vulnerabilities in the platform's and the pipeline's libraries (PyPI advisory data, OSV)
     runs-on: ubuntu-24.04
@@ -113,6 +132,9 @@ jobs:
       MONGO_PORT: "1"
       LG_QUIET: "1"
       THREATMAP_SCHEDULE: "0"
+      # the outside-connection guard and a made-up map key on the check steps, as in the database job
+      GUARD_LOG: ${{ github.workspace }}/outside-unit.jsonl
+      GUARD_PATH: ${{ github.workspace }}/platform/tests/no_outside
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1      # v7.0.1, Node 24 (tag in actions/checkout)
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0, Node 24 (tag in actions/setup-python)
@@ -129,6 +151,10 @@ jobs:
       # MongoDB or the service (exit 77): they run on the server, in platform/tests/run_all_checks.sh.
       - name: Platform checks
         working-directory: platform
+        env:
+          LG_NO_OUTSIDE: ${{ env.GUARD_LOG }}
+          PYTHONPATH: ${{ env.GUARD_PATH }}
+          MAPBOX_TOKEN: dummy-map-key-for-checks
         run: |
           set -e
           for t in test_privacy_roles test_schedule check_ip_find check_host_label_text check_masked_fields check_banner_inbound check_data_access \
@@ -145,6 +171,9 @@ jobs:
           echo "::group::check_beacon_stats"; LG_UNIT_ONLY=1 python tests/check_beacon_stats.py; echo "::endgroup::"
       - name: Pipeline checks
         working-directory: database
+        env:
+          LG_NO_OUTSIDE: ${{ env.GUARD_LOG }}
+          PYTHONPATH: ${{ env.GUARD_PATH }}
         run: |
           set -e
           for t in test_mail_auth test_dns_https test_mail_auth_pipeline test_sender_readiness test_worker_settings_effective test_link_downloads test_zip_limits test_line_hash test_report_api \
@@ -152,3 +181,7 @@ jobs:
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
           done
           python -m unittest tests.test_mail_sources
+      - name: Nothing reached outside (the guard's list)
+        if: always()
+        working-directory: platform
+        run: python tests/no_outside/report.py "$GUARD_LOG"

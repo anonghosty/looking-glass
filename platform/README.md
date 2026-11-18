@@ -66,7 +66,7 @@ pipeline, a free Mapbox token, and optionally a Malpedia token. The browser need
 
 ## Third-party data and services
 
-- Shadowserver reports: https://www.shadowserver.org (your CSIRT's own free reports).
+- Data: the Shadowserver Foundation (mappings, report definitions), https://www.shadowserver.org
 - Region boundaries: geoBoundaries gbOpen ADM1, CC BY 4.0, https://www.geoboundaries.org.
 - Map tiles and place look-ups: Mapbox. 3D arcs: deck.gl. Network names: RIPEstat. Malware look-ups: Malpedia.
 - Audit portal: CIS Critical Security Controls® v8.1 safeguard numbers and titles (CIS's official mapping to NIST SP

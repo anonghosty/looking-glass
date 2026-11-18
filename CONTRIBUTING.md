@@ -56,6 +56,15 @@ reports. The demo data (`lg_demo`) is enough for nearly every change.
 cd platform && tests/run_all_checks.sh
 ```
 
+With the outside-connection guard, as GitHub's checks run: only this computer and the database may be reached, every
+other connection or name look-up is refused and listed, and the run fails on any place Looking Glass has no reason to
+reach (`platform/tests/no_outside/`). A made-up map key switches the map look-ups on, so a check that should send
+nothing is seen if it tries. Nothing a check does can leave the computer.
+
+```bash
+cd platform && LG_NO_OUTSIDE=1 tests/run_all_checks.sh
+```
+
 ```bash
 cd database && .venv/bin/python -m unittest discover -s tests
 ```

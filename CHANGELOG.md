@@ -5,6 +5,23 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-18 (7)
+### Added
+- **A check of Abused or Compromised against MongoDB** (`platform/tests/verify_intelligence.py`), like the checks the
+  other pages have: every report's rows per day, its 7-day median, the group totals, "never received", "still
+  arriving", each report's view and its CSV export, and management's counts, all recounted straight from the
+  database. Read-only, counts only. It runs in the full suite on a running installation and skips itself where
+  there is none. Its CSV comparison is recorded in the audit log as an export by the automation account.
+- The suite's line for the page's other check now names it as people see it: "Abused or Compromised".
+- **An outside-connection guard for the checks** (`platform/tests/no_outside/`). While the checks run with it, only
+  the computer itself and the database can be reached: every other connection or name look-up is refused and
+  listed, and the run fails on any place Looking Glass has no reason to reach. GitHub's checks run with it and a
+  made-up map key, so a check that should send nothing is seen if it tries (an advisory had sent place names to the
+  map geocoder, caught on a test installation only, 2026-11-18). GitHub's database job now also runs the advisory
+  ATT&CK checks, where there is report data to load. On an installation: `LG_NO_OUTSIDE=1 tests/run_all_checks.sh`
+  (see CONTRIBUTING).
+  Nothing to do when updating.
+
 ## 2026-11-18 (6)
 ### Fixed
 - **An advisory's Affected lists every infection, issue and CVE its devices show, from every report.** The devices
