@@ -5,6 +5,35 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-18 (2)
+### Added
+- **Findings pages keep up on their own.** A finding sent to you, decided or replied to shows on your open Findings
+  page within about 15 seconds, no reload needed, and the cards that changed flash. While you type a comment or choose
+  a person, a notice offers **Show the changes** instead of redrawing under your hands. The advisor's portal updates the
+  same way; the review and advisory pages show the notice. This works for every role. The page only asks for a short
+  fingerprint of the findings in your channels (no title, name or person), and only while the page is in front. Nothing
+  to do when updating.
+- **The review page shows the researcher and the analyst side by side**: *What the researcher is saying* (their
+  finding and notes on the combination) and *What the analyst is saying* (the final comments and the analyst's
+  replies).
+### Changed
+- **The Findings page groups a case as one: case → finding → sub-findings.** A researcher's finding and an analyst's
+  request to management on the same combination used to be two separate cards, linked only by the code. The analyst's
+  requests now sit inside the researcher's finding, which is marked *Case: the researcher's finding*, and the
+  organisations' sub-findings stay inside each request. States, channels and decisions are unchanged, and the Open tab
+  brings the whole case along while any part of it is open. Existing findings are grouped the same way. Nothing to do
+  when updating.
+- **An administrator's steps name the role they played.** Notes, findings and the review page said only
+  "Administrator" when an administrator did a researcher's, analyst's or manager's work. They now say *Administrator
+  acting as researcher*, *acting as analyst*, *acting as management* or *acting as advisor*. The role is worked out
+  from the step itself (a note is research; a request from the analyst's tools is analysis; a decision is
+  management's), so findings made before this update are labelled too.
+### Fixed
+- **Long text in the analysts' PDF tables no longer runs over the rows below.** A cell such as *Other days* stopped
+  at three lines and squeezed the rest of its text into the third, which spilled over the next rows. Every line is now
+  kept at the table's size and the row grows to hold it; the page breaks follow. Generate a report again to get the
+  corrected PDF.
+
 ## 2026-11-18
 ### Added
 - **Settings → Configuration: every setting in plain words, without a terminal.** A new tab lists every setting

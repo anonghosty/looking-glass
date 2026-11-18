@@ -75,7 +75,10 @@ class Notes:
         book = getattr(self, "codes", None)
         codes = [{"code": c, "text": (book.describe(c) if book else "") or ""} for c in n.get("codes") or []]
         out = {"id": n["id"], "text": n["text"], "date": n.get("date", ""), "by": who,
-               "role": ROLE_LABEL.get(n.get("role", ""), "Researcher"), "user": n.get("user", ""), "codes": codes}
+               # a note is research (the Definitions page's Notes window): an administrator's is labelled as the
+               # role it played, so management reading it knows (the user, 2026-11-18)
+               "role": "Administrator acting as researcher" if n.get("role") == "admin" else ROLE_LABEL.get(n.get("role", ""), "Researcher"),
+               "acted": "researcher", "user": n.get("user", ""), "codes": codes}
         track = getattr(self, "findings", None)
         f = track.of_note(n["id"]) if track else None
         if f:                              # tracked as a finding: its number and where it stands (findings.py)

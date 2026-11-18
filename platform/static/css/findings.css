@@ -182,3 +182,12 @@ details.fd-subd[hidden] { display: none; }
 .fd-watch .fd-w-again.calm { color: #9fe3bf; border-color: rgba(90,200,140,.35); }
 .fd-watch .fd-w-act { color: var(--muted); }
 .fd-watch .fd-w-exp { color: #ffb4b4; border-color: rgba(255,120,120,.45); background: rgba(255,90,90,.08); font-weight: 600; }
+
+/* the notice when a finding changed while the page was open (findings-live.js) */
+.fl-notice { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 60; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  max-width: calc(100vw - 32px); box-sizing: border-box; padding: 10px 14px; border-radius: 14px; border: 1px solid rgba(124, 156, 255, .5);
+  background: #15182a; color: var(--text, #eee); font-size: 13.5px; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
+/* case → finding → sub-findings (2026-11-18): the researcher's finding on top, the analysts' requests inside it */
+.fd-org.case { border-color: rgba(245, 179, 73, .45); color: #f5c77a; background: rgba(245, 179, 73, .08); }
+.fd-reqs > summary b { color: #f5c77a; }
+.fd-card.fd-req { border-left-width: 3px; }

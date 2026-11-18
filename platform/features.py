@@ -5,7 +5,7 @@ module with its own install(app, ctx), and gets one entry below, built from `cor
 
 core: db (the reports database, read only), registry (the communications reports), store (the communications day
 store), settings (the constituency), svc (the services platform: its "registry" and "store"), replay_now(),
-day_start(dt), AUTH (has_perm, csrf_ok, audit, ...), app_logger.
+day_start(dt), AUTH (has_perm, csrf_ok, audit, ...), app_logger, findings (findings.Findings).
 Returns {name: what each feature's install returned}, for tests and for other modules.
 """
 
@@ -57,5 +57,11 @@ def install(app, core):
     if all(k in A for k in ("has_perm", "csrf_ok", "fresh", "audit")):     # the platform always; a check's cut-down core not
         out["config"] = config_page.install(app, {"base_dir": os.path.dirname(os.path.abspath(__file__)), "has_perm": A["has_perm"],
                                                    "csrf_ok": A["csrf_ok"], "fresh": A["fresh"], "audit": A["audit"]})
+
+    # the Findings pages keep up on their own: a fingerprint of what each person sees, asked every 15 s
+    # (findings_live.py, static/js/findings-live.js)
+    if core.get("findings") is not None and "has_perm" in A:
+        import findings_live
+        out["findings_live"] = findings_live.install(app, {"findings": core["findings"], "has_perm": A["has_perm"]})
 
     return out

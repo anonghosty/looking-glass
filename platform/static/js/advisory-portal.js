@@ -33,14 +33,19 @@
   };
   const link = (href, text) => { const a = el("a", null, text); a.href = href; return a; };
 
-  async function load() {
+  async function load(quiet) {
     let r;
     try { r = await fetch("/api/advisory/dashboard", { cache: "no-store" }); }
     catch (e) {                                // the connection dropped: say so, never a page that loads for ever (review 2026-11-13)
+      if (quiet) return;                       // a background read that failed keeps what is on the page
       document.getElementById("apLoading")?.remove(); window.LGLoader?.ready();
       main.append(el("p", "fd-empty", `Could not open it: ${e.message}`)); return;
     }
     const d = await r.json().catch(() => ({}));
+    if (quiet) {                               // someone changed a finding or an advisory (findings-live.js): drawn anew in place
+      if (!r.ok) return;
+      main.replaceChildren();
+    }
     document.getElementById("apLoading")?.remove();
     window.LGLoader?.ready();
     if (!r.ok) { main.append(el("p", "fd-empty", d.error || `Could not open the portal (HTTP ${r.status})`)); return; }
@@ -119,5 +124,8 @@
     } else oc.append(el("p", "fd-empty", "No open finding in your channels."));
     main.append(oc);
   }
+  // a finding management sends to this advisor shows up on its own, without a reload (findings-live.js); the page
+  // keeps its place while it is drawn anew
+  window.LGFindingsLive?.watch({ refresh: async () => { const y = window.scrollY; await load(true); window.scrollTo(0, y); } });
   load();
 })();

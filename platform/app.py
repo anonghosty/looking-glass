@@ -3610,7 +3610,7 @@ WARMUP = _warmup.install({
 import features as _features  # noqa: E402
 FEATURES = _features.install(app, {"db": db, "registry": registry, "svc": svc, "replay_now": replay_now,
                                    "day_start": day_start, "AUTH": AUTH, "app_logger": app.logger,
-                                   "store": store, "settings": settings})
+                                   "store": store, "settings": settings, "findings": FINDINGS})
 
 if __name__ == "__main__":
     # `python app.py` (tests, development) listens on this computer only unless BIND_HOST says otherwise; the service

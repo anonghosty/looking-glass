@@ -31,6 +31,7 @@
       body: JSON.stringify(body) });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    window.LGFindingsLive?.mine();         // the advisor's own save: no "it has changed" notice for it
     return d;
   }
 
@@ -486,6 +487,9 @@
     main.querySelectorAll(".av-card")[1]?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  // the finding changes under the advisor (management, an expiry): a notice offers the changes, never a reload under
+  // their hands while they write (findings-live.js); their own saves do not count (post() above)
+  window.LGFindingsLive?.watch({});
   (async () => {
     try { await reloadIndex(); } catch (e) { $("avLoading")?.remove(); main.append(el("p", "fd-empty", e.message)); return; }
     $("avLoading")?.remove();

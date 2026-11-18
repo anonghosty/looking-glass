@@ -36,6 +36,41 @@ MAX_TITLE, MAX_COMMENT = 140, 1000
 TO_STATUS = {"management": "management", "researcher": "researcher", "analyst": "analyst", "advisor": "advisor"}
 KIND_LABEL = {"management": "a manager", "researcher": "a researcher", "analyst": "an analyst", "advisor": "an advisor"}
 ROLE_LABEL["advisor"] = "Advisor"
+
+
+def acted_role(item, step=None):
+    """An administrator can do every role's work; management must see which role a step was (the user, 2026-11-18:
+    "show which role he played"). The step itself says it: the first step of a finding made from a note is research,
+    of one an analyst's tool made is analysis; a decision or an approval is management's; an advisory marked as sent is
+    the advisor's; a reply with an analyst code (LG-A) is an analyst's, one with combination codes a researcher's.
+    The step's own role (researcher, analyst, ...) when it was not an administrator; "" when nothing tells."""
+    step = step if step is not None else (item.get("history") or [{}])[0]
+    if (step.get("role") or item.get("role")) != "admin":
+        return ""
+    k = step.get("kind") or ""
+    first = (item.get("history") or [None])[0] is step
+    if first:
+        return "analyst" if item.get("origin") == "analyst" else "researcher"
+    if k == "decision" or step.get("approval"):
+        return "management"
+    if k == "advisory_sent":
+        return "advisor"
+    if k == "reply":
+        codes = [str(c) for c in step.get("codes") or []]
+        if any(c.startswith("LG-A-") for c in codes):
+            return "analyst"
+        if codes:
+            return "researcher"
+    return ""
+
+
+def role_label(role, acted=""):
+    """"Researcher", or for an administrator doing a role's work "Administrator acting as researcher"."""
+    if role == "admin" and acted:
+        return f"Administrator acting as {acted}"
+    return ROLE_LABEL.get(role, "Researcher")
+
+
 NONE_FOUND = "Looked into the selection: no combination of interest found. The request is closed."
 
 
@@ -436,8 +471,10 @@ class Findings:
 
     def shown(self, x, describe=None):
         """As people see it: names in full, dates readable, codes with what they mean. No address in any field."""
-        who = lambda u, r: ({"by": "Looking Glass", "role": "Looking Glass"} if r == "system" else
-                            {"by": self.people.name(u, ""), "role": ROLE_LABEL.get(r, "Researcher")})
+        # an administrator's step names the role it played (acted_role): "Administrator acting as analyst"
+        who = lambda u, r, step=None: ({"by": "Looking Glass", "role": "Looking Glass"} if r == "system" else       # noqa: E731
+                                       {"by": self.people.name(u, ""), "role": role_label(r, acted_role(x, step)),
+                                        "acted": acted_role(x, step) or (r if r in ROLE_LABEL and r != "admin" else "")})
         day = lambda t: time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(t)) if t else ""
         return {"id": x["id"], "number": f"#{x['id']}", "section": x["section"], "name": x["name"], "title": x["title"], "text": x["text"],
                 "codes": [{"code": c, "text": (describe(c) if describe else "") or "", "asked": self.asked_of(c) or ""}
@@ -449,7 +486,7 @@ class Findings:
                              "kind": h.get("kind", "status"), "comment": h.get("comment", ""), "decision": h.get("decision", ""),
                              "to": self.people.name(h["to"]) if h.get("to") else "",
                              "codes": [{"code": c, "text": (describe(c) if describe else "") or ""} for c in h.get("codes") or []],
-                             **who(h["user"], h["role"])} for h in x["history"]],
+                             **who(h["user"], h["role"], h)} for h in x["history"]],
                 "updated": day(x["history"][-1]["at"]),
                 "display_name": self.title_of(x["name"]) if x.get("section") == "services" else x["name"],
                 # the review without "sent" (the devices' addresses, kept for the analyst's report only: never on this page)
@@ -480,12 +517,46 @@ class Findings:
         with self.lock:
             self._load()
             items = [x for x in self.data["items"].values() if self.sees(x, user, admin, strict)]
+        link = self.request_links(items)
         if open_only:
-            # an open case brings all its sub-findings along, the closed ones too: the page folds them into the case
+            # an open case brings all its sub-findings along, the closed ones too: the page folds them into the case;
+            # a researcher's finding and the analysts' requests on it come together, whichever of them is still open
+            byid = {x["id"]: x for x in items}
+            is_open = lambda fid: fid in byid and byid[fid]["status"] in OPEN       # noqa: E731
             open_cases = {x["id"] for x in items if x.get("kind") == "case" and x["status"] in OPEN}
-            items = [x for x in items if x["status"] in OPEN or x.get("parent") in open_cases]
+            keep = {o for r, o in link.items() if is_open(r)} | {r for r, o in link.items() if is_open(o)}
+            open_cases |= {r for r in keep if byid[r].get("kind") == "case"}
+            items = [x for x in items if x["status"] in OPEN or x.get("parent") in open_cases or x["id"] in keep]
         items.sort(key=lambda x: -x["history"][-1]["at"])
-        return [self.shown(x, describe) for x in items]
+        out = []
+        for x in items:
+            d = self.shown(x, describe)
+            d["from_finding"] = link.get(x["id"], "")
+            d["requests"] = sorted((r for r, o in link.items() if o == x["id"]), key=int)
+            out.append(d)
+        return out
+
+    @staticmethod
+    def request_links(items):
+        """The structure the user asked for (2026-11-18): case → finding → sub-findings. A researcher's finding on a
+        combination is the top; an analyst's request to management on that same combination (a review, or a case of
+        organisations) sits inside it; the organisations' sub-findings inside the request. Worked out from the
+        combination code, so findings made before this are grouped too: {request id: researcher's finding id}, among
+        the findings given (one the viewer cannot see is never linked, so nothing of another channel shows)."""
+        first = {}
+        for x in sorted(items, key=lambda x: x["at"]):
+            if (x.get("origin") or "researcher") != "analyst" and not x.get("review") and x.get("kind") not in ("case", "review") \
+                    and not x.get("parent"):
+                for c in x.get("codes") or []:
+                    first.setdefault(c, x)
+        out = {}
+        for x in items:
+            if x.get("parent") or x.get("kind") not in ("review", "case"):
+                continue
+            o = first.get((x.get("codes") or [None])[0])
+            if o and o["id"] != x["id"] and o["at"] <= x["at"]:
+                out[x["id"]] = o["id"]
+        return out
 
 
 def install(app, ctx):

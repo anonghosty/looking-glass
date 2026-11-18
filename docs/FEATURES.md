@@ -149,8 +149,20 @@ From a finding to the organisation that can act on it, with a name on every hand
   sub-finding per organisation, each decided on its own. Management approves to a named advisor, or rejects with a
   reason. **Mark as drafted** on the advisory page and **Mark as sent** on the Findings page: the sub-finding closes,
   then the case when every sub-finding is closed, all logged. ([User guide](USER_GUIDE.md#findings-cases-and-who-holds-them))
+- **Case → finding → sub-findings in one card.** A researcher's finding on a combination is the top of its case. Every
+  request an analyst sends to management on that same combination sits inside it, and each request's organisations
+  inside the request. Each keeps its own state and channel: someone outside a request's channel sees the researcher's
+  finding without it. Findings made before this are grouped the same way.
 - **The Findings page as a ticket tree**, folding at every level, with closed sub-findings in their own group and
   state pills that name who holds each one.
+- **Findings pages keep up on their own.** When someone sends a finding on, decides, replies or marks an advisory as
+  sent, the Findings page and the advisor's portal show it within about 15 seconds, without a reload. The changed cards
+  flash. While you are typing a comment or choosing a person, nothing is redrawn: a notice offers **Show the changes**.
+  The review and advisory pages show the same notice.
+- **The role an administrator played.** An administrator can do every role's work, so a step they took is named by the
+  role it was: *Administrator acting as researcher* for a note or a finding started from a note, *acting as analyst*
+  for a request sent from the analyst's tools, *acting as management* for a decision. Management's review page shows
+  *What the researcher is saying* and *What the analyst is saying* side by side.
 - **The advisor's dashboard:** waiting, drafts, drafted, sent, recipients, open and closed findings and cases, days to
   send, and the impacts carried.
 - **Notifications.** A bell on every role's pages: what changed in your findings, one click to go there, clear your own.

@@ -27,6 +27,8 @@ import zipfile
 
 from flask import Response, g, jsonify, render_template, request
 
+import findings as _findings      # acted_role / role_label: which role an administrator's step played
+
 
 def install(app, ctx):
     """ctx: book (combos.CodeBook: own_job, package, describe), findings (findings.Findings), cross(hosts) -> the views
@@ -419,7 +421,9 @@ def install(app, ctx):
                 items = sorted(F.data["items"].values(), key=lambda y: y["at"])
             r0 = next((y for y in items if rv["source"] in (y.get("codes") or []) and not y.get("review")), None)
             if r0:
-                rf = {"number": f"#{r0['id']}", "title": r0["title"], "text": r0["text"], "by": ctx["people_name"](r0["user"]), "status": r0["status"]}
+                rf = {"number": f"#{r0['id']}", "title": r0["title"], "text": r0["text"], "by": ctx["people_name"](r0["user"]), "status": r0["status"],
+                      # "Researcher", or "Administrator acting as researcher" (findings.acted_role)
+                      "role": _findings.role_label(r0.get("role", ""), _findings.acted_role(r0))}
             # the note the finding was made from is the finding: shown once, as the finding (2026-11-17: the same words
             # appeared twice, as "Their finding" and again as a note)
             same = lambda n: bool(r0) and n.get("user") == r0.get("user") and " ".join(str(n.get("text") or "").split()) == \

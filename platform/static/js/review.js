@@ -57,14 +57,16 @@
     // drilled down within an analyst's selection: only its devices were searched (combos.py within)
     if (rv.within) meta.append(el("b", "rv-org", `Within the analyst's selection ${rv.within}`));
     hero.append(meta);
-    if (f.text) { const q = el("blockquote", "rv-quote"); q.append(el("b", null, `Final comments by the analyst, ${f.by}`), el("p", null, f.text)); hero.append(q); }
     main.append(hero);
-    // what the researcher is saying
+    // what each side is saying, side by side (the user, 2026-11-18): the researcher's notes and finding on the
+    // combination, and the analyst's comments on this request. An administrator who did either job is named by the
+    // role played ("Administrator acting as researcher"), so management knows whose view each one is.
+    const said = el("div", "rv-said");
     const rs = el("section", "rv-card rv-researcher");
     rs.append(el("h2", null, "What the researcher is saying"), el("p", "rv-what", d.researcher.what || rv.source));
     if (d.researcher.finding) {
       const x = d.researcher.finding, q = el("blockquote", "rv-quote r");
-      q.append(el("b", null, `Their finding ${x.number}: ${x.title}`), el("p", null, x.text || ""), el("small", null, `Researcher: ${x.by}`));
+      q.append(el("b", null, `Their finding ${x.number}: ${x.title}`), el("p", null, x.text || ""), el("small", null, `${x.role || "Researcher"}: ${x.by}`));
       rs.append(q);
     }
     for (const n of d.researcher.notes || []) {
@@ -73,7 +75,22 @@
       rs.append(q);
     }
     if (!d.researcher.finding && !(d.researcher.notes || []).length) rs.append(el("p", "fd-empty", "No note from the researchers on this combination yet."));
-    main.append(rs);
+    const as = el("section", "rv-card rv-analyst");
+    as.append(el("h2", null, "What the analyst is saying"), el("p", "rv-what", rv.drill_code ? `The devices drilled down to (${rv.drill_code}), from ${rv.source}` : `The request on ${rv.source}`));
+    if (f.text) {
+      const q = el("blockquote", "rv-quote");
+      q.append(el("b", null, "Final comments"), el("p", null, f.text), el("small", null, `${f.role || "Analyst"}: ${f.by} · ${f.created}`));
+      as.append(q);
+    }
+    // the analyst's replies on this request (an administrator's only when it was analyst's work)
+    for (const h of (f.history || []).filter((h) => h.kind === "reply" && h.acted === "analyst" && h.comment)) {
+      const q = el("blockquote", "rv-quote");
+      q.append(el("b", null, `${h.role}: ${h.by} · ${h.at}`), el("p", null, h.comment));
+      as.append(q);
+    }
+    if (!as.querySelector(".rv-quote")) as.append(el("p", "fd-empty", "The analyst sent it without a comment."));
+    said.append(rs, as);
+    main.append(said);
     // the views: the Executive portal itself, filtered to each
     const vs = el("section", "rv-card rv-views");
     vs.append(el("h2", null, "The views, as the Executive portal shows them"));
@@ -166,5 +183,8 @@
     const back = el("a", `lg-btn ${rv.decision ? "primary" : "sm"}`, "Back to the Findings page"); back.href = `/findings#f${f.id}`; dc.append(back);
     main.append(dc);
   }
+  // another manager decides, or the finding moves on, while this page is open: a notice offers the changes (a reload:
+  // the embedded portal views are too heavy to redraw under someone's eyes; findings-live.js)
+  window.LGFindingsLive?.watch({});
   load();
 })();

@@ -9,10 +9,12 @@
   let state = "open", data = { findings: [], statuses: [] };
 
   let loadSeq = 0;      // only the newest load draws: Open then All quickly, the reload after "Mark as sent" (review 2026-11-13)
-  async function load() {
+  async function load(quiet) {
     const seq = ++loadSeq;
-    // the searching logo whenever the list is read (first open, Open / All, after an action), not only the first time
-    if (!$("fdList").querySelector(".st-loading")) {
+    // the searching logo whenever the list is read (first open, Open / All, after an action), not only the first time;
+    // quiet: someone else changed a finding (findings-live.js), redrawn in place without the logo
+    if (quiet) watchP = null;                 // its "over time" line read again too
+    else if (!$("fdList").querySelector(".st-loading")) {
       const w = el("div", "st-loading fd-loading", state === "open" ? "Reading the open findings…" : "Reading every finding…");
       if (data.findings.length) $("fdList").prepend(w); else $("fdList").replaceChildren(w);
     }
@@ -25,8 +27,20 @@
       $("fdList").replaceChildren(el("p", "fd-empty", "The connection was interrupted. Try again.")); window.LGLoader?.ready(); return;
     }
     if (seq !== loadSeq) return;
-    if (!r.ok) { $("fdList").replaceChildren(el("p", "fd-empty", d.error || `Could not load (HTTP ${r.status})`)); window.LGLoader?.ready(); return; }
+    if (!r.ok) {
+      if (quiet) return;                      // a failed background read keeps what is on the page
+      $("fdList").replaceChildren(el("p", "fd-empty", d.error || `Could not load (HTTP ${r.status})`)); window.LGLoader?.ready(); return;
+    }
+    // quiet: the cards that changed flash, so the person sees what moved
+    const before = quiet ? new Map(data.findings.map((f) => [f.id, `${f.status}|${f.history.length}|${(f.advisories || []).map((a) => a.status).join(",")}`])) : null;
     data = d; draw(); window.LGLoader?.ready();
+    if (quiet) {
+      for (const f of data.findings) {
+        if (before.get(f.id) === `${f.status}|${f.history.length}|${(f.advisories || []).map((a) => a.status).join(",")}`) continue;
+        $(`f${f.id}`)?.classList.add("flash");
+      }
+      return;
+    }
     const want = location.hash.match(/^#f(\d+)$/);
     if (want) { const c = $(`f${want[1]}`); if (c) { c.classList.add("flash"); c.scrollIntoView({ block: "center" }); } }
   }
@@ -47,11 +61,15 @@
     byId = Object.fromEntries(data.findings.map((f) => [f.id, f]));
     const shown = new Set(items.map((f) => f.id));
     const top = [];
+    // case → finding → sub-findings (the user, 2026-11-18): an analyst's request on a researcher's combination goes
+    // inside the researcher's finding, its organisations inside the request
     for (const f of items) {
       const p = f.parent && byId[f.parent];
-      const t = p || f;
+      const t0 = p || f;
+      const t = (t0.from_finding && byId[t0.from_finding]) || t0;
       if (!top.includes(t)) top.push(t);
       if (p) shown.add(p.id);
+      shown.add(t.id);
     }
     matchIds = q ? new Set(items.map((f) => f.id)) : null;
     for (const f of top) list.append(card(f));
@@ -134,6 +152,22 @@
     const missing = f.children.length - kids.length;
     // sub-findings of other channels (another organisation's advisor, say) stay out of sight: findings are channels
     if (missing > 0) b.append(el("p", "fd-empty", `${pl(missing, "other sub-finding", "other sub-findings")} of this case ${missing === 1 ? "is" : "are"} not in your channel, so ${missing === 1 ? "it is" : "they are"} not shown here.`));
+    return b;
+  }
+  // the analysts' requests to management on this researcher's finding (findings.request_links): each its own card,
+  // a case of organisations with its sub-findings inside it. Folded like the sub-findings; open ones unfolded.
+  function requestsBlock(f) {
+    const reqs = (f.requests || []).map((id) => byId[id]).filter(Boolean);
+    const b = fold(`req${f.id}`, "fd-subs fd-reqs", [el("b", null, `Analysts' requests to management · ${reqs.length}`),
+      el("span", "fd-subs-n", reqs.map((r) => `${r.number} ${r.status_label.toLowerCase()}`).join(" · "))], true);
+    for (const r of reqs) {
+      const d = fold(`reqc${r.id}`, "fd-subd", [el("span", "fd-no", r.kind === "case" ? `Case ${r.number}` : r.number), el("b", "fd-sub-org", r.title),
+        el("span", `fd-pill s-${r.status}`, r.open && r.assignee && r.kind !== "case" ? `${r.status_label} · ${r.assignee}` : r.status_label)],
+        !!r.open && !matchIds);
+      const rc = card(r); rc.classList.add("fd-sub", "fd-req"); d.append(rc);
+      if (matchIds && !matchIds.has(r.id) && !matchIds.has(f.id) && !(r.children || []).some((k) => matchIds.has(k))) d.hidden = true;
+      b.append(d);
+    }
     return b;
   }
   const acodeOf = (f) => (f.codes || []).map((c) => c.code || c).find((c) => /^LG-A-/.test(c)) || "";
@@ -318,6 +352,8 @@
     const t = el("div", "fd-t");
     // a sub-finding is named by its organisation: the rest (title, name, who sent it, the text) is the case's, said once
     t.append(el("span", "fd-no", f.kind === "case" ? `Case ${f.number}` : f.number), el("h2", null, f.parent ? f.network : f.title));
+    // the top of a case: the researcher's finding, with the analysts' requests on it inside
+    if ((f.requests || []).length) { const k = el("span", "fd-org case", "Case: the researcher's finding"); k.title = "The analysts' requests to management on this combination are inside it, and their organisations inside each request"; t.append(k); }
     if (f.network && !f.parent) t.append(el("span", "fd-org", f.network));
     else if (f.review && !f.parent) t.append(el("span", "fd-org all", "Overview: every organisation"));
     // the state names who holds it: "With management · <the manager>", not only the role
@@ -497,11 +533,24 @@
     // analyst named, the analyst's request, management's decision to the advisor, the advisory sent). Only a finding
     // approved before that rule, which still waits for its analyst, keeps the bar
     if (!deciding && f.status === "approved" && data.can_decide) c.append(mv, toBox);
+    // the analysts' requests last: the researcher's finding's own trail, reply and decision stay together above them
+    if ((f.requests || []).length) c.append(requestsBlock(f));
     return c;
   }
   for (const b of document.querySelectorAll(".fd-tabs button")) b.addEventListener("click", () => {
     state = b.dataset.state; for (const x of document.querySelectorAll(".fd-tabs button")) x.setAttribute("aria-selected", String(x === b)); load();
   });
   $("fdQ").addEventListener("input", draw);
+  // someone else moves a finding on (sends it to this person, decides, replies): the list keeps up on its own
+  // (findings-live.js). Never under someone's hands: while they type a comment or choose a person, a notice waits.
+  const typed = new Set();
+  $("fdList").addEventListener("input", (e) => { if (e.target.matches("textarea, input")) typed.add(e.target); });
+  const busy = () => {
+    const a = document.activeElement;
+    if (a && $("fdList").contains(a) && a.matches("textarea, input, select")) return true;
+    for (const t of typed) { if (!document.body.contains(t)) typed.delete(t); else if (t.value.trim()) return true; }
+    return [...document.querySelectorAll("#fdList .fd-to")].some((t) => !t.hidden);
+  };
+  window.LGFindingsLive?.watch({ refresh: () => load(true), busy });
   load();
 })();

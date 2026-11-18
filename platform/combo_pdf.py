@@ -117,18 +117,27 @@ class AnalystDoc(ex.Doc):
         return yy - 22
 
     def row_lines(self, cols, w, r):
-        """Each cell's lines: text columns wrap (at most three lines), numbers and addresses stay on one."""
+        """Each cell's lines: text columns wrap onto as many lines as they need (2026-11-18: they stopped at three and
+        squeezed the rest into the third, which then spilled over the rows below), numbers and addresses stay on one
+        (a little smaller, or on two lines, when long: fit())."""
         out = []
         for (lbl, f, al, mono), v in zip(cols, r):
             if al == "r" or mono:
                 out.append([self.fit(str(v), w * f - 10, 8)])
             else:
-                ls = ex.simpleSplit(self.s(str(v)), self.F["r"], 8, w * f - 10) or [""]
-                out.append(ls[:3] if len(ls) <= 3 else ls[:2] + [self.fit(" ".join(ls[2:]), w * f - 10, 8)])
+                out.append(ex.simpleSplit(self.s(str(v)), self.F["r"], 8, w * f - 10) or [""])
         return out
 
+    @staticmethod
+    def cell_height(lines):
+        """The height a cell's lines take: 10 pt a line; a fit() on two lines takes both."""
+        return sum(len(t.lines) * t.size * 1.15 if getattr(t, "lines", None) else 10 for t in lines)
+
+    def row_height(self, cells):
+        return max(self.cell_height(cl) for cl in cells) + 5.5
+
     def table_height(self, cols, w, rows):
-        return 14 + sum(max(len(c) for c in self.row_lines(cols, w, r)) * 10 + 5.5 for r in rows)
+        return 14 + sum(self.row_height(self.row_lines(cols, w, r)) for r in rows)
 
     def table(self, x, y, w, cols, rows):
         """cols [(label, fraction of w, "l"|"r", mono)]; long text wraps within its column. Returns the y below it."""
@@ -142,7 +151,7 @@ class AnalystDoc(ex.Doc):
         yy = y - 14
         for i, r in enumerate(rows):
             cells = self.row_lines(cols, w, r)
-            rh = max(len(cl) for cl in cells) * 10 + 5.5
+            rh = self.row_height(cells)                 # as tall as its tallest cell: nothing runs into the next row
             if i % 2:
                 c.setFillColor(Color(1, 1, 1, .025)); c.rect(x, yy - rh, w, rh, stroke=0, fill=1)
             for (lbl, f, al, mono), cx, lines in zip(cols, xs, cells):
