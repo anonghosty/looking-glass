@@ -47,6 +47,20 @@ Two actions are there, each needing a fresh sign-in and written to the audit log
 From a terminal: `./manage/slow_requests.py [--days N]` (the slow requests) and `./tools/resource_check.py` (disk and
 memory against the budgets in `.env`).
 
+If Intel gathered or the services patterns could not be counted again (a record no rule expected, say), the earlier
+counts stay on screen, it is tried again after 30 s, and an alert shows on the administrators' bell and here until it
+works; the details are in the service log (`journalctl -u looking-glass`).
+
+### Changing settings without a terminal: Settings → Configuration
+
+Every setting in `.env` is listed there in plain words, with the value in use, where it comes from and its default
+([CONFIGURATION.md](CONFIGURATION.md)). The tuning settings (replay, loading, memory and speed, findings, alerts) can
+be changed within a safe range: **Save**, then **Restart now** when it suits (about a minute while the days are loaded
+again; everyone's pages pause, then carry on). The security, audit and database settings are shown with the exact line
+to change in `.env` on the server; passwords and tokens are never shown. Each save and restart needs a recent sign-in
+and is in the audit log. A value kept there can be undone with **Use the default**, or by deleting `data/config.json`
+and running `deploy/reload.sh`.
+
 ## Accounts
 
 Normally done on the **Admin** page ([USER_GUIDE.md](USER_GUIDE.md)). On the command line, for recovery:

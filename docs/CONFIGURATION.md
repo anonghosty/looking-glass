@@ -8,6 +8,15 @@ Looking Glass is configured in two places:
 - **The Settings page** (administrators): the country and the constituency. It is stored in `data/settings.json`
   and applies at once, without a restart. `COUNTRY`, `CONSTITUENT_ASNS` and `CONSTITUENT_CIDRS` in `.env` are only
   the starting values until Settings is saved.
+- **Settings → Configuration** (administrators): every setting below in plain words, with the value in use, where it
+  comes from (`.env`, this page or the default) and its default. The **tuning** settings (replay, loading and
+  counting, memory and speed, findings, alerts: marked *page* below) can be changed there within a safe range. They are
+  kept in `data/config.json`, take precedence over `.env`, and apply after a restart: **Restart now** on that tab
+  (about a minute while the days are loaded again), or `deploy/reload.sh`. Changing them needs a recent sign-in, and
+  every change and restart is in the audit log. The **security**, **audit** and **database** settings are shown only,
+  with the exact `.env` line to change on the server, so a stolen administrator session cannot weaken them.
+  Passwords and tokens are never shown, only whether one is set. To undo a value kept on the page, use **Use the
+  default** there, or delete `data/config.json` and restart.
 
 The database pipeline has its own `.env` in `../database` ([../../database/README.md](../database/README.md)).
 
@@ -162,6 +171,13 @@ The control checks give evidence, not a pass or fail: the conclusion is the audi
 | `HEAVY_PER_USER` | `3` | heavy views (statistics, map, analysis, drill-down lists, regions, reports) one person may have worked on at once; more wait their turn. `0`: no limit |
 | `HEAVY_PER_MINUTE` | `240` | heavy views one person may ask for in a minute; more get 429 with Retry-After. `0`: no limit |
 | `HEAVY_WAIT_S` | `20` | how long a heavy view waits for its turn before 429 |
+| `BEACON_KEEP_MAX` | `200000` | decoded beacon answers (format, operator, version, OS family only) kept in `data/beacon_summaries.json` so a restart does not decode the day's request lines again; about 170 bytes each in memory. Raise it for a country with many check-ins a day |
+| `SLOW_REQUEST_S` | `2` | a request taking longer than this many seconds is listed in Settings → Task monitor |
+
+Every setting in this table except `REF_SECRET`, `HSTS_*`, `BACKUP_PUBLIC_KEY` and `FALLBACK_SCAN`, and also
+`REPLAY_OFFSET_HOURS`, `REPORT_SETTLE_SECONDS`, `MAX_EVENTS_PER_POLL`, `EXEC_BASELINE_*`, `SPIKE_*`, `FINDING_*` and
+`PIPELINE_STALE_HOURS`, can be changed on **Settings → Configuration** too (the page allows at least 1 for the
+`HEAVY_*` limits: "no limit" is set in `.env` only).
 | `HSTS_MAX_AGE` | `31536000` | Strict-Transport-Security on answers over HTTPS, in seconds (`0` tells browsers to forget it); `HSTS_INCLUDE_SUBDOMAINS=1`, `HSTS_PRELOAD=1` only when every name under the domain is on HTTPS for good |
 | `BACKUP_PUBLIC_KEY` | `data/backup_public_key` | the public key backups are encrypted to (an age recipient or a GnuPG public key; [OPERATIONS.md](OPERATIONS.md#backups)) |
 | `FALLBACK_SCAN` | `0` | `1` loads reports without a `filename` index by `extracted_date`, which has no index: **every row of the report is read** for each day. Leave it off; create the `filename` index instead ([OPERATIONS.md](OPERATIONS.md)) |
@@ -186,6 +202,8 @@ Created and kept by the service; private to its user and never committed:
 | `backup_public_key` | the public key backups are encrypted to (you put it there; [OPERATIONS.md](OPERATIONS.md#backups)) |
 | `audit.log`, `audit.head`, `audit_archive/` | sign-ins, account and settings changes, exports, findings and advisories; each entry chained to the one before by its SHA-256 (tamper evident). Archived at `AUDIT_ROTATE_MB`, kept for `AUDIT_RETENTION_DAYS`; `audit.head` holds the newest link and the number of entries |
 | `settings.json`, `schedule.json` | Settings page values, replay schedule |
+| `config.json` | the tuning values kept on Settings → Configuration (they take precedence over `.env`; delete it and restart to go back to `.env`) |
+| `beacon_summaries.json` | the beacon decoder's public answers kept across restarts (hashes of the request lines, never the lines; safe to delete) |
 | `geocache.json`, `malpedia_cache.json` | look-up caches |
 | `asns.json` | network names for AS numbers (built by `manage/asn_registry.py`, editable on the Definitions page) |
 | `definitions.json` | definitions written on this site (take precedence over the shipped ones) |

@@ -10,6 +10,16 @@ The bind address stays on the command line of the service (deploy/looking-glass.
 import os
 
 _d = os.path.dirname(os.path.abspath(__file__))
+
+# Settings → Configuration (config_page.py): .env, then the values kept on that page, before the app is loaded, so every
+# module reads them (a value kept there takes precedence over .env). A problem here never stops the service.
+try:
+    import sys as _sys
+    _sys.path.insert(0, _d)
+    import config_page as _config_page
+    _config_page.apply(_d)
+except Exception as _e:                  # noqa: BLE001
+    print(f"Settings → Configuration not applied: {_e}")
 _cert, _key = os.path.join(_d, "data", "tls", "cert.pem"), os.path.join(_d, "data", "tls", "key.pem")
 if os.path.exists(_cert) and os.path.exists(_key):
     certfile, keyfile = _cert, _key       # Python's defaults: TLS 1.2+ only

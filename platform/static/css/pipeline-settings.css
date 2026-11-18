@@ -67,3 +67,31 @@
 .wk-file + .wk-file { border-top: 1px dashed var(--border, rgba(255, 255, 255, .08)); }
 .wk-file code { font-size: 12.5px; overflow-wrap: anywhere; white-space: normal; }
 .wk-file.is-odd code { color: var(--warn, #f5b54a); }
+
+/* Settings → Configuration (config-page.js): every setting in plain words; full text, wrapped, never cut */
+.cf-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin: 12px 0 0; }
+.cf-bar .search { flex: 1 1 260px; max-width: 460px; }
+.cf-bar-r { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cf-group { margin: 18px 0 0; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line, rgba(255, 255, 255, .12));
+  background: rgba(255, 255, 255, .02); }
+.cf-group h3 { margin: 0 0 4px; font-size: 15px; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.cf-kind { font-size: 11px; font-weight: 500; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; opacity: .8; }
+.cf-kind.edit { color: var(--accent, #8ee0bd); }
+.cf-kind.ro { color: #c9c9c9; }
+.cf-row { padding: 10px 0; border-top: 1px solid rgba(255, 255, 255, .06); }
+.cf-row:first-of-type { border-top: 0; }
+.cf-head { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+.cf-label { font-weight: 600; overflow-wrap: anywhere; }
+.cf-key { font-size: 11px; opacity: .65; overflow-wrap: anywhere; }
+.cf-help, .cf-meta, .cf-how, .cf-pending { display: block; margin-top: 3px; line-height: 1.45; overflow-wrap: anywhere; }
+.cf-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
+.cf-input { width: 180px; max-width: 100%; }
+.cf-input.bad { outline: 2px solid #ff8f8f; }
+.cf-value { overflow-wrap: anywhere; }
+.cf-secret.on { color: var(--accent, #8ee0bd); }
+.cf-secret.off { opacity: .7; }
+.cf-pending { color: #f5c26b; }
+.cf-how code { padding: 0 4px; border-radius: 4px; background: rgba(255, 255, 255, .06); overflow-wrap: anywhere; }.cf-input { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line, rgba(255, 255, 255, .18));
+  background: rgba(255, 255, 255, .05); color: inherit; font: inherit; }
+.cf-input:focus-visible { outline: 2px solid var(--accent, #8ee0bd); outline-offset: 1px; }
+.cf-bar-r button:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }

@@ -5,6 +5,22 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-18
+### Added
+- **Settings → Configuration: every setting in plain words, without a terminal.** A new tab lists every setting
+  Looking Glass runs with: what it does, the value in use, where it comes from (`.env`, this page or the default) and
+  its default, with a search box. The tuning settings (replay timing, loading and counting, memory and speed limits
+  such as the decoded beacon answers kept, findings' deadlines, spike and pipeline alerts) can be changed within a safe
+  range and are kept in `data/config.json`; they take precedence over `.env` and apply after **Restart now** (about a
+  minute while the days are loaded again). The security switches, sign-in locks, the audit log's settings and the
+  database connection are shown only, with the exact `.env` line to change on the server, so a stolen administrator
+  session cannot weaken them; passwords and tokens are never shown, only whether one is set. Saving and restarting
+  need a recent sign-in and are written to the audit log. Nothing to do when updating.
+### Fixed
+- **`SETTLE_MAX_SECONDS`, and `DAY_MAX_AGE_SECONDS` for the services platform, set in `.env` are now used.** They were
+  read before `.env` was loaded, so their defaults always applied. `.env` is now read as the service starts, before
+  anything else. If you set either one, check its value still suits you.
+
 ## 2026-11-17 (11)
 ### Changed
 - **Intel gathered and the combination filters no longer make you wait for a recount.** The counts behind the

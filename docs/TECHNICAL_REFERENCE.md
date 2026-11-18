@@ -137,6 +137,17 @@ server side is in small modules called from `app.py`:
   are never matched between names (shared by every beacon of a format). The XOR key is not an indicator: a new one per
   check-in. Never shown to researchers: MAC, hardware UUID (`spare1`), `cpuid`, `cpumd5`, `mem`, the key. Test:
   `tests/check_beacon_decode.py` (made-up beacons from `tests/beacon_samples.py`, random keys).
+- **`config_page.py`, Settings → Configuration.** A catalogue of the platform's settings: `TUNING` (key, group, label,
+  kind, default, range, help: editable), `READ_ONLY` (security, sign-in locks, audit, database, country: shown with the
+  `.env` line) and `SECRETS` (only whether set). Values are kept in `data/config.json` (mode 600); `load()` keeps only
+  valid tuning values, so a hand-edited file cannot switch a security setting. `apply()` runs in `gunicorn.conf.py`
+  before the app is loaded: `.env` first (read with python-dotenv's own parser, never replacing what the service was
+  given), then the kept values, which take precedence; so every module, also those that read a setting as they are
+  imported, sees the same values. `GET/POST /api/admin/config`, `POST /api/admin/config/restart` (SIGTERM to the gunicorn
+  master; systemd's `Restart=always` starts it again; one a minute). Settings permission; changes need JSON, the CSRF
+  token and a recent sign-in; each is audited (`config_changed`, `service_restarted`). Registered in `features.py`.
+  Test: `tests/check_config_page.py` (the catalogue against the code's own defaults, validation, precedence, secrets
+  never in an answer, every guard, the restart signal).
 - **`beacon_keep.py`, decoded answers kept across restarts.** The public summary of each request line's beacon
   (`beacon_decode.public`: format, operator, version, OS family, state) is kept in `data/beacon_summaries.json` (mode
   600), keyed by a SHA-256 of the request line and host; the line, the host and the device details are never written.

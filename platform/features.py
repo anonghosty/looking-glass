@@ -49,4 +49,13 @@ def install(app, core):
         "day_of": lambda platform: core["day_start"](core["replay_now"]()),
         "has_perm": core["AUTH"]["has_perm"], "logger": core.get("app_logger")})
 
+    # Settings → Configuration: every non-secret setting, the tuning ones editable (config_page.py; applied at start
+    # by gunicorn.conf.py)
+    import os
+    import config_page
+    A = core["AUTH"]
+    if all(k in A for k in ("has_perm", "csrf_ok", "fresh", "audit")):     # the platform always; a check's cut-down core not
+        out["config"] = config_page.install(app, {"base_dir": os.path.dirname(os.path.abspath(__file__)), "has_perm": A["has_perm"],
+                                                   "csrf_ok": A["csrf_ok"], "fresh": A["fresh"], "audit": A["audit"]})
+
     return out

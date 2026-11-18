@@ -21,6 +21,16 @@ import services_intel as SI  # noqa: E402
 checks, fails = 0, []
 
 
+def settle(gate, most=10.0):
+    """Wait until the gate's background counts have finished (a slow or paused machine: not a fixed sleep)."""
+    end = time.time() + most
+    while time.time() < end:
+        with gate.lock:
+            if not gate.busy:
+                return
+        time.sleep(0.05)
+
+
 def ok(label, cond, info=""):
     global checks
     checks += 1
@@ -64,7 +74,7 @@ t = time.perf_counter(); first = g.serve("report", None, "earlier counts", c.bui
 ok("the earlier counts at once (no wait for the recount)", first == "earlier counts" and dt < 0.1, f"{dt * 1000:.0f} ms")
 second = g.serve("report", None, "earlier counts", c.build)
 ok("... a second request meanwhile does not start another recount", second == "earlier counts")
-time.sleep(1.2)
+settle(g)
 ok("... one recount ran behind the page and its answer is kept", c.calls == 1 and c.stored == "count #1", f"{c.calls} recounts")
 
 print("4. In the checks: out of date")
@@ -126,18 +136,18 @@ logging.getLogger("looking-glass").disabled = True      # the expected traceback
 g, b = R.Gate("t6"), Broken()
 g.background = True
 got = g.serve("report", None, "earlier counts", b.build)
-time.sleep(0.4)
+settle(g)
 ok("in the service: the earlier counts at once, the failure kept for the task monitor",
    got == "earlier counts" and g.failures == 1 and g.last_error and "no rule expected" in g.last_error[2], str(g.last_error))
 ok("... and not tried again straight away (no failing loop)", g.serve("report", None, "earlier counts", b.build) == "earlier counts"
-   and (time.sleep(0.3) or b.calls == 1), f"{b.calls} tries")
+   and (settle(g) or b.calls == 1), f"{b.calls} tries")
 import system_alerts as SA  # noqa: E402
 ok("... an alert for the administrators' bell and the task monitor", any("could not be updated" in a["title"] and a["problem"]
                                                                       for a in SA.count_alerts()))
 g.failed_at["report"] -= R.RETRY_SECONDS + 1
 b.broken = False
 g.serve("report", None, "earlier counts", b.build)
-time.sleep(0.4)
+settle(g)
 ok("... tried again after the pause, the new counts kept and the alert gone",
    b.stored == "count #2" and g.last_error is None and not [a for a in SA.count_alerts() if a["key"].startswith("counts-failed:t6:")],
    f"{b.calls} tries")
