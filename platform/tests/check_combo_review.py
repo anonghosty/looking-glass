@@ -322,6 +322,70 @@ try:
         ok("…and it carries each address's host name and ports (2026-11-18)", rows and {"host_name", "ports"} <= set(rows[0]), ", ".join(rows[0][:4]))
         ok("…and the devices CSV carries no Looking Glass code", not {"combination_code", "cross_report_code", "code"} & set(rows[0])
            and not re.search(r"LG-[ACX]-", zf_.read(f"{fb}_devices.csv").decode("utf-8", "replace")), ", ".join(h for h in rows[0] if "code" in h))
+
+        # Affected names everything the devices CSV names (the user, 2026-11-18): the CSV is what the organisation gets
+        def csv_has(col):
+            i = rows[0].index(col) if col in rows[0] else None
+            return {v.strip() for r in rows[1:] if i is not None for v in r[i].split(",") if v.strip()}
+
+        def affected_covers_csv(label):
+            st_, a_ = call(f"/api/advisory/1/net?network={quote(NET)}", ADVISOR, **ADV)
+            af = (a_.get("advisory") or {}).get("affected") or {}
+            miss = {"infections": csv_has("infections") - set(af.get("categories") or []),
+                    "issues": csv_has("issues") - set(af.get("issues") or []) - set(af.get("cves") or []),
+                    "cves": csv_has("cves") - set(af.get("cves") or [])}
+            # nothing missing; a CSV that names nothing is fine (some test data have none: the "another report" check
+            # below always puts something there)
+            ok(label, st_ == 200 and not any(miss.values()),
+               f"missing from Affected: {json.dumps({k_: sorted(v)[:5] for k_, v in miss.items() if v})}; CSV has "
+               f"{len(csv_has('infections'))} infections, {len(csv_has('issues'))} issues, {len(csv_has('cves'))} CVEs")
+
+        affected_covers_csv("…Affected names every infection, issue and CVE the devices CSV names")
+        # a review kept before 2026-11-17 kept no device flags: Affected must still name what the CSV names (it missed
+        # a Compromised IoT device's "smb-scan; Compromised", 2026-11-18)
+        kp = os.path.join(book.review_paths["store"], "1.json")
+        kj = json.load(open(kp, encoding="utf-8")); kj.pop("flags", None); kj.pop("report_day", None)
+        json.dump(kj, open(kp, "w", encoding="utf-8"))
+        _cl = lambda fn, n: fn.__closure__[fn.__code__.co_freevars.index(n)].cell_contents       # noqa: E731
+        _recs = _cl(_cl(A.app.view_functions["api_advisory"], "networks_of"), "records")
+        _cl(_recs, "_cache").clear()                               # the advisory's records and flags, kept a minute
+        affected_covers_csv("…and so does a review kept before device flags were kept (2026-11-17)")
+        # one device also seen in another report that day (as a Compromised IoT device is): an infection and an issue
+        # the finding's own records do not carry. Affected must name them, as the devices table and CSV do.
+        st_, a_ = call(f"/api/advisory/1/net?network={quote(NET)}", ADVISOR, **ADV)
+        ip0 = ((a_.get("advisory") or {}).get("devices") or [{}])[0].get("ip")
+        real_hf = A.SVC_INTEL.host_flags
+
+        def other_report(hosts, scope=None, load=True):
+            out = dict(real_hf(hosts, scope, load) or {})
+            if ip0 in hosts:
+                f0 = {k_: list(v) for k_, v in (out.get(ip0) or {}).items()}
+                f0.setdefault("infections", []).append("smb-scan"); f0.setdefault("issues", []).append("Compromised")
+                out[ip0] = f0
+            return out
+        A.SVC_INTEL.host_flags = other_report
+        try:
+            _cl(_recs, "_cache").clear()
+            st_, a_ = call(f"/api/advisory/1/net?network={quote(NET)}", ADVISOR, **ADV)
+            af = (a_.get("advisory") or {}).get("affected") or {}
+            ok("…a device's infection and issue from another report are in Affected (2026-11-18: smb-scan; Compromised)",
+               ip0 and "smb-scan" in (af.get("categories") or []) and "Compromised" in (af.get("issues") or []),
+               f"categories {af.get('categories')} · issues {af.get('issues')}")
+            # …and its definition card counts the devices that have it, not the whole combination (2026-11-18: the
+            # Compromised card read "148 devices in this combination" for 1 device)
+            seen_c = []
+            _cp.build = lambda d_, m_: (seen_c.append(d_), real_b(d_, m_))[1]
+            try:
+                call(f"/advisory/1/preview?network={quote(NET)}", ADVISOR, raw=True, **ADV)   # builds it, keeps nothing
+            finally:
+                _cp.build = real_b
+            stc = (seen_c[-1].get("stats") or {}) if seen_c else {}
+            ok("…its definition counts the devices that have it: 1 of the advisory's devices",
+               str(stc.get("Compromised", "")).startswith("1 of the ") and "in this advisory" in str(stc.get("Compromised", ""))
+               and str(stc.get("smb-scan", "")).startswith("1 of the "), json.dumps({k_: stc.get(k_) for k_ in ("Compromised", "smb-scan")}))
+        finally:
+            A.SVC_INTEL.host_flags = real_hf
+            _cl(_recs, "_cache").clear()
     st, d = call("/api/advisory/1/generate", ADVISOR, "POST", {"network": NET}, **ADV)
     gen = (d.get("advisory") or {}).get("generated") or []
     st2, _ = call(f"/advisory/1/file/{ref}/1", ADVISOR, raw=True, **ADV)

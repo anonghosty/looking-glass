@@ -109,12 +109,13 @@ class ServicesIntel:
             slot = self.cache if sk == "report" else self.others.setdefault(sk, {"key": None, "at": 0.0, "data": None})
         return svc, comms, key, sk, slot
 
-    def index(self, scope=None):
+    def index(self, scope=None, load=True):
         """scope (report_day.py): None, the report day (what is shown); "memory", every day in memory (the analysts'
         search); "YYYY-MM-DD", that day (the Executive portal's code filter). Out of date while the service runs: the
-        earlier counts at once, counted again behind the page (index_refresh.py)."""
+        earlier counts at once, counted again behind the page (index_refresh.py). load=False: the days already in
+        memory only, never a day loaded for it (a day's load looks up its places' map positions)."""
         try:
-            self.ctx.get("load_day") and self.ctx["load_day"]()
+            load and self.ctx.get("load_day") and self.ctx["load_day"]()
         except Exception:                                  # noqa: BLE001  (the days already in memory still count)
             pass
         _s, _c, key, sk, slot = self._slot(scope)
@@ -462,11 +463,12 @@ class ServicesIntel:
                            for i, h in sorted(issues.items(), key=lambda kv: -len(kv[1]))][:40],
                 "issues_total": len(issues), "infections": infections[:20], "infections_hosts": len({h for hs in names.values() for h in hs})}
 
-    def host_flags(self, hosts, scope=None):
+    def host_flags(self, hosts, scope=None, load=True):
         """{host: {"infections", "issues", "cves"}} on a day (report_day.py scope): the infections each device calls a
         sinkhole as, and the issues and CVEs the services reports name on it, so an analyst or an advisor sees what each
-        device in a list is (the user, 2026-11-17). For a search's own device list only; never sent to a researcher."""
-        data = self.index(scope)
+        device in a list is (the user, 2026-11-17). For a search's own device list only; never sent to a researcher.
+        load=False (an advisory's Affected): from the days already in memory, no day loaded for it."""
+        data = self.index(scope, load)
         out = {}
         for h in {h for h in hosts if h}:
             iss = (data["host_issues"].get(h) or {}).keys()

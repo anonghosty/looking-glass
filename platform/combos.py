@@ -563,14 +563,37 @@ def install(app, ctx):
                     out[h].append({"day": di, "same": False, "text": f"{di}: changed: {other[h]}"})
         return dict(out)
 
-    def flags_of(hosts, day_iso):
-        """{host: {infections, issues, cves}} on a day (services_intel.host_flags), {} when not available."""
+    def flags_of(hosts, day_iso, load=True):
+        """{host: {infections, issues, cves}} on a day (services_intel.host_flags), {} when not available. load=False:
+        from the days in memory only (an advisory page never loads a day, nor looks up map positions, to show it)."""
         try:
-            return ctx["host_flags"](hosts, day_iso) if ctx.get("host_flags") and hosts else {}
+            if not (ctx.get("host_flags") and hosts):
+                return {}
+            return ctx["host_flags"](hosts, day_iso) if load else ctx["host_flags"](hosts, day_iso, load=False)
         except Exception:                                     # noqa: BLE001  (the list still shows without them)
             if ctx.get("logger"):
                 ctx["logger"].exception("device flags failed")
             return {}
+
+    def device_flags(section, days_of, flags_day=None, kept_flags=None, load=True):
+        """{host: {infections, issues, cves}}: what each device is, across every report, on its last day with the
+        combination (flags_day: the report day). kept_flags: what a review kept when it was sent, used as it is; a
+        review kept before these were kept (before 2026-11-17) has none, and they are worked out from the days in
+        memory, exactly as the devices table does. One function for the table and the advisory's Affected
+        (2026-11-18: Affected missed the infections the table showed, e.g. a Compromised IoT device's)."""
+        mem_isos = {dd.date().isoformat() for dd in (ctx["store"] if section == "infections" else ctx["svc_store"]).days}
+        by_last = collections.defaultdict(set)
+        for h, ds in days_of.items():
+            last_day = flags_day or max(set(ds) - {""}, default="")
+            by_last[last_day if last_day in mem_isos else "memory"].add(h)
+        flags = {}
+        for dd, hs in by_last.items():
+            kept_here = {h: kept_flags[h] for h in hs if h in (kept_flags or {})}
+            flags.update(kept_here)
+            rest = hs - set(kept_here)                   # none kept for these: worked out, never left empty
+            if rest:
+                flags.update(flags_of(rest, dd, load))
+        return flags
 
     def run(job, entry, days, scope="report"):
         if entry.get("kind") == "a":
@@ -736,15 +759,7 @@ def install(app, ctx):
         # what each device is that day: its infections, issues and CVEs (on its last day with the combination), and on
         # the report day whether it carried the same combination on the other days in memory, or what instead
         earlier = job.get("earlier") or {}
-        mem_isos = {dd.date().isoformat() for dd in (ctx["store"] if section == "infections" else ctx["svc_store"]).days}
-        by_last = collections.defaultdict(set)
-        for d in devs:
-            last_day = job.get("flags_day") or max(d["days"] - {""}, default="")
-            by_last[last_day if last_day in mem_isos else "memory"].add(d["ip"])
-        flags = {}
-        kept_flags = job.get("kept_flags")                # a review's report: the flags kept when it was sent
-        for dd, hs in by_last.items():
-            flags.update({h: kept_flags[h] for h in hs if h in kept_flags} if kept_flags is not None else flags_of(hs, dd))
+        flags = device_flags(section, {d["ip"]: d["days"] for d in devs}, job.get("flags_day"), job.get("kept_flags"))
         for d in devs:
             f_ = flags.get(d["ip"]) or {}
             d["flags"] = {k: list(f_.get(k) or []) for k in ("infections", "issues", "cves")}
@@ -990,8 +1005,9 @@ def install(app, ctx):
         explained, stats = [], {}
         ticked_n = {str(t_.get("name")): t_.get("hosts") for t_ in ((enr or {}).get("infections") or []) + ((enr or {}).get("issues") or [])
                     if t_.get("name") and isinstance(t_.get("hosts"), int)}
+        # issues counted too (2026-11-18: "Compromised", on 1 device, read "148 devices in this combination")
         av_n = collections.Counter(str(n_) for dv_ in (job.get("advisory") or {}).get("devices") or []
-                                   for n_ in set((dv_.get("infections") or []) + (dv_.get("cves") or [])))
+                                   for n_ in set((dv_.get("infections") or []) + (dv_.get("cves") or []) + (dv_.get("issues") or [])))
         heads =[(nm, section) for nm in entry.get("names", [])[:8]] if is_a else [(entry["name"], section)]
         if section == "services":
             # a services name is a report, not malware (Malpedia would call it "probably malware"): its issues (tags) and
@@ -1381,6 +1397,7 @@ def install(app, ctx):
     book.own_job = own                    # acodes.py: an analyst's request made from a finished search
     book.jobs = jobs                      # tests: a service restart is the search gone from memory
     book.package = package                # combo_review.py: the report again, with the views management chose
+    book.device_flags = device_flags      # advisory.py: Affected names what the devices table names
     book.describe = lambda code: described(book, code, resolve(code) if CODE_RX.match(code or "") else
                                            book.get(code) if ANY_RX.match(code or "") else None)
     book.resolve_any = lambda code: resolve(code) if CODE_RX.match(code or "") else book.get(code) if ANY_RX.match(code or "") else None

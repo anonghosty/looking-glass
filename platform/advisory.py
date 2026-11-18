@@ -369,6 +369,19 @@ def install(app, ctx):
     def report_key(e, comms):
         return str((e.get("source") if comms else e.get("report")) or "")
 
+    def flags_for(k, days_of):
+        """{host: {infections, issues, cves}} for a finding's devices: the kept ones, the rest worked out as the devices
+        table does (book.device_flags). Kept with the finding's records (records(), a minute), per set of devices."""
+        if not hasattr(book, "device_flags"):
+            return k.get("flags") or {}
+        memo = k.setdefault("_flags", {})
+        key = tuple(sorted(days_of))
+        if key not in memo:
+            # the days in memory only: opening an advisory never loads a day, nor sends its places to the map geocoder
+            # (lg-test, 2026-11-18: "nothing left the server" caught api.mapbox.com)
+            memo[key] = book.device_flags(k["entry"].get("section"), days_of, k.get("report_day"), k.get("flags"), load=False)
+        return memo[key]
+
     def devices_of(x, network):
         """The organisation's IP addresses with what the records say about each (for the advisor and the PDF)."""
         k = records(x)
@@ -381,8 +394,10 @@ def install(app, ctx):
                 continue
             h = k["host"](e)
             d = devs.setdefault(h, {"ip": h, "network": network or k["net"](e), "asn": str(k["asn"](e) or ""), "ports": set(), "reports": set(),
-                                    "cves": set(), "issues": set(), "labels": set(), "categories": set(), "hostname": "", "records": 0, "last": ""})
+                                    "cves": set(), "issues": set(), "labels": set(), "categories": set(), "hostname": "", "records": 0, "last": "",
+                                    "days": set()})
             d["records"] += 1
+            d["days"].add(str(e.get("extracted_date") or "")[:10])
             port = e.get("dst_port") if k["comms"] else e.get("port")
             if port not in (None, ""):
                 d["ports"].add(str(port))
@@ -419,14 +434,18 @@ def install(app, ctx):
                 ticked.setdefault(dv.get("ip"), set()).add(str(inf.get("name") or ""))
         # what the search said about each device on its report day (kept with the review, combos.py): its infections,
         # issues and CVEs that day, and whether it carried the same combination on the other days, or changed
-        flags, earlier = k.get("flags") or {}, k.get("earlier") or {}
+        # The same lookup as the devices table (combos.device_flags), so Affected names everything the table names
+        # (2026-11-18: a review kept before 2026-11-17 has no flags kept, and Affected missed what the devices showed
+        # in their other reports, e.g. "smb-scan; Compromised" from Compromised IoT)
+        earlier = k.get("earlier") or {}
+        flags = flags_for(k, {h: d["days"] for h, d in devs.items()})
         for h, d in devs.items():
             f_ = flags.get(h) or {}
             d["cves"].update(str(c).upper() for c in f_.get("cves") or [])
             d["issues"].update(str(i) for i in f_.get("issues") or [] if not CVE_RX.search(str(i)))
             ticked.setdefault(h, set()).update(str(n) for n in f_.get("infections") or [])
         report_day = k.get("report_day") or ""
-        return sorted(({**d, "ports": sorted(d["ports"], key=lambda p: (len(p), p)), "reports": sorted(d["reports"]), "cves": sorted(d["cves"]),
+        return sorted(({**{kk: v for kk, v in d.items() if kk != "days"}, "ports": sorted(d["ports"], key=lambda p: (len(p), p)), "reports": sorted(d["reports"]), "cves": sorted(d["cves"]),
                         "issues": clean(d), "labels": sorted(d["labels"]), "categories": sorted(d["categories"]),
                         "infections": sorted((d["categories"] | ticked.get(d["ip"], set())) - {""}),
                         "last": d["last"][:16].replace("T", " "), "report_day": report_day,

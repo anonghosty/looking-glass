@@ -5,6 +5,16 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-18 (6)
+### Fixed
+- **An advisory's Affected lists every infection, issue and CVE its devices show, from every report.** The devices
+  table and the devices CSV named what each device showed in its other reports that day (for example "smb-scan;
+  Compromised" from Compromised IoT), but Affected did not, when the finding's review was kept before 2026-11-17 (no
+  device details were kept then). Affected and the table now read the same thing, worked out the same way.
+- **The definitions in an advisory count the devices that have each issue,** for example "1 of the 148 devices in this
+  advisory"; an issue could read as if every device of the combination had it.
+  Nothing to do when updating; generate an advisory again to get the full Affected list and the counts.
+
 ## 2026-11-18 (5)
 ### Changed
 - **The Findings page no longer waits for analyst codes' device counts after a restart.** Measured on a test

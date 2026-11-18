@@ -2937,7 +2937,7 @@ COMBOS = _combos.install(app, {
     "can_note": _kb_change_allowed, "shapes": lambda: _adm1_shapes(), "country": lambda: settings.data["country"],
     "svc_matcher": lambda entry, scope="memory": SVC_INTEL.matcher(entry, scope), "svc_new_code": lambda r, items: SVC_INTEL.new_code(r, items),
     # each device's infections, issues and CVEs on a day; the report day (report_day.py)
-    "host_flags": lambda hosts, scope=None: SVC_INTEL.host_flags(hosts, scope), "replay_now": replay_now,
+    "host_flags": lambda hosts, scope=None, load=True: SVC_INTEL.host_flags(hosts, scope, load), "replay_now": replay_now,
     "title_of": lambda n: SVC_KB["title_of"](n),
     "cross": lambda hosts, scope="memory": SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"],   # a search's devices
                                                               scope=scope),          # across every category, on the search's day(s)
