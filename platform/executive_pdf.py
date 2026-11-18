@@ -388,7 +388,9 @@ class Doc:
             self.text(x + w - 14, y - h + 8, f"{len(rest)} more on the next page", 7.4, MUTE, anchor="end")
         return rest
 
-    def bars(self, x, y, w, rows, metric="hosts", n=8, label=lambda r: r["label"], stack=False, row_h=None):
+    def bars(self, x, y, w, rows, metric="hosts", n=8, label=lambda r: r["label"], stack=False, row_h=None, bottom=None):
+        """bottom: no row below it. A label too long for its room wraps and its row grows (2026-11-18: "Accessible GPRS
+        Tunneling Protocol (GTP)" was squeezed onto two lines over the next row)."""
         rows = [r for r in rows if (r.get(metric) if r.get(metric) is not None else r.get("count"))][:n]
         if not rows:
             self.text(x, y - 10, "Nothing for this selection.", 8.5, MUTE); return y - 20
@@ -403,10 +405,15 @@ class Doc:
                 yy -= (row_h or 26)
             else:
                 lw = w * .44
-                self.text(x, yy - 9, self.fit(label(r), lw - 6, 8.4), 8.4, HexColor("#d6ddee"))
+                ll = simpleSplit(self.s(label(r)), self.F["r"], 8.4, lw - 6) or [""]
+                rh = max(row_h or 17, 17 + 10 * (len(ll) - 1))
+                if bottom is not None and yy - rh < bottom:
+                    break
+                for k, ln in enumerate(ll):
+                    self.text(x, yy - 9 - 10 * k, ln, 8.4, HexColor("#d6ddee"))
                 self.bar(x + lw, yy - 10, w - lw - 46, 5.5, v / mx)
                 self.text(x + w, yy - 9, fmt(v), 8.6, TXT, True, "end")
-                yy -= (row_h or 17)
+                yy -= rh
         return yy
 
     def donut(self, x, y, size, rows, unit, w=300, severity=False):
@@ -503,6 +510,9 @@ class Doc:
         placed = []
         for v, lx, ly, name, r in sorted(labels, key=lambda z: -z[0]):        # busiest first; skip overlapping names
             tw = c.stringWidth(self.s(name), self.F["b"], 6.6)
+            # a name near the map's edge is moved in so it stays on the map (2026-11-18: "Tharaka-Nithi" ran into
+            # the list of regions beside it)
+            lx = min(max(lx, x + tw / 2 + 2), x + w - tw / 2 - 2)
             box = (lx - tw / 2 - 2, ly - 8, lx + tw / 2 + 2, ly + 8)
             if any(not (box[2] < b[0] or box[0] > b[2] or box[3] < b[1] or box[1] > b[3]) for b in placed):
                 continue
@@ -545,20 +555,35 @@ class Doc:
             self.text(x, yy - 9, f"+ {len(rest)} more region{'s' if len(rest) != 1 else ''} with {fmt(sum((r.get('hosts') or r['count']) for r in rest))} {unit}", 7.8, MUTE)
         return yy
 
-    def ranking(self, x, y, w, rows, comms, max_rows=10):
+    def ranking(self, x, y, w, rows, comms, max_rows=10, bottom=None):
+        """The top list. A row grows with its text (2026-11-18: a long name or a CVE's description was squeezed onto
+        extra lines over the bar and the next row): the name wraps; the line beside it (the code, or the issue's
+        title) stays beside it when it fits, else goes on its own lines under the name. bottom: no row below it."""
         mx = max([r.get("hosts") or r["count"] for r in rows] or [1])
         yy = y
         for i, r in enumerate(rows[:max_rows], 1):
             c = self.c
+            name = (r.get("title") or r["value"]) if comms else r["value"]
+            sub = r["value"] if comms and r.get("title") and r["title"] != r["value"] else (r.get("title") if not comms else "")
+            tw = w - 26 - 86                                     # the text's room: the count stands at the right
+            nl = simpleSplit(self.s(name), self.F["b"], 9.6, tw) or [""]
+            last_w = c.stringWidth(nl[-1], self.F["b"], 9.6)
+            sf = self.F["m"] if comms else self.F["r"]
+            inline = bool(sub) and c.stringWidth(self.s(sub), sf, 7.8) <= tw - last_w - 8
+            sl = [] if inline or not sub else simpleSplit(self.s(sub), sf, 7.4, tw)
+            extra = 11.5 * (len(nl) - 1) + 9 * len(sl)
+            if bottom is not None and yy - 33 - extra < bottom:
+                break
             c.setFillColor(Color(1, 1, 1, .05)); c.roundRect(x, yy - 18, 17, 17, 4, stroke=0, fill=1)
             self.text(x + 8.5, yy - 12, str(i), 8, DIM, True, "middle")
-            name = (r.get("title") or r["value"]) if comms else r["value"]
-            self.text(x + 26, yy - 9, self.fit(name, w * .55, 9.6, True), 9.6, TXT, True)
-            sub = r["value"] if comms and r.get("title") and r["title"] != r["value"] else (r.get("title") if not comms else "")
-            fn = self.fit(name, w * .55, 9.6, True)          # its real width, at the size it is drawn
-            nx = x + 26 + min(w * .55, c.stringWidth(str(fn), self.F["b"], getattr(fn, "size", None) or 9.6)) + 8
-            if sub:
-                self.text(nx, yy - 9, self.fit(sub, x + w - 90 - nx, 7.8), 7.8, MUTE, mono=comms)
+            for k, ln in enumerate(nl):
+                self.text(x + 26, yy - 9 - 11.5 * k, ln, 9.6, TXT, True)
+            if inline:
+                self.text(x + 26 + last_w + 8, yy - 9 - 11.5 * (len(nl) - 1), sub, 7.8, MUTE, mono=comms)
+            for k, ln in enumerate(sl):
+                self.text(x + 26, yy - 9 - 11.5 * (len(nl) - 1) - 9 * (k + 1), ln, 7.4, MUTE, mono=comms)
+            row_top = yy
+            yy -= extra                                          # the pills and the bar go below the text
             tx = x + 26
             if not comms:
                 if r.get("exploited"):
@@ -576,8 +601,8 @@ class Doc:
             elif r.get("title"):
                 tx = self.pill(tx, yy - 21, "Looking Glass definition", VIOLET)
             self.bar(tx + 4, yy - 20, x + w - 80 - tx, 5.5, (r.get("hosts") or r["count"]) / mx)
-            self.text(x + w, yy - 10, fmt(r.get("hosts") or r["count"]), 13, TXT, True, "end")
-            self.text(x + w, yy - 20, "devices" if comms else "hosts", 6.8, MUTE, anchor="end")
+            self.text(x + w, row_top - 10, fmt(r.get("hosts") or r["count"]), 13, TXT, True, "end")
+            self.text(x + w, row_top - 20, "devices" if comms else "hosts", 6.8, MUTE, anchor="end")
             yy -= 33
         return yy
 
@@ -643,16 +668,19 @@ class Doc:
             kv = x_["kev"]
             alert = (f"Actively exploited since {kv.get('date_added')}" + ("; used in ransomware" if kv.get("ransomware") == "Known" else "") + ". "
                      + (f"Required action: {kv['action']}" if kv.get("action") else ""))
-        dl = simpleSplit(self.s(desc), self.F["r"], 8.2, w - 24)[:6]
-        # researchers' notes on this name (notes.py), the newest first, up to three lines
+        # every line kept, the card as tall as its text (2026-11-18: the description stopped at six lines, the notes at
+        # three and the CISA box at three, mid-sentence: "…Bitdefender Labs found it on")
+        dl = simpleSplit(self.s(desc), self.F["r"], 8.2, w - 24)
+        # researchers' notes on this name (notes.py), the newest two
         nt = " ".join(f"Notes shared by {n.get('role') or 'Researcher'}: {n.get('by') or 'a researcher'}"
                       f"{' (' + n['date'] + ')' if n.get('date') else ''}: {n.get('text', '')}"
                       + (f" Combinations: {', '.join(c['code'] for c in n['codes'])}." if n.get("codes") else "")
                       for n in (x_.get("notes") or [])[:2])
         if nt:
-            dl += simpleSplit(self.s(nt), self.F["r"], 8.2, w - 24)[:3]
-        al = simpleSplit(self.s(alert), self.F["r"], 7.8, w - 36)[:3] if alert else []
-        h = 46 + 11 * len(dl) + (20 + 10 * len(al) if al else 0) + (12 if title and title != name else 0)
+            dl += simpleSplit(self.s(nt), self.F["r"], 8.2, w - 24)
+        al = simpleSplit(self.s(alert), self.F["r"], 7.8, w - 36) if alert else []
+        tl = simpleSplit(self.s(title), self.F["b"], 8.6, w - 24) if title and title != name else []
+        h = 46 + 11 * len(dl) + (20 + 10 * len(al) if al else 0) + 12 * len(tl)
         if y is None:
             return h
         self.card(x, y, w, h)
@@ -663,8 +691,8 @@ class Doc:
         for t, col in tags:
             tx = self.pill(tx, y - 33, t, col)
         yy = y - 45
-        if title and title != name:
-            self.text(x + 12, yy, self.fit(title, w - 24, 8.6, True), 8.6, HexColor("#c9d6ff"), True); yy -= 12
+        for ln in tl:
+            self.text(x + 12, yy, ln, 8.6, HexColor("#c9d6ff"), True); yy -= 12
         for ln in dl:
             self.text(x + 12, yy, ln, 8.2, HexColor("#d6ddee")); yy -= 11
         if al:
@@ -737,17 +765,18 @@ def build(d, enr, meta):
                                                 key=lambda r: (-r["hosts"], not r["exploited"], -(r["cvss"] or 0)))
     top = doc.card(M, y, rw, y - 30, "Top infections" if comms else "Top issues",
                    "Devices per infection" if comms else "Hosts per issue, most hosts first")
-    doc.ranking(M + 14, top, rw - 28, rows, comms, max_rows=int((top - 40) // 33))
+    doc.ranking(M + 14, top, rw - 28, rows, comms, max_rows=int((top - 40) // 33), bottom=38)
     x2, w2 = M + rw + 12, W - 2 * M - rw - 12
     h3 = (y - 30 - 12) / 2
     top = doc.card(x2, y, w2, h3, "Most affected networks", ("Devices" if comms else "Hosts") + " per network")
-    doc.bars(x2 + 14, top, w2 - 28, [r for r in d["networks"] if r["value"] != "Unknown network"], n=int((h3 - 50) // 17))
+    doc.bars(x2 + 14, top, w2 - 28, [r for r in d["networks"] if r["value"] != "Unknown network"], n=int((h3 - 50) // 17), bottom=y - h3 + 8)
     if comms:
         top = doc.card(x2, y - h3 - 12, w2, h3, "Where infected devices connect to", "Events per country of the server contacted")
-        doc.bars(x2 + 14, top, w2 - 28, d["destinations"], metric="count", n=int((h3 - 50) // 17), label=lambda r: _country(r["label"]))
+        doc.bars(x2 + 14, top, w2 - 28, d["destinations"], metric="count", n=int((h3 - 50) // 17), label=lambda r: _country(r["label"]),
+                 bottom=y - 2 * h3 - 12 + 8)
     else:
         top = doc.card(x2, y - h3 - 12, w2, h3, "Exposed services", "Hosts per service")
-        doc.bars(x2 + 14, top, w2 - 28, d["services"], n=int((h3 - 50) // 17))
+        doc.bars(x2 + 14, top, w2 - 28, d["services"], n=int((h3 - 50) // 17), bottom=y - 2 * h3 - 12 + 8)
 
     # ---------------- page 4: deeper insight
     y = doc.new_page("Deeper insight")

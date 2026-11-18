@@ -309,7 +309,7 @@ The report an advisor sends one organisation about its affected devices: the adv
 An advisory's states after it is written. Drafted: finished and ready to go out, its report generated. Sent: marked as sent to its recipients on the Findings page, with exactly which file went to them; a sent advisory can no longer be changed, so the record of what the organisation received stays exact.
 
 **Report out of date (advisory)**  
-An advisory whose heading, subject, TLP, Description or Recommended Actions changed after its report was generated: the file no longer says what the advisory says. It cannot be marked drafted or sent until the report is generated again, so the organisation always receives what the record shows.
+An advisory whose title, TLP, Description or Recommended Actions changed after its report was generated: the file no longer says what the advisory says. It cannot be marked drafted or sent until the report is generated again, so the organisation always receives what the record shows.
 
 **TLP (Traffic Light Protocol)**  
 FIRST's TLP 2.0 labels how far an advisory may travel: RED (the named recipients only), AMBER+STRICT (the recipient's organisation only), AMBER (the organisation and its clients who need to know; the default, since an advisory lists the organisation's addresses), GREEN (the recipient's community, not published) and CLEAR (anyone).

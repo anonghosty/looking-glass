@@ -5,6 +5,69 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-18 (4)
+### Added
+- **Two new checks of every page as people see it, run before every release.**
+  - `platform/tests/pdf_pages_check.py` renders PDFs and finds text drawn over other text, the "…" cut-off and text
+    off the page. It also runs in GitHub's checks.
+  - `platform/tests/browser_checks.py` opens every page for every role in a browser and checks that every control is
+    reached with the keyboard, focus is never trapped, lists are lists, no text is cut off and no page errors.
+  - Both skip themselves where their tools are not installed (pypdfium2; Playwright with a test installation and its
+    test accounts), so the suite runs anywhere.
+### Changed
+- **The advisory's own title is now the large title on its PDF.** The advisory page has one **Title** field (it
+  starts as the finding's title); it is printed large at the top of the first page, with "*CSIRT* Security
+  Advisory" in small letters above it. Before, the large title was always "*CSIRT* Security Advisory" and the
+  advisor's words were the smaller line below. An advisory that already had a typed heading keeps it as the small
+  line. A long title is no longer cut after three lines. Generate an advisory again to get the new layout.
+- **The report page with the map is named "Geographic Location"** (it was "Where"), in the analysts' reports and in
+  the advisory's insights.
+- **The table of addresses says what it lists: "The IP addresses with the most records"** on a page named "IP
+  addresses" (it said "The devices"), and page 1's preview is "The busiest IP addresses".
+- **An advisory with more than 10 affected IP addresses points to its devices CSV instead of listing them.** The
+  Affected IP addresses section gives their number and the name of the attached CSV; with 10 or fewer the table
+  stays. The devices CSV now also has the **host_name** and **ports** columns (after ip), so nothing the table showed
+  is lost; the analysts' devices CSV has them too.
+- **Generate report always gives the advisory and its devices CSV together, never a PDF alone.** A finding that keeps
+  no devices (made before devices were kept with findings) is refused with what to do: the analyst sends the
+  combination to management again, and the new finding keeps its devices.
+- **No page of an advisory prints the platform and scope line** ("Publicly accessible services · Ghana · whole
+  country"). It was already gone from the advisory's own pages; the insights, Technical Details and references pages
+  still had it. The analyst's own report keeps it.
+- **An advisory's Technical Details pages are titled "Definitions"**: the badge beside the logo already says
+  TECHNICAL DETAILS, so the title no longer repeats it.
+### Fixed
+- **An advisory's Affected section lists every infection its devices carry.** Its Categories showed only the infections
+  from the devices' own sinkhole records, while the device table also showed those the search found on them that day
+  (for example android.vo1d2 listed, avalanche-andromeda and m0yv only in the table). Categories, CVEs and Issues now
+  list everything the device rows show. Generate an advisory again to get the corrected PDF.
+
+- **The device counts beside analyst codes on the Findings page no longer wait for each other.** Every code was
+  counted under one shared lock, so one code that takes long to count (about 16 s the first time, on a large
+  selection) held every other code's count, and their loading placeholders could spin for over 30 s. Each code now
+  has its own lock: a slow count only delays itself, and the same code is still counted once at a time.
+- **Accessibility (found by an automated check of every page for every role, WCAG 2.2 AA):**
+  - The top lists on the map and services pages, and the attack-type legend on the map page, made each list item a
+    button, so screen readers met lists without list items. Each entry is now a real button inside its list item,
+    at least 24 px tall (the touch-target minimum). They work the same with a mouse, Enter or Space.
+  - The Executive portal's map was marked as a picture while holding a control (the whole-country switch); it is
+    now a group.
+
+Found by rendering every page of every kind of PDF the platform makes (110 pages) and checking each one:
+- **Executive report, "Explained" pages:** a card's text stopped mid-sentence (the description after six lines, the
+  researchers' notes and CISA's required action after three). Every line is now kept and the card grows to hold it.
+- **Executive report, top infections and top issues:** a long name or a CVE's description was squeezed onto extra
+  lines over the bar and the next row. The row now grows with its text, and the description goes under the name when
+  it does not fit beside it.
+- **Executive report, the bars beside them:** a long label ("Accessible GPRS Tunneling Protocol (GTP)") ran over
+  the next row; it now wraps and its row grows.
+- **Maps:** a region's name at the edge of the map ran into the list beside it; it now stays on the map.
+- **Analysis report summary:** the list of actively exploited CVEs stopped after eight with "…"; it now names the
+  rest as a count ("and 21 more, each explained under Issues explained").
+- **Analysis report, the reports in the selection:** a report's name could end a page with its text on the next.
+- **Audit evidence:** the method text showed "<i>backed</i>" as written; it now reads "backed". The seal's SHA-256
+  is printed in full instead of shortened with "…".
+
 ## 2026-11-18 (3)
 ### Fixed
 - **The advisory's table of affected IP addresses no longer leaves its heading alone on a page.** When the first row

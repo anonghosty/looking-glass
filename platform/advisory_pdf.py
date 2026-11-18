@@ -21,7 +21,8 @@ LEVEL = {"critical": RED, "high": AMBER, "medium": BLUE, "low": SLATE}
 LEVEL_WORD = {"critical": "Critical", "high": "High", "medium": "Medium", "low": "Low"}
 ACCENT = HexColor("#a9b8ff")
 BOTTOM = 40                                   # nothing below this line: the footer's room
-KEEP_MAX = 300                                # a block kept on one page is at most this tall (about half a landscape page)
+LIST_MAX = 10                                 # above this many affected IP addresses, the CSV holds them (not the PDF)
+KEEP_MAX = 300                               # a block kept on one page is at most this tall (about half a landscape page)
 
 
 class Flow:
@@ -187,12 +188,14 @@ def _logo_section(doc, a, y):
     x = M + bw + 18
     tw = W - M - x
     yy = y - 4
-    doc.text(x, yy - 8, "SECURITY ADVISORY", 8.5, ACCENT, True)
-    yy -= 14
-    for ln in simpleSplit(doc.s(a["title"]), doc.F["b"], 17, tw)[:3]:
+    # the advisor's own title large (the user, 2026-11-18: "Void 2 Detected" is the heading); the CSIRT's line
+    # ("Meridian CSIRT Security Advisory", or an older advisory's typed heading) small above it. Every line kept.
+    eyebrow = (a.get("title") or "Security Advisory").upper()
+    for ln in simpleSplit(doc.s(eyebrow), doc.F["b"], 8.5, tw):
+        doc.text(x, yy - 8, ln, 8.5, ACCENT, True); yy -= 12
+    yy -= 2
+    for ln in simpleSplit(doc.s(a.get("subject") or a.get("title") or ""), doc.F["b"], 17, tw):
         doc.text(x, yy - 16, ln, 17, TXT, True); yy -= 21
-    for ln in simpleSplit(doc.s(a.get("subject") or ""), doc.F["r"], 11, tw)[:3]:
-        doc.text(x, yy - 12, ln, 11, DIM); yy -= 15
     return min(y - bh, yy) - 12
 
 
@@ -248,9 +251,18 @@ def front(doc, a):
                   ", ".join((d.get("cves") or []) + (d.get("issues") or [])) or "–",
                   ", ".join(d.get("infections") or d.get("categories") or []) or "–", d.get("last") or "–"]
                  + (["; ".join(d.get("earlier") or []) or "–"] if other else []) for d in devs]
-        # the heading keeps the table's head and first row with it on one page
-        f.heading(f"Affected IP addresses ({len(devs):,})", keep=14 + f.row_height(cols, trows[0]))
-        f.table(cols, trows)
+        if len(devs) > LIST_MAX and a.get("devices_csv"):
+            # many addresses: said, not listed (the user, 2026-11-18: "this will save space and prevent too much
+            # information"); the devices CSV sent with the PDF holds every one, with all these columns
+            f.heading(f"Affected IP addresses ({len(devs):,})")
+            f.para(f"Due to the number of affected IP addresses ({len(devs):,}), they are not listed here. Kindly refer to the "
+                   f"attached CSV file, {a['devices_csv']}: it lists every IP address with its host name, ports, network and "
+                   "location, the reports that found it, its infections, issues and CVEs, when it was first and last seen, and "
+                   "what it carried on the other days.", 9.6, TXT)
+        else:
+            # the heading keeps the table's head and first row with it on one page
+            f.heading(f"Affected IP addresses ({len(devs):,})", keep=14 + f.row_height(cols, trows[0]))
+            f.table(cols, trows)
 
     f.heading("Description")
     if a.get("description"):
@@ -369,7 +381,7 @@ def alone(a, meta):
             self.text(M, 14, f"Advisory {a['ref']}. Generated {now} by {a.get('org') or 'the CSIRT'}.", 7.2, MUTE)
 
     doc = Doc(dict(meta, advisory=a))
-    doc.c.setTitle(f"{a['title']} · {a['ref']}")
+    doc.c.setTitle(f"{a.get('subject') or a['title']} · {a['ref']}")     # the advisor's title, as on the page
     front(doc, a)
     references(doc, a)
     return doc.done()

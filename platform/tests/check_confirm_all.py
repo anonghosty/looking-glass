@@ -133,8 +133,13 @@ try:
         real_build = AA.build
         ADV.advisory_attack.build = lambda _am, _auto, adv: real_build(am, auto, adv)
         ADVP = {"advisory"}
+        # the made-up finding keeps its devices, as a real one does: Generate gives the PDF and the devices CSV
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from _kept_report import keep_devices, organisation
+        unkeep = keep_devices(A.COMBOS, "1")
         try:
-            NET = ADV.ALL
+            # the organisation the finding's kept devices are in, as the advisory page offers it
+            NET = organisation(A)
             st, j = call("/api/advisory/1/net", ADVP, "POST", {"network": NET, "subject": "Fixture", "description": "d", "actions": "a",
                                                                "recipients": ["Team A"]}, user="lg-t-adv", role="advisor")
             att = j["advisory"]["attack"]
@@ -161,6 +166,7 @@ try:
             F.get, F.sees = fkeep["get"], fkeep["sees"]
             A.ADVISORIES.dir, A.ORG.path = real_dir, real_org
             ADV.advisory_attack.build = real_build
+            unkeep()
     finally:
         for k, v in keep.items():
             setattr(A.ATTACK, k, v)

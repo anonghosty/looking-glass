@@ -1745,11 +1745,14 @@
     const max = Math.max(1, ...rows.map((r) => r.count));
     const sum = total || rows.reduce((a, r) => a + r.count, 0);
     for (const r of rows.slice(0, 6)) {
-      const li = el("li"); li.tabIndex = 0; li.setAttribute("role", "button");
+      // a real button inside the list item (2026-11-18 sweep: the item made into a button left the list without
+      // list items); Enter and Space are the button's own
+      const li = el("li"), btn = el("button", "tl-btn"); btn.type = "button";
       const bar = el("span", "bar"); bar.style.width = `calc(${(r.count / max) * 100}% - 16px)`;
       if (colorFn) bar.style.setProperty("--bc", colorFn(r.value));
       const lbl = el("span", "lbl"); lbl.append(...labelFn(r.value, r));
-      li.append(bar, lbl, el("span", "num", fmt(r.count)));
+      btn.append(bar, lbl, el("span", "num", fmt(r.count)));
+      li.append(btn);
       attachTip(li, () => {
         const name = lbl.textContent;
         const lines = [tipLine(name), tipLine(null, `${fmt(r.count)} events · ${pct(r.count, sum)} of all events`)];
@@ -1759,8 +1762,7 @@
         return lines;
       });
       const open = () => openScoped(kind, r.value);
-      li.addEventListener("click", open);
-      li.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+      btn.addEventListener("click", open);
       ol.append(li);
     }
     if (!rows.length) ol.append(el("li", "muted", "No data yet"));
@@ -1846,7 +1848,11 @@
       svg.append(path);
       const li = el("li"); const sw = el("span", "swatch"); sw.style.background = color(r.value);
       const name = el("span", null, r.label || r.value); name.title = r.label || r.value;
-      li.append(sw, name, el("span", "n", pct(r.count, sum)));
+      // clickable: a real button inside the list item (2026-11-18 sweep: the item made into a button left the list
+      // without list items, and its row was under the 24 px touch target); the list stays a list
+      const box = opts.onClick ? el("button", "legend-btn") : li;
+      if (opts.onClick) { box.type = "button"; li.append(box); }
+      box.append(sw, name, el("span", "n", pct(r.count, sum)));
       legend.append(li);
       const on = () => { svg.classList.add("hovering"); path.classList.add("hot"); li.classList.add("hot"); };
       const off = () => { svg.classList.remove("hovering"); path.classList.remove("hot"); li.classList.remove("hot"); hideTip(); };
@@ -1859,7 +1865,10 @@
         if (opts.onClick) { n.addEventListener("click", () => opts.onClick(r.value)); n.style.cursor = "pointer"; } else n.style.cursor = "default";
       }
       path.setAttribute("aria-hidden", "true");          // the legend entry is the control; the slice repeats it
-      if (opts.onClick) keyable(li, () => opts.onClick(r.value), `${r.label || r.value}, ${pct(r.count, sum)}: analyse`, on, off);
+      if (opts.onClick) {
+        box.setAttribute("aria-label", `${r.label || r.value}, ${pct(r.count, sum)}: analyse`);
+        box.addEventListener("focus", on); box.addEventListener("blur", off);
+      }
     }
     const t = (y, cls, txt) => { const n = document.createElementNS(NS, "text"); n.setAttribute("x", cx); n.setAttribute("y", y); n.setAttribute("text-anchor", "middle"); n.setAttribute("class", cls); n.textContent = txt; return n; };
     svg.append(t(cy + 2, "d-total", fmt(rows.length ? sum : 0)), t(cy + 15, "d-sub", opts.center || "events"));

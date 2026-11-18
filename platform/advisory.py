@@ -461,7 +461,10 @@ def install(app, ctx):
                     add(issues, i)
                 for lb in d["labels"]:
                     add(labels, lb)
-                for c in d["categories"]:
+                # every infection the device carries, as its row in the table shows it: its own sinkhole records AND
+                # what the search found on it that day (2026-11-18: the row said "android.vo1d2, avalanche-andromeda,
+                # m0yv" while Affected listed android.vo1d2 alone, and Technical Details explained only that one)
+                for c in d.get("infections") or d["categories"]:
                     add(cats, c)
         else:                                     # no kept search: the combination's own parts
             for r, items in (entry.get("parts") or ([(entry.get("report"), entry.get("items") or [])] if entry.get("kind") == "r" else [])):
@@ -804,7 +807,7 @@ def install(app, ctx):
             return jsonify(error="Choose the organisation (network) the advisory goes to."), 400
         subject = re.sub(r"\s+", " ", str(b.get("subject") or "")).strip()[:MAX_SUBJECT]
         if not subject:
-            return jsonify(error="Give the advisory a subject."), 400
+            return jsonify(error="Give the advisory a title."), 400
         rec, rerr = clean_recipients(b.get("recipients") or [])
         if rec is None:
             return jsonify(error=rerr), 400
@@ -852,6 +855,8 @@ def install(app, ctx):
         a = pdf_input(v, auto, has_report)
         base = file_base(x, auto, network)
         if has_report:
+            # the devices CSV goes with the PDF: an advisory with many addresses points to it instead of listing them
+            a["devices_csv"] = f"{base}_devices.csv"
             sel = asns_for(x, network)
             out, err = book.review_report_of(x["id"], me()[0], a, network=network or None, file_base=base,
                                              asns=sorted(sel) if sel is not None else None)
@@ -933,10 +938,18 @@ def install(app, ctx):
         att_now = attack_of(adv, auto_of(x, network))
         if advisory_attack.pending_text(att_now):         # never send unreviewed ATT&CK mappings silently
             return jsonify(error=advisory_attack.pending_text(att_now)), 409
+        # the rule (the user, 2026-11-18): Generate report always gives the advisory AND its devices CSV. A finding with no
+        # kept search has no devices to put in the CSV, so it is refused, never sent as a PDF alone
+        if not kept(x):
+            return jsonify(error="This finding keeps no devices, so there is no devices CSV to send with the advisory. Ask the "
+                                 "analyst to send the combination to management again from the Combinations page; its "
+                                 "devices are then kept with the new finding."), 409
         out, err = build(x, adv, network)
         if not out:
             return jsonify(error=err), 409
         zname, zbytes, pname, pbytes = out
+        if not zbytes:                                    # the same rule, whatever build() returned
+            return jsonify(error="The devices CSV could not be made, so the advisory was not generated."), 409
         name, data = (zname, zbytes) if zbytes else (pname, pbytes)
         # one report per advisory: generating again replaces the previous one (every generation stays in the history,
         # and in the audit log); the number goes on, so a download link of an older one never gets the new file

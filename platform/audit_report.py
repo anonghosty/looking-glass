@@ -78,9 +78,10 @@ def build(d):
               f"NIST controls ({d.get('cis_source', 'CIS mapping to NIST SP 800-53 Rev. 5')}), each with the NIST control it comes "
               "through and CIS's relationship (Equivalent, Subset: the safeguard covers part of the NIST control, Superset: it "
               "covers more); a NIST control CIS does not map is said so. Under each safeguard, kept apart from CIS's text and "
-              "marked as ours, Looking Glass's own reading: <i>backed</i> (the check produces evidence for the safeguard as CIS "
-              "words it), <i>not backed</i> (the mapping reaches it but the check does not look at its subject, with the reason) "
-              "or <i>related</i> (CIS's mapping relates it; nothing more is claimed). "
+              # plain words in quotes: _p escapes markup, so "<i>" printed as text (2026-11-18)
+              "marked as ours, Looking Glass's own reading: “backed” (the check produces evidence for the safeguard as CIS "
+              "words it), “not backed” (the mapping reaches it but the check does not look at its subject, with the reason) "
+              "or “related” (CIS's mapping relates it; nothing more is claimed). "
               f"{d.get('cis_note') or CERT_NOTE} "
               "The checks present evidence and give no pass or fail: "
               "whether a control is implemented and operating effectively is the auditor's conclusion. Corroborate the evidence with independent testing (for "

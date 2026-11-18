@@ -329,10 +329,12 @@
     // step 3: the template
     const w = card("3 · The advisory", a.locked
       ? `As it was sent to ${a.network || "all networks"}. A sent advisory can no longer be changed, so the record of what the organisation received stays exact; a correction goes out as a new message.`
-      : `Your words for ${a.network || "all networks"}: the subject, the Description on the impact, the Recommended Actions. Bold, bullets and numbering carry into the PDF.`);
-    const head = el("input", "av-in av-heading"); head.type = "text"; head.maxLength = IDX.limits.subject; head.value = a.heading || "";
-    head.placeholder = a.heading_default;          // empty: the CSIRT's name + "Security Advisory"
-    const subj = el("input", "av-in"); subj.type = "text"; subj.maxLength = IDX.limits.subject; subj.value = a.subject;
+      : `Your words for ${a.network || "all networks"}: the title, the Description on the impact, the Recommended Actions. Bold, bullets and numbering carry into the PDF.`);
+    // one field: the advisor's own title, large at the top of the PDF (the user, 2026-11-18). The CSIRT's line
+    // ("<CSIRT> Security Advisory") is printed small above it; an older advisory's typed heading is kept as that line
+    const heading = a.heading || "";
+    const subj = el("input", "av-in av-heading"); subj.type = "text"; subj.maxLength = IDX.limits.subject; subj.value = a.subject;
+    subj.placeholder = "The advisory's title, e.g. Vo1d botnet infections on Android TV boxes";
     const mk = (val, ph) => { const ta = el("textarea", "av-ta"); ta.rows = 7; ta.maxLength = IDX.limits.text; ta.value = val; ta.placeholder = ph; return ta; };
     const desc = mk(a.description, "Describe the impact: what is exposed or happening on these IP addresses, and why it matters.");
     const act = mk(a.recommended_actions, "- Patch to a supported version\n- Close the management ports to the internet\n- Check the hosts for signs of compromise");
@@ -360,19 +362,18 @@
     tlpBox.append(el("span", "av-field-h", "Traffic Light Protocol (TLP)"), tlpNote, tlpPick);
     const lab = (t, x, hint, tools) => { const l = el("div", "av-field"); l.append(el("span", null, t)); if (tools) l.append(tools); l.append(x); if (hint) l.append(el("small", "muted", hint)); return l; };
     const pv1 = el("div", "av-preview"), pv2 = el("div", "av-preview");
-    w.append(tlpBox, lab("Heading", head, `The advisory's title, large at the top of the first page. Left empty: "${a.heading_default}".`),
-             lab("Subject", subj, "The line under the heading."),
+    w.append(tlpBox, lab("Title", subj, `Large at the top of the first page, with "${heading || a.heading_default}" in small letters above it.`),
              lab("Description", desc, a.kinds_line ? `Below it the advisory adds: "${a.kinds_line}"` : "", toolbar(desc, pv1)), pv1,
              lab("Recommended Actions", act, D.has_report ? 'After them: "See below for further insight into the activity." and the report on this organisation\'s devices.' : "", toolbar(act, pv2)), pv2,
              lab("Recipients", rec));
-    [head, subj, desc, act, rec].forEach((x) => { x.disabled = !edit; });
+    [subj, desc, act, rec].forEach((x) => { x.disabled = !edit; });
     w.querySelectorAll(".av-tool").forEach((b) => { b.disabled = !edit; });
     const bar = el("div", "av-acts"), msg = el("span", "muted av-msg"); msg.setAttribute("role", "status");
     const say = (t, bad) => { msg.textContent = t; msg.style.color = bad ? "#ff8f8f" : ""; };
     // this form's organisation and data: fixed when it is drawn, whatever is picked afterwards
     const net = NET, seq = SEQ, here = D;
     // rev: the revision this form opened; a save after someone else's is refused ("changed meanwhile")
-    const body = () => ({ network: net, rev: here.advisory.rev, tlp: tlpVal, heading: head.value, subject: subj.value, description: desc.value, actions: act.value, recipients: rec.value });
+    const body = () => ({ network: net, rev: here.advisory.rev, tlp: tlpVal, heading, subject: subj.value, description: desc.value, actions: act.value, recipients: rec.value });
     const save = async () => { const d = await post(`/api/advisory/${fid}/net`, body()); here.advisory = d.advisory; here.saved = true; return d; };
     // one action at a time; the page is drawn again only if this organisation is still the one shown
     const run = async (button, work) => {

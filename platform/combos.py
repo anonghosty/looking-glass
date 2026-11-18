@@ -716,7 +716,7 @@ def install(app, ctx):
                      "_issue": ", ".join(e.get("issues") or []) if is_a else entry["name"]}
             rows.append([extra[k] if k in extra else _cell(e, k) for _, k in cols])
             d = devices.setdefault(h, {"ip": h, "asn": asn or "", "network": extra["_network"], "records": 0, "first": None, "last": None,
-                                       "reports": set(), "days": set(),
+                                       "reports": set(), "days": set(), "ports": set(), "hostname": "",
                                        "country": e.get("src_geo") if section == "infections" else e.get("geo"),
                                        "region": e.get("src_region") if section == "infections" else e.get("region"),
                                        "city": e.get("src_city") if section == "infections" else e.get("city")})
@@ -726,6 +726,12 @@ def install(app, ctx):
             d["last"] = t if d["last"] is None or t > d["last"] else d["last"]
             d["reports"].add(extra["_report"])
             d["days"].add(str(e.get("extracted_date") or "")[:10])
+            # its ports and host name (2026-11-18): an advisory with many addresses sends them in this CSV, not in its PDF
+            port = e.get("dst_port") if section == "infections" else e.get("port")
+            if port not in (None, ""):
+                d["ports"].add(str(port))
+            if e.get("hostname") and not d["hostname"]:
+                d["hostname"] = str(e["hostname"])
         devs = sorted(devices.values(), key=lambda d: (-d["records"], d["ip"]))
         # what each device is that day: its infections, issues and CVEs (on its last day with the combination), and on
         # the report day whether it carried the same combination on the other days in memory, or what instead
@@ -759,9 +765,10 @@ def install(app, ctx):
             """The device's other reports as people read them (a services report's title, never its key: "Device
             Identification", not device_id), sorted. The CSV keeps the keys, beside its reports column."""
             return sorted({T(r) for r in set(per_dev.get(d["ip"], {})) - d["reports"]})
-        dev_cols = ["ip", "asn", "network", "country", "region", "city", "records", "days", "first_seen", "last_seen", "reports",
+        dev_cols = ["ip", "host_name", "ports", "asn", "network", "country", "region", "city", "records", "days", "first_seen", "last_seen", "reports",
                     "also_seen_in", "infections", "issues", "cves", "other_days", "combination_code", "cross_report_code"]
-        dev_rows = [[d["ip"], d["asn"], d["network"], d["country"] or "", (d["region"] or "").title(), (d["city"] or "").title(), d["records"],
+        dev_rows = [[d["ip"], d["hostname"], ", ".join(sorted(d["ports"], key=lambda p: (len(p), p))),
+                     d["asn"], d["network"], d["country"] or "", (d["region"] or "").title(), (d["city"] or "").title(), d["records"],
                      len(d["days"]), d["first"] or "", d["last"] or "", ", ".join(sorted(d["reports"])),
                      ", ".join(sorted(set(per_dev.get(d["ip"], {})) - d["reports"])), ", ".join(d["flags"]["infections"]),
                      ", ".join(d["flags"]["issues"]), ", ".join(d["flags"]["cves"]), earlier_text(d),

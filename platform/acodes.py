@@ -66,6 +66,40 @@ def new_acode(book, platform, day, sel):
     return code
 
 
+class PerKeyCache:
+    """Answers kept `ttl` seconds, worked out at most once at a time PER KEY (2026-11-18 browser check: with one lock
+    for every analyst code, a code that took 16 s to count made every other code's count on the Findings page wait
+    behind it, and their placeholders spun for over 30 s). Two keys never wait for each other; the same key asked
+    twice at once is worked out once. At most `size` answers kept, the oldest dropped first."""
+
+    def __init__(self, ttl=600, size=64):
+        self.ttl, self.size = ttl, size
+        self.cache, self.locks, self.guard = {}, {}, threading.Lock()
+
+    def _fresh(self, key):
+        hit = self.cache.get(key)
+        return hit if hit and time.time() - hit[0] < self.ttl else None
+
+    def get(self, key, compute):
+        hit = self._fresh(key)
+        if hit:
+            return hit[1]
+        with self.guard:
+            lock = self.locks.setdefault(key, threading.Lock())
+        with lock:
+            hit = self._fresh(key)                         # worked out meanwhile by the request it waited for
+            if hit:
+                return hit[1]
+            out = compute()
+            with self.guard:
+                if len(self.cache) >= self.size and key not in self.cache:
+                    self.cache.pop(min(self.cache, key=lambda k: self.cache[k][0]), None)
+                self.cache[key] = (time.time(), out)
+                for k in [k for k in self.locks if k not in self.cache and k != key][:max(0, len(self.locks) - 2 * self.size)]:
+                    self.locks.pop(k, None)                # the locks of dropped answers do not pile up
+            return out
+
+
 def install(app, ctx):
     """ctx: book (combos.CodeBook), findings (findings.Findings), has_perm(p), csrf_ok(), fresh(), is_demo(), audit,
     day(platform, iso) -> a Day (memory, or loaded from MongoDB), slice(day, kind, value) -> comms records,
@@ -460,48 +494,40 @@ def install(app, ctx):
             return hp("settings")
         return not f or ctx["findings"].sees(f, user()[0], hp("settings"))
 
-    _cd_cache, _cd_lock = {}, threading.Lock()
+    _cd = PerKeyCache(ttl=600, size=64)
 
     def code_devices(code):
         """{code: devices}: for an analyst code, how many of its devices each code the researcher can answer with stands
         for (the same figures as its page), and the code itself with all its devices. Kept ten minutes, per viewer level:
         what is worked out for a viewer who sees hosts is never served to one who does not (security review of 04696d5:
         a beacon selection's small patterns keep no code for researchers)."""
-        key = (code, bool(small_codes.viewer_sees_hosts()))
-        hit = _cd_cache.get(key)
-        if hit and time.time() - hit[0] < 600:
-            return hit[1]
-        with _cd_lock:
-            hit = _cd_cache.get(key)
-            if hit and time.time() - hit[0] < 600:
-                return hit[1]
-            v = view(code)
-            out = {}
-            if v:
-                out[code] = v["devices"]
-                for n in v["names"]:
-                    for c in n["combinations"]:
-                        if c["code"]:                              # a code held back (fewer than 5 devices): not listed
-                            out.setdefault(c["code"], c["devices"])
-                    for x in n["across"]:
-                        if x["code"]:
-                            out.setdefault(x["code"], x["devices"])
-                cr = v.get("cross") or {}
-                for s in cr.get("services") or []:
-                    for c in s.get("combinations") or []:
-                        if c.get("code"):
-                            out.setdefault(c["code"], c["hosts"])
-                for x in cr.get("cross") or []:
-                    if x.get("code"):
-                        out.setdefault(x["code"], x["hosts"])
-                for x in cr.get("infections") or []:
-                    for r in x.get("reports") or []:
-                        if r.get("code"):
-                            out.setdefault(r["code"], r["hosts"])
-            if len(_cd_cache) > 64:
-                _cd_cache.pop(min(_cd_cache, key=lambda k: _cd_cache[k][0]))
-            _cd_cache[key] = (time.time(), out)
-            return out
+        return _cd.get((code, bool(small_codes.viewer_sees_hosts())), lambda: _code_devices(code))
+
+    def _code_devices(code):
+        v = view(code)
+        out = {}
+        if v:
+            out[code] = v["devices"]
+            for n in v["names"]:
+                for c in n["combinations"]:
+                    if c["code"]:                              # a code held back (fewer than 5 devices): not listed
+                        out.setdefault(c["code"], c["devices"])
+                for x in n["across"]:
+                    if x["code"]:
+                        out.setdefault(x["code"], x["devices"])
+            cr = v.get("cross") or {}
+            for s in cr.get("services") or []:
+                for c in s.get("combinations") or []:
+                    if c.get("code"):
+                        out.setdefault(c["code"], c["hosts"])
+            for x in cr.get("cross") or []:
+                if x.get("code"):
+                    out.setdefault(x["code"], x["hosts"])
+            for x in cr.get("infections") or []:
+                for r in x.get("reports") or []:
+                    if r.get("code"):
+                        out.setdefault(r["code"], r["hosts"])
+        return out
 
     @app.route("/api/intel/acode/<code>/devices")
     def api_acode_code_devices(code):

@@ -1660,7 +1660,10 @@ def api_svc_report_pdf():
         if kev:
             pts.insert(0, f"{len(kev)} of the issues in this selection {'is a vulnerability' if len(kev) == 1 else 'are vulnerabilities'} "
                           f"that CISA confirms {'is' if len(kev) == 1 else 'are'} being actively exploited (Known Exploited Vulnerabilities "
-                          f"catalog): {', '.join(kev[:8])}{'…' if len(kev) > 8 else ''}. Hosts with these should be patched first.")
+                          f"catalog): {', '.join(kev[:8])}"
+                          # the rest named as a count, never cut off with "…" (2026-11-18)
+                          + (f" and {len(kev) - 8} more, each explained under Issues explained" if len(kev) > 8 else "")
+                          + ". Hosts with these should be patched first.")
         crit = [i for i, x in enr.items() if (x.get("cvss") or {}).get("score") and x["cvss"]["score"] >= 9]
         if crit:
             pts.append(f"{len(crit)} CVE{'s' if len(crit) != 1 else ''} in this selection {'is' if len(crit) == 1 else 'are'} rated critical (CVSS 9 or more).")

@@ -196,7 +196,7 @@ against the trends, an analyst pulls exactly those devices and writes the adviso
   see what it stands for and the researchers' notes. Then search the days in memory (exactly the counts the researcher
   saw) or up to 31 days of stored history, read one day at a time in the background. The results show the key figures,
   a map of the country's regions (hover a region for its devices, cities, networks and IP addresses), networks,
-  cities, activity by hour, what the devices are, ports and the busiest devices. The download is a ZIP with a PDF in the
+  cities, activity by hour, what the devices are, ports and the busiest IP addresses. The download is a ZIP with a PDF in the
   Executive report's design (overview and key findings, the region map with each region's cities, the devices with
   their addresses, across reports, and the explanations of the name (each name, for an analyst code) and every CVE
   in the combination, each with its references and where it comes from, with the researchers' notes on those names;

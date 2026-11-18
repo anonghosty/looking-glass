@@ -231,6 +231,12 @@ try:
        all(i.startswith(("End of life", "Exposed", "Device implant", "Badcandy", "Cpanel", "Open dir", "Vulnerable", "Expired", "POODLE", "FREAK", "Compromised"))
            for d in devs for i in d["issues"]) and not any(issue_tags.issue_of(lb) for d in devs for lb in d["labels"]),
        f"issues {sorted({i for d in devs for i in d['issues']})[:6]} · seen as {sorted({lb for d in devs for lb in d['labels']})[:6]}")
+    aff = av.get("affected", {})
+    row_inf = {n for d in devs for n in d.get("infections") or []}
+    ok("…Affected lists every infection, CVE and issue the devices' rows show (2026-11-18: one category of three)",
+       row_inf <= set(aff.get("categories") or []) and {c for d in devs for c in d["cves"]} <= set(aff.get("cves") or [])
+       and {i for d in devs for i in d["issues"]} <= set(aff.get("issues") or []),
+       f"rows {sorted(row_inf)[:6]} · Affected {(aff.get('categories') or [])[:6]}")
     ok("…the reports filled in on their own, each with its impact flags", av.get("reports") and all(r["flags"] and r["url"].startswith("https://")
        for r in av["reports"]), ", ".join(r["title"] for r in av.get("reports") or []))
     ok("…the impacts gathered, the most severe first", av.get("impact") and [f["level"] for f in av["impact"]] ==
@@ -311,7 +317,9 @@ try:
        sorted(zn) == sorted([f"{fb}.pdf", f"{fb}_devices.csv"]), ", ".join(zn))
     if zf_ and f"{fb}_devices.csv" in zn:
         rows = list(csv.reader(io.StringIO(zf_.read(f"{fb}_devices.csv").decode("utf-8-sig"))))
-        ok("…its devices are this organisation's only", rows[1:] and all(r[2] == NET for r in rows[1:]), f"{len(rows) - 1} devices")
+        net_col = rows[0].index("network") if rows and "network" in rows[0] else 2      # by name: columns can be added
+        ok("…its devices are this organisation's only", rows[1:] and all(r[net_col] == NET for r in rows[1:]), f"{len(rows) - 1} devices")
+        ok("…and it carries each address's host name and ports (2026-11-18)", rows and {"host_name", "ports"} <= set(rows[0]), ", ".join(rows[0][:4]))
         ok("…and the devices CSV carries no Looking Glass code", not {"combination_code", "cross_report_code", "code"} & set(rows[0])
            and not re.search(r"LG-[ACX]-", zf_.read(f"{fb}_devices.csv").decode("utf-8", "replace")), ", ".join(h for h in rows[0] if "code" in h))
     st, d = call("/api/advisory/1/generate", ADVISOR, "POST", {"network": NET}, **ADV)

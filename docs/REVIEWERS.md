@@ -89,10 +89,20 @@ Every release goes through the same steps before it is published:
 2. **The same checks GitHub runs:** unit tests without a database, the database tests, a dependency audit and static
    analysis (Bandit, CodeQL).
 3. **The installation's own security check** (`platform/security_testing/security_retest.py`) and a resource check.
-4. **A scan of what is published:** no secret, key or private term may be in the code or the documents.
-5. **A signed commit and a signed tag**, with the release notes on GitHub. How to check a signature yourself:
+4. **Every page, as people see it:**
+   - **In a browser, every page for every role:** `platform/tests/browser_checks.py` checks that every control is
+     reached with the keyboard, nothing is trapped, lists are lists, no text is cut off and no page errors. It needs
+     Playwright, a test installation and its test accounts (`LG_BROWSER_BASE`, `LG_BROWSER_ACCOUNTS`), and skips
+     itself otherwise.
+   - **An accessibility scan** (WCAG 2.2 AA) of every page.
+   - **Every kind of PDF** the platform makes is generated and rendered: `platform/tests/pdf_pages_check.py` finds
+     text drawn over other text, the "…" cut-off and text off the page. It also runs in GitHub's checks.
+   - **Every page is then looked at:** a missing line or a heading left alone at the foot of a page is only seen by
+     eye.
+5. **A scan of what is published:** no secret, key or private term may be in the code or the documents.
+6. **A signed commit and a signed tag**, with the release notes on GitHub. How to check a signature yourself:
    [Checking a release's signature](INSTALLATION.md#checking-a-releases-signature).
-6. **After publishing:** GitHub's checks must pass, and an **AI-assisted security review** of the release's changes
+7. **After publishing:** GitHub's checks must pass, and an **AI-assisted security review** of the release's changes
    is read. It is a second pair of eyes, not a verdict: every point it raises is checked against the code and,
    when it holds, fixed in the next release.
 

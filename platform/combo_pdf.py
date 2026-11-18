@@ -42,9 +42,9 @@ class AnalystDoc(ex.Doc):
         lw = self.c.stringWidth("Looking Glass", self.F["b"], 13)
         self.pill(M + lw + 8, H - M - 5, self.label_of(section) if self.meta.get("advisory") else
                   "ANALYST · " + ("SELECTION" if str(self.meta.get("header", "")).find("LG-A-") >= 0 else "COMBINATION"), AMBER, 7)
-        # the platform and scope line ("Publicly accessible services · Ghana · whole country"): not on the advisory's own
-        # pages (user, 2026-11-14); the report's other pages keep it
-        if not (self.meta.get("advisory") and self.label_of(section) == "ADVISORY"):
+        # the platform and scope line ("Publicly accessible services · Ghana · whole country"): not on any page of an advisory (the user, 2026-11-14 for its own pages; 2026-11-18: "taken out entirely",
+        # the insights, technical details and references too); the analyst's own report keeps it
+        if not self.meta.get("advisory"):
             self.text(M, H - M - 20, f"{self.meta['platform_label']} · {self.meta['scope']}", 8.5, DIM)
         self.text(W - M, H - M - 6, section, 11, HexColor("#a9b8ff"), True, "end")
         self.text(W - M, H - M - 20, self.fit(self.meta["header"], 420, 8.5), 8.5, DIM, anchor="end")
@@ -58,9 +58,11 @@ class AnalystDoc(ex.Doc):
         s = str(section or "")
         if s.startswith("Advisory"):
             return "ADVISORY"
-        if s.startswith("Technical Details"):
+        # the Technical Details part: its pages are titled "Definitions", the badge says TECHNICAL DETAILS (the user,
+        # 2026-11-18: the title repeated the badge)
+        if s.startswith(("Technical Details", "Definitions")):
             return "TECHNICAL DETAILS"
-        if s.endswith("· Technical Details"):            # short insights with the Technical Details under them
+        if s.endswith(("· Technical Details", "· Definitions")):     # short insights with the definitions under them
             return "INSIGHTS · TECHNICAL DETAILS"
         if s.startswith("Shadowserver Report References"):
             return "REFERENCES"
@@ -311,7 +313,7 @@ def build(d, meta):
     comms = d["section"] == "infections"
     unit = "Events" if comms else "Records"
     adv = meta.get("advisory")                         # an advisory (advisory.py): its pages first, the report below unchanged
-    EXPL = "Technical Details" if adv else "Explained"  # …with the definitions under Technical Details
+    EXPL = "Definitions" if adv else "Explained"        # …the Technical Details part (its badge), titled Definitions
     if adv:
         import advisory_pdf
         advisory_pdf.front(doc, adv)
@@ -352,12 +354,12 @@ def build(d, meta):
             n = int((y - 30 - 62) // 15.5)
             while n > 1 and 48 + doc.table_height(cols, W - 2 * M - 28, prev(d["devices"][:n])) > y - 30:
                 n -= 1
-            top = doc.card(M, y, W - 2 * M, min(y - 30, 52 + doc.table_height(cols, W - 2 * M - 28, prev(d["devices"][:n]))), "The busiest devices",
+            top = doc.card(M, y, W - 2 * M, min(y - 30, 52 + doc.table_height(cols, W - 2 * M - 28, prev(d["devices"][:n]))), "The busiest IP addresses",
                            f"The {min(n, len(d['devices']))} with the most records; all of them on the next pages and in {d['csv_devices']}")
             doc.table(M + 14, top, W - 2 * M - 28, cols, prev(d["devices"][:n]))
 
     # ---------------- page 2: where
-    y = doc.new_page("Where")
+    y = doc.new_page("Geographic Location")                  # (the user, 2026-11-18: was "Where")
     hh = y - 30
     mw = (W - 2 * M - 12) * .64
     if d.get("shapes"):
@@ -404,10 +406,11 @@ def build(d, meta):
     pages = pages or [[]]
     shown = sum(len(p) for p in pages)
     for pi, chunk in enumerate(pages):
-        y = doc.new_page("The devices")
+        # the table lists IP addresses, so it says so (the user, 2026-11-18: "not devices, IP addresses")
+        y = doc.new_page("IP addresses")
         top = doc.card(M, y, W - 2 * M, min(y - 30, 56 + doc.table_height(cols, tw, [row(x) for x in chunk])),
-                       "The devices with the most records" if pi == 0 else "The devices (continued)",
-                       f"{fmt(shown)} of {fmt(d['kpis']['devices'])} shown, the most records first; every device is in {d['csv_devices']}"
+                       "The IP addresses with the most records" if pi == 0 else "The IP addresses (continued)",
+                       f"{fmt(shown)} of {fmt(d['kpis']['devices'])} shown, the most records first; every IP address is in {d['csv_devices']}"
                        + ("" if adv else f", every record in {d['csv_records']}"))      # an advisory sends the devices CSV only
         doc.table(M + 14, top, tw, cols, [row(x) for x in chunk])
 

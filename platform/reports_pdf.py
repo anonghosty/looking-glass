@@ -87,7 +87,8 @@ def styles():
     S = {
         "title": ParagraphStyle("title", fontName=b, fontSize=22, leading=27, textColor=NAVY, spaceAfter=4),
         "subtitle": ParagraphStyle("subtitle", fontName=r, fontSize=12, leading=16, textColor=colors.HexColor("#a9b8ff"), spaceAfter=10),
-        "h1": ParagraphStyle("h1", fontName=b, fontSize=15, leading=19, textColor=NAVY, spaceBefore=10, spaceAfter=6),
+        # a heading never ends a page: it moves on with what it heads (keepWithNext)
+        "h1": ParagraphStyle("h1", fontName=b, fontSize=15, leading=19, textColor=NAVY, spaceBefore=10, spaceAfter=6, keepWithNext=1),
         "h2": ParagraphStyle("h2", fontName=b, fontSize=11.5, leading=15, textColor=colors.HexColor("#c9d6ff"), spaceBefore=8, spaceAfter=3),
         "body": ParagraphStyle("body", fontName=r, fontSize=9.5, leading=13.5, alignment=TA_LEFT, spaceAfter=4, textColor=BODY),
         "bullet": ParagraphStyle("bullet", fontName=r, fontSize=9.5, leading=13.5, leftIndent=12, bulletIndent=2, spaceAfter=2, textColor=BODY,
@@ -561,14 +562,14 @@ def build(spec):
     gl = spec.get("glossary") or []
     st.append(CondPageBreak(70 * mm))
     if gl:
-        st.append(P("The reports in this selection", S["h1"]))
+        # each report's name, text and link on one page together, the section's heading with the first one
+        # (2026-11-18: "Accessible SSH Report" stood alone at the foot of a page, its text on the next)
+        entries = []
         for title, d, url in gl:
-            st.append(P(f"<b>{t(title)}</b>", S["body"]))
-            if d:
-                st.append(P(t(d), S["meta"]))
-            if url:
-                st.append(link(url, S["link"]))
-            st.append(Spacer(1, 4))
+            e = [P(f"<b>{t(title)}</b>", S["body"])] + ([P(t(d), S["meta"])] if d else []) + ([link(url, S["link"])] if url else []) + [Spacer(1, 4)]
+            entries.append(e)
+        for i, e in enumerate(entries):
+            st.append(KeepTogether(([P("The reports in this selection", S["h1"])] if i == 0 else []) + e))
     st.append(P("About this report", S["h1"]))
     for s in spec.get("sources") or []:
         st.append(P(t(s), S["bullet"], bulletText="•" if _FONT.get("unicode") else "-"))

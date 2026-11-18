@@ -12,6 +12,7 @@
   - the routes: advisors only, the security token, MITRE's full text for readers only.
 Usage: tests/check_advisory_attack.py"""
 import json
+import urllib.parse
 import os
 import re
 import shutil
@@ -112,6 +113,10 @@ try:
     ADV.advisory_attack.build = lambda _am, _auto, adv: real_build(am, auto, adv)    # the fixture ATT&CK and devices
     aud = A.AUTH["audit"]; audited = []
     aud.add = lambda *a, **k: audited.append(a[0] if a else "")
+    # the made-up finding keeps its devices, as a real one does: Generate gives the PDF and the devices CSV
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from _kept_report import keep_devices, organisation
+    unkeep = keep_devices(A.COMBOS, "1")
 
     def call(path, perms=("advisory",), method="GET", body=None, token="good", raw=False):
         with A.app.test_request_context(path, method=method, json=body, headers={"X-CSRF-Token": token}):
@@ -122,7 +127,8 @@ try:
             r = r[0] if isinstance(r, tuple) else r
             return (code, r.get_data()) if raw else (code, json.loads(r.get_data(as_text=True) or "{}"))
     try:
-        NET = ADV.ALL
+        # the organisation the finding's kept devices are in, as the advisory page offers it
+        NET = organisation(A)
         st, j = call("/api/advisory/1/net", method="POST", body={"network": NET, "subject": "Fixture advisory", "description": "d", "actions": "a",
                                                                    "recipients": ["Team A"]})
         ok("the advisor saves the advisory", st == 200, j.get("error", ""))
@@ -158,7 +164,7 @@ try:
         st, j = call("/api/advisory/1/generate", method="POST", body={"network": NET})
         snap = store.of("1", NET)["reports"][-1]["attack"]
         ok("generated again: the removed technique is not in it", st == 200 and [x["id"] for x in snap["techniques"]] == ["T1133"])
-        st, j = call("/api/advisory/1/export?network=")
+        st, j = call("/api/advisory/1/export?network=" + urllib.parse.quote(NET))
         ok("the JSON export carries only reviewed mappings, with MITRE's texts", [x["id"] for x in (j.get("mitre_attack") or {}).get("techniques", [])] == ["T1133"]
            and j["mitre_attack"]["techniques"][0]["defend"][0]["id"] == "M1035" and not IP_RX.search(json.dumps(j.get("mitre_attack"))), j.get("mitre_attack"))
         st, j = call("/api/advisory/1/drafted", method="POST", body={"network": NET})
@@ -172,7 +178,7 @@ try:
         st, j = call("/api/advisory/1/send", method="POST", body={"network": NET, "recipients": ["Team A"]})
         ok("sent", st == 200, j.get("error", ""))
         am.review("event4_sinkhole_http", ["T1071.004"], False, "", "lg-t-res")     # mappings change after sending...
-        st, j = call("/api/advisory/1/net?network=")
+        st, j = call("/api/advisory/1/net?network=" + urllib.parse.quote(NET))
         ok("a sent advisory shows what went out, not today's mappings", [x["id"] for x in j["advisory"]["attack"]["techniques"]] == ["T1133"]
            and j["advisory"]["attack"]["version"] == "2.0", j["advisory"].get("attack"))
         st, j = call("/api/advisory/1/attack", method="POST", body={"network": NET, "key": key, "action": "restore"})
@@ -197,6 +203,7 @@ try:
             F.advisory_sent = keep["advisory_sent"]
         A.ADVISORIES.dir, A.ORG.path = real_dir, real_org
         ADV.advisory_attack.build = real_build
+        unkeep()
         del aud.add
     ok("nothing left the server", not OUT, OUT[:3])
 finally:

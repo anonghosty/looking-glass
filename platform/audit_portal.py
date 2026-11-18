@@ -489,7 +489,7 @@ def install(app, ctx):
         reviewed = bool(review) and time.time() - review["t"] <= REVIEW_DAYS * 86400
         if seal and seal["state"] == "intact":
             sealed = (f" The {fmt(seal['entries'])} entries written before the chain started ({_when(seal['first'])} to {_when(seal['last'])}) were "
-                      f"sealed on {_when(seal['sealed_at'])} (SHA-256 {seal['sha256'][:16]}…, recorded in the chain) and are unchanged since; "
+                      f"sealed on {_when(seal['sealed_at'])} (SHA-256 {seal['sha256']}, recorded in the chain) and are unchanged since; "
                       "nothing can prove they were unchanged before the seal.")
         elif seal:
             sealed = f" The entries written before the chain were sealed on {_when(seal['sealed_at'])}; seal: {seal['state']}."
