@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""PDF tables: a row is as tall as its tallest cell (the user, 2026-11-18: in the analyst's devices PDF the "Other days"
+"""PDF tables (analysts' report and advisory): a row is as tall as its tallest cell; a long name breaks at its hyphen;
+the advisory's table head and first row stay on one page with their heading.
+Earlier note: a row is as tall as its tallest cell (the user, 2026-11-18: in the analyst's devices PDF the "Other days"
 column ran over the rows below it: cells stopped at three lines and squeezed the rest into the third). Made-up rows:
 1. a long text cell keeps every word, on as many lines as it needs (no "…", nothing squeezed)
 2. the row's height covers all of them, so the next row starts below the last line
@@ -46,6 +48,41 @@ ok("drawn: the table ends below every line", y_end <= 1000 - 14 - rh - doc.row_h
 
 print("3. The page breaks use the same heights")
 ok("table_height is the head plus each row", abs(doc.table_height(cols, W, rows) - (14 + rh + doc.row_height(doc.row_lines(cols, W, rows[1])))) < .01)
+
+print("4. A long name breaks at its hyphen, never mid-word, never over the next column")
+import executive_pdf as EX  # noqa: E402
+lines = EX.hard_lines(doc, ["avalanche-andromeda,"], doc.F["r"], 8, doc.c.stringWidth("avalanche-androm", doc.F["r"], 8))
+ok("'avalanche-andromeda,' becomes 'avalanche-' / 'andromeda,'", lines == ["avalanche-", "andromeda,"], str(lines))
+wide = doc.row_lines([("Infections", .05, "l", False)], 760, ["lumma-stealer-beacon-with-a-very-long-name"])[0]
+ok("in the analysts' table every line fits its column", all(doc.c.stringWidth(t, doc.F["r"], 8) <= 760 * .05 - 10 + .01 for t in wide), str(wide))
+
+print("5. The advisory: a table's head and its first row on one page, the heading with them")
+import advisory_pdf as APDF  # noqa: E402
+reports = [{"title": f"Report number {i} with a long name"} for i in range(40)]
+early = "2026-11-15: changed: in Accessible MikroTik Service with Tag: iot + Tag: mikrotik + Tag: mikrotik-btest; calls sinkholes as android.vo1d2"
+devs = [{"ip": f"192.0.2.{i}", "ports": ["2000"], "reports": ["Accessible MikroTik Service"], "infections": ["android.vo1d2", "avalanche-andromeda"],
+         "last": "2026-11-16 10:00", "earlier": [early, early]} for i in range(6)]
+for n in range(0, 40, 3):                        # the table starting at every height down page 1
+    seen = []
+    orig = CP.AnalystDoc.text                     # every text drawn, with its page
+
+    def rec(self, x, y, t, *a, **k):
+        seen.append((self.page, str(t)))
+        return orig(self, x, y, t, *a, **k)
+    CP.AnalystDoc.text = rec
+    try:
+        APDF.alone({"logo": None, "title": "T", "ref": "ADV-T", "tlp": "TLP:AMBER", "reports": reports[:n], "devices": devs, "description": "d",
+                    "actions": "a", "header": "h", "labels": [], "impact": [], "kinds_line": "", "recipients": []},
+                   {"platform_label": "Advisory", "scope": "s", "header": "h", "selection": "s", "day": "2026-11-16", "generated_by": "t"})
+    finally:
+        del CP.AnalystDoc.text                    # back to the inherited one
+    pg = lambda s: next((p for p, t in seen if t.startswith(s)), None)       # noqa: E731
+    if not (pg("Affected IP addresses") == pg("IP ADDRESS") == pg("192.0.2.0")):
+        ok(f"with {n} report chips: heading, head and first row together", False,
+           f"pages {pg('Affected IP addresses')}, {pg('IP ADDRESS')}, {pg('192.0.2.0')}")
+        break
+else:
+    ok("wherever the table starts on page 1, its heading, head and first row are on one page", True)
 
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {fails}" if fails else ""))
 sys.exit(1 if fails else 0)

@@ -125,7 +125,7 @@ class AnalystDoc(ex.Doc):
             if al == "r" or mono:
                 out.append([self.fit(str(v), w * f - 10, 8)])
             else:
-                out.append(ex.simpleSplit(self.s(str(v)), self.F["r"], 8, w * f - 10) or [""])
+                out.append(ex.hard_lines(self, ex.simpleSplit(self.s(str(v)), self.F["r"], 8, w * f - 10) or [""], self.F["r"], 8, w * f - 10))
         return out
 
     @staticmethod

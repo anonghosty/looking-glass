@@ -15,26 +15,13 @@ import re
 from reportlab.lib.colors import Color, HexColor
 from reportlab.lib.utils import ImageReader, simpleSplit
 
-from executive_pdf import AMBER, BLUE, DIM, M, MUTE, RED, SLATE, TXT, VIOLET, W
+from executive_pdf import AMBER, BLUE, DIM, M, MUTE, RED, SLATE, TXT, VIOLET, W, hard_lines as _hard
 
 LEVEL = {"critical": RED, "high": AMBER, "medium": BLUE, "low": SLATE}
 LEVEL_WORD = {"critical": "Critical", "high": "High", "medium": "Medium", "low": "Low"}
 ACCENT = HexColor("#a9b8ff")
 BOTTOM = 40                                   # nothing below this line: the footer's room
 KEEP_MAX = 300                                # a block kept on one page is at most this tall (about half a landscape page)
-
-
-def _hard(doc, lines, font, size, width):
-    """Lines still wider than the column (an IPv6 address, a long name without spaces) broken by characters: never cut."""
-    out = []
-    for ln in lines:
-        while ln and doc.c.stringWidth(ln, font, size) > width:
-            k = len(ln)
-            while k > 1 and doc.c.stringWidth(ln[:k], font, size) > width:
-                k -= 1
-            out.append(ln[:k]); ln = ln[k:]
-        out.append(ln)
-    return out
 
 
 class Flow:
@@ -48,8 +35,10 @@ class Flow:
         if self.y - h < BOTTOM:
             self.y = self.doc.new_page(f"{self.title} (continued)")
 
-    def heading(self, text):
-        self.need(52)
+    def heading(self, text, keep=0):
+        """keep: the height of what must follow on the same page (a table's head and first row): a heading never
+        stands alone at the foot of a page (2026-11-18)."""
+        self.need(52 + keep)
         d = self.doc
         self.y -= 8
         d.c.setFillColor(VIOLET); d.c.rect(M, self.y - 13, 3, 15, stroke=0, fill=1)
@@ -111,6 +100,16 @@ class Flow:
                 self.y -= lead
         self.y -= 4
 
+    def cells(self, cols, r, size=8.2):
+        """Each cell's lines: wrapped at spaces, a long word broken after a hyphen (_hard); never cut."""
+        d, w = self.doc, W - 2 * M
+        return [_hard(d, simpleSplit(d.s(str(v)), d.F["m"] if mono else d.F["r"], size, w * fr - 10) or [""],
+                      d.F["m"] if mono else d.F["r"], size, w * fr - 10)
+                for v, (_, fr, mono) in zip(r, cols)]
+
+    def row_height(self, cols, r, size=8.2):
+        return max(len(c) for c in self.cells(cols, r, size)) * (size + 2.2) + 5
+
     def table(self, cols, rows, size=8.2):
         """A table that wraps every cell (never cut) and carries on over pages, its head on each.
         cols [(label, fraction, mono)]."""
@@ -126,12 +125,12 @@ class Flow:
                 d.text(cx + 4, self.y - 9, lbl.upper(), 6.8, MUTE, True)
             d.c.setStrokeColor(Color(1, 1, 1, .1)); d.c.setLineWidth(.6); d.c.line(M, self.y - 14, M + w, self.y - 14)
             self.y -= 14
-        self.need(40)
+        # the head goes on the page its first row goes on (2026-11-18: a tall first row moved on and left the head
+        # alone over half an empty page)
+        self.need(14 + (self.row_height(cols, rows[0], size) if rows else 26))
         head()
         for i, r in enumerate(rows):
-            cells = [_hard(d, simpleSplit(d.s(str(v)), d.F["m"] if mono else d.F["r"], size, w * fr - 10) or [""],
-                           d.F["m"] if mono else d.F["r"], size, w * fr - 10)
-                     for v, (_, fr, mono) in zip(r, cols)]
+            cells = self.cells(cols, r, size)
             rh = max(len(c) for c in cells) * lead + 5
             if self.y - rh < BOTTOM:
                 self.y = self.doc.new_page(f"{self.title} (continued)")
@@ -236,18 +235,22 @@ def front(doc, a):
     # the organisation's IP addresses: what the advisory is about
     devs = a.get("devices") or []
     if devs:
-        f.heading(f"Affected IP addresses ({len(devs):,})")
         # infections apart from CVEs and issues (2026-11-14): what the device calls botnet sinkholes as
         # the other days in memory (2026-11-17): the same combination there too, or what the device carried instead
         other = any(d.get("earlier") for d in devs)
-        f.table([("IP address", .12 if other else .13, True), ("Host name", .1 if other else .12, False), ("Ports", .05 if other else .06, True),
-                 ("Reports", .16 if other else .2, False), ("CVEs and issues", .2 if other else .23, False),
-                 ("Infections", .12 if other else .14, False), ("Last seen (UTC)", .1 if other else .12, True)]
-                + ([("Other days", .15, False)] if other else []),
-                [[d["ip"], d.get("hostname") or "–", ", ".join(d.get("ports") or []) or "–", ", ".join(d.get("reports") or []) or "–",
+        # with Other days, its long text gets the room (2026-11-18: at 15 % each row was a column of words, too tall to
+        # start under the report chips); an IPv6 address still fits its column on two lines
+        cols = ([("IP address", .12 if other else .13, True), ("Host name", .09 if other else .12, False), ("Ports", .05 if other else .06, True),
+                 ("Reports", .12 if other else .2, False), ("CVEs and issues", .13 if other else .23, False),
+                 ("Infections", .12 if other else .14, False), ("Last seen (UTC)", .09 if other else .12, True)]
+                + ([("Other days", .28, False)] if other else []))
+        trows = [[d["ip"], d.get("hostname") or "–", ", ".join(d.get("ports") or []) or "–", ", ".join(d.get("reports") or []) or "–",
                   ", ".join((d.get("cves") or []) + (d.get("issues") or [])) or "–",
                   ", ".join(d.get("infections") or d.get("categories") or []) or "–", d.get("last") or "–"]
-                 + (["; ".join(d.get("earlier") or []) or "–"] if other else []) for d in devs])
+                 + (["; ".join(d.get("earlier") or []) or "–"] if other else []) for d in devs]
+        # the heading keeps the table's head and first row with it on one page
+        f.heading(f"Affected IP addresses ({len(devs):,})", keep=14 + f.row_height(cols, trows[0]))
+        f.table(cols, trows)
 
     f.heading("Description")
     if a.get("description"):

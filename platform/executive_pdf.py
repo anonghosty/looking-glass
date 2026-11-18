@@ -18,6 +18,24 @@ import reports_pdf as rp
 import timezones
 
 
+def hard_lines(doc, lines, font, size, width):
+    """Wrapped lines still wider than their column (an IPv6 address, a long name with no space) broken: after a hyphen,
+    a dot, a colon, a slash or an underscore when one fits ("avalanche-" / "andromeda"; 2026-11-18: an advisory broke it
+    as "avalanche-androme" / "da"), else by characters. Never cut, never over the next column."""
+    out = []
+    for ln in lines:
+        while ln and doc.c.stringWidth(ln, font, size) > width:
+            k = len(ln)
+            while k > 1 and doc.c.stringWidth(ln[:k], font, size) > width:
+                k -= 1
+            soft = max((i + 1 for i in range(1, k) if ln[i] in "-./:_"), default=0)
+            if soft > k // 3:                          # a sensible place to break, not a stub of one or two letters
+                k = soft
+            out.append(ln[:k]); ln = ln[k:].lstrip()
+        out.append(ln)
+    return out
+
+
 class _Fit(str):
     """A text Doc.fit() could not fit at its size: drawn whole at .size (or as .lines), never cut."""
     size = None

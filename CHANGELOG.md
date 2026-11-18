@@ -5,6 +5,18 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-18 (3)
+### Fixed
+- **The advisory's table of affected IP addresses no longer leaves its heading alone on a page.** When the first row
+  was too tall to fit under the report chips, it moved to the next page and left the section heading and the column
+  names over half an empty page. The heading, the column names and the first row now always start on the same page.
+- **Long names in the advisory and the analysts' report break at their hyphens.** A name too long for its column
+  broke mid-word ("avalanche-androme" / "da"); it now breaks after a hyphen, dot, colon or slash ("avalanche-" /
+  "andromeda"). In the analysts' report such a name used to run over the next column.
+- **The advisory's Other days column is wider** (28 % of the table instead of 15 %), taken from the Reports and CVEs
+  columns, so its rows are about half as tall and the table needs fewer pages. Generate an advisory again to get the
+  corrected PDF.
+
 ## 2026-11-18 (2)
 ### Added
 - **Findings pages keep up on their own.** A finding sent to you, decided or replied to shows on your open Findings
