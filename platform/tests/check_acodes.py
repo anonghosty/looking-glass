@@ -174,6 +174,7 @@ try:
             held[0] -= 1
     try:
         A.store.days = {}
+        A.RECENT_DAYS.clear()                     # no older day kept from the checks above
         A.store._load = lambda start: (loads.append(start), Gone(day))[1]
         isos = [(day.start - timedelta(days=i)).date().isoformat() for i in range(5)]
         entry = {"code": code, "platform": "comms", "day": isos[0], "days": isos}
@@ -184,6 +185,23 @@ try:
            first == 5 and peak[0] == 1, f"{first} reads, at most {peak[0]} days held at once")
         ok("…viewed again within minutes: no day read again, the same records", len(loads) == first and len(r1) == len(r2) == 5 * len(want),
            f"{len(loads) - first} more reads, {len(r1)}/{len(r2)} records")
+        # 2026-11-18: an analyst code's page loaded its older day twice, and each count again
+        one = {"code": code, "platform": "comms", "day": isos[2]}
+        A.RECENT_DAYS.clear(); A.ACODES.days_of(one); before = len(loads)
+        A.ACODES.days_of(one); A.ACODES.records(one, days=A.ACODES.days_of(one))
+        ok("an older day asked again within minutes (its page, its records, its counts): loaded once", len(loads) == before,
+           f"{len(loads) - before} more reads")
+        print("The counts worked out after a start (acode_warm.py)")
+        A.RECENT_DAYS.clear(); A.store._load = real_load; A.store.days = real_days
+        made = A.ACODES.warm()
+        open_codes = sorted({c for f in F.all_open() for c in f.get("codes") or [] if c.startswith("LG-A-")})
+        ok("every open finding's analyst code counted ahead, at both viewer levels, kept apart",
+           made == 2 * len(open_codes) and all(A.ACODES.cached(c, True) and A.ACODES.cached(c, False) for c in open_codes),
+           f"{made} counts for {len(open_codes)} codes")
+        st_, d_ = call(f"/api/intel/acode/{code}/devices", ANALYST)
+        st_r, d_r = call(f"/api/intel/acode/{code}/devices", RESEARCHER, role="researcher")
+        ok("…and a request then gets them at once, each viewer its own level", st_ == 200 and st_r == 200 and d_.get("devices", {}).get(code)
+           and d_r.get("devices", {}).get(code), f"{st_} {st_r}")
     finally:
         A.store.days, A.store._load = real_days, real_load
 finally:

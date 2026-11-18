@@ -31,6 +31,20 @@ def ok(label, cond, info=""):
 if not shutil.which("openssl"):
     print("openssl not found: skipped"); sys.exit(77)
 import install_cert as ic  # noqa: E402
+import socket  # noqa: E402
+
+# The test names are reserved (.example never resolves): answer that here instead of asking the network, so a slow or
+# broken DNS cannot stall every check (2026-11-18: 20 s per check, the check timed out with DNS down).
+_real_gai = socket.getaddrinfo
+
+
+def _gai(host, *a, **k):
+    if isinstance(host, str) and (host == "example" or host.endswith(".example")):
+        raise socket.gaierror(socket.EAI_NONAME, "reserved test name")
+    return _real_gai(host, *a, **k)
+
+
+ic.socket.getaddrinfo = _gai
 
 T = tempfile.mkdtemp(prefix="lg-cert-")
 P = lambda n: os.path.join(T, n)   # noqa: E731

@@ -5,6 +5,33 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-18 (5)
+### Changed
+- **The Findings page no longer waits for analyst codes' device counts after a restart.** Measured on a test
+  installation, right after a restart, four codes' counts took 30 to 45 s together. Each one built the code's whole page,
+  and that loaded the code's older day from the database twice, then again for every count (one large day loaded
+  three times in 13 s). Three changes:
+  - an analyst code's page loads its day once and uses it for its records too;
+  - an older day loaded for an analyst code is kept a few minutes, so its page and its counts share it (**Older days
+    kept for analyst codes**, default 1 day, and **How long such a day is kept**, default 300 s, on Settings →
+    Configuration; 0 days keeps none, as before). A kept day costs about as much memory as a day in memory and is
+    dropped as soon as the constituency or the stored data change. A code spanning many days is still read one day at
+    a time, never two in memory together;
+  - 30 s after a start, the device counts of every open finding's analyst code are worked out in the background, for
+    people who see addresses and for those who do not, each kept apart (**Analyst code counts worked out after a
+    start**, 0 = off).
+  Nothing to do when updating; the defaults apply.
+- **ATT&CK techniques in PDFs say only "Observed" or "Possible" again,** for example "T1071.001 Web Protocols · Command
+  and Control · Observed". The line had grown to "Observed: this device was used for it". The analysis and Executive
+  PDFs use the same form. The device's part is still in the cards and in the advisory's "Why it is in this advisory".
+  In the advisory PDF, Observed and Possible have the cards' look (amber and teal, a faded outline); in the analysis
+  PDFs the word is in the same colour.
+- **"Why it is in this advisory" counts IP addresses for Observed techniques too, and says what they are linked to:**
+  "3 IP addresses in this advisory have these affected devices (most often: …)". A technique linked to a botnet
+  infection names the infections, one linked to an issue names the issues, one linked to a CVE names the CVE. Before,
+  Observed techniques from a sinkhole had no figures, and Possible ones named the kinds of device.
+  Nothing to do when updating; advisories generated again get the new wording.
+
 ## 2026-11-18 (4)
 ### Added
 - **Two new checks of every page as people see it, run before every release.**

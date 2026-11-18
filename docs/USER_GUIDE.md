@@ -371,7 +371,8 @@ refresh log is `data/names_refresh.log`). A look-up only reads these files: no n
 only the downloads of the public files leave the server. Without them, look-ups work as before.
 
 **MITRE ATT&CK techniques.** Cards, documents and the Definitions page show which ATT&CK techniques a name, a report or a
-CVE stands for, always with how sure that is and what the constituent's part was:
+CVE stands for, always with how sure that is and what the constituent's part was. In PDFs the technique's line says only
+**Observed** or **Possible**; the constituent's part is in the cards and in the advisory's "Why it is in this advisory":
 
 - **Observed** (the report saw it): for example a device that contacted a sinkholed command-and-control server over
   HTTP: *T1071.001 Web Protocols, this device was used for it*; an address that decoy amplifiers saw forged requests

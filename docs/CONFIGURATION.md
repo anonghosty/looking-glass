@@ -171,6 +171,9 @@ The control checks give evidence, not a pass or fail: the conclusion is the audi
 | `HEAVY_PER_USER` | `3` | heavy views (statistics, map, analysis, drill-down lists, regions, reports) one person may have worked on at once; more wait their turn. `0`: no limit |
 | `HEAVY_PER_MINUTE` | `240` | heavy views one person may ask for in a minute; more get 429 with Retry-After. `0`: no limit |
 | `HEAVY_WAIT_S` | `20` | how long a heavy view waits for its turn before 429 |
+| `ANALYST_DAY_KEEP` | `1` | older days (not among the days in memory) kept for analyst codes, so a code's page, its records and its device counts share one load from the database instead of loading the day again each time. Each kept day costs about as much memory as a day in memory; `0` keeps none (every request loads the day again). A kept day is dropped as soon as the constituency or the stored data change, and a code spanning many days is still read one day at a time |
+| `ANALYST_DAY_KEEP_S` | `300` | seconds such a day is kept (30 to 3600) |
+| `ANALYST_WARM_DELAY_S` | `30` | seconds after a start before the device counts of every open finding's analyst code are worked out in the background (both viewer levels, kept apart), so the Findings page does not wait for them; `0` = never ahead |
 | `BEACON_KEEP_MAX` | `200000` | decoded beacon answers (format, operator, version, OS family only) kept in `data/beacon_summaries.json` so a restart does not decode the day's request lines again; about 170 bytes each in memory. Raise it for a country with many check-ins a day |
 | `SLOW_REQUEST_S` | `2` | a request taking longer than this many seconds is listed in Settings → Task monitor |
 

@@ -191,9 +191,10 @@ def install(app, ctx):
     _rec_cache, _rec_lock = {}, threading.Lock()
     REC_TTL, REC_MAX = 300, 16
 
-    def records(entry, day=None):
-        """The records of an analyst code on its day (the given day object, or the code's day(s) loaded)."""
-        if day is None:
+    def records(entry, day=None, days=None):
+        """The records of an analyst code on its day (the given day object, or the code's day(s) loaded). days: the
+        code's day objects when the caller has them already (view()), so they are not loaded again."""
+        if day is None and days is None:
             try:
                 with open(ids_path(entry["code"]), encoding="utf-8") as f:
                     ids = set(json.load(f))
@@ -221,7 +222,7 @@ def install(app, ctx):
                         _rec_cache.pop(min(_rec_cache, key=lambda k: _rec_cache[k][0]))
                     _rec_cache[key] = (time.time(), out)
                     return list(out)
-        days = [day] if day is not None else days_of(entry)
+        days = [day] if day is not None else days if days is not None else days_of(entry)
         if not days:
             return []
         try:
@@ -351,12 +352,16 @@ def install(app, ctx):
                        to=ctx["people_name"](to))
 
     # ------------------------------------------------------------------ the researcher's view of an analyst code
-    def view(code):
+    def view(code, sees_hosts=None, with_chain=True):
+        """The analyst code's page. sees_hosts: the viewer's level, given (the counts worked out after a start, with no
+        one signed in) or the signed-in viewer's; with_chain=False for the counts, which never need the chain (it
+        checks the signed-in person's channels)."""
         entry = book.get(code)
         if not entry or entry.get("kind") != "a":
             return None
         days = days_of(entry)
-        evs = records(entry) if days else []
+        # its records from the days just loaded (2026-11-18: records() loaded the same day a second time)
+        evs = records(entry, days=days) if days else []
         section = "infections" if entry["platform"] == "comms" else "issues"
         labels = ctx["labels"]()
         host = (lambda e: e.get("src_ip") or "") if section == "infections" else (lambda e: e.get("ip") or "")
@@ -365,7 +370,8 @@ def install(app, ctx):
         defined = ctx["defined"]()
         # a selection made from decoded beacons (beacon_findings.py) was not handed over by an analyst: a viewer who does
         # not see hosts gets no code for a pattern fewer than 5 devices carry, as in Intel gathered (security review of 3ba9e60)
-        masked = bool((entry.get("sel") or {}).get("beacon")) and not small_codes.viewer_sees_hosts()
+        sees = small_codes.viewer_sees_hosts() if sees_hosts is None else bool(sees_hosts)
+        masked = bool((entry.get("sel") or {}).get("beacon")) and not sees
         per = collections.defaultdict(lambda: {"records": 0, "hosts": set(), "reports": collections.Counter(),
                                                "combos": collections.defaultdict(lambda: {"records": 0, "hosts": collections.Counter()}),
                                                "dev": collections.defaultdict(lambda: collections.defaultdict(set))})
@@ -427,7 +433,7 @@ def install(app, ctx):
                 "day": span[0] if len(span) == 1 else f"{span[0]} to {span[-1]}", "days": span,
                 "records": len(evs), "devices": len(hosts), "reports": len({rep(e) for e in evs}), "names": out,
                 "finding": {"id": f["id"], "number": f"#{f['id']}", "title": f["title"], "text": f["text"], "status": f["status"]} if f else None,
-                "in_memory": bool(evs), "cross": cross, "focus": entry.get("focus", ""), "chain": chain_of(code)}
+                "in_memory": bool(evs), "cross": cross, "focus": entry.get("focus", ""), "chain": chain_of(code) if with_chain else []}
 
     CHAIN_MAX = 12
 
@@ -501,10 +507,11 @@ def install(app, ctx):
         for (the same figures as its page), and the code itself with all its devices. Kept ten minutes, per viewer level:
         what is worked out for a viewer who sees hosts is never served to one who does not (security review of 04696d5:
         a beacon selection's small patterns keep no code for researchers)."""
-        return _cd.get((code, bool(small_codes.viewer_sees_hosts())), lambda: _code_devices(code))
+        sees = bool(small_codes.viewer_sees_hosts())
+        return _cd.get((code, sees), lambda: _code_devices(code, sees))
 
-    def _code_devices(code):
-        v = view(code)
+    def _code_devices(code, sees):
+        v = view(code, sees_hosts=sees, with_chain=False)       # the counts need neither the chain nor a signed-in user
         out = {}
         if v:
             out[code] = v["devices"]
@@ -661,4 +668,25 @@ def install(app, ctx):
     api.days_of = days_of
     api.allowed = lambda code: in_channel(code)            # combos.py, the Executive filter: the channel rule
     api.chain = chain_of                                    # how a selection came about (tests/check_acode_chain.py)
+
+    def warm(stop=None):
+        """After a start, the device counts of every analyst code the open findings carry, at both viewer levels (who
+        sees hosts, who does not), so the first person to open the Findings page does not wait for them (2026-11-18:
+        after a restart, four codes took 30-45 s together). Each level is worked out on its own and kept apart, as a
+        request keeps them; nothing here depends on a signed-in person. Returns how many counts were made."""
+        codes = sorted({str(c).upper() for f in ctx["findings"].all_open() for c in (f.get("codes") or []) if ACODE_RX.match(str(c).upper())})
+        made = 0
+        for code in codes:
+            for sees in (True, False):
+                if stop is not None and stop():
+                    return made
+                try:
+                    _cd.get((code, sees), lambda c=code, s=sees: _code_devices(c, s))
+                    made += 1
+                except Exception:                              # noqa: BLE001  (one code that fails never stops the others)
+                    app.logger.exception("Analyst code %s: counts not worked out ahead", code)
+        return made
+    api.warm = warm
+    api.code_devices = code_devices                         # tests/check_acode_warm.py
+    api.cached = lambda code, sees: _cd._fresh((code, sees)) is not None
     return api

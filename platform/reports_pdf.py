@@ -7,6 +7,7 @@ way in Demo mode). All text is escaped before it reaches reportlab's markup pars
 """
 import io
 import os
+import re
 from datetime import datetime, timezone
 from xml.sax.saxutils import escape
 
@@ -67,6 +68,9 @@ def _fonts():
 
 _ASCII = str.maketrans({"→": "->", "←": "<-", "“": '"', "”": '"', "‘": "'", "’": "'", "…": "...", "≥": ">=", "≤": "<=",
                         "✓": "v", "•": "-", "−": "-", " ": " "})
+
+
+CERT_HEX = {"Observed": "#f6c27a", "Possible": "#9fdbe6"}     # as on the app's cards (app.css .mp-cert-*)
 
 
 def t(x):
@@ -402,7 +406,9 @@ def enrichment_block(name, x, stat, S, width):
             out.append(P(f"<b>Also described by:</b> {t(also[len('Also described by: '):])}", S["meta"]))
     for ln in attack_map.attack_lines(x.get("attack")):   # MITRE ATT&CK, with the version this PDF was made with
         head_, _, rest_ = ln.partition(": ")
-        out.append(P(f"<b>{t(head_)}:</b> {t(rest_)}", S["meta"]))
+        # Observed / Possible in the cards' colours (app.css .mp-cert, the user's choice 2026-11-18)
+        rest_ = re.sub(r"· (Observed|Possible)\b", lambda m: f'· <font color="{CERT_HEX[m.group(1)]}"><b>{m.group(1)}</b></font>', t(rest_))
+        out.append(P(f"<b>{t(head_)}:</b> {rest_}", S["meta"]))
     out.append(Spacer(1, 7))
     return KeepTogether(out[:5]), out[5:]
 

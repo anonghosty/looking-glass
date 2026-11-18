@@ -102,7 +102,7 @@ try:
        and AA.pending_text(att), att)
     w = att["pending"][0]["why_here"]
     ok("why it is here: CTID's mapping in plain words, the host count, no address", w.startswith("MITRE CTID maps CVE-2099-1002 to this technique (how attackers exploit it)")
-       and "1 host in this advisory has it" in w and not IP_RX.search(json.dumps(att)), w)
+       and "1 IP address in this advisory has it" in w and not IP_RX.search(json.dumps(att)), w)
     ok("its key names the CVE and the mapping", att["pending"][0]["key"] == "T1133|cve:CVE-2099-1002:exploitation_technique")
 
     import app as A

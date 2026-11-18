@@ -152,6 +152,7 @@ run "Findings pages keep up; roles played" $PY tests/check_findings_live.py
 run "PDF tables: rows fit their text"  $PY tests/check_pdf_rows.py
 run "PDF pages: no overlap, no cut-off" $PY tests/pdf_pages_check.py
 run "analyst code counts: one lock per code" $PY tests/check_per_key_cache.py
+run "older days kept for analyst codes" $PY tests/check_recent_days.py
 run "Browser: keyboard, lists, cut text" $PY tests/browser_checks.py
 run "findings (researcher → advisory)" $PY tests/check_findings.py
 run "analyst codes (analyst → researcher)" $PY tests/check_acodes.py

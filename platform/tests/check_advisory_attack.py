@@ -87,7 +87,35 @@ try:
     ok("reviewed mappings go out; suggested ones wait for the advisor", list(out) == ["T1133"] and [x["id"] for x in att["pending"]] == ["T1071.001"])
     w = out["T1133"]["why_here"]
     ok("Why it is in this advisory: Looking Glass's words, the role, counts and products", w.startswith("Looking Glass maps the report “Accessible RDP Report”")
-       and "2 hosts in this advisory are in it (most often: windows, rdp)" in w, w)
+       and "2 IP addresses in this advisory have these affected devices" in w and "windows" not in w, w)
+    # Observed, from a sinkhole the devices called (not one of the advisory's own reports): the same figures as
+    # Possible, in the user's wording (2026-11-18: it said only "this device was used for it", with no figures)
+    # "most often" names what the technique is linked to (the user, 2026-11-18): infection -> the infections,
+    # issue -> the issues, CVE -> the CVE; never the kinds of device
+    sink = [{"ip": "192.0.2.20", "reports": ["Accessible MikroTik Service"], "labels": ["iot", "mikrotik"],
+             "infections": ["quietbot", "noisybot"], "issues": ["Exposed admin panel"]},
+            {"ip": "192.0.2.21", "reports": ["Accessible MikroTik Service"], "labels": ["mikrotik"], "infections": ["quietbot"],
+             "issues": ["Exposed admin panel", "Expired certificate"]},
+            {"ip": "192.0.2.22", "reports": ["Accessible MikroTik Service"], "labels": ["iot"], "infections": [], "issues": []}]
+    wo = AA._why({"report_key": "event4_microsoft_sinkhole", "report": "Microsoft Sinkhole events", "certainty": "observed",
+                  "role": "this device was used for it"}, sink)
+    ok("Observed (botnet infection): the IP addresses that called the sinkhole, most often which infections",
+       "2 IP addresses in this advisory have these affected devices (most often: quietbot, noisybot)" in wo, wo)
+    wp = AA._why({"report_key": "scan_mikrotik", "report": "Accessible MikroTik Service", "certainty": "possible",
+                  "role": "attackers can use this exposure for it"}, sink)
+    ok("Possible (an issue): every IP address of the report, most often which issues",
+       "3 IP addresses in this advisory have these affected devices (most often: Exposed admin panel, Expired certificate)" in wp, wp)
+    wc = AA._why({"category": "quietbot", "why": "a botnet", "role": "this device was used for it"}, sink)
+    ok("an infection's name: the infections", "2 IP addresses in this advisory have these affected devices (most often: quietbot, noisybot)" in wc, wc)
+    wv = AA._why({"cve": "CVE-2099-1001", "kind": "how attackers exploit it", "role": "r"}, [dict(sink[0], cves=["CVE-2099-1001"])])
+    ok("a CVE: the CVE itself", "CVE-2099-1001" in wv and "1 IP address in this advisory has it" in wv, wv)
+    ok("never the kinds of device", not any(x in wo + wp + wc for x in ("iot", "mikrotik")), wo + wp)
+    ok("one IP address: singular", "1 IP address in this advisory has these affected devices" in AA._why(
+        {"report_key": "scan_x", "report": "X", "role": "r"}, [{"reports": ["X"], "issues": ["a"]}]))
+    ok("nothing to name: no brackets, nothing made up", AA._why({"report_key": "scan_x", "report": "X", "role": "r"},
+                                                              [{"reports": ["X"], "labels": ["a"]}]).endswith("have these affected devices.")
+       or AA._why({"report_key": "scan_x", "report": "X", "role": "r"}, [{"reports": ["X"], "labels": ["a"]}]).endswith("has these affected devices."))
+    ok("never 'hosts' in these sentences", "host" not in wo + wp)
     ok("...never an address", not IP_RX.search(json.dumps(att)))
     ok("What it is and How to defend travel with each technique", out["T1133"]["desc"].startswith("Fixture: adversaries may use remote services")
        and out["T1133"]["defend"][0]["id"] == "M1035")
@@ -222,7 +250,21 @@ def _rec(self, text, *a, **k):
     drawn.append((p0, self.doc.page, str(text)))
 
 
-APDF.Flow.para = _rec
+_cert, _badge, badges = APDF.Flow.para_cert, APDF.Flow._badge, []
+
+
+def _rec_cert(self, text, size, cert, *a, **k):
+    p0 = self.doc.page
+    _cert(self, text, size, cert, *a, **k)
+    drawn.append((p0, self.doc.page, str(text)))
+
+
+def _rec_badge(self, x, base, word, size, col):
+    badges.append((word, col.hexval()))
+    _badge(self, x, base, word, size, col)
+
+
+APDF.Flow.para, APDF.Flow.para_cert, APDF.Flow._badge = _rec, _rec_cert, _rec_badge
 try:
     long = "Adversaries may leverage external-facing remote services to get in. " * 3
     techs = [{"id": f"T90{i:02d}", "name": f"Keep {i}", "tactics": ["Initial Access"], "certainty": "possible",
@@ -242,10 +284,20 @@ try:
             split.append(t["id"])
     ok("every technique's lines, from its heading to its MITRE link, are on one page", techs and not split, split)
     ok("…and the PDF spans several pages, so page breaks were really tested", max(p1 for _, p1, _ in drawn) >= 3)
+    # Observed / Possible with the cards' look (the user, 2026-11-18): the word alone, in the card colour
+    techs[0].update(certainty="observed", certainty_label="Observed (the report saw it)")
+    badges.clear()
+    APDF.alone(adv, {"platform_label": "Advisory", "scope": "s", "header": "h", "selection": "s", "day": "2026-11-13", "generated_by": "t"})
+    want = {"Observed": "0xf6c27a", "Possible": "0x9fdbe6"}
+    ok("Observed / Possible drawn with the cards' look: amber and teal, the word alone",
+       badges and {w for w, _ in badges} == {"Observed", "Possible"} and all(want[w] == c.lower() for w, c in badges)
+       and not any(":" in w for w, _ in badges), badges[:4])
+    ok("…the heading line itself never repeats the device's part", not any("used for it" in s or "exposure for it" in s
+                                                                            for _, _, s in drawn if s.startswith("T90")))
 except Exception as e:      # noqa: BLE001
     ok("every technique's lines, from its heading to its MITRE link, are on one page", False, f"{type(e).__name__}: {e}")
 finally:
-    APDF.Flow.para = _para
+    APDF.Flow.para, APDF.Flow.para_cert, APDF.Flow._badge = _para, _cert, _badge
 
 print(f"\n{checks - len(fails)} of {checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))
 sys.exit(1 if fails else 0)

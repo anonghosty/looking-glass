@@ -203,7 +203,8 @@ try:
     ok("known for this malware: MITRE's links, and its groups", [t["id"] for t in kn] == ["T1071.001", "T1110.001"] and att["groups"] == ["Fixture Group"])
     ok("the card carries the ATT&CK version", att["version"] == "2.0")
     lines = AM.attack_lines(att)
-    ok("document text: version first, every technique, nothing cut", lines[0].startswith("MITRE ATT&CK v2.0: T1071.001 Web Protocols (observed")
+    ok("document text: version first, every technique, nothing cut", lines[0].startswith("MITRE ATT&CK v2.0: T1071.001 Web Protocols · Command and Control · Observed")
+       and "used for it" not in lines[0]                        # Observed / Possible only (the user, 2026-11-18)
        and "Credential Access: T1110.001 Password Guessing" in lines[1] and not any("…" in x or "..." in x for x in lines), lines)
     ok("CSV cell: IDs and the version", AM.ids_text(att) == "T1071.001; 2 known for this malware (ATT&CK v2.0)", AM.ids_text(att))
     am.labels = lambda: {"Sinkhole HTTP (our label)": "event4_sinkhole_http"}

@@ -23,6 +23,8 @@ ACCENT = HexColor("#a9b8ff")
 BOTTOM = 40                                   # nothing below this line: the footer's room
 LIST_MAX = 10                                 # above this many affected IP addresses, the CSV holds them (not the PDF)
 KEEP_MAX = 300                               # a block kept on one page is at most this tall (about half a landscape page)
+# Observed / Possible as on the app's cards (app.css .mp-cert-observed / -possible / -known)
+CERT_COLOUR = {"observed": HexColor("#f6c27a"), "possible": HexColor("#9fdbe6"), "known for this malware": HexColor("#c4b5fd")}
 
 
 class Flow:
@@ -57,6 +59,38 @@ class Flow:
                 d.text(x, self.y - size, ln, size, color, bold)
                 self.y -= lead
         self.y -= 4
+
+    def para_cert(self, text, size, cert, x=M):
+        """A bold line ending in the certainty with the cards' look (app.css .mp-cert, the user's choice 2026-11-18):
+        the word in its colour inside a thin faded outline of the same colour, no fill. Observed amber, Possible teal."""
+        d = self.doc
+        col = CERT_COLOUR.get(cert.lower())
+        if not col:
+            return self.para(f"{text} · {cert}" if cert else text, size, TXT, True, x=x)
+        lead = size * 1.42
+        bs = size * .82                                  # the badge's text, a little smaller, as on the cards
+        bw = d.c.stringWidth(d.s(cert), d.F["b"], bs) + 10
+        lines = simpleSplit(d.s(text + " ·"), d.F["b"], size, W - M - x) or [""]
+        last_w = d.c.stringWidth(lines[-1], d.F["b"], size)
+        own_line = x + last_w + 6 + bw > W - M           # no room after the last line: the badge on a line of its own
+        for i, ln in enumerate(lines):
+            self.need(lead + 2)
+            d.text(x, self.y - size, ln, size, TXT, True)
+            if i == len(lines) - 1 and not own_line:
+                self._badge(x + last_w + 6, self.y - size, cert, bs, col)
+            self.y -= lead
+        if own_line:
+            self.need(lead + 2)
+            self._badge(x, self.y - size, cert, bs, col)
+            self.y -= lead
+        self.y -= 4
+
+    def _badge(self, x, base, word, size, col):
+        c = self.doc.c
+        w = c.stringWidth(self.doc.s(word), self.doc.F["b"], size) + 10
+        c.setStrokeColor(Color(col.red, col.green, col.blue, .5)); c.setLineWidth(.7)
+        c.roundRect(x, base - 3.2, w, size + 5.6, 3.5, stroke=1, fill=0)
+        self.doc.text(x + 5, base, word, size, col, True)
 
     def height(self, text, size=9.6, bold=False, x=M, width=None):
         """How much room para() would take for this text (to keep a block together before drawing it)."""
@@ -310,7 +344,10 @@ def front(doc, a):
             # the technique's lines as (text, size, colour, bold, x), measured first so the whole block is kept on one
             # page (a technique split from its "How to defend" was seen in a render, 2026-11-13); a block taller than
             # KEEP_MAX still flows over pages rather than leaving a page empty
-            rows = [(f"{t['id']} {t['name']} · {', '.join(t.get('tactics') or [])} · {cert}: {t.get('role', '')}", 9.6, TXT, True, M)]
+            # the first line ends in Observed / Possible only, with the cards' look (the user, 2026-11-18); the
+            # device's part is in "Why it is in this advisory"
+            head = f"{t['id']} {t['name']} · {', '.join(t.get('tactics') or [])}"
+            rows = []
             if t.get("desc"):
                 rows.append((f"What it is (MITRE): {t['desc']}", 9, TXT, False, M + 10))
             if t.get("why_here"):
@@ -325,7 +362,8 @@ def front(doc, a):
                     rows.append((f"• {m['id']} {m['name']}" + (f": {m['text']}" if m.get("text") else ""), 8.8, DIM, False, M + 20))
             rows.append((f"MITRE ATT&CK: {t.get('url') or ''}", 8.4, ACCENT, False, M + 10))
             f.y -= 4
-            f.need(min(sum(f.height(s, z, b, x) for s, z, _, b, x in rows), KEEP_MAX))
+            f.need(min(f.height(head + " · " + cert + " xx", 9.6, True) + sum(f.height(s, z, b, x) for s, z, _, b, x in rows), KEEP_MAX))
+            f.para_cert(head, 9.6, cert)
             for s, z, c, b, x in rows:
                 f.para(s, z, c, b, x=x)
 

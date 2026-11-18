@@ -49,6 +49,15 @@ TUNING = [
     ("BEACON_KEEP_MAX", "Memory and speed", "Decoded beacon answers kept across restarts", "int", 200000, 1000, 5000000,
      "The decoder's public answers (format, operator, version, OS family) kept so a restart does not decode the day again. "
      "About 170 bytes each in memory. Raise it for a country with many check-ins a day."),
+    ("ANALYST_DAY_KEEP", "Memory and speed", "Older days kept for analyst codes", "int", 1, 0, 7,
+     "An analyst code on a day older than the days in memory loads that whole day from the database; it is kept for "
+     "its page and counts to share. Each kept day costs about as much memory as a day in memory. 0 keeps none: every "
+     "request loads the day again (slower, least memory)."),
+    ("ANALYST_DAY_KEEP_S", "Memory and speed", "How long such a day is kept", "int", 300, 30, 3600,
+     "Seconds. A kept day is also dropped at once when the constituency or the stored data change."),
+    ("ANALYST_WARM_DELAY_S", "Memory and speed", "Analyst code counts worked out after a start", "int", 30, 0, 600,
+     "Seconds after a start before the device counts of the open findings' analyst codes are worked out, so the "
+     "Findings page does not wait for them. 0 = never ahead: the first person to open Findings waits for them."),
     ("MGMT_PAST_RECORDS", "Memory and speed", "Past records the Executive portal keeps in memory", "int", 3000000, 100000, 50000000,
      "For its 7-day baselines; roughly 200 to 300 MB per million. Above it, older days are read from the database when needed."),
     ("EXEC_BASELINE_WORKERS", "Memory and speed", "Executive baselines built at the same time", "int", 2, 1, 16,

@@ -2983,8 +2983,13 @@ _beacon_unknown.install(app, {"store": store, "labels": INTEL.ctx["labels"], "ba
 import acodes as _acodes  # noqa: E402
 
 
+import recent_days as _recent_days                  # noqa: E402
+RECENT_DAYS = _recent_days.RecentDays()
+
+
 def _day_for(platform, iso):
-    """A day of either platform: the copy in memory, or loaded from MongoDB (not kept)."""
+    """A day of either platform: the copy in memory, or loaded from MongoDB and kept a few minutes (recent_days.py:
+    an analyst code's page and its counts share one load instead of loading the day again each time)."""
     st = store if platform == "comms" else svc["store"]
     try:
         start = datetime.fromisoformat(iso).replace(tzinfo=timezone.utc)
@@ -2993,11 +2998,16 @@ def _day_for(platform, iso):
     d = st.days.get(start)
     if d is not None:
         return d
-    try:
-        return st._load(start)
-    except Exception:                    # noqa: BLE001  (an unreadable day: the code has no records)
-        app.logger.exception("Analyst code: day %s could not be loaded", iso)
-        return None
+    # the version a kept copy is valid for: the constituency (settings) and the stored data (the store's generation)
+    version = (getattr(getattr(st, "settings", None) or settings, "version", 0), getattr(st, "gen", 0))
+
+    def load():
+        try:
+            return st._load(start)
+        except Exception:                # noqa: BLE001  (an unreadable day: the code has no records)
+            app.logger.exception("Analyst code: day %s could not be loaded", iso)
+            return None
+    return RECENT_DAYS.get((platform, iso), version, load)
 
 
 ACODES = _acodes.install(app, {
@@ -3613,7 +3623,7 @@ WARMUP = _warmup.install({
 import features as _features  # noqa: E402
 FEATURES = _features.install(app, {"db": db, "registry": registry, "svc": svc, "replay_now": replay_now,
                                    "day_start": day_start, "AUTH": AUTH, "app_logger": app.logger,
-                                   "store": store, "settings": settings, "findings": FINDINGS})
+                                   "store": store, "settings": settings, "findings": FINDINGS, "acodes": ACODES})
 
 if __name__ == "__main__":
     # `python app.py` (tests, development) listens on this computer only unless BIND_HOST says otherwise; the service

@@ -5,7 +5,7 @@ module with its own install(app, ctx), and gets one entry below, built from `cor
 
 core: db (the reports database, read only), registry (the communications reports), store (the communications day
 store), settings (the constituency), svc (the services platform: its "registry" and "store"), replay_now(),
-day_start(dt), AUTH (has_perm, csrf_ok, audit, ...), app_logger, findings (findings.Findings).
+day_start(dt), AUTH (has_perm, csrf_ok, audit, ...), app_logger, findings (findings.Findings), acodes (acodes.install's api).
 Returns {name: what each feature's install returned}, for tests and for other modules.
 """
 
@@ -63,5 +63,11 @@ def install(app, core):
     if core.get("findings") is not None and "has_perm" in A:
         import findings_live
         out["findings_live"] = findings_live.install(app, {"findings": core["findings"], "has_perm": A["has_perm"]})
+
+    # the analyst codes' device counts worked out ahead after a start, so the Findings page does not wait for them
+    # (acode_warm.py; only in the running service)
+    if core.get("acodes") is not None:
+        import acode_warm
+        out["acode_warm"] = acode_warm.install(app, {"acodes": core["acodes"], "logger": core.get("app_logger")})
 
     return out

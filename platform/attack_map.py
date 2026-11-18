@@ -695,12 +695,17 @@ def attack_lines(att):
     if obs:
         bits = []
         for t in obs:
-            s = (f"{t['cve']}: " if att.get("cves") and t.get("cve") else "") + f"{t['id']} {t['name']} ("
-            s += f"{t['kind']}" if t.get("kind") else f"{t['certainty_label'].split(' (')[0].lower()}: {t['role']}"
-            s += f"; {t['note']}" if t.get("note") else ""
-            s += f"; {t['status']}" if t.get("status") in ("suggested", "please check") else ""
-            s += f"; retired in {t['retired_in']}" if t.get("retired_in") else ""
-            bits.append(s + ")")
+            # "T1071.001 Web Protocols · Command and Control · Observed" (the user, 2026-11-18): id and name, tactic,
+            # then only Observed / Possible; the constituent's part is not repeated here
+            extra = ([t["note"]] if t.get("note") else []) + ([t["status"]] if t.get("status") in ("suggested", "please check") else []) \
+                + ([f"retired in {t['retired_in']}"] if t.get("retired_in") else [])
+            s = (f"{t['cve']}: " if att.get("cves") and t.get("cve") else "") + f"{t['id']} {t['name']}"
+            if t.get("kind"):                 # CVE techniques: unchanged, "T… Name (how attackers exploit it; …)"
+                bits.append(s + f" ({'; '.join([t['kind']] + extra)})")
+                continue
+            s += f" · {', '.join(t['tactics'])}" if t.get("tactics") else ""
+            s += f" · {t['certainty_label'].split(' (')[0]}"
+            bits.append(s + (f" ({'; '.join(extra)})" if extra else ""))
         out.append(f"MITRE ATT&CK v{v}: " + "; ".join(bits) + ".")
     if known:
         by = {}

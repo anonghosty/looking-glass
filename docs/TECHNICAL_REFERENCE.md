@@ -155,6 +155,17 @@ server side is in small modules called from `app.py`:
   (`BEACON_KEEP_MAX`), written at most once a minute while new answers come in, and at exit; each different summary
   is held once in memory. Switched on by `beacon_decode.install` (the
   running platform only). Deleting the file is safe: the answers are worked out again. Test: `tests/check_beacon_keep.py`.
+- **`recent_days.py`, older days kept for analyst codes.** `app._day_for` gives an analyst code its day: the copy in
+  memory, or else the day loaded from MongoDB and kept by `RecentDays` for `ANALYST_DAY_KEEP_S` seconds, at most
+  `ANALYST_DAY_KEEP` days (default 1; 0 keeps none). A kept copy is valid only for the version it was loaded at (the
+  constituency's settings version and the store's generation). Room is made before a load, so a code spanning many
+  days is read one day at a time, and two requests for the same day at once load it once. Kept days are read only,
+  like the days in memory. Test: `tests/check_recent_days.py`.
+- **`acode_warm.py`, analyst code counts worked out after a start.** `ANALYST_WARM_DELAY_S` seconds after the service
+  starts (the running service only, `index_refresh.SERVING`), one thread calls `acodes.api.warm()`: the device counts
+  (`/api/intel/acode/<code>/devices`) of every analyst code the open findings carry, at both viewer levels, kept apart
+  in `acodes.PerKeyCache` (one lock per code). The counts use `view(code, sees_hosts, with_chain=False)`, which depends
+  on no signed-in person. Tests: `tests/check_recent_days.py`, `tests/check_per_key_cache.py`, `tests/check_acodes.py`.
 - **`beacon_findings.py`, decoded beacons handed over.** `POST /api/beacon/finding` (`{name, format, operator, version,
   os_family, kind: analyst|management, to, comment, title}`; the *definitions*, *settings* or *unmasked* permission,
   CSRF token, a fresh sign-in) makes a finding (`findings.Findings.create(..., extra={"beacon": selection})`) in the

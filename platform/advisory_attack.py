@@ -32,25 +32,38 @@ def _why(t, devices):
         src = (f"MITRE CTID maps {t['cve']} to this technique ({t.get('kind') or 'mapped'}): {role}."
                + (" Looking Glass's administrators trust CTID's mappings." if t.get("trusted") else ""))
         if hit:
-            src += f" {len(hit)} {'host' if len(hit) == 1 else 'hosts'} in this advisory {'has' if len(hit) == 1 else 'have'} it."
+            src += f" {_ips(hit)} in this advisory {'has' if len(hit) == 1 else 'have'} it."
         return src
+    # "most often" names what the technique is linked to (the user, 2026-11-18): a botnet infection (sinkholes, an
+    # infection's name) -> the infections; an issue (an exposure report) -> the issues; a CVE -> the CVE (above)
     if t.get("report_key"):
         title = t.get("report") or t["report_key"]
         hit = [d for d in devices if title in (d.get("reports") or [])]
+        infection = "sinkhole" in f"{title} {t['report_key']}".lower()
+        if not hit and infection:
+            # a sinkhole report the devices called (their infections), not one of the advisory's own reports: the
+            # devices with an infection are the ones it observed (2026-11-18: Observed had no figures, Possible had)
+            hit = [d for d in devices if d.get("infections") or d.get("categories")]
         src = f"Looking Glass maps the report “{title}” to this technique: {role}."
     else:
         c = t.get("category") or ""
-        hit = [d for d in devices if c in (d.get("categories") or [])]
+        infection = True
+        hit = [d for d in devices if c in (d.get("infections") or d.get("categories") or [])]
         src = f"Shadowserver names the infection “{c}” this way ({(t.get('why') or '').rstrip('.')}): {role}."
     if hit:
-        labels = {}
+        seen = {}
         for d in hit:
-            for lb in d.get("labels") or []:
-                labels[lb] = labels.get(lb, 0) + 1
-        top = [lb for lb, _ in sorted(labels.items(), key=lambda kv: -kv[1])[:3]]
-        noun = "host" if len(hit) == 1 else "hosts"
-        src += f" {len(hit)} {noun} in this advisory {'is' if len(hit) == 1 else 'are'} in it" + (f" (most often: {', '.join(top)})" if top else "") + "."
+            for v in ((d.get("infections") or d.get("categories") or []) if infection else (d.get("issues") or [])):
+                seen[v] = seen.get(v, 0) + 1
+        top = [v for v, _ in sorted(seen.items(), key=lambda kv: (-kv[1], kv[0]))[:3]]
+        # the user's wording (2026-11-18): IP addresses, for Observed and Possible alike
+        src += (f" {_ips(hit)} in this advisory {'has' if len(hit) == 1 else 'have'} these affected devices"
+                + (f" (most often: {', '.join(top)})" if top else "") + ".")
     return src
+
+
+def _ips(hit):
+    return f"{len(hit)} IP {'address' if len(hit) == 1 else 'addresses'}"
 
 
 def build(am, auto, adv):
