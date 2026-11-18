@@ -865,6 +865,13 @@ def build(d, enr, meta):
                     y = doc.new_page("Explained"); cols = [y, y]; ci = 0
             doc.explanation(M + ci * (col_w + gap), cols[ci], col_w, name, x_, stats.get(name), comms)
             cols[ci] -= h + 10
+    # ---------------- References (pdf_refs.py, the user 2026-11-18): each explained name's references, then every report
+    # of the selection with its page on shadowserver.org, ordered by criticality and flagged with it
+    import pdf_refs
+    pdf_refs.draw(doc, pdf_refs.groups(list(enr.items()) if enr else [], pdf_refs.platform_levels(meta.get("platform_label")),
+                                       pdf_refs.report_entries([r.get("value") or r.get("label") for r in reps])),
+                  "The sources behind this report: each explained name with its references, then the Shadowserver "
+                  "reports of this selection, the most critical first.")
     return doc.done()
 
 

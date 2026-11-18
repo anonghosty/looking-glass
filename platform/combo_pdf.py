@@ -16,6 +16,7 @@ from reportlab.lib.colors import Color, HexColor
 import attack_map
 import executive_pdf as ex
 import name_sources
+import pdf_refs
 from executive_pdf import AMBER, BLUE, DIM, H, M, MUTE, RED, SLATE, TEAL, TXT, VIOLET, W, fmt, pct
 
 def _share(n, total):
@@ -25,7 +26,38 @@ def _share(n, total):
 
 
 DEVICE_ROWS = 28                   # devices per page on "The devices" (two pages at most; the CSV has all of them)
-REFS_SHOWN = 6                     # references printed per explanation card (the rest: on the Malpedia / source page)
+_WATERMARKS = {}
+
+
+def _watermark(text):
+    """A page-sized transparent picture with the text across it, faint and on a slant (an advisory's preview)."""
+    if text not in _WATERMARKS:
+        import io
+        from PIL import Image, ImageDraw, ImageFont
+        from reportlab.lib.utils import ImageReader
+        scale = 2
+        img = Image.new("RGBA", (int(W * scale), int(H * scale)), (0, 0, 0, 0))
+        font = None
+        for base in ("/usr/share/fonts/truetype/dejavu", "/usr/share/fonts/dejavu", "/usr/share/fonts/TTF"):  # as reports_pdf
+            try:
+                font = ImageFont.truetype(f"{base}/DejaVuSans-Bold.ttf", 44 * scale)
+                break
+            except OSError:
+                continue
+        if font is None:
+            try:
+                font = ImageFont.load_default(size=44 * scale)          # Pillow 10.1 and later
+            except TypeError:
+                font = ImageFont.load_default()
+        band = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        d = ImageDraw.Draw(band)
+        for i, yy in enumerate(range(int(H * scale * .18), int(H * scale), int(H * scale * .34))):     # repeated, so a crop still has it
+            d.text((W * scale * (.08 if i % 2 else .22), yy), text, font=font, fill=(255, 255, 255, 20))
+        img = band.rotate(24, resample=Image.BICUBIC, center=(W * scale / 2, H * scale / 2))
+        buf = io.BytesIO(); img.save(buf, "PNG"); buf.seek(0)
+        _WATERMARKS.clear()
+        _WATERMARKS[text] = ImageReader(buf)
+    return _WATERMARKS[text]
 NOT_GIVEN = "Not given by the report"
 
 
@@ -38,6 +70,7 @@ class AnalystDoc(ex.Doc):
         c.setFillColor(ex.BG); c.rect(0, 0, W, H, stroke=0, fill=1)
         c.saveState(); c.setFillColor(Color(.36, .55, .94, .10)); c.circle(W * .18, H + 40, 260, stroke=0, fill=1)
         c.setFillColor(Color(.96, .7, .29, .06)); c.circle(W * .85, H + 60, 230, stroke=0, fill=1); c.restoreState()
+        self.preview_marks()                             # an advisory's preview: who and when, behind and above (2026-11-18)
         self.text(M, H - M - 6, "Looking Glass", 13, TXT, True)
         lw = self.c.stringWidth("Looking Glass", self.F["b"], 13)
         self.pill(M + lw + 8, H - M - 5, self.label_of(section) if self.meta.get("advisory") else
@@ -64,7 +97,7 @@ class AnalystDoc(ex.Doc):
             return "TECHNICAL DETAILS"
         if s.endswith(("· Technical Details", "· Definitions")):     # short insights with the definitions under them
             return "INSIGHTS · TECHNICAL DETAILS"
-        if s.startswith("Shadowserver Report References"):
+        if s.startswith(("References", "Shadowserver Report References")):
             return "REFERENCES"
         return "INSIGHTS"
 
@@ -81,6 +114,24 @@ class AnalystDoc(ex.Doc):
         self.text(x0 + w / 2, y, t, 8.5, HexColor(adv.get("tlp_colour") or "#FFC000"), True, "middle")
         return w
 
+    # ---------------- an advisory's preview (the user, 2026-11-18): a screenshot of it names who took it and when, and
+    # can never pass for the advisory itself. The generated PDF never carries any of it.
+    def preview_text(self):
+        p = (self.meta.get("advisory") or {}).get("preview")
+        if not p:
+            return ""
+        return f"PREVIEW · NOT FOR DISTRIBUTION · {p.get('who') or 'unknown'} · {p.get('at') or ''} · {p.get('ref') or 'not saved yet'}"
+
+    def preview_marks(self):
+        """The header line, and a faint diagonal watermark behind the page's content. The watermark is a picture of
+        the words: it cannot be selected or deleted as text, and no text-overlap check reads it as text on text."""
+        t = self.preview_text()
+        if not t:
+            return
+        p = self.meta["advisory"]["preview"]
+        self.c.drawImage(_watermark(f"PREVIEW · {p.get('who') or ''}"), 0, 0, W, H, mask="auto")
+        self.text(W / 2, H - 11, t, 7.4, HexColor("#f5b54a"), True, "middle")
+
     def footer(self):
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -90,6 +141,9 @@ class AnalystDoc(ex.Doc):
         self.text(W - M, 14, page, 7.2, MUTE, anchor="end")
         if adv.get("tlp"):                         # an advisory: its TLP rule, and the label beside the page number
             self.tlp_mark(14, W - M - self.c.stringWidth(page, self.F["r"], 7.2) - 10)
+            if self.preview_text():                # a preview: who and when, in place of the line the advisory carries
+                self.text(M, 14, self.preview_text(), 7.2, HexColor("#f5b54a"), True)
+                return
             # short, so it never runs into the TLP label: the label itself says how far it may go
             self.text(M, 14, f"Contains the addresses of affected devices. Generated {now}{who}.", 7.2, MUTE)
             return
@@ -165,20 +219,6 @@ class AnalystDoc(ex.Doc):
             yy -= rh
         return yy
 
-    def url_lines(self, refs, w, size):
-        """References numbered, one per line; a long address breaks anywhere and goes on (never cut). [(text, url)]"""
-        out = []
-        for i, u in enumerate(refs):
-            line = ""
-            for ch in self.s(f"{i + 1}. {u}"):
-                if line.strip() and self.c.stringWidth(line + ch, self.F["r"], size) > w:
-                    out.append((line, u)); line = "    " + ch
-                else:
-                    line += ch
-            if line.strip():
-                out.append((line, u))
-        return out
-
     @staticmethod
     def context_of(name, x_):
         """What the card itself says about where its explanation comes from: type, how the name was matched, by whom."""
@@ -194,15 +234,6 @@ class AnalystDoc(ex.Doc):
         elif upd:
             bits.append(upd.capitalize())
         return " · ".join(bits)
-
-    @staticmethod
-    def refs_of(x_):
-        """The card's sources: its own page first (Malpedia, NVD), then its references, each once."""
-        seen, out = set(), []
-        for u in [x_.get("url"), x_.get("nvd_url")] + list(x_.get("references") or []) + list(x_.get("curated_references") or []):
-            if isinstance(u, str) and u.startswith(("http://", "https://")) and u not in seen:
-                seen.add(u); out.append(u)
-        return out
 
     def explanation(self, x, y, w, name, x_, stat, comms):
         """As the Executive card, but nothing is cut: the full title and the whole description, wrapped, then where it
@@ -239,12 +270,9 @@ class AnalystDoc(ex.Doc):
         sl = ex.simpleSplit(self.s(stat or ""), self.F["r"], 7.6, w - 24) if stat else []
         ctx = self.context_of(name, x_)
         cl = ex.simpleSplit(self.s(ctx), self.F["r"], 7.6, w - 24) if ctx else []
-        refs = self.refs_of(x_)
-        shown = refs[:REFS_SHOWN]
-        more = len(refs) - len(shown)
-        rl = self.url_lines(shown, w - 24, 7.2)
-        if more:
-            rl.append((f"and {more} more on the {'Malpedia' if x_.get('found') else 'source'} page", None))
+        # its references are listed in the References section at the end, grouped by name (pdf_refs.py, the user
+        # 2026-11-18), no longer on the card
+        rl = []
         h = (46 + 11 * len(dl) + 11 * len(tl) + 10 * len(sl) + (20 + 10 * len(al) if al else 0)
              + (6 + 10 * len(cl) if cl else 0) + (19 + 9.4 * len(rl) if rl else 0))
         if y is None:
@@ -545,6 +573,14 @@ def build(d, meta):
         for n in d["notes"]:
             hgt = doc.note_card(0, None, col_w, n, d["code"])
             place(hgt, lambda x, yy, n=n: doc.note_card(x, yy, col_w, n, d["code"]))
+    # the References section (pdf_refs.py, the user 2026-11-18): every explained name's references, then the Shadowserver
+    # reports, ordered by criticality and flagged with it; an advisory's notes and authors are never in it
+    shown_cards = [(n, {kk: v for kk, v in c.items() if kk not in ("notes", "note", "note_by", "note_updated", "by")} if adv else c)
+                   for n, c in d["explained"]]
     if adv:
-        advisory_pdf.references(doc, adv)
+        advisory_pdf.references(doc, adv, shown_cards, d.get("ref_levels") or {})
+    else:
+        pdf_refs.draw(doc, pdf_refs.groups(shown_cards, d.get("ref_levels") or {}, pdf_refs.report_entries(d.get("ref_reports") or [])),
+                      "The sources behind this report: each explained name with its references, then the Shadowserver "
+                      "reports it draws on, the most critical first.")
     return doc.done()

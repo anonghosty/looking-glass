@@ -28,6 +28,7 @@ import threading
 import time
 
 import index_refresh
+import pdf_refs
 import report_day
 import small_codes
 from intel import combo_code, cross_code
@@ -144,6 +145,17 @@ class ServicesIntel:
         # host's cross-view took 0.3 s alone and ~8 s when ten were opened at once; performance test 2026-11-14)
         host_issues = collections.defaultdict(lambda: collections.defaultdict(set))
         host_cves = collections.defaultdict(set)                                  # host -> CVEs named in its tags
+        # host -> infection / issue / CVE -> the highest severity Shadowserver gave the records that carry it (the
+        # PDFs' References section orders and flags each name by it, the user 2026-11-18; pdf_refs.py)
+        host_levels = collections.defaultdict(dict)
+
+        def up(h, name, sev):
+            lv = pdf_refs.level(sev)
+            if not (h and name and lv):
+                return
+            cur = host_levels[h].get(name)
+            if not cur or pdf_refs.LEVELS.index(lv) < pdf_refs.LEVELS.index(cur):    # keep the most severe
+                host_levels[h][name] = lv
         records = collections.Counter()
         for d in svc:
             for e in d.events:
@@ -164,11 +176,13 @@ class ServicesIntel:
                 combo_hosts[base][items][ip] += 1
                 for i in e.get("issues") or []:
                     host_issues[ip][i].add(base)
+                    up(ip, i, e.get("severity"))
                 tags = e.get("tags") or []
                 for t in (tags.split(",") if isinstance(tags, str) else tags):
                     cv = CVE_FIND.search(str(t))
                     if cv:                                         # a CVE named in a tag (the advisory's rule)
                         host_cves[ip].add(cv.group(0).upper())
+                        up(ip, cv.group(0).upper(), e.get("severity"))
         infected = collections.defaultdict(set)                                   # host -> infection names
         sink_rep = collections.defaultdict(lambda: collections.defaultdict(set))  # host -> sinkhole report -> names
         labels = self.ctx["labels"]() if self.ctx.get("labels") else {}
@@ -176,6 +190,7 @@ class ServicesIntel:
             for e in d.events:
                 if e.get("src_ip") and e.get("infection"):
                     infected[e["src_ip"]].add(e["infection"])
+                    up(e["src_ip"], e["infection"], e.get("severity"))
                     sink_rep[e["src_ip"]][labels.get(e.get("source"), e.get("source") or "Sinkhole")].add(e["infection"])
         # an item may be shown when MIN_HOSTS hosts share it, and (free text) when they sit in MIN_NETWORKS networks
         template_labels = {b: {f["label"] for f in fs if f["kind"] == "template"} for b, fs in fields.items()}
@@ -184,6 +199,7 @@ class ServicesIntel:
                     for b, v in vals.items()}
         data = {"fields": fields, "vals": vals, "showable": showable, "combos": combos, "combo_hosts": combo_hosts, "hosts": hosts,
                 "host_reports": host_reports, "host_items": host_items, "host_issues": host_issues, "host_cves": host_cves, "infected": infected, "sink_rep": sink_rep, "records": records,
+                "host_levels": host_levels,
                 "days": sorted({d.start.date().isoformat() for d in svc})}
         with self.lock:
             slot.update(key=key, at=time.time(), data=data)
@@ -474,7 +490,9 @@ class ServicesIntel:
             iss = (data["host_issues"].get(h) or {}).keys()
             out[h] = {"infections": sorted(data["infected"].get(h, ())),
                       "cves": sorted({i.upper() for i in iss if CVE_RX.match(i)} | data.get("host_cves", {}).get(h, set())),
-                      "issues": sorted(i for i in iss if not CVE_RX.match(i))}
+                      "issues": sorted(i for i in iss if not CVE_RX.match(i)),
+                      # each name's highest record severity (the PDFs' References section, pdf_refs.py)
+                      "levels": dict((data.get("host_levels") or {}).get(h) or {})}
         return out
 
     def matcher(self, entry, scope="memory"):

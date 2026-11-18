@@ -161,6 +161,16 @@ server side is in small modules called from `app.py`:
   constituency's settings version and the store's generation). Room is made before a load, so a code spanning many
   days is read one day at a time, and two requests for the same day at once load it once. Kept days are read only,
   like the days in memory. Test: `tests/check_recent_days.py`.
+- **`pdf_refs.py`, the PDFs' References section.** One function orders and flags every PDF's references: each
+  explained name (by criticality: a CVE's CVSS severity, an actively exploited one first within its level; an
+  infection's or issue's highest record severity), then the Shadowserver reports (by Shadowserver's severity, matched
+  by their shadowserver.org page). Record levels come from the PDF's records, the days in memory (`DAYS`, set by
+  `features.py`) and `data/name_levels.json` (names and levels only, the most severe kept). Also draws the References
+  pages on the canvas PDFs; `reports_pdf.py` draws its own with the same groups.
+- **`name_levels_catchup.py`, every name's level learned once.** `NAME_LEVELS_DELAY_S` seconds after a start (the
+  running service only), one thread reads every report collection once, projecting only infection, issues, tags and
+  severity, in batches with short pauses between them, and keeps each name's highest level in `data/name_levels.json`; it
+  writes `data/name_levels.done` at the end and never runs again.
 - **`acode_warm.py`, analyst code counts worked out after a start.** `ANALYST_WARM_DELAY_S` seconds after the service
   starts (the running service only, `index_refresh.SERVING`), one thread calls `acodes.api.warm()`: the device counts
   (`/api/intel/acode/<code>/devices`) of every analyst code the open findings carry, at both viewer levels, kept apart

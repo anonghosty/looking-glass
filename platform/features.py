@@ -64,6 +64,21 @@ def install(app, core):
         import findings_live
         out["findings_live"] = findings_live.install(app, {"findings": core["findings"], "has_perm": A["has_perm"]})
 
+    # the PDFs' References section (pdf_refs.py): the analysis and Executive reports order their names by the severity
+    # Shadowserver gave the records of the days in memory, of their platform
+    import pdf_refs
+    pdf_refs.DAYS.update(comms=lambda: list(store.days.values()), services=lambda: list(svc_store.days.values()))
+    # …and, once, every name's level from all the reports' records, not only the days in memory (name_levels_catchup.py)
+    if core.get("db") is not None:
+        import name_levels_catchup
+
+        def report_collections():
+            regs = [x["name"] for x in (core["registry"].get() or [])] + [x["name"] for x in (core["svc"]["registry"].get() or [])]
+            return list(dict.fromkeys(regs))
+        out["name_levels"] = name_levels_catchup.install(app, {"db": core["db"], "collections": report_collections,
+                                                               "base_dir": os.path.dirname(os.path.abspath(__file__)),
+                                                               "logger": core.get("app_logger")})
+
     # the analyst codes' device counts worked out ahead after a start, so the Findings page does not wait for them
     # (acode_warm.py; only in the running service)
     if core.get("acodes") is not None:

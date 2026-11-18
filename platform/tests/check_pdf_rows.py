@@ -198,7 +198,7 @@ try:
     for adv_meta in ({"x": 1}, None):
         d_ = CP.AnalystDoc({"platform_label": "Publicly accessible services", "scope": "Ghana · whole country", "header": "h",
                             **({"advisory": adv_meta} if adv_meta else {})})
-        for sec in ("Advisory", "Overview", "Definitions", "Shadowserver Report References"):
+        for sec in ("Advisory", "Overview", "Definitions", "References"):
             d_.new_page(sec)
 finally:
     del CP.AnalystDoc.text

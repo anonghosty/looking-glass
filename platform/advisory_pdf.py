@@ -377,32 +377,17 @@ def front(doc, a):
         f.para("See below for further insight into the activity.", 10.5, ACCENT, True)
 
 
-def references(doc, a):
-    """Shadowserver Report References: every report the advisory names, with its page on shadowserver.org."""
-    if not a.get("reports"):
-        return
-    f = Flow(doc, "Shadowserver Report References")
-    f.para("The Shadowserver Foundation's reports this advisory draws on. Each page explains the report, its fields and how "
-           "to remediate what it finds.", 9.2, DIM)
-    for i, r in enumerate(a["reports"], 1):
-        url_lines = simpleSplit(doc.s(r.get("url") or ""), doc.F["m"], 8.4, W - 2 * M - 30)
-        f.need(34 + 11 * len(url_lines))
-        doc.text(M, f.y - 10, f"{i}.", 10, DIM, True)
-        doc.text(M + 22, f.y - 10, r["title"], 10.5, TXT, True)
-        where = " · ".join(x for x in (r.get("section"), r.get("group")) if x)
-        if r.get("note"):
-            where = f"{where} · {r['note']}" if where else r["note"]
-        yy = f.y - 23
-        if where:
-            for ln in simpleSplit(doc.s(where), doc.F["r"], 8.2, W - 2 * M - 30):
-                doc.text(M + 22, yy, ln, 8.2, MUTE); yy -= 11
-        for ln in url_lines:
-            doc.text(M + 22, yy, ln, 8.4, HexColor("#8fb4ff"), mono=True)
-            if r.get("url"):
-                lw = doc.c.stringWidth(ln, doc.F["m"], 8.4)
-                doc.c.linkURL(r["url"], (M + 22, yy - 2, M + 22 + lw, yy + 9), relative=0)
-            yy -= 11
-        f.y = yy - 8
+def references(doc, a, cards=(), levels=None):
+    """References (the user, 2026-11-18): every defined name's references, then every Shadowserver report the advisory
+    names with its page on shadowserver.org, all ordered by criticality and flagged with it (pdf_refs.py)."""
+    import pdf_refs
+    reps = [{"title": r["title"], "url": r.get("url") or "", "severity": pdf_refs.severity_by_url(r.get("url")),
+             "where": " · ".join(x for x in (r.get("section"), r.get("group"), r.get("note")) if x)}
+            for r in a.get("reports") or []]
+    pdf_refs.draw(doc, pdf_refs.groups(cards, levels or {}, reps),
+                  "The sources behind this advisory: each defined name with its references, then the Shadowserver "
+                  "Foundation's reports it draws on (each page explains the report, its fields and how to remediate what "
+                  "it finds), the most critical first.")
 
 
 def alone(a, meta):
@@ -416,6 +401,9 @@ def alone(a, meta):
             page = f"Page {self.page}"
             self.text(W - M, 14, page, 7.2, MUTE, anchor="end")
             self.tlp_mark(14, W - M - self.c.stringWidth(page, self.F["r"], 7.2) - 10)
+            if self.preview_text():                # a preview: who and when (combo_pdf.AnalystDoc.preview_marks)
+                self.text(M, 14, self.preview_text(), 7.2, HexColor("#f5b54a"), True)
+                return
             self.text(M, 14, f"Advisory {a['ref']}. Generated {now} by {a.get('org') or 'the CSIRT'}.", 7.2, MUTE)
 
     doc = Doc(dict(meta, advisory=a))

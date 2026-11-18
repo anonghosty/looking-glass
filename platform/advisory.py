@@ -866,12 +866,17 @@ def install(app, ctx):
         ctx["audit"].add("advisory_saved", user=user, target=adv["ref"], detail=f"finding #{x['id']} · {network or 'all networks'}")
         return jsonify(ok=True, advisory=view(adv, x, with_devices=True), saved=True)
 
-    def build(x, adv, network, as_pdf_only=False):
-        """(file name, bytes, pdf name, pdf bytes) of the organisation's report; (None, error)."""
+    def build(x, adv, network, as_pdf_only=False, preview=False):
+        """(file name, bytes, pdf name, pdf bytes) of the organisation's report; (None, error). preview: the advisor's
+        preview, every page marked with who opened it and when (the user, 2026-11-18); never the generated file."""
         auto = auto_of(x, network)
         v = view(adv, x, auto)
         has_report = kept(x)
         a = pdf_input(v, auto, has_report)
+        if preview:
+            who = me()[0]
+            a["preview"] = {"who": (ctx["people_name"](who) or who) if ctx.get("people_name") else who,
+                            "at": time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime()), "ref": v.get("ref") or ""}
         base = file_base(x, auto, network)
         if has_report:
             # the devices CSV goes with the PDF: an advisory with many addresses points to it instead of listing them
@@ -927,7 +932,7 @@ def install(app, ctx):
         if network is None:
             return jsonify(error="That network is not in this finding."), 404
         adv = store.of(x["id"], network) or blank(x, me()[0], network)
-        out, err = build(x, adv, network, as_pdf_only=True)
+        out, err = build(x, adv, network, as_pdf_only=True, preview=True)
         if not out:
             return jsonify(error=err), 409
         r = Response(out[3], mimetype="application/pdf", headers={"Content-Disposition": f'inline; filename="{out[2]}"', "Cache-Control": "no-store"})

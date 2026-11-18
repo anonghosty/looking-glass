@@ -351,6 +351,23 @@ names** on the analysis lists (the table and the CSV get *What it is* and *Sourc
 and Executive PDFs (description, then *Source: …* with the licence, then *Also described by*), the Executive portal's
 **Explain**, and the advisories' **Technical Details**.
 
+**References in the PDFs.** In every PDF (analysis, combination, Executive and the advisory) a name's card keeps its
+explanation, and its links are listed at the end, in a **References** section: one heading per name with its numbered
+links, then the **Shadowserver reports** the PDF draws on, each with its page on shadowserver.org. Everything is ordered
+by criticality, flagged CRITICAL, HIGH, MEDIUM, LOW or INFO (Shadowserver's lowest level), and NOT RATED last when no
+severity is known:
+
+- a CVE: the CVSS severity NVD gives it, with its score; one CISA lists as actively exploited keeps that level, is
+  flagged **Actively exploited**, and comes first within its level;
+- an infection or an issue: the highest severity Shadowserver gave the records that carry it (in the report's own
+  records, else in the days in memory; a name whose days have left memory keeps the level it had, remembered in
+  `data/name_levels.json`, names and levels only, never shipped);
+- a Shadowserver report: the severity Shadowserver gives that report type.
+
+**The advisory's preview** names who opened it and when: "PREVIEW · NOT FOR DISTRIBUTION · name · date and time ·
+reference" at the top and the foot of every page, and a faint watermark across each page, behind the text. A screenshot
+of the preview therefore shows who took it. The report the advisor generates for the organisation carries none of it.
+
 **Keeping the copies current.** The installer downloads the first copies, so a new installation has them from the
 start (without internet it goes on without them and says so), and schedules a weekly refresh (Mondays 04:17, the user's crontab;
 `manage/fetch_offline_names.py --schedule`, `--unschedule` to remove it). A download is used only if it is valid, has

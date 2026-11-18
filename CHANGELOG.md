@@ -5,6 +5,27 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-18 (8)
+### Changed
+- **Every PDF lists its references at the end, in a References section ordered by criticality.** The definition cards
+  of the analysis, combination, Executive and advisory PDFs keep their explanation; their links now sit at the end,
+  under one heading per name, then the Shadowserver reports the PDF draws on (the advisory's "Shadowserver Report
+  References" page became this section). Each heading carries its criticality: a CVE its CVSS severity and score, and
+  an actively exploited one (CISA KEV) also "Actively exploited", first within its level; an infection or an issue
+  the highest severity Shadowserver gave the records that carry it; a Shadowserver report the severity Shadowserver
+  gives that report type (INFO, Shadowserver's lowest level, as it says). A name with no severity at all is "not
+  rated", listed last. The Executive PDF gains the section. A name whose days have left memory keeps the level it
+  had: Looking Glass remembers each name's highest level in `data/name_levels.json` (names and levels only); after
+  the update it learns them from the days it loads, so a name seen only before the update reads "not rated" until it
+  appears again.
+### Added
+- **The advisory's preview names who opened it and when.** Every page of the preview carries "PREVIEW · NOT FOR
+  DISTRIBUTION · name · date and time · reference" at the top and the foot, and a faint watermark behind the content
+  (a picture, so it cannot be selected or removed as text). A screenshot of the preview therefore shows who took it.
+  The report the advisor generates for the organisation carries none of it. Each preview was already in the data-access
+  log.
+  Nothing to do when updating; PDFs made after the update have the new layout.
+
 ## 2026-11-18 (7)
 ### Added
 - **A check of Abused or Compromised against MongoDB** (`platform/tests/verify_intelligence.py`), like the checks the

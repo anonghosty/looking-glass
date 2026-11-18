@@ -13,6 +13,7 @@ from xml.sax.saxutils import escape
 
 import attack_map
 import name_sources
+import pdf_refs
 
 from reportlab.graphics.charts.barcharts import HorizontalBarChart, VerticalBarChart
 from reportlab.graphics.shapes import Drawing, String
@@ -383,20 +384,7 @@ def enrichment_block(name, x, stat, S, width):
         extra.append(("Updated", f"{x['updated']}" + (f" by {x['by']}" if x.get("by") else "")))
     for lbl, v in extra:
         out.append(P(f"<b>{t(lbl)}:</b> {t(v)}", S["meta"]))
-    refs = list(x.get("references") or [])
-    if x.get("cveorg_url") and not x.get("nvd"):
-        refs = [x["cveorg_url"]] + refs
-    if x.get("kev_url"):
-        refs = [x["kev_url"]] + refs
-    if x.get("url"):
-        refs = [x["url"]] + [u for u in refs if u != x["url"]]
-    refs += [u for u in (x.get("curated_references") or []) if u not in refs]
-    if refs:
-        out.append(P(f"<b>{'Evidence / references' if k == 'curated' else 'References'}"
-                     + (f" ({x.get('reference_count')} in {x.get('ref_source') or 'NVD' if x.get('kind') == 'cve' else x.get('source_label') or 'Malpedia'}, {len(refs)} shown)"
-                        if x.get("reference_count", 0) > len(refs) else "")
-                     + ":</b>", S["meta"]))
-        out += [link(u, S["link"]) for u in refs[:10]]
+    # its references: in the References section at the end, grouped by name (pdf_refs.py, the user 2026-11-18)
     if x.get("kind") != "cve":                     # the source and its licence travel with its text (name_sources.py)
         src = name_sources.source_text(x)
         if src:
@@ -564,18 +552,33 @@ def build(spec):
         body = [[r.get(k, "") for k, _ in cols] for r in rows[:MAX_ROWS]]
         st.append(data_table([lbl for _, lbl in cols], body, S, widths))
 
-    # ---- report definitions and sources
+    # ---- References (pdf_refs.py, the user 2026-11-18): each explained name's references, then the reports in this
+    # selection with what each is and its page, all ordered by criticality and flagged with it
     gl = spec.get("glossary") or []
     st.append(CondPageBreak(70 * mm))
-    if gl:
-        # each report's name, text and link on one page together, the section's heading with the first one
-        # (2026-11-18: "Accessible SSH Report" stood alone at the foot of a page, its text on the next)
-        entries = []
-        for title, d, url in gl:
-            e = [P(f"<b>{t(title)}</b>", S["body"])] + ([P(t(d), S["meta"])] if d else []) + ([link(url, S["link"])] if url else []) + [Spacer(1, 4)]
-            entries.append(e)
-        for i, e in enumerate(entries):
-            st.append(KeepTogether(([P("The reports in this selection", S["h1"])] if i == 0 else []) + e))
+    gs = pdf_refs.groups(list((spec.get("enrichment") or {}).items()),
+                         spec.get("ref_levels") or pdf_refs.platform_levels(spec.get("platform_label")),
+                         [{"title": ti, "url": u, "severity": pdf_refs.severity_by_url(u), "where": d} for ti, d, u in gl if u], shown=10)
+    pill = {"critical": "#ef5d6c", "high": "#f5b54a", "medium": "#5b8def", "low": "#7d8aa8", "info": "#7d8aa8", "": "#7d8aa8"}
+
+    def flags_html(lv, flags):
+        bits = [f'<font color="{pill[lv]}"><b>{pdf_refs.WORD[lv].upper()}</b></font>']
+        bits += [f'<font color="#ef5d6c"><b>{t(f)}</b></font>' if f == "Actively exploited" else t(f) for f in flags]
+        return " · ".join(bits)
+    for i, g_ in enumerate(gs):
+        head = [P("References", S["h1"]), P(t("The sources behind this report: each explained name with its references, then "
+                                                "the Shadowserver reports in this selection, the most critical first."), S["meta"])] if i == 0 else []
+        if g_["kind"] == "name":
+            e = [P(f"<b>{t(g_['title'])}</b> · {flags_html(g_['level'], g_['flags'])}", S["body"])]
+            e += [link(u, S["link"]) for u in g_["refs"]]
+            if g_.get("more"):
+                e.append(P(t(f"and {g_['more']} more on the {g_.get('more_where') or 'source'} page"), S["meta"]))
+            st.append(KeepTogether(head + e + [Spacer(1, 4)]))
+        else:
+            for j, r in enumerate(g_["items"]):               # the group's heading never alone at a page's foot
+                e = [P(f"<b>{t(r['title'])}</b> · {flags_html(r['level'], [])}", S["body"])]
+                e += ([P(t(r["where"]), S["meta"])] if r.get("where") else []) + [link(r["url"], S["link"]), Spacer(1, 4)]
+                st.append(KeepTogether((head + [P("Shadowserver reports", S["h2"])] if j == 0 else []) + e))
     st.append(P("About this report", S["h1"]))
     for s in spec.get("sources") or []:
         st.append(P(t(s), S["bullet"], bulletText="•" if _FONT.get("unicode") else "-"))

@@ -45,6 +45,7 @@ from flask import Response, g, jsonify, render_template, request, has_request_co
 import csvsafe
 import issue_tags
 import intel as I
+import pdf_refs
 import report_day
 from services_intel import SINK                # a services code's part "the host calls a sinkhole as …"
 
@@ -763,6 +764,7 @@ def install(app, ctx):
         for d in devs:
             f_ = flags.get(d["ip"]) or {}
             d["flags"] = {k: list(f_.get(k) or []) for k in ("infections", "issues", "cves")}
+            d["flags"]["levels"] = dict(f_.get("levels") or {})       # each name's record severity (pdf_refs.py)
             d["earlier"] = earlier.get(d["ip"]) or []
         if not network and asns is None and not summary_only:
             job["dev_flags"] = {d["ip"]: d["flags"] for d in devs}      # kept with a review (combo_review.keep_search)
@@ -1059,6 +1061,12 @@ def install(app, ctx):
                              else f"Ticked by the analyst: {ticked_n[nm]:,} of the devices" if nm in ticked_n
                              else f"{av_n[nm]:,} of the {len(devs):,} devices in this advisory" if av_n.get(nm)
                              else f"{len(devs):,} devices in this combination")
+        # each explained name's criticality for the References section (pdf_refs.py, the user 2026-11-18): the highest
+        # severity Shadowserver gave the records that carry it, here and in the devices' other reports
+        ref_levels = pdf_refs.levels_from_records(found)
+        for d in devs:
+            for name, lv in (d["flags"].get("levels") or {}).items():
+                pdf_refs.lift(ref_levels, name, lv)
         data = {"section": section, "code": entry["code"], "name": entry["name"], "parts": parts,
                 "headline": (f"{len(devs):,} device{'s' if len(devs) != 1 else ''} in the analyst's selection ({span})" if is_a else
                              f"{len(devs):,} device{'s' if len(devs) != 1 else ''} carried exactly this combination ({span})")
@@ -1082,7 +1090,11 @@ def install(app, ctx):
                 "report_sets": [{"label": " + ".join(T(r) for r in s_["reports"]), "hosts": s_["devices"]} for s_ in x["sets"]],
                 "kinds": [{"label": k_, "count": n} for k_, n in kind.most_common(10)],
                 "ports": [{"label": k_, "count": n} for k_, n in ports.most_common(10)],
-                "explained": explained, "stats": stats, "notes": notes}
+                "explained": explained, "stats": stats, "notes": notes,
+                # the References section (pdf_refs.py): each name's criticality, and the Shadowserver reports this PDF
+                # names (the combination's own, then those its devices were also seen in), each once
+                "ref_levels": ref_levels,
+                "ref_reports": list(dict.fromkeys([str(r) for r, _ in parts if r] + [str(r) for s_ in x["sets"] for r in s_["reports"]]))}
         try:
             if summary_only:                                  # the page's figures for one network: no PDF needed
                 raise _SummaryOnly()

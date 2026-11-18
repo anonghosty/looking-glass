@@ -55,6 +55,9 @@ TUNING = [
      "request loads the day again (slower, least memory)."),
     ("ANALYST_DAY_KEEP_S", "Memory and speed", "How long such a day is kept", "int", 300, 30, 3600,
      "Seconds. A kept day is also dropped at once when the constituency or the stored data change."),
+    ("NAME_LEVELS_DELAY_S", "Memory and speed", "Names' criticality learned from every report", "int", 120, 0, 3600,
+     "Seconds after a start before every report's records are read once, gently, to learn each name's criticality for "
+     "the PDFs' References section; it runs once per installation. 0 = never (the day loads still teach it)."),
     ("ANALYST_WARM_DELAY_S", "Memory and speed", "Analyst code counts worked out after a start", "int", 30, 0, 600,
      "Seconds after a start before the device counts of the open findings' analyst codes are worked out, so the "
      "Findings page does not wait for them. 0 = never ahead: the first person to open Findings waits for them."),

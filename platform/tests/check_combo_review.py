@@ -292,19 +292,31 @@ try:
        f"{st} rev {d.get('advisory', {}).get('rev')}")
     st, d = call("/api/advisory/1/send", ADVISOR, "POST", {"network": NET}, **ADV)
     ok("it cannot be marked as sent before a report is generated", st == 400)
-    st, pdf = call(f"/advisory/1/preview?network={quote(NET)}", ADVISOR, raw=True, **ADV)
+    import combo_pdf as _cp
+    marks, real_pm = [], _cp.AnalystDoc.preview_marks
+    _cp.AnalystDoc.preview_marks = lambda self: (marks.append(self.preview_text()), real_pm(self))[1]
+    try:
+        st, pdf = call(f"/advisory/1/preview?network={quote(NET)}", ADVISOR, raw=True, **ADV)
+    finally:
+        _cp.AnalystDoc.preview_marks = real_pm
     ok("the preview: its pages on top of the analyst's report on this organisation", st == 200 and pdf[:4] == b"%PDF" and len(pdf) > 20000,
        f"{len(pdf) if isinstance(pdf, bytes) else pdf}")
+    # every page of the preview names who opened it and when (the user, 2026-11-18: a screenshot then names its source)
+    ok("…every page of the preview marked: PREVIEW · NOT FOR DISTRIBUTION, who, when",
+       marks and all(m.startswith("PREVIEW · NOT FOR DISTRIBUTION · ") and " UTC · " in m for m in marks), f"{len(marks)} pages · {marks[:1]}")
     if os.environ.get("LG_SAVE_PDF") and st == 200:      # to look at the pages
         with open(os.environ["LG_SAVE_PDF"], "wb") as fh:
             fh.write(pdf)
-    import combo_pdf as _cp
-    real_b, seen_b = _cp.build, []
+    real_b, seen_b, gen_marks = _cp.build, [], []
     _cp.build = lambda d_, m_: (seen_b.append(d_), real_b(d_, m_))[1]
+    _cp.AnalystDoc.preview_marks = lambda self: (gen_marks.append(self.preview_text()), real_pm(self))[1]
     try:
         st, d = call("/api/advisory/1/generate", ADVISOR, "POST", {"network": NET}, **ADV)
     finally:
         _cp.build = real_b
+        _cp.AnalystDoc.preview_marks = real_pm
+    ok("…the generated advisory, what goes to the organisation: no preview mark on any page",
+       gen_marks and not any(gen_marks), f"{len(gen_marks)} pages")
     fname = (d.get("file") or {}).get("name") or ""
     ok("the advisor generates the report: named as the CSIRT names it", st == 200 and fname == f"{fb}.zip", d.get("error", fname))
     words = json.dumps([seen_b[-1].get("findings"), seen_b[-1].get("headline")]) if seen_b else ""
@@ -359,7 +371,7 @@ try:
         def other_report(hosts, scope=None, load=True):
             out = dict(real_hf(hosts, scope, load) or {})
             if ip0 in hosts:
-                f0 = {k_: list(v) for k_, v in (out.get(ip0) or {}).items()}
+                f0 = {k_: (dict(v) if isinstance(v, dict) else list(v)) for k_, v in (out.get(ip0) or {}).items()}   # "levels" is a map
                 f0.setdefault("infections", []).append("smb-scan"); f0.setdefault("issues", []).append("Compromised")
                 out[ip0] = f0
             return out

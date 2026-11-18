@@ -227,7 +227,9 @@ try:
         import reports_pdf as RP
         S = RP.styles()
         head, rest = RP.enrichment_block("herdbot", c2, "", S, 400)
-        txt = " ".join(getattr(f, "text", "") for f in rest)
+        # the whole card: its first lines are kept together with the heading (shorter since the references moved to
+        # the References section, 2026-11-18), the rest flows after it
+        txt = " ".join(getattr(f, "text", "") for f in list(getattr(head, "_content", None) or []) + list(rest))
         ok("analysis PDF card prints the source line and the other sources", "Also described by" in txt and "CC0 1.0" in txt, txt[:160])
         ok("Definitions: which sources know a name", A.NAME_SOURCES.known_by("herdbot") == ["MISP Galaxy · Botnet cluster", "MITRE ATT&CK"]
            and A.NAME_SOURCES.known_by("x", "win.x") == ["Malpedia"] and A.NAME_SOURCES.known_by("no-such-name-anywhere") == [])
