@@ -457,7 +457,7 @@ U.S. Government it is not subject to copyright in the United States, and anyone 
 without permission. The control identifiers and titles the Audit portal shows are quoted from NIST's official catalogue
 (Release 5.2.0); please credit NIST as the source.
 
-**Credits:** data — the Shadowserver Foundation (your CSIRT's own reports) · region boundaries — geoBoundaries, Natural Earth ·
+**Credits:** data — the Shadowserver Foundation (mappings, report definitions) · region boundaries — geoBoundaries, Natural Earth ·
 maps — Mapbox · 3D arcs — deck.gl · network names — RIPEstat and PeeringDB · malware look-ups — Malpedia (Fraunhofer FKIE).
 
 **Global context (third-party): ICHI.** To see how things look globally, the
