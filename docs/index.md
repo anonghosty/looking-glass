@@ -19,7 +19,7 @@ hide:
 <path class="lgh-handle" d="M21.4 21.4 L27.6 27.6" stroke="#ededef" stroke-width="3" stroke-linecap="round" pathLength="100"/>
 </svg></div>
 
-<p class="lg-eyebrow">Free and open source · built in Africa, for African CSIRTs</p>
+<p class="lg-eyebrow">Free and open source · built in Africa, for CSIRTs in every country</p>
 
 # Your Shadowserver reports, replayed as a living picture of your country
 

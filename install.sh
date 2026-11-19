@@ -94,7 +94,7 @@ banner() {
 
    ╭─────────────────────────────────────────────────────────────╮
    │   ◉  L O O K I N G   G L A S S                              │
-   │      Shadowserver threat replay for African CSIRTs          │
+   │      Shadowserver threat replay for CSIRTs everywhere       │
    ╰─────────────────────────────────────────────────────────────╯
 EOF
   printf '%s\n' "$R"

@@ -167,7 +167,7 @@ def splash():
     screen_on()
     try:
         top, left = max(1, (lines - size // 2 - 4) // 2), (cols - size) // 2 + 1
-        name, sub = "L O O K I N G   G L A S S", "Shadowserver threat replay for African CSIRTs"
+        name, sub = "L O O K I N G   G L A S S", "Shadowserver threat replay for CSIRTs everywhere"
         t0 = time.time()
         while True:
             t = time.time() - t0

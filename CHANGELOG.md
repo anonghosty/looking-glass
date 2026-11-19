@@ -5,6 +5,17 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-19
+### Changed
+- **Documentation: for CSIRTs in every country.** The documentation site's home page, its title and description, its
+  link-preview card and the guided installer's banner now say "built in Africa, for CSIRTs in every country", as the
+  README does.
+- **Documentation: memory and disk measured again on this version.** The installation guide adds a measurement of the
+  current version (test installation, made-up data, about 67,000 records a day: about 2.3 GB for the platform and
+  MongoDB together, within the 4 GB minimum). The README's requirements now give the same 4 GB minimum (it said
+  about 2 GB), and the download and disk sizes are updated (about 70 MB to download, about 45 MB with `--depth 1`;
+  the code itself about 6 MB). Nothing to do when updating.
+
 ## 2026-11-18 (8)
 ### Changed
 - **Every PDF lists its references at the end, in a References section ordered by criticality.** The definition cards

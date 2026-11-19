@@ -239,7 +239,7 @@ a tamper-evident audit log with control checks mapped to NIST SP 800-53 and CIS 
 ## Quick start
 
 **You need:** Ubuntu 24.04 or later, Desktop or Server (on the computer itself, in a virtual machine, or Ubuntu on WSL 2 on Windows 10/11) · your Shadowserver API key, or
-the mailbox that receives your Shadowserver reports · about 250 MB of disk for the code and its Python environments,
+the mailbox that receives your Shadowserver reports · at least 4 GB RAM · about 250 MB of disk for the code and its Python environments,
 plus room for your reports in MongoDB · a free [Mapbox](https://account.mapbox.com/) token · optionally a [Malpedia](https://malpedia.caad.fkie.fraunhofer.de/) token.
 No Shadowserver reports yet? [Sign up your CSIRT](https://www.shadowserver.org/what-we-do/network-reporting/get-reports/) — it is free.
 
@@ -384,7 +384,7 @@ See the [security policy](.github/SECURITY.md).
 |---|---|
 | Countries | **every country and territory** (ISO 3166-1), chosen by continent; regions maps for about 200 of them, the rest drawn as one area |
 | Operating system | **Ubuntu 24.04 or later, Desktop or Server** — on the computer itself, in a virtual machine, or Ubuntu on WSL 2 on Windows 10/11. On Ubuntu Server, create the first administrator through an SSH tunnel (`ssh -L 5000:127.0.0.1:5000 user@server`, then open http://localhost:5000) |
-| Memory and disk | about 2 GB RAM for the platform. Disk: about 100 MB to download (the code itself is about 9 MB; the rest is screenshots, film posters and the history) and about 120 MB for the two Python environments; MongoDB needs space for your reports |
+| Memory and disk | **4 GB RAM minimum** for the whole server, enough for about 50,000 records a day; more records a day need more, see [How much memory](docs/INSTALLATION.md#how-much-memory). Disk: about 70 MB to download (about 45 MB with `--depth 1`); the files take about 70 MB, of which the code is about 6 MB and the rest screenshots, film posters and the world maps; the two Python environments add about 115 MB; MongoDB needs space for your reports |
 | Network | the mailbox (IMAP, Gmail API or Microsoft Graph) or Shadowserver's report API, Mapbox for the map tiles; optional Malpedia, RIPEstat, PeeringDB, NVD, CISA KEV and EPSS look-ups |
 | Browsers | current Chrome, Edge, Firefox or Safari; TVs and phones supported |
 

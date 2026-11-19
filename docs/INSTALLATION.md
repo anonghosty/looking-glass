@@ -71,7 +71,7 @@ For a plain screen without the logo's movement, use `./install.sh --no-animation
 | Mapbox | a free account and a public access token (`pk.…`) for the map: https://account.mapbox.com |
 | Malpedia (optional) | an API token, so Malpedia joins the sources behind the "Look up" buttons |
 | Name sources (no account needed) | MISP Galaxy, MITRE ATT&CK and MITRE CTID's KEV mappings: the installer downloads the first copies (public files on GitHub, about 60 MB to fetch, about 6 MB kept, a minute) and schedules a weekly refresh. Without internet the installation goes on without them; look-ups then use the definitions and Malpedia until the next refresh |
-| Memory / disk | **Minimum: 4 GB RAM** for the whole server. That is enough for up to about 50,000 records a day (about half a million records kept), which covers most countries; more records a day need more, see [How much memory](#how-much-memory). Disk: `git clone` downloads about 50 MB (about 36 MB with `--depth 1`, the latest version only) and takes about 45 MB on disk; the code itself is under 10 MB, the rest is screenshots and film posters. The two Python environments the installer makes add about 115 MB. MongoDB needs space for your reports |
+| Memory / disk | **Minimum: 4 GB RAM** for the whole server. That is enough for up to about 50,000 records a day (about half a million records kept), which covers most countries; more records a day need more, see [How much memory](#how-much-memory). Disk: `git clone` downloads about 70 MB (about 45 MB with `--depth 1`, the latest version only); the files take about 70 MB on disk, of which the code itself is about 6 MB and the rest screenshots, film posters (about 37 MB) and the world maps (about 24 MB). The two Python environments the installer makes add about 115 MB. MongoDB needs space for your reports |
 
 ## How much memory
 
@@ -90,6 +90,11 @@ session (the map, the services platform, the Executive portal's 7-day baseline, 
 | 100,000 | 2.3 GB | 1.3 GB | 3.5 GB | 6 GB | 8 GB |
 | 200,000 | 4.0 GB | 1.5 GB | 5.5 GB | 8 GB | 12 GB |
 | 300,000 | 5.2 GB | 1.5 GB | 6.7 GB | 10 GB | 16 GB |
+
+Measured again on the current version (2026-11-18, the same way, on the test installation with made-up data at about
+67,000 records a day, after a cold start, every role's pages and all seven kinds of PDF): web service 1.5 GB at its
+peak, MongoDB 0.8 GB, together 2.3 GB, within the 4 GB minimum. The speed work since the table was made (day loads
+streamed, fewer database reads) made pages faster without raising memory.
 
 The web service grows with the records (about 2 GB per 100,000 a day); MongoDB levels off, as it keeps only what it
 is reading in memory. The server figures add Ubuntu itself (about 1 GB) and room to grow: during a day of use the web

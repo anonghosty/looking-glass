@@ -1,7 +1,7 @@
 # The documentation site (Read the Docs, or any MkDocs host), built from the same docs/ folder GitHub shows.
 # Local preview:  pip install -r docs/requirements.txt && mkdocs serve
 site_name: Looking Glass
-site_description: Your Shadowserver reports, replayed as a living picture of your country. Free and open source, built in Africa, for African CSIRTs.
+site_description: Your Shadowserver reports, replayed as a living picture of your country. Free and open source, built in Africa, for CSIRTs in every country.
 site_author: Ike Owuraku Amponsah
 site_url: !ENV [READTHEDOCS_CANONICAL_URL, ""]
 repo_url: https://github.com/anonghosty/looking-glass

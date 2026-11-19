@@ -4,7 +4,7 @@
 {%- set lg_site = config.site_url or "https://looking-glass-gh.readthedocs.io/en/latest/" -%}
 {%- if not lg_site.endswith("/") %}{% set lg_site = lg_site ~ "/" %}{% endif -%}
 {%- if page and page.is_homepage -%}
-  {%- set lg_title = "Looking Glass: Shadowserver reports, replayed for African CSIRTs" -%}
+  {%- set lg_title = "Looking Glass: Shadowserver reports, replayed for CSIRTs in every country" -%}
 {%- elif page and page.title -%}
   {%- set lg_title = (page.title | striptags) ~ " · Looking Glass" -%}
 {%- else -%}
