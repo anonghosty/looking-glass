@@ -4,7 +4,8 @@ test account on a RUNNING install and opens every page the role's Overview links
 1. keyboard: every visible control is reached by the Tab key, focus is never trapped, and nothing that looks
    clickable (pointer cursor) sits outside a control the keyboard can reach;
 2. lists: a list (ul/ol) holds list items only, and no list item is itself made into a button (screen readers);
-3. cut-off text: once the page has settled, no text is cut with "…";
+3. cut-off text: once the page has settled, no text is cut with "…"; and no MITRE ATT&CK technique or mitigation is
+   shown twice in one box (a rule, 2026-11-19);
 4. errors: no script error and no server error (5xx) while the page opens;
 5. loading: the loading logo shows at most once and draws itself at most once, loading lines do not come back after
    they have finished, and nothing is still loading after 30 s.
@@ -101,7 +102,19 @@ PAGE_JS = """(sel) => {
       .filter(c => !['LI', 'SCRIPT', 'TEMPLATE'].includes(c.tagName) || (c.tagName === 'LI' && c.getAttribute('role'))).map(c => name(l) + ' > ' + name(c))).slice(0, 8);
   const cut = [...document.querySelectorAll('body *')].filter(e => vis(e) && e.children.length <= 2 && e.textContent.trim()
       && getComputedStyle(e).textOverflow === 'ellipsis' && e.scrollWidth > e.clientWidth + 2).map(name).slice(0, 8);
-  return {n, pointer, lists, cut}; }"""
+  // RULE (the user, 2026-11-19): no MITRE ATT&CK technique or mitigation shown twice in one box (a card, the advisory's
+  // list, a dialog); the advisor's review queues (suggested / removed mappings, one per source on purpose) left out
+  const rx = /^\\s*((?:T\\d{4}(?:\\.\\d{3})?)|(?:M\\d{4}))\\b/, boxes = new Map(), dup = [];
+  for (const e of document.querySelectorAll('body *')) {
+    if (!vis(e) || e.closest('.av-tech-pending, .av-tech-removed, .av-tech-removedlist')) continue;
+    if ([...e.children].some(c => rx.test(c.textContent || ''))) continue;
+    const t = (e.textContent || '').trim(), m = rx.exec(t); if (!m || t.length > 160) continue;
+    let b = e.closest('.av-tech-out, .av-attack, article, section, dialog, [role=dialog], .card, details, body');
+    if (b && b.classList.contains('av-tech-out')) b = b.parentElement;
+    let s = boxes.get(b); if (!s) boxes.set(b, s = new Map()); s.set(m[1], (s.get(m[1]) || 0) + 1);
+  }
+  for (const [b, s] of boxes) for (const [k, c] of s) if (c > 1) dup.push(k + ' x' + c + ' in ' + String(b.className || b.tagName).slice(0, 40));
+  return {n, pointer, lists, cut, dup: dup.slice(0, 8)}; }"""
 
 
 def totp(secret):
@@ -196,7 +209,8 @@ with sync_playwright() as p:
             probs = ([f"not reached by Tab: {missed}"] if missed else []) + (["focus trapped"] if same > 5 else []) + \
                     ([f"clickable but not a control: {info['pointer']}"] if info["pointer"] else []) + \
                     ([f"list holds a non-item: {info['lists']}"] if info["lists"] else []) + \
-                    ([f"cut off with '…': {info['cut']}"] if info["cut"] else []) + load_probs + errs[:4]
+                    ([f"cut off with '…': {info['cut']}"] if info["cut"] else []) + \
+                    ([f"MITRE ATT&CK shown twice: {info['dup']}"] if info.get("dup") else []) + load_probs + errs[:4]
             if probs:
                 fails += 1
                 print(f"  FAIL {role} {path}: " + " | ".join(probs))

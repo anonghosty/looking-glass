@@ -75,6 +75,8 @@ def content_sig(adv):
             adv.get("actions") or ""]
     if adv.get("attack_decisions"):            # the advisor's ATT&CK choices change what the report carries (advisory_attack.py)
         body.append(sorted(adv["attack_decisions"].items()))
+    if "insights" in adv:                      # Add insights (2026-11-19): with or without the analysis pages; an advisory
+        body.append(["insights", bool(adv["insights"])])   # saved before the option keeps its fingerprint
     return hashlib.sha256(json.dumps(body, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
@@ -589,7 +591,14 @@ def install(app, ctx):
         return {"finding": x["id"], "network": network, "ref": None, "subject": x["title"], "description": "", "actions": "",
                 "recipients": [network] if network else [], "tlp": tlp.DEFAULT, "status": "draft", "created": _now(), "updated": _now(), "by": user,
                 "sends": [], "reports": [], "source": (x.get("review") or {}).get("source") or ((x.get("codes") or [None])[0]),
-                "decision": (x.get("review") or {}).get("decision") or "", "history": [{"at": _now(), "user": user, "what": "created"}]}
+                "decision": (x.get("review") or {}).get("decision") or "", "history": [{"at": _now(), "user": user, "what": "created"}],
+                # a new advisory goes without the insights pages; the advisor adds them (the user, 2026-11-19)
+                "insights": False}
+
+    def insights_of(adv):
+        """Whether the advisory's PDF carries the insights pages: what the advisor chose; an advisory saved before the
+        option existed keeps them (as it was generated before)."""
+        return bool(adv.get("insights", True))
 
     def view(adv, x, auto=None, with_devices=False):
         """The advisory as the page and the export show it (addresses only with with_devices: never in the export)."""
@@ -610,6 +619,7 @@ def install(app, ctx):
                             "devices": len(auto["devices"]), "records": sum(d["records"] for d in auto["devices"])},
                "reports": auto["reports"], "impact": auto["impact"], "kinds_line": auto["kinds_line"],
                "description": adv["description"], "recommended_actions": adv["actions"], "recipients": adv["recipients"],
+               "insights": insights_of(adv),
                "sends": [{"to": s["to"], "at": _day(s["at"]), "by": name_of(s["by"]), "report": (s.get("report") or {}).get("name", "")}
                          for s in adv.get("sends") or []],
                "locked": adv.get("status") == "sent",    # sent: read-only, the record of what went out
@@ -635,11 +645,14 @@ def install(app, ctx):
         o = ctx["org"].get()
         ref = v["ref"] or "ADV (draft, not saved yet)"
         return {"ref": ref, "org": v["organisation"], "logo": o["logo"], "title": v["title"], "subject": v["subject"],
+                # the look of the PDF and the name at the top of its pages (Settings → Organisation, 2026-11-19)
+                "look": o.get("pdf_look") or "designed",
+                "brand": ctx["org"].brand_text() if hasattr(ctx["org"], "brand_text") else "Looking Glass",
                 "network": v["network"], "date": v["updated"], "status_label": v["status_label"], "by": v["organisation"],    # signed by the CSIRT
                 "finding": v["finding"], "cves": v["affected"]["cves"], "issues": v["affected"]["issues"],
                 "categories": v["affected"]["categories"], "labels": v["affected"]["labels"], "devices": auto["devices"], "reports": v["reports"], "impact": v["impact"],
                 "kinds_line": v["kinds_line"], "description": v["description"], "actions": v["recommended_actions"],
-                "recipients": v["recipients"], "has_report": has_report,
+                "recipients": v["recipients"], "has_report": has_report, "insights": v["insights"],
                 "attack": advisory_attack.for_recipients(v.get("attack")),     # only reviewed mappings go to recipients
                 "tlp": v["tlp"], "tlp_short": v["tlp_short"], "tlp_text": v["tlp_text"], "tlp_colour": (tlp.of(v["tlp"]) or {}).get("colour", "#FFC000"),
                 "header": f"{v['tlp']} · {ref} · {v['network'] or 'all networks'}"[:80]}
@@ -873,6 +886,12 @@ def install(app, ctx):
         heading = re.sub(r"\s+", " ", str(b.get("heading") or "")).strip()[:MAX_SUBJECT]
         adv.update(heading=heading, tlp=level["key"], subject=subject, description=str(b.get("description") or "").replace("\r", "").strip()[:MAX_TEXT],
                    actions=str(b.get("actions") or "").replace("\r", "").strip()[:MAX_TEXT], recipients=rec, updated=_now())
+        if "insights" in b:                          # Add insights: the analysis pages after the advisory, or not
+            was = insights_of(adv)
+            adv["insights"] = bool(b.get("insights"))
+            if not create and was != adv["insights"]:
+                adv["history"].append({"at": _now(), "user": user,
+                                       "what": "insights added" if adv["insights"] else "insights left out"})
         if not create:
             if adv["status"] == "drafted":            # changed after it was marked as drafted: a draft again until marked again
                 adv["status"] = "draft"
@@ -890,7 +909,15 @@ def install(app, ctx):
 
     def build(x, adv, network, as_pdf_only=False, preview=False):
         """(file name, bytes, pdf name, pdf bytes) of the organisation's report; (None, error). preview: the advisor's
-        preview, every page marked with who opened it and when (the user, 2026-11-18); never the generated file."""
+        preview, every page marked with who opened it and when (the user, 2026-11-18); never the generated file.
+        An ATT&CK technique or mitigation that would be printed twice stops it (advisory_pdf.assert_no_duplicates)."""
+        import advisory_pdf
+        try:
+            return _build(x, adv, network, as_pdf_only, preview)
+        except advisory_pdf.DuplicateAttack as e:
+            return None, f"The report was not made: {e}. Please tell the administrator (it is a fault, not your advisory)."
+
+    def _build(x, adv, network, as_pdf_only=False, preview=False):
         auto = auto_of(x, network)
         v = view(adv, x, auto)
         has_report = kept(x)

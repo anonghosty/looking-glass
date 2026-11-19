@@ -345,7 +345,7 @@ class AttackMap:
             known = self._items(sw["techniques"], "known", "known", "MITRE", "", "")
         if not (items or known):
             return None
-        return {"version": self.version(), "techniques": items + known, "software": (sw or {}).get("name", ""),
+        return {"version": self.version(), "techniques": merge_by_id(items) + merge_by_id(known), "software": (sw or {}).get("name", ""),
                 "software_id": (sw or {}).get("id", ""), "groups": (sw or {}).get("groups") or []}
 
     # ---------------------------------------------------------------------------------------------- CVEs (CTID KEV)
@@ -682,6 +682,35 @@ def latest_kev_path(tree):
     return best[1] if best else ""
 
 
+_RANK = {"observed": 0, "possible": 1, "known": 2}
+
+
+def merge_by_id(items):
+    """Each technique once (the user, 2026-11-19: "it repeats everywhere"): a technique several reports or rules map
+    to becomes one item, with every report in "reports" (and "report" naming them all), the strongest certainty
+    (Observed before Possible), each distinct reason once in "why", and every mitigation once. Order kept (first seen)."""
+    out, by = [], {}
+    for it in items or []:
+        g = by.get(it.get("id"))
+        if g is None:
+            g = dict(it, reports=[r for r in [it.get("report")] if r], defend=list(it.get("defend") or []))
+            by[it.get("id")] = g
+            out.append(g)
+            continue
+        if _RANK.get(it.get("certainty"), 9) < _RANK.get(g.get("certainty"), 9):
+            g["certainty"], g["certainty_label"], g["role"] = it.get("certainty"), it.get("certainty_label"), it.get("role", g.get("role"))
+        if it.get("report") and it["report"] not in g["reports"]:
+            g["reports"].append(it["report"])
+        if it.get("why") and it["why"] not in (g.get("why") or ""):
+            g["why"] = f"{g['why']} {it['why']}".strip() if g.get("why") else it["why"]
+        have = {m.get("id") for m in g["defend"]}
+        g["defend"] += [m for m in it.get("defend") or [] if m.get("id") not in have]
+    for g in out:
+        if len(g.get("reports") or []) > 1:
+            g["report"] = ", ".join(g["reports"])
+    return out
+
+
 # ------------------------------------------------------------------------------------------------ text for documents
 def attack_lines(att):
     """Plain text for PDFs and CSV: grouped by tactic, every technique with its certainty; the version first.
@@ -706,13 +735,13 @@ def attack_lines(att):
             s += f" · {', '.join(t['tactics'])}" if t.get("tactics") else ""
             s += f" · {t['certainty_label'].split(' (')[0]}"
             bits.append(s + (f" ({'; '.join(extra)})" if extra else ""))
-        out.append(f"MITRE ATT&CK v{v}: " + "; ".join(bits) + ".")
+        out.append(f"MITRE ATT&CK v{v}: " + "; ".join(dict.fromkeys(bits)) + ".")     # each technique once (2026-11-19)
     if known:
         by = {}
         for t in known:
             by.setdefault((t.get("tactics") or ["Other"])[0], []).append(f"{t['id']} {t['name']}")
         out.append(f"Known for this malware (MITRE ATT&CK v{v}, {att.get('software') or 'Software'}): "
-                   + "; ".join(f"{ta}: {', '.join(v2)}" for ta, v2 in by.items()) + ".")
+                   + "; ".join(f"{ta}: {', '.join(dict.fromkeys(v2))}" for ta, v2 in by.items()) + ".")
         if att.get("groups"):
             out.append(f"Groups MITRE says use it: {', '.join(att['groups'])}.")
     if att.get("source"):                                 # CVE techniques (CTID KEV)

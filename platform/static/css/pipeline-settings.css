@@ -51,6 +51,10 @@
 .wk-requests li.bad { color: #ff8f8f; }
 .wk-confirm { margin: 4px 0 6px; padding: 6px 10px; border-left: 3px solid #e0a83a; background: rgba(224, 168, 58, .08); border-radius: 4px; font-size: 12px; }
 .wk-confirm code { display: block; margin-top: 4px; font-family: var(--mono, monospace); user-select: all; word-break: break-all; }
+/* the command with its Copy button (recorded like every copy; 2026-11-19) */
+.wk-confirm-cmd { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-top: 4px; }
+.wk-confirm-cmd code { margin-top: 0; flex: 1 1 260px; }
+.wk-confirm-cmd .wk-copy { flex: none; }
 .wk-api { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 4px; }
 .wk-api .wk-in { flex: 1 1 220px; }
 .wk-modal { max-width: 440px; }

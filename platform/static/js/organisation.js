@@ -1,14 +1,18 @@
-/* Looking Glass · Settings: the organisation's name and logo, which head every advisory (organisation.py).
+/* Looking Glass · Settings: the organisation's name and logo, which head every advisory (organisation.py), and the
+   advisory PDF's look (designed or plain white) and the name at the top of its pages (2026-11-19).
    Saved on its own, with its own button (not with Apply settings). */
 (() => {
   const $ = (id) => document.getElementById(id);
   const card = $("cardOrg");
   if (!card) return;
   const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
-  let saved = { name: "", has_logo: false }, logo, maxKb = 40;   // logo: undefined = keep, "" = remove, data URL = new
+  let saved = { name: "", has_logo: false, look: "designed", brand: "looking-glass" }, logo, maxKb = 40;   // logo: undefined = keep, "" = remove, data URL = new
 
   const msg = (t, bad) => { $("orgMsg").textContent = t; $("orgMsg").style.color = bad ? "#ff8f8f" : ""; };
-  const dirty = () => $("orgName").value.trim() !== saved.name || logo !== undefined;
+  const dirty = () => $("orgName").value.trim() !== saved.name || logo !== undefined ||
+    $("orgPdfLook").value !== saved.look || $("orgPdfBrand").value !== saved.brand;
+  // a select enhanced by lg-select.js shows its own button: its change event keeps that button in step
+  const setSel = (el, v) => { el.value = v; el.dispatchEvent(new Event("change")); };
   const sync = () => { $("orgSave").disabled = !dirty() || !$("orgName").value.trim(); };
   const show = (src) => {
     $("orgLogo").hidden = !src; $("orgNoLogo").hidden = !!src; $("orgRemove").hidden = !src;
@@ -20,7 +24,9 @@
       const r = await fetch("/api/organisation", { credentials: "same-origin" });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || r.status);
-      saved = { name: d.name || "", has_logo: !!d.has_logo }; maxKb = d.max_logo_kb || 40;
+      saved = { name: d.name || "", has_logo: !!d.has_logo, look: d.pdf_look || "designed", brand: d.pdf_brand || "looking-glass" };
+      maxKb = d.max_logo_kb || 40;
+      setSel($("orgPdfLook"), saved.look); setSel($("orgPdfBrand"), saved.brand);
       $("orgName").value = saved.name; logo = undefined;
       show(saved.has_logo ? `/organisation/logo?t=${Date.now()}` : "");
       $("orgLogoHint").textContent = `At most ${maxKb} KB.`;
@@ -29,6 +35,8 @@
   }
 
   $("orgName").addEventListener("input", sync);
+  $("orgPdfLook").addEventListener("change", sync);
+  $("orgPdfBrand").addEventListener("change", sync);
   $("orgFile").addEventListener("change", () => {
     const f = $("orgFile").files[0];
     $("orgFile").value = "";
@@ -43,6 +51,7 @@
   $("orgSave").addEventListener("click", async () => {
     const body = { name: $("orgName").value.trim() };
     if (logo !== undefined) body.logo = logo;
+    body.pdf_look = $("orgPdfLook").value; body.pdf_brand = $("orgPdfBrand").value;
     $("orgSave").disabled = true; msg("Saving…");
     try {
       const r = await fetch("/api/organisation", { method: "POST", credentials: "same-origin",

@@ -118,6 +118,19 @@ def install(app, core):
                                                "fresh": A["fresh"], "audit": A["audit"],
                                                "org": Organisation(os.path.join(base, "data", "organisation.json"))})
 
+    # Settings → Constituency: pick address blocks (/24) from the reports, with their records and network
+    # (address_blocks.py, the user 2026-11-19); counted by both day loaders before the constituency
+    if "has_perm" in A and core.get("asns") is not None:
+        import address_blocks
+        asns = core["asns"]
+
+        def blocks_days():
+            start = core["day_start"](core["replay_now"]())
+            return [d for d in (store.days.get(start), svc_store.days.get(start)) if d is not None]
+        out["address_blocks"] = address_blocks.install(app, {
+            "has_perm": A["has_perm"], "settings": st, "days": blocks_days,
+            "company": lambda asn: asns.company(asn, False), "day": lambda: core["day_start"](core["replay_now"]()).date().isoformat()})
+
     # the analyst codes' device counts worked out ahead after a start, so the Findings page does not wait for them
     # (acode_warm.py; only in the running service)
     if core.get("acodes") is not None:

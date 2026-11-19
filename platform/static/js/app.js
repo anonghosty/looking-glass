@@ -1149,11 +1149,17 @@
       if (my === refreshStats.seq && !state.stats && !refreshStats.toasted) { refreshStats.toasted = true; toast(`Could not load figures: ${err.message}`); }
     }
   }
+  // the drop-downs' counts follow the other filters (the user, 2026-11-19): asked again whenever a filter changes;
+  // a slower answer for an older choice of filters is dropped
+  const facetsURL = () => { const p = filterParams(); p.set("at", new Date(replayNow()).toISOString()); return `/api/facets?${p}`; };
   async function loadFacets() {
+    const my = (loadFacets.seq = (loadFacets.seq || 0) + 1);
     try {
-      state.facets = await getJSON(`/api/facets?at=${encodeURIComponent(new Date(replayNow()).toISOString())}`);
+      const f = await getJSON(facetsURL());
+      if (my !== loadFacets.seq) return;
+      state.facets = f;
       for (const r of state.facets.infection || []) infColor(r.value);
-      buildFilters();
+      keepFocus(buildFilters);
       renderPins();   // pinned rows can now show report labels
       if (state.facets.beacon_pending) setTimeout(loadBeaconFacet, 20000);
     } catch (err) { toast(`Could not load filters: ${err.message}`); }
@@ -1162,7 +1168,7 @@
   // filled in when they are done, so nothing else the analyst set changes
   async function loadBeaconFacet() {
     try {
-      const f = await getJSON(`/api/facets?at=${encodeURIComponent(new Date(replayNow()).toISOString())}`);
+      const f = await getJSON(facetsURL());
       if (f.beacon_pending) { setTimeout(loadBeaconFacet, 30000); return; }
       if (!f.beacon || !state.facets) return;
       state.facets.beacon = f.beacon; delete state.facets.beacon_pending;
@@ -1605,14 +1611,29 @@
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") { if (!$("insight").hidden) closeInsight(); else if (!$("modal").hidden) closeModal(); else setDrawer(false); } });
 
   // ------------------------------------------------------------------ filters
+  // a rebuilt list replaces its buttons and boxes: the one that had the keyboard focus gets it back (same filter, same value)
+  function keepFocus(build) {
+    const a = document.activeElement, k = a?.dataset?.fk, v = a?.dataset?.fv;
+    build();
+    if (k == null) return;
+    const back = [...document.querySelectorAll("[data-fk]")].find((n) => n.dataset.fk === k && n.dataset.fv === v);
+    if (back) back.focus({ preventScroll: true });
+  }
+  // a chosen value the other filters leave nothing of is still listed (count 0), so it can be seen and taken off
+  function withChosen(rows, key) {
+    const cur = state.filters[key];
+    const chosen = cur instanceof Set ? [...cur] : (cur ? [cur] : []);
+    const have = new Set(rows.map((r) => String(r.value)));
+    return rows.concat(chosen.filter((v) => !have.has(String(v))).map((v) => ({ value: v, count: 0 })));
+  }
   function buildFilters() {
     const f = state.facets || {};
     const cBox = $("fClass"); cBox.replaceChildren();
-    for (const r of f.attack_class || []) cBox.append(chip(r.value, "attack_class", classColor(r.value), fmt(r.count)));
+    for (const r of withChosen(f.attack_class || [], "attack_class")) cBox.append(chip(r.value, "attack_class", classColor(r.value), fmt(r.count)));
     const sl = $("fSource"); sl.replaceChildren();
-    for (const r of f.source || []) {
+    for (const r of withChosen(f.source || [], "source")) {
       const li = el("li"), label = el("label"), cb = el("input");
-      cb.type = "checkbox"; cb.checked = state.filters.source.has(r.value);
+      cb.type = "checkbox"; cb.checked = state.filters.source.has(r.value); cb.dataset.fk = "source"; cb.dataset.fv = r.value;
       cb.addEventListener("change", () => { cb.checked ? state.filters.source.add(r.value) : state.filters.source.delete(r.value); filtersChanged(); });
       const sw = el("span", "swatch"); sw.style.background = classColor(f.source_class?.[r.value]);
       const name = el("span", "name", srcLabel(r.value)); name.title = `${r.value} · ${f.source_class?.[r.value] || ""}`; name.style.fontFamily = "var(--font)";
@@ -1621,27 +1642,27 @@
     }
     $("srcCount").textContent = f.source ? `(${f.source.length} with data yesterday)` : "";
     const sevBox = $("fSeverity"); sevBox.replaceChildren();
-    for (const s of (f.severity || []).map((x) => x.value).sort((a, b) => SEV_ORDER.indexOf(a) - SEV_ORDER.indexOf(b))) sevBox.append(chip(s, "severity", sevColor(s)));
+    for (const s of withChosen(f.severity || [], "severity").map((x) => x.value).sort((a, b) => SEV_ORDER.indexOf(a) - SEV_ORDER.indexOf(b))) sevBox.append(chip(s, "severity", sevColor(s)));
     const pBox = $("fProtocol"); pBox.replaceChildren();
-    for (const p of f.protocol || []) pBox.append(chip(p.value, "protocol"));
+    for (const p of withChosen(f.protocol || [], "protocol")) pBox.append(chip(p.value, "protocol"));
     renderInfectionList();
     $("infCount").textContent = f.infection ? `(${f.infection.length})` : "";
-    fillSelect($("fSrcCity"), "All cities", f.src_city || [], (v) => titleCase(v), "src_city");
-    fillSelect($("fDst"), "All countries", f.dst_geo || [], countryName, "dst_geo");
-    fillSelect($("fTag"), "All tags", f.tag || [], (v) => v, "tag");
-    fillSelect($("fPort"), "All ports", f.dst_port || [], (v) => v, "dst_port");
-    fillSelect($("fSrcAsn"), "All networks", f.src_asn || [], (v) => v, "src_asn");
-    fillSelect($("fDstAsn"), "All networks", f.dst_asn || [], (v) => v, "dst_asn");
+    fillSelect($("fSrcCity"), "All cities", withChosen(f.src_city || [], "src_city"), (v) => titleCase(v), "src_city");
+    fillSelect($("fDst"), "All countries", withChosen(f.dst_geo || [], "dst_geo"), countryName, "dst_geo");
+    fillSelect($("fTag"), "All tags", withChosen(f.tag || [], "tag"), (v) => v, "tag");
+    fillSelect($("fPort"), "All ports", withChosen(f.dst_port || [], "dst_port"), (v) => v, "dst_port");
+    fillSelect($("fSrcAsn"), "All networks", withChosen(f.src_asn || [], "src_asn"), (v) => v, "src_asn");
+    fillSelect($("fDstAsn"), "All networks", withChosen(f.dst_asn || [], "dst_asn"), (v) => v, "dst_asn");
     // the beacons Looking Glass decoded (analysts and admins: the server sends no list to masked viewers)
     const bLabel = $("fBeaconLabel");
     if (bLabel) {
       bLabel.hidden = !f.beacon;
-      if (f.beacon) fillSelect($("fBeacon"), f.beacon.length ? "All records" : "No decoded beacons today", f.beacon, (v) => v, "beacon");
+      if (f.beacon) fillSelect($("fBeacon"), f.beacon.length ? "All records" : "No decoded beacons today", withChosen(f.beacon, "beacon"), (v) => v, "beacon");
     }
   }
   function chip(value, key, dotColor, count) {
     const b = el("button", "chip"); b.type = "button";
-    b.setAttribute("aria-pressed", String(state.filters[key].has(value)));
+    b.setAttribute("aria-pressed", String(state.filters[key].has(value))); b.dataset.fk = key; b.dataset.fv = value;
     if (dotColor) { const d = el("span", "dot"); d.style.background = dotColor; b.append(d); }
     b.append(document.createTextNode(value));
     if (count) b.append(el("span", "chip-n", count));
@@ -1652,10 +1673,10 @@
     const q = $("infSearch").value.trim().toLowerCase();
     const ul = $("fInfection"); ul.replaceChildren();
     const sevOf = state.facets?.infection_severity || {};
-    for (const r of state.facets?.infection || []) {
+    for (const r of withChosen(state.facets?.infection || [], "infection")) {
       if (q && !r.value.toLowerCase().includes(q)) continue;
       const li = el("li"), label = el("label"), cb = el("input");
-      cb.type = "checkbox"; cb.checked = state.filters.infection.has(r.value);
+      cb.type = "checkbox"; cb.checked = state.filters.infection.has(r.value); cb.dataset.fk = "infection"; cb.dataset.fv = r.value;
       cb.addEventListener("change", () => { cb.checked ? state.filters.infection.add(r.value) : state.filters.infection.delete(r.value); filtersChanged(); });
       const sw = el("span", "swatch"); sw.style.background = infColor(r.value); sw.style.color = infColor(r.value);
       const name = el("span", "name", r.value); name.title = `${r.value} · ${sevOf[r.value] || ""}`;
@@ -1681,7 +1702,7 @@
   function filtersChanged() {
     clearTimeout(filterTimer);
     renderFilterBar(); renderPins();
-    filterTimer = setTimeout(() => { resetStream(); refreshStats(); refreshReplayed(); loadGeo(true); }, 250);
+    filterTimer = setTimeout(() => { resetStream(); refreshStats(); refreshReplayed(); loadGeo(true); loadFacets(); }, 250);
   }
   function resetStream() {
     state.generation++;

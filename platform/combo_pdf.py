@@ -61,19 +61,70 @@ def _watermark(text):
 NOT_GIVEN = "Not given by the report"
 
 
+def _light(col):
+    """A colour of the designed (dark) pages as it reads on white paper: the same hue, the lightness turned around
+    (dark backgrounds become white, light text dark), the transparency kept. The plain look of an advisory (Settings →
+    Organisation, the user 2026-11-19), applied as the canvas draws, so every part of the PDF follows without being
+    drawn twice. Pictures (the logo, the preview watermark) are not colours and stay as they are."""
+    import colorsys
+    try:
+        r, g, b = float(col.red), float(col.green), float(col.blue)
+    except AttributeError:
+        return col
+    h, light, s = colorsys.rgb_to_hls(r, g, b)
+    light = 1 - light
+    if light > .5:                                        # a dark surface turned light: plain white paper, not grey
+        light = min(1.0, light + (light - .5) * .25)
+    s = min(1.0, s * .9)
+    r2, g2, b2 = colorsys.hls_to_rgb(h, light, s)
+    # a bright accent (amber, yellow, light green) kept as it was would barely show on white paper: darkened until it
+    # reads (WCAG 4.5:1 on white). Surfaces turned light (lightness over .8) are paper, not text, and stay.
+    while light <= .8 and light > .05 and _luminance(r2, g2, b2) > .183:
+        light -= .03
+        r2, g2, b2 = colorsys.hls_to_rgb(h, light, s)
+    return Color(r2, g2, b2, getattr(col, "alpha", 1))
+
+
+def _luminance(r, g, b):
+    """WCAG relative luminance of an sRGB colour (0..1 channels)."""
+    def ch(v):
+        return v / 12.92 if v <= .03928 else ((v + .055) / 1.055) ** 2.4
+    return .2126 * ch(r) + .7152 * ch(g) + .0722 * ch(b)
+
+
 class AnalystDoc(ex.Doc):
+    def __init__(self, meta):
+        super().__init__(meta)
+        self._plain = (meta.get("advisory") or {}).get("look") == "plain"
+        self._raw = False                                # True while a colour must stay exact (the TLP label)
+        if self._plain:
+            c = self.c
+            fill, stroke = c.setFillColor, c.setStrokeColor
+            c.setFillColor = lambda col, alpha=None: fill(col if self._raw else _light(col)) if alpha is None else fill(col if self._raw else _light(col), alpha)
+            c.setStrokeColor = lambda col, alpha=None: stroke(col if self._raw else _light(col)) if alpha is None else stroke(col if self._raw else _light(col), alpha)
+
+    def brand(self):
+        """The name at the top left of each page: an advisory's choice (Looking Glass, the organisation, or none);
+        "Looking Glass" on every other report."""
+        adv = self.meta.get("advisory")
+        return "Looking Glass" if not adv else str(adv.get("brand", "Looking Glass") or "")
+
     def new_page(self, section):
         if self.page:
             self.footer(); self.c.showPage()
         self.page += 1
         c = self.c
         c.setFillColor(ex.BG); c.rect(0, 0, W, H, stroke=0, fill=1)
-        c.saveState(); c.setFillColor(Color(.36, .55, .94, .10)); c.circle(W * .18, H + 40, 260, stroke=0, fill=1)
-        c.setFillColor(Color(.96, .7, .29, .06)); c.circle(W * .85, H + 60, 230, stroke=0, fill=1); c.restoreState()
+        if not getattr(self, "_plain", False):           # the plain look: no soft glow behind the header
+            c.saveState(); c.setFillColor(Color(.36, .55, .94, .10)); c.circle(W * .18, H + 40, 260, stroke=0, fill=1)
+            c.setFillColor(Color(.96, .7, .29, .06)); c.circle(W * .85, H + 60, 230, stroke=0, fill=1); c.restoreState()
         self.preview_marks()                             # an advisory's preview: who and when, behind and above (2026-11-18)
-        self.text(M, H - M - 6, "Looking Glass", 13, TXT, True)
-        lw = self.c.stringWidth("Looking Glass", self.F["b"], 13)
-        self.pill(M + lw + 8, H - M - 5, self.label_of(section) if self.meta.get("advisory") else
+        name = self.brand()
+        lw = 0
+        if name:                                         # Looking Glass, the organisation's name, or nothing (2026-11-19)
+            self.text(M, H - M - 6, self.fit(name, 300, 13, True), 13, TXT, True)
+            lw = min(300, self.c.stringWidth(self.s(name), self.F["b"], 13)) + 8
+        self.pill(M + lw, H - M - 5, self.label_of(section) if self.meta.get("advisory") else
                   "ANALYST · " + ("SELECTION" if str(self.meta.get("header", "")).find("LG-A-") >= 0 else "COMBINATION"), AMBER, 7)
         # the platform and scope line ("Publicly accessible services · Ghana · whole country"): not on any page of an advisory (the user, 2026-11-14 for its own pages; 2026-11-18: "taken out entirely",
         # the insights, technical details and references too); the analyst's own report keeps it
@@ -110,8 +161,12 @@ class AnalystDoc(ex.Doc):
         t = self.s(adv["tlp"])
         w = self.c.stringWidth(t, self.F["b"], 8.5) + 14
         x0 = (right - w) if right is not None else W / 2 - w / 2
-        self.c.setFillColor(HexColor("#000000")); self.c.roundRect(x0, y - 4, w, 14, 3, stroke=0, fill=1)
-        self.text(x0 + w / 2, y, t, 8.5, HexColor(adv.get("tlp_colour") or "#FFC000"), True, "middle")
+        self._raw = True                                 # TLP 2.0: a black box and the level's own colour, on any look
+        try:
+            self.c.setFillColor(HexColor("#000000")); self.c.roundRect(x0, y - 4, w, 14, 3, stroke=0, fill=1)
+            self.text(x0 + w / 2, y, t, 8.5, HexColor(adv.get("tlp_colour") or "#FFC000"), True, "middle")
+        finally:
+            self._raw = False
         return w
 
     # ---------------- an advisory's preview (the user, 2026-11-18): a screenshot of it names who took it and when, and
@@ -346,200 +401,206 @@ def build(d, meta):
         import advisory_pdf
         advisory_pdf.front(doc, adv)
 
-    # ---------------- page 1: overview
-    y = doc.new_page("Overview")
-    is_a = d["code"].startswith("LG-A-")
-    doc.text(M, y - 4, (d["name"] if adv else f"ANALYST CODE {d['code']}" if is_a else f"COMBINATION {d['code']} · {d['name']}").upper(),
-             8, HexColor("#a9b8ff"), True)                # an advisory: what it is about, never Looking Glass's codes
-    y = doc.wrap(M, y - 22, d["headline"], W - 2 * M - 40, 16, TXT, True, 20, 2) - 2
-    # what the combination is: per report, its indicators
-    for rep, items in d["parts"]:
-        doc.text(M, y - 9, doc.fit(rep, 150, 8.6, True), 8.6, DIM, True)
-        y = doc.chips(M + 160, y, W - 2 * M - 160, items) - 2
-    y -= 4
-    k = d["kpis"]
-    tiles = [(fmt(k["devices"]), "Devices", "with exactly this", BLUE),
-             (fmt(k["records"]), unit, f"{k['records'] / max(1, k['devices']):.1f} per device", VIOLET),
-             (fmt(k["repeat"]), "Repeating it", f"{_share(k['repeat'], k['devices'])} of the devices", AMBER),
-             (fmt(k["also"]), "In other reports", "of the same name", RED),
-             (fmt(k["regions"]), "Regions", f"{fmt(k['cities'])} cit{'y' if k['cities'] == 1 else 'ies'}", TEAL),
-             (fmt(k["networks"]), "Networks", "operators", SLATE)]
-    y = doc.kpis(y, tiles)
-    cols = [("IP address", .17, "l", True), ("Network", .25, "l", False), ("Region", .16, "l", False), ("City", .14, "l", False),
-            (unit, .1, "r", False), ("Last seen (UTC)", .18, "l", True)]
-    prev = lambda xs: [[x["ip"], x["network"], x["region"], x["city"], fmt(x["records"]), x["last"]] for x in xs]
-    if d.get("hours"):
-        hgt = max(150, y - 30)
-        cw = (W - 2 * M - 12) * .58
-        doc.area(M, y, cw, hgt, d["hours"], d["peak_hour"], unit)
-        doc.findings(M + cw + 12, y, W - 2 * M - cw - 12, hgt, d["findings"])
-    else:
-        # no event times on this platform: the key findings at their own height, the busiest devices beneath
-        need = 56 + sum(12 * min(3, len(ex.simpleSplit(doc.s(t), doc.F["r"], 8.8, W - 2 * M - 52))) + 6 for t in d["findings"][:7])
-        doc.findings(M, y, W - 2 * M, need, d["findings"])
-        y -= need + 12
-        if y - 30 > 90 and d["devices"]:
-            n = int((y - 30 - 62) // 15.5)
-            while n > 1 and 48 + doc.table_height(cols, W - 2 * M - 28, prev(d["devices"][:n])) > y - 30:
-                n -= 1
-            top = doc.card(M, y, W - 2 * M, min(y - 30, 52 + doc.table_height(cols, W - 2 * M - 28, prev(d["devices"][:n]))), "The busiest IP addresses",
-                           f"The {min(n, len(d['devices']))} with the most records; all of them on the next pages and in {d['csv_devices']}")
-            doc.table(M + 14, top, W - 2 * M - 28, cols, prev(d["devices"][:n]))
-
-    # ---------------- page 2: where
-    y = doc.new_page("Geographic Location")                  # (the user, 2026-11-18: was "Where")
-    hh = y - 30
-    mw = (W - 2 * M - 12) * .64
-    if d.get("shapes"):
-        top = doc.card(M, y, mw, hh, "Regions and cities", "Regions coloured by devices (red is most), with each region's cities beside the map")
-        doc.region_map(M + 10, top, mw * .56, hh - (y - top) - 12, d["shapes"], d["regions"], d["region_details"], True)
-        doc.text(M + mw * .56 + 22, top - 2, "Devices per region and city", 8, DIM, True)
-        doc.region_tree(M + mw * .56 + 22, top - 10, mw * .44 - 36, y - hh + 16, d["regions"], d["region_details"], True)
-    else:
-        top = doc.card(M, y, mw, hh, "Regions and cities", "Devices per region, with its cities")
-        doc.region_tree(M + 14, top - 10, mw - 28, y - hh + 16, d["regions"], d["region_details"], True)
-    x2, w2 = M + mw + 12, W - 2 * M - mw - 12
-    h2 = (hh - 12) / 2
-    top = doc.card(x2, y, w2, h2, "Networks", "Devices per network (all of them in the devices CSV)")
-    doc.bars(x2 + 14, top, w2 - 28, d["networks"], n=max(1, int((h2 - 56) // 37)), stack=True)
-    top = doc.card(x2, y - h2 - 12, w2, h2, "Cities", "Devices per city")
-    doc.bars(x2 + 14, top, w2 - 28, d["cities"], n=max(1, int((h2 - 56) // 37)), stack=True)
-
-    # ---------------- page 3 (and 4): the devices
-    # each device's infections, issues and CVEs that day, and (the report day) the other days in memory: the same
-    # combination there too, or what it carried instead (2026-11-17)
-    other = any(x.get("earlier") for x in d["devices"])
-    flag = lambda x: "; ".join(s for s in (", ".join((x.get("flags") or {}).get("infections") or []),                # noqa: E731
-                                           ", ".join(((x.get("flags") or {}).get("issues") or []) + ((x.get("flags") or {}).get("cves") or []))) if s) or "–"
-    cols = ([("IP address", .1, "l", True), ("Network", .1, "l", False), ("AS", .045, "l", False), ("Region", .075, "l", False),
-             ("City", .065, "l", False), (unit, .05, "r", False), ("Days", .035, "r", False), ("Last seen (UTC)", .1, "l", True),
-             ("Infections, issues, CVEs", .15, "l", False), ("Also seen in", .08, "l", False), ("Other days", .2, "l", False)] if other else
-            [("IP address", .11, "l", True), ("Network", .14, "l", False), ("AS", .05, "l", False), ("Region", .08, "l", False),
-             ("City", .07, "l", False), (unit, .05, "r", False), ("Days", .04, "r", False), ("Last seen (UTC)", .1, "l", True),
-             ("Infections, issues, CVEs", .22, "l", False), ("Also seen in", .14, "l", False)])
-    devs = d["devices"][:2 * DEVICE_ROWS]
-    row = lambda x: ([x["ip"], x["network"], x["asn"], x["region"], x["city"], fmt(x["records"]), fmt(x["days"]), x["last"], flag(x),   # noqa: E731
-                      x["also"] or "–"] + ([x.get("earlier") or "–"] if other else []))
-    tw = W - 2 * M - 28
-    room = H - M - 44 - 30 - 56                      # the table's height on one page
-    pages, cur = [], []
-    for x in devs:                                   # as many rows as fit (long cells wrap, so rows differ in height)
-        if cur and doc.table_height(cols, tw, [row(r) for r in cur + [x]]) > room:
-            pages.append(cur); cur = []
-            if len(pages) == 2:
-                break
-        cur.append(x)
-    if cur and len(pages) < 2:
-        pages.append(cur)
-    pages = pages or [[]]
-    shown = sum(len(p) for p in pages)
-    for pi, chunk in enumerate(pages):
-        # the table lists IP addresses, so it says so (the user, 2026-11-18: "not devices, IP addresses")
-        y = doc.new_page("IP addresses")
-        top = doc.card(M, y, W - 2 * M, min(y - 30, 56 + doc.table_height(cols, tw, [row(x) for x in chunk])),
-                       "The IP addresses with the most records" if pi == 0 else "The IP addresses (continued)",
-                       f"{fmt(shown)} of {fmt(d['kpis']['devices'])} shown, the most records first; every IP address is in {d['csv_devices']}"
-                       + ("" if adv else f", every record in {d['csv_records']}"))      # an advisory sends the devices CSV only
-        doc.table(M + 14, top, tw, cols, [row(x) for x in chunk])
-
-    # ---------------- across reports and what the devices are: only the parts that have something to show (an empty
-    # chart is left out, and the page with it when nothing is left; the key findings already say "none")
-    across_on = bool(d["across"]["multi"] or d["across"]["patterns"])
-    side = []                                          # (title, subtitle, rows, bars options, row height)
-    if d["report_sets"]:
-        side.append(("Reports these devices were seen in", "Devices per set of reports", d["report_sets"], {"stack": True}, 47))
-    if any(r["label"] != NOT_GIVEN for r in d["kinds"]):
-        side.append(("What the devices are", f"{unit} per vendor / type, as the reports name them", d["kinds"], {"metric": "count", "stack": True}, 37))
-    if d["ports"]:
-        side.append(("Destination ports" if comms else "Ports", f"{unit} per port / protocol", d["ports"], {"metric": "count"}, 17))
-    after = None                                       # where the explanations may start on this page (charts on their own)
-    top0 = H - M - 44                                  # the first line under a page's header (AnalystDoc.new_page)
-    alone_h = min(top0 - 30, max(110, max((66 + min(len(s[2]), 10) * s[4] for s in side), default=0)))
-    # short charts on their own leave most of a page empty (2026-11-14, an advisory's page 12): the Technical Details
-    # carry on under them, an advisory's page then labelled with both parts
-    # (not with an Impact section: the explanations then follow it on its page)
-    shared = not across_on and bool(d["explained"] or d["notes"]) and top0 - alone_h - 18 > H * .45 and not (d.get("impact") and not adv)
-    if across_on or side:
-        y = doc.new_page("Across reports" if across_on else " · ".join([s[0] for s in side] + ([EXPL] if shared else [])))
-        hh = y - 30
-        lw = (W - 2 * M - 12) * .6 if (across_on and side) else W - 2 * M if across_on else 0
-        if side:                                       # beside Across reports, stacked; on their own, side by side
-            if across_on:
-                x2, w2 = M + lw + 12, W - 2 * M - lw - 12
-                h3 = (hh - 12 * (len(side) - 1)) / len(side)
-                spots = [(x2, y - i * (h3 + 12), w2, h3) for i in range(len(side))]
-            else:                                      # as tall as their rows need, no taller
-                w3 = (W - 2 * M - 12 * (len(side) - 1)) / len(side)
-                spots = [(M + i * (w3 + 12), y, w3, alone_h) for i in range(len(side))]
-                after = y - alone_h - 18 if shared else None
-            for (title, sub, rows, opt, rh), (sx, sy, sw, sh) in zip(side, spots):
-                top = doc.card(sx, sy, sw, sh, title, sub)
-                doc.bars(sx + 14, top, sw - 28, rows, n=max(1, int((sh - 56) // rh)), **opt)
-    if across_on:
-        top = doc.card(M, y, lw, hh, "Across reports", ("What these devices carried in the name's other reports: each exact pattern, with its devices by IP address" if adv else
-                                              "What these devices carried in the name's other reports: each exact pattern, with its code to search next"))
-        yy = doc.hero(M + 14, top, lw - 28, [(fmt(d["across"]["multi"]), "devices also in other reports", HexColor("#a9c3ff")),
-                                             (fmt(d["across"]["patterns_total"]), "exact patterns", TXT),
-                                             (_share(d["across"]["multi"], k["devices"]), "of the devices", HexColor("#ffd38a"))])
-        from device_note import DEVICE_IP_NOTE          # devices are matched by IP address (review follow-up)
-        yy = doc.wrap(M + 14, yy - 4, DEVICE_IP_NOTE, lw - 28, 8, DIM)
-        if not d["across"]["patterns"] and is_a:
-            doc.wrap(M + 14, yy - 6, "An analyst code covers the whole selection, with several names: the researchers' view of the code gives each "
-                                     "name's cross-report patterns and their codes.", lw - 28, 8.8, DIM)
-    IPS_SHOWN = 40
-
-    def ip_lines(p, width):
-        """An advisory names a pattern by its devices (their IP addresses), not its code: the lines they take, wrapped."""
-        if not (adv and p.get("ips")):
-            return []
-        ips = p["ips"][:IPS_SHOWN]
-        more = len(p["ips"]) - len(ips)
-        text = ", ".join(ips) + (f" and {more} more (every one in the devices CSV)" if more > 0 else "")
-        from reportlab.lib.utils import simpleSplit
-        return simpleSplit(doc.s(text), doc.F["m"], 8, width - 28)
-
-    def est(p, width):
-        """About how tall a pattern is: its head, and per report the rows its chips take at this width."""
-        h = 28 + 11 * len(ip_lines(p, width))
-        for part in p["parts"]:
-            line = sum(doc.c.stringWidth(doc.s(str(it)), doc.F["r"], 7.6) + 22 for it in part["items"]) or 40
-            h += 22 * max(1, -(-line // max(60, width - 142)))
-        return h
-
-    bottom = (y - hh) if across_on else 0
-    for p in (d["across"]["patterns"] if across_on else []):
-        if yy - est(p, lw) < bottom + 14:
-            # no room left in this card: the next patterns go on a page of their own, never over the footer
-            y = doc.new_page("Across reports (continued)")
-            hh, lw = y - 30, W - 2 * M
-            yy = doc.card(M, y, lw, hh, "Across reports, continued", ("Each exact pattern, with its devices by IP address" if adv else "Each exact pattern, with its code to search next"))
-            bottom = y - hh
-            if yy - est(p, lw) < bottom + 14:
-                continue                               # taller than a whole page: it is in the CSV
-        yy -= 6
-        head = f"{fmt(p['devices'])} device{'s' if p['devices'] != 1 else ''}"
-        doc.text(M + 14, yy - 10, head, 9.6, TXT, True)
-        ipl = ip_lines(p, lw)
-        if ipl:                                        # an advisory: the devices themselves, by IP address
-            yy -= 22
-            for ln in ipl:
-                doc.text(M + 14, yy - 2, ln, 8, HexColor("#e3e9ff"), mono=True)
-                yy -= 11
-            yy -= 2
+    # the insights pages: Overview, Geographic location, the IP addresses, Across reports. An advisory carries them
+    # only when the advisor added them (Add insights, the user 2026-11-19); the advisory pages, its Technical
+    # Details and References always stay. The analysts' own report always has them.
+    insights = not adv or bool(adv.get("insights", True))
+    after = None                                       # where the explanations may start (set by the charts' page)
+    if insights:
+        # ---------------- page 1: overview
+        y = doc.new_page("Overview")
+        is_a = d["code"].startswith("LG-A-")
+        doc.text(M, y - 4, (d["name"] if adv else f"ANALYST CODE {d['code']}" if is_a else f"COMBINATION {d['code']} · {d['name']}").upper(),
+                 8, HexColor("#a9b8ff"), True)                # an advisory: what it is about, never Looking Glass's codes
+        y = doc.wrap(M, y - 22, d["headline"], W - 2 * M - 40, 16, TXT, True, 20, 2) - 2
+        # what the combination is: per report, its indicators
+        for rep, items in d["parts"]:
+            doc.text(M, y - 9, doc.fit(rep, 150, 8.6, True), 8.6, DIM, True)
+            y = doc.chips(M + 160, y, W - 2 * M - 160, items) - 2
+        y -= 4
+        k = d["kpis"]
+        tiles = [(fmt(k["devices"]), "Devices", "with exactly this", BLUE),
+                 (fmt(k["records"]), unit, f"{k['records'] / max(1, k['devices']):.1f} per device", VIOLET),
+                 (fmt(k["repeat"]), "Repeating it", f"{_share(k['repeat'], k['devices'])} of the devices", AMBER),
+                 (fmt(k["also"]), "In other reports", "of the same name", RED),
+                 (fmt(k["regions"]), "Regions", f"{fmt(k['cities'])} cit{'y' if k['cities'] == 1 else 'ies'}", TEAL),
+                 (fmt(k["networks"]), "Networks", "operators", SLATE)]
+        y = doc.kpis(y, tiles)
+        cols = [("IP address", .17, "l", True), ("Network", .25, "l", False), ("Region", .16, "l", False), ("City", .14, "l", False),
+                (unit, .1, "r", False), ("Last seen (UTC)", .18, "l", True)]
+        prev = lambda xs: [[x["ip"], x["network"], x["region"], x["city"], fmt(x["records"]), x["last"]] for x in xs]
+        if d.get("hours"):
+            hgt = max(150, y - 30)
+            cw = (W - 2 * M - 12) * .58
+            doc.area(M, y, cw, hgt, d["hours"], d["peak_hour"], unit)
+            doc.findings(M + cw + 12, y, W - 2 * M - cw - 12, hgt, d["findings"])
         else:
-            doc.pill(M + 14 + doc.c.stringWidth(doc.s(head), doc.F["b"], 9.6) + 10, yy - 9.5, p["code"], VIOLET, 7.4)
-            yy -= 22
-        for part in p["parts"]:
-            if yy < bottom + 24:
-                break                                  # never past the card (the CSV has every pattern in full)
-            name = part.get("title") or part["report"]
+            # no event times on this platform: the key findings at their own height, the busiest devices beneath
+            need = 56 + sum(12 * min(3, len(ex.simpleSplit(doc.s(t), doc.F["r"], 8.8, W - 2 * M - 52))) + 6 for t in d["findings"][:7])
+            doc.findings(M, y, W - 2 * M, need, d["findings"])
+            y -= need + 12
+            if y - 30 > 90 and d["devices"]:
+                n = int((y - 30 - 62) // 15.5)
+                while n > 1 and 48 + doc.table_height(cols, W - 2 * M - 28, prev(d["devices"][:n])) > y - 30:
+                    n -= 1
+                top = doc.card(M, y, W - 2 * M, min(y - 30, 52 + doc.table_height(cols, W - 2 * M - 28, prev(d["devices"][:n]))), "The busiest IP addresses",
+                               f"The {min(n, len(d['devices']))} with the most records; all of them on the next pages and in {d['csv_devices']}")
+                doc.table(M + 14, top, W - 2 * M - 28, cols, prev(d["devices"][:n]))
+
+        # ---------------- page 2: where
+        y = doc.new_page("Geographic Location")                  # (the user, 2026-11-18: was "Where")
+        hh = y - 30
+        mw = (W - 2 * M - 12) * .64
+        if d.get("shapes"):
+            top = doc.card(M, y, mw, hh, "Regions and cities", "Regions coloured by devices (red is most), with each region's cities beside the map")
+            doc.region_map(M + 10, top, mw * .56, hh - (y - top) - 12, d["shapes"], d["regions"], d["region_details"], True)
+            doc.text(M + mw * .56 + 22, top - 2, "Devices per region and city", 8, DIM, True)
+            doc.region_tree(M + mw * .56 + 22, top - 10, mw * .44 - 36, y - hh + 16, d["regions"], d["region_details"], True)
+        else:
+            top = doc.card(M, y, mw, hh, "Regions and cities", "Devices per region, with its cities")
+            doc.region_tree(M + 14, top - 10, mw - 28, y - hh + 16, d["regions"], d["region_details"], True)
+        x2, w2 = M + mw + 12, W - 2 * M - mw - 12
+        h2 = (hh - 12) / 2
+        top = doc.card(x2, y, w2, h2, "Networks", "Devices per network (all of them in the devices CSV)")
+        doc.bars(x2 + 14, top, w2 - 28, d["networks"], n=max(1, int((h2 - 56) // 37)), stack=True)
+        top = doc.card(x2, y - h2 - 12, w2, h2, "Cities", "Devices per city")
+        doc.bars(x2 + 14, top, w2 - 28, d["cities"], n=max(1, int((h2 - 56) // 37)), stack=True)
+
+        # ---------------- page 3 (and 4): the devices
+        # each device's infections, issues and CVEs that day, and (the report day) the other days in memory: the same
+        # combination there too, or what it carried instead (2026-11-17)
+        other = any(x.get("earlier") for x in d["devices"])
+        flag = lambda x: "; ".join(s for s in (", ".join((x.get("flags") or {}).get("infections") or []),                # noqa: E731
+                                               ", ".join(((x.get("flags") or {}).get("issues") or []) + ((x.get("flags") or {}).get("cves") or []))) if s) or "–"
+        cols = ([("IP address", .1, "l", True), ("Network", .1, "l", False), ("AS", .045, "l", False), ("Region", .075, "l", False),
+                 ("City", .065, "l", False), (unit, .05, "r", False), ("Days", .035, "r", False), ("Last seen (UTC)", .1, "l", True),
+                 ("Infections, issues, CVEs", .15, "l", False), ("Also seen in", .08, "l", False), ("Other days", .2, "l", False)] if other else
+                [("IP address", .11, "l", True), ("Network", .14, "l", False), ("AS", .05, "l", False), ("Region", .08, "l", False),
+                 ("City", .07, "l", False), (unit, .05, "r", False), ("Days", .04, "r", False), ("Last seen (UTC)", .1, "l", True),
+                 ("Infections, issues, CVEs", .22, "l", False), ("Also seen in", .14, "l", False)])
+        devs = d["devices"][:2 * DEVICE_ROWS]
+        row = lambda x: ([x["ip"], x["network"], x["asn"], x["region"], x["city"], fmt(x["records"]), fmt(x["days"]), x["last"], flag(x),   # noqa: E731
+                          x["also"] or "–"] + ([x.get("earlier") or "–"] if other else []))
+        tw = W - 2 * M - 28
+        room = H - M - 44 - 30 - 56                      # the table's height on one page
+        pages, cur = [], []
+        for x in devs:                                   # as many rows as fit (long cells wrap, so rows differ in height)
+            if cur and doc.table_height(cols, tw, [row(r) for r in cur + [x]]) > room:
+                pages.append(cur); cur = []
+                if len(pages) == 2:
+                    break
+            cur.append(x)
+        if cur and len(pages) < 2:
+            pages.append(cur)
+        pages = pages or [[]]
+        shown = sum(len(p) for p in pages)
+        for pi, chunk in enumerate(pages):
+            # the table lists IP addresses, so it says so (the user, 2026-11-18: "not devices, IP addresses")
+            y = doc.new_page("IP addresses")
+            top = doc.card(M, y, W - 2 * M, min(y - 30, 56 + doc.table_height(cols, tw, [row(x) for x in chunk])),
+                           "The IP addresses with the most records" if pi == 0 else "The IP addresses (continued)",
+                           f"{fmt(shown)} of {fmt(d['kpis']['devices'])} shown, the most records first; every IP address is in {d['csv_devices']}"
+                           + ("" if adv else f", every record in {d['csv_records']}"))      # an advisory sends the devices CSV only
+            doc.table(M + 14, top, tw, cols, [row(x) for x in chunk])
+
+        # ---------------- across reports and what the devices are: only the parts that have something to show (an empty
+        # chart is left out, and the page with it when nothing is left; the key findings already say "none")
+        across_on = bool(d["across"]["multi"] or d["across"]["patterns"])
+        side = []                                          # (title, subtitle, rows, bars options, row height)
+        if d["report_sets"]:
+            side.append(("Reports these devices were seen in", "Devices per set of reports", d["report_sets"], {"stack": True}, 47))
+        if any(r["label"] != NOT_GIVEN for r in d["kinds"]):
+            side.append(("What the devices are", f"{unit} per vendor / type, as the reports name them", d["kinds"], {"metric": "count", "stack": True}, 37))
+        if d["ports"]:
+            side.append(("Destination ports" if comms else "Ports", f"{unit} per port / protocol", d["ports"], {"metric": "count"}, 17))
+        after = None                                       # where the explanations may start on this page (charts on their own)
+        top0 = H - M - 44                                  # the first line under a page's header (AnalystDoc.new_page)
+        alone_h = min(top0 - 30, max(110, max((66 + min(len(s[2]), 10) * s[4] for s in side), default=0)))
+        # short charts on their own leave most of a page empty (2026-11-14, an advisory's page 12): the Technical Details
+        # carry on under them, an advisory's page then labelled with both parts
+        # (not with an Impact section: the explanations then follow it on its page)
+        shared = not across_on and bool(d["explained"] or d["notes"]) and top0 - alone_h - 18 > H * .45 and not (d.get("impact") and not adv)
+        if across_on or side:
+            y = doc.new_page("Across reports" if across_on else " · ".join([s[0] for s in side] + ([EXPL] if shared else [])))
+            hh = y - 30
+            lw = (W - 2 * M - 12) * .6 if (across_on and side) else W - 2 * M if across_on else 0
+            if side:                                       # beside Across reports, stacked; on their own, side by side
+                if across_on:
+                    x2, w2 = M + lw + 12, W - 2 * M - lw - 12
+                    h3 = (hh - 12 * (len(side) - 1)) / len(side)
+                    spots = [(x2, y - i * (h3 + 12), w2, h3) for i in range(len(side))]
+                else:                                      # as tall as their rows need, no taller
+                    w3 = (W - 2 * M - 12 * (len(side) - 1)) / len(side)
+                    spots = [(M + i * (w3 + 12), y, w3, alone_h) for i in range(len(side))]
+                    after = y - alone_h - 18 if shared else None
+                for (title, sub, rows, opt, rh), (sx, sy, sw, sh) in zip(side, spots):
+                    top = doc.card(sx, sy, sw, sh, title, sub)
+                    doc.bars(sx + 14, top, sw - 28, rows, n=max(1, int((sh - 56) // rh)), **opt)
+        if across_on:
+            top = doc.card(M, y, lw, hh, "Across reports", ("What these devices carried in the name's other reports: each exact pattern, with its devices by IP address" if adv else
+                                                  "What these devices carried in the name's other reports: each exact pattern, with its code to search next"))
+            yy = doc.hero(M + 14, top, lw - 28, [(fmt(d["across"]["multi"]), "devices also in other reports", HexColor("#a9c3ff")),
+                                                 (fmt(d["across"]["patterns_total"]), "exact patterns", TXT),
+                                                 (_share(d["across"]["multi"], k["devices"]), "of the devices", HexColor("#ffd38a"))])
+            from device_note import DEVICE_IP_NOTE          # devices are matched by IP address (review follow-up)
+            yy = doc.wrap(M + 14, yy - 4, DEVICE_IP_NOTE, lw - 28, 8, DIM)
+            if not d["across"]["patterns"] and is_a:
+                doc.wrap(M + 14, yy - 6, "An analyst code covers the whole selection, with several names: the researchers' view of the code gives each "
+                                         "name's cross-report patterns and their codes.", lw - 28, 8.8, DIM)
+        IPS_SHOWN = 40
+
+        def ip_lines(p, width):
+            """An advisory names a pattern by its devices (their IP addresses), not its code: the lines they take, wrapped."""
+            if not (adv and p.get("ips")):
+                return []
+            ips = p["ips"][:IPS_SHOWN]
+            more = len(p["ips"]) - len(ips)
+            text = ", ".join(ips) + (f" and {more} more (every one in the devices CSV)" if more > 0 else "")
             from reportlab.lib.utils import simpleSplit
-            name_lines = simpleSplit(doc.s(name), doc.F["b"], 8, 100) or [name]       # wrapped, never cut
-            for i, ln in enumerate(name_lines[:2]):
-                doc.text(M + 22, yy - 9.5 - i * 9.5, ln, 8, DIM, True)
-            yy2 = doc.chips(M + 128, yy, lw - 142, part["items"], 7.6) - 2
-            yy = min(yy2, yy - 9.5 * len(name_lines[:2]) - 6)
-        doc.c.setStrokeColor(Color(1, 1, 1, .05)); doc.c.line(M + 14, yy + 2, M + lw - 14, yy + 2)
+            return simpleSplit(doc.s(text), doc.F["m"], 8, width - 28)
+
+        def est(p, width):
+            """About how tall a pattern is: its head, and per report the rows its chips take at this width."""
+            h = 28 + 11 * len(ip_lines(p, width))
+            for part in p["parts"]:
+                line = sum(doc.c.stringWidth(doc.s(str(it)), doc.F["r"], 7.6) + 22 for it in part["items"]) or 40
+                h += 22 * max(1, -(-line // max(60, width - 142)))
+            return h
+
+        bottom = (y - hh) if across_on else 0
+        for p in (d["across"]["patterns"] if across_on else []):
+            if yy - est(p, lw) < bottom + 14:
+                # no room left in this card: the next patterns go on a page of their own, never over the footer
+                y = doc.new_page("Across reports (continued)")
+                hh, lw = y - 30, W - 2 * M
+                yy = doc.card(M, y, lw, hh, "Across reports, continued", ("Each exact pattern, with its devices by IP address" if adv else "Each exact pattern, with its code to search next"))
+                bottom = y - hh
+                if yy - est(p, lw) < bottom + 14:
+                    continue                               # taller than a whole page: it is in the CSV
+            yy -= 6
+            head = f"{fmt(p['devices'])} device{'s' if p['devices'] != 1 else ''}"
+            doc.text(M + 14, yy - 10, head, 9.6, TXT, True)
+            ipl = ip_lines(p, lw)
+            if ipl:                                        # an advisory: the devices themselves, by IP address
+                yy -= 22
+                for ln in ipl:
+                    doc.text(M + 14, yy - 2, ln, 8, HexColor("#e3e9ff"), mono=True)
+                    yy -= 11
+                yy -= 2
+            else:
+                doc.pill(M + 14 + doc.c.stringWidth(doc.s(head), doc.F["b"], 9.6) + 10, yy - 9.5, p["code"], VIOLET, 7.4)
+                yy -= 22
+            for part in p["parts"]:
+                if yy < bottom + 24:
+                    break                                  # never past the card (the CSV has every pattern in full)
+                name = part.get("title") or part["report"]
+                from reportlab.lib.utils import simpleSplit
+                name_lines = simpleSplit(doc.s(name), doc.F["b"], 8, 100) or [name]       # wrapped, never cut
+                for i, ln in enumerate(name_lines[:2]):
+                    doc.text(M + 22, yy - 9.5 - i * 9.5, ln, 8, DIM, True)
+                yy2 = doc.chips(M + 128, yy, lw - 142, part["items"], 7.6) - 2
+                yy = min(yy2, yy - 9.5 * len(name_lines[:2]) - 6)
+            doc.c.setStrokeColor(Color(1, 1, 1, .05)); doc.c.line(M + 14, yy + 2, M + lw - 14, yy + 2)
 
     # ---------------- impact (an analyst's report; an advisory has it on its own pages): what the reports these devices
     # were found in can lead to, the most severe first (advisory_pdf.draw_impact, the user 2026-11-19). The explanations
@@ -592,7 +653,8 @@ def build(d, meta):
     shown_cards = [(n, {kk: v for kk, v in c.items() if kk not in ("notes", "note", "note_by", "note_updated", "by")} if adv else c)
                    for n, c in d["explained"]]
     if adv:
-        advisory_pdf.references(doc, adv, shown_cards, d.get("ref_levels") or {})
+        # every report its pages name: the advisory's own, and the ones its devices were also seen in (2026-11-19)
+        advisory_pdf.references(doc, adv, shown_cards, d.get("ref_levels") or {}, also=d.get("ref_reports") or [])
     else:
         pdf_refs.draw(doc, pdf_refs.groups(shown_cards, d.get("ref_levels") or {}, pdf_refs.report_entries(d.get("ref_reports") or [])),
                       "The sources behind this report: each explained name with its references, then the Shadowserver "

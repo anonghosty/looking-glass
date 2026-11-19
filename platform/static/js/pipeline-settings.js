@@ -142,7 +142,19 @@
             if (r.confirmed) w.append(el("span", null, "Confirmed on the server: applied at the next run."));
             else {
               w.append(el("span", null, `Waits for confirmation on the server (${r.weakens.join("; ")}). On the pipeline's account, in ${S.pipeline_dir || "the pipeline's folder"}, run:`));
-              w.append(el("code", null, r.confirm));
+              // the command with a Copy button: selecting text is blocked on every page, and a copy through the button is
+              // recorded like every other (lg-copy.js; the user, 2026-11-19)
+              const row = el("div", "wk-confirm-cmd"), cmd = el("code", null, r.confirm);
+              const cp = el("button", "pill-btn wk-copy", "Copy"); cp.type = "button";
+              cp.title = "Copy this command (recorded under your name)"; cp.setAttribute("aria-label", `Copy the command ${r.confirm}`);
+              cp.addEventListener("click", async () => {
+                const res = window.LGCopy ? await window.LGCopy.copy({ text: r.confirm, kind: "text", what: "the pipeline's confirmation command", page: "Settings · Workers" })
+                  : { ok: false, message: "Copying is not available on this page." };
+                cp.textContent = res.ok ? "Copied" : "Not copied"; cp.title = res.message;
+                if (!res.ok && window.LGCopy) window.LGCopy.tell(res.message);
+                setTimeout(() => { cp.textContent = "Copy"; }, 2500);
+              });
+              row.append(cmd, cp); w.append(row);
             }
             li.append(w);
           }

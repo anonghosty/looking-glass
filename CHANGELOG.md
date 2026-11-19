@@ -5,6 +5,39 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-19 (9)
+### Added
+- **Advisories: Add insights.** An advisory can go out on its own, without the analysis pages (INSIGHTS): tick **Add
+  insights** to include them. A new advisory starts without them; one written before keeps them. The advisory pages,
+  TECHNICAL DETAILS and REFERENCES always stay. Turning it on or off marks a generated report out of date.
+- **The advisory PDF's look and the name on its pages** (Settings → Organisation → Advisory PDF): *Designed* (dark
+  pages, as before) or *Plain* (white pages for printing; the TLP label unchanged), and at the top left of each page
+  *Looking Glass* (as before), the organisation's name, or no name. Each change is in the audit log.
+- **Settings → Workers: a Copy button for the confirmation command**, so the copy is recorded like every other copy.
+- **Settings → Constituency: pick address blocks from the reports.** Every /24 in yesterday's reports on both
+  platforms, with its records and network, searchable; tick one to add it to the extra address ranges. Typing a range
+  still works, and nothing is looked up outside Looking Glass.
+### Fixed
+- **An advisory lists each MITRE ATT&CK technique once.** A technique that several reports, categories or CVEs map to
+  was printed once for each of them. It is now one entry with every reason under "Why it is in this advisory", each
+  CVE's mapping note once, and the strongest certainty (Observed before Possible). The advisor still reviews each
+  mapping on its own. Generate an advisory's report again to get the corrected PDF.
+- **MITRE mitigations in one section, grouped by code.** Instead of a "How to defend" list under every technique, the
+  advisory has one section, *How to defend: MITRE ATT&CK mitigations*, with each mitigation once (M1016, M1031, …, in
+  code order) and the techniques it defends against; each technique names its mitigation codes.
+- **Each ATT&CK technique once everywhere else too:** the names' cards (Technical Details, Executive, the services
+  and management pages) and the advisory page show a technique once with every report it came from. A guard stops a
+  report from being made if a technique or mitigation would ever be listed twice, and the release checks look for
+  repeats on every page and in every PDF.
+- **An advisory's REFERENCES list every report it names**, also the reports its devices were also seen in (for
+  example *Device Identification*), marked as such.
+### Changed
+- **The counts in the filters follow the other filters** (map and services platforms): each list counts the records
+  matching every other filter, so drilling down shows what each choice would give instead of the whole day's figures.
+  A list's own choice never hides its alternatives, and a chosen value with nothing left stays listed with 0.
+- **After updating:** nothing to do. Advisories keep today's look and the Looking Glass name until an administrator
+  chooses otherwise.
+
 ## 2026-11-19 (8)
 ### Security
 - **Trace a leak can no longer be used to test guessed addresses** (external review): one trace of a whole range of

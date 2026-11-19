@@ -43,6 +43,8 @@ from replay_counts import ReplayCounts
 from services import (BANNER, banner_mask, EMPTY,FAMILIES, FILTER_KEYS, SEV_ORDER, ServiceRegistry, ServiceStore, matches, parse_filters,
                        parse_time, report_info)
 
+import facets as _facets  # noqa: E402  (drop-down counts that follow the other filters)
+
 DRILL_LIMIT = 300
 # the request parameters that can change an answer: the filters and the view's own. Cache keys are built from these
 # only, so a parameter nothing reads (&x=random) cannot make every request a new cache entry (external review, 2026-11-12)
@@ -200,6 +202,11 @@ def register(app, ctx):
         if not cross and not multi:
             return (lambda e: matches(e, flt)) if flt else None
         seed_flt, view_flt = split_cross(args)
+        ips = seed_hosts(day, cross, multi, seed_flt)
+        return lambda e: e["ip"] in ips and matches(e, view_flt)
+
+    def seed_hosts(day, cross, multi, seed_flt):
+        """The hosts "Hosts in several reports" / "Hosts with multiple issues" chose (see scope)."""
         # a masked viewer's banner filter matches differently: its kind is part of the key
         key = (id(day), day.version, cross, multi, tuple(sorted((k, type(v).__name__, tuple(sorted(map(str, v)))) for k, v in seed_flt.items())))
         ips = scope_cache.get(key)
@@ -214,7 +221,25 @@ def register(app, ctx):
             if len(scope_cache) > 64:
                 scope_cache.clear()
             scope_cache[key] = ips
-        return lambda e: e["ip"] in ips and matches(e, view_flt)
+        return ips
+
+    def facet_scope(day, args):
+        """(the records the drop-downs count over, the filters each field's counts follow but its own): every record of
+        the day and every filter; with several reports / multiple issues on, the chosen hosts' records and the filters
+        added after switching it on (split_cross). The time window narrows them like the view."""
+        on = lambda v: (v or "0") not in ("0", "")        # noqa: E731
+        cross, multi = on(args.get("cross")), on(args.get("multi"))
+        if cross or multi:
+            seed_flt, flt = split_cross(args)
+            ips = seed_hosts(day, cross, multi, seed_flt)
+            evs = [e for e in day.events if e["ip"] in ips]
+        else:
+            evs, flt = day.events, parse_filters(args, refs, asns)
+        tw = parse_time(args.get("time"))
+        if tw:
+            t0 = day.start.timestamp()
+            evs = [e for e in evs if t0 + tw[0] <= e["_t"] < t0 + tw[1]]
+        return evs, flt
 
     def selection(args):
         """(day, whole-day events in scope, the time window if any)."""
@@ -458,7 +483,25 @@ def register(app, ctx):
 
     # masked and unmasked viewers each keep their own lists (review 2026-11-13); worked out once for everyone asking at
     # the same moment (ResultCache; review of d82a436: simultaneous requests computed it twice)
-    facets_cache = ResultCache(size=8)
+    facets_cache = ResultCache(size=64)       # one per day and choice of filters
+    # a drop-down's list -> the filter it sets
+    FACET_FILTER = {"service": "service", "family": "family", "severity": "severity", "issue": "issue", "tag": "tag",
+                    "port": "port", "network": "asn", "city": "city", "vendor": "vendor", "device_type": "device_type",
+                    "product": "product", "sector": "sector", "protocol": "protocol", "region": "region"}
+
+    def facet_counts(day, args, demo):
+        """(the drop-downs' lists, whether filters shaped them): each list counted over the records matching every
+        other filter (facets.py), from one pass over the records in scope."""
+        evs, flt = facet_scope(day, args)
+        if not flt and evs is day.events:
+            return breakdowns(evs, demo, 400), False
+        pool = _facets.pools(evs, flt, test=lambda e, f, vals: matches(e, {f: vals}))
+        whole = breakdowns(pool.passed, demo, 400)
+        out = {}
+        for name, rows in whole.items():
+            f = FACET_FILTER.get(name)
+            out[name] = breakdowns(pool.of(f), demo, 400)[name] if f in flt else rows
+        return out, True
 
     @app.route("/api/svc/facets")
     def svc_facets():
@@ -466,9 +509,10 @@ def register(app, ctx):
         day = day_for(request.args.get("at"))
         # whole-day lists change when the day is reloaded, the network names change (asns), a report type is added,
         # or an administrator matches a region name (review of d82a436: those three were left out of the key)
-        key = (day_key(day), demo, ctx["country_name"](), asns.mtime, registry.version, region_version())
-        b = facets_cache.get(key, lambda: breakdowns(day.events, demo, 400))
-        return jsonify(day=day.start.date().isoformat(), total=len(day.events), facets=b,
+        # with filters, each list's counts follow every OTHER filter (facets.py; the user, 2026-11-19), cached per set
+        key = (day_key(day), demo, ctx["country_name"](), asns.mtime, registry.version, region_version(), cache_args(request.args))
+        b, filtered = facets_cache.get(key, lambda: facet_counts(day, request.args, demo))
+        return jsonify(day=day.start.date().isoformat(), total=len(day.events), facets=b, filtered=filtered,
                        reports=[{"name": s["name"], "label": s["label"], "family": s["family"],
                                  "rows": day.per_source.get(s["name"], 0), "warnings": s["diagnostic"]["warnings"]}
                                 for s in sorted(registry.items, key=lambda s: (-day.per_source.get(s["name"], 0), s["label"]))],

@@ -243,6 +243,9 @@ Come back to it at any time with the **Overview** button, which is in every page
   for example *ttyunos API request (encrypted)*, *adoverocean OTA task request (one-way hash, not encoded)* or *CLogin
   check-in (did not decode)*. Right after a day is loaded its beacons are decoded in the background;
   the filter appears by itself once that is done, usually within a minute or two.
+- **The counts in the filters follow your other filters.** Choose a city and the reports, infections, ports and
+  networks show how many of that city's records each holds; the city list itself still shows every city, so you can
+  switch. A value you chose that the other filters leave nothing of stays in its list with 0, so you can take it off.
 - **Intel** (right): attack types, events by hour, severity mix, networks, infections, cities, C2 domains...
   Every line is clickable.
 - **Stream** (bottom): every event as it replays. Click a row for the full details (the raw request, the infected
@@ -301,7 +304,9 @@ The same layout, without a map:
   Executive portal and its PDF use the same frame; on the portal, the link under the map switches to the whole country.
 - **Filters:** only hosts with issues, report family (exposed, population, identified device, compromised,
   blocklisted), report, severity, issue (CVE, POODLE, expired certificate, exposed admin panel...), region, city,
-  network, port, vendor, device type, **Hosts in several reports** and **Hosts with multiple issues**.
+  network, port, vendor, device type, **Hosts in several reports** and **Hosts with multiple issues**. Their counts
+  follow the other filters, as on the map; with *Hosts in several reports* or *Hosts with multiple issues* on, they
+  count those hosts' records.
 - **Intel and stream** as on the map, with the report's definition in every record's details.
 
 ![The regions view](media/screens/31-services-view-kenya-regions.png)
@@ -950,12 +955,14 @@ combination on the other days in memory, or what changed), and the **impact** of
 
 **Never from a blank page.** The advisor writes only the short part: a description and the actions to take. The
 report brings the rest by itself:
-- **INSIGHTS:** the analysis behind the finding, the analyst's report on this organisation's devices. It shows the
-  pattern across reports, the networks, regions and cities, and the busiest devices, so the organisation sees why it
-  matters, not just a list.
+- **INSIGHTS** (only when **Add insights** is ticked): the analysis behind the finding, the analyst's report on this
+  organisation's devices. It shows the pattern across reports, the networks, regions and cities, and the busiest
+  devices, so the organisation sees why it matters, not just a list. A new advisory starts without it; tick **Add
+  insights** to include it. Advisories written before this option keep their insights.
 - **TECHNICAL DETAILS:** every weakness and every tag in it defined, from the researchers' definitions and the CVE
-  look-ups, each with its references.
-- **REFERENCES:** the Shadowserver report pages for each report involved.
+  look-ups, each with its references. Always included.
+- **REFERENCES:** the Shadowserver report pages for each report involved, including the reports the devices were also
+  seen in (for example *Device Identification*). Always included.
 
 ![Writing the advisory: TLP, heading, Description, Recommended Actions](media/screens/72-advisory.png)
 
@@ -977,6 +984,15 @@ again.
 actions), then **INSIGHTS**, **TECHNICAL DETAILS** and **REFERENCES**, each with its label. It is signed by your CSIRT
 (its name and logo from Settings), never by a person; who wrote it is kept in the audit log. It carries no internal code
 and no researcher's note, and every page shows the TLP at the bottom right and in the header line.
+
+**How the PDF looks** is set by an administrator in **Settings → Organisation → Advisory PDF**:
+- **The advisory's look:** *Designed* (dark pages, as before) or *Plain* (white pages and dark text, for printing). The
+  TLP label keeps its black box and colour on both.
+- **The name on the advisory's pages** (top left of every page): *Looking Glass* (as before), *the organisation's name*,
+  or *no name*.
+
+Each change is in the audit log, and the next report generated uses it. Turning **Add insights** on or off marks a
+generated report out of date, like a change to the text.
 
 ![The advisory report, signed by the CSIRT](media/screens/73-advisory-report.png)
 
@@ -1044,7 +1060,11 @@ platform full screen. The display adapts to TVs and weaker devices by itself (`?
   example "12:15:41 UTC (15:15:41 Nairobi time)"). Daylight saving (Egypt, Morocco) is taken into account. For a zone
   that is UTC, as in Ghana, only UTC is shown. Changing it reloads nothing.
 - **Constituency:** the whole country, or the networks your CSIRT is responsible for: choose companies (all their
-  AS numbers) and add address ranges. Both platforms then show only your constituency.
+  AS numbers) and add address ranges. Both platforms then show only your constituency. To add ranges, type them in
+  **Extra address ranges**, or open **Pick address blocks from the reports**: every address block (/24) in yesterday's
+  reports on both platforms, with its records and the network most of them belong to. Search by block, network or AS
+  number, and tick a block to add it (untick to take it off); blocks whose network is already chosen are marked as in
+  already. Nothing is looked up outside Looking Glass. **Apply settings** saves the choice.
 
 - **Organisation:** your CSIRT's name and logo (PNG or JPEG, at most 40 KB). Advisories are signed with them, and the
   sign-in pages show them: those pages name no product, so that internet scanners cannot tell what runs here.

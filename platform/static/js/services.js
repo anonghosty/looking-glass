@@ -1006,20 +1006,39 @@
   explain($("viewSeg").querySelector('[data-view="ghana"]'), "ghana");
 
   // ------------------------------------------------------------------ filters (drawer)
+  // the lists' counts follow the other filters (the user, 2026-11-19): asked again whenever a filter changes; a slower
+  // answer for an older choice of filters is dropped
   async function loadFacets() {
+    const my = (loadFacets.seq = (loadFacets.seq || 0) + 1);
     try {
-      const f = await getJSON(`/api/svc/facets?at=${encodeURIComponent(atParam())}`);
+      const p = filterParams(); p.set("at", atParam());
+      const f = await getJSON(`/api/svc/facets?${p}`);
+      if (my !== loadFacets.seq) return;
       state.facets = f; state.svcFamily = new Map(f.reports.map((r) => [r.label, r.family]));
       if (state.stats) { stage.setData(state.stats); renderIntel(state.stats); }
-      buildFilters();
+      keepFocus(buildFilters);
       const ub = $("unsupportedBox"); ub.hidden = !f.unsupported.length;
       if (f.unsupported.length) ub.replaceChildren(el("h3", null, `${f.unsupported.length} report type(s) not processed yet`), el("p", "fg-hint", f.unsupported.map((u) => `${u.label}: missing ${u.missing.join(", ")}`).join(" · ")));
     } catch (err) { toast(`Could not load filters: ${err.message}`); }
   }
+  // a rebuilt list replaces its buttons and boxes: the one that had the keyboard focus gets it back (same filter, same value)
+  function keepFocus(build) {
+    const a = document.activeElement, k = a?.dataset?.fk, v = a?.dataset?.fv;
+    build();
+    if (k == null) return;
+    const back = [...document.querySelectorAll("[data-fk]")].find((n) => n.dataset.fk === k && n.dataset.fv === v);
+    if (back) back.focus({ preventScroll: true });
+  }
+  // a chosen value the other filters leave nothing of is still listed (count 0), so it can be seen and taken off
+  function withChosen(rows, key) {
+    const have = new Set(rows.map((r) => String(r.value)));
+    return rows.concat([...state.filters[key]].filter((v) => !have.has(String(v))).map((v) => ({ value: v, label: String(v), count: 0 })));
+  }
   function chips(box, key, rows, color, label = (r) => r.label) {
     box.replaceChildren();
-    for (const r of rows) {
+    for (const r of withChosen(rows, key)) {
       const b = el("button", "chip"); b.type = "button"; b.setAttribute("aria-pressed", String(state.filters[key].has(r.value)));
+      b.dataset.fk = key; b.dataset.fv = r.value;
       const d = el("span", "dot"); d.style.background = color(r.value); b.append(d, document.createTextNode(label(r)), el("span", "chip-n", fmt(r.count)));
       b.addEventListener("click", () => { const s = state.filters[key]; s.has(r.value) ? s.delete(r.value) : s.add(r.value); filtersChanged(); });
       box.append(b);
@@ -1027,8 +1046,9 @@
   }
   function checklist(box, key, rows, q, color) {
     box.replaceChildren();
-    for (const r of rows.filter((x) => !q || x.label.toLowerCase().includes(q))) {
+    for (const r of withChosen(rows, key).filter((x) => !q || x.label.toLowerCase().includes(q))) {
       const li = el("li"); const lab = el("label"); const cb = el("input"); cb.type = "checkbox"; cb.checked = state.filters[key].has(r.value);
+      cb.dataset.fk = key; cb.dataset.fv = r.value;
       const sw = el("span", "swatch"); sw.style.background = color ? color(r.value) : "#7c7c85";
       lab.append(cb, sw, el("span", "nm", r.label), el("span", "n", fmt(r.count))); li.append(lab);
       if (key === "service") attachTip(li, () => { const d = defOf(r.value); return [tipLine(r.label), ...(d ? [tipLine(null, d.def)] : [])]; });
@@ -1048,8 +1068,10 @@
     const b = f.facets;
     chips($("fFamily"), "family", b.family, famColor);
     chips($("fSeverity"), "severity", b.severity, sevColor, (r) => titleCase(r.label));
-    const svc = f.reports.filter((r) => r.rows).map((r) => ({ value: r.label, label: r.label, count: r.rows }));
-    $("srcCount").textContent = `(${svc.length} with data yesterday, of ${f.reports.length})`;
+    // filtered: each report's records in this selection (the other filters), else its whole day
+    const inSel = f.filtered ? new Map((b.service || []).map((r) => [r.value, r.count])) : null;
+    const svc = f.reports.map((r) => ({ value: r.label, label: r.label, count: inSel ? (inSel.get(r.label) || 0) : r.rows })).filter((r) => r.count);
+    $("srcCount").textContent = inSel ? `(${svc.length} with records in this selection, of ${f.reports.length})` : `(${svc.length} with data yesterday, of ${f.reports.length})`;
     checklist($("fService"), "service", svc, $("svcSearch").value.trim().toLowerCase(), (v) => famColor(state.svcFamily.get(v)));
     $("issCount").textContent = `(${b.issue.length})`;
     checklist($("fIssue"), "issue", b.issue, $("issSearch").value.trim().toLowerCase(), () => "#f5b54a");
@@ -1103,6 +1125,7 @@
   }
   function filtersChanged() {
     buildFilters(); renderFilterBar(); resetStream(); backfill(); refreshStats(); refreshReplayed(); $("stageHint").textContent = stageHint();
+    clearTimeout(filtersChanged.facets); filtersChanged.facets = setTimeout(loadFacets, 250);   // the lists' counts follow
     // keep the filters in the address, so a refresh (or a minimised tab reloaded by the browser) returns to the same view
     const u = new URL(location.href), keep = u.searchParams.get("demo");
     u.search = new URLSearchParams(filterPairs().filter(([k]) => k !== "ip")).toString();

@@ -41,6 +41,27 @@
   // refuses to generate the report otherwise).
   const httpUrl = (u) => { try { return ["http:", "https:"].includes(new URL(u).protocol); } catch { return false; } };
   const ext = (href, text, cls) => { if (!httpUrl(href)) return el("span", cls, text); const a = el("a", cls, text); a.href = href; a.target = "_blank"; a.rel = "noopener noreferrer"; return a; };
+  // what goes to the recipients, each technique once (the user, 2026-11-19: "it repeats everywhere"): the mappings of
+  // one technique from several reports or CVEs in one box, every reason, CTID comment, note and mitigation once, the
+  // strongest certainty; the mappings themselves (parts) keep their own keys for Undo
+  const CERT_RANK = { observed: 0, possible: 1, known: 2 };
+  function mergeOut(list) {
+    const by = new Map(), out = [];
+    for (const t of list || []) {
+      let g = by.get(t.id);
+      if (!g) { g = { ...t, whys: [], comments: [], notes: [], parts: [], defend: [...(t.defend || [])] }; by.set(t.id, g); out.push(g); }
+      else {
+        if ((CERT_RANK[t.certainty] ?? 9) < (CERT_RANK[g.certainty] ?? 9)) { g.certainty = t.certainty; g.certainty_label = t.certainty_label; }
+        const have = new Set(g.defend.map((m) => m.id));
+        for (const m of t.defend || []) if (!have.has(m.id)) g.defend.push(m);
+      }
+      if (t.why_here && !g.whys.includes(t.why_here)) g.whys.push(t.why_here);
+      if (t.comment && !g.comments.some(([c, x]) => c === t.cve && x === t.comment)) g.comments.push([t.cve, t.comment]);
+      if (t.note && !g.notes.includes(t.note)) g.notes.push(t.note);
+      g.parts.push(t);
+    }
+    return out;
+  }
   function techBox(t, a, kind) {
     // the organisation, switch counter and advisory this box was drawn for: Confirm/Remove/Undo send these, never
     // whatever is picked when the answer comes back (the same rule as the form's buttons, check_workflow_fixes 5)
@@ -72,10 +93,15 @@
       });
       box.append(p, more, full);
     }
-    if (t.why_here) { const p = el("p", "av-tech-line"); p.append(el("b", null, "Why it is in this advisory (Looking Glass): "), document.createTextNode(t.why_here)); box.append(p); }
+    if (t.whys?.length > 1) {                // one technique from several reports / CVEs (mergeOut): each reason once
+      box.append(el("p", "av-tech-line", null)); box.lastChild.append(el("b", null, "Why it is in this advisory (Looking Glass):"));
+      const ul = el("ul", "av-tech-def"); for (const w of t.whys) ul.append(el("li", null, w)); box.append(ul);
+    } else if (t.why_here) { const p = el("p", "av-tech-line"); p.append(el("b", null, "Why it is in this advisory (Looking Glass): "), document.createTextNode(t.why_here)); box.append(p); }
     // a CVE's technique (MITRE CTID's KEV mappings): CTID's own words, and a note when ATT&CK changed since it mapped
-    if (t.comment) { const p = el("p", "av-tech-line"); p.append(el("b", null, `How ${t.cve || "the CVE"} maps (MITRE CTID): `), document.createTextNode(t.comment)); box.append(p); }
-    if (t.note) box.append(el("p", "av-tech-line av-tech-note", `ATT&CK version: ${t.note}.`));
+    for (const [cve, comment] of t.comments || (t.comment ? [[t.cve, t.comment]] : [])) {
+      const p = el("p", "av-tech-line"); p.append(el("b", null, `How ${cve || "the CVE"} maps (MITRE CTID): `), document.createTextNode(comment)); box.append(p);
+    }
+    for (const note of t.notes || (t.note ? [t.note] : [])) box.append(el("p", "av-tech-line av-tech-note", `ATT&CK version: ${note}.`));
     if (t.defend?.length) {
       box.append(el("p", "av-tech-line av-tech-dh", "How to defend (MITRE mitigations):"));
       const ul = el("ul", "av-tech-def");
@@ -97,14 +123,20 @@
       if (kind === "pending") acts.append(act("Confirm for this advisory", "confirm", true), act("Remove", "remove"));
       if (kind === "removed") acts.append(act("Restore", "restore"));
       box.append(acts);
-    } else if (!a.locked && t.status === "confirmed for this advisory") {
-      const acts = el("div", "av-tech-acts"), b = el("button", "pill-btn", "Undo"); b.type = "button";
-      b.addEventListener("click", async () => {
-        if (BUSY) return; BUSY = true; b.disabled = true;
-        try { const d = await post(`/api/advisory/${fid}/attack`, { network: tnet, key: t.key, action: "restore" }); if (tseq !== SEQ) return; there.advisory = d.advisory; draw(); }
-        catch (e) { b.disabled = false; acts.append(el("span", "av-err", e.message)); } finally { BUSY = false; }
-      });
-      acts.append(b); box.append(acts);
+    } else if (!a.locked && (t.parts || [t]).some((p) => p.status === "confirmed for this advisory")) {
+      // an Undo for each mapping confirmed for this advisory (several when the technique came from several sources)
+      const acts = el("div", "av-tech-acts"), parts = (t.parts || [t]).filter((p) => p.status === "confirmed for this advisory");
+      for (const p of parts) {
+        const src = p.report || p.cve || p.category || "";
+        const b = el("button", "pill-btn", parts.length > 1 || (t.parts || []).length > 1 ? `Undo (${src || p.key})` : "Undo"); b.type = "button";
+        b.addEventListener("click", async () => {
+          if (BUSY) return; BUSY = true; b.disabled = true;
+          try { const d = await post(`/api/advisory/${fid}/attack`, { network: tnet, key: p.key, action: "restore" }); if (tseq !== SEQ) return; there.advisory = d.advisory; draw(); }
+          catch (e) { b.disabled = false; acts.append(el("span", "av-err", e.message)); } finally { BUSY = false; }
+        });
+        acts.append(b);
+      }
+      box.append(acts);
     }
     return box;
   }
@@ -143,7 +175,7 @@
       at.append(w);
       for (const t of A.pending) at.append(techBox(t, a, "pending"));
     }
-    for (const t of A.techniques || []) at.append(techBox(t, a, "out"));
+    for (const t of mergeOut(A.techniques)) at.append(techBox(t, a, "out"));   // each technique once (2026-11-19)
     if (A.removed?.length) {
       const det = el("details", "av-tech-removedlist"); det.append(el("summary", null, `Removed from this advisory (${A.removed.length})`));
       for (const t of A.removed) det.append(techBox(t, a, "removed"));
@@ -362,18 +394,27 @@
     tlpBox.append(el("span", "av-field-h", "Traffic Light Protocol (TLP)"), tlpNote, tlpPick);
     const lab = (t, x, hint, tools) => { const l = el("div", "av-field"); l.append(el("span", null, t)); if (tools) l.append(tools); l.append(x); if (hint) l.append(el("small", "muted", hint)); return l; };
     const pv1 = el("div", "av-preview"), pv2 = el("div", "av-preview");
+    // Add insights (the user, 2026-11-19): the analysis pages after the advisory (Overview, Geographic location, the IP
+    // addresses, Across reports), or the advisory alone; Technical Details and References always stay
+    const ins = el("input"); ins.type = "checkbox"; ins.id = "advInsights"; ins.checked = !!a.insights;
+    const insBox = el("label", "av-insights"); insBox.htmlFor = "advInsights";
+    insBox.append(ins, el("b", null, "Add insights"),
+      el("small", "muted", "The analysis pages after the advisory: Overview, Geographic location, the IP address tables and Across reports. "
+        + "Without them the PDF is the advisory, its Technical Details and References. Save, then generate the report again."));
     w.append(tlpBox, lab("Title", subj, `Large at the top of the first page, with "${heading || a.heading_default}" in small letters above it.`),
              lab("Description", desc, a.kinds_line ? `Below it the advisory adds: "${a.kinds_line}"` : "", toolbar(desc, pv1)), pv1,
-             lab("Recommended Actions", act, D.has_report ? 'After them: "See below for further insight into the activity." and the report on this organisation\'s devices.' : "", toolbar(act, pv2)), pv2,
+             lab("Recommended Actions", act, D.has_report ? 'With the insights added, after them: "See below for further insight into the activity." and the analysis of this organisation\'s devices.' : "", toolbar(act, pv2)), pv2,
              lab("Recipients", rec));
-    [subj, desc, act, rec].forEach((x) => { x.disabled = !edit; });
+    if (D.has_report) w.append(insBox);              // only an advisory with a report has insights to add
+    [subj, desc, act, rec, ins].forEach((x) => { x.disabled = !edit; });
     w.querySelectorAll(".av-tool").forEach((b) => { b.disabled = !edit; });
     const bar = el("div", "av-acts"), msg = el("span", "muted av-msg"); msg.setAttribute("role", "status");
     const say = (t, bad) => { msg.textContent = t; msg.style.color = bad ? "#ff8f8f" : ""; };
     // this form's organisation and data: fixed when it is drawn, whatever is picked afterwards
     const net = NET, seq = SEQ, here = D;
     // rev: the revision this form opened; a save after someone else's is refused ("changed meanwhile")
-    const body = () => ({ network: net, rev: here.advisory.rev, tlp: tlpVal, heading, subject: subj.value, description: desc.value, actions: act.value, recipients: rec.value });
+    const body = () => ({ network: net, rev: here.advisory.rev, tlp: tlpVal, heading, subject: subj.value, description: desc.value, actions: act.value, recipients: rec.value,
+                          ...(D.has_report ? { insights: ins.checked } : {}) });
     const save = async () => { const d = await post(`/api/advisory/${fid}/net`, body()); here.advisory = d.advisory; here.saved = true; return d; };
     // one action at a time; the page is drawn again only if this organisation is still the one shown
     const run = async (button, work) => {

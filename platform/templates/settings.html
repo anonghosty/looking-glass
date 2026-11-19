@@ -93,6 +93,18 @@
         <div class="table-wrap st-nets"><table class="hosts" id="netTable"><thead><tr><th></th><th>Network (company)</th><th>Type</th><th>AS numbers</th><th>Records yesterday</th></tr></thead><tbody></tbody></table></div>
         <label class="st-field st-cidrs"><span>Extra address ranges (one per line, for example 41.66.0.0/16 or a single address)</span>
           <textarea id="cidrs" rows="4" spellcheck="false" placeholder="196.10.0.0/22"></textarea></label>
+        {# pick address blocks from the reports (address_blocks.py, address-blocks.js; the user 2026-11-19) #}
+        <details class="st-blocks" id="blockPick">
+          <summary>Pick address blocks from the reports</summary>
+          <p class="st-hint">Every address block (/24) in yesterday's reports on both platforms, with its records and the network
+            most of them belong to. Tick a block to add it to the extra address ranges above; untick to take it off. Blocks
+            whose network is already chosen are in the constituency anyway. Nothing is looked up outside Looking Glass.</p>
+          <div class="st-row st-tools">
+            <input type="search" class="search" id="blockSearch" placeholder="Search a block or a network, for example 192.0.2, telecom or AS64500" autocomplete="off" aria-label="Search the address blocks">
+            <span class="muted" id="blockCount" role="status"></span>
+          </div>
+          <div class="table-wrap st-nets"><table class="hosts" id="blockTable"><thead><tr><th><span class="st-sr">Add</span></th><th>Address block</th><th>Network</th><th>Records yesterday</th><th>Note</th></tr></thead><tbody></tbody></table></div>
+        </details>
       </div>
       <div class="st-preview" id="preview2"></div>
     </section>
@@ -124,6 +136,25 @@
           </div>
         </div>
       </div>
+      {# the advisory PDF's look and the name at the top of its pages (the user, 2026-11-19); saved with the organisation #}
+      <fieldset class="org-signin org-pdf" id="orgPdf">
+        <legend>Advisory PDF</legend>
+        <p class="st-hint">How the advisories' PDFs look. The plain look prints well: white pages, dark text, the TLP label unchanged.
+          The name at the top left of each page can be Looking Glass, the organisation's name, or nothing.</p>
+        <div class="org-grid">
+          <label class="st-field"><span>The advisory's look</span>
+            <select id="orgPdfLook" class="lg-enhance">
+              <option value="designed">Designed (dark pages, as before)</option>
+              <option value="plain">Plain (white pages)</option>
+            </select></label>
+          <label class="st-field"><span>The name on the advisory's pages</span>
+            <select id="orgPdfBrand" class="lg-enhance">
+              <option value="looking-glass">Looking Glass (as before)</option>
+              <option value="organisation">The organisation's name</option>
+              <option value="none">No name</option>
+            </select></label>
+        </div>
+      </fieldset>
       <div class="org-save"><button class="intro-cta" id="orgSave" type="button" disabled>Save the organisation</button><span class="muted" id="orgMsg" role="status"></span></div>
       {# the sign-in pages' logo (neutral.py, signin-look.js; the user's choice 2026-11-19): scanners recognise a product's logo #}
       <fieldset class="org-signin" id="signinLook">
@@ -255,6 +286,7 @@
   <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>
   <script src="{{ url_for('static', filename='js/net-editor.js') }}"></script>
   <script src="{{ url_for('static', filename='js/organisation.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/address-blocks.js') }}"></script>
   <script src="{{ url_for('static', filename='js/signin-look.js') }}"></script>
   {% if "settings" in lg_perms %}<script src="{{ url_for('static', filename='js/pipeline-settings.js') }}"></script>
   <script src="{{ url_for('static', filename='js/password-policy.js') }}"></script>

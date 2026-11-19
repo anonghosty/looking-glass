@@ -275,3 +275,8 @@ body.settings-page .hud { position: sticky; top: 0; }
 .adm-inv-done { margin: 10px 0; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(61, 214, 140, .35); background: rgba(61, 214, 140, .06); }
 .adm-inv-done p { margin: 0 0 6px; }
 .adm-inv-link { display: block; margin: 0 0 8px; overflow-wrap: anywhere; font-size: 12.5px; }
+/* Settings → Constituency: pick address blocks from the reports (address-blocks.js) */
+.st-blocks { margin-top: 12px; }
+.st-blocks > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+.st-blocks td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.st-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

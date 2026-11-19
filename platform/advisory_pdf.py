@@ -225,12 +225,88 @@ class Flow:
         self.y -= 4
 
 
+_CERT_RANK = {"observed": 0, "possible": 1, "known": 2}
+
+
+def group_techniques(techs):
+    """One entry per ATT&CK technique (the user, 2026-11-19: the advisory repeated the same technique several times):
+    a technique several reports, categories or CVEs map to is printed once, with every reason under "Why it is in this
+    advisory", each CTID comment and version note once, the mitigations once, and the strongest certainty (Observed
+    before Possible). The mappings themselves stay one per source: the advisor reviews each (advisory_attack.py)."""
+    out, by = [], {}
+    for t in techs or []:
+        g = by.get(t["id"])
+        if g is None:
+            g = dict(t, whys=[], comments=[], notes=[], defend=[])
+            by[t["id"]] = g
+            out.append(g)
+        elif _CERT_RANK.get(t.get("certainty"), 9) < _CERT_RANK.get(g.get("certainty"), 9):
+            g["certainty"], g["certainty_label"] = t.get("certainty"), t.get("certainty_label")
+        if t.get("why_here") and t["why_here"] not in g["whys"]:
+            g["whys"].append(t["why_here"])
+        if t.get("comment") and (t.get("cve"), t["comment"]) not in g["comments"]:
+            g["comments"].append((t.get("cve"), t["comment"]))
+        if t.get("note") and t["note"] not in g["notes"]:
+            g["notes"].append(t["note"])
+        have = {m.get("id") for m in g["defend"]}
+        g["defend"] += [m for m in t.get("defend") or [] if m.get("id") not in have]
+        for k in ("desc", "url", "tactics", "name"):
+            if not g.get(k) and t.get(k):
+                g[k] = t[k]
+    return out
+
+
+class DuplicateAttack(ValueError):
+    """An ATT&CK technique or mitigation would be printed twice: the advisory is not made (the guard below)."""
+
+
+def assert_no_duplicates(groups, mitigations=()):
+    """The guard (the user, 2026-11-19: "duplicates need to be checked and guarded"): a technique or a mitigation is
+    printed once in an advisory, or the advisory is not made. Duplicates are merged before (group_techniques,
+    group_mitigations); this stops a later change from bringing them back."""
+    for kind, ids in (("technique", [g.get("id") for g in groups or []]), ("mitigation", [m.get("id") for m in mitigations or []])):
+        seen = set()
+        twice = [i for i in ids if i in seen or seen.add(i)]
+        if twice:
+            raise DuplicateAttack(f"MITRE ATT&CK {kind} listed twice in the advisory: {', '.join(sorted(set(twice)))}")
+        for g in groups or []:                   # inside one technique: each mitigation, reason and comment once
+            for field, key in (("defend", lambda m: m.get("id")), ("whys", lambda w: w), ("comments", lambda c: c)):
+                vals = [key(v) for v in g.get(field) or []]
+                if len(vals) != len(set(map(str, vals))):
+                    raise DuplicateAttack(f"MITRE ATT&CK {g.get('id')}: a {field} entry listed twice")
+
+
+def group_mitigations(groups):
+    """The mitigations of the grouped techniques, each once, grouped and ordered by their code (the user, 2026-11-19:
+    "group them by code"): [{id, name, techs: [technique ids], texts: [(technique id, MITRE's text for it)]}]."""
+    by, order = {}, []
+    for t in groups or []:
+        for m in t.get("defend") or []:
+            if not m.get("id"):
+                continue
+            g = by.get(m["id"])
+            if g is None:
+                g = by[m["id"]] = {"id": m["id"], "name": m.get("name") or "", "techs": [], "texts": []}
+                order.append(m["id"])
+            if t["id"] not in g["techs"]:
+                g["techs"].append(t["id"])
+            if m.get("text") and (t["id"], m["text"]) not in g["texts"]:
+                g["texts"].append((t["id"], m["text"]))
+    code = lambda k: (int(k[1:]) if k[1:].isdigit() else 10 ** 9, k)        # noqa: E731  M1016 < M1031 < M1037
+    return [by[k] for k in sorted(order, key=code)]
+
+
 def _logo_section(doc, a, y):
     """The logo section, top left: the organisation's logo (or its initial), its name and the advisory's title."""
     c = doc.c
     bw, bh = 132, 74
-    c.setFillColor(Color(1, 1, 1, .96)); c.setStrokeColor(Color(1, 1, 1, .2))
-    c.roundRect(M, y - bh, bw, bh, 10, stroke=1, fill=1)
+    plain = getattr(doc, "_plain", False)
+    doc._raw = True                           # the logo's white card stays white on any look; a grey edge on white paper
+    try:
+        c.setFillColor(Color(1, 1, 1, .96)); c.setStrokeColor(Color(.8, .82, .87, 1) if plain else Color(1, 1, 1, .2))
+        c.roundRect(M, y - bh, bw, bh, 10, stroke=1, fill=1)
+    finally:
+        doc._raw = False
     drawn = False
     if a.get("logo"):
         try:
@@ -242,7 +318,11 @@ def _logo_section(doc, a, y):
         except Exception:                     # noqa: BLE001  (an unreadable logo: the initial instead)
             drawn = False
     if not drawn:
-        doc.text(M + bw / 2, y - bh / 2 - 9, (a.get("org") or "?")[:1].upper(), 28, HexColor("#1b2140"), True, "middle")
+        doc._raw = True                       # the initial: dark on the white card, on any look
+        try:
+            doc.text(M + bw / 2, y - bh / 2 - 9, (a.get("org") or "?")[:1].upper(), 28, HexColor("#1b2140"), True, "middle")
+        finally:
+            doc._raw = False
     x = M + bw + 18
     tw = W - M - x
     yy = y - 4
@@ -344,12 +424,10 @@ def front(doc, a):
         if any(t.get("cve") for t in att["techniques"]):
             f.para("CVE techniques: MITRE Center for Threat-Informed Defense, Mappings Explorer (KEV to ATT&CK). © MITRE, "
                    "Apache License 2.0.", 8.8, DIM)
-        seen = set()
-        for t in att["techniques"]:
-            if (t["id"], t.get("report"), t.get("category"), t.get("cve"), t.get("kind")) in seen:
-                continue
-            seen.add((t["id"], t.get("report"), t.get("category"), t.get("cve"), t.get("kind")))
-            cert = (t.get("certainty_label") or "").split(" (")[0] or str(t.get("certainty") or "").capitalize()
+        groups = group_techniques(att["techniques"])
+        assert_no_duplicates(groups, group_mitigations(groups))
+        for t in groups:
+            cert =(t.get("certainty_label") or "").split(" (")[0] or str(t.get("certainty") or "").capitalize()
             # the technique's lines as (text, size, colour, bold, x), measured first so the whole block is kept on one
             # page (a technique split from its "How to defend" was seen in a render, 2026-11-13); a block taller than
             # KEEP_MAX still flows over pages rather than leaving a page empty
@@ -359,40 +437,69 @@ def front(doc, a):
             rows = []
             if t.get("desc"):
                 rows.append((f"What it is (MITRE): {t['desc']}", 9, TXT, False, M + 10))
-            if t.get("why_here"):
-                rows.append((f"Why it is in this advisory (Looking Glass): {t['why_here']}", 9, TXT, False, M + 10))
-            if t.get("comment"):                      # CTID's own words on how the CVE maps (KEV mappings, Apache 2.0)
-                rows.append((f"How {t.get('cve') or 'the vulnerability'} maps (MITRE CTID): {t['comment']}", 9, TXT, False, M + 10))
-            if t.get("note"):                         # the ATT&CK version CTID mapped with differs: renamed / revoked
-                rows.append((f"ATT&CK version: {t['note']}.", 8.8, DIM, False, M + 10))
-            if t.get("defend"):
-                rows.append(("How to defend (MITRE mitigations):", 9, TXT, False, M + 10))
-                for m in t["defend"]:
-                    rows.append((f"• {m['id']} {m['name']}" + (f": {m['text']}" if m.get("text") else ""), 8.8, DIM, False, M + 20))
+            whys = t.get("whys") or []
+            if len(whys) == 1:
+                rows.append((f"Why it is in this advisory (Looking Glass): {whys[0]}", 9, TXT, False, M + 10))
+            elif whys:                                # one technique, several reports / CVEs: each reason once
+                rows.append(("Why it is in this advisory (Looking Glass):", 9, TXT, False, M + 10))
+                for w in whys:
+                    rows.append((f"• {w}", 8.8, TXT, False, M + 20))
+            for cve, comment in t.get("comments") or []:   # CTID's own words on how each CVE maps (KEV mappings, Apache 2.0)
+                rows.append((f"How {cve or 'the vulnerability'} maps (MITRE CTID): {comment}", 9, TXT, False, M + 10))
+            for note in t.get("notes") or []:         # the ATT&CK version CTID mapped with differs: renamed / revoked
+                rows.append((f"ATT&CK version: {note}.", 8.8, DIM, False, M + 10))
+            if t.get("defend"):                       # the mitigations themselves: once each, in their own section below
+                rows.append(("How to defend: " + ", ".join(m["id"] for m in t["defend"]) + " (MITRE mitigations, below).",
+                             8.8, DIM, False, M + 10))
             rows.append((f"MITRE ATT&CK: {t.get('url') or ''}", 8.4, ACCENT, False, M + 10))
             f.y -= 4
             f.need(min(f.height(head + " · " + cert + " xx", 9.6, True) + sum(f.height(s, z, b, x) for s, z, _, b, x in rows), KEEP_MAX))
             f.para_cert(head, 9.6, cert)
             for s, z, c, b, x in rows:
                 f.para(s, z, c, b, x=x)
+        # the mitigations grouped in one section (the user, 2026-11-19): each once, with the techniques it defends
+        # against; MITRE's words for each technique kept, said once when they are the same
+        mits = group_mitigations(group_techniques(att["techniques"]))
+        if mits:
+            f.heading("How to defend: MITRE ATT&CK mitigations")
+            f.para("Each mitigation once, with the techniques above it defends against. MITRE's words. © The MITRE "
+                   "Corporation, reproduced and distributed with its permission.", 8.8, DIM)
+            for m in mits:
+                head = f"{m['id']} {m['name']} · for {', '.join(m['techs'])}"
+                texts = m["texts"]
+                lines = ([] if not texts else [(texts[0][1], M + 10)] if len({t for _, t in texts}) == 1 else
+                         [(f"• {tid}: {t}", M + 20) for tid, t in texts])
+                f.y -= 3
+                f.need(min(f.height(head, 9.4, True) + sum(f.height(s, 8.8, False, x) for s, x in lines), KEEP_MAX))
+                f.para(head, 9.4, TXT, True)
+                for s, x in lines:
+                    f.para(s, 8.8, DIM, x=x)
 
     f.heading("Recommended Actions")
     if a.get("actions"):
         f.rich(a["actions"])
     else:
         f.para("(The advisor has not written the recommended actions yet.)", color=MUTE)
-    if a.get("has_report"):
+    if a.get("has_report") and a.get("insights", True):     # only when the insights pages follow (Add insights)
         f.y -= 6
         f.para("See below for further insight into the activity.", 10.5, ACCENT, True)
 
 
-def references(doc, a, cards=(), levels=None):
+def references(doc, a, cards=(), levels=None, also=()):
     """References (the user, 2026-11-18): every defined name's references, then every Shadowserver report the advisory
-    names with its page on shadowserver.org, all ordered by criticality and flagged with it (pdf_refs.py)."""
+    names with its page on shadowserver.org, all ordered by criticality and flagged with it (pdf_refs.py).
+    also: the other reports the advisory's pages name (the reports its devices were also seen in, across reports): each
+    listed too (the user, 2026-11-19: Device Identification was named in the advisory but missing from References)."""
     import pdf_refs
     reps = [{"title": r["title"], "url": r.get("url") or "", "severity": pdf_refs.severity_by_url(r.get("url")),
              "where": " · ".join(x for x in (r.get("section"), r.get("group"), r.get("note")) if x)}
             for r in a.get("reports") or []]
+    names = list(also or []) + [r for dv in a.get("devices") or [] for r in (dv.get("reports") or [])]
+    have = {r["url"] for r in reps if r.get("url")} | {r["title"] for r in reps}
+    for e in pdf_refs.report_entries(names):
+        if e["url"] not in have and e["title"] not in have:
+            have.update((e["url"], e["title"]))
+            reps.append(dict(e, where=" · ".join(x for x in (e.get("where"), "the devices were also seen in this report") if x)))
     pdf_refs.draw(doc, pdf_refs.groups(cards, levels or {}, reps),
                   "The sources behind this advisory: each defined name with its references, then the Shadowserver "
                   "Foundation's reports it draws on (each page explains the report, its fields and how to remediate what "

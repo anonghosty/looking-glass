@@ -4,8 +4,10 @@
 Stored in data/organisation.json (name, logo as base64, its type). The logo is a PNG or JPEG of at most 40 KB (it
 travels inside a JSON request, and requests are capped at 64 KB).
 
-API: GET /api/organisation (admins and advisors) · POST /api/organisation {name, logo: data URL | "" to remove}
-(admins) · GET /organisation/logo (the image). Installed from app.py.
+API: GET /api/organisation (admins and advisors) · POST /api/organisation {name, logo: data URL | "" to remove,
+pdf_look: designed | plain, pdf_brand: looking-glass | organisation | none} (admins) · GET /organisation/logo (the
+image). Installed from app.py.
+The advisory PDF's look and the name at the top of its pages are set here too (the user, 2026-11-19).
 """
 import base64
 import json
@@ -18,6 +20,10 @@ from flask import Response, g, jsonify, request
 MAX_NAME = 120
 MAX_LOGO = 40 * 1024
 KINDS = {"image/png": b"\x89PNG\r\n\x1a\n", "image/jpeg": b"\xff\xd8\xff"}
+# the advisory PDF's look (the user, 2026-11-19): the designed dark pages, or plain white for printing; and the name at
+# the top left of each page: Looking Glass, the organisation's name, or none. Today's look until an admin changes it.
+LOOKS = ("designed", "plain")
+BRANDS = ("looking-glass", "organisation", "none")
 
 
 class Organisation:
@@ -38,7 +44,14 @@ class Organisation:
                 logo = base64.b64decode(d["logo"], validate=True)
             except ValueError:
                 logo = None
-        return {"name": str(d.get("name") or ""), "logo": logo, "logo_type": d.get("logo_type") or ""}
+        return {"name": str(d.get("name") or ""), "logo": logo, "logo_type": d.get("logo_type") or "",
+                "pdf_look": d.get("pdf_look") if d.get("pdf_look") in LOOKS else LOOKS[0],
+                "pdf_brand": d.get("pdf_brand") if d.get("pdf_brand") in BRANDS else BRANDS[0]}
+
+    def brand_text(self):
+        """The name printed at the top left of each advisory page: "Looking Glass", the organisation's name, or ""."""
+        o = self.get()
+        return {"looking-glass": "Looking Glass", "organisation": o["name"], "none": ""}[o["pdf_brand"]]
 
     @staticmethod
     def check_logo(data_url):
@@ -56,11 +69,12 @@ class Organisation:
             return None, f"The logo is {len(raw) // 1024} KB: at most {MAX_LOGO // 1024} KB, please (a smaller or compressed image)."
         return (raw, m.group(1)), ""
 
-    def save(self, name, logo):
-        """logo: (bytes, type) to set, "" to remove, None to keep."""
+    def save(self, name, logo, look=None, brand=None):
+        """logo: (bytes, type) to set, "" to remove, None to keep. look / brand: one of LOOKS / BRANDS, None to keep."""
         with self.lock:
             cur = self.get()
-            d = {"name": name}
+            d = {"name": name, "pdf_look": look if look in LOOKS else cur["pdf_look"],
+                 "pdf_brand": brand if brand in BRANDS else cur["pdf_brand"]}
             if logo is None and cur["logo"]:
                 d.update(logo=base64.b64encode(cur["logo"]).decode(), logo_type=cur["logo_type"])
             elif logo:
@@ -87,7 +101,8 @@ def install(app, ctx):
             return jsonify(error="For admins and advisors."), 403
         o = org.get()
         return jsonify(name=o["name"], has_logo=bool(o["logo"]), can_edit=bool(hp("settings")),
-                       max_logo_kb=MAX_LOGO // 1024)
+                       max_logo_kb=MAX_LOGO // 1024, pdf_look=o["pdf_look"], pdf_brand=o["pdf_brand"],
+                       looks=list(LOOKS), brands=list(BRANDS))
 
     @app.route("/api/organisation", methods=["POST"])
     def api_organisation_save():
@@ -113,11 +128,21 @@ def install(app, ctx):
                 logo, err = org.check_logo(b["logo"])
                 if not logo:
                     return jsonify(error=err), 400
-        org.save(name, logo)
-        ctx["audit"].add("organisation_set", user=who(), target=name,
-                         detail="logo removed" if logo == "" else "logo set" if logo else "name only")
+        look, brand = b.get("pdf_look"), b.get("pdf_brand")
+        if look is not None and look not in LOOKS:
+            return jsonify(error="The advisory's look: designed or plain."), 400
+        if brand is not None and brand not in BRANDS:
+            return jsonify(error="The name on the advisory's pages: Looking Glass, the organisation's name, or none."), 400
+        before = org.get()
+        org.save(name, logo, look, brand)
         o = org.get()
-        return jsonify(ok=True, name=o["name"], has_logo=bool(o["logo"]))
+        bits = ["logo removed" if logo == "" else "logo set" if logo else "name only"]
+        if o["pdf_look"] != before["pdf_look"]:
+            bits.append(f"advisory look: {o['pdf_look']}")
+        if o["pdf_brand"] != before["pdf_brand"]:
+            bits.append(f"name on the advisory's pages: {o['pdf_brand']}")
+        ctx["audit"].add("organisation_set", user=who(), target=name, detail="; ".join(bits))
+        return jsonify(ok=True, name=o["name"], has_logo=bool(o["logo"]), pdf_look=o["pdf_look"], pdf_brand=o["pdf_brand"])
 
     @app.route("/organisation/logo")
     def organisation_logo():

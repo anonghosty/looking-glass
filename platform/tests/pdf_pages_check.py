@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Every page of PDFs, checked as a reader sees them (the user, 2026-11-18: "tests always to be done"): text drawn over
-other text, the "…" cut-off, and text beyond the page's edge. Renders with pypdfium2; without it the check is skipped
+other text, the "…" cut-off, and text beyond the page's edge; and, per PDF, no MITRE ATT&CK technique or mitigation
+listed twice (a rule, 2026-11-19). Renders with pypdfium2; without it the check is skipped
 (exit 77, SKIPPED) so an install without it still runs the rest of the suite.
     python tests/pdf_pages_check.py               made-up advisory and Executive pages, built here
     python tests/pdf_pages_check.py a.pdf b.pdf   those files (the release flow: every kind of PDF from a test system)
@@ -53,6 +54,29 @@ def page_problems(page):
     return probs
 
 
+import re  # noqa: E402
+
+HEAD = re.compile(r"^\s*((?:T\d{4}(?:\.\d{3})?)|(?:M\d{4})) \S.* · ")       # a technique's / a mitigation's title line
+TID = re.compile(r"\bT\d{4}(?:\.\d{3})?\b")
+
+
+def attack_duplicates(pdf):
+    """RULE (the user, 2026-11-19: "duplicates need to be checked and guarded"): in one PDF, a MITRE ATT&CK technique
+    or mitigation has its title line once, and no line names the same technique twice."""
+    heads, probs = {}, []
+    for i in range(len(pdf)):
+        for line in pdf[i].get_textpage().get_text_range().splitlines():
+            m = HEAD.match(line)
+            if m:
+                heads.setdefault(m.group(1), []).append(i + 1)
+            ids = TID.findall(line)
+            twice = sorted({t for t in ids if ids.count(t) > 1})
+            if twice:
+                probs.append(f"page {i + 1}: {', '.join(twice)} twice on one line")
+    probs += [f"{k} listed {len(p)} times (pages {p})" for k, p in heads.items() if len(p) > 1]
+    return probs
+
+
 def made_up():
     """A made-up advisory with long names, many report chips and long Other days; the Executive top list and an
     Explained card with long texts. Returns [(name, pdf bytes)]."""
@@ -72,7 +96,15 @@ def made_up():
                        "level": lvl, "text": "What this can lead to, in words long enough to wrap over several lines. " * 4,
                        "reports": [f"Report number {j} with a long name" for j in range(12)]}
                       for i, lvl in enumerate(["critical", "high", "medium", "low"])],
-           "kinds_line": "", "recipients": []}
+           "kinds_line": "", "recipients": [],
+           # the same technique from several reports (the user's 2026-11-19 case): printed once, its mitigations once
+           "attack": {"version": "18.1", "techniques": [
+               {"id": tid, "name": nm, "tactics": ["Command and Control"], "certainty": "observed", "certainty_label": "Observed",
+                "status": "reviewed", "report": rep, "desc": "Adversaries may communicate using an application layer protocol.",
+                "why_here": f"Looking Glass maps the report “{rep}” to this technique.", "url": "https://attack.mitre.org/techniques/T1071/",
+                "defend": [{"id": "M1031", "name": "Network Intrusion Prevention", "text": "Use network signatures."}]}
+               for tid, nm in (("T1071.001", "Web Protocols"), ("T1071.004", "DNS"))
+               for rep in ("Sinkhole Events", "Sinkhole DNS Events", "IPv6 Sinkhole Events")]}}
     out = [("made-up advisory", APDF.alone(adv, {"platform_label": "Advisory", "scope": "s", "header": "h", "selection": "s",
                                                   "day": "2026-11-16", "generated_by": "t"}))]
     d = EXP.Doc({"platform_label": "Services", "scope": "s", "selection": "s", "day": "2026-11-17", "cities": [], "tz": None, "generated_by": "t"})
@@ -94,6 +126,10 @@ bad = 0
 pages = 0
 for name, data in docs:
     pdf = pdfium.PdfDocument(data)
+    dup = attack_duplicates(pdf)
+    if dup:
+        bad += 1
+        print(f"  FAIL {name}: MITRE ATT&CK shown twice: " + "; ".join(dup[:6]))
     for i in range(len(pdf)):
         pages += 1
         pr = page_problems(pdf[i])

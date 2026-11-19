@@ -27,6 +27,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
+import address_blocks
 import issue_tags
 import load_stamps
 from respcache import settled
@@ -364,20 +365,22 @@ class ServiceStore:
                     asn[str(e["asn"])] += 1
                 region[e["region"]] += 1
             raw = len(rows)
+            # the address blocks, for Settings → Constituency (address_blocks.py), before the constituency
+            blocks = address_blocks.tally(rows, (("ip", "asn", "geo"),), (st.data.get("country", "") if st is not None else ""))
             if st is not None and st.restricted:
                 rows = [e for e in rows if st.in_scope(e["asn"], e["ip"])]
-            by_src[s["name"]] = {"raw": raw, "asn": asn, "region": region, "rows": rows, "last": last}
+            by_src[s["name"]] = {"raw": raw, "asn": asn, "region": region, "blocks": blocks, "rows": rows, "last": last}
         names = {s["name"] for s in srcs}
         for n, b in keep.items():
             if n in names:
                 by_src[n] = b
         events, per, arrived = [], {}, {}
-        raw_total, asn_raw, region_raw = 0, Counter(), Counter()
+        raw_total, asn_raw, region_raw, block_raw = 0, Counter(), Counter(), Counter()
         for s in srcs:
             b = by_src.get(s["name"])
             if not b:
                 continue
-            raw_total += b["raw"]; asn_raw.update(b["asn"]); region_raw.update(b["region"])
+            raw_total += b["raw"]; asn_raw.update(b["asn"]); region_raw.update(b["region"]); block_raw.update(b.get("blocks") or {})
             events += b["rows"]
             if b["rows"]:
                 per[s["name"]] = len(b["rows"])
@@ -389,7 +392,7 @@ class ServiceStore:
         day.by_src, day.gen, day.settings_version = by_src, getattr(self, "gen", 0), sv
         if sig is not None:
             load_stamps.counted(day, stamp, t0)
-        day.raw_total, day.asn_raw, day.region_raw = raw_total, asn_raw, region_raw
+        day.raw_total, day.asn_raw, day.region_raw, day.block_raw = raw_total, asn_raw, region_raw, block_raw
         day.version = hashlib.md5(json.dumps([sorted(per.items()), sv]).encode(), usedforsecurity=False).hexdigest()[:10]
         if self.log:
             self.log.warning("Services: loaded %s: %d records from %d reports in %.1fs%s", start.date(), len(events), len(per), time.time() - t0,

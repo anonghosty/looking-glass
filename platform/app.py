@@ -259,6 +259,8 @@ def matches(ev, flt):
 
 # ---------------------------------------------------------------- day store
 import itertools as _itertools  # noqa: E402
+import facets as _facets  # noqa: E402  (drop-down counts that follow the other filters)
+import address_blocks as _address_blocks  # noqa: E402  (records per /24, for Settings → Constituency)
 import beacon_stats  # noqa: E402  (the Beacon filter, the Decoded beacons figure and its Details list)
 _DAY_SERIAL = _itertools.count(1)
 # a loaded day is checked against MongoDB every DAY_RELOAD_SECONDS and kept, with every cached answer, when its rows
@@ -381,10 +383,13 @@ class DayStore:
                     if e[f"{side}_asn"]:
                         asn[str(e[f"{side}_asn"])] += 1
             raw = len(rows)
+            # the address blocks in the country, for Settings → Constituency (address_blocks.py), before the constituency
+            blocks = _address_blocks.tally(rows, (("src_ip", "src_asn", "src_geo"), ("dst_ip", "dst_asn", "dst_geo")),
+                                           settings.data.get("country", ""))
             # constituency (Settings): keep events whose source or destination host is in it
             if settings.restricted:
                 rows = [e for e in rows if settings.in_scope(e["src_asn"], e["src_ip"]) or settings.in_scope(e["dst_asn"], e["dst_ip"])]
-            by_src[s["name"]] = {"raw": raw, "asn": asn, "rows": rows, "last": last}
+            by_src[s["name"]] = {"raw": raw, "asn": asn, "blocks": blocks, "rows": rows, "last": last}
             fresh += rows
         names = {s["name"] for s in srcs}
         for n, b in keep.items():               # taken over: already prepared, geocoded and referenced
@@ -404,12 +409,12 @@ class DayStore:
             e["src_ref"] = host_refs.ref(e["src_ip"])
             e["request"] = _request_path(e["http_url"]) if e.get("http_url") else ""   # filterable request path
         events, per, arrived = [], {}, {}
-        raw_total, asn_raw = 0, Counter()
+        raw_total, asn_raw, block_raw = 0, Counter(), Counter()
         for s in srcs:
             b = by_src.get(s["name"])
             if not b:
                 continue
-            raw_total += b["raw"]; asn_raw.update(b["asn"])
+            raw_total += b["raw"]; asn_raw.update(b["asn"]); block_raw.update(b.get("blocks") or {})
             events += b["rows"]
             if b["rows"]:
                 per[s["name"]] = len(b["rows"])
@@ -426,7 +431,7 @@ class DayStore:
         day.by_src, day.gen, day.settings_version = by_src, self.gen, settings.version
         if sig is not None:
             load_stamps.counted(day, stamp, t0)
-        day.raw_total, day.asn_raw = raw_total, asn_raw
+        day.raw_total, day.asn_raw, day.block_raw = raw_total, asn_raw, block_raw
         day.version = hashlib.md5(json.dumps([sorted(per.items()), settings.version]).encode(), usedforsecurity=False).hexdigest()[:10]
         return day
 
@@ -685,18 +690,21 @@ def api_events():
 
 @app.route("/api/facets")
 def api_facets():
-    """Filter values (with counts) for the whole replay day."""
+    """Filter values (with counts) for the whole replay day; with filters in the query, each field's counts follow
+    every OTHER filter (facets.py, the user 2026-11-19)."""
     day = store.get(parse_iso(request.args.get("at"), replay_now()))
     demo = is_demo()
     beacons = not demo and beacon_stats.ready(day)      # labelled in the background once per loaded day
-    key = ("facets", day_key(day), demo, asn_registry.mtime, registry.version, beacons)
-    return jsonify(RCACHE.get(key, lambda: _facets_core(day, demo, beacons)))
+    flt = parse_filters(request.args)
+    key = ("facets", day_key(day), demo, asn_registry.mtime, registry.version, beacons, filters_key(flt))
+    return jsonify(RCACHE.get(key, lambda: _facets_core(day, demo, beacons, flt)))
 
 
-def _facets_core(day, demo, beacons=False):
+def _facets_core(day, demo, beacons=False, flt=None):
     result = {}
+    pool = _facets.pools(day.events, flt or {}, lambda e, f: beacon_stats.label(e) if f == "beacon" else e.get(f))
     for field in FACET_FIELDS:
-        c = Counter(e[field] for e in day.events)
+        c = Counter(e[field] for e in pool.of(field))
         rows = [{"value": v or EMPTY_LABEL.get(field, ""), "count": n} for v, n in c.most_common(300)]
         result[field] = [r for r in rows if r["value"]]
     # severity of each infection (most common one), so the UI can color infections consistently
@@ -707,16 +715,18 @@ def _facets_core(day, demo, beacons=False):
     # source and destination networks, grouped by company (all ASNs of an operator together), like Intel shows them;
     # aliases in demo mode. The value is what the src_asn / dst_asn filters take (asn_registry.resolve).
     for side in ("src", "dst"):
-        c = Counter(asn_registry.company(e[f"{side}_asn"], demo) for e in day.events if e[f"{side}_asn"])
+        c = Counter(asn_registry.company(e[f"{side}_asn"], demo) for e in pool.of(f"{side}_asn") if e[f"{side}_asn"])
         result[f"{side}_asn"] = [{"value": v, "count": n} for v, n in c.most_common(300) if v]
     if beacons:                           # analysts and admins: the beacons Looking Glass decoded (beacon_stats.py)
-        result["beacon"] = beacon_stats.facet_rows(day.events)
+        result["beacon"] = beacon_stats.facet_rows(pool.of("beacon"))
     elif not demo:
         result["beacon_pending"] = True   # still being labelled: the page asks again shortly
     result["source_labels"] = {s["name"]: s["label"] for s in registry.get()}
     result["source_class"] = {s["name"]: s["class"] for s in registry.get()}
     result["day"] = day.start.date().isoformat()
     result["day_total"] = len(day.events)
+    result["filtered"] = bool(flt)
+    result["matching"] = pool.total     # records matching every filter (the whole day without filters)
     return result
 
 
@@ -3667,7 +3677,8 @@ WARMUP = _warmup.install({
 import features as _features  # noqa: E402
 FEATURES = _features.install(app, {"db": db, "registry": registry, "svc": svc, "replay_now": replay_now,
                                    "day_start": day_start, "AUTH": AUTH, "app_logger": app.logger,
-                                   "store": store, "settings": settings, "findings": FINDINGS, "acodes": ACODES})
+                                   "store": store, "settings": settings, "findings": FINDINGS, "acodes": ACODES,
+                                   "asns": asn_registry})
 
 if __name__ == "__main__":
     # `python app.py` (tests, development) listens on this computer only unless BIND_HOST says otherwise; the service
