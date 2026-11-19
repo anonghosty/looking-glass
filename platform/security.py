@@ -60,9 +60,17 @@ def _csv(v):
     return [x.strip() for x in (v or "").split(",") if x.strip()]
 
 
+# "internal" in VIEWER_NETWORKS: every private (internal) range, never the internet (the installer's "Any computer on
+# our internal network", the user 2026-11-19: a CSIRT's operations network)
+INTERNAL_RANGES = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7")
+
+
 def _networks(spec):
     out = []
     for x in _csv(spec):
+        if x.lower() == "internal":
+            out += [ipaddress.ip_network(n) for n in INTERNAL_RANGES]
+            continue
         try:
             out.append(ipaddress.ip_network(x, strict=False))
         except ValueError:

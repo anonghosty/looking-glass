@@ -40,7 +40,7 @@
     } finally { allowed = false; }
   }
   /* LGCopy.copy({text, what, kind, page}) -> {ok, message}. kind: event, record, addresses, code, indicators, note,
-     text, recovery (a person's own recovery codes: recorded, never fingerprinted). */
+     text, recovery (a person's own recovery codes) and invite (a sign-up link): secrets, recorded, never sent or fingerprinted. */
   async function copy(o) {
     const text = String(o.text ?? "");
     if (!text.trim()) return { ok: false, message: "Nothing to copy." };
@@ -48,7 +48,7 @@
     try {
       r = await fetch("/api/copy/record", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() },
         body: JSON.stringify({ kind: o.kind || "text", what: o.what || "", page: o.page || document.title.replace(/^Looking Glass · /, ""),
-          text: o.kind === "recovery" ? undefined : text }) });
+          text: (o.kind === "recovery" || o.kind === "invite") ? undefined : text }) });
       d = await r.json().catch(() => ({}));
     } catch { return { ok: false, message: "Not copied: the copy could not be recorded (no connection)." }; }
     if (!r.ok) return { ok: false, message: `Not copied: ${d.error || "the copy could not be recorded"}` };

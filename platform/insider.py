@@ -46,7 +46,9 @@ TRACE_PER_MINUTE = 5
 BODY_LIMITS = {"/api/copy/record": 12_000_000, "/api/audit/trace": TRACE_MAX_BYTES + 1_000_000}
 COMMON_SHARE = 0.2              # a line in more than this share of the seals (a CSV header) does not count as a match
 KINDS = {"event": "an event's details", "record": "a record's details", "addresses": "addresses", "code": "a code",
-         "indicators": "indicator values", "note": "a note", "text": "text", "recovery": "recovery codes"}
+         "indicators": "indicator values", "note": "a note", "text": "text", "recovery": "recovery codes",
+         "invite": "a sign-up link"}
+SECRET_KINDS = ("recovery", "invite")        # recorded as copied, never fingerprinted: they are secrets
 
 
 def _hid(n=4):
@@ -250,8 +252,8 @@ def install(app, ctx):
         page = re.sub(r"[\x00-\x1f]", " ", str(b.get("page") or ""))[:60]
         text = b.get("text")
         entry = {"id": _hid(), "t": round(time.time(), 3), "user": u, "kind": "copy", "what": what, "page": page}
-        if kind == "recovery":
-            detail = f"{what} · not fingerprinted (the person's own secret)"
+        if kind in SECRET_KINDS:
+            detail = f"{what} · not fingerprinted (a secret)"
             sid = ""
         else:
             if not isinstance(text, str) or not text.strip():

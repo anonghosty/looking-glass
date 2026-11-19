@@ -443,6 +443,37 @@ try:
     s, _, _ = req(aop2, "/api/admin/users/lg-selftest-new", json.dumps({"action": "delete"}), {"Content-Type": "application/json", "X-CSRF-Token": at}, "POST")
     ok("admin deletes the account", s == 200 and not users.get("lg-selftest-new"), str(s))
 
+    # Add a person (invites.py, the user 2026-11-19): a one-time sign-up link; the person sets their own password and
+    # authenticator, and the account is active at once with the link's role
+    print("\nAdd a person: a one-time sign-up link")
+    s, _, b_ = req(aop2, "/api/admin/invites", json.dumps({"role": "analyst", "name": "Self Test Invite"}),
+                   {"Content-Type": "application/json", "X-CSRF-Token": at}, "POST")
+    link_ = (json.loads(b_) if s == 200 else {}).get("link", "")
+    tokv = urllib.parse.unquote(link_.split("invite=", 1)[1]) if "invite=" in link_ else ""
+    ok("an administrator makes a sign-up link", s == 200 and bool(tokv), str(s))
+    ireg, _ = client()
+    ireg.addheaders.append(("X-LG-Automation", open(os.path.join(ROOT, "data", "automation.key")).read().strip()))
+    s, _, pg_ = req(ireg, "/register?invite=" + urllib.parse.quote(tokv, safe=""))
+    ok("the link opens the sign-up form, saying the person was invited", s == 200 and 'name="invite"' in pg_ and "invited you" in pg_, str(s))
+    ipw = strong()
+    iprof = dict(PROFILE, email=f"retest-inv-{secrets.token_hex(3)}@example.org")
+    s, _, pg_ = req(ireg, "/register", dict(iprof, username="lg-selftest-inv", password=ipw, password2=ipw, invite=tokv))
+    mi = _re.search(r"secret=([A-Z2-7]+)", pg_)
+    isec = mi.group(1) if mi else ""
+    s, _, done_ = req(ireg, "/register", {"step": "enrol", "code": totp_at(isec, int(time.time() // 30))})
+    u_inv = users.get("lg-selftest-inv") or {}
+    ok("the account is active at once, with the link's role, approved by the administrator who made it",
+       u_inv.get("status") == "active" and u_inv.get("role") == "analyst" and u_inv.get("approved_by") == ADMIN,
+       f"{u_inv.get('status')} {u_inv.get('role')} {u_inv.get('approved_by')}")
+    plain2, _ = client()
+    s, _, pg_ = req(plain2, "/register?invite=" + urllib.parse.quote(tokv, safe=""))
+    ok("the link works once: opened again, it says it no longer works", s == 403 and "no longer works" in pg_, str(s))
+    au = json.loads(req(aop2, "/api/admin/audit?limit=300&q=lg-selftest-inv&selftests=1")[2])["rows"]
+    ok("the link's use is in the audit log, never the link", "invite_used" in {r["event"] for r in au}
+       and tokv not in json.dumps(au), ", ".join(sorted({r["event"] for r in au})))
+    req(aop2, "/api/admin/users/lg-selftest-inv", json.dumps({"action": "delete"}), {"Content-Type": "application/json", "X-CSRF-Token": at}, "POST")
+    ok("the invited test account is removed again", not users.get("lg-selftest-inv"))
+
     print("\nAttempts left and forgotten password")
     def fresh_code(name, secret):
         step = int(time.time() // 30)
@@ -495,6 +526,11 @@ try:
                   "https://evil.example", "javascript:alert(1)", "\\\\evil.example"):
         _, _, lp_ = req(anon, "/login?next=" + urllib.parse.quote(trick, safe=""))
         nv = re.search(r'name="next" value="([^"]*)"', lp_)
+        if not nv and 'name="setup_code"' in lp_:
+            # no administrator yet: the page offers the first administrator's set-up, not a sign-in form, so there is no
+            # next= to keep (a fresh installation, 2026-11-19); the sign-in form is checked once an administrator exists
+            print(f"  SKIPPED sign-in keeps no foreign next= ({trick!r}): no administrator yet, no sign-in form")
+            continue
         ok(f"sign-in keeps no foreign next= ({trick!r})", bool(nv) and not re.match(r"^\s*(/[\\/\t\r\n]|[\\/]{2}|\w+:)", nv.group(1) if nv else "x"),
            nv.group(1) if nv else "no next field")
     s, _, _ = req(anon, "/login", {"username": "x", "password": "y"}, {"Origin": "https://evil.example"})
@@ -580,7 +616,7 @@ except Stop as why:
     print(f"\nSTOPPED: {why}")
 finally:
     users._load()
-    for n in (ADMIN, VIEWER, "lg-selftest-new", "lg-selftest-res", "lg-selftest-ext"):
+    for n in (ADMIN, VIEWER, "lg-selftest-new", "lg-selftest-res", "lg-selftest-ext", "lg-selftest-inv"):
         users.data["users"].pop(n, None)
     users.save()
     print(f"\ntemporary accounts removed: {not any(n in users.all() for n in (ADMIN, VIEWER, 'lg-selftest-res', 'lg-selftest-ext'))}")

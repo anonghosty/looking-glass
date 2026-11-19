@@ -1237,7 +1237,9 @@ def run_checks(s: Settings) -> int:
 
         db = client[s.mongo_db]
         names = set(db.list_collection_names())
-        services = sorted(n for n in names if not n.startswith(("files_", "discovered_fields_", "system.")))
+        # the pipeline's own bookkeeping (lg_*: lg_load_stamps) is not a report: no row index, no row shape (a fresh
+        # installation, 2026-11-19, failed its check on it)
+        services = sorted(n for n in names if not n.startswith(("files_", "discovered_fields_", "system.", "lg_")))
         add("OK", f"database '{s.mongo_db}'", f"{len(services)} service collection(s)")
         bad_index, bad_shape, total_docs = [], [], 0
         for name in services:

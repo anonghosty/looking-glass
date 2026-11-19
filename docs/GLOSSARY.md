@@ -7,7 +7,7 @@ the platform: the **Glossary** tab on the overview page and the **Glossary** but
 
 - [The basics](#the-basics) (8 terms)
 - [Who and where](#who-and-where) (10 terms)
-- [Threats](#threats) (23 terms)
+- [Threats](#threats) (25 terms)
 - [Numbers and measures](#numbers-and-measures) (14 terms)
 - [Using the platform](#using-the-platform) (11 terms)
 - [Accounts, roles and permissions](#accounts-roles-and-permissions) (48 terms)
@@ -121,6 +121,12 @@ Events rated critical: usually confirmed infections or active attacks that need 
 
 **Severity map**  
 On the Definitions page (researchers and administrators): every infection and issue the reports carried, with its criticality and where it comes from. Rated by Shadowserver: the highest severity Shadowserver gave the records that carry the name. Not rated: no record rates it. Rated by researchers: a researcher gave a not-rated name a level; Shadowserver's own ratings are never changed. CVEs are rated by their CVSS score and are not on the map.
+
+**Sign-up link**  
+A one-time link an administrator makes on the Admin page (Users, Add a person) to add someone with a chosen role. The person opens it and sets their own password and authenticator; the account works at once. It works once, for 72 hours, and can be revoked. Making, using and revoking one are in the audit log, never the link itself.
+
+**Internal network (any computer on it)**  
+An access choice: besides this computer, any computer with a private (internal) address may reach the sign-in page, never one on the internet. For a CSIRT's operations network. In .env: VIEWER_NETWORKS=internal.
 
 **Copy (recorded)**  
 Copying on Looking Glass is only through the copy buttons. Each one records the copy first, under your name (what, how many lines and addresses, which page, when), and copies only when that is done: if it cannot be recorded, nothing is copied. The copied text itself is never recorded. Auditors see every copy in the Audit portal's Copies tab.
@@ -610,6 +616,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Infection / category](#threats) · 
 [Intel](#using-the-platform) · 
 [Intel gathered](#accounts-roles-and-permissions) · 
+[Internal network (any computer on it)](#threats) · 
 [IP address](#who-and-where) · 
 [Issue](#publicly-accessible--vulnerable-services) · 
 [Key findings](#using-the-platform) · 
@@ -667,6 +674,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Severity map](#threats) · 
 [Shadowserver](#the-basics) · 
 [Share of all events](#numbers-and-measures) · 
+[Sign-up link](#threats) · 
 [Sinkhole](#threats) · 
 [Source host](#who-and-where) · 
 [Spam link host](#accounts-roles-and-permissions) · 

@@ -5,6 +5,36 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-19 (5)
+### Added
+- **The guided installer: a Back button on every question** (text mode: type `<`); earlier answers are kept, and
+  passwords are never written down for it. Esc still stops the installation.
+- **"Any computer on our internal network"** under *this computer and chosen networks* (`VIEWER_NETWORKS=internal`:
+  every private range, never the internet), for a CSIRT's operations network. The allowed-networks list now refuses
+  `0.0.0.0` (that let nobody in) and `0.0.0.0/0` (that is the whole internet), saying what to type instead.
+- **Add a person** (Admin → Users): a one-time sign-up link with the person's role; they set their own password and
+  authenticator, and the account works at once. Works once, for 72 hours (`INVITE_HOURS`), revocable, audited (never
+  the link), also when sign-up on the sign-in page is closed.
+- **The bell tells administrators when someone signs up**: one notice for everyone waiting, leading to Admin → Users.
+- **Network changes are caught**: the bell (and the installation check) warns administrators when this computer's
+  address no longer matches the self-signed HTTPS certificate or MongoDB's listening address, with the fix.
+- **The installer offers to look up network names** (No by default; only AS numbers are sent) and says what No means:
+  "Unlisted network" in demo mode and one check skipped.
+### Fixed
+- **The first administrator could not be made on the sign-in page when sign-up was closed** (`REGISTRATION=0`), while
+  the installer said "Let's get started". The first administrator now always signs up with the setup code; closing
+  sign-up closes it for everyone else.
+- **The installer failed when Ubuntu's automatic updates held the package manager** ("Could not get lock"). It now
+  waits, showing what for, and asks after 10 minutes without progress (stopping the update never hangs).
+- **The installer accepted ports browsers refuse to open** (6000 gave *ERR_UNSAFE_PORT*): they are refused, and a safe
+  free one is suggested.
+- **A fresh installation's own checks failed** where nothing was wrong: the pipeline check read its bookkeeping
+  collection as a report; the security retest needed a sign-in form before any administrator existed; every Python file
+  was made executable; the demo masking test took "Unlisted network" for a network's alias.
+- The Settings page's `.env` box says it is read only, and where to change the values.
+- **After updating:** nothing to do. If the bell then warns that the certificate no longer matches this computer's
+  address: `cd platform && deploy/make_tls_cert.sh <the name or address people use>`.
+
 ## 2026-11-19 (4)
 ### Changed
 - **Someone who is not signed in can no longer tell what runs here.** The sign-in, account and reset pages name no

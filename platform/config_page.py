@@ -91,7 +91,7 @@ TUNING_KEYS = {t[0] for t in TUNING}
 # read-only: (key, group, label, default as shown, help). Changed in .env, then the service restarted.
 READ_ONLY = [
     ("ACCESS_MODE", "Access and security", "Who can reach the sign-in page", "local", "local: this computer; private: plus the viewer networks; public: anyone."),
-    ("VIEWER_NETWORKS", "Access and security", "Networks allowed in private mode", "", "Addresses and ranges, comma separated."),
+    ("VIEWER_NETWORKS", "Access and security", "Networks allowed in private mode", "", "Addresses and ranges, comma separated; internal = every private range."),
     ("ALLOWED_HOSTS", "Access and security", "Extra host names people type to reach it", "", "The computer's own names and addresses are always allowed."),
     ("MFA_REQUIRED", "Access and security", "Authenticator code at every sign-in", "1", "0 only in a closed lab."),
     ("REGISTRATION", "Access and security", "Create an account on the sign-in page", "1", "0: only administrators add people."),

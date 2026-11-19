@@ -164,6 +164,9 @@ run "PDF References by criticality; preview marks" $PY tests/check_pdf_refs.py
 run "Severity map: who, ratings, PDFs" $PY tests/check_severity_map.py
 run "Insider package: copies recorded, seals, Trace a leak" $PY tests/check_insider.py
 run "Anti-fingerprinting: what a signed-out visitor learns" tests/check_fingerprint.py
+run "Network changes: certificate and MongoDB addresses" tests/check_addresses.py
+run "Accounts: sign-up links, first administrator, sign-up bell" tests/check_accounts.py
+run "Installer questions: Back, networks, ports, wording" tests/check_installer_questions.py
 run "PDF pages: no overlap, no cut-off" $PY tests/pdf_pages_check.py
 run "analyst code counts: one lock per code" $PY tests/check_per_key_cache.py
 run "older days kept for analyst codes" $PY tests/check_recent_days.py

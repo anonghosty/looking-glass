@@ -173,6 +173,20 @@ server side is in small modules called from `app.py`:
   writes `data/name_levels.done` at the end and never runs again. Since version 2 of its marker it also keeps every name
   the records carried, rated or not, with its kind in `data/name_kinds.json`; an installation updated from version 1
   reads every report once more.
+- **`invites.py`, Add a person.** One-time sign-up links: `data/invites.json` (owner-only) keyed by the SHA-256 of a
+  256-bit token (never a working link), with role, name, maker, made and expiry (`INVITE_HOURS`, 72), used or revoked;
+  at most 50 open; entries finished 90 days ago are dropped. `GET/POST /api/admin/invites`,
+  `POST /api/admin/invites/<id>/revoke` (permission *users*, CSRF, a recent sign-in; audited as `invite_made`,
+  `invite_revoked`, and `invite_used` by auth.py). It sets `auth.INVITE` (`check`, `use`): `/register?invite=` opens
+  sign-up also when `REGISTRATION=0`; at enrolment the link is used once and the account is created **active** with the
+  link's role, `approved_by` its maker. auth.py also opens sign-up while no administrator exists (the first one, with
+  the setup code), whatever `REGISTRATION` says. Page: `static/js/invites-admin.js`. Test: `tests/check_accounts.py`
+  and the security retest (a full sign-up through a link).
+- **`net_drift.py`, network changes.** `drift(base_dir)` compares this computer's addresses (`hostname -I`) with the
+  IP addresses of a self-signed `data/tls/cert.pem` (read with `openssl x509`; not checked for a CA's certificate or
+  `ACCESS_MODE=local`) and with `MONGO_BIND` in the pipeline's `.env`; each mismatch comes with its fix. Used by
+  `system_alerts.py` (the bell; at most every 5 minutes) and `tests/check_addresses.py` (a warning, not a failure).
+  `system_alerts.py` also announces people waiting for approval (one alert; its key is the newest sign-up's time).
 - **`neutral.py`, what a signed-out visitor learns (anti-fingerprinting).** An `after_request` hook rewrites every
   status line to the standard reason phrase (`http.HTTPStatus`), empties Werkzeug's "Redirecting..." bodies and
   replaces its default error pages with a plain one, replaces the static files' ETag with 24 hex characters of its

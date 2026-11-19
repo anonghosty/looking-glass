@@ -63,7 +63,9 @@ and running `deploy/reload.sh`.
 
 ## Accounts
 
-Normally done on the **Admin** page ([USER_GUIDE.md](USER_GUIDE.md)). On the command line, for recovery:
+Normally done on the **Admin** page ([USER_GUIDE.md](USER_GUIDE.md)): approve people who signed up (the bell tells
+every administrator), or invite someone with **Users → Add a person** (a one-time sign-up link, 72 hours,
+`INVITE_HOURS`). On the command line, for recovery:
 
 ```bash
 manage/manage_users.py list                 # accounts, roles, MFA, recovery codes left
@@ -78,6 +80,23 @@ Glass's user. It checks the new certificate first (key, domain, dates, chain) an
 otherwise it keeps the previous pair in `data/tls/previous-<time>/`, records the renewal in the audit log, reloads the
 service and checks the site over HTTPS. The bell warns administrators 30, 14 and 3 days before expiry, and once it has
 expired. `manage/install_cert.sh --status` shows the installed certificate and its days left.
+
+### When the server's address changes
+
+Looking Glass follows its own addresses by itself (it reads them again every minute). Two settings do not, and the bell
+warns administrators when they stop matching (the installation check, `tests/check_addresses.py`, says the same):
+
+- **The self-signed certificate** names the server's addresses as they were when it was made, so other computers get a
+  name warning. Make it again, then trust it once more on each screen:
+  ```bash
+  deploy/make_tls_cert.sh <the name or address people use>
+  ```
+  (A certificate made before 2026-11-19 also names the product; making it again replaces that too.)
+- **MongoDB on a network address** (the pipeline here, the platform on another computer: `MONGO_BIND` in the
+  pipeline's `.env`) cannot start on an address the server no longer has. Give the server its address back, or set
+  `MONGO_BIND` to the new one, run `database/deploy.sh`, and change `MONGO_HOST` in the platform's `.env`.
+
+Best: give the server a fixed address (a DHCP reservation on your DHCP server or router) or a name people use.
 
 ## Backups
 

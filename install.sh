@@ -20,11 +20,13 @@ PF_DIR="$ROOT/platform"
 VERSION="1.0"
 TITLE="Looking Glass installer $VERSION"
 mkdir -p "$ROOT/install-logs"; chmod 700 "$ROOT/install-logs"
-LOG="$ROOT/install-logs/install-$(date +%Y%m%d-%H%M%S).log"
-: > "$LOG"; chmod 600 "$LOG"
+if [ -n "${LG_BACK_LOG:-}" ] && [ -f "$LG_BACK_LOG" ]; then LOG="$LG_BACK_LOG"     # Back: the same log goes on
+else LOG="$ROOT/install-logs/install-$(date +%Y%m%d-%H%M%S).log"; : > "$LOG"; fi
+chmod 600 "$LOG"; unset LG_BACK_LOG
 
 # ---------------------------------------------------------------------------------------------------------- options
 UI=auto; ANSWERS=""; ASSUME_YES=0; NO_ANIM=0
+ORIG_ARGS=("$@")                  # Back starts the installer again with them
 while [ $# -gt 0 ]; do
   case "$1" in
     --text) UI=text; shift ;;
@@ -137,6 +139,49 @@ _pre() {  # KEY DEFAULT -> sets REPLY and returns 0 when answered without asking
   fi
   return 1
 }
+# ---------------------------------------------------------------------------------------------------------- Back
+# Every question has a Back button (the user, 2026-11-19); Esc still stops the installation. Back starts the installer
+# again (exec) with this run's answers IN ITS ENVIRONMENT ONLY (never written to disk: passwords are among them). The new
+# run answers every question before the one to go back to silently, in the same order and with the same answers (the
+# checks between them run again), then asks that question with the earlier answer offered. Answers are replayed by
+# their order, not their name: a check that failed and was retried asks the same question twice. If the questions no
+# longer match (something changed meanwhile), replaying stops and the questions are asked from there on.
+QN=0; declare -a STEPS=() SHOWN=() REPLAY_K=() REPLAY_V=(); REPLAY_TO=0
+if [ -n "${LG_BACK_TO:-}" ] && [[ $LG_BACK_TO =~ ^[0-9]+$ ]]; then
+  REPLAY_TO="$LG_BACK_TO"
+  for ((i = 1; i <= ${LG_BACK_N:-0}; i++)); do
+    v="LG_BACK_$i"; d="$(printf '%s' "${!v:-}" | base64 -d 2>/dev/null || true)"
+    REPLAY_K[i]="${d%%$'\t'*}"; REPLAY_V[i]="${d#*$'\t'}"; unset "$v"
+  done
+  unset d v i
+fi
+unset LG_BACK_TO LG_BACK_N
+replaying() { [ "$QN" -lt "$REPLAY_TO" ] || { [ "$QN" = 0 ] && [ "$REPLAY_TO" -gt 0 ]; }; }
+# step KEY -> 0 with REPLY set when this question is answered from the replay (nothing shown); 1 to ask it.
+# STEP_DEF holds the earlier answer when this is the question gone back to.
+step() {
+  QN=$((QN + 1)); STEP_DEF=""
+  if [ "$QN" -le "$REPLAY_TO" ]; then
+    if [ "${REPLAY_K[$QN]-}" != "$1" ]; then log "back: the questions changed at $QN ($1): asked from here"; REPLAY_TO=0; return 1; fi
+    if [ "$QN" -lt "$REPLAY_TO" ]; then REPLY="${REPLAY_V[$QN]}"; return 0; fi
+    STEP_DEF="${REPLAY_V[$QN]}"; REPLAY_TO=0
+  fi
+  return 1
+}
+record() { STEPS[QN]="$1"$'\t'"$2"; }      # KEY VALUE: in memory only
+shown() { SHOWN+=("$QN"); }
+go_back() {  # back to the question before this one
+  local i t=0
+  for ((i = ${#SHOWN[@]} - 1; i >= 0; i--)); do [ "${SHOWN[i]}" -lt "$QN" ] && { t="${SHOWN[i]}"; break; }; done
+  if [ "$t" = 0 ]; then msg "Back" "This is the first question."; return 1; fi
+  log "back: from question $QN to question $t"
+  export LG_BACK_TO="$t" LG_BACK_N="$t" LG_BACK_LOG="$LOG"
+  for ((i = 1; i <= t; i++)); do export "LG_BACK_$i=$(printf '%s' "${STEPS[i]-}" | base64 -w0)"; done
+  if [ -n "${SUDO_KEEPALIVE:-}" ]; then kill "$SUDO_KEEPALIVE" 2>/dev/null || true; fi
+  clear 2>/dev/null || true; echo "Back to the previous question..."
+  exec bash "$ROOT/install.sh" "${ORIG_ARGS[@]}"
+}
+BACK_HINT='(Back: the previous question; Esc: stop)'
 cancelled() { save_answers; clear 2>/dev/null || true; echo "Installation cancelled. Your answers (not passwords) are offered again next time. Nothing after this point was changed. Log: $LOG"; exit 130; }
 
 # the advice under every "which folder holds the reports" question (2026-11-15)
@@ -145,6 +190,7 @@ FOLDER_TIP="Best: a folder (or label) only for Shadowserver's reports, filled by
 mail is then never read, and a message that does not belong stands out."
 
 msg() {  # TITLE TEXT
+  if replaying; then log "[$1] (replayed, not shown)"; return 0; fi
   [ "$UI" = dialog ] && fit_windows
   if [ "$INTERACTIVE" = 0 ] || [ "$ASSUME_YES" = 1 ]; then log "[$1] $2"; [ "$UI" = text ] && printf '\n%s%s%s\n%s\n' "$B" "$1" "$R" "$2"; return 0; fi
   if [ "$UI" = dialog ]; then whiptail --title " $1 " --backtitle "$TITLE" --msgbox "$2" $H $W
@@ -153,26 +199,45 @@ msg() {  # TITLE TEXT
 ask_yesno() {  # KEY TITLE TEXT DEFAULT(yes|no) -> REPLY=yes|no
   [ "$UI" = dialog ] && fit_windows
   local k="$1" t="$2" x="$3" def; def="$(prev "$1" "${4:-yes}")"
-  if _pre "$k" "$def"; then REPLY="${REPLY,,}"; [[ $REPLY == y* || $REPLY == true || $REPLY == 1 ]] && REPLY=yes || REPLY=no; return; fi
-  if [ "$UI" = dialog ]; then
-    local o=(); [ "$def" = no ] && o=(--defaultno)
-    if whiptail --title " $t " --backtitle "$TITLE" "${o[@]}" --yesno "$x" $H $W; then REPLY=yes; else REPLY=no; fi
-  else
-    printf '\n%s%s%s\n%s\n' "$B" "$t" "$R" "$x"
-    local a; read -rp "  [${def}] yes/no: " a; a="${a:-$def}"; [[ ${a,,} == y* ]] && REPLY=yes || REPLY=no
-  fi
-  log "answer $k = $REPLY"; remember "$k" "$REPLY"
+  if step "$k"; then remember "$k" "$REPLY"; record "$k" "$REPLY"; return 0; fi
+  [ -n "$STEP_DEF" ] && def="$STEP_DEF"
+  if _pre "$k" "$def"; then REPLY="${REPLY,,}"; [[ $REPLY == y* || $REPLY == true || $REPLY == 1 ]] && REPLY=yes || REPLY=no; record "$k" "$REPLY"; return; fi
+  shown
+  local rc a
+  while :; do
+    if [ "$UI" = dialog ]; then
+      rc=0
+      REPLY=$(whiptail --title " $t " --backtitle "$TITLE" --cancel-button Back --default-item "$def" --menu "$x\n\n$BACK_HINT" $H $W 2 \
+        yes "Yes" no "No" 3>&1 1>&2 2>&3) || rc=$?
+      if [ "$rc" = 1 ]; then go_back || true; continue; elif [ "$rc" != 0 ]; then cancelled; fi
+    else
+      printf '\n%s%s%s\n%s\n' "$B" "$t" "$R" "$x"
+      read -rp "  [${def}] yes/no (< back): " a; a="${a:-$def}"
+      if [ "$a" = "<" ]; then go_back || true; continue; fi
+      [[ ${a,,} == y* ]] && REPLY=yes || REPLY=no
+    fi
+    break
+  done
+  log "answer $k = $REPLY"; remember "$k" "$REPLY"; record "$k" "$REPLY"
 }
 ask_input() {  # KEY TITLE TEXT DEFAULT [validator]
   [ "$UI" = dialog ] && fit_windows
   local k="$1" t="$2" x="$3" def="${4-}" val="${5-}"
   is_private "$k" || def="$(prev "$k" "$def")"
+  if step "$k"; then is_private "$k" || remember "$k" "$REPLY"; record "$k" "$REPLY"; return 0; fi
+  [ -n "$STEP_DEF" ] && def="$STEP_DEF"
+  local asked=0
   while :; do
     if ! _pre "$k" "$def"; then
+      [ "$asked" = 1 ] || shown; asked=1
       if [ "$UI" = dialog ]; then
-        REPLY=$(whiptail --title " $t " --backtitle "$TITLE" --inputbox "$x" $H $W "$def" 3>&1 1>&2 2>&3) || cancelled
+        local rc=0
+        REPLY=$(whiptail --title " $t " --backtitle "$TITLE" --cancel-button Back --inputbox "$x\n\n$BACK_HINT" $H $W "$def" 3>&1 1>&2 2>&3) || rc=$?
+        if [ "$rc" = 1 ]; then go_back || true; continue; elif [ "$rc" != 0 ]; then cancelled; fi
       else
-        printf '\n%s%s%s\n%s\n' "$B" "$t" "$R" "$x"; read -rp "  [${def}]: " REPLY; REPLY="${REPLY:-$def}"
+        printf '\n%s%s%s\n%s\n' "$B" "$t" "$R" "$x"; read -rp "  [${def}] (< back): " REPLY
+        if [ "$REPLY" = "<" ]; then go_back || true; continue; fi
+        REPLY="${REPLY:-$def}"
       fi
     fi
     REPLY="${REPLY#"${REPLY%%[![:space:]]*}"}"; REPLY="${REPLY%"${REPLY##*[![:space:]]}"}"
@@ -181,54 +246,71 @@ ask_input() {  # KEY TITLE TEXT DEFAULT [validator]
       msg "Please check" "$err"; continue
     fi
     if is_private "$k"; then log "answer $k ($([ -n "$REPLY" ] && echo given || echo empty))"; else log "answer $k = ${REPLY:0:60}"; remember "$k" "$REPLY"; fi
+    record "$k" "$REPLY"
     return 0
   done
 }
 ask_secret() {  # KEY TITLE TEXT [allow-empty]  -> REPLY (never logged)
   [ "$UI" = dialog ] && fit_windows
   local k="$1" t="$2" x="$3" empty="${4:-no}" a b
-  if [ -n "${ANS[$k]+x}" ]; then REPLY="${ANS[$k]}"; log "answer $k (secret, from file)"; return 0; fi
+  if step "$k"; then record "$k" "$REPLY"; return 0; fi
+  if [ -n "${ANS[$k]+x}" ]; then REPLY="${ANS[$k]}"; log "answer $k (secret, from file)"; record "$k" "$REPLY"; return 0; fi
   if [ "$INTERACTIVE" = 0 ] || [ "$ASSUME_YES" = 1 ]; then
     [ "$empty" = yes ] && { REPLY=""; return 0; }
     echo "No answer for $k (a secret must be given in the answers file or typed)." >&2; exit 1
   fi
+  shown
   while :; do
+    local rc=0
     if [ "$UI" = dialog ]; then
-      a=$(whiptail --title " $t " --backtitle "$TITLE" --passwordbox "$x" $H $W 3>&1 1>&2 2>&3) || cancelled
+      a=$(whiptail --title " $t " --backtitle "$TITLE" --cancel-button Back --passwordbox "$x\n\n$BACK_HINT" $H $W 3>&1 1>&2 2>&3) || rc=$?
+      if [ "$rc" = 1 ]; then go_back || true; continue; elif [ "$rc" != 0 ]; then cancelled; fi
     else
-      printf '\n%s%s%s\n%s\n' "$B" "$t" "$R" "$x"; read -rsp "  (hidden): " a; echo
+      printf '\n%s%s%s\n%s\n' "$B" "$t" "$R" "$x"; read -rsp "  (hidden; < back): " a; echo
+      if [ "$a" = "<" ]; then go_back || true; continue; fi
     fi
-    if [ -z "$a" ]; then [ "$empty" = yes ] && { REPLY=""; log "answer $k (secret, empty)"; return 0; }; msg "Please check" "This cannot be empty."; continue; fi
+    if [ -z "$a" ]; then [ "$empty" = yes ] && { REPLY=""; log "answer $k (secret, empty)"; record "$k" ""; return 0; }; msg "Please check" "This cannot be empty."; continue; fi
     if [ "$UI" = dialog ]; then
-      b=$(whiptail --title " $t " --backtitle "$TITLE" --passwordbox "Type it again to confirm." 9 $W 3>&1 1>&2 2>&3) || cancelled
+      rc=0
+      b=$(whiptail --title " $t " --backtitle "$TITLE" --cancel-button Back --passwordbox "Type it again to confirm." 9 $W 3>&1 1>&2 2>&3) || rc=$?
+      if [ "$rc" = 1 ]; then continue; elif [ "$rc" != 0 ]; then cancelled; fi
     else read -rsp "  again: " b; echo; fi
-    [ "$a" = "$b" ] && { REPLY="$a"; log "answer $k (secret, typed)"; return 0; }
+    [ "$a" = "$b" ] && { REPLY="$a"; log "answer $k (secret, typed)"; record "$k" "$REPLY"; return 0; }
     msg "Please check" "The two entries differ. Try again."
   done
 }
 ask_menu() {  # KEY TITLE TEXT DEFAULT tag item [tag item...]
   [ "$UI" = dialog ] && fit_windows
   local k="$1" t="$2" x="$3" def; def="$(prev "$1" "$4")"; shift 4
+  if step "$k"; then remember "$k" "$REPLY"; record "$k" "$REPLY"; return 0; fi
+  [ -n "$STEP_DEF" ] && def="$STEP_DEF"
   if _pre "$k" "$def"; then
     local ok=0 i; for ((i = 1; i <= $#; i += 2)); do [ "${!i}" = "$REPLY" ] && ok=1; done
     [ $ok = 1 ] || { echo "Answer for $k must be one of the menu choices, not '$REPLY'." >&2; exit 1; }
-    remember "$k" "$REPLY"; return 0
+    remember "$k" "$REPLY"; record "$k" "$REPLY"; return 0
   fi
+  shown
   if [ "$UI" = dialog ]; then
-    local n=$(( $# / 2 )); [ $n -gt 12 ] && n=12
-    REPLY=$(whiptail --title " $t " --backtitle "$TITLE" --default-item "$def" --menu "$x" $(( n + 11 )) $W $n "$@" 3>&1 1>&2 2>&3) || cancelled
+    local n=$(( $# / 2 )) rc=0; [ $n -gt 12 ] && n=12
+    while :; do
+      rc=0
+      REPLY=$(whiptail --title " $t " --backtitle "$TITLE" --cancel-button Back --default-item "$def" --menu "$x\n\n$BACK_HINT" $(( n + 13 )) $W $n "$@" 3>&1 1>&2 2>&3) || rc=$?
+      if [ "$rc" = 1 ]; then go_back || true; continue; elif [ "$rc" != 0 ]; then cancelled; fi
+      break
+    done
   else
     printf '\n%s%s%s\n%s\n' "$B" "$t" "$R" "$x"
     local tags=() i=1
     while [ $# -gt 0 ]; do printf '   %s%2d)%s %s\n' "$CYN" "$i" "$R" "$2"; tags+=("$1"); shift 2; i=$((i + 1)); done
     local d=1 j; for j in "${!tags[@]}"; do [ "${tags[$j]}" = "$def" ] && d=$((j + 1)); done
     while :; do
-      read -rp "  choice [$d]: " a; a="${a:-$d}"
+      read -rp "  choice [$d] (< back): " a; a="${a:-$d}"
+      if [ "$a" = "<" ]; then go_back || true; continue; fi
       if [[ $a =~ ^[0-9]+$ ]] && [ "$a" -ge 1 ] && [ "$a" -le ${#tags[@]} ]; then REPLY="${tags[$((a - 1))]}"; break; fi
       for j in "${!tags[@]}"; do [ "${tags[$j],,}" = "${a,,}" ] && { REPLY="${tags[$j]}"; break 2; }; done
     done
   fi
-  log "answer $k = $REPLY"; remember "$k" "$REPLY"
+  log "answer $k = $REPLY"; remember "$k" "$REPLY"; record "$k" "$REPLY"
 }
 
 # ---------------------------------------------------------------------------------------------------------- progress
@@ -245,6 +327,23 @@ gauge_open() {
     GAUGE_PID=$!
     GAUGE_OPEN=1
   fi
+}
+gauge_wait() { gauge "${PCT:-14}" "$1"; log "apt: $1"; }   # the package-manager wait, in the progress window
+gauge_ask() {  # MESSAGE -> APT_CHOICE = wait | stop-update | cancel (the progress window closes for the question)
+  local c="wait"
+  if [ "$UI" = dialog ] && [ "$INTERACTIVE" = 1 ]; then
+    gauge_close
+    c=$(whiptail --title " Waiting for the package manager " --backtitle "$TITLE" --menu "$1" 16 $W 3 \
+      wait "Keep waiting" stop-update "Stop the automatic update for now (it runs again later by itself)" cancel "Stop the installation" \
+      3>&1 1>&2 2>&3) || c=cancel
+    gauge_open
+  elif [ "$INTERACTIVE" = 1 ]; then
+    printf '%s\n' "$1" >&2
+    read -rp "  [w]ait longer, [s]top the automatic update for now, [c]ancel? [w]: " c
+    case "${c,,}" in s*) c="stop-update" ;; c*) c="cancel" ;; *) c="wait" ;; esac
+  fi
+  # shellcheck disable=SC2034  # read by wait_for_apt, in database/apt_wait.sh
+  APT_CHOICE="$c"
 }
 gauge() {  # PERCENT MESSAGE
   PCT="$1"; GAUGE_MSG="$2"; log "== [$1%] $2"
@@ -334,8 +433,12 @@ v_mongo_port() {  # free, or already our own MongoDB (a re-run)
   echo "Port $1 is already used by another program$([ $IS_WSL = 1 ] && echo ' (on WSL this can be another Linux distribution or Windows)'). Choose a free port, for example 27018."
   return 1
 }
-v_lg_port() {  # free, or already a Looking Glass service (a re-run)
+# ports that Chrome, Edge and Firefox refuse to open ("ERR_UNSAFE_PORT"; their shared list, 2026)
+BROWSER_BLOCKED=" 1 7 9 11 13 15 17 19 20 21 22 23 25 37 42 43 53 69 77 79 87 95 101 102 103 104 109 110 111 113 115 117 119 123 135 137 139 143 161 179 389 427 465 512 513 514 515 526 530 531 532 540 548 554 556 563 587 601 636 989 990 993 995 1719 1720 1723 2049 3659 4045 4190 5060 5061 6000 6566 6665 6666 6667 6668 6669 6679 6697 10080 "
+safe_free_port() { local q; for q in 8443 5000 5088 8080 8888 9443; do in_use "$q" || { echo "$q"; return; }; done; echo 8443; }
+v_lg_port() {  # free, or already a Looking Glass service (a re-run); never one browsers refuse to open
   v_port "$1" || return 1
+  [[ $BROWSER_BLOCKED == *" $1 "* ]] && { echo "Browsers refuse to open port $1 (Chrome, Edge and Firefox show ERR_UNSAFE_PORT). Choose another, for example $(safe_free_port)."; return 1; }
   in_use "$1" || return 0
   local s; for s in looking-glass threatmap; do
     systemctl show -p ExecStart --value "$s" 2>/dev/null | grep -qE -- "--bind [^ ]*:$1( |;|$)" && [ "$(stat -c %U "$PF_DIR")" = "$(id -un)" ] && [ "$s" = looking-glass ] && return 0
@@ -386,17 +489,25 @@ items = [x.strip() for x in sys.argv[1].split(",") if x.strip()]
 if not items:
     print("Give at least one address or range, for example 10.20.0.0/24, 192.168.1.40"); sys.exit(1)
 for x in items:
+    if x.lower() == "internal":
+        continue                     # every private range (the platform reads the word: security.py)
     try:
-        ipaddress.ip_network(x, strict=False)
+        n = ipaddress.ip_network(x, strict=False)
     except ValueError:
         print(f"'{x}' is not an address or range (like 10.20.0.0/24)."); sys.exit(1)
+    if n.prefixlen == 0:
+        print(f"'{x}' is every address in the world, the internet included: choose 'Anyone (internet-facing site)' for that, "
+              "or 'Any computer on our internal network'."); sys.exit(1)
+    if n.network_address.is_unspecified:
+        print(f"'{x}' lets nobody in: no computer has that address. For every computer on your internal network, go back "
+              "and choose 'Any computer on our internal network', or type 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16."); sys.exit(1)
 EOF
 }
 
 # ======================================================================================================================
 # 0. Checks before anything is asked
 # ======================================================================================================================
-if anim_ok; then python3 "$ROOT/installer_anim.py" splash || true; fi
+if anim_ok && [ "$REPLAY_TO" = 0 ]; then python3 "$ROOT/installer_anim.py" splash || true; fi
 banner
 [ "$(id -u)" != 0 ] || { echo "Run ./install.sh as the ordinary user who will run Looking Glass (not root, not with sudo)."; exit 1; }
 [ -d "$DB_DIR" ] && [ -d "$PF_DIR" ] || { echo "Run it from the Looking Glass folder (it needs database/ and platform/ next to it)."; exit 1; }
@@ -493,6 +604,12 @@ if ! sudo -n true 2>/dev/null; then
 fi
 ( while sleep 50; do sudo -n true 2>/dev/null || exit; done ) & SUDO_KEEPALIVE=$!
 
+# Ubuntu's automatic updates (or another installation) hold the package manager for a while after a start: wait, and
+# say what for, instead of failing (lg-try, 2026-11-19)
+[ -f "$DB_DIR/apt_wait.sh" ] && . "$DB_DIR/apt_wait.sh"
+if [ ${#MISSING[@]} -gt 0 ] && declare -F wait_for_apt >/dev/null; then
+  wait_for_apt || { echo "Stopped while waiting for the package manager. Run ./install.sh again later."; exit 1; }
+fi
 if [ ${#MISSING[@]} -gt 0 ]; then
   printf '%sInstalling the missing packages:%s %s\n' "$B" "$R" "${MISSING[*]}"
   run "apt-get update" sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
@@ -504,9 +621,9 @@ fi
 CHK="$ROOT/.installer-venv/bin/python"
 printf '%sPreparing the answer checks%s (MongoDB, HTTP and signing libraries, in %s)\n' "$B" "$R" ".installer-venv"
 [ -x "$CHK" ] || run "checker environment" python3 -m venv "$ROOT/.installer-venv"
-run "checker libraries" "$CHK" -m pip install -q --disable-pip-version-check "pymongo>=4.15,<5" "requests>=2.32,<3" "cryptography>=42"
+[ "$REPLAY_TO" -gt 0 ] && [ -x "$CHK" ] || run "checker libraries" "$CHK" -m pip install -q --disable-pip-version-check "pymongo>=4.15,<5" "requests>=2.32,<3" "cryptography>=42"
 printf '%s✔ Ready.%s The questions open in windows now.\n' "$GRN" "$R"
-sleep 1
+[ "$REPLAY_TO" -gt 0 ] || sleep 1
 
 # the windows: whiptail is installed now
 UI="$UI_WANTED"
@@ -527,6 +644,8 @@ msg "Welcome" "This installs Looking Glass on this computer:
 The requirements are in place. Next come the questions; each answer is checked
 on the spot (mailbox or API key, map and Malpedia keys, database, ports). Nothing is
 installed until you confirm the summary. About 15 minutes.
+
+Every question has a Back button (in text mode: type <). Esc stops the installation.
 
 Folder: $ROOT"
 
@@ -707,22 +826,35 @@ after_failure() {  # KEY WHAT REASON
     fi
     echo "Check failed: $2: $reason (set SKIP_FAILED_CHECKS=yes in the answers file to continue anyway)" >&2; exit 1
   fi
-  if [ "$UI" = dialog ]; then
-    local c; c=$(whiptail --title " Check failed: $2 " --backtitle "$TITLE" --menu "$reason" 18 $W 3 \
-      retry "Change the answer and check again" continue "Continue anyway (fix it later in .env)" cancel "Cancel the installation" 3>&1 1>&2 2>&3) || cancelled
+  local c
+  if step "CHECK:$2"; then c="$REPLY"
+  elif [ "$UI" = dialog ]; then
+    shown
+    local rc
+    while :; do
+      rc=0
+      c=$(whiptail --title " Check failed: $2 " --backtitle "$TITLE" --cancel-button Back --menu "$reason\n\n$BACK_HINT" 20 $W 3 \
+        retry "Change the answer and check again" continue "Continue anyway (fix it later in .env)" cancel "Cancel the installation" 3>&1 1>&2 2>&3) || rc=$?
+      if [ "$rc" = 1 ]; then go_back || true; continue; elif [ "$rc" != 0 ]; then cancelled; fi
+      break
+    done
   else
+    shown
     printf '\n%sCheck failed: %s%s\n%s\n' "$RED$B" "$2" "$R" "$reason"
-    local c; read -rp "  [r]etry, [c]ontinue anyway, [q]uit? [r]: " c; c="${c:-r}"
+    read -rp "  [r]etry, [c]ontinue anyway, [q]uit? [r]: " c; c="${c:-r}"
     case "${c,,}" in c*) c="continue" ;; q*) c="cancel" ;; *) c="retry" ;; esac
   fi
+  record "CHECK:$2" "$c"
   case "$c" in retry) for k in "${@:4}"; do unset "ANS[$k]"; done; return 0 ;; continue) return 1 ;; *) cancelled ;; esac
 }
 checking() {
+  replaying && return 0
   if [ "$UI" = dialog ] && [ "$INTERACTIVE" = 1 ]; then fit_windows; whiptail --backtitle "$TITLE" --infobox "\n  Checking $1...\n\n  This takes a few seconds (at most about 20)." 9 $W
   else printf '  %sChecking %s (at most about 20 seconds)...%s\n' "$D" "$1" "$R"; fi
 }
 passed() {  # shown, not only logged: a window in dialog mode, a green line in text mode
   log "check passed: $1"
+  replaying && return 0
   if [ "$UI" = dialog ] && [ "$INTERACTIVE" = 1 ] && [ "$ASSUME_YES" = 0 ]; then
     fit_windows
     whiptail --title " ✔ Check passed " --backtitle "$TITLE" --msgbox "\n✔  $1" 12 $W
@@ -825,6 +957,12 @@ server's network address too. Which address should it listen on?
 (Only that computer should be allowed through the firewall to port $MONGO_PORT. It must be an
 internal address of this server: MongoDB is never reachable from the internet.)" "$(hostname -I 2>/dev/null | awk '{print $1}')" v_internal_host
     MONGO_BIND="127.0.0.1,$REPLY"
+    msg "Keep this address fixed" "MongoDB will listen on $REPLY. If this server's address ever changes, MongoDB
+cannot start (\"cannot assign requested address\") and the platform cannot reach it.
+
+Give this server a fixed address: a DHCP reservation on your router or DHCP server, or a
+static address. The installation check warns if the address and MongoDB's setting stop
+matching, and says how to fix it."
   fi
   ask_input MONGO_AUTH_SOURCE "MongoDB account database" "Database the account is defined in (almost always admin):" admin v_nonempty; MONGO_AUTH_SOURCE="$REPLY"
   ask_input MONGO_DB "Report database" "Name of the database holding the reports:" shadowserver v_user; MONGO_DB="$REPLY"
@@ -1154,8 +1292,16 @@ The token is checked with Malpedia next."
     public  "Anyone (internet-facing site)"
   ACCESS_MODE="$REPLY"; VIEWER_NETWORKS=""; HTTPS=none; ALLOWED_HOSTS=""; TRUST_PROXY=0; INSECURE=0
   if [ "$ACCESS_MODE" = private ]; then
-    ask_input VIEWER_NETWORKS "Allowed networks" "Addresses and ranges allowed to reach Looking Glass, comma separated
+    # a CSIRT's operations network: every computer on it (the user, 2026-11-19), or only the ones listed
+    ask_menu VIEWER_SCOPE "Which computers" "Which computers besides this one may reach the sign-in page?" internal \
+      internal "Any computer on our internal network (private addresses only, never the internet)" \
+      list     "Only the addresses and ranges I list"
+    if [ "$REPLY" = internal ]; then
+      VIEWER_NETWORKS=internal
+    else
+      ask_input VIEWER_NETWORKS "Allowed networks" "Addresses and ranges allowed to reach Looking Glass, comma separated
 (for example 10.20.0.0/24, 192.168.1.40):" "" v_networks; VIEWER_NETWORKS="$REPLY"
+    fi
   fi
   TLS_DOMAIN=""; TLS_CERT_FILE=""; TLS_KEY_FILE=""; TLS_CHAIN_FILE=""; PORT_DEFAULT=5000
   if [ "$ACCESS_MODE" = public ]; then
@@ -1174,7 +1320,9 @@ look-alike site needs. A certificate for a domain avoids it.
 To go ahead anyway, type: self-signed" "" v_confirm_self_signed
     fi
   elif [ "$ACCESS_MODE" != local ]; then
-    ask_menu HTTPS "HTTPS" "Other computers must use HTTPS to sign in. How?" selfsigned \
+    ask_menu HTTPS "HTTPS" "Other computers must use HTTPS to sign in. How?
+(A self-signed certificate covers this computer's names and its addresses as they are now: give the
+server a fixed address or a name people use, or make it again after a change: deploy/make_tls_cert.sh)" selfsigned \
       selfsigned "Certificate made here (self-signed; screens warn once)" \
       domain     "A certificate bought for a domain name" \
       proxy      "A reverse proxy here does HTTPS (Caddy / nginx; you set it up)" \
@@ -1216,8 +1364,19 @@ Leave empty if none." "" ""; ALLOWED_HOSTS="$REPLY"
   in_use "$LG_PORT" && passed "Port $LG_PORT is used by Looking Glass itself (a re-install): it will be kept." \
                     || passed "Port $LG_PORT is free for Looking Glass."
   ask_yesno REGISTRATION "Accounts" "Let people request an account on the sign-in page?
-(Requests wait for an administrator's approval. No = administrators add people.)" yes
+Yes: requests wait for an administrator's approval (the administrators are told in the bell).
+No:  only people an administrator invites (Admin page, Add a person: a one-time sign-up link).
+Either way the first administrator signs up with the one-time setup code." yes
   REGISTRATION=$([ "$REPLY" = yes ] && echo 1 || echo 0)
+  # the names of the networks in the reports (the user, 2026-11-19: asked, No by default, saying what No means)
+  ask_yesno NAMES_LOOKUP "Network names" "Look up the names of the networks in your reports once they are loaded?
+Only AS numbers are sent, to PeeringDB and RIPEstat (public registries); nothing else leaves.
+
+If you choose No:
+  • demo mode and masked views show every network as \"Unlisted network\";
+  • one check (the demo masking check's alias test) is SKIPPED until the names are looked up.
+You can do it later: platform/manage/asn_registry.py 7, or Settings > Identify networks." no
+  NAMES_LOOKUP="$REPLY"
   [ "$MONGO_MODE" = local ] && READONLY=yes   # (remote: asked with the MongoDB login above)
   ask_input SERVICE_NAME "Service name" "Name of the systemd service:" looking-glass v_user; SERVICE_NAME="$REPLY"
 fi
@@ -1329,6 +1488,10 @@ if [ $WANT_DB = 1 ]; then
     env_set "$DB_DIR/.env" MAIL_AUTH "${MAIL_AUTH:-log}"   # the sender check: asked either way
     env_set "$DB_DIR/.env" REPORT_SOURCE "${REPORT_SOURCE:-email}"   # e-mail or the API: asked either way
     if [ -n "$SS_API_KEY" ]; then env_set "$DB_DIR/.env" SHADOWSERVER_API_KEY "$SS_API_KEY"; env_set "$DB_DIR/.env" SHADOWSERVER_API_SECRET "$SS_API_SECRET"; fi
+  fi
+  if declare -F wait_for_apt >/dev/null && apt_lock_holder >/dev/null; then
+    # shown in the progress window; after 10 minutes without progress the person chooses (gauge_ask)
+    APT_ASK=gauge_ask wait_for_apt gauge_wait || { gauge_close; fail "Stopped while waiting for the package manager (nothing was installed after that point)."; }
   fi
   gauge 14 "Installing $([ "$MONGO_MODE" = local ] && [ "$MDB_MANAGED" != 1 ] && echo "MongoDB and ")the database pipeline (several minutes)..."
   sargs=(); [ "$SCHEDULE" != off ] && sargs=(--schedule "$SCHEDULE")
@@ -1451,6 +1614,12 @@ check() {  # LABEL command...
   log "\$ check: $label"
   if bg_wait "$@"; then RESULTS+=("PASS  $label"); else RESULTS+=("FAIL  $label"); fi
 }
+if [ $WANT_PF = 1 ] && [ "${NAMES_LOOKUP:-no}" = yes ]; then
+  gauge 82 "Looking up the names of the networks in the reports (only AS numbers are sent)..."
+  log "\$ platform/manage/asn_registry.py 7"
+  bg_wait bash -c 'cd "$1" && .venv/bin/python manage/asn_registry.py 7' _ "$PF_DIR" \
+    || PF_WARN="${PF_WARN:+$PF_WARN }The network names could not be looked up now (see the log): run platform/manage/asn_registry.py 7 later."
+fi
 if [ "$RUN_CHECKS" = yes ]; then
   if [ $WANT_DB = 1 ]; then gauge 84 "Checking the database pipeline..."; check "database pipeline setup (shadowserver check)" bash -c "cd '$DB_DIR' && ./check.sh"; fi
   if [ $WANT_PF = 1 ]; then
@@ -1494,6 +1663,9 @@ if printf '%s\n' "${RESULTS[@]}" | grep -q '^FAIL.*check_libraries'; then OUT+="
 Note: a library the platform uses is missing, outside the versions it supports, or behaves
       differently. This does not depend on reports. See the log, or run: platform/.venv/bin/python
       platform/tests/check_libraries.py"; fi
+[ $WANT_PF = 1 ] && [ "${NAMES_LOOKUP:-no}" != yes ] && OUT+="
+Note: network names were not looked up, so demo mode shows \"Unlisted network\" and the demo masking check
+      skips its alias test. Later: platform/manage/asn_registry.py 7 (only AS numbers are sent)."
 [ $WANT_PF = 1 ] && OUT+="
 
 Next: open $PF_URL on this computer and choose \"Let's get started\" to create the

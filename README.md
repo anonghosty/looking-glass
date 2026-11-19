@@ -272,6 +272,13 @@ No Shadowserver reports yet? [Sign up your CSIRT](https://www.shadowserver.org/w
    - [ ] Restrict your Mapbox token to your host names in your Mapbox account.
    - [ ] Other screens: choose who may open it (`ACCESS_MODE`), switch on HTTPS, and open the firewall for those
          only. On WSL, remove any Windows firewall rule that opens the port wider than that.
+   - [ ] Give the server a fixed address (a DHCP reservation) or a name people use. The self-signed HTTPS certificate
+         names the server's addresses as they were when it was made: after an address change (or to replace a
+         certificate made before 2026-11-19, which names the product), make it again, then trust it once more on each
+         screen. Looking Glass warns administrators in the bell when it no longer matches.
+         ```bash
+         cd platform && deploy/make_tls_cert.sh <the name or address people use>
+         ```
    - [ ] Check the installation: `platform/security_testing/security_retest.py`.
    - [ ] Take a backup (`platform/manage/backup.sh`) and keep a copy off the server.
 
@@ -354,6 +361,8 @@ from the other permissions. Details: [User guide → Roles](docs/USER_GUIDE.md#r
 - **Safe exports:** no CSV cell can run as a spreadsheet formula.
 - **Hardened web layer:** HTTPS for remote access, a strict content security policy (per-request nonce, no eval),
   CSRF tokens and same-origin checks, HttpOnly / SameSite=Strict / Secure cookies, frames refused, network allow lists.
+- **Nothing to recognise from the outside:** signed out, the pages name no product, framework or library version; the
+  sign-in pages carry your organisation's name and logo.
 - **Installation check:** [`security_retest.py`](platform/security_testing/security_retest.py)
   checks each protection on your own installation. See [SECURITY.md](docs/SECURITY.md).
 - **No secrets in the code:** credentials live only in `.env` files, which `.gitignore` keeps out of the repository.

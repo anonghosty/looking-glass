@@ -96,6 +96,16 @@ def install(app, core):
         out["insider"] = insider.install(app, {"base_dir": os.path.dirname(os.path.abspath(__file__)), "has_perm": A["has_perm"],
                                                "csrf_ok": A["csrf_ok"], "audit": A["audit"], "people_name": people_name})
 
+    # Add a person: one-time sign-up links made on the Admin page (invites.py, the user 2026-11-19); auth.py reads them at
+    # sign-up through auth.INVITE
+    if all(k in A for k in ("has_perm", "csrf_ok", "fresh", "audit", "roles")):
+        import auth as _auth
+        import invites
+        out["invites"] = invites.install(app, {"base_dir": os.path.dirname(os.path.abspath(__file__)), "has_perm": A["has_perm"],
+                                               "csrf_ok": A["csrf_ok"], "fresh": A["fresh"], "audit": A["audit"],
+                                               "roles": lambda: sorted(A["roles"].roles), "hook": _auth.INVITE,
+                                               "people_name": people_name if "users" in A else None})
+
     # what someone not signed in can learn about the server: as little as possible (neutral.py, anti-fingerprinting):
     # plain status lines and error pages, neutral file tags, a short policy before sign-in, /healthz for this computer
     # only, the sign-in pages' logo as an administrator chooses it (the organisation's by default)

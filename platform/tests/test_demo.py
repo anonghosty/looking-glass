@@ -78,7 +78,9 @@ def as_role(path, perms):
 # a real network (normal mode), its alias and an opaque host reference (demo mode), the day's top infection
 st = json.loads(get(f"/api/stats?at={AT}")[1])
 std = json.loads(get(f"/api/stats?at={AT}&demo=1")[1])
-alias = std["src_network"][0]["value"] if std.get("src_network") else ""
+# a network with a demo alias: not "Unlisted network", which stands for every network without a name yet
+# (data/asns.json is built by manage/asn_registry.py; a fresh installation has none: lg-try, 2026-11-19)
+alias = next((x["value"] for x in std.get("src_network") or [] if x.get("value") and x["value"] != "Unlisted network"), "")
 ev_demo = json.loads(get(f"/api/events?latest=1&limit=50&to={TO}&demo=1")[1])["events"]
 ref = ev_demo[-1]["src_ref"] if ev_demo else ""
 inf = st["infection"][0]["value"] if st.get("infection") else ""
@@ -127,7 +129,11 @@ def total(path):
     return json.loads(body).get("total") if code == 200 and body.strip().startswith("{") else f"HTTP {code}"
 n_real, n_alias = total(f"/api/insight?kind=src_asn&value={name}&at={AT}"), total(f"/api/insight?kind=src_asn&value={alias}&at={AT}&demo=1")
 ok("normal mode: the real network name works", isinstance(n_real, int) and n_real > 0, f"total={n_real}")
-ok("demo: its alias works", isinstance(n_alias, int) and n_alias > 0, f"total={n_alias}")
+if alias:
+    ok("demo: its alias works", isinstance(n_alias, int) and n_alias > 0, f"total={n_alias}")
+else:
+    print("    SKIPPED: demo: an alias works (no network has a name yet, so demo mode shows every one as \"Unlisted network\": "
+          "run manage/asn_registry.py 7 to look the names up; only AS numbers are sent)")
 for label, v in (("real network name", name), ("real AS number", f"AS{asn}"), ("bare AS number", str(asn))):
     n = total(f"/api/insight?kind=src_asn&value={v}&at={AT}&demo=1")
     ok(f"demo: the {label} gives nothing", n == 0, f"total={n}")

@@ -56,6 +56,8 @@ import throttle_prune
 import password_policy
 import system_alerts
 
+# one-time sign-up links (invites.py sets these): check(token) -> the open invite or None; use(token, user) -> it, once
+INVITE = {"check": None, "use": None}
 PUBLIC_PATHS = ("/login", "/register", "/forgot", "/logout", "/healthz", "/favicon.ico")
 # the only files served without signing in: what the sign-in, account and reset pages use (anti-fingerprinting,
 # 2026-11-19: every script and style was readable by anyone, which named the product and its libraries; neutral.py)
@@ -1088,8 +1090,11 @@ def install(app, base_dir, logger):
     def page(tpl, code=200, **kw):
         kw.setdefault("error", "")
         kw.setdefault("tls", not remote_needs_tls())
-        kw.setdefault("registration", registration_open)
         kw.setdefault("no_admin", not active_admins())
+        # the first administrator always signs up (with the setup code), whatever REGISTRATION says (2026-11-19: with
+        # REGISTRATION=0 a new installation could only make one on the command line, while the installer said otherwise)
+        kw.setdefault("registration", registration_open or kw["no_admin"])
+        kw.setdefault("invite", "")
         setup.sync(kw["no_admin"])          # a code while there is no administrator, none once there is
         kw.setdefault("local", _is_loopback(client()[0]))
         kw.setdefault("view", "choice")
@@ -1335,37 +1340,62 @@ def install(app, base_dir, logger):
                 # behind a reverse proxy the administrator comes through the proxy, over HTTPS (remote_needs_tls)
                 first_admin = (not active_admins() and bool(st.get("setup"))
                                and not name.lower().startswith(TEST_PREFIX))
-                users.data["users"][name] = {"hash": st["hash"], "role": "admin" if first_admin else LOWEST_ROLE,
-                                             "status": "active" if first_admin else "pending", "created": int(_now()),
+                # a one-time sign-up link: used now, once; the account is active with the link's role, approved by the
+                # administrator who made it (a link used or revoked meanwhile: the account waits for approval as usual)
+                inv = None
+                if st.get("invite") and not first_admin and INVITE["use"]:
+                    inv = INVITE["use"](st["invite"], name)
+                role = "admin" if first_admin else (inv["role"] if inv else LOWEST_ROLE)
+                users.data["users"][name] = {"hash": st["hash"], "role": role,
+                                             "status": "active" if (first_admin or inv) else "pending", "created": int(_now()),
                                              "pw_set_at": int(_now()),
                                              "profile": st.get("profile", {}),
                                              "changed": int(_now()), "totp": st["secret"], "totp_last": stp, "recovery": hashes,
                                              "registered": {"at": int(_now()), "ip": ip, "location": location(ip),
                                                             "ua": request.headers.get("User-Agent", "")[:200]}}
+                if inv:
+                    users.data["users"][name].update(approved_by=inv.get("by", ""), approved_at=int(_now()))
                 users.save()
                 if first_admin:
                     setup.discard()             # used: an administrator exists now
-                audit.add("registered", user=name, detail="first admin (setup code)" if first_admin else "awaiting approval")
+                audit.add("registered", user=name, detail="first admin (setup code)" if first_admin
+                          else f"with a sign-up link from {inv.get('by', '')}, role {inv['role']}" if inv else "awaiting approval")
+                if inv:
+                    audit.add("invite_used", user=name, target=inv.get("name") or inv["role"],
+                              detail=f"sign-up link {inv.get('id', '')} made by {inv.get('by', '')}: account active, role {inv['role']}")
                 status = users.data["users"][name]["status"]
         return page("enrol_done.html", name=name, codes=codes, status=status)
 
     # ---------------- registration
     @app.route("/register", methods=["GET", "POST"])
     def register():
-        if not registration_open:
-            return page("login.html", 403, next="/", view="signin", error="Registration is closed. Ask an admin for an account.")
+        # a one-time sign-up link (Admin page, Add a person; invites.py) opens sign-up for its person, also when it is
+        # closed; with no administrator yet sign-up is open for the first one (setup code)
+        inv_tok = str(request.values.get("invite") or "")[:100]
+        inv = INVITE["check"](inv_tok) if (inv_tok and INVITE["check"]) else None
+        closed = not registration_open and not inv and bool(active_admins())
+        bad_link = bool(inv_tok) and not inv
         if request.method == "GET":
-            return page("login.html", view="register")
+            if bad_link:
+                return page("login.html", 403, next="/", view="signin",
+                            error="This sign-up link no longer works (used, expired or revoked). Ask an administrator for a new one.")
+            if closed:
+                return page("login.html", 403, next="/", view="signin", error="Registration is closed. Ask an admin for an account.")
+            return page("login.html", view="register", registration=True, invite=inv_tok if inv else "")
         # what was typed comes back with an error (never the passwords)
         f = {k: (request.form.get(k) or "").strip()[:254] for k in ("username", "full_name", "organisation", "email", "country")}
         f["email"] = f["email"].lower(); f["country"] = f["country"].upper()
 
         def fail(code, msg):
-            return page("login.html", code, view="register", error=msg, form=f)
+            return page("login.html", code, view="register", error=msg, form=f, registration=True, invite=inv_tok if inv else "")
         if remote_needs_tls():
             return fail(403, "Create accounts over HTTPS from other computers (see docs/INSTALLATION.md).")
         if request.form.get("step") == "enrol":
             return enrol_submit("/")
+        if closed or bad_link:
+            return page("login.html", 403, next="/", view="signin",
+                        error="This sign-up link no longer works (used, expired or revoked). Ask an administrator for a new one."
+                        if bad_link else "Registration is closed. Ask an admin for an account.")
         ip, _ = client()
         if throttle.count(("register", ip), 3600) >= 5:
             audit.add("register_limited")
@@ -1414,6 +1444,7 @@ def install(app, base_dir, logger):
         throttle.count(("register", ip), 3600, add=True)     # only registrations that reach the authenticator step count
         secret = totp_new_secret()
         tok = new_step({"kind": "enrol", "user": name, "secret": secret, "hash": generate_password_hash(pw), "setup": first,
+                        "invite": inv_tok if (inv and not first) else "",
                         "profile": {"full_name": f["full_name"], "organisation": f["organisation"], "email": f["email"], "country": f["country"]}})
         return step_response(enrol_page(name, secret, "/"), tok)
 

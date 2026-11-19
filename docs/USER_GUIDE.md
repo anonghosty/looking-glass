@@ -80,8 +80,11 @@ partners see the country's situation at a glance on a wall screen.
 4. On **Findings**, **Mark as sent**: the sub-finding closes, then its case once every sub-finding is closed.
 
 **Add a colleague**
-1. They choose **Create an account** on the sign-in page and link an authenticator app.
-2. An administrator approves them in **Admin → Users** with a role.
+- They sign up themselves: **Create an account** on the sign-in page, with an authenticator app. Every administrator is
+  told in the bell (*"… asks for an account"*); one approves them in **Admin → Users** with a role, or refuses.
+- Or an administrator invites them: **Admin → Users → Add a person** makes a one-time sign-up link (their role, 72
+  hours) to send them. They set their own password and authenticator, and the account works at once with that role.
+  This also works when sign-up on the sign-in page is closed.
 
 ---
 
@@ -93,12 +96,18 @@ partners see the country's situation at a glance on a wall screen.
 The very first visit shows only **Let's get started**: it asks for the one-time setup code from the server
 (`cat data/setup_code` in the platform folder; the installer shows the command), then creates the first
 administrator (name, organisation, email, country, user name, password) and links an authenticator app with a QR code. Keep the recovery codes it
-shows somewhere safe and offline.
+shows somewhere safe and offline. This works whether sign-up on the sign-in page is open or closed (`REGISTRATION`):
+closing it only closes sign-up for everyone else.
 
 ### Getting an account
 Choose **Create an account**, fill in your full name, organisation, email, country, a user name and a password,
 and scan the QR code with an authenticator app (Google Authenticator, Microsoft Authenticator, Aegis, 2FAS...).
-Your account then waits until an administrator approves it and gives it a role.
+Your account then waits until an administrator approves it and gives it a role; the administrators are told in the
+bell.
+
+With a **sign-up link** from an administrator, open the link and do the same: the page says you were invited, and your
+account works as soon as you finish, with the role the administrator chose. A link works once, for 72 hours; one that
+was used, revoked or has expired says so: ask for a new one.
 
 Passwords need at least 12 characters with upper and lower case letters, a digit and a symbol, and must not contain
 your name or common words. The eye button shows what you typed; the bar shows its strength.
@@ -1134,7 +1143,14 @@ settings stay in its own `.env`.
 - **Users:** approve new accounts with a role (only accounts waiting for approval; an active account's role changes
   with Role, which never removes the last administrator), change roles, revoke or restore, reset an authenticator, allow a
   password reset, end someone's sessions, delete. Each account shows its profile and when it last signed in.
-  You cannot remove the last administrator or your own account.
+  You cannot remove the last administrator or your own account. When someone signs up, the bell says so (one notice
+  for everyone waiting, *"N people are waiting for your approval"*), leading here.
+- **Users → Add a person:** a one-time sign-up link for someone you want to add: choose their role (and, if you like,
+  write their name for the list), then **Make a sign-up link** and copy it (shown once; the copy is recorded, never the
+  link). Send it by your organisation's usual secure channel. They set their own password and authenticator; nothing
+  secret passes through you. The link works once, for 72 hours (`INVITE_HOURS`), even when sign-up on the sign-in page
+  is closed; the open links are listed with **Revoke**. Making, using and revoking a link are in the audit log, never
+  the link itself.
 - **Roles & permissions:** the permissions of each role, and custom roles.
 - **Peace of mind** (just for you): turn it on to step out of the day-to-day work. The two platforms, Findings,
   Definitions, Combinations and the Executive and Advisory portals close for you, and no findings notification comes

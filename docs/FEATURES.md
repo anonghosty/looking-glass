@@ -260,6 +260,11 @@ against the trends, an analyst pulls exactly those devices and writes the adviso
   update; shown on every card and in the PDF reports as "Notes shared by Researcher: *full name* (*date*)".
 - **Seen in, as report cards.** Each report a name appears in shows *intel · N kinds* or *name only*; one click opens
   that report's intel. Names not in today's reports show **Last seen in *report* on *date*** (30 days remembered).
+- **Adding people.** Sign-up on the sign-in page (administrators are told in the bell) or a one-time sign-up link from
+  Admin → Add a person, with the role chosen; the person sets their own password and authenticator.
+- **A guided installer that lets you go back**, explains its choices (including any computer on your internal
+  network), waits for Ubuntu's updates instead of failing, and warns later when a network change breaks the certificate
+  or MongoDB's address.
 - **Nothing to recognise from the outside.** Signed out, the pages name no product, framework or library version:
   the sign-in pages carry the organisation's name and logo, error pages are plain, and the platform's own files need
   a sign-in. ([Installation, Updating](INSTALLATION.md#updating))

@@ -45,6 +45,9 @@
   {% if registration %}
   <form class="auth-view" data-v="register" method="post" action="/register" autocomplete="off">
     <h1>{% if no_admin %}Administrator account{% else %}Create an account{% endif %}</h1>
+    {# a one-time sign-up link from an administrator (Admin page, Add a person; invites.py) #}
+    {% if invite %}<input type="hidden" name="invite" value="{{ invite }}">
+    <p class="auth-sub">An administrator invited you: your account is ready to use as soon as you finish.</p>{% endif %}
     <ol class="auth-steps" aria-label="Steps"><li class="on">Details</li><li>Authenticator</li><li>Recovery codes</li></ol>
     {% if no_admin %}
     <p class="auth-sub">First, the setup code: on the server, run <code>cat data/setup_code</code> in the platform

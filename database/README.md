@@ -397,6 +397,7 @@ database/
 ├── run.sh                        runs the pipeline with a lock and a log file
 ├── check.sh                      setup checks (MongoDB service + pipeline --check)
 ├── deploy.sh                     installs/updates everything (sudo)
+├── apt_wait.sh                   waits (and says what for) while the system's package manager is busy (deploy.sh, ../install.sh)
 ├── mongo_log_rotation.sh         rotates MongoDB's own log (run by deploy.sh; older installs: sudo ./mongo_log_rotation.sh --now)
 ├── bin/
 │   ├── shadowserver              the global command (linked from /usr/local/bin)
@@ -510,6 +511,7 @@ Everything together stays under about 5 GB.
 | `shadowserver: command not found` | Run `./deploy.sh` in the project folder, then open a new terminal |
 | Tab completion doesn't work | Open a new terminal (completion loads at shell start) |
 | `Permission denied` running a script | `chmod +x *.sh bin/shadowserver` in this folder |
+| "Waiting for Ubuntu's automatic updates to finish" | A new computer updates itself after it starts and holds the package manager; `deploy.sh` (and the installer) wait and show their progress. After 10 minutes without progress you choose: wait longer, stop the update for now (it runs again later), or cancel. Never `systemctl stop unattended-upgrades`: with a stalled download it waits for ever |
 | `Another pipeline run is in progress` | A run is going: `shadowserver status` / `shadowserver logs -f`. Wait, or stop it with Ctrl-C in its terminal |
 | `check` shows `service mongod  inactive` | `sudo systemctl start mongod`; if it fails: `sudo tail -n 50 /var/log/mongodb/mongod.log` |
 | `mongodb connection ... Authentication failed` | `MONGO_USER`/`MONGO_PASSWORD` in `.env` don't match the MongoDB user. Fix `.env` or reset the password in `mongosh` |

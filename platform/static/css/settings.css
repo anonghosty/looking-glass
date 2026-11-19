@@ -261,3 +261,16 @@ body.settings-page .hud { position: sticky; top: 0; }
 #sevTable td b.mono { overflow-wrap: anywhere; }
 #sevMore { padding: 10px 0 2px; text-align: center; }
 #sevMore:empty { display: none; }
+
+/* Settings → Organisation → Sign-in page logo (neutral.py): like the page's other boxes, not the browser's fieldset */
+.org-signin { margin: 18px 0 0; padding: 12px 16px 14px; border: 1px solid var(--border, rgba(255, 255, 255, .08)); border-radius: 12px;
+  background: rgba(255, 255, 255, .02); display: grid; gap: 8px; }
+.org-signin legend { padding: 0 6px; font-size: 13px; font-weight: 600; color: var(--text, #e8e9ee); }
+.org-signin .st-field { max-width: 420px; }
+/* Admin → Users → Add a person (invites-admin.js) */
+.adm-invite { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border, rgba(255, 255, 255, .08)); }
+.adm-invite h3 { margin: 0 0 6px; font-size: 15px; }
+.adm-inv-role { display: inline-flex; align-items: center; gap: 8px; }
+.adm-inv-done { margin: 10px 0; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(61, 214, 140, .35); background: rgba(61, 214, 140, .06); }
+.adm-inv-done p { margin: 0 0 6px; }
+.adm-inv-link { display: block; margin: 0 0 8px; overflow-wrap: anywhere; font-size: 12.5px; }

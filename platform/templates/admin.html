@@ -52,6 +52,27 @@
       <div class="st-loading" id="adLoading">Opening the accounts and their roles…</div>
       <div class="table-wrap"><table class="hosts adm-table" id="usersTable"><thead><tr>
         <th>Name</th><th>Status</th><th>Role</th><th>MFA</th><th>Registered</th><th>Last login</th><th>Sessions</th><th></th></tr></thead><tbody></tbody></table></div>
+      {# Add a person: a one-time sign-up link (invites.py, invites-admin.js; the user 2026-11-19) #}
+      <div class="adm-invite" id="invBox" hidden>
+        <h3>Add a person</h3>
+        <p class="st-hint">Makes a one-time sign-up link to send to the person (by your organisation's usual secure channel). They
+          open it, fill in their details and set their own password and authenticator: nothing secret passes through you. Their
+          account is active at once with the role chosen here. The link works once, for <span id="invHours">72</span> hours, and
+          can be revoked below. Works also when sign-up on the sign-in page is closed.</p>
+        <div class="st-row st-tools">
+          <input class="search" id="invName" placeholder="Their name (optional, for this list)" maxlength="100" autocomplete="off" aria-label="Their name">
+          <label class="adm-inv-role"><span class="muted">Role</span> <select id="invRole" class="lg-enhance" aria-label="Their role"></select></label>
+          <button class="intro-cta" id="invMake" type="button">Make a sign-up link</button>
+        </div>
+        <div class="adm-inv-done" id="invDone" hidden>
+          <p><b>The sign-up link</b> <span class="muted">(shown once: copy it now)</span></p>
+          <code class="adm-inv-link" id="invLink"></code>
+          <button class="pill-btn" id="invCopy" type="button">Copy the link</button>
+        </div>
+        <span class="muted" id="invMsg" role="status"></span>
+        <div class="table-wrap"><table class="hosts adm-table" id="invTable"><thead><tr>
+          <th>For</th><th>Role</th><th>Made by</th><th>Made</th><th>Expires</th><th></th></tr></thead><tbody></tbody></table></div>
+      </div>
     </section>
 
     <section class="st-card adm-pane" id="pane-roles" hidden>
@@ -76,5 +97,6 @@
   <script src="{{ url_for('static', filename='js/notifications.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/peace.js') }}"></script>
   <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/invites-admin.js') }}"></script>
 </body>
 </html>

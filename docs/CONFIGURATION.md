@@ -71,10 +71,11 @@ of …"), then replays the whole day from 00:00 to 24:00. Details: [TECHNICAL_RE
 | Setting | Default | Meaning |
 |---|---|---|
 | `ACCESS_MODE` | `local` | who can reach the sign-in page: `local` (this computer), `private` (plus `VIEWER_NETWORKS`), `public` (anyone) |
-| `VIEWER_NETWORKS` | empty | addresses and ranges allowed in `private` mode, comma separated (`10.20.0.0/24, 192.168.1.40`). `any` or `*` = public |
+| `VIEWER_NETWORKS` | empty | addresses and ranges allowed in `private` mode, comma separated (`10.20.0.0/24, 192.168.1.40`). `internal` = every private range (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7): any computer on the internal network, never the internet. `any` or `*` = public. Never `0.0.0.0` (that is one address no computer has: nobody gets in) |
 | `ALLOWED_HOSTS` | empty | extra host names people type to reach it (the computer's own names and addresses are always allowed). `*` = any |
 | `MFA_REQUIRED` | `1` | authenticator code at every sign-in. `0` only in a closed lab |
-| `REGISTRATION` | `1` | **Create an account** on the sign-in page (accounts wait for an administrator's approval). `0` = only administrators add people |
+| `REGISTRATION` | `1` | **Create an account** on the sign-in page (accounts wait for an administrator's approval; the administrators are told in the bell). `0` = only people an administrator invites (Admin → Users → Add a person). The first administrator always signs up with the setup code, whatever this says |
+| `INVITE_HOURS` | `72` | how long a sign-up link from Add a person works (1 to 720 hours); it works once either way |
 | `SESSION_IDLE_MINUTES` | `60` | a normal session ends after this many minutes without use |
 | `SESSION_MAX_HOURS` | `12` | and after this many hours in any case. "Stay signed in" sessions last up to 5 days (fixed) |
 | `TRUST_PROXY` | `0` | `1` when a reverse proxy on the same computer does HTTPS (Caddy, nginx): the client address and https come from its headers. The proxy must send `X-Forwarded-For`; direct requests without it are refused (except `/healthz`) |
@@ -208,6 +209,7 @@ Created and kept by the service; private to its user and never committed:
 | `audit.log`, `audit.head`, `audit_archive/` | sign-ins, account and settings changes, exports, findings and advisories; each entry chained to the one before by its SHA-256 (tamper evident). Archived at `AUDIT_ROTATE_MB`, kept for `AUDIT_RETENTION_DAYS`; `audit.head` holds the newest link and the number of entries |
 | `copy_seals.jsonl`, `copy_seal.key` | the seals of every copy made with a copy button and every file downloaded: who, when, what, and keyed fingerprints (never the text or an address); the key that makes them (when `COPY_SEAL_KEY` is not set). Owner-only; seals older than `AUDIT_RETENTION_DAYS` are removed |
 | `name_kinds.json`, `name_ratings.json` | every name the reports carried with its kind, and the researchers' ratings of names no record rates (the severity map; names only) |
+| `invites.json` | the open and recent sign-up links (Add a person): role, who made it, when; only each link's SHA-256, never a working link. Owner-only |
 | `signin_look.json` | which logo the sign-in pages show: the organisation's (default), Looking Glass's or none; who chose it and when |
 | `settings.json`, `schedule.json` | Settings page values, replay schedule |
 | `config.json` | the tuning values kept on Settings → Configuration (they take precedence over `.env`; delete it and restart to go back to `.env`) |

@@ -56,7 +56,10 @@ if grep -qE '^LG_PORT=' .env; then sed -i "s/^LG_PORT=.*/LG_PORT=$port/" .env; e
 # the service's name, so deploy/reload.sh (and the certificate renewal) reload the right one when it is not looking-glass
 if grep -qE '^LG_SERVICE=' .env; then sed -i "s/^LG_SERVICE=.*/LG_SERVICE=$name/" .env; else printf '# Name of the systemd service (set by deploy/install.sh)\nLG_SERVICE=%s\n' "$name" >> .env; fi
 mkdir -p data && chmod 700 data
-find deploy manage security_testing tests tools -maxdepth 1 \( -name '*.sh' -o -name '*.py' \) -exec chmod +x {} +
+# only the scripts (a first line starting with #!) are made executable; modules stay plain files, as the file-mode
+# check (tests/check_file_modes.py) expects (a fresh installation, 2026-11-19: every .py had been made executable)
+find deploy manage security_testing tests tools -maxdepth 1 \( -name '*.sh' -o -name '*.py' \) -type f -print0 \
+  | while IFS= read -r -d '' f; do [ "$(head -c2 "$f")" = '#!' ] && chmod +x "$f" || chmod -x "$f"; done
 
 step "4. Service unit (deploy/$name.service)"
 sed -e "s|@USER@|$(id -un)|g" -e "s|@PROJECT@|$project|g" -e "s|@BIND@|$bind|g" \

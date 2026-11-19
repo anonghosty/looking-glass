@@ -23,6 +23,24 @@ run these steps in the Ubuntu window. On Ubuntu, run them in a terminal, as the 
    ```
    It asks its questions in windows (`./install.sh --text` for plain prompts), checks every answer (mailbox login,
    tokens, MongoDB, ports), installs both parts and runs the checks.
+   - **Back** on every question returns to the one before, keeping your earlier answers (in text mode, type `<`).
+     **Esc** stops the installation. Going back runs the answer checks between the two questions again, so it can
+     take a few seconds; passwords are never written down for it, so a password question comes back empty.
+   - **Who may open it:** *this computer only*, *this computer and chosen networks* (then: *any computer on our
+     internal network*, every private address and never the internet, or only the addresses and ranges you list), or
+     *anyone* (internet-facing, HTTPS required). The list refuses `0.0.0.0` (that lets nobody in) and `0.0.0.0/0`
+     (that is the whole internet).
+   - **The port:** any free port browsers open; it refuses those browsers block (6000 among them: *ERR_UNSAFE_PORT*)
+     and suggests one.
+   - **Ubuntu's automatic updates** often run right after a computer starts and hold the package manager. The
+     installer waits for them and shows what it is waiting for and how far it is; after 10 minutes without progress
+     it asks: keep waiting, stop the update for now (it runs again later by itself), or stop the installation.
+   - **Network names** (optional, No by default): looks up the names of the networks in your reports once they are
+     loaded (only AS numbers are sent, to PeeringDB and RIPEstat). Without them, demo mode shows every network as
+     "Unlisted network" and one check (the demo masking alias test) is skipped; do it later with
+     `platform/manage/asn_registry.py 7` or Settings → Identify networks.
+   - **Sign-up on the sign-in page:** *No* means only people an administrator invites (Admin → Users → Add a
+     person); the first administrator always signs up with the setup code either way.
 4. **Open the address it shows** and create the first administrator (see [A6](#a6-the-first-administrator-security)).
 
 Later updates are a `git pull` in the same folder (see [Updating](#updating)).
@@ -469,6 +487,13 @@ security_testing/security_retest.py && tests/run_all_checks.sh
 > `--now` also rotates the current log straight away. Running it again changes nothing. It writes no rule when
 > another one already rotates that log, and MongoDB is not restarted. If your MongoDB runs elsewhere or was yours
 > before Looking Glass, its log is yours to rotate; the same script can do it there too.
+
+> **Accounts and network changes (from the release after 2026-11-19 (4)).** Nothing to do when updating. New:
+> administrators are told in the bell when someone signs up; **Admin → Users → Add a person** makes one-time sign-up
+> links; the first administrator always signs up with the setup code, also when `REGISTRATION=0`; `VIEWER_NETWORKS`
+> accepts `internal` (any computer on the internal network); and the bell warns administrators when this computer's
+> address no longer matches the self-signed certificate or MongoDB's listening address (`MONGO_BIND`), saying how to
+> fix it. If it warns about the certificate: `cd platform && deploy/make_tls_cert.sh <the name or address people use>`.
 
 > **What the outside sees (from 2026-11-19).** Someone who is not signed in can no longer tell what runs here: the
 > sign-in pages name no product (the organisation's name and logo instead, Settings → Organisation → *Sign-in page

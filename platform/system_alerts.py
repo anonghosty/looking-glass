@@ -10,6 +10,8 @@ like them so the bell shows them as they are:
   - the HTTPS certificate (data/tls) expires within 30 days: again at 14 and at 3 days, and once it has expired
   - the audit log cannot be written (a full disk...), and for 7 days after, that entries were lost (auth.Audit)
   - the sender check has stopped checking (DNS does not answer for the key), or, once, that blocking can be switched on
+  - people who signed up and wait for approval (one alert for all; it comes back when someone new signs up)
+  - this computer's addresses no longer match the HTTPS certificate or MongoDB's listening address (network changes)
 Each alert has an id that changes when something new happens; clearing one hides that alert for that person only
 (data/system_alerts_seen.json). Nothing here holds an address or a report's content.
 """
@@ -172,6 +174,8 @@ class Alerts:
                         "at": rec_at, "link": "/audit"})
         out += self._sender_check(now)
         out += self._decoding_asks()
+        out += self._signups()
+        out += self._addresses(now)
         out += count_alerts(now)
         cert = self._certificate()
         if cert and cert["days_left"] <= 30:
@@ -230,6 +234,41 @@ class Alerts:
                                  "page, then approve or not."),
                         "at": float(s.get("asked_at") or 0), "link": "/findings#beaconUnknown"})
         return out
+
+    def _signups(self):
+        """People who signed up and wait for an administrator's approval (the user, 2026-11-19: the administrators were not
+        told). One alert for all of them; its key changes when someone new signs up, so clearing it hides it until then."""
+        users = (_read_json(os.path.join(self.data, "users.json")) or {}).get("users") or {}
+        waiting = []
+        for name, u in users.items():
+            if isinstance(u, dict) and u.get("status") == "pending" and not str(name).startswith("lg-selftest"):
+                at = float((u.get("registered") or {}).get("at") or u.get("created") or 0)
+                full = str(((u.get("profile") or {}).get("full_name") or "")).strip()
+                waiting.append((at, f"{full} ({name})" if full and full.lower() != str(name).lower() else str(name)))
+        if not waiting:
+            return []
+        waiting.sort()
+        newest = waiting[-1][0]
+        who = ", ".join(w for _, w in waiting[-3:]) + (f" and {len(waiting) - 3} more" if len(waiting) > 3 else "")
+        title = (f"{waiting[0][1]} asks for an account" if len(waiting) == 1
+                 else f"{len(waiting)} people are waiting for your approval")
+        return [{"key": f"signup:{round(newest)}", "problem": True, "title": title,
+                 "text": (f"waiting for your approval: {who}. On the Admin page, approve each with a role, or refuse."),
+                 "at": newest, "link": "/admin"}]
+
+    def _addresses(self, now):
+        """This computer's address changed and the certificate or MongoDB's listening address no longer match
+        (net_drift.py, the user 2026-11-19). Worked out at most every 5 minutes (the bell asks often)."""
+        cached = getattr(self, "_drift_cache", None)
+        if not cached or now - cached[0] > 300:
+            try:
+                import net_drift
+                found = net_drift.drift(self.base_dir, env=self.env)
+            except Exception:                            # noqa: BLE001  never break the bell over this
+                found = []
+            cached = self._drift_cache = (now, found)
+        return [{"key": d["key"], "problem": True, "title": d["title"], "text": d["text"], "at": cached[0], "link": "/settings"}
+                for d in cached[1]]
 
     def _certificate(self):
         """The installed HTTPS certificate (data/tls), read with deploy/install_cert.py: domain, expiry, days left."""

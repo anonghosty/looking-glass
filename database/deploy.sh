@@ -103,9 +103,14 @@ command -v gpg   >/dev/null || base_pkgs+=(gnupg)
 command -v curl  >/dev/null || base_pkgs+=(curl)
 command -v flock >/dev/null || base_pkgs+=(util-linux)
 command -v crontab >/dev/null || base_pkgs+=(cron)
+# the package manager may be busy (Ubuntu's automatic updates after a start): wait, saying what for (apt_wait.sh,
+# shared with install.sh; 2026-11-19); apt itself also waits up to 5 minutes for its lock as a last resort
+[[ -f ./apt_wait.sh ]] && . ./apt_wait.sh
+APT_LOCK=(-o DPkg::Lock::Timeout=300)
 if [[ ${#base_pkgs[@]} -gt 0 ]]; then
-  sudo apt-get update -qq
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${base_pkgs[@]}"
+  if declare -F wait_for_apt >/dev/null; then wait_for_apt || die "Stopped while waiting for the package manager."; fi
+  sudo apt-get "${APT_LOCK[@]}" update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get "${APT_LOCK[@]}" install -y -qq "${base_pkgs[@]}"
 fi
 
 if [[ $LOCAL == false ]]; then
@@ -133,8 +138,9 @@ elif ! command -v mongod >/dev/null || ! command -v mongosh >/dev/null || ! comm
   curl -fsSL "https://pgp.mongodb.com/server-$SERIES.asc" | sudo gpg --dearmor --yes -o "$KEYRING"
   echo "deb [ arch=amd64,arm64 signed-by=$KEYRING ] https://repo.mongodb.org/apt/ubuntu $CODENAME/mongodb-org/$SERIES multiverse" \
     | sudo tee "/etc/apt/sources.list.d/mongodb-org-$SERIES.list" >/dev/null
-  sudo apt-get update -qq
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mongodb-org
+  if declare -F wait_for_apt >/dev/null; then wait_for_apt || die "Stopped while waiting for the package manager."; fi
+  sudo apt-get "${APT_LOCK[@]}" update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get "${APT_LOCK[@]}" install -y -qq mongodb-org
 fi
 [[ $LOCAL == false ]] || info "$(mongod --version | head -n1), mongosh $(mongosh --version)"
 
