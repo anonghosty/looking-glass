@@ -20,7 +20,7 @@
   <header class="hud">
     <div class="hud-left">
       <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
-      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Audit portal · read only · signed in as {{ lg_user }} ({{ lg_role }})</span></div></div>
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Audit portal · read only · signed in as {{ lg_name }} ({{ lg_role }})</span></div></div>
     </div>
     <div class="hud-right">
       {% set nav_here = "audit" %}{% set nav_go = false %}{% include "_page_nav.html" %}
@@ -46,6 +46,7 @@
       <button type="button" role="tab" data-tab="live" aria-selected="false">Signed in now</button>
       <button type="button" role="tab" data-tab="sender" aria-selected="false">Sender check</button>
       <button type="button" role="tab" data-tab="evidence" aria-selected="false">Integrity and evidence</button>
+      <button type="button" role="tab" data-tab="trace" aria-selected="false">Trace a leak</button>
     </nav>
     <div class="st-banner" id="banner" role="status" hidden></div>
 
@@ -126,10 +127,28 @@
         </div>
       </div>
     </section>
+
+    {# Trace a leak (insider.py, static/js/leak-trace.js): text or a file found outside, matched against the sealed copies
+       and downloads; nothing given is kept, every trace is in the audit log #}
+    <section class="st-card adm-pane au-pane" id="pane-trace" hidden>
+      <h2>Trace a leak</h2>
+      <p class="st-hint">Found text or a file outside Looking Glass that may have come from it? Paste the text or choose the file. Every copy made with a
+        copy button and every file downloaded was sealed when it happened, with keyed fingerprints of the whole, of each line and of each
+        address. What you give here is fingerprinted the same way and thrown away. The answer is who copied or downloaded it, when, and how
+        closely it matches. Each trace is in the audit log (who and when, how many matches, never what was searched); at most 5 a minute.</p>
+      <form id="trForm" class="au-trace" autocomplete="off">
+        <label class="st-field">Text found outside<textarea id="trText" rows="7" maxlength="5000000" spellcheck="false"
+          placeholder="Paste the leaked text: addresses, lines of a list, a record"></textarea></label>
+        <label class="st-field">Or a file found outside<input type="file" id="trFile"></label>
+        <div class="au-ev-acts"><button type="submit" class="lg-btn primary" id="trGo">Trace</button><span class="muted" id="trMsg" role="status"></span></div>
+      </form>
+      <div id="trOut"></div>
+    </section>
   </main>
   <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
   <script src="{{ url_for('static', filename='js/notifications.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/sender-audit.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/leak-trace.js') }}"></script>
   <script src="{{ url_for('static', filename='js/audit.js') }}"></script>
 </body>
 </html>

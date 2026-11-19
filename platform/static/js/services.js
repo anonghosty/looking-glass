@@ -1217,7 +1217,9 @@
   $("mShow").addEventListener("click", () => { const e = state.modalEv; if (!e) return; closeModal(); applyPairs([["service", e.service]]); });
   $("mCopy").addEventListener("click", async () => {
     if (!state.modalEv) return;
-    try { await navigator.clipboard.writeText(JSON.stringify(state.modalEv, null, 2)); $("mCopy").textContent = "Copied"; setTimeout(() => { $("mCopy").textContent = "Copy JSON"; }, 1500); } catch { toast("Clipboard not available"); }
+    // recorded before it is copied, under the person's name (lg-copy.js, insider.py); not recorded = not copied
+    const r = await window.LGCopy.copy({ text: JSON.stringify(state.modalEv, null, 2), kind: "record", what: "a record's details (JSON)", page: "Services platform" });
+    if (r.ok) { $("mCopy").textContent = "Copied"; setTimeout(() => { $("mCopy").textContent = "Copy JSON"; }, 1500); } else toast(r.message);
   });
 
   // ================================================================== analysis (same dialog, figures and drill-downs as the map platform)

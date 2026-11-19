@@ -20,10 +20,11 @@
                   issues: ["Associated tags", "Other CVEs on the same hosts"], services: null };   // services: every pattern field
   const ofKinds = (k) => !KINDS[cur.section] || KINDS[cur.section].includes(k.kind);
   const rn = (x) => (intel?.labels || {})[x] || x;                    // a services report's title
+  // recorded before it is copied, under the person's name (lg-copy.js, insider.py); not recorded = not copied
   async function clip(text) {
-    try { await navigator.clipboard.writeText(text); return true; } catch { /* not a secure page */ }
-    const ta = el("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.append(ta); ta.select();
-    let ok = false; try { ok = document.execCommand("copy"); } catch { /* */ } ta.remove(); return ok;
+    const r = await window.LGCopy.copy({ text, kind: "code", what: "a combination code (notes)", page: "Definitions" });
+    if (!r.ok) window.LGCopy.tell(r.message);
+    return r.ok;
   }
 
   // ---------------- the window
@@ -74,7 +75,7 @@
   function codeTag(c, removable) {
     const t = el("span", "kbn-code"); t.title = c.text || c.code;
     const b = el("button", "kbn-code-b"); b.type = "button"; b.append(el("code", null, c.code)); b.title = `Copy ${c.code}`;
-    b.addEventListener("click", async () => { msg.textContent = (await clip(c.code)) ? `Copied ${c.code}` : "Copy failed"; msg.className = "kbn-msg ok"; });
+    b.addEventListener("click", async () => { msg.textContent = (await clip(c.code)) ? `Copied ${c.code}` : "Not copied"; msg.className = "kbn-msg ok"; });
     t.append(b, el("span", "kbn-code-t", c.text || ""));
     if (removable) {
       const x = el("button", "kbn-code-x", "✕"); x.type = "button"; x.setAttribute("aria-label", `Remove ${c.code} from this note`);

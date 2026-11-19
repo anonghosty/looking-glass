@@ -51,7 +51,7 @@
       </a>
       <div class="brand">
         <div class="brand-title">Looking Glass</div>
-        <div class="brand-sub"><span class="demo-pill" id="demoPill" hidden>Demo</span><button type="button" class="scope-pill" id="scopePill" hidden></button><span class="track-name">Publicly accessible / vulnerable services</span><span class="sep bs-more">·</span><span class="bs-more" id="collectionName">Shadowserver</span></div>
+        <div class="brand-sub"><span class="demo-pill" id="demoPill" hidden>Demo</span><button type="button" class="scope-pill" id="scopePill" hidden></button><span class="track-name">Publicly accessible / vulnerable services</span><span class="sep bs-more">·</span><span class="bs-more" id="collectionName">Shadowserver</span><span class="sep bs-more">·</span><span class="bs-more">signed in as {{ lg_name }}</span></div>
       </div>
     </div>
 
@@ -91,7 +91,7 @@
       </button>
       {% if "management" in lg_perms %}<a class="demo-btn account-btn" href="/management" title="The management portal (Executive): aggregated dashboard and executive reports"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Executive</span></a>{% endif %}
       {% if "users" in lg_perms or "audit" in lg_perms %}<a class="demo-btn account-btn" href="/admin" title="Users, sessions, roles and audit log"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6zM9 12l2 2 4-4"/></svg><span>Admin</span></a>{% endif %}
-      <form method="post" action="/logout" class="account-form"><button type="submit" class="demo-btn account-btn" title="Logged in as {{ lg_user }} ({{ lg_role }}). Click to log out.">
+      <form method="post" action="/logout" class="account-form"><button type="submit" class="demo-btn account-btn" title="Logged in as {{ lg_name }} ({{ lg_role }}). Click to log out.">
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
         <span class="acct-name">Log out</span></button></form>
       <button type="button" class="demo-btn" id="btnSettings" title="Settings for both platforms: country and constituency"{% if "settings" not in lg_perms %} hidden{% endif %}>
@@ -296,6 +296,7 @@
 
   <script nonce="{{ csp_nonce }}">window.SVC_CONFIG = { offsetHours: {{ offset_hours|tojson }}, lookups: {{ ("malpedia" in lg_perms)|tojson }} };</script>
   <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/lg-copy.js') }}"></script>
   <script src="{{ url_for('static', filename='js/notifications.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/regions.js') }}"></script>
   <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>

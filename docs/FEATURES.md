@@ -260,6 +260,10 @@ against the trends, an analyst pulls exactly those devices and writes the adviso
   update; shown on every card and in the PDF reports as "Notes shared by Researcher: *full name* (*date*)".
 - **Seen in, as report cards.** Each report a name appears in shows *intel · N kinds* or *name only*; one click opens
   that report's intel. Names not in today's reports show **Last seen in *report* on *date*** (30 days remembered).
+- **Every copy recorded, every copy and download sealed, Trace a leak.** Copying only through the copy buttons, each
+  copy recorded under the person's name before it happens (not recorded = not copied); keyed fingerprints of every
+  copy and downloaded file; auditors trace text or a file found outside back to who copied or downloaded it, and when.
+  Every header names the person signed in. ([User guide](USER_GUIDE.md#everything-is-recorded-under-your-name))
 - **The severity map.** Every infection and issue the reports carried, with its criticality and its source: rated by
   Shadowserver, not rated (listed first) or rated by a researcher. Researchers rate only the names no record rates;
   Shadowserver's ratings are never changed; every rating is audited, and the PDFs flag a researcher's rating as such.

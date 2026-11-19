@@ -27,6 +27,7 @@
     sessions: "Sessions ended by an administrator, and session misuse (a session used from another address or browser).",
     config: "Settings (country, constituency), network names and types, definitions, the organisation, and Peace of mind.",
     data: "Report and CSV downloads, combination reports, advisory files, and the audit evidence exported here.",
+    copies: "Every copy made with a copy button, recorded before it was copied: who, what, how many lines and addresses, which page, and its seal (never the text itself). Also every leak traced.",
     workflow: "Findings, reviews and decisions, analyst and combination codes, notes, and advisories from saved to sent.",
     system: "The built-in security self-test (temporary lg-selftest accounts, attacks simulated on purpose), the checks on this computer, and integrity checks.",
   };
@@ -354,6 +355,7 @@
   let current = "overview";
   const work = (tab) => tab === "overview" ? loadOverview : tab === "access" ? loadAccess : tab === "live" ? loadSessions
     : tab === "evidence" ? async () => evPeriod()
+    : tab === "trace" ? async () => window.LGTrace?.ready()          // leak-trace.js: Trace a leak
     : tab === "sender" ? () => window.LGSender.load(per())          // sender-audit.js: the DKIM sender check
     : () => loadLog(true);
   function show(tab, first) {

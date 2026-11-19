@@ -7,7 +7,7 @@ the platform: the **Glossary** tab on the overview page and the **Glossary** but
 
 - [The basics](#the-basics) (8 terms)
 - [Who and where](#who-and-where) (10 terms)
-- [Threats](#threats) (20 terms)
+- [Threats](#threats) (23 terms)
 - [Numbers and measures](#numbers-and-measures) (14 terms)
 - [Using the platform](#using-the-platform) (11 terms)
 - [Accounts, roles and permissions](#accounts-roles-and-permissions) (48 terms)
@@ -121,6 +121,15 @@ Events rated critical: usually confirmed infections or active attacks that need 
 
 **Severity map**  
 On the Definitions page (researchers and administrators): every infection and issue the reports carried, with its criticality and where it comes from. Rated by Shadowserver: the highest severity Shadowserver gave the records that carry the name. Not rated: no record rates it. Rated by researchers: a researcher gave a not-rated name a level; Shadowserver's own ratings are never changed. CVEs are rated by their CVSS score and are not on the map.
+
+**Copy (recorded)**  
+Copying on Looking Glass is only through the copy buttons. Each one records the copy first, under your name (what, how many lines and addresses, which page, when), and copies only when that is done: if it cannot be recorded, nothing is copied. The copied text itself is never recorded. Auditors see every copy in the Audit portal's Copies tab.
+
+**Seal**  
+Keyed fingerprints made when something is copied or downloaded: of the whole text, of each line and of each address, and a downloaded file's SHA-256. No text or address can be read back from a seal, and without the secret key it cannot be tested against guesses. Each seal has a reference such as S-1a2b3c4d.
+
+**Trace a leak**  
+In the Audit portal (auditors and administrators): text or a file found outside Looking Glass is matched against the seals of every copy and download, to say who copied or downloaded it, when, and how closely it matches. What is traced is not kept, and each trace is in the audit log (never what was searched).
 
 **Researcher's rating**  
 A level a researcher gave, on the severity map, to a name no Shadowserver record rates. The PDFs' References section uses it and flags it "Researcher's rating". When Shadowserver later rates the name, Shadowserver's level is used instead.
@@ -557,6 +566,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Confirmation on the server](#security-audit-and-the-pipeline) · 
 [Constituency (Settings)](#publicly-accessible--vulnerable-services) · 
 [Control check (LG-01 … LG-15)](#security-audit-and-the-pipeline) · 
+[Copy (recorded)](#threats) · 
 [Country (Settings)](#publicly-accessible--vulnerable-services) · 
 [Critical](#threats) · 
 [Cross-report hosts](#numbers-and-measures) · 
@@ -649,6 +659,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Retention note and rotation entry](#security-audit-and-the-pipeline) · 
 [Role](#accounts-roles-and-permissions) · 
 [Scanning](#threats) · 
+[Seal](#threats) · 
 [Seen in / Last seen](#accounts-roles-and-permissions) · 
 [Sender check (DKIM)](#security-audit-and-the-pipeline) · 
 [Services constellation](#publicly-accessible--vulnerable-services) · 
@@ -667,5 +678,6 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Threat actor](#accounts-roles-and-permissions) · 
 [Time zone (display)](#security-audit-and-the-pipeline) · 
 [TLP (Traffic Light Protocol)](#accounts-roles-and-permissions) · 
+[Trace a leak](#threats) · 
 [User agent](#who-and-where) · 
 [Workers (Settings)](#security-audit-and-the-pipeline)

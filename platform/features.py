@@ -89,6 +89,13 @@ def install(app, core):
                                                          "has_perm": A["has_perm"], "csrf_ok": A["csrf_ok"],
                                                          "audit": A["audit"], "people_name": people_name})
 
+    # the insider package (insider.py, the user 2026-11-18): copies recorded before they happen, copies and downloads
+    # sealed with keyed fingerprints, Trace a leak in the Audit portal, the person's full name in every header
+    if all(k in A for k in ("has_perm", "csrf_ok", "audit")):
+        import insider
+        out["insider"] = insider.install(app, {"base_dir": os.path.dirname(os.path.abspath(__file__)), "has_perm": A["has_perm"],
+                                               "csrf_ok": A["csrf_ok"], "audit": A["audit"], "people_name": people_name})
+
     # the analyst codes' device counts worked out ahead after a start, so the Findings page does not wait for them
     # (acode_warm.py; only in the running service)
     if core.get("acodes") is not None:

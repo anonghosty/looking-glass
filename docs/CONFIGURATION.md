@@ -153,6 +153,7 @@ Set these to what your own audits and laws require; the defaults suit a yearly I
 | `FINDING_ACT_DAYS` | `30` | days after a finding's devices were last seen before a finding nobody is acting on closes on its own ("Time to act expired"); never one approved, with the advisor or with an advisory not yet sent; `0` never closes one |
 | `FINDING_GRACE_DAYS` | `7` | a finding is never closed this way sooner than this many days after it was opened (a review of older records) |
 | `DATA_ACCESS_LOG` | `1` | `0` stops logging views of host-level data (one host's activity, host lists, record details, analyses) in the audit log; exports are always logged. Off, CIS safeguard 3.14 shows as "related", not backed |
+| `COPY_SEAL_KEY` | empty | the secret key that seals every copy and download (keyed fingerprints, for Trace a leak). Empty: Looking Glass makes one at the first start in `data/copy_seal.key` (owner-only) and uses it. Keep the key with your backups: seals made with a lost key can no longer be traced. Never shown anywhere |
 | `AUDIT_REVIEW_DAYS` | `7` | control check LG-13 (NIST AU-6): the review interval the check names (integrity check or evidence export). 7 is CIS's figure (weekly, safeguard 8.11); above it, 8.11 shows as "related", not backed |
 
 The control checks give evidence, not a pass or fail: the conclusion is the auditor's.
@@ -205,6 +206,8 @@ Created and kept by the service; private to its user and never committed:
 | `region_matches.json` | the administrator's region matches (Settings → Country) |
 | `backup_public_key` | the public key backups are encrypted to (you put it there; [OPERATIONS.md](OPERATIONS.md#backups)) |
 | `audit.log`, `audit.head`, `audit_archive/` | sign-ins, account and settings changes, exports, findings and advisories; each entry chained to the one before by its SHA-256 (tamper evident). Archived at `AUDIT_ROTATE_MB`, kept for `AUDIT_RETENTION_DAYS`; `audit.head` holds the newest link and the number of entries |
+| `copy_seals.jsonl`, `copy_seal.key` | the seals of every copy made with a copy button and every file downloaded: who, when, what, and keyed fingerprints (never the text or an address); the key that makes them (when `COPY_SEAL_KEY` is not set). Owner-only; seals older than `AUDIT_RETENTION_DAYS` are removed |
+| `name_kinds.json`, `name_ratings.json` | every name the reports carried with its kind, and the researchers' ratings of names no record rates (the severity map; names only) |
 | `settings.json`, `schedule.json` | Settings page values, replay schedule |
 | `config.json` | the tuning values kept on Settings → Configuration (they take precedence over `.env`; delete it and restart to go back to `.env`) |
 | `beacon_summaries.json` | the beacon decoder's public answers kept across restarts (hashes of the request lines, never the lines; safe to delete) |

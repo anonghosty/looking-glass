@@ -71,7 +71,11 @@
       msg.className = "ac-msg ok"; msg.replaceChildren();
       const code = el("code", "ac-code", d.code);
       const copy = el("button", "pill-btn", "Copy the code"); copy.type = "button";
-      copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(d.code); copy.textContent = "Copied"; } catch { copy.textContent = "Select and copy"; } });
+      // recorded before it is copied, under the person's name (lg-copy.js, insider.py); not recorded = not copied
+      copy.addEventListener("click", async () => {
+        const r = await window.LGCopy.copy({ text: d.code, kind: "code", what: "an analyst code" });
+        copy.textContent = r.ok ? "Copied" : "Not copied"; if (!r.ok) window.LGCopy.tell(r.message);
+      });
       const open = el("a", "pill-btn", `Open finding ${d.finding}`); open.href = `/findings#f${d.finding.slice(1)}`;
       msg.append(el("div", null, `Finding ${d.finding} sent to ${d.to || "the researcher"}: ${fmt(d.records)} records on ${fmt(d.hosts)} host${d.hosts === 1 ? "" : "s"}.`), code,
         el("div", "ac-sub", `Researchers and management see it as: ${d.label}`), copy, open);

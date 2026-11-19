@@ -1583,7 +1583,9 @@
   $("mCopy").addEventListener("click", async () => {
     if (!state.modalEv) return;
     const { _path, ...clean } = state.modalEv;
-    try { await navigator.clipboard.writeText(JSON.stringify(clean, null, 2)); $("mCopy").textContent = "Copied"; setTimeout(() => { $("mCopy").textContent = "Copy JSON"; }, 1500); } catch { toast("Clipboard not available"); }
+    // recorded before it is copied, under the person's name (lg-copy.js, insider.py); not recorded = not copied
+    const r = await window.LGCopy.copy({ text: JSON.stringify(clean, null, 2), kind: "event", what: "an event's details (JSON)", page: "Network communications map" });
+    if (r.ok) { $("mCopy").textContent = "Copied"; setTimeout(() => { $("mCopy").textContent = "Copy JSON"; }, 1500); } else toast(r.message);
   });
   $("mFly").addEventListener("click", () => {
     const ev = state.modalEv; if (!ev) return;

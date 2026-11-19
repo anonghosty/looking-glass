@@ -39,10 +39,12 @@
   const SEC = { issues: "issue", services: "services report", infections: "infection / category" };
 
   // ---------------- copying: one value per line (files, tools) or one line with commas (search boxes, messages)
-  async function writeClip(text) {
-    try { await navigator.clipboard.writeText(text); return true; } catch { /* not a secure page, or refused */ }
-    const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
-    document.body.append(ta); ta.select(); let ok = false; try { ok = document.execCommand("copy"); } catch { /* */ } ta.remove(); return ok;
+  // every copy is recorded first, under the person's name (lg-copy.js, insider.py); not recorded = not copied
+  let lastWhy = "";
+  async function writeClip(text, what) {
+    const r = await window.LGCopy.copy({ text, kind: "indicators", what: what ? `indicator values: ${what}` : "indicator values (Intel gathered)", page: "Intel gathered" });
+    lastWhy = r.ok ? "" : r.message;
+    return r.ok;
   }
   let toastT;
   function toast(text) {
@@ -50,7 +52,7 @@
     t.replaceChildren(svg(ICON.check, 14, 2.2), document.createTextNode(text)); t.classList.add("on");
     clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 1600);
   }
-  async function copy(text, what) { toast((await writeClip(text)) ? `Copied ${what}` : "Copy failed: select the text instead"); }
+  async function copy(text, what) { toast((await writeClip(text, what)) ? `Copied ${what}` : lastWhy || "Not copied"); }
   function iconBtn(icon, tip, fn, cls = "") {
     const b = el("button", `ig-ibtn ${cls}`); b.type = "button"; b.title = tip; b.setAttribute("aria-label", tip); b.append(svg(icon, 14));
     b.addEventListener("click", (e) => { e.stopPropagation(); fn(); }); return b;

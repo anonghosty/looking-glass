@@ -143,7 +143,12 @@
       const tools = el("div", "ce-iptools");
       if (devs.length > IPS_SHOWN) { const m = el("button", "lg-btn sm ghost", `All ${fmt(devs.length)} addresses`); m.type = "button"; m.addEventListener("click", () => { draw(true); m.remove(); }); tools.append(m); }
       const cp = el("button", "lg-btn sm ghost", "Copy the addresses"); cp.type = "button";
-      cp.addEventListener("click", async () => { try { await navigator.clipboard.writeText(devs.map((d) => d.ip).join("\n")); cp.textContent = "Copied"; } catch { cp.textContent = "Copy failed"; } setTimeout(() => { cp.textContent = "Copy the addresses"; }, 1400); });
+      // recorded before it is copied, under the person's name (lg-copy.js, insider.py); not recorded = not copied
+      cp.addEventListener("click", async () => {
+        const r = await window.LGCopy.copy({ text: devs.map((d) => d.ip).join("\n"), kind: "addresses", what: `the addresses of a combination (${fmt(devs.length)})`, page: "Combination search" });
+        cp.textContent = r.ok ? "Copied" : "Not copied"; if (!r.ok) window.LGCopy.tell(r.message);
+        setTimeout(() => { cp.textContent = "Copy the addresses"; }, 1400);
+      });
       tools.append(cp);
       dv.append(list, tools); r.append(dv);
       const foot = el("div", "ce-combo");

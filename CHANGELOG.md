@@ -5,6 +5,24 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-19 (3)
+### Added
+- **Every copy is recorded before it happens.** Copying on the pages is only through the copy buttons; text cannot be
+  selected, copied or dragged out except in the fields people type in. Each copy button asks the server to record the
+  copy first (who, what, how many lines and addresses, which page, when) and copies only when that is done: when it
+  cannot be recorded, nothing is copied. The copy buttons were not recorded before. The Audit portal has a new
+  **Copies** tab. The copied text itself is never recorded.
+- **Sealed copies and downloads, and Trace a leak.** Every copy and every downloaded file is sealed with keyed
+  fingerprints (the whole, each line, each address; a file's SHA-256, and each file in a ZIP), never the text. In the
+  Audit portal, **Trace a leak** (auditors and administrators) matches text or a file found outside against the seals:
+  who copied or downloaded it, when, and how closely it matches. What is traced is not kept; each trace is audited
+  (how many matches, never what was searched), at most 5 a minute per person.
+- **Every page header names the person signed in by their full name**, and the Overview says: "Everything you view,
+  copy or export on Looking Glass is recorded under your name."
+- **After updating:** nothing to do. Looking Glass makes the sealing key at the first start (`data/copy_seal.key`,
+  owner-only) unless `COPY_SEAL_KEY` is set in `.env`; keep it with your backups, since seals made with a lost key can
+  no longer be traced. The seals (`data/copy_seals.jsonl`) are kept as long as the audit log (`AUDIT_RETENTION_DAYS`).
+
 ## 2026-11-19 (2)
 ### Added
 - **The severity map, on the Definitions page (researchers and administrators only).** Every infection and issue the

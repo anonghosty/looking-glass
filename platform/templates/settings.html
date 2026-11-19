@@ -19,7 +19,7 @@
   <header class="hud">
     <div class="hud-left">
       <button type="button" class="brand-btn" data-go="/?intro=1" aria-label="Open the Looking Glass overview"><img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32"></button>
-      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span id="stScope">Settings · both platforms</span></div></div>
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span id="stScope">Settings · both platforms</span><span> · signed in as {{ lg_name }} ({{ lg_role }})</span></div></div>
     </div>
     <div class="hud-right">
       {% set nav_here = "settings" %}{% set nav_go = true %}{% include "_page_nav.html" %}

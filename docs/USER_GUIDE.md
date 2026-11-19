@@ -153,6 +153,25 @@ belong to one role only and cannot be given to any other: *definitions* (Researc
 Administrators can make custom roles from the other permissions (view, unmasked data, export, Malpedia, settings,
 networks, audit).
 
+### Everything is recorded under your name
+
+Every page's header names you by the full name you registered with, and the Overview says it plainly: *Everything
+you view, copy or export on Looking Glass is recorded under your name.*
+
+- **Copying is only through the copy buttons** (Copy JSON, Copy the addresses, the copy icons of Intel gathered, Copy
+  the code). Text on the pages cannot be selected, copied or dragged out, except in the fields you type in. Each copy
+  button records the copy **before** it copies: who, what, how many lines and addresses, which page, when. If the copy
+  cannot be recorded (the connection dropped, the disk is full), **nothing is copied** and the button says why.
+- **Every copy and every downloaded file is sealed:** keyed fingerprints of the whole, of each line and of each
+  address (a download also its SHA-256, and each file inside a ZIP), never the text itself. If a list turns up
+  outside, an auditor can trace it back to the copy or the download it came from (*Trace a leak*, in the Audit
+  portal).
+- Your own recovery codes are shown once when you set up your authenticator; that page comes before you are signed
+  in, so its copy button is not recorded.
+
+Said plainly: blocking selection in a browser deters, it does not make copying impossible (the browser's developer
+tools, a photo of the screen). What it guarantees is that every copy made the normal way is on record.
+
 ---
 
 ## 2. The intro page
@@ -1173,6 +1192,16 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
   hosts by their reference, never their address; the same person viewing the same thing again within 10 minutes is
   not logged twice, but every download is, the same list twice included. `DATA_ACCESS_LOG=0` in `.env` turns view logging off (the Audit portal then says so). Each has its count, a search, *Alerts only*, and **Export CSV**.
   The installation check's events are kept apart in System and self-test.
+- **Copies:** every copy made with a copy button, recorded before it was copied: who, what (for example "the addresses
+  of a combination (12)"), how many lines and addresses, which page, when, and its seal's reference (S-…); never the
+  copied text. Also every leak traced (who, when, how many matches).
+- **Trace a leak:** text or a file found outside Looking Glass (a pasted list, a CSV, a ZIP someone shared) is matched
+  against the seals of every copy and download: who copied or downloaded it, when, what, and how closely it matches
+  ("the exact text copied", "the exact file", or "3 of its 40 lines and addresses"). A file found inside a ZIP is
+  matched even when the file was renamed and zipped again. What you give is fingerprinted in memory and thrown away;
+  each trace is in the audit log (who, when, how many matches, never what was searched); at most 5 a minute per
+  person. A line found in many copies and downloads (a CSV's header) does not count as a match, and the answer says
+  how many were left out.
 - **Access review:** every account with its role and what that role may do, its authenticator, last sign-in, who
   approved it and flags (no authenticator, dormant, pending too long, every permission), and the roles matrix.
 - **Signed in now:** every session with its address, location, browser and expiry (read only).

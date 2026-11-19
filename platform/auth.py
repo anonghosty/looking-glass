@@ -93,17 +93,17 @@ FIXED_ROLES = {"management": ["management"], AUDITOR_ROLE: list(AUDITOR_PERMS), 
                "researcher": ["definitions", "networks"], "external": ["view"]}   # external: masked viewing only, never more
 # Permissions that belong to one role only (and admin): they cannot be ticked onto any other role.
 EXCLUSIVE_PERMS = {"management": "management", "definitions": "researcher", "advisory": "advisor", "users": "admin"}
-AUDIT_PATHS = ("/audit", "/api/audit/", "/api/admin/audit", "/api/admin/sessions", "/overview", "/api/notifications")   # all an auditor opens
-ADVISORY_PATHS = ("/findings", "/api/findings", "/advisory", "/api/advisory", "/api/organisation", "/organisation/logo", "/api/notifications", "/overview",
+AUDIT_PATHS = ("/audit", "/api/audit/", "/api/copy/", "/api/admin/audit", "/api/admin/sessions", "/overview", "/api/notifications")   # all an auditor opens
+ADVISORY_PATHS = ("/findings", "/api/findings", "/api/copy/", "/advisory", "/api/advisory", "/api/organisation", "/organisation/logo", "/api/notifications", "/overview",
                   "/api/attack/technique/",    # all the advisor role (no 'view') can open; MITRE's full text of a technique
                   "/api/beacon/finding/")      # a finding's decoded beacons, counts only for them (beacon_findings.py)
-DEFINITIONS_PATHS = ("/definitions", "/api/kb/", "/api/networks", "/api/lookups", "/api/intel", "/api/notes", "/api/combo-codes/",
+DEFINITIONS_PATHS = ("/definitions", "/api/kb/", "/api/copy/", "/api/networks", "/api/lookups", "/api/intel", "/api/notes", "/api/combo-codes/",
                      "/findings", "/api/findings", "/intel/", "/api/notifications", "/overview",
                      "/api/attack", "/api/name-sources",      # ATT&CK mappings and the name sources' status (attack_map.py, name_sources.py)
                      "/api/beacon/finding",                   # handing decoded beacons over, and a finding's beacons (counts)
                      "/api/overview/spikes",                  # the spike notice on the Overview's buttons (counts only)
                      "/api/beacon/code")                      # a beacon selection's LG-B code, for Move to notes (5+ devices)
-MANAGEMENT_PATHS = ("/management", "/api/mgmt/", "/api/lookups", "/api/combo-codes/", "/findings", "/api/findings",
+MANAGEMENT_PATHS = ("/management", "/api/mgmt/", "/api/copy/", "/api/lookups", "/api/combo-codes/", "/findings", "/api/findings",
                     "/intel/", "/api/intel/acode/", "/review/", "/api/review/", "/api/notifications", "/overview",
                     "/api/attack/technique/",
                     "/api/overview/spikes",       # the spike notice on the Overview's buttons (counts only)

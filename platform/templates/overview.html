@@ -18,7 +18,7 @@
   <header class="hud">
     <div class="hud-left">
       <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
-      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Overview · signed in as {{ lg_user }} ({{ lg_role }})</span></div></div>
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Overview · signed in as {{ lg_name }} ({{ lg_role }})</span></div></div>
     </div>
     <div class="hud-right">
       {% set nav_here = "overview" %}{% set nav_go = false %}{% include "_page_nav.html" %}
@@ -30,6 +30,8 @@
       <div class="ov-kicker">Shadowserver threat intelligence</div>
 {%- set gr = lg_greeting() -%}
       <h1 class="lg-greet">{{ gr[0] }}<span class="lg-greet-name">{{ gr[1] }}</span>{% if "Looking Glass" in gr[2] %}{{ gr[2].split("Looking Glass")[0] }}<span>Looking Glass</span>{{ gr[2].split("Looking Glass")[1] }}{% else %}{{ gr[2] }}{% endif %}</h1>
+      {# the user's wording (2026-11-18): the Overview, not the sign-in page, says it (insider.py) #}
+      <p class="ov-record" role="note">Everything you view, copy or export on Looking Glass is recorded under your name.</p>
     </section>
     <section class="ov-yours">
       <h2>Your pages</h2>

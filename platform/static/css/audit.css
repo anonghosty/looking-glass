@@ -86,3 +86,8 @@ button.au-check:focus-visible { outline: 2px solid var(--accent); outline-offset
 
 /* text shows in full (sweep 2026-11-14): wraps instead of being cut with "…" */
 .au-bar-l, .au-card td { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+
+/* Trace a leak (leak-trace.js, insider.py, 2026-11-19) */
+.au-trace { display: grid; gap: 10px; max-width: 900px; margin: 6px 0 14px; }
+.au-trace textarea { width: 100%; min-height: 140px; font-family: "Geist Mono", ui-monospace, monospace; font-size: 12.5px; }
+#trOut .au-table td { white-space: normal; overflow-wrap: anywhere; }

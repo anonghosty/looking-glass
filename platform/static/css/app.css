@@ -1261,3 +1261,16 @@ svg [role="button"]:focus-visible, svg [tabindex="0"]:focus-visible { outline: n
 .tl-btn:hover { background: var(--hover); }
 .tl-btn:hover .num { color: var(--text); }
 .tl-btn:focus-visible { outline: 2px solid var(--accent, #7c9cff); outline-offset: 1px; }
+/* copying only through the recorded copy buttons (lg-copy.js, insider.py, 2026-11-19): no selecting page text, except
+   in fields people type in; the notice when a copy is refused; the hidden buffer the fallback copy uses */
+html.lg-nocopy body { -webkit-user-select: none; user-select: none; }
+html.lg-nocopy input, html.lg-nocopy textarea, html.lg-nocopy select, html.lg-nocopy [contenteditable=""], html.lg-nocopy [contenteditable="true"] { -webkit-user-select: text; user-select: text; }
+.lg-copy-note { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 10000; max-width: min(560px, calc(100vw - 32px));
+  padding: 10px 16px; border-radius: 10px; background: #1b1d24; color: #e8e9ee; border: 1px solid rgba(245, 181, 74, .45);
+  font-size: 13px; line-height: 1.4; box-shadow: 0 8px 28px rgba(0, 0, 0, .45); text-align: center; }
+.lg-copy-note[hidden] { display: none; }
+.lg-copy-buf { position: fixed; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+/* the record notice under the greeting (insider.py, the user's wording 2026-11-18): on the Overview and the map's intro */
+.ov-record { margin: 10px auto 0; max-width: 620px; padding: 8px 14px; border-radius: 10px; font-size: 13px; line-height: 1.45;
+  color: #f5d08a; background: rgba(245, 181, 74, .08); border: 1px solid rgba(245, 181, 74, .3); text-align: center; }

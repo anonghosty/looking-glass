@@ -33,7 +33,7 @@ import csvsafe
 import data_access
 
 TABS = [("auth", "Authentication"), ("accounts", "Accounts and access"), ("sessions", "Sessions"),
-        ("config", "Configuration changes"), ("data", "Data access and exports"), ("workflow", "Workflow"),
+        ("config", "Configuration changes"), ("data", "Data access and exports"), ("copies", "Copies"), ("workflow", "Workflow"),
         ("system", "System and self-test")]
 TAB_OF = {}
 for _tab, _events in {
@@ -76,6 +76,9 @@ LABEL = {"login": "Signed in", "login_failed": "Failed sign-in", "login_locked":
          "audit_verified": "Audit log integrity checked"}
 LABEL["data_viewed"] = "Host-level data viewed"          # data_access.py (CIS 3.14)
 LABEL["data_exported"] = "Host list downloaded"
+# copies recorded before they happen, and the leak traces (insider.py, 2026-11-19): who, what, how many, never the text
+LABEL["copied"], TAB_OF["copied"] = "Copied", "copies"
+LABEL["leak_traced"], TAB_OF["leak_traced"] = "Leak traced", "copies"
 LABEL["audit_sealed"] = "Entries before the chain sealed"
 TAB_OF["audit_sealed"] = "system"
 LABEL["audit_archive_removed"] = "Old audit archive removed by the retention"
