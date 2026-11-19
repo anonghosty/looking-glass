@@ -3,7 +3,8 @@
 ''''exec "$(dirname -- "$0")/../.venv/bin/python" "$0" "$@" # '''
 """Accounts (the user, 2026-11-19), with a scratch folder and made-up names; the installation's accounts are never
 changed (the full sign-up through a link is in security_testing/security_retest.py, with its temporary accounts):
-1. one-time sign-up links (invites.py): only a hash kept, once, expiring, revocable, at most 50 open;
+1. one-time sign-up links (invites.py): only a hash kept, once, expiring, revocable, at most 50 open; never for a role
+   with administrators' or auditors' rights (the external review, 2026-11-19), checked again when the link is used;
 2. the Admin page's API: administrators only ('users'), the CSRF token and a recent sign-in for changes; audited, never
    the link;
 3. sign-up: a link opens it also when it is closed (REGISTRATION=0); a used, expired or revoked link is refused and
@@ -83,8 +84,13 @@ def _u():
 
 
 base = tempfile.mkdtemp()
+# made-up roles with their permissions: an administrator, an auditor, and a custom role given administrators' rights
+ROLE_PERMS = {"admin": {"users", "settings"}, "analyst": {"view", "export"}, "auditor": {"audit"},
+              "custom-boss": {"view", "settings"}, "researcher": {"definitions"}}
 api = I.install(app, {"base_dir": base, "has_perm": lambda p: p in who["perms"], "csrf_ok": lambda: who["csrf"],
-                      "fresh": lambda: who["fresh"], "audit": Audit(), "roles": lambda: ["admin", "analyst", "researcher"],
+                      "fresh": lambda: who["fresh"], "audit": Audit(),
+                      "roles": lambda: ["admin", "analyst", "auditor", "custom-boss", "researcher"],
+                      "perms_of": lambda r: ROLE_PERMS.get(r, set()),
                       "hook": hook, "people_name": lambda u: {"admin1": "Ama Owusu"}.get(u, "")})
 c = app.test_client()
 ok("auth.py is given the link check (the hook)", hook["check"] is not None and hook["use"] is not None)
@@ -97,6 +103,19 @@ lst = c.get("/api/admin/invites").get_json()
 ok("the open links are listed, with who made them (full name), never the link", len(lst["open"]) == 1 and lst["open"][0]["by"] == "Ama Owusu"
    and "link" not in lst["open"][0] and link.split("=", 1)[1] not in json.dumps(lst), lst["open"])
 ok("a role that does not exist: refused", c.post("/api/admin/invites", json={"role": "superuser"}).status_code == 400)
+# the external review (2026-11-19): a forwarded or leaked link must not make an administrator nobody approved
+for role in ("admin", "auditor", "custom-boss"):
+    r = c.post("/api/admin/invites", json={"role": role})
+    ok(f"no sign-up link for the {role} role (administrators' or auditors' rights): refused, saying why",
+       r.status_code == 400 and "approved" in (r.get_json() or {}).get("error", ""), str(r.get_json()))
+ok("…and the Admin page is offered only the roles a link may give", c.get("/api/admin/invites").get_json()["roles"] == ["analyst", "researcher"],
+   str(c.get("/api/admin/invites").get_json()["roles"]))
+tok_ok = link.split("=", 1)[1]
+ROLE_PERMS["analyst"] = {"view", "users"}                 # the role was given administrators' rights after the link was made
+ok("a link whose role gained those rights since: no longer opens sign-up, nor can be used",
+   hook["check"](tok_ok) is None and hook["use"](tok_ok, "someone") is None)
+ROLE_PERMS["analyst"] = {"view", "export"}
+ok("…back to an analyst's rights: the link works again (it was not used up)", hook["check"](tok_ok) is not None)
 ok("markup in the name: refused", c.post("/api/admin/invites", json={"role": "analyst", "name": "<b>x</b>"}).status_code == 400)
 who["csrf"] = False
 ok("without the page's CSRF token: refused", c.post("/api/admin/invites", json={"role": "analyst"}).status_code == 403)

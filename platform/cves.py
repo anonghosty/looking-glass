@@ -264,11 +264,12 @@ class CveIntel:
             self._save()
         return data
 
-    def lookup_many(self, ids, progress=None, budget=None):
+    def lookup_many(self, ids, progress=None, budget=None, stop=None):
         """Explain several CVEs as one batch, reporting each step to progress(kind, text, done=None):
         KEV (one download), EPSS (one request per 100), CVE.org (four at a time), NVD from the cache only.
         budget: seconds; once spent, no further CVE.org record is fetched (those CVEs are explained from what is known
-        and fetched on a later look-up), so one request cannot hold up the server (external review, 2026-11-12)."""
+        and fetched on a later look-up), so one request cannot hold up the server (external review, 2026-11-12).
+        stop: () -> True once the person closed the look-up's window: no further record is fetched (2026-11-19)."""
         deadline = time.monotonic() + budget if budget else None
         from concurrent.futures import ThreadPoolExecutor
         say = progress or (lambda *a, **k: None)
@@ -289,6 +290,8 @@ class CveIntel:
         done = [cached]
 
         def one(i):
+            if stop and stop():                          # stopped: the queued records are not fetched
+                return
             if deadline is not None and time.monotonic() > deadline:
                 done[0] += 1
                 say("item", f"{i}: not fetched now (time budget spent): explained from what is known, fetched on a later look-up", done=done[0])
@@ -336,6 +339,24 @@ class CveIntel:
             return ""
         self._refresh()
         return self._title_from(cve, (self.cache.get("kev") or {}).get("items") or {})
+
+    def known_description(self, cve):
+        """A CVE's full description, from the cache only (nobody is asked): NVD's, else the CVE.org record's, else
+        CISA's short description; "" when nothing is cached. Shown in full under the title in the Definitions list (the
+        user, 2026-11-19: "it's supposed to explain it fully so it's clear to the researcher")."""
+        cve = (cve or "").strip().upper()
+        if not is_cve(cve):
+            return ""
+        self._refresh()
+        n = (self.cache["nvd"].get(cve) or {}).get("data") or {}
+        o = (self.cache["cveorg"].get(cve) or {}).get("data") or {}
+        k = ((self.cache.get("kev") or {}).get("items") or {}).get(cve) or {}
+        main = " ".join(str(n.get("description") or o.get("description") or "").split())
+        short = " ".join(str(k.get("short") or "").split())
+        # an exploited CVE: CISA's own explanation too, when the record says less (a record may be one line only)
+        if short and short.lower() not in main.lower():
+            return f"{main} CISA: {short}" if main else short
+        return main
 
     def _title_from(self, cve, kev):
         if (kev.get(cve) or {}).get("name"):

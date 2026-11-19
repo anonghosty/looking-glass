@@ -1421,16 +1421,28 @@
         ib.addEventListener("click", async () => {
           ib.disabled = true; ib.textContent = "Looking up the issues…";
           try {
-            let all = r;
-            if (r.total > r.rows.length) { try { const q = new URLSearchParams(pairs); q.set("at", atParam()); q.set("metric", r.metric); q.set("all", "1"); all = await getJSON(`/api/svc/drill?${q}`); } catch { all = r; } }
-            const names = [...new Set(all.rows.flatMap((row) => (r.row_kind === "issue" ? [row.name] : row.issues || [])).filter(Boolean))];
-            const nCve = names.filter((n) => /^CVE-\d{4}-\d{4,7}$/i.test(n)).length;
-            r.iss = await window.LGLookup.run({ kind: "issues", values: names, title: "Explaining the issues",
-              intro: `${names.length} issue${names.length === 1 ? "" : "s"}: ${nCve} CVE${nCve === 1 ? "" : "s"}, looked up in batches (CISA's exploited-vulnerabilities catalog once a day, EPSS 100 at a time, ` +
-                `the official CVE.org records four at a time; NVD's own analysis is added in the background at NVD's pace), and ${names.length - nCve} other issue${names.length - nCve === 1 ? "" : "s"}, explained from their definitions.` });
+            // the window opens at once; the whole list is gathered inside it, so closing it stops that too (2026-11-19)
+            r.iss = await window.LGLookup.run({ kind: "issues", title: "Explaining the issues",
+              prepare: async (signal) => {
+                let all = r;
+                if (r.total > r.rows.length) {
+                  const q = new URLSearchParams(pairs); q.set("at", atParam()); q.set("metric", r.metric); q.set("all", "1");
+                  const res = await fetch(`/api/svc/drill?${q}`, { credentials: "same-origin", signal });
+                  if (res.ok) all = await res.json();
+                }
+                return [...new Set(all.rows.flatMap((row) => (r.row_kind === "issue" ? [row.name] : row.issues || [])).filter(Boolean))];
+              },
+              intro: (names) => {
+                const nCve = names.filter((n) => /^CVE-\d{4}-\d{4,7}$/i.test(n)).length;
+                return `${names.length} issue${names.length === 1 ? "" : "s"}: ${nCve} CVE${nCve === 1 ? "" : "s"}, looked up in batches (CISA's exploited-vulnerabilities catalog once a day, EPSS 100 at a time, ` +
+                  `the official CVE.org records four at a time; NVD's own analysis is added in the background at NVD's pace), and ${names.length - nCve} other issue${names.length - nCve === 1 ? "" : "s"}, explained from their definitions.`;
+              } });
             // kept on r; redraw only if this list is still the one shown (review 2026-11-13)
             if (box.dataset.metric === r.metric && !box.hidden && box.isConnected) renderDrill(box, r, pairs, d);
-          } catch (err) { ib.disabled = false; ib.textContent = `Look-up failed: ${err.message} (retry)`; }
+          } catch (err) {
+            ib.disabled = false;
+            ib.textContent = err.stopped ? "Explain issues" : `Look-up failed: ${err.message} (retry)`;    // stopped: as it was
+          }
         });
         acts.append(ib);
       }

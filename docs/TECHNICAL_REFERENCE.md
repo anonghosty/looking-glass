@@ -201,7 +201,7 @@ server side is in small modules called from `app.py`:
   *settings*, CSRF, a recent sign-in; audited as `settings_changed`). `deploy/make_tls_cert.sh` names the certificate
   after the first name given or the machine. Registered in `features.py`. Test: `tests/check_fingerprint.py`.
 - **`insider.py`, copies recorded, seals and Trace a leak.** `POST /api/copy/record` (`{kind, what, page, text}`;
-  signed in, CSRF token) seals the text (HMAC-SHA-256, key `COPY_SEAL_KEY` or `data/copy_seal.key`: the whole
+  signed in, CSRF token, at most `COPY_PER_MINUTE` (30) a minute per person, else 429) seals the text (HMAC-SHA-256, key `COPY_SEAL_KEY` or `data/copy_seal.key`: the whole
   normalised text, each line of 4+ characters, each IP address found by `ip_find`; fingerprints cut to 96 bits) into
   `data/copy_seals.jsonl` (owner-only, fsynced) and only then writes the audit entry `copied` and answers; a write that
   fails answers 503 and nothing is audited, and `static/js/lg-copy.js` (`LGCopy.copy`) copies only after a 200. The
@@ -209,11 +209,14 @@ server side is in small modules called from `app.py`:
   seals every 200 response with `Content-Disposition: attachment` (SHA-256 of the body; each file of a ZIP; the lines
   and addresses of text files) and the JSON of `download=1` lists (their addresses); people only, never the
   self-test's accounts or the local check scripts' automation key. `POST /api/audit/trace` (permission
-  *audit*, CSRF, 5 a minute per person; JSON `{text}` or a multipart `file`) fingerprints the input in memory and
-  returns the matching seals (exact by whole text or SHA-256, else by items; items in more than 20 % of the seals are
-  not counted), audited as `leak_traced` with the number of matches only. These two routes take bodies up to 12 MB and
+  *audit*, CSRF, 5 a minute and `TRACE_PER_DAY` (100) a day per person; JSON `{text}` or a multipart `file`)
+  fingerprints the input in memory and returns the matching seals: exact by whole text or SHA-256; else, when at most
+  `TRACE_MAX_ITEMS` (1,000) lines and addresses were given, a seal holding at least `TRACE_MIN_SHARE` (half) of the
+  given lines or of the given addresses (`exact_only` in the answer when more were given). Items held by more than
+  20 % of the PEOPLE with seals are not counted (by people, not seals, so one person's repeated copies cannot hide
+  rows). The seals file is read twice, a line at a time. Audited as `leak_traced` with the number of matches only. These two routes take bodies up to 12 MB and
   26 MB (`request.max_content_length`); every other route keeps the 64 KB of `security.py`. At most 50,000 items are
-  kept per seal (`cut` says when more were left out); seals older than `AUDIT_RETENTION_DAYS` are removed at start.
+  kept per seal (`cut` says when more were left out); seals older than `AUDIT_RETENTION_DAYS` are removed at start and then once a day.
   Also the template value `lg_name` (the signed-in person's full name, `people.py`). Registered in `features.py`;
   `/api/copy/` is in the path lists of the roles limited to their portals (`auth.py`). Test: `tests/check_insider.py`.
 - **`severity_map.py`, the severity map.** `GET /api/kb/severity-map` and `POST /api/kb/severity-map/rate` (`{name,

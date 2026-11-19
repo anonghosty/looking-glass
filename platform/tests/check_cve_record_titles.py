@@ -65,6 +65,13 @@ with tempfile.TemporaryDirectory() as tmp:
     ok("not a CVE id: nothing", ci.known_title("Expired certificate") == "" and ci.known_title("") == "")
     ok("one CVE by the same rule (any case)", ci.known_title(" cve-2099-0002 ") == "Missing authentication in Example Router")
     ok("the cache file is left as it was", json.load(open(path, encoding="utf-8")) == made_up)
+    # what it is, in full (the user, 2026-11-19: "it's supposed to explain it fully")
+    ci.cache["kev"]["items"]["CVE-2099-0003"] = {"name": "x", "short": "Example OS contains a flaw that lets an attacker run code."}
+    d3 = ci.known_description("CVE-2099-0003")
+    ok("the full description: NVD's first, whole", d3.startswith("NVD's text first. Then more."), d3)
+    ok("…with CISA's explanation added when the record says less", d3.endswith("CISA: Example OS contains a flaw that lets an attacker run code."), d3)
+    ok("…CVE.org's when NVD has none", ci.known_description("CVE-2099-0002") == "Long text.")
+    ok("…nothing for a CVE never looked up, nor for a name that is not a CVE", ci.known_description("CVE-2099-0009") == "" and ci.known_description("Expired certificate") == "")
 
 print("2. the platform uses the one rule")
 src = open(os.path.join(HERE, "app.py"), encoding="utf-8").read()
@@ -74,6 +81,20 @@ ok("the code cards' definitions include the CVEs' public titles", "cve_intel.kno
 ok("a researcher's own definition wins (applied after)", 0 <= body.find("known_titles") < body.find("issues_kb()"))
 ok("the Definitions list's title uses the same rule", "title=item[\"title\"] or cve_intel.known_title(name)" in src)
 ok("no other CVE title rule left in that list", "(c.get(\"kev\") or {}).get(\"name\", \"\"))" not in src)
+
+ok("the Definitions list shows what it is in full under the title", 'item["description"] = desc' in src and "cve_intel.known_description(name)" in src)
+
+print("2b. a look-up window closed while it runs stops the look-up (the user, 2026-11-19)")
+ok("the server stops a look-up between two names, for the person who started it only, with the page's CSRF token",
+   '@app.route("/api/lookups/<jid>/stop", methods=["POST"])' in src and 'j["cancel"] = True' in src
+   and src.count("raise _LookupStopped()") >= 3 and 'job["state"] = "stopped"' in src)
+ok("…the queued CVE records are not fetched once stopped", "if stop and stop():" in open(os.path.join(HERE, "cves.py"), encoding="utf-8").read())
+S_ = os.environ.get("LG_HELD_DIR", "")
+pdfjs = os.path.join(S_, "pdf.js.new") if S_ and os.path.exists(os.path.join(S_, "pdf.js.new")) else os.path.join(HERE, "static", "js", "pdf.js")
+js = open(pdfjs, encoding="utf-8").read()
+ok("the window: closing it aborts the list being gathered and stops the server's job", "ctrl.abort()" in js and "/stop`" in js
+   and "if (win.onClose) win.onClose()" in js and "e.stopped = true" in js)
+ok("…and it opens at once, gathering a long list inside it (prepare)", "values = await prepare(ctrl.signal)" in js)
 
 print("3. tooltips above every panel")
 css = open(os.path.join(HERE, "static", "css", "app.css"), encoding="utf-8").read()

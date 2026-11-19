@@ -1160,7 +1160,8 @@ settings stay in its own `.env`.
   password reset, end someone's sessions, delete. Each account shows its profile and when it last signed in.
   You cannot remove the last administrator or your own account. When someone signs up, the bell says so (one notice
   for everyone waiting, *"N people are waiting for your approval"*), leading here.
-- **Users → Add a person:** a one-time sign-up link for someone you want to add: choose their role (and, if you like,
+- **Users → Add a person:** a one-time sign-up link for someone you want to add (any role but an administrator's or an
+  auditor's: those sign up on the sign-in page and are approved here): choose their role (and, if you like,
   write their name for the list), then **Make a sign-up link** and copy it (shown once; the copy is recorded, never the
   link). Send it by your organisation's usual secure channel. They set their own password and authenticator; nothing
   secret passes through you. The link works once, for 72 hours (`INVITE_HOURS`), even when sign-up on the sign-in page
@@ -1233,9 +1234,12 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
   against the seals of every copy and download: who copied or downloaded it, when, what, and how closely it matches
   ("the exact text copied", "the exact file", or "3 of its 40 lines and addresses"). A file found inside a ZIP is
   matched even when the file was renamed and zipped again. What you give is fingerprinted in memory and thrown away;
-  each trace is in the audit log (who, when, how many matches, never what was searched); at most 5 a minute per
-  person. A line found in many copies and downloads (a CSV's header) does not count as a match, and the answer says
-  how many were left out.
+  each trace is in the audit log (who, when, how many matches, never what was searched); at most 5 a minute and 100 a
+  day per person. A copy or download is shown when it is exactly what you gave, or holds at least half of its lines or
+  of its addresses (so a list of guessed addresses never matches, while a real excerpt does, even reformatted). Give
+  at most 1,000 lines and 1,000 addresses to find partial matches; with more, only copies and downloads of exactly
+  that text or file are looked for, and the answer says so. A line found in many people's copies and downloads (a
+  CSV's header) does not count as a match, and the answer says how many were left out.
 - **Access review:** every account with its role and what that role may do, its authenticator, last sign-in, who
   approved it and flags (no authenticator, dormant, pending too long, every permission), and the roles matrix.
 - **Signed in now:** every session with its address, location, browser and expiry (read only).

@@ -103,7 +103,8 @@ def install(app, core):
         import invites
         out["invites"] = invites.install(app, {"base_dir": os.path.dirname(os.path.abspath(__file__)), "has_perm": A["has_perm"],
                                                "csrf_ok": A["csrf_ok"], "fresh": A["fresh"], "audit": A["audit"],
-                                               "roles": lambda: sorted(A["roles"].roles), "hook": _auth.INVITE,
+                                               "roles": lambda: sorted(A["roles"].roles), "perms_of": A["roles"].perms,
+                                               "hook": _auth.INVITE,
                                                "people_name": people_name if "users" in A else None})
 
     # what someone not signed in can learn about the server: as little as possible (neutral.py, anti-fingerprinting):

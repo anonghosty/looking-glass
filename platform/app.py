@@ -1965,16 +1965,16 @@ def issue_resolve(name, fetch=True):
                     "references, on the Definitions page."}
 
 
-def issues_resolve(names, budget=15.0, progress=None):
+def issues_resolve(names, budget=15.0, progress=None, stop=None):
     """Several issues: CVEs as one batch (CISA KEV, EPSS per 100, CVE.org four at a time; NVD's analysis from the
-    background check), then the others (definitions, never looked up)."""
+    background check), then the others (definitions, never looked up). stop: () -> True once the look-up was stopped."""
     names = [n for n in dict.fromkeys(str(x).strip() for x in names) if n]
     out = {}
     ids = [n for n in names if cves.is_cve(n)]
     if ids:
         # budget: no more fetching once spent (external review, 2026-11-12: it was ignored); a progress window (the
         # look-up the user started and watches) has no limit
-        cards = cve_intel.lookup_many(ids, progress=progress, budget=None if progress else budget)
+        cards = cve_intel.lookup_many(ids, progress=progress, budget=None if progress else budget, stop=stop)
         for n in ids:
             out[n] = issue_resolve(n, fetch=False) if cards.get(n.upper()) is None else cards[n.upper()]
             cur = issues_kb().get(n.lower())
@@ -2048,6 +2048,10 @@ def _cve_loop():
 _JOBS, _JOBS_LOCK = {}, threading.Lock()
 
 
+class _LookupStopped(Exception):
+    """A look-up stopped by the person who started it (POST /api/lookups/<id>/stop)."""
+
+
 def _job_new(kind, total, user):
     import secrets as _secrets
     jid = _secrets.token_urlsafe(12)
@@ -2087,6 +2091,8 @@ def api_lookups_start():
     job = _job_new(kind, len(values), user)
 
     def say(kind_, text, done=None):
+        if job.get("cancel"):                     # closed by the person who started it: stop between two names
+            raise _LookupStopped()
         if kind_ == "item":
             job["current"] = text
             if done is None:
@@ -2101,7 +2107,7 @@ def api_lookups_start():
         ids = [v for v in values if cves.is_cve(v)]
         _job_log(job, f"{len(values)} issue{'s' if len(values) != 1 else ''}: {len(ids)} CVE{'s' if len(ids) != 1 else ''}, "
                       f"{len(values) - len(ids)} other{'s' if len(values) - len(ids) != 1 else ''}")
-        job["results"] = issues_resolve(values, progress=say)
+        job["results"] = issues_resolve(values, progress=say, stop=lambda: bool(job.get("cancel")))
         job["done"] = job["total"]
 
     def run_malpedia():
@@ -2110,11 +2116,15 @@ def api_lookups_start():
                  f"at most {MAX_MP} new questions a minute" if malpedia.enabled else
                  "is not set up: the Looking Glass definitions and knowledge base answer"))
         for v in values:
+            if job.get("cancel"):                 # closed by the person who started it
+                raise _LookupStopped()
             if demo and v.startswith("ref:"):
                 job["done"] += 1
                 continue
             job["current"] = v
             for attempt in range(8):
+                if job.get("cancel"):
+                    raise _LookupStopped()
                 try:
                     card = mp_resolve(v)[0]
                     break
@@ -2124,7 +2134,10 @@ def api_lookups_start():
                 except RuntimeError as exc:
                     if "Too many" in str(exc) and attempt < 7:
                         _job_log(job, f"{v}: Malpedia's limit reached ({MAX_MP} questions a minute): waiting 15 s, then continuing")
-                        time.sleep(15)
+                        for _ in range(15):           # the wait ends at once when the look-up is stopped
+                            if job.get("cancel"):
+                                raise _LookupStopped()
+                            time.sleep(1)
                         continue
                     card = {"found": False, "pending": True, "reason": f"Not checked yet: {security.public_error(exc, 'Malpedia did not answer')}."}
                     job["failed"] += 1
@@ -2142,12 +2155,29 @@ def api_lookups_start():
             job["state"] = "done"
             _job_log(job, f"Finished: {job['total']} looked up in {time.time() - job['t0']:.0f} s"
                           + (f", {job['failed']} could not be checked" if job["failed"] else ""))
+        except _LookupStopped:                        # closed by the person who started it (the user, 2026-11-19)
+            job["state"] = "stopped"
+            _job_log(job, f"Stopped by you after {job['done']} of {job['total']}")
         except Exception as exc:                      # the page shows it; the platform carries on
             app.logger.exception("look-up job %s failed", kind)   # full details in the server log only
             job["state"], job["error"] = "failed", security.public_error(exc)
             _job_log(job, f"Stopped: {job['error']}")
     threading.Thread(target=run, daemon=True, name=f"lookup-{kind}").start()
     return jsonify(id=job["id"], total=job["total"])
+
+
+@app.route("/api/lookups/<jid>/stop", methods=["POST"])
+def api_lookups_stop(jid):
+    """Stop a look-up: the window was closed before it finished (the user, 2026-11-19: "I should be able to close it
+    even when it's loading so it stops searching"). Only the person who started it; it stops between two names."""
+    if not AUTH["csrf_ok"]():
+        return jsonify(error="Refused (the request did not come from this page)."), 403
+    j = _JOBS.get(jid)
+    if not j or j["user"] != (getattr(g, "user", None) or {}).get("user", ""):
+        return jsonify(error="No such look-up."), 404
+    if j["state"] == "running":
+        j["cancel"] = True
+    return jsonify(ok=True, state=j["state"])
 
 
 @app.route("/api/lookups/<jid>")
@@ -2512,8 +2542,9 @@ def issue_resolve(name, fetch=True):  # noqa: F811
     return _with_attack(_noted(_issue_resolve_plain(name, fetch=fetch), "issues", name), name)
 
 
-def issues_resolve(names, budget=15.0, progress=None):  # noqa: F811
-    return {n: _with_attack(_noted(c, "issues", n), n) for n, c in _issues_resolve_plain(names, budget=budget, progress=progress).items()}
+def issues_resolve(names, budget=15.0, progress=None, stop=None):  # noqa: F811
+    return {n: _with_attack(_noted(c, "issues", n), n)
+            for n, c in _issues_resolve_plain(names, budget=budget, progress=progress, stop=stop).items()}
 
 
 @app.route("/api/malpedia/batch")
@@ -2638,6 +2669,9 @@ def _kb_unresolved(db_ok):
             item.update(found=c["found"], pending=c["pending"], exploited=c["exploited"],
                         cvss=(c.get("cvss") or {}).get("score"), severity=(c.get("cvss") or {}).get("severity", ""),
                         epss=c.get("epss"), title=item["title"] or cve_intel.known_title(name))   # KEV name, CNA title or 1st sentence
+        # what it is, in full under its title (the user, 2026-11-19): a CVE's public description; another issue's definition
+        desc = cve_intel.known_description(name) if item["cve"] else ""
+        item["description"] = desc if desc and desc != item["title"] else ("" if item["cve"] else e.get("description", ""))
         issues.append(item)
     return jsonify(unresolved=todo, defined=done, unchecked=new, all=every, check=_AUTOCHECK, malpedia=malpedia.enabled,
                    issues=issues, cve=cve_intel.status(), database=db_ok,

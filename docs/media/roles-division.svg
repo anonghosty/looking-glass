@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 780" width="1200" height="780" role="img" aria-labelledby="t d" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Roboto, Arial, sans-serif">
+  <title id="t">A cybersecurity division: security operations and GRC under one head, and the Looking Glass roles in it</title>
+  <desc id="d">The head of cybersecurity (CISO) leads two branches. Security operations (CSIRT and SOC) finds and fixes: SOC tiers detect and triage, the CSIRT handles incidents and warns others, threat intelligence studies the threats, SOC engineering runs the tools. GRC sets the rules and checks them: policy and planning, risk management, control assessment and internal audit, privacy compliance. Constituents and other CSIRTs, outside the division, compare trends in a masked view. Each box names its NICE work role where one applies, and the pill names the Looking Glass role that does this work.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101219"/><stop offset="1" stop-color="#0b0c10"/>
+    </linearGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5b8def"/><stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <filter id="sh" x="-10%" y="-10%" width="120%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000" flood-opacity=".45"/>
+    </filter>
+    <style>
+      .card { fill: #16181f; stroke-width: 1; }
+      .ops  { stroke: #34508f; }
+      .grc  { stroke: #6b5524; }
+      .h1 { font-size: 21px; font-weight: 700; fill: #f4f5f7; }
+      .h2 { font-size: 17px; font-weight: 700; fill: #f4f5f7; }
+      .h3 { font-size: 14.5px; font-weight: 650; fill: #eceef2; }
+      .t  { font-size: 12.5px; fill: #a9adb8; }
+      .eb { font-size: 11px; font-weight: 700; letter-spacing: .1em; }
+      .nice { font-size: 10.5px; fill: #8f95a3; }
+      .chip { font-size: 10.5px; font-weight: 650; }
+      .line { stroke: #3a3e4c; stroke-width: 1.5; fill: none; }
+      .pb { fill: #1f2a48; stroke: #3d5a9e; }
+      .pa { fill: #33270f; stroke: #8a6a26; }
+      .ct { fill: #bcd0ff; }
+      .ca { fill: #f5d9a8; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="780" rx="18" fill="url(#bg)"/>
+
+  <!-- the head -->
+  <g filter="url(#sh)">
+    <rect x="370" y="34" width="460" height="122" rx="14" fill="#171a24" stroke="url(#top)" stroke-width="1.6"/>
+  </g>
+  <rect x="370" y="34" width="460" height="4" rx="2" fill="url(#top)"/>
+  <text x="600" y="66" text-anchor="middle" class="eb" fill="#9db8ff">LEADERSHIP · DECIDES</text>
+  <text x="600" y="94" text-anchor="middle" class="h1">Head of cybersecurity / CISO</text>
+  <text x="600" y="115" text-anchor="middle" class="nice">NICE: Executive Cybersecurity Leadership</text>
+  <rect class="pb" x="465" y="126" width="270" height="22" rx="11"/>
+  <text x="600" y="141" text-anchor="middle" class="chip ct">Management · Executive portal</text>
+
+  <!-- connectors -->
+  <path class="line" d="M600 156 V180 M310 180 H890 M310 180 V202 M890 180 V202"/>
+
+  <!-- branch: security operations -->
+  <rect x="40" y="202" width="540" height="74" rx="12" fill="#14213d" stroke="#3d5a9e"/>
+  <text x="62" y="230" class="eb" fill="#7fa7ff">SECURITY OPERATIONS · FINDS AND FIXES</text>
+  <text x="62" y="258" class="h2">CSIRT / SOC</text>
+  <text x="560" y="258" text-anchor="end" class="t">uses Looking Glass every day</text>
+
+  <!-- branch: GRC -->
+  <rect x="620" y="202" width="540" height="74" rx="12" fill="#2a2110" stroke="#8a6a26"/>
+  <text x="642" y="230" class="eb" fill="#f5c46b">GRC · SETS THE RULES AND CHECKS THEM</text>
+  <text x="642" y="258" class="h2">Governance, risk, compliance</text>
+  <text x="1140" y="258" text-anchor="end" class="t">uses the Audit portal</text>
+
+  <path class="line" d="M310 276 V296 M890 276 V296"/>
+
+  <!-- operations cards -->
+  <rect class="card ops" x="40" y="296" width="262" height="140" rx="12"/>
+  <text x="58" y="324" class="h3">SOC tiers 1 → 2 → 3</text>
+  <text x="58" y="346" class="t">Detect and triage alerts,</text>
+  <text x="58" y="363" class="t">investigate, contain, hunt</text>
+  <text x="58" y="388" class="nice">Industry practice, not a standard</text>
+  <rect class="pb" x="58" y="401" width="96" height="22" rx="11"/>
+  <text x="106" y="416" text-anchor="middle" class="chip ct">Analyst</text>
+
+  <rect class="card ops" x="318" y="296" width="262" height="140" rx="12"/>
+  <text x="336" y="324" class="h3">CSIRT</text>
+  <text x="336" y="346" class="t">Incident handlers and manager:</text>
+  <text x="336" y="363" class="t">handle, coordinate, warn others</text>
+  <text x="336" y="388" class="nice">NICE: Incident Response</text>
+  <rect class="pb" x="336" y="401" width="156" height="22" rx="11"/>
+  <text x="414" y="416" text-anchor="middle" class="chip ct">Analyst · Advisor</text>
+
+  <rect class="card ops" x="40" y="452" width="262" height="140" rx="12"/>
+  <text x="58" y="480" class="h3">Threat intelligence</text>
+  <text x="58" y="502" class="t">Researchers: study the threats</text>
+  <text x="58" y="519" class="t">and their patterns</text>
+  <text x="58" y="544" class="nice">NICE: Threat Analysis</text>
+  <rect class="pb" x="58" y="557" width="114" height="22" rx="11"/>
+  <text x="115" y="572" text-anchor="middle" class="chip ct">Researcher</text>
+
+  <rect class="card ops" x="318" y="452" width="262" height="140" rx="12"/>
+  <text x="336" y="480" class="h3">SOC engineering</text>
+  <text x="336" y="502" class="t">Run the tools and the</text>
+  <text x="336" y="519" class="t">platform they run on</text>
+  <text x="336" y="544" class="nice">NICE: Defensive Cybersecurity</text>
+  <rect class="pb" x="336" y="557" width="132" height="22" rx="11"/>
+  <text x="402" y="572" text-anchor="middle" class="chip ct">Administrator</text>
+
+  <!-- GRC cards -->
+  <rect class="card grc" x="620" y="296" width="262" height="140" rx="12"/>
+  <text x="638" y="324" class="h3">Policy and planning</text>
+  <text x="638" y="346" class="t">Write the rules the</text>
+  <text x="638" y="363" class="t">division works by</text>
+  <text x="638" y="388" class="nice">NICE: Cybersecurity Policy and Planning</text>
+
+  <rect class="card grc" x="898" y="296" width="262" height="140" rx="12"/>
+  <text x="916" y="324" class="h3">Risk management</text>
+  <text x="916" y="346" class="t">Decide what risk</text>
+  <text x="916" y="363" class="t">is acceptable</text>
+
+  <rect class="card grc" x="620" y="452" width="262" height="140" rx="12"/>
+  <text x="638" y="480" class="h3">Control assessment, audit</text>
+  <text x="638" y="502" class="t">Check the controls work and</text>
+  <text x="638" y="519" class="t">every step was recorded</text>
+  <text x="638" y="544" class="nice">NICE: Security Control Assessment</text>
+  <rect class="pa" x="638" y="557" width="170" height="22" rx="11"/>
+  <text x="723" y="572" text-anchor="middle" class="chip ca">Auditor · Audit portal</text>
+
+  <rect class="card grc" x="898" y="452" width="262" height="140" rx="12"/>
+  <text x="916" y="480" class="h3">Privacy compliance</text>
+  <text x="916" y="502" class="t">Protect personal data and</text>
+  <text x="916" y="519" class="t">who may see it</text>
+  <text x="916" y="544" class="nice">NICE: Privacy Compliance</text>
+
+  <!-- outside the division -->
+  <rect x="40" y="620" width="1120" height="86" rx="12" fill="#12161a" stroke="#2f5a55" stroke-dasharray="5 5"/>
+  <text x="62" y="648" class="eb" fill="#6fe3cc">OUTSIDE THE DIVISION</text>
+  <text x="62" y="673" class="h3">Constituents and other CSIRTs</text>
+  <text x="62" y="694" class="t">Compare trends, masked: no address, host name or real network name.</text>
+  <rect x="1004" y="662" width="136" height="22" rx="11" fill="#123530" stroke="#2f7a6f"/>
+  <text x="1072" y="677" text-anchor="middle" class="chip" fill="#a8f0e2">External viewer</text>
+
+  <text x="40" y="744" class="nice">Blue: security operations. Amber: governance, risk and compliance. Pills: the Looking Glass role that does this work.</text>
+  <text x="40" y="762" class="nice">Sources: ENISA, FIRST, NIST NICE (listed under the diagram).</text>
+</svg>

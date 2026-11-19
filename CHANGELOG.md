@@ -5,6 +5,34 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-19 (8)
+### Security
+- **Trace a leak can no longer be used to test guessed addresses** (external review): one trace of a whole range of
+  guessed addresses said how many matched, and halving the range found an address in 17 traces. A trace now compares
+  at most 1,000 lines and 1,000 addresses one by one (more: only the exact text or file is looked for, and the answer
+  says so), and reports a copy or download only when it is exactly what was given or holds at least half of its lines
+  or of its addresses. A real leaked excerpt is still found, also when it was reformatted. At most 100 traces a day
+  per person, besides 5 a minute.
+- **Copies recorded: at most 30 a minute per person.** A flood could fill the disk and the audit log, and copying the
+  same rows over and over could make them "common", so that a trace left them out. A line now counts as common only
+  when it is in many PEOPLE's copies and downloads. Old seals are removed every day (they were removed only when the
+  service started), and a trace reads the seals one at a time.
+- **A sign-up link never gives an administrator's or an auditor's role** (or any role with their rights): those
+  accounts sign up on the sign-in page and are approved on Admin → Users. A link whose role was given those rights
+  after it was made no longer works.
+- **Only the researcher's answer to an analyst's request makes them follow management's review** (external review):
+  any reply carrying codes, by anyone in the request's channel, did. Now it is the one reply that sent the request
+  back to the analyst, made by a researcher; it alone also links a review to the request.
+### Changed
+- **Settings → Definitions → Issues says what each issue is, in full:** under each CVE's title, its whole public
+  description (NVD's, else the CVE.org record's, with CISA's explanation added for an exploited CVE whose record says
+  little); under any other issue, its definition.
+- **A look-up window can be closed at any time, and closing it stops the look-up** ("Explain the names", "Explain
+  issues", the Definitions look-ups and the others): the window opens at once, even while a long list is still being
+  gathered, and closing it stops both the gathering and the search on the server. The button is ready again.
+- **After updating:** nothing to do. A sign-up link made earlier for an administrator or an auditor stops working;
+  make the account by sign-up and approval instead.
+
 ## 2026-11-19 (7)
 ### Added
 - **Every port an IP address was seen open on, with the service**, in the devices CSV of the combination search, the

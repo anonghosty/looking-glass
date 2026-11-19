@@ -208,7 +208,7 @@
             "Malpedia is not set up: the Looking Glass definitions answer first. ") + "MISP Galaxy and MITRE ATT&CK answer from the copies on this server." });
       flash($("infStatus"), "Look-up finished: the lists below are up to date.", "ok");
       await load();
-    } catch (e) { flash($("infStatus"), `Look-up failed: ${e.message}`, "bad"); }
+    } catch (e) { flash($("infStatus"), e.stopped ? "Look-up stopped: you closed its window." : `Look-up failed: ${e.message}`, e.stopped ? "warn" : "bad"); }
     finally { busy(btn, false); }
   });
 
@@ -244,6 +244,8 @@
       } else status.append(pill(x.defined ? "Defined" : "Needs a definition", x.defined ? "ok" : "warn"));
       const what = el("td", "dz-def");
       what.append(el("b", null, x.title || (x.cve ? "CVE" : "—")));
+      // what it is, in full: a CVE's public description (NVD / CVE.org / CISA), another issue's definition (2026-11-19)
+      if (x.description) what.append(el("p", "dz-what-d", x.description));
       if (x.by) what.append(el("small", null, `${x.cve ? "Note" : "Definition"} by ${x.by}${x.updated ? `, ${x.updated}` : ""}`));
       // a CVE is described by NVD; the organisation adds its context (affected products here…), not a definition
       const act = el("td", "dz-act"), b = el("button", `lg-btn sm${!x.cve && !x.defined ? " primary" : ""}`, x.cve ? (x.defined ? "Edit context" : "Add context") : x.defined ? "Edit" : "Define"); b.type = "button";
@@ -274,7 +276,7 @@
           `official CVE.org records four at a time; NVD's own analysis follows in the background at NVD's pace), and ${names.length - n} other issues, explained from their definitions.` });
       flash($("issStatus"), "Look-up finished: the lists below are up to date.", "ok");
       await load();
-    } catch (e) { flash($("issStatus"), `Look-up failed: ${e.message}`, "bad"); }
+    } catch (e) { flash($("issStatus"), e.stopped ? "Look-up stopped: you closed its window." : `Look-up failed: ${e.message}`, e.stopped ? "warn" : "bad"); }
     finally { busy(btn, false); }
   });
 

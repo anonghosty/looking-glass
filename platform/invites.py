@@ -9,6 +9,9 @@ It works when sign-up on the sign-in page is closed (REGISTRATION=0).
   not hold working links. It works ONCE, until INVITE_HOURS (72) have passed, and an administrator can revoke it.
 * Every link made, used and revoked is in the audit log (invite_made, invite_used, invite_revoked), never the link.
 * At most INVITES_OPEN_MAX (50) links are open at a time.
+* No link gives an administrator's or an auditor's role (any role holding NO_LINK_PERMS: users, settings, audit):
+  those accounts sign up on the sign-in page and are approved. Checked again when the link is opened and used, so a
+  role given those rights after the link was made does not slip through (external review, 2026-11-19).
 API (permission 'users', CSRF, a recent sign-in for changes): GET /api/admin/invites · POST /api/admin/invites
 {role, name} -> {link} (shown once) · POST /api/admin/invites/<id>/revoke.
 auth.py reads the link at sign-up through INVITE (check, use), set here.
@@ -107,11 +110,32 @@ class Invites:
             return None
 
 
+# roles a sign-up link never gives: one that holds any of these permissions (administrators, auditors, or a custom role
+# made with their rights) goes through approval. A forwarded or leaked link must not make a working administrator with
+# nobody approving it (external review, 2026-11-19)
+NO_LINK_PERMS = ("users", "settings", "audit")
+
+
 def install(app, ctx):
-    """ctx: base_dir, has_perm, csrf_ok, fresh, audit, roles (() -> role names), hook (auth.INVITE), people_name."""
+    """ctx: base_dir, has_perm, csrf_ok, fresh, audit, roles (() -> role names), perms_of (role -> permissions; when
+    given, roles holding NO_LINK_PERMS get no link), hook (auth.INVITE), people_name."""
     inv = Invites(os.path.join(ctx["base_dir"], "data", "invites.json"))
     hp = ctx["has_perm"]
-    ctx["hook"].update(check=inv.check, use=inv.use)
+    perms_of = ctx.get("perms_of")
+
+    def link_roles():
+        """The roles a sign-up link may give; checked again when a link is opened and used (a role changed since)."""
+        return [r for r in ctx["roles"]() if r != "admin" and not (perms_of and set(perms_of(r)) & set(NO_LINK_PERMS))]
+
+    def check(token):
+        e = inv.check(token)
+        return e if e and e.get("role") in link_roles() else None
+
+    def use(token, user):
+        if not check(token):
+            return None
+        return inv.use(token, user)
+    ctx["hook"].update(check=check, use=use)
     name_of = ctx.get("people_name") or (lambda u: u)
 
     def me():
@@ -138,10 +162,13 @@ def install(app, ctx):
             return bad
         if request.method == "GET":
             return jsonify(open=[shaped(e) for e in sorted(inv.open_ones().values(), key=lambda e: e["at"])],
-                           roles=list(ctx["roles"]()), hours=hours())
+                           roles=link_roles(), hours=hours())
         b = request.get_json(silent=True) or {}
         role = str(b.get("role") or "")
-        if role not in ctx["roles"]():
+        if role in ctx["roles"]() and role not in link_roles():
+            return jsonify(error="A sign-up link cannot give this role: administrators and auditors sign up on the sign-in "
+                                 "page and are approved on Admin → Users."), 400
+        if role not in link_roles():
             return jsonify(error="Choose one of the roles."), 400
         name = re.sub(r"\s+", " ", str(b.get("name") or "")).strip()
         if len(name) > 100 or re.search(r"[<>\x00-\x1f]", name):

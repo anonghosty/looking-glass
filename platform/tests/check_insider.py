@@ -7,7 +7,10 @@ the installation's data/ is never read or written:
 3. long copies and traced files may be larger than the platform's 64 KB, nothing else may;
 4. every downloaded file sealed (its SHA-256, its lines and addresses; a ZIP's files); a list saved in the browser too;
 5. Trace a leak: auditors and administrators, CSRF, at most 5 a minute; exact and partial matches, by file and by
-   text; a CSV header in every download does not count; audited without what was searched; nothing kept;
+   text; a CSV header in many people's downloads does not count; audited without what was searched; nothing kept;
+5b. the external review (2026-11-19): guesses cannot be tested (a /16 compared as a whole only; 1,000 guesses holding
+   the real addresses do not match; a real excerpt does), a daily trace limit, at most 30 copies recorded a minute per
+   person, one person's repeated copies never make rows "common", seals pruned daily, the seals read line by line;
 6. the pages: the full name in every header, lg-copy.js on every signed-in page, no other way to the clipboard,
    the Overview's notice, the copy address open to every role.
 Run: .venv/bin/python tests/check_insider.py"""
@@ -165,7 +168,10 @@ who["automation"] = True
 c.get("/x/hosts.csv")
 who["automation"] = False
 ok("the local check scripts' downloads (automation key) are not sealed: people only", sum(1 for _ in open(seals)) == n0)
-c.get("/x/hosts.csv"); c.get("/x/hosts.csv"); c.get("/x/other.csv")      # more downloads: the header is common
+c.get("/x/hosts.csv"); c.get("/x/hosts.csv"); c.get("/x/other.csv")
+for p in ("ama", "kofi", "esi", "yaw", "abena"):        # five more PEOPLE download it: the CSV header is common
+    who["user"] = p; c.get("/x/other.csv")
+who["user"] = "grace"
 
 print("5. Trace a leak")
 tr = lambda **b: c.post("/api/audit/trace", json=b)  # noqa: E731
@@ -197,6 +203,56 @@ ok("each trace audited: who, how many matches, never what was searched", traced 
 ok("…what was given is not kept", "192.0.2.250" not in open(seals).read() and "not from here" not in open(seals).read())
 codes = [tr(text="203.0.113.9").status_code for _ in range(3)]
 ok("at most 5 a minute per person", 429 in codes, str(codes))
+
+print("5b. The external review's findings (2026-11-19)")
+import ipaddress  # noqa: E402
+secret = ["198.18.37.201", "198.18.140.9", "198.18.200.77"]           # a test range (RFC 2544), made up
+who["user"] = "analyst1"
+r = rec(text="ip,network\n" + "\n".join(f"{ip},Example Net" for ip in secret), kind="addresses")
+ok("(set-up) an analyst copies three addresses", r.status_code == 200)
+who["user"], who["perms"] = "auditor1", {"audit"}
+guess = lambda net: "\n".join(str(a) for a in ipaddress.ip_network(net))      # noqa: E731
+r = tr(text=guess("198.18.0.0/16")).get_json()
+ok("a whole /16 of guesses (65,536): compared as a whole only, nothing matches, and the answer says why",
+   r.get("total") == 0 and r.get("exact_only") is True and r.get("max_items") == 1000, str({k: r.get(k) for k in ("total", "exact_only")}))
+near = [f"198.18.37.{i}" for i in range(997)] + secret                          # 1,000 guesses holding the three real ones
+r = tr(text="\n".join(near)).get_json()
+ok("1,000 guesses that hold the real addresses: no match (they are not most of what was given)", r.get("total") == 0, str(r.get("matches"))[:160])
+r = tr(text="\n".join(secret + ["198.18.1.1"])).get_json()
+ok("…a real excerpt (3 of the 4 lines leaked): found", r.get("total") >= 1 and r["matches"][0]["matched"] >= 3 and r["matches"][0]["given"] == 8,
+   str(r.get("matches"))[:200])
+I.TRACE_PER_DAY, keep_day = 2, I.TRACE_PER_DAY
+who["user"] = "auditor2"
+codes = [tr(text="203.0.113.9").status_code for _ in range(3)]
+I.TRACE_PER_DAY = keep_day
+ok("a daily limit per person besides the minute's", codes[:2] == [200, 200] and codes[2] == 429, str(codes))
+who["user"], who["perms"] = "external1", {"view"}
+n_seals, n_audit = sum(1 for _ in open(seals)), len(audit)
+codes = [rec(text=f"line {i} 192.0.2.{i % 250}", kind="text").status_code for i in range(32)]
+ok("copies recorded: at most 30 a minute per person, the rest refused (429)", codes[:30] == [200] * 30 and codes[30:] == [429, 429], str(codes[28:]))
+ok("…a refused one writes no seal and no audit entry", sum(1 for _ in open(seals)) == n_seals + 30 and len(audit) == n_audit + 30)
+# one person copying the same rows many times cannot make them "common" (and so hidden from a trace)
+who["user"] = "insider1"
+rows = "192.0.2.201,Example Net\n192.0.2.202,Example Net\n"
+for _ in range(25):
+    rec(text=rows, kind="addresses")
+who["user"], who["perms"] = "auditor3", {"audit"}
+r = tr(text=rows).get_json()
+ok("rows copied 25 times by one person are still found (common counts people, not copies)",
+   any(m["user"] == "insider1" for m in r.get("matches") or []) and r.get("common_left_out") == 0, str({k: r.get(k) for k in ("total", "common_left_out")}))
+old = {"id": "S-old", "t": 1.0, "user": "x", "kind": "copy", "items": ["aa"]}
+api["sealer"].write(dict(old))
+api["pruned"]["at"] = 0.0                                 # a day passed since the last prune
+api["prune_daily"]()
+import time as _t  # noqa: E402
+for _ in range(50):
+    if '"S-old"' not in open(seals).read():
+        break
+    _t.sleep(.1)
+ok("seals past the retention are removed every day (not only at start)", '"S-old"' not in open(seals).read())
+src = open(I.__file__, encoding="utf-8").read()
+ok("a trace reads the seals one line at a time (no list of them all)", "list(self.all())" not in src)
+who["perms"] = {"audit"}
 who["user"] = "grace"
 with app.test_request_context("/x/page"):
     _u()

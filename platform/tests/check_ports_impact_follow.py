@@ -80,6 +80,22 @@ with tempfile.TemporaryDirectory() as tmp:
     rv2 = g.create_review("LG-X-0000000A", "services", "x", "Review", "t", "ana", "analyst", "man", {"codes": [], "source": "LG-X-0000000A"})
     ok("a researcher's own finding on the code still comes first in the links", g.request_links(list(g.data["items"].values())).get(rv2["id"]) == own["id"])
     ok("…and the researcher who answered still follows the review", "res" in rv2["participants"])
+    # the external review of 15dc30a: only THE answer counts (the reply that sent the request back, by a researcher)
+    h = F.Findings(os.path.join(tmp, "h.json"), People())
+    rq = h.create_analyst("LG-A-0000000C", "services", "Sel", "Look", "t", "ana", "analyst", to="res")
+    h.reply(rq["id"], "my answer", ["LG-X-0000000D"], "res", "researcher")                    # the answer: counts
+    h.reply(rq["id"], "later, more codes", ["LG-X-0000000E"], "res", "researcher")           # a second reply: does not
+    h.data["items"][rq["id"]]["participants"].append("ana2")
+    h.reply(rq["id"], "someone else in the channel", ["LG-X-0000000F"], "ana2", "analyst")  # not the answer: does not
+    rv_d = h.create_review("LG-X-0000000D", "services", "x", "R", "t", "ana", "analyst", "man", {"codes": []})
+    rv_e = h.create_review("LG-X-0000000E", "services", "x", "R", "t", "ana", "analyst", "man", {"codes": []})
+    rv_f = h.create_review("LG-X-0000000F", "services", "x", "R", "t", "ana", "analyst", "man", {"codes": []})
+    ok("only the researcher's answer makes a follower", "res" in rv_d["participants"], rv_d["participants"])
+    ok("…a later reply with other codes does not", "res" not in rv_e["participants"], rv_e["participants"])
+    ok("…nor anyone else in the channel attaching codes", "ana2" not in rv_f["participants"], rv_f["participants"])
+    links = h.request_links(list(h.data["items"].values()))
+    ok("…and only the answer's codes link a review to the request", links.get(rv_d["id"]) == rq["id"]
+       and rv_e["id"] not in links and rv_f["id"] not in links, str(links))
     shown = json.dumps(f.list(False, user="res", admin=False, strict=True))
     ok("nothing on the researcher's page holds an address", "192.0.2." not in shown and "sent" not in json.dumps([x.get("review") for x in f.list(False, user="res", admin=False, strict=True)]))
 

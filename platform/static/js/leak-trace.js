@@ -12,12 +12,20 @@
 
   function how(m) {
     if (m.exact) return m.kind === "download" ? "The exact file, or its exact text" : "The exact text copied";
-    return `${fmt(m.matched)} of its ${fmt(m.of)} lines and addresses${m.cut ? " (only the first lines were sealed)" : ""}`;
+    return `${fmt(m.matched)} of the ${fmt(m.given)} lines and addresses given (it holds ${fmt(m.of)})${m.cut ? " (only the first lines were sealed)" : ""}`;
+  }
+  // how a trace compares (insider.py, external review 2026-11-19): said with every answer, so a "no match" is read right
+  function rules(d) {
+    const share = Math.round((d.min_share || .5) * 100);
+    return d.exact_only
+      ? `More than ${fmt(d.max_items)} lines or addresses were given: only copies and downloads of exactly this text or file were looked for. To find partial matches, trace the part that leaked (at most ${fmt(d.max_items)} lines).`
+      : `A copy or download is shown when it is exactly this text or file, or holds at least ${share}% of the lines and addresses given.`;
   }
   function show(d) {
     const out = $("trOut"); out.replaceChildren();
     if (!d.matches.length) {
-      out.append(el("p", "au-vf ok", "No match: nothing copied with a copy button or downloaded from Looking Glass, among the seals kept, matches what you gave."));
+      out.append(el("p", "au-vf ok", "No match: nothing copied with a copy button or downloaded from Looking Glass, among the seals kept, matches what you gave."),
+        el("p", "st-hint", rules(d)));
       return;
     }
     out.append(el("p", "au-vf bad", `${fmt(d.total)} match${d.total === 1 ? "" : "es"}, the closest first${d.total > d.matches.length ? ` (the first ${fmt(d.matches.length)} shown)` : ""}.`));
@@ -33,7 +41,8 @@
       tb.append(tr);
     }
     t.append(tb); const w = el("div", "table-wrap"); w.append(t); out.append(w);
-    if (d.common_left_out) out.append(el("p", "st-hint", `${fmt(d.common_left_out)} line(s) found in many copies and downloads (a CSV's header, for example) were not counted as matches.`));
+    out.append(el("p", "st-hint", rules(d)));
+    if (d.common_left_out) out.append(el("p", "st-hint", `${fmt(d.common_left_out)} line(s) found in many people's copies and downloads (a CSV's header, for example) were not counted as matches.`));
   }
   $("trForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();

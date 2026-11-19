@@ -112,10 +112,18 @@ class Findings:
             if x.get("origin") != "analyst" or x.get("kind") in ("review", "case") or x.get("parent"):
                 continue
             for h in x.get("history") or []:
-                if h.get("kind") == "reply" and code in (h.get("codes") or []) and h.get("user") and h["user"] != x.get("user") \
-                        and h["user"] not in out:
+                if self.is_answer(x, h) and code in (h.get("codes") or []) and h["user"] not in out:
                     out.append(h["user"])
         return out
+
+    @staticmethod
+    def is_answer(item, h):
+        """Whether history step h is THE researcher's answer to an analyst's request: the reply that sent it back to the
+        analyst who asked (reply() sets "to" only on that one), made by a researcher. Any other reply carrying codes
+        (another person in the channel, a second reply) makes nobody a follower and links nothing (external review of
+        15dc30a, 2026-11-19: anyone in a request's channel could attach known codes and join management's reviews)."""
+        return (h.get("kind") == "reply" and bool(h.get("user")) and h["user"] != item.get("user")
+                and bool(h.get("to")) and h.get("to") == item.get("user") and h.get("role") == "researcher")
 
     @staticmethod
     def _add_seen(item, users):
@@ -581,7 +589,7 @@ class Findings:
         for x in sorted(items, key=lambda x: x["at"]):
             if x.get("origin") == "analyst" and x.get("kind") not in ("case", "review") and not x.get("parent"):
                 for h in x.get("history") or []:
-                    if h.get("kind") == "reply":
+                    if Findings.is_answer(x, h):          # the researcher's answer only (external review of 15dc30a)
                         for c in h.get("codes") or []:
                             first.setdefault(c, x)
         out = {}

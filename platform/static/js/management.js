@@ -856,7 +856,7 @@
       ranking($("chTop"), comms ? d.infections : d.issues.concat(d.infections_on || []).sort((a, c) => c.hosts - a.hosts || Number(c.exploited) - Number(a.exploited) || (c.cvss || 0) - (a.cvss || 0)), d.platform);
       $("cTop").scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
       toast(`${Object.keys(res).length} explained: shown under each name`, "ok");
-    } catch (e) { toast(e.message, "bad"); }
+    } catch (e) { toast(e.stopped ? "Stopped: you closed the window." : e.message, e.stopped ? "" : "bad"); }
     finally { b.disabled = false; }
   });
   // opened from a finding (/management?code=LG-C-…): the portal shows exactly that combination, on its platform

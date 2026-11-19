@@ -341,7 +341,11 @@
           intro: SOURCES_INTRO })
           : await mpBatch(names);
         wrap.replaceChildren(el("div", "mp-head", mpSummary(res))); renderMpList(wrap, res);
-      } catch (err) { btn.disabled = false; btn.textContent = `Look-up failed: ${err.message} (click to retry)`; }
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = err.stopped ? `Look up this host's ${names.length} infection${names.length === 1 ? "" : "s"} / categor${names.length === 1 ? "y" : "ies"}`
+          : `Look-up failed: ${err.message} (click to retry)`;       // stopped (window closed): as it was
+      }
     });
     wrap.append(btn); box.append(wrap);
   }
@@ -2351,15 +2355,24 @@
         mp.addEventListener("click", async () => {
           mp.disabled = true; mp.textContent = "Looking up…";
           try {
-            let all = r;
-            if (r.total > r.rows.length) { try { all = await getJSON(`/api/insight/drill?kind=${encodeURIComponent(d.kind)}&value=${encodeURIComponent(d.value)}&metric=${r.metric}&at=${encodeURIComponent(d.as_of)}&all=1`); } catch { all = r; } }
-            const names = [...new Set(all.rows.flatMap((row) => [].concat(row.infections || row.infection || [])).filter(Boolean))];
-            r.mp = await window.LGLookup.run({ kind: "malpedia", values: names, title: "Explaining the names",
-              intro: `${names.length} infection${names.length === 1 ? "" : "s"} / categor${names.length === 1 ? "y" : "ies"} in this list. ` + SOURCES_INTRO
+            // the window opens at once; the whole list is gathered inside it, so closing it stops that too (2026-11-19)
+            r.mp = await window.LGLookup.run({ kind: "malpedia", title: "Explaining the names",
+              prepare: async (signal) => {
+                let all = r;
+                if (r.total > r.rows.length) {
+                  const res = await fetch(`/api/insight/drill?kind=${encodeURIComponent(d.kind)}&value=${encodeURIComponent(d.value)}&metric=${r.metric}&at=${encodeURIComponent(d.as_of)}&all=1`, { credentials: "same-origin", signal });
+                  if (res.ok) all = await res.json();
+                }
+                return [...new Set(all.rows.flatMap((row) => [].concat(row.infections || row.infection || [])).filter(Boolean))];
+              },
+              intro: (names) => `${names.length} infection${names.length === 1 ? "" : "s"} / categor${names.length === 1 ? "y" : "ies"} in this list. ` + SOURCES_INTRO
                 + (CFG.malpedia ? " New names are asked of Malpedia at most 30 a minute." : "") });
             // kept on r; redraw only if this list is still the one shown (review 2026-11-13)
             if (box.dataset.metric === r.metric && !box.hidden && box.isConnected) renderDrill(box, r, d);
-          } catch (err) { mp.disabled = false; mp.textContent = `Look-up failed: ${err.message} (retry)`; }
+          } catch (err) {
+            mp.disabled = false;
+            mp.textContent = err.stopped ? "Explain the names" : `Look-up failed: ${err.message} (retry)`;    // stopped: as it was
+          }
         });
         acts.append(mp);
       }

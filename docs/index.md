@@ -40,6 +40,9 @@ the few devices that matter, and reports you can send. One modest server and a g
 
 ## Where to start
 
+Not sure which role you are? [Who does what](ROLES.md) maps each Looking Glass role to the roles of a CSIRT, a SOC
+and a cybersecurity division with GRC, with sources.
+
 <div class="grid cards" markdown>
 
 -   :material-download-circle-outline:{ .lg-ic .blue } **Install**
@@ -77,6 +80,31 @@ the few devices that matter, and reports you can send. One modest server and a g
     one-click executive report.
 
     [User guide](USER_GUIDE.md) · [Features](FEATURES.md)
+
+-   :material-email-fast-outline:{ .lg-ic .blue } **Advisors**
+
+    ---
+
+    Write the advisory for each organisation, with its devices, impact and recommended actions, and send it.
+
+    [Advisories](USER_GUIDE.md#advisories-the-advisor) · [Who does what](ROLES.md)
+
+-   :material-clipboard-check-outline:{ .lg-ic .slate } **Auditors and GRC**
+
+    ---
+
+    The Audit portal: who did what and when, the access review, the controls mapping and Trace a leak, never the
+    threat data.
+
+    [How the audit log proves itself](AUDIT_LOG_PROOF.md) · [Who does what](ROLES.md)
+
+-   :material-eye-outline:{ .lg-ic .teal } **Constituents and other CSIRTs**
+
+    ---
+
+    A masked, read-only view to compare trends: no address, host name or real network name.
+
+    [Who does what](ROLES.md)
 
 -   :material-shield-lock-outline:{ .lg-ic .red } **Administrators**
 
@@ -141,7 +169,7 @@ to advisory under
 3. **Replay.** Shadowserver sends a day's reports during the next day; Looking Glass replays that day in full, at
    the same time of day, so a wall screen always shows a living picture.
 4. **Analyse and share.** Analysts drill down and export; researchers define and explain; executives get
-   aggregates; partners see masked views.
+   aggregates; advisors write the advisories; constituents and other CSIRTs compare trends, masked.
 
 </div>
 

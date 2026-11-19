@@ -13,8 +13,15 @@
 * "Trace a leak" (the Audit portal; auditors and administrators): text pasted or a file dropped there is fingerprinted
   in memory the same way and thrown away; the answer is every copy and download it matches, with who, when and what,
   exactly or by how many of its lines and addresses. Each trace is in the audit log ("leak_traced": who, when, how many
-  matches; never what was searched) and at most TRACE_PER_MINUTE are answered a minute per person, so it cannot be used
-  to test guesses.
+  matches; never what was searched). Against testing guesses (external review, 2026-11-19: one trace of a whole /16 of
+  guessed addresses said how many matched, and halving found an address in 17 traces): a trace compares at most
+  TRACE_MAX_ITEMS lines and TRACE_MAX_ITEMS addresses (more: the exact text or file only), a seal is reported only when
+  it holds the exact text or file or at least TRACE_MIN_SHARE of what was given, and TRACE_PER_MINUTE / TRACE_PER_DAY
+  traces are answered per person.
+* Copies recorded: at most COPY_PER_MINUTE a minute per person (a flood would fill the disk and the audit log, and could
+  make a line "common" so a trace leaves it out). A line counts as common by how many PEOPLE's seals hold it, never by
+  how many seals: one person copying the same rows again and again cannot hide them. Seals past the retention are
+  removed every day (not only at start), and a trace reads the seals file one line at a time.
 * A person's own recovery codes are recorded as copied, without any fingerprint (they are the person's secret).
 * Every page header names the person signed in by their registered full name (template value lg_name).
 
@@ -28,6 +35,7 @@ import hashlib
 import hmac
 import io
 import json
+import math
 import os
 import re
 import secrets
@@ -43,8 +51,13 @@ SEAL_ITEMS_MAX = 50000          # lines + addresses kept per copy or file (the w
 TEXT_MAX = 5_000_000            # characters a copy may carry to be recorded
 TRACE_MAX_BYTES = 25_000_000    # a file or text given to Trace a leak
 TRACE_PER_MINUTE = 5
+TRACE_PER_DAY = 100
+TRACE_MAX_ITEMS = 1000          # lines, and addresses, a trace compares one by one (more: the exact text or file only)
+TRACE_MIN_SHARE = 0.5           # a seal is reported when it holds at least this share of what was given (or all of it)
+COPY_PER_MINUTE = 30            # copies recorded per person a minute
 BODY_LIMITS = {"/api/copy/record": 12_000_000, "/api/audit/trace": TRACE_MAX_BYTES + 1_000_000}
-COMMON_SHARE = 0.2              # a line in more than this share of the seals (a CSV header) does not count as a match
+COMMON_SHARE = 0.2              # a line held by more than this share of the PEOPLE with seals does not count as a match
+PRUNE_EVERY = 86400             # seals past the retention removed once a day
 KINDS = {"event": "an event's details", "record": "a record's details", "addresses": "addresses", "code": "a code",
          "indicators": "indicator values", "note": "a note", "text": "text", "recovery": "recovery codes",
          "invite": "a sign-up link"}
@@ -83,7 +96,8 @@ class Sealer:
     def seal_text(self, text):
         t = normal(text)
         lines, addrs = self.items(t)
-        return {"whole": self.h("T", t), "lines": len(lines), "addresses": len(addrs), "items": (addrs + lines)}
+        return {"whole": self.h("T", t), "lines": len(lines), "addresses": len(addrs), "items": (addrs + lines),
+                "line_items": lines, "addr_items": addrs}          # kept apart for a trace only (never written)
 
     def seal_file(self, data, name=""):
         """A downloaded file: its SHA-256, and its text's (a ZIP: each file's) fingerprints."""
@@ -109,6 +123,7 @@ class Sealer:
                 continue
             s = self.seal_text(txt)
             out["items"] += s["items"]; out["lines"] += s["lines"]; out["addresses"] += s["addresses"]
+            out.setdefault("line_items", []).extend(s["line_items"]); out.setdefault("addr_items", []).extend(s["addr_items"])
             out.setdefault("wholes", []).append(s["whole"])
         return out
 
@@ -159,32 +174,54 @@ class Sealer:
             return len(lines) - len(keep)
 
     def trace(self, text=None, data=None):
-        """Every seal the text or file matches: [{seal, exact, lines, addresses, of}], the closest first."""
-        q_whole, q_sha, q_items = set(), set(), set()
+        """Every seal the text or file matches: ([{seal, exact, matched, of, given}], lines left out as common, whether the
+        lines and addresses were compared one by one), the closest first.
+        Against testing guesses (external review, 2026-11-19): more than TRACE_MAX_ITEMS lines or addresses given are
+        compared as a whole only (the exact text or file); a seal that is not exact is reported only when it holds at
+        least TRACE_MIN_SHARE of what was given (a list of guesses never does, a real excerpt does). A line counts as
+        common by the PEOPLE whose seals hold it, never by how many seals (one person copying the same rows many times
+        cannot make them common). The seals file is read one line at a time, twice."""
+        q_whole, q_sha, q_lines, q_addrs = set(), set(), set(), set()
         if data is not None:
             f = self.seal_file(data)
             q_sha.add(f["sha256"]); q_sha.update(x["sha256"] for x in f["files"])
-            q_whole.update(f.get("wholes") or []); q_items.update(f["items"])
+            q_whole.update(f.get("wholes") or [])
+            q_lines.update(f.get("line_items") or []); q_addrs.update(f.get("addr_items") or [])
         if text:
             s = self.seal_text(text)
-            q_whole.add(s["whole"]); q_items.update(s["items"])
-        seals = list(self.all())
-        freq = {}
-        for s in seals:
-            for i in s.get("items") or []:
-                if i in q_items:
-                    freq[i] = freq.get(i, 0) + 1
-        common = {i for i, n in freq.items() if len(seals) > 4 and n > COMMON_SHARE * len(seals)}
+            q_whole.add(s["whole"]); q_lines.update(s["line_items"]); q_addrs.update(s["addr_items"])
+        one_by_one = len(q_lines) <= TRACE_MAX_ITEMS and len(q_addrs) <= TRACE_MAX_ITEMS
+        if not one_by_one:
+            q_lines, q_addrs = set(), set()                  # too much to compare line by line: the exact text or file only
+        q_items = q_lines | q_addrs
+        people, item_people = set(), {}
+        for s in self.all():                                 # pass 1: who holds each line given (people, not seals)
+            u = s.get("user") or ""
+            people.add(u)
+            if q_items:
+                for i in s.get("items") or []:
+                    if i in q_items:
+                        item_people.setdefault(i, set()).add(u)
+        common = {i for i, us in item_people.items() if len(people) > 4 and len(us) > COMMON_SHARE * len(people)}
+        # the share is asked of the lines and of the addresses apart: a leak is often reformatted (a list of the addresses
+        # taken out of a CSV) and then only its addresses match; a list of guesses holds few real ones of either kind
+        g_lines, g_addrs = q_lines - common, q_addrs - common
+        need_l = max(1, math.ceil(TRACE_MIN_SHARE * len(g_lines)))      # at least half of what was given, rounded up
+        need_a = max(1, math.ceil(TRACE_MIN_SHARE * len(g_addrs)))
         out = []
-        for s in seals:
+        for s in self.all():                                 # pass 2: the matches
             exact = s.get("whole") in q_whole or bool(set(s.get("wholes") or []) & q_whole) \
                 or s.get("sha256") in q_sha or any(x.get("sha256") in q_sha for x in s.get("files") or [])
-            hit = [i for i in s.get("items") or [] if i in q_items and i not in common]
-            if not exact and not hit:
+            its = s.get("items") or []
+            hit_l = sum(1 for i in its if i in g_lines) if g_lines else 0
+            hit_a = sum(1 for i in its if i in g_addrs) if g_addrs else 0
+            enough = (g_lines and hit_l >= need_l) or (g_addrs and hit_a >= need_a)
+            if not exact and not enough:
                 continue
-            out.append({"seal": s, "exact": exact, "matched": len(hit), "of": s.get("items_total") or len(s.get("items") or [])})
+            out.append({"seal": s, "exact": exact, "matched": hit_l + hit_a, "of": s.get("items_total") or len(its),
+                        "given": len(g_lines) + len(g_addrs)})
         out.sort(key=lambda r: (not r["exact"], -r["matched"], -(r["seal"].get("t") or 0)))
-        return out, len(common)
+        return out, len(common), one_by_one
 
 
 def load_key(base_dir):
@@ -209,8 +246,11 @@ def install(app, ctx):
     """ctx: base_dir, has_perm, csrf_ok, audit, people_name (username -> full name)."""
     hp, audit = ctx["has_perm"], ctx["audit"]
     sealer = Sealer(load_key(ctx["base_dir"]), os.path.join(ctx["base_dir"], "data", "copy_seals.jsonl"))
-    traced = {}                                        # user -> [times] (Trace a leak's limit)
+    traced = {}                                        # user -> [times] (Trace a leak's limits)
+    copied = {}                                        # user -> [times] (copies recorded a minute)
+    limits_lock = threading.Lock()
     full = ctx.get("people_name") or (lambda u: "")
+    pruned = {"at": 0.0}
 
     def me():
         return (getattr(g, "user", None) or {}).get("user", "")
@@ -218,10 +258,35 @@ def install(app, ctx):
     def name_of(u):
         return full(u) or u
 
-    try:
-        sealer.prune(int(float(os.environ.get("AUDIT_RETENTION_DAYS", "400") or 400)))
-    except (OSError, ValueError):
-        pass
+    def prune_now():
+        try:
+            sealer.prune(int(float(os.environ.get("AUDIT_RETENTION_DAYS", "400") or 400)))
+        except (OSError, ValueError):
+            pass
+
+    def prune_daily():
+        """Seals past the retention removed once a day, behind the request (not only at start: a service that runs for
+        months kept every seal; external review, 2026-11-19)."""
+        now = time.time()
+        with limits_lock:
+            if now - pruned["at"] < PRUNE_EVERY:
+                return
+            pruned["at"] = now
+        threading.Thread(target=prune_now, daemon=True, name="copy-seals-prune").start()
+
+    def over(book, u, per, window):
+        """True when u already made `per` requests in the last `window` seconds; else counts this one."""
+        now = time.time()
+        with limits_lock:
+            recent = [t for t in book.get(u, []) if now - t < window]
+            if len(recent) >= per:
+                book[u] = recent
+                return True
+            book[u] = recent + [now]
+            return False
+
+    prune_now()
+    pruned["at"] = time.time()
 
     # the platform takes request bodies of 64 KB at most (security.py, report #7); a long list copied and a file traced
     # are larger, so these two take more, and only from someone signed in (Trace a leak: with the 'audit' permission)
@@ -244,6 +309,11 @@ def install(app, ctx):
             return jsonify(error="Sign in again."), 401
         if not ctx["csrf_ok"]():
             return jsonify(error="Refused (the request did not come from this page)."), 403
+        # a limit per person: a flood would fill the disk and the audit log, and could make lines "common" so that a trace
+        # leaves them out (external review, 2026-11-19); the page copies nothing when it is refused (fail closed)
+        if over(copied, u, COPY_PER_MINUTE, 60):
+            return jsonify(error=f"At most {COPY_PER_MINUTE} copies a minute: wait a moment, or download the list instead."), 429
+        prune_daily()
         b = request.get_json(silent=True) or {}
         kind = str(b.get("kind") or "text")
         if kind not in KINDS:
@@ -300,6 +370,7 @@ def install(app, ctx):
                          "page": request.path[:60], "lines": 0, "addresses": s["addresses"],
                          "items": s["items"][:s["addresses"]]}           # its addresses only (the JSON's lines are not the file's)
             sealer.write(entry)
+            prune_daily()
         except Exception:                                  # noqa: BLE001  (a seal never breaks a download)
             pass
         return resp
@@ -311,11 +382,11 @@ def install(app, ctx):
             return jsonify(error="Trace a leak is for the auditor role and administrators (permission 'audit')."), 403
         if not ctx["csrf_ok"]():
             return jsonify(error="Refused (the request did not come from this page)."), 403
-        u, now = me(), time.time()
-        recent = [t for t in traced.get(u, []) if now - t < 60]
-        if len(recent) >= TRACE_PER_MINUTE:
+        u = me()
+        if over(traced, u + "|min", TRACE_PER_MINUTE, 60):
             return jsonify(error=f"At most {TRACE_PER_MINUTE} traces a minute: wait a moment."), 429
-        traced[u] = recent + [now]
+        if over(traced, u + "|day", TRACE_PER_DAY, 86400):
+            return jsonify(error=f"At most {TRACE_PER_DAY} traces a day per person: the rest tomorrow."), 429
         text, data, given = None, None, ""
         f = request.files.get("file")
         if f is not None:
@@ -331,7 +402,7 @@ def install(app, ctx):
             given = "pasted text"
         if not text and not data:
             return jsonify(error="Paste the text or choose the file to trace."), 400
-        found, common = sealer.trace(text=text, data=data)
+        found, common, one_by_one = sealer.trace(text=text, data=data)
         text = data = None                                  # nothing given is kept
         audit.add("leak_traced", user=u, target=given, detail=f"{len(found)} match{'es' if len(found) != 1 else ''}")
         rows = []
@@ -339,7 +410,9 @@ def install(app, ctx):
             s = r["seal"]
             rows.append({"id": s.get("id"), "t": s.get("t"), "who": name_of(s.get("user", "")), "user": s.get("user", ""),
                          "kind": s.get("kind"), "what": s.get("what", ""), "page": s.get("page", ""), "exact": r["exact"],
-                         "matched": r["matched"], "of": r["of"], "cut": bool(s.get("cut"))})
-        return jsonify(ok=True, matches=rows, total=len(found), common_left_out=common)
+                         "matched": r["matched"], "of": r["of"], "given": r["given"], "cut": bool(s.get("cut"))})
+        return jsonify(ok=True, matches=rows, total=len(found), common_left_out=common,
+                       # more than TRACE_MAX_ITEMS lines or addresses: only the exact text or file was looked for
+                       exact_only=not one_by_one, max_items=TRACE_MAX_ITEMS, min_share=TRACE_MIN_SHARE)
 
-    return {"sealer": sealer}
+    return {"sealer": sealer, "prune_daily": prune_daily, "pruned": pruned}
