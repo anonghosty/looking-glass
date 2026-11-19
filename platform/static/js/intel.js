@@ -591,11 +591,15 @@
       const nm = el("button", "ig-where-name", i.name); nm.type = "button"; nm.title = `Intel gathered for ${i.name}`;
       nm.addEventListener("click", (e) => { e.stopPropagation(); open(i.name, "infections"); });
       row.append(nm, el("span", "ig-every-n", plural(i.hosts, "host")));
-      for (const r of i.reports.slice(0, 3)) {
-        const cr = el("div", "ig-code-row"); cr.append(el("span", "ig-every-in", r.title),
-          codeChip(r.code, `${r.title}: hosts also calling botnet sinkholes as ${i.name}`), noteBtn(r.code, `${r.title}: hosts also calling botnet sinkholes as ${i.name}`));
-        row.append(cr);
-      }
+      // ONE code for the infection, with Move to notes; the reports its devices are in are named, without codes of
+      // their own (the user, 2026-11-19: "only the infection name should be moved to notes")
+      const what = `Hosts also calling botnet sinkholes as ${i.name}`;
+      const reps = (i.reports || []).map((r) => `${r.title} (${fmt(r.hosts)})`).join(" · ");
+      if (reps) row.append(el("span", "ig-every-in ig-every-reps", `in ${reps}`));
+      const cr = el("div", "ig-code-row");
+      if (i.code) cr.append(codeChip(i.code, what), noteBtn(i.code, what));
+      else cr.append(el("span", "ig-held", "Fewer than 5 devices: no lasting code. An analyst can drill into it."));
+      row.append(cr);
       bi.append(row);
     }
     // CVEs and issues (other than this one)
@@ -610,15 +614,13 @@
         const b = chipOf(i.name); b.classList.add(/^CVE-/i.test(i.name) ? "cve" : "iss"); b.append(el("em", null, fmt(i.hosts)));
         const w = i.seen_in?.length ? seenIn(i.seen_in) : el("span", "ig-every-in", `in ${(i.reports || []).map((r) => `${r.title} (${fmt(r.hosts)})`).join(", ") || "the services reports"}`);
         row.append(b, w);
-        // per report it was found in: the code of exactly those devices, with Move to notes (as infections, 2026-11-19);
-        // fewer than 5 devices: no lasting code (small_codes.py), an analyst drills into it
-        for (const r of (i.reports || []).slice(0, 3)) {
-          const what = `${r.title}: hosts carrying ${i.name} there`;
-          const cr = el("div", "ig-code-row"); cr.append(el("span", "ig-every-in", r.title), el("span", "ig-every-n", plural(r.hosts, "host")));
-          if (r.code) cr.append(codeChip(r.code, what), noteBtn(r.code, what));
-          else cr.append(el("span", "ig-held", "Fewer than 5 devices: no lasting code. An analyst can drill into it."));
-          row.append(cr);
-        }
+        // ONE code for the CVE / issue (its devices in the reports it was found in), with Move to notes (the user,
+        // 2026-11-19: not one per report); fewer than 5 devices: no lasting code (small_codes.py)
+        const what = `Hosts carrying ${i.name}`;
+        const cr = el("div", "ig-code-row");
+        if (i.code) cr.append(codeChip(i.code, what), noteBtn(i.code, what));
+        else cr.append(el("span", "ig-held", "Fewer than 5 devices: no lasting code. An analyst can drill into it."));
+        row.append(cr);
         ul.append(row);
       });
       bc.append(ul);

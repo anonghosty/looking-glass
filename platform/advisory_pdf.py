@@ -27,6 +27,30 @@ KEEP_MAX = 300                               # a block kept on one page is at mo
 CERT_COLOUR = {"observed": HexColor("#f6c27a"), "possible": HexColor("#9fdbe6"), "known for this malware": HexColor("#c4b5fd")}
 
 
+def draw_impact(f, impact, what):
+    """The Impact section (a Flow `f`): each impact flag, the most severe first, with its level, what it can lead to and
+    the reports that carry it. One drawing for the advisory and the analysts' combination / analyst code PDF (the user,
+    2026-11-19). Nothing is drawn when no report carries a flag. what: "this advisory", "this report"."""
+    if not impact:
+        return
+    doc = f.doc
+    f.heading("Impact")
+    f.para(f"What the exposures and events in {what} can lead to, by the reports that found them.", 8.8, DIM)
+    for fl in impact:
+        body = simpleSplit(doc.s(fl["text"]), doc.F["r"], 9, W - 2 * M - 70)
+        reps = simpleSplit(doc.s("Reports: " + ", ".join(fl["reports"])), doc.F["r"], 8, W - 2 * M - 70)
+        f.need(18 + 12.5 * len(body) + 11 * len(reps))
+        col = LEVEL.get(fl["level"], SLATE)
+        doc.pill(M, f.y - 10, LEVEL_WORD.get(fl["level"], fl["level"]).upper(), col, 7.4)
+        doc.text(M + 70, f.y - 10, fl["label"], 10, TXT, True)
+        yy = f.y - 10
+        for ln in body:                   # under the label, wrapped, never cut
+            yy -= 12.5; doc.text(M + 70, yy, ln, 9, TXT)
+        for ln in reps:
+            yy -= 11; doc.text(M + 70, yy, ln, 8, MUTE)
+        f.y = yy - 9
+
+
 class Flow:
     """A cursor down the advisory's pages: a new page when the next line would not fit."""
 
@@ -290,8 +314,8 @@ def front(doc, a):
             # information"); the devices CSV sent with the PDF holds every one, with all these columns
             f.heading(f"Affected IP addresses ({len(devs):,})")
             f.para(f"Due to the number of affected IP addresses ({len(devs):,}), they are not listed here. Kindly refer to the "
-                   f"attached CSV file, {a['devices_csv']}: it lists every IP address with its host name, ports, network and "
-                   "location, the reports that found it, its infections, issues and CVEs, when it was first and last seen, and "
+                   f"attached CSV file, {a['devices_csv']}: it lists every IP address with its host name, ports, every port "
+                   "it was seen open on with the service running there, network and location, the reports that found it, its infections, issues and CVEs, when it was first and last seen, and "
                    "what it carried on the other days.", 9.6, TXT)
         else:
             # the heading keeps the table's head and first row with it on one page
@@ -307,22 +331,7 @@ def front(doc, a):
         f.para(a["kinds_line"], 9.2, ACCENT, True)
 
     # impact: the flags of every report in the advisory, the most severe first, and which reports carry them
-    if a.get("impact"):
-        f.heading("Impact")
-        f.para("What the exposures and events in this advisory can lead to, by the reports that found them.", 8.8, DIM)
-        for fl in a["impact"]:
-            body = simpleSplit(doc.s(fl["text"]), doc.F["r"], 9, W - 2 * M - 70)
-            reps = simpleSplit(doc.s("Reports: " + ", ".join(fl["reports"])), doc.F["r"], 8, W - 2 * M - 70)
-            f.need(18 + 12.5 * len(body) + 11 * len(reps))
-            col = LEVEL.get(fl["level"], SLATE)
-            doc.pill(M, f.y - 10, LEVEL_WORD.get(fl["level"], fl["level"]).upper(), col, 7.4)
-            doc.text(M + 70, f.y - 10, fl["label"], 10, TXT, True)
-            yy = f.y - 10
-            for ln in body:                   # under the label, wrapped, never cut
-                yy -= 12.5; doc.text(M + 70, yy, ln, 9, TXT)
-            for ln in reps:
-                yy -= 11; doc.text(M + 70, yy, ln, 8, MUTE)
-            f.y = yy - 9
+    draw_impact(f, a.get("impact"), "this advisory")
 
     # MITRE ATT&CK techniques: the mappings of the reports in the advisory, with the ATT&CK version this advisory was
     # generated with (kept with the advisory: a sent one keeps what the recipient got; attack_map.py)

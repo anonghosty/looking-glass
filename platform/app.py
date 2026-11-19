@@ -2933,6 +2933,9 @@ def _combo_pdf(spec):
     return reports_pdf.build(spec)
 
 
+import advisory as _advisory_mod  # noqa: E402
+_IMPACT = _advisory_mod.Impact(BASE_DIR)    # the reports' impact flags (data/report_impact.json), for the analysts' PDF
+
 COMBOS = _combos.install(app, {
     "intel": INTEL, "store": store, "svc_store": svc["store"],
     "labels": lambda: {**{x["name"]: x["label"] for x in registry.get()}, **{x["name"]: x["label"] for x in svc["registry"].get()}},
@@ -2946,6 +2949,8 @@ COMBOS = _combos.install(app, {
     "title_of": lambda n: SVC_KB["title_of"](n),
     "cross": lambda hosts, scope="memory": SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"],   # a search's devices
                                                               scope=scope),          # across every category, on the search's day(s)
+    # the Impact section of the analysts' PDF: the same rule as the advisory's (advisory.Impact.summary)
+    "impact_of": lambda names: _IMPACT.of_names(names, lambda n: SVC_KB["title_of"](n)),
     "logger": app.logger})
 NOTES.codes = COMBOS            # notes carry combination codes; their meaning is read from the code book
 

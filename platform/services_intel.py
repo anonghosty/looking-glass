@@ -153,6 +153,9 @@ class ServicesIntel:
         # host -> infection / issue / CVE -> the highest severity Shadowserver gave the records that carry it (the
         # PDFs' References section orders and flags each name by it, the user 2026-11-18; pdf_refs.py)
         host_levels = collections.defaultdict(dict)
+        # host -> "port/protocol" -> the reports it was seen open in: every service an address runs, for the devices
+        # CSVs (the user, 2026-11-19: "all the ports each ip address has so its easier to identify services running")
+        host_ports = collections.defaultdict(lambda: collections.defaultdict(set))
 
         def up(h, name, sev):
             lv = pdf_refs.level(sev)
@@ -173,6 +176,10 @@ class ServicesIntel:
                 records[base] += 1
                 hosts[base].add(ip)
                 host_reports[ip].add(base)
+                port = e.get("port")
+                if ip and port not in (None, "", 0, "0"):
+                    proto = str(e.get("protocol") or "").strip().lower()
+                    host_ports[ip][f"{port}/{proto}" if proto else str(port)].add(base)
                 for it in items:
                     vals[base][it][ip] += 1
                     nets[base][it].add(e.get("asn") or "")
@@ -204,7 +211,7 @@ class ServicesIntel:
                     for b, v in vals.items()}
         data = {"fields": fields, "vals": vals, "showable": showable, "combos": combos, "combo_hosts": combo_hosts, "hosts": hosts,
                 "host_reports": host_reports, "host_items": host_items, "host_issues": host_issues, "host_cves": host_cves, "infected": infected, "sink_rep": sink_rep, "records": records,
-                "host_levels": host_levels,
+                "host_levels": host_levels, "host_ports": host_ports,
                 "days": sorted({d.start.date().isoformat() for d in svc})}
         with self.lock:
             slot.update(key=key, at=time.time(), data=data)
@@ -212,13 +219,19 @@ class ServicesIntel:
 
     # ---------------------------------------------------------------- the sinkholes of a report's hosts
     @staticmethod
-    def sink_code(base, name):
-        return cross_code(SECTION, base, [(base, []), (SINK, [f"Infection: {name}"])])
+    def sink_code(base, name, reports=None):
+        """The devices in report `base` (or in any of `reports`) that call a sinkhole as `name`. One code per name with
+        all its reports (the user, 2026-11-19: "only the infection name should be moved to notes"), one per report for
+        a single report's sinkholes card."""
+        reps = sorted(set(reports)) if reports else [base]
+        return cross_code(SECTION, reps[0], [(r, []) for r in reps] + [(SINK, [f"Infection: {name}"])])
 
     @staticmethod
-    def issue_code(base, name):
-        """The devices in report `base` carrying the CVE / issue `name` there: one code per report it was found in."""
-        return cross_code(SECTION, base, [(base, []), (ISSUE, [f"Issue: {name}"])])
+    def issue_code(base, name, reports=None):
+        """The devices carrying the CVE / issue `name` in report `base` (or in any of `reports` it was found in): one
+        code per name (the user, 2026-11-19), its reports in the code so it resolves to exactly those devices."""
+        reps = sorted(set(reports)) if reports else [base]
+        return cross_code(SECTION, reps[0], [(r, []) for r in reps] + [(ISSUE, [f"Issue: {name}"])])
 
     def carried(self, hosts, data=None, top=10):
         """What a group of devices carries (a cross-report pattern's, the user 2026-11-19): the CVEs, issues and
@@ -440,10 +453,14 @@ class ServicesIntel:
                 names[n].add(h)
         infections = []
         for n, hs in sorted(names.items(), key=lambda kv: -len(kv[1])):
-            reps = [{"report": s["report"], "title": s["title"], "hosts": len(hs & data["hosts"][s["report"]]),
-                     "code": small_codes.code_for(self.sink_code(s["report"], n), len(hs & data["hosts"][s["report"]]), full)}
+            reps = [{"report": s["report"], "title": s["title"], "hosts": len(hs & data["hosts"][s["report"]])}
                     for s in services if hs & data["hosts"][s["report"]]]
-            infections.append({"name": n, "hosts": len(hs), "reports": sorted(reps, key=lambda r: -r["hosts"])[:6]})
+            # ONE code for the name: its devices in every services report they are in (the user, 2026-11-19: "only the
+            # infection name should be moved to notes", not one code per report)
+            all_reps = [r["report"] for r in reps]
+            code = small_codes.code_for(self.sink_code(all_reps[0], n, all_reps), len(hs), full) if all_reps else None
+            infections.append({"name": n, "hosts": len(hs), "code": code, "all_reports": all_reps,
+                               "reports": sorted(reps, key=lambda r: -r["hosts"])[:6]})
             if with_hosts:                                 # only for the analysts (combo_review.py): ticked into a report
                 infections[-1]["ips"] = sorted(hs)
         # across reports: the exact pattern of each host over every report it is in (services reports with their pattern
@@ -475,19 +492,22 @@ class ServicesIntel:
                     hook(SECTION, s["report"], s["report"], [c["items"] for c in s["combinations"]])
             except Exception:                              # noqa: BLE001
                 pass
-            try:
+            try:                                           # one code per infection, all its reports in it
                 for x in infections:
-                    for r in x["reports"]:
-                        hook(SECTION, r["report"], None, [[(r["report"], []), (SINK, [f"Infection: {x['name']}"])]])
+                    if x["code"]:
+                        reps = sorted(set(x["all_reports"]))
+                        hook(SECTION, reps[0], None, [[(r, []) for r in reps] + [(SINK, [f"Infection: {x['name']}"])]])
             except Exception:                              # noqa: BLE001
                 pass
-            try:                                           # the CVEs' and issues' codes, one per report (as infections)
+            try:                                           # one code per CVE / issue, all its reports in it
                 for i, reps in issue_reps.items():
-                    for r, rh in reps.items():
-                        if small_codes.code_for(self.issue_code(r, i), len(rh), full):
-                            hook(SECTION, r, None, [[(r, []), (ISSUE, [f"Issue: {i}"])]])
+                    rs = sorted(reps)
+                    if rs and small_codes.code_for(self.issue_code(rs[0], i, rs), len(issues[i]), full):
+                        hook(SECTION, rs[0], None, [[(r, []) for r in rs] + [(ISSUE, [f"Issue: {i}"])]])
             except Exception:                              # noqa: BLE001
                 pass
+        for x in infections:
+            x.pop("all_reports", None)
         # where these hosts were seen, by kind of report: the sinkhole reports they call, the vulnerability reports, the
         # services reports, and the other categories, each report named with its hosts
         by_kind = collections.defaultdict(list)
@@ -505,10 +525,11 @@ class ServicesIntel:
         return {"days": data["days"], "sources": sources, "services": services[:20], "services_total": len(services),
                 "cross": cross, "cross_total": len(xp), "multi_hosts": sum(xp.values()),
                 "issues": [{"name": i, "hosts": len(h),
-                            # per report it was found in, the code of exactly those devices (none below MIN_HOSTS for a
-                            # viewer who does not see hosts: small_codes.py)
-                            "reports": [{"report": r, "title": title_of(r), "hosts": len(rh),
-                                         "code": small_codes.code_for(self.issue_code(r, i), len(rh), full)}
+                            # ONE code for the name: the devices carrying it in the reports it was found in (none below
+                            # MIN_HOSTS for a viewer who does not see hosts: small_codes.py; the user, 2026-11-19)
+                            "code": (small_codes.code_for(self.issue_code(min(issue_reps[i]), i, list(issue_reps[i])), len(h), full)
+                                     if issue_reps[i] else None),
+                            "reports": [{"report": r, "title": title_of(r), "hosts": len(rh)}
                                         for r, rh in sorted(issue_reps[i].items(), key=lambda kv: -len(kv[1]))],
                             # every report that led to it, grouped by kind (its hosts' sinkhole reports too)
                             "seen_in": grouped({r: len(rh) for r, rh in issue_reps[i].items()}, title_of, kind_of,
@@ -531,8 +552,20 @@ class ServicesIntel:
                       "cves": sorted({i.upper() for i in iss if CVE_RX.match(i)} | data.get("host_cves", {}).get(h, set())),
                       "issues": sorted(i for i in iss if not CVE_RX.match(i)),
                       # each name's highest record severity (the PDFs' References section, pdf_refs.py)
-                      "levels": dict((data.get("host_levels") or {}).get(h) or {})}
+                      "levels": dict((data.get("host_levels") or {}).get(h) or {}),
+                      # every port it was seen open on that day, with the services reports that found it
+                      "ports": self.ports_text(data, h)}
         return out
+
+    def ports_text(self, data, h):
+        """Every port one address was seen open on, as people read it: "22/tcp Accessible SSH; 443/tcp Accessible SSL,
+        Vulnerable HTTP", the lowest port first. One rule for every devices CSV (combos.py)."""
+        per = (data.get("host_ports") or {}).get(h) or {}
+
+        def order(p):
+            n, _, proto = p.partition("/")
+            return (int(n) if n.isdigit() else 1 << 20, proto, p)
+        return "; ".join(f"{p} {', '.join(sorted({self.title_of(r) for r in per[p]}))}" for p in sorted(per, key=order))
 
     def matcher(self, entry, scope="memory"):
         """The records of a code. scope: "memory" for the analysts' search (its own range), a day (YYYY-MM-DD) for the

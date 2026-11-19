@@ -76,9 +76,11 @@ class PerKeyCache:
         self.ttl, self.size = ttl, size
         self.cache, self.locks, self.guard = {}, {}, threading.Lock()
 
+    # the monotonic clock, and the oldest by insertion order: with the wall clock, a clock adjustment (WSL re-syncs its
+    # time) dropped a newer answer instead of the oldest (lg-test, 2026-11-19) and could keep an answer too long
     def _fresh(self, key):
         hit = self.cache.get(key)
-        return hit if hit and time.time() - hit[0] < self.ttl else None
+        return hit if hit and time.monotonic() - hit[0] < self.ttl else None
 
     def get(self, key, compute):
         hit = self._fresh(key)
@@ -92,9 +94,10 @@ class PerKeyCache:
                 return hit[1]
             out = compute()
             with self.guard:
-                if len(self.cache) >= self.size and key not in self.cache:
-                    self.cache.pop(min(self.cache, key=lambda k: self.cache[k][0]), None)
-                self.cache[key] = (time.time(), out)
+                self.cache.pop(key, None)                  # worked out again: it is the newest now
+                if len(self.cache) >= self.size:
+                    self.cache.pop(next(iter(self.cache)), None)     # the oldest put in
+                self.cache[key] = (time.monotonic(), out)
                 for k in [k for k in self.locks if k not in self.cache and k != key][:max(0, len(self.locks) - 2 * self.size)]:
                     self.locks.pop(k, None)                # the locks of dropped answers do not pile up
             return out
@@ -530,10 +533,9 @@ def install(app, ctx):
             for x in cr.get("cross") or []:
                 if x.get("code"):
                     out.setdefault(x["code"], x["hosts"])
-            for x in cr.get("infections") or []:
-                for r in x.get("reports") or []:
-                    if r.get("code"):
-                        out.setdefault(r["code"], r["hosts"])
+            for x in (cr.get("infections") or []) + (cr.get("issues") or []):     # one code per name (2026-11-19)
+                if x.get("code"):
+                    out.setdefault(x["code"], x["hosts"])
         return out
 
     @app.route("/api/intel/acode/<code>/devices")

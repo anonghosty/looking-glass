@@ -169,6 +169,7 @@ run "Accounts: sign-up links, first administrator, sign-up bell" tests/check_acc
 run "Installer questions: Back, networks, ports, wording" tests/check_installer_questions.py
 run "CVE titles from public records; tooltips on top" tests/check_cve_record_titles.py
 run "CVE / issue codes; what a pattern's devices carry" tests/check_issue_codes.py
+run "Every port per address; researcher follows the review; Impact in the analysts' PDF" tests/check_ports_impact_follow.py
 run "PDF pages: no overlap, no cut-off" $PY tests/pdf_pages_check.py
 run "analyst code counts: one lock per code" $PY tests/check_per_key_cache.py
 run "older days kept for analyst codes" $PY tests/check_recent_days.py

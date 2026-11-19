@@ -66,7 +66,13 @@ def made_up():
     adv = {"logo": None, "title": "Example CSIRT Security Advisory", "subject": "Void 2 Detected: " + "MikroTik routers calling sinkholes " * 3,
            "ref": "ADV-T", "tlp": "TLP:AMBER", "network": "Example Telecom", "reports": [{"title": f"Report number {i} with a long name",
            "url": f"https://www.example.org/report-{i}/"} for i in range(30)], "devices": devs, "description": "d", "actions": "a",
-           "header": "h", "labels": [], "impact": [], "kinds_line": "", "recipients": []}
+           "header": "h", "labels": [],
+           # the Impact section (advisory_pdf.draw_impact, shared with the analysts' PDF): long texts and many reports wrap
+           "impact": [{"flag": f"f{i}", "label": f"Example impact {i}: remote code execution on an exposed management service",
+                       "level": lvl, "text": "What this can lead to, in words long enough to wrap over several lines. " * 4,
+                       "reports": [f"Report number {j} with a long name" for j in range(12)]}
+                      for i, lvl in enumerate(["critical", "high", "medium", "low"])],
+           "kinds_line": "", "recipients": []}
     out = [("made-up advisory", APDF.alone(adv, {"platform_label": "Advisory", "scope": "s", "header": "h", "selection": "s",
                                                   "day": "2026-11-16", "generated_by": "t"}))]
     d = EXP.Doc({"platform_label": "Services", "scope": "s", "selection": "s", "day": "2026-11-17", "cities": [], "tz": None, "generated_by": "t"})

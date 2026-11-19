@@ -405,6 +405,7 @@ html.ig-open { overflow: hidden; }
 .ig-every-k { display: grid; gap: 2px; }
 .ig-every-k .ig-code-row .ig-code, .ig-every-k .ig-code-row .ig-tonote, .ig-every-r .ig-code-row .ig-code, .ig-every-r .ig-code-row .ig-tonote { margin-top: 2px; }
 .ig-every-r > .ig-code-row { flex-basis: 100%; padding-left: 12px; }
+.ig-every-r > .ig-every-reps { flex-basis: 100%; padding-left: 12px; line-height: 1.45; }   /* an infection's reports, named (2026-11-19) */
 .ig-seenin { display: grid; gap: 2px; flex-basis: 100%; min-width: 0; }
 .ig-seenin-r { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 8px; font-size: 11.5px; line-height: 1.45; }
 .ig-seenin-k { font-weight: 700; color: var(--text-2); }

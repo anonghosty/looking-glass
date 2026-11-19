@@ -35,6 +35,7 @@ import re
 import secrets
 import stat
 import tempfile
+import time
 from pathlib import Path
 
 DOMAIN_RX = re.compile(r"^(?=.{3,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
@@ -414,7 +415,7 @@ def results(platform_data_dir, limit=20):
     if d.is_symlink():
         return out
     files = [p for p in d.glob("*.json") if not p.is_symlink()] if d.exists() else []
-    for p in sorted(files, key=lambda q: q.stat().st_mtime, reverse=True)[:limit]:
+    for p in sorted(files, key=lambda q: (q.stat().st_mtime_ns, q.name), reverse=True)[:limit]:
         try:
             r = json.loads(p.read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -473,6 +474,13 @@ def _write_result(done_fd, name, result):
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600, dir_fd=done_fd)
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
         json.dump(result, fh)
+    # the file's time from the fine clock: the filesystem stamps files at a coarse tick, so two results written within
+    # one tick tied and results() could name the older one the latest (lg-test, 2026-11-19)
+    now = time.time_ns()
+    try:
+        os.utime(tmp, ns=(now, now), dir_fd=done_fd)
+    except (OSError, NotImplementedError):
+        pass
     os.replace(tmp, name, src_dir_fd=done_fd, dst_dir_fd=done_fd)
 
 

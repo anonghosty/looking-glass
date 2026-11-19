@@ -228,11 +228,13 @@ def describe(entry):
         if entry["kind"] == "r":
             return f"{t(entry['report'])}: {' + '.join(entry['items']) or 'no pattern item'}"
         sink = [i for r, items in entry["parts"] if r == "Botnet sinkholes" for i in items]
-        if sink:
-            return f"{t(entry['name'])}: hosts also calling botnet sinkholes as {', '.join(s.split(': ', 1)[-1] for s in sink)}"
         found = [i for r, items in entry["parts"] if r == ISSUE for i in items]
+        reps = [t(r) for r, _ in entry["parts"] if r not in (SINK, ISSUE)]
+        where = reps[0] if len(reps) == 1 else ", ".join(reps[:-1]) + " or " + reps[-1] if reps else t(entry["name"])
+        if sink:                                          # one report, or one code per name over all its reports
+            return f"{where}: hosts also calling botnet sinkholes as {', '.join(s.split(': ', 1)[-1] for s in sink)}"
         if found:
-            return f"{t(entry['name'])}: hosts carrying {', '.join(s.split(': ', 1)[-1] for s in found)} there"
+            return f"{where}: hosts carrying {', '.join(s.split(': ', 1)[-1] for s in found)} there"
         return f"{t(entry['name'])} across " + "; ".join(f"{t(r)}: {' + '.join(i) or 'the report only'}" for r, i in entry["parts"])
     if entry["kind"] == "r":
         items = " + ".join(entry["items"]) or "no indicator (the name only)"
@@ -343,13 +345,13 @@ def enrich_rows(enr):
             rows.append(["across reports device", " | ".join(p["title"] for p in x["parts"]),
                          f"{dv['ip']}" + (f" ({dv['network']})" if dv.get("network") else ""), 1, "", x["code"]])
     for i in enr.get("issues") or []:
-        rows.append(["cve / issue", "; ".join(f"{r['title']} ({r['hosts']})" for r in i.get("reports") or []), i["name"], i["hosts"], "", ""])
+        rows.append(["cve / issue", "; ".join(f"{r['title']} ({r['hosts']})" for r in i.get("reports") or []), i["name"], i["hosts"], "", i.get("code") or ""])
         for dv in i.get("devices") or []:             # ticked by the analyst: each device of it, as sent to management
             rows.append(["cve / issue device", i["name"], f"{dv['ip']}" + (f" ({dv['network']})" if dv.get("network") else ""), 1, "", ""])
     for i in enr.get("infections") or []:
-        rows.append(["infection (calling sinkholes)", "", i["name"], i["hosts"], "", ""])
+        rows.append(["infection (calling sinkholes)", "", i["name"], i["hosts"], "", i.get("code") or ""])   # one code per name
         for r in i.get("reports") or []:
-            rows.append(["infection in a services report", r["title"], i["name"], r["hosts"], "", r.get("code", "")])
+            rows.append(["infection in a services report", r["title"], i["name"], r["hosts"], "", ""])
         for dv in i.get("devices") or []:
             rows.append(["infection device", i["name"], f"{dv['ip']}" + (f" ({dv['network']})" if dv.get("network") else ""), 1, "", ""])
     return rows
@@ -538,9 +540,8 @@ def install(app, ctx):
                         seen = True
                     bits.append(f"calls sinkholes as {', '.join(names)}" if names else "no sinkhole call")
                     continue
-                if r == ISSUE and hasattr(md, "issues_in"):   # an issue code: what the device carried in its report instead
-                    base = next((b for b, _ in want if b != ISSUE), "")
-                    names = md.issues_in(h, base)
+                if r == ISSUE and hasattr(md, "issues_in"):   # an issue code: what the device carried in its reports instead
+                    names = sorted({n for b, _ in want if b not in (ISSUE, SINK) for n in md.issues_in(h, b)})
                     bits.append(f"carries {', '.join(names)} there" if names else "no CVE or issue there")
                     continue
                 got = per[h].get(r) if h in per else None
@@ -598,6 +599,11 @@ def install(app, ctx):
         flags = {}
         for dd, hs in by_last.items():
             kept_here = {h: kept_flags[h] for h in hs if h in (kept_flags or {})}
+            # a review kept before the ports were kept (2026-11-19) has none: they are worked out, the rest used as kept
+            no_ports = {h for h, v in kept_here.items() if "ports" not in v}
+            if no_ports:
+                got = flags_of(no_ports, dd, load)
+                kept_here.update({h: dict(kept_here[h], ports=(got.get(h) or {}).get("ports", "")) for h in no_ports})
             flags.update(kept_here)
             rest = hs - set(kept_here)                   # none kept for these: worked out, never left empty
             if rest:
@@ -773,6 +779,7 @@ def install(app, ctx):
             f_ = flags.get(d["ip"]) or {}
             d["flags"] = {k: list(f_.get(k) or []) for k in ("infections", "issues", "cves")}
             d["flags"]["levels"] = dict(f_.get("levels") or {})       # each name's record severity (pdf_refs.py)
+            d["flags"]["ports"] = f_.get("ports") or ""                # every port it was seen open on, with the service
             d["earlier"] = earlier.get(d["ip"]) or []
         if not network and asns is None and not summary_only:
             job["dev_flags"] = {d["ip"]: d["flags"] for d in devs}      # kept with a review (combo_review.keep_search)
@@ -790,9 +797,11 @@ def install(app, ctx):
             """The device's other reports as people read them (a services report's title, never its key: "Device
             Identification", not device_id), sorted. The CSV keeps the keys, beside its reports column."""
             return sorted({T(r) for r in set(per_dev.get(d["ip"], {})) - d["reports"]})
-        dev_cols = ["ip", "host_name", "ports", "asn", "network", "country", "region", "city", "records", "days", "first_seen", "last_seen", "reports",
+        # ports: the ports of this selection's own records; all_ports_and_services: every port the address was seen open
+        # on that day in the services reports, with the service (the user, 2026-11-19)
+        dev_cols = ["ip", "host_name", "ports", "all_ports_and_services", "asn", "network", "country", "region", "city", "records", "days", "first_seen", "last_seen", "reports",
                     "also_seen_in", "infections", "issues", "cves", "other_days", "combination_code", "cross_report_code"]
-        dev_rows = [[d["ip"], d["hostname"], ", ".join(sorted(d["ports"], key=lambda p: (len(p), p))),
+        dev_rows = [[d["ip"], d["hostname"], ", ".join(sorted(d["ports"], key=lambda p: (len(p), p))), d["flags"].get("ports") or "",
                      d["asn"], d["network"], d["country"] or "", (d["region"] or "").title(), (d["city"] or "").title(), d["records"],
                      len(d["days"]), d["first"] or "", d["last"] or "", ", ".join(sorted(d["reports"])),
                      ", ".join(sorted(set(per_dev.get(d["ip"], {})) - d["reports"])), ", ".join(d["flags"]["infections"]),
@@ -1103,6 +1112,13 @@ def install(app, ctx):
                 # names (the combination's own, then those its devices were also seen in), each once
                 "ref_levels": ref_levels,
                 "ref_reports": list(dict.fromkeys([str(r) for r, _ in parts if r] + [str(r) for s_ in x["sets"] for r in s_["reports"]]))}
+        # the Impact section (the user, 2026-11-19): the same reports, by their impact flags (advisory.Impact.summary)
+        try:
+            data["impact"] = ctx["impact_of"](data["ref_reports"]) if ctx.get("impact_of") else []
+        except Exception:                                     # noqa: BLE001  (the report goes out without the section)
+            if ctx.get("logger"):
+                ctx["logger"].exception("impact of the report's reports failed")
+            data["impact"] = []
         try:
             if summary_only:                                  # the page's figures for one network: no PDF needed
                 raise _SummaryOnly()

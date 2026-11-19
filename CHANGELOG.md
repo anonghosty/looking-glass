@@ -5,6 +5,28 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-19 (7)
+### Added
+- **Every port an IP address was seen open on, with the service**, in the devices CSV of the combination search, the
+  analyst code package and the advisory (`all_ports_and_services`, for example `22/tcp Accessible SSH; 443/tcp
+  Accessible SSL, Vulnerable HTTP`), beside the ports of the selection's own records.
+- **The analysts' PDF has an Impact section**, as the advisory has: what the reports its devices were found in can lead
+  to, the most severe first, with the reports behind each.
+### Changed
+- **A researcher who answers an analyst's request follows it on.** When the analyst sends the researcher's code to
+  management (a review, or a case for several organisations), the researcher is in its channel: they see management's
+  decision and the advisory's progress, and the review sits inside the request on the Findings page. Never an address.
+  Requests answered before this update count too.
+- **One code per infection, CVE and issue** in *In every other category* (Intel gathered) and on an analyst code's
+  page, with one **Move to notes**: the name's devices in all the reports they were found in, which are listed under
+  it. It was one code per report, which made the lists long. Codes handed out before keep working.
+### Fixed
+- **The Findings page's device counts could keep the wrong answers when the computer's clock was adjusted**: the
+  count cache now times its answers with a clock that never jumps and drops the oldest one first.
+- **Settings → Workers could list two pipeline results in the wrong order** when the pipeline wrote them within a few
+  milliseconds of each other; each result now carries an exact time.
+- **After updating:** nothing to do.
+
 ## 2026-11-19 (6)
 ### Added
 - **CVEs and issues get codes and Move to notes in *In every other category*** (Intel gathered → Across reports), like

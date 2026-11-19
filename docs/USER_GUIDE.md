@@ -571,9 +571,9 @@ Each combination across reports also says **what its devices carry**: the CVEs, 
 how many of that combination's devices; click a name to open its Intel gathered. Names and counts only.
 
 **In every other category** (also under Across reports) shows the same devices in the services reports, with the CVEs,
-issues and infections on them. Every infection, CVE and issue there has a code per report it was found in (exactly the
-devices carrying it in that report) and **Move to notes**. A group of fewer than 5 devices is shown without a lasting
-code; an analyst can still drill into it.
+issues and infections on them. Every infection, CVE and issue there has **one code** (its devices, in the reports they
+were found in, which are listed under it) and **Move to notes**. A group of fewer than 5 devices is shown without a
+lasting code; an analyst can still drill into it.
 
 In the Intel window the combinations are shown as a **List** (each set as its values joined with +) or as a **Matrix**
 (values as columns, sets as rows). *Devices* counts the distinct devices that carry a value; they are counted, never
@@ -658,10 +658,14 @@ or the Findings page) is for roles that see addresses and may export:
    region map with its cities, networks and cities, the devices with their addresses, across reports, and the
    explanations of the name (each name, for an analyst code) and of every CVE in the combination, each with its
    references as links and where it comes from, and the researchers' notes on those names, or a line saying there are
-   none yet; a chart with nothing to show, such as across reports when no device was in another report, is left out)
+   none yet; a chart with nothing to show, such as across reports when no device was in another report, is left out;
+   and an **Impact** section, as in an advisory: what the reports these devices were found in can lead to, the most
+   severe first, with the reports behind each)
    and two CSV files: one
    row per device (with the other reports it was seen in, its infections, issues and CVEs, the other days, and its
-   cross-report code) and one row per record. The columns
+   cross-report code; `ports` holds the ports of the selection's own records, and `all_ports_and_services` every port
+   the address was seen open on that day with the service there, for example `22/tcp Accessible SSH; 443/tcp
+   Accessible SSL`) and one row per record. The columns
    have fixed names, ready for enrichment and dashboards. If the search has expired (after an hour), the button runs it
    again and then downloads.
 5. **A report for one network provider**, to attach to the advisory sent to that operator: choose it in **Report for**
@@ -744,7 +748,9 @@ the analyst sends a combination to a manager, the manager approves it to a named
 there is no general "move it on".
 
 **Findings are channels.** Only the people a finding has passed through (and administrators) see it. Others never
-learn it exists.
+learn it exists. A researcher who answers an analyst's request with a code follows it on: when the analyst sends that
+code to management, the researcher is in the review's channel (seeing it, not acting on it) and finds it inside the
+request on the Findings page, through management's decision and the advisory.
 
 **The flow:**
 1. A researcher (from a note) or an analyst (from the combination search) opens a finding and sends it to a manager.

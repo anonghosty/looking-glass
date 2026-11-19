@@ -317,7 +317,11 @@ server side is in small modules called from `app.py`:
   days) read day by day from MongoDB with `app._combo_fetch` (only the name's reports, inside the constituency). Each
   day is matched on its own (a services code with that day's sinkhole calls: `SVC_INTEL.matcher(entry, day)`). On the
   report day each device gets its other days in memory (`earlier_notes`: the same combination, or what it carried
-  there instead), and every device its infections, issues and CVEs that day (`services_intel.host_flags`); a review
+  there instead), and every device its infections, issues and CVEs that day (`services_intel.host_flags`, which also
+  gives `ports`: every port/protocol the address was open on in the services reports, with their titles, from the
+  index's `host_ports`; the devices CSV's `all_ports_and_services`); the PDF's Impact section comes from
+  `advisory.Impact.of_names` over the report's own and also-seen-in reports (the advisory's rule, `Impact.summary`) and
+  is drawn by `advisory_pdf.draw_impact`, shared with the advisory; a review
   keeps both with its records (`combo_review.keep_search`), so the advisory shows what the search showed. For the devices found it also
   follows them into the name's other reports (cross-report patterns with their codes, sets of reports). The result is a
   ZIP (PDF from `combo_pdf.py`, drawn with `executive_pdf.Doc`'s parts: tiles, activity, findings, the region map and
@@ -353,7 +357,10 @@ server side is in small modules called from `app.py`:
   `GET /api/findings?state=open|all`, `POST /api/findings/<id>/status {status, comment}` (CSRF, a recent sign-in),
   page `/findings` for researchers, management, analysts (`unmasked` + `export`) and admins; `/findings` and
   `/api/findings` are in the researcher and management roles' allowed paths. Audit events `finding_created`,
-  `finding_status`.
+  `finding_status`. A review or case an analyst creates on a code takes in the researchers whose reply to an analyst's
+  request carried that code (`Findings._answerers`, from the history, so earlier answers count; `_add_seen` adds them
+  to `participants` without making them the assignee), and `request_links` links it to that request when no
+  researcher's own finding on the code comes first.
 - **`seen_index.py`, last seen.** `data/seen_names.json` remembers, for every name, the last date it was seen in each
   report (readable report names, no hosts). Every replay day is added as it passes; once per installation the last 14
   days are read from MongoDB in the background by one worker (`seen_names.json.done` marks it done). Kept 30 days.
@@ -715,7 +722,7 @@ With `MALPEDIA_TOKEN` set in `.env`, every infection description (in the event d
   NVD's own analysis only from the background thread (every 10 minutes, at NVD's pace, one worker process; `NVD_API_KEY` makes it 10 times faster). Cache `data/cve_cache.json` (NVD / CVE.org / EPSS 7 days, KEV 1 day), merged between worker processes.
   Non-CVE issues come from `data/issues.json` (shipped) and the `issues` of `data/definitions.json`, never looked up. `GET /api/issues/batch?values=` (permission `malpedia`).
   A CVE's title in lists (`CveIntel.known_titles` / `known_title`, cache only, never a request): CISA KEV's name, else the CNA's title, else the first whole sentence of the description (`short_title`). `app._defined_titles` (the code cards' definitions) and the Definitions list use it; a researcher's definition overrides it. Nothing is copied into `definitions.json`: the record is read from the cache each time, so it follows the weekly refresh.
-  Codes for CVEs / issues (`services_intel.ISSUE`, `issue_code(report, name)` = `cross_code` of `[(report, []), ("Issues found", ["Issue: name"])]`): one per report in `for_hosts`' issues, `small_codes.code_for` below 5 hosts, registered with `on_codes`; `Matcher` resolves them from `host_issues`. `ServicesIntel.carried(hosts)` gives a cross-report pattern's CVEs, issues and infections with counts; `intel.py` keeps the device sets of the 12 shown patterns per name (`xhosts`) for it and drops them before answering.
+  Codes for CVEs / issues and infections in `for_hosts` (since 2026-11-19 ONE per name, not per report: `issue_code(first, name, reports)` = `cross_code` of `[(report, []) for each report] + [("Issues found", ["Issue: name"])]`, `sink_code(first, name, reports)` likewise with `"Botnet sinkholes"`; a one-report code made before reads and resolves as it did), `small_codes.code_for` below 5 hosts, registered with `on_codes`; `Matcher` resolves them from `host_issues`. `ServicesIntel.carried(hosts)` gives a cross-report pattern's CVEs, issues and infections with counts; `intel.py` keeps the device sets of the 12 shown patterns per name (`xhosts`) for it and drops them before answering.
 - Management portal: `management.py` (`/management`, `GET /api/mgmt/comms|services` with filters and `day`, `GET /api/mgmt/explain?kind=infection|issue&name=`, `GET /api/mgmt/report?platform=` executive PDF). Answers carry aggregates only (counts, shares, trends, facets) and never an address; other roles get 403. Permission `management` is exclusive (`auth.Roles` strips it from every role except `management` and `admin`; the `management` role is always exactly `["management"]`); management users are confined to `MANAGEMENT_PATHS`.
 - Look-up jobs: `POST /api/lookups` {kind: issues | malpedia, values} (permission `malpedia`, CSRF; at most 400 names, two running jobs per user) starts a background job; `GET /api/lookups/<id>?since=n` returns progress, the new log lines and, when done, the results. The page shows them in a progress window (`static/js/pdf.js`, `LGLookup.run`). Malpedia jobs wait and continue when Malpedia's 30-a-minute limit is reached.
 - Reports: `GET /api/insight/report` and `/api/svc/report` return a ZIP (PDF + complete list as CSV, formula-safe); `format=pdf` returns the PDF alone (then the list is printed).

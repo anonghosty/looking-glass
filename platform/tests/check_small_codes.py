@@ -81,9 +81,10 @@ ok("services sinkholes: an infection under 5 hosts has no code for a researcher"
    all(n["code"] is None for n in sk["names"] if n["hosts"] < MIN) and all(n["code"] for n in sk["names"] if n["hosts"] >= MIN),
    f"{len(sk['names'])} infections")
 ok("…an analyst keeps them all", all(n["code"] for n in as_viewer(ANALYST, lambda: SI.sinkholes_of(base))["names"]))
-inf = [r_ for x in res["infections"] for r_ in x["reports"]]
-ok("Intel gathered (hold_small): the infection codes per report follow the rule too",
-   all(r_["code"] is None for r_ in inf if r_["hosts"] < MIN), f"{len(inf)} rows")
+inf = res["infections"] + res["issues"]               # one code per name since 2026-11-19 (not one per report)
+ok("Intel gathered (hold_small): the infection and CVE / issue codes (one per name) follow the rule too",
+   all(x_["code"] is None for x_ in inf if x_["hosts"] < MIN) and not any("code" in r_ for x_ in inf for r_ in x_["reports"]),
+   f"{len(inf)} names")
 os.environ["PUBLIC_DEMO"] = "1"
 pub = as_viewer(ANALYST, lambda: SI.for_hosts(hs, hold_small=True))
 os.environ.pop("PUBLIC_DEMO")

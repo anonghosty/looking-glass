@@ -457,7 +457,8 @@ def build(d, meta):
     alone_h = min(top0 - 30, max(110, max((66 + min(len(s[2]), 10) * s[4] for s in side), default=0)))
     # short charts on their own leave most of a page empty (2026-11-14, an advisory's page 12): the Technical Details
     # carry on under them, an advisory's page then labelled with both parts
-    shared = not across_on and bool(d["explained"] or d["notes"]) and top0 - alone_h - 18 > H * .45
+    # (not with an Impact section: the explanations then follow it on its page)
+    shared = not across_on and bool(d["explained"] or d["notes"]) and top0 - alone_h - 18 > H * .45 and not (d.get("impact") and not adv)
     if across_on or side:
         y = doc.new_page("Across reports" if across_on else " · ".join([s[0] for s in side] + ([EXPL] if shared else [])))
         hh = y - 30
@@ -540,9 +541,22 @@ def build(d, meta):
             yy = min(yy2, yy - 9.5 * len(name_lines[:2]) - 6)
         doc.c.setStrokeColor(Color(1, 1, 1, .05)); doc.c.line(M + 14, yy + 2, M + lw - 14, yy + 2)
 
+    # ---------------- impact (an analyst's report; an advisory has it on its own pages): what the reports these devices
+    # were found in can lead to, the most severe first (advisory_pdf.draw_impact, the user 2026-11-19). The explanations
+    # carry on under it when there is room
+    imp_y = None
+    if d.get("impact") and not adv:
+        import advisory_pdf
+        # a page of its own, titled "Impact": the explanations follow under their own heading when they fit, else on the
+        # next page (2026-11-19: a title naming both while the explanations were on the next page)
+        f = advisory_pdf.Flow(doc, "Impact")
+        advisory_pdf.draw_impact(f, d["impact"], "this report")
+        imp_y = f.y - 10 if f.y - 10 > H * .4 else None
     # ---------------- explained: the name and every CVE in the combination, then the researchers' notes
     if d["explained"] or d["notes"]:
-        if after is not None:                          # room left under the charts: carry on there
+        if imp_y is not None:                          # under the Impact section, on its page
+            y = imp_y
+        elif after is not None:                        # room left under the charts: carry on there
             y = after
         else:
             y = doc.new_page(EXPL)

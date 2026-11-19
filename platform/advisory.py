@@ -269,6 +269,32 @@ class Impact:
     def flag(self, name):
         return ((self._json("report_impact.json").get("flags") or {}).get(name)) or None
 
+    def summary(self, reps, title_of=lambda k: k):
+        """(reports, impact) for {report key: (entry, note)}: each report with its impact flags, and the impact list —
+        every flag once, the most severe first, with the reports that carry it. One rule for the advisory and the
+        analysts' combination / analyst code PDF (the user, 2026-11-19)."""
+        reports, by_flag = [], collections.OrderedDict()
+        for key, (e, note) in reps.items():
+            fl = [f for f in self.flags_of(key, e) if self.flag(f)]
+            title = e.get("title") or title_of(key)
+            reports.append({"key": key, "title": title, "section": e.get("section") or "", "group": e.get("group") or "",
+                            "url": e.get("url") or "", "flags": fl, "note": note or ""})
+            for f in fl:
+                by_flag.setdefault(f, []).append(title)
+        impact = [dict(self.flag(f), flag=f, reports=rs) for f, rs in by_flag.items()]
+        impact.sort(key=lambda z: LEVELS.index(z["level"]) if z.get("level") in LEVELS else 9)
+        return reports, impact
+
+    def of_names(self, names, title_of=lambda k: k):
+        """The impact list for reports named by collection name or title (a combination's own and the ones its devices
+        were also seen in); names the report map does not know are left out."""
+        reps = {}
+        for n in names:
+            k, e = self.entry(n)
+            if k and k not in reps:
+                reps[k] = (e, None)
+        return self.summary(reps, title_of)[1]
+
     def sinkhole_reports(self):
         return [(k, e) for k, e in self.reports().items() if e.get("section") == "Infections" and "sinkhole" in k]
 
@@ -537,16 +563,7 @@ def install(app, ctx):
                         rk, re_ = imp.entry(r.get("report") or r.get("title"))
                         if re_:
                             reps.setdefault(rk, (re_, None))
-        reports, by_flag = [], collections.OrderedDict()
-        for key, (e, note) in reps.items():
-            fl = [f for f in imp.flags_of(key, e) if imp.flag(f)]
-            title = e.get("title") or ctx["title_of"](key)
-            reports.append({"key": key, "title": title, "section": e.get("section") or "", "group": e.get("group") or "",
-                            "url": e.get("url") or "", "flags": fl, "note": note or ""})
-            for f in fl:
-                by_flag.setdefault(f, []).append(title)
-        impact = [dict(imp.flag(f), flag=f, reports=rs) for f, rs in by_flag.items()]
-        impact.sort(key=lambda z: LEVELS.index(z["level"]) if z.get("level") in LEVELS else 9)
+        reports, impact = imp.summary(reps, ctx["title_of"])
         cves = sorted(set(cves))
         if "End of life" in issues and any(i.startswith("End of life (") for i in issues):
             issues.remove("End of life")

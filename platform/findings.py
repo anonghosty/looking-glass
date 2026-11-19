@@ -102,6 +102,29 @@ class Findings:
         was, never to the other roles (strict)."""
         return admin or user in (x.get("participants") or []) or (not x.get("participants") and not strict)
 
+    def _answerers(self, code):
+        """The researchers who answered an analyst's request with `code` in their reply (findings.reply). The review or
+        case an analyst then sends to management on that code includes them, so they follow what they found through
+        management's decision and the advisory (the user, 2026-11-19: "the researcher cannot track it as a finding").
+        Call under the lock."""
+        out = []
+        for x in self.data["items"].values():
+            if x.get("origin") != "analyst" or x.get("kind") in ("review", "case") or x.get("parent"):
+                continue
+            for h in x.get("history") or []:
+                if h.get("kind") == "reply" and code in (h.get("codes") or []) and h.get("user") and h["user"] != x.get("user") \
+                        and h["user"] not in out:
+                    out.append(h["user"])
+        return out
+
+    @staticmethod
+    def _add_seen(item, users):
+        """Into the channel to see it, without becoming the person it is with (the assignee stays)."""
+        for u in users:
+            item.setdefault("participants", [item["user"]])
+            if u not in item["participants"]:
+                item["participants"].append(u)
+
     @staticmethod
     def _join(item, to):
         if to:
@@ -191,6 +214,7 @@ class Findings:
                                  "comment": (f"Across-report views for {code}: {len(review.get('codes', []))} pattern(s) ticked." if review.get("codes")
                                              else f"{code} for the advisory: no across-report data (the researcher's view).")}]}
             self._join(item, to)
+            self._add_seen(item, self._answerers(code))     # the researchers whose reply gave the code follow it
             self.data["items"][fid] = item
             self._save()
         return item
@@ -210,6 +234,8 @@ class Findings:
                     "history": [{"status": "management", "user": user, "role": role, "at": now, "to": to,
                                  "comment": f"A case on {code}: {len(subs)} organisation(s), one sub-finding each."}]}
             self._join(case, to)
+            answered = self._answerers(code)               # the researchers whose reply gave the code follow it
+            self._add_seen(case, answered)
             kids = []
             for net, review in subs:
                 self.data["seq"] += 1
@@ -223,6 +249,7 @@ class Findings:
                                      "comment": f"Sub-finding of case #{pid} for {net}: "
                                                 + (f"{len(review.get('codes', []))} across-report pattern(s)." if review.get("codes") else "the researcher's view.")}]}
                 self._join(item, to)
+                self._add_seen(item, answered)
                 self.data["items"][fid] = item
                 case["children"].append(fid)
                 kids.append(item)
@@ -549,6 +576,14 @@ class Findings:
                     and not x.get("parent"):
                 for c in x.get("codes") or []:
                     first.setdefault(c, x)
+        # an analyst's request a researcher answered: the codes of the reply lead back to it too (a researcher's own
+        # finding on the same code still comes first) (the user, 2026-11-19)
+        for x in sorted(items, key=lambda x: x["at"]):
+            if x.get("origin") == "analyst" and x.get("kind") not in ("case", "review") and not x.get("parent"):
+                for h in x.get("history") or []:
+                    if h.get("kind") == "reply":
+                        for c in h.get("codes") or []:
+                            first.setdefault(c, x)
         out = {}
         for x in items:
             if x.get("parent") or x.get("kind") not in ("review", "case"):

@@ -4,10 +4,11 @@
 """CVE and issue codes in "In every other category", and what a cross-report pattern's devices carry (the user,
 2026-11-19: a researcher could not move a CVE or an issue to notes; each "Combinations across reports" card should say
 which CVEs, issues and infections its devices carry). On made-up devices (documentation addresses), no database:
-1. per report a CVE / issue was found in, a code for exactly the devices carrying it there; a group under MIN_HOSTS gets
-   no lasting code for a viewer who does not see hosts, and one when the viewer does; the codes are registered (on_codes);
-2. the code resolves to exactly those devices' records in that report (services_intel.Matcher), not the others, nor the
-   same devices' records in another report; its description reads in words (combos.describe);
+1. ONE code per CVE / issue / infection (the user, 2026-11-19: "only the infection name should be moved to notes", not
+   one code per report), its reports named without codes; a group under MIN_HOSTS gets no lasting code for a viewer who
+   does not see hosts, and one when the viewer does; the codes are registered (on_codes);
+2. the code resolves to exactly the devices carrying it, in the reports where they carry it (services_intel.Matcher);
+   its description names its reports (combos.describe), and a one-report code made before reads as it did;
 3. carried(): names and counts per group, most carried first, CVEs from tags counted too, never an address;
 4. the infection / issue pages: a pattern's device set is taken out before the answer leaves (intel.py).
 Usage: tests/check_issue_codes.py"""
@@ -52,35 +53,47 @@ shown = []
 si = SI.ServicesIntel({"on_codes": lambda section, name, report, combos: shown.append((section, name, report, combos))})
 si.index = lambda scope=None, load=True: data
 
-print("1. a code per report a CVE / issue was found in")
+print("1. ONE code per CVE / issue / infection, not one per report (the user, 2026-11-19)")
 small_codes.viewer_sees_hosts = lambda: False                # a researcher (no hosts)
 x = si.for_hosts(set(ips), hold_small=True)
 by = {i["name"]: i for i in x["issues"]}
-cve_rep = {r["report"]: r for r in by[CVE]["reports"]}
-ok("the CVE has a code for its 6 devices in the report", cve_rep[REP]["hosts"] == 6 and str(cve_rep[REP]["code"]).startswith("LG-X-"), cve_rep[REP])
-ok("and one row for the other report (1 device): no lasting code there", cve_rep[OTHER]["hosts"] == 1 and cve_rep[OTHER]["code"] is None)
-ok("an issue on 3 devices: no lasting code for a viewer without hosts", by[SMALL]["reports"][0]["code"] is None)
-ok("the code is the shared rule's (issue_code)", cve_rep[REP]["code"] == SI.ServicesIntel.issue_code(REP, CVE))
+ok("the CVE has one code for its 7 devices, over both reports it was found in", by[CVE]["hosts"] == 7
+   and str(by[CVE]["code"]).startswith("LG-X-") and by[CVE]["code"] == SI.ServicesIntel.issue_code(OTHER, CVE, [REP, OTHER]), by[CVE].get("code"))
+ok("…the reports are named, without codes of their own", {r["report"]: r["hosts"] for r in by[CVE]["reports"]} == {REP: 6, OTHER: 1}
+   and not any("code" in r for r in by[CVE]["reports"]))
+ok("an issue on 3 devices: no lasting code for a viewer without hosts", by[SMALL]["code"] is None)
 reg = [c for s, n, r, cs in shown for c in cs if any(p[0] == SI.ISSUE for p in c)]
-ok("the shown code is registered for the analysts (on_codes)", [[(REP, []), (SI.ISSUE, [f"Issue: {CVE}"])]] == reg, reg)
+ok("the shown code is registered for the analysts (on_codes)", [[(OTHER, []), (REP, []), (SI.ISSUE, [f"Issue: {CVE}"])]] == reg, reg)
+infs = {i["name"]: i for i in x["infections"]}
+ok("an infection: one code, its reports named without codes", "code" in infs["example-bot"] and not any("code" in r for r in infs["example-bot"]["reports"])
+   and infs["example-bot"]["hosts"] == 2, infs["example-bot"])
 small_codes.viewer_sees_hosts = lambda: True                 # a viewer who sees hosts: every code
 y = si.for_hosts(set(ips), hold_small=True)
-ok("a viewer who sees hosts gets the small group's code", {i["name"]: i for i in y["issues"]}[SMALL]["reports"][0]["code"] is not None)
+yi = {i["name"]: i for i in y["infections"]}
+ok("a viewer who sees hosts gets the small groups' codes", {i["name"]: i for i in y["issues"]}[SMALL]["code"] is not None
+   and yi["example-bot"]["code"] == SI.ServicesIntel.sink_code(OTHER, "example-bot", [REP, OTHER]), yi["example-bot"].get("code"))
 ok("no address in the answer for a researcher", not any(ip in json.dumps(x) for ip in ips))
 
 print("2. the code resolves to exactly those devices")
-entry = {"kind": "x", "section": "services", "name": REP, "parts": [[REP, []], [SI.ISSUE, [f"Issue: {CVE}"]]]}
+entry = {"kind": "x", "section": "services", "name": OTHER, "parts": [[OTHER, []], [REP, []], [SI.ISSUE, [f"Issue: {CVE}"]]]}
 m = SI.Matcher(si, entry)
 events = [{"ip": ip, "report": REP} for ip in ips] + [{"ip": ip, "report": OTHER} for ip in (ips[0], ips[9])]
 got = m.match(events)
-ok("the 6 devices' records in the report", sorted(e["ip"] for e in got) == sorted(ips[:6]) and all(e["report"] == REP for e in got), len(got))
-ok("not the device carrying it in another report only", ips[9] not in {e["ip"] for e in got})
-ok("the code's reports leave out the part that is not a report", m.reports == {REP})
+ok("the 7 devices' records where they carry it", sorted({e["ip"] for e in got}) == sorted(ips[:6] + [ips[9]])
+   and all((e["report"] == REP) != (e["ip"] == ips[9]) for e in got), len(got))
+ok("not a device's records in a report where it does not carry it", not any(e["ip"] == ips[0] and e["report"] == OTHER for e in got))
+ok("the code's reports leave out the part that is not a report", m.reports == {REP, OTHER})
 ok("what a device carried instead, in words", m.issues_in(ips[6], REP) == [SMALL] and m.issues_in(ips[0], OTHER) == [])
+sink_entry = {"kind": "x", "section": "services", "name": OTHER, "parts": [[OTHER, []], [REP, []], [SI.SINK, ["Infection: example-bot"]]]}
+sm = SI.Matcher(si, sink_entry)
+ok("an infection code: the devices calling it, in any of its reports", sorted({e["ip"] for e in sm.match(events)}) == sorted(ips[:2]))
 try:
     import combos  # noqa: E402
-    combos._TITLE["of"] = lambda n: {REP: "Example Service"}.get(n, n)
-    ok("the code's description", combos.describe(entry) == f"Example Service: hosts carrying {CVE} there", combos.describe(entry))
+    combos._TITLE["of"] = lambda n: {REP: "Example Service", OTHER: "Other Service"}.get(n, n)
+    ok("the code's description names its reports", combos.describe(entry) == f"Other Service or Example Service: hosts carrying {CVE} there", combos.describe(entry))
+    ok("…an infection code's too", combos.describe(sink_entry) == "Other Service or Example Service: hosts also calling botnet sinkholes as example-bot", combos.describe(sink_entry))
+    one = {"kind": "x", "section": "services", "name": REP, "parts": [[REP, []], [SI.ISSUE, [f"Issue: {CVE}"]]]}
+    ok("a code made before this (one report) still reads as it did", combos.describe(one) == f"Example Service: hosts carrying {CVE} there", combos.describe(one))
 except ImportError as exc:
     ok("combos importable", False, exc)
 

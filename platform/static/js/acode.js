@@ -111,9 +111,11 @@
     if (!x.infections.length) { sec.append(empty("None of these hosts is in the network communications reports of the report day.")); return; }
     sec.append(el("p", "ax-xsum", `${pl(x.infections_hosts, "host")} of the selection call botnet sinkholes:`));
     const ul = el("ul", "ax-list");
-    for (const i of x.infections) for (const r of i.reports) {
-      const what = el("div", "ax-what"); what.append(el("span", "ax-rep", r.title), chips([i.name]));
-      ul.append(codeRow(r.code, `${r.title}: hosts also calling botnet sinkholes as ${i.name}`, what, `${pl(r.hosts, "host")} · ${pl(i.hosts, "host")} in all`, true));
+    // one row and one code per infection, its services reports named (the user, 2026-11-19: not one per report)
+    for (const i of x.infections) {
+      const reps = (i.reports || []).map((r) => `${r.title} (${fmt(r.hosts)})`).join(" · ");
+      const what = el("div", "ax-what"); what.append(chips([i.name]), el("span", "ax-rep", reps ? `in ${reps}` : ""));
+      ul.append(codeRow(i.code, `Hosts also calling botnet sinkholes as ${i.name}`, what, pl(i.hosts, "host"), true));
     }
     sec.append(ul);
   }
