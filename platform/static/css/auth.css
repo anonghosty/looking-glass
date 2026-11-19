@@ -1,4 +1,4 @@
-/* Looking Glass · sign-in, account and reset pages: animated scene (auth-bg.js) behind a frosted-glass card */
+/* Sign-in, account and reset pages: animated scene (auth-bg.js) behind a frosted-glass card */
 .auth-page { margin: 0; min-height: 100vh; background: #05060a; color: var(--text); overflow-x: hidden; font-family: var(--font); }
 .auth-bg { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
 .auth-vignette { position: fixed; inset: 0; z-index: 1; pointer-events: none;

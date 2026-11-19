@@ -1,4 +1,4 @@
-/* Looking Glass · authenticator set-up: draws the QR code (otpauth URI) in the browser, so the key is never sent to
+/* Authenticator set-up: draws the QR code (otpauth URI) in the browser, so the key is never sent to
    a third-party QR service; copies recovery codes. Uses qrcode-generator (cdnjs, pinned with an integrity hash). */
 (() => {
   "use strict";

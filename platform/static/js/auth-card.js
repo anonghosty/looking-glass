@@ -1,4 +1,4 @@
-/* Looking Glass · sign-in and account pages
+/* Sign-in and account pages
    * buttons open the matching form in place (sign in, create an account); Back returns to the choice
    * the eye shows / hides a password
    * live password strength: the same rules the server enforces (12+ characters, upper and lower case, a number,
@@ -59,7 +59,7 @@
     num: (p) => /\d/.test(p),
     sym: (p) => /[^A-Za-z0-9]/.test(p),
   };
-  const COMMON = ["password", "passw0rd", "welcome", "admin", "qwerty", "letmein", "123456", "shadowserver", "lookingglass", "changeme"];
+  const COMMON = ["password", "passw0rd", "welcome", "admin", "qwerty", "letmein", "123456", "changeme"];
   function check(inp) {
     const p = inp.value, meter = document.getElementById(inp.dataset.strength);
     const ok = Object.fromEntries(Object.entries(RULES).map(([k, f]) => [k, f(p)]));

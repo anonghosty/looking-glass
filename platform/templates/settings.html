@@ -125,6 +125,20 @@
         </div>
       </div>
       <div class="org-save"><button class="intro-cta" id="orgSave" type="button" disabled>Save the organisation</button><span class="muted" id="orgMsg" role="status"></span></div>
+      {# the sign-in pages' logo (neutral.py, signin-look.js; the user's choice 2026-11-19): scanners recognise a product's logo #}
+      <fieldset class="org-signin" id="signinLook">
+        <legend>Sign-in page logo</legend>
+        <p class="st-hint">What people see on the sign-in, account and reset pages before they sign in. A product's own logo lets internet
+          scanners recognise what runs here, so the organisation's logo is the default. Each change is in the audit log.</p>
+        <label class="st-field"><span>Shown before sign-in</span>
+          <select id="signinLogo" class="lg-enhance">
+            <option value="organisation">The organisation's logo</option>
+            <option value="looking-glass">The Looking Glass logo (as before)</option>
+            <option value="none">No logo</option>
+          </select></label>
+        <small class="muted" id="signinOrgNote"></small>
+        <span class="muted" id="signinMsg" role="status"></span>
+      </fieldset>
     </section>
     {% endif %}
 
@@ -240,6 +254,7 @@
   <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>
   <script src="{{ url_for('static', filename='js/net-editor.js') }}"></script>
   <script src="{{ url_for('static', filename='js/organisation.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/signin-look.js') }}"></script>
   {% if "settings" in lg_perms %}<script src="{{ url_for('static', filename='js/pipeline-settings.js') }}"></script>
   <script src="{{ url_for('static', filename='js/password-policy.js') }}"></script>
   <script src="{{ url_for('static', filename='js/task-monitor.js') }}"></script>

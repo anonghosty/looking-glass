@@ -173,6 +173,19 @@ server side is in small modules called from `app.py`:
   writes `data/name_levels.done` at the end and never runs again. Since version 2 of its marker it also keeps every name
   the records carried, rated or not, with its kind in `data/name_kinds.json`; an installation updated from version 1
   reads every report once more.
+- **`neutral.py`, what a signed-out visitor learns (anti-fingerprinting).** An `after_request` hook rewrites every
+  status line to the standard reason phrase (`http.HTTPStatus`), empties Werkzeug's "Redirecting..." bodies and
+  replaces its default error pages with a plain one, replaces the static files' ETag with 24 hex characters of its
+  SHA-256 (answering 304 to a matching `If-None-Match`), and, for requests without a signed-in user, sets a short
+  Content-Security-Policy naming no outside library (`/login` and `/register` keep the QR-code library of the
+  authenticator set-up). `/healthz` answers loopback only (a `before_request` 404). `security.py` sends no `Server`
+  header. `auth.PUBLIC_STATIC` lists the only files served signed out (the sign-in pages' styles and scripts, the
+  world outline of their scene); any other `/static/` path is 404 signed out and served to every signed-in role before
+  the role path lists apply. The sign-in pages (`auth_base.html`, `login.html`, `forgot.html`) show the organisation's
+  name and the logo `data/signin_look.json` chooses: `organisation` (default; `/login/logo`, none when unset),
+  `looking-glass` (`/login/mark.svg`, served only then) or `none`; `GET/POST /api/settings/signin-look` (permission
+  *settings*, CSRF, a recent sign-in; audited as `settings_changed`). `deploy/make_tls_cert.sh` names the certificate
+  after the first name given or the machine. Registered in `features.py`. Test: `tests/check_fingerprint.py`.
 - **`insider.py`, copies recorded, seals and Trace a leak.** `POST /api/copy/record` (`{kind, what, page, text}`;
   signed in, CSRF token) seals the text (HMAC-SHA-256, key `COPY_SEAL_KEY` or `data/copy_seal.key`: the whole
   normalised text, each line of 4+ characters, each IP address found by `ip_find`; fingerprints cut to 96 bits) into
@@ -586,7 +599,7 @@ Every setting, with examples: [CONFIGURATION.md](CONFIGURATION.md). The main one
 | `GET /api/insight?kind=&value=&at=` | analytics for one entity (`kind` = `source`, `attack_class`, `infection`, `src_city`, `http_host`, `dst_geo`, `src_ip`, `src_asn` or `dst_ip`): connections, share, hosts, C2 domains, median beacon interval and how many hosts beacon regularly, multi-infected hosts, hourly profile, breakdowns, most active hosts and plain-language findings |
 | `GET /api/insight/drill?kind=&value=&metric=&at=[&all=1]` | the list behind one figure of the analysis view (`metric` = `events`, `share`, `hosts`, `c2`, `dst_ips`, `interval`, `multi`, `reports`, `cross`, `beacons`: decoded beacons, analysts and admins). Host lists are ranked for follow-up (several kinds of activity, several reports, several infections, regular beaconing, critical). Returns the first 300 rows, or all with `all=1` (used by Download CSV). Demo mode masks IPs and networks |
 | `GET /api/related?src_ip=&at=` | what one infected host did today: connection count, first and last seen, infections, contacted hosts |
-| `GET /healthz` | liveness |
+| `GET /healthz` | liveness; this computer only (loopback), anyone else gets 404 |
 
 ## Intro page
 

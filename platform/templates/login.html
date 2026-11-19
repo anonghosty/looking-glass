@@ -3,16 +3,16 @@
 {% block title %}Sign in{% endblock %}
 {% block card %}
 <div class="auth-card" id="authCard" data-view="{{ view }}">
-  <img class="auth-logo" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="44" height="44">
+  {% if signin_logo == "lg" %}{% if signin_logo == "lg" %}<img class="auth-logo" src="/login/mark.svg" alt="" width="44" height="44">{% elif signin_logo %}<img class="auth-logo" src="{{ signin_logo }}" alt="" width="44" height="44">{% endif %}{% elif signin_logo %}<img class="auth-logo" src="{{ signin_logo }}" alt="" width="44" height="44">{% endif %}
   {% if error %}<div class="auth-alert err" role="alert">{{ error }}</div>{% endif %}
   {% if notice %}<div class="auth-alert ok" role="status">{{ notice }}</div>{% endif %}
-  {% if not tls %}<div class="auth-alert err" role="alert">This connection is not encrypted. Open Looking Glass over HTTPS from this computer.</div>{% endif %}
+  {% if not tls %}<div class="auth-alert err" role="alert">This connection is not encrypted. Open this site over HTTPS from this computer.</div>{% endif %}
 
-  <!-- choice -->
+  {# choice #}
   <section class="auth-view" data-v="choice">
     {% if no_admin %}
       {% if registration %}
-      <h1>Welcome to Looking Glass</h1>
+      <h1>Welcome</h1>
       <p class="auth-sub">Set up the administrator account. You need the one-time setup code from the server.</p>
       <button type="button" class="auth-btn" data-show="register"><span>Let's get started</span></button>
       {% else %}
@@ -28,7 +28,7 @@
     {% endif %}
   </section>
 
-  <!-- sign in -->
+  {# sign in #}
   {% if not no_admin %}
   <form class="auth-view" data-v="signin" method="post" action="/login" autocomplete="on">
     <h1>Sign in</h1>
@@ -41,7 +41,7 @@
   </form>
   {% endif %}
 
-  <!-- create an account -->
+  {# create an account #}
   {% if registration %}
   <form class="auth-view" data-v="register" method="post" action="/register" autocomplete="off">
     <h1>{% if no_admin %}Administrator account{% else %}Create an account{% endif %}</h1>
@@ -66,7 +66,7 @@
   </form>
   {% endif %}
 
-  <!-- second step: authenticator code -->
+  {# second step: authenticator code #}
   {% if view == "mfa" %}
   <form class="auth-view" data-v="mfa" method="post" action="/login" autocomplete="off">
     <h1>Verify it's you</h1>
@@ -80,7 +80,7 @@
   </form>
   {% endif %}
 
-  <!-- the password expired (password_policy.py): a new one before the session opens; no second sign-in -->
+  {# the password expired (password_policy.py): a new one before the session opens; no second sign-in #}
   {% if view == "expired" %}
   <form class="auth-view" data-v="expired" method="post" action="/login" autocomplete="off">
     <h1>Your password has expired</h1>

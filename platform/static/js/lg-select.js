@@ -1,4 +1,4 @@
-/* Looking Glass · dropdowns in the platform's own design (instead of the browser's plain lists).
+/* Dropdowns in the platform's own design (instead of the browser's plain lists).
    Any <select class="lg-enhance"> becomes a styled button with a dark list, a search box for long lists, a tick on the
    current choice and full keyboard use (arrows, Home/End, Enter, Escape, typing to search). The real <select> stays in
    the page, hidden, and keeps the value: code that reads it, sets it or listens to "change" works unchanged.

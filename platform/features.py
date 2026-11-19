@@ -96,6 +96,17 @@ def install(app, core):
         out["insider"] = insider.install(app, {"base_dir": os.path.dirname(os.path.abspath(__file__)), "has_perm": A["has_perm"],
                                                "csrf_ok": A["csrf_ok"], "audit": A["audit"], "people_name": people_name})
 
+    # what someone not signed in can learn about the server: as little as possible (neutral.py, anti-fingerprinting):
+    # plain status lines and error pages, neutral file tags, a short policy before sign-in, /healthz for this computer
+    # only, the sign-in pages' logo as an administrator chooses it (the organisation's by default)
+    if all(k in A for k in ("has_perm", "csrf_ok", "fresh", "audit")):
+        import neutral
+        from organisation import Organisation
+        base = os.path.dirname(os.path.abspath(__file__))
+        out["neutral"] = neutral.install(app, {"base_dir": base, "has_perm": A["has_perm"], "csrf_ok": A["csrf_ok"],
+                                               "fresh": A["fresh"], "audit": A["audit"],
+                                               "org": Organisation(os.path.join(base, "data", "organisation.json"))})
+
     # the analyst codes' device counts worked out ahead after a start, so the Findings page does not wait for them
     # (acode_warm.py; only in the running service)
     if core.get("acodes") is not None:

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Create a self-signed HTTPS certificate for Looking Glass in data/tls/ and switch the service to HTTPS.
+# Create a self-signed HTTPS certificate for Looking Glass in data/tls/ and switch the service to HTTPS. The
+# certificate is named after the first name given here, else this machine's name (never the product's).
 # Run it as the user the service runs as (no sudo needed):
 #     ./deploy/make_tls_cert.sh                      # this machine's name and all its addresses
 #     ./deploy/make_tls_cert.sh lookingglass.local   # plus extra names / addresses
@@ -39,9 +40,13 @@ if [ -f data/tls/cert.pem ]; then
   keep="data/tls/previous-$(date -u +%Y%m%d-%H%M%S)"; mkdir -p "$keep"; mv data/tls/cert.pem data/tls/key.pem "$keep"/ 2>/dev/null || true
   echo "Previous certificate kept in $keep"
 fi
+# the certificate's name: the first name given, else this machine's, never the product's (anti-fingerprinting,
+# 2026-11-19: "CN=Looking Glass" let internet scanners list installations by their certificate)
+cn="${1:-${hn:-localhost}}"
+cn="$(printf '%s' "$cn" | tr -cd 'A-Za-z0-9.:_-' | cut -c1-64)"; cn="${cn:-localhost}"
 openssl req -x509 -newkey rsa:3072 -sha256 -days 825 -nodes \
   -keyout data/tls/key.pem -out data/tls/cert.pem \
-  -subj "/CN=Looking Glass" -addext "subjectAltName=$san" -addext "extendedKeyUsage=serverAuth" 2>/dev/null
+  -subj "/CN=$cn" -addext "subjectAltName=$san" -addext "extendedKeyUsage=serverAuth" 2>/dev/null
 chmod 600 data/tls/key.pem; chmod 644 data/tls/cert.pem
 if [ "$(id -u)" = "0" ]; then chown -R "$owner:$owner" data/tls; fi
 

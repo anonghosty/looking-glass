@@ -208,6 +208,7 @@ Created and kept by the service; private to its user and never committed:
 | `audit.log`, `audit.head`, `audit_archive/` | sign-ins, account and settings changes, exports, findings and advisories; each entry chained to the one before by its SHA-256 (tamper evident). Archived at `AUDIT_ROTATE_MB`, kept for `AUDIT_RETENTION_DAYS`; `audit.head` holds the newest link and the number of entries |
 | `copy_seals.jsonl`, `copy_seal.key` | the seals of every copy made with a copy button and every file downloaded: who, when, what, and keyed fingerprints (never the text or an address); the key that makes them (when `COPY_SEAL_KEY` is not set). Owner-only; seals older than `AUDIT_RETENTION_DAYS` are removed |
 | `name_kinds.json`, `name_ratings.json` | every name the reports carried with its kind, and the researchers' ratings of names no record rates (the severity map; names only) |
+| `signin_look.json` | which logo the sign-in pages show: the organisation's (default), Looking Glass's or none; who chose it and when |
 | `settings.json`, `schedule.json` | Settings page values, replay schedule |
 | `config.json` | the tuning values kept on Settings → Configuration (they take precedence over `.env`; delete it and restart to go back to `.env`) |
 | `beacon_summaries.json` | the beacon decoder's public answers kept across restarts (hashes of the request lines, never the lines; safe to delete) |

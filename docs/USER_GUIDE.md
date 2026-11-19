@@ -1022,7 +1022,10 @@ platform full screen. The display adapts to TVs and weaker devices by itself (`?
 - **Constituency:** the whole country, or the networks your CSIRT is responsible for: choose companies (all their
   AS numbers) and add address ranges. Both platforms then show only your constituency.
 
-- **Organisation:** your CSIRT's name and logo (PNG or JPEG, at most 40 KB). Advisories are signed with them.
+- **Organisation:** your CSIRT's name and logo (PNG or JPEG, at most 40 KB). Advisories are signed with them, and the
+  sign-in pages show them: those pages name no product, so that internet scanners cannot tell what runs here.
+  **Sign-in page logo** chooses what those pages show before anyone signs in: *the organisation's logo* (the default;
+  no logo while none is set), *the Looking Glass logo* (as before) or *no logo*. Each change is in the audit log.
 
 **Apply settings** saves and applies at once for everyone.
 

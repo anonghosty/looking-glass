@@ -5,6 +5,20 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-19 (4)
+### Changed
+- **Someone who is not signed in can no longer tell what runs here.** The sign-in, account and reset pages name no
+  product: they show the organisation's name and logo (Settings → Organisation → **Sign-in page logo**: the
+  organisation's logo by default, the Looking Glass logo, or none; audited). Redirects and error pages are plain, with
+  the standard status lines, file tags are neutral, there is no Server header, and the security policy sent before
+  sign-in names no outside library or version. The platform's scripts and styles need a sign-in; only the files the
+  sign-in pages use stay open. New HTTPS certificates are named after the machine (or the name given), never after
+  the product. Looking Glass is open source, so this is defence in depth: keeping the platform off the open internet
+  (a VPN, a firewall allowlist) stays the strongest step.
+- **After updating:** `/healthz` answers this computer only: monitoring from another computer gets "Not Found" (run it
+  on this computer, or through the reverse proxy here). The HTTPS certificate keeps its old name until you make a new
+  one with `deploy/make_tls_cert.sh <the name people use>`; each screen then trusts it once more.
+
 ## 2026-11-19 (3)
 ### Added
 - **Every copy is recorded before it happens.** Copying on the pages is only through the copy buttons; text cannot be

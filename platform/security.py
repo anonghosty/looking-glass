@@ -160,7 +160,8 @@ def install(app, logger=None):
         g.csp_nonce = secrets.token_urlsafe(16)
         if not client_allowed():
             # visitors are not told how the server is configured (docs/INSTALLATION.md explains ACCESS_MODE to administrators)
-            abort(403, description="Looking Glass is not available from your network. Contact the administrator.")
+            # …and not which product this is either (anti-fingerprinting, 2026-11-19)
+            abort(403, description="Not available from your network. Contact the administrator.")
         if not any_host and _host_only(request.host) not in hosts and _host_only(request.host) not in _refreshed_names():
             abort(400, description="Unknown host name. Contact the administrator.")
         if request.method not in SAFE_METHODS:
@@ -222,7 +223,9 @@ def install(app, logger=None):
         hsts = hsts_value()
         if hsts and request.is_secure:
             h.setdefault("Strict-Transport-Security", hsts)
-        h["Server"] = "Looking Glass"
+        # no Server header at all (anti-fingerprinting, 2026-11-19): it named the product; gunicorn's own is removed by
+        # gunicorn.conf.py
+        h.pop("Server", None)
         return resp
 
     @app.context_processor

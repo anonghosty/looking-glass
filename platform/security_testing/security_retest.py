@@ -221,8 +221,11 @@ try:
     s, _, _ = req(anon, "/services?service=Block+List"); ok("services page without login -> redirect", s == 302)
     for p in ("/api/clock", "/api/svc/hosts.csv", "/api/svc/drill?metric=hosts&all=1", "/api/events", "/api/settings", "/api/asns"):
         s, _, _ = req(anon, p); ok(f"{p} without login -> 401", s == 401, str(s))
-    for p in ("/login", "/healthz", "/static/css/app.css", "/static/js/loader.js"):
+    for p in ("/login", "/healthz", "/static/css/app.css", "/static/css/auth.css"):
         s, _, _ = req(anon, p); ok(f"{p} stays reachable", s == 200, str(s))
+    # anti-fingerprinting (neutral.py, 2026-11-19): only the sign-in pages' files are served signed out
+    for p in ("/static/js/loader.js", "/static/js/app.js"):
+        s, _, _ = req(anon, p); ok(f"{p} is not served without signing in", s == 404, str(s))
     s, _, _ = req(anon, "/static/../.env"); ok("path traversal still blocked", s in (400, 404), str(s))
 
     print("\nPasswords, MFA, lockout")
@@ -560,7 +563,8 @@ try:
     except Exception:
         pass
     if lan:
-        s, _, _ = req(anon, "/healthz", base=f"{'https' if TLS else 'http'}://{lan[0]}:{PORT}")
+        # the sign-in page, not /healthz: /healthz answers this computer only (neutral.py, 2026-11-19)
+        s, _, _ = req(anon, "/login", base=f"{'https' if TLS else 'http'}://{lan[0]}:{PORT}")
         from dotenv import dotenv_values
         sys.path.insert(0, ROOT)
         os.environ.update({k: v or "" for k, v in dotenv_values(os.path.join(ROOT, ".env")).items() if k in ("ACCESS_MODE", "VIEWER_NETWORKS")})

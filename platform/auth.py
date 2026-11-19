@@ -1,6 +1,7 @@
 """Login, accounts, roles and permissions, sessions and the audit log for Looking Glass (docs/SECURITY.md).
 
-Every page and API needs a login; /login, /register, /logout, /healthz and the static files do not. Pages without a
+Every page and API needs a login; /login, /register, /logout, /healthz (this computer only, neutral.py) and the few
+files the sign-in pages use (PUBLIC_STATIC) do not. Pages without a
 login redirect to /login; API calls get 401.
 
 Accounts (data/users.json, mode 600)
@@ -55,7 +56,12 @@ import throttle_prune
 import password_policy
 import system_alerts
 
-PUBLIC_PATHS = ("/login", "/register", "/forgot", "/logout", "/healthz", "/static/", "/favicon.ico")
+PUBLIC_PATHS = ("/login", "/register", "/forgot", "/logout", "/healthz", "/favicon.ico")
+# the only files served without signing in: what the sign-in, account and reset pages use (anti-fingerprinting,
+# 2026-11-19: every script and style was readable by anyone, which named the product and its libraries; neutral.py)
+PUBLIC_STATIC = frozenset("/static/" + f for f in (
+    "css/app.css", "css/auth.css", "js/auth-bg.js", "js/lg-select.js", "js/auth-card.js", "js/enrol.js",
+    "data/land-110m.json"))                 # the logo: /login/mark.svg, only when chosen (neutral.py)
 # sign-up attempts whose e-mail domain is looked up in DNS, per address and hour (room for typing mistakes)
 REGISTER_DNS_PER_HOUR = 30
 NAME_RE = re.compile(r"^[a-zA-Z0-9._-]{2,40}$")
@@ -961,7 +967,7 @@ def install(app, base_dir, logger):
     def _require_login():
         g.user = None
         p = request.path
-        if p.startswith(PUBLIC_PATHS):
+        if p.startswith(PUBLIC_PATHS) or p in PUBLIC_STATIC:
             return None
         ip, ua = client()
         key = request.headers.get("X-LG-Automation")
@@ -987,6 +993,9 @@ def install(app, base_dir, logger):
                         g.rotated_token, g.user["key"] = new_tok, _h(new_tok)
                 # Peace of mind: Admin, the audit log, Settings and the platforms' Overview (to keep an eye on the database);
                 # the platforms themselves, the findings and the portals are closed, pages and data alike
+                # the platform's files (scripts, styles, images): for anyone signed in, whatever their role
+                if p.startswith("/static/"):
+                    return None
                 if g.user.get("peace") and not p.startswith(("/api/me", "/admin", "/api/admin", "/audit")):
                     if p.startswith(PEACE_CLOSED):
                         if p.startswith("/api/"):
@@ -1031,6 +1040,8 @@ def install(app, base_dir, logger):
                 return None
         if p.startswith("/api/"):
             return jsonify(error="Login required", login="/login"), 401
+        if p.startswith("/static/"):
+            abort(404)                                     # signed out: the platform's other files do not exist
         return redirect("/login?next=" + quote(_safe_next(request.full_path.rstrip("?")), safe="/"))
 
     @app.after_request

@@ -1,4 +1,4 @@
-/* Looking Glass · sign-in scene (decorative; no real data before sign-in)
+/* Sign-in scene (decorative; no real data before sign-in)
    * Globe of dots in the shape of the continents (world-atlas land-110m, CC0, pinned with an integrity hash).
      Interactive: drag (mouse or finger) to spin, with inertia; scroll or pinch to zoom; hover lights up the land
      under the pointer; click or tap launches a burst of attacks from that spot. Keyboard / TV remote: focus the globe
@@ -13,7 +13,7 @@
   const ctx = cv.getContext("2d");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const TAU = Math.PI * 2, rad = Math.PI / 180;
-  // world-atlas 2.0.2 land-110m (ISC; Natural Earth, public domain), served by Looking Glass itself (review 2026-11-15):
+  // world-atlas 2.0.2 land-110m (ISC; Natural Earth, public domain), served by this server itself (review 2026-11-15):
   // the sign-in page makes no outside request, and the CSP needs no CDN. The hash below still checks it.
   const LAND_URL = "/static/data/land-110m.json";
   const LAND_SRI = "sha384-5oFOGoMd0tkagYW08lVco4uAi7XDEDBwBxOdeKx+SA1ihbsHiR/aFAJGretluTzG";

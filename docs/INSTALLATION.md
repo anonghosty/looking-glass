@@ -272,7 +272,11 @@ Keep untrusted networks (hotel, mobile hotspot) on the **Public** profile.
 To show Looking Glass on a TV, a wall screen or colleagues' computers:
 1. **HTTPS:** `deploy/make_tls_cert.sh` creates a certificate for this computer's names and addresses and switches
    the service to HTTPS. A self-signed certificate warns once on each screen (or install `data/tls/cert.pem` as
-   trusted there); a certificate from your organisation's CA can replace the two files in `data/tls/`.
+   trusted there); a certificate from your organisation's CA can replace the two files in `data/tls/`. The certificate
+   is named after the first name you give (`deploy/make_tls_cert.sh lookingglass.example.org`), else this computer's
+   name; never after the product, so internet scanners cannot list installations by it. Certificates made before
+   2026-11-19 are named "Looking Glass": run the script again to replace yours (each screen then trusts the new one
+   once more; the old pair is kept in `data/tls/previous-<time>/`).
 2. **Listen on the network:** run `deploy/install.sh --network`, then copy the service file again and restart (A4 commands, then `sudo systemctl restart looking-glass`).
 3. **`.env`:** `ACCESS_MODE=private` with `VIEWER_NETWORKS=<screen address or range>` (for example `192.168.10.0/24`),
    or `ACCESS_MODE=public`. Other host names than the computer's own go in `ALLOWED_HOSTS`. Then `deploy/reload.sh`.
@@ -465,6 +469,16 @@ security_testing/security_retest.py && tests/run_all_checks.sh
 > `--now` also rotates the current log straight away. Running it again changes nothing. It writes no rule when
 > another one already rotates that log, and MongoDB is not restarted. If your MongoDB runs elsewhere or was yours
 > before Looking Glass, its log is yours to rotate; the same script can do it there too.
+
+> **What the outside sees (from 2026-11-19).** Someone who is not signed in can no longer tell what runs here: the
+> sign-in pages name no product (the organisation's name and logo instead, Settings → Organisation → *Sign-in page
+> logo*), error pages and redirects are plain, and the platform's scripts and styles need a sign-in. Two things to
+> check after updating:
+> - **`/healthz` answers this computer only.** Monitoring that called it from another computer gets "Not Found": run
+>   the check on this computer (`curl -sk https://localhost:5000/healthz`) or through the reverse proxy here.
+> - **The HTTPS certificate keeps its old name** ("Looking Glass") until you make a new one:
+>   `deploy/make_tls_cert.sh <the name people use>`. Each screen then trusts the new certificate once more. A certificate
+>   from your organisation's CA is not affected.
 
 `requirements.txt` lets each library update within its major version only, so an update brings fixes but no big
 changes. If `check_libraries.py` fails, its line names the library.
