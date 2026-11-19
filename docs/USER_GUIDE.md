@@ -567,6 +567,13 @@ gathered, devices are counted and never listed.
 for example *iot + router-os* in one report **and** the same set in another, with the number of devices), the
 **reports seeing the same devices** (the exact sets of reports per device), and the **indicators in more than one
 report** (for example a domain looked up in Sinkhole DNS and contacted in Sinkhole HTTP), with records per report.
+Each combination across reports also says **what its devices carry**: the CVEs, issues and infections on them, each with
+how many of that combination's devices; click a name to open its Intel gathered. Names and counts only.
+
+**In every other category** (also under Across reports) shows the same devices in the services reports, with the CVEs,
+issues and infections on them. Every infection, CVE and issue there has a code per report it was found in (exactly the
+devices carrying it in that report) and **Move to notes**. A group of fewer than 5 devices is shown without a lasting
+code; an analyst can still drill into it.
 
 In the Intel window the combinations are shown as a **List** (each set as its values joined with +) or as a **Matrix**
 (values as columns, sets as rows). *Devices* counts the distinct devices that carry a value; they are counted, never
@@ -578,7 +585,9 @@ findings ("the C2 moved to …", "seen together with … since Monday"). A note 
 appears on every card of that name (map, services, Executive) and in the PDF reports as **Notes shared by Researcher:
 *full name* (*date*)**. Notes are kept apart from the definitions (`data/notes.json`) and are never replaced by an
 update. The author or an administrator can remove a note; both are in the audit log. (For a CVE, the define button reads
-*Add context*: your organisation's remarks on the CVE, which NVD describes.)
+*Add context*: your organisation's remarks on the CVE, which NVD describes.) A CVE's title in the lists comes from its
+public record once it has been looked up: CISA's name for it, else the title its issuer gave it, else the first
+sentence of its description. Context your researchers add comes first.
 
 ### Combination codes, the combination search and findings
 

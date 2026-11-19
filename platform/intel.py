@@ -350,11 +350,19 @@ class Intel:
         # only the sets are kept: {(section, name): Counter({(report, report): devices})}
         sets = {k: collections.Counter(tuple(sorted(r)) for r in hosts_.values()) for k, hosts_ in dev_reps.items()}
         # the cross-report pattern of each device seen in two or more reports: per report, everything it carried there
-        xcombos = {k: collections.Counter(tuple(sorted((rep, tuple(sorted(items))) for rep, items in per.items()))
-                                          for per in hosts_.values() if len(per) > 1)
-                   for k, hosts_ in dev_items.items()}
+        # and, for the 12 patterns shown, which devices carry each: they never leave the server; the window gets what they
+        # carry in the services reports (CVEs, issues, infections) as names and counts (ctx "carried", the user 2026-11-19)
+        xcombos, xhosts = {}, {}
+        for k, hosts_ in dev_items.items():
+            pat_h = collections.defaultdict(list)
+            for h, per in hosts_.items():
+                if len(per) > 1:
+                    pat_h[tuple(sorted((rep, tuple(sorted(items))) for rep, items in per.items()))].append(h)
+            c = collections.Counter({p: len(hs) for p, hs in pat_h.items()})
+            xcombos[k] = c
+            xhosts[k] = {p: frozenset(pat_h[p]) for p, _n in c.most_common(12)}
         del dev_items
-        data = {"by": by, "match": match, "days": days, "sets": sets, "xcombos": xcombos}
+        data = {"by": by, "match": match, "days": days, "sets": sets, "xcombos": xcombos, "xhosts": xhosts}
         with self.lock:
             cache.update(key=key, at=time.time(), data=data)
         return data
@@ -407,9 +415,16 @@ class Intel:
                             "combo_of": "C2 domain, DNS lookup, TLS name, user agent and tags" if section == "infections" else "associated tags and CVEs"})
         leads = [x for x in self.leads()["leads"] if any(p == section and n == key[1] for p, n in x["names_key"])]
         across = self._across(data, key, me)
+        carried = self.ctx.get("carried")
         for x in across["cross_combos"]:
             x["code"] = small_codes.code_for(cross_code(section, key[1], [(p["report"], p["items"]) for p in x["parts"]]),
                                              x["devices"], full)
+            hs = x.pop("_hosts", None)                   # the device set never leaves: only what it carries, counted
+            if carried and hs:
+                try:
+                    x["carries"] = carried(hs)
+                except Exception:                        # noqa: BLE001  (the card shows without its summary line)
+                    pass
         self._shown(section, key[1], None, [[(p["report"], p["items"]) for p in x["parts"]] for x in across["cross_combos"]])
         return {"name": name, "section": section, "days": data["days"], "reports": reports, "leads": leads[:20],
                 "across": across}
@@ -449,7 +464,9 @@ class Intel:
         shared.sort(key=lambda x: (-len(x["where"]), -x["records"]))
         xc = data.get("xcombos", {}).get(key) or collections.Counter()
         multi = sum(xc.values()) or 1
-        cross_combos = [{"parts": [{"report": rep, "items": list(items)} for rep, items in pattern], "devices": n, "share": round(n / multi, 4)}
+        xh = data.get("xhosts", {}).get(key) or {}
+        cross_combos = [{"parts": [{"report": rep, "items": list(items)} for rep, items in pattern], "devices": n, "share": round(n / multi, 4),
+                         "_hosts": xh.get(pattern)}          # taken out before the answer leaves (view)
                         for pattern, n in xc.most_common(12)]
         return {"cross_combos": cross_combos, "cross_combos_total": len(xc),
                 "devices": sum(sets.values()), "multi_devices": sum(n for rs, n in sets.items() if len(rs) > 1),

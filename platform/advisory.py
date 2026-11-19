@@ -43,6 +43,7 @@ MAX_TEXT, MAX_SUBJECT, MAX_RECIPIENTS, MAX_RECIPIENT = 6000, 200, 30, 120
 MAX_DEVICES_SHOWN = 500
 CVE_RX = re.compile(r"CVE-\d{4}-\d{4,7}", re.I)
 SINK = "Botnet sinkholes"                 # services_intel.SINK: the part of a code where the host calls a sinkhole
+ISSUE = "Issues found"                    # services_intel.ISSUE: the part where the host carries a CVE / issue
 LEVELS = ["critical", "high", "medium", "low"]
 ALL = ""                                  # the network of an advisory on a finding without a kept search: everything
 
@@ -508,11 +509,15 @@ def install(app, ctx):
                             add(cves, m.group(0).upper())
                         elif it.startswith("Infection:"):
                             add(cats, it.split(":", 1)[1].strip())
+                        elif it.startswith("Issue:"):           # an issue code's part (a CVE is matched above)
+                            add(issues, it.split(":", 1)[1].strip())
                         elif it.lower().startswith("tag:"):
                             add(issues, issue_tags.issue_of(it)) if issue_tags.issue_of(it) else add(labels, it.split(":", 1)[1].strip().lower())
                     if q.get("report") == SINK:
                         for sk, se in imp.sinkhole_reports():
                             reps.setdefault(sk, (se, "the devices were seen calling a sinkhole in one of these reports"))
+                        continue
+                    if q.get("report") == ISSUE:               # not a report: the issue code's other part names the report
                         continue
                     rk, re_ = imp.entry(q.get("report") or q.get("title"))
                     if re_:

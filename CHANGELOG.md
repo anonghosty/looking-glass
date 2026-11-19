@@ -5,6 +5,21 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-19 (6)
+### Added
+- **CVEs and issues get codes and Move to notes in *In every other category*** (Intel gathered → Across reports), like
+  infections: one code per report a CVE or issue was found in, for exactly the devices carrying it there. Fewer than 5
+  devices: no lasting code for researchers, as for every other pattern.
+- **Each *Combinations across reports* card says what its devices carry**: the CVEs, issues and infections on them,
+  each with how many of the card's devices; a name opens its Intel gathered. Names and counts only.
+### Fixed
+- **A CVE read "No definition yet"** (on a code card) **or just "CVE"** (Settings → Definitions → Issues) although its
+  public record had been looked up. It now takes its title from that record: CISA's name for it, else the title its
+  issuer gave it, else the first sentence of its description. Only what is already looked up is used; a definition
+  your researchers wrote still comes first.
+- **The Overview's tooltips opened underneath it** and could not be seen; every tooltip now sits above every panel.
+- **After updating:** nothing to do.
+
 ## 2026-11-19 (5)
 ### Added
 - **The guided installer: a Back button on every question** (text mode: type `<`); earlier answers are kept, and

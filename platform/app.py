@@ -2637,7 +2637,7 @@ def _kb_unresolved(db_ok):
             c = cve_intel.card(name, fetch=False)
             item.update(found=c["found"], pending=c["pending"], exploited=c["exploited"],
                         cvss=(c.get("cvss") or {}).get("score"), severity=(c.get("cvss") or {}).get("severity", ""),
-                        epss=c.get("epss"), title=item["title"] or (c.get("kev") or {}).get("name", ""))
+                        epss=c.get("epss"), title=item["title"] or cve_intel.known_title(name))   # KEV name, CNA title or 1st sentence
         issues.append(item)
     return jsonify(unresolved=todo, defined=done, unchecked=new, all=every, check=_AUTOCHECK, malpedia=malpedia.enabled,
                    issues=issues, cve=cve_intel.status(), database=db_ok,
@@ -2846,6 +2846,9 @@ import intel as _intel  # noqa: E402
 
 def _defined_titles():
     out = {("infections", n): (e.get("title") or n) for n, e in knowledge_base().items() if defined_entry(e)}
+    # a CVE with a public record (CVE.org / NVD / CISA KEV, already cached) is defined by that record; a researcher's own
+    # definition still wins (the user, 2026-11-19: "No definition yet" on a CVE whose record the platform had)
+    out.update({("issues", c.lower()): t for c, t in cve_intel.known_titles().items()})
     out.update({("issues", n.lower()): (e.get("title") or n) for n, e in issues_kb().items() if defined_entry(e)})
     return out                                     # names in lower case (intel.py compares them so)
 
@@ -2860,6 +2863,8 @@ INTEL = _intel.install(app, {"store": store, "svc_store": svc["store"], "replay_
                              "services_view": lambda n: SVC_KB["view"](n),     # Services in Intel gathered (services_kb.py)
                              "cross": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"],   # every category
                                                                         hold_small=True),     # researchers: no code below 5 hosts
+                             # a cross-report pattern's devices: the CVEs, issues and infections they carry (names, counts)
+                             "carried": lambda hosts: SVC_INTEL.carried(hosts),
                              "labels": lambda: {**{x["name"]: x["label"] for x in registry.get()},
                                                 **{x["name"]: x["label"] for x in svc["registry"].get()}},
                              # Spam URL: the link's host is a "Spam link host", masked when in the country (review 2026-11-13)

@@ -315,6 +315,37 @@ class CveIntel:
         return {i: self.card(i, fetch=False) for i in ids}
 
     # ------------------------------------------------------------------ what the platform shows
+    def known_titles(self):
+        """{CVE: title} for every CVE already looked up, from the cache only (nobody is asked): CISA's KEV name, else
+        the title the CVE's issuer (CNA) gave it, else the first whole sentence of its description. One shared rule
+        for the Definitions list and the code cards: a CVE with a public record no longer reads "No definition yet"
+        or a bare "CVE" (the user, 2026-11-19)."""
+        self._refresh()
+        kev = (self.cache.get("kev") or {}).get("items") or {}
+        out = {}
+        for cve in set(self.cache["cveorg"]) | set(self.cache["nvd"]):
+            t = self._title_from(cve, kev)
+            if t:
+                out[cve] = t
+        return out
+
+    def known_title(self, cve):
+        """One CVE's title by the rule of known_titles(); "" when nothing about it is cached yet."""
+        cve = (cve or "").strip().upper()
+        if not is_cve(cve):
+            return ""
+        self._refresh()
+        return self._title_from(cve, (self.cache.get("kev") or {}).get("items") or {})
+
+    def _title_from(self, cve, kev):
+        if (kev.get(cve) or {}).get("name"):
+            return kev[cve]["name"]
+        o = (self.cache["cveorg"].get(cve) or {}).get("data") or {}
+        n = (self.cache["nvd"].get(cve) or {}).get("data") or {}
+        if o.get("missing") and n.get("missing"):
+            return ""
+        return (o.get("cna_title") or "").strip() or short_title(n.get("description") or o.get("description") or "")
+
     def card(self, cve, fetch=True, wait=False):
         """Everything known about one CVE: NVD's analysis when it has been added, else the official CVE.org record
         (fetched now when fetch=True; NVD itself only from the cache, the background check adds it)."""

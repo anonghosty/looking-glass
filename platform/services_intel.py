@@ -12,7 +12,9 @@ For one report (its IPv6 twin included):
   cross-report patterns (per report, the items the host carried there) with their codes (LG-X-...);
 * sinkholes: how many of these hosts also appear in the network communications reports (an exposed service on a
   device that is already infected), the infection names there (the threat's names, not constituent data), each with
-  a code (LG-X-..., a part on SINK) an analyst resolves to exactly those hosts.
+  a code (LG-X-..., a part on SINK) an analyst resolves to exactly those hosts;
+* CVEs and issues of an analyst's selection (for_hosts): per report each was found in, a code (LG-X-..., a part on
+  ISSUE) for exactly the hosts carrying it there, so a researcher can move it to notes like an infection.
 
 intel_view() gives the same answer in the shape of /api/intel (intel.py), so the researchers' Intel gathered window and
 the Notes window (codes to attach) work for Services as they do for infections and issues.
@@ -37,6 +39,9 @@ from svc_patterns import MIN_HOSTS
 
 SECTION = "services"
 SINK = "Botnet sinkholes"     # the part of a sinkhole code: the host also calls a sinkhole as this infection
+# the part of an issue code: the host carries this CVE / issue in the code's report (the user, 2026-11-19: a researcher
+# could not move a CVE or an issue of "In every other category" to notes; infections had per-report codes, these none)
+ISSUE = "Issues found"
 TOP = 15
 CVE_RX = re.compile(r"^CVE-\d{4}-\d{4,7}$", re.I)
 CVE_FIND = re.compile(r"CVE-\d{4}-\d{4,7}", re.I)
@@ -210,6 +215,27 @@ class ServicesIntel:
     def sink_code(base, name):
         return cross_code(SECTION, base, [(base, []), (SINK, [f"Infection: {name}"])])
 
+    @staticmethod
+    def issue_code(base, name):
+        """The devices in report `base` carrying the CVE / issue `name` there: one code per report it was found in."""
+        return cross_code(SECTION, base, [(base, []), (ISSUE, [f"Issue: {name}"])])
+
+    def carried(self, hosts, data=None, top=10):
+        """What a group of devices carries (a cross-report pattern's, the user 2026-11-19): the CVEs, issues and
+        infections on them, each with how many of the devices carry it. Names and counts only, never a host; the most
+        carried first, `top` of each, with how many there are in all. One function for every pattern card."""
+        data = data or self.index()
+        cv, iss, inf = collections.Counter(), collections.Counter(), collections.Counter()
+        for h in {h for h in hosts if h}:
+            names = set(data["host_issues"].get(h) or {})
+            cv.update({i.upper() for i in names if CVE_RX.match(i)} | set(data.get("host_cves", {}).get(h, ())))
+            iss.update(i for i in names if not CVE_RX.match(i))
+            inf.update(set(data["infected"].get(h, ())))
+
+        def part(c):
+            return {"names": [{"name": n, "hosts": k} for n, k in sorted(c.items(), key=lambda kv: (-kv[1], kv[0]))[:top]], "total": len(c)}
+        return {"cves": part(cv), "issues": part(iss), "infections": part(inf)}
+
     def sinkholes_of(self, base, data=None, full=None):
         """full: whether the viewer sees hosts (small_codes); None works it out. An infection fewer than MIN_HOSTS hosts
         carry gets no lasting code for a viewer who does not (external review, 2026-11-12)."""
@@ -280,17 +306,19 @@ class ServicesIntel:
         sets = collections.Counter(tuple(sorted(set(data["host_reports"][h]) | set(data["sink_rep"].get(h, {})))) for h in hs)
         multi = sum(n for s, n in sets.items() if len(s) > 1)
         report_sets = [{"reports": list(s), "hosts": n} for s, n in sets.most_common() if len(s) > 1 and n >= MIN_HOSTS][:10]
-        xp = collections.Counter()
+        xp, xph = collections.Counter(), collections.defaultdict(list)
         for h in hs:
             pat = host_pattern(data, h)
             if len(pat) > 1:
                 xp[pat] += 1
+                xph[pat].append(h)
         cross = []
         for pattern, n in xp.most_common():
             if n < MIN_HOSTS:
                 break
             parts = [{"report": r, "items": list(items)} for r, items in pattern]
-            cross.append({"parts": parts, "hosts": n, "code": cross_code(SECTION, base, [(p["report"], p["items"]) for p in parts])})
+            cross.append({"parts": parts, "hosts": n, "code": cross_code(SECTION, base, [(p["report"], p["items"]) for p in parts]),
+                          "carries": self.carried(xph[pattern], data)})
             if len(cross) >= 8:
                 break
         sinkholes = self.sinkholes_of(base, data)
@@ -333,7 +361,8 @@ class ServicesIntel:
                          "combinations_small": g["combinations_small"], "combo_of": "pattern items",
                          "single": None}],
             "across": {"devices": g["hosts"], "multi_devices": a["hosts_in_other_reports"],
-                       "cross_combos": [{"parts": x["parts"], "devices": x["hosts"], "share": round(x["hosts"] / multi, 4), "code": x["code"]}
+                       "cross_combos": [{"parts": x["parts"], "devices": x["hosts"], "share": round(x["hosts"] / multi, 4), "code": x["code"],
+                                         "carries": x.get("carries")}
                                         for x in a["cross_patterns"]],
                        "cross_combos_total": len(a["cross_patterns"]),
                        "report_sets": [{"reports": s["reports"], "devices": s["hosts"], "share": round(s["hosts"] / max(1, g["hosts"]), 4)}
@@ -452,6 +481,13 @@ class ServicesIntel:
                         hook(SECTION, r["report"], None, [[(r["report"], []), (SINK, [f"Infection: {x['name']}"])]])
             except Exception:                              # noqa: BLE001
                 pass
+            try:                                           # the CVEs' and issues' codes, one per report (as infections)
+                for i, reps in issue_reps.items():
+                    for r, rh in reps.items():
+                        if small_codes.code_for(self.issue_code(r, i), len(rh), full):
+                            hook(SECTION, r, None, [[(r, []), (ISSUE, [f"Issue: {i}"])]])
+            except Exception:                              # noqa: BLE001
+                pass
         # where these hosts were seen, by kind of report: the sinkhole reports they call, the vulnerability reports, the
         # services reports, and the other categories, each report named with its hosts
         by_kind = collections.defaultdict(list)
@@ -469,7 +505,10 @@ class ServicesIntel:
         return {"days": data["days"], "sources": sources, "services": services[:20], "services_total": len(services),
                 "cross": cross, "cross_total": len(xp), "multi_hosts": sum(xp.values()),
                 "issues": [{"name": i, "hosts": len(h),
-                            "reports": [{"report": r, "title": title_of(r), "hosts": len(rh)}
+                            # per report it was found in, the code of exactly those devices (none below MIN_HOSTS for a
+                            # viewer who does not see hosts: small_codes.py)
+                            "reports": [{"report": r, "title": title_of(r), "hosts": len(rh),
+                                         "code": small_codes.code_for(self.issue_code(r, i), len(rh), full)}
                                         for r, rh in sorted(issue_reps[i].items(), key=lambda kv: -len(kv[1]))],
                             # every report that led to it, grouped by kind (its hosts' sinkhole reports too)
                             "seen_in": grouped({r: len(rh) for r, rh in issue_reps[i].items()}, title_of, kind_of,
@@ -572,9 +611,15 @@ class Matcher:
         self.fields = {}
         parts = entry.get("parts") or []
         self.sink = [i for r, items in parts if r == SINK for i in items]
-        self.reports = {entry["report"]} if entry["kind"] == "r" else {r for r, _ in parts if r != SINK}
+        self.issue = [i for r, items in parts if r == ISSUE for i in items]
+        self.reports = {entry["report"]} if entry["kind"] == "r" else {r for r, _ in parts if r not in (SINK, ISSUE)}
         self.infected = data["infected"]
         self.sink_rep = data["sink_rep"]
+        self.host_issues = data["host_issues"]
+
+    def issues_in(self, h, base):
+        """The CVEs / issues host h carries in report `base` (names as the reports give them)."""
+        return sorted(i for i, bases in (self.host_issues.get(h) or {}).items() if base in bases)
 
     def host(self, e):
         return e.get("ip") or ""
@@ -601,6 +646,10 @@ class Matcher:
             names = {s.split(": ", 1)[-1].lower() for s in self.sink}
             return [e for e in events if self.report(e) in self.reports and self.host(e)
                     and names & {n.lower() for n in self.infected.get(self.host(e), ())}]
+        if self.issue:                                     # the devices carrying the CVE / issue in that report
+            names = {s.split(": ", 1)[-1].lower() for s in self.issue}
+            return [e for e in events if self.report(e) in self.reports and self.host(e)
+                    and names & {i.lower() for i in self.issues_in(self.host(e), self.report(e))}]
         if self.e["kind"] == "r":
             want = tuple(sorted(self.e["items"]))
             return [e for e in events if self.host(e) and self.report(e) in self.reports and self.items(e) == want]

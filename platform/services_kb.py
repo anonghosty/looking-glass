@@ -28,7 +28,7 @@ from flask import jsonify, request
 
 from report_map import sibling
 from services import banner_mask
-from services_intel import SINK
+from services_intel import ISSUE, SINK
 from svc_patterns import MIN_HOSTS
 
 CACHE_SECONDS = 60             # kept for older callers; the cache now follows the days in memory (MAX_AGE_SECONDS)
@@ -366,7 +366,7 @@ def install(app, ctx):
     # ---------------- for Intel gathered (intel.py, section=services) and the combination codes (combos.py)
     def title_of(name):
         """A services report's readable title (its IPv6 twin's too); the name itself when it is not a services report."""
-        if name == SINK:
+        if name in (SINK, ISSUE):
             return name
         g = services_reports().get(name) or services_reports().get(sibling(name or ""))
         if not g:                                          # a report of another section (e.g. compromised devices)

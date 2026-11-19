@@ -367,6 +367,32 @@
   }
 
   // ---------------- across reports: which reports see the same devices, and which indicators turn up in several
+  // what a pattern's devices carry (services_intel.carried): the CVEs, issues and infections on them, each with how
+  // many of the pattern's devices; a name opens its Intel gathered. Names and counts only (the user, 2026-11-19)
+  function carriesLine(cr, devices) {
+    const box = el("div", "ig-carries");
+    const groups = [["cves", "CVEs", "issues", "cve"], ["issues", "Issues", "issues", "iss"], ["infections", "Infections", "infections", "inf"]];
+    let any = false;
+    for (const [k, label, section, cls] of groups) {
+      const g = cr[k] || { names: [], total: 0 };
+      if (!g.total) continue;
+      any = true;
+      const row = el("div", "ig-carries-r"); row.append(el("span", "ig-carries-k", `${label} ${fmt(g.total)}`));
+      const list = el("div", "ig-carries-l");
+      for (const n of g.names) {
+        const b = el("button", `ig-chip ${cls}`, n.name); b.type = "button";
+        b.title = `${n.name}: on ${fmt(n.hosts)} of these ${plural(devices, "device")}. Open its Intel gathered`;
+        b.append(el("em", null, fmt(n.hosts)));
+        b.addEventListener("click", (e) => { e.stopPropagation(); open(n.name, section); });
+        list.append(b);
+      }
+      if (g.total > g.names.length) list.append(el("span", "ig-carries-more", `and ${fmt(g.total - g.names.length)} more`));
+      row.append(list); box.append(row);
+    }
+    if (!any) box.append(el("span", "ig-carries-none", "No CVE, issue or infection on these devices on the report day."));
+    return box;
+  }
+
   function acrossView(pane) {
     const d = st.d, a = d.across || {};
     const path = el("div", "ig-path");
@@ -421,6 +447,7 @@
         for (const p of x.parts) { const blk = el("div", `ig-xc-part${p.report === d.name ? " cur" : ""}`); blk.append(el("span", "ig-xc-rep", rn(p.report)), chipSet(p.items)); parts.append(blk); }
       }
       if (st.focus && !x.parts.some((p) => p.items.includes(st.focus))) li.classList.add("dim");
+      if (x.carries) parts.append(carriesLine(x.carries, x.devices));
       const pat = x.parts.map((p) => `${rn(p.report)}: ${p.items.join(", ") || "-"}`).join(" | ");
       if (x.code) { const cr = el("div", "ig-code-row"); cr.append(codeChip(x.code, `${d.title || d.name} across ${pat}`), noteBtn(x.code, `Across ${pat}`)); parts.append(cr); }
       li.append(stat, parts, iconBtn(ICON.copy, "Copy this pattern on one line (with its code)", () => copy((x.code ? `${x.code}: ` : "") + pat, "this pattern")));
@@ -582,7 +609,17 @@
         const row = el("div", `ig-every-ir${st.focus && st.focus !== i.name ? " dim" : ""}`); if (n >= 12 && !openI) row.hidden = true;
         const b = chipOf(i.name); b.classList.add(/^CVE-/i.test(i.name) ? "cve" : "iss"); b.append(el("em", null, fmt(i.hosts)));
         const w = i.seen_in?.length ? seenIn(i.seen_in) : el("span", "ig-every-in", `in ${(i.reports || []).map((r) => `${r.title} (${fmt(r.hosts)})`).join(", ") || "the services reports"}`);
-        row.append(b, w); ul.append(row);
+        row.append(b, w);
+        // per report it was found in: the code of exactly those devices, with Move to notes (as infections, 2026-11-19);
+        // fewer than 5 devices: no lasting code (small_codes.py), an analyst drills into it
+        for (const r of (i.reports || []).slice(0, 3)) {
+          const what = `${r.title}: hosts carrying ${i.name} there`;
+          const cr = el("div", "ig-code-row"); cr.append(el("span", "ig-every-in", r.title), el("span", "ig-every-n", plural(r.hosts, "host")));
+          if (r.code) cr.append(codeChip(r.code, what), noteBtn(r.code, what));
+          else cr.append(el("span", "ig-held", "Fewer than 5 devices: no lasting code. An analyst can drill into it."));
+          row.append(cr);
+        }
+        ul.append(row);
       });
       bc.append(ul);
       if (iss.length > 12 && !openI) {

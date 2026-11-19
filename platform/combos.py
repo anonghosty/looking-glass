@@ -47,7 +47,7 @@ import issue_tags
 import intel as I
 import pdf_refs
 import report_day
-from services_intel import SINK                # a services code's part "the host calls a sinkhole as …"
+from services_intel import ISSUE, SINK         # a services code's part "the host calls a sinkhole as …" / "carries CVE / issue …"
 
 CODE_RX = re.compile(r"^LG-[CX]-[0-9A-F]{8}$")          # the researchers' codes (this module)
 ANY_RX = re.compile(r"^LG-[CXAB]-[0-9A-F]{8}$")         # and the analysts' (acodes.py) and decoded beacons (beacon_findings.py)
@@ -230,6 +230,9 @@ def describe(entry):
         sink = [i for r, items in entry["parts"] if r == "Botnet sinkholes" for i in items]
         if sink:
             return f"{t(entry['name'])}: hosts also calling botnet sinkholes as {', '.join(s.split(': ', 1)[-1] for s in sink)}"
+        found = [i for r, items in entry["parts"] if r == ISSUE for i in items]
+        if found:
+            return f"{t(entry['name'])}: hosts carrying {', '.join(s.split(': ', 1)[-1] for s in found)} there"
         return f"{t(entry['name'])} across " + "; ".join(f"{t(r)}: {' + '.join(i) or 'the report only'}" for r, i in entry["parts"])
     if entry["kind"] == "r":
         items = " + ".join(entry["items"]) or "no indicator (the name only)"
@@ -534,6 +537,11 @@ def install(app, ctx):
                     if names:
                         seen = True
                     bits.append(f"calls sinkholes as {', '.join(names)}" if names else "no sinkhole call")
+                    continue
+                if r == ISSUE and hasattr(md, "issues_in"):   # an issue code: what the device carried in its report instead
+                    base = next((b for b, _ in want if b != ISSUE), "")
+                    names = md.issues_in(h, base)
+                    bits.append(f"carries {', '.join(names)} there" if names else "no CVE or issue there")
                     continue
                 got = per[h].get(r) if h in per else None
                 if got is None:
