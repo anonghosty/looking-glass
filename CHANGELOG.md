@@ -5,6 +5,20 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-19 (2)
+### Added
+- **The severity map, on the Definitions page (researchers and administrators only).** Every infection and issue the
+  reports carried, with its criticality and where it comes from: rated by Shadowserver (the highest severity
+  Shadowserver gave the records that carry it), not rated (no record rates it, listed first) or rated by a researcher.
+  A researcher can give a not-rated name a level, or take it back; Shadowserver's own ratings are never changed, and
+  when Shadowserver later rates a name, its level replaces the researcher's (shown as replaced). Every rating is in the
+  audit log (`severity_rated`). The PDFs' References section uses a researcher's rating where no record rates a name,
+  flagged "Researcher's rating". CVEs are rated by their CVSS score and are not on the map. The names are kept in
+  `data/name_kinds.json` and the ratings in `data/name_ratings.json` (names only: no host, no address, no count).
+- **After updating:** about two minutes after the service starts, Looking Glass reads every report's records once more
+  in the background (infection, issues, tags and severity only, in batches with pauses), so the map also lists the
+  names no record rates from before the update. Nothing to do; `NAME_LEVELS_DELAY_S=0` turns it off.
+
 ## 2026-11-19
 ### Changed
 - **Documentation: for CSIRTs in every country.** The documentation site's home page, its title and description, its

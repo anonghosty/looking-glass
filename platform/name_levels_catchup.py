@@ -21,7 +21,7 @@ import pdf_refs
 BATCH = 5000                 # records read between two pauses
 PAUSE = 0.05                 # seconds between batches: the database and the pages keep their pace
 FIELDS = {"infection": 1, "issues": 1, "tags": 1, "severity": 1, "_id": 0}     # never an address
-VERSION = 1
+VERSION = 2                  # 2 (2026-11-19): also every name carried, rated or not, for the severity map: read once more
 
 
 def delay():
@@ -48,18 +48,19 @@ def catch_up(db, names, base_dir, stop=None, pause=PAUSE):
     t, records, learned = time.time(), 0, {}
     cols = [n for n in names if n]
     for n in cols:
-        levels = {}
+        levels, kinds = {}, {}
         batch = []
         for e in db[n].find({}, FIELDS).batch_size(2000):
             batch.append(e)
             if len(batch) >= BATCH:
-                pdf_refs.levels_from_records(batch, levels); records += len(batch); batch = []
+                pdf_refs.levels_from_records(batch, levels, kinds); records += len(batch); batch = []
                 if stop is not None and stop.is_set():
-                    pdf_refs.remember(levels)
+                    pdf_refs.remember(levels); pdf_refs.remember_kinds(kinds)
                     return {"collections": cols, "records": records, "names": len(learned), "seconds": round(time.time() - t, 1), "stopped": True}
                 time.sleep(pause)
-        pdf_refs.levels_from_records(batch, levels); records += len(batch)
+        pdf_refs.levels_from_records(batch, levels, kinds); records += len(batch)
         pdf_refs.remember(levels)                         # kept after each collection: an interrupted run keeps its part
+        pdf_refs.remember_kinds(kinds)                    # …and every name it carried, rated or not (the severity map)
         for k, v in levels.items():
             pdf_refs.lift(learned, k, v)
     os.makedirs(os.path.join(base_dir, "data"), exist_ok=True)

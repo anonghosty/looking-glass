@@ -364,6 +364,20 @@ severity is known:
   `data/name_levels.json`, names and levels only, never shipped);
 - a Shadowserver report: the severity Shadowserver gives that report type.
 
+A name no record rates can be given a level by a researcher on the severity map (below); the PDFs then use that level
+and flag it **Researcher's rating**.
+
+**The severity map** (Definitions page; researchers and administrators only, permission *definitions*) lists every
+infection and issue the reports carried, with its criticality and where it comes from: **Rated by Shadowserver** (the
+highest severity Shadowserver gave the records that carry it, learned as report days load), **Not rated** (no record
+rates it) or **Rated by researchers**. The not-rated names come first. A researcher rates a not-rated name with the
+picker in its row (Critical, High, Medium, Low or Info), or takes their rating back; each change is in the audit log
+(`severity_rated`: who, which name, from what to what). Shadowserver's own ratings are never changed here: when
+Shadowserver later rates a name a researcher rated, Shadowserver's level is used and the researcher's is shown as
+replaced. CVEs are not on the map; they are rated by their CVSS score. The names and their kinds are kept in
+`data/name_kinds.json` and the researchers' ratings in `data/name_ratings.json` (names only: no host, no address, no
+count).
+
 **The advisory's preview** names who opened it and when: "PREVIEW · NOT FOR DISTRIBUTION · name · date and time ·
 reference" at the top and the foot of every page, and a faint watermark across each page, behind the text. A screenshot
 of the preview therefore shows who took it. The report the advisor generates for the organisation carries none of it.

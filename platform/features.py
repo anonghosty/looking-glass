@@ -79,6 +79,16 @@ def install(app, core):
                                                                "base_dir": os.path.dirname(os.path.abspath(__file__)),
                                                                "logger": core.get("app_logger")})
 
+    # the severity map on the Definitions page: every infection and issue with its criticality, Shadowserver's or, for a
+    # name no record rates, a researcher's (severity_map.py; researchers and administrators only)
+    if all(k in A for k in ("has_perm", "csrf_ok", "audit")):
+        import severity_map
+        from people import People
+        people_name = People(A["users"]).full_name if "users" in A else None
+        out["severity_map"] = severity_map.install(app, {"base_dir": os.path.dirname(os.path.abspath(__file__)),
+                                                         "has_perm": A["has_perm"], "csrf_ok": A["csrf_ok"],
+                                                         "audit": A["audit"], "people_name": people_name})
+
     # the analyst codes' device counts worked out ahead after a start, so the Findings page does not wait for them
     # (acode_warm.py; only in the running service)
     if core.get("acodes") is not None:

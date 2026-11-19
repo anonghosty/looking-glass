@@ -7,7 +7,7 @@ the platform: the **Glossary** tab on the overview page and the **Glossary** but
 
 - [The basics](#the-basics) (8 terms)
 - [Who and where](#who-and-where) (10 terms)
-- [Threats](#threats) (18 terms)
+- [Threats](#threats) (20 terms)
 - [Numbers and measures](#numbers-and-measures) (14 terms)
 - [Using the platform](#using-the-platform) (11 terms)
 - [Accounts, roles and permissions](#accounts-roles-and-permissions) (48 terms)
@@ -118,6 +118,12 @@ Shadowserver's rating of how serious an event is: critical, high, medium, low or
 
 **Critical**  
 Events rated critical: usually confirmed infections or active attacks that need action.
+
+**Severity map**  
+On the Definitions page (researchers and administrators): every infection and issue the reports carried, with its criticality and where it comes from. Rated by Shadowserver: the highest severity Shadowserver gave the records that carry the name. Not rated: no record rates it. Rated by researchers: a researcher gave a not-rated name a level; Shadowserver's own ratings are never changed. CVEs are rated by their CVSS score and are not on the map.
+
+**Researcher's rating**  
+A level a researcher gave, on the severity map, to a name no Shadowserver record rates. The PDFs' References section uses it and flags it "Researcher's rating". When Shadowserver later rates the name, Shadowserver's level is used instead.
 
 **Tag**  
 An extra label from the report, often a campaign name or an alternative family name.
@@ -638,6 +644,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Reports](#numbers-and-measures) · 
 [Request path](#who-and-where) · 
 [Researcher (role)](#accounts-roles-and-permissions) · 
+[Researcher's rating](#threats) · 
 [Residential proxy](#threats) · 
 [Retention note and rotation entry](#security-audit-and-the-pipeline) · 
 [Role](#accounts-roles-and-permissions) · 
@@ -646,6 +653,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Sender check (DKIM)](#security-audit-and-the-pipeline) · 
 [Services constellation](#publicly-accessible--vulnerable-services) · 
 [Severity](#threats) · 
+[Severity map](#threats) · 
 [Shadowserver](#the-basics) · 
 [Share of all events](#numbers-and-measures) · 
 [Sinkhole](#threats) · 

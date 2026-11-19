@@ -20,7 +20,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("LG_QUIET", "1")
 import tempfile  # noqa: E402
 import pdf_refs as R  # noqa: E402
-R.KNOWN["path"] = os.path.join(tempfile.mkdtemp(), "name_levels.json")      # never the installation's own file
+R.KNOWN["path"] = os.path.join(tempfile.mkdtemp(), "name_levels.json")      # never the installation's own files
+R.SEEN["path"] = os.path.join(tempfile.mkdtemp(), "name_kinds.json")        # (2026-11-19: its made-up names reached the map)
+_REAL_KINDS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "name_kinds.json")
+_REAL_BEFORE = os.path.getmtime(_REAL_KINDS) if os.path.exists(_REAL_KINDS) else None
 
 checks, fails = 0, []
 
@@ -203,6 +206,9 @@ said.clear(); images.clear()
 gen = doc({"advisory": {"tlp": "TLP:AMBER"}})
 gen.new_page("Advisory"); gen.footer()
 ok("the generated advisory: no preview mark, no watermark", not any("PREVIEW" in s for s in said) and not images)
+
+ok("the installation's own name files were never written by this check",
+   (os.path.getmtime(_REAL_KINDS) if os.path.exists(_REAL_KINDS) else None) == _REAL_BEFORE)
 
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {fails}" if fails else ""))
 sys.exit(1 if fails else 0)

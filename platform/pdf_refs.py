@@ -45,25 +45,33 @@ def lift(levels, name, sev):
         levels[name] = lv
 
 
-def levels_from_records(records, levels=None):
+def levels_from_records(records, levels=None, kinds=None):
     """{name: highest severity} over records, for every name a record carries: its infection, its issues (a CVE by its
-    number), the CVEs in its tags and the issues its tags stand for (issue_tags.py, as the advisory reads them)."""
+    number), the CVEs in its tags and the issues its tags stand for (issue_tags.py, as the advisory reads them).
+    kinds: a dict that also learns every name the records carry, rated or not, as "Infection" or "Issue" (the severity
+    map lists the names no record rates too)."""
     import re
     import issue_tags
     levels = {} if levels is None else levels
+    seen = (lambda n, k: kinds.setdefault(n, k) if n else None) if kinds is not None else (lambda n, k: None)
     for e in records or []:
         sev = e.get("severity")
-        lift(levels, e.get("infection"), sev)
+        inf = e.get("infection")
+        lift(levels, inf, sev)
+        seen(inf if isinstance(inf, str) else None, "Infection")
         for i in _as_list(e.get("issues")):
             cv = re.search(r"CVE-\d{4}-\d{4,7}", i, re.I)
             lift(levels, cv.group(0).upper() if cv else i, sev)
+            seen(cv.group(0).upper() if cv else i, "Issue")
         tags = _as_list(e.get("tags"))
         for t in tags:
             cv = re.search(r"CVE-\d{4}-\d{4,7}", t, re.I)
             if cv:
                 lift(levels, cv.group(0).upper(), sev)
+                seen(cv.group(0).upper(), "Issue")
         for t in issue_tags.split(tags)[0]:
             lift(levels, t, sev)
+            seen(t, "Issue")
     return levels
 
 
@@ -106,6 +114,11 @@ def groups(explained, record_levels=None, reports=(), shown=REFS_SHOWN):
             # the PDF's own records first; else the days in memory of both platforms (a name its devices showed in
             # another report, a review kept before severities were kept): the same rule, never an invented level
             lv = level(record_levels.get(name)) or level(all_levels().get(name))
+            if not lv:
+                # a name no record rates: a researcher's rating from the severity map (severity_map.py), said as such
+                lv = researcher_level(name)
+                if lv:
+                    flags.append("Researcher's rating")
         named.append(({"kind": "name", "title": str(name), "level": lv, "flags": flags, "refs": refs[:shown],
                        "more": max(0, len(refs) - shown),
                        # a CVE's are on NVD's page even when it is "found" (2026-11-18: read "on the Malpedia page")
@@ -282,13 +295,14 @@ def day_levels(days):
     hit = _DAY_LEVELS.get(key)
     if hit is not None:
         return hit
-    out = {}
+    out, kinds = {}, {}
     for d in days:
-        levels_from_records(d.events, out)
+        levels_from_records(d.events, out, kinds)
     if len(_DAY_LEVELS) > 4:                             # two platforms, a change of days now and then
         _DAY_LEVELS.clear()
     _DAY_LEVELS[key] = out
     remember(out)
+    remember_kinds(kinds)
     return out
 
 
@@ -336,3 +350,60 @@ def remember(levels):
         KNOWN["levels"], KNOWN["mtime"] = cur, os.path.getmtime(p)
     except OSError:
         pass                                             # a read-only folder: the levels in memory still work
+
+
+# ------------------------------------------------------------------ the severity map (severity_map.py, the user 2026-11-18)
+# Every name the reports carried, rated or not, with its kind (data/name_kinds.json: names and kinds only, no host, no
+# address, no count), so the map lists the names no record rates; and the researchers' ratings of those names.
+SEEN = {"path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "name_kinds.json"), "mtime": None, "kinds": {}}
+RATINGS = {"get": None}       # severity_map.py: () -> {name: {"level", "by", "at"}}
+
+
+def all_kinds():
+    """{name: "Infection" | "Issue"} for every name the reports carried (days loaded and the one-time read of every report)."""
+    p = SEEN["path"]
+    try:
+        m = os.path.getmtime(p)
+    except OSError:
+        return SEEN["kinds"]
+    if SEEN["mtime"] != m:
+        try:
+            with open(p, encoding="utf-8") as fh:
+                d = json.load(fh)
+            SEEN["kinds"] = {str(k): v for k, v in (d.items() if isinstance(d, dict) else []) if v in ("Infection", "Issue")}
+        except (OSError, ValueError):
+            pass
+        SEEN["mtime"] = m
+    return SEEN["kinds"]
+
+
+def remember_kinds(kinds):
+    """Keep the names not seen before in data/name_kinds.json (a name's first kind stays); written only when one is new."""
+    cur = dict(all_kinds())
+    new = {str(n): k for n, k in (kinds or {}).items() if n and n not in cur and k in ("Infection", "Issue")}
+    if not new or len(cur) + len(new) > KNOWN_MAX:
+        return
+    cur.update(new)
+    p = SEEN["path"]
+    try:
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        tmp = p + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(cur, fh, sort_keys=True)
+        os.replace(tmp, p)
+        SEEN["kinds"], SEEN["mtime"] = cur, os.path.getmtime(p)
+    except OSError:
+        pass
+
+
+def researcher_level(name):
+    """A researcher's rating of a name no record rates ("" when none): only ever used where Shadowserver gives no level."""
+    get = RATINGS.get("get")
+    if not get or not name:
+        return ""
+    try:
+        r = get() or {}
+    except Exception:                                    # noqa: BLE001  (unflagged rather than no PDF)
+        return ""
+    hit = r.get(name) or next((v for k, v in r.items() if k.lower() == str(name).lower()), None)
+    return level((hit or {}).get("level"))

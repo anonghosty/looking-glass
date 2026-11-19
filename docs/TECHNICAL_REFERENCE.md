@@ -170,7 +170,17 @@ server side is in small modules called from `app.py`:
 - **`name_levels_catchup.py`, every name's level learned once.** `NAME_LEVELS_DELAY_S` seconds after a start (the
   running service only), one thread reads every report collection once, projecting only infection, issues, tags and
   severity, in batches with short pauses between them, and keeps each name's highest level in `data/name_levels.json`; it
-  writes `data/name_levels.done` at the end and never runs again.
+  writes `data/name_levels.done` at the end and never runs again. Since version 2 of its marker it also keeps every name
+  the records carried, rated or not, with its kind in `data/name_kinds.json`; an installation updated from version 1
+  reads every report once more.
+- **`severity_map.py`, the severity map.** `GET /api/kb/severity-map` and `POST /api/kb/severity-map/rate` (`{name,
+  level}`, level `""` takes a rating back), both under the Definitions page's addresses and both needing the
+  *definitions* permission (researchers and administrators only); a rating needs the CSRF token and is audited
+  (`severity_rated`). The rows join `pdf_refs.all_levels()` (Shadowserver's), `pdf_refs.all_kinds()` (every name the
+  records carried, `data/name_kinds.json`) and the researchers' ratings (`data/name_ratings.json`); CVEs are left out.
+  A name Shadowserver rates is refused (409). `pdf_refs.researcher_level()` gives the PDFs a researcher's level only
+  where no record rates the name, flagged "Researcher's rating". Registered in `features.py`; page:
+  `static/js/severity-map.js`. Test: `tests/check_severity_map.py`.
 - **`acode_warm.py`, analyst code counts worked out after a start.** `ANALYST_WARM_DELAY_S` seconds after the service
   starts (the running service only, `index_refresh.SERVING`), one thread calls `acodes.api.warm()`: the device counts
   (`/api/intel/acode/<code>/devices`) of every analyst code the open findings carry, at both viewer levels, kept apart

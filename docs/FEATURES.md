@@ -260,6 +260,10 @@ against the trends, an analyst pulls exactly those devices and writes the adviso
   update; shown on every card and in the PDF reports as "Notes shared by Researcher: *full name* (*date*)".
 - **Seen in, as report cards.** Each report a name appears in shows *intel · N kinds* or *name only*; one click opens
   that report's intel. Names not in today's reports show **Last seen in *report* on *date*** (30 days remembered).
+- **The severity map.** Every infection and issue the reports carried, with its criticality and its source: rated by
+  Shadowserver, not rated (listed first) or rated by a researcher. Researchers rate only the names no record rates;
+  Shadowserver's ratings are never changed; every rating is audited, and the PDFs flag a researcher's rating as such.
+  Researchers and administrators only. ([User guide](USER_GUIDE.md#5-analysis-and-follow-up))
 - **The Definitions page stands on its own** (`/definitions`), with the Looking Glass loading animation; admins reach it
   from the intro page, the map, the services platform and Settings. Settings shows network names read-only.
 - **Full names.** Definitions, notes, network corrections and reports name people by their registered full name; the

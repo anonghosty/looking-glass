@@ -256,3 +256,8 @@ body.settings-page .hud { position: sticky; top: 0; }
 .st-matchcell .st-use { padding: 4px 10px; font-size: 12.5px; margin: 0 6px 4px 0; }
 .st-matchcell .st-pick { max-width: 220px; font-size: 12.5px; padding: 3px 6px; border-radius: 6px; background: var(--panel, #15171c); color: var(--text, #e8e9ee); border: 1px solid var(--line, rgba(255, 255, 255, .15)); }
 #matchHint.bad { color: #f2a3a5; }
+/* the severity map (2026-11-19): a researcher's rating picker in the last column; names wrap, never cut */
+#sevTable .sev-pick { width: auto; min-width: 170px; background: var(--surface-2, #15171c); color: var(--text, #e8e9ee); border-color: var(--border-strong, rgba(255, 255, 255, .15)); }
+#sevTable td b.mono { overflow-wrap: anywhere; }
+#sevMore { padding: 10px 0 2px; text-align: center; }
+#sevMore:empty { display: none; }

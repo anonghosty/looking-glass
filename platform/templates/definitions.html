@@ -31,6 +31,37 @@
     <div class="st-loading" id="kbLoading">Loading the definitions, the intel gathered from the reports and the network names…</div>
 {% with standalone=True %}{% include "_kb_cards.html" %}{% endwith %}
 
+{% if "definitions" in lg_perms %}
+    {# the severity map: every infection and issue with its criticality and its source; researchers rate only the names no
+       record rates (static/js/severity-map.js, severity_map.py; researchers and administrators only) #}
+    <section class="st-card dz" id="cardSev" hidden>
+      <header class="dz-head">
+        <div class="dz-icon dz-icon-iss" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M4 20h16M6 16v-3M10 16V9M14 16v-5M18 16V5"/></svg>
+        </div>
+        <div class="dz-title">
+          <h2>Severity map · every infection and issue</h2>
+          <p class="dz-sub">Each name the reports carried, with its criticality: the highest severity Shadowserver gave the records that
+            carry it, learned as report days load. A name no record rates can be rated here by a researcher; Shadowserver's own
+            ratings are never changed. The PDFs' References section uses these ratings and marks a researcher's as such. CVEs are
+            rated by their CVSS score and are not listed here.</p>
+        </div>
+      </header>
+      <div class="dz-stats" role="tablist" aria-label="Severity map">
+        <button class="dz-stat warn" type="button" role="tab" data-sev="not_rated" aria-selected="true"><b id="sevN1">–</b><span>Not rated</span><em>no record rates them</em></button>
+        <button class="dz-stat" type="button" role="tab" data-sev="shadowserver" aria-selected="false"><b id="sevN2">–</b><span>Rated by Shadowserver</span><em>from the records</em></button>
+        <button class="dz-stat ok" type="button" role="tab" data-sev="researcher" aria-selected="false"><b id="sevN3">–</b><span>Rated by researchers</span><em>names no record rates</em></button>
+        <button class="dz-stat" type="button" role="tab" data-sev="all" aria-selected="false"><b id="sevN4">–</b><span>All names</span><em>the most critical first</em></button>
+      </div>
+      <div class="dz-toolbar">
+        <input type="search" class="dz-search" id="sevSearch" placeholder="Search a name, a level or a researcher" autocomplete="off" aria-label="Search the severity map">
+        <span class="dz-status" id="sevStatus" role="status"></span>
+      </div>
+      <div class="table-wrap dz-table"><table id="sevTable"><thead><tr><th>Name</th><th>Kind</th><th>Criticality</th><th>Source</th><th class="dz-act"></th></tr></thead><tbody></tbody></table></div>
+      <div id="sevMore"></div>
+    </section>
+{% endif %}
+
 {% include "_net_card.html" %}
 
 {% include "_tlp_card.html" %}
@@ -79,6 +110,7 @@
   <script src="{{ url_for('static', filename='js/kb-settings.js') }}"></script>
   <script src="{{ url_for('static', filename='js/confirm-list.js') }}"></script>
   <script src="{{ url_for('static', filename='js/attack-map.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/severity-map.js') }}"></script>
   <script src="{{ url_for('static', filename='js/kb-services-patterns.js') }}"></script>
   <script src="{{ url_for('static', filename='js/kb-services.js') }}"></script>
   <script src="{{ url_for('static', filename='js/net-editor.js') }}"></script>
