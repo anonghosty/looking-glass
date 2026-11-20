@@ -274,7 +274,7 @@ No Shadowserver reports yet? [Sign up your CSIRT](https://www.shadowserver.org/w
          only. On WSL, remove any Windows firewall rule that opens the port wider than that.
    - [ ] Give the server a fixed address (a DHCP reservation) or a name people use. The self-signed HTTPS certificate
          names the server's addresses as they were when it was made: after an address change (or to replace a
-         certificate made before 2026-11-19, which names the product), make it again, then trust it once more on each
+         certificate which names the product), make it again, then trust it once more on each
          screen. Looking Glass warns administrators in the bell when it no longer matches.
          ```bash
          cd platform && deploy/make_tls_cert.sh <the name or address people use>
