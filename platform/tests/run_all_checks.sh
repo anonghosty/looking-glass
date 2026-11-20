@@ -177,6 +177,8 @@ run "RULE: no ATT&CK technique or mitigation listed twice, anywhere" tests/check
 run "Sign-in: the card turns, the dive after signing in, no logo before" tests/check_signin_motion.py
 run "Hover labels on the header and portal buttons" tests/check_hover_labels.py
 run "Settings: the logo's size and crop tool" tests/check_logo_tool.py
+run "The guided tour on every platform and portal" $PY tests/check_tour.py
+run "Every PDF and CSV variation: the content checker" $PY tests/check_output_lint.py
 run "PDF pages: no overlap, no cut-off" $PY tests/pdf_pages_check.py
 run "analyst code counts: one lock per code" $PY tests/check_per_key_cache.py
 run "older days kept for analyst codes" $PY tests/check_recent_days.py

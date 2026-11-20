@@ -118,6 +118,11 @@ def install(app, core):
                                                "fresh": A["fresh"], "audit": A["audit"],
                                                "org": Organisation(os.path.join(base, "data", "organisation.json"))})
 
+    # the guided tour's memory per person: which pages' tours were seen or skipped (tour_prefs.py, tour.js; 2026-11-20)
+    if "csrf_ok" in A:
+        import tour_prefs
+        out["tour_prefs"] = tour_prefs.install(app, {"base_dir": os.path.dirname(os.path.abspath(__file__)), "csrf_ok": A["csrf_ok"]})
+
     # right after signing in: the dive into the globe, the logo, then the page (signin_welcome.py, the user 2026-11-19);
     # behind the sign-in, so nobody signed out sees the product's logo
     import signin_welcome

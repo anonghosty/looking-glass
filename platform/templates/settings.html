@@ -136,25 +136,10 @@
           </div>
         </div>
       </div>
-      {# the advisory PDF's look and the name at the top of its pages (the user, 2026-11-19); saved with the organisation #}
-      <fieldset class="org-signin org-pdf" id="orgPdf">
-        <legend>Advisory PDF</legend>
-        <p class="st-hint">How the advisories' PDFs look. The plain look prints well: white pages, dark text, the TLP label unchanged.
-          The name at the top left of each page can be Looking Glass, the organisation's name, or nothing.</p>
-        <div class="org-grid">
-          <label class="st-field"><span>The advisory's look</span>
-            <select id="orgPdfLook" class="lg-enhance">
-              <option value="designed">Designed (dark pages, as before)</option>
-              <option value="plain">Plain (white pages)</option>
-            </select></label>
-          <label class="st-field"><span>The name on the advisory's pages</span>
-            <select id="orgPdfBrand" class="lg-enhance">
-              <option value="looking-glass">Looking Glass (as before)</option>
-              <option value="organisation">The organisation's name</option>
-              <option value="none">No name</option>
-            </select></label>
-        </div>
-      </fieldset>
+      {# the advisory PDF's look and the name at the top of its pages are the advisor's choice, on each advisory (the user,
+         2026-11-20: "it should be the choice of the advisor and not the admin") #}
+      <p class="st-hint">The advisory's look (designed or plain white) and the name at the top of its pages are chosen by the
+        advisor on each advisory.</p>
       <div class="org-save"><button class="intro-cta" id="orgSave" type="button" disabled>Save the organisation</button><span class="muted" id="orgMsg" role="status"></span></div>
       {# no logo on the sign-in pages any more (the user, 2026-11-19): nothing for a scanner to recognise; the name stays #}
       <p class="st-hint">The sign-in pages show the organisation's name, never a logo: an image there is something internet

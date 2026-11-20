@@ -189,6 +189,18 @@ you view, copy or export on Looking Glass is recorded under your name.*
 Said plainly: blocking selection in a browser deters, it does not make copying impossible (the browser's developer
 tools, a photo of the screen). What it guarantees is that every copy made the normal way is on record.
 
+### The guided tour
+
+Every page with a header has a **Tutorial** button (a question mark, before the bell and Log out). It shows a short
+tour of that page: one part at a time is lit up, the rest dimmed, with what it shows; then the header's buttons, each
+with what it does. **Next** and **Back** (or the **Right** and **Left** arrows) move through it; **Skip the tour** or
+**Escape** ends it, and the focus goes back to the button. A part that is not on the page for you (another role's,
+an empty list) is left out.
+
+The first time you open a page, a small box offers the tour: **Take the tour**, **Skip**, or **Don't show again** (for
+every page). Your answer is remembered for your account, in every browser, and the Tutorial button still shows the
+tour any time.
+
 ---
 
 ## 2. The intro page
@@ -996,14 +1008,21 @@ actions), then **INSIGHTS**, **TECHNICAL DETAILS** and **REFERENCES**, each with
 (its name and logo from Settings), never by a person; who wrote it is kept in the audit log. It carries no internal code
 and no researcher's note, and every page shows the TLP at the bottom right and in the header line.
 
-**How the PDF looks** is set by an administrator in **Settings → Organisation → Advisory PDF**:
-- **The advisory's look:** *Designed* (dark pages, as before) or *Plain* (white pages and dark text, for printing). The
-  TLP label keeps its black box and colour on both.
-- **The name on the advisory's pages** (top left of every page): *Looking Glass* (as before), *the organisation's name*,
-  or *no name*.
+**How the PDF looks** is the advisor's choice, for each advisory, beside **Add insights** on the advisory page:
+- **The PDF's look:** *Designed* (dark pages) or *Plain* (white pages and dark text, for printing). The TLP label
+  keeps its black box and colour on both.
+- **The name at the top of its pages** (top left of every page): *Looking Glass*, *the organisation's name*, or *no
+  name*.
 
-Each change is in the audit log, and the next report generated uses it. Turning **Add insights** on or off marks a
+A new advisory starts with the designed look and Looking Glass. An advisory written before this choice moved to the
+advisory page keeps what Settings → Organisation held then, so its PDF does not change. Each change is in the
+advisory's history and the audit log. Changing the look or the name, or turning **Add insights** on or off, marks a
 generated report out of date, like a change to the text.
+
+**MITRE ATT&CK in the report.** Each technique is listed once, in code order, with every reason it applies merged
+into one sentence. The mitigations follow in their own section, **one block per technique** (in code order): the
+technique, then its MITRE mitigations in code order, each with MITRE's advice for that technique. A mitigation that
+defends against several techniques appears under each of them, once in each.
 
 ![The advisory report, signed by the CSIRT](media/screens/73-advisory-report.png)
 
@@ -1273,7 +1292,10 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
   of its addresses (so a list of guessed addresses never matches, while a real excerpt does, even reformatted). Give
   at most 1,000 lines and 1,000 addresses to find partial matches; with more, only copies and downloads of exactly
   that text or file are looked for, and the answer says so. A line found in many people's copies and downloads (a
-  CSV's header) does not count as a match, and the answer says how many were left out.
+  CSV's header) does not count as a match, and the answer says how many were left out. Small traces (at most 3
+  lines each) are watched: one or two addresses at a time can be used to test guesses, so when one person runs 20 of
+  them within 24 hours (`SMALL_TRACE_ALERT`), the administrators get an alert in the bell, linking here, and again at
+  every further 20. Only the person and the times are kept for this, never what was traced.
 - **Access review:** every account with its role and what that role may do, its authenticator, last sign-in, who
   approved it and flags (no authenticator, dormant, pending too long, every permission), and the roles matrix.
 - **Signed in now:** every session with its address, location, browser and expiry (read only).

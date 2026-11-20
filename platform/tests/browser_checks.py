@@ -152,12 +152,71 @@ def pages_of(pg):
     return out[:MAX_PAGES]
 
 
+def tour_walk(pg):
+    """The guided tour on this page (tour.js, 2026-11-20): the Tutorial button in the header, every step of the page whose
+    part is on it, each step spotlighting something visible with its card on the screen, walked by keyboard to the end;
+    Escape ends it; the focus goes back to the button. Returns the problems found."""
+    if not pg.evaluate("!!document.querySelector('.hud-right, .mg-top-actions')"):
+        return []
+    probs = []
+    if not pg.evaluate("!!window.LGTour"):
+        return ["the tour (tour.js) is not loaded"]
+    btn = pg.query_selector(".lg-tour-btn")
+    if not btn or not btn.is_visible():
+        return ["no Tutorial button in the header"]
+    want = pg.evaluate("""() => { const T = window.LGTour, own = T.STEPS[T.pageKey()] || [];
+        const vis = (n) => { const r = n.getBoundingClientRect(); return r.width > 2 && r.height > 2 && getComputedStyle(n).visibility !== 'hidden'; };
+        return own.filter(([sel]) => [...document.querySelectorAll(sel)].some(vis)).map(s => s[1]); }""")
+    have = pg.evaluate("window.LGTour.steps().map(s => s.title)")
+    lost = [t for t in want if t not in have]
+    if lost:
+        probs.append(f"tour steps left out though their part is on the page: {lost}")
+    if not pg.evaluate("(window.LGTour.STEPS[window.LGTour.pageKey()] || []).length") and pg.evaluate("location.pathname") != "/":
+        probs.append(f"no tour steps for this page ({pg.evaluate('window.LGTour.pageKey()')})")
+    # pressed as a keyboard user does: the map's Overview dialog over the page would block a mouse click (the tour
+    # explains that dialog then)
+    btn.evaluate("b => { b.focus(); b.click(); }")    # focused first, as a click or Enter on it leaves it
+    time.sleep(.4)
+    seen, bad = 0, []
+    for _ in range(len(have) + 2):
+        st = pg.evaluate("""() => { const c = document.querySelector('.lg-tour-card'); if (!c) return null;
+            const s = document.querySelector('.lg-tour-spot').getBoundingClientRect(), r = c.getBoundingClientRect();
+            return {t: c.querySelector('.lg-tour-title').textContent, x: (c.querySelector('.lg-tour-text').textContent || '').length,
+                    spot: s.width > 4 && s.height > 4, on: r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight + 1 && r.right <= innerWidth + 1,
+                    focus: c.contains(document.activeElement)}; }""")
+        if st is None:
+            break
+        seen += 1
+        if not (st["spot"] and st["on"] and st["x"] and st["focus"]):
+            bad.append(st["t"])
+        pg.keyboard.press("ArrowRight")
+        time.sleep(.35)                      # as a person reads: the step settled (scrolled, placed) before it is measured
+    if seen != len(have):
+        probs.append(f"the tour showed {seen} of its {len(have)} steps")
+    if pg.evaluate("!!document.querySelector('.lg-tour')"):
+        probs.append("the tour did not end after its last step")
+    if bad:
+        probs.append(f"tour steps off screen, pointing at nothing or losing the focus: {bad[:4]}")
+    if not pg.evaluate("document.activeElement && document.activeElement.classList.contains('lg-tour-btn')"):
+        probs.append("the focus did not go back to the Tutorial button")
+    btn.evaluate("b => { b.focus(); b.click(); }")
+    time.sleep(.3)
+    pg.keyboard.press("Escape")
+    time.sleep(.2)
+    if pg.evaluate("!!document.querySelector('.lg-tour')"):
+        probs.append("Escape did not end the tour")
+    return probs
+
+
 fails = 0
 with sync_playwright() as p:
     br = p.chromium.launch()
     for role in ROLES:
         ctx = br.new_context(ignore_https_errors=True, viewport={"width": 1400, "height": 900})
         ctx.add_init_script(LOAD_WATCH)                   # before the page's own scripts, on every page
+        # the tour's first-visit offer (tour.js) is not shown, so it never covers what is checked; the tour itself is
+        # walked below on every page
+        ctx.add_init_script("try { localStorage.setItem('lg.tour.never', '1') } catch (e) {}")
         try:
             pg = sign_in(ctx, ACCOUNTS[role])
         except Exception as e:                          # noqa: BLE001
@@ -213,7 +272,8 @@ with sync_playwright() as p:
             missed = pg.evaluate("(got) => [...document.querySelectorAll('[data-kb]')].filter(e => !got.includes(e.dataset.kb) && e.isConnected"
                                  " && e.getBoundingClientRect().width > 0).map(e => e.tagName.toLowerCase() + ': ' + (e.getAttribute('aria-label') ||"
                                  " e.textContent || e.value || '').trim().slice(0, 40)).slice(0, 8)", sorted(reached))
-            probs = ([f"not reached by Tab: {missed}"] if missed else []) + (["focus trapped"] if same > 5 else []) + \
+            tour = tour_walk(pg)
+            probs = tour + ([f"not reached by Tab: {missed}"] if missed else []) + (["focus trapped"] if same > 5 else []) + \
                     ([f"clickable but not a control: {info['pointer']}"] if info["pointer"] else []) + \
                     ([f"list holds a non-item: {info['lists']}"] if info["lists"] else []) + \
                     ([f"cut off with '…': {info['cut']}"] if info["cut"] else []) + \

@@ -429,12 +429,26 @@
     insBox.append(ins, el("b", null, "Add insights"),
       el("small", "muted", "The analysis pages after the advisory: Overview, Geographic location, the IP address tables and Across reports. "
         + "Without them the PDF is the advisory, its Technical Details and References. Save, then generate the report again."));
+    // the PDF's look and the name at the top of its pages: the advisor's choice for this advisory (the user, 2026-11-20:
+    // "it should be the choice of the advisor and not the admin")
+    const pick = (id, label, value, opts) => {
+      const s = el("select"); s.id = id; s.className = "lg-enhance";
+      for (const [v, t] of opts) s.append(new Option(t, v));
+      s.value = value; const l = el("label", "av-field av-pdfopt"); l.htmlFor = id; l.append(el("span", null, label), s); return [l, s];
+    };
+    const [lookBox, look] = pick("advLook", "The PDF's look", a.look || "designed",
+      [["designed", "Designed (dark pages)"], ["plain", "Plain (white pages, prints well)"]]);
+    const [brandBox, brand] = pick("advBrand", "The name at the top of its pages", a.brand || "looking-glass",
+      [["looking-glass", "Looking Glass"], ["organisation", `The organisation's name (${a.organisation || "from Settings"})`], ["none", "No name"]]);
+    const pdfOpts = el("div", "av-pdfopts"); pdfOpts.append(lookBox, brandBox,
+      el("small", "muted", "For this advisory's PDF. The TLP label keeps its black box on both looks. Save, then generate the report again."));
     w.append(tlpBox, lab("Title", subj, `Large at the top of the first page, with "${heading || a.heading_default}" in small letters above it.`),
              lab("Description", desc, a.kinds_line ? `Below it the advisory adds: "${a.kinds_line}"` : "", toolbar(desc, pv1)), pv1,
              lab("Recommended Actions", act, D.has_report ? 'With the insights added, after them: "See below for further insight into the activity." and the analysis of this organisation\'s devices.' : "", toolbar(act, pv2)), pv2,
              lab("Recipients", rec));
     if (D.has_report) w.append(insBox);              // only an advisory with a report has insights to add
-    [subj, desc, act, rec, ins].forEach((x) => { x.disabled = !edit; });
+    w.append(pdfOpts);
+    [subj, desc, act, rec, ins, look, brand].forEach((x) => { x.disabled = !edit; });
     w.querySelectorAll(".av-tool").forEach((b) => { b.disabled = !edit; });
     const bar = el("div", "av-acts"), msg = el("span", "muted av-msg"); msg.setAttribute("role", "status");
     const say = (t, bad) => { msg.textContent = t; msg.style.color = bad ? "#ff8f8f" : ""; };
@@ -442,6 +456,7 @@
     const net = NET, seq = SEQ, here = D;
     // rev: the revision this form opened; a save after someone else's is refused ("changed meanwhile")
     const body = () => ({ network: net, rev: here.advisory.rev, tlp: tlpVal, heading, subject: subj.value, description: desc.value, actions: act.value, recipients: rec.value,
+                          look: look.value, brand: brand.value,
                           ...(D.has_report ? { insights: ins.checked } : {}) });
     const save = async () => { const d = await post(`/api/advisory/${fid}/net`, body()); here.advisory = d.advisory; here.saved = true; return d; };
     // one action at a time; the page is drawn again only if this organisation is still the one shown

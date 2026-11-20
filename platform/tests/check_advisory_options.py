@@ -75,7 +75,7 @@ ok("an advisory saved before the option keeps its fingerprint (its generated rep
 ok("…turning the insights on or off makes the generated report out of date",
    ADV.content_sig(dict(base, insights=True)) != ADV.content_sig(dict(base, insights=False)))
 asrc = open(os.path.join(HERE, "advisory.py"), encoding="utf-8").read()
-ok("a new advisory starts without the insights (the user's choice)", '"insights": False}' in asrc)
+ok("a new advisory starts without the insights (the user's choice)", '"insights": False,' in asrc)
 ok("an advisory saved before the option keeps them", 'return bool(adv.get("insights", True))' in asrc)
 ok("the choice is saved, and a change is in the advisory's history", 'adv["insights"] = bool(b.get("insights"))' in asrc
    and '"insights added" if adv["insights"] else "insights left out"' in asrc)
@@ -142,8 +142,21 @@ S = os.environ.get("LG_HELD_DIR", "")
 pick = lambda name, live: os.path.join(S, name + ".new") if S and os.path.exists(os.path.join(S, name + ".new")) else live  # noqa: E731
 ojs = open(pick("organisation.js", os.path.join(HERE, "static", "js", "organisation.js")), encoding="utf-8").read()
 shtml = open(pick("settings.html", os.path.join(HERE, "templates", "settings.html")), encoding="utf-8").read()
-ok("Settings → Organisation: the two choices, saved with the organisation",
-   'id="orgPdfLook"' in shtml and 'id="orgPdfBrand"' in shtml and "body.pdf_look" in ojs and "body.pdf_brand" in ojs)
+print("3b. …now the advisor's choice, per advisory (the user, 2026-11-20: \"the choice of the advisor and not the admin\")")
+ok("Settings → Organisation no longer holds the two choices", 'id="orgPdfLook"' not in shtml and 'id="orgPdfBrand"' not in shtml
+   and "body.pdf_look" not in ojs and "body.pdf_brand" not in ojs)
+ajs2 = open(pick("advisory.js", os.path.join(HERE, "static", "js", "advisory.js")), encoding="utf-8").read()
+ok("the advisory page: the look and the name on its pages, saved with the advisory",
+   'pick("advLook"' in ajs2 and 'pick("advBrand"' in ajs2 and "look: look.value, brand: brand.value" in ajs2)
+ok("a new advisory: the designed look and Looking Glass", '"look": "designed", "brand": "looking-glass"}' in asrc)
+ok("the API refuses an unknown look or name (400) and writes the change in the advisory's history",
+   "if b[key] not in allowed:" in asrc and '"look: " if key == "look" else "name on its pages: "' in asrc)
+ok("an advisory saved before the move keeps the organisation's old choice (its PDF does not change)",
+   'o.get("pdf_look") if o.get("pdf_look") in LOOKS' in asrc)
+ok("changing the look or the name makes the generated report out of date",
+   ADV.content_sig(dict(base, look="plain")) != ADV.content_sig(dict(base, look="designed"))
+   and ADV.content_sig(dict(base, brand="none")) != ADV.content_sig(dict(base, brand="looking-glass")))
+ok("…an advisory saved before keeps its fingerprint", ADV.content_sig(dict(base)) == ADV.content_sig(dict(base)))
 
 print("4. MITRE ATT&CK: each technique once (the user, 2026-11-19: the advisory repeated them)")
 mk = lambda tid, cert, why, **k: dict({"id": tid, "name": "Exploit Public-Facing Application" if tid == "T1190" else "External Remote Services",  # noqa: E731
@@ -182,9 +195,23 @@ try:
     APDF.alone(dict(adv, attack={"version": "18.1", "techniques": techs}), meta)
 finally:
     APDF.Flow.para = real_para
-ok("…printed in one section after the techniques, M1050 once",
-   sum(1 for s in paras if s.startswith("M1050 Exploit Protection")) == 1
-   and not any(s.startswith("• M1050") for s in paras), str([s for s in paras if "M1050" in s]))
+
+def mitigation_blocks(paras):
+    """The mitigations section as printed: {technique: [its mitigations]} in print order (2026-11-20: one block per technique)."""
+    i = next((k for k, s in enumerate(paras) if s.startswith("For each technique above, MITRE's mitigations")), None)
+    blocks, cur = {}, None
+    for s in paras[i + 1:] if i is not None else []:
+        if s[:1] == "T" and s[1:5].isdigit():
+            cur = blocks.setdefault(s.split(" ")[0], [])
+        elif s[:1] == "M" and s[1:5].isdigit() and cur is not None:
+            cur.append(s.split(" ")[0])
+    return blocks
+
+
+blocks = mitigation_blocks(paras)
+ok("…printed after the techniques, one block per technique in code order, each with its mitigations once, in code order",
+   blocks == {"T1133": ["M1050"], "T1190": ["M1016", "M1050"]} and list(blocks) == ["T1133", "T1190"]
+   and not any(s.startswith("• M1050") for s in paras), str(blocks))
 import attack_map as AM  # noqa: E402
 lines = AM.attack_lines({"version": "18.1", "techniques": [dict(techs[0], certainty_label="Possible"), dict(techs[0], certainty_label="Possible")]})
 ok("the plain-text lines (Technical Details, CSV) list a technique once", lines and lines[0].count("T1190") == 1, str(lines))

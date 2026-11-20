@@ -495,7 +495,7 @@ def front(doc, a):
             f.para("CVE techniques: MITRE Center for Threat-Informed Defense, Mappings Explorer (KEV to ATT&CK). © MITRE, "
                    "Apache License 2.0.", 8.8, DIM)
         groups = group_techniques(att["techniques"])
-        assert_no_duplicates(groups, group_mitigations(groups))
+        assert_no_duplicates(groups)                  # each technique once; within a technique, each mitigation once
         for t in groups:
             cert =(t.get("certainty_label") or "").split(" (")[0] or str(t.get("certainty") or "").capitalize()
             # the technique's lines as (text, size, colour, bold, x), measured first so the whole block is kept on one
@@ -518,7 +518,7 @@ def front(doc, a):
                 rows.append((f"How {cve or 'the vulnerability'} maps (MITRE CTID): {comment}", 9, TXT, False, M + 10))
             for note in t.get("notes") or []:         # the ATT&CK version CTID mapped with differs: renamed / revoked
                 rows.append((f"ATT&CK version: {note}.", 8.8, DIM, False, M + 10))
-            if t.get("defend"):                       # the mitigations themselves: once each, in their own section below
+            if t.get("defend"):                       # the mitigations themselves: under this technique, in the section below
                 rows.append(("How to defend: " + ", ".join(m["id"] for m in t["defend"]) + " (MITRE mitigations, below).",
                              8.8, DIM, False, M + 10))
             rows.append((f"MITRE ATT&CK: {t.get('url') or ''}", 8.4, ACCENT, False, M + 10))
@@ -527,23 +527,26 @@ def front(doc, a):
             f.para_cert(head, 9.6, cert)
             for s, z, c, b, x in rows:
                 f.para(s, z, c, b, x=x)
-        # the mitigations grouped in one section (the user, 2026-11-19): each once, with the techniques it defends
-        # against; MITRE's words for each technique kept, said once when they are the same
-        mits = group_mitigations(group_techniques(att["techniques"]))
-        if mits:
+        # the mitigations in one section, grouped by technique (the user, 2026-11-20: "grouped by techniques"; chose
+        # one block per technique): each technique in code order, its mitigations in code order with MITRE's advice for
+        # that technique. A mitigation defending two techniques is under both; within one technique each is once.
+        with_defence = [t for t in groups if t.get("defend")]
+        if with_defence:
             f.heading("How to defend: MITRE ATT&CK mitigations")
-            f.para("Each mitigation once, with the techniques above it defends against. MITRE's words. © The MITRE "
+            f.para("For each technique above, MITRE's mitigations and its advice for that technique. © The MITRE "
                    "Corporation, reproduced and distributed with its permission.", 8.8, DIM)
-            for m in mits:
-                head = f"{m['id']} {m['name']} · for {', '.join(m['techs'])}"
-                texts = m["texts"]
-                lines = ([] if not texts else [(texts[0][1], M + 10)] if len({t for _, t in texts}) == 1 else
-                         [(f"• {tid}: {t}", M + 20) for tid, t in texts])
+            for t in with_defence:
+                head = f"{t['id']} {t['name']}"
+                lines = []
+                for m in t["defend"]:
+                    lines.append((f"{m['id']} {m.get('name') or ''}".strip(), 9, TXT, True, M + 10))
+                    if m.get("text"):
+                        lines.append((m["text"], 8.8, DIM, False, M + 20))
                 f.y -= 3
-                f.need(min(f.height(head, 9.4, True) + sum(f.height(s, 8.8, False, x) for s, x in lines), KEEP_MAX))
-                f.para(head, 9.4, TXT, True)
-                for s, x in lines:
-                    f.para(s, 8.8, DIM, x=x)
+                f.need(min(f.height(head, 9.6, True) + sum(f.height(s, z, b, x) for s, z, _, b, x in lines), KEEP_MAX))
+                f.para(head, 9.6, TXT, True)
+                for s, z, c, b, x in lines:
+                    f.para(s, z, c, b, x=x)
 
     f.heading("Recommended Actions")
     if a.get("actions"):

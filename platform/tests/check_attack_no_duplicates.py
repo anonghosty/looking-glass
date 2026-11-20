@@ -80,8 +80,18 @@ try:
 finally:
     APDF.Flow.para_cert, APDF.Flow.para = real_pc, real_p
 ok("the PDF: each technique heading once", sorted(h.split(" ")[0] for h in heads) == ["T1071.001", "T1071.004"] and pdf[:4] == b"%PDF", str(heads))
-ok("the PDF: each mitigation once, in its own section", [s.split(" ")[0] for s in paras if s.startswith(("M1031 ", "M1037 "))] == ["M1031", "M1037"]
-   and not any(s.startswith("• M10") for s in paras))
+i_mit = next((k for k, s in enumerate(paras) if s.startswith("For each technique above, MITRE's mitigations")), None)
+blocks, cur = {}, None
+for s in paras[i_mit + 1:] if i_mit is not None else []:
+    if s[:1] == "T" and s[1:5].isdigit():
+        ok(f"the PDF's mitigations: {s.split(' ')[0]} has one block", s.split(" ")[0] not in blocks)
+        cur = blocks.setdefault(s.split(" ")[0], [])
+    elif s[:1] == "M" and s[1:5].isdigit() and cur is not None:
+        cur.append(s.split(" ")[0])
+want = {t["id"]: sorted({m["id"] for m in t["defend"]}, key=APDF.code_key) for t in groups if t.get("defend")}
+ok("the PDF's mitigations, grouped by technique (2026-11-20): one block per technique in code order, each mitigation "
+   "once within it, in code order", blocks == want and list(blocks) == sorted(want, key=APDF.code_key)
+   and all(len(v) == len(set(v)) for v in blocks.values()) and not any(s.startswith("• M10") for s in paras), str(blocks))
 asrc = open(os.path.join(HERE, "advisory.py"), encoding="utf-8").read()
 ok("generating the report stops with a message if the guard ever fires", "except advisory_pdf.DuplicateAttack as e:" in asrc)
 

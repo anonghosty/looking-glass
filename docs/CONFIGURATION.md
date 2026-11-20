@@ -155,6 +155,7 @@ Set these to what your own audits and laws require; the defaults suit a yearly I
 | `FINDING_GRACE_DAYS` | `7` | a finding is never closed this way sooner than this many days after it was opened (a review of older records) |
 | `DATA_ACCESS_LOG` | `1` | `0` stops logging views of host-level data (one host's activity, host lists, record details, analyses) in the audit log; exports are always logged. Off, CIS safeguard 3.14 shows as "related", not backed |
 | `COPY_SEAL_KEY` | empty | the secret key that seals every copy and download (keyed fingerprints, for Trace a leak). Empty: Looking Glass makes one at the first start in `data/copy_seal.key` (owner-only) and uses it. Keep the key with your backups: seals made with a lost key can no longer be traced. Never shown anywhere |
+| `SMALL_TRACE_ALERT` | `20` | Trace a leak searches of at most 3 lines each that one person may run within 24 hours before the administrators get an alert in the bell (and again at every further this many); at least 2. Only the person and the times are kept (`data/trace_watch.json`) |
 | `AUDIT_REVIEW_DAYS` | `7` | control check LG-13 (NIST AU-6): the review interval the check names (integrity check or evidence export). 7 is CIS's figure (weekly, safeguard 8.11); above it, 8.11 shows as "related", not backed |
 
 The control checks give evidence, not a pass or fail: the conclusion is the auditor's.
@@ -210,6 +211,8 @@ Created and kept by the service; private to its user and never committed:
 | `copy_seals.jsonl`, `copy_seal.key` | the seals of every copy made with a copy button and every file downloaded: who, when, what, and keyed fingerprints (never the text or an address); the key that makes them (when `COPY_SEAL_KEY` is not set). Owner-only; seals older than `AUDIT_RETENTION_DAYS` are removed |
 | `name_kinds.json`, `name_ratings.json` | every name the reports carried with its kind, and the researchers' ratings of names no record rates (the severity map; names only) |
 | `invites.json` | the open and recent sign-up links (Add a person): role, who made it, when; only each link's SHA-256, never a working link. Owner-only |
+| `tour_seen.json` | the guided tour: for each person, which pages' tours were taken or skipped, and *Don't show again*. Nothing else. Owner-only |
+| `trace_watch.json` | the times of each person's small Trace a leak searches in the last 24 hours (for the bell's alert); never what was traced. Owner-only |
 | `signin_look.json` | no longer used (the sign-in pages show no logo since 2026-11-19); it may be deleted |
 | `settings.json`, `schedule.json` | Settings page values, replay schedule |
 | `config.json` | the tuning values kept on Settings → Configuration (they take precedence over `.env`; delete it and restart to go back to `.env`) |

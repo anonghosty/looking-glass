@@ -37,6 +37,7 @@ import advisory_attack
 import finding_rules
 import issue_tags
 import tlp
+from organisation import BRANDS, LOOKS      # the advisory PDF's looks and page names (the advisor chooses per advisory)
 
 SCHEMA, VERSION = "looking-glass/advisory", 2
 MAX_TEXT, MAX_SUBJECT, MAX_RECIPIENTS, MAX_RECIPIENT = 6000, 200, 30, 120
@@ -77,6 +78,9 @@ def content_sig(adv):
         body.append(sorted(adv["attack_decisions"].items()))
     if "insights" in adv:                      # Add insights (2026-11-19): with or without the analysis pages; an advisory
         body.append(["insights", bool(adv["insights"])])   # saved before the option keeps its fingerprint
+    for k in ("look", "brand"):                # the advisor's look and page name (2026-11-20), only once chosen
+        if k in adv:
+            body.append([k, adv[k]])
     return hashlib.sha256(json.dumps(body, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
@@ -593,7 +597,18 @@ def install(app, ctx):
                 "sends": [], "reports": [], "source": (x.get("review") or {}).get("source") or ((x.get("codes") or [None])[0]),
                 "decision": (x.get("review") or {}).get("decision") or "", "history": [{"at": _now(), "user": user, "what": "created"}],
                 # a new advisory goes without the insights pages; the advisor adds them (the user, 2026-11-19)
-                "insights": False}
+                "insights": False,
+                # its look and the name at the top of its pages: the advisor's choice, per advisory (the user, 2026-11-20:
+                # "it should be the choice of the advisor and not the admin"); the designed look and Looking Glass to start
+                "look": "designed", "brand": "looking-glass"}
+
+    def look_of(adv):
+        """(look, brand) of an advisory: the advisor's choice; an advisory saved before the choice moved to the advisor
+        keeps what Settings → Organisation held then (so its PDF does not change)."""
+        o = ctx["org"].get()
+        look = adv.get("look") if adv.get("look") in LOOKS else (o.get("pdf_look") if o.get("pdf_look") in LOOKS else LOOKS[0])
+        brand = adv.get("brand") if adv.get("brand") in BRANDS else (o.get("pdf_brand") if o.get("pdf_brand") in BRANDS else BRANDS[0])
+        return look, brand
 
     def insights_of(adv):
         """Whether the advisory's PDF carries the insights pages: what the advisor chose; an advisory saved before the
@@ -620,6 +635,7 @@ def install(app, ctx):
                "reports": auto["reports"], "impact": auto["impact"], "kinds_line": auto["kinds_line"],
                "description": adv["description"], "recommended_actions": adv["actions"], "recipients": adv["recipients"],
                "insights": insights_of(adv),
+               "look": look_of(adv)[0], "brand": look_of(adv)[1],
                "sends": [{"to": s["to"], "at": _day(s["at"]), "by": name_of(s["by"]), "report": (s.get("report") or {}).get("name", "")}
                          for s in adv.get("sends") or []],
                "locked": adv.get("status") == "sent",    # sent: read-only, the record of what went out
@@ -645,9 +661,9 @@ def install(app, ctx):
         o = ctx["org"].get()
         ref = v["ref"] or "ADV (draft, not saved yet)"
         return {"ref": ref, "org": v["organisation"], "logo": o["logo"], "title": v["title"], "subject": v["subject"],
-                # the look of the PDF and the name at the top of its pages (Settings → Organisation, 2026-11-19)
-                "look": o.get("pdf_look") or "designed",
-                "brand": ctx["org"].brand_text() if hasattr(ctx["org"], "brand_text") else "Looking Glass",
+                # the look of the PDF and the name at the top of its pages: the advisor's choice for this advisory
+                "look": v["look"],
+                "brand": {"looking-glass": "Looking Glass", "organisation": v["organisation"], "none": ""}[v["brand"]],
                 "network": v["network"], "date": v["updated"], "status_label": v["status_label"], "by": v["organisation"],    # signed by the CSIRT
                 "finding": v["finding"], "cves": v["affected"]["cves"], "issues": v["affected"]["issues"],
                 "categories": v["affected"]["categories"], "labels": v["affected"]["labels"], "devices": auto["devices"], "reports": v["reports"], "impact": v["impact"],
@@ -892,6 +908,18 @@ def install(app, ctx):
             if not create and was != adv["insights"]:
                 adv["history"].append({"at": _now(), "user": user,
                                        "what": "insights added" if adv["insights"] else "insights left out"})
+        # the look and the name at the top of the pages: the advisor's choice (2026-11-20), only the listed values
+        for key, allowed, said in (("look", LOOKS, {"designed": "designed (dark pages)", "plain": "plain (white pages)"}),
+                                   ("brand", BRANDS, {"looking-glass": "Looking Glass", "organisation": "the organisation's name", "none": "no name"})):
+            if key in b:
+                if b[key] not in allowed:
+                    return jsonify(error="The advisory's look: designed or plain; the name on its pages: Looking Glass, "
+                                         "the organisation's name or none."), 400
+                was = look_of(adv)[0 if key == "look" else 1]
+                adv[key] = b[key]
+                if not create and was != adv[key]:
+                    adv["history"].append({"at": _now(), "user": user,
+                                           "what": ("look: " if key == "look" else "name on its pages: ") + said[adv[key]]})
         if not create:
             if adv["status"] == "drafted":            # changed after it was marked as drafted: a draft again until marked again
                 adv["status"] = "draft"

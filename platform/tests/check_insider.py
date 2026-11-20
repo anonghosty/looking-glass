@@ -226,6 +226,26 @@ who["user"] = "auditor2"
 codes = [tr(text="203.0.113.9").status_code for _ in range(3)]
 I.TRACE_PER_DAY = keep_day
 ok("a daily limit per person besides the minute's", codes[:2] == [200, 200] and codes[2] == 429, str(codes))
+# small traces (at most 3 lines) watched: many in 24 hours put an alert in the administrators' bell (the user, 2026-11-20)
+watch = os.path.join(base, "data", I.WATCH_FILE)
+wd = json.load(open(watch)) if os.path.exists(watch) else {}
+ok("small traces are noted: who and when only", wd.get("auditor2") and all(isinstance(t, int) for t in wd["auditor2"])
+   and "203.0.113" not in open(watch).read(), str(wd)[:160])
+ok("…the notes file is owner-only (0600)", (os.stat(watch).st_mode & 0o777) == 0o600)
+ok("…a trace of more than 3 lines is not noted as small", "auditor1" not in wd or len(wd["auditor1"]) <= 1, str(wd.get("auditor1")))
+import system_alerts as SA  # noqa: E402
+now = _t.time() if "_t" in dir() else __import__("time").time()
+json.dump({"mallory": [round(now) - i for i in range(I.SMALL_TRACE_ALERT)], "old": [round(now) - 90000] * 50,
+           "few": [round(now)] * (I.SMALL_TRACE_ALERT - 1)}, open(watch, "w"))
+alerts = SA.Alerts(base)._small_traces(now)
+ok(f"{I.SMALL_TRACE_ALERT} small traces by one person in 24 hours: an alert in the bell, linking to Audit",
+   len(alerts) == 1 and alerts[0]["title"].startswith("mallory ran ") and alerts[0]["link"] == "/audit" and alerts[0]["problem"], str(alerts))
+ok("…older than 24 hours or fewer than the limit: no alert", not any(a["title"].startswith(("old ", "few ")) for a in alerts))
+ok("…the alert says nothing of what was traced", "203.0.113" not in json.dumps(alerts))
+json.dump({"mallory": [round(now) - i for i in range(2 * I.SMALL_TRACE_ALERT)]}, open(watch, "w"))
+a2 = SA.Alerts(base)._small_traces(now)
+ok("…a new alert (a new key) at each further limit", a2 and a2[0]["key"] != alerts[0]["key"], str([a["key"] for a in a2]))
+os.remove(watch)
 who["user"], who["perms"] = "external1", {"view"}
 n_seals, n_audit = sum(1 for _ in open(seals)), len(audit)
 codes = [rec(text=f"line {i} 192.0.2.{i % 250}", kind="text").status_code for i in range(32)]

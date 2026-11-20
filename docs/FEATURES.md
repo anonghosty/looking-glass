@@ -266,8 +266,11 @@ against the trends, an analyst pulls exactly those devices and writes the adviso
   network), waits for Ubuntu's updates instead of failing, and warns later when a network change breaks the certificate
   or MongoDB's address.
 - **Nothing to recognise from the outside.** Signed out, the pages name no product, framework or library version:
-  the sign-in pages carry the organisation's name and logo, error pages are plain, and the platform's own files need
-  a sign-in. ([Installation, Updating](INSTALLATION.md#updating))
+  the sign-in pages carry the organisation's name only (no logo or picture), error pages are plain, and the platform's
+  own files need a sign-in. ([Installation, Updating](INSTALLATION.md#updating))
+- **A guided tour on every page.** A Tutorial button in every header walks through the page's parts and buttons, by
+  mouse or keyboard; the first visit to a page offers it, remembered per person.
+  ([User guide](USER_GUIDE.md#the-guided-tour))
 - **Every copy recorded, every copy and download sealed, Trace a leak.** Copying only through the copy buttons, each
   copy recorded under the person's name before it happens (not recorded = not copied); keyed fingerprints of every
   copy and downloaded file; auditors trace text or a file found outside back to who copied or downloaded it, and when.

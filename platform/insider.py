@@ -51,6 +51,14 @@ SEAL_ITEMS_MAX = 50000          # lines + addresses kept per copy or file (the w
 TEXT_MAX = 5_000_000            # characters a copy may carry to be recorded
 TRACE_MAX_BYTES = 25_000_000    # a file or text given to Trace a leak
 TRACE_PER_MINUTE = 5
+# Watching small traces (external review of 1a7b016 + the user, 2026-11-20): a trace of one or two addresses still
+# answers yes or no, so someone with the audit permission could test about 100 guesses a day, slowly. Not closed (it
+# would break real traces of short excerpts) but watched: SMALL_TRACE_ALERT traces of at most SMALL_TRACE_ITEMS lines
+# by one person within 24 hours put an alert in the administrators' bell (system_alerts.py). Only the time and the
+# person are kept (data/trace_watch.json), never what was traced.
+SMALL_TRACE_ITEMS = 3
+SMALL_TRACE_ALERT = max(2, int(os.environ.get("SMALL_TRACE_ALERT", "20") or 20))
+WATCH_FILE = "trace_watch.json"
 TRACE_PER_DAY = 100
 TRACE_MAX_ITEMS = 1000          # lines, and addresses, a trace compares one by one (more: the exact text or file only)
 TRACE_MIN_SHARE = 0.5           # a seal is reported when it holds at least this share of what was given (or all of it)
@@ -274,6 +282,30 @@ def install(app, ctx):
             pruned["at"] = now
         threading.Thread(target=prune_now, daemon=True, name="copy-seals-prune").start()
 
+    watch_path = os.path.join(ctx["base_dir"], "data", WATCH_FILE)
+
+    def note_small_trace(u):
+        """One more small trace by u: its time kept for 24 hours (the bell's alert counts them; system_alerts.py)."""
+        now = time.time()
+        with limits_lock:
+            try:
+                with open(watch_path, encoding="utf-8") as fh:
+                    d = json.load(fh)
+                d = d if isinstance(d, dict) else {}
+            except (OSError, ValueError):
+                d = {}
+            d = {k: [t for t in v if now - t < 86400] for k, v in d.items() if isinstance(v, list)}
+            d[u] = d.get(u, []) + [round(now)]
+            d = {k: v for k, v in d.items() if v}
+            tmp = watch_path + ".tmp"
+            try:
+                fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    json.dump(d, fh)
+                os.replace(tmp, watch_path)
+            except OSError:
+                pass
+
     def over(book, u, per, window):
         """True when u already made `per` requests in the last `window` seconds; else counts this one."""
         now = time.time()
@@ -402,8 +434,11 @@ def install(app, ctx):
             given = "pasted text"
         if not text and not data:
             return jsonify(error="Paste the text or choose the file to trace."), 400
+        small = bool(text) and len([ln for ln in text.splitlines() if ln.strip()]) <= SMALL_TRACE_ITEMS
         found, common, one_by_one = sealer.trace(text=text, data=data)
         text = data = None                                  # nothing given is kept
+        if small:
+            note_small_trace(u)
         audit.add("leak_traced", user=u, target=given, detail=f"{len(found)} match{'es' if len(found) != 1 else ''}")
         rows = []
         for r in found[:200]:

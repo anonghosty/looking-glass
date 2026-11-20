@@ -5,6 +5,26 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-20 (3)
+### Added
+- **A guided tour on every platform and portal.** A Tutorial button in every page header shows a short tour of that
+  page: one part at a time, spotlighted, with what it shows, then the header's buttons. Back, Next and Skip, or the
+  arrow keys and Escape. The first time someone opens a page they are offered the tour (Take the tour, Skip, or
+  Don't show again for every page); the answer is remembered for that person on the server, in every browser.
+- **An alert for many small leak traces.** When one person runs many Trace a leak searches of at most 3 lines each
+  within 24 hours (20 by default, `SMALL_TRACE_ALERT`), administrators get an alert in the bell, linking to Audit.
+  Only the person and the times are kept, never what was traced.
+### Changed
+- **The advisory's look and the name on its pages are now the advisor's choice, per advisory**, on the advisory page
+  beside Add insights: the designed (dark) or plain (white) look, and Looking Glass, the organisation's name or no
+  name at the top of the pages. They left Settings → Organisation. An advisory saved before keeps the choice
+  Settings held, so its PDF does not change.
+- **The advisory's MITRE ATT&CK mitigations are grouped by technique:** one block per technique, in code order, with
+  its mitigations and MITRE's advice for that technique. A mitigation that defends against several techniques appears
+  under each of them, once in each. Generate an advisory's report again to get the new layout.
+- **After updating:** nothing to do. Two new files appear in `data/` as they are used: `tour_seen.json` (who has seen
+  or skipped which page's tour) and `trace_watch.json` (the times of small traces, kept 24 hours).
+
 ## 2026-11-20 (2)
 ### Added
 - **Settings → Organisation: size and crop the logo.** Choosing a logo opens a sizing step: the picture in the
