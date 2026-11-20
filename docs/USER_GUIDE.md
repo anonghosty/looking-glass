@@ -1077,7 +1077,11 @@ platform full screen. The display adapts to TVs and weaker devices by itself (`?
   number, and tick a block to add it (untick to take it off); blocks whose network is already chosen are marked as in
   already. Nothing is looked up outside Looking Glass. **Apply settings** saves the choice.
 
-- **Organisation:** your CSIRT's name and logo (PNG or JPEG, at most 40 KB). Advisories are signed with them. The
+- **Organisation:** your CSIRT's name and logo (PNG or JPEG). **Choose a logo** opens a sizing step: the picture in
+  the advisory's logo frame (2:1, its border highlighted), **Trim empty margins**, a size slider, dragging (or the arrow
+  keys) to place it, a background for a picture with see-through parts (keep it, white or dark), and previews of the
+  logo card on the dark and the plain advisory. It recommends about 464 × 232 pixels and makes the saved logo small
+  enough (at most 40 KB) in your browser; nothing is sent until you save. Advisories are signed with them. The
   sign-in pages show the name only, never a logo: they name no product and show no image, so that internet scanners
   cannot tell what runs here.
 

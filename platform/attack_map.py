@@ -708,7 +708,14 @@ def merge_by_id(items):
     for g in out:
         if len(g.get("reports") or []) > 1:
             g["report"] = ", ".join(g["reports"])
-    return out
+        g["defend"] = sorted(g.get("defend") or [], key=lambda m: _code_key(m.get("id")))
+    return sorted(out, key=lambda g: _code_key(g.get("id")))      # in code order (the user, 2026-11-20)
+
+
+def _code_key(code):
+    """T1021 < T1071.001 < T1071.004 < T1133; M1030 < M1031; anything else last."""
+    m = re.match(r"^([A-Z]+)(\d+)(?:\.(\d+))?$", str(code or ""))
+    return (m.group(1), int(m.group(2)), int(m.group(3) or 0)) if m else ("~", 0, 0, str(code))
 
 
 # ------------------------------------------------------------------------------------------------ text for documents
@@ -723,14 +730,29 @@ def attack_lines(att):
     known = [t for t in att["techniques"] if t["certainty"] == "known"]
     if obs:
         bits = []
+        # a CVE's technique mapped in several roles (CTID: "what attackers gain first" and "how attackers exploit it")
+        # is one entry with every role (2026-11-20: the release check found T1059.001 twice on one line)
+        roles = {}
         for t in obs:
+            if t.get("kind"):
+                k = ((t.get("cve") if att.get("cves") else ""), t["id"])
+                for r in [t["kind"]] + ([t["note"]] if t.get("note") else []):
+                    if r not in roles.setdefault(k, []):
+                        roles[k].append(r)
+        done = set()
+        for t in sorted(obs, key=lambda t: _code_key(t.get("id"))):      # in code order (2026-11-20)
             # "T1071.001 Web Protocols · Command and Control · Observed" (the user, 2026-11-18): id and name, tactic,
             # then only Observed / Possible; the constituent's part is not repeated here
             extra = ([t["note"]] if t.get("note") else []) + ([t["status"]] if t.get("status") in ("suggested", "please check") else []) \
                 + ([f"retired in {t['retired_in']}"] if t.get("retired_in") else [])
             s = (f"{t['cve']}: " if att.get("cves") and t.get("cve") else "") + f"{t['id']} {t['name']}"
-            if t.get("kind"):                 # CVE techniques: unchanged, "T… Name (how attackers exploit it; …)"
-                bits.append(s + f" ({'; '.join([t['kind']] + extra)})")
+            if t.get("kind"):                 # CVE techniques: "T… Name (what attackers gain first; how attackers exploit it)"
+                k = ((t.get("cve") if att.get("cves") else ""), t["id"])
+                if k in done:
+                    continue
+                done.add(k)
+                more = [x for x in extra if x not in roles[k]]
+                bits.append(s + f" ({'; '.join(roles[k] + more)})")
                 continue
             s += f" · {', '.join(t['tactics'])}" if t.get("tactics") else ""
             s += f" · {t['certainty_label'].split(' (')[0]}"
@@ -753,7 +775,7 @@ def ids_text(att):
     """Short: 'T1071.001, T1110.001 (ATT&CK v20.1)' for CSV cells and the Executive card."""
     if not att or not att.get("techniques"):
         return ""
-    ids = list(dict.fromkeys(t["id"] for t in att["techniques"] if t["certainty"] != "known"))
+    ids = sorted(dict.fromkeys(t["id"] for t in att["techniques"] if t["certainty"] != "known"), key=_code_key)
     known = len({t["id"] for t in att["techniques"] if t["certainty"] == "known"})
     return (", ".join(ids) + (f"; {known} known for this malware" if known else "") + f" (ATT&CK v{att.get('version')})").strip("; ")
 
@@ -766,6 +788,8 @@ def by_tactic(att):
             out.setdefault(ta, [])
             if t["id"] not in [x["id"] for x in out[ta]]:
                 out[ta].append(t)
+    for ta in out:
+        out[ta].sort(key=lambda t: _code_key(t.get("id")))
     return out
 
 

@@ -29,7 +29,9 @@
       setSel($("orgPdfLook"), saved.look); setSel($("orgPdfBrand"), saved.brand);
       $("orgName").value = saved.name; logo = undefined;
       show(saved.has_logo ? `/organisation/logo?t=${Date.now()}` : "");
-      $("orgLogoHint").textContent = `At most ${maxKb} KB.`;
+      $("orgLogoHint").textContent = window.LGLogoTool
+        ? `A wide logo works best, about ${window.LGLogoTool.OUT_W} × ${window.LGLogoTool.OUT_H} pixels (2:1). You size and crop it next, and see it on the advisory.`
+        : `At most ${maxKb} KB.`;
       sync();
     } catch (e) { msg(`The organisation could not be read: ${e.message}`, true); }
   }
@@ -42,6 +44,16 @@
     $("orgFile").value = "";
     if (!f) return;
     if (!/^image\/(png|jpeg)$/.test(f.type)) { msg("The logo must be a PNG or JPEG image.", true); return; }
+    // the size and crop tool (logo-tool.js, 2026-11-19): any picture up to 5 MB is fitted to the advisory's frame and
+    // made small enough here, in the browser; without it, a picture already within the limit as before
+    if (window.LGLogoTool) {
+      if (f.size > 5 * 1024 * 1024) { msg("Choose a picture under 5 MB.", true); return; }
+      window.LGLogoTool.open(f).then((url) => {
+        if (!url) { msg("Logo not changed."); return; }
+        logo = url; show(logo); msg("New logo chosen: save to keep it."); sync();
+      });
+      return;
+    }
     if (f.size > maxKb * 1024) { msg(`The logo is ${Math.ceil(f.size / 1024)} KB: at most ${maxKb} KB, please.`, true); return; }
     const rd = new FileReader();
     rd.onload = () => { logo = rd.result; show(logo); msg("New logo chosen: save to keep it."); sync(); };

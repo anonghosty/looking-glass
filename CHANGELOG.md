@@ -5,6 +5,24 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-20 (2)
+### Added
+- **Settings → Organisation: size and crop the logo.** Choosing a logo opens a sizing step: the picture in the
+  advisory's 2:1 logo frame (its border highlighted), Trim empty margins, a size slider, drag or arrow keys to place
+  it, a background for see-through pictures, previews of the card on the dark and the plain advisory, the recommended
+  size (about 464 × 232 pixels) and the saved size. Pictures up to 5 MB; the saved logo stays within 40 KB, made in
+  the browser.
+### Fixed
+- **An advisory's MITRE ATT&CK reasons are no longer repeated per report.** Reasons that differ only in a report's,
+  a CVE's or an infection's name are one sentence naming them all ("the 8 reports … to this technique … For each,
+  14 IP addresses …"), on the PDF and the advisory page. A CVE's technique that CTID maps in two roles is listed once
+  with both ("T1059.001 PowerShell (what attackers gain first; how attackers exploit it)"), in the CVE cards and CSVs.
+- **ATT&CK codes in code order everywhere:** the techniques (T1021 before T1071.001 before T1133), each technique's
+  mitigation codes, each mitigation's techniques, the cards, the CSV text and the advisory page. Generate an
+  advisory's report again to get the corrected PDF.
+### Changed
+- **After updating:** nothing to do.
+
 ## 2026-11-20
 ### Added
 - **The sign-in moves.** The card turns over between Sign in, Create an account and Back, and every next step (the

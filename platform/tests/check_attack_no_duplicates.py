@@ -100,12 +100,62 @@ ok("short IDs (CSV cells, Executive card): each once", AM.ids_text(att).count("T
 bt = AM.by_tactic(att)
 ok("the Executive's tactic view: each once", [t["id"] for t in bt["Command and Control"]] == ["T1071.001", "T1071.004"])
 
+print("2b. Reasons that differ only in a name: one sentence (the user, 2026-11-20: eight near-identical sentences)")
+tail = "this device was used for it. 14 IP addresses in this advisory have these affected devices (most often: example-bot)."
+reps = ["Sinkhole Events", "Sinkhole HTTP Events", "Sinkhole DNS Events", "IPv6 Sinkhole Events"]
+many = [tech("T1071.001", r, why_here=f"Looking Glass maps the report “{r}” to this technique: {tail}") for r in reps]
+g1 = APDF.group_techniques(many)[0]
+ok("4 reports with the same reason: one sentence naming all 4", len(g1["whys"]) == 1 and all(f"“{r}”" in g1["whys"][0] for r in reps)
+   and "the 4 reports" in g1["whys"][0], g1["whys"])
+ok("…each report's own figures kept, not added up (For each, 14 IP addresses)", "For each, 14 IP addresses" in g1["whys"][0])
+cves = [tech("T1190", "", cve=f"CVE-2099-000{i}", why_here=f"MITRE CTID maps CVE-2099-000{i} to this technique (how attackers exploit it): "
+             "attackers can use it. 1 IP address in this advisory has it.") for i in (1, 2)]
+ok("two CVEs with the same reason: one sentence", APDF.group_techniques(cves)[0]["whys"] ==
+   ["MITRE CTID maps CVE-2099-0001 and CVE-2099-0002 to this technique (how attackers exploit it): attackers can use it. For each, 1 IP address in this advisory has it."])
+diff = [tech("T1133", "A", why_here="Looking Glass maps the report “A” to this technique: x. 3 IP addresses in this advisory have these affected devices."),
+        tech("T1133", "B", why_here="Looking Glass maps the report “B” to this technique: x. 5 IP addresses in this advisory have these affected devices.")]
+ok("different figures stay separate sentences (nothing is hidden)", len(APDF.group_techniques(diff)[0]["whys"]) == 2)
+heads, paras = [], []
+APDF.Flow.para_cert = lambda self, h, *a, **k: (heads.append(h), real_pc(self, h, *a, **k))[1]
+APDF.Flow.para = lambda self, s, *a, **k: (paras.append(s), real_p(self, s, *a, **k))[1]
+try:
+    APDF.alone(dict(adv, attack={"version": "18.1", "techniques": many}), meta)
+finally:
+    APDF.Flow.para_cert, APDF.Flow.para = real_pc, real_p
+why_lines = [s for s in paras if "maps the" in s]
+ok("the PDF: the reason printed once, on one line with its heading", len(why_lines) == 1 and why_lines[0].startswith("Why it is in this advisory"), why_lines)
+
+print("2c. In code order everywhere (the user, 2026-11-20: \"look at the codes, they are not arranged in order\")")
+mixed = [tech("T1133", "A"), tech("T1021", "A"), tech("T1071.004", "B"), tech("T1071.001", "B")]
+mixed[0]["defend"] = [{"id": "M1042", "name": "x"}, {"id": "M1030", "name": "y"}, {"id": "M1035", "name": "z"}]
+gm = APDF.group_techniques(mixed)
+ok("the advisory's techniques: T1021, T1071.001, T1071.004, T1133", [x["id"] for x in gm] == ["T1021", "T1071.001", "T1071.004", "T1133"], [x["id"] for x in gm])
+ok("…each technique's mitigation codes in order (M1030, M1035, M1042)", [m["id"] for m in gm[-1]["defend"]] == ["M1030", "M1035", "M1042"])
+mm = APDF.group_mitigations(gm)
+ok("…the mitigations in order, each with its techniques in order", [m["id"] for m in mm] == sorted([m["id"] for m in mm], key=APDF.code_key)
+   and all(m["techs"] == sorted(m["techs"], key=APDF.code_key) for m in mm), [(m["id"], m["techs"]) for m in mm])
+ok("the cards, the text lines and the short IDs in order", [x["id"] for x in AM.merge_by_id(mixed)] == ["T1021", "T1071.001", "T1071.004", "T1133"]
+   and AM.ids_text({"version": "1", "techniques": mixed}).startswith("T1021, T1071.001, T1071.004, T1133")
+   and AM.attack_lines({"version": "1", "techniques": mixed})[0].index("T1021") < AM.attack_lines({"version": "1", "techniques": mixed})[0].index("T1133"))
+
+two = {"version": "20.1", "techniques": [
+    {"id": "T1059.001", "name": "PowerShell", "certainty": "possible", "kind": "what attackers gain first", "cve": "CVE-2022-41082"},
+    {"id": "T1059.001", "name": "PowerShell", "certainty": "possible", "kind": "how attackers exploit it", "cve": "CVE-2022-41082"},
+    {"id": "T1078", "name": "Valid Accounts", "certainty": "possible", "kind": "how attackers exploit it", "cve": "CVE-2022-41082"}]}
+line = AM.attack_lines(two)[0]
+ok("a CVE's technique in two roles: once, with both roles (the release check found T1059.001 twice on one line)",
+   line.count("T1059.001") == 1 and "T1059.001 PowerShell (what attackers gain first; how attackers exploit it)" in line, line)
+
 print("3. The advisory page")
 S = os.environ.get("LG_HELD_DIR", "")
 p = os.path.join(S, "advisory.js.new") if S and os.path.exists(os.path.join(S, "advisory.js.new")) else os.path.join(HERE, "static", "js", "advisory.js")
 js = open(p, encoding="utf-8").read()
 ok("what goes to the recipients: one box per technique (mergeOut), every reason listed",
    "for (const t of mergeOut(A.techniques))" in js and "function mergeOut(list)" in js and "t.whys?.length > 1" in js)
+ok("…in code order there too (the techniques, the suggested ones, the mitigation codes)", "out.sort((a, b) => codeCmp(a.id, b.id))" in js
+   and "A.pending].sort((x, y) => codeCmp(x.id, y.id))" in js and "g.defend.sort(" in js)
+ok("…reasons that differ only in a name merged there too (as in the PDF)", "function mergeWhys(whys)" in js
+   and "g.whys = mergeWhys(g.whys)" in js and '". For each, $1"' in js)
 ok("…each mapping keeps its own Undo", "for (const p of parts)" in js and "key: p.key, action: \"restore\"" in js)
 
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {fails}" if fails else ""))

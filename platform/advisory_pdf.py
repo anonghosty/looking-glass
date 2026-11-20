@@ -226,6 +226,63 @@ class Flow:
 
 
 _CERT_RANK = {"observed": 0, "possible": 1, "known": 2}
+# "Why it is in this advisory" sentences (advisory_attack._why) that say the same thing but for one name: merged into
+# one sentence naming them all (the user, 2026-11-20: eight sentences for eight sinkhole reports, "this is bad")
+_WHY_FORMS = (
+    (re.compile(r"^Looking Glass maps the report “(.+?)” to this technique: (.*)$", re.S),
+     lambda names, rest: f"Looking Glass maps the {_count(names, 'report')} {_names(names)} to this technique: {_each(names, rest)}"),
+    (re.compile(r"^MITRE CTID maps (CVE-\d{4}-\d{4,7}) to this technique \((.+?)\): (.*)$", re.S),
+     lambda names, rest: f"MITRE CTID maps {_names(names, quote=False)} to this technique ({rest[0]}): {_each(names, rest[1])}"),
+    (re.compile(r"^Shadowserver names the infection “(.+?)” this way \((.*?)\): (.*)$", re.S),
+     lambda names, rest: f"Shadowserver names the {_count(names, 'infection')} {_names(names)} this way ({rest[0]}): {_each(names, rest[1])}"),
+)
+
+
+def _each(names, rest):
+    """Merged reasons keep each one's own figures: "…: role. For each, 14 IP addresses …" (the same figures, counted per
+    report or CVE, not a total)."""
+    if len(names) < 2:
+        return rest
+    return re.sub(r"\.\s+(\d+ IP address)", r". For each, \1", rest, count=1)
+
+
+def _count(names, word):
+    return word if len(names) == 1 else f"{len(names)} {word}s"
+
+
+def _names(names, quote=True):
+    q = [f"“{n}”" if quote else n for n in names]
+    return q[0] if len(q) == 1 else ", ".join(q[:-1]) + " and " + q[-1]
+
+
+def merge_whys(whys):
+    """The distinct reasons, those that differ only in a report's, a CVE's or an infection's name merged into one
+    sentence naming them all, in the order first seen; any other sentence kept as it is."""
+    groups, order = {}, []
+    for w in whys or []:
+        for i, (rx, _) in enumerate(_WHY_FORMS):
+            m = rx.match(w)
+            if m:
+                name, rest = m.group(1), (m.group(2) if m.lastindex == 2 else m.groups()[1:])
+                key = (i, rest if isinstance(rest, str) else tuple(rest))
+                if key not in groups:
+                    groups[key] = []
+                    order.append(key)
+                if name not in groups[key]:
+                    groups[key].append(name)
+                break
+        else:
+            key = ("plain", w)
+            if key not in groups:
+                groups[key] = [w]
+                order.append(key)
+    out = []
+    for key in order:
+        if key[0] == "plain":
+            out.append(key[1])
+        else:
+            out.append(_WHY_FORMS[key[0]][1](groups[key], key[1]))
+    return out
 
 
 def group_techniques(techs):
@@ -253,7 +310,18 @@ def group_techniques(techs):
         for k in ("desc", "url", "tactics", "name"):
             if not g.get(k) and t.get(k):
                 g[k] = t[k]
-    return out
+    for g in out:                           # one sentence for reasons that differ only in a name (2026-11-20)
+        g["whys"] = merge_whys(g["whys"])
+        g["defend"] = sorted(g["defend"], key=lambda m: code_key(m.get("id")))
+    # in code order (the user, 2026-11-20: "look at the codes, they are not arranged in order"): T1021 before
+    # T1071.001 before T1071.004 before T1133
+    return sorted(out, key=lambda g: code_key(g.get("id")))
+
+
+def code_key(code):
+    """An ATT&CK code's place in code order: T1071.001 -> ("T", 1071, 1); M1031 -> ("M", 1031, 0); others last."""
+    m = re.match(r"^([A-Z]+)(\d+)(?:\.(\d+))?$", str(code or ""))
+    return (m.group(1), int(m.group(2)), int(m.group(3) or 0)) if m else ("~", 0, 0, str(code))
 
 
 class DuplicateAttack(ValueError):
@@ -292,8 +360,10 @@ def group_mitigations(groups):
                 g["techs"].append(t["id"])
             if m.get("text") and (t["id"], m["text"]) not in g["texts"]:
                 g["texts"].append((t["id"], m["text"]))
-    code = lambda k: (int(k[1:]) if k[1:].isdigit() else 10 ** 9, k)        # noqa: E731  M1016 < M1031 < M1037
-    return [by[k] for k in sorted(order, key=code)]
+    for g in by.values():                     # the techniques under each mitigation in code order too
+        g["techs"].sort(key=code_key)
+        g["texts"].sort(key=lambda tt: code_key(tt[0]))
+    return [by[k] for k in sorted(order, key=code_key)]
 
 
 def _logo_section(doc, a, y):

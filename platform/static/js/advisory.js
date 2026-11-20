@@ -45,6 +45,33 @@
   // one technique from several reports or CVEs in one box, every reason, CTID comment, note and mitigation once, the
   // strongest certainty; the mappings themselves (parts) keep their own keys for Undo
   const CERT_RANK = { observed: 0, possible: 1, known: 2 };
+  // reasons that differ only in a report's, a CVE's or an infection's name: one sentence naming them all, each one's
+  // figures kept ("For each, …"), as in the PDF (advisory_pdf.merge_whys; the user, 2026-11-20)
+  const WHY_FORMS = [
+    [/^Looking Glass maps the report “(.+?)” to this technique: ([\s\S]*)$/, (n, r) => `Looking Glass maps the ${count(n, "report")} ${names(n)} to this technique: ${each(n, r[0])}`],
+    [/^MITRE CTID maps (CVE-\d{4}-\d{4,7}) to this technique \((.+?)\): ([\s\S]*)$/, (n, r) => `MITRE CTID maps ${names(n, false)} to this technique (${r[0]}): ${each(n, r[1])}`],
+    [/^Shadowserver names the infection “(.+?)” this way \((.*?)\): ([\s\S]*)$/, (n, r) => `Shadowserver names the ${count(n, "infection")} ${names(n)} this way (${r[0]}): ${each(n, r[1])}`],
+  ];
+  const count = (n, w) => (n.length === 1 ? w : `${n.length} ${w}s`);
+  const names = (n, quote = true) => { const q = n.map((x) => (quote ? `“${x}”` : x)); return q.length === 1 ? q[0] : `${q.slice(0, -1).join(", ")} and ${q[q.length - 1]}`; };
+  const each = (n, rest) => (n.length < 2 ? rest : rest.replace(/\.\s+(\d+ IP address)/, ". For each, $1"));
+  // ATT&CK codes in code order: T1021 < T1071.001 < T1071.004 < T1133; M1030 < M1031
+  const codeKey = (c) => { const m = /^([A-Z]+)(\d+)(?:\.(\d+))?$/.exec(String(c || "")); return m ? [m[1], +m[2], +(m[3] || 0)] : ["~", 0, 0]; };
+  const codeCmp = (a, b) => { const x = codeKey(a), y = codeKey(b); return x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : x[1] - y[1] || x[2] - y[2]; };
+  function mergeWhys(whys) {
+    const groups = new Map();
+    for (const w of whys) {
+      let key = null, name = null;
+      for (let i = 0; i < WHY_FORMS.length; i++) {
+        const m = WHY_FORMS[i][0].exec(w);
+        if (m) { name = m[1]; key = JSON.stringify([i, m.slice(2)]); break; }
+      }
+      if (key === null) { groups.set(JSON.stringify(["plain", w]), null); continue; }
+      if (!groups.has(key)) groups.set(key, []);
+      if (!groups.get(key).includes(name)) groups.get(key).push(name);
+    }
+    return [...groups].map(([k, n]) => { const [i, rest] = JSON.parse(k); return i === "plain" ? rest : WHY_FORMS[i][1](n, rest); });
+  }
   function mergeOut(list) {
     const by = new Map(), out = [];
     for (const t of list || []) {
@@ -60,7 +87,8 @@
       if (t.note && !g.notes.includes(t.note)) g.notes.push(t.note);
       g.parts.push(t);
     }
-    return out;
+    for (const g of out) { g.whys = mergeWhys(g.whys); g.defend.sort((a, b) => codeCmp(a.id, b.id)); }
+    return out.sort((a, b) => codeCmp(a.id, b.id));       // in code order (the user, 2026-11-20)
   }
   function techBox(t, a, kind) {
     // the organisation, switch counter and advisory this box was drawn for: Confirm/Remove/Undo send these, never
@@ -173,7 +201,7 @@
         w.append(el("div", "av-tech-acts", null)); w.lastChild.append(all);
       }
       at.append(w);
-      for (const t of A.pending) at.append(techBox(t, a, "pending"));
+      for (const t of [...A.pending].sort((x, y) => codeCmp(x.id, y.id))) at.append(techBox(t, a, "pending"));
     }
     for (const t of mergeOut(A.techniques)) at.append(techBox(t, a, "out"));   // each technique once (2026-11-19)
     if (A.removed?.length) {

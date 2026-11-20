@@ -157,11 +157,12 @@ techs = [mk("T1190", "possible", "Looking Glass maps the report A to this techni
          mk("T1190", "possible", "Looking Glass maps the report A to this technique.", report="A", category="c"),
          mk("T1133", "possible", "Looking Glass maps the report A to this technique.", report="A")]
 g = APDF.group_techniques(techs)
-ok("one entry per technique", [x["id"] for x in g] == ["T1190", "T1133"], str([x["id"] for x in g]))
-ok("…every distinct reason kept, each once", len(g[0]["whys"]) == 3)
-ok("…the strongest certainty (Observed before Possible)", g[0]["certainty"] == "observed")
-ok("…the CVE's CTID comment and the mitigations, each once", g[0]["comments"] == [("CVE-2099-0001", "Fixture comment.")]
-   and [m["id"] for m in g[0]["defend"]] == ["M1050", "M1016"])
+ok("one entry per technique, in code order (2026-11-20)", [x["id"] for x in g] == ["T1133", "T1190"], str([x["id"] for x in g]))
+g90 = next(x for x in g if x["id"] == "T1190")
+ok("…every distinct reason kept, each once", len(g90["whys"]) == 3, g90["whys"])
+ok("…the strongest certainty (Observed before Possible)", g90["certainty"] == "observed")
+ok("…the CVE's CTID comment and the mitigations, each once, in code order", g90["comments"] == [("CVE-2099-0001", "Fixture comment.")]
+   and [m["id"] for m in g90["defend"]] == ["M1016", "M1050"])
 heads = []
 real_pc = APDF.Flow.para_cert
 APDF.Flow.para_cert = lambda self, head, *a, **k: (heads.append(head), real_pc(self, head, *a, **k))[1]
@@ -173,7 +174,7 @@ t1190 = [h for h in heads if h.startswith("T1190 ")]
 ok("the advisory PDF prints T1190 once (it was printed for each report and CVE)", len(t1190) == 1 and pdf[:4] == b"%PDF", str(heads))
 mits = APDF.group_mitigations(g)
 ok("the mitigations grouped by code, in code order: each once, with the techniques it defends against",
-   [m["id"] for m in mits] == ["M1016", "M1050"] and mits[1]["techs"] == ["T1190", "T1133"] and mits[0]["techs"] == ["T1190"], str(mits))
+   [m["id"] for m in mits] == ["M1016", "M1050"] and mits[1]["techs"] == ["T1133", "T1190"] and mits[0]["techs"] == ["T1190"], str(mits))
 paras = []
 real_para = APDF.Flow.para
 APDF.Flow.para = lambda self, s, *a, **k: (paras.append(s), real_para(self, s, *a, **k))[1]
