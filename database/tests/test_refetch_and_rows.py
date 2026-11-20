@@ -5,7 +5,6 @@
 - a CSV that has a non-UTF-8 byte after the first batches is read again with the bytes replaced: its rows are counted
   once, and the rows this run already inserted are not counted as "already in DB" (they were counted twice)
 Run: .venv/bin/python tests/test_refetch_and_rows.py"""
-import os
 import sys
 import tempfile
 from pathlib import Path

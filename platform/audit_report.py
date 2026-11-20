@@ -101,7 +101,7 @@ def build(d):
             [_p("Entries", st["cellb"]), _p(f"{v['entries']} kept ({v['chained']} chained, {v['before_chain']} written before the chain started), "
                                             f"from {d['first']} to {d['last']}; {v['archives']} archive file(s); "
                                             f"{v['removed_archives']} removed by the retention of {v['retention_days']} days"
-                                            + (f", each recorded in the chain" if v['removed_archives'] and not v.get('removals_pending') else
+                                            + (", each recorded in the chain" if v['removed_archives'] and not v.get('removals_pending') else
                                                f", {v.get('removals_pending')} to be recorded in the chain with the next entry" if v.get('removals_pending') else ""),
                                             st["b"])],
             [_p("Head", st["cellb"]), _p(f"entry {v.get('head_entry', v['entries'])}: {v['head']}", st["mono"])],

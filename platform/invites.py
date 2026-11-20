@@ -37,6 +37,10 @@ def hours():
         return 72
 
 
+class TooManyOpen(ValueError):
+    """INVITES_OPEN_MAX sign-up links are open: the one refusal the Admin page shows in words."""
+
+
 def h(token):
     return hashlib.sha256(str(token or "").encode()).hexdigest()
 
@@ -72,7 +76,7 @@ class Invites:
             # links used, revoked or expired more than 90 days ago are forgotten
             d = {k: v for k, v in d.items() if max(v.get("used_at") or 0, v.get("revoked_at") or 0, v.get("expires", 0)) > now - 90 * 86400}
             if len([1 for v in d.values() if not v.get("used_at") and not v.get("revoked_at") and v.get("expires", 0) > now]) >= INVITES_OPEN_MAX:
-                raise ValueError(f"{INVITES_OPEN_MAX} sign-up links are open: revoke some first.")
+                raise TooManyOpen(f"{INVITES_OPEN_MAX} sign-up links are open: revoke some first.")
             token = secrets.token_urlsafe(32)
             iid = secrets.token_hex(4)
             d[h(token)] = {"id": iid, "role": role, "name": name, "by": by, "at": now, "expires": now + hours() * 3600}
@@ -175,8 +179,10 @@ def install(app, ctx):
             return jsonify(error="The name: at most 100 characters, without < or >."), 400
         try:
             token, e = inv.make(role, name, me())
-        except ValueError as exc:
-            return jsonify(error=str(exc)), 400
+        except TooManyOpen:
+            # this one case only, with its own fixed words; anything else is the plain error page (no internal text in an
+            # answer: CodeQL py/stack-trace-exposure, 2026-11-20)
+            return jsonify(error=f"{INVITES_OPEN_MAX} sign-up links are open: revoke some first."), 400
         ctx["audit"].add("invite_made", user=me(), target=name or role,
                          detail=f"sign-up link for the role {role}, valid {hours()} h (link {e['id']})")
         link = request.host_url.rstrip("/") + "/register?invite=" + token

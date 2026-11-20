@@ -137,7 +137,7 @@
       use.title = `Count "${x.r}" as ${regionName(x.suggestion)} (similarity ${Math.round((x.score || 0) * 100)}%)`;
       use.addEventListener("click", () => setMatch(iso, x.r, x.suggestion, use)); td.append(use);
     }
-    const pick = el("select", "st-pick"); pick.setAttribute("aria-label", `Choose the region for ${x.r}`);
+    const pick = el("select", "st-pick lg-enhance"); pick.setAttribute("aria-label", `Choose the region for ${x.r}`);
     pick.append(el("option", null, x.suggestion ? "or choose…" : "Choose the region…"));
     const c = el("option", null, "The country itself (region unknown)"); c.value = "__country__"; pick.append(c);
     for (const r of rm.regions || []) { const o = el("option", null, window.LGRegions ? window.LGRegions.shortName(r.name) : r.name); o.value = r.key; pick.append(o); }

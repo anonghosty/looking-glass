@@ -943,7 +943,12 @@ def install(app, ctx):
         try:
             return _build(x, adv, network, as_pdf_only, preview)
         except advisory_pdf.DuplicateAttack as e:
-            return None, f"The report was not made: {e}. Please tell the administrator (it is a fault, not your advisory)."
+            # the detail to the service's log for the administrator; the advisor gets a fixed message (no internal text
+            # in an answer: CodeQL py/stack-trace-exposure, 2026-11-20)
+            from flask import current_app
+            current_app.logger.warning("advisory %s (%s): report not made, ATT&CK listed twice: %s", x.get("id"), network, e)
+            return None, ("The report was not made: a MITRE ATT&CK technique or mitigation would have been listed twice. "
+                          "Please tell the administrator (it is a fault, not your advisory; the detail is in the service's log).")
 
     def _build(x, adv, network, as_pdf_only=False, preview=False):
         auto = auto_of(x, network)

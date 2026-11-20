@@ -361,7 +361,7 @@ class Intel:
             c = collections.Counter({p: len(hs) for p, hs in pat_h.items()})
             xcombos[k] = c
             xhosts[k] = {p: frozenset(pat_h[p]) for p, _n in c.most_common(12)}
-        del dev_items
+        dev_items.clear()            # freed now (the device sets are large); the name stays for combo() above
         data = {"by": by, "match": match, "days": days, "sets": sets, "xcombos": xcombos, "xhosts": xhosts}
         with self.lock:
             cache.update(key=key, at=time.time(), data=data)

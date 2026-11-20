@@ -1599,7 +1599,7 @@ def api_insight_report_pdf():
             (f"{I.get('cross_report_hosts', 0):,}", "hosts in several reports"), (f"{I.get('multi_infected', 0):,}", "hosts with several infections"),
             (f"{I.get('regular_beacons', 0):,}", "hosts beaconing regularly"), (I.get("beacon_median_label") or "", "typical repeat interval"),
             (f"{I.get('c2_hosts', 0):,}", "C2 / sinkhole domains"), (f"{I.get('dst_ips', 0):,}", "destination IPs"),
-            (f"{peak:02d}:00 UTC" if peak is not None else "", "peak hour"), (f"{len(rows):,}", f"entries in this list")]
+            (f"{peak:02d}:00 UTC" if peak is not None else "", "peak hour"), (f"{len(rows):,}", "entries in this list")]
     if I.get("decoded_beacons") is not None:
         kpis.append((f"{I['decoded_beacons']:,}", "decoded beacons"))
     B = I.get("breakdowns") or {}

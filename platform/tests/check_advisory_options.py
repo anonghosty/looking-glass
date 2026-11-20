@@ -10,7 +10,6 @@ made-up names), no database:
 3. the advisory PDF's look (designed or plain white) and the name at the top of its pages (Settings → Organisation).
 Usage: tests/check_advisory_options.py"""
 import os
-import re
 import sys
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

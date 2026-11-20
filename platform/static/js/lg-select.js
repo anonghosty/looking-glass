@@ -17,7 +17,8 @@
     ui.value.textContent = label(sel);
     ui.btn.classList.toggle("set", !!sel.value);
     ui.btn.disabled = sel.disabled;
-    ui.btn.title = `${sel.dataset.caption || sel.getAttribute("aria-label") || ""}${sel.dataset.caption || sel.getAttribute("aria-label") ? ": " : ""}${label(sel)}`;
+    // the select's own tooltip when it has one (a pattern kind explains the chosen kind), else its name and value
+    ui.btn.title = sel.title || `${sel.dataset.caption || sel.getAttribute("aria-label") || ""}${sel.dataset.caption || sel.getAttribute("aria-label") ? ": " : ""}${label(sel)}`;
   }
 
   function close(focusBack) {
@@ -52,6 +53,7 @@
         if (q && !o.textContent.toLowerCase().includes(q) && o.value !== "") continue;
         const b = el("button", `lgs-opt${o.value === sel.value ? " on" : ""}`); b.type = "button"; b.setAttribute("role", "option");
         b.setAttribute("aria-selected", String(o.value === sel.value)); b.dataset.value = o.value;
+        if (o.title) b.title = o.title;                 // an option's explanation stays (2026-11-20)
         b.append(el("span", null, o.textContent), el("i", null, o.value === sel.value ? "✓" : ""));
         b.addEventListener("click", () => choose(sel, o.value));
         list.append(b); items.push(b);
@@ -109,10 +111,14 @@
     btn.addEventListener("click", () => openList(sel));
     btn.addEventListener("keydown", (e) => { if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) { e.preventDefault(); openList(sel); } });
     sel.addEventListener("change", () => sync(sel));
-    // options or value replaced by code: follow
-    new MutationObserver(() => sync(sel)).observe(sel, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled"] });
-    const desc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value");
-    Object.defineProperty(sel, "value", { configurable: true, get() { return desc.get.call(this); }, set(v) { desc.set.call(this, v); sync(this); } });
+    // code that focuses the select (a picker asking for a choice) reaches the visible button
+    sel.addEventListener("focus", () => btn.focus());
+    // options, value, disabled or the tooltip replaced by code: follow
+    new MutationObserver(() => sync(sel)).observe(sel, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled", "title"] });
+    for (const prop of ["value", "selectedIndex"]) {
+      const desc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, prop);
+      Object.defineProperty(sel, prop, { configurable: true, get() { return desc.get.call(this); }, set(v) { desc.set.call(this, v); sync(this); } });
+    }
     sync(sel);
   }
 

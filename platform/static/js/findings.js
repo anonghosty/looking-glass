@@ -491,7 +491,7 @@
     }
     // move it on
     const mv = el("div", "fd-move");
-    const sel = el("select", "fd-sel"); sel.setAttribute("aria-label", "New status");
+    const sel = el("select", "fd-sel lg-enhance"); sel.setAttribute("aria-label", "New status");
     for (const s of data.statuses) { const o = el("option", null, s.label); o.value = s.key; if (s.key === f.status) o.selected = true; sel.append(o); }
     const com = el("input", "fd-in"); com.maxLength = 1000; com.placeholder = "Comment (for example: look at the rising trend in the Northern region)"; com.setAttribute("aria-label", "Comment");
     const go = el("button", "lg-btn sm primary", "Move it on"); go.type = "button";

@@ -124,7 +124,9 @@ ok("a file that does not exist", not r["ok"] and "does not exist" in r["problems
 
 print("Wildcards")
 wc_c, wc_k = leaf("wild", ["*.test.example"])
-ok("*.test.example covers lg.test.example", ic.check(D, wc_c, wc_k, P("int.pem"), CA)["ok"])
+r = ic.check(D, wc_c, wc_k, P("int.pem"), CA)
+# the checker's own reasons are shown when it refuses (2026-11-20: it failed once in a loaded release run, with no reason)
+ok("*.test.example covers lg.test.example", r["ok"], json.dumps(r.get("problems")))
 ok("…but not a.b.test.example (one label only)", not ic._covers(["*.test.example"], "a.b.test.example")
    and not ic._covers(["*.test.example"], "test.example"))
 

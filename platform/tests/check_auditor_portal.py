@@ -368,8 +368,16 @@ try:
     ac = audit_chain.Chain(os.path.join(ad, "audit.log"))
     ac.record_retention_setting()                        # what start-up does: the setting (400 days) goes into the chain
     ac.rotate_bytes = 1                                  # every write rotates: several archives within the same second
-    for i in range(8):
-        ac.append({"t": time.time(), "event": "login", "user": f"u{i}"})
+    # the archive names take the time of the rotation: the clock is held in one second for these 8, so they do land
+    # in the same second however busy the computer is (2026-11-20: on a loaded test run the loop crossed a second
+    # boundary and the check failed, though the code was right)
+    real_gmtime, held = audit_chain.time.gmtime, int(time.time())
+    audit_chain.time.gmtime = lambda t=None: real_gmtime(held if t is None else t)
+    try:
+        for i in range(8):
+            ac.append({"t": time.time(), "event": "login", "user": f"u{i}"})
+    finally:
+        audit_chain.time.gmtime = real_gmtime
     names = [os.path.basename(p) for p in ac.archives()]
     v = ac.verify()
     # 1 setting entry + 8 entries + a rotation entry for each of the 8 rotations
@@ -432,7 +440,7 @@ try:
         rec = [json.loads(x) for x in open(lch.path).read().splitlines() if "audit_archive_" in x]
         ok(f"{label}: NOT whole, in the portal and the standalone verifier, before and after it is recorded",
            not v1["ok"] and not off1["ok"] and not v2["ok"] and not off2["ok"], f"{v2['break']} | {off2.get('break')}")
-        ok(f"…and recorded as an alert that says why", rec and rec[-1]["event"] == "audit_archive_deleted_early",
+        ok("…and recorded as an alert that says why", rec and rec[-1]["event"] == "audit_archive_deleted_early",
            (rec[-1]["detail"] if rec else "")[:170])
     # a genuine clean-up still passes: entries 500 days old, the 400-day setting recorded, prune() removes them
     gd = os.path.join(tmp, "genuine"); os.makedirs(gd)
@@ -618,7 +626,7 @@ try:
         ok(f"a period in the far past or future, no error: {path}", st == 200, str(st))
 
     print("Proof to take away: the proof package and the independent verifier")
-    import ast, hashlib, subprocess, zipfile
+    import ast, hashlib, zipfile
     r = c.get("/api/audit/proof.zip", headers=H)
     z = zipfile.ZipFile(io.BytesIO(r.data))
     names = set(z.namelist())
@@ -656,7 +664,6 @@ try:
     ok("…archived entries come first, oldest archive first, then audit.log", [x["event"] for x in recs] == ["a1", "a2", "b1", "c1"] and skipped == 0)
     # a damaged archive (review 2026-11-13): bad data in the middle, cut short, or not gzip at all. The check reports a
     # break naming the file; nothing answers with a traceback or a 500
-    import audit_verifier as AV
     good = open(os.path.join(sd, "audit_archive", "audit-20260101-000000.log.gz"), "rb").read()
     for label, blob in (("bad data inside", good[:12] + bytes(b ^ 0xFF for b in good[12:-8]) + good[-8:]), ("cut short", good[:len(good) // 2]),
                         ("not gzip at all", b"plain text, not an archive\n")):

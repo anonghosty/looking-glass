@@ -135,7 +135,6 @@ try:
                            {"status": "active", "role": "analyst", "changed": 0} if u == ANALYST else real_get(u))
     fake = SA.Alerts(plat, env={})
     json.dump({"finished": round(time.time() - 60), "ok": False, "file_errors": 3, "disk_low": False}, open(stp, "w"))
-    import notifications as N
     # the app's bell, with this throwaway Alerts in place of the real one
     sysfn = None
     for name, fn in APP.app.view_functions.items():

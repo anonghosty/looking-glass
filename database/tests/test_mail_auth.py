@@ -4,7 +4,7 @@ a correctly signed report passes; a changed body, a changed subject, a forged se
 domain, no signature, a missing key, DNS that does not answer and plain garbage are each recorded for what they are;
 nothing ever raises. (On real mail it was tried on the 80 newest Shadowserver e-mails, 2026-11-12: all passed.)
 Run: .venv/bin/python tests/test_mail_auth.py"""
-import base64, hashlib, os, re, sys, tempfile
+import base64, hashlib, sys, tempfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cryptography.hazmat.primitives import hashes, serialization  # noqa: E402

@@ -191,7 +191,7 @@ if shutil.which("age") and shutil.which("age-keygen"):
             winid = os.path.join(tmp, "win-identity.txt")
             open(winid, "wb").write(("﻿" + open(idf).read().replace("\n", "\r\n")).encode("utf-16-le"))
             rc, out = run("manage/restore_check.sh", "--identity", winid, os.path.join(d, made[-1]))
-            ok(f"…and opens with a private key saved as UTF-16 with CR LF", rc == 0 and "RESULT: restorable" in out, out[-300:])
+            ok("…and opens with a private key saved as UTF-16 with CR LF", rc == 0 and "RESULT: restorable" in out, out[-300:])
 else:
     print("  age not installed here: skipped (GnuPG checked above)")
 open(os.path.join(proj, "data", "backup_public_key"), "w").write("hello")

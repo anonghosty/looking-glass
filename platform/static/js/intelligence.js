@@ -160,7 +160,7 @@
     const t = el("div");
     t.append(el("div", "fd-eyebrow", "Report · Abused or Compromised"), el("h2", null, d.title), el("p", "it-sub", d.meaning));
     const right = el("div", "it-vh-acts");
-    const sel = el("select", "it-dayselect"); sel.setAttribute("aria-label", "Day");
+    const sel = el("select", "it-dayselect lg-enhance"); sel.setAttribute("aria-label", "Day");
     for (const dd of [...d.days].reverse()) { const o = new Option(dayLabel(dd), dd); if (dd === d.day) o.selected = true; sel.append(o); }
     sel.addEventListener("change", () => { view.day = sel.value; fetchView(false); });
     const close = el("button", "pill-btn", "Close"); close.type = "button";

@@ -22,9 +22,9 @@
       ev.stopPropagation();
       if (form) { form.remove(); form = null; return; }
       form = el("div", "bh-form"); form.addEventListener("click", (e) => e.stopPropagation());
-      const kind = el("select", "fd-in"); kind.setAttribute("aria-label", "Send to");
+      const kind = el("select", "fd-in lg-enhance"); kind.setAttribute("aria-label", "Send to");
       for (const [v, t] of [["analyst", "An analyst"], ["management", "A manager"]]) { const o = el("option", null, t); o.value = v; kind.append(o); }
-      const who = el("select", "fd-in"); who.setAttribute("aria-label", "Person");
+      const who = el("select", "fd-in lg-enhance"); who.setAttribute("aria-label", "Person");
       const note = el("textarea", "fd-in"); note.rows = 3; note.maxLength = 1000;
       note.placeholder = "What to look into (optional): Looking Glass writes what it decoded";
       const go = el("button", "lg-btn sm primary", "Send"); go.type = "button";

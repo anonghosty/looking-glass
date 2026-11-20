@@ -5,6 +5,32 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-20 (5)
+### Added
+- **A second layout of the CLogin check-in decodes.** Some *android.badbox2* check-ins carry their data in Base64
+  text that needs no padding, followed by `=` and a short trailer that is not XORed. The `=` was read as padding, so
+  these were listed as *Unknown encoding*. They now decode like the first layout, and the Decoded beacon's note says
+  where the trailer starts. Sent in through a decoding request.
+### Changed
+- **Every drop-down is in the Looking Glass design.** The 14 that still opened the browser's own list now use the
+  platform's (search box on long lists, tick on the choice, full keyboard use): the organisation picker and the
+  advisory's look and name, a finding's new status, the hand-over's recipient and person, the people picker, the
+  combinations' report and device filter, the Abused or Compromised day, the definitions' note report, services sort,
+  pattern kind and severity, the region match and the logo's background. Long names wrap in full; each keeps its size;
+  an option's explanation stays as its tooltip.
+- **Coding rules checked on every change** ([Ruff](https://docs.astral.sh/ruff/), `ruff.toml` at the top of the
+  repository): undefined and unused names, bare `except:`, mutable or computed default arguments, late-bound loop
+  variables and the like; CI fails on a change that breaks one. The code was brought in line (no behaviour changed).
+- **After updating:** nothing to do.
+### Security
+- **No error's own text reaches an answer** (GitHub code scanning, CodeQL): an advisory stopped by the ATT&CK duplicate
+  guard now tells the advisor in fixed words and writes the detail to the service's log; Add a person answers only its
+  open-links limit in words, anything else gets the plain error page. Two test-code alerts were also tidied.
+### Fixed
+- **The advisory page's two new drop-downs** (the PDF's look, the name at the top of its pages) showed as plain white
+  browser lists: the page did not load the drop-down script. A check now makes sure every page that asks for the
+  Looking Glass drop-down loads it, and that no drop-down is left as the browser's list.
+
 ## 2026-11-20 (4)
 ### Added
 - **The map's infection filter shows what else the devices carry.** With an infection ticked, the list counts devices:

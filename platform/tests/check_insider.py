@@ -234,7 +234,8 @@ ok("small traces are noted: who and when only", wd.get("auditor2") and all(isins
 ok("…the notes file is owner-only (0600)", (os.stat(watch).st_mode & 0o777) == 0o600)
 ok("…a trace of more than 3 lines is not noted as small", "auditor1" not in wd or len(wd["auditor1"]) <= 1, str(wd.get("auditor1")))
 import system_alerts as SA  # noqa: E402
-now = _t.time() if "_t" in dir() else __import__("time").time()
+import time as _clock  # noqa: E402
+now = _clock.time()
 json.dump({"mallory": [round(now) - i for i in range(I.SMALL_TRACE_ALERT)], "old": [round(now) - 90000] * 50,
            "few": [round(now)] * (I.SMALL_TRACE_ALERT - 1)}, open(watch, "w"))
 alerts = SA.Alerts(base)._small_traces(now)

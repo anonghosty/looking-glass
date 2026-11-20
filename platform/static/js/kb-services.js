@@ -71,7 +71,7 @@
     if ($("svcSort")) return;
     const bar = el("div", "svc-ctl");
     const sl = el("label", "svc-sort"); sl.append(el("span", null, "Sort"));
-    const sel = el("select"); sel.id = "svcSort"; sel.setAttribute("aria-label", "Sort the services reports");
+    const sel = el("select", "kbs-sort lg-enhance"); sel.id = "svcSort"; sel.setAttribute("aria-label", "Sort the services reports");
     for (const [k, [l]] of Object.entries(SORTS)) { const o = el("option", null, l); o.value = k; sel.append(o); }
     sel.addEventListener("change", () => { sortBy = sel.value; render(); }); sl.append(sel);
     const chips = el("div", "svc-fchips"); chips.setAttribute("role", "group"); chips.setAttribute("aria-label", "Show only");

@@ -5,7 +5,7 @@
 - an e-mail that could not be checked (DNS did not answer) never counts as passed, and when the newest day's e-mails
   could not be checked at all, the check is said to have stopped working
 Throwaway mail states only. Run: .venv/bin/python tests/test_sender_readiness.py"""
-import datetime as dt, os, sqlite3, sys, tempfile
+import datetime as dt, sqlite3, sys, tempfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import mail_auth as MA  # noqa: E402

@@ -19,7 +19,7 @@ import sys
 import threading
 import time
 
-from flask import g, jsonify, request
+from flask import g, jsonify
 
 MALPEDIA_LICENCE = ("Malpedia (Fraunhofer FKIE), malpedia.caad.fkie.fraunhofer.de. Malpedia content is licensed "
                     "CC BY-NC-SA 3.0 (creativecommons.org/licenses/by-nc-sa/3.0/).")

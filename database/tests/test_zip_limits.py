@@ -2,7 +2,6 @@
 goes through; a zip bomb, too many files, a zip that lies about its size, and file names that try to leave the
 folder are refused and quarantined with nothing left behind; a nearly full disk is retried later, not quarantined.
 Made-up data only. Run: python3 tests/test_zip_limits.py"""
-import io
 import os
 import random
 import shutil

@@ -25,6 +25,18 @@ def encode(obj, key, trailer=TRAILER):
     return base64.b64encode(x).decode()
 
 
+def encode_eq(obj, key, extra=b"", trailer=None):
+    """The variant from a decoding request (2026-11-20): the JSON and a few more bytes, padded to whole Base64 groups so
+    the Base64 text needs no '=', then '=' and the trailer as it is (not XORed with one byte), all under the key, then
+    Base64. Made-up values only."""
+    inner = json.dumps(obj, separators=(",", ":")).encode() + extra
+    inner += b" " * (-len(inner) % 3)
+    trailer = trailer if trailer is not None else "".join(rnd.choice("0123456789abcdef") for _ in range(17))
+    mid = base64.b64encode(inner) + b"=" + trailer.encode()
+    x = bytes(b ^ key.encode()[i % len(key)] for i, b in enumerate(mid))
+    return base64.b64encode(x).decode()
+
+
 def rkey():
     return "".join(rnd.choice("0123456789abcdef") for _ in range(32))
 

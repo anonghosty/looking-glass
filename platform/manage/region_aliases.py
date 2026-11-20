@@ -216,7 +216,6 @@ def process(path, all_iso):
     cc = d["iso2"]
     iso = iso_entries(cc, all_iso)
     top = [r for r in iso if not r.get("parent")]
-    by_code = {r["code"]: r for r in iso}
     extra = {flat(k): v for k, v in EXTRA.get(cc, {}).items()}
     code_to_key = {}
     renames = RENAME.get(cc, {})

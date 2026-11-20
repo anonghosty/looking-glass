@@ -13,7 +13,7 @@
   function picker(kind) {
     const [one, label] = WHO[kind] || WHO.management;
     const wrap = el("label", "pp-pick");
-    const sel = el("select", "pp-sel"); sel.setAttribute("aria-label", label);
+    const sel = el("select", "pp-sel lg-enhance"); sel.setAttribute("aria-label", label);
     sel.append(new Option(`Choose ${one}…`, ""));
     const note = el("small", "pp-note", "Only you and the person you choose see it and its trail (and whoever it is passed on to).");
     wrap.append(el("span", "pp-l", label), sel, note);

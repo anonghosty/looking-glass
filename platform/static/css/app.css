@@ -1144,6 +1144,24 @@ details.mp-mini.kev > summary { color: #ff9a9e; }
 .lgs-opt.on { color: #fff; background: rgba(91, 141, 239, .1); font-weight: 600; }
 .lgs-none { margin: 8px 10px; color: #7a85a0; font-size: 12.5px; }
 @media (prefers-reduced-motion: reduce) { .lgs-pop { animation: none; } .lgs-chev { transition: none; } }
+/* the drop-downs that were the browser's own lists until 2026-11-20 keep the sizes they had (the wrapper carries each
+   class as lgs-<class>; check_select_enhancer.py makes sure no select stays the browser's list) */
+.lgs-av-in { width: 100%; }
+.lgs-av-in .lgs-btn { padding: 9px 11px; border-radius: 9px; font-size: 14px; }
+.lgs-av-netsel { max-width: 640px; }
+.lgs-fd-sel, .lgs-fd-in { min-width: 0; }
+.fd-adv-send .lgs-fd-in { flex: 1 1 260px; }
+.bh-form .lgs { width: 100%; }
+.lgs-pp-sel { min-width: 0; }
+.pp-pick.need .lgs-pp-sel .lgs-btn { border-color: #e5484d; box-shadow: 0 0 0 3px rgba(229, 72, 77, .2); }
+.cb-ac-box .lgs-cb-in { width: 100%; }
+.lgs-cb-filter-sel { min-width: min(280px, 100%); max-width: 100%; }
+.lgs-kbn-sel { max-width: 100%; }
+.lgs-it-dayselect .lgs-btn { padding: 5px 10px; border-radius: 7px; font-size: 12.5px; }
+.st-matchcell .lgs-st-pick { max-width: 220px; }
+.st-matchcell .lgs-st-pick .lgs-btn { padding: 3px 8px; border-radius: 6px; font-size: 12.5px; }
+#sevTable .lgs-sev-pick { min-width: 170px; }
+.lt-field .lgs { width: 100%; }
 /* places */
 .grid2 .lgs { width: 100%; }
 .lgs-speed .lgs-btn { padding: 6px 10px; font-size: 12px; border-radius: 7px; gap: 8px; }

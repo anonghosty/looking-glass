@@ -632,7 +632,6 @@ class Doc:
 
     def explanation(self, x, y, w, name, x_, stat, comms):
         """One explanation card; returns its height (drawn only when y is given)."""
-        lines = []
         kind = x_.get("kind")
         if kind == "cve":
             tags = ([("Actively exploited · CISA KEV", RED)] if x_.get("exploited") else []) + \

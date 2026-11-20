@@ -182,6 +182,8 @@ run "Every PDF and CSV variation: the content checker" $PY tests/check_output_li
 run "RULE: every page opens with the loading animation" $PY tests/check_loader_everywhere.py
 run "Map filter: what else the devices carry; two ticked = carrying both" $PY tests/check_filter_overlap.py
 run "Nothing answers without signing in (every route, malformed requests)" $PY tests/check_signed_out.py
+run "Every page asking for the Looking Glass drop-downs loads lg-select.js" $PY tests/check_select_enhancer.py
+run "Sign-up links: the open limit, in fixed words; no error text in answers" $PY tests/check_invite_limit.py
 run "PDF pages: no overlap, no cut-off" $PY tests/pdf_pages_check.py
 run "analyst code counts: one lock per code" $PY tests/check_per_key_cache.py
 run "older days kept for analyst codes" $PY tests/check_recent_days.py

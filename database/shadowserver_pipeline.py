@@ -39,7 +39,6 @@ import re
 import shutil
 import signal
 import sqlite3
-import ssl
 import sys
 import time
 import zipfile

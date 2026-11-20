@@ -86,8 +86,8 @@ Every release goes through the same steps before it is published:
 
 1. **The full test suite** (over a hundred checks: privacy per role, CSRF on every write route, masking, caches,
    findings, the pipeline) on a test installation with made-up data.
-2. **The same checks GitHub runs:** unit tests without a database, the database tests, a dependency audit and static
-   analysis (Bandit, CodeQL).
+2. **The same checks GitHub runs:** unit tests without a database, the database tests, a dependency audit, the coding
+   rules (Ruff, `ruff.toml`) and static analysis (Bandit, ShellCheck, CodeQL).
 3. **The installation's own security check** (`platform/security_testing/security_retest.py`) and a resource check.
 4. **Every page, as people see it:**
    - **In a browser, every page for every role:** `platform/tests/browser_checks.py` checks that every control is

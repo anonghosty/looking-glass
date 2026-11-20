@@ -14,7 +14,6 @@
 5. the certificate script names no product.
 The real app is only read from (GET); the setting and /healthz are checked on a throwaway app with a scratch folder.
 Usage: tests/check_fingerprint.py"""
-import base64
 import os
 import re
 import sys

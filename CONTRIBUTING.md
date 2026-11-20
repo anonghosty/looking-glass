@@ -45,10 +45,12 @@ reports. The demo data (`lg_demo`) is enough for nearly every change.
 - **Text shows in full.** No cut-off text on pages or in PDFs; lists wrap.
 - **Readable names, not internal identifiers**, wherever people read them.
 - **Documentation** is updated in the same pull request when behaviour or a setting changes.
-- **Code standard:** Python passes [Bandit](https://bandit.readthedocs.io/) with no medium or high finding and shell
-  scripts pass [ShellCheck](https://www.shellcheck.net/) with no warning (both run in CI). A finding kept on purpose is
-  marked where it is, with the reason: `# nosec B310  # why` or `# shellcheck disable=SC2024  # why`. Follow the style
-  of the file you change (PEP 8 for new Python modules).
+- **Code standard:** Python passes [Ruff](https://docs.astral.sh/ruff/) with the rules in [ruff.toml](ruff.toml)
+  (undefined and unused names, bare `except:`, mutable or computed default arguments, late-bound loop variables and
+  the like) and [Bandit](https://bandit.readthedocs.io/) with no medium or high finding; shell scripts pass
+  [ShellCheck](https://www.shellcheck.net/) with no warning. All three run in CI and a change that breaks them fails.
+  A finding kept on purpose is marked where it is, with the reason: `# noqa: F401  # why`, `# nosec B310  # why` or
+  `# shellcheck disable=SC2024  # why`. Layout follows the file you change (PEP 8 for new Python modules).
 
 ## Checks to run
 
@@ -67,6 +69,12 @@ cd platform && LG_NO_OUTSIDE=1 tests/run_all_checks.sh
 
 ```bash
 cd database && .venv/bin/python -m unittest discover -s tests
+```
+
+The coding rules, from the top of the repository (`pip install ruff==0.17.6`, the version CI uses):
+
+```bash
+ruff check platform database
 ```
 
 Pull requests run the same checks in CI; they must pass.

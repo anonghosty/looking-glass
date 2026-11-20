@@ -1,0 +1,28 @@
+# Ruff (https://docs.astral.sh/ruff/), run on every push and pull request by .github/workflows/checks.yml
+# (static-analysis job): a change that breaks one of these rules fails the checks. CONTRIBUTING.md says how to run it.
+#
+# The rules enforced are the ones that catch real mistakes, not layout:
+#   F           pyflakes: undefined names, unused imports and variables, redefinitions, f-strings with nothing in them
+#   E9          syntax errors
+#   E711-E714   comparisons with None, True or False, and "not in" written the long way
+#   E721        type comparisons
+#   E722        a bare "except:"
+#   W6          invalid escape sequences
+#   B006, B008  mutable or computed default arguments
+#   B023        a function made in a loop that uses the loop's variable later
+# Layout (line length, several statements on one line, where imports sit) follows the file being changed and PEP 8 for
+# new modules; it is not enforced here.
+
+target-version = "py312"
+extend-exclude = [".venv", "venv"]
+
+[lint]
+select = ["F", "E9", "E711", "E712", "E713", "E714", "E721", "E722", "W6", "B006", "B008", "B023"]
+
+[lint.per-file-ignores]
+# the checks build small helpers inside their loops and call them within the same step (checked by hand, 2026-11-20)
+"**/tests/**" = ["B023"]
+
+[lint.flake8-bugbear]
+# a frozen dataclass with fixed defaults (its .env reading is Limits.from_env): a safe default argument
+extend-immutable-calls = ["zip_limits.Limits", "zl.Limits"]

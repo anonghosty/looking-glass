@@ -43,7 +43,7 @@
       const tr = el("tr", s.may ? (s.noise ? "svp-noise" : "") : "svp-off");
       const cb = el("input"); cb.type = "checkbox"; cb.checked = chosen.has(s.field); cb.disabled = !s.may;
       cb.setAttribute("aria-label", `Use ${s.field} as a pattern field`);
-      const kind = el("select"); for (const [k, [l, t]] of Object.entries(KIND)) { const o = el("option", null, l); o.value = k; o.title = t; kind.append(o); }
+      const kind = el("select", "kbp-kind lg-enhance"); for (const [k, [l, t]] of Object.entries(KIND)) { const o = el("option", null, l); o.value = k; o.title = t; kind.append(o); }
       kind.value = chosen.get(s.field)?.kind || s.kind; kind.disabled = !s.may;
       const tip = () => { kind.title = KIND[kind.value]?.[1] || ""; }; tip(); kind.addEventListener("change", tip);
       const lbl = el("input", "svp-lbl"); lbl.value = chosen.get(s.field)?.label || s.field.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()); lbl.maxLength = 60; lbl.disabled = !s.may;

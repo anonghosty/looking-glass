@@ -543,6 +543,10 @@ def split_b64(pt):
     """(the Base64 text at the start, what follows it): the trailer after the text is not Base64."""
     m = _B64_RUN.match(pt)
     n = m.end()
+    if pt[n - 1:n] == b"=" and n % 4:
+        # an '=' that cannot be padding (2026-11-20: Base64 text that needs none, then '=' and a hex trailer): it starts
+        # the trailer
+        n = len(pt[:n].rstrip(b"="))
     if not pt[n - 1:n] == b"=":
         n -= n % 4                                 # unpadded: whole groups only; the rest belongs to the trailer
     return pt[:n], pt[n:]
@@ -577,7 +581,7 @@ def _read(fmt, outer, key, lenient=False):
     """One value under one key: the beacon, or None. lenient (after the known-start repair only): a stray '=' after the
     Base64 text, or a JSON whose very end fails, is still read."""
     pt = _xor(outer, key)
-    text64, _ = split_b64(pt)
+    text64, after64 = split_b64(pt)
     inner = _b64(text64) or (_lenient_inner(outer, key) if lenient else None)   # a stray '=' (2026-11-16)
     if not inner:
         return None
@@ -614,11 +618,22 @@ def _read(fmt, outer, key, lenient=False):
     # the trailer: after the Base64 text of the JSON in the XOR layer (as sent), or after the JSON inside it
     used = len(text[:end].encode("utf-8", "surrogateescape"))
     n64 = -(-used // 3) * 4
-    tail = (pt[n64:].lstrip(b"=") or text[end:].encode("utf-8", "surrogateescape")).strip(b"\r\n\x00 ")
-    trailer = ""
-    if tail:
-        plain = bytes(b ^ fmt.trailer_xor for b in tail) if fmt.trailer_xor is not None else tail
-        trailer = plain.decode("ascii") if re.fullmatch(rb"[0-9a-fA-F]+", plain) else tail.hex()
+    trailer, trailer_kind = "", ""
+    if after64[:1] == b"=" and len(after64) > 1 and not lenient:
+        # 2026-11-20 (a decoding request from the creator): Base64 text that needs no padding, then '=' and the
+        # trailer as it is (not XORed with one byte); a few bytes may follow the JSON inside the Base64 text
+        tail = after64[1:].strip(b"\r\n\x00 ")
+        trailer = "".join(chr(c) if 32 <= c < 127 else f"\\x{c:02x}" for c in tail)
+        trailer_kind = "after '=', as it is" if not re.fullmatch(rb"[0-9a-f]+", tail) else "after '=', plain hex"
+    else:
+        tail = (pt[n64:].lstrip(b"=") or text[end:].encode("utf-8", "surrogateescape")).strip(b"\r\n\x00 ")
+        if tail:
+            plain = bytes(b ^ fmt.trailer_xor for b in tail) if fmt.trailer_xor is not None else tail
+            if re.fullmatch(rb"[0-9a-fA-F]+", plain):
+                trailer = plain.decode("ascii")
+                trailer_kind = f"XOR 0x{fmt.trailer_xor:02x}" if fmt.trailer_xor is not None else "hex"
+            else:
+                trailer, trailer_kind = tail.hex(), "bytes, shown as hex"
     d = fmt.describe(obj)
     notes = list(d.pop("notes", []))
     if instruction_like(obj):
@@ -627,7 +642,7 @@ def _read(fmt, outer, key, lenient=False):
         notes.append(cut_note)
         trailer = ""
     elif trailer:
-        notes.append(f"Trailer after the JSON (XOR 0x{fmt.trailer_xor:02x}): {trailer}")
+        notes.append(f"Trailer after the JSON ({trailer_kind}): {trailer}")
     return {"format": fmt.name, "title": fmt.title, "key": key.decode("ascii"), "json": obj, "trailer": trailer,
             "notes": notes, **d}
 

@@ -85,7 +85,7 @@ def wait_for(fn, timeout=90, step=2):
             v = fn()
             if v:
                 return v
-        except Exception as e:  # server busy reloading
+        except Exception:  # server busy reloading
             v = None
         time.sleep(step)
     return v

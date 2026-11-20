@@ -57,7 +57,7 @@
   function action(x) {
     const td = el("td", "dz-act");
     if (x.source === "shadowserver") return td;            // Shadowserver's ratings are never changed here
-    const sel = el("select", "dz-input sev-pick");
+    const sel = el("select", "dz-input sev-pick lg-enhance");
     sel.setAttribute("aria-label", `Severity for ${x.name}`);
     sel.append(new Option(x.source ? "Change the rating" : "Rate this name", ""));
     for (const lv of data.levels) sel.append(new Option(WORD[lv], lv));

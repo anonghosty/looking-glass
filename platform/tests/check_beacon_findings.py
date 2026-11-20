@@ -300,7 +300,6 @@ with app2.test_request_context("/"):
     ok("the code book itself describes a held beacon code to nobody who may not see it",
        C.described(book, ho["beacon_code"], book.get(ho["beacon_code"])) == "")
 import acodes  # noqa: E402
-import small_codes  # noqa: E402
 src = open(acodes.__file__, encoding="utf-8").read()
 ok("a selection made from beacons keeps the 5-device rule on the code's page (codes and ticking a CVE)",
    "small_codes.code_for(I.combo_code" in src and "small_codes.code_for(I.cross_code" in src and "return jsonify(error=small_codes.HELD), 409" in src)

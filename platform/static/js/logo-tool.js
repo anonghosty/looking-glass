@@ -89,7 +89,7 @@
       const trim = el("label", "lt-check"); const trimBox = el("input"); trimBox.type = "checkbox"; trimBox.checked = true; trim.append(trimBox, el("span", null, "Trim empty margins"));
       const zoomL = el("label", "lt-field"); const zoom = el("input"); zoom.type = "range"; zoom.min = "0.5"; zoom.max = "2.5"; zoom.step = "0.01"; zoom.value = "1";
       zoomL.append(el("span", null, "Size in the frame"), zoom);
-      const bgL = el("label", "lt-field"); const bg = el("select");
+      const bgL = el("label", "lt-field"); const bg = el("select", "lt-bg lg-enhance");
       for (const [v, t] of [["clear", "Keep see-through (the card is white)"], ["white", "White background"], ["dark", "Dark background"]]) bg.append(new Option(t, v));
       bgL.append(el("span", null, st.clear ? "Background (the picture has see-through parts)" : "Background"), bg);
       const reset = el("button", "pill-btn", "Centre again"); reset.type = "button";

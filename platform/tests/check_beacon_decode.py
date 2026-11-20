@@ -15,13 +15,12 @@ Base64 -> repeating XOR with a 32-character hex key -> Base64), with random keys
    fewer than 5 devices carry them, shown from 5; an analyst sees them at once; the URL indicator never carries the
    blob; MAC, UUID, cpuid, cpumd5 and memory are in no answer.
 5. The analysts' API: refused without the page's token or the 'unmasked' permission; answers the full JSON with them.
+6. The '=' trailer variant: Base64 text with no padding, then '=' and the trailer as it is; the first layout still works.
 Run: .venv/bin/python tests/check_beacon_decode.py"""
 import base64
-import collections
 import datetime
 import json
 import os
-import random
 import sys
 import time
 
@@ -365,6 +364,31 @@ ok("... nor kept as 'no beacon' in the summaries (Intel, filters)", fd == "" and
 again = B.decode(fresh)
 ok("the next try, with time, decodes it and keeps the answer", again and again[0]["operator"] == "PKS" and B.decode_finished(fresh))
 ok("... and the summary then names it", B.field({"http_url": fresh, "http_host": "c2.example"}, "format") != "")
+
+# ---- the variant from a decoding request (2026-11-20): Base64 text that needs no padding, then '=' and the trailer as
+# it is. The '=' was read as padding, the Base64 text then failed, and the key search could not settle (made-up values)
+print("6. The '=' trailer variant (made-up check-ins)")
+from beacon_samples import encode_eq  # noqa: E402
+good, bad = 0, []
+for i in range(40):
+    k, o = rkey(), made_up(300 + i, operator=rnd.choice(["WT", "PKS", "HTM", "zckypc"]), version="WT:1.0.0")
+    o["spare2"] = "y" * rnd.randint(0, 120)
+    extra = bytes(rnd.randrange(32, 127) for _ in range(rnd.choice([0, 3, 6])))
+    tr = "".join(rnd.choice("0123456789abcdef") for _ in range(17))
+    d = B.first(line(encode_eq(o, k, extra, tr), path="/" + "".join(rnd.choice("abcdefgh") for _ in range(6))))
+    if d and d["key"] == k and d["json"] == o and d["trailer"] == tr:
+        good += 1
+    else:
+        bad.append(k)
+ok("the key, JSON and trailer come back exactly (40 made-up check-ins, any path)", good == 40, f"{40 - good} failed")
+o = made_up(400)
+d = B.first(line(encode_eq(o, rkey(), b"\x01\x02\x03")))
+ok("the trailer is said to come after '='", d and any("after '='" in n for n in d["notes"]), json.dumps(d and d["notes"]))
+d = B.first(line(encode_eq(o, rkey(), b"", "0123456789abcde\x07f")))
+ok("a trailer byte that is not hex is shown escaped, never guessed", d and "\\x07" in d["trailer"] and any("as it is" in n for n in d["notes"]))
+ok("the first layout (trailer XOR 0x72) still decodes the same way", (B.first(line(encode(made_up(401), rkey()))) or {}).get("trailer") == TRAILER)
+ok("split_b64: an '=' that cannot be padding starts the trailer", B.split_b64(b"QUJD=0123") == (b"QUJD", b"=0123")
+   and B.split_b64(b"QUI=0123") == (b"QUI=", b"0123"))
 
 print(f"\n{checks - len(fails)}/{checks} checks passed")
 if fails:

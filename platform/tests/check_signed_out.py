@@ -51,6 +51,7 @@ if BASE.startswith("https"):
     CTX = ssl.create_default_context(cafile=os.path.join(ROOT, "data", "tls", "cert.pem")) if TLS else ssl.create_default_context()
     CTX.check_hostname = False
     CTX.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
+    CTX.minimum_version = ssl.TLSVersion.TLSv1_2          # as the service: TLS 1.2 or newer (CodeQL py/insecure-protocol)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -144,7 +145,8 @@ ok("…even this computer's own requests need a session or the automation key", 
 print("3. The sign-in page carries no data")
 code, h, body = ask("/login")
 ok("the sign-in page opens", code == 200, code)
-blobs = re.findall(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", body, re.S)
+# any closing form (</script >, </SCRIPT>): this reads our own page, it filters nothing (CodeQL py/bad-tag-filter)
+blobs = re.findall(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script\s*>", body, re.S | re.I)
 data_blobs = [b.strip()[:80] for b in blobs if re.search(r"[\[{]\s*\"[^\"]+\"\s*:|JSON\.parse|\b[A-Z_]{4,}\s*=", b)]
 ok("no data in it (no embedded data objects or figures in its scripts)", not data_blobs, data_blobs[:3])
 ok("…and no data scripts in its own files", not re.search(r'type=["\']application/(ld\+)?json', body))

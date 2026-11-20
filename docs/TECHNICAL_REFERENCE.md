@@ -102,6 +102,10 @@ server side is in small modules called from `app.py`:
   must carry and a `describe` function for its notes. The first is the **CLogin check-in** (`clogin`, `GET
   /CLogin?key=…`; operators zckypc, WT, PKS, HTM): Base64 → repeating XOR with a 32-character lowercase hex key, a new
   key per check-in → the Base64 text of the JSON followed by a trailer (46–52 hex characters, each XORed with 0x72).
+  A second layout of the same check-in: the JSON and a few more bytes in Base64 text that needs no padding, then `=` and
+  a short trailer as it is (not XORed), all under the key. `split_b64` takes an `=` that cannot be padding as the start
+  of the trailer, and the note says *after '=', plain hex* or *after '=', as it is* (a byte that is not printable is
+  shown as `\xNN`).
   The key is recovered from the beacon: per key position, the hex characters that map that column into the Base64
   alphabet up to the trailer (`boundary_columns`: each character is judged up to the first byte it cannot map, three key
   lengths short of the longest stretch); per 4-character group (Base64 groups and the key line up, the key length being

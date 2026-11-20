@@ -232,7 +232,7 @@
       ? "There is nothing to build from yet: no pattern value of this report is shared by 5 or more hosts on the report day."
       : "There is nothing to build from: the reports in memory carry no C2 domain, lookup, user agent or tag for this name.")); return; }
     const form = el("div", "kbn-build");
-    const sel = el("select", "kbn-sel"); sel.setAttribute("aria-label", "Report");
+    const sel = el("select", "kbn-sel lg-enhance"); sel.setAttribute("aria-label", "Report");
     for (const r of reps) { const o = el("option", null, `${rn(r.report)} (${fmt(r.records)} records)`); o.value = r.report; sel.append(o); }
     const vals = el("div", "kbn-vals");
     const res = el("div", "kbn-res");

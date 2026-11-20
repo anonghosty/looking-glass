@@ -166,7 +166,7 @@
     let bar = $("cbFilter");
     if (!bar) { bar = el("div", "cb-filter"); bar.id = "cbFilter"; $("cbTiles").before(bar); }
     bar.replaceChildren();
-    const sel = el("select", "cb-filter-sel"); sel.setAttribute("aria-label", "Show the devices of");
+    const sel = el("select", "cb-filter-sel lg-enhance"); sel.setAttribute("aria-label", "Show the devices of");
     sel.append(new Option(`All networks · ${fmt(s.devices)} device${s.devices === 1 ? "" : "s"} on ${fmt((s.networks_all || []).length)} network${(s.networks_all || []).length === 1 ? "" : "s"}`, ""));
     for (const n of s.networks_all || []) sel.append(new Option(`${n.label || "Unknown"}${n.asn ? ` (AS${n.asn})` : ""} · ${fmt(n.devices)} device${n.devices === 1 ? "" : "s"}, ${fmt(n.records)} records`, n.label || "Unknown"));
     const note = el("span", "cb-filter-note", "The whole search.");

@@ -45,7 +45,7 @@ EMPTY = {"infection": "unknown", "tag": "untagged", "severity": "unrated"}
 try:
     _st = json.load(open(os.path.join(HERE, "..", "data", "settings.json")))
     if _st.get("networks") or _st.get("cidrs"):
-        print(f"SKIPPED: a constituency is set in Settings; tests/verify_constituency.py compares it with MongoDB.")
+        print("SKIPPED: a constituency is set in Settings; tests/verify_constituency.py compares it with MongoDB.")
         sys.exit(77)
 except (OSError, ValueError):
     pass
