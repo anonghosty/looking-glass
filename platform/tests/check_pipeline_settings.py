@@ -62,6 +62,13 @@ def apply_now():
     return WS.apply_requests(PLAT, PIPE / ".env", PIPE, logging.getLogger("lg-check-workers"))
 
 
+def result_of(rid):
+    """The pipeline's result for one request, found by its id. Not "the newest": results written within one clock tick
+    share a time, and the tie was broken by the random part of their names (2026-11-20: the check once read the wrong
+    one in a release run)."""
+    return next((r_ for r_ in WS.results(PLAT, limit=200) if r_.get("id") == rid), {})
+
+
 def confirm(rid):
     """What someone on the server does: ./confirm_request.sh <id> (here without the y/N question)."""
     return WS.cli([rid, "--yes"])
@@ -385,9 +392,9 @@ try:
     c.post("/api/pipeline/unlock", json={"password": PW}, headers=H)
     r = c.post("/api/pipeline/settings", json={"values": {"REPORT_SOURCE": "api", "EMAIL_DAYS": "4"}}, headers=H)
     ok("…but not without a saved key (nothing requested)", r.status_code == 400 and "API key" in r.json.get("error", "") and not WS.pending(PLAT), str(r.json))
-    WS.make_request(PLAT, "settings", {"values": {"REPORT_SOURCE": "api"}}, "someone")
+    nokey = WS.make_request(PLAT, "settings", {"values": {"REPORT_SOURCE": "api"}}, "someone")
     apply_now()
-    last = WS.results(PLAT, 1)[0]
+    last = result_of(nokey)
     ok("…and the pipeline itself refuses the API without a key, too", last["status"] == "refused" and "no API key" in last["reason"], str(last))
     (PIPE / ".env").write_text(keep_env)
     c.post("/api/pipeline/lock", json={}, headers=H)            # a refused save leaves it unlocked: lock it now
@@ -444,7 +451,7 @@ try:
     ok("…not released before it is confirmed", not (q2 / MA.RELEASE_FILE).exists() and not (q3 / MA.RELEASE_FILE).exists())
     confirm(r.json["request"])
     apply_now()
-    last = WS.results(PLAT, 1)[0]
+    last = result_of(r.json["request"])
     ok("…once confirmed, the next run releases both, and the result names the files",
        (q2 / MA.RELEASE_FILE).exists() and (q3 / MA.RELEASE_FILE).exists() and last.get("status") == "applied"
        and "2026-11-15-scan_http-example-geo.csv" in " ".join(last.get("changes") or [str(last)]), str(last)[:300])

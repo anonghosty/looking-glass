@@ -259,7 +259,7 @@ class Alerts:
                  "at": newest, "link": "/admin"}]
 
     def _small_traces(self, now):
-        """Someone ran many small Trace a leak searches (at most 3 lines each) within 24 hours: one or two addresses at a
+        """Someone ran many small Trace a leak searches (at most 3 lines or addresses each) within 24 hours: one or two addresses at a
         time can test guesses (external review of 1a7b016; the user, 2026-11-20). One alert per person, again at every
         further SMALL_TRACE_ALERT. Only counts and the person: never what was traced (insider.note_small_trace)."""
         try:
@@ -279,7 +279,7 @@ class Alerts:
             who = f"{full} ({name})" if full and full.lower() != str(name).lower() else str(name)
             out.append({"key": f"small-traces:{name}:{step}:{round(recent[step * limit - 1])}", "problem": True,
                         "title": f"{who} ran {len(recent)} small traces in 24 hours",
-                        "text": (f"{len(recent)} Trace a leak searches of at most {insider.SMALL_TRACE_ITEMS} lines each since "
+                        "text": (f"{len(recent)} Trace a leak searches of at most {insider.SMALL_TRACE_ITEMS} lines or addresses each since "
                                  f"{_when(recent[0])}. One or two addresses at a time can be used to test guesses at what was "
                                  "copied or downloaded. The audit log (Trace a leak entries) shows each one."),
                         "at": recent[-1], "link": "/audit"})

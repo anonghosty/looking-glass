@@ -5,6 +5,24 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-20 (8)
+### Security
+- **Small Trace a leak searches are counted however they are sent.** The administrators' bell warns when one person
+  runs many traces of only a few items, since one or two addresses at a time can test guesses. Only pasted text was
+  counted: an uploaded file, a ZIP holding one, or a single address padded with filler lines answered just the same
+  without being counted. A trace now counts as small when it gives at most 3 lines **or** at most 3 addresses, pasted
+  or in a file (a PDF can only match as the exact same file, so it never counts). Found by an external review.
+- **After updating:** nothing to do.
+### Fixed
+- **The sign-in globe showed one country only.** Its attacks all aimed at a single fixed country, whatever country
+  the installation serves. Looking Glass serves every country: the globe now marks three countries at a time, picked
+  at random from cities on every continent and replaced one by one, and most attacks land on them. It never marks the
+  installation's own country, so the sign-in page still says nothing about the installation. No slower to draw.
+- **Two test-code alerts from GitHub code scanning (CodeQL):** the signed-out check now insists on TLS 1.2 or newer
+  and reads a page's scripts with an HTML parser instead of a pattern.
+- **A timing-sensitive check made reliable:** the pipeline settings check finds its own result by its request, not by
+  the newest file, which two results written in the same instant could swap.
+
 ## 2026-11-20 (7)
 ### Changed
 - **Governance: Community instead of Continuity.** The section now invites CSIRTs and people to collaborate, send fixes

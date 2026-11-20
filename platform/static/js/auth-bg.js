@@ -4,7 +4,10 @@
      under the pointer; click or tap launches a burst of attacks from that spot. Keyboard / TV remote: focus the globe
      (Tab or the remote's arrows), then arrows turn it, + / - or channel keys zoom, OK launches a burst.
      Auto-rotates when left alone.
-   * Attacks arc in from around the world with impact rings.
+   * Attacks arc in from around the world with impact rings. Looking Glass serves every country, so no country is fixed:
+     three countries are marked at a time, picked at random from cities on every continent and replaced one by one,
+     and most attacks land on them.
+     (It never shows the installation's own country: the page says nothing about the installation before sign-in.)
    Still frame for "reduce motion"; pauses when the tab is hidden. */
 (() => {
   "use strict";
@@ -149,7 +152,23 @@
   // ------------------------------------------------------------------ attacks
   const SOURCES = [[40.7, -74], [51.5, -0.1], [55.7, 37.6], [39.9, 116.4], [35.7, 139.7], [1.35, 103.8], [-23.5, -46.6], [19.4, -99.1],
     [28.6, 77.2], [52.5, 13.4], [37.6, 127], [-33.9, 151.2], [30, 31.2], [6.5, 3.4], [-1.3, 36.8], [33.6, -7.6], [25.2, 55.3], [48.9, 2.35], [37.8, -122.4], [-26.2, 28]].map(([a, b]) => ll(a, b));
-  const HUB = ll(7.9, -1.0);
+  // the marked countries: HUB_COUNT of the cities above at a time, picked at random; each is replaced after HUB_MS
+  // (staggered, so they change one at a time) or when it turns out of view
+  const HUB_COUNT = 3, HUB_MS = 6000;
+  const hubs = [];                                          // [{v, since}]
+  const near = (p, q) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2] > 0.94;   // within about 2,200 km of each other
+  function pickHub(i, now) {
+    const others = hubs.filter((h, j) => h && j !== i).map((h) => h.v);
+    const vis = SOURCES.filter((v) => facing(v, 0.3) && !others.some((o) => o === v || near(o, v)));
+    hubs[i] = vis.length ? { v: vis[(Math.random() * vis.length) | 0], since: now } : null;
+  }
+  function keepHubs(now) {
+    for (let i = 0; i < HUB_COUNT; i++) {
+      const h = hubs[i];
+      if (!h || !facing(h.v, 0.1) || (!reduce && now - h.since > HUB_MS)) pickHub(i, h ? now : now - (i * HUB_MS) / HUB_COUNT);
+    }
+  }
+  const liveHubs = () => hubs.filter((h) => h && facing(h.v, 0.1)).map((h) => h.v);
   const COLORS = ["#e5484d", "#f5b54a", "#5b8def", "#e5484d", "#8e7cf0"];
   const arcs = [], rings = [];
   const pickColor = () => COLORS[(Math.random() * COLORS.length) | 0];
@@ -159,7 +178,8 @@
     const vis = SOURCES.filter((v) => facing(v));
     const a = from || vis[(Math.random() * vis.length) | 0];
     if (!a) return;
-    const b = facing(HUB, 0.1) && (from || Math.random() < 0.72) ? HUB : vis[(Math.random() * vis.length) | 0];
+    const targets = liveHubs().filter((v) => v !== a);
+    const b = targets.length && (from || Math.random() < 0.7) ? targets[(Math.random() * targets.length) | 0] : vis[(Math.random() * vis.length) | 0];
     if (!b || a === b) return;
     arcs.push({ a, b, t: 0, speed: 0.0065 + Math.random() * 0.006, color: pickColor(), w: 1 + Math.random() * 1.3 });
   }
@@ -208,11 +228,14 @@
       if (hv) { const dd = (d[0] - hv[0]) ** 2 + (d[1] - hv[1]) ** 2 + (d[2] - hv[2]) ** 2; if (dd < 0.018) { const k = 1 - dd / 0.018; a = Math.min(1, a + k * 0.8); s += k * 1.4; col = "255,200,120"; } }
       ctx.fillStyle = `rgba(${col},${a})`; ctx.fillRect(cx + x * R - s / 2, cy - y * R - s / 2, s, s);
     }
-    // the constituency
-    const hub = rot(HUB);
-    if (hub[2] > 0) { const hx = cx + hub[0] * R, hy = cy - hub[1] * R, pulse = Math.sin(now / 300);
+    // the marked countries move around the world (still frame: only when one has turned out of view)
+    keepHubs(now);
+    for (const v of liveHubs()) {
+      const hp = rot(v); if (hp[2] <= 0) continue;
+      const hx = cx + hp[0] * R, hy = cy - hp[1] * R, pulse = Math.sin(now / 300);
       ctx.fillStyle = "#e5484d"; ctx.beginPath(); ctx.arc(hx, hy, 3.4, 0, TAU); ctx.fill();
-      ctx.strokeStyle = `rgba(229,72,77,${0.45 + 0.3 * pulse})`; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(hx, hy, 8 + 2.5 * pulse, 0, TAU); ctx.stroke(); }
+      ctx.strokeStyle = `rgba(229,72,77,${0.45 + 0.3 * pulse})`; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(hx, hy, 8 + 2.5 * pulse, 0, TAU); ctx.stroke();
+    }
     // attacks
     spawnClock += dt;
     if (!reduce && spawnClock > 0.3 && arcs.length < 28) { spawnClock = 0; spawn(); }
@@ -241,6 +264,7 @@
     }
   }
   if (reduce) {
+    keepHubs(performance.now());
     for (let i = 0; i < 18; i++) spawn();
     arcs.forEach((a) => { a.t = Math.random(); });
     const still = () => frame(performance.now()); still(); addEventListener("resize", still); setTimeout(still, 1500);   // after the land loads

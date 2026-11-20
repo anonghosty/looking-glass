@@ -54,7 +54,7 @@ TRACE_PER_MINUTE = 5
 # Watching small traces (external review of 1a7b016 + the user, 2026-11-20): a trace of one or two addresses still
 # answers yes or no, so someone with the audit permission could test about 100 guesses a day, slowly. Not closed (it
 # would break real traces of short excerpts) but watched: SMALL_TRACE_ALERT traces of at most SMALL_TRACE_ITEMS lines
-# by one person within 24 hours put an alert in the administrators' bell (system_alerts.py). Only the time and the
+# or addresses (pasted or in a file) by one person within 24 hours put an alert in the administrators' bell (system_alerts.py). Only the time and the
 # person are kept (data/trace_watch.json), never what was traced.
 SMALL_TRACE_ITEMS = 3
 SMALL_TRACE_ALERT = max(2, int(os.environ.get("SMALL_TRACE_ALERT", "20") or 20))
@@ -181,9 +181,11 @@ class Sealer:
             os.replace(tmp, self.path)
             return len(lines) - len(keep)
 
-    def trace(self, text=None, data=None):
+    def trace(self, text=None, data=None, counts=None):
         """Every seal the text or file matches: ([{seal, exact, matched, of, given}], lines left out as common, whether the
-        lines and addresses were compared one by one), the closest first.
+        lines and addresses were compared one by one), the closest first. `counts` (a dict), when given, is filled with
+        how many distinct lines and addresses were given, read the same way as they are compared (a file's text, each
+        text file in a ZIP; a PDF has none), for the small-trace watch.
         Against testing guesses (external review, 2026-11-19): more than TRACE_MAX_ITEMS lines or addresses given are
         compared as a whole only (the exact text or file); a seal that is not exact is reported only when it holds at
         least TRACE_MIN_SHARE of what was given (a list of guesses never does, a real excerpt does). A line counts as
@@ -198,6 +200,8 @@ class Sealer:
         if text:
             s = self.seal_text(text)
             q_whole.add(s["whole"]); q_lines.update(s["line_items"]); q_addrs.update(s["addr_items"])
+        if counts is not None:
+            counts["lines"], counts["addresses"] = len(q_lines), len(q_addrs)
         one_by_one = len(q_lines) <= TRACE_MAX_ITEMS and len(q_addrs) <= TRACE_MAX_ITEMS
         if not one_by_one:
             q_lines, q_addrs = set(), set()                  # too much to compare line by line: the exact text or file only
@@ -434,8 +438,11 @@ def install(app, ctx):
             given = "pasted text"
         if not text and not data:
             return jsonify(error="Paste the text or choose the file to trace."), 400
-        small = bool(text) and len([ln for ln in text.splitlines() if ln.strip()]) <= SMALL_TRACE_ITEMS
-        found, common, one_by_one = sealer.trace(text=text, data=data)
+        given_n = {}
+        found, common, one_by_one = sealer.trace(text=text, data=data, counts=given_n)
+        # small: few lines OR few addresses, pasted or in a file (a ZIP's files too). Counting lines alone missed an
+        # uploaded file, and one address padded with filler lines (external review of e6702c4, 2026-11-20)
+        small = (0 < given_n.get("lines", 0) <= SMALL_TRACE_ITEMS) or (0 < given_n.get("addresses", 0) <= SMALL_TRACE_ITEMS)
         text = data = None                                  # nothing given is kept
         if small:
             note_small_trace(u)

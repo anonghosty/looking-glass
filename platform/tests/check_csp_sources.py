@@ -38,5 +38,17 @@ if path and os.path.isfile(path) and sri:
     got = base64.b64encode(hashlib.sha384(open(path, "rb").read()).digest()).decode()
     ok("it is the file the integrity hash pins", got == sri.group(1))
 
+print("The sign-in globe marks countries all over the world (the user, 2026-11-20: a global tool, not one country)")
+ok("no single fixed country to aim at", "const HUB =" not in js and "ll(7.9, -1.0)" not in js)
+ok("three countries marked at a time, picked at random", bool(re.search(r"const HUB_COUNT = 3\b", js)) and "pickHub" in js)
+cities = [(float(a), float(b)) for a, b in re.findall(r"\[(-?\d+(?:\.\d+)?), (-?\d+(?:\.\d+)?)\]", js.split("const SOURCES", 1)[1].split(".map(", 1)[0])]
+regions = {"the Americas": any(lon < -30 for _lat, lon in cities), "Europe": any(lat > 35 and -30 < lon < 45 for lat, lon in cities),
+           "Africa": any(-35 < lat < 35 and -20 < lon < 52 for lat, lon in cities), "Asia": any(lat > 0 and lon > 60 for lat, lon in cities),
+           "Oceania": any(lat < -10 and lon > 110 for lat, lon in cities)}
+ok("the marked cities come from every inhabited continent", len(cities) >= 15 and all(regions.values()),
+   f"{len(cities)} cities; missing: {[k for k, v in regions.items() if not v]}")
+ok("…never the installation's own country (the page says nothing about the installation before sign-in)",
+   not re.search(r"COUNTRY|data-country|dataset\.country", js))
+
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))
 sys.exit(1 if fails else 0)

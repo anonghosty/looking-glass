@@ -21,6 +21,7 @@ import ssl
 import sys
 import urllib.error
 import urllib.request
+from html.parser import HTMLParser
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if not os.path.isdir(os.path.join(ROOT, "static", "js")):      # run from a draft folder: the platform is the current one
@@ -46,12 +47,22 @@ except Exception:                                              # noqa: BLE001
     PORT = int(os.environ.get("LG_PORT", "5000") or 5000)
 TLS = os.path.exists(os.path.join(ROOT, "data", "tls", "cert.pem"))
 BASE = os.environ.get("LG_SIGNED_OUT_BASE") or (("https" if TLS else "http") + f"://127.0.0.1:{PORT}")
-CTX = None
-if BASE.startswith("https"):
-    CTX = ssl.create_default_context(cafile=os.path.join(ROOT, "data", "tls", "cert.pem")) if TLS else ssl.create_default_context()
-    CTX.check_hostname = False
-    CTX.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
-    CTX.minimum_version = ssl.TLSVersion.TLSv1_2          # as the service: TLS 1.2 or newer (CodeQL py/insecure-protocol)
+def tls_context():
+    """A client context for this installation's own HTTPS: TLS 1.2 or newer only, as the service (set where it is made,
+    so it is plain at every use: CodeQL py/insecure-protocol); the installation's own certificate trusted, its name not
+    checked (the address is 127.0.0.1)."""
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    if TLS:
+        ctx.load_verify_locations(cafile=os.path.join(ROOT, "data", "tls", "cert.pem"))
+    else:
+        ctx.load_default_certs()
+    ctx.check_hostname = False
+    ctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
+    return ctx
+
+
+CTX = tls_context() if BASE.startswith("https") else None
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -145,8 +156,32 @@ ok("…even this computer's own requests need a session or the automation key", 
 print("3. The sign-in page carries no data")
 code, h, body = ask("/login")
 ok("the sign-in page opens", code == 200, code)
-# any closing form (</script >, </SCRIPT>): this reads our own page, it filters nothing (CodeQL py/bad-tag-filter)
-blobs = re.findall(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script\s*>", body, re.S | re.I)
+
+
+class InlineScripts(HTMLParser):
+    """The text of every inline <script> on a page, read by Python's HTML parser (not a pattern: CodeQL
+    py/bad-tag-filter); a script with src= is a file, not inline."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.found, self._in = [], False
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "script" and not any(k == "src" for k, _ in attrs):
+            self._in = True
+            self.found.append("")
+
+    def handle_endtag(self, tag):
+        if tag == "script":
+            self._in = False
+
+    def handle_data(self, data):
+        if self._in:
+            self.found[-1] += data
+
+
+_ip = InlineScripts()
+_ip.feed(body)
+blobs = _ip.found
 data_blobs = [b.strip()[:80] for b in blobs if re.search(r"[\[{]\s*\"[^\"]+\"\s*:|JSON\.parse|\b[A-Z_]{4,}\s*=", b)]
 ok("no data in it (no embedded data objects or figures in its scripts)", not data_blobs, data_blobs[:3])
 ok("…and no data scripts in its own files", not re.search(r'type=["\']application/(ld\+)?json', body))
@@ -173,7 +208,7 @@ host, port = urlsplit(BASE).hostname, urlsplit(BASE).port or (443 if BASE.starts
 def raw(data):
     s = socket.create_connection((host, port), timeout=10)
     if BASE.startswith("https"):
-        s = CTX.wrap_socket(s, server_hostname=host)
+        s = tls_context().wrap_socket(s, server_hostname=host)
     s.sendall(data)
     out = b""
     try:

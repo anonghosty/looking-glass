@@ -233,6 +233,34 @@ ok("small traces are noted: who and when only", wd.get("auditor2") and all(isins
    and "203.0.113" not in open(watch).read(), str(wd)[:160])
 ok("…the notes file is owner-only (0600)", (os.stat(watch).st_mode & 0o777) == 0o600)
 ok("…a trace of more than 3 lines is not noted as small", "auditor1" not in wd or len(wd["auditor1"]) <= 1, str(wd.get("auditor1")))
+# the external review of e6702c4 (2026-11-20): a guess sent as a file, a ZIP, or padded with filler lines was not counted
+
+
+def trace_file(body, name):
+    return c.post("/api/audit/trace", data={"file": (io.BytesIO(body), name)}, content_type="multipart/form-data")
+
+
+def noted(user):
+    return len((json.load(open(watch)) if os.path.exists(watch) else {}).get(user) or [])
+
+
+zb = io.BytesIO()
+with zipfile.ZipFile(zb, "w") as z:
+    z.writestr("one.txt", "198.18.37.201\n")
+small_cases = [("an uploaded file of one address", lambda: trace_file(b"198.18.37.201\n", "guess.txt")),
+               ("a ZIP holding a one-line file", lambda: trace_file(zb.getvalue(), "guess.zip")),
+               ("one address pasted with filler lines", lambda: tr(text="198.18.37.201\nfiller one\nfiller two\nfiller three\nfiller four"))]
+for i, (label, send) in enumerate(small_cases):
+    who["user"] = f"auditor3{i}"
+    r = send()
+    ok(f"…{label}: still answers, and is noted as small", r.status_code == 200 and r.get_json().get("total", 0) >= 1
+       and noted(f"auditor3{i}") == 1, f"{r.status_code} {str(r.get_json())[:120]} noted={noted(f'auditor3{i}')}")
+who["user"] = "auditor39"
+r = trace_file(b"%PDF-1.7 made-up, no readable lines\n", "report.pdf")
+ok("…a PDF (matched as the exact file only, so no guesses) is not noted as small",
+   r.status_code == 200 and noted("auditor39") == 0, f"{r.status_code} noted={noted('auditor39')}")
+wd = json.load(open(watch))
+ok("…the notes still hold who and when only", "198.18.37" not in open(watch).read() and "filler" not in open(watch).read())
 import system_alerts as SA  # noqa: E402
 import time as _clock  # noqa: E402
 now = _clock.time()
