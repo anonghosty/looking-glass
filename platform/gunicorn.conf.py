@@ -63,6 +63,33 @@ def _no_server_header():
 _no_server_header()
 
 
+# A neutral answer to a request too malformed to reach Looking Glass (the user, 2026-11-20, after a scan: nmap's garbled
+# request got gunicorn's own error page, "Invalid Request Line '…'", which names the server to anyone who knows it, and
+# it repeated what was sent). The same plain page as every other error (neutral.plain_page): the status in plain words,
+# nothing echoed back, no template. The status code itself is unchanged (400, 431, …).
+def _neutral_bad_request():
+    try:
+        from gunicorn import util as _util
+        if getattr(_util.write_error, "_lg_neutral", False):
+            return
+
+        def write_error(sock, status_int, reason, mesg):
+            words = " ".join(str(reason or "Bad Request").split())[:40] or "Bad Request"
+            body = (f"<!doctype html><meta charset=\"utf-8\"><title>{words}</title>"
+                    f"<p style=\"font-family:sans-serif\">{words}.</p>").encode("utf-8")
+            head = (f"HTTP/1.1 {int(status_int)} {words}\r\nConnection: close\r\nContent-Type: text/html; charset=utf-8\r\n"
+                    f"Content-Length: {len(body)}\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: DENY\r\n"
+                    "Content-Security-Policy: default-src 'none'; frame-ancestors 'none'\r\nCache-Control: no-store\r\n\r\n")
+            _util.write_nonblock(sock, head.encode("latin-1") + body)
+        write_error._lg_neutral = True
+        _util.write_error = write_error
+    except Exception:          # noqa: BLE001  (another gunicorn layout: its page stays, the service still starts)
+        pass
+
+
+_neutral_bad_request()
+
+
 # One worker process, always (review 2026-11-15). Sessions, the failed-sign-in counters, the sign-in steps and the days
 # in memory live in that one process: with --workers 4 a session made in one worker is unknown to the other three, and
 # people would be signed out at random. The service runs "--workers 1 --threads 8"; the command line overrides this

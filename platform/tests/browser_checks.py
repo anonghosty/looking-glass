@@ -208,6 +208,49 @@ def tour_walk(pg):
     return probs
 
 
+# RULE (the user, 2026-11-20: "this has to be a check ... make sure everywhere that needs a loading screen is well done"):
+# every link to another page opens with the loading animation. Each such link on the page is clicked (a mouse click
+# event), the loader's go() is watched instead of leaving the page, and a link the loader does not take is a problem.
+LOADER_LINKS = r"""() => {
+  if (!window.LGLoader) return ['the loader (loader.js) is not on this page'];
+  const real = window.LGLoader.go, went = [];
+  window.LGLoader.go = (u) => { went.push(u); };
+  // after every other listener: never leave the page during the check
+  const stop = (e) => { e.preventDefault(); };
+  window.addEventListener('click', stop);
+  const skip = /^\/(api|static|login|logout|forgot|enrol|welcome|organisation\/logo)(\/|$)/;
+  const files = /\.(pdf|csv|zip|json|txt|png|svg)$/i, dl = /\/(report|preview|export)(\/|$)/;
+  const out = [], seen = new Set();
+  try {
+    for (const a of document.querySelectorAll('a[href]')) {
+      const r = a.getBoundingClientRect();
+      if (!r.width || !r.height || a.target === '_blank' || a.hasAttribute('download') || a.dataset.noLoader != null) continue;
+      const href = a.getAttribute('href'); if (!href.startsWith('/') || href.startsWith('//')) continue;
+      const u = new URL(href, location.href);
+      if (skip.test(u.pathname) || files.test(u.pathname) || dl.test(u.pathname)) continue;
+      if (u.pathname === location.pathname && u.search === location.search) continue;
+      const key = u.pathname + u.search; if (seen.has(key)) continue; seen.add(key);
+      const n = went.length;
+      a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, view: window }));
+      if (went.length === n) out.push(`${(a.textContent || a.getAttribute('aria-label') || '').trim().slice(0, 30)} -> ${key}`);
+    }
+  } finally {
+    window.removeEventListener('click', stop);
+    window.LGLoader.go = real;
+  }
+  return out.length ? ['opens without the loading animation: ' + out.slice(0, 6).join('; ')] : [];
+}"""
+
+
+def loader_links(pg):
+    if pg.evaluate("!document.querySelector('.hud-right, .mg-top-actions')"):
+        return []                                    # not a signed-in page with a header
+    try:
+        return pg.evaluate(LOADER_LINKS)
+    except Exception as e:  # noqa: BLE001  a page that navigated anyway is itself the problem
+        return [f"the loader check could not finish: {str(e)[:120]}"]
+
+
 fails = 0
 with sync_playwright() as p:
     br = p.chromium.launch()
@@ -272,7 +315,7 @@ with sync_playwright() as p:
             missed = pg.evaluate("(got) => [...document.querySelectorAll('[data-kb]')].filter(e => !got.includes(e.dataset.kb) && e.isConnected"
                                  " && e.getBoundingClientRect().width > 0).map(e => e.tagName.toLowerCase() + ': ' + (e.getAttribute('aria-label') ||"
                                  " e.textContent || e.value || '').trim().slice(0, 40)).slice(0, 8)", sorted(reached))
-            tour = tour_walk(pg)
+            tour = tour_walk(pg) + loader_links(pg)
             probs = tour + ([f"not reached by Tab: {missed}"] if missed else []) + (["focus trapped"] if same > 5 else []) + \
                     ([f"clickable but not a control: {info['pointer']}"] if info["pointer"] else []) + \
                     ([f"list holds a non-item: {info['lists']}"] if info["lists"] else []) + \

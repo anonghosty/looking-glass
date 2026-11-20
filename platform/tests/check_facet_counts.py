@@ -67,10 +67,14 @@ ok("…and every other field is counted over the records matching both",
 print("2. The service and the map page")
 src = open(os.path.join(HERE, "app.py"), encoding="utf-8").read()
 ok("/api/facets reads the filters and caches per filter set",
-   "flt = parse_filters(request.args)" in src and 'beacons, filters_key(flt))' in src and "_facets_core(day, demo, beacons, flt)" in src)
+   # (2026-11-20: through narrow_filters, which adds "carrying every ticked infection" only when the map asks)
+   "flt = narrow_filters(parse_filters(request.args), day, request.args)" in src and 'beacons, filters_key(flt))' in src
+   and "_facets_core(day, demo, beacons, flt)" in src)
 ok("…every field, the networks and the beacons use the other filters' records",
    "for e in pool.of(field)" in src and 'pool.of(f"{side}_asn")' in src and 'facet_rows(pool.of("beacon"))' in src)
-ok("…the beacon filter is matched on its label, as the records are", 'beacon_stats.label(e) if f == "beacon" else e.get(f)' in src)
+ok("…the beacon filter is matched on its label, as the records are (field_value, shared with matches)",
+   'if f == "beacon":\n        return beacon_stats.label(ev)' in src and "_facets.pools(day.events, flt or {}, field_value)" in src
+   and "return all(field_value(ev, f) in vals for f, vals in flt.items())" in src)
 S = os.environ.get("LG_HELD_DIR", "")
 js_path = os.path.join(S, "app.js.new") if S and os.path.exists(os.path.join(S, "app.js.new")) else os.path.join(HERE, "static", "js", "app.js")
 js = open(js_path, encoding="utf-8").read()
@@ -78,7 +82,8 @@ ok("the map page asks with the filters, again whenever one changes, dropping slo
    "p = filterParams()" in js and "loadGeo(true); loadFacets(); }, 250)" in js and "if (my !== loadFacets.seq) return;" in js)
 ok("…a chosen value with nothing left is still listed (0), so it can be taken off", "function withChosen(rows, key)" in js
    and js.count("withChosen(") >= 12)
-ok("…the focused box or button keeps the keyboard focus when the lists are rebuilt", "keepFocus(buildFilters)" in js
+ok("…the focused box or button keeps the keyboard focus when the lists are rebuilt (and move smoothly, 2026-11-20)",
+   'keepFocus(() => flipList($("drawer"), buildFilters))' in js
    and "cb.dataset.fk" in js and "b.dataset.fk = key" in js)
 
 print("3. The services platform: list filters (tags, issues) and its page")

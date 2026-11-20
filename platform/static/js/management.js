@@ -826,7 +826,7 @@
     if (state.mapMismatch) {
       const v = await mapWarning();
       if (!v) return;
-      if (v === "settings") { location.href = "/settings"; return; }
+      if (v === "settings") { if (window.LGLoader) window.LGLoader.go("/settings"); else location.href = "/settings"; return; }
       if (v === "admin") { toast(`Please contact your administrator to troubleshoot this: Settings has ${state.mapMismatch.country}, which does not match these reports.`, "ok"); return; }
       p.set("map", "0");
     }

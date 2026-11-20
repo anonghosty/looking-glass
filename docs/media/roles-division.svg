@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 780" width="1200" height="780" role="img" aria-labelledby="t d" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Roboto, Arial, sans-serif">
   <title id="t">A cybersecurity division: security operations and GRC under one head, and the Looking Glass roles in it</title>
-  <desc id="d">The head of cybersecurity (CISO) leads two branches. Security operations (CSIRT and SOC) finds and fixes: SOC tiers detect and triage, the CSIRT handles incidents and warns others, threat intelligence studies the threats, SOC engineering runs the tools. GRC sets the rules and checks them: policy and planning, risk management, control assessment and internal audit, privacy compliance. Constituents and other CSIRTs, outside the division, compare trends in a masked view. Each box names its NICE work role where one applies, and the pill names the Looking Glass role that does this work.</desc>
+  <desc id="d">The head of cybersecurity (CISO) leads two branches. Security operations (CSIRT and SOC) finds and fixes: SOC tiers detect and triage, the CSIRT handles incidents and warns others, threat intelligence studies the threats, SOC engineering runs the tools. Team leads in security operations can hold the Management role (the Executive portal) too, so decisions need not wait on the head of the division. GRC sets the rules and checks them: policy and planning, risk management, control assessment and internal audit, privacy compliance. Constituents and other CSIRTs, outside the division, compare trends in a masked view. Each box names its NICE work role where one applies, and the pill names the Looking Glass role that does this work.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#101219"/><stop offset="1" stop-color="#0b0c10"/>
@@ -50,7 +50,10 @@
   <rect x="40" y="202" width="540" height="74" rx="12" fill="#14213d" stroke="#3d5a9e"/>
   <text x="62" y="230" class="eb" fill="#7fa7ff">SECURITY OPERATIONS · FINDS AND FIXES</text>
   <text x="62" y="258" class="h2">CSIRT / SOC</text>
-  <text x="560" y="258" text-anchor="end" class="t">uses Looking Glass every day</text>
+  <text x="186" y="257" class="t">uses Looking Glass every day</text>
+  <!-- team leads can hold the Executive portal too, so every decision does not wait on management (the user, 2026-11-20) -->
+  <rect class="pb" x="380" y="242" width="188" height="22" rx="11"/>
+  <text x="474" y="257" text-anchor="middle" class="chip ct">Team leads · Executive portal</text>
 
   <!-- branch: GRC -->
   <rect x="620" y="202" width="540" height="74" rx="12" fill="#2a2110" stroke="#8a6a26"/>

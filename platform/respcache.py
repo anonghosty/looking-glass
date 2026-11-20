@@ -84,5 +84,7 @@ def day_key(day):
 
 
 def filters_key(flt):
-    """{field: set(values)} -> a hashable, order-independent key."""
-    return tuple(sorted((k, tuple(sorted(map(str, v)))) for k, v in (flt or {}).items()))
+    """{field: set(values)} -> a hashable, order-independent key. A hidden filter ("_…", worked out from the others and
+    the day, such as the devices carrying every ticked infection) counts by its presence only: the day's key and the
+    other filters name its values (and a set of thousands of devices is not sorted for every request)."""
+    return tuple(sorted((k, ("*",) if str(k).startswith("_") else tuple(sorted(map(str, v)))) for k, v in (flt or {}).items()))

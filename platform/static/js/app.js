@@ -664,7 +664,8 @@
     remember(ev);
     countEvent(ev, weight);
     const color = infColor(infName(ev));
-    if (state.active.length < maxActive()) {
+    // an arc kept drawn through a filter change is not launched twice when the stream refills
+    if (state.active.length < maxActive() && !state.active.some((x) => x.ev.id === ev.id)) {
       const path = ev.src_coords && ev.dst_coords ? arcPath(ev.src_coords, ev.dst_coords) : null;
       const start = opts.start ?? now;
       state.active.push({ ev, rgb: hexRgb(color), path, start, life: activeWallMs(), phase: Math.random() * 0.25 });
@@ -714,6 +715,19 @@
       }
     }
     state.active = keep;
+    // arcs a filter change left out: drawn whole, fading to nothing over 0.7 s (resetStream)
+    if (state.fading?.length) {
+      const t = Date.now(), still = [];
+      for (const f of state.fading) {
+        const k = 1 - (t - f.fadeAt) / 700;
+        if (k <= 0) continue;
+        still.push(f);
+        if (f.path) { arcs.push({ ev: f.ev, path: f.path, color: [...f.rgb, 150 * k], w: 1.6 }); dstDots.push({ ev: f.ev, pos: f.ev.dst_coords, color: [...f.rgb, 255 * k], r: 3.5 }); }
+        const sp = f.ev.src_coords || f.ev.dst_coords;
+        if (sp) srcDots.push({ ev: f.ev, pos: sp, color: [...f.rgb, 255 * k], r: 3.5 });
+      }
+      state.fading = still;
+    }
 
     // pinned communications stay drawn
     const pinned = [];
@@ -857,6 +871,9 @@
     const p = new URLSearchParams();
     for (const k of SET_KEYS) for (const v of state.filters[k]) p.append(k, v);
     for (const k of SINGLE_KEYS) if (state.filters[k]) p.append(k, state.filters[k]);
+    // two or more infections ticked: only the devices carrying every one of them (the user, 2026-11-20: "make it
+    // narrow to devices carrying both"); the server applies it to the map, stream, figures, lists and analyses
+    if (state.filters.infection.size > 1) p.append("inf_all", "1");
     return p;
   }
   // Client-side copy of the server's filter logic, used for pinned items and as a safety net on incoming events.
@@ -1159,7 +1176,8 @@
       if (my !== loadFacets.seq) return;
       state.facets = f;
       for (const r of state.facets.infection || []) infColor(r.value);
-      keepFocus(buildFilters);
+      // the lists move to their new order and their counts roll to the new figures (the user, 2026-11-20)
+      keepFocus(() => flipList($("drawer"), buildFilters));
       renderPins();   // pinned rows can now show report labels
       if (state.facets.beacon_pending) setTimeout(loadBeaconFacet, 20000);
     } catch (err) { toast(`Could not load filters: ${err.message}`); }
@@ -1619,6 +1637,40 @@
     const back = [...document.querySelectorAll("[data-fk]")].find((n) => n.dataset.fk === k && n.dataset.fv === v);
     if (back) back.focus({ preventScroll: true });
   }
+  // smooth filtering (the user, 2026-11-20: "there is no smooth filtering animation when you filter"): a rebuilt list's
+  // rows slide from where they were to their new places (new rows fade in), and every count rolls from the figure it
+  // showed to the new one. Off for anyone whose computer is set to reduce motion.
+  function flipList(box, build) {
+    const rowOf = (n) => n.closest("li, .chip") || n;
+    const before = new Map();
+    if (box && !reducedMotion) for (const n of box.querySelectorAll("[data-fv]")) before.set(`${n.dataset.fk}|${n.dataset.fv}`, rowOf(n).getBoundingClientRect().top);
+    build();
+    if (!box || reducedMotion || !before.size) return;
+    for (const n of box.querySelectorAll("[data-fv]")) {
+      const row = rowOf(n), was = before.get(`${n.dataset.fk}|${n.dataset.fv}`);
+      if (!row.animate) continue;
+      if (was == null) { row.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, easing: "ease-out" }); continue; }
+      const dy = was - row.getBoundingClientRect().top;
+      if (Math.abs(dy) > 1 && Math.abs(dy) < 2000) row.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 420, easing: "cubic-bezier(.2,.7,.2,1)" });
+    }
+  }
+  const shownCounts = new Map();   // "field|value" -> the count last shown, so the next one rolls from it
+  function countEl(cls, key, value) {
+    const s = el("span", cls, fmt(value)), from = shownCounts.get(key);
+    shownCounts.set(key, value);
+    if (from == null || from === value || reducedMotion) return s;
+    s.textContent = fmt(from);
+    const t0 = performance.now();
+    const step = (t) => {
+      if (shownCounts.get(key) !== value) return;            // a newer figure took over
+      const k = Math.min(1, (t - t0) / 600);
+      s.textContent = fmt(Math.round(from + (value - from) * ease(k)));
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+    setTimeout(() => { if (shownCounts.get(key) === value) s.textContent = fmt(value); }, 800);   // background tabs
+    return s;
+  }
   // a chosen value the other filters leave nothing of is still listed (count 0), so it can be seen and taken off
   function withChosen(rows, key) {
     const cur = state.filters[key];
@@ -1629,7 +1681,7 @@
   function buildFilters() {
     const f = state.facets || {};
     const cBox = $("fClass"); cBox.replaceChildren();
-    for (const r of withChosen(f.attack_class || [], "attack_class")) cBox.append(chip(r.value, "attack_class", classColor(r.value), fmt(r.count)));
+    for (const r of withChosen(f.attack_class || [], "attack_class")) cBox.append(chip(r.value, "attack_class", classColor(r.value), r.count));
     const sl = $("fSource"); sl.replaceChildren();
     for (const r of withChosen(f.source || [], "source")) {
       const li = el("li"), label = el("label"), cb = el("input");
@@ -1637,7 +1689,8 @@
       cb.addEventListener("change", () => { cb.checked ? state.filters.source.add(r.value) : state.filters.source.delete(r.value); filtersChanged(); });
       const sw = el("span", "swatch"); sw.style.background = classColor(f.source_class?.[r.value]);
       const name = el("span", "name", srcLabel(r.value)); name.title = `${r.value} · ${f.source_class?.[r.value] || ""}`; name.style.fontFamily = "var(--font)";
-      label.append(cb, sw, name, el("span", "count", fmt(r.count)));
+      label.append(cb, sw, name, countEl("count", `source|${r.value}`, r.count));
+      if (!r.count && !cb.checked) li.classList.add("f-zero");
       li.append(label); sl.append(li);
     }
     $("srcCount").textContent = f.source ? `(${f.source.length} with data yesterday)` : "";
@@ -1646,7 +1699,15 @@
     const pBox = $("fProtocol"); pBox.replaceChildren();
     for (const p of withChosen(f.protocol || [], "protocol")) pBox.append(chip(p.value, "protocol"));
     renderInfectionList();
-    $("infCount").textContent = f.infection ? `(${f.infection.length})` : "";
+    // with infections ticked, the list counts devices: how many of the matching devices also carry each one
+    const overlap = f.infection_unit === "devices";
+    const all = state.filters.infection.size > 1;
+    $("infCount").textContent = !f.infection ? "" : overlap
+      ? `(${f.infection.filter((r) => r.count).length}) · ${all ? "devices carrying all ticked" : "devices that also carry each"}`
+      : `(${f.infection.length})`;
+    $("infCount").title = !overlap ? "" : all
+      ? "Two or more infections ticked: only the devices carrying every one of them. Each count is how many of those devices carry that infection; 0 means none of them does."
+      : "With an infection ticked, each count is how many of its devices also carry that infection; 0 means none of them does.";
     fillSelect($("fSrcCity"), "All cities", withChosen(f.src_city || [], "src_city"), (v) => titleCase(v), "src_city");
     fillSelect($("fDst"), "All countries", withChosen(f.dst_geo || [], "dst_geo"), countryName, "dst_geo");
     fillSelect($("fTag"), "All tags", withChosen(f.tag || [], "tag"), (v) => v, "tag");
@@ -1665,7 +1726,7 @@
     b.setAttribute("aria-pressed", String(state.filters[key].has(value))); b.dataset.fk = key; b.dataset.fv = value;
     if (dotColor) { const d = el("span", "dot"); d.style.background = dotColor; b.append(d); }
     b.append(document.createTextNode(value));
-    if (count) b.append(el("span", "chip-n", count));
+    if (count != null) b.append(countEl("chip-n", `${key}|${value}`, count));
     b.addEventListener("click", () => { const s = state.filters[key]; s.has(value) ? s.delete(value) : s.add(value); b.setAttribute("aria-pressed", String(s.has(value))); filtersChanged(); });
     return b;
   }
@@ -1681,7 +1742,8 @@
       const sw = el("span", "swatch"); sw.style.background = infColor(r.value); sw.style.color = infColor(r.value);
       const name = el("span", "name", r.value); name.title = `${r.value} · ${sevOf[r.value] || ""}`;
       const sd = el("span", "sevdot"); sd.style.background = sevColor(sevOf[r.value]); sd.title = sevOf[r.value] || "";
-      label.append(cb, sw, name, sd, el("span", "count", fmt(r.count)));
+      label.append(cb, sw, name, sd, countEl("count", `infection|${r.value}`, r.count));
+      if (!r.count && !cb.checked) li.classList.add("f-zero");      // none of the matching devices carries it
       li.append(label); ul.append(li);
     }
   }
@@ -1706,7 +1768,15 @@
   }
   function resetStream() {
     state.generation++;
-    state.pending = []; state.active = []; state.buffer = []; state.recentRate = [];
+    // arcs the new filters leave out fade away instead of vanishing; the ones still matching stay drawn (the user,
+    // 2026-11-20: smooth filtering). Reduced motion: all cleared at once, as before.
+    if (reducedMotion) state.fading = [];
+    else {
+      const t = Date.now();
+      state.fading = (state.fading || []).concat(state.active.filter((a) => !matchesFilters(a.ev)).map((a) => ({ ...a, fadeAt: t })));
+    }
+    state.active = reducedMotion ? [] : state.active.filter((a) => matchesFilters(a.ev));
+    state.pending = []; state.buffer = []; state.recentRate = [];
     $("btnNew").hidden = true;
     $("rows").replaceChildren(); state.rowsById.clear(); $("streamEmpty").hidden = false;
     for (const p of [...state.popups]) dropPopup(p);

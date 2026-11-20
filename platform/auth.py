@@ -142,7 +142,7 @@ ROLE_INFO = {
                 "use Malpedia or change anything.",
     "analyst": "CSIRT analysts. They see all data unmasked to analyse it, can export lists and CSV files, look up malware on "
                "Malpedia, and switch Demo mode on for presentations. They cannot change Settings or manage users.",
-    "management": "Managers and executives. They use the management portal only: aggregated statistics of both platforms "
+    "management": "Managers, executives or team leads (so decisions need not wait on management). They use the management portal only: aggregated statistics of both platforms "
                   "(infections, issues, regions, sectors, networks, trends), explanations of infections (Malpedia) and "
                   "vulnerabilities (CVE), and polished executive reports for the filters they choose. They never see individual "
                   "addresses or host lists, and no other role can be given this portal.",

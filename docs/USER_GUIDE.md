@@ -153,7 +153,7 @@ says how many attempts are left.
 |---|---|---|
 | **External** | both platforms, always masked: IP addresses become an opaque label (`Host 3f9a2c41b07e`, no part of the address), network names become aliases ("Telco 1"), host names are hidden | view only. No Demo switch, exports or Malpedia |
 | **Analyst** | everything, unmasked | analyse, export CSV, look up Malpedia, switch Demo on for presentations |
-| **Management** | only the **management portal** (Executive, `/management`): aggregated figures of both platforms, never individual addresses | filter, explain infections and vulnerabilities, download executive PDF reports. No other role can be given this portal (admins can preview it) |
+| **Management** (managers, executives or team leads) | only the **management portal** (Executive, `/management`): aggregated figures of both platforms, never individual addresses | filter, explain infections and vulnerabilities, download executive PDF reports. No other role can be given this portal (admins can preview it) |
 | **Researcher** | only the **Definitions** page (no platforms or addresses) | the organisation's security researchers: define, with references, the malware names Malpedia does not know and the issues that are not CVEs; add notes to CVEs; correct network names and types |
 | **Advisor** | the **Advisory portal** and the findings management sends them (with the organisation's devices) | write each organisation's advisory, generate its report, mark it drafted and sent; their dashboard shows what went out and to whom |
 | **Auditor** | only the **Audit portal** (`/audit`): the audit log by tab, the dashboard and control checks, the access review, the log's integrity | read and export evidence for a period. Read only everywhere; never the platforms or any host data |
@@ -269,6 +269,13 @@ Come back to it at any time with the **Overview** button, which is in every page
 - **The counts in the filters follow your other filters.** Choose a city and the reports, infections, ports and
   networks show how many of that city's records each holds; the city list itself still shows every city, so you can
   switch. A value you chose that the other filters leave nothing of stays in its list with 0, so you can take it off.
+- **Ticking an infection shows what else its devices carry.** The infection list then counts **devices**: each
+  other infection shows how many of the ticked infection's devices also carry it, and one none of them carries is
+  greyed with 0, at the bottom, still there to tick. Tick **two or more** and only the devices carrying **every one
+  of them** are shown, on the map, the stream, the figures, Intel and in an analysis; the list then counts those
+  devices. An analyst code or finding made before this keeps the devices it was made with.
+- **Filtering moves smoothly:** the counts roll to their new figures, the list rows slide to their new places, and
+  arcs the new filters leave out fade away (off when your computer is set to reduce motion).
 - **Intel** (right): attack types, events by hour, severity mix, networks, infections, cities, C2 domains...
   Every line is clickable.
 - **Stream** (bottom): every event as it replays. Click a row for the full details (the raw request, the infected

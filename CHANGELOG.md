@@ -5,6 +5,27 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-20 (4)
+### Added
+- **The map's infection filter shows what else the devices carry.** With an infection ticked, the list counts devices:
+  how many of its devices also carry each other infection (none: greyed, at the bottom). Ticking two or more shows
+  only the devices carrying every one of them, everywhere on the map, in Intel, the figures and an analysis. Analyst
+  codes and findings made before keep the devices they were made with.
+- **Smooth filtering on the map:** counts roll to their new figures, list rows slide to their new places, and arcs
+  the filters leave out fade away (off with reduced motion).
+### Changed
+- **Every page opens with the loading animation**, from any link, not only the header's buttons (Write the advisory,
+  Open the review and an advisory's Open on the Findings page opened without it), and the Executive portal's Settings.
+- **A request too malformed to reach Looking Glass** (a garbled request line, a broken header, an oversized one) gets
+  the same plain page as every other error, with nothing of what was sent repeated back. Before, the web server's
+  own page answered, which named it.
+- **The Management role** (the Executive portal) is described as managers, executives or team leads, so decisions need
+  not wait on management: in the roles guide and diagram, the user guide, the glossary and the Admin page.
+- **After updating:** nothing to do.
+### Security
+- New checks on every release: every route refuses a signed-out request (GET and POST), an identity or id in the
+  address changes nothing, the sign-in page carries no data, and malformed requests get the plain page.
+
 ## 2026-11-20 (3)
 ### Added
 - **A guided tour on every platform and portal.** A Tutorial button in every page header shows a short tour of that

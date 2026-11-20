@@ -203,17 +203,27 @@
   };
   if (document.body) window.LGLoader.arrive(); else document.addEventListener("DOMContentLoaded", () => window.LGLoader.arrive());
 
-  // the header's page buttons (templates/_page_nav.html) open every page, the new ones included, with the logo animation
+  // every page opens with the logo animation: the header's page buttons (templates/_page_nav.html) and any other link
+  // to a page of the platform
   document.addEventListener("click", (e) => {
     // the page buttons of the platforms' headers and the overview too (account-btn: Executive, Admin, Definitions,
     // Combinations, Findings), so every page opens with the logo, also one without a loading line of its own
     // (Combinations opened plainly before, 2026-11-13)
-    const a = e.target.closest?.("a.nav-ic[href], a.account-btn[href]");
+    // …and every other link to another page of the platform (the user, 2026-11-20: Write the advisory, Open the review
+    // and an advisory's Open on the Findings page "just appear"): downloads, files, the API, the sign-in pages and a
+    // place on the same page are left to the browser
+    const a = e.target.closest?.("a[href]");
     if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || a.target === "_blank") return;
+    if (a.hasAttribute("download") || a.dataset.noLoader != null) return;
     const href = a.getAttribute("href");
-    if (!href || !href.startsWith("/")) return;
+    if (!href || !href.startsWith("/") || href.startsWith("//")) return;
+    const u = new URL(href, location.href);
+    if (u.origin !== location.origin) return;
+    if (/^\/(api|static|login|logout|forgot|enrol|welcome|organisation\/logo)(\/|$)/.test(u.pathname)) return;
+    if (/\.(pdf|csv|zip|json|txt|png|svg)$/i.test(u.pathname) || /\/(report|preview|export)(\/|$)/.test(u.pathname)) return;
+    if (u.pathname === location.pathname && u.search === location.search) return;     // a place on this page
     e.preventDefault();
-    window.LGLoader.go(href);
+    window.LGLoader.go(u.pathname + u.search + u.hash);
   });
 
   // keyboard focus for every dialog on every page (dialog-focus.js): loaded from here, which every page already has

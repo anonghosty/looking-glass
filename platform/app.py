@@ -253,8 +253,35 @@ def parse_filters(args):
     return out
 
 
+def field_value(ev, f):
+    """A record's value for one filter: the decoded beacon's label, the device for the 'carries every ticked infection'
+    filter (narrow_filters), else the stored field."""
+    if f == "beacon":
+        return beacon_stats.label(ev)
+    if f == CARRIERS:
+        return ev.get("src_ip")
+    return ev.get(f)
+
+
 def matches(ev, flt):
-    return all((beacon_stats.label(ev) if f == "beacon" else ev.get(f)) in vals for f, vals in flt.items())
+    return all(field_value(ev, f) in vals for f, vals in flt.items())
+
+
+# two or more infections ticked: only the devices carrying every one of them (the user, 2026-11-20: "make it narrow to
+# devices carrying both"). Their records of the ticked infections are what the map, the stream, the figures and the
+# lists show. Worked out once per loaded day and choice (facets.carriers), as a hidden filter on the device.
+CARRIERS = "_carries_all"
+
+
+def narrow_filters(flt, day, args=None):
+    """Only when the page asks for it (inf_all=1, sent by the map since 2026-11-20): a selection saved before (an
+    analyst code, a finding's records) keeps the devices it was made with (either infection)."""
+    vals = (flt or {}).get("infection")
+    if not vals or len(vals) < 2 or args is None or args.get("inf_all") != "1":
+        return flt
+    devs = RCACHE.get(("carriers", day_key(day), tuple(sorted(map(str, vals)))),
+                      lambda: _facets.carriers(day.events, lambda e: e.get("infection") or "", lambda e: e.get("src_ip"), vals))
+    return dict(flt, **{CARRIERS: devs})
 
 
 # ---------------------------------------------------------------- day store
@@ -671,7 +698,7 @@ def api_events():
         limit = max(1, min(int(request.args.get("limit", MAX_PER_POLL)), 2000))
     except ValueError:
         limit = MAX_PER_POLL
-    flt = parse_filters(request.args)
+    flt = narrow_filters(parse_filters(request.args), store.get(t_to), request.args)
     if request.args.get("latest") == "1":
         # most recent `limit` matching events of the replay day up to `to` (used to backfill a filtered view)
         day = store.get(t_to)
@@ -695,18 +722,22 @@ def api_facets():
     day = store.get(parse_iso(request.args.get("at"), replay_now()))
     demo = is_demo()
     beacons = not demo and beacon_stats.ready(day)      # labelled in the background once per loaded day
-    flt = parse_filters(request.args)
+    flt = narrow_filters(parse_filters(request.args), day, request.args)
     key = ("facets", day_key(day), demo, asn_registry.mtime, registry.version, beacons, filters_key(flt))
     return jsonify(RCACHE.get(key, lambda: _facets_core(day, demo, beacons, flt)))
 
 
 def _facets_core(day, demo, beacons=False, flt=None):
     result = {}
-    pool = _facets.pools(day.events, flt or {}, lambda e, f: beacon_stats.label(e) if f == "beacon" else e.get(f))
+    pool = _facets.pools(day.events, flt or {}, field_value)
     for field in FACET_FIELDS:
         c = Counter(e[field] for e in pool.of(field))
         rows = [{"value": v or EMPTY_LABEL.get(field, ""), "count": n} for v, n in c.most_common(300)]
         result[field] = [r for r in rows if r["value"]]
+    if (flt or {}).get("infection"):          # infections ticked: what else their devices carry (facets.overlap)
+        result["infection"] = _facets.overlap(pool, lambda e: e.get("infection") or EMPTY_LABEL.get("infection", ""),
+                                              lambda e: e.get("src_ip"))
+        result["infection_unit"] = "devices"
     # severity of each infection (most common one), so the UI can color infections consistently
     sev = {}
     for e in day.events:
@@ -737,7 +768,7 @@ def api_stats():
     (they change only when late rows arrive in MongoDB, picked up on the periodic day reload)."""
     rn = parse_iso(request.args.get("at"), replay_now())
     day = store.get(rn)
-    flt = parse_filters(request.args)
+    flt = narrow_filters(parse_filters(request.args), day, request.args)
     demo = is_demo()
     key = ("stats", day_key(day), demo, settings.version, asn_registry.mtime, filters_key(flt))
     out = dict(RCACHE.get(key, lambda: _stats_core(day, flt, demo)))      # shared by every viewer of the same selection
@@ -813,7 +844,7 @@ def api_geo():
     Places are cities (as geocoded), so demo mode needs no masking here."""
     rn = parse_iso(request.args.get("at"), replay_now())
     day = store.get(rn)
-    flt = parse_filters(request.args)
+    flt = narrow_filters(parse_filters(request.args), day, request.args)
     return jsonify(RCACHE.get(("geo", day_key(day), filters_key(flt)), lambda: _geo_core(day, flt)))
 
 
@@ -872,7 +903,7 @@ def api_replayed():
     position, i.e. how many have been replayed in the event stream so far. Cheap: called every few seconds."""
     rn = parse_iso(request.args.get("at"), replay_now())
     day = store.get(rn)
-    flt = parse_filters(request.args)
+    flt = narrow_filters(parse_filters(request.args), day, request.args)
     if flt:
         # the selection's records found once per loaded day and kept (replay_counts.py); each poll is a binary search.
         # hosts: distinct source hosts (the empty stream says "its IP address" or "their N IP addresses")
@@ -1086,7 +1117,7 @@ def _slice_on(day, kind, value):
     if kind == "filters":
         # the same filter logic as the map, stream and Intel, so the numbers agree everywhere
         pairs = parse_qsl(value or "", keep_blank_values=False)
-        flt = parse_filters(MultiDict(pairs))
+        flt = narrow_filters(parse_filters(MultiDict(pairs)), day, MultiDict(pairs))
         # a time window ("time=1080+60") narrows by event time; it is not a map filter
         windows = []
         for k, v in pairs:

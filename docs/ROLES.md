@@ -55,7 +55,7 @@ SOC staff are commonly organised in tiers. This is industry practice, not a stan
 |---|---|---|---|
 | **Researcher** | Researcher | Threat intelligence; Tier 3 threat hunter | Threat Analysis (PD-WRL-006) |
 | **Analyst** | Triage officer and incident handler | Tier 1 and Tier 2 analyst | Incident Response (PD-WRL-003) |
-| **Management** | Incident manager; team manager | SOC manager | Executive Cybersecurity Leadership (OG-WRL-007), for the head of the team |
+| **Management** | Incident manager; team manager; team leads | SOC manager; team leads | Executive Cybersecurity Leadership (OG-WRL-007), for the head of the team |
 | **Advisor** | The incident handler's communication with constituents; the senior specialist who writes advisories | The responder who tells the IT team what to fix | Incident Response (its communication part) |
 | **Auditor** | Outside the core CSIRT roles | Outside the SOC | Security Control Assessment (OG-WRL-012) |
 | **Administrator** | Not a core role (often IT support) | SOC engineering | Defensive Cybersecurity (PD-WRL-001) |
@@ -97,6 +97,7 @@ Looking Glass does not provide 5.1 *Monitoring and detection* itself: it reads w
     │     CSIRT: incident handlers, incident manager  handle, coordinate, warn others
     │     Threat intelligence / researchers           study the threats
     │     SOC engineering                             run the tools
+    │     Team leads                                  may hold the Executive portal (Management)
     │
     └── GRC: governance, risk and compliance          sets the rules and checks them
           Policy and planning                         NICE: Cybersecurity Policy and Planning (OG-WRL-002)
@@ -108,7 +109,8 @@ Looking Glass does not provide 5.1 *Monitoring and detection* itself: it reads w
 Where Looking Glass sits in it:
 
 - **Security operations** use it every day: researchers, analysts, advisors.
-- **The head of the division** and senior managers use the Executive portal (Management).
+- **The head of the division**, senior managers or **team leads** use the Executive portal (Management). Giving the
+  role to team leads too means every decision does not wait on management.
 - **GRC** uses the Audit portal (Auditor): who did what, the access review, the controls mapping and Trace a leak,
   never the threat data. That is the separation of duties GRC is there to check.
 

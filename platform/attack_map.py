@@ -26,10 +26,9 @@ import json
 import os
 import re
 import threading
-import time
 from datetime import datetime, timezone
 
-from offline_names import ATTACK_FILE, FULL_FILE, TID, tactic_label  # noqa: F401  (tactic_label re-exported for callers)
+from offline_names import ATTACK_FILE, FULL_FILE, TID
 
 RULES_FILE = "attack_rules.json"
 MAPPINGS_FILE = "attack_mappings.json"

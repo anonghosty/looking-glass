@@ -11,6 +11,10 @@ filter counts only for that filter's own field; a record that fails two or more 
 pools(events, flt, value) -> Pools; Pools.of(field) gives the records to count that field's choices over. value(ev,
 field) gives a record's value for a filter; or pass test=(ev, field, vals) -> bool where a filter is not a plain
 "value in vals" (the services platform: tags and issues are lists, masked banners).
+
+overlap(pool, name, device) -> rows: the map's infection list while infections are ticked: how many of the matching
+devices also carry each infection (2026-11-20). carriers(events, name, device, values) -> the devices carrying every
+one of the ticked infections (two or more ticked narrow to those devices).
 """
 
 
@@ -49,3 +53,43 @@ def pools(events, flt, value=None, test=None):
         elif failed:
             missed[failed].append(ev)
     return Pools(passed, missed, len(passed))
+
+
+def carriers(events, name, device, values):
+    """The devices with records of every one of `values` (the user, 2026-11-20: two infections ticked "narrow to
+    devices carrying both"). -> set of devices"""
+    want = set(values)
+    have = {}
+    for e in events:
+        n = name(e)
+        if n in want:
+            d = device(e)
+            if d:
+                have.setdefault(d, set()).add(n)
+    return {d for d, s in have.items() if s >= want}
+
+
+def overlap(pool, name, device, field="infection", limit=300):
+    """A list filter with its own choice ticked, counted as what else the matching devices carry (the user, 2026-11-20:
+    "when i filter it doesnt reflect on the other infections"; chose "overlap counts").
+
+    The matching devices are the devices (device(ev)) of the records that pass every filter. Each choice of the field
+    (name(ev)) is counted as how many of those devices also have a record with it (among the records every OTHER filter
+    lets through), so the ticked choices count their own devices and the rest how many of them they share. A choice
+    none of them carries stays listed with 0, so it can still be ticked. Most first, then by name.
+    -> [{"value", "count"}]"""
+    devices = {device(e) for e in pool.passed if device(e)}
+    pairs, names = set(), set()
+    for e in pool.of(field):
+        n = name(e)
+        if not n:
+            continue
+        names.add(n)
+        d = device(e)
+        if d in devices:
+            pairs.add((n, d))
+    counts = {}
+    for n, _ in pairs:
+        counts[n] = counts.get(n, 0) + 1
+    rows = sorted(({"value": n, "count": counts.get(n, 0)} for n in names), key=lambda r: (-r["count"], r["value"].lower()))
+    return rows[:limit]
