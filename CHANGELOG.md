@@ -5,6 +5,15 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-20 (9)
+### Changed
+- **The security assurance case.** [Architecture and threat model](docs/ARCHITECTURE.md) has a new section, "Why the
+  security requirements are met": how secure design principles are applied (least privilege, fail-safe defaults,
+  complete mediation, separation of privilege, economy of mechanism, open design, defence in depth) and how each of
+  the OWASP Top 10 weaknesses is countered. With the threat model and the trust boundaries above it, it is the
+  assurance case.
+- **After updating:** nothing to do (documentation only).
+
 ## 2026-11-20 (8)
 ### Security
 - **Small Trace a leak searches are counted however they are sent.** The administrators' bell warns when one person

@@ -206,7 +206,49 @@ These risks are known and accepted, or left to the operator. They are listed her
   is not something Looking Glass would catch.
 - **The audit portal shows evidence, not verdicts.** Its 15 control checks give the facts, and the auditor decides.
 
-## 7. Keeping this page true
+## 7. Why the security requirements are met
+
+This is the assurance case. The threat model (sections 4 and 5) and the trust boundaries (section 3) are above; this
+section argues that secure design principles were applied and that common implementation weaknesses are countered.
+
+### Secure design principles
+
+- **Least privilege.** The platform reads the database with a read-only account; the pipeline's account reaches its
+  own database only; the web service runs in a systemd sandbox that can write only `data/`; each role gets only the
+  permissions it needs, and management, researcher, advisor and auditor are exclusive roles.
+- **Fail-safe defaults.** Every page needs a sign-in with a second factor; the service listens on this computer only
+  until an administrator opens it to the network; roles without the *unmasked* permission see masked addresses;
+  pipeline settings are locked; no backup is made without an encryption key.
+- **Complete mediation.** Every request is checked for its permission on the server, and every change for its CSRF
+  token; nothing relies on the page hiding a button.
+- **Separation of privilege.** Only the pipeline writes the database; a request that loosens the pipeline needs a
+  second confirmation on the server; the auditor role is kept apart from administrators.
+- **Economy of mechanism.** One shared function for each sensitive job: one address finder for every masker, one CSV
+  writer that neutralises formulas, one audit log.
+- **Open design.** The code is public (AGPL-3.0); security rests on keys (`REF_SECRET`, TOTP secrets, TLS and signing
+  keys), not on the secrecy of the code.
+- **Defence in depth.** Report values are inserted as text and the Content Security Policy blocks scripts that slip
+  through; a bug in the web app still meets the read-only account and the sandbox; the audit log's chain is checked
+  again offline by the auditor.
+
+### Common implementation weaknesses (OWASP Top 10, 2021)
+
+| Weakness | How Looking Glass counters it |
+|---|---|
+| A01 Broken access control | Permissions and masking on the server, findings as channels; the access checks in the test suite |
+| A02 Cryptographic failures | scrypt passwords, TLS 1.2 and newer, SHA-256 and HMAC-SHA-256, encrypted backups |
+| A03 Injection | No request value reaches a database query as an operator; values are written into pages as text, with a per-request CSP nonce; CSV cells that look like formulas are neutralised |
+| A04 Insecure design | This threat model, kept true with every release (section 8), and outside reviews |
+| A05 Security misconfiguration | A hardened service unit, security headers, plain error pages, and an installer that refuses to open the service to the whole internet without HTTPS |
+| A06 Vulnerable and outdated components | `pip-audit` on every push; browser libraries pinned with integrity hashes |
+| A07 Identification and authentication failures | A second factor for every account, lockouts, sessions bound to their browser |
+| A08 Software and data integrity failures | Signed commits and tags, CI actions pinned to a commit, DKIM-checked report e-mails |
+| A09 Security logging and monitoring failures | A hash-chained audit log and the administrators' bell |
+| A10 Server-side request forgery | Looking Glass contacts a fixed list of services only and follows only Shadowserver's download links; a guard in CI fails any check that tries to reach anywhere else |
+
+Static analysis (Bandit, CodeQL, Ruff, ShellCheck) and the full test suite run before every release.
+
+## 8. Keeping this page true
 
 - A new feature that crosses a boundary in section 3, or touches an asset in section 4, adds its row to section 5,
   with its control, in the same release.
