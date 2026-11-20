@@ -63,7 +63,7 @@ PUBLIC_PATHS = ("/login", "/register", "/forgot", "/logout", "/healthz", "/favic
 # 2026-11-19: every script and style was readable by anyone, which named the product and its libraries; neutral.py)
 PUBLIC_STATIC = frozenset("/static/" + f for f in (
     "css/app.css", "css/auth.css", "js/auth-bg.js", "js/lg-select.js", "js/auth-card.js", "js/enrol.js",
-    "data/land-110m.json"))                 # the logo: /login/mark.svg, only when chosen (neutral.py)
+    "js/auth-turn.js", "data/land-110m.json"))   # no logo before sign-in at all (2026-11-19, neutral.py)
 # sign-up attempts whose e-mail domain is looked up in DNS, per address and hour (room for typing mistakes)
 REGISTER_DNS_PER_HOUR = 30
 NAME_RE = re.compile(r"^[a-zA-Z0-9._-]{2,40}$")
@@ -1114,7 +1114,8 @@ def install(app, base_dir, logger):
             users.data["users"][name]["last_login"] = {"at": int(_now()), "ip": ip, "location": location(ip), "ua": ua[:200]}
             users.save()
         audit.add("login", user=name, detail="stay signed in (5 days)" if persist else "")
-        resp = redirect(nxt)
+        # the sign-in's last step: the dive into the globe and the logo, then the page (signin_welcome.py, 2026-11-19)
+        resp = redirect("/welcome?next=" + quote(nxt, safe="/"))
         # stay signed in: a 5-day cookie; otherwise a browser-session cookie (gone when the browser closes)
         resp.set_cookie(cookie_name(), token, httponly=True, samesite="Strict", secure=request.is_secure, path="/",
                         max_age=sessions.PERSIST_MAX if persist else None)

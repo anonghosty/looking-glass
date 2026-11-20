@@ -196,9 +196,9 @@ server side is in small modules called from `app.py`:
   header. `auth.PUBLIC_STATIC` lists the only files served signed out (the sign-in pages' styles and scripts, the
   world outline of their scene); any other `/static/` path is 404 signed out and served to every signed-in role before
   the role path lists apply. The sign-in pages (`auth_base.html`, `login.html`, `forgot.html`) show the organisation's
-  name and the logo `data/signin_look.json` chooses: `organisation` (default; `/login/logo`, none when unset),
-  `looking-glass` (`/login/mark.svg`, served only then) or `none`; `GET/POST /api/settings/signin-look` (permission
-  *settings*, CSRF, a recent sign-in; audited as `settings_changed`). `deploy/make_tls_cert.sh` names the certificate
+  name only: no image and an empty tab icon (`data:,`). After a sign-in, `auth.start_session` redirects to
+  `/welcome?next=…` (`signin_welcome.py`, not public: signed out it is the sign-in page), which plays the globe dive and
+  opens `next` (a path on this site, `auth._safe_next`). `deploy/make_tls_cert.sh` names the certificate
   after the first name given or the machine. Registered in `features.py`. Test: `tests/check_fingerprint.py`.
 - **`insider.py`, copies recorded, seals and Trace a leak.** `POST /api/copy/record` (`{kind, what, page, text}`;
   signed in, CSRF token, at most `COPY_PER_MINUTE` (30) a minute per person, else 429) seals the text (HMAC-SHA-256, key `COPY_SEAL_KEY` or `data/copy_seal.key`: the whole

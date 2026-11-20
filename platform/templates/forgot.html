@@ -3,7 +3,6 @@
 {% block title %}Reset password{% endblock %}
 {% block card %}
 <div class="auth-card">
-  {% if signin_logo == "lg" %}{% if signin_logo == "lg" %}<img class="auth-logo" src="/login/mark.svg" alt="" width="44" height="44">{% elif signin_logo %}<img class="auth-logo" src="{{ signin_logo }}" alt="" width="44" height="44">{% endif %}{% elif signin_logo %}<img class="auth-logo" src="{{ signin_logo }}" alt="" width="44" height="44">{% endif %}
   <h1>Reset password</h1>
   {% if error %}<div class="auth-alert err" role="alert">{{ error }}</div>{% endif %}
   {% if notice %}<div class="auth-alert ok" role="status">{{ notice }}</div>{% endif %}

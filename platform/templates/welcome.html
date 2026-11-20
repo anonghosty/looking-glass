@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="referrer" content="same-origin">
+  {#- after signing in (signin_welcome.py; the user, 2026-11-19): the view dives deep into the globe to pitch black, the
+      Looking Glass logo draws itself, and the loading screen opens the page the sign-in was for. Signed-in people only. -#}
+  <title>Signing in</title>
+  <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/auth.css') }}" rel="stylesheet">
+</head>
+<body class="auth-page lg-welcome" data-next="{{ next }}">
+  <canvas id="authBg" class="auth-bg" role="img" aria-label="Signing in"></canvas>
+  <div class="lg-black" aria-hidden="true"></div>
+  <p class="st-sr" role="status">Signed in. Opening Looking Glass.</p>
+  <noscript><p style="color:#fff;padding:24px">Signed in. <a href="{{ next }}" style="color:#9db5ff">Continue</a></p></noscript>
+  {#- welcome.js first: it clears an earlier page's "arriving" mark before loader.js reads it -#}
+  <script src="{{ url_for('static', filename='js/welcome.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/auth-bg.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
+  {#- every signed-in page records copies (insider.py), this one too, though it holds nothing to copy -#}
+  <script src="{{ url_for('static', filename='js/lg-copy.js') }}"></script>
+</body>
+</html>

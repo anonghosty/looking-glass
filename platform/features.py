@@ -118,6 +118,12 @@ def install(app, core):
                                                "fresh": A["fresh"], "audit": A["audit"],
                                                "org": Organisation(os.path.join(base, "data", "organisation.json"))})
 
+    # right after signing in: the dive into the globe, the logo, then the page (signin_welcome.py, the user 2026-11-19);
+    # behind the sign-in, so nobody signed out sees the product's logo
+    import signin_welcome
+    from auth import _safe_next
+    out["signin_welcome"] = signin_welcome.install(app, {"safe_next": _safe_next})
+
     # Settings → Constituency: pick address blocks (/24) from the reports, with their records and network
     # (address_blocks.py, the user 2026-11-19); counted by both day loaders before the constituency
     if "has_perm" in A and core.get("asns") is not None:

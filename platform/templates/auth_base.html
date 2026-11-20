@@ -8,8 +8,9 @@
   {#- the sign-in pages name no product (anti-fingerprinting, neutral.py, 2026-11-19): the organisation's name and logo, as
       an administrator chooses in Settings -#}
   <title>{% block title %}Sign in{% endblock %}{% if signin_org %} · {{ signin_org }}{% endif %}</title>
-  {% if signin_logo == "lg" %}<link rel="icon" type="image/svg+xml" href="/login/mark.svg">
-  {% elif signin_logo %}<link rel="icon" href="{{ signin_logo }}">{% endif %}
+  {#- no logo and no tab icon before sign-in (the user, 2026-11-19: "it eradicates the image fingerprint"); an empty
+      icon so the browser does not ask for /favicon.ico either -#}
+  <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -22,8 +23,6 @@
   <div class="auth-vignette" aria-hidden="true"></div>
   <main class="auth-wrap">
     <section class="auth-hero" aria-hidden="true">
-      {% if signin_logo == "lg" %}<img class="auth-hero-logo" src="/login/mark.svg" alt="" width="88" height="88">
-      {% elif signin_logo %}<img class="auth-hero-logo" src="{{ signin_logo }}" alt="" width="88" height="88">{% endif %}
       {% if signin_org %}<h2 class="auth-hero-title">{{ signin_org }}</h2>{% endif %}
       <p class="auth-hero-sub">For authorised users only.</p>
     </section>
@@ -31,6 +30,7 @@
   </main>
   <script src="{{ url_for('static', filename='js/lg-select.js') }}"></script>
   <script src="{{ url_for('static', filename='js/auth-bg.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/auth-turn.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

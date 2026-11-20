@@ -125,7 +125,7 @@ r = fc.get("/healthz", environ_base={"REMOTE_ADDR": "192.0.2.9"})
 ok("…and nobody else (a plain \"Not Found\")", r.status_code == 404 and "ok" not in r.get_data(as_text=True))
 ok("the authenticator set-up page (it draws a QR code) keeps the QR-code library it needs",
    "qrcode-generator/1.4.4" in fc.get("/register/enrol").headers.get("Content-Security-Policy", ""))
-TPL = "{{ signin_logo }}|{{ signin_org }}"
+TPL = "{{ signin_logo | default('') }}|{{ signin_org }}"
 
 
 def look():
@@ -134,37 +134,25 @@ def look():
         return render_template_string(TPL)
 
 
-ok("no organisation logo and no choice: no logo, no name", look() == "|", look())
+# no logo before sign-in at all (the user, 2026-11-19: "it eradicates the image fingerprint"): the name only
+ok("no organisation name: nothing shown", look() == "|", look())
 png = b"\x89PNG\r\n\x1a\n" + b"0" * 64
 org.save("Made-up CSIRT", (png, "image/png"))
-ok("the organisation's logo and name by default", look() == "/login/logo|Made-up CSIRT", look())
-r = fc.get("/login/logo")
-ok("…its logo served to the sign-in pages", r.status_code == 200 and r.get_data() == png and r.mimetype == "image/png")
-ok("the setting: signed out, refused", fc.post("/api/settings/signin-look", json={"logo": "none"}).status_code == 403)
-who.update(user="admin1", perms={"settings"})
-who["csrf"] = False
-ok("…without the page's CSRF token, refused", fc.post("/api/settings/signin-look", json={"logo": "none"}).status_code == 403)
-who["csrf"], who["fresh"] = True, False
-ok("…from a session older than 12 hours, refused", fc.post("/api/settings/signin-look", json={"logo": "none"}).status_code == 403)
-who["fresh"] = True
-ok("…an unknown choice, refused", fc.post("/api/settings/signin-look", json={"logo": "mine"}).status_code == 400)
-r = fc.post("/api/settings/signin-look", json={"logo": "looking-glass"})
-who["user"] = ""
-ok("an administrator chooses the Looking Glass logo (back to how it was)", r.status_code == 200 and look() == "lg|Made-up CSIRT", look())
-ok("…the change is audited", audit and audit[-1][1]["target"] == "sign-in page logo" and audit[-1][1]["detail"] == "organisation -> looking-glass", audit[-1:])
-ok("…and the organisation's logo is no longer served at /login/logo", fc.get("/login/logo").status_code == 404)
-who.update(user="admin1")
-fc.post("/api/settings/signin-look", json={"logo": "none"})
-who["user"] = ""
-ok("…or no logo at all", look() == "|Made-up CSIRT", look())
-base_tpl = open(os.path.join(os.environ.get("LG_HELD_DIR", "") , "auth_base.html.new")).read() if os.environ.get("LG_HELD_DIR") and \
-    os.path.exists(os.path.join(os.environ["LG_HELD_DIR"], "auth_base.html.new")) else open(os.path.join(HERE, "templates", "auth_base.html"), encoding="utf-8").read()
-ok("the sign-in pages show the chosen logo, never the product's unless chosen", 'signin_logo == "lg"' in base_tpl
-   and "logo-mark.svg" not in base_tpl and "/login/mark.svg" in base_tpl)
+ok("an organisation with a logo: its name only, no logo", look() == "|Made-up CSIRT", look())
 os.makedirs(os.path.join(tmp, "static", "img")); open(os.path.join(tmp, "static", "img", "logo-mark.svg"), "w").write("<svg/>")
-ok("…the product's logo is not served while another is chosen", fc.get("/login/mark.svg").status_code == 404)
-who.update(user="admin1"); fc.post("/api/settings/signin-look", json={"logo": "looking-glass"}); who["user"] = ""
-ok("…and is, once an administrator chooses it", fc.get("/login/mark.svg").status_code == 200)
+for path in ("/login/logo", "/login/mark.svg"):
+    r = fc.get(path)
+    ok(f"no image served before sign-in at {path}", r.status_code == 404 and not r.mimetype.startswith("image/"), r.status_code)
+ok("the old logo setting is gone", fc.get("/api/settings/signin-look").status_code == 404
+   and fc.post("/api/settings/signin-look", json={"logo": "looking-glass"}).status_code in (404, 405))
+S_ = os.environ.get("LG_HELD_DIR", "")
+pick = lambda n, live: open(os.path.join(S_, n + ".new"), encoding="utf-8").read() if S_ and os.path.exists(os.path.join(S_, n + ".new")) \
+    else open(live, encoding="utf-8").read()  # noqa: E731
+pages = {n: pick(n, os.path.join(HERE, "templates", n)) for n in ("auth_base.html", "login.html", "forgot.html")}
+for n, src in pages.items():
+    ok(f"{n}: no logo, no image of the product or the organisation", "<img" not in src and "logo-mark" not in src
+       and "/login/logo" not in src and "/login/mark.svg" not in src and "signin_logo" not in src)
+ok("…and no tab icon to fetch (an empty one)", '<link rel="icon" href="data:,">' in pages["auth_base.html"])
 
 print("5. The certificate")
 sh = open(os.path.join(HERE, "deploy", "make_tls_cert.sh"), encoding="utf-8").read()

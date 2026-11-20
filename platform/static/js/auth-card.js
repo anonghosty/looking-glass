@@ -32,7 +32,9 @@
       if (!b) return;
       e.preventDefault();
       for (const a of card.querySelectorAll(".auth-alert")) a.remove();   // alerts belong to the view they came with
-      show(b.dataset.show, true);
+      // the card turns over to its other side (auth-turn.js; the user, 2026-11-19), else changes at once
+      if (window.LGTurn && b.dataset.show !== card.dataset.view) window.LGTurn.turn(card, () => show(b.dataset.show, true));
+      else show(b.dataset.show, true);
     });
     show(card.dataset.view || "choice", card.dataset.view !== "choice");
   }

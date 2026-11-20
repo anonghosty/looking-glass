@@ -118,7 +118,9 @@ try:
         ok(f"refused: {why} (still no session)", r.status_code == 400 and not has_session(r), str(r.status_code))
     other, _ = sign_in("chkadmin", PW_A, SEC_A)          # (the admin too must change, but that is their own step)
     r = c.post("/login", data={"step": "expired", "password": NEW_U, "password2": NEW_U, "next": "/"}, headers=UA)
-    ok("a good new password opens the session at once, no second sign-in", r.status_code == 302 and has_session(r) and r.headers["Location"].endswith("/"), str(r.status_code))
+    ok("a good new password opens the session at once, no second sign-in", r.status_code == 302 and has_session(r)
+       # through the dive after signing in (signin_welcome.py, 2026-11-19), then the page
+       and "/welcome?next=" in r.headers["Location"], f"{r.status_code} {r.headers.get('Location', '')}")
     u = users.get("chkuser")
     ok("…stored (the old one no longer works), with the time it was set", check_password_hash(u["hash"], NEW_U) and not check_password_hash(u["hash"], PW_U)
        and abs(u.get("pw_set_at", 0) - time.time()) < 60)

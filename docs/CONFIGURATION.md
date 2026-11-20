@@ -210,7 +210,7 @@ Created and kept by the service; private to its user and never committed:
 | `copy_seals.jsonl`, `copy_seal.key` | the seals of every copy made with a copy button and every file downloaded: who, when, what, and keyed fingerprints (never the text or an address); the key that makes them (when `COPY_SEAL_KEY` is not set). Owner-only; seals older than `AUDIT_RETENTION_DAYS` are removed |
 | `name_kinds.json`, `name_ratings.json` | every name the reports carried with its kind, and the researchers' ratings of names no record rates (the severity map; names only) |
 | `invites.json` | the open and recent sign-up links (Add a person): role, who made it, when; only each link's SHA-256, never a working link. Owner-only |
-| `signin_look.json` | which logo the sign-in pages show: the organisation's (default), Looking Glass's or none; who chose it and when |
+| `signin_look.json` | no longer used (the sign-in pages show no logo since 2026-11-19); it may be deleted |
 | `settings.json`, `schedule.json` | Settings page values, replay schedule |
 | `config.json` | the tuning values kept on Settings → Configuration (they take precedence over `.env`; delete it and restart to go back to `.env`) |
 | `beacon_summaries.json` | the beacon decoder's public answers kept across restarts (hashes of the request lines, never the lines; safe to delete) |

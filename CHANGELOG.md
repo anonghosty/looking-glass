@@ -5,6 +5,19 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-20
+### Added
+- **The sign-in moves.** The card turns over between Sign in, Create an account and Back, and every next step (the
+  authenticator, the recovery codes, the sign-in code, a new password) turns in. After a successful sign-in the button
+  fades, the view dives deep into the globe to black, the Looking Glass logo draws itself, and the Overview opens. Off
+  for anyone whose computer is set to reduce motion.
+- **Hover labels on the header and portal buttons:** each says what it is at once, on hover or keyboard focus.
+### Changed
+- **No logo or picture on the sign-in pages any more** (and no tab icon): the organisation's name only, so scanners
+  have no image to recognise. The Settings choice *Sign-in page logo* is gone; `/login/logo` and `/login/mark.svg`
+  answer "not found". The organisation's logo stays on advisories.
+- **After updating:** nothing to do. `data/signin_look.json` is no longer read and may be deleted.
+
 ## 2026-11-19 (9)
 ### Added
 - **Advisories: Add insights.** An advisory can go out on its own, without the analysis pages (INSIGHTS): tick **Add

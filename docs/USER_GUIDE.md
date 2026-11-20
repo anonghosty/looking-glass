@@ -92,6 +92,14 @@ partners see the country's situation at a glance on a wall screen.
 
 ![The sign-in page](media/screens/00-login.png)
 
+The card turns over between **Sign in** and **Create an account** (and **Back**), and each next step (the
+authenticator, the recovery codes, the sign-in code, a new password) turns in. After you sign in, the button fades,
+the view dives deep into the globe until the screen is black, the Looking Glass logo draws itself, and your Overview
+opens (or the page your link asked for). If your computer is set to reduce motion, all of this is skipped.
+
+The sign-in pages show your organisation's name only: no logo, picture or tab icon, so that internet scanners have
+nothing to recognise. The Looking Glass logo appears only after a successful sign-in.
+
 ### First time on a new installation
 The very first visit shows only **Let's get started**: it asks for the one-time setup code from the server
 (`cat data/setup_code` in the platform folder; the installer shows the command), then creates the first
@@ -186,6 +194,9 @@ tools, a photo of the screen). What it guarantees is that every copy made the no
 ## 2. The intro page
 
 ![The intro page: yesterday at a glance](media/screens/10-overview.png)
+
+Point at any button in a page's header (or move to it with the keyboard) and its name shows under it at once, for
+example *Findings* or *Settings*.
 
 Every role starts on its own **Overview** after signing in (a link to a particular page still opens that page). The
 first time you open it, it greets you by your first name: *Greetings, Kwame! Welcome to Looking Glass*. After that it
@@ -1066,10 +1077,9 @@ platform full screen. The display adapts to TVs and weaker devices by itself (`?
   number, and tick a block to add it (untick to take it off); blocks whose network is already chosen are marked as in
   already. Nothing is looked up outside Looking Glass. **Apply settings** saves the choice.
 
-- **Organisation:** your CSIRT's name and logo (PNG or JPEG, at most 40 KB). Advisories are signed with them, and the
-  sign-in pages show them: those pages name no product, so that internet scanners cannot tell what runs here.
-  **Sign-in page logo** chooses what those pages show before anyone signs in: *the organisation's logo* (the default;
-  no logo while none is set), *the Looking Glass logo* (as before) or *no logo*. Each change is in the audit log.
+- **Organisation:** your CSIRT's name and logo (PNG or JPEG, at most 40 KB). Advisories are signed with them. The
+  sign-in pages show the name only, never a logo: they name no product and show no image, so that internet scanners
+  cannot tell what runs here.
 
 **Apply settings** saves and applies at once for everyone.
 

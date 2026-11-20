@@ -174,6 +174,8 @@ run "Advisory options: References, insights, look, header; pipeline command copy
 run "Drop-down counts follow the other filters (facets)" tests/check_facet_counts.py
 run "Settings: pick address blocks from the reports" tests/check_address_blocks.py
 run "RULE: no ATT&CK technique or mitigation listed twice, anywhere" tests/check_attack_no_duplicates.py
+run "Sign-in: the card turns, the dive after signing in, no logo before" tests/check_signin_motion.py
+run "Hover labels on the header and portal buttons" tests/check_hover_labels.py
 run "PDF pages: no overlap, no cut-off" $PY tests/pdf_pages_check.py
 run "analyst code counts: one lock per code" $PY tests/check_per_key_cache.py
 run "older days kept for analyst codes" $PY tests/check_recent_days.py

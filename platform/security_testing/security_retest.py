@@ -236,7 +236,12 @@ try:
     used = totp_at(asec, LAST.get(ADMIN, 0))
     ok("password + authenticator code -> logged in", s == 302, f"{s} {loc}")
     # a hostile next= is dropped: the sign-in lands on this site's own start (every role's Overview since 2026-11-14)
-    ok("redirect after login stays on this site (no open redirect)", loc in ("/", B + "/", "/overview", B + "/overview"), loc)
+    # since 2026-11-19 through /welcome (the dive after signing in), which then opens next= on this site only
+    ok("redirect after login stays on this site (no open redirect)", loc in ("/", B + "/", "/overview", B + "/overview",
+       "/welcome?next=/overview", B + "/welcome?next=/overview"), loc)
+    for hostile in ("//evil.example/x", "https://evil.example/", "/\\evil.example"):
+        sw, _, bw = req(op, "/welcome?next=" + urllib.parse.quote(hostile, safe=""))
+        ok(f"/welcome refuses next={hostile} (opens the Overview)", sw == 200 and 'data-next="/overview"' in bw and "evil" not in bw, str(sw))
     cookie = h.get("Set-Cookie", "")
     ok("session cookie HttpOnly, SameSite=Strict, Path=/", "HttpOnly" in cookie and "SameSite=Strict" in cookie and "Path=/" in cookie, cookie.split(";")[0][:20] + "…")
     if TLS:

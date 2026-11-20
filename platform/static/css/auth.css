@@ -183,3 +183,34 @@ body.globe-focus::after { content: "Globe: arrows turn · + / - zoom · OK launc
   bottom: 18px; transform: translateX(-50%); z-index: 6; padding: 7px 14px; border-radius: 99px; font-size: 12.5px; color: #e6e8f0;
   background: rgba(20, 22, 32, .82); border: 1px solid rgba(139, 92, 246, .55); box-shadow: 0 0 0 3px rgba(139, 92, 246, .18); pointer-events: none; }
 @media (hover: none) { body.globe-hover { cursor: default; } }
+
+/* ---- the card turns over (auth-turn.js; the user, 2026-11-19): a real 3D turn in the old look, never a fade ---- */
+.auth-wrap { perspective: 1600px; }
+.auth-card { transform-origin: 50% 50%; backface-visibility: hidden; will-change: transform; }
+/* the card's entrance (authCard: fade and rise) plays once; it must not play again when a turn ends (it looked like a
+   fade in and out, 2026-11-19) */
+.auth-card.lg-settled { animation: none; }
+/* while the card turns, its new side arrives whole: the inner slide-and-fade (authView) would read as a fade */
+.auth-card.lg-turn-in .auth-in, .auth-card.lg-turn-out .auth-in { animation: none; }
+.auth-card.lg-turn-out { animation: lgTurnOut .23s cubic-bezier(.55,0,.8,.3) both; }
+.auth-card.lg-turn-in { animation: lgTurnIn .38s cubic-bezier(.15,.75,.25,1) both; }
+@keyframes lgTurnOut { from { transform: rotateY(0); } to { transform: rotateY(90deg); } }
+@keyframes lgTurnIn { from { transform: rotateY(-90deg); } to { transform: rotateY(0); } }
+/* the last step sent: its button fades away (then the globe zoom, /welcome) */
+.auth-btn.lg-going { animation: lgGoing .35s ease forwards; pointer-events: none; }
+@keyframes lgGoing { to { opacity: 0; transform: scale(.92); filter: blur(2px); } }
+@media (prefers-reduced-motion: reduce) { .auth-card.lg-turn-out, .auth-card.lg-turn-in, .auth-btn.lg-going { animation: none !important; } }
+
+/* ---- /welcome: zooming deep into the globe, to pitch black, then the logo (welcome.js) ---- */
+body.lg-welcome { background: #000; overflow: hidden; }
+body.lg-welcome .auth-bg { transform-origin: 50% 48%; transition: transform 2s cubic-bezier(.6,0,.9,.4); will-change: transform; }
+body.lg-welcome.diving .auth-bg { transform: scale(14); }
+.lg-black { position: fixed; inset: 0; z-index: 4; background: #000; opacity: 0; transition: opacity 1.1s ease-in .7s; pointer-events: none; }   /* fully black by ~1.9 s, before the logo (2.05 s) */
+body.lg-welcome.diving .lg-black { opacity: 1; }
+@media (max-width: 960px) { body.lg-welcome .auth-bg { transform-origin: 50% 40%; } }
+.st-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* the last step sent: the card and the name beside it leave together, the globe stays (then /welcome dives into it) */
+body.lg-leaving .auth-card { animation: lgLeave .45s cubic-bezier(.5,0,.8,.4) forwards !important; pointer-events: none; }
+body.lg-leaving .auth-hero, body.lg-leaving .auth-vignette { transition: opacity .45s ease; opacity: 0; }
+@keyframes lgLeave { to { opacity: 0; transform: translateY(10px) scale(.96); } }
+@media (prefers-reduced-motion: reduce) { body.lg-leaving .auth-card { animation: none !important; } }

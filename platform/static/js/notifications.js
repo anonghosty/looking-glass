@@ -20,6 +20,7 @@
     // it looks like the header's other buttons: an icon button beside the page icons, on every page (the Executive
     // portal's header has icon buttons too since 2026-11-13)
     const b = el("button", "demo-btn nav-ic lg-bell"); b.type = "button";
+    b.title = "Notifications"; b.setAttribute("aria-label", "Notifications");   // named from the start, before its first count (2026-11-19)
     b.setAttribute("aria-haspopup", "dialog"); b.setAttribute("aria-expanded", "false");
     b.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="${BELL}"/></svg>`;
     const badge = el("span", "lg-bell-n"); badge.hidden = true; b.append(badge, el("span", "lg-bell-label", "Notifications"));

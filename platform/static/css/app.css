@@ -1275,3 +1275,9 @@ html.lg-nocopy input, html.lg-nocopy textarea, html.lg-nocopy select, html.lg-no
 /* the record notice under the greeting (insider.py, the user's wording 2026-11-18): on the Overview and the map's intro */
 .ov-record { margin: 10px auto 0; max-width: 620px; padding: 8px 14px; border-radius: 10px; font-size: 13px; line-height: 1.45;
   color: #f5d08a; background: rgba(245, 181, 74, .08); border: 1px solid rgba(245, 181, 74, .3); text-align: center; }
+/* hover labels on the header and portal buttons (header-tips.js; the user, 2026-11-19: "when you hover in a portal it
+   should say what the button is"): at once, under the button, on hover and on keyboard focus */
+.lg-htip { position: fixed; z-index: 3000; pointer-events: none; max-width: 260px; padding: 5px 9px; border-radius: 7px;
+  font: 500 12px/1.35 var(--font, Inter, system-ui, sans-serif); color: #eef0f6; background: rgba(18, 20, 30, .96);
+  border: 1px solid rgba(143, 176, 255, .28); box-shadow: 0 6px 18px rgba(0, 0, 0, .45); white-space: normal; }
+.lg-htip[hidden] { display: none; }

@@ -5,7 +5,7 @@ test account on a RUNNING install and opens every page the role's Overview links
    clickable (pointer cursor) sits outside a control the keyboard can reach;
 2. lists: a list (ul/ol) holds list items only, and no list item is itself made into a button (screen readers);
 3. cut-off text: once the page has settled, no text is cut with "…"; and no MITRE ATT&CK technique or mitigation is
-   shown twice in one box (a rule, 2026-11-19);
+   shown twice in one box (a rule, 2026-11-19); a header button shows its hover label at once (header-tips.js);
 4. errors: no script error and no server error (5xx) while the page opens;
 5. loading: the loading logo shows at most once and draws itself at most once, loading lines do not come back after
    they have finished, and nothing is still loading after 30 s.
@@ -187,6 +187,13 @@ with sync_playwright() as p:
                     "[...document.querySelectorAll('.i-loading, .st-loading, .lg-loading, .svc-loading, .kbn-loading, .mp-loading')]"
                     ".filter(e => e.offsetParent !== null).map(e => e.textContent.trim().slice(0, 40)).slice(0, 3)")))
             info = pg.evaluate(PAGE_JS, FOCUSABLE)
+            # hover labels (header-tips.js, 2026-11-19): a header button says what it is at once, on hover
+            tip = pg.evaluate("""() => { const b = [...document.querySelectorAll('.nav-ic, .hud-right a, .hud-right button, .mg-top-actions a, .mg-top-actions button')]
+                .find(e => e.getBoundingClientRect().width > 0); if (!b) return 'none';
+              b.dispatchEvent(new MouseEvent('mouseover', {bubbles: true}));
+              const t = document.querySelector('.lg-htip'), r = t && !t.hidden ? t.textContent.trim() : '';
+              b.dispatchEvent(new MouseEvent('mouseout', {bubbles: true, relatedTarget: document.body})); return r; }""")
+            info["tip"] = tip
             pg.evaluate("document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0)")
             reached, prev, same = set(), None, 0
             for _ in range(min(4000, info["n"] * 4 + 80)):            # long pages: enough presses to reach the end
@@ -210,7 +217,8 @@ with sync_playwright() as p:
                     ([f"clickable but not a control: {info['pointer']}"] if info["pointer"] else []) + \
                     ([f"list holds a non-item: {info['lists']}"] if info["lists"] else []) + \
                     ([f"cut off with '…': {info['cut']}"] if info["cut"] else []) + \
-                    ([f"MITRE ATT&CK shown twice: {info['dup']}"] if info.get("dup") else []) + load_probs + errs[:4]
+                    ([f"MITRE ATT&CK shown twice: {info['dup']}"] if info.get("dup") else []) + \
+                    (["a header button shows no hover label"] if info.get("tip") == "" else []) + load_probs + errs[:4]
             if probs:
                 fails += 1
                 print(f"  FAIL {role} {path}: " + " | ".join(probs))
