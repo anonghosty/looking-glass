@@ -435,7 +435,7 @@ External services:
   turns city/region/country into coordinates. Each place is looked up once and cached in `data/geocache.json`.
 - Flag images come from `flagcdn.com`, and fonts come from Google Fonts.
 
-For development, `.venv/bin/python app.py` runs it without the service on http://localhost:5000.
+For development, `.venv/bin/python app.py` runs it without the service on `http://localhost:<PORT>` (`PORT` in `.env`).
 
 ### Always on: a new day every day
 
@@ -573,7 +573,7 @@ So the replay time can be more than 24 hours behind the current time; the top ba
 Run it as a service with gunicorn. Use **one worker**, since the day cache is in memory, and threads for concurrent viewers:
 
 ```bash
-.venv/bin/gunicorn --workers 1 --threads 8 --bind 127.0.0.1:5000 app:app
+.venv/bin/gunicorn --workers 1 --threads 8 --bind 127.0.0.1:<your port> app:app
 ```
 
 A hardened systemd unit is included: `deploy/install.sh` writes `deploy/looking-glass.service` from
@@ -710,7 +710,7 @@ The look adapts to the device (phone, tablet, laptop, large screen). The top bar
 | **Full** | Every effect: 3D tilt, glowing arcs with trails, impact rings, camera drift, see-through blurred panels, sharp rendering on high-resolution screens. |
 | **Lite** | Flat map, no glow, trails, fog or camera drift, solid panels (blurring over a moving map is the heaviest effect on weak graphics chips), no UI animations, at most 40 arcs and 4 popups at once, half the redraw rate, 120 stream rows, and 1 pixel per CSS pixel (a 4K TV otherwise draws four times the pixels). |
 
-The data, counts and analysis are identical in every mode. A screen can also be set from the address: `http://host:5000/?perf=lite` (or `full`, `auto`); the choice is remembered on that device.
+The data, counts and analysis are identical in every mode. A screen can also be set from the address: `http://host:<your port>/?perf=lite` (or `full`, `auto`); the choice is remembered on that device.
 
 **Browser requirement:** the map needs WebGL 2 and a browser from about 2021 or later (current Chrome, Edge, Firefox, Safari; TVs roughly from 2021–2022 on). Older TV browsers get a clear message instead of a blank screen. For those TVs, use a computer or streaming stick with an up-to-date browser on the TV's HDMI input, or share a computer's screen to the TV.
 

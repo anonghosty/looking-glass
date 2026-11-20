@@ -262,8 +262,8 @@ No Shadowserver reports yet? [Sign up your CSIRT](https://www.shadowserver.org/w
    ask it to, it checks the installation and shows the result.
 5. **Open the address it shows** and choose **Let's get started** to create the first administrator with an
    authenticator app. It asks for a one-time setup code: `cat platform/data/setup_code` (the installer shows this). On **Ubuntu Server** (no browser on the machine), create the first administrator through an SSH
-   tunnel: `ssh -L 5000:127.0.0.1:5000 user@server`, then open http://localhost:5000 on your own computer (use the
-   port you chose in the installer if it is not 5000).
+   tunnel: `ssh -L <your port>:127.0.0.1:<your port> user@server`, then open `http://localhost:<your port>` on your own
+   computer (`<your port>` is the port you selected in the installer).
 6. **Before you hand it to anyone.** The installer already sets up the hardened service, the read-only database
    account and the pipeline's own account. These are left to you:
    - [ ] Approve each new account in **Admin → Users** with the right role, and no more.
@@ -392,7 +392,7 @@ See the [security policy](.github/SECURITY.md).
 | | |
 |---|---|
 | Countries | **every country and territory** (ISO 3166-1), chosen by continent; regions maps for about 200 of them, the rest drawn as one area |
-| Operating system | **Ubuntu 24.04 or later, Desktop or Server** — on the computer itself, in a virtual machine, or Ubuntu on WSL 2 on Windows 10/11. On Ubuntu Server, create the first administrator through an SSH tunnel (`ssh -L 5000:127.0.0.1:5000 user@server`, then open http://localhost:5000) |
+| Operating system | **Ubuntu 24.04 or later, Desktop or Server** — on the computer itself, in a virtual machine, or Ubuntu on WSL 2 on Windows 10/11. On Ubuntu Server, create the first administrator through an SSH tunnel (`ssh -L <your port>:127.0.0.1:<your port> user@server`, then open `http://localhost:<your port>`, with the port you selected in the installer) |
 | Memory and disk | **4 GB RAM minimum** for the whole server, enough for about 50,000 records a day; more records a day need more, see [How much memory](docs/INSTALLATION.md#how-much-memory). Disk: about 70 MB to download (about 45 MB with `--depth 1`); the files take about 70 MB, of which the code is about 6 MB and the rest screenshots, film posters and the world maps; the two Python environments add about 115 MB; MongoDB needs space for your reports |
 | Network | the mailbox (IMAP, Gmail API or Microsoft Graph) or Shadowserver's report API, Mapbox for the map tiles; optional Malpedia, RIPEstat, PeeringDB, NVD, CISA KEV and EPSS look-ups |
 | Browsers | current Chrome, Edge, Firefox or Safari; TVs and phones supported |

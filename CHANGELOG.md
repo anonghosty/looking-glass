@@ -5,6 +5,15 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-20 (6)
+### Changed
+- **The guides use the port you selected.** The installer asks which port Looking Glass listens on, so the
+  installation guide, operations, configuration, technical reference and both READMEs now write
+  `http://localhost:<your port>` (and the same in the SSH tunnel, health check, firewall and reverse-proxy examples)
+  instead of a fixed port. [Installation](docs/INSTALLATION.md) says once where your port comes from: the installer's
+  **Port** question or `deploy/install.sh --port`, kept in `.env` as `LG_PORT`.
+- **After updating:** nothing to do (documentation only).
+
 ## 2026-11-20 (5)
 ### Added
 - **A second layout of the CLogin check-in decodes.** Some *android.badbox2* check-ins carry their data in Base64

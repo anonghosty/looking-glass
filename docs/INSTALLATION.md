@@ -66,7 +66,10 @@ Looking Glass has two parts, installed in this order:
 Two setups are supported, with the same code:
 
 - **A. Windows with WSL 2:** Ubuntu running inside Windows on an analyst's PC or laptop.
-- **B. Ubuntu Desktop or Server:** Ubuntu 24.04 or later, on its own computer or in a virtual machine. Recommended for a permanent, shared installation. On Ubuntu Server, create the first administrator through an SSH tunnel (`ssh -L 5000:127.0.0.1:5000 user@server`, then open http://localhost:5000).
+- **B. Ubuntu Desktop or Server:** Ubuntu 24.04 or later, on its own computer or in a virtual machine. Recommended for a permanent, shared installation. On Ubuntu Server, create the first administrator through an SSH tunnel (`ssh -L <your port>:127.0.0.1:<your port> user@server`, then open `http://localhost:<your port>`).
+
+Throughout this guide, `<your port>` is the port you selected for Looking Glass: the guided installer's **Port**
+question, or `deploy/install.sh --port`. It is written in `.env` as `LG_PORT`.
 
 Security is described in [../docs/SECURITY.md](SECURITY.md). Steps marked
 **(security)** are part of the hardening and must be done on every installation.
@@ -184,7 +187,7 @@ The settings are in [CONFIGURATION.md](CONFIGURATION.md) (`MONGO_HOST`, `MONGO_T
    ```
    Then restart WSL from PowerShell with `wsl --shutdown`, and open Ubuntu again.
 
-With mirrored networking your Windows browser opens Looking Glass at `http://localhost:5000`.
+With mirrored networking your Windows browser opens Looking Glass at `http://localhost:<your port>`.
 
 ### A2. Get the code, then the database
 Clone the repository into your home folder; both parts are installed from it:
@@ -224,9 +227,9 @@ sudo systemd-analyze verify /etc/systemd/system/looking-glass.service
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now looking-glass
 ```
-Check that it runs, and on 127.0.0.1:5000 only:
+Check that it runs, and on 127.0.0.1:`<your port>` only (put your port number in place of `<your port>`):
 ```bash
-systemctl status looking-glass --no-pager | head -5; ss -ltn | grep 5000; curl -s localhost:5000/healthz
+systemctl status looking-glass --no-pager | head -5; ss -ltn | grep <your port>; curl -s localhost:<your port>/healthz
 ```
 After changing the code or `.env`, restart it without sudo with `deploy/reload.sh`.
 
@@ -256,7 +259,7 @@ it shows the commands for that server's administrator to run, and they give you 
 account is never needed or changed.
 
 ### A6. The first administrator **(security)**
-On the computer itself (your Windows browser counts), open http://localhost:5000:
+On the computer itself (your Windows browser counts), open `http://localhost:<your port>`:
 1. Click **Let's get started**. It asks for the one-time **setup code**: in a terminal, in the platform folder, run
    `cat data/setup_code` (the installer printed this command). It proves you can reach the server itself, works
    once, and is deleted when the administrator exists.
@@ -273,14 +276,14 @@ manage/manage_users.py add YOURNAME --admin
 ```
 
 ### A7. Windows firewall **(security)**
-With mirrored networking two firewall layers decide whether other computers reach port 5000: the Windows Defender
-Firewall and the Hyper-V firewall for WSL. If only this computer uses Looking Glass, make sure no rule opens port
-5000. In an **administrator** PowerShell, list them:
+With mirrored networking two firewall layers decide whether other computers reach `<your port>`: the Windows Defender
+Firewall and the Hyper-V firewall for WSL. If only this computer uses Looking Glass, make sure no rule opens
+`<your port>`. In an **administrator** PowerShell, list them (put your port number in place of `<your port>`):
 ```powershell
-Get-NetFirewallRule -Enabled True -Direction Inbound | Where-Object { ($_ | Get-NetFirewallPortFilter).LocalPort -contains '5000' } | Select DisplayName, Profile
+Get-NetFirewallRule -Enabled True -Direction Inbound | Where-Object { ($_ | Get-NetFirewallPortFilter).LocalPort -contains '<your port>' } | Select DisplayName, Profile
 ```
 ```powershell
-Get-NetFirewallHyperVRule | Where-Object { $_.LocalPorts -contains '5000' } | Select Name, DisplayName, RemoteAddresses
+Get-NetFirewallHyperVRule | Where-Object { $_.LocalPorts -contains '<your port>' } | Select Name, DisplayName, RemoteAddresses
 ```
 Disable any you find with `Disable-NetFirewallRule -DisplayName "<name>"` and
 `Get-NetFirewallHyperVRule | Where-Object DisplayName -eq "<name>" | Remove-NetFirewallHyperVRule`.
@@ -298,14 +301,14 @@ To show Looking Glass on a TV, a wall screen or colleagues' computers:
 2. **Listen on the network:** run `deploy/install.sh --network`, then copy the service file again and restart (A4 commands, then `sudo systemctl restart looking-glass`).
 3. **`.env`:** `ACCESS_MODE=private` with `VIEWER_NETWORKS=<screen address or range>` (for example `192.168.10.0/24`),
    or `ACCESS_MODE=public`. Other host names than the computer's own go in `ALLOWED_HOSTS`. Then `deploy/reload.sh`.
-4. **Firewall:** open port 5000 to those screens only, on the **Private** profile, in both layers (administrator PowerShell):
+4. **Firewall:** open `<your port>` to those screens only, on the **Private** profile, in both layers (administrator PowerShell):
    ```powershell
-   New-NetFirewallRule -DisplayName "Looking Glass (screens)" -Direction Inbound -Protocol TCP -LocalPort 5000 -RemoteAddress <screen-address> -Profile Private -Action Allow
+   New-NetFirewallRule -DisplayName "Looking Glass (screens)" -Direction Inbound -Protocol TCP -LocalPort <your port> -RemoteAddress <screen-address> -Profile Private -Action Allow
    ```
    ```powershell
-   New-NetFirewallHyperVRule -Name LookingGlassScreens -DisplayName "Looking Glass (screens)" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 5000 -RemoteAddresses <screen-address> -Action Allow
+   New-NetFirewallHyperVRule -Name LookingGlassScreens -DisplayName "Looking Glass (screens)" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts <your port> -RemoteAddresses <screen-address> -Action Allow
    ```
-5. **On the screen:** open `https://<computer-name>:5000` and sign in. For a public screen, use an **external**
+5. **On the screen:** open `https://<computer-name>:<your port>` and sign in. For a public screen, use an **external**
    account (always masked) or set `PUBLIC_DEMO=1`, and tick **Stay signed in for 5 days**.
 
 ---
@@ -344,8 +347,8 @@ systemd-analyze security looking-glass --no-pager | tail -1
 sudo -u lookingglass .venv/bin/python deploy/create_readonly_db_user.py && sudo systemctl restart looking-glass
 ```
 Create the first administrator: read the setup code on the server (`sudo -u lookingglass cat data/setup_code` in the
-platform folder), then open http://localhost:5000 in a browser on the server, or tunnel to it over SSH
-(`ssh -L 5000:127.0.0.1:5000 you@server`, then open http://localhost:5000 on your computer), or, once the reverse
+platform folder), then open `http://localhost:<your port>` in a browser on the server, or tunnel to it over SSH
+(`ssh -L <your port>:127.0.0.1:<your port> you@server`, then open `http://localhost:<your port>` on your computer), or, once the reverse
 proxy below is set up, its HTTPS address; choose **Let's get started** and type the code. Or on the command line:
 ```bash
 sudo -u lookingglass manage/manage_users.py add YOURNAME --admin
@@ -386,7 +389,7 @@ manage/install_cert.sh --status                                                 
 internal network use your CA or `tls internal`). In `/etc/caddy/Caddyfile`:
 ```
 lookingglass.example.org {
-    reverse_proxy 127.0.0.1:5000
+    reverse_proxy 127.0.0.1:<your port>
     encode gzip
 }
 ```
@@ -400,7 +403,7 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     add_header Strict-Transport-Security "max-age=31536000" always;
     location / {
-        proxy_pass http://127.0.0.1:5000;
+        proxy_pass http://127.0.0.1:<your port>;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -411,7 +414,7 @@ server {
 server { listen 80; server_name lookingglass.example.org; return 301 https://$host$request_uri; }
 ```
 In `.env`:
-- `TRUST_PROXY=1`: the real client address and `https` come from the proxy's headers, so session binding, address checks and Secure cookies work. The proxy **must** send `X-Forwarded-For` (Caddy does by itself; for nginx keep the `proxy_set_header` lines above): a request without it is refused, because it would look like it came from the server itself. The headers are believed only from a proxy on this computer. With `TRUST_PROXY=1`, an SSH tunnel to port 5000 is refused too (it carries no such header): use the proxy's address. **One proxy, on this computer:** Looking Glass takes the **last** address in `X-Forwarded-For` (the one your proxy added) and the last `X-Forwarded-Proto`, so a proxy that appends to what the visitor sent (nginx's `$proxy_add_x_forwarded_for`) still gives the visitor's real address, never a forged `127.0.0.1`. With two proxies in a row (a CDN or load balancer in front of nginx), the last address is the first proxy's: have the outer one's address replace the header at the inner proxy (nginx `real_ip` module), or the sign-in limits and session binding will see that proxy, not your visitors;
+- `TRUST_PROXY=1`: the real client address and `https` come from the proxy's headers, so session binding, address checks and Secure cookies work. The proxy **must** send `X-Forwarded-For` (Caddy does by itself; for nginx keep the `proxy_set_header` lines above): a request without it is refused, because it would look like it came from the server itself. The headers are believed only from a proxy on this computer. With `TRUST_PROXY=1`, an SSH tunnel to `<your port>` is refused too (it carries no such header): use the proxy's address. **One proxy, on this computer:** Looking Glass takes the **last** address in `X-Forwarded-For` (the one your proxy added) and the last `X-Forwarded-Proto`, so a proxy that appends to what the visitor sent (nginx's `$proxy_add_x_forwarded_for`) still gives the visitor's real address, never a forged `127.0.0.1`. With two proxies in a row (a CDN or load balancer in front of nginx), the last address is the first proxy's: have the outer one's address replace the header at the inner proxy (nginx `real_ip` module), or the sign-in limits and session binding will see that proxy, not your visitors;
 - `ALLOWED_HOSTS=lookingglass.example.org`;
 - `ACCESS_MODE=private` with `VIEWER_NETWORKS=` your CSIRT's address ranges, or `ACCESS_MODE=public` for an internet-facing site.
 
@@ -432,7 +435,7 @@ sudo ufw default deny incoming && sudo ufw allow OpenSSH
 sudo ufw allow from 10.20.0.0/24 to any port 443 proto tcp     # your CSIRT network only (or: sudo ufw allow 443/tcp)
 sudo ufw enable
 ```
-Port 5000 and MongoDB's 27017 stay closed to the network.
+`<your port>` and MongoDB's 27017 stay closed to the network.
 
 ---
 
@@ -500,7 +503,7 @@ security_testing/security_retest.py && tests/run_all_checks.sh
 > logo*), error pages and redirects are plain, and the platform's scripts and styles need a sign-in. Two things to
 > check after updating:
 > - **`/healthz` answers this computer only.** Monitoring that called it from another computer gets "Not Found": run
->   the check on this computer (`curl -sk https://localhost:5000/healthz`) or through the reverse proxy here.
+>   the check on this computer (`curl -sk https://localhost:<your port>/healthz`) or through the reverse proxy here.
 > - **The HTTPS certificate keeps its old name** ("Looking Glass") until you make a new one:
 >   `deploy/make_tls_cert.sh <the name people use>`. Each screen then trusts the new certificate once more. A certificate
 >   from your organisation's CA is not affected.

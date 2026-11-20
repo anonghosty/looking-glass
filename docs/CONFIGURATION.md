@@ -193,8 +193,8 @@ Every setting in this table except `REF_SECRET`, `HSTS_*`, `BACKUP_PUBLIC_KEY` a
 reload builds the new copy beside the old one, so memory briefly rises by about one day's size; reloading only the
 reports that changed keeps that small. Roughly 1 GB of web-service memory per million records held, plus the Executive
 portal's past records above.
-| `LG_PORT` | `5000` | the port the service listens on. Set by the installer or `deploy/install.sh --port`; the checks read it |
-| `PORT` | `5000` | port for `python app.py` (development only) |
+| `LG_PORT` | the port you selected | the port the service listens on (`<your port>` in these guides). Set by the installer's **Port** question or `deploy/install.sh --port`; the checks read it |
+| `PORT` | the port you choose | port for `python app.py` (development only) |
 
 ## Files in `data/`
 

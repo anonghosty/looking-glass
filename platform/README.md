@@ -25,7 +25,7 @@ deploy/install.sh            # Python environment, .env, data folder, service fi
 nano .env                    # MongoDB account, MAPBOX_TOKEN, COUNTRY
 sudo cp deploy/looking-glass.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now looking-glass
 ```
-Open http://localhost:5000 and choose **Let's get started** to create the first administrator. Full instructions,
+Open `http://localhost:<your port>` (the port you selected; `deploy/install.sh --port`, `LG_PORT` in `.env`) and choose **Let's get started** to create the first administrator. Full instructions,
 including Windows (WSL) and Linux servers, HTTPS and firewalls: [docs/INSTALLATION.md](../docs/INSTALLATION.md).
 
 ## Documentation
@@ -60,7 +60,7 @@ The guides above are in the top-level docs/ folder.
 
 ## Requirements
 
-Ubuntu 24.04 or later, Desktop or Server, with systemd (on the computer itself, in a virtual machine or as Ubuntu on WSL 2; on Ubuntu Server, create the first administrator through an SSH tunnel: `ssh -L 5000:127.0.0.1:5000 user@server`, then open http://localhost:5000), Python 3.12+, MongoDB 6+ filled by the
+Ubuntu 24.04 or later, Desktop or Server, with systemd (on the computer itself, in a virtual machine or as Ubuntu on WSL 2; on Ubuntu Server, create the first administrator through an SSH tunnel: `ssh -L <your port>:127.0.0.1:<your port> user@server`, then open `http://localhost:<your port>`), Python 3.12+, MongoDB 6+ filled by the
 pipeline, a free Mapbox token, and optionally a Malpedia token. The browser needs WebGL 2 (any browser from about
 2021 on).
 
