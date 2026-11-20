@@ -1,6 +1,6 @@
 # Governance
 
-How decisions about Looking Glass are made, who does what, and what happens if the maintainer is not available.
+How decisions about Looking Glass are made, who does what, and how to take part.
 
 ## How decisions are made
 
@@ -31,16 +31,18 @@ A declined proposal always gets its reason.
 Every change, including the maintainer's own, passes the automated checks on GitHub and an automated security review
 before it is released.
 
-## Continuity
+## Community
 
-The project depends on one person today. To keep it usable if the maintainer is not available:
-
-- Everything needed to carry on is public: the code, the full history, the documentation sources and the release notes
-  are in the repository, under the AGPL-3.0 licence, so anyone can fork it and continue.
-- Releases need no secret held only by the maintainer to be used: an installation updates from the public repository
-  ([Installation, Updating](INSTALLATION.md#updating)).
-- The project is looking for a second maintainer, from another organisation, with administrator access to the
-  repository and the docs site. Until then this risk remains, and it is said here so nobody has to discover it.
+- **Everything is open.** The code, its full history, the documentation sources and the release notes are in the
+  public repository, under the AGPL-3.0 licence. Anyone who runs a changed version as a service shares those changes
+  under the same licence.
+- **Installations stand on their own.** Updates come from the public repository, and using a release needs no secret
+  held by one person ([Installation, Updating](INSTALLATION.md#updating)).
+- **Contributions are welcome.** CSIRTs that use Looking Glass are invited to send fixes and improvements as pull
+  requests ([contribution guide](https://github.com/anonghosty/looking-glass/blob/main/CONTRIBUTING.md)) and to report
+  security issues privately ([Security, section 6](SECURITY.md#6-reporting-a-vulnerability)). Every change is reviewed
+  before it reaches the main repository.
+- **Looking for collaboration.** I'm looking for CSIRTs and people who want to work on Looking Glass together.
 
 ## Changing this page
 

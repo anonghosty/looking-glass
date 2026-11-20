@@ -27,8 +27,8 @@ tests and a note in the [CHANGELOG](https://github.com/anonghosty/looking-glass/
 
 ## The project
 
-- **A second maintainer** with administrator access to the repository and the docs site
-  ([Governance, Continuity](GOVERNANCE.md#continuity)).
+- **Collaboration** with CSIRTs and people who want to work on Looking Glass
+  ([Governance, Community](GOVERNANCE.md#community)).
 - The OpenSSF Best Practices silver level.
 
 Suggestions are welcome as [issues](https://github.com/anonghosty/looking-glass/issues).

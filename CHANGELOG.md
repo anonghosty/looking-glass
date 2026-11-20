@@ -5,6 +5,12 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-20 (7)
+### Changed
+- **Governance: Community instead of Continuity.** The section now invites CSIRTs and people to collaborate, send fixes
+  and improvements as pull requests and report security issues privately; the roadmap points to it.
+- **After updating:** nothing to do (documentation only).
+
 ## 2026-11-20 (6)
 ### Changed
 - **The guides use the port you selected.** The installer asks which port Looking Glass listens on, so the
