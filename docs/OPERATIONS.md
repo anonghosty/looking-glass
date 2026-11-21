@@ -263,13 +263,27 @@ unsigned and the Audit portal says so.
 
 ## The quarterly report and the purge
 
-The raw Shadowserver report rows are kept for about a quarter and a month, then deleted. Before they go, Looking Glass
-counts the quarter and keeps the result. The cycle, for every quarter (example: October to December 2026):
+Looking Glass counts every quarter once it has ended and keeps the result. **The quarterly purge is off on every
+installation until an administrator turns it on** in Settings → Quarterly: while it is off, no report rows are deleted,
+the reports and the bell say so, and the raw Shadowserver report rows are kept for good. Once it is on, the raw rows are
+kept for about a quarter and a month, then deleted.
+
+**Turning it on or off:** Settings → Quarterly, the card at the top (administrators with the Settings permission).
+**Turn on the quarterly purge** shows what will be deleted and when (the purge day, the cutoff and the rows the newest
+VALID report counted; the last 31 days are kept; findings, cases, advisories and the quarterly reports never), and asks
+for your own password; a wrong one counts like a failed sign-in. It is done once: it then stays on for every quarter.
+**Turn off the quarterly purge** is always there while it is on, with the same checks; turning it off removes any waiting
+purge permit, so a purge that has not run yet does not run. Each change is in the audit log ("Quarterly purge turned
+on" or "turned off": who, when, the rows it would delete then). The switch is kept in
+`data/quarterly/purge_confirmed.json` (owner-only); do not edit it by hand. Turned on after a quarter's purge day,
+nothing is deleted for that quarter: the next quarter's purge covers its rows.
+
+The cycle, for every quarter once the purge is on (example: October to December 2026):
 
 | When | What happens |
 |---|---|
-| The first check after 00:00 UTC on the next quarter's 3rd day (3 January 2027), when the quarter's last day's reports have arrived | The service makes the quarter's reports by itself: the management PDF and summary CSV, the advisor PDF and three CSVs, the purge CSV for administrators. Every accuracy check is run; the outputs say **VALID** or **NOT VALID** at the top |
-| At once | Management, advisors and administrators each get one alert in the bell: "2026Q4 reports ready; download before Thursday 21 January 2027; the raw report rows older than Tuesday 22 December 2026 are deleted on Friday 22 January 2027" |
+| The first check after 00:00 UTC on the next quarter's 3rd day (3 January 2027), when the quarter's last day's reports have arrived | The service makes the quarter's reports by itself: the management PDF and summary CSV, the advisor PDF and three CSVs, the purge CSV for administrators. Every accuracy check is run; the outputs say **VALID** or **NOT VALID** at the top, and whether the purge was on or off when they were made |
+| At once | Management, advisors and administrators each get one alert in the bell: "2026Q4 reports ready; download before Thursday 21 January 2027; the raw report rows older than Tuesday 22 December 2026 are deleted on Friday 22 January 2027". With the purge off, it says instead that no report rows are deleted, and administrators get one more alert: "The quarterly purge is off: turn it on in Settings → Quarterly, or leave it off to keep every report row" |
 | The 15 working days (Monday to Friday) after the quarter | People download their copies: management on the Executive portal, advisors on the advisory portal, administrators in Settings → Quarterly. Each download is sealed, its CSV stamped with who and when, and in the audit log |
 | The next working day (the purge day, 22 January 2027) | The database pipeline's next run deletes the report rows dated before the cutoff (the purge day minus 31 days: the last 31 days stay). Older quarters' rows go too |
 | After the purge | The administrators' bell says how many rows were deleted, from how many collections, before which day; the audit log has a "Quarterly purge" entry; Settings → Quarterly shows it |
@@ -285,8 +299,10 @@ quarter's record. Only the pipeline's report collections lose their old rows; `f
 
 **Who deletes:** the database pipeline, on its own account, never the web service. The service only writes a *purge
 permit* into its own `data/quarterly/<YYYYQn>/purge_permit.json`, and only when the report is VALID and made before
-the purge day. The pipeline reads it, works out the dates again itself and refuses anything else: no permit, a permit
-that is not VALID, dates that are not the rule's, a cutoff within 31 days of today, or a quarter already purged. Its
+the purge day **and** the purge is turned on. The pipeline reads it and `data/quarterly/purge_confirmed.json`, works
+out the dates again itself and refuses anything else: the purge not turned on ("refused: the purge is not turned on in
+Settings → Quarterly", logged once per quarter), no permit, a permit that is not VALID, dates that are not the rule's,
+a cutoff within 31 days of today, or a quarter already purged. Its
 result is in its `DATA_DIR`, `quarterly_purge_status.json`, and in its log (`[PURGE]` lines); a purge that cannot run
 never stops the pipeline's run.
 
@@ -299,7 +315,7 @@ check failed and why:
   it again once the run has finished;
 - *8 no address in any output*: a text carried an address (for example a decision's comment the masking missed): every
   output was removed. Tell the Looking Glass maintainers; do not copy the text anywhere.
-A report made again and VALID before the purge day writes the permit, and the purge runs on its day. Made after the
+A report made again and VALID before the purge day writes the permit (when the purge is on), and the purge runs on its day. Made after the
 purge day, it writes no permit: the next quarter's purge covers those rows, so nothing is lost.
 
 **Making a report again:** Settings → Quarterly → **Make it again** (administrators; in the audit log as "Quarterly

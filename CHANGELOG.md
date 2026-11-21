@@ -5,6 +5,24 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-21 (4)
+### Changed
+- **The documentation's screenshots show today's Looking Glass.** All 50 were taken again (made-up data), under the
+  same names, so every page that shows one shows the current screens.
+- **The quarterly purge is off until an administrator turns it on.** It no longer runs on its own: Settings →
+  Quarterly shows at the top whether it is on or off and, while off, what it would delete once on (the purge day, the
+  cutoff and the rows the newest VALID quarterly report counted). **Turn on the quarterly purge** shows exactly what
+  will be deleted and when, and asks for the administrator's own password; a wrong one counts like a failed sign-in.
+  It is done once and stays on for every quarter after; **Turn off the quarterly purge**, with the same checks, is
+  always there and stops a purge that has not run yet. Each change is in the audit log (who, when, the rows it would
+  delete then). Looking Glass writes a purge permit only while the purge is on, and the database pipeline refuses to
+  purge unless the platform's `data/quarterly/purge_confirmed.json` says it is on. The timing has not changed and still
+  has no setting. While the purge is off, the quarterly reports, the admin CSV and the bell say that no report rows are
+  deleted, and administrators get one bell alert per quarter saying it is off.
+- **After updating:** the quarterly purge is now off until an administrator turns it on in Settings → Quarterly; an
+  installation that wants it should turn it on before Friday 22 January 2027 (the purge day for October to December
+  2026). Update the database pipeline too (its `quarterly_purge.py` checks the same switch); nothing else to do.
+
 ## 2026-11-21 (3)
 ### Fixed
 - **GitHub's checks run again.** One line of the checks workflow was not valid YAML (an unquoted value holding ": "),

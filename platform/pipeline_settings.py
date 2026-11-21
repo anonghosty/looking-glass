@@ -38,8 +38,8 @@ import urllib.request
 import https_only
 
 from flask import g, jsonify, request
-from werkzeug.security import check_password_hash
 
+import password_policy
 import pipeline_link
 import report_files
 
@@ -91,7 +91,7 @@ def ping(key, secret, url=None, timeout=15):
 
 def install(app, ctx):
     """ctx: base_dir, data_dir, has_perm, csrf_ok, fresh, audit, users, throttle, client (-> (ip, ua))."""
-    hp, audit, users, throttle = ctx["has_perm"], ctx["audit"], ctx["users"], ctx["throttle"]
+    hp, audit = ctx["has_perm"], ctx["audit"]           # users, throttle, client: password_policy.check_own_password
     unlocked = {}                                           # (user, session csrf) -> until
 
     def ddir():                                             # the platform's own data folder, looked up on each use
@@ -225,17 +225,10 @@ def install(app, ctx):
         if bad:
             return bad
         name, sk = me()
-        ip, _ = ctx["client"]()
-        u = users.get(name) if name else None
-        if not u or (getattr(g, "user", None) or {}).get("automation"):
-            return jsonify(error="Unlocking needs a signed-in administrator's own password."), 403
-        if throttle.locked(ip, name):
-            return jsonify(error=f"Too many wrong passwords. Try again in {throttle.wait_minutes(ip, name)} minutes."), 429
-        pw = str((request.get_json(silent=True) or {}).get("password") or "")
-        if not (u.get("hash") and check_password_hash(u["hash"], pw)):
-            throttle.failed(ip, name)
-            audit.add("pipeline_unlock_failed", user=name, detail="Settings → Workers: wrong password")
-            return jsonify(error="That password is not right."), 403
+        bad = password_policy.check_own_password(ctx, "pipeline_unlock_failed", "Settings → Workers: wrong password",
+                                                 need="Unlocking needs a signed-in administrator's own password.")
+        if bad:
+            return bad
         unlocked[sk] = time.time() + UNLOCK_SECONDS
         audit.add("pipeline_unlock", user=name, detail=f"Settings → Workers unlocked for {UNLOCK_SECONDS // 60} minutes")
         return jsonify(ok=True, unlocked_for=UNLOCK_SECONDS)

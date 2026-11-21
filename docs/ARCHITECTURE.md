@@ -97,7 +97,7 @@ server, on the pipeline's own account ([Security, section 1](SECURITY.md#pipelin
 | B7 | Platform and pipeline → outside services | look-ups | only what each service needs: AS numbers (PeeringDB, RIPEstat), CVE IDs (NVD, FIRST, CISA), malware hashes and families (Malpedia), place names (Mapbox geocoding); the pipeline asks Cloudflare and Google over HTTPS (1.1.1.1, 1.0.0.1, 8.8.8.8, 8.8.4.4, by IP address, certificates checked) for Shadowserver's DKIM key when the network drops DNS TXT look-ups, sending only that key's name (`MAIL_AUTH_DNS_SERVERS`). No constituent IP address is sent to any of them |
 | B8 | Server → auditor | the proof package | the auditor's own verifier, standard library only, run off the server; an earlier head kept by the auditor; signed daily checkpoints, optionally copied to another computer (`AUDIT_CHECKPOINT_COPY_DIR`), which the verifier and the proof package check |
 | B9 | Analyst → the Looking Glass creator | a decoding request | sent by hand, never by Looking Glass: only the HTTP request lines (up to 5) with their infection names, each keeping only its undecoded value (every other parameter value reads `<value>`, any address `<address>`; the path keeps only its shape, best effort: plain path words and file names stay, any other segment reads `<seg>`, `<n>`, `<long>`, `<address>` or `<email>`, `;` parameters lose their values and keep only plain-word names; a name that is itself a plain word stays, so the administrator checks the exact lines), no host, address, user agent or count; the analyst confirms the TLP rules allow it; recorded as an export; pasted into a private report on the separate [HTTP Requests Decoding](https://github.com/anonghosty/http-requests-decoding) repository, never a public issue |
-| B10 | Platform → pipeline | the quarterly purge permit | written only for a VALID quarterly report; the pipeline works out the quarter's dates itself and refuses a permit that differs, one made after its purge day, or a cutoff within 31 days of today; it deletes only report rows dated before the cutoff, from report collections only, once per quarter |
+| B10 | Platform → pipeline | the quarterly purge permit | written only for a VALID quarterly report and only while an administrator has turned the purge on in Settings → Quarterly (their own password again; `purge_confirmed.json`); the pipeline also requires that confirmation, read-only, and refuses without it; the pipeline works out the quarter's dates itself and refuses a permit that differs, one made after its purge day, or a cutoff within 31 days of today; it deletes only report rows dated before the cutoff, from report collections only, once per quarter |
 
 ## 4. What an attacker would want
 
@@ -161,7 +161,7 @@ Each row below names a threat and the control that stops it.
 | Write to the database | The platform's account is read-only; `deploy/create_readonly_db_user.py` checks that it can't write |
 | Read the database administrator's password | It is kept in `/etc/looking-glass/mongo-admin.env`, which only root can read |
 | Write outside `data/` | systemd sandbox (rated by `systemd-analyze security`); `/run/user` and D-Bus are hidden from it, so it can't confirm its own requests |
-| Forge a purge permit to delete the reports database | The pipeline trusts no date in the permit: it recomputes the purge day and cutoff, keeps the last 31 days, deletes only from report collections and only once per quarter; findings, cases, advisories and the quarterly reports are never deleted. Every purge is in the audit log |
+| Forge a purge permit to delete the reports database | The pipeline also requires the administrator's confirmation (`purge_confirmed.json`, written only after their password was checked again; the purge is off until then) and refuses without it. It trusts no date in the permit: it recomputes the purge day and cutoff, keeps the last 31 days, deletes only from report collections and only once per quarter; findings, cases, advisories and the quarterly reports are never deleted. Every purge is in the audit log |
 | A shell as the Linux user, outside the sandbox | **Not stopped by these controls.** Platform and pipeline share that user, so it can edit the pipeline's `.env` and confirm requests itself. Protect the account (SSH keys, no shared password, no passwordless sudo); see section 6 |
 
 ### A5. Someone who edits the audit log
@@ -220,8 +220,8 @@ section argues that secure design principles were applied and that common implem
   permissions it needs, and management, researcher, advisor and auditor are exclusive roles.
 - **Fail-safe defaults.** Every page needs a sign-in with a second factor; the service listens on this computer only
   until an administrator opens it to the network; roles without the *unmasked* permission see masked addresses;
-  pipeline settings are locked; no backup is made without an encryption key; no quarterly purge without a VALID
-  quarterly report.
+  pipeline settings are locked; no backup is made without an encryption key; the quarterly purge stays off until an
+  administrator confirms it, and even then never without a VALID quarterly report.
 - **Complete mediation.** Every request is checked for its permission on the server, and every change for its CSRF
   token; nothing relies on the page hiding a button.
 - **Separation of privilege.** Only the pipeline writes the database; a request that loosens the pipeline needs a

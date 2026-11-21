@@ -10,11 +10,18 @@ quarter's Shadowserver reports and its own workflow, and keeps the result in dat
   summary.json   the counts the next quarter compares against (per network and report, no address); kept for ever:
                  the statistics that survive the purge
   status.json    VALID or NOT VALID, every accuracy check, when it was made, the 15th working day, the purge day, the cutoff
-  purge_permit.json   only when the report is VALID (and made before its purge day): the database pipeline's permission
-                 to delete the raw report rows dated before the cutoff, on the purge day. The platform never deletes
-                 anything itself and never writes the pipeline's files; the pipeline reads this file read-only, works
-                 the dates out again and refuses anything else (quarterly_purge.py in the pipeline's folder).
+  purge_permit.json   only when the report is VALID (and made before its purge day) AND the quarterly purge is turned on:
+                 the database pipeline's permission to delete the raw report rows dated before the cutoff, on the purge
+                 day. The platform never deletes anything itself and never writes the pipeline's files; the pipeline
+                 reads this file read-only, works the dates out again and refuses anything else (quarterly_purge.py in
+                 the pipeline's folder).
   purge_result.json   the pipeline's result, copied here once it purged (and written to the audit log)
+data/quarterly/purge_confirmed.json   the purge's switch (the user 2026-11-21, r88): OFF on every installation until an
+                 administrator turns it on in Settings → Quarterly, once, after seeing what it deletes (the Settings
+                 permission, CSRF and their own password again). {enabled, by, by_name, at, at_ts, shown}: who, when and
+                 what the page showed. Written only by that route (set_purge). Turning it off removes every waiting
+                 permit; turning it on writes the permit for the newest VALID quarter whose purge day has not passed.
+                 The pipeline reads this file too and refuses to purge unless it says enabled. The timing stays fixed.
 
 Reading: MongoDB find / aggregate / count_documents only, and the platform's data/ files. Counting is two-stage:
 MongoDB groups (month, network, host); Python counts the groups, so no document ever holds a network's addresses.
@@ -67,6 +74,16 @@ CHECK_EVERY = 600                    # seconds between the background checks
 # the collections the purge may touch: the pipeline's own rule (report_names.valid + quarterly_purge.NOT_REPORTS)
 REPORT_NAME = re.compile(r"^[a-z0-9][a-z0-9_]{0,63}$")
 NOT_REPORTS = ("files_", "discovered_fields_", "lg_", "system.")
+CONFIRM_FILE = "purge_confirmed.json"   # data/quarterly/: the purge's switch (off until an administrator turns it on)
+# why a quarter has no purge permit (status.json "no_permit_why"; Settings → Quarterly and the bell show it)
+WHY_INVALID = "the report is NOT VALID"
+WHY_MADE_LATE = ("made after its purge day: nothing is deleted for this quarter (the next quarter's purge covers its "
+                 "rows)")
+WHY_OFF = "the quarterly purge is off on this installation (Settings → Quarterly): nothing is deleted"
+WHY_ON_LATE = ("the quarterly purge was turned on after this quarter's purge day: nothing is deleted for this quarter "
+               "(the next quarter's purge covers its rows)")
+WHY_NOT_NEWEST = "a newer quarter's report exists: only the newest quarter gets a purge permit"
+OFF_TEXT = "The quarterly purge is off on this installation: no report rows are deleted."
 
 # every output of a quarter: kind -> (file name, readable name, who gets it)
 FILES = {
@@ -933,13 +950,22 @@ def write_csvs(out, R, rows, status, made):
     _write(p, head("Management summary"), ["section", "name", "period", "metric", "value", "note"], rows["management"])
     files["management"] = p
     p = os.path.join(out, file_name("admin", Q))
+    on = bool(R.get("purge_on"))
     hd = head("Administrator: rows and the purge") + [
+        ["Quarterly purge", "on" if on else "off",
+         ("on when this report was made (turned on in Settings → Quarterly): the database pipeline deletes on the purge "
+          "day unless an administrator turns it off before then") if on else
+         ("off when this report was made: nothing will be deleted unless an administrator turns it on in Settings → "
+          "Quarterly before the purge day")],
         ["Quarter ends", pd["last_day"].isoformat(), ""],
-        [f"{WORKING_DAYS}th working day (Mon-Fri) after: download before the end of this day", pd["working_day_15"].isoformat(), ""],
-        ["Purge day (the next working day)", pd["purge_day"].isoformat(), ""],
+        [f"{WORKING_DAYS}th working day (Mon-Fri) after: download before the end of this day", pd["working_day_15"].isoformat(),
+         "" if on else "matters only if the quarterly purge is turned on"],
+        ["Purge day (the next working day)", pd["purge_day"].isoformat(), "" if on else "only if the quarterly purge is turned on"],
         [f"Cutoff (purge day minus {KEEP_DAYS} days)", pd["cutoff"].isoformat(),
-         "the database pipeline deletes the report rows dated before this day, of every quarter"],
-        ["Rows the purge deletes (all quarters, counted now)", sum(v for v in R["purge_all"].values()), ""],
+         "the database pipeline deletes the report rows dated before this day, of every quarter" if on else
+         "if the quarterly purge is turned on: the report rows dated before this day, of every quarter, would be deleted"],
+        ["Rows the purge deletes (all quarters, counted now)" if on else "Rows the purge would delete if turned on (all quarters, counted now)",
+         sum(v for v in R["purge_all"].values()), ""],
         ["Collections that could not be read", len(R["failed"]), "; ".join(sorted(R["failed"]))]]
     _write(p, hd, ["quarter", "report", "collection", "kind", "rows in quarter"] + [f"rows {m}" for m in months]
            + ["days so far", "days with data", "days without data", "rows of this quarter before the cutoff",
@@ -956,6 +982,7 @@ def make(db, quarter, base, today=None, exclude=(), F=None):
     kev = kev_ids(cv)
     R = collect_db(db, y, q, today, exclude, kev)
     R["kev_set"] = kev
+    R["purge_on"] = purge_on(base)                     # what the reports say about the purge (and the permit's rule)
     R["purge"] = purge_dates(y, q)
     R["purge_all"] = {}
     for n in purgeable(db):
@@ -1042,6 +1069,119 @@ def _write_json(path, obj):
     os.replace(tmp, path)
 
 
+# ------------------------------------------------------------------ the purge's switch and the permit's rule
+def permit_rule(valid, made_day, purge_day, on, today):
+    """(permit, why not): the one rule for a quarter's purge permit. VALID, made on or before its purge day, the purge
+    turned on (Settings → Quarterly), and its purge day not passed."""
+    if not valid:
+        return False, WHY_INVALID
+    if made_day > purge_day:
+        return False, WHY_MADE_LATE
+    if not on:
+        return False, WHY_OFF
+    if today > purge_day:
+        return False, WHY_ON_LATE
+    return True, ""
+
+
+def permit_doc(st):
+    """The permit as the pipeline reads it, from a quarter's status.json (its own report's dates and when it was made:
+    the pipeline refuses a report made after its purge day)."""
+    return {"quarter": st["quarter"], "valid": True, "status": "VALID", "generated_at": st["generated_at"],
+            **{k: st[k] for k in ("last_day", "working_day_15", "purge_day", "cutoff")}, "keep_days": KEEP_DAYS,
+            "note": "Written by Looking Glass for the database pipeline's quarterly purge (quarterly_purge.py), which "
+                    "checks every date again itself, and that the purge is turned on (purge_confirmed.json)."}
+
+
+def confirm_path(base):
+    return os.path.join(base, "data", "quarterly", CONFIRM_FILE)
+
+
+def confirmation(base):
+    """The purge's switch: {enabled, by, by_name, at, at_ts, shown}. Off ({"enabled": False}) when the file is missing,
+    unreadable or says anything but enabled: true."""
+    d = read_json(confirm_path(base)) or {}
+    return dict(d, enabled=d.get("enabled") is True)
+
+
+def purge_on(base):
+    return confirmation(base)["enabled"]
+
+
+def _day(text):
+    try:
+        return date.fromisoformat(str(text or "")[:10])
+    except ValueError:
+        return None
+
+
+def purge_preview(base, today):
+    """What the purge would delete next, for Settings → Quarterly and the audit log: the newest VALID report's dates and
+    its dry count (rows_purge_deletes, counted when it was made), whether its purge day has passed; and the rule's next
+    purge day (the newest ended quarter whose purge day has not passed, else this quarter's)."""
+    y, q = quarter_of(today)
+    py, pq = prev_quarter(y, q)
+    ny, nq = (py, pq) if purge_dates(py, pq)["purge_day"] >= today else (y, q)
+    nd = purge_dates(ny, nq)
+    out = {"quarter": "", "rows": None, "purge_day": "", "cutoff": "", "working_day_15": "", "passed": False,
+           "permit": False, "next": {"quarter": qname(ny, nq), "purge_day": nd["purge_day"].isoformat(),
+                                     "cutoff": nd["cutoff"].isoformat()}, "keep_days": KEEP_DAYS}
+    for qn, st in quarters(base):
+        if st.get("valid"):
+            pday = _day(st.get("purge_day"))
+            rows = st.get("rows_purge_deletes")
+            out.update(quarter=qn, rows=int(rows) if isinstance(rows, (int, float)) else None,
+                       purge_day=st.get("purge_day", ""), cutoff=st.get("cutoff", ""), working_day_15=st.get("working_day_15", ""),
+                       passed=bool(pday is None or today > pday),
+                       permit=os.path.isfile(os.path.join(quarter_dir(base, qn), "purge_permit.json")))
+            break
+    return out
+
+
+def sync_permits(base, on, today):
+    """After the switch changed: the permits follow it. Off: every waiting permit is removed. On: the newest quarter's
+    permit is written when the rule allows it (VALID, made before its purge day, the day not passed). Each kept quarter's
+    status.json says why it has no permit. A quarter already purged is left as it is. Returns [(quarter, what)]."""
+    done = []
+    for i, (qn, st) in enumerate(quarters(base)):
+        d = quarter_dir(base, qn)
+        p = os.path.join(d, "purge_permit.json")
+        if os.path.exists(os.path.join(d, "purge_result.json")):
+            if os.path.lexists(p):
+                os.remove(p)
+            continue
+        pday, made = _day(st.get("purge_day")), _day(st.get("generated_at"))
+        if pday is None or made is None:
+            permit, why = False, WHY_INVALID
+        else:
+            permit, why = permit_rule(bool(st.get("valid")), made, pday, on, today)
+        if permit and i:
+            permit, why = False, WHY_NOT_NEWEST
+        if permit:
+            _write_json(p, permit_doc(st))
+            done.append((qn, "purge permit written"))
+        elif os.path.lexists(p):
+            os.remove(p)
+            done.append((qn, "purge permit removed"))
+        if (bool(st.get("permit")), st.get("no_permit_why", ""), st.get("purge_on")) != (permit, why, on):
+            _write_json(os.path.join(d, "status.json"), dict(st, permit=permit, no_permit_why=why, purge_on=on))
+    return done
+
+
+def set_purge(base, enabled, user, full_name, shown, now=None):
+    """Turn the quarterly purge on or off (Settings → Quarterly; the route checked the permission, CSRF and the password).
+    The switch is written first (the pipeline then refuses at once when it is off), then the permits follow it.
+    Returns (the switch as written, [(quarter, what happened to its permit)])."""
+    now = now or time.time()
+    today = datetime.fromtimestamp(now, timezone.utc).date()
+    os.makedirs(os.path.join(base, "data", "quarterly"), mode=0o700, exist_ok=True)
+    rec = {"enabled": bool(enabled), "by": user, "by_name": full_name or user,
+           "at": datetime.fromtimestamp(now, timezone.utc).isoformat(timespec="seconds"), "at_ts": round(now),
+           "shown": shown}
+    _write_json(confirm_path(base), rec)
+    return rec, sync_permits(base, bool(enabled), today)
+
+
 class Refused(Exception):
     """A quarter that cannot be made (not ended yet, or its raw rows were deleted)."""
 
@@ -1070,16 +1210,13 @@ def build(db, base, quarter, made, today=None, now=None, exclude=(), F=None):
         pd = R["purge"]
         valid = status[0] == "VALID"
         gen = datetime.fromtimestamp(now, timezone.utc).isoformat(timespec="seconds")
-        permit = valid and today <= pd["purge_day"]
+        permit, no_permit_why = permit_rule(valid, today, pd["purge_day"], bool(R.get("purge_on")), today)
         st = {"quarter": quarter, "status": status[0], "valid": valid, "why": status[1], "made": made,
               "generated_at": gen, "generated_ts": round(now), "took_s": round(time.time() - t0, 1),
               "guards": [{"name": g_[0], "ok": g_[1], "detail": g_[2]} for g_ in G],
               "failed_collections": sorted(R["failed"]),
               **{k: v.isoformat() for k, v in pd.items()}, "keep_days": KEEP_DAYS, "working_days": WORKING_DAYS,
-              "permit": permit,
-              "no_permit_why": "" if permit else ("the report is NOT VALID" if not valid else
-                                                  "made after its purge day: nothing is deleted for this quarter (the next "
-                                                  "quarter's purge covers its rows)"),
+              "permit": permit, "no_permit_why": no_permit_why, "purge_on": bool(R.get("purge_on")),
               "rows_purge_deletes": sum(R["purge_all"].values()),
               "files": {k: {"name": os.path.basename(p), "bytes": os.path.getsize(p),
                             "sha256": hashlib.sha256(open(p, "rb").read()).hexdigest()} for k, p in files.items()}}
@@ -1091,11 +1228,7 @@ def build(db, base, quarter, made, today=None, now=None, exclude=(), F=None):
         _write_json(os.path.join(tmp, "summary.json"), summ)
         _write_json(os.path.join(tmp, "status.json"), st)
         if permit:
-            _write_json(os.path.join(tmp, "purge_permit.json"), {
-                "quarter": quarter, "valid": True, "status": "VALID", "generated_at": gen,
-                **{k: v.isoformat() for k, v in pd.items()}, "keep_days": KEEP_DAYS,
-                "note": "Written by Looking Glass for the database pipeline's quarterly purge (quarterly_purge.py), which "
-                        "checks every date again itself."})
+            _write_json(os.path.join(tmp, "purge_permit.json"), permit_doc(st))
         old = None
         if os.path.isdir(final):
             keep = os.path.join(final, "purge_result.json")
@@ -1139,8 +1272,11 @@ def bell(base, now=None):
         purge_day = date.fromisoformat(st.get("purge_day", ""))
     except ValueError:
         purge_day = today
+    on = purge_on(base)
     if st.get("valid") and today <= purge_day:
-        if st.get("permit"):
+        if not on:                                   # what is true now, whatever the report said when it was made
+            text = "download it from your page. The quarterly purge is off on this installation, so no report rows are deleted."
+        elif st.get("permit") and os.path.isfile(os.path.join(quarter_dir(base, q), "purge_permit.json")):
             text = (f"download it before the end of {_long(st.get('working_day_15'))}; the raw report rows older than "
                     f"{_long(st.get('cutoff'))} are deleted on {_long(st.get('purge_day'))}.")
         else:
@@ -1153,6 +1289,11 @@ def bell(base, now=None):
                     "text": (f"{st.get('why', '')}. No purge permit was written, so nothing is deleted. Settings → Quarterly "
                              "shows each check; make it again once the cause is fixed."), "at": at,
                     "link": "/settings#quarterly", "perms": ("settings",)})
+    vq = next(((qn, s) for qn, s in kept if s.get("valid")), None)
+    if not on and vq:                                # off, and a VALID report exists: once per quarter, administrators
+        out.append({"key": f"quarterly-purge-off:{vq[0]}", "problem": False, "title": "The quarterly purge is off",
+                    "text": "turn it on in Settings → Quarterly, or leave it off to keep every report row.",
+                    "at": float(vq[1].get("generated_ts") or now), "link": "/settings#quarterly", "perms": ("settings",)})
     for qq, s2 in kept[:2]:                            # the purge's result, for 7 days
         res = read_json(os.path.join(base, "data", "quarterly", qq, "purge_result.json"))
         if res and res.get("outcome") == "done":
@@ -1257,6 +1398,9 @@ def install(app, ctx):
                 make_now(quarter, "made automatically after the quarter ended", SYSTEM_USER)
             except Refused:
                 pass
+        if not purge_on(base) and not busy["quarter"] and any(
+                os.path.lexists(os.path.join(quarter_dir(base, qn), "purge_permit.json")) for qn, _ in quarters(base)):
+            sync_permits(base, False, today)          # off: no permit waits (one left from before r88 included)
         take_results()
 
     def loop():
@@ -1278,6 +1422,7 @@ def install(app, ctx):
 
     def listing(audience, admin=False):
         out = []
+        on = purge_on(base)
         for q, st in quarters(base):
             files = []
             for kind, (_n, label, who) in FILES.items():
@@ -1288,7 +1433,7 @@ def install(app, ctx):
             row = {"quarter": q, "status": st.get("status"), "valid": st.get("valid"), "why": st.get("why", ""),
                    "generated_at": st.get("generated_at"), "made": st.get("made", ""), "last_day": st.get("last_day"),
                    "download_before": st.get("working_day_15"), "purge_day": st.get("purge_day"), "cutoff": st.get("cutoff"),
-                   "permit": bool(st.get("permit")), "files": files}
+                   "permit": bool(st.get("permit")) and on, "purge_on": on, "files": files}
             if admin:
                 row.update(guards=st.get("guards") or [], no_permit_why=st.get("no_permit_why", ""),
                            failed_collections=st.get("failed_collections") or [], rows_purge_deletes=st.get("rows_purge_deletes"),
@@ -1371,7 +1516,72 @@ def install(app, ctx):
                        pipeline={"found": bool(ps), "purged_before": ps.get("purged_before", ""),
                                  "last": {k: (ps.get("last") or {}).get(k) for k in ("quarter", "at", "outcome", "why",
                                                                                       "purge_day", "cutoff", "rows_deleted")}},
-                       rules={"working_days": WORKING_DAYS, "keep_days": KEEP_DAYS})
+                       rules={"working_days": WORKING_DAYS, "keep_days": KEEP_DAYS}, purge=purge_view(today))
+
+    def purge_view(today=None):
+        """The switch as Settings → Quarterly shows it: on or off, since when, by whom, and what the purge would delete."""
+        c = confirmation(base)
+        return {"enabled": c["enabled"], "since": c.get("at", "") if c["enabled"] else "",
+                "by": c.get("by", "") if c["enabled"] else "", "by_name": c.get("by_name", "") if c["enabled"] else "",
+                "changed_at": c.get("at", ""), "changed_by_name": c.get("by_name", ""),
+                "preview": purge_preview(base, today or datetime.now(timezone.utc).date())}
+
+    @app.route("/api/admin/quarterly/purge", methods=["POST"])
+    def api_quarterly_purge():
+        """Turn the quarterly purge on or off (r88, the user 2026-11-21): the Settings permission, the page's CSRF token,
+        a session younger than 12 hours and the administrator's own password again (password_policy.check_own_password:
+        a wrong one counts as a failed sign-in). Turning it on needs the figures the page showed (they must still be the
+        same). Every change is in the audit log: who, when, what it would delete then."""
+        if not hp(PERM["admin"]):
+            return jsonify(error=REFUSE["admin"]), 403
+        if request.mimetype != "application/json" or not ctx["csrf_ok"]():
+            return jsonify(error="Refused (the request did not come from this page)."), 403
+        if not ctx.get("fresh", lambda: False)():
+            return jsonify(error="Sign in again to make changes (your session is older than 12 hours).", reauth=True), 403
+        if not all(k in ctx for k in ("users", "throttle", "client")):
+            return jsonify(error="This needs a signed-in administrator's own password."), 403
+        body = request.get_json(silent=True) or {}
+        enabled = body.get("enabled")
+        if not isinstance(enabled, bool):
+            return jsonify(error="Say whether to turn the quarterly purge on or off."), 400
+        if enabled == purge_on(base):
+            return jsonify(error=f"The quarterly purge is already {'on' if enabled else 'off'}.", purge=purge_view()), 409
+        today = datetime.now(timezone.utc).date()
+        pv = purge_preview(base, today)
+        shown = body.get("shown") if isinstance(body.get("shown"), dict) else {}
+        if enabled and (str(shown.get("quarter") or "") != pv["quarter"] or shown.get("rows") != pv["rows"]
+                        or str(shown.get("purge_day") or "") != (pv["purge_day"] or pv["next"]["purge_day"])):
+            return jsonify(error="What the purge would delete has changed since this page was opened: read it again, then confirm.",
+                           purge=purge_view(today)), 409
+        import password_policy                       # the one password re-check (also Settings → Workers and Password policy)
+        bad = password_policy.check_own_password(ctx, "quarterly_purge_password_failed",
+                                                 f"Settings → Quarterly: wrong password (turning the purge {'on' if enabled else 'off'})")
+        if bad:
+            return bad
+        u = me()
+        full = (ctx.get("people_name") or (lambda x: ""))(u) or u
+        os.makedirs(top, mode=0o700, exist_ok=True)
+        with open(os.path.join(top, ".lock"), "w") as lf:      # never while a report is being made (it writes permits too)
+            try:
+                fcntl.flock(lf, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                return jsonify(error="A quarterly report is being made: try again once it is ready."), 409
+            if busy["quarter"]:
+                return jsonify(error=f"{busy['quarter']} is being made: try again once it is ready."), 409
+            seen = {"quarter": pv["quarter"], "rows": pv["rows"], "purge_day": pv["purge_day"] or pv["next"]["purge_day"],
+                    "cutoff": pv["cutoff"] or pv["next"]["cutoff"], "keep_days": KEEP_DAYS}
+            _rec, changes = set_purge(base, enabled, u, full, seen)
+        if pv["quarter"]:
+            what = (f"{pv['rows']:,}" if isinstance(pv["rows"], int) else "an unknown number of") + \
+                   f" raw report rows dated before {pv['cutoff']} (the {pv['quarter']} report's count; purge day {pv['purge_day']}" + \
+                   (", passed" if pv["passed"] else "") + ")"
+        else:
+            what = (f"no VALID quarterly report yet, so no count; the next purge day by the rule is {pv['next']['purge_day']} "
+                    f"(rows dated before {pv['next']['cutoff']})")
+        perm = "; ".join(f"{q}: {w}" for q, w in changes) or "no purge permit written or removed"
+        audit.add("quarterly_purge_on" if enabled else "quarterly_purge_off", user=u, target=pv["quarter"],
+                  detail=(f"turned {'on' if enabled else 'off'} by {full} · it would delete then: {what} · {perm}")[:900])
+        return jsonify(ok=True, purge=purge_view(today))
 
     @app.route("/api/admin/quarterly/<quarter>/<kind>")
     def api_quarterly_admin_file(quarter, kind):

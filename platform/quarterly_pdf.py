@@ -287,13 +287,25 @@ def write_management(path, R, X, W, A, status, made):
     sec = "Data quality and retention"
     y = d.new_page(sec)
     pd = R["purge"]
-    rows = [["Quarter ends", long_day(pd["last_day"])],
-            ["Download these reports before the end of (the 15th working day after, Mon-Fri)", long_day(pd["working_day_15"])],
-            ["Purge day (the next working day)", long_day(pd["purge_day"])],
-            ["Cutoff: report rows dated before it are deleted (the last 31 days are kept)", long_day(pd["cutoff"])],
-            ["Raw report rows the purge deletes (all quarters, counted now)", fmt(sum(R["purge_all"].values()))],
-            ["Kept after the purge", "these reports, their statistics, findings, cases and advisories"],
-            ["Collections that could not be read", ", ".join(sorted(R["failed"])) or "none"]]
+    if R.get("purge_on"):
+        rows = [["The quarterly purge", "On when this report was made (turned on in Settings → Quarterly): it runs on the purge "
+                 "day unless an administrator turns it off before then"],
+                ["Quarter ends", long_day(pd["last_day"])],
+                ["Download these reports before the end of (the 15th working day after, Mon-Fri)", long_day(pd["working_day_15"])],
+                ["Purge day (the next working day)", long_day(pd["purge_day"])],
+                ["Cutoff: report rows dated before it are deleted (the last 31 days are kept)", long_day(pd["cutoff"])],
+                ["Raw report rows the purge deletes (all quarters, counted now)", fmt(sum(R["purge_all"].values()))],
+                ["Kept after the purge", "these reports, their statistics, findings, cases and advisories"],
+                ["Collections that could not be read", ", ".join(sorted(R["failed"])) or "none"]]
+    else:
+        rows = [["The quarterly purge", "Off on this installation when this report was made: nothing will be deleted. An "
+                 "administrator can turn it on in Settings → Quarterly; until then every report row is kept"],
+                ["Quarter ends", long_day(pd["last_day"])],
+                ["If the purge is turned on before then: the purge day (16th working day after, Mon-Fri)", long_day(pd["purge_day"])],
+                ["If it is turned on: report rows dated before this day would be deleted (the last 31 days are kept)", long_day(pd["cutoff"])],
+                ["Raw report rows the purge would delete if turned on (all quarters, counted now)", fmt(sum(R["purge_all"].values()))],
+                ["Never deleted", "these reports, their statistics, findings, cases and advisories"],
+                ["Collections that could not be read", ", ".join(sorted(R["failed"])) or "none"]]
     y = d.table(y, sec, "Retention", None, [("Figure", 420, "start"), ("Value", 0, "start")], rows)
     _accuracy(d, y, sec, R)
     pdf = d.done()
@@ -354,9 +366,14 @@ def write_advisor(path, R, X, W, A, status, made):
     sec = "Accuracy checks"
     y = d.new_page(sec)
     pd = R["purge"]
-    y = d.table(y, sec, "Keep your copy", None, [("Figure", 420, "start"), ("Value", 0, "start")],
-                [["Download these reports before the end of (the 15th working day after the quarter, Mon-Fri)", long_day(pd["working_day_15"])],
-                 ["The raw report rows dated before this day are deleted on the purge day", f"{long_day(pd['cutoff'])} (purge on {long_day(pd['purge_day'])})"]])
+    keep = ([["Download these reports before the end of (the 15th working day after the quarter, Mon-Fri)", long_day(pd["working_day_15"])],
+             ["The raw report rows dated before this day are deleted on the purge day", f"{long_day(pd['cutoff'])} (purge on {long_day(pd['purge_day'])})"],
+             ["The quarterly purge", "On when this report was made: it runs on the purge day unless an administrator turns it off before then"]]
+            if R.get("purge_on") else
+            [["The quarterly purge", "Off on this installation when this report was made: no report rows will be deleted"],
+             ["If an administrator turns it on before the purge day", f"the raw report rows dated before {long_day(pd['cutoff'])} would be "
+              f"deleted on {long_day(pd['purge_day'])}: download your copy before the end of {long_day(pd['working_day_15'])}"]])
+    y = d.table(y, sec, "Keep your copy", None, [("Figure", 420, "start"), ("Value", 0, "start")], keep)
     _accuracy(d, y, sec, R)
     pdf = d.done()
     with open(path, "wb") as f:

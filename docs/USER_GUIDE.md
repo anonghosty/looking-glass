@@ -1080,10 +1080,11 @@ address. Every report says **VALID** (every accuracy check passed) or **NOT VALI
 
 Researchers, analysts and external accounts do not get the quarterly reports. Every list keeps the past quarters too.
 
-**Download your copy in time.** The bell says until when: the 15th working day (Monday to Friday) after the quarter.
-On the next working day the database pipeline deletes the raw report rows older than 31 days, so the platforms can no
-longer show those days. The quarterly reports stay on these pages, and findings, cases and advisories are never
-deleted. Each download is recorded under your name; a CSV carries who downloaded it and when on its second line.
+**Download your copy in time.** The quarterly purge is off until an administrator turns it on in Settings →
+Quarterly; while it is off, no report rows are deleted and the bell and the reports say so. Once it is on, the bell
+says until when: the 15th working day (Monday to Friday) after the quarter. On the next working day the database
+pipeline deletes the raw report rows older than 31 days, so the platforms can no longer show those days. The quarterly
+reports stay on these pages, and findings, cases and advisories are never deleted. Each download is recorded under your name; a CSV carries who downloaded it and when on its second line.
 
 Decisions are counted one per organisation of a case, so a quarter can have more decisions than findings: a case that
 goes to three organisations is decided three times.
@@ -1237,7 +1238,24 @@ settings stay in its own `.env`.
 
 ### Quarterly (reports and the purge)
 
-Every kept quarter with all its files, **VALID** or **NOT VALID**, its accuracy checks (open them to see each one), the
+**The quarterly purge** is at the top, and it is **off** on every installation until an administrator turns it on. Off,
+it says: "The quarterly purge is off on this installation: no report rows are deleted.", then what it would do once on:
+the purge day, the cutoff, and how many rows it would delete (counted when the newest VALID quarterly report was made;
+before the first VALID report it says there is no count yet, and gives the next purge day by the rule).
+
+- **Turn on the quarterly purge** opens a window that shows exactly what will be deleted and when: the raw report rows
+  dated before the cutoff, from the report collections only, on the purge day; the last 31 days are always kept;
+  findings, cases, advisories and the quarterly reports are never deleted. Confirm with the password you sign in with
+  (a wrong one counts like a failed sign-in). Once on, it stays on for every quarter after, and the card says
+  "On since <day>, confirmed by <full name>." with the next purge's day and rows.
+- **Turn off the quarterly purge** works the same way and is always there while it is on. Nothing is deleted while it
+  is off: a purge that has not run yet does not run.
+- Both need the Settings permission and your password, and each change is in the audit log (who, when, and the rows it
+  would delete then). While it is off and a VALID report exists, administrators get one bell alert per quarter: "The
+  quarterly purge is off: turn it on in Settings → Quarterly, or leave it off to keep every report row."
+- Turned on after a quarter's purge day, nothing is deleted for that quarter; the next quarter's purge covers its rows.
+
+Below it: every kept quarter with all its files, **VALID** or **NOT VALID**, its accuracy checks (open them to see each one), the
 dates (download before, purge day, cutoff), whether the purge permit was written, and the purge's result once the
 pipeline has run it. **Make it again** counts an ended quarter again (for example once its last day's reports are
 loaded, or after a NOT VALID run); click it twice to confirm. The timing of the purge cannot be changed here or

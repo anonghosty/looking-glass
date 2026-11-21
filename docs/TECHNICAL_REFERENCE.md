@@ -879,7 +879,18 @@ CSV and at the top of every PDF page.
 
 **Kept** in `data/quarterly/<YYYYQn>/` (owner-only; built in a temporary folder and put in place in one step): the
 two PDFs (`executive_pdf.Doc`'s look; every text whole, rows grow, tables carry on over pages), five CSVs (`csvsafe`),
-`status.json`, `summary.json`, `purge_permit.json` (VALID and made before the purge day only) and `purge_result.json`.
+`status.json`, `summary.json`, `purge_permit.json` (VALID, made before the purge day, and the purge turned on only) and
+`purge_result.json`. `status.json` also records `purge_on` (the switch when it was made) and `no_permit_why`.
+
+**The purge's switch** (`data/quarterly/purge_confirmed.json`, mode 600, written only by `quarterly.set_purge` through
+the route below): `{enabled, by, by_name, at, at_ts, shown}`, where `shown` is what the page showed (quarter, rows,
+purge day, cutoff). Missing, unreadable or anything but `"enabled": true` is off, and off is the default on every
+installation. One rule decides a permit, `quarterly.permit_rule`: VALID, made on or before the purge day, the purge on,
+the purge day not passed. Turning it on writes the permit for the newest kept quarter when that rule allows it;
+turning it off removes every waiting permit; each kept quarter's `status.json` is updated with why it has none
+(`WHY_OFF`, `WHY_ON_LATE`, ...). The switch is written first, so the pipeline refuses at once when it is turned off. It
+never runs while a report is being made (the same `data/quarterly/.lock`). The PDFs' retention page, the advisor PDF's
+"Keep your copy" and the admin CSV's head say whether the purge was on or off when they were made.
 
 **Routes.** Each checks its permission; downloads are attachments, so `insider.py` seals them; CSVs get a second line
 "Downloaded, <full name> (<account>), <time UTC>"; each is in the audit log (`quarterly_download`).
@@ -890,14 +901,23 @@ two PDFs (`executive_pdf.Doc`'s look; every text whole, rows grow, tables carry 
 | `GET /api/advisory/quarterly`, `GET /api/advisory/quarterly/<Q>/<kind>` | `advisory` | the advisor PDF and three CSVs |
 | `GET /api/admin/quarterly`, `GET /api/admin/quarterly/<Q>/<kind>` | `settings` | every file, the checks, the purge's status, the quarters that can be made again |
 | `POST /api/admin/quarterly/make` `{quarter}` | `settings`, CSRF | make an ended quarter again (audit `quarterly_made`) |
+| `POST /api/admin/quarterly/purge` `{enabled, password, shown}` | `settings`, CSRF, a session under 12 hours, the administrator's own password (`password_policy.check_own_password`, the same re-check as Settings → Workers and Password policy: a wrong one counts as a failed sign-in, audit `quarterly_purge_password_failed`) | turn the quarterly purge on or off (audit `quarterly_purge_on` / `quarterly_purge_off`: who, the rows it would delete then, the permits written or removed). Turning it on refuses (409) when `shown` is no longer what the purge would delete; the same state twice is refused (409) |
+
+`GET /api/admin/quarterly` also returns `purge`: `{enabled, since, by, by_name, preview}`; `preview` is the newest VALID
+report's quarter, dry count (`rows_purge_deletes`), purge day, cutoff, whether that day has passed and whether its
+permit is waiting, and `next`, the rule's next purge day.
 
 **The bell** (`system_alerts.Alerts._quarterly` → `quarterly.bell`): an alert may name the permissions that see it
 (`perms`) and where it leads for each (`links`); without them it is for administrators, as before. Ready: management,
-advisors and administrators, until the purge day. NOT VALID, the purge done (7 days), and a purge the pipeline refused
-although the permit was written: administrators.
+advisors and administrators, until the purge day; with the purge off it says no report rows are deleted. While the
+purge is off and a VALID report exists: "The quarterly purge is off" for administrators, once per quarter (its key names
+the newest VALID quarter). NOT VALID, the purge done (7 days), and a purge the pipeline refused although the permit was
+written: administrators.
 
-**The purge** is the pipeline's (`quarterly_purge.py` beside `shadowserver_pipeline.py`, run after loading): it reads
-the permit read-only (never through a symbolic link), works out the dates itself, deletes `filename` < cutoff (a report
+**The purge** is the pipeline's (`quarterly_purge.py` beside `shadowserver_pipeline.py`, run after loading): it refuses
+unless the platform's `data/quarterly/purge_confirmed.json` says `"enabled": true` (read like the permit: read-only,
+never through a symbolic link, a plain file of 64 KB at most, untrusted; "the purge is not turned on in Settings →
+Quarterly", logged once per quarter), reads the permit read-only (never through a symbolic link), works out the dates itself, deletes `filename` < cutoff (a report
 day prefix) from the report collections only (`report_names.valid`, not `files_*` / `discovered_fields_*` / `lg_*`, with
 the filename index), one at a time, records each collection's count in `<DATA_DIR>/quarterly_purge_status.json`, and
 afterwards leaves out files dated before the cutoff when loading. The platform copies a done purge into the quarter's

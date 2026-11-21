@@ -390,6 +390,26 @@ try:
 
     print("\nWhat is kept in data/quarterly/ (status, summary, the purge permit)")
     now = ts("2027-01-03 00:20:00")
+    # the purge is OFF until an administrator turns it on (r88): a VALID report then writes no permit, and says so
+    ok("a new installation: the quarterly purge is off", not qq.purge_on(base))
+    st0 = qq.build(db, base, "2026Q4", "made automatically after the quarter ended", today=date(2027, 1, 3), now=now)
+    qd = qq.quarter_dir(base, "2026Q4")
+    ok("purge off: a VALID report writes no permit, and status.json says why",
+       st0["valid"] and not st0["permit"] and st0["no_permit_why"] == qq.WHY_OFF and st0["purge_on"] is False
+       and not os.path.exists(os.path.join(qd, "purge_permit.json")), str(st0.get("no_permit_why")))
+    adm0 = open(os.path.join(qd, qq.file_name("admin", "2026Q4")), encoding="utf-8").read()
+    ok("...the admin CSV says the purge is off and nothing will be deleted",
+       "Quarterly purge,off," in adm0 and "nothing will be deleted" in adm0 and "Rows the purge would delete if turned on" in adm0)
+    if have_pdf:
+        ret = " ".join((p.extract_text() or "") for p in pypdf.PdfReader(os.path.join(qd, qq.file_name("pdf_management", "2026Q4"))).pages)
+        adv = " ".join((p.extract_text() or "") for p in pypdf.PdfReader(os.path.join(qd, qq.file_name("pdf_advisor", "2026Q4"))).pages)
+        ok("...and both PDFs: the retention page and Keep your copy say it is off, no rows will be deleted",
+           "Off on this installation" in " ".join(ret.split()) and "nothing will be deleted" in " ".join(ret.split())
+           and "no report rows will be deleted" in " ".join(adv.split()))
+    rec, changed = qq.set_purge(base, True, "ada.admin", "Ada Admin", {"quarter": "2026Q4"}, now=now + 60)
+    ok("turned on (Settings → Quarterly): the permit is written for the quarter whose purge day has not passed",
+       qq.purge_on(base) and changed == [("2026Q4", "purge permit written")] and os.path.exists(os.path.join(qd, "purge_permit.json"))
+       and oct(os.stat(qq.confirm_path(base)).st_mode & 0o777) == "0o600", str(changed))
     st = qq.build(db, base, "2026Q4", "made automatically after the quarter ended", today=date(2027, 1, 3), now=now)
     qd = qq.quarter_dir(base, "2026Q4")
     ok("made on the next quarter's 3rd day: VALID, every file kept", st["valid"] and sorted(os.listdir(qd)) == sorted(
@@ -417,6 +437,9 @@ try:
        not st7["valid"] and not st7["permit"] and not os.path.exists(os.path.join(qd, "purge_permit.json")))
     st = qq.build(db, base, "2026Q4", "made again on request", today=date(2027, 1, 6), now=ts("2027-01-06 10:00:00"))
     ok("made again, VALID, before its purge day: the permit is back", st["valid"] and os.path.exists(os.path.join(qd, "purge_permit.json")))
+    if have_pdf:
+        ret = " ".join(" ".join((p.extract_text() or "") for p in pypdf.PdfReader(os.path.join(qd, qq.file_name("pdf_management", "2026Q4"))).pages).split())
+        ok("purge on: the retention page says it runs on the purge day unless turned off", "On when this report was made" in ret)
     # the next quarter compares against the kept summary, not the reports (their rows may be purged by then)
     for c in rows:
         db[c].delete_many({"filename": {"$lt": "2026-12-22"}})

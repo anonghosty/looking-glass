@@ -148,10 +148,15 @@ def install(app, core):
     # Executive portal (management), the advisory portal (advisors) and Settings → Quarterly (admins)
     if core.get("db") is not None and all(k in A for k in ("has_perm", "csrf_ok", "audit")):
         import quarterly
+        from flask import request as _rq
         out["quarterly"] = quarterly.install(app, {
             "base_dir": os.path.dirname(os.path.abspath(__file__)), "db": core["db"], "has_perm": A["has_perm"],
             "csrf_ok": A["csrf_ok"], "audit": A["audit"], "findings": core.get("findings"), "logger": core.get("app_logger"),
-            "people_name": people_name if "users" in A else None, "serving": bool(core.get("serving"))})
+            "people_name": people_name if "users" in A else None, "serving": bool(core.get("serving")),
+            # turning the quarterly purge on or off (r88) asks for the administrator's own password again
+            **({"users": A["users"], "throttle": A["throttle"], "fresh": A["fresh"],
+                "client": lambda: (_rq.remote_addr or "", _rq.headers.get("User-Agent", ""))}
+               if all(k in A for k in ("users", "throttle", "fresh")) else {})})
 
     # library files refused at installation because they did not match the lock (deploy/safe_libraries.py, r86): into
     # the audit log once each, after a start (library_supply.py); the bell alert is system_alerts.py's

@@ -26,3 +26,15 @@
 .q-msg.bad { color: #ffb3ba; }
 .q-empty { margin: 0; padding: 18px; text-align: center; font-size: 13.5px; color: var(--muted); border-radius: 12px; border: 1px dashed var(--border); }
 .q-wrap-adv { padding-top: 0; }
+/* the purge's switch (r88): its state first, in plain words; OFF until an administrator turns it on */
+.q-purge.off { border-color: rgba(91, 141, 239, .45); }
+.q-purge.on { border-color: rgba(245, 158, 11, .5); }
+.q-tag.off { color: #b8cdfa; border-color: rgba(91, 141, 239, .6); background: rgba(91, 141, 239, .12); }
+.q-tag.on { color: #fcd38d; border-color: rgba(245, 158, 11, .6); background: rgba(245, 158, 11, .12); }
+.q-state { margin: 0; font-size: 14px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
+.st-modal.q-modal { background: #141418; }   /* solid: what it deletes must read cleanly over the page */
+.q-modal .q-list-plain { margin: 8px 0 12px; padding-left: 20px; display: grid; gap: 6px; font-size: 13.5px; line-height: 1.5; }
+.q-modal .q-list-plain li { overflow-wrap: anywhere; }
+.q-modal .wk-pw { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.q-pw-label { flex-basis: 100%; font-size: 13px; color: var(--muted); }
+.q-modal .q-msg { margin: 8px 0 0; }

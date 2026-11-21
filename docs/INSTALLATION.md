@@ -543,6 +543,13 @@ security_testing/security_retest.py && tests/run_all_checks.sh
 `tests/check_libraries.py`, and leaves an environment alone when its lock did not change. If it stops, nothing was
 changed: see [When a library file does not match](#when-a-library-file-does-not-match).
 
+> **The quarterly purge is off until an administrator turns it on (from the release after 2026-11-21 (3)).** After
+> updating, no report rows are deleted by the quarterly purge until an administrator turns it on in Settings →
+> Quarterly (it shows what it would delete and when, and asks for their own password). An installation that wants the
+> purge should turn it on before Friday 22 January 2027, the purge day for October to December 2026. Nothing else to
+> do: update the database pipeline with the platform as usual, since it checks the same switch
+> ([OPERATIONS.md](OPERATIONS.md#the-quarterly-report-and-the-purge)).
+
 > **Libraries only from the lock files (from the release after 2026-11-20 (9)).** `pip install -r requirements.txt` is
 > no longer used: every installation and update installs the exact versions in `requirements.lock`, each file checked
 > against its sha256 value (see [The libraries](#the-libraries-only-files-that-match-the-lock)). After `git pull`, run

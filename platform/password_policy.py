@@ -82,9 +82,30 @@ class Policy:
         return False, ""
 
 
+def check_own_password(ctx, failed_event, failed_detail, need="This needs a signed-in administrator's own password."):
+    """The one password re-check (Settings → Password policy, → Workers, → Quarterly): None when the signed-in person typed
+    their own password again (the JSON body's "password"); else an error response. A wrong password counts as a failed
+    sign-in (the sign-in throttle, so guessing is locked out like at sign-in) and goes in the audit log as failed_event.
+    ctx: users, throttle, client (-> (ip, ua)), audit."""
+    name = (getattr(g, "user", None) or {}).get("user", "")
+    ip, _ = ctx["client"]()
+    u = ctx["users"].get(name) if name else None
+    if not u or (getattr(g, "user", None) or {}).get("automation"):
+        return jsonify(error=need), 403
+    throttle = ctx["throttle"]
+    if throttle.locked(ip, name):
+        return jsonify(error=f"Too many wrong passwords. Try again in {throttle.wait_minutes(ip, name)} minutes."), 429
+    pw = str((request.get_json(silent=True) or {}).get("password") or "")
+    if not (u.get("hash") and check_password_hash(u["hash"], pw)):
+        throttle.failed(ip, name)
+        ctx["audit"].add(failed_event, user=name, detail=failed_detail)
+        return jsonify(error="That password is not right."), 403
+    return None
+
+
 def install(app, ctx):
     """ctx: policy (Policy), has_perm, csrf_ok, fresh, audit, users, throttle, client (-> (ip, ua))."""
-    policy, hp, audit, users, throttle = ctx["policy"], ctx["has_perm"], ctx["audit"], ctx["users"], ctx["throttle"]
+    policy, hp, audit, users = ctx["policy"], ctx["has_perm"], ctx["audit"], ctx["users"]
 
     def guard(change=False):
         if not hp("settings"):
@@ -98,19 +119,7 @@ def install(app, ctx):
 
     def own_password():
         """None when the signed-in administrator typed their own password; else an error response."""
-        name = (getattr(g, "user", None) or {}).get("user", "")
-        ip, _ = ctx["client"]()
-        u = users.get(name) if name else None
-        if not u or (getattr(g, "user", None) or {}).get("automation"):
-            return jsonify(error="This needs a signed-in administrator's own password."), 403
-        if throttle.locked(ip, name):
-            return jsonify(error=f"Too many wrong passwords. Try again in {throttle.wait_minutes(ip, name)} minutes."), 429
-        pw = str((request.get_json(silent=True) or {}).get("password") or "")
-        if not (u.get("hash") and check_password_hash(u["hash"], pw)):
-            throttle.failed(ip, name)
-            audit.add("password_policy_refused", user=name, detail="wrong password")
-            return jsonify(error="That password is not right."), 403
-        return None
+        return check_own_password(ctx, "password_policy_refused", "wrong password")
 
     def view():
         p = policy.get()

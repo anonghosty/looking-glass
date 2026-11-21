@@ -115,10 +115,14 @@ go straight to `sorting_backup/<service>/`, replacing an older copy. Everything 
 If the e-mail step fails (mail server down, network), the pipeline logs the error and still sorts and loads what is already on disk.
 
 **Step 4, the quarterly purge (once a quarter).** After loading, every run checks whether a quarterly purge is due
-(`quarterly_purge.py`). Looking Glass makes its quarterly reports once a quarter has ended and, when every accuracy check
-passed (VALID), writes a purge permit into its own data folder (`data/quarterly/<YYYYQn>/purge_permit.json`). The
-pipeline reads it read-only (never through a symbolic link) and checks everything again itself:
+(`quarterly_purge.py`). The purge is **off** until an administrator turns it on in Looking Glass (Settings → Quarterly,
+with their own password), which keeps `data/quarterly/purge_confirmed.json`. Looking Glass makes its quarterly reports
+once a quarter has ended and, when every accuracy check passed (VALID) and the purge is on, writes a purge permit into
+its own data folder (`data/quarterly/<YYYYQn>/purge_permit.json`). The pipeline reads both read-only (never through a
+symbolic link) and checks everything again itself:
 
+- **Turned on:** unless `purge_confirmed.json` says `"enabled": true`, nothing is deleted: "refused: the purge is not
+  turned on in Settings → Quarterly" (logged once per quarter). Missing, unreadable or malformed counts as off.
 - **When:** 15 working days (Monday to Friday; public holidays are not counted) after the quarter's last day, the purge
   runs on the next working day, the *purge day*. Not before it, and only once per quarter.
 - **What:** the report rows whose file name starts with a day before the *cutoff*, the purge day minus 31 days: the last

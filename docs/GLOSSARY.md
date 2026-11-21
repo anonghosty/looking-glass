@@ -141,7 +141,7 @@ In the Audit portal (auditors and administrators): text or a file found outside 
 Made on the next quarter's 3rd day, once the quarter's last reports have arrived: the quarter's records and unique addresses per month, report, network, region and sector, infections, actively exploited CVEs, findings, cases, decisions and advisories. Counts only, never an address. Management gets the management report, advisors the advisor report, administrators everything. It says VALID when every accuracy check passed, NOT VALID otherwise.
 
 **Quarterly purge**  
-On the working day after the 15th working day (Monday to Friday) after a quarter, the database pipeline deletes the raw report rows older than 31 days. Only when that quarter's report is VALID, once per quarter, and never findings, cases, advisories or the quarterly reports. Download your copy of the quarterly report before it.
+Off on every installation until an administrator turns it on in Settings → Quarterly, after reading what it deletes, with their own password; it can be turned off there the same way. Once it is on: on the working day after the 15th working day (Monday to Friday) after a quarter, the database pipeline deletes the raw report rows older than 31 days. Only when that quarter's report is VALID, once per quarter, and never findings, cases, advisories or the quarterly reports. Download your copy of the quarterly report before it.
 
 **Researcher's rating**  
 A level a researcher gave, on the severity map, to a name no Shadowserver record rates. The PDFs' References section uses it and flags it "Researcher's rating". When Shadowserver later rates the name, Shadowserver's level is used instead.

@@ -83,6 +83,11 @@ LABEL["leak_traced"], TAB_OF["leak_traced"] = "Leak traced", "copies"
 LABEL["quarterly_download"], TAB_OF["quarterly_download"] = "Quarterly report downloaded", "data"
 LABEL["quarterly_made"], TAB_OF["quarterly_made"] = "Quarterly report made", "system"
 LABEL["quarterly_purge"], TAB_OF["quarterly_purge"] = "Quarterly purge", "system"
+# the purge's switch in Settings → Quarterly (r88): off until an administrator turns it on with their password
+LABEL["quarterly_purge_on"], TAB_OF["quarterly_purge_on"] = "Quarterly purge turned on", "config"
+LABEL["quarterly_purge_off"], TAB_OF["quarterly_purge_off"] = "Quarterly purge turned off", "config"
+LABEL["quarterly_purge_password_failed"] = "Quarterly purge switch: wrong password"
+TAB_OF["quarterly_purge_password_failed"] = "config"
 # a library file refused at installation: it did not match its lock (library_supply.py, r86)
 LABEL["library_suspected"], TAB_OF["library_suspected"] = "Library file refused (did not match the lock)", "system"
 LABEL["audit_sealed"] = "Entries before the chain sealed"

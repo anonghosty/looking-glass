@@ -6,6 +6,8 @@ database that is dropped afterwards (the real database is never touched). Only d
     beside this pipeline);
   * it deletes exactly the rows dated before the cutoff, from report collections only (never files_*,
     discovered_fields_*, lg_* or a collection without the filename index);
+  * it refuses unless the platform's purge_confirmed.json says the purge is turned on (missing, "enabled": false,
+    malformed, a symbolic link), logging that once per quarter;
   * it refuses without a permit, with a NOT VALID permit, before the purge day, with a cutoff inside 31 days, with
     dates that are not the rule's, and when run a second time;
   * it writes its result (per collection), and files before the cutoff are not loaded again.
@@ -92,6 +94,77 @@ ok("a file dated before the cutoff counts as purged (not loaded again); one on t
    qp.is_purged("2026-12-21-scan_http-ke.csv", "2026-12-22") and not qp.is_purged("2026-12-22-scan_http-ke.csv", "2026-12-22")
    and not qp.is_purged("scan_http.csv", "2026-12-22") and not qp.is_purged("2026-01-01-x.csv", ""))
 
+print("\nThe purge's switch (Settings → Quarterly): off unless the platform's purge_confirmed.json says enabled (no database)")
+ok("enabled: true is on; false, a string, a list, nothing: off",
+   qp.check_confirmation({"enabled": True}) == "" and all(qp.check_confirmation(x) == qp.NOT_ON for x in
+                                                         ({"enabled": False}, {"enabled": "true"}, {"enabled": 1}, [], None, {})))
+sw = tempfile.mkdtemp(prefix="lg-purge-switch-")
+sw_data = os.path.join(sw, "platform", "data")
+sw_base = os.path.join(sw, "pipeline")
+os.makedirs(os.path.join(sw_data, "quarterly", "2026Q4")); os.makedirs(sw_base)
+with open(os.path.join(sw_data, "quarterly", "2026Q4", "purge_permit.json"), "w", encoding="utf-8") as fh:
+    json.dump(good, fh)
+
+
+class Count(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.lines = []
+
+    def emit(self, record):
+        self.lines.append(record.getMessage())
+
+
+slog = logging.getLogger("t-switch")
+slog.setLevel(logging.INFO)
+slog.propagate = False
+counted = Count()
+slog.addHandler(counted)
+
+
+def confirm(text):
+    p = os.path.join(sw_data, "quarterly", qp.CONFIRM_FILE)
+    if text is None:
+        if os.path.lexists(p):
+            os.remove(p)
+        return
+    with open(p, "w", encoding="utf-8") as fh:
+        fh.write(text)
+
+
+try:
+    # db=None: a refusal never reaches the database (a purge that got that far would fail on None)
+    for label, text in (("without purge_confirmed.json", None), ("with \"enabled\": false", '{"enabled": false}'),
+                        ("with a malformed file", '{"enabled": tru'), ("with \"enabled\": \"true\" (a string)", '{"enabled": "true"}'),
+                        ("with a list instead of an object", '[{"enabled": true}]')):
+        confirm(text)
+        r = qp.run(None, sw_data, sw_base, slog, today=D(2027, 1, 22))
+        ok(f"a VALID permit on its purge day, but {label}: refused, the purge is not turned on",
+           r.get("outcome") == "refused" and r.get("why") == qp.NOT_ON, str(r))
+    target = os.path.join(sw, "elsewhere.json")
+    with open(target, "w", encoding="utf-8") as fh:
+        fh.write('{"enabled": true}')
+    confirm(None)
+    os.symlink(target, os.path.join(sw_data, "quarterly", qp.CONFIRM_FILE))
+    r = qp.run(None, sw_data, sw_base, slog, today=D(2027, 1, 22))
+    ok("a confirmation reached through a symbolic link is not read: refused", r.get("outcome") == "refused" and r["why"] == qp.NOT_ON, str(r))
+    os.remove(os.path.join(sw_data, "quarterly", qp.CONFIRM_FILE))
+    os.remove(os.path.join(sw_base, qp.STATUS_FILE))          # a fresh pipeline: nothing recorded yet
+    counted.lines.clear()
+    for _ in range(3):
+        qp.run(None, sw_data, sw_base, slog, today=D(2027, 1, 22))
+    ok("the refusal is logged once per quarter, not at every run", len([x for x in counted.lines if qp.NOT_ON in x]) == 1, str(counted.lines))
+    ok("...and recorded in the pipeline's own status (the platform shows it)",
+       qp.read_status(sw_base).get("last", {}).get("why") == qp.NOT_ON)
+    confirm('{"enabled": true, "by": "ada.admin", "at": "2027-01-05T09:00:00+00:00"}')
+    ok("turned on: the confirmation is read", qp.check_confirmation(qp.read_confirmation(sw_data)) == "")
+    os.remove(os.path.join(sw_data, "quarterly", "2026Q4", "purge_permit.json"))
+    r = qp.run(None, sw_data, sw_base, slog, today=D(2027, 1, 22))
+    ok("turned on but no permit (turning it off removed it, or the report was NOT VALID): still refused",
+       r.get("outcome") == "refused" and "no purge permit" in r["why"], str(r))
+finally:
+    shutil.rmtree(sw, ignore_errors=True)
+
 # ------------------------------------------------------------------ the database part
 try:
     import test_report_names as trn
@@ -136,7 +209,26 @@ try:
     def unchanged():
         return all(db[n].count_documents({}) == k for n, k in totals.items())
 
+    def switch(text):
+        os.makedirs(os.path.join(plat_data, "quarterly"), exist_ok=True)
+        p = os.path.join(plat_data, "quarterly", qp.CONFIRM_FILE)
+        if text is None:
+            if os.path.lexists(p):
+                os.remove(p)
+            return
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write(text)
+
     print("\nRefusals: nothing is deleted")
+    permit()
+    for label, text in (("without purge_confirmed.json", None), ("with \"enabled\": false", '{"enabled": false}'),
+                        ("with a malformed purge_confirmed.json", "{not json")):
+        switch(text)
+        r = qp.run(db, plat_data, base, log, today=D(2027, 1, 22))
+        ok(f"a VALID permit, {label}: refused, nothing deleted", r.get("outcome") == "refused" and r["why"] == qp.NOT_ON
+           and unchanged(), str(r))
+    os.remove(os.path.join(plat_data, "quarterly", "2026Q4", "purge_permit.json"))
+    switch('{"enabled": true, "by": "ada.admin"}')
     r = qp.run(db, plat_data, base, log, today=D(2027, 1, 22))
     ok("without a permit: refused, nothing deleted", r.get("outcome") == "refused" and "no purge permit" in r["why"] and unchanged(), str(r))
     permit(valid=False, status="NOT VALID")

@@ -119,9 +119,11 @@ arise; the e-mail path stays as a fallback.
 
 ## Quarterly report and purge
 
-Nothing to set. The timing is fixed on purpose, so no one (an administrator, a stolen session, a changed `.env`) can
-make the raw rows go sooner: 15 working days (Monday to Friday) after a quarter ends, the purge runs on the next
-working day and deletes the raw report rows older than 31 days. Public holidays are not counted. The quarterly report
+Nothing to set in `.env`. The quarterly purge is off until an administrator turns it on in Settings → Quarterly (with
+their own password; kept in `data/quarterly/purge_confirmed.json`). The timing is fixed on purpose, so no one (an
+administrator, a stolen session, a changed `.env`) can make the raw rows go sooner: once the purge is on, 15 working
+days (Monday to Friday) after a quarter ends, it runs on the next working day and deletes the raw report rows older
+than 31 days. Public holidays are not counted. The quarterly report
 uses `EXCLUDE_COLLECTIONS` like the platforms, and finds the pipeline by `PIPELINE_DIR` like Settings → Workers.
 How it works and what to do when a report is NOT VALID: [OPERATIONS.md](OPERATIONS.md#the-quarterly-report-and-the-purge).
 
@@ -234,7 +236,7 @@ Created and kept by the service; private to its user and never committed:
 | `findings.json` | findings: notes tracked from the first look to the advisory, with their status history |
 | `seen_names.json` (+ `.done`) | where and when each name was last seen (30 days) |
 | `tls/` | HTTPS certificate and key (`deploy/make_tls_cert.sh`) |
-| `quarterly/<YYYYQn>/` | each quarter's reports (two PDFs, five CSVs), `status.json` (VALID or NOT VALID, every accuracy check, the dates), `summary.json` (the counts per network and report the next quarter compares against; no address; kept for ever), `purge_permit.json` (only while a VALID report allows the purge) and `purge_result.json` (what the purge deleted). Owner-only. Back it up with the rest of `data/`: after the purge, these reports are the quarter's record |
+| `quarterly/<YYYYQn>/` | each quarter's reports (two PDFs, five CSVs), `status.json` (VALID or NOT VALID, every accuracy check, the dates), `summary.json` (the counts per network and report the next quarter compares against; no address; kept for ever), `purge_permit.json` (only while a VALID report allows the purge and the purge is turned on) and `purge_result.json` (what the purge deleted); beside them `purge_confirmed.json`, the purge's switch (off until an administrator turns it on in Settings → Quarterly). Owner-only. Back it up with the rest of `data/`: after the purge, these reports are the quarter's record |
 | `quarterly/state.json` | the day the quarterly report was first installed (only quarters ending after it are made by themselves) |
 
 Shipped with the code (curated reference data, replaced by updates): `infections.json` (what each infection is and

@@ -9,6 +9,10 @@ app with the real routes, the insider package's seals and a made-up kept quarter
   * nothing served holds an address;
   * the bell: "ready" for management, advisors and admins (each with their own link), NOT VALID and the purge's result
     for admins only, nothing for the other roles; the pipeline's purge record is written to the audit log once;
+  * the purge's switch (r88): off by default; turning it on or off needs the Settings permission, CSRF, a fresh session
+    and the administrator's own password (a wrong one refused and counted like a failed sign-in); each change in the
+    audit log; no permit while off, the permit written on turning on for a quarter whose purge day has not passed,
+    removed on turning off; the bell's "purge is off" alert and the "ready" wording while off;
   * the working-day calendar for every quarter of 2026 to 2029.
 Run: .venv/bin/python tests/check_quarterly_access.py"""
 import json
@@ -23,6 +27,7 @@ from datetime import date, datetime, timedelta, timezone
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("LG_QUIET", "1")
 from flask import Flask, g, request  # noqa: E402
+from werkzeug.security import generate_password_hash  # noqa: E402
 
 import auth  # noqa: E402
 import insider  # noqa: E402
@@ -127,7 +132,34 @@ def csrf_ok():
     return request.headers.get("X-CSRF-Token") == "the-page-token"
 
 
-ctx = {"base_dir": base, "has_perm": has_perm, "csrf_ok": csrf_ok, "audit": Audit(), "people_name": lambda u: "Ada Admin" if u == "ada.admin" else ""}
+PASSWORD = "the-admins-own-password-1"
+_HASH = generate_password_hash(PASSWORD)
+HASHES = {n: _HASH for n in NAMES.values()}
+FRESH = [True]
+
+
+class Users:
+    def get(self, name):
+        return {"hash": HASHES[name]} if name in HASHES else None
+
+
+class Throttle:                                       # the sign-in throttle: a wrong password counts as a failed sign-in
+    def __init__(self):
+        self.failures = []
+
+    def locked(self, ip, name):
+        return False
+
+    def failed(self, ip, name):
+        self.failures.append(name)
+
+    def wait_minutes(self, ip, name):
+        return 15
+
+
+THROTTLE = Throttle()
+ctx = {"base_dir": base, "has_perm": has_perm, "csrf_ok": csrf_ok, "audit": Audit(), "people_name": lambda u: "Ada Admin" if u == "ada.admin" else "",
+       "users": Users(), "throttle": THROTTLE, "client": lambda: ("127.0.0.1", "check"), "fresh": lambda: FRESH[0]}
 insider.install(app, dict(ctx))
 api = qq.install(app, dict(ctx, db=None, serving=False))
 c = app.test_client()
@@ -218,6 +250,136 @@ def bell(role):
         _who()
         return [a for a in alerts.for_user(NAMES[role], has_perm=has_perm) if a["id"].startswith("sys:quarterly")]
 
+
+print("\nThe purge's switch (Settings → Quarterly, r88): off until an administrator turns it on")
+PERMIT = os.path.join(qd, "purge_permit.json")
+SWITCH = "/api/admin/quarterly/purge"
+OK_HDR = {"X-Role": "admin", "X-CSRF-Token": "the-page-token"}
+# as a new installation has it after r88: the report VALID, but no permit, because the purge is off
+NOW_ST = dict(STATUS, generated_at=(today - timedelta(days=1)).isoformat() + "T00:20:00+00:00", rows_purge_deletes=4321)   # made before its purge day
+json.dump(dict(NOW_ST, permit=False, no_permit_why=qq.WHY_OFF, purge_on=False), open(os.path.join(qd, "status.json"), "w"))
+ok("off by default: no purge_confirmed.json, purge_on() is False", not qq.purge_on(base) and not os.path.exists(qq.confirm_path(base)))
+adm = get(LISTS["admin"], "admin").json
+pv = adm["purge"]["preview"]
+ok("the admin's list says it is off, with the newest VALID report's dry count, purge day and cutoff",
+   adm["purge"]["enabled"] is False and pv["quarter"] == Q and pv["rows"] == 4321 and pv["purge_day"] == STATUS["purge_day"]
+   and pv["cutoff"] == STATUS["cutoff"] and not pv["passed"] and not pv["permit"], str(adm["purge"]))
+ok("...and each quarter: no permit (the management list too), purge_on false",
+   not adm["quarters"][0]["permit"] and adm["quarters"][0]["purge_on"] is False and adm["quarters"][0]["no_permit_why"] == qq.WHY_OFF
+   and not get(LISTS["management"], "management").json["quarters"][0]["permit"])
+off = {role: bell(role) for role in ROLES}
+offa = [x for x in off["admin"] if x["id"].startswith("sys:quarterly-purge-off")]
+ok("the bell, off: one alert for admins only, once per quarter (its id names the quarter)",
+   len(offa) == 1 and offa[0]["id"] == f"sys:quarterly-purge-off:{Q}"
+   and offa[0]["title"] + ": " + offa[0]["text"] == "The quarterly purge is off: turn it on in Settings → Quarterly, or leave it off to keep every report row."
+   and not any(x["id"].startswith("sys:quarterly-purge-off") for r in ROLES if r != "admin" for x in off[r]), str(offa))
+rdy = [x for x in off["management"] if x["id"].startswith("sys:quarterly-ready")]
+ok("...and \"reports ready\" says what is true: no rows are deleted (never \"are deleted on\")",
+   len(rdy) == 1 and "The quarterly purge is off on this installation, so no report rows are deleted." in rdy[0]["text"]
+   and "are deleted on" not in rdy[0]["text"], str(rdy))
+shown = {"quarter": Q, "rows": 4321, "purge_day": STATUS["purge_day"]}
+
+
+def switch(role, body, headers=None):
+    h = dict(headers if headers is not None else OK_HDR)
+    if role is not None:
+        h["X-Role"] = role
+    elif "X-Role" in h:
+        del h["X-Role"]
+    return c.post(SWITCH, json=body, headers=h)
+
+
+on_body = {"enabled": True, "password": PASSWORD, "shown": shown}
+codes = {r: switch(r, on_body).status_code for r in ("management", "advisor", "analyst", "researcher", "external", "auditor")}
+ok("turning it on needs the Settings permission: every other role is refused (403), signed out too",
+   set(codes.values()) == {403} and switch(None, on_body).status_code == 403 and not qq.purge_on(base), str(codes))
+ok("...and the page's CSRF token: none or a forged one is refused",
+   switch("admin", on_body, {"X-Role": "admin"}).status_code == 403
+   and switch("admin", on_body, {"X-Role": "admin", "X-CSRF-Token": "forged"}).status_code == 403 and not qq.purge_on(base))
+FRESH[0] = False
+ok("...and a session younger than 12 hours (sign in again)", switch("admin", on_body).status_code == 403 and not qq.purge_on(base))
+FRESH[0] = True
+AUDIT.clear()
+THROTTLE.failures.clear()
+r = switch("admin", dict(on_body, password="not-the-password"))
+ok("a wrong password is refused, counted like a failed sign-in, and in the audit log",
+   r.status_code == 403 and THROTTLE.failures == ["ada.admin"] and [a[0] for a in AUDIT] == ["quarterly_purge_password_failed"]
+   and not qq.purge_on(base) and not os.path.exists(PERMIT), str((r.status_code, THROTTLE.failures, AUDIT)))
+r = switch("admin", {"enabled": True, "shown": shown})
+ok("...no password at all is refused the same way", r.status_code == 403 and len(THROTTLE.failures) == 2 and not qq.purge_on(base))
+r = switch("admin", dict(on_body, shown=dict(shown, rows=12)))
+ok("figures that are not what the purge would delete now are refused (read it again), before the password is checked",
+   r.status_code == 409 and len(THROTTLE.failures) == 2 and not qq.purge_on(base), str(r.status_code))
+ok("\"enabled\" must be true or false", switch("admin", {"enabled": "yes", "password": PASSWORD}).status_code == 400)
+ok("the one password re-check is password_policy.check_own_password (no second copy in quarterly.py)",
+   "check_password_hash" not in src and "check_own_password" in src)
+AUDIT.clear()
+r = switch("admin", on_body)
+conf = json.load(open(qq.confirm_path(base)))
+ok("turned on with the right password: purge_confirmed.json says enabled, who (full name), when and what was shown; owner-only",
+   r.status_code == 200 and conf["enabled"] is True and conf["by"] == "ada.admin" and conf["by_name"] == "Ada Admin"
+   and conf["shown"]["rows"] == 4321 and conf["shown"]["quarter"] == Q and conf["shown"]["cutoff"] == STATUS["cutoff"]
+   and oct(os.stat(qq.confirm_path(base)).st_mode & 0o777) == "0o600", str((r.status_code, r.json)))
+ok("...the permit is written for the quarter whose purge day has not passed (owner-only, the report's own dates)",
+   os.path.exists(PERMIT) and json.load(open(PERMIT))["purge_day"] == STATUS["purge_day"]
+   and json.load(open(PERMIT))["generated_at"] == NOW_ST["generated_at"] and oct(os.stat(PERMIT).st_mode & 0o777) == "0o600"
+   and json.load(open(os.path.join(qd, "status.json")))["permit"] is True)
+ok("...in the audit log: turned on, by whom, the rows it would delete then, the permit written",
+   [a[0] for a in AUDIT] == ["quarterly_purge_on"] and AUDIT[0][1] == "ada.admin" and AUDIT[0][2] == Q
+   and "4,321 raw report rows dated before " + STATUS["cutoff"] in AUDIT[0][3] and "Ada Admin" in AUDIT[0][3]
+   and "purge permit written" in AUDIT[0][3], str(AUDIT))
+ok("...shown in the Audit portal by name",
+   audit_portal.LABEL.get("quarterly_purge_on") == "Quarterly purge turned on" and audit_portal.LABEL.get("quarterly_purge_off") == "Quarterly purge turned off"
+   and "quarterly_purge_password_failed" in audit_portal.LABEL)
+p = r.json["purge"]
+ok("...and the page says on since when, confirmed by whom", p["enabled"] and p["by_name"] == "Ada Admin" and p["since"] == conf["at"])
+ok("turning it on twice is refused (already on)", switch("admin", on_body).status_code == 409)
+nobell = [x for x in bell("admin") if x["id"].startswith("sys:quarterly-purge-off")]
+ok("on: the \"purge is off\" alert is gone", not nobell)
+AUDIT.clear()
+off_body = {"enabled": False, "password": PASSWORD}
+ok("turning it off needs the same checks: another role, no CSRF token, a wrong password are refused",
+   switch("management", off_body).status_code == 403 and switch("admin", off_body, {"X-Role": "admin"}).status_code == 403
+   and switch("admin", dict(off_body, password="nope")).status_code == 403 and qq.purge_on(base) and os.path.exists(PERMIT))
+AUDIT.clear()
+r = switch("admin", off_body)
+st_off = json.load(open(os.path.join(qd, "status.json")))
+ok("turned off: the waiting permit is removed (the purge that has not run yet will not), status.json says why",
+   r.status_code == 200 and not qq.purge_on(base) and not os.path.exists(PERMIT) and st_off["permit"] is False
+   and st_off["no_permit_why"] == qq.WHY_OFF and json.load(open(qq.confirm_path(base)))["enabled"] is False)
+ok("...in the audit log: turned off, by whom, what it would have deleted, the permit removed",
+   [a[0] for a in AUDIT] == ["quarterly_purge_off"] and "purge permit removed" in AUDIT[0][3] and "4,321" in AUDIT[0][3], str(AUDIT))
+ok("...and the \"purge is off\" alert is back for admins", any(x["id"] == f"sys:quarterly-purge-off:{Q}" for x in bell("admin")))
+# a quarter whose purge day has passed: turning it on writes no permit for it
+json.dump(dict(st_off, purge_day=(today - timedelta(days=1)).isoformat(), generated_at=(today - timedelta(days=5)).isoformat() + "T00:20:00+00:00"),
+          open(os.path.join(qd, "status.json"), "w"))
+pv2 = get(LISTS["admin"], "admin").json["purge"]["preview"]
+r = switch("admin", dict(on_body, shown={"quarter": Q, "rows": 4321, "purge_day": pv2["purge_day"]}))
+st_late = json.load(open(os.path.join(qd, "status.json")))
+ok("turned on after a quarter's purge day: no permit for it (its rows wait for the next quarter's purge), and it says so",
+   r.status_code == 200 and pv2["passed"] and not os.path.exists(PERMIT) and st_late["permit"] is False and st_late["no_permit_why"] == qq.WHY_ON_LATE,
+   str((r.status_code, st_late.get("no_permit_why"))))
+r = switch("admin", off_body)
+# the rule itself, for every case
+D0, D1 = date(2027, 1, 3), date(2027, 1, 22)
+ok("the permit's one rule: VALID, made before the purge day, turned on, the day not passed",
+   qq.permit_rule(True, D0, D1, True, D0) == (True, "") and qq.permit_rule(False, D0, D1, True, D0)[1] == qq.WHY_INVALID
+   and qq.permit_rule(True, D0, D1, False, D0)[1] == qq.WHY_OFF and qq.permit_rule(True, date(2027, 1, 23), D1, True, date(2027, 1, 23))[1] == qq.WHY_MADE_LATE
+   and qq.permit_rule(True, D0, D1, True, date(2027, 1, 23))[1] == qq.WHY_ON_LATE)
+qq._write_json(qq.confirm_path(base), {"enabled": "true"})
+ok("a switch file that says anything but enabled: true is off", not qq.purge_on(base))
+open(qq.confirm_path(base), "w").write("{broken")
+ok("...a malformed one too", not qq.purge_on(base))
+json.dump(dict(NOW_ST, permit=True), open(os.path.join(qd, "status.json"), "w"))
+qq._write_json(PERMIT, qq.permit_doc(NOW_ST))           # a permit left from before r88, the purge off
+api["tick"]()
+ok("the background check removes a permit left while the purge is off (one from before the update)",
+   not os.path.exists(PERMIT) and json.load(open(os.path.join(qd, "status.json")))["no_permit_why"] == qq.WHY_OFF)
+# back to the made-up kept quarter, purge on (as an installation that turned it on), for the checks below
+json.dump(NOW_ST, open(os.path.join(qd, "status.json"), "w"))
+os.remove(qq.confirm_path(base))
+r = switch("admin", on_body)
+ok("turned on again later: the permit is written again", r.status_code == 200 and os.path.exists(PERMIT), str(r.json))
 
 ready = {role: bell(role) for role in ROLES}
 ok("\"ready\": one alert each for management, advisors and admins", all(len(ready[r]) == 1 for r in ("management", "advisor", "admin")))

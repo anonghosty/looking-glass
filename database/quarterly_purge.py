@@ -9,6 +9,10 @@ never writes here, and this module never trusts the permit on its own:
     not counted) after the quarter's last day, the purge runs on the next working day; it always keeps the last 31
     days, so the cutoff is the purge day minus 31 days. A permit whose quarter, purge day or cutoff differ from these is
     refused. Nobody can change the timing: there is no setting for it.
+  * The purge is OFF until an administrator turns it on in Settings → Quarterly (with their own password). Looking Glass
+    then keeps data/quarterly/purge_confirmed.json with "enabled": true; this module reads it read-only, like the
+    permit, and refuses unless it says exactly that: missing, unreadable, malformed or "enabled" anything but true is
+    refused ("the purge is not turned on in Settings → Quarterly").
   * Nothing happens before the purge day, nor twice for one quarter (this pipeline's own record, below), nor when the
     permit is missing, is not VALID, was made after the purge day, or names a cutoff within 31 days of today.
   * Only report collections are touched: a name the pipeline itself loads reports into (report_names.valid: never
@@ -39,6 +43,8 @@ import worker_settings
 KEEP_DAYS = 31                    # the last 31 days are always kept
 WORKING_DAYS = 15                 # the grace period after the quarter, in working days (Monday to Friday)
 STATUS_FILE = "quarterly_purge_status.json"
+CONFIRM_FILE = "purge_confirmed.json"   # in the platform's data/quarterly/: the purge's switch (Settings → Quarterly)
+NOT_ON = "the purge is not turned on in Settings → Quarterly"
 DATE_PREFIX = re.compile(r"^\d{4}-\d{2}-\d{2}")
 NOT_REPORTS = ("files_", "discovered_fields_", "lg_", "system.")
 
@@ -170,6 +176,27 @@ def read_permit(platform_data_dir, quarter):
     return permit or None
 
 
+def read_confirmation(platform_data_dir):
+    """The purge's switch as written by the platform (data/quarterly/purge_confirmed.json), or None. Read like the
+    permit: never through a symbolic link, a plain file only, 64 KB at most; untrusted."""
+    if not platform_data_dir:
+        return None
+    try:
+        top = worker_settings.open_dir(os.path.join(str(platform_data_dir), "quarterly"))
+    except OSError:
+        return None
+    try:
+        _raw, conf = worker_settings.read_request(top, CONFIRM_FILE)
+    finally:
+        os.close(top)
+    return conf or None
+
+
+def check_confirmation(conf):
+    """"" when an administrator turned the purge on; else why not (anything but "enabled": true is off)."""
+    return "" if isinstance(conf, dict) and conf.get("enabled") is True else NOT_ON
+
+
 def check_permit(permit, quarter, d, today):
     """"" when the permit allows this quarter's purge today; else why not."""
     if not permit:
@@ -206,7 +233,8 @@ def run(db, platform_data_dir, base_dir, log, today=None, now=None):
             "purge_day": d["purge_day"].isoformat(), "cutoff": d["cutoff"].isoformat(), "keep_days": KEEP_DAYS}
     if quarter in done:
         return dict(base, outcome="already done", why=f"{quarter} was purged on {done[quarter].get('at', '')[:10]}")
-    why = check_permit(read_permit(platform_data_dir, quarter), quarter, d, today)
+    why = (check_confirmation(read_confirmation(platform_data_dir))
+           or check_permit(read_permit(platform_data_dir, quarter), quarter, d, today))
     if why:
         res = dict(base, outcome="refused", why=why)
         last = st.get("last") or {}

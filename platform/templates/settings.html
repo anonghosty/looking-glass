@@ -181,10 +181,11 @@
     <section class="st-card q-card q-pane" id="tabQuarterly" data-scope="admin" hidden>
       <h2>Quarterly <span class="st-for">reports and the purge</span></h2>
       <p class="st-hint">Once a quarter has ended, Looking Glass makes its reports: one for management, one for advisors, and the purge's
-        figures for you. Management, advisors and administrators are told in the bell. When every accuracy check passes (VALID),
-        Looking Glass gives the database pipeline its permit: 15 working days (Monday to Friday) after the quarter, on the next working
-        day, the pipeline deletes the raw report rows older than 31 days. Findings, cases, advisories and these reports are kept. The
-        timing cannot be changed here. Each download, each report made and the purge are in the audit log.</p>
+        figures for you. Management, advisors and administrators are told in the bell. The quarterly purge is off until an administrator
+        turns it on below. Once it is on, and when every accuracy check passes (VALID), Looking Glass gives the database pipeline its
+        permit: 15 working days (Monday to Friday) after the quarter, on the next working day, the pipeline deletes the raw report rows
+        older than 31 days. Findings, cases, advisories and these reports are kept. The timing cannot be changed. Each download, each
+        report made, turning the purge on or off, and the purge itself are in the audit log.</p>
       <div class="q-body"></div>
     </section>
 
