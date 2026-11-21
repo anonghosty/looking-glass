@@ -51,7 +51,7 @@
           if (!r.ok) { msg.textContent = d.error || `Not sent (${r.status}).`; go.disabled = false; return; }
           msg.replaceChildren(document.createTextNode(`Sent as finding ${d.finding.number}. `));
           const a = el("a", null, "Open it"); a.href = `/findings#f${d.finding.id}`; msg.append(a);
-        } catch (e) { msg.textContent = `Not sent: ${e.message}`; go.disabled = false; }
+        } catch (e) { msg.textContent = `Not sent: ${window.LGLoader.errorText(e, true)}`; go.disabled = false; }
       });
       form.append(el("label", "bh-l", "Send to"), kind, who, note, go, msg);
       wrap.append(form);
@@ -69,7 +69,7 @@
         const r = await fetch(`/api/beacon/finding/${encodeURIComponent(f.id)}`, { credentials: "same-origin" });
         d = await r.json();
         if (!r.ok) throw new Error(d.error || r.status);
-      } catch (e) { s.replaceChildren(el("h3", null, "Decoded beacons"), el("p", "fd-msg", `Could not load them: ${e.message}`)); return; }
+      } catch (e) { s.replaceChildren(el("h3", null, "Decoded beacons"), el("p", "fd-msg", `Could not load them: ${window.LGLoader.errorText(e)}`)); return; }
       s.replaceChildren(el("h3", null, "Decoded beacons"), el("p", "bh-said", d.said));
       if (d.selection.length) {
         const chips = el("div", "bh-chips");
@@ -92,7 +92,7 @@
             const r = await fetch(`/api/beacon/finding/${encodeURIComponent(f.id)}?records=1`, { credentials: "same-origin" });
             const dd = await r.json(); if (!r.ok) throw new Error(dd.error || r.status);
             holder.replaceChildren(); records(holder, dd); show.remove();
-          } catch (e) { holder.replaceChildren(el("p", "fd-msg", `Could not load them: ${e.message}`)); show.disabled = false; }
+          } catch (e) { holder.replaceChildren(el("p", "fd-msg", `Could not load them: ${window.LGLoader.errorText(e)}`)); show.disabled = false; }
         });
         s.append(show, holder);
       }

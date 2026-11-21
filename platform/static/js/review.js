@@ -36,7 +36,7 @@
     try { r = await fetch(`/api/review/${encodeURIComponent(fid)}`, { cache: "no-store" }); }
     catch (e) {                                // the connection dropped: say so, never a page that loads for ever (review 2026-11-13)
       $("rvLoading")?.remove(); window.LGLoader?.ready();
-      main.append(el("p", "fd-empty", `Could not open it: ${e.message}`)); return;
+      main.append(el("p", "fd-empty", `Could not open it: ${window.LGLoader.errorText(e)}`)); return;
     }
     const d = await r.json().catch(() => ({}));
     $("rvLoading")?.remove();

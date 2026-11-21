@@ -1,4 +1,4 @@
-# Looking Glass — security
+# Looking Glass: security
 
 How Looking Glass protects the data it holds, how to run it safely, and how to report a vulnerability. To install it,
 see [INSTALLATION.md](INSTALLATION.md); for the parts, trust boundaries and threat model, see

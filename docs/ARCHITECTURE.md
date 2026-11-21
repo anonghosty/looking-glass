@@ -75,7 +75,7 @@ server, on the pipeline's own account ([Security, section 1](SECURITY.md#pipelin
      get no lasting code.
    - Management sees numbers and the C2 / sinkhole domains by name; a C2 host that is an IP address reads
      "IP address 1, 2…", never the address.
-   - External viewers see everything masked.
+   - External viewers see everything masked, on three pages only (external_access.py).
    - The auditor sees only the audit log and its evidence.
 5. **Followed up.** A finding is a channel. Every hand-over names a person, and only the people in it (and admins)
    can open it.

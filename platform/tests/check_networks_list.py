@@ -48,8 +48,11 @@ def use_registry(content):
 
 ev = lambda src, dst="": {"src_asn": src, "dst_asn": dst, "src_geo": "GH", "dst_geo": "US", "events": 1}
 A.store.days.clear(); A.svc["store"].days.clear()
-A.store.days["d1"] = SimpleNamespace(events=[ev("64500", "64501"), ev("64500"), ev("64502")], asn_raw={"64500": 2, "64502": 1, "64501": 1})
-A.svc["store"].days["d1"] = SimpleNamespace(events=[{"asn": "64503", "geo": "GH"}], asn_raw={"64503": 1})
+# the day the map shows (the Records column counts this day only) and an older day still held in memory
+D1 = A.day_start(A.replay_now()); D0 = D1 - A.timedelta(days=1)
+A.store.days[D1] = SimpleNamespace(events=[ev("64500", "64501"), ev("64500"), ev("64502")], asn_raw={"64500": 2, "64502": 1, "64501": 1})
+A.svc["store"].days[D1] = SimpleNamespace(events=[{"asn": "64503", "geo": "GH"}, {"asn": "64500", "geo": "GH"}], asn_raw={"64503": 1, "64500": 1})
+A.store.days[D0] = SimpleNamespace(events=[ev("64504"), ev("64500")], asn_raw={"64504": 7, "64500": 40})
 token = sessions.create(USER, "127.0.0.1", UA)
 csrf = max((s for s in sessions.s.values() if s["user"] == USER and s.get("csrf")), key=lambda s: s["created"])["csrf"]
 c = A.app.test_client(); c.set_cookie("lg_session", token)
@@ -59,16 +62,32 @@ try:
     use_registry(None)
     j = c.get("/api/networks", headers=H).json
     got = {r["asn"]: r for r in j["networks"]}
-    ok("every network in the reports is listed", set(got) == {"64500", "64501", "64502", "64503"}, ", ".join(sorted(got)))
+    ok("every network in the reports is listed", set(got) == {"64500", "64501", "64502", "64503", "64504"}, ", ".join(sorted(got)))
     ok("…not reviewed and not identified, no name", all(not r["reviewed"] and r.get("identified") is False and r["name"] == "" for r in got.values()))
-    ok("…with its events, busiest first", got["64500"]["events"] == 2 and j["networks"][0]["asn"] == "64500", str([r["asn"] for r in j["networks"]]))
+    ok("…with its records on the day the map shows (both platforms), busiest first",
+       got["64500"]["events"] == 3 and got["64501"]["events"] == 1 and got["64503"]["events"] == 1 and j["networks"][0]["asn"] == "64500",
+       str({a: r["events"] for a, r in got.items()}))
+    ok("…an older day in memory is not counted (a network only seen then: 0 that day)", got["64504"]["events"] == 0, str(got["64504"]["events"]))
+    ok("…the answer names that day", j.get("events_day") == D1.date().isoformat(), str(j.get("events_day")))
     print("A registry that knows some of them")
-    use_registry({"64500": {"name": "Example Telecom", "type": "isp", "reviewed": True, "events_last_check": 2}})
+    # a figure Identify networks noted long ago (events_last_check) and one it never noted: both get the day's records
+    use_registry({"64500": {"name": "Example Telecom", "type": "isp", "reviewed": True, "events_last_check": 999},
+                  "64501": {"name": "Sample University", "type": "education", "reviewed": True, "source": "curated"}})
     j = c.get("/api/networks", headers=H).json
     ids = [r["asn"] for r in j["networks"]]
-    ok("a network in the registry is listed once, as it is", ids.count("64500") == 1
-       and next(r for r in j["networks"] if r["asn"] == "64500")["name"] == "Example Telecom")
-    ok("…the others are listed for review", {"64501", "64502", "64503"} <= set(ids))
+    byn = {r["asn"]: r for r in j["networks"]}
+    ok("a network in the registry is listed once, as it is", ids.count("64500") == 1 and byn["64500"]["name"] == "Example Telecom")
+    ok("…the others are listed for review", {"64502", "64503"} <= set(ids))
+    ok("…registry networks show the day's records, not an old noted figure or 0 (3 and 1)",
+       byn["64500"]["events"] == 3 and byn["64501"]["events"] == 1, f"{byn['64500']['events']} {byn['64501']['events']}")
+    print("The day the map shows is not loaded yet")
+    held = (A.store.days.pop(D1), A.svc["store"].days.pop(D1))
+    A._NETS_CACHE.update(key=None)
+    j = c.get("/api/networks", headers=H).json
+    ok("records not known: null for every network (the page says 'not loaded'), no day named",
+       all(r["events"] is None for r in j["networks"]) and j.get("events_day") == "", str([(r["asn"], r["events"]) for r in j["networks"]][:4]))
+    A.store.days[D1], A.svc["store"].days[D1] = held
+    A._NETS_CACHE.update(key=None)
     print("Naming one that is not identified yet")
     use_registry(None)
     hdr = dict(H, **{"X-CSRF-Token": csrf})

@@ -19,7 +19,7 @@
 <body class="settings-page" data-user="{{ lg_user }}"{% if "users" in lg_perms %} data-admin="1"{% endif %}>
   <header class="hud">
     <div class="hud-left">
-      <button type="button" class="brand-btn" data-go="/?intro=1" aria-label="Open the Looking Glass overview"><img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32"></button>
+      <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
       <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span id="stScope">Settings · both platforms</span><span> · signed in as {{ lg_name }} ({{ lg_role }})</span></div></div>
     </div>
     <div class="hud-right">
@@ -87,15 +87,8 @@
       <div class="st-preview" id="scopeSummary" role="status"></div>
     </section>
 
-    {# the researchers' work (definitions, Intel gathered, notes, network names) is a page of its own: /definitions #}
-    {% if "settings" in lg_perms or "definitions" in lg_perms or "networks" in lg_perms %}
-    <section class="st-card st-moved">
-      <h2>Definitions, intel and network names <span class="st-for">a page of their own</span></h2>
-      <p class="st-hint">Defining infections and issues, the indicators gathered from the reports (Intel gathered), researchers' notes and the network
-        names now have their own page, the same one researchers use.</p>
-      <a class="intro-cta st-moved-btn" href="/definitions">Open Definitions</a>
-    </section>
-    {% endif %}
+    {# the researchers' work (definitions, Intel gathered, notes, network names) is a page of its own: /definitions,
+       opened from the header's Definitions button (r90: no second "Open Definitions" card here) #}
 
     {# the organisation: its name and logo head every advisory (organisation.py, organisation.js); saved on its own #}
     {% if "settings" in lg_perms %}

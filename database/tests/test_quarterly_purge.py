@@ -74,6 +74,10 @@ if plat:
         print(f"  (the platform's quarterly.py could not be loaded here: {exc.__class__.__name__}; its own check compares)")
 ok("the quarter due on its purge day is that quarter; the day before, the one before",
    qp.due_quarter(D(2027, 1, 22)) == (2026, 4) and qp.due_quarter(D(2027, 1, 21)) == (2026, 3))
+ok("the quarter waiting after the due one, in words: 21 January 2027 (2026Q3 due) names 2026Q4 and Friday 22 January 2027",
+   qp.next_purge_text(qp.due_quarter(D(2027, 1, 21))) == "2026Q4 is purged on Friday 22 January 2027 if its report is VALID and the purge is on"
+   and qp.next_quarter(2026, 4) == (2027, 1), qp.next_purge_text((2026, 3)))
+ok("no database here: whether rows wait before a cutoff is not known (the plain refusal is worded)", qp.has_rows_before(None, "2026-09-21") is None)
 
 print("\nThe permit's checks (no database)")
 d4 = qp.dates(2026, 4)
@@ -162,6 +166,9 @@ try:
     r = qp.run(None, sw_data, sw_base, slog, today=D(2027, 1, 22))
     ok("turned on but no permit (turning it off removed it, or the report was NOT VALID): still refused",
        r.get("outcome") == "refused" and "no purge permit" in r["why"], str(r))
+    ok("...the refusal names the quarter waiting next and its purge day (2027Q1, Thursday 22 April 2027)",
+       "Next: 2027Q1 is purged on Thursday 22 April 2027" in r["why"] and r.get("next_quarter") == "2027Q1"
+       and r.get("next_purge_day") == "2027-04-22", str(r))
 finally:
     shutil.rmtree(sw, ignore_errors=True)
 
@@ -231,6 +238,17 @@ try:
     switch('{"enabled": true, "by": "ada.admin"}')
     r = qp.run(db, plat_data, base, log, today=D(2027, 1, 22))
     ok("without a permit: refused, nothing deleted", r.get("outcome") == "refused" and "no purge permit" in r["why"] and unchanged(), str(r))
+    ok("...rows wait before its cutoff, so it is a refusal that names the next quarter", r["why"].startswith(qp.NO_PERMIT)
+       and "Next: 2027Q1 is purged on Thursday 22 April 2027" in r["why"], r["why"])
+    # 23 July 2026: the latest quarter whose purge day has passed is 2026Q2 (cutoff 21 June 2026), and the made-up rows
+    # start on 15 July: nothing was ever there to purge for it; the quarter waiting is 2026Q3 (purge Thursday 22 October)
+    r = qp.run(db, plat_data, base, log, today=D(2026, 7, 23))
+    ok("no report row before the due quarter's cutoff: 'nothing to purge', naming the next quarter and its purge day, nothing deleted",
+       r.get("outcome") == "nothing to purge" and r.get("quarter") == "2026Q2" and unchanged()
+       and r.get("why") == ("Nothing to purge now: no report rows are dated before Sunday 21 June 2026, the cutoff of 2026Q2; "
+                            "2026Q3 is purged on Thursday 22 October 2026 if its report is VALID and the purge is on"), str(r))
+    ok("...and the database part says so: no rows before 21 June, rows before 22 December",
+       qp.has_rows_before(db, "2026-06-21") is False and qp.has_rows_before(db, "2026-12-22") is True)
     permit(valid=False, status="NOT VALID")
     r = qp.run(db, plat_data, base, log, today=D(2027, 1, 22))
     ok("with a NOT VALID permit: refused, nothing deleted", r.get("outcome") == "refused" and unchanged(), str(r))

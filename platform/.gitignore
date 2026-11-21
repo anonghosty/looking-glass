@@ -30,3 +30,5 @@ tools/services_fields.json
 # old location of the geocoding cache
 /geocache.json
 *.log
+# code files a later release no longer ships, moved aside on update (deploy/stale_files.py)
+backups/

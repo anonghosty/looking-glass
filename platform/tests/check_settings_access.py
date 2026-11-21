@@ -56,10 +56,20 @@ try:
     H = dict(TOK, **{"User-Agent": UA, "X-CSRF-Token": csrf})
     r = c.get("/api/settings", headers=H)
     ok("cannot even read the settings (403: accounts without the permission do not see Settings)", r.status_code == 403, str(r.status_code))
-    r = c.post("/api/settings", json={"country": "GH", "networks": [], "cidrs": []}, headers=H)
+    import address_blocks as _AB
+    cpath = _AB.chosen_path(A.settings)
+    before = os.stat(cpath).st_mtime_ns if os.path.exists(cpath) else None
+    r = c.post("/api/settings", json={"country": "GH", "networks": [], "cidrs": ["198.18.9.0/24"],
+                                      "block_networks": {"198.18.9.0/24": "64500"}}, headers=H)
     ok("a change is refused (403)", r.status_code == 403 and "Settings permission" in r.json.get("error", ""), str(r.status_code))
+    ok("…and the blocks' networks file is not written (data/constituency_blocks.json)",
+       (os.stat(cpath).st_mtime_ns if os.path.exists(cpath) else None) == before)
     r = c.post("/api/asns/identify", json={}, headers=H)
     ok("starting a network look-up is refused", r.status_code == 403, str(r.status_code))
+    AB = "/api/settings/address-blocks"
+    ok("the address blocks (a network's list, the summary, Add a block, the range check) are refused (403)",
+       all(c.get(f"{AB}?{q}", headers=H).status_code == 403
+           for q in ("asn=64500", "summary=1", "add=192.0.2.0/24&for=64500", "check=198.51.100.0/22")))
 
     print("Signed in as an administrator (Settings permission), no token")
     c, csrf = client(ADMIN)
@@ -71,6 +81,18 @@ try:
     ok("a change passes the permission check (stops at 'send JSON', nothing saved)", r.status_code == 415, str(r.status_code))
     r = c.post("/api/settings", data="not json", content_type="text/plain", headers={"User-Agent": UA})
     ok("…but not without the page's CSRF token", r.status_code == 403, str(r.status_code))
+    # r90: each saved range's network for the page (yesterday, else any day in memory), and the two Add boxes,
+    # checked on the server with the same rule as Apply settings
+    r = c.get(f"{AB}?summary=1", headers=H)
+    ok("the summary answers an administrator, with each saved range's network and what the reports hold",
+       r.status_code == 200 and {"counts", "owners", "info"} <= set(r.json or {}), str(r.status_code))
+    r = c.get(f"{AB}?add=198.18.200.9&for=64500", headers=H)
+    ok("Add a block: a single address adds its /24", r.status_code == 200 and r.json.get("range") == "198.18.200.0/24", str(r.json))
+    r = c.get(f"{AB}?add=not-a-range&for=64500", headers=H)
+    ok("…not an address range: refused with Apply settings' words", r.status_code == 400
+       and r.json.get("error") == "not an address range: not-a-range", str(r.json))
+    r = c.get(f"{AB}?check=198.51.100.7/22", headers=H)
+    ok("Other address ranges' Add: written the standard way", r.status_code == 200 and r.json.get("range") == "198.51.100.0/22", str(r.json))
 
     print("The Settings page")
     root = os.path.dirname(A.__file__)
@@ -89,6 +111,12 @@ try:
     ok("Settings' network list has a Constituent drop-down bound to the constituency (the Constituency card's mode follows)",
        "window.LGConstituency" in sj and "setState(asn, s)" in sj and 'setMode("some")' in sj and "C.setState(x.asn, v)" in nj
        and '"Constituent"' in nj and "onChange(" in nj)
+    ok("…a chosen block stays chosen in its row until it is unticked, and saving still sends only AS numbers and ranges",
+       "toggleBlock(asn, blk, on, inf)" in sj and "C.toggleBlock(x.asn, blk, on, inf)" in nj
+       and "for (const s of picks.values()) s.delete(blk)" in sj and "body: JSON.stringify({ ...w, block_networks: blockNetworks() })" in sj
+       and 'networks: mode === "some" ? [...chosen].sort() : [],' in sj)
+    ok("…Other address ranges: only an administrator gets the remove buttons and the Add box",
+       "const can = !!(data && data.writable);" in sj and '$("cidrsAdd").hidden = !data.writable;' in sj)
 finally:
     users.get, roles.perms = real_get, real_perms
     for t in MADE:                                  # the test's own sessions end with it

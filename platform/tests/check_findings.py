@@ -13,6 +13,7 @@ import needs_db  # noqa: E402
 needs_db.require()
 import app as A  # noqa: E402
 import auth  # noqa: E402
+import finding_rules  # noqa: E402
 from flask import g  # noqa: E402
 
 fails, checks = [], 0
@@ -81,8 +82,18 @@ try:
     ok("only roles that see addresses get the Search button", call("/api/findings", ANALYST, role="analyst")[1]["can_search"]
        and not call("/api/findings", MGMT, role="management")[1]["can_search"])
     st, d = call("/api/findings", {"view"}, role="external", user="lg-check-external")
-    ok("external opens the Findings page, but sees no finding it is not in (not even one made before channels)",
-       st == 200 and d.get("findings") == [], f"HTTP {st} · {len(d.get('findings') or [])} findings")
+    ok("external is refused the findings (never in a channel: r90), with the plain message",
+       st == 403 and d.get("error") == finding_rules.REFUSED and "findings" not in d, f"HTTP {st}")
+    for role, perms in (("external", {"view"}), ("auditor", {"audit"})):
+        with A.app.test_request_context("/findings"):
+            g.user = {"user": f"lg-check-{role}", "role": role, "perms": perms, "csrf": "t", "automation": True}
+            r = A.app.view_functions["findings_page"]()
+        code = r[1] if isinstance(r, tuple) else getattr(r, "status_code", 200)
+        ok(f"{role}: the Findings page is refused (403)", code == 403, str(code))
+        for path in ("/api/findings/stamp", "/api/findings/watch", "/api/findings/people?kind=analyst"):
+            ok(f"{role}: {path.split('?')[0]} refused (403)", call(path, perms, role=role, user=f"lg-check-{role}")[0] == 403)
+    for role, perms in (("researcher", RESEARCHER), ("management", MGMT), ("analyst", ANALYST), ("advisor", {"advisory"}), ("admin", {"settings", "users"})):
+        ok(f"{role}: still opens the findings API", call("/api/findings", perms, role=role, user=f"lg-check-{role}")[0] == 200)
     ok("researchers and management can open the page (their allowed paths)", "/findings".startswith(auth.DEFINITIONS_PATHS) and "/api/findings".startswith(auth.MANAGEMENT_PATHS))
     print("Moving it on")
     st, d = call("/api/findings/1/status", MGMT, "POST", {"status": "analyst", "comment": "x"}, role="management", user="lg-check-management")
@@ -110,7 +121,7 @@ try:
     st, d = call("/api/findings/99/status", ANALYST, "POST", {"status": "closed"}, role="analyst")
     ok("an unknown finding: 404", st == 404)
     st, d = call("/api/findings/1/status", {"view"}, "POST", {"status": "closed"}, role="external", user="lg-check-external")
-    ok("external cannot move it (to them it does not exist)", st == 404)
+    ok("external cannot move it (findings are refused to them)", st == 403)
     with A.FINDINGS.lock:                                 # a finding made before channels: open to the team, never to the others
         A.FINDINGS._load(); A.FINDINGS.data["items"]["900"] = {"id": "900", "note": None, "section": "infections", "name": "x", "title": "Old",
                                                                "text": "", "codes": [], "user": "someone", "role": "researcher", "at": 1.0,
@@ -118,8 +129,8 @@ try:
                                                                                              "at": 1.0, "comment": ""}]}
         A.FINDINGS._save()
     ok("an old finding without a channel: still open to the team", any(f_["id"] == "900" for f_ in call("/api/findings?state=all", MGMT, role="management")[1]["findings"]))
-    ok("…never to the other roles", not call("/api/findings?state=all", {"view"}, role="external", user="lg-check-external")[1]["findings"]
-       and call("/api/findings/900/status", {"view"}, "POST", {"status": "closed"}, role="external", user="lg-check-external")[0] == 404)
+    ok("…never to the other roles", call("/api/findings?state=all", {"view"}, role="external", user="lg-check-external")[0] == 403
+       and call("/api/findings/900/status", {"view"}, "POST", {"status": "closed"}, role="external", user="lg-check-external")[0] == 403)
     with A.FINDINGS.lock:
         A.FINDINGS._load(); A.FINDINGS.data["items"].pop("900", None); A.FINDINGS._save()
     call("/api/findings/1/status", MGMT, "POST", {"status": "closed"}, role="management")

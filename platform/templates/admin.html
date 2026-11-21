@@ -17,7 +17,7 @@
 <body class="settings-page admin-page" data-perms="{{ lg_perms|join(',') }}" data-me="{{ lg_user }}">
   <header class="hud">
     <div class="hud-left">
-      <a class="brand-btn" href="/?intro=1" aria-label="Open the Looking Glass overview"><img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32"></a>
+      <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
       <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Admin · users and roles · signed in as {{ lg_name }} ({{ lg_role }})</span></div></div>
     </div>
     <div class="hud-right">

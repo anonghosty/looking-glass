@@ -117,7 +117,7 @@
 
   async function load() {
     const work = async () => {
-      try { S = await api("/api/admin/config"); draw(); } catch (e) { body.replaceChildren(el("p", "fd-empty", e.message)); }
+      try { S = await api("/api/admin/config"); draw(); } catch (e) { body.replaceChildren(el("p", "fd-empty", window.LGLoader.errorText(e))); }
     };
     if (window.LGLoader) await window.LGLoader.pane(pane, "Opening the configuration…", work); else await work();
   }
@@ -130,7 +130,7 @@
       S = await api("/api/admin/config", { values });
       edits.clear(); draw();
       say(S.pending_restart ? "Saved. It applies after a restart: use Restart now when it suits (about a minute)." : "Saved.");
-    } catch (e) { say(e.message, true); state(); }
+    } catch (e) { say(window.LGLoader.errorText(e, true), true); state(); }
   });
   undo.addEventListener("click", () => { edits.clear(); draw(); say(""); });
 
@@ -139,7 +139,7 @@
     restart.disabled = true; say("Restarting…");
     try {
       await api("/api/admin/config/restart", {});
-    } catch (e) { restart.disabled = false; say(e.message, true); return; }
+    } catch (e) { restart.disabled = false; say(window.LGLoader.errorText(e, true), true); return; }
     window.LGLoader?.busy("Restarting Looking Glass");
     const t0 = Date.now();
     await new Promise((r) => setTimeout(r, 4000));

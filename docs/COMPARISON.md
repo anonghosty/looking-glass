@@ -45,7 +45,7 @@ and e-mail them, PGP-signed), Fody (contacts and sent tickets) and Tuency (const
 
 | Strengths | What it needs |
 |---|---|
-| Free, open source, mature; used by many national CERTs | **Resources**: a Linux server and several services to run and keep updated (Redis message queue, databases, bots) — minimum 4 GB RAM, 2 CPUs, 10 GB disk plus data ([hardware requirements][imq-hw]) |
+| Free, open source, mature; used by many national CERTs | **Resources**: a Linux server and several services to run and keep updated (Redis message queue, databases, bots); minimum 4 GB RAM, 2 CPUs, 10 GB disk plus data ([hardware requirements][imq-hw]) |
 | Automates notifying the owners of affected hosts | Staff to configure the bots and apply Shadowserver format updates |
 | Handles many feeds, not only Shadowserver | Another tool to visualise the results (it moves and routes data; it is not a dashboard) |
 
@@ -74,7 +74,7 @@ Free and open source (AGPL-3.0), built for one job: turning a CSIRT's own Shadow
 
 | Strengths | Limits (honestly) |
 |---|---|
-| Ready-made views of every Shadowserver report: a live map, the services platform, analysis, host lists, PDF and CSV reports | Shadowserver reports only — not a general feed or log platform |
+| Ready-made views of every Shadowserver report: a live map, the services platform, analysis, host lists, PDF and CSV reports | Shadowserver reports only, not a general feed or log platform |
 | Useful straight after the guided installer: mailbox, database, platform, accounts | Replays the previous day (as Shadowserver delivers it); not real-time ingestion of other feeds |
 | Modest resources: one server with 4 GB RAM for about 50,000 records a day ([installation guide](INSTALLATION.md)) | Does not e-mail constituents automatically (IntelMQ does) |
 | Executive portal and reports with aggregates only; masked views for partners and public screens | No free-text search across arbitrary data (Elasticsearch does) |
@@ -85,14 +85,14 @@ Free and open source (AGPL-3.0), built for one job: turning a CSIRT's own Shadow
 | | IntelMQ | Elastic Stack | **Looking Glass** |
 |---|:---:|:---:|:---:|
 | Free to use | ✅ | ✅ | ✅ |
-| Ready-made views of Shadowserver data | — | ◐ build them | ✅ |
+| Ready-made views of Shadowserver data | no | ◐ build them | ✅ |
 | Useful straight after installing | ◐ configure bots | ◐ build dashboards | ✅ |
-| Executive reports and dashboard | — | ◐ build them | ✅ |
-| Automatic notification of constituents | ✅ | — | — |
-| Many feeds besides Shadowserver | ✅ | ✅ | — |
-| Search across any data, at scale | — | ✅ | — |
+| Executive reports and dashboard | no | ◐ build them | ✅ |
+| Automatic notification of constituents | ✅ | no | no |
+| Many feeds besides Shadowserver | ✅ | ✅ | no |
+| Search across any data, at scale | no | ✅ | no |
 
-✅ built in · ◐ partly, or with work · — not its job
+✅ built in · ◐ partly, or with work · no: not its job
 
 ## Why it matters for Africa
 
@@ -114,7 +114,7 @@ IntelMQ and Elastic.
 |---|---|
 | **IntelMQ** | notifies the owners of affected hosts, across many feeds |
 | **Elastic Stack** | searches everything you keep, for investigations and hunting |
-| **Looking Glass** | shows the picture: what is happening in the country, where, and what to fix first — for analysts and executives |
+| **Looking Glass** | shows the picture: what is happening in the country, where, and what to fix first, for analysts and executives |
 
 Looking Glass reads the reports from the mailbox (or a MongoDB you already have) and changes nothing upstream, so it
 runs happily next to an existing IntelMQ or Elastic set-up.
@@ -140,11 +140,11 @@ Checked in November 2026.
 [aa]: https://africanarguments.org/2026/10/cybersecurity-is-the-infrastructure-africa-is-forgetting-to-build/
 [interpol]: https://www.interpol.int/content/download/23094/file/INTERPOL_Africa_Cyberthreat_Assessment_Report_2025.pdf
 
-- Shadowserver, *2024: highlights of the year in review* — [link][ss-2024]
-- Shadowserver, *Overview of free public benefit network security reports* — [link][ss-overview]
-- Shadowserver, report schemas — [link][ss-schema]; 2021 report restructuring notice — [link][ss-2021]; public dashboard — [link][ss-dash]; Elasticsearch loader — [link][ss-es]
-- IntelMQ documentation: introduction — [link][imq-docs]; the IntelMQ universe — [link][imq-universe]; hardware requirements — [link][imq-hw]; schema update thread — [link][imq-schema]
-- Elastic, pricing FAQ — [link][es-faq]; AGPL announcement — [link][es-agpl]; Opster, Elasticsearch minimum requirements — [link][es-size]
-- UNIDIR, *Strengthening national CSIRT cooperation* (2025) — [link][unidir]
-- African Arguments, *Cybersecurity is the infrastructure Africa is forgetting to build* (2026) — [link][aa]
-- INTERPOL, *Africa Cyberthreat Assessment Report 2025* — [link][interpol]
+- Shadowserver, *2024: highlights of the year in review*: [link][ss-2024]
+- Shadowserver, *Overview of free public benefit network security reports*: [link][ss-overview]
+- Shadowserver, report schemas: [link][ss-schema]; 2021 report restructuring notice: [link][ss-2021]; public dashboard: [link][ss-dash]; Elasticsearch loader: [link][ss-es]
+- IntelMQ documentation, introduction: [link][imq-docs]; the IntelMQ universe: [link][imq-universe]; hardware requirements: [link][imq-hw]; schema update thread: [link][imq-schema]
+- Elastic, pricing FAQ: [link][es-faq]; AGPL announcement: [link][es-agpl]; Opster, Elasticsearch minimum requirements: [link][es-size]
+- UNIDIR, *Strengthening national CSIRT cooperation* (2025): [link][unidir]
+- African Arguments, *Cybersecurity is the infrastructure Africa is forgetting to build* (2026): [link][aa]
+- INTERPOL, *Africa Cyberthreat Assessment Report 2025*: [link][interpol]

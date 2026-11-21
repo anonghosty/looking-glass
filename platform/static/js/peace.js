@@ -16,7 +16,7 @@
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
       window.LGLoader ? window.LGLoader.go("/admin", on ? "Peace of mind: admin, audit and Settings only" : "Everything back") : location.reload();
     } catch (e) {
-      box.checked = !on; msg.classList.remove("lg-loading"); msg.querySelector(".lg-logo-wrap")?.remove(); msg.textContent = e.message;
+      box.checked = !on; msg.classList.remove("lg-loading"); msg.querySelector(".lg-logo-wrap")?.remove(); msg.textContent = window.LGLoader.errorText(e, true);
     } finally { box.disabled = false; }
   });
 })();

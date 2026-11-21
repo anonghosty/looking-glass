@@ -40,7 +40,7 @@
   async function load() {
     let r;
     try { r = await fetch("/api/intelligence", { cache: "no-store" }); }
-    catch (e) { $("itLoading")?.remove(); window.LGLoader?.ready(); main.append(el("p", "fd-empty", `Could not open it: ${e.message}`)); return; }
+    catch (e) { $("itLoading")?.remove(); window.LGLoader?.ready(); main.append(el("p", "fd-empty", `Could not open it: ${window.LGLoader.errorText(e)}`)); return; }
     const d = await r.json().catch(() => ({}));
     $("itLoading")?.remove(); window.LGLoader?.ready();
     if (!r.ok) { main.append(el("p", "fd-empty", d.error || `Could not open Abused or Compromised (HTTP ${r.status})`)); return; }
@@ -146,7 +146,7 @@
     // the platform's loading animation while the records are read (2026-11-14: the page showed only a line of text)
     window.LGLoader?.busy("Reading the report's records");
     try { r = await postJSON("/api/intelligence/report", body()); d = await r.json().catch(() => ({})); }
-    catch (e) { window.LGLoader?.ready(); pane.replaceChildren(el("p", "fd-empty", `Could not read it: ${e.message}`)); return; }
+    catch (e) { window.LGLoader?.ready(); pane.replaceChildren(el("p", "fd-empty", `Could not read it: ${window.LGLoader.errorText(e)}`)); return; }
     window.LGLoader?.ready();
     if (!r.ok) { pane.replaceChildren(el("p", "fd-empty", d.error || `Could not read it (HTTP ${r.status})`)); return; }
     drawView(pane, d);
@@ -243,14 +243,14 @@
     }
     // the records: the platforms' host table, with its downloads
     const rec = el("section", "m-sec wide it-records");
-    const rh = el("div", "drill-head"); rh.append(el("h3", null, `Records${d.total > d.shown ? ` · the first ${fmt(d.shown)} of ${fmt(d.total)} (the CSV carries all)` : ""}`));
+    const rh = el("div", "drill-head"); rh.append(el("h3", null, `Records${d.total > d.shown ? ` · the first ${fmt(d.shown)} of ${fmt(d.total)}${d.masked_view ? "" : " (the CSV carries all)"}` : ""}`));
     const acts = el("div", "drill-actions");
     if (d.can_reveal) {
       const rv = el("button", "pill-btn", view.reveal ? "Mask the accounts again" : "Show the accounts"); rv.type = "button";
       rv.title = view.reveal ? "" : "Leaked accounts are masked. Showing them is written to the audit log.";
       rv.addEventListener("click", () => { view.reveal = !view.reveal; fetchView(false); }); acts.append(rv);
     }
-    if (d.total) {
+    if (d.total && !d.masked_view) {             // the masked view (external accounts) downloads nothing
       // the view goes in the request body, never the address; the file comes back and is saved from the page
       const ex = el("button", "pill-btn", "Download CSV"); ex.type = "button"; ex.title = "Every record of this view, as a spreadsheet file. The download is written to the audit log.";
       // through the platform's one download helper (LGLoader.download, r89): a POST with the CSRF token
@@ -264,12 +264,13 @@
     }
     rh.append(acts); rec.append(rh);
     if (d.masked) rec.append(el("p", "drill-intro", "Accounts are masked (first letter and domain). “Show the accounts” shows them in full; that is written to the audit log."));
+    if (d.masked_view) rec.append(el("p", "drill-intro", "Masked view: IP addresses are shown as host labels, networks by their alias, and host names, organisations, accounts and e-mail addresses are hidden."));
     if (!d.rows.length) rec.append(el("p", "drill-empty", "No record on this day with this selection."));
     else rec.append(table(d));
     pane.append(rec);
     // an analyst code and finding from this view
     if (d.code) pane.append(codeBox(d));
-    else if (!d.no_ip && d.total) pane.append(el("p", "it-note", "An analyst code is made from the services platform's records: this report is not among them."));
+    else if (!d.no_ip && d.total && !d.masked_view) pane.append(el("p", "it-note", "An analyst code is made from the services platform's records: this report is not among them."));
   }
 
   // a cell's value (2026-11-14): web addresses in reference fields (a write-up, a block list's page) open in a new tab;
@@ -309,7 +310,7 @@
       for (const c of cols) {
         const td = el("td", `c-${c.key}`);
         const v = r[c.key] || "";
-        if (c.key === "ip" && v) {
+        if (c.key === "ip" && v && !d.masked_view) {       // masked view: a host label, not a look-up
           const b = el("button", "it-ip mono", v); b.type = "button"; b.title = "What else this host carries";
           b.addEventListener("click", () => hostView(v, b)); td.append(b);
         } else { cellText(td, c.key, v); }
@@ -356,7 +357,7 @@
     let r, d;
     window.LGLoader?.busy("Following this host through the week's reports");
     try { r = await postJSON("/api/intelligence/host", { ip }); d = await r.json().catch(() => ({})); }
-    catch (e) { window.LGLoader?.ready(); box.lastChild.replaceWith(el("p", "fd-empty", `Could not read it: ${e.message}`)); return; }
+    catch (e) { window.LGLoader?.ready(); box.lastChild.replaceWith(el("p", "fd-empty", `Could not read it: ${window.LGLoader.errorText(e)}`)); return; }
     window.LGLoader?.ready();
     if (!r.ok) { box.lastChild.replaceWith(el("p", "fd-empty", d.error || `HTTP ${r.status}`)); return; }
     const body = el("div", "it-hbody");

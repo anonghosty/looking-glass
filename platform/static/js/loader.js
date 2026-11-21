@@ -13,8 +13,85 @@
   // which brings the viewer back to the same place afterwards
   const nativeFetch = window.fetch.bind(window);
   let leaving = false;
-  window.fetch = async (...args) => {
-    const r = await nativeFetch(...args);
+  // Looking Glass could not be reached (r90: never the browser's own error text on a page): a READ (GET or HEAD) that
+  // got no answer, or a gateway page instead of Looking Glass's answer (502, 503, 504 that is not JSON), is tried again
+  // on its own after 2, 4, 8 and 15 s, saying so in plain words in a small line at the foot of the page (or through
+  // the caller's lgWait(text)); after the last try that line offers Retry. An ACTION (POST, PUT, PATCH, DELETE) is
+  // never sent again on its own: it could be done twice. The page words what happened with LGLoader.errorText.
+  const UNREACH = "Looking Glass could not be reached just now (it may be restarting).";
+  const WAITING = `${UNREACH} Trying again…`;
+  const WAITS = [2000, 4000, 8000, 15000];
+  // the browsers' own words for a request that got no answer (Chrome and Edge, Firefox, Safari, older ones), for an
+  // answer that was not JSON (a gateway or sign-in page instead of Looking Glass's answer) and a gateway's status line
+  const NET_RE = /^(Failed to fetch|NetworkError when attempting to fetch resource|Load failed|Network request failed|The network connection was lost|The Internet connection appears to be offline|A network error occurred|net::ERR_)/i;
+  const JSON_RE = /" is not valid JSON|^Unexpected token|^Unexpected end of JSON input|^Unexpected non-whitespace character|^JSON\.parse:|^JSON Parse error|^The string did not match the expected pattern|^Unrecognized token/i;
+  const GATEWAY_RE = /^50[234]\b/;
+  const msgOf = (e) => (typeof e === "string" ? e : String((e && e.message) || ""));
+  /** true when no usable answer came from Looking Glass: no answer at all, or something that is not its JSON */
+  function lost(e) {
+    if (!e) return false;
+    const m = msgOf(e);
+    return e.unreachable === true || e.name === "SyntaxError" || e.name === "TimeoutError"
+      || NET_RE.test(m) || JSON_RE.test(m) || GATEWAY_RE.test(m);
+  }
+  const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
+  // the line at the foot of the page while reads are being tried again (built with the DOM: no HTML, no inline style
+  // attribute; the CSSOM is allowed by the page's Content-Security-Policy)
+  let netBar = null, netWaiting = 0;
+  function netLine(text, retry) {
+    if (!document.body) return;
+    if (!netBar) {
+      netBar = document.createElement("div"); netBar.className = "lg-net-bar"; netBar.setAttribute("role", "status");
+      Object.assign(netBar.style, { position: "fixed", left: "50%", bottom: "16px", transform: "translateX(-50%)", zIndex: "2147483000",
+        maxWidth: "calc(100vw - 32px)", boxSizing: "border-box", display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap",
+        padding: "8px 14px", borderRadius: "10px", background: "#1d1d22", color: "#ededef", border: "1px solid #3a3a42",
+        boxShadow: "0 6px 24px rgba(0,0,0,.35)", font: "14px/1.4 system-ui, sans-serif" });
+    }
+    const span = document.createElement("span"); span.textContent = text;
+    netBar.replaceChildren(span);
+    if (retry) {
+      const b = document.createElement("button"); b.type = "button"; b.className = "pill-btn"; b.textContent = "Retry";
+      b.title = "Opens this page again, which reads everything again";
+      b.addEventListener("click", () => { span.textContent = WAITING; b.disabled = true; location.reload(); });
+      netBar.append(b);
+    }
+    if (!netBar.isConnected) document.body.append(netBar);
+  }
+  const netHide = () => { if (netBar && !netWaiting) netBar.remove(); };
+  window.fetch = async (input, init) => {
+    const opts = init || {};
+    const method = String(opts.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
+    const again = (method === "GET" || method === "HEAD") && opts.lgRetry !== false;
+    const onWait = typeof opts.lgWait === "function" ? opts.lgWait : null;
+    let r = null, waited = false;
+    try {
+      for (let i = 0; ; i++) {
+        let failed = null;
+        try {
+          r = await nativeFetch(input, init);
+          if (again && i < WAITS.length && [502, 503, 504].includes(r.status) && !/json/i.test(r.headers.get("Content-Type") || "")) failed = "gateway";
+        } catch (e) {
+          if (!again || !lost(e) || opts.signal?.aborted) throw e;
+          if (i >= WAITS.length) {
+            const out = new Error(UNREACH); out.unreachable = true; out.lgTried = true; out.cause = e;
+            throw out;
+          }
+          failed = e;
+        }
+        if (!failed) break;
+        if (onWait) onWait(WAITING);
+        else { if (!waited) netWaiting++; netLine(WAITING); }
+        waited = true;
+        await sleep(WAITS[i]);
+        if (opts.signal?.aborted) throw new DOMException("The request was stopped.", "AbortError");
+      }
+    } catch (e) {
+      if (waited && !onWait) { netWaiting--; if (e && e.lgTried) netLine(UNREACH, true); else netHide(); }
+      throw e;
+    }
+    if (waited && !onWait) netWaiting--;
+    if (r.ok) netHide();                         // Looking Glass answers again: the line goes
+    else if (waited && !onWait && r.status >= 500) netLine(UNREACH, true);
     if (r.status === 401 && !leaving) {
       leaving = true;
       location.href = `/login?next=${encodeURIComponent(location.pathname + location.search)}`;
@@ -202,9 +279,36 @@
     hide,
     /** the plain words when the server could not be reached (a restart, a dropped connection), never the browser's
         own "Failed to fetch" */
-    UNREACHABLE: "Looking Glass could not be reached just now (it may be restarting).",
+    UNREACHABLE: UNREACH,
+    /** the same while a read is tried again on its own (2, 4, 8, 15 s) */
+    WAITING,
+    /** an action (save, send, approve…) that got no usable answer: never sent again on its own (it could be done twice) */
+    NOT_DONE: "Looking Glass could not be reached (it may be restarting), so this may not have been done. Try again in a moment; if you are not sure, open the page again to check first.",
     /** true for an error that means the request never got an answer (fetch's TypeError), not a refusal */
     unreachable(e) { return !!e && (e.name === "TypeError" || e.unreachable === true); },
+    /** true when no usable answer came from Looking Glass: none at all (the browser's "Failed to fetch", "NetworkError
+        when attempting to fetch resource.", "Load failed"), or one that is not its JSON (a gateway page) */
+    lost,
+    /** The words a page shows for a caught error (r90: one shared function, tests/check_error_text.py). The server's
+        own message (an Error the page made from its JSON "error") is kept as it is; the browser's own text never
+        reaches the page: no answer or no JSON answer gives UNREACHABLE for a read and NOT_DONE for an action
+        (action = true: the person clicked to change something); a fault in the page's script gives plain words. */
+    errorText(e, action) {
+      if (lost(e)) return action ? window.LGLoader.NOT_DONE : UNREACH;
+      const m = msgOf(e).trim();
+      const own = typeof e === "string" || !!e && (!e.name || e.name === "Error");     // words a page or the server wrote
+      if (own && m) return m;
+      return action ? "That did not work, so it may not have been done. Try again in a moment." : "Something went wrong on this page. Open it again to try once more.";
+    },
+    /** a request and its JSON answer ({r, j, tries}; j is {} when the answer is not JSON): a read is tried again on its
+        own after 2, 4, 8 and 15 s when Looking Glass could not be reached (onWait(text) says so meanwhile, instead of
+        the line at the foot of the page), then it throws an error that lost() knows; an action is sent once */
+    async ask(url, opts, onWait) {
+      let tries = 0;
+      const r = await fetch(url, { credentials: "same-origin", ...opts, lgWait: (text) => { tries++; onWait?.(text); } });
+      const j = await r.json().catch(() => ({}));
+      return { r, j, tries };
+    },
     /** a file from the server (r89, the user 2026-11-21: quarterly downloads failed with "Network error"): through
         fetch, a blob and a temporary link, never a plain <a href download> (on a self-signed certificate the browser's
         download manager makes its own request, which often fails before it reaches Looking Glass). The button shows
@@ -265,7 +369,7 @@
       for (let attempt = 0; attempt < 2 && !r; attempt++) {
         try { r = await fetch(url, opts); }
         catch (e) {
-          if (!window.LGLoader.unreachable(e) || attempt) throw e;
+          if (!window.LGLoader.unreachable(e) || attempt || e.lgTried) throw e;     // lgTried: a read already tried 2, 4, 8, 15 s
           await new Promise((ok) => setTimeout(ok, 1500));
         }
       }

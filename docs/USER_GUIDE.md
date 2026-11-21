@@ -151,7 +151,7 @@ says how many attempts are left.
 ### Roles
 | Role | Sees | Can |
 |---|---|---|
-| **External** | both platforms, always masked: IP addresses become an opaque label (`Host 3f9a2c41b07e`, no part of the address), network names become aliases ("Telco 1"), host names are hidden | view only. No Demo switch, exports or Malpedia |
+| **External** | three pages only: network communications, publicly accessible / vulnerable services and Abused or Compromised, always masked: IP addresses become an opaque label (`Host 3f9a2c41b07e`), network names become aliases ("Telco 1"), host names, organisations, accounts and e-mail addresses are hidden | View only: no Demo switch, downloads, look-ups or copying; every other page is refused |
 | **Analyst** | everything, unmasked | analyse, export CSV, look up Malpedia, switch Demo on for presentations |
 | **Management** (managers, executives or team leads) | only the **management portal** (Executive, `/management`): aggregated figures of both platforms, never individual addresses | filter, explain infections and vulnerabilities, download executive PDF reports. No other role can be given this portal (admins can preview it) |
 | **Researcher** | only the **Definitions** page (no platforms or addresses) | the organisation's security researchers: define, with references, the malware names Malpedia does not know and the issues that are not CVEs; add notes to CVEs; correct network names and types |
@@ -159,7 +159,8 @@ says how many attempts are left.
 | **Auditor** | only the **Audit portal** (`/audit`): the audit log by tab, the dashboard and control checks, the access review, the log's integrity | read and export evidence for a period. Read only everywhere; never the platforms or any host data |
 | **Admin** | everything | also Settings, definitions, accounts, roles, the Audit portal; **Peace of mind** steps out of the operations |
 
-Every role has an **Overview**, and every role but the auditor the **Findings** page (only the findings it takes part in).
+Every role has an **Overview**. Researchers, management, analysts, advisors and admins also have the **Findings** page
+(only the findings they take part in); external accounts and the auditor do not.
 
 **Permanent roles.** Admin, Management, Researcher, Advisor, Auditor and External are permanent: no one can remove them or change
 their permissions (on the Roles page they have no Remove button and their boxes cannot be changed). Administrators
@@ -229,9 +230,9 @@ before and at least 500 more; a drop (blue) the other way round. When the platfo
 (services) or one infection (communications) jumped on its own, the notice names it and says the total is steady. On
 an ordinary day there is no notice. It holds counts and names only, never an address.
 
-At the top left: **Display** quality (Auto / Full / Lite, see section 6). At the top right: your pages as buttons, the
-**bell** (see [Notifications](#notifications-the-bell)), **Settings**, and **Log out** last; under them, whether both
-platforms show the whole country or your constituency.
+At the top left: **Display** quality (Auto / Full / Lite, see section 6). At the top right: the **bell** (see
+[Notifications](#notifications-the-bell)), **Tutorial** and **Log out**. Your pages are the cards further down. Under the
+header buttons: whether both platforms show the whole country or your constituency.
 
 The day at a glance: totals, the activity over the day, the mix of attack types and every monitored report (all of
 them, in as many columns as fit, with each report's records that day).
@@ -248,7 +249,7 @@ and its distinct hosts (hover for whether its times are a placeholder).
 The **Glossary** tab explains every term and every Shadowserver report in plain language, with links to Shadowserver's own
 report pages.
 
-Come back to it at any time with the **Overview** button, which is in every page's header, or the logo.
+Come back to it at any time with the **Overview** button, which is in every page's header.
 
 ## 3. Reported network communications (the map)
 
@@ -284,6 +285,9 @@ Come back to it at any time with the **Overview** button, which is in every page
   filter's events all come later in the day, the stream says so and when: "None of the 6 matching events of 2026-01-15
   has been replayed yet: the first is at 09:30:00 UTC and the replay is at 07:30:00 UTC, so it appears in about 2 hours.
   Their 5 IP addresses are already in the charts and statistics: click them to analyse them, or find them on the map."
+  If the day's reports hold nothing for your constituency, the event list says "No records for your constituency on
+  &lt;day&gt;." Without a constituency it says "No records reported on &lt;day&gt;." While the day's reports have not
+  arrived yet, it says it is waiting. The services page's stream does the same.
 - **Decoded beacon** (in the details, under *HTTP request (as seen by the sinkhole)*; analysts and admins). Some bots
   pack what they know about the machine into one encoded query value of their check-in. When the request carries one
   in a format Looking Glass knows, it is decoded on the server and shown here: the format, operator, version and
@@ -752,6 +756,9 @@ look-ups. Types come from PeeringDB's categories and the company name (bank, uni
 sector is missing, **Add a type** (with the word used for it in Demo mode, for example Institution). Added types are kept
 in `data/network_types.json` and offered everywhere, also in the Settings constituency filter.
 
+The Records column counts each network's records on the day the map shows (both platforms, before the constituency);
+the header names the day. It says "not loaded" while that day's reports are not loaded yet.
+
 **Reports (PDF + CSV).** Every list behind an analysis figure, on both platforms, has **Download report (PDF + CSV)**
 next to **Download CSV** (permission *export*). It is a ZIP file with the PDF and the complete list as CSV; the PDF
 does not repeat every address, it refers to the CSV. The PDF contains:
@@ -868,7 +875,10 @@ between work in progress and everything.
 Shadowserver sends a group of **Intelligence** reports beside the two platforms: compromised systems and victims
 (compromised websites and devices, ransomware victims), malicious content hosted in the constituency (malware and
 sandbox URLs, spam links), addresses on block lists or targeted, leaked accounts, and attacker infrastructure. The
-**Abused or Compromised** page (`/intelligence`) is for analysts and administrators; it is closed in Demo mode.
+**Abused or Compromised** page (`/intelligence`) is for analysts and administrators, and for external accounts in a
+masked view; it is closed in Demo mode. External accounts see it masked: host labels instead of addresses, network
+aliases, and host names, organisations, accounts and e-mail addresses hidden; they cannot download, look up a host or
+show accounts.
 
 - **Group tiles:** today's records in each group against the median of the 7 days before, with the 8 days as bars.
   While the day's files are still coming in, the page says so: "still arriving: N of the usual M reports".
@@ -944,14 +954,14 @@ That is a normal day-to-day change"). The baseline is built in the background an
 filter or clicked combination gets its own baseline in about a second (the past days are kept in memory). The executive report
 has a **7-day baseline** page and a `seven-day-trend` CSV.
 
-**How changes are graded** — change = (today − 7-day average) ÷ 7-day average:
+**How changes are graded:** change = (today − 7-day average) ÷ 7-day average:
 
 | Grade | Change | What it means |
 |---|---|---|
 | Normal (grey) | within ±10% | the usual day-to-day change; also when the numbers are too small to read anything into (under 20, or fewer than 10 apart) |
 | Slight rise / Slight drop (blue) | 10% to 25% | a small change: keep an eye on it |
 | Caution (amber) | 25% to 50% up | clearly above the usual level: look into it today |
-| Danger (red) | 50% or more up, or new this week (20 or more) | extreme: investigate now — a new campaign, newly affected hosts, or a network reported for the first time |
+| Danger (red) | 50% or more up, or new this week (20 or more) | extreme: investigate now (a new campaign, newly affected hosts, or a network reported for the first time) |
 | Clear drop (green) | 25% to 50% down | clearly below the usual level: often clean-up working |
 | Unusual drop / Went quiet (amber) | 50% or more down, or none today (after 10 or more a day) | check before reading it as good news: a takedown, a sinkhole change or a report that did not arrive |
 
@@ -1174,18 +1184,24 @@ on that page too.
 
 - **Not in**: the network is not part of your constituency.
 - **The whole network**: every address of that network (its AS number) is in.
-- **Some address blocks**: the network's row opens in place, under it, with the network's address blocks (/24) that
-  had records yesterday, busiest first, each with its record count and a tick box. The first 50 are shown; **Show all
-  N blocks** shows the rest, and the search box finds a block (for example 192.0.2). Tick the blocks that are yours.
-  **Close** (or the row's button) folds the row again; folded, it says how many are chosen, for example "3 of 120
-  blocks chosen". The list grows the table while it is open. The first time a network's blocks are asked for, the
-  loading animation shows until they arrive.
+- **Some address blocks**: only the blocks you tick are in.
 
-**Other address ranges**, under the table, is for ranges or single addresses that belong to no listed network (for
-example a government network without its own AS number), one per line, such as 198.51.100.0/22. Choosing a network or
-typing a range switches the Constituency card to **Only selected networks and address ranges**. Nothing is looked up
-outside Looking Glass. **Apply settings** saves it all: the whole networks as AS numbers, the ticked blocks and the
-other ranges as address ranges. When the page opens again, a saved range that is one of a network's blocks shows as
+Choose **Some address blocks** in a network's Constituent column to open its row. It lists every /24 block in which the
+network had records yesterday, busiest first, after the blocks you already chose. Tick the blocks that are yours. Your
+choice is kept until you untick it; blocks without records stay chosen and show "no records yesterday". A block you
+tick or add stays in that network's row after **Apply settings**, even if it never appears in the reports. To choose a
+block that is not listed, type it in **Add a block** (for example 192.0.2.0/24, or a single address to add the /24 it
+is in) and press **Add**. Each block shows its record count and a tick box. The first 50 are shown; **Show all N
+blocks** shows the rest, and the search box finds a block (for example 192.0.2). **Close** (or the row's button) folds
+the row again; folded, it says how many are chosen, for example "3 of 120 blocks chosen". The list grows the table
+while it is open. The first time a network's blocks are asked for, the loading animation shows until they arrive.
+
+Under the table, **Other address ranges** lists ranges that belong to no listed network, one per row: add one in the
+box, remove one with its × button. A range not seen in the reports yet stays there, marked as such. A range can be a
+single address or a block such as 198.51.100.0/22 (for example a government network without its own AS number).
+Choosing a network or adding a range switches the Constituency card to **Only selected networks and address ranges**.
+Nothing is looked up outside Looking Glass. Press **Apply settings** at the bottom to save: the whole networks as AS
+numbers, the ticked blocks and the other ranges as address ranges. When the page opens again, a saved range that is one of a network's blocks shows as
 that network's chosen block; any other range is under Other address ranges. Accounts without the Settings permission
 see the choices in words, without the controls.
 
@@ -1310,7 +1326,9 @@ checks (open them to see each one), its purge as it stands now, whether the purg
 result once the pipeline has run it. **Make it again** counts an ended quarter again (for example once its last day's
 reports are loaded, or after a NOT VALID run); click it twice to confirm. It offers only ended quarters of the last
 four that have report rows (from the oldest report day in the database on) and were not purged; with none it says
-"No ended quarter has report rows yet: the first report is made on <day>." The timing of the purge cannot be changed here or
+"No ended quarter has report rows yet: the first report is made on <day>." When no ended quarter can be counted, Make it
+again shows only the reason. The pipeline's last purge check says "Nothing to purge now" when the latest quarter past
+its purge day had no report rows before its cutoff, and names the next quarter and its purge day. The timing of the purge cannot be changed here or
 anywhere: [OPERATIONS.md](OPERATIONS.md#the-quarterly-report-and-the-purge) explains the cycle and what to do when a
 report is NOT VALID.
 
@@ -1457,3 +1475,7 @@ before changing anything.
 - Send an advisory as two attachments (the PDF and the devices CSV), never the archive, and at the TLP it carries.
 - Never share recovery codes or the authenticator key.
 - Sign out (top bar) on shared computers.
+- If a page says "Looking Glass could not be reached just now (it may be restarting)", the server did not answer,
+  usually because it is restarting. Pages that read data try again on their own and offer Retry. If you had just saved
+  or sent something, open the page again at http://localhost:<your port> to check whether it went through before trying
+  again.

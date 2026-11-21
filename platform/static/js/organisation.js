@@ -29,7 +29,7 @@
         ? `A wide logo works best, about ${window.LGLogoTool.OUT_W} × ${window.LGLogoTool.OUT_H} pixels (2:1). You size and crop it next, and see it on the advisory.`
         : `At most ${maxKb} KB.`;
       sync();
-    } catch (e) { msg(`The organisation could not be read: ${e.message}`, true); }
+    } catch (e) { msg(`The organisation could not be read: ${window.LGLoader.errorText(e)}`, true); }
   }
 
   $("orgName").addEventListener("input", sync);
@@ -64,7 +64,7 @@
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
       await load(); msg("Saved: the next advisories carry it.");
-    } catch (e) { msg(e.message, true); sync(); }
+    } catch (e) { msg(window.LGLoader.errorText(e, true), true); sync(); }
   });
   load();
 })();

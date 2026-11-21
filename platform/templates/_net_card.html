@@ -29,7 +29,8 @@
       </header>
       {% if readonly %}<p class="dz-hint st-ro-note"><b>Choose your constituents in the Constituent column:</b> Not in, The whole network, or
         Some address blocks (the network's row opens with its address blocks that have records, busiest first: tick the ones that
-        are yours). Ranges that belong to no listed network go in <b>Other address ranges</b>, under the table. Every part of
+        are yours, or add one that is not listed). Your choice is kept until you untick it; blocks without records stay chosen.
+        Ranges that belong to no listed network go in <b>Other address ranges</b>, under the table. Every part of
         Looking Glass then shows only those, for every user, once you press <b>Apply settings</b> at the bottom; the Constituency card above sums it up.
         To correct a name or a type, open the Definitions page.</p>{% endif %}
       <div class="dz-panel" id="netTypePanel" hidden>
@@ -52,10 +53,22 @@
         <select class="dz-select lg-enhance" id="netTypeFilter" aria-label="Show one type"><option value="">All types</option></select>
         <span class="dz-status" id="netStatus" role="status"></span>
       </div>
-      <div class="table-wrap dz-table net-table"><table id="netEdTable"><thead><tr><th>AS number</th><th>Company name</th><th>Type</th><th>Note</th><th>Registry holder</th><th class="num">Events</th><th>Status</th><th class="dz-act"></th></tr></thead><tbody></tbody></table></div>
+      <div class="table-wrap dz-table net-table"><table id="netEdTable"><thead><tr><th>AS number</th><th>Company name</th><th>Type</th><th>Note</th><th>Registry holder</th><th class="num">Records</th><th>Status</th><th class="dz-act"></th></tr></thead><tbody></tbody></table></div>
       {% if readonly %}
-      {# ranges not tied to a listed network (settings.js; replaces the Constituency card's "Extra address ranges") #}
-      <label class="st-field st-cidrs nb-other"><span>Other address ranges (one per line, for example 198.51.100.0/22 or a single address): ranges that belong to no listed network</span>
-        <textarea id="cidrs" rows="4" spellcheck="false" placeholder="198.51.100.0/22"></textarea></label>
+      {# ranges not tied to a listed network (settings.js; replaces the Constituency card's "Extra address ranges");
+         r90: one row each with a remove button, and a box to add one #}
+      <div class="st-cidrs nb-other" id="cidrs" role="group" aria-labelledby="cidrsTitle">
+        <h3 class="nb-other-title" id="cidrsTitle">Other address ranges</h3>
+        <p class="dz-hint">Ranges or single addresses that belong to no listed network, for example a government network without its own
+          AS number. Ranges not seen in the reports yet are kept here too. Remove one with its × button; Apply settings, at the bottom, saves the change.</p>
+        <ul class="nb-chips" id="cidrsList" aria-label="Other address ranges"></ul>
+        <p class="dz-hint" id="cidrsNote"></p>
+        <div class="nb-add" id="cidrsAdd">
+          <label class="nb-add-label" for="cidrsNew">Add a range</label>
+          <input class="dz-input mono nb-add-input" id="cidrsNew" type="text" maxlength="64" autocomplete="off" spellcheck="false" placeholder="for example 198.51.100.0/22">
+          <button class="lg-btn sm" id="cidrsAddBtn" type="button">Add</button>
+          <span class="nb-add-msg muted" id="cidrsMsg" role="status"></span>
+        </div>
+      </div>
       {% endif %}
     </section>

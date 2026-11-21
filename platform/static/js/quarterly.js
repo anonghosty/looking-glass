@@ -31,30 +31,18 @@
     const d = new Date(`${String(iso).slice(0, 10)}T00:00:00Z`);
     return isNaN(d) ? String(iso) : d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   };
-  const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
   let timer = null, confirmQ = null, drawnOnce = false;
 
   // ---------------- Looking Glass not reachable (a restart): plain words, a few tries with longer waits, then Retry
-  const UNREACH = window.LGLoader?.UNREACHABLE || "Looking Glass could not be reached just now (it may be restarting).";
+  // r90: the shared helpers in loader.js (LGLoader.ask, lost, errorText); a read is tried again after 2, 4, 8 and 15 s
+  // (onWait says so here), an action (Make it again, the purge's switch) is sent once
+  const UNREACH = window.LGLoader.UNREACHABLE;
   const WAITING = `${UNREACH} Trying again…`;
-  const isNet = (e) => (window.LGLoader?.unreachable ? window.LGLoader.unreachable(e) : !!e && e.name === "TypeError");
-  const WAITS = [2000, 4000, 8000, 15000];
-  /** a request and its JSON answer; when no answer came, tries again after 2, 4, 8 and 15 s (onWait says so), then
-      throws an error that isNet() knows */
-  async function ask(url, opts, onWait) {
-    for (let i = 0; ; i++) {
-      try {
-        const r = await fetch(url, { credentials: "same-origin", ...opts });
-        const j = await r.json().catch(() => ({}));
-        return { r, j, tries: i };
-      } catch (e) {
-        if (!isNet(e) || i >= WAITS.length) throw e;
-        onWait?.(WAITING);
-        await sleep(WAITS[i]);
-      }
-    }
-  }
-  const plain = (e) => (isNet(e) ? UNREACH : "That did not work. Try again.");
+  const isNet = (e) => window.LGLoader.lost(e);
+  /** a request and its JSON answer ({r, j, tries}): LGLoader.ask */
+  const ask = (url, opts, onWait) => window.LGLoader.ask(url, opts, onWait);
+  /** the words for an action that did not go through (only actions use it): LGLoader.errorText */
+  const plain = (e) => window.LGLoader.errorText(e, true);
   const net = el("div", "q-net"); net.setAttribute("role", "status"); net.tabIndex = -1; net.hidden = true;
   body.before(net);
   function showNet(text, retry) {
@@ -145,7 +133,8 @@
     const msg = el("span", "q-msg"); msg.setAttribute("role", "status");
     if (d.making) { btn.disabled = true; msg.textContent = `${d.making} is being made…`; msg.classList.add("lg-loading"); }
     else if (d.error) { msg.textContent = d.error; msg.classList.add("bad"); }
-    if (!(d.can_make || []).length) { btn.disabled = true; sel.disabled = true; }
+    // no quarter to offer: no empty drop-down and no greyed button, only the sentence below (can_make_note)
+    const none = !(d.can_make || []).length;
     btn.addEventListener("click", async () => {
       const q = sel.value;
       if (confirmQ !== q) { confirmQ = q; btn.textContent = `Make ${q} again: click to confirm`; return; }
@@ -162,13 +151,21 @@
         poll();
       } catch (e) { msg.className = "q-msg bad"; msg.textContent = plain(e); btn.disabled = false; btn.textContent = "Make it again"; }
     });
-    t.append(sel, btn, msg); w.append(t);
-    if (!(d.can_make || []).length && d.can_make_note) w.append(el("p", "q-meta", d.can_make_note));
+    if (none) {
+      // a quarter still being made, or the last attempt's error, is still said
+      if (msg.textContent) { t.append(msg); w.append(t); }
+    } else { t.append(sel, btn, msg); w.append(t); }
+    if (none && d.can_make_note) w.append(el("p", "q-meta", d.can_make_note));
     const p = d.pipeline || {};
     const last = p.last || {};
+    // "nothing to purge": the latest quarter whose purge day passed had no rows to delete; its sentence names the
+    // quarter waiting next, so it is shown on its own (not as "<quarter> nothing to purge: …")
+    const lastText = !last.outcome ? "none yet"
+      : last.outcome === "nothing to purge" && last.why ? last.why
+        : `${last.quarter || ""} ${last.outcome}${last.why ? `: ${last.why}` : ""}`;
     w.append(el("p", "q-meta", p.found
       ? `The database pipeline's last purge check${last.at ? ` (${String(last.at).replace("T", " ").slice(0, 16)} UTC)` : ""}: `
-        + `${last.outcome ? `${last.quarter || ""} ${last.outcome}${last.why ? `: ${last.why}` : ""}` : "none yet"}.`
+        + `${lastText}.`
         + (p.purged_before ? ` Rows dated before ${day(p.purged_before)} have been purged.` : "")
       : "The database pipeline has not checked for a purge yet (or it runs on another computer)."));
     return w;

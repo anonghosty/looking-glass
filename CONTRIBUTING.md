@@ -52,6 +52,11 @@ reports. The demo data (`lg_demo`) is enough for nearly every change.
   `cd platform && python3 tools/screens_manifest.py --update 60-settings.png`. `--status` lists every screenshot that
   needs attention. A new screenshot is added to `SCREENS` in that tool, with the address it is taken on, before
   `--update`.
+- **New files are safe in your clone.** Updating an installation moves aside only files an earlier Looking Glass
+  release shipped and the new one no longer does. A file you add has never been shipped, so
+  `deploy/update_libraries.sh` leaves it where it is and names it as "Not part of Looking Glass, left in place". You never
+  edit `.release_files` or `.release_files_history`: the release builder writes both when a release is made, and your
+  file joins the list then.
 - **Code standard:** Python passes [Ruff](https://docs.astral.sh/ruff/) with the rules in [ruff.toml](ruff.toml)
   (undefined and unused names, bare `except:`, mutable or computed default arguments, late-bound loop variables and
   the like) and [Bandit](https://bandit.readthedocs.io/) with no medium or high finding; shell scripts pass

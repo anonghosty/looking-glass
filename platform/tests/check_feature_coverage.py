@@ -35,6 +35,12 @@ FEATURES = {
         "docs": [("docs/USER_GUIDE.md", "Some address blocks"), ("docs/USER_GUIDE.md", "Other address ranges"),
                  ("docs/CONFIGURATION.md", "Some address blocks"), ("docs/TECHNICAL_REFERENCE.md", "?asn=")],
     },
+    # r90: external accounts open the two platforms and Abused or Compromised only, masked (the sign-in gate's allow-list)
+    "external_access": {
+        "tour": [("/intelligence", "#itMain .it-hero")],
+        "glossary": ["role_external"],
+        "docs": [("docs/ROLES.md", "Abused or Compromised"), ("docs/TECHNICAL_REFERENCE.md", "external_access.py")],
+    },
     "library_supply": {
         "no_ui": "an alert in the administrators' existing bell and an entry in the audit log; no page or control of its own",
         "docs": [("docs/INSTALLATION.md", "When a library file does not match"),

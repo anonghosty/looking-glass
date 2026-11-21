@@ -165,7 +165,11 @@ print("Encrypted backups (GnuPG)")
 if shutil.which("gpg"):
     gh = os.path.join(tmp, "gnupg"); os.makedirs(gh); os.chmod(gh, 0o700)
     g = lambda *a: subprocess.run(["gpg", "--homedir", gh, "--batch", *a], capture_output=True, text=True)  # noqa: E731
-    g("--passphrase", "", "--pinentry-mode", "loopback", "--quick-gen-key", "LG backup test <test@example.invalid>", "default", "default", "never")
+    # the key made two minutes in the past: a clock that steps back a second (WSL, virtual machines) made gpg refuse a
+    # key "created 1 second in the future" (r90 staging); the same fix as the certificate test's backdating
+    import time as _time
+    g("--faked-system-time", f"{int(_time.time()) - 120}!", "--passphrase", "", "--pinentry-mode", "loopback",
+      "--quick-gen-key", "LG backup test <test@example.invalid>", "default", "default", "never")
     pub = g("--export", "--armor").stdout
     sec_path = os.path.join(tmp, "secret.asc")
     open(sec_path, "w").write(g("--export-secret-keys", "--armor", "--pinentry-mode", "loopback", "--passphrase", "").stdout)

@@ -4,7 +4,10 @@
 
   const CFG = window.TM_CONFIG || {};
   // Malpedia look-ups; without a Malpedia token the Looking Glass definitions (written by researchers) answer instead
-  const MP_ON = !!(CFG.malpedia || CFG.enrich);
+  // look-ups (Malpedia, definitions) only for a role with the 'malpedia' permission: the server refuses the others, so
+  // they get no Look up buttons (r90: external accounts)
+  const LOOKUPS = document.body.dataset.lookups === "1";
+  const MP_ON = !!(CFG.malpedia || CFG.enrich) && LOOKUPS;
   const MP_SRC = "";                   // look-ups ask every source now (name_sources.py): the buttons just say "Look up"
   const SOURCES_INTRO = "Each name is looked up once: the researchers' definitions, " + (CFG.malpedia ? "Malpedia (answers kept a week), " : "")
     + "MISP Galaxy and MITRE ATT&CK (copies kept on this server). Only the names are looked up.";
@@ -344,7 +347,7 @@
       } catch (err) {
         btn.disabled = false;
         btn.textContent = err.stopped ? `Look up this host's ${names.length} infection${names.length === 1 ? "" : "s"} / categor${names.length === 1 ? "y" : "ies"}`
-          : `Look-up failed: ${err.message} (click to retry)`;       // stopped (window closed): as it was
+          : `Look-up failed: ${window.LGLoader.errorText(err)} (click to retry)`;       // stopped (window closed): as it was
       }
     });
     wrap.append(btn); box.append(wrap);
@@ -366,7 +369,7 @@
     wrap.replaceChildren(el("div", "mp-loading", "Looking up…"));
     let r;
     try { r = await getJSON(`/api/malpedia?field=${encodeURIComponent(field)}&value=${encodeURIComponent(value)}`); }
-    catch (err) { wrap.replaceChildren(el("p", "mp-err", `Look-up failed: ${err.message}`)); return; }
+    catch (err) { wrap.replaceChildren(el("p", "mp-err", `Look-up failed: ${window.LGLoader.errorText(err)}`)); return; }
     renderMalpedia(wrap, r, value);
   }
   // links from Malpedia (third-party data): only http(s) becomes a link, anything else (javascript:, data:...) is plain text
@@ -440,7 +443,8 @@
   const titleCase = (s) => (s || "").toLowerCase().replace(/(^|[\s-])\w/g, (c) => c.toUpperCase());
   const regionNames = (() => { try { return new Intl.DisplayNames(["en"], { type: "region" }); } catch { return null; } })();
   const countryName = (cc) => { if (!cc) return "Unknown"; if (cc === "EU") return "Europe"; try { return regionNames ? regionNames.of(cc.toUpperCase()) : cc; } catch { return cc; } };
-  const flagUrl = (cc) => (cc && /^[a-z]{2}$/i.test(cc) && cc !== "EU" ? `https://flagcdn.com/w40/${cc.toLowerCase()}.png` : "");
+  // "UK" is how some reports write the United Kingdom; its flag file is "gb" (r90: the UK flag never loaded)
+  const flagUrl = (cc) => (cc && /^[a-z]{2}$/i.test(cc) && cc !== "EU" ? `https://flagcdn.com/w40/${cc.toLowerCase() === "uk" ? "gb" : cc.toLowerCase()}.png` : "");
   const flagImg = (cc) => { const i = el("img", "flag"); i.alt = ""; const u = flagUrl(cc); if (u) { i.src = u; i.loading = "lazy"; } else i.style.visibility = "hidden"; return i; };
   const hexRgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
   const sevColor = (s) => SEV[s] || SEV.info;
@@ -1062,7 +1066,7 @@
       state.pending.sort((a, b) => a.wall - b.wall);
       $("streamInfo").textContent = data.sampled ? `sampled ${data.returned} of ${data.total}` : "";
       if (toastIsError) hideToast();   // the feed is back: clear a feed error, but keep normal messages
-    } catch (err) { toast(`Data feed error: ${err.message}. Retrying…`); }
+    } catch (err) { toast(`Data feed error: ${window.LGLoader.errorText(err)} Retrying…`); }
     finally { polling = false; }
   }
 
@@ -1100,7 +1104,7 @@
         state.recentRate.push([Date.parse(ev.extracted_date), 1]);
       });
       state.cursor = to;
-    } catch (err) { toast(`Could not load recent attacks: ${err.message}`); state.cursor = to; }
+    } catch (err) { toast(`Could not load recent attacks: ${window.LGLoader.errorText(err)}`); state.cursor = to; }
   }
 
   // "Replayed so far": the exact number of the day's records (with the active filters) whose event time is
@@ -1136,6 +1140,9 @@
     let msg = null;
     if (filtered && r.total === 0) {
       msg = `No events of ${r.day} match these filters.`;
+    } else if (!filtered && r.total === 0) {
+      // the day is loaded (the server answered for it) and holds nothing: say so, not "waiting" (r90)
+      msg = !$("scopePill").hidden ? `No records for your constituency on ${r.day}.` : `No records reported on ${r.day}.`;
     } else if (r.replayed === 0 && r.total > 0 && r.next_at) {
       const first = r.next_at.slice(11, 19), now = new Date(at).toISOString().slice(11, 19);
       const head = !filtered ? `No event of ${r.day} has been replayed yet: the first`
@@ -1163,7 +1170,7 @@
       setTimeout(fitKpis, 1000);   // after the figures have counted up to their new width
       renderIntel(s);
     } catch (err) {   // keep previous; with no figures yet, say so once (review 2026-11-13)
-      if (my === refreshStats.seq && !state.stats && !refreshStats.toasted) { refreshStats.toasted = true; toast(`Could not load figures: ${err.message}`); }
+      if (my === refreshStats.seq && !state.stats && !refreshStats.toasted) { refreshStats.toasted = true; toast(`Could not load figures: ${window.LGLoader.errorText(err)}`); }
     }
   }
   // the drop-downs' counts follow the other filters (the user, 2026-11-19): asked again whenever a filter changes;
@@ -1180,7 +1187,7 @@
       keepFocus(() => flipList($("drawer"), buildFilters));
       renderPins();   // pinned rows can now show report labels
       if (state.facets.beacon_pending) setTimeout(loadBeaconFacet, 20000);
-    } catch (err) { toast(`Could not load filters: ${err.message}`); }
+    } catch (err) { toast(`Could not load filters: ${window.LGLoader.errorText(err)}`); }
   }
   // the day's beacons are decoded in the background on the server (beacon_stats.ready): only the Beacon filter is
   // filled in when they are done, so nothing else the analyst set changes
@@ -1585,7 +1592,7 @@
           ["Infections / categories", r.infections.join(", ")], ["Contacted hosts", r.hosts.join(", ")], ["Destinations", r.dst_ips.join(", ")],
         ]));
       } catch (err) {   // say so instead of "Loading…" forever (review 2026-11-13)
-        if (state.modalEv === ev) related.replaceWith(section("This host yesterday", [["Status", `Could not load: ${err.message}`]]));
+        if (state.modalEv === ev) related.replaceWith(section("This host yesterday", [["Status", `Could not load: ${window.LGLoader.errorText(err)}`]]));
       }
     }
   }
@@ -2246,7 +2253,7 @@
     } catch (err) {
       const top = insightStack[insightStack.length - 1];   // a newer analysis owns the dialog (review 2026-11-13)
       if (!top || top[0] !== kind || top[1] !== value) return;
-      $("iBody").replaceChildren(el("div", "i-loading", `Could not load analysis: ${err.message}`)); return;
+      $("iBody").replaceChildren(el("div", "i-loading", `Could not load analysis: ${window.LGLoader.errorText(err)}`)); return;
     }
     const cur = insightStack[insightStack.length - 1];
     if (!cur || cur[0] !== kind || cur[1] !== value) return;
@@ -2413,7 +2420,7 @@
     let r;
     try {
       r = await getJSON(`/api/insight/drill?kind=${encodeURIComponent(d.kind)}&value=${encodeURIComponent(d.value)}&metric=${metric}&at=${encodeURIComponent(d.as_of)}`);
-    } catch (err) { if (box.dataset.metric !== metric) return; box.replaceChildren(el("div", "i-loading", `Could not load the details: ${err.message}`)); return; }
+    } catch (err) { if (box.dataset.metric !== metric) return; box.replaceChildren(el("div", "i-loading", `Could not load the details: ${window.LGLoader.errorText(err)}`)); return; }
     if (box.dataset.metric !== metric) return;
     renderDrill(box, r, d);
   }
@@ -2462,7 +2469,7 @@
             if (box.dataset.metric === r.metric && !box.hidden && box.isConnected) renderDrill(box, r, d);
           } catch (err) {
             mp.disabled = false;
-            mp.textContent = err.stopped ? "Explain the names" : `Look-up failed: ${err.message} (retry)`;    // stopped: as it was
+            mp.textContent = err.stopped ? "Explain the names" : `Look-up failed: ${window.LGLoader.errorText(err)} (retry)`;    // stopped: as it was
           }
         });
         acts.append(mp);
@@ -3046,7 +3053,6 @@
       $("introScope").textContent = st.restricted
         ? `Showing your constituency: ${st.networks} AS number${st.networks === 1 ? "" : "s"}${st.cidrs ? `, ${st.cidrs} address range${st.cidrs === 1 ? "" : "s"}` : ""} · country ${st.country_name}`
         : `Showing the whole country (${st.country_name})`;
-      $("introSettings").title = `Settings · ${$("introScope").textContent}`;
       if (state.scopeVersion != null && st.version !== state.scopeVersion) {
         // new constituency: the server has reloaded the day; everything on screen reloads too
         resetStream(); loadFacets(); refreshStats(); refreshReplayed(); loadGeo(false);
@@ -3069,10 +3075,9 @@
   }
   for (const a of document.querySelectorAll('a[href^="/services"]')) a.addEventListener("click", (e) => { e.preventDefault(); goTo(a.getAttribute("href")); });
   window.__lgGoTo = goTo;
-  // Settings: buttons (top bar, constituency label, intro page), all with the same fade
-  // from the map the Settings page shows only the constituency (the map does not use a country); the intro shows both
+  // Settings: buttons (top bar, constituency label), with the same fade; the intro's Settings is its "Your pages" card
+  // from the map the Settings page shows only the constituency (the map does not use a country)
   for (const id of ["btnSettings", "scopePill"]) $(id)?.addEventListener("click", () => goTo("/settings?for=comms"));
-  $("introSettings")?.addEventListener("click", () => goTo("/settings"));
   function showIntroTab(tab) {
     for (const b of document.querySelectorAll(".intro-tabs [role=tab]")) b.setAttribute("aria-selected", String(b.dataset.itab === tab));
     $("introOverview").hidden = tab !== "overview";
@@ -3087,8 +3092,8 @@
   explain($("speed"), "speed");
   explain($("levelBar"), "activity");
 
-  $("btnIntro").addEventListener("click", openIntro);
-  $("btnOverview").addEventListener("click", openIntro);
+  // the labelled Overview button opens the overview; the logo beside it is branding only (r90: one way there)
+  $("btnOverview")?.addEventListener("click", openIntro);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("intro").hidden) closeIntro(); });
   // shown once per browser session; refreshes go straight to the map (use Overview to come back)
   const introSeen = (() => { try { return sessionStorage.getItem("lg.introSeen") === "1"; } catch { return false; } })();
@@ -3104,7 +3109,7 @@
     // no card shows "0" or an empty body on the way (2026-11-15); the intro page has its own loading
     const covering = $("intro").hidden && window.LGLoader;
     if (covering) window.LGLoader.busy("Loading reported network communications");
-    try { await syncClock(); } catch (err) { toast(`Cannot reach server: ${err.message}`); }
+    try { await syncClock(); } catch (err) { toast(window.LGLoader.errorText(err)); }
     await loadKb();
     setInterval(loadKb, 10 * 60000);   // pick up new definitions without a reload
     await loadFacets();

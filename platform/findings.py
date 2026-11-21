@@ -609,11 +609,16 @@ def install(app, ctx):
 
     def team():
         """The roles that work the findings: researchers, management, analysts (who see addresses), advisors and admins."""
-        return hp("definitions") or hp("management") or hp("settings") or (hp("unmasked") and hp("export")) or hp("advisory")
+        return finding_rules.is_team(hp)
 
     def allowed():
-        """Every role opens the Findings page (the findings whose channel it is in; no address is ever on it)."""
-        return bool((getattr(g, "user", None) or {}).get("user"))
+        """Only the roles that work the findings open the Findings page and its API (r90): a hand-over only ever names
+        one of them, so any other account (external, auditor) is never in a channel and is refused like any closed page."""
+        return bool((getattr(g, "user", None) or {}).get("user")) and team()
+
+    # the templates show the Findings buttons and cards by the same rule (_page_nav.html, _portal_cards.html, index.html,
+    # services.html): lg_findings_team(lg_perms)
+    app.jinja_env.globals["lg_findings_team"] = lambda perms: finding_rules.is_team(lambda p: p in (perms or ()))
 
     def me():
         u = getattr(g, "user", None) or {}
@@ -631,7 +636,7 @@ def install(app, ctx):
     def api_findings_people():
         """Whom a finding can be sent to: the active managers, researchers or analysts (names, never more)."""
         if not allowed():
-            return jsonify(error="Findings are for researchers, management, analysts and admins."), 403
+            return jsonify(error=finding_rules.REFUSED), 403
         kind = request.args.get("kind") or ""
         if kind not in TO_STATUS:
             return jsonify(error="kind is management, researcher or analyst."), 400
@@ -642,13 +647,13 @@ def install(app, ctx):
     @app.route("/findings")
     def findings_page():
         if not allowed():
-            return render_template("denied.html", message="Findings are for researchers, management, analysts and admins."), 403
+            return render_template("denied.html", message=finding_rules.REFUSED), 403
         return render_template("findings.html", statuses=STATUSES)
 
     @app.route("/api/findings")
     def api_findings():
         if not allowed():
-            return jsonify(error="Findings are for researchers, management, analysts and admins."), 403
+            return jsonify(error=finding_rules.REFUSED), 403
         items = f.list(request.args.get("state") != "all", ctx["describe"], me()[0], admin(), strict=not team())
         return jsonify(findings=items, statuses=[{"key": k, "label": v, "open": k in OPEN} for k, v in STATUSES],
                        can_search=bool(hp("unmasked") and hp("export")), can_portal=bool(hp("management")),
@@ -658,7 +663,7 @@ def install(app, ctx):
     @app.route("/api/findings/<fid>/status", methods=["POST"])
     def api_findings_status(fid):
         if not allowed():
-            return jsonify(error="Findings are for researchers, management, analysts and admins."), 403
+            return jsonify(error=finding_rules.REFUSED), 403
         if not ctx["csrf_ok"]():
             return jsonify(error="Refused (the request did not come from this page)."), 403
         if not ctx["fresh"]():
@@ -749,7 +754,7 @@ def install(app, ctx):
     def api_findings_reply(fid):
         """A reply on a finding with its own codes: a researcher answers an analyst's code with combination codes."""
         if not allowed():
-            return jsonify(error="Findings are for researchers, management, analysts and admins."), 403
+            return jsonify(error=finding_rules.REFUSED), 403
         if not ctx["csrf_ok"]():
             return jsonify(error="Refused (the request did not come from this page)."), 403
         if not ctx["fresh"]():

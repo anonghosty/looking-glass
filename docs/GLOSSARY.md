@@ -6,7 +6,7 @@ the platform: the **Glossary** tab on the overview page and the **Glossary** but
 ## Contents
 
 - [The basics](#the-basics) (8 terms)
-- [Who and where](#who-and-where) (13 terms)
+- [Who and where](#who-and-where) (14 terms)
 - [Threats](#threats) (27 terms)
 - [Numbers and measures](#numbers-and-measures) (14 terms)
 - [Using the platform](#using-the-platform) (11 terms)
@@ -67,11 +67,14 @@ The company that operates the internet connection, such as an ISP, a university 
 **Constituent (column)**  
 In Settings, the column of Network names & types where the constituency is chosen, one network at a time: Not in, The whole network (all its addresses), or Some address blocks (only the blocks you tick). Apply settings saves the choice for everyone.
 
+**Records (network list)**  
+The records with the network on either side on the day the map shows, both platforms, before the constituency.
+
 **Address block**  
-A group of 256 neighbouring IPv4 addresses (a /24, for example 192.0.2.0/24); for IPv6, a /48. In Settings, Some address blocks lists a network's blocks that had records yesterday, busiest first, with their record counts.
+A group of 256 neighbouring IPv4 addresses (a /24, for example 192.0.2.0/24); for IPv6, a /48. In Settings, Some address blocks lists every block a network had records in yesterday (either side), busiest first, with that network's record counts; the blocks you chose come first and stay chosen until you untick them, with or without records.
 
 **Other address ranges**  
-In Settings, the box under Network names & types for address ranges or single addresses that belong to no listed network, for example a government network without its own AS number. One per line.
+In Settings, the list under Network names & types for address ranges or single addresses that belong to no listed network, for example a government network without its own AS number, and for ranges not seen in the reports yet. One row each, with a button to remove it.
 
 **Target port**  
 The network port (service) that was contacted, for example 80 for web, 22 for SSH, 23 for Telnet or 445 for Windows file sharing. It shows which service was being used or attacked.
@@ -261,7 +264,7 @@ Speed 1x plays yesterday's events at their original pace, 24 hours later. Faster
 What an account may see and do on Looking Glass. Each role is a set of permissions; administrators assign a role to every account (Admin → Users) and can create their own roles from the permissions (Admin → Roles).
 
 **External (role)**  
-People outside the security team, such as partners or visitors. They see both platforms with IP addresses, network names and host names always masked, cannot switch masking off, and cannot export, run look-ups or change anything.
+People outside the security team, such as partners, visitors or a public screen. They open three pages only: network communications (the map, with its Overview and this glossary), publicly accessible / vulnerable services, and Abused or Compromised. Everything they see is masked: IP addresses become host labels, networks are shown by their alias, and host names, organisations, accounts and e-mail addresses are hidden. They cannot switch masking off, export or download, run look-ups, open a host's records or change anything; every other page is refused to them.
 
 **Analyst (role)**  
 The security team's analysts. They see all data unmasked, analyse it, download lists, CSV files and reports (PDF + CSV), look up malware on Malpedia and vulnerabilities (CVEs), and switch Demo mode on for presentations. They cannot change Settings or manage accounts.
@@ -667,6 +670,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Quarterly purge](#threats) · 
 [Quarterly report](#threats) · 
 [Record](#publicly-accessible--vulnerable-services) · 
+[Records (network list)](#who-and-where) · 
 [Regions heatmap](#publicly-accessible--vulnerable-services) · 
 [Replay (minus 24 h)](#the-basics) · 
 [Replay time (UTC)](#the-basics) · 

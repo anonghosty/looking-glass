@@ -136,7 +136,7 @@
           const j = await r.json().catch(() => ({}));
           if (!r.ok) { sourcesPanel({ text: j.error || `Refused (${r.status})`, kind: "bad" }); return; }
           sourcesPanel({ text: "Refresh started: it takes about a minute. Reload this page to see the new counts.", kind: "ok" });
-        } catch (e) { sourcesPanel({ text: `Not started: ${e.message}`, kind: "bad" }); }
+        } catch (e) { sourcesPanel({ text: `Not started: ${window.LGLoader.errorText(e, true)}`, kind: "bad" }); }
       });
       box.append(b);
     }
@@ -208,7 +208,7 @@
             "Malpedia is not set up: the Looking Glass definitions answer first. ") + "MISP Galaxy and MITRE ATT&CK answer from the copies on this server." });
       flash($("infStatus"), "Look-up finished: the lists below are up to date.", "ok");
       await load();
-    } catch (e) { flash($("infStatus"), e.stopped ? "Look-up stopped: you closed its window." : `Look-up failed: ${e.message}`, e.stopped ? "warn" : "bad"); }
+    } catch (e) { flash($("infStatus"), e.stopped ? "Look-up stopped: you closed its window." : `Look-up failed: ${window.LGLoader.errorText(e)}`, e.stopped ? "warn" : "bad"); }
     finally { busy(btn, false); }
   });
 
@@ -276,7 +276,7 @@
           `official CVE.org records four at a time; NVD's own analysis follows in the background at NVD's pace), and ${names.length - n} other issues, explained from their definitions.` });
       flash($("issStatus"), "Look-up finished: the lists below are up to date.", "ok");
       await load();
-    } catch (e) { flash($("issStatus"), e.stopped ? "Look-up stopped: you closed its window." : `Look-up failed: ${e.message}`, e.stopped ? "warn" : "bad"); }
+    } catch (e) { flash($("issStatus"), e.stopped ? "Look-up stopped: you closed its window." : `Look-up failed: ${window.LGLoader.errorText(e)}`, e.stopped ? "warn" : "bad"); }
     finally { busy(btn, false); }
   });
 
@@ -309,7 +309,7 @@
       try {
         const r = await fetch(`/api/kb/entry?name=${encodeURIComponent(name)}&section=${section}`, { cache: "no-store", headers: hdr(false) });
         if (r.ok) e = await r.json(); else err = (await r.json().catch(() => ({}))).error || `HTTP ${r.status}`;
-      } catch (x) { err = x.message || "The connection was interrupted. Try again."; }
+      } catch (x) { err = window.LGLoader.errorText(x); }
       finally { window.LGLoader?.ready(); }
       if (mine !== openSeq) return;           // another name was opened meanwhile: its own call fills the form
       if (err) { flash($(isIssue ? "issStatus" : "infStatus"), `Could not open “${name}”: ${err}`, "bad"); return; }
@@ -381,7 +381,7 @@
         b.addEventListener("click", () => { $("kbMp").value = h.id; box.replaceChildren(el("span", "dz-pill ok", `Selected ${h.id}`)); });
         box.append(b);
       }
-    } catch (e) { box.replaceChildren(el("span", "muted", e.message)); }
+    } catch (e) { box.replaceChildren(el("span", "muted", window.LGLoader.errorText(e))); }
     finally { busy(btn, false); }
   }
   $("kbMpFind").addEventListener("click", mpFind);
@@ -402,7 +402,7 @@
       $("kbMsg").className = "id-msg good"; $("kbMsg").textContent = "Saved ✓ Every user now sees this definition.";
       if (section === "issues") issTab = isCve(body.name) ? "cves" : "defined"; else infTab = "defined";
       await load(); setTimeout(() => show(false), 900);
-    } catch (e) { $("kbMsg").className = "id-msg bad"; $("kbMsg").textContent = e.message; }
+    } catch (e) { $("kbMsg").className = "id-msg bad"; $("kbMsg").textContent = window.LGLoader.errorText(e, true); }
     finally { btn.disabled = false; btn.classList.remove("is-busy"); }
   });
   // the page's first load: the Looking Glass logo (loader.js) until the definitions are in
@@ -411,6 +411,6 @@
   load().then(loaded).catch((e) => {
     loaded();
     console.error("Definitions could not be loaded:", e);
-    for (const id of ["infStatus", "issStatus"]) flash($(id), `Could not load: ${e.message}`, "bad");
+    for (const id of ["infStatus", "issStatus"]) flash($(id), `Could not load: ${window.LGLoader.errorText(e)}`, "bad");
   });
 })();

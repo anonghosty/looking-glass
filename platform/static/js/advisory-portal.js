@@ -39,7 +39,7 @@
     catch (e) {                                // the connection dropped: say so, never a page that loads for ever (review 2026-11-13)
       if (quiet) return;                       // a background read that failed keeps what is on the page
       document.getElementById("apLoading")?.remove(); window.LGLoader?.ready();
-      main.append(el("p", "fd-empty", `Could not open it: ${e.message}`)); return;
+      main.append(el("p", "fd-empty", `Could not open it: ${window.LGLoader.errorText(e)}`)); return;
     }
     const d = await r.json().catch(() => ({}));
     if (quiet) {                               // someone changed a finding or an advisory (findings-live.js): drawn anew in place
@@ -117,7 +117,7 @@
     const oc = card("Open findings in your channels", "Where each one stands (the Findings page has their trail)");
     if (d.open_findings.length) {
       oc.append(table(["Finding", "Title", "Status", "With", "Since"], d.open_findings.map((x) => {
-        const tr = el("tr"), td = el("td"); td.append(link("/findings", x.number));
+        const tr = el("tr"), td = el("td"); td.append(link(`/findings#f${encodeURIComponent(x.fid)}`, x.number));   // the finding itself (r90)
         tr.append(td, el("td", null, x.title), el("td", null, x.status_label), el("td", null, x.assignee || "–"), el("td", null, x.since));
         return tr;
       })));

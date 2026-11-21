@@ -21,6 +21,18 @@ NOT_YOURS = ("Findings move by their own steps (sent to a manager, a decision, a
              "moving one by hand is for management or an administrator.")
 
 
+REFUSED = "Findings are for researchers, management, analysts, advisors and admins."
+
+
+def is_team(has):
+    """The roles that work the findings, the only ones a hand-over can name: researchers, management, analysts (who
+    see addresses), advisors and admins. `has(perm)` -> bool. Everyone else (an external account, the auditor) is never
+    in a channel, so the Findings page, its API and its buttons are closed to them (r90). The one rule for findings.py,
+    findings_live.py, beacon_findings.py and the templates (lg_findings_team(lg_perms))."""
+    return bool(has("definitions") or has("management") or has("settings") or (has("unmasked") and has("export"))
+                or has("advisory"))
+
+
 def can_move(item, status, is_manager, open_statuses):
     """"" when this person may move `item` to `status` by hand; else the reason."""
     if not is_manager:

@@ -119,8 +119,8 @@
       ["#cardScope", "Constituency", "The whole country, or only chosen networks and address ranges, with a live count: networks, address blocks, other ranges. Every part of Looking Glass follows it."],
       ["#cardOrg", "Organisation", "The name and logo every advisory carries."],
       ["#cardPwPolicy", "Password policy", "Password expiry, and making every account change its password."],
-      ["#cardNets", "Choosing the constituency", "In the Constituent column, choose Not in, The whole network, or Some address blocks for each network. Some address blocks opens the row with its blocks, busiest first: tick yours."],
-      ["#cidrs", "Other address ranges", "Ranges or single addresses that belong to no listed network, one per line."],
+      ["#cardNets", "Choosing the constituency", "In the Constituent column, choose Not in, The whole network, or Some address blocks for each network. Some address blocks opens the row with its blocks, busiest first: tick yours, or add one that is not listed. A choice stays until you untick it."],
+      ["#cidrs", "Other address ranges", "Ranges or single addresses that belong to no listed network, one row each: add one in the box, remove one with its × button."],
       ["#save", "Apply settings", "Applies the country and constituency."],
     ],
     "/review/": [
@@ -142,6 +142,17 @@
   };
   const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; };
   const vis = (n) => { if (!n) return false; const r = n.getBoundingClientRect(); return r.width > 2 && r.height > 2 && getComputedStyle(n).visibility !== "hidden"; };
+  // r90: a part another layer covers (the map's header behind its Overview dialog) is not on screen for the person:
+  // what is drawn at its centre must be the part itself (or inside it). A part scrolled out of view is scrolled to.
+  const uncovered = (n) => {
+    const r = n.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return true;
+    const top = document.elementFromPoint(x, y);
+    return !top || top === n || n.contains(top) || !!top.closest(".lg-tour, .lg-tour-offer, .lg-htip");
+  };
+  // a part under an open modal dialog it is not in (the map's Overview dialog over the map) is left out too
+  const underDialog = (n) => [...document.querySelectorAll('[aria-modal="true"]')].some((d) => d !== n && !d.contains(n) && !d.hidden && vis(d) && !d.closest(".lg-tour"));
+  const shown = (n) => vis(n) && !underDialog(n) && uncovered(n);
   // the page: /advisory/12 -> /advisory/, /intel/LG-A-… -> /intel/; the map with its Overview dialog open -> /#intro
   const pageKey = () => {
     const p = location.pathname;
@@ -178,19 +189,19 @@
   function steps() {
     const out = [];
     for (const [sel, title, text] of pageSteps()) {
-      const n = [...document.querySelectorAll(sel)].find(vis);
+      const n = [...document.querySelectorAll(sel)].find((m) => vis(m) && !underDialog(m));
       if (n) out.push({ n, sel, title, text });
     }
-    // the header buttons, each from its own description
-    const heads = [...document.querySelectorAll(".hud-right .nav-ic, .hud-right .demo-btn, .hud-right .lg-bell, .mg-top-actions a, .mg-top-actions button")]
-      .filter((n) => vis(n) && !n.classList.contains("lg-tour-btn"));
+    // the header buttons, each from its own description: only those the person can see and reach now (r90)
+    const heads = [...document.querySelectorAll(".hud-right .nav-ic, .hud-right .demo-btn, .hud-right .lg-bell, .intro-gear-row .lg-bell, .intro-gear-row .account-btn, .mg-top-actions a, .mg-top-actions button")]
+      .filter((n) => shown(n) && !n.classList.contains("lg-tour-btn"));
     for (const n of heads) {
       const name = (n.getAttribute("aria-label") || n.textContent || "").trim();
       const tip = (n.getAttribute("title") || n.dataset.lgTitle || "").trim();
       if (name) out.push({ n, title: name, text: tip && tip !== name ? tip : "A button in the header." });
     }
     const t = document.querySelector(".lg-tour-btn");
-    if (t) out.push({ n: t, title: "Lost? Start the tour again", text: "The Tutorial button shows this tour of the page, any time." });
+    if (t && shown(t)) out.push({ n: t, title: "Lost? Start the tour again", text: "The Tutorial button shows this tour of the page, any time." });
     return out;
   }
 
@@ -256,16 +267,35 @@
     show();
   }
 
-  // the Tutorial button in the header (before the bell / Settings / Log out, like the other icons)
+  // the Tutorial button in the header (before the bell / Settings / Log out, like the other icons). One button per page:
+  // on the map it sits in the header of the screen that is open, the Overview dialog's own group (beside its bell and
+  // Log out, styled like its bell) while the dialog is open, the map's header once it closes (r90: it stayed behind
+  // the dialog, unreachable)
+  let tourBtn = null;
+  const introOpen = () => { const i = document.getElementById("intro"); return !!(i && !i.hidden && vis(i)); };
+  function placeButton() {
+    if (!tourBtn) return;
+    const intro = introOpen() && document.querySelector(".intro-gear-row");
+    const host = intro || document.querySelector(".hud-right, .mg-top-actions");
+    if (!host) return;
+    const logout = host.querySelector(":scope > .account-form, :scope > .account-btn, .account-form, .account-btn");
+    const before = logout ? (logout.closest(".account-form") || logout) : null;
+    if (tourBtn.parentElement === host && tourBtn.nextElementSibling === before) return;
+    const had = document.activeElement === tourBtn;
+    host.insertBefore(tourBtn, before);
+    if (had) tourBtn.focus({ preventScroll: true });
+  }
   function addButton() {
-    const host = document.querySelector(".hud-right, .mg-top-actions");
-    if (!host || host.querySelector(".lg-tour-btn")) return;
+    if (tourBtn || !document.querySelector(".hud-right, .mg-top-actions")) return;
     const b = el("button", "demo-btn nav-ic lg-tour-btn"); b.type = "button";
     b.title = "Tutorial: a short tour of this page, what its sections, buttons and charts show"; b.setAttribute("aria-label", "Tutorial");
     b.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.6 9.2a2.5 2.5 0 1 1 3.4 2.4c-.6.3-1 .8-1 1.5v.6M12 17h.01"/></svg><span>Tutorial</span>';
     b.addEventListener("click", start);
-    const logout = host.querySelector(".account-form, .account-btn");
-    host.insertBefore(b, logout ? (logout.closest(".account-form") || logout) : null);
+    tourBtn = b;
+    placeButton();
+    // the map's Overview dialog opens and closes in place (app.js openIntro / closeIntro): the button follows it
+    const intro = document.getElementById("intro");
+    if (intro) new MutationObserver(placeButton).observe(intro, { attributes: true, attributeFilter: ["hidden", "class", "style"] });
   }
 
   // the first visit: the offer (once per page; "Don't show again" for every page)

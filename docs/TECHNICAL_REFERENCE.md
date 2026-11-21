@@ -388,7 +388,8 @@ Each entry has:
 - `country` and `role`: whether the ASN appears as a source, a destination or both
 - `reviewed`: `true` means the name was curated by hand
 - `demo_alias`
-- `events_last_check`
+- `events_last_check` (records noted when Identify networks last looked the network up; not shown on the pages, where
+  the Records column counts the day the map shows)
 
 **Updating it:**
 
@@ -438,6 +439,12 @@ the installer runs it. To allow a new major version, raise its range, make the l
 One tool installs the Python libraries everywhere: `deploy/safe_libraries.py`, Python's standard library only, run by
 the guided installer (for the platform, the database pipeline and the installer's own answer checks), `deploy/install.sh`,
 `deploy/update_libraries.sh` and the pipeline's `deploy.sh` (a release copies the tool beside it, unchanged).
+
+Each release carries `.release_files` in `platform/` and `database/`, listing every file it ships.
+`deploy/stale_files.py`, run during the update, moves code files that are on `.release_files_history` (every file any
+published release shipped in that folder) but not on `.release_files` to `backups/stale-<time>/`, and names every other
+unlisted code file as left in place; with no history list it moves nothing. It refuses a list it cannot trust and never
+follows links.
 
 1. **This computer** (`check-machine`): `ID=ubuntu` with `VERSION_ID` 24.04 or later in `/etc/os-release` (`ID_LIKE`
    does not count), the `python3` that will run Looking Glass at 3.12, 3.13 or 3.14, and `platform.machine()` x86_64 or
@@ -643,11 +650,11 @@ Every setting, with examples: [CONFIGURATION.md](CONFIGURATION.md). The main one
 | Variable | Default | Meaning |
 |---|---|---|
 | `MONGO_HOST`, `MONGO_PORT` | `localhost`, `27017` | Mongo server |
-| `MONGO_USER`, `MONGO_PASSWORD`, `MONGO_AUTH_SOURCE` | — , — , `admin` | credentials |
+| `MONGO_USER`, `MONGO_PASSWORD`, `MONGO_AUTH_SOURCE` | none, none, `admin` | credentials |
 | `MONGO_DB` | `shadowserver` | source database |
 | `MONGO_COLLECTIONS` | empty | empty means auto-discover every src/dst collection; otherwise a comma-separated list to use |
 | `EXCLUDE_COLLECTIONS` | `outdated_dnssec_key` | comma-separated collections to skip |
-| `MAPBOX_TOKEN` | — | Mapbox public token |
+| `MAPBOX_TOKEN` | none | Mapbox public token |
 | `REPLAY_OFFSET_HOURS` | `24` | which day counts as "yesterday", and the schedule used on a fresh start when yesterday's report is already in |
 | `REPORT_SETTLE_SECONDS` | `600` | after a day's report starts arriving, wait this long before replaying that day from 00:00 |
 | `MAX_EVENTS_PER_POLL` | `400` | cap per poll window; any extra events are randomly sampled |
@@ -783,7 +790,7 @@ With `MALPEDIA_TOKEN` set in `.env`, every infection description (in the event d
 - Management portal: `management.py` (`/management`, `GET /api/mgmt/comms|services` with filters and `day`, `GET /api/mgmt/explain?kind=infection|issue&name=`, `GET /api/mgmt/report?platform=` executive PDF). Answers carry aggregates only (counts, shares, trends, facets) and never an address; other roles get 403. Permission `management` is exclusive (`auth.Roles` strips it from every role except `management` and `admin`; the `management` role is always exactly `["management"]`); management users are confined to `MANAGEMENT_PATHS`.
 - Look-up jobs: `POST /api/lookups` {kind: issues | malpedia, values} (permission `malpedia`, CSRF; at most 400 names, two running jobs per user) starts a background job; `GET /api/lookups/<id>?since=n` returns progress, the new log lines and, when done, the results. The page shows them in a progress window (`static/js/pdf.js`, `LGLookup.run`). Malpedia jobs wait and continue when Malpedia's 30-a-minute limit is reached.
 - Reports: `GET /api/insight/report` and `/api/svc/report` return a ZIP (PDF + complete list as CSV, formula-safe); `format=pdf` returns the PDF alone (then the list is printed).
-- Network names: `GET /api/networks`, `POST /api/networks/entry`, `POST /api/networks/types` (permission `networks` or settings; CSRF; fresh sign-in). Types: `netypes.py` (built-in sectors, PeeringDB categories) plus `data/network_types.json`; demo aliases use each type's word. The built-in researcher role has `definitions` and `networks` (added once to existing installs, marker `data/.roles_networks_added`).
+- Network names: `GET /api/networks`, `POST /api/networks/entry`, `POST /api/networks/types` (permission `networks` or settings; CSRF; fresh sign-in). Types: `netypes.py` (built-in sectors, PeeringDB categories) plus `data/network_types.json`; demo aliases use each type's word. The built-in researcher role has `definitions` and `networks` (added once to existing installs, marker `data/.roles_networks_added`). `GET /api/networks` gives each network's records on the replay day (`events`, null when that day is not loaded) and `events_day`.
 - Administrator / researcher definitions (`data/infections.json`, written from Settings or `/definitions` via `POST /api/kb/entry`; permission `definitions`, or `settings`; the built-in `researcher` role has only `definitions` and is limited to `/definitions` and `/api/kb/*`): an optional `malpedia` family id is looked up directly instead of searching; otherwise `references` + `description` give a *Looking Glass definition* card. `GET /api/kb/unresolved` lists unmatched names, names not checked yet and defined names; `GET /api/kb/malpedia-search?q=` finds family ids; `POST /api/kb/check` checks new names now. The check state per name is in `data/malpedia_names.json` (run-time, not shipped); a background thread checks names new reports bring in every 30 minutes at most 20 per minute, one worker at a time (`data/.malpedia_check.lock`).
 - `tools/malpedia_check.py` looks up every infection of the replay day and lists what matched (typically most of them; the rest are Shadowserver activity names such as `ssh-brute-force` or proxy networks that Malpedia does not list).
 
@@ -972,6 +979,10 @@ only), analyst (all data, exports, Malpedia), researcher (the Definitions page),
 advisor (the Advisory portal), auditor (the Audit portal only, read only) or admin. "Stay signed in" keeps a session
 for up to 5 days. Admins manage users, sessions, roles and permissions on the **Admin** page; the audit log is read in
 the **Audit portal** (`/audit`). An optional password expiry policy is set in Settings (`password_policy.py`).
+
+External accounts (permissions exactly "view"): `external_access.py` holds the allow-list of exact paths (the map, the
+services platform, Abused or Compromised and what every account needs). The sign-in gate refuses every other page and
+API before it runs. Abused or Compromised masks their rows with `masked_fields.intelligence_row`.
 
 The audit log and its evidence, module by module:
 - `audit_chain.py`: the hash-chained audit log, its archives on rotation and the retention removals recorded in the chain.

@@ -217,10 +217,10 @@
     $("logCount").textContent = `${fmt(logOffset)} of ${fmt(d.total)} events`;
     $("logMore").hidden = logOffset >= d.total;
   }
-  let lst; $("logSearch").addEventListener("input", () => { clearTimeout(lst); lst = setTimeout(() => loadLog(true).catch((e) => banner(e.message, true)), 300); });
-  $("logAlerts").addEventListener("change", () => loadLog(true).catch((e) => banner(e.message, true)));
-  $("logTests").addEventListener("change", () => loadLog(true).catch((e) => banner(e.message, true)));
-  $("logMore").addEventListener("click", () => loadLog(false).catch((e) => banner(e.message, true)));
+  let lst; $("logSearch").addEventListener("input", () => { clearTimeout(lst); lst = setTimeout(() => loadLog(true).catch((e) => banner(window.LGLoader.errorText(e), true)), 300); });
+  $("logAlerts").addEventListener("change", () => loadLog(true).catch((e) => banner(window.LGLoader.errorText(e), true)));
+  $("logTests").addEventListener("change", () => loadLog(true).catch((e) => banner(window.LGLoader.errorText(e), true)));
+  $("logMore").addEventListener("click", () => loadLog(false).catch((e) => banner(window.LGLoader.errorText(e), true)));
 
   // ---------------- access review
   async function loadAccess() {
@@ -303,7 +303,7 @@
   }
   $("vfRun").addEventListener("click", async () => {
     $("vfRun").disabled = true; window.LGLoader?.busy("Verifying the audit log");
-    try { showVerify(await getJSON("/api/audit/verify")); } catch (e) { banner(e.message, true); }
+    try { showVerify(await getJSON("/api/audit/verify")); } catch (e) { banner(window.LGLoader.errorText(e), true); }
     finally { $("vfRun").disabled = false; window.LGLoader?.ready(); }
   });
   async function sha256hex(buf) { const h = await crypto.subtle.digest("SHA-256", buf); return [...new Uint8Array(h)].map((x) => x.toString(16).padStart(2, "0")).join(""); }
@@ -340,7 +340,7 @@
         : `Found at entry ${fmt(e.entry)}${e.when ? ` (${e.when})` : ""}: the log up to it is exactly the log of that audit.`;
       out.append(el("b", null, e.proven ? "Unchanged since the earlier audit" : "Not proven"), el("p", null, msg));
       const p = el("p", "muted"); p.append(el("span", null, "Head now "), el("code", "au-hash", `${d.head}@${d.head_entry}`)); out.append(p);
-    } catch (e) { banner(e.message, true); }
+    } catch (e) { banner(window.LGLoader.errorText(e), true); }
     finally { window.LGLoader?.ready(); }
   });
   $("evPdf").addEventListener("click", () => download(`/api/audit/report.pdf?${per()}`, "the evidence report"));
@@ -367,7 +367,7 @@
       $("logTestsBox").hidden = tab === "system";
     }
     try { history.replaceState(null, "", tab === "overview" ? location.pathname : `#${tab}`); } catch { /* */ }
-    const run = () => work(tab)().catch((e) => banner(`Could not load: ${e.message}`, true));
+    const run = () => work(tab)().catch((e) => banner(`Could not load: ${window.LGLoader.errorText(e)}`, true));
     // the first tab (also one opened straight from a link, whose pane has no loading line of its own): under the page's
     // logo until it has its data (2026-11-15)
     if (first) return (window.LGLoader?.wait || ((p) => p))(run(), "Opening the Audit portal").finally(() => { $("auLoading")?.remove(); window.LGLoader?.ready(); });

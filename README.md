@@ -72,8 +72,8 @@ The [Shadowserver Foundation](https://www.shadowserver.org/what-we-do/network-re
 hand: a national CSIRT can receive **well over a hundred report e-mails and tens of thousands of rows a day**, each report with its own
 columns, in formats that change over time. A folder of zipped CSV files is not a picture.
 
-Free tools exist — [IntelMQ](https://docs.intelmq.org/) routes and notifies, the [Elastic Stack](https://www.elastic.co/)
-searches everything — but **the resources to run them** (servers, storage, skilled staff, time) are scarce for many
+Free tools exist: [IntelMQ](https://docs.intelmq.org/) routes and notifies, the [Elastic Stack](https://www.elastic.co/)
+searches everything. But **the resources to run them** (servers, storage, skilled staff, time) are scarce for many
 teams, especially across Africa. Looking Glass needs **one modest server and a guided installer**, and is useful on day one.
 
 > Looking Glass **complements** IntelMQ and Elastic; it does not replace them. See the
@@ -97,8 +97,8 @@ process the Shadowserver data? (4:54, narrated, with captions; animation with ma
 <td><b>Reported network communications.</b> Infected and attacking hosts in your country and what caught them
 (botnet sinkholes and honeypots), replayed on a 3D map one day later, with filters, live charts and an event
 stream.</td>
-<td><b>Publicly accessible / vulnerable services.</b> What anyone on the internet can reach in your constituency —
-open databases, remote desktop, vulnerable devices, compromised and blocklisted hosts — by service, region, network
+<td><b>Publicly accessible / vulnerable services.</b> What anyone on the internet can reach in your constituency
+(open databases, remote desktop, vulnerable devices, compromised and blocklisted hosts), by service, region, network
 and issue.</td>
 </tr>
 <tr>
@@ -108,7 +108,7 @@ and issue.</td>
 <tr>
 <td><b>One click to analyse.</b> Every figure, bubble, region and row opens an analysis: key findings, breakdowns and
 the hosts to follow up first, with CSV and PDF reports.</td>
-<td><b>Executive portal.</b> Aggregated figures only — never an address — with a one-click executive report (PDF in
+<td><b>Executive portal.</b> Aggregated figures only, never an address, with a one-click executive report (PDF in
 the dashboard's design, plus CSVs).</td>
 </tr>
 <tr>
@@ -116,8 +116,8 @@ the dashboard's design, plus CSVs).</td>
 </tr>
 <tr>
 <td colspan="2"><b>7-day baseline.</b> Every figure, infection and issue compared with its own average over the previous 7
-days, graded on a stated scale — Normal (within ±10%), Slight rise / drop, Caution, Danger, Clear drop, Unusual drop /
-Went quiet — with plain words on what to do. In the key findings and the executive report too.</td>
+days, graded on a stated scale (Normal (within ±10%), Slight rise / drop, Caution, Danger, Clear drop, Unusual drop /
+Went quiet), with plain words on what to do. In the key findings and the executive report too.</td>
 </tr>
 <tr>
 <td><a href="docs/media/screens/32-services-insight.png"><img src="docs/media/screens/32-services-insight.png" alt="Issues explained"></a></td>
@@ -131,7 +131,7 @@ screens, partners and presentations.</td>
 </tr>
 <tr>
 <td colspan="2"><b>Intel for researchers.</b> On the Definitions page, every infection and issue shows what the reports
-carry for it — C2 domains, DNS lookups, URLs, user agents, other CVEs, tags, fingerprints — report by report, with the
+carry for it (C2 domains, DNS lookups, URLs, user agents, other CVEs, tags, fingerprints), report by report, with the
 exact combinations and how many hosts keep repeating them. Looking Glass raises matches between names and reports
 ("can you look into this?"), and researchers share dated, signed notes that appear on every card and report.</td>
 </tr>
@@ -168,7 +168,7 @@ pill naming who holds it. Management approves to a named advisor or rejects with
 passed through see it. An analyst can ask first: <b>Make analyst code</b> turns a selection into an
 <code>LG-A-…</code> code the researchers answer.</td>
 <td><b>The Executive, filtered by a code.</b> Management applies a finding's code to its own portal: how many devices,
-where, which networks, the trend — counts only, never an address.</td>
+where, which networks, the trend: counts only, never an address.</td>
 </tr>
 <tr>
 <td colspan="2"><a href="docs/media/screens/68-combinations.png"><img src="docs/media/screens/68-combinations.png" alt="Combinations: the devices behind a code"></a></td>
@@ -176,7 +176,7 @@ where, which networks, the trend — counts only, never an address.</td>
 <tr>
 <td colspan="2"><b>Combinations: send the needle, not the haystack.</b> The analyst searches a code (or picks an analyst
 code from a searchable list) and gets exactly those devices: statistics, a regions map that shows the addresses on
-hover, networks, cities and the busiest devices — then <b>one report per network provider</b> (PDF + CSV) to attach
+hover, networks, cities and the busiest devices. Then <b>one report per network provider</b> (PDF + CSV) to attach
 to the advisory. The two ways it is used are told step by step in <a href="docs/USE_CASES.md">Use cases</a>.</td>
 </tr>
 <tr>
@@ -210,7 +210,7 @@ a tamper-evident audit log with control checks mapped to NIST SP 800-53 and CIS 
 ## How it works
 
 ```
- Shadowserver report e-mails ──► database/  (pipeline: fetch attachments and links, unzip, sort, load — every 30 min)
+ Shadowserver report e-mails ──► database/  (pipeline: fetch attachments and links, unzip, sort, load, every 30 min)
                                      │
                                      ▼
                                   MongoDB  (one collection per report type)
@@ -241,7 +241,7 @@ a tamper-evident audit log with control checks mapped to NIST SP 800-53 and CIS 
 **You need:** Ubuntu 24.04 or later, Desktop or Server (on the computer itself, in a virtual machine, or Ubuntu on WSL 2 on Windows 10/11) · your Shadowserver API key, or
 the mailbox that receives your Shadowserver reports · at least 4 GB RAM · about 250 MB of disk for the code and its Python environments,
 plus room for your reports in MongoDB · a free [Mapbox](https://account.mapbox.com/) token · optionally a [Malpedia](https://malpedia.caad.fkie.fraunhofer.de/) token.
-No Shadowserver reports yet? [Sign up your CSIRT](https://www.shadowserver.org/what-we-do/network-reporting/get-reports/) — it is free.
+No Shadowserver reports yet? [Sign up your CSIRT](https://www.shadowserver.org/what-we-do/network-reporting/get-reports/): it is free.
 
 1. **Get the code**
    ```bash
@@ -254,7 +254,7 @@ No Shadowserver reports yet? [Sign up your CSIRT](https://www.shadowserver.org/w
    ```
 3. **Answer its questions.** What to install, where MongoDB runs, how to reach the mailbox (with step-by-step help for
    Google, Microsoft or IMAP credentials), how often to fetch and **how many days each run looks back**, your
-   country, tokens, who may open the platform, and the port. **Every answer is checked on the spot** — a real mailbox
+   country, tokens, who may open the platform, and the port. **Every answer is checked on the spot**: a real mailbox
    login, real token checks, a real MongoDB login, port conflicts. **For the mailbox, give it a folder (or Gmail label)
    only for Shadowserver's reports**, filled by a mail rule: Looking Glass reads every message in that folder, so other
    mail is never read and anything that does not belong stands out.
@@ -317,7 +317,7 @@ The complete guide, with every screen and button: [docs/USER_GUIDE.md](docs/USER
 
 | Role | Sees | Can |
 |---|---|---|
-| **External** | both platforms, always masked | view only |
+| **External** | three pages only: network communications, publicly accessible / vulnerable services and Abused or Compromised, always masked | view only |
 | **Analyst** | everything, unmasked | analyse, export CSV and PDF, Malpedia, Demo mode |
 | **Researcher** | only the Definitions page (no addresses) | define malware names and issues with references, study the intel gathered from the reports, share notes, correct network names |
 | **Management** | the Executive portal (aggregates, never addresses) and the findings it decides | filter, explain, download executive reports; approve findings to a named advisor or reject them |
@@ -325,9 +325,10 @@ The complete guide, with every screen and button: [docs/USER_GUIDE.md](docs/USER
 | **Auditor** | only the Audit portal (never the platforms or host data) | read the audit log, control checks, access review and integrity; export evidence. Changes nothing |
 | **Admin** | everything | also Settings (with the password policy and the pipeline's Workers settings), the Definitions page, accounts, roles and the Audit portal; Peace of mind to step out of the operations |
 
-Every role has an Overview, and every role but the auditor the Findings it takes part in. The auditor's permission is
-fixed, so what an auditor may do never depends on the people being audited. Administrators can build custom roles
-from the other permissions. Details: [User guide → Roles](docs/USER_GUIDE.md#roles).
+Every role has an Overview. Researchers, management, analysts, advisors and admins also have the Findings they take
+part in; external accounts and the auditor do not. The auditor's permission is fixed, so what an auditor may do never
+depends on the people being audited. Administrators can build custom roles from the other permissions.
+Details: [User guide → Roles](docs/USER_GUIDE.md#roles).
 
 ## Security
 
@@ -376,14 +377,14 @@ See the [security policy](.github/SECURITY.md).
 | | IntelMQ | Elastic Stack | **Looking Glass** |
 |---|:---:|:---:|:---:|
 | Free to use | ✅ | ✅ | ✅ |
-| Ready-made views of Shadowserver data | — | ◐ build them | ✅ |
+| Ready-made views of Shadowserver data | no | ◐ build them | ✅ |
 | Useful straight after installing | ◐ configure bots | ◐ build dashboards | ✅ |
-| Executive reports and dashboard | — | ◐ build them | ✅ |
-| Automatic notification of constituents | ✅ | — | — |
-| Many feeds besides Shadowserver | ✅ | ✅ | — |
-| Search across any data, at scale | — | ✅ | — |
+| Executive reports and dashboard | no | ◐ build them | ✅ |
+| Automatic notification of constituents | ✅ | no | no |
+| Many feeds besides Shadowserver | ✅ | ✅ | no |
+| Search across any data, at scale | no | ✅ | no |
 
-✅ built in · ◐ partly, or with work · — not its job.
+✅ built in · ◐ partly, or with work · no: not its job.
 **Use them together:** IntelMQ notifies, Elastic searches, Looking Glass shows. Full comparison with sources:
 [docs/COMPARISON.md](docs/COMPARISON.md).
 
@@ -392,7 +393,7 @@ See the [security policy](.github/SECURITY.md).
 | | |
 |---|---|
 | Countries | **every country and territory** (ISO 3166-1), chosen by continent; regions maps for about 200 of them, the rest drawn as one area |
-| Operating system | **Ubuntu 24.04 or later, Desktop or Server**, only — on the computer itself, in a virtual machine, or Ubuntu on WSL 2 on Windows 10/11. On Ubuntu Server, create the first administrator through an SSH tunnel (`ssh -L <your port>:127.0.0.1:<your port> user@server`, then open `http://localhost:<your port>`, with the port you selected in the installer) |
+| Operating system | **Ubuntu 24.04 or later, Desktop or Server**, only: on the computer itself, in a virtual machine, or Ubuntu on WSL 2 on Windows 10/11. On Ubuntu Server, create the first administrator through an SSH tunnel (`ssh -L <your port>:127.0.0.1:<your port> user@server`, then open `http://localhost:<your port>`, with the port you selected in the installer) |
 | Python and processor | **Python 3.12, 3.13 or 3.14** (the one Ubuntu brings), on an **x86_64** (Intel, AMD) or **aarch64** (64-bit ARM) processor. The installer checks the system, Python and processor first and refuses anything else before it installs anything |
 | Libraries | installed only from the lock files, each file checked against its sha256 value; a file that does not match is refused and reported ([When a library file does not match](docs/INSTALLATION.md#when-a-library-file-does-not-match)) |
 | Memory and disk | **4 GB RAM minimum** for the whole server, enough for about 50,000 records a day; more records a day need more, see [How much memory](docs/INSTALLATION.md#how-much-memory). Disk: about 70 MB to download (about 45 MB with `--depth 1`); the files take about 70 MB, of which the code is about 6 MB and the rest screenshots, film posters and the world maps; the two Python environments add about 115 MB; MongoDB needs space for your reports |
@@ -468,14 +469,14 @@ U.S. Government it is not subject to copyright in the United States, and anyone 
 without permission. The control identifiers and titles the Audit portal shows are quoted from NIST's official catalogue
 (Release 5.2.0); please credit NIST as the source.
 
-**Credits:** data — the Shadowserver Foundation (mappings, report definitions) · region boundaries — geoBoundaries, Natural Earth ·
-maps — Mapbox · 3D arcs — deck.gl · network names — RIPEstat and PeeringDB · malware look-ups — Malpedia (Fraunhofer FKIE).
+**Credits:** data: the Shadowserver Foundation (mappings, report definitions) · region boundaries: geoBoundaries, Natural Earth ·
+maps: Mapbox · 3D arcs: deck.gl · network names: RIPEstat and PeeringDB · malware look-ups: Malpedia (Fraunhofer FKIE).
 
 **Global context (third-party): ICHI.** To see how things look globally, the
 [Internet Cyber Health Index (ICHI)](https://ichi.global), maintained by Joe Bernik, publishes a free composite score of
 global cyber-risk conditions, updated through the day, with its sources and methodology. It is global and outside-in:
 it says nothing about your own constituency, which is what Looking Glass shows. Looking Glass does not call ICHI, use its
-score or show its data; this is a pointer for readers who want the wider picture. Credit: ICHI — Internet Cyber Health
+score or show its data; this is a pointer for readers who want the wider picture. Credit: ICHI, the Internet Cyber Health
 Index (https://ichi.global).
 
 ## Author

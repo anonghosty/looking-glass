@@ -7,6 +7,7 @@ workstation_name, dns_host_name...), MAC addresses, user names, descriptions, lo
 secrets, banners. A field a report adds tomorrow stays hidden until someone adds it here on purpose.
 
 service_extras(extras) / event_extras(extras) -> (shown, hidden_count)
+intelligence_row(row, fields, alias) -> the masked record of Abused or Compromised (external accounts)
 """
 import re
 
@@ -65,6 +66,45 @@ def _keep(extras, names, families):
         else:
             hidden += 1
     return shown, hidden
+
+
+def intelligence_row(row, fields, alias):
+    """Abused or Compromised (intelligence.py) as external accounts see one record (the user, 2026-11-21), with the
+    platforms' own masking: the address becomes its opaque label (privacy.mask_ip, "Host 3f9a2c41b07e", as on both
+    platforms, so one host can still be followed), the network its demo alias (alias: privacy.AsnRegistry.alias), a
+    host name "hidden" (as services_api.public), an organisation's name and a leaked account "hidden"; places,
+    severity and the record's time stay (as on both platforms); the report's own fields (fields: intelligence.FIELDS)
+    go through hostmask.mask (host names, addresses, e-mail addresses, dates and IDs inside them masked); every other
+    field is left out, so a field a report adds tomorrow stays hidden. Returns the masked row."""
+    import privacy
+    out = {}
+    for k, v in (row or {}).items():
+        if v in (None, "") or k in INTEL_INTERNAL:
+            continue
+        if k == "ip":
+            out[k] = privacy.mask_ip(str(v))
+        elif k == "asn":
+            out[k] = alias(v) or ""
+        elif k in INTEL_HIDDEN:
+            out[k] = "hidden"
+        elif k == "timestamp":
+            out[k] = v
+        elif k in INTEL_KEPT:
+            out[k] = _value(v, k)
+        elif k in INTEL_DATES and isinstance(v, str) and DATE_ONLY.match(v.strip()):
+            out[k] = v.strip()
+        elif k in fields:
+            out[k] = _value(v, k)
+    return out
+
+
+# Abused or Compromised: what each masked record keeps. Places and severity are kept as on both platforms (the
+# region and city of a host, never its address); the time stamp is the record's own time
+INTEL_KEPT = frozenset({"timestamp", "region", "city", "geo", "country", "severity", "sector"})
+INTEL_HIDDEN = frozenset({"hostname", "email", "username", "entity_name"})   # a name: shown as "hidden"
+INTEL_DATES = frozenset({"date_published"})                                     # a date only: kept as it is
+INTEL_INTERNAL = frozenset({"_id", "line_hash", "filename", "category", "extracted_date", "logged_date"})
+DATE_ONLY = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?Z?$")
 
 
 def service_extras(extras):

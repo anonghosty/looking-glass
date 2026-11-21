@@ -61,7 +61,7 @@
       if (!r.ok) throw new Error(d.error || r.statusText);
       $("trMsg").textContent = "Done: what you gave was not kept.";
       show(d);
-    } catch (e) { $("trMsg").textContent = `Not traced: ${e.message}`; }
+    } catch (e) { $("trMsg").textContent = `Not traced: ${window.LGLoader.errorText(e)}`; }
     finally { $("trGo").disabled = false; window.LGLoader?.ready(); }
   });
   window.LGTrace = { ready: () => {} };

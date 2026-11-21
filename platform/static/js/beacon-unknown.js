@@ -36,7 +36,7 @@
     go.addEventListener("click", async () => {
       if (!ta.value.trim()) { msg.textContent = "Say why first."; ta.focus(); return; }
       go.disabled = true;
-      try { await onGo(ta.value.trim()); } catch (e) { msg.textContent = e.message; go.disabled = false; }
+      try { await onGo(ta.value.trim()); } catch (e) { msg.textContent = window.LGLoader.errorText(e, true); go.disabled = false; }
     });
     box.append(el("span", "bh-l", label), ta, go, msg);
     return box;
@@ -77,7 +77,7 @@
         const rv = el("div", "bu-review");
         const ok = el("button", "lg-btn sm primary", "Approve sending"); ok.type = "button";
         const msg = el("span", "fd-msg"); msg.setAttribute("role", "status");
-        ok.addEventListener("click", async () => { ok.disabled = true; try { await state(f.id, "approved", "", f.requests_hash); redraw(); } catch (e) { msg.textContent = e.message; ok.disabled = false; } });
+        ok.addEventListener("click", async () => { ok.disabled = true; try { await state(f.id, "approved", "", f.requests_hash); redraw(); } catch (e) { msg.textContent = window.LGLoader.errorText(e, true); ok.disabled = false; } });
         const no = el("details", "bu-send"); no.append(el("summary", null, "Do not approve"));
         no.append(reasonForm("Why it is not approved", "e.g. TLP:RED source, or not a beacon", "Do not approve", false,
           async (why) => { await state(f.id, "rejected", why); redraw(); }));
@@ -104,7 +104,7 @@
           link.href = f.issue_url; link.target = "_blank"; link.rel = "noopener noreferrer";
           msg.replaceChildren(document.createTextNode("Downloaded. Title the report \"Decoding request\", paste the file's contents into it, then mark it as sent. "), link);
           const sent = el("button", "lg-btn sm", "Mark as sent"); sent.type = "button";
-          sent.addEventListener("click", async () => { try { await state(f.id, "sent"); redraw(); } catch (e) { msg.textContent = e.message; } });
+          sent.addEventListener("click", async () => { try { await state(f.id, "sent"); redraw(); } catch (e) { msg.textContent = window.LGLoader.errorText(e, true); } });
           act.append(sent);
         } finally { go.disabled = !cb.checked; }
       });
@@ -117,7 +117,7 @@
       tog.title = away ? "Back to the open families" : "A session token, an ID or the like: put it away (it stays listed under Put away)";
       tog.addEventListener("click", async () => {
         try { await state(f.id, away ? "open" : "dismissed", away ? "" : "Not a beacon"); redraw(); }
-        catch (e) { tog.textContent = e.message; }
+        catch (e) { tog.textContent = window.LGLoader.errorText(e, true); }
       });
       act.append(tog);
     }
@@ -131,7 +131,7 @@
       const r = await fetch("/api/beacon/unknown", { credentials: "same-origin" });
       if (r.status === 403) { holder.hidden = true; return; }
       d = await r.json(); if (!r.ok) throw new Error(d.error || r.status);
-    } catch (e) { holder.hidden = false; holder.replaceChildren(el("h2", null, "Requests Looking Glass could not decode"), el("p", "fd-msg", `Could not load them: ${e.message}`)); return; }
+    } catch (e) { holder.hidden = false; holder.replaceChildren(el("h2", null, "Requests Looking Glass could not decode"), el("p", "fd-msg", `Could not load them: ${window.LGLoader.errorText(e)}`)); return; }
     holder.hidden = false;
     // arrived from a pointer (an event's Decoded beacon, the Decoded beacons list): bring the section into view
     if (location.hash === "#beaconUnknown") setTimeout(() => holder.scrollIntoView({ behavior: "smooth", block: "start" }), 50);

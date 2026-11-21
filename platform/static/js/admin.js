@@ -46,7 +46,7 @@
   const usersWrap = $("usersTable")?.closest(".table-wrap") || $("usersTable");
   if ($("adLoading") && usersWrap) usersWrap.hidden = true;
   async function loadUsers() {
-    let d; try { d = await getJSON("/api/admin/users"); } catch (e) { banner(`Could not load users: ${e.message}`, true); return; }
+    let d; try { d = await getJSON("/api/admin/users"); } catch (e) { banner(`Could not load users: ${window.LGLoader.errorText(e)}`, true); return; }
     finally { $("adLoading")?.remove(); if (usersWrap) usersWrap.hidden = false; window.LGLoader?.ready(); }
     roleNames = d.roles; ROLE_INFO = d.info || {};
     drawRoleLegend();
@@ -112,7 +112,7 @@
   async function act(name, action, extra, ok) {
     if (!action) { loadUsers(); return; }           // pending: the role is applied on approval
     let done = false;
-    try { await post(`/api/admin/users/${encodeURIComponent(name)}`, { action, ...extra }); banner(ok); done = true; } catch (e) { banner(e.message, true); }
+    try { await post(`/api/admin/users/${encodeURIComponent(name)}`, { action, ...extra }); banner(ok); done = true; } catch (e) { banner(window.LGLoader.errorText(e, true), true); }
     loadUsers();
     return done;                                     // the button that asked stays disabled only when it worked
   }
@@ -122,7 +122,7 @@
   // ---------------- roles & permissions
   let rolesState = null;
   async function loadRoles() {
-    try { rolesState = await getJSON("/api/admin/roles"); } catch (e) { banner(`Could not load roles: ${e.message}`, true); return; }
+    try { rolesState = await getJSON("/api/admin/roles"); } catch (e) { banner(`Could not load roles: ${window.LGLoader.errorText(e)}`, true); return; }
     drawRoles();
   }
   function drawRoles() {
@@ -167,12 +167,12 @@
   });
   $("saveRoles").addEventListener("click", async () => {
     try { const d = await post("/api/admin/roles", { roles: rolesState.roles }); rolesState.roles = d.roles; banner("Roles saved. Users with a changed role get the new permissions straight away."); drawRoles(); }
-    catch (e) { banner(e.message, true); }
+    catch (e) { banner(window.LGLoader.errorText(e, true), true); }
   });
 
   // ---------------- locked sign-ins (lockouts.py): what is locked now, and lifting a lock (audited, fresh sign-in)
   async function loadLocks(quiet) {
-    let d; try { d = await getJSON("/api/admin/lockouts"); } catch (e) { if (!quiet) banner(`Could not load the locks: ${e.message}`, true); return; }
+    let d; try { d = await getJSON("/api/admin/lockouts"); } catch (e) { if (!quiet) banner(`Could not load the locks: ${window.LGLoader.errorText(e)}`, true); return; }
     finally { if (!quiet) window.LGLoader?.ready(); }
     drawLocks(d.locked || [], d.limits || {});
   }
@@ -196,7 +196,7 @@
         b.disabled = true;
         try { const x = await post("/api/admin/lockouts/unlock", r.kind === "address" ? { ip: r.ip } : { ip: r.ip, name: r.name });
           banner(`Unlocked: ${what}.`); drawLocks(x.locked || [], lim); }
-        catch (e) { b.disabled = false; banner(e.message, true); }
+        catch (e) { b.disabled = false; banner(window.LGLoader.errorText(e, true), true); }
       });
       td.append(b); tr.append(td); tb.append(tr);
     }

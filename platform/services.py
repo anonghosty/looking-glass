@@ -366,7 +366,7 @@ class ServiceStore:
                 region[e["region"]] += 1
             raw = len(rows)
             # the address blocks, for Settings → Constituency (address_blocks.py), before the constituency
-            blocks = address_blocks.tally(rows, (("ip", "asn", "geo"),), (st.data.get("country", "") if st is not None else ""))
+            blocks = address_blocks.tally(rows, (("ip", "asn"),))
             if st is not None and st.restricted:
                 rows = [e for e in rows if st.in_scope(e["asn"], e["ip"])]
             by_src[s["name"]] = {"raw": raw, "asn": asn, "region": region, "blocks": blocks, "rows": rows, "last": last}

@@ -13,7 +13,8 @@ Accounts (data/users.json, mode 600)
 * manage/manage_users.py does the same on the server's command line (recovery, scripting).
 
 Roles and permissions (data/roles.json): permissions are fixed (PERMS); roles are sets of permissions, editable by an
-admin on /admin. admin always has every permission. Defaults: external = view (data always masked, no demo switch),
+admin on /admin. admin always has every permission. Defaults: external = view (data always masked, no demo switch;
+only the two platforms and Abused or Compromised, external_access.py),
 analyst = view + unmasked +
 export + malpedia, admin = all. Enforced on the server: masking (no "unmasked" -> demo mode for that user), exports,
 Malpedia, Settings, users, audit.
@@ -54,6 +55,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 import throttle_prune
 import password_policy
+import external_access
 import system_alerts
 
 # one-time sign-up links (invites.py sets these): check(token) -> the open invite or None; use(token, user) -> it, once
@@ -137,9 +139,12 @@ PEACE_PATHS = ("/settings", "/api/settings", "/api/asns/identify", "/api/network
 PEACE = {"of": lambda user: False}           # peace.py: whether this admin has Peace of mind on
 # what each built-in role is for (shown on the admin page; custom roles are described by their permissions)
 ROLE_INFO = {
-    "external": "People outside the security team, such as partners or visitors. They see both platforms with IP addresses, "
-                "network names and host names always masked, cannot switch masking off (no Demo button), and cannot export, "
-                "use Malpedia or change anything.",
+    "external": "People outside the security team, such as partners, visitors or a public screen. They open three pages only: "
+                "network communications (the map, with its Overview and glossary), publicly accessible / vulnerable "
+                "services, and Abused or Compromised. Everything they see is masked: no IP addresses, no real network or "
+                "company names, no host names and no e-mail addresses. They cannot switch masking off (no Demo button), "
+                "cannot export or download, cannot run look-ups or use Malpedia, cannot open a host's records, and cannot "
+                "change anything. Every other page is refused to them.",
     "analyst": "CSIRT analysts. They see all data unmasked to analyse it, can export lists and CSV files, look up malware on "
                "Malpedia, and switch Demo mode on for presentations. They cannot change Settings or manage users.",
     "management": "Managers, executives or team leads (so decisions need not wait on management). They use the management portal only: aggregated statistics of both platforms "
@@ -1008,6 +1013,15 @@ def install(app, base_dir, logger):
                     if p in EXPORT_PATHS or request.args.get("all") == "1":   # 'export' is not kept (review 2026-11-13)
                         return jsonify(error="Peace of mind is on: no exports or complete lists."), 403
                     return None
+                # external accounts (permissions exactly 'view'): the two platforms and Abused or Compromised, masked,
+                # and nothing else; an allow-list of exact paths (external_access.py, the user 2026-11-21), asked
+                # before Admin, the audit log and every other route's own checks
+                if external_access.is_external(g.user["perms"]):
+                    why = external_access.refused(p)
+                    if why:
+                        if p.startswith("/api/"):
+                            return jsonify(error=why), 403
+                        return render_template("denied.html", message=why), 403
                 if not p.startswith(("/api/me", "/admin", "/api/admin", "/audit")) and "view" not in g.user["perms"]:
                     # management: only the management portal (the start page sends them there)
                     if MANAGEMENT_ONLY in g.user["perms"] and not ({"definitions", "networks"} & g.user["perms"]):

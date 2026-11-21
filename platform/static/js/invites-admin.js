@@ -28,7 +28,7 @@
       b.addEventListener("click", async () => {
         b.disabled = true;
         try { await api(`/api/admin/invites/${encodeURIComponent(x.id)}/revoke`, {}); $("invMsg").textContent = "Revoked: that link no longer works."; load(); }
-        catch (e) { $("invMsg").textContent = `Not revoked: ${e.message}`; b.disabled = false; }
+        catch (e) { $("invMsg").textContent = `Not revoked: ${window.LGLoader.errorText(e, true)}`; b.disabled = false; }
       });
       act.append(b);
       tr.append(el("td", null, x.name || "–"), el("td", null, x.role), el("td", null, x.by), el("td", "mono", when(x.at)), el("td", "mono", when(x.expires)), act);
@@ -55,7 +55,7 @@
       link = d.link; $("invLink").textContent = link; $("invDone").hidden = false;
       $("invMsg").textContent = `Made for the role ${d.invite.role}. It is in the audit log (the link itself never is).`;
       $("invName").value = ""; load();
-    } catch (e) { $("invMsg").textContent = `Not made: ${e.message}`; }
+    } catch (e) { $("invMsg").textContent = `Not made: ${window.LGLoader.errorText(e, true)}`; }
     finally { $("invMake").disabled = false; }
   });
   $("invCopy").addEventListener("click", async () => {

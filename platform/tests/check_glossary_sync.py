@@ -11,6 +11,9 @@ import tempfile
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JS = os.path.join(HERE, "static", "js", "glossary.js")
+_HELD = os.path.join(os.environ.get("LG_HELD_DIR", ""), "glossary.js.new")
+if os.environ.get("LG_HELD_DIR") and os.path.exists(_HELD):   # the held copy that ships next (as the other checks do)
+    JS = _HELD
 MD = next((p for p in (os.path.join(HERE, "..", "docs", "GLOSSARY.md"),                       # the published repository
                        os.path.join(HERE, "tools", "release_root", "docs", "GLOSSARY.md"))      # the development tree
            if os.path.exists(p)), None)

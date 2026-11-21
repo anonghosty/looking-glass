@@ -168,11 +168,15 @@ def pretty(event, detail):
         m = re.fullmatch(r"role (\S+)", d)
         return f"Approved with the role {m.group(1)}" if m else d
     if event == "settings_changed":
-        m = re.fullmatch(r"country (\S+), (\d+) networks, (\d+) ranges", d)
+        # older entries: "country GH, 2 networks, 1 ranges"; since then the time zone and the ranges kept with their
+        # network were added ("country GH, time zone Africa/Accra, 2 networks, 1 ranges (1 kept with their network)")
+        m = re.fullmatch(r"country (\S+)(?:, time zone (\S+))?, (\d+) networks, (\d+) ranges(?: \((\d+) kept with their network\))?", d)
         if m:
-            n, r = int(m.group(2)), int(m.group(3))
+            n, r = int(m.group(3)), int(m.group(4))
             scope = "the whole country" if not n and not r else f"{n} network{'s' if n != 1 else ''} and {r} address range{'s' if r != 1 else ''}"
-            return f"Country set to {m.group(1)}; constituency: {scope}"
+            tz = f"; time zone {m.group(2)}" if m.group(2) else ""
+            kept = f" ({m.group(5)} with their network)" if m.group(5) and int(m.group(5)) else ""
+            return f"Country set to {m.group(1)}{tz}; constituency: {scope}{kept}"
         return d
     if event == "roles_changed":
         try:

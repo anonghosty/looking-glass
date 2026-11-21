@@ -116,7 +116,7 @@
             const r = await fetch(`/api/attack/technique/${encodeURIComponent(t.id)}`, { cache: "no-store", credentials: "same-origin" });
             const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
             full.replaceChildren(el("p", null, j.description), el("small", "muted", `MITRE ATT&CK v${j.version}. ${j.notice}`)); full.dataset.loaded = "1";
-          } catch (e) { full.replaceChildren(el("p", "muted", `Could not open it: ${e.message}`)); }
+          } catch (e) { full.replaceChildren(el("p", "muted", `Could not open it: ${window.LGLoader.errorText(e)}`)); }
         }
       });
       box.append(p, more, full);
@@ -143,7 +143,7 @@
         b.addEventListener("click", async () => {
           if (BUSY) return; BUSY = true; b.disabled = true; window.LGLoader?.busy("Saving");
           try { const d = await post(`/api/advisory/${fid}/attack`, { network: tnet, key: t.key, action }); if (tseq !== SEQ) return; there.advisory = d.advisory; draw(); }
-          catch (e) { b.disabled = false; acts.append(el("span", "av-err", e.message)); }
+          catch (e) { b.disabled = false; acts.append(el("span", "av-err", window.LGLoader.errorText(e, true))); }
           finally { BUSY = false; window.LGLoader?.ready(); }
         });
         return b;
@@ -160,7 +160,7 @@
         b.addEventListener("click", async () => {
           if (BUSY) return; BUSY = true; b.disabled = true;
           try { const d = await post(`/api/advisory/${fid}/attack`, { network: tnet, key: p.key, action: "restore" }); if (tseq !== SEQ) return; there.advisory = d.advisory; draw(); }
-          catch (e) { b.disabled = false; acts.append(el("span", "av-err", e.message)); } finally { BUSY = false; }
+          catch (e) { b.disabled = false; acts.append(el("span", "av-err", window.LGLoader.errorText(e, true))); } finally { BUSY = false; }
         });
         acts.append(b);
       }
@@ -195,7 +195,7 @@
             const d = await post(`/api/advisory/${fid}/attack`, { network: anet, action: "confirm_all", keys });
             if (aseq !== SEQ) return;
             ahere.advisory = d.advisory; draw();
-          } catch (e) { all.disabled = false; w.append(el("span", "av-err", ` ${e.message}`)); }
+          } catch (e) { all.disabled = false; w.append(el("span", "av-err", ` ${window.LGLoader.errorText(e, true)}`)); }
           finally { BUSY = false; window.LGLoader?.ready(); }
         });
         w.append(el("div", "av-tech-acts", null)); w.lastChild.append(all);
@@ -464,7 +464,7 @@
       if (BUSY) return;
       BUSY = true; button.disabled = true;
       try { const done = await work(); if (seq === SEQ) { await reloadIndex(); draw(); if (done) sayLater(done); } }
-      catch (e) { if (seq === SEQ) { say(e.message, true); button.disabled = false; } }
+      catch (e) { if (seq === SEQ) { say(window.LGLoader.errorText(e, true), true); button.disabled = false; } }
       finally { BUSY = false; }
     };
     if (edit) {
@@ -586,7 +586,7 @@
   // their hands while they write (findings-live.js); their own saves do not count (post() above)
   window.LGFindingsLive?.watch({});
   (async () => {
-    try { await reloadIndex(); } catch (e) { $("avLoading")?.remove(); main.append(el("p", "fd-empty", e.message)); return; }
+    try { await reloadIndex(); } catch (e) { $("avLoading")?.remove(); main.append(el("p", "fd-empty", window.LGLoader.errorText(e))); return; }
     $("avLoading")?.remove();
     window.LGLoader?.ready();
     // a malformed address part (#%E0%A4%A) is simply not a network: the page opens as usual (review 2026-11-13: it went blank)

@@ -34,7 +34,7 @@ def ok(label, cond, info=""):
 print("1. The catalogue")
 src = ""
 for root, dirs, files in os.walk(HERE):
-    dirs[:] = [d for d in dirs if d not in (".venv", "tests", "node_modules", ".git", "data", "tools")]
+    dirs[:] = [d for d in dirs if d not in (".venv", ".venvs", "tests", "node_modules", ".git", "data", "tools", "backups")]   # backups: old code moved aside (deploy/stale_files.py)
     for f in files:
         if f.endswith(".py") and f != "config_page.py":
             src += open(os.path.join(root, f), encoding="utf-8", errors="replace").read() + "\n"

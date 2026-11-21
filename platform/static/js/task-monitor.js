@@ -166,12 +166,12 @@
     save.addEventListener("click", async () => {
       save.disabled = true;
       try { const r = await api("/api/admin/monitor/cache", { ttl: Number(sel.value) }); say(r.ttl_s ? `Heavy answers are now kept ${r.ttl_s} seconds.` : "The cache is off: every answer is computed."); refresh(); }
-      catch (e) { say(e.message, true); } finally { save.disabled = false; }
+      catch (e) { say(window.LGLoader.errorText(e, true), true); } finally { save.disabled = false; }
     });
     clear.addEventListener("click", async () => {
       clear.disabled = true;
       try { const r = await api("/api/admin/monitor/cache", { action: "clear" }); say(`${r.cleared} kept answer(s) forgotten: the next visit computes afresh.`); refresh(); }
-      catch (e) { say(e.message, true); } finally { clear.disabled = false; }
+      catch (e) { say(window.LGLoader.errorText(e, true), true); } finally { clear.disabled = false; }
     });
     const row = el("div", "st-row st-tools tm-cache-row");
     const lab = el("label", "st-field"); lab.append(el("span", null, "Keep heavy answers for"), sel);
@@ -323,7 +323,7 @@
   // ---------------- refreshing while the tab shows (Performance more often, like Task Manager)
   async function refresh() {
     try { D = await api("/api/admin/monitor"); draw(D); drawTab(D); }
-    catch (e) { if (first) $("tmBody").replaceChildren(el("p", "fd-empty", e.message)); else say(`Could not read the figures: ${e.message}`, true); }
+    catch (e) { if (first) $("tmBody").replaceChildren(el("p", "fd-empty", window.LGLoader.errorText(e))); else say(`Could not read the figures: ${window.LGLoader.errorText(e)}`, true); }
     finally { if (first) { first = false; window.LGLoader?.ready(); } }
   }
   let tick = 0;                                    // every 2 s on Performance (its graphs), every 5 s elsewhere

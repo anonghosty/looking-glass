@@ -8,7 +8,8 @@ import stat
 import sys
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SKIP = {".venv", ".venvs", "data", "__pycache__", "site", ".git", "node_modules"}   # .venvs: the libraries, built by deploy/safe_libraries.py (r86)
+SKIP = {".venv", ".venvs", "data", "__pycache__", "site", ".git", "node_modules",   # .venvs: the libraries, built by deploy/safe_libraries.py (r86)
+        "backups"}                                                                # old code files moved aside on update (deploy/stale_files.py)
 checks, fails = 0, []
 
 

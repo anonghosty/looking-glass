@@ -111,7 +111,7 @@ class ACodes:
         return recs[entry["code"]]
 
 
-perms = {"analyst": {"unmasked", "export"}, "researcher": {"definitions"}, "advisor": {"advisory"}}
+perms = {"analyst": {"unmasked", "export"}, "researcher": {"definitions"}, "advisor": {"advisory"}, "admin": {"settings", "users"}}
 app = Flask(__name__)
 W = finding_watch.install(app, {"findings": F, "book": Book(), "acodes": ACodes(), "replay_now": lambda: LATEST,
                                 "stores": {"comms": Store([]), "services": Store(latest)}, "network": lambda a: "",
@@ -161,6 +161,8 @@ st, d = call("/api/findings/8/again", "advisor", "nobody")
 ok("…nor an advisor on a finding from before channels that management has not approved (Security Reviewer)", st == 404, str(st))
 st, d = call("/api/findings/8/again", "analyst", "grace")
 ok("…while an analyst still gets that finding's addresses", st == 200, str(st))
+st, d = call("/api/findings/watch", "external", "eve")
+ok("an account outside the findings team (external) is refused the list (r90)", st == 403 and "findings" not in d, str(st))
 
 print("Time to act")
 os.environ["FINDING_ACT_DAYS"] = "30"

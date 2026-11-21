@@ -74,7 +74,7 @@
   function open(file) {
     return new Promise(async (resolve) => {
       let pic;
-      try { pic = await loadImage(file); } catch (e) { alert(e.message); resolve(null); return; }
+      try { pic = await loadImage(file); } catch (e) { alert(window.LGLoader.errorText(e, true)); resolve(null); return; }
       const st = { img: pic.img, box: contentBox(pic.img), clear: hasClear(pic.img), trim: true, zoom: 1, dx: 0, dy: 0, bg: "clear" };
       if (!st.clear) st.bg = "clear";
       const prev = document.activeElement;

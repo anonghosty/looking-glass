@@ -297,8 +297,14 @@ try:
 
     print(" 3. Pretend Thursday 21 January 2027 (the 15th working day): too early")
     r1 = pipeline(base, pipe, D(2027, 1, 21), "2027-01-21 06:00:00")
-    ok("the pipeline refuses and deletes nothing", r1.get("outcome") == "refused" and counts(DB) == BEFORE, str(r1))
+    ok("the pipeline deletes nothing", r1.get("outcome") != "done" and counts(DB) == BEFORE, str(r1))
     print(f"      (its answer that day: {r1.get('quarter')}: {r1.get('why')})")
+    # that day the latest quarter whose purge day has passed is 2026Q3 (cutoff 21 September), and the reports start on
+    # 1 October: it says there is nothing to purge and names the quarter that is waiting, not a refusal for 2026Q3
+    ok("...and says so honestly: nothing to purge for 2026Q3, 2026Q4 is purged on Friday 22 January 2027",
+       (r1.get("quarter"), r1.get("outcome"), r1.get("next_quarter"), r1.get("next_purge_day")) == ("2026Q3", "nothing to purge", Q, "2027-01-22")
+       and r1.get("why") == ("Nothing to purge now: no report rows are dated before Monday 21 September 2026, the cutoff of 2026Q3; "
+                             "2026Q4 is purged on Friday 22 January 2027 if its report is VALID and the purge is on"), str(r1))
     ok("the permit on its own is refused that day too: before the purge day",
        qp.check_permit(qp.read_permit(os.path.join(base, "data"), Q), Q, qp.dates(2026, 4), D(2027, 1, 21))
        == "before the purge day (2027-01-22)")
@@ -402,6 +408,8 @@ try:
     ok("22 January: refused (no purge permit), nothing deleted",
        r.get("outcome") == "refused" and r.get("quarter") == Q and str(r.get("why")).startswith("no purge permit")
        and counts(DB) == BEFORE, str(r))
+    ok("...the refusal names the quarter waiting next and its purge day",
+       "Next: 2027Q1 is purged on Thursday 22 April 2027 if its report is VALID and the purge is on" in str(r.get("why")), str(r.get("why")))
     nothing_recorded("NOT VALID", base, pipe, audit, api, ts("2027-01-22 06:10:00"))
 finally:
     client.drop_database(DBN)

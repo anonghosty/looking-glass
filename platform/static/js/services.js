@@ -17,7 +17,8 @@
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const fmt = (n) => Math.round(n || 0).toLocaleString("en-US");
   const titleCase = (s) => (s || "").toLowerCase().replace(/(^|[\s-])\w/g, (c) => c.toUpperCase());
-  const flagUrl = (cc) => (cc && /^[a-z]{2}$/i.test(cc) && cc !== "EU" ? `https://flagcdn.com/w40/${cc.toLowerCase()}.png` : "");
+  // "UK" is how some reports write the United Kingdom; its flag file is "gb" (r90: the UK flag never loaded)
+  const flagUrl = (cc) => (cc && /^[a-z]{2}$/i.test(cc) && cc !== "EU" ? `https://flagcdn.com/w40/${cc.toLowerCase() === "uk" ? "gb" : cc.toLowerCase()}.png` : "");
   const flagImg = (cc) => { const i = el("img", "flag"); i.alt = ""; const u = flagUrl(cc); if (u) { i.src = u; i.loading = "lazy"; } else i.style.visibility = "hidden"; return i; };
   const SEV = { critical: "#e5484d", high: "#f76b15", medium: "#ffc53d", low: "#3e8ef7", info: "#8b8d98" };
   const SEV_ORDER = ["critical", "high", "medium", "low", "info"];
@@ -364,7 +365,7 @@
       for (const ev of d.events) state.pending.push({ ev, weight, wall: wallFor(Date.parse(ev.extracted_date)) });
       state.pending.sort((a, b) => a.wall - b.wall);
       $("streamInfo").textContent = d.sampled ? `sampled ${d.returned} of ${d.total}` : "";
-    } catch (err) { toast(`Data feed error: ${err.message}. Retrying…`); }
+    } catch (err) { toast(`Data feed error: ${window.LGLoader.errorText(err)} Retrying…`); }
     finally { polling = false; }
   }
   async function backfill() {
@@ -421,6 +422,9 @@
     let msg = "Waiting for records in the replay window…";
     if (filtered && r.total === 0) {
       msg = `No records of ${r.day} match these filters.`;
+    } else if (!filtered && r.total === 0 && !state.waiting) {
+      // the day is loaded (the server answered for it) and holds nothing: say so, not "waiting" (r90)
+      msg = COUNTRY.restricted ? `No records for your constituency on ${r.day}.` : `No records reported on ${r.day}.`;
     } else if (r.replayed === 0 && r.total > 0 && r.next_at) {
       const head = !filtered ? `No record of ${r.day} has been replayed yet: the first`
         : r.total === 1 ? `The only matching record of ${r.day} has not been replayed yet: it`
@@ -674,7 +678,7 @@
       $("kTotal").textContent = fmt(s.total); $("kHosts").textContent = fmt(s.hosts); $("kVuln").textContent = fmt(s.vulnerable_hosts);
       $("kCrit").textContent = fmt(s.critical); $("kServices").textContent = fmt(s.services);
       renderIntel(s); stage.setData(s); loadRegions();
-    } catch (err) { toast(`Could not load figures: ${err.message}`); }
+    } catch (err) { toast(`Could not load figures: ${window.LGLoader.errorText(err)}`); }
   }
   function renderIntel(s) {
     const b = s.breakdowns, total = Math.max(1, s.total);
@@ -1019,7 +1023,7 @@
       keepFocus(buildFilters);
       const ub = $("unsupportedBox"); ub.hidden = !f.unsupported.length;
       if (f.unsupported.length) ub.replaceChildren(el("h3", null, `${f.unsupported.length} report type(s) not processed yet`), el("p", "fg-hint", f.unsupported.map((u) => `${u.label}: missing ${u.missing.join(", ")}`).join(" · ")));
-    } catch (err) { toast(`Could not load filters: ${err.message}`); }
+    } catch (err) { toast(`Could not load filters: ${window.LGLoader.errorText(err)}`); }
   }
   // a rebuilt list replaces its buttons and boxes: the one that had the keyboard focus gets it back (same filter, same value)
   function keepFocus(build) {
@@ -1197,7 +1201,7 @@
     window.LGLoader?.busy("Opening the record");
     let d;
     try { d = await getJSON(`/api/svc/detail?id=${encodeURIComponent(ev.id)}&at=${encodeURIComponent(ev.extracted_date)}`); }
-    catch (err) { window.LGLoader?.ready(); if (seq === openModal.seq) toast(`Could not load the record: ${err.message}`); return; }
+    catch (err) { window.LGLoader?.ready(); if (seq === openModal.seq) toast(`Could not load the record: ${window.LGLoader.errorText(err)}`); return; }
     finally { if (openModal.loading === key && seq === openModal.seq) openModal.loading = null; }
     if (seq !== openModal.seq) return;
     queueMicrotask(() => window.LGLoader?.ready());         // after the window below is drawn
@@ -1278,7 +1282,7 @@
     const p = new URLSearchParams(pairs); p.set("at", atParam());
     window.LGAnalysis = { platform: "services", query: p.toString(), at: p.get("at"), title: selTitle(pairs) };   // acode-make.js
     let d;
-    try { d = await getJSON(`/api/svc/insight?${p}`); } catch (err) { if (stack[stack.length - 1] !== pairs) return; $("iBody").replaceChildren(el("div", "i-loading", `Could not load analysis: ${err.message}`)); return; }
+    try { d = await getJSON(`/api/svc/insight?${p}`); } catch (err) { if (stack[stack.length - 1] !== pairs) return; $("iBody").replaceChildren(el("div", "i-loading", `Could not load analysis: ${window.LGLoader.errorText(err)}`)); return; }
     if (stack[stack.length - 1] !== pairs) return;
     renderInsight(pairs, d, opts.drill);
   }
@@ -1419,7 +1423,7 @@
     box.scrollIntoView({ block: "nearest", behavior: reducedMotion ? "auto" : "smooth" });
     const p = new URLSearchParams(pairs); p.set("at", atParam()); p.set("metric", metric);
     let r;
-    try { r = await getJSON(`/api/svc/drill?${p}`); } catch (err) { if (box.dataset.metric !== metric) return; box.replaceChildren(el("div", "i-loading", `Could not load the details: ${err.message}`)); return; }
+    try { r = await getJSON(`/api/svc/drill?${p}`); } catch (err) { if (box.dataset.metric !== metric) return; box.replaceChildren(el("div", "i-loading", `Could not load the details: ${window.LGLoader.errorText(err)}`)); return; }
     if (box.dataset.metric !== metric) return;
     renderDrill(box, r, pairs, d);
   }
@@ -1464,7 +1468,7 @@
             if (box.dataset.metric === r.metric && !box.hidden && box.isConnected) renderDrill(box, r, pairs, d);
           } catch (err) {
             ib.disabled = false;
-            ib.textContent = err.stopped ? "Explain issues" : `Look-up failed: ${err.message} (retry)`;    // stopped: as it was
+            ib.textContent = err.stopped ? "Explain issues" : `Look-up failed: ${window.LGLoader.errorText(err)} (retry)`;    // stopped: as it was
           }
         });
         acts.append(ib);
@@ -1768,7 +1772,7 @@
     // the logo until the figures, the filters and the lists are all in (2026-11-15: they showed "0" and empty bodies)
     window.LGLoader?.busy("Loading publicly accessible / vulnerable services");
     await loadGlossary();
-    try { await syncClock(); } catch (err) { toast(`Could not reach the server: ${err.message}`); }
+    try { await syncClock(); } catch (err) { toast(window.LGLoader.errorText(err)); }
     if (state.sched) { state.anchorReplay = Date.parse(state.sched.replay_now); state.anchorWall = Date.now(); }
     state.cursor = replayNow();
     try { await Promise.all([loadFacets(), refreshStats()]); } finally { window.LGLoader?.ready(); }

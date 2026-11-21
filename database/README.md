@@ -273,7 +273,7 @@ shadowserver schedule off       # remove it
 ```
 
 - It is a cron job for your own user: no sudo needed. You can see it with `crontab -l` (marked `# shadowserver-pipeline`). Other cron jobs you have are left alone.
-- It runs `run.sh --quiet`: the e-mail of the last `EMAIL_DAYS` days (the installer asks for it, right after the schedule; 7 recommended — e-mails already fetched are skipped, so a run catches up by itself after the computer was off), then unzip/sort, then load. Output goes to `logs/pipeline-YYYY-MM-DD.log`; read it with `shadowserver logs` or `shadowserver status`.
+- It runs `run.sh --quiet`: the e-mail of the last `EMAIL_DAYS` days (the installer asks for it, right after the schedule; 7 recommended; e-mails already fetched are skipped, so a run catches up by itself after the computer was off), then unzip/sort, then load. Output goes to `logs/pipeline-YYYY-MM-DD.log`; read it with `shadowserver logs` or `shadowserver status`.
 - If a manual run is still going at that time, the scheduled run skips itself.
 
 > **Important on WSL:** cron only fires while WSL is running. WSL shuts itself down when no terminal or app uses it. Keep a WSL terminal open at the scheduled time, or start WSL before it. If a day was missed, catch up with `shadowserver run --days N`.

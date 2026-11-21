@@ -21,6 +21,8 @@ never writes here, and this module never trusts the permit on its own:
     index, one collection at a time. Findings, cases, advisories and everything of the platform's are never touched.
   * What was deleted is recorded per collection in <DATA_DIR>/quarterly_purge_status.json, which the platform reads
     (its admin page, the bell, the audit log). A purge that fails is recorded too and never stops the pipeline's run.
+    A refusal names the next quarter and its purge day; when the latest quarter whose purge day has passed had no
+    report row before its cutoff at all, the record says "nothing to purge" instead of a refusal.
   * Files dated before the cutoff are not loaded again afterwards (the sorted copies, a mailbox fetched again): the
     loader asks purged_before() and leaves them out.
 
@@ -45,6 +47,7 @@ WORKING_DAYS = 15                 # the grace period after the quarter, in worki
 STATUS_FILE = "quarterly_purge_status.json"
 CONFIRM_FILE = "purge_confirmed.json"   # in the platform's data/quarterly/: the purge's switch (Settings → Quarterly)
 NOT_ON = "the purge is not turned on in Settings → Quarterly"
+NO_PERMIT = "no purge permit from Looking Glass for this quarter (its report was not made, or was NOT VALID)"
 DATE_PREFIX = re.compile(r"^\d{4}-\d{2}-\d{2}")
 NOT_REPORTS = ("files_", "discovered_fields_", "lg_", "system.")
 
@@ -92,6 +95,38 @@ def due_quarter(today):
         if dates(y, q)["purge_day"] <= today:
             return y, q
     return None
+
+
+def next_quarter(y, q):
+    return (y + 1, 1) if q == 4 else (y, q + 1)
+
+
+def say_day(d):
+    """Friday 22 January 2027."""
+    return f"{d:%A} {d.day} {d:%B %Y}"
+
+
+def next_purge_text(due):
+    """The quarter after the due one and its purge day, in words: what is waiting next."""
+    ny, nq = next_quarter(*due)
+    return (f"{quarter_name(ny, nq)} is purged on {say_day(dates(ny, nq)['purge_day'])} if its report is VALID "
+            "and the purge is on")
+
+
+def has_rows_before(db, cutoff_iso):
+    """True when a report collection holds a row dated before the cutoff, False when none does, None when that could
+    not be read (no database here, or a read failed). Read only, through the filename index; used only for the
+    wording of a refusal, never to decide what is deleted."""
+    if db is None:
+        return None
+    try:
+        flt = purge_filter(cutoff_iso)
+        for name, no in report_collections(db).items():
+            if not no and db[name].find_one(flt, {"_id": 1}) is not None:
+                return True
+        return False
+    except Exception:  # noqa: BLE001  (the wording falls back to the plain refusal)
+        return None
 
 
 def purge_filter(cutoff_iso):
@@ -200,7 +235,7 @@ def check_confirmation(conf):
 def check_permit(permit, quarter, d, today):
     """"" when the permit allows this quarter's purge today; else why not."""
     if not permit:
-        return "no purge permit from Looking Glass for this quarter (its report was not made, or was NOT VALID)"
+        return NO_PERMIT
     if permit.get("quarter") != quarter:
         return "the permit names another quarter"
     if permit.get("valid") is not True or permit.get("status") != "VALID":
@@ -236,9 +271,20 @@ def run(db, platform_data_dir, base_dir, log, today=None, now=None):
     why = (check_confirmation(read_confirmation(platform_data_dir))
            or check_permit(read_permit(platform_data_dir, quarter), quarter, d, today))
     if why:
-        res = dict(base, outcome="refused", why=why)
+        # the wording only (what is deleted, and when, is decided above): the latest quarter whose purge day has passed
+        # may have had nothing to purge at all (no report row dated before its cutoff: the reports start later), and
+        # the quarter actually waiting is the next one; say so, and name it with its purge day
+        outcome, nxt = "refused", next_quarter(*due)
+        if why == NO_PERMIT and has_rows_before(db, d["cutoff"].isoformat()) is False:
+            outcome = "nothing to purge"
+            why = (f"Nothing to purge now: no report rows are dated before {say_day(d['cutoff'])}, the cutoff of {quarter}; "
+                   f"{next_purge_text(due)}")
+        elif why == NO_PERMIT:
+            why = f"{NO_PERMIT}; its rows are kept. Next: {next_purge_text(due)}"
+        res = dict(base, outcome=outcome, why=why, next_quarter=quarter_name(*nxt),
+                   next_purge_day=dates(*nxt)["purge_day"].isoformat())
         last = st.get("last") or {}
-        if (last.get("quarter"), last.get("outcome"), last.get("why")) != (quarter, "refused", why):
+        if (last.get("quarter"), last.get("outcome"), last.get("why")) != (quarter, outcome, why):
             log.info("[PURGE] %s: not purged: %s", quarter, why)
         st["last"] = res
         _write_status(base_dir, st)

@@ -98,8 +98,8 @@
       try { s = await (await fetch(`/api/lookups/${j.id}?since=${since}`, { credentials: "same-origin", cache: "no-store" })).json(); misses = 0; }
       catch (err) {   // give up after 10 failed polls in a row, so the caller's "(retry)" shows (review 2026-11-13)
         if (++misses < 10) continue;
-        w.msg.className = "lk-msg bad"; w.msg.textContent = `Lost contact with the server: ${err.message}`; w.now.textContent = "";
-        throw new Error(`lost contact with the server (${err.message})`);
+        w.msg.className = "lk-msg bad"; w.msg.textContent = window.LGLoader.errorText(err); w.now.textContent = "";
+        throw new Error(window.LGLoader.errorText(err));
       }
       if (s.error && !s.state) throw new Error(s.error);
       if (s.state === "stopped") throw stoppedError();

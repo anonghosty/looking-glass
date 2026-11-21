@@ -207,7 +207,7 @@
     box.replaceChildren(el("p", "svc-loading", "Reading what the reports show for this service…"));
     let r;
     try { r = await fetch(`/api/kb/service?name=${encodeURIComponent(name)}`, { cache: "no-store" }); }
-    catch (e) { box.replaceChildren(el("p", "svc-loading", `Could not open: ${e.message}`)); return; }   // (review 2026-11-13)
+    catch (e) { box.replaceChildren(el("p", "svc-loading", `Could not open: ${window.LGLoader.errorText(e)}`)); return; }   // (review 2026-11-13)
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { box.replaceChildren(el("p", "svc-loading", d.error || `Could not open (HTTP ${r.status})`)); return; }
     box.replaceChildren();
@@ -275,5 +275,5 @@
 
   // the page's logo stays until this card has its data (LGLoader.wait, 2026-11-15)
   (window.LGLoader?.wait || ((p) => p))(load(), "Opening definitions and intel")
-    .catch((e) => { $("svcStatus").textContent = `Could not load the services: ${e.message}`; });
+    .catch((e) => { $("svcStatus").textContent = `Could not load the services: ${window.LGLoader.errorText(e)}`; });
 })();

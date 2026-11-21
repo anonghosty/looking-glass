@@ -30,6 +30,7 @@ import time
 from flask import g, jsonify, request
 
 import beacon_decode
+import finding_rules
 
 MIN_HOSTS = 5
 MAX_RECORDS = 500                      # records listed for an analyst (the counts cover all of them)
@@ -225,7 +226,7 @@ def install(app, ctx):
         return u.get("user", ""), u.get("role", "")
 
     def team():
-        return hp("definitions") or hp("management") or hp("settings") or (hp("unmasked") and hp("export")) or hp("advisory")
+        return finding_rules.is_team(hp)
 
     def attach(fid):
         """Management's normal view of a beacon finding: an analyst code (LG-A) for exactly its records, added to the
@@ -352,6 +353,8 @@ def install(app, ctx):
         user = me()[0]
         if not user:
             return jsonify(error="Sign in."), 403
+        if not team():                                       # findings are the team's only (r90)
+            return jsonify(error=finding_rules.REFUSED), 403
         x = f.get(fid)
         if not x or not x.get("beacon") or not f.sees(x, user, hp("settings"), strict=not team()):
             return jsonify(error="No such finding."), 404

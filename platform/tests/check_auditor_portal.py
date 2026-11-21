@@ -249,6 +249,10 @@ try:
     for ev, raw, want in (("user_role", "analyst -> management", "Role changed from analyst to management"),
                           ("settings_changed", "country GH, 0 networks, 0 ranges", "Country set to GH; constituency: the whole country"),
                           ("settings_changed", "country KE, 2 networks, 1 ranges", "Country set to KE; constituency: 2 networks and 1 address range"),
+                          ("settings_changed", "country GH, time zone Africa/Accra, 2 networks, 3 ranges (2 kept with their network)",
+                           "Country set to GH; time zone Africa/Accra; constituency: 2 networks and 3 address ranges (2 with their network)"),
+                          ("settings_changed", "country GH, time zone UTC, 0 networks, 0 ranges (0 kept with their network)",
+                           "Country set to GH; time zone UTC; constituency: the whole country"),
                           ("user_approve", "role external", "Approved with the role external"),
                           ("roles_changed", '{"analyst": ["export", "view"]}', "analyst now: export, view"),
                           ("roles_changed", "{}", "Saved without changes"),
@@ -753,10 +757,18 @@ try:
     ok("…and the chain is still whole", audit.chain.verify()["ok"])
 
     print("The admin page and the nav")
-    rd = lambda p: open(os.path.join(os.path.dirname(A.__file__), p), encoding="utf-8").read()
+    def rd(p):
+        """A page file: the held copy that ships next when LG_HELD_DIR names one, else the installed file."""
+        held = os.path.join(os.environ.get("LG_HELD_DIR", ""), os.path.basename(p) + ".new")
+        src = held if os.environ.get("LG_HELD_DIR") and os.path.exists(held) else os.path.join(os.path.dirname(A.__file__), p)
+        return open(src, encoding="utf-8").read()
     ok("the Roles editor treats permanent roles as fixed (no Remove, locked boxes; the auditor among them)",
        "A permanent role" in rd("static/js/admin.js") and '"auditor"' in rd("static/js/admin.js"))
-    ok("auditors are not offered Findings", 'lg_role != "auditor"' in rd("templates/_page_nav.html") and 'lg_role != "auditor"' in rd("templates/_portal_cards.html"))
+    # r90: Findings follow one rule, finding_rules.is_team (the auditor is not in the team), in both templates
+    import finding_rules
+    ok("auditors are not offered Findings",
+       "lg_findings_team(lg_perms)" in rd("templates/_page_nav.html") and "lg_findings_team(lg_perms)" in rd("templates/_portal_cards.html")
+       and not finding_rules.is_team(lambda p: p in {"audit"}))
 finally:
     users.get, roles.perms = real_get, real_perms
     roles.path, roles.roles = real_roles_path, real_roles

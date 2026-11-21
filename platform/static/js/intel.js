@@ -773,7 +773,7 @@
     body.replaceChildren(el("div", "ig-loading lg-loading", "Gathering the indicators from the reports…"));   // the searching logo (loader.js)
     back.hidden = false; box.hidden = false; document.documentElement.classList.add("ig-open");
     let d; try { d = await get(`/api/intel?section=${encodeURIComponent(section || "infections")}&name=${encodeURIComponent(name)}`); }
-    catch (e) { if (gen === openGen && !box.hidden) body.replaceChildren(el("p", "ig-empty", `Could not gather the intel: ${e.message}`)); return; }
+    catch (e) { if (gen === openGen && !box.hidden) body.replaceChildren(el("p", "ig-empty", `Could not gather the intel: ${window.LGLoader.errorText(e)}`)); return; }
     if (gen !== openGen || box.hidden) return;
     const svc = d.section === "services";
     if (d.title) $("igName").textContent = d.title;            // a services report: its title, the collection names small
@@ -856,7 +856,7 @@
     body.replaceChildren(el("div", "ig-loading lg-loading", "Gathering the records that carry it…"));
     back.hidden = false; box.hidden = false; document.documentElement.classList.add("ig-open");
     let d; try { d = await get(`/api/intel/match?kind=${encodeURIComponent(x.kind)}&value=${encodeURIComponent(x.value)}`); }
-    catch (e) { if (gen === openGen && !box.hidden) body.replaceChildren(el("p", "ig-empty", `Could not gather the match: ${e.message}`)); return; }
+    catch (e) { if (gen === openGen && !box.hidden) body.replaceChildren(el("p", "ig-empty", `Could not gather the match: ${window.LGLoader.errorText(e)}`)); return; }
     if (gen !== openGen || box.hidden) return;
     const places = d.places || [];
     const meta = $("igMeta");

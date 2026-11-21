@@ -371,7 +371,8 @@ changes only when someone makes the locks again, on purpose, with the one tool f
    It downloads exactly the locked files for the six supported computers, checks each against its lock, writes
    `SHA256SUMS` and stops if a library has no ready-built file for one of them. The release attaches
    `looking-glass-libraries-<release>.tar.gz` to that release in the library repository.
-6. **Installations then update** with `deploy/update_libraries.sh` (INSTALLATION.md, Updating).
+6. **Installations then update** with `deploy/update_libraries.sh` (INSTALLATION.md, Updating). The update moves
+   files the release no longer ships into a backup folder; see Updating.
 
 Never install a library into `.venv` by hand: the next update replaces the environment from the lock anyway, and the
 library would be in no lock. The environments in `.venvs/` (the one in use and the one before) are rebuilt from the locks

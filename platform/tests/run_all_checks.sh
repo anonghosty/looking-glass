@@ -126,6 +126,7 @@ run "the installer's database check: internal only, TLS, structure" $PY tests/ch
 run "Bought certificate: checks, install, bell" $PY tests/check_install_cert.py
 run "the installer's animated logo" $PY tests/check_installer_anim.py
 run "Libraries: only files that match the lock (every install path, every source)" $PY tests/check_installer_supply.py
+run "update: old code files moved aside, nothing else touched" $PY tests/check_stale_files.py
 run "offline names: MISP Galaxy + ATT&CK, nothing sent" $PY tests/check_offline_names.py
 run "ATT&CK mappings, versions, CVE links" $PY tests/check_attack_map.py
 run "ATT&CK in advisories (reviewed only)" $PY tests/check_advisory_attack.py
@@ -139,6 +140,7 @@ run "reverse proxy: the right-most address, never a visitor's 127.0.0.1" $PY tes
 run "addresses from .env: https only (feed, report API)" $PY tests/check_https_only.py
 run "request times in UTC (one day copy)" $PY tests/check_time_offsets.py
 run "masked views: no host-name filter" $PY tests/check_masked_hostname.py
+run "external accounts: three masked pages, every other route refused" $PY tests/check_external_masking.py
 run "researchers: no code below 5 hosts" $PY tests/check_small_codes.py
 run "masked text: every address labelled" $PY tests/check_host_label_text.py
 run "self-test resets its own counters" $PY tests/check_retest_reset.py
@@ -169,6 +171,7 @@ run "Severity map: who, ratings, PDFs" $PY tests/check_severity_map.py
 run "Insider package: copies recorded, seals, Trace a leak" $PY tests/check_insider.py
 run "Quarterly reports: who gets what, seals, CSRF, bell, calendar" $PY tests/check_quarterly_access.py
 run "Every download in the audit log; one shared download helper on every page" $PY tests/check_downloads.py
+run "No page shows the browser's own error text; reads tried again, actions never" $PY tests/check_error_text.py
 run "Quarterly report: known answers, guards, permit (throwaway database)" $PY tests/check_quarterly.py
 run "Quarterly purge end to end: permit, pipeline, audit, bell (throwaway database)" $PY tests/check_quarterly_purge_e2e.py
 run "Anti-fingerprinting: what a signed-out visitor learns" tests/check_fingerprint.py
@@ -188,6 +191,7 @@ run "Settings: the logo's size and crop tool" tests/check_logo_tool.py
 run "The guided tour on every platform and portal" $PY tests/check_tour.py
 run "Every PDF and CSV variation: the content checker" $PY tests/check_output_lint.py
 run "RULE: every page opens with the loading animation" $PY tests/check_loader_everywhere.py
+run "RULE: each destination offered once per page, per role" $PY tests/check_nav_once.py
 run "Map filter: what else the devices carry; two ticked = carrying both" $PY tests/check_filter_overlap.py
 run "Nothing answers without signing in (every route, malformed requests)" $PY tests/check_signed_out.py
 run "Every page asking for the Looking Glass drop-downs loads lg-select.js" $PY tests/check_select_enhancer.py

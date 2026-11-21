@@ -245,19 +245,21 @@ def install(app, ctx):
         return bool((hp("unmasked") and hp("export")) or hp("advisory") or hp("settings"))
 
     def visible(fid):
+        import finding_rules
         x = F.get(fid)
-        team = hp("definitions") or hp("management") or hp("settings") or (hp("unmasked") and hp("export")) or hp("advisory")
-        return x if x and F.sees(x, me()[0], hp("settings"), strict=not team) else None
+        return x if x and F.sees(x, me()[0], hp("settings"), strict=not finding_rules.is_team(hp)) else None
 
     @app.route("/api/findings/watch")
     def api_findings_watch():
         """For each finding this user sees: reported days, time to act, and how many devices are in the latest report
         again (counts only: no address)."""
+        import finding_rules
         if not me()[0]:
             return jsonify(error="Sign in first."), 403
+        if not finding_rules.is_team(hp):                  # findings are the team's only (r90)
+            return jsonify(error=finding_rules.REFUSED), 403
         out = {}
-        for x in F.visible(me()[0], hp("settings"), strict=not (hp("definitions") or hp("management") or hp("settings")
-                                                              or (hp("unmasked") and hp("export")) or hp("advisory"))):
+        for x in F.visible(me()[0], hp("settings"), strict=False):
             fid = str(x["id"])
             r = result(fid) if x["status"] in F.OPEN or (x.get("reported") or {}).get("last") else {"state": "none"}
             out[fid] = {k: v for k, v in (r or {}).items() if k != "again_ips"} | {

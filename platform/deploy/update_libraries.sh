@@ -2,7 +2,8 @@
 # Update the Python libraries after `git pull`, from the locks only (deploy/safe_libraries.py): the platform's .venv
 # and, when the database pipeline is beside it (../database), the pipeline's .venv. Each is built anew beside the
 # running one and switched to only when every file matched its requirements.lock and installed; the running service
-# keeps its libraries until it is reloaded. A lock that did not change is left alone.
+# keeps its libraries until it is reloaded. A lock that did not change is left alone. Then code files the release no
+# longer ships are moved aside to backups/stale-<time>/ (LG_KEEP_STALE=1 keeps them).
 #
 #   deploy/update_libraries.sh            then: deploy/reload.sh (the platform); the pipeline uses its new libraries on
 #                                         its next run
@@ -11,7 +12,7 @@ set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
 project="$(pwd)"
 force=()
-case "${1:-}" in --force) force=(--force) ;; '') ;; -h|--help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+case "${1:-}" in --force) force=(--force) ;; '') ;; -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   *) echo "unknown option $1 (deploy/update_libraries.sh --help)"; exit 1 ;; esac
 python3 deploy/safe_libraries.py check-machine
 flagged=0
@@ -26,6 +27,17 @@ update "$project" platform flask,pymongo,dotenv,gunicorn,reportlab
 db="$(dirname "$project")/database"
 if [ -f "$db/requirements.lock" ] && [ -f "$db/shadowserver_pipeline.py" ]; then
   update "$db" database requests,pymongo,cryptography,dns
+fi
+# code files the new release no longer ships: moved aside to backups/stale-<time>/ in each folder, never deleted
+# (deploy/stale_files.py; LG_KEEP_STALE=1 lists and keeps them). A list it cannot trust moves nothing and does not
+# stop the update
+stale() {  # FOLDER PART
+  python3 "$project/deploy/stale_files.py" --folder "$1" --part "$2" \
+    || echo "WARNING: old code files in $1 were not checked (see above); the libraries are updated."
+}
+stale "$project" platform
+if [ -f "$db/requirements.lock" ] && [ -f "$db/shadowserver_pipeline.py" ]; then
+  stale "$db" database
 fi
 .venv/bin/python tests/check_libraries.py
 if [ "$flagged" = 1 ]; then

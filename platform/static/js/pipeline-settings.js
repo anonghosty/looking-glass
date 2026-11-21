@@ -44,7 +44,7 @@
   const say = (t, bad) => { msg.textContent = t || ""; msg.classList.toggle("bad", !!bad); };
 
   async function load(keepMsg) {
-    try { S = await api("/api/pipeline/settings"); } catch (e) { body.replaceChildren(el("p", "fd-empty", e.message)); return; }
+    try { S = await api("/api/pipeline/settings"); } catch (e) { body.replaceChildren(el("p", "fd-empty", window.LGLoader.errorText(e))); return; }
     if (!keepMsg) say("");
     draw();
     loadWeek();
@@ -202,7 +202,7 @@
       S._until = 0; clearInterval(timer);
       await load(true);
       say(d.changed.length ? `${d.changed.join(", ")}: ${d.note}` : d.note);
-    } catch (e) { say(e.message, true); btn.disabled = false; if (e.locked) load(true); }
+    } catch (e) { say(window.LGLoader.errorText(e, true), true); btn.disabled = false; if (e.locked) load(true); }
   }
 
   // ---------------- the password, to unlock
@@ -220,7 +220,7 @@
     f.addEventListener("submit", async (ev) => {
       ev.preventDefault(); go.disabled = true; out.textContent = "";
       try { const d = await api("/api/pipeline/unlock", { password: inp.value }); inp.value = ""; close(); S._until = Date.now() / 1000 + d.unlocked_for; await load(true); say("Unlocked."); }
-      catch (e) { out.textContent = e.message; go.disabled = false; inp.select(); }
+      catch (e) { out.textContent = window.LGLoader.errorText(e, true); go.disabled = false; inp.select(); }
     });
     document.body.append(back, m); inp.focus();
   }
@@ -240,7 +240,7 @@
     const acts = el("div", "wk-acts");
     if (a.key_set) {
       const chk = el("button", "pill-btn", "Check with Shadowserver now"); chk.type = "button";
-      chk.addEventListener("click", async () => { chk.disabled = true; try { const d = await api("/api/pipeline/apikey/check", {}); say(d.ok ? d.message : `Not accepted: ${d.message}`, !d.ok); await load(true); } catch (e) { say(e.message, true); chk.disabled = false; } });
+      chk.addEventListener("click", async () => { chk.disabled = true; try { const d = await api("/api/pipeline/apikey/check", {}); say(d.ok ? d.message : `Not accepted: ${window.LGLoader.errorText(d, true)}`, !d.ok); await load(true); } catch (e) { say(window.LGLoader.errorText(e, true), true); chk.disabled = false; } });
       acts.append(chk);
     }
     c.append(acts);
@@ -253,7 +253,7 @@
     f.addEventListener("submit", async (ev) => {
       ev.preventDefault(); go.disabled = true; say("Asking Shadowserver…");
       try { const d = await api("/api/pipeline/apikey", { key: k.value, secret: s.value }); k.value = s.value = ""; S._until = 0; clearInterval(timer); await load(true); say(`${d.message}. ${d.note} Locked again.`); }
-      catch (e) { say(e.message, true); go.disabled = false; }
+      catch (e) { say(window.LGLoader.errorText(e, true), true); go.disabled = false; }
     });
     c.append(f, el("small", "muted", "Kept only if Shadowserver accepts it; the pipeline then saves it at its next run. Only the key and a signature made with the secret are sent to Shadowserver."));
   }
@@ -265,7 +265,7 @@
     const c = $("wkWeek"); if (!c) return;
     c.replaceChildren(el("h3", null, "Sender check, last 7 days"));
     const wait = el("p", "lg-loading", "Counting the report e-mails of the last 7 days…"); c.append(wait);
-    let d; try { d = await api("/api/pipeline/sender-week"); } catch (e) { wait.remove(); c.append(el("p", "fd-empty", e.message)); return; }
+    let d; try { d = await api("/api/pipeline/sender-week"); } catch (e) { wait.remove(); c.append(el("p", "fd-empty", window.LGLoader.errorText(e))); return; }
     wait.remove();
     if (!d.found) { c.append(el("p", "muted", "No report e-mail has been checked yet (the sender check starts with the pipeline's next run).")); return; }
     if (d.mode === "off") { c.append(el("p", "muted", "The sender check is off, so nothing is counted. Switch on “Check the sender of every report” above.")); return; }
@@ -326,7 +326,7 @@
   async function loadHeld() {
     const c = $("wkHeld"); c.replaceChildren(el("h3", null, "Reports held back by the sender check"));
     const wait = el("p", "lg-loading", "Loading the reports held back…"); c.append(wait);   // never an empty card (2026-11-15)
-    let d; try { d = await api("/api/pipeline/held"); } catch (e) { wait.remove(); c.append(el("p", "fd-empty", e.message)); return; }
+    let d; try { d = await api("/api/pipeline/held"); } catch (e) { wait.remove(); c.append(el("p", "fd-empty", window.LGLoader.errorText(e))); return; }
     wait.remove();
     if (!d.held.length) { c.append(el("p", "muted", d.mode === "enforce" ? "None held back." : `None held back (${d.mode === "off" ? "the sender check is off" : "blocking is off: reports that do not pass are recorded, not held back"}).`)); return; }
     // the user (2026-11-15): list them by their Shadowserver file names, ask before processing, one by one or all
@@ -386,7 +386,7 @@
         + "They are loaded like any other at the pipeline's next run. Process only reports you know are genuine.")) return;
       go.disabled = true;
       try { const r = await api("/api/pipeline/release", { ids: chosen.map((h) => h.id) }); say(r.note); loadHeld(); }
-      catch (e) { say(e.message, true); sync(); }
+      catch (e) { say(window.LGLoader.errorText(e, true), true); sync(); }
     });
     t.append(tb); const wrap = el("div", "table-wrap"); wrap.append(t); c.append(wrap);
   }

@@ -102,7 +102,10 @@ for sel, _t, _x in steps:
             missing.append(f"{kind}{name} ({sel})")
 ok("every part a step points at exists in the pages' templates or scripts", not missing, missing)
 ok("a step whose part is not on the page is left out (never pointing at nothing)",
-   "const n = [...document.querySelectorAll(sel)].find(vis);" in tour and "if (n) out.push" in tour)
+   "const n = [...document.querySelectorAll(sel)].find((m) => vis(m) && !underDialog(m));" in tour and "if (n) out.push" in tour)
+ok("r90: a header button covered by another layer (the map's header behind its Overview dialog) is left out",
+   "document.elementFromPoint(x, y)" in tour and ".filter((n) => shown(n)" in tour and "if (t && shown(t))" in tour
+   and """querySelectorAll('[aria-modal="true"]')""" in tour)
 ok("the header buttons explained from their own descriptions (a new button is covered)", 'getAttribute("title")' in tour and ".hud-right .nav-ic" in tour)
 ok("/advisory/12, /review/…, /intel/… use their page's steps", r"/^\/(advisory|review|intel)\/./" in tour)
 
@@ -118,7 +121,12 @@ ok("…the focus goes back where it was when the tour ends", "ui.back.focus()" i
 ok("the first-visit offer: Take the tour, Skip, Don't show again", all(w in tour for w in ('"Take the tour"', '"Skip"', '"Don\'t show again"')))
 ok("…offered only after the page's loading (never over a page still being drawn)", "#lgTransition.on, .st-loading:not([hidden])" in tour)
 ok("…once per page, per person (the server's memory), and this browser's", 'store.get("seen:" + pageKey())' in tour and "server.pages" in tour)
-ok("the Tutorial button before Log out", 'host.insertBefore(b, logout' in tour and 'aria-label", "Tutorial"' in tour)
+ok("the Tutorial button before Log out", 'host.insertBefore(tourBtn, before)' in tour and 'aria-label", "Tutorial"' in tour)
+# r90: on the map's Overview (/?intro=1) the button sat in the map's header behind the dialog, out of reach: one button,
+# in the dialog's own header group (beside its bell and Log out) while it is open, back in the map's header after
+ok("…on the map's Overview: in the dialog's own header group while it is open, one button that follows it",
+   'introOpen() && document.querySelector(".intro-gear-row")' in tour and "new MutationObserver(placeButton)" in tour
+   and tour.count('el("button", "demo-btn nav-ic lg-tour-btn")') == 1)
 css = read(os.path.join(HERE, "static", "css", "app.css"))
 ok("its styles are in app.css", all(c in css for c in (".lg-tour-card", ".lg-tour-spot", ".lg-tour-offer")))
 fsrc = open(os.path.join(HERE, "features.py"), encoding="utf-8").read()

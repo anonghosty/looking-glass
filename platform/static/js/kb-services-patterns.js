@@ -24,7 +24,7 @@
     pane.replaceChildren(el("p", "svc-loading", "Measuring how each field groups the hosts…"));
     let r;
     try { r = await fetch(`/api/kb/service/fields?name=${encodeURIComponent(name)}`, { cache: "no-store" }); }
-    catch (e) { pane.replaceChildren(el("p", "svc-loading", `Could not open: ${e.message}`)); return; }   // (review 2026-11-13)
+    catch (e) { pane.replaceChildren(el("p", "svc-loading", `Could not open: ${window.LGLoader.errorText(e)}`)); return; }   // (review 2026-11-13)
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { pane.replaceChildren(el("p", "svc-loading", d.error || `HTTP ${r.status}`)); return; }
     pane.replaceChildren();
@@ -66,7 +66,7 @@
         if (!rr.ok) throw new Error(j.error || `HTTP ${rr.status}`);
         msg.className = "kbn-msg ok"; msg.textContent = "Saved: the patterns are counted again with these fields.";
         setTimeout(() => onSaved?.(), 700);
-      } catch (e) { msg.className = "kbn-msg bad"; msg.textContent = e.message; } finally { save.disabled = false; }
+      } catch (e) { msg.className = "kbn-msg bad"; msg.textContent = window.LGLoader.errorText(e, true); } finally { save.disabled = false; }
     });
     reset.addEventListener("click", async () => {
       if (reset.disabled) return;              // one reset at a time; say why it failed (review 2026-11-13)
@@ -76,7 +76,7 @@
         const j = await rr.json().catch(() => ({}));
         if (!rr.ok) throw new Error(j.error || `HTTP ${rr.status}`);
         onSaved?.();
-      } catch (e) { msg.className = "kbn-msg bad"; msg.textContent = e instanceof TypeError ? "The connection was interrupted. Try again." : e.message; }
+      } catch (e) { msg.className = "kbn-msg bad"; msg.textContent = window.LGLoader.errorText(e, true); }
       finally { reset.disabled = false; }
     });
     // a product rule: how to read a product and its version out of a response

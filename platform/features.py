@@ -26,6 +26,11 @@ def _held(store, version):
 def install(app, core):
     out = {}
 
+    # external accounts: the two platforms and Abused or Compromised only (external_access.py; the sign-in gate in
+    # auth.py enforces it, the templates hide the rest with the same test)
+    import external_access
+    out["external"] = external_access.install(app)
+
     # the spike notice on the Overview's buttons: the latest report day against the day before, counted as each
     # platform shows a day (spike_notice.py)
     import spike_notice
@@ -139,8 +144,11 @@ def install(app, core):
         def blocks_days():
             start = core["day_start"](core["replay_now"]())
             return [d for d in (store.days.get(start), svc_store.days.get(start)) if d is not None]
+
+        def blocks_all_days():             # every day both platforms hold in memory: a saved range's network
+            return [d for s in (store, svc_store) for d in list(s.days.values()) if d is not None]
         out["address_blocks"] = address_blocks.install(app, {
-            "has_perm": A["has_perm"], "settings": st, "days": blocks_days,
+            "has_perm": A["has_perm"], "settings": st, "days": blocks_days, "all_days": blocks_all_days,
             "company": lambda asn: asns.company(asn, False), "day": lambda: core["day_start"](core["replay_now"]()).date().isoformat()})
 
     # the quarterly report and the quarterly purge's permit (quarterly.py, r85, the user 2026-11-20): made once a quarter

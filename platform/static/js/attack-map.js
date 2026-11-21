@@ -46,7 +46,7 @@
       load.waiting = true; return window.LGLoader.wait(load(first), "Opening definitions and intel");
     }
     try { data = await get("/api/attack"); }
-    catch (e) { if (first) { $("cardAttack").hidden = true; return; } $("amStatus").textContent = `Could not load: ${e.message}`; return; }
+    catch (e) { if (first) { $("cardAttack").hidden = true; return; } $("amStatus").textContent = `Could not load: ${window.LGLoader.errorText(e)}`; return; }
     $("cardAttack").hidden = false;
     if (first) {                                     // open on the tab that needs work first
       const c = data.summary.counts || {};
@@ -124,7 +124,7 @@
       if (!go) return;
       b.disabled = true; window.LGLoader?.busy("Saving the setting");
       try { await post("/api/attack/ctid-trust", { trust: !tr.on }); data = await get("/api/attack"); render(); }
-      catch (e) { $("amStatus").className = "dz-status bad"; $("amStatus").textContent = `Not changed: ${e.message}`; b.disabled = false; }
+      catch (e) { $("amStatus").className = "dz-status bad"; $("amStatus").textContent = `Not changed: ${window.LGLoader.errorText(e, true)}`; b.disabled = false; }
       finally { window.LGLoader?.ready(); }
     });
     row.append(b);
@@ -159,7 +159,7 @@
         $("amStatus").textContent = `Confirmed ${fmt(j.confirmed.length)}` + (sk.length
           ? `, skipped ${sk.length}: ${sk.map((s) => `${s.title} (${s.reason})`).join("; ")}. Please look at ${sk.length === 1 ? "it" : "them"} again.` : ".");
       } catch (e) {
-        $("amStatus").className = "dz-status bad"; $("amStatus").textContent = `Nothing was confirmed: ${e.message}`;
+        $("amStatus").className = "dz-status bad"; $("amStatus").textContent = `Nothing was confirmed: ${window.LGLoader.errorText(e, true)}`;
         b.disabled = false; b.classList.remove("is-busy");
       } finally { window.LGLoader?.ready(); }
     });
@@ -217,7 +217,7 @@
       render();
       $("amStatus").textContent = `Saved: ${x.title} is reviewed.`; $("amStatus").className = "dz-status ok";
     } catch (e) {
-      $("amStatus").textContent = `Not saved: ${e.message}`; $("amStatus").className = "dz-status bad";
+      $("amStatus").textContent = `Not saved: ${window.LGLoader.errorText(e, true)}`; $("amStatus").className = "dz-status bad";
       if (btn) { btn.disabled = false; btn.classList.remove("is-busy"); }
     } finally { window.LGLoader?.ready(); }
   }
@@ -277,7 +277,7 @@
       const j = await get(`/api/attack/shortlist?report=${encodeURIComponent(x.report)}`);
       const list = [...j.results, ...[...chosen.values()].filter((t) => !j.results.some((y) => y.id === t.id))];
       grouped(list, short, (id) => chosen.has(id), toggle);
-    } catch (e) { short.replaceChildren(el("p", "dz-status bad", `Could not load: ${e.message}`)); }
+    } catch (e) { short.replaceChildren(el("p", "dz-status bad", `Could not load: ${window.LGLoader.errorText(e)}`)); }
     let timer = 0;
     q.addEventListener("input", () => {
       clearTimeout(timer);
@@ -289,7 +289,7 @@
           const j = await get(`/api/attack/search?q=${encodeURIComponent(v)}`);
           if (!j.results.length) found.replaceChildren(el("p", "dz-by", "No current technique matches (retired ones are hidden)."));
           else grouped(j.results, found, (id) => chosen.has(id), toggle);
-        } catch (e) { found.replaceChildren(el("p", "dz-status bad", e.message)); }
+        } catch (e) { found.replaceChildren(el("p", "dz-status bad", window.LGLoader.errorText(e))); }
       }, 250);
     });
     sync(); q.focus();

@@ -5,6 +5,11 @@
   const $ = (id) => document.getElementById(id);
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
   const fmt = (n) => Number(n || 0).toLocaleString("en-US");
+  // the Records column: the network's records on the day the map shows (GET /api/networks' events_day); "—" when that
+  // day is not loaded, never a made-up 0
+  const recs = (n) => (n == null ? "not loaded" : fmt(n));
+  const dayText = (d) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+  let eventsDay = "";
   const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content || "";
   const hdr = (json) => (json ? { "Content-Type": "application/json", "X-CSRF-Token": csrf() } : {});
   const TYPES = {};
@@ -40,7 +45,7 @@
     const r = await fetch("/api/networks", { cache: "no-store", headers: hdr(false) });
     if (!r.ok) { $("cardNets").hidden = true; return; }
     const j = await r.json();
-    rows = j.networks; identifying = j.identifying; canLookup = !!j.can_lookup; setTypes(j.types);
+    rows = j.networks; identifying = j.identifying; canLookup = !!j.can_lookup; eventsDay = j.events_day || ""; setTypes(j.types);
     $("cardNets").hidden = false; counts();
     // nothing left to review: open on every network, each still editable (a company renames, rebrands, merges…)
     if (view === "todo" && !rows.some((x) => !x.reviewed)) view = "all";
@@ -90,7 +95,7 @@
             const j = await r.json().catch(() => ({}));
             if (!r.ok) throw new Error(j.error || `Refused (${r.status})`);
             saved += 1; flash($("netStatus"), `Saving: ${fmt(saved)} of ${fmt(list.length)}`);
-          } catch (e) { failed.push(`AS${x.asn}: ${e.message}`); }
+          } catch (e) { failed.push(`AS${x.asn}: ${window.LGLoader.errorText(e)}`); }
         }
         busy(b, false);
         await load();
@@ -120,7 +125,7 @@
           }
           await load();
           flash($("netStatus"), `${fmt(found)} of ${fmt(todo.length)} network${todo.length === 1 ? "" : "s"} named: check them, then Save.`, "ok");
-        } catch (e) { flash($("netStatus"), `Look-up stopped: ${e.message}`, "bad"); }
+        } catch (e) { flash($("netStatus"), `Look-up stopped: ${window.LGLoader.errorText(e)}`, "bad"); }
         finally { busy(b, false); lookAllButton(); }
       });
       $("netStatus").after(b);
@@ -141,7 +146,8 @@
   }
   // ---- Settings: the Constituent column picks the constituency (the user's design, 2026-11-21: one picker). Each
   // network is Not in, The whole network (its AS number is saved) or Some address blocks (its /24 blocks with records
-  // are listed in an expansion row under it; the ticked ones are saved as address ranges). settings.js holds the choice
+  // are listed in an expansion row under it, the chosen ones first, kept until unticked, plus Add a block; the ticked
+  // ones are saved as address ranges). settings.js holds the choice
   // (window.LGConstituency) and saves it with Apply settings; address-blocks.js lists the blocks (window.LGBlocks).
   const CHOICES = [["out", "Not in"], ["whole", "The whole network"], ["some", "Some address blocks"]];
   const openRows = new Set();           // networks whose blocks are shown (kept while the table is drawn again)
@@ -179,8 +185,8 @@
       if (open && !prow && window.LGBlocks) {
         const ctl = window.LGBlocks.panel({
           asn: x.asn, name,
-          picked: () => C.picked(x.asn),
-          toggle: (blk, on) => { own(() => C.toggleBlock(x.asn, blk, on)); tog.firstChild.textContent = blocksText(C, x.asn); },
+          picked: () => C.picked(x.asn), isChosen: (blk) => C.isChosen(blk), info: (blk) => C.info(blk),
+          toggle: (blk, on, inf) => { own(() => C.toggleBlock(x.asn, blk, on, inf)); tog.firstChild.textContent = blocksText(C, x.asn); },
           onClose: () => { openRows.delete(x.asn); sync(); tog.focus(); },
         });
         prow = el("tr", "nb-row"); const c = el("td"); c.colSpan = 8; c.append(ctl.node); prow.append(c);
@@ -208,8 +214,12 @@
     $("netTypeFilter").hidden = view === "types";
     if (view === "types") { renderTypes(tb); return; }
     const C = RO ? window.LGConstituency : null;      // Settings: this list also picks the constituency (settings.js)
-    $("netEdTable").querySelector("thead tr").replaceChildren(...[["AS number"], ["Company name"], ["Type"], ["Note"], ["Registry holder"], ["Events", "num"], ["Status"],
+    $("netEdTable").querySelector("thead tr").replaceChildren(...[["AS number"], ["Company name"], ["Type"], ["Note"], ["Registry holder"],
+      [eventsDay ? `Records on ${dayText(eventsDay)}` : "Records", "num"], ["Status"],
       [C ? "Constituent" : "", "dz-act"]].map(([h, c]) => el("th", c || null, h)));
+    const recTh = $("netEdTable").querySelector("thead th.num");
+    if (recTh) recTh.title = eventsDay ? `Records with this network on either side on ${dayText(eventsDay)}, the day the map shows (both platforms, before the constituency)`
+      : "That day's reports are not loaded yet: the records are not known";
     lastKey = C ? C.key() : "";
     const q = $("netEdSearch").value.trim().toLowerCase().replace(/^as/, ""), tf = $("netTypeFilter").value;
     // a search looks through every network, whatever the tab: a reviewed one is found and edited the same way
@@ -241,7 +251,7 @@
         // a network in the reports not looked up yet (Identify networks): listed for review, without a name
         const nm = x.identified === false && !x.name ? el("td", "dz-w-name muted", "not identified yet") : el("td", "dz-w-name", x.name);
         tr.append(el("td", "mono dz-name", `AS${x.asn}`), nm, el("td", null, TYPES[x.type] || x.type), el("td", "muted", x.note || "—"),
-          el("td", "dz-seen", `${x.holder || "—"}${x.country ? ` (${x.country})` : ""}`), el("td", "num mono", fmt(x.events)), st, cell.td);
+          el("td", "dz-seen", `${x.holder || "—"}${x.country ? ` (${x.country})` : ""}`), el("td", "num mono", recs(x.events)), st, cell.td);
         tb.append(tr); cell.sync(); continue;
       }
       const name = el("input", "dz-input"); name.value = x.name; name.maxLength = 80; name.setAttribute("aria-label", `Company name for AS${x.asn}`);
@@ -279,12 +289,12 @@
           Object.assign(x, { name: name.value.trim(), type: type.value, note: note.value.trim(), reviewed: true, by: "you", updated: new Date().toISOString().slice(0, 10) });
           busy(save, false); dirty(); showStatus(); status.prepend(pill("Saved ✓", "ok")); counts(); saveAllButton();
           tr.classList.add("dz-saved"); setTimeout(() => tr.classList.remove("dz-saved"), 1500);
-        } catch (e) { busy(save, false); save.disabled = false; status.replaceChildren(pill(e.message, "bad")); }
+        } catch (e) { busy(save, false); save.disabled = false; status.replaceChildren(pill(window.LGLoader.errorText(e, true), "bad")); }
       });
       const td = (node, cls) => { const c = el("td", cls || null); c.append(node); return c; };
       const act = td(save, "dz-act");
       tr.append(el("td", "mono dz-name", `AS${x.asn}`), td(name, "dz-w-name"), td(type, "dz-w-type"), td(note, "dz-w-note"),
-        el("td", "dz-seen", `${x.holder || "—"}${x.country ? ` (${x.country})` : ""}`), el("td", "num mono", fmt(x.events)), status, act);
+        el("td", "dz-seen", `${x.holder || "—"}${x.country ? ` (${x.country})` : ""}`), el("td", "num mono", recs(x.events)), status, act);
       tb.append(tr);
     }
     if (shown.length > 300) { const tr = el("tr", "dz-empty"), td = el("td", null, `Showing 300 of ${fmt(shown.length)}: search or choose a type to narrow the list.`); td.colSpan = 8; tr.append(td); tb.append(tr); }
@@ -310,14 +320,14 @@
       setTypes(j.types); render();
       flash(msg, `Added “${label}” ✓ It can now be chosen for any network.`, "ok");
       $("netTypeLabel").value = ""; $("netTypeAlias").value = "";
-    } catch (e) { flash(msg, e.message, "bad"); }
+    } catch (e) { flash(msg, window.LGLoader.errorText(e, true), "bad"); }
     finally { busy(btn, false); }
   });
   $("netTypeLabel").addEventListener("keydown", (e) => { if (e.key === "Enter") $("netTypeAdd").click(); });
   $("netTypeAlias").addEventListener("keydown", (e) => { if (e.key === "Enter") $("netTypeAdd").click(); });
   // the page's logo stays until this card has its data (LGLoader.wait, 2026-11-15)
   (window.LGLoader?.wait || ((p) => p))(load())
-    .catch((e) => { console.error("Network names could not be loaded:", e); flash($("netStatus"), `Could not load: ${e.message}`, "bad"); });
+    .catch((e) => { console.error("Network names could not be loaded:", e); flash($("netStatus"), `Could not load: ${window.LGLoader.errorText(e)}`, "bad"); });
   // Settings: redraw the choices when the constituency changes elsewhere (the Constituency card's mode, Undo changes, the
   // blocks' counts arriving), only when it did; a change made in this table updates its own row
   if (RO && window.LGConstituency) window.LGConstituency.onChange(() => {

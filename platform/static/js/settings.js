@@ -14,10 +14,14 @@
   const norm = (n) => { let s = String(n || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toUpperCase().trim(); for (const x of SUFFIXES) if (s.endsWith(x)) s = s.slice(0, -x.length).trim(); return s; };
   const FOR = new URLSearchParams(location.search).get("for") || "";
   // the constituency (the user's design, 2026-11-21: one picker, in Network names & types): chosen = whole networks
-  // (AS numbers), someNets + picks = networks with some of their address blocks ticked, the "Other address ranges" box
-  // (#cidrs) = the rest. Saved as before: AS numbers and address ranges (CIDRs), with Apply settings.
+  // (AS numbers), someNets + picks = networks with some of their address blocks ticked, others = the "Other address
+  // ranges" list (#cidrs) with the rest. Saved as before: AS numbers and address ranges (CIDRs), with Apply settings.
+  // A chosen block stays in its network's row until it is unticked, with or without records (r90).
   let data = null, chosen = new Set(), someNets = new Set(), picks = new Map(), mode = "all", shapes = null, saved = null;
-  let blockInfo = { counts: null, owners: {} };      // address_blocks.py: blocks per network; saved range -> its network
+  let others = [];
+  // address_blocks.py: blocks per network; saved range -> its network (yesterday, else any day in memory); per range,
+  // what the reports hold (info: {asn, nets: {asn: records yesterday}, part, exact, seen})
+  let blockInfo = { counts: null, owners: {}, info: {} };
   const plural = (n, one, many) => `${fmt(n)} ${n === 1 ? one : (many || `${one}s`)}`;
   const uniqSorted = (list) => [...new Set(list.map(String))].sort();
   try { sessionStorage.removeItem("lg.settingsToken"); } catch { /* the settings token is gone (2026-11-11) */ }
@@ -38,7 +42,7 @@
     saved = { country: s.country, timezone: s.timezone || "", networks: [...s.networks].map(String).sort(), cidrs: uniqSorted(s.cidrs) };
     // which saved ranges are a network's address blocks, and how many blocks each network has (administrators only)
     if (data.writable && window.LGBlocks) {
-      try { const b = await window.LGBlocks.summary(); blockInfo = { counts: b.counts || {}, owners: b.owners || {} }; }
+      try { const b = await window.LGBlocks.summary(); blockInfo = { counts: b.counts || {}, owners: b.owners || {}, info: b.info || {} }; }
       catch (e) { console.warn("The address blocks could not be read:", e); }
     }
     mode = s.restricted ? "some" : "all";
@@ -91,9 +95,9 @@
       idTimer = null;                          // done, failed or stopped: no job to resume (review 2026-11-13)
       if (st.state === "done" || st.state === "stopped") {
         // the choices not applied yet stay as they were
-        const keep = { c: new Set(chosen), s: new Set(someNets), p: new Map([...picks].map(([a, v]) => [a, new Set(v)])), o: $("cidrs").value, m: mode };
+        const keep = { c: new Set(chosen), s: new Set(someNets), p: new Map([...picks].map(([a, v]) => [a, new Set(v)])), o: [...others], m: mode };
         await load();
-        chosen = keep.c; someNets = keep.s; picks = keep.p; $("cidrs").value = keep.o; setMode(keep.m);
+        chosen = keep.c; someNets = keep.s; picks = keep.p; others = keep.o; drawOthers(); setMode(keep.m);
       }
     }
   }
@@ -107,7 +111,7 @@
       const r = await fetch("/api/asns/identify", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: "{}" });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { btn.disabled = false; idRender({ state: "failed", total: 0, done: 0, added: 0, known: 0, failed: 0, log: [], message: j.error || `Refused (${r.status}).` }); return; }
-    } catch (e) { btn.disabled = false; idRender({ state: "failed", total: 0, done: 0, added: 0, known: 0, failed: 0, log: [], message: `Could not start: ${e.message}` }); return; }
+    } catch (e) { btn.disabled = false; idRender({ state: "failed", total: 0, done: 0, added: 0, known: 0, failed: 0, log: [], message: `Could not start: ${window.LGLoader.errorText(e, true)}` }); return; }
     idPoll();
   });
   $("idClose").addEventListener("click", () => idShow(false));
@@ -115,7 +119,8 @@
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("idModal").hidden) idShow(false); });
   function access() {
     const box = $("access");
-    $("cidrs").readOnly = !data.writable;         // read only: the other address ranges are shown, not changed
+    $("cidrsAdd").hidden = !data.writable;        // read only: the other address ranges are shown, not changed
+    drawOthers();
     if (data.writable) { box.hidden = true; return; }
     box.hidden = false; box.replaceChildren();
     box.append(document.createTextNode("Read only: changing settings needs an account with the Settings permission (administrators)."));
@@ -132,7 +137,7 @@
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
       await renderCountry();
     } catch (e) {
-      const h = $("matchHint"); h.textContent = `Not saved: ${e.message}`; h.classList.add("bad");
+      const h = $("matchHint"); h.textContent = `Not saved: ${window.LGLoader.errorText(e, true)}`; h.classList.add("bad");
       if (btn) btn.disabled = false;
     }
   }
@@ -270,8 +275,9 @@
   }
   for (const b of document.querySelectorAll(".st-mode button")) b.addEventListener("click", () => setMode(b.dataset.mode));
   const pickSet = (asn) => { if (!picks.has(asn)) picks.set(asn, new Set()); return picks.get(asn); };
-  /** the saved AS numbers and ranges as the picker shows them: a range that is one of a network's address blocks is
-      that network's chosen block (Some address blocks); any other range goes to Other address ranges */
+  /** the saved AS numbers and ranges as the picker shows them: a range whose network is known (yesterday's blocks,
+      else any day in memory: blockInfo.owners) is that network's chosen block (Some address blocks), with or without
+      records; any other range goes to Other address ranges */
   function applySaved(nets, cidrs) {
     chosen = new Set(nets.map(String)); someNets = new Set(); picks = new Map();
     const other = [];
@@ -279,8 +285,65 @@
       const a = blockInfo.owners[c];
       if (a && !chosen.has(String(a))) { someNets.add(String(a)); pickSet(String(a)).add(c); } else other.push(c);
     }
-    $("cidrs").value = other.join("\n");
+    others = other; drawOthers();
   }
+  const allPicked = () => new Set([...someNets].flatMap((a) => [...(picks.get(a) || [])]));
+  /** a network's chosen blocks: its own, and an exact block chosen in another network's row that it has records in
+      too (a block two networks share is the same range, ticked in both rows) */
+  function pickedOf(asn) {
+    const a = String(asn), out = new Set(picks.get(a) || []);
+    for (const r of allPicked()) { const i = blockInfo.info[r]; if (i && i.exact && i.nets && i.nets[a]) out.add(r); }
+    return out;
+  }
+  // ---- Other address ranges: one row each with its remove button, and a box to add one (r90: was a text box)
+  const NOT_SEEN = "not seen in the reports yet";
+  function drawOthers(focusAt) {
+    const ul = $("cidrsList"); if (!ul) return;
+    const can = !!(data && data.writable);
+    ul.replaceChildren();
+    others.forEach((r, k) => {
+      const li = el("li", "nb-chip"), i = blockInfo.info[r];
+      li.append(el("span", "mono", r));
+      if (!(i && i.asn)) li.append(el("span", "nb-recs", NOT_SEEN));
+      if (can) {
+        const x = el("button", "lg-btn sm nb-x", "×"); x.type = "button";
+        x.setAttribute("aria-label", `Remove ${r}`); x.title = `Remove ${r}`;
+        x.addEventListener("click", () => {
+          others.splice(k, 1); drawOthers(k);
+          $("cidrsMsg").textContent = `Removed ${r}. Apply settings, at the bottom, saves the change.`;
+          refresh();
+        });
+        li.append(x);
+      }
+      ul.append(li);
+    });
+    if (!others.length) ul.append(el("li", "nb-empty muted", "No other address ranges."));
+    const unseen = others.filter((r) => !(blockInfo.info[r] && blockInfo.info[r].asn)).length;
+    $("cidrsNote").textContent = unseen ? `${plural(unseen, "range")} ${unseen === 1 ? "is" : "are"} ${NOT_SEEN}, so ${unseen === 1 ? "its" : "their"} network is not known: ${unseen === 1 ? "it stays" : "they stay"} here, chosen.` : "";
+    if (focusAt != null) {                         // after a removal: the next remove button, else the box to add one
+      const xs = ul.querySelectorAll("button.nb-x");
+      (xs[Math.min(focusAt, xs.length - 1)] || $("cidrsNew"))?.focus();
+    }
+  }
+  async function addOther() {
+    const box = $("cidrsNew"), msg = $("cidrsMsg"), text = box.value.trim();
+    if (!data || !data.writable) return;
+    if (!window.LGBlocks.looksLikeRange(text)) {
+      msg.textContent = text ? `Not an address range: ${text}. Type a range such as 198.51.100.0/22, or a single address.` : "Type an address range or a single address first.";
+      box.focus(); return;
+    }
+    $("cidrsAddBtn").disabled = true;
+    try {
+      const { range } = await window.LGBlocks.check(text);   // written the standard way, as Apply settings keeps it
+      if (others.includes(range) || allPicked().has(range)) { msg.textContent = `${range} is already chosen.`; return; }
+      others.push(range); box.value = ""; drawOthers();
+      msg.textContent = `Added ${range}. Apply settings, at the bottom, saves it.`;
+      if (mode !== "some") setMode("some"); else refresh();
+    } catch (e) { msg.textContent = window.LGLoader.errorText(e, true); }
+    finally { $("cidrsAddBtn").disabled = false; box.focus(); }
+  }
+  $("cidrsAddBtn").addEventListener("click", addOther);
+  $("cidrsNew").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addOther(); } });
   // the network list (Network names & types, net-editor.js) is where the constituency is chosen: its Constituent
   // column (Not in / The whole network / Some address blocks). Choosing there switches this card to "Only selected".
   window.LGConstituency = {
@@ -293,8 +356,15 @@
     has: (asn) => mode === "some" && chosen.has(String(asn)),
     isSome: () => mode === "some",
     writable: () => !!(data && data.writable),
-    picked: (asn) => new Set(picks.get(String(asn)) || []),
-    blockCount: (asn) => (blockInfo.counts ? blockInfo.counts[String(asn)] || 0 : null),
+    picked: pickedOf,
+    isChosen: (blk) => allPicked().has(blk),
+    info: (blk) => blockInfo.info[blk] || null,
+    /** "3 of 120 blocks chosen": the blocks with records yesterday, and the chosen ones not among them */
+    blockCount(asn) {
+      if (!blockInfo.counts) return null;
+      const a = String(asn), listed = (r) => { const i = blockInfo.info[r]; return !!(i && i.exact && i.nets && i.nets[a]); };
+      return (blockInfo.counts[a] || 0) + [...pickedOf(a)].filter((r) => !listed(r)).length;
+    },
     count: () => chosen.size,
     key: () => [mode, [...chosen].sort().join(","), [...someNets].sort().map((a) => `${a}:${(picks.get(a) || new Set()).size}`).join(","),
       blockInfo.counts ? "1" : "0", data && data.writable ? "w" : "r"].join("|"),
@@ -306,19 +376,28 @@
       if (mode !== "some" && s !== "out") setMode("some"); else refresh();
     },
     set(asn, on) { this.setState(asn, on ? "whole" : "out"); },
-    toggleBlock(asn, blk, on) {
+    /** tick (on) or untick a block in a network's row; inf: what the reports hold for it (address_blocks.py). Unticking
+        removes the range wherever it was chosen (a shared block is one range) */
+    toggleBlock(asn, blk, on, inf) {
       if (!data) return;
-      const a = String(asn), set = pickSet(a);
-      if (on) { set.add(blk); blockInfo.owners[blk] = a; } else set.delete(blk);
+      const a = String(asn);
+      if (on) {
+        // the row it is ticked in is the network it is remembered under (Apply settings sends it: blockNetworks)
+        if (!allPicked().has(blk)) { pickSet(a).add(blk); blockInfo.owners[blk] = a; }
+        const old = blockInfo.info[blk];
+        if (inf) blockInfo.info[blk] = { ...inf, nets: { ...((old && old.nets) || {}), ...(inf.nets || {}) } };
+        if (others.includes(blk)) { others = others.filter((r) => r !== blk); drawOthers(); }
+      } else for (const s of picks.values()) s.delete(blk);
       refresh();
     },
     onChange(fn) { this._l.push(fn); },
   };
   function tell() { for (const f of (window.LGConstituency && window.LGConstituency._l) || []) { try { f(); } catch { /* the other card */ } } }
-  // typing an other address range chooses "Only selected networks and address ranges", like a choice in the list
-  $("cidrs").addEventListener("input", () => { if (mode !== "some" && cidrList().length) setMode("some"); else refresh(); });
-  const cidrList = () => $("cidrs").value.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean);
-  const blockList = () => [...someNets].flatMap((a) => [...(picks.get(a) || [])]);
+  // adding an other address range chooses "Only selected networks and address ranges", like a choice in the list
+  const cidrList = () => others.slice();
+  const blockList = () => [...allPicked()];
+  /** {range: AS number}: the row each chosen block was ticked or added in (sent with Apply settings) */
+  const blockNetworks = () => Object.fromEntries([...someNets].flatMap((a) => [...(picks.get(a) || [])].map((r) => [r, a])));
 
   // ---------------- what would be applied, and whether it differs from what is in force
   function wanted() {
@@ -380,7 +459,10 @@
     try {
       // the session's CSRF token (from the page) proves the change comes from this page (auth.py)
       const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
-      const r = await fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify(w) });
+      // the settings as before (w), and beside them which network each chosen block was ticked or added under, so it
+      // stays in that row even with no records (kept apart from the settings: data/constituency_blocks.json, r90)
+      const r = await fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ ...w, block_networks: blockNetworks() }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || r.statusText);
       saved = { country: j.settings.country, timezone: j.settings.timezone || "", networks: [...j.settings.networks].map(String).sort(), cidrs: uniqSorted(j.settings.cidrs) };
@@ -404,7 +486,7 @@
       banner.scrollIntoView({ behavior: "smooth", block: "start" });
       refresh();
     } catch (err) {
-      banner.className = "st-banner err"; banner.hidden = false; banner.textContent = `Settings were not applied: ${err.message}`;
+      banner.className = "st-banner err"; banner.hidden = false; banner.textContent = `Settings were not applied: ${window.LGLoader.errorText(err, true)}`;
       $("applyState").textContent = "Not applied"; refresh();
     }
   });
@@ -413,5 +495,5 @@
     if (window.LGLoader) window.LGLoader.go(b.dataset.go); else location.href = b.dataset.go;
   });
   const loaded = () => { $("stLoading")?.remove(); $("stMain")?.classList.remove("st-pending"); window.LGLoader?.ready(); };
-  load().then(loaded, (err) => { loaded(); throw err; }).catch((err) => { const b = $("banner"); b.className = "st-banner err"; b.hidden = false; b.textContent = `Could not load settings: ${err.message}`; });
+  load().then(loaded, (err) => { loaded(); throw err; }).catch((err) => { const b = $("banner"); b.className = "st-banner err"; b.hidden = false; b.textContent = `Could not load settings: ${window.LGLoader.errorText(err)}`; });
 })();

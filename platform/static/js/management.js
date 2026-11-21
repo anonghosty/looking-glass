@@ -74,7 +74,7 @@
       if (!r.ok) throw new Error(d.error || r.statusText);
       state.data = d;
       render();
-    } catch (e) { if (seq === loadSeq) toast(`Could not load: ${e.message}`, "bad"); }
+    } catch (e) { if (seq === loadSeq) toast(`Could not load: ${window.LGLoader.errorText(e)}`, "bad"); }
     finally {
       if (seq === loadSeq) {
         document.body.classList.remove("is-loading");
@@ -257,7 +257,7 @@
             const res = await fetch(`/api/mgmt/explain?kind=${kind}&name=${encodeURIComponent(r.value)}`, { credentials: "same-origin" });
             const j = await res.json(); if (!res.ok) throw new Error(j.error || res.statusText);
             cache[r.value] = j;
-          } catch (e) { inline.replaceChildren(el("p", "mg-empty", `Could not explain it: ${e.message}`)); return; }
+          } catch (e) { inline.replaceChildren(el("p", "mg-empty", `Could not explain it: ${window.LGLoader.errorText(e)}`)); return; }
         }
         if (openSet.has(r.value)) inline.replaceChildren(card(cache[r.value], r.value, r));
       };
@@ -405,7 +405,7 @@
     $("mgDrawer").classList.add("open"); $("mgDrawer").setAttribute("aria-hidden", "false"); $("mgScrim").hidden = false;
     let x;
     try { const r = await fetch(`/api/mgmt/explain?kind=${kind}&name=${encodeURIComponent(name)}`, { credentials: "same-origin" }); x = await r.json(); if (!r.ok) throw new Error(x.error || r.statusText); }
-    catch (e) { body.replaceChildren(el("p", "mg-empty", `Could not explain it: ${e.message}`)); return; }
+    catch (e) { body.replaceChildren(el("p", "mg-empty", `Could not explain it: ${window.LGLoader.errorText(e)}`)); return; }
     body.replaceChildren(card(x, name, row));
   }
   const link = (u) => { let ok = false; try { ok = ["http:", "https:"].includes(new URL(u).protocol); } catch { ok = false; } if (!ok) return el("span", null, u); const a = el("a", null, u.replace(/^https?:\/\//, "").slice(0, 70)); a.href = u; a.target = "_blank"; a.rel = "noopener noreferrer"; return a; };
@@ -853,7 +853,7 @@
       ranking($("chTop"), comms ? d.infections : d.issues.concat(d.infections_on || []).sort((a, c) => c.hosts - a.hosts || Number(c.exploited) - Number(a.exploited) || (c.cvss || 0) - (a.cvss || 0)), d.platform);
       $("cTop").scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
       toast(`${Object.keys(res).length} explained: shown under each name`, "ok");
-    } catch (e) { toast(e.stopped ? "Stopped: you closed the window." : e.message, e.stopped ? "" : "bad"); }
+    } catch (e) { toast(e.stopped ? "Stopped: you closed the window." : window.LGLoader.errorText(e), e.stopped ? "" : "bad"); }
     finally { b.disabled = false; }
   });
   // opened from a finding (/management?code=LG-C-…): the portal shows exactly that combination, on its platform

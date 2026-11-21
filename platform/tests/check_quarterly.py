@@ -104,6 +104,13 @@ svc("scan_http", POOL[701], 64502, "2026-12-31", "23:59:59")           # the las
 svc("scan_http", POOL[702], 64502, "2027-01-01", "00:00:00")           # next quarter: out
 sink(POOL[1], 64501, "2026-09-30", "23:59:59")                        # previous quarter: out
 sink(POOL[709], 64503, "2026-08-15")                                  # a network seen only in the previous quarter
+# rows with no infection and no family (r90): named readably, never by their raw tag list. Another destination than
+# the sinkhole above (the constituency check counts that one's rows), November and December only (recurring networks)
+TAGGED = {"badcandy;device-implant;ssl": POOL[400:403], "": POOL[403:405], "examplebot;iot": POOL[405:406]}
+for tg, ips in TAGGED.items():
+    for ip in ips:
+        sink(ip, 64501, "2026-11-21" if tg.startswith("badcandy") else "2026-12-06")
+        rows["event4_sinkhole_http"][-1].update(infection="", tag=tg, dst_ip="203.0.113.250")
 
 HOST = {"scan_http": "ip", "blocklist": "ip", "event4_sinkhole_http": "src_ip"}
 ASNF = {"scan_http": "asn", "blocklist": "asn", "event4_sinkhole_http": "src_asn"}
@@ -148,7 +155,7 @@ def J(name, obj):
 
 J("asns.json", {"asns": {"64500": {"name": "Example Net A"}, "64501": {"name": "Example Net B"}, "64502": {"name": "Example Net C"},
                          "64503": {"name": "Example Net D"}}})
-J("infections.json", {"infections": {"andromeda": {"title": "Andromeda (Gamarue)"}}})
+J("infections.json", {"infections": {"andromeda": {"title": "Andromeda (Gamarue)"}, "examplebot": {"title": "Examplebot (Example family)"}}})
 LONG = ("The example transport protocol with certain example extensions, found in Example before 9.6 and other products, "
         "allows remote attackers to bypass integrity checks such that some packets are omitted, and a client and server may "
         "consequently end up with a connection for which some security features have been downgraded or disabled, aka a "
@@ -308,6 +315,19 @@ try:
        val("Actively exploited (CISA KEV)", "Addresses with a KEV CVE", "unique addresses") == "10"
        and any(r["name"] == "CVE-2099-0001: Example Product Remote Code Execution" and r["value"] == "10" for r in mg))
     ok("management: infections by their readable name (Andromeda (Gamarue): 20)", val("Infections", "Andromeda (Gamarue)", "unique addresses") == "20")
+    infs = {r["name"]: r["value"] for r in mg if r["section"] == "Infections" and r["metric"] == "unique addresses"}
+    no_name = qq.readable("event4_sinkhole_http", "communication")
+    ok("management: a row with no infection or family is named readably, never by its raw tags (r90): the issues its tags "
+       "stand for (Badcandy, Device implant: 3), a tag the knowledge base knows (Examplebot (Example family): 1), else the "
+       f"report's name ({no_name}: 2)",
+       (infs.get("Badcandy, Device implant"), infs.get("Examplebot (Example family)"), infs.get(no_name)) == ("3", "1", "2")
+       and not any(";" in n or n in TAGGED for n in infs) and no_name and ";" not in no_name, str(infs))
+    ok("...the same names as one shared function gives them (infection_name), with the knowledge base's titles",
+       qq.infection_name(qq.infection_key({"t": "badcandy;device-implant;ssl"}, "event4_sinkhole_http", "communication"), {})
+       == "Badcandy, Device implant"
+       and qq.infection_name(qq.infection_key({"i": "andromeda", "t": "x;y"}, "n", "communication"), {"andromeda": "Andromeda (Gamarue)"})
+       == "Andromeda (Gamarue)"
+       and qq.infection_name(qq.infection_key({"f": "Mirai"}, "n", "communication"), {}) == "Mirai")
     ok("management: better or worse (networks gone 1: Example Net D; appeared 2: A and C), counted from the reports",
        val("Better or worse", "networks gone", "count") == "1" and val("Better or worse", "networks appeared", "count") == "2"
        and PS["source"] == "counted from the reports now",

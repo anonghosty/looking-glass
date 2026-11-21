@@ -25,7 +25,7 @@
       load.waiting = true; return window.LGLoader.wait(load(first), "Opening definitions and intel");
     }
     try { data = await get("/api/kb/severity-map"); }
-    catch (e) { if (first) { $("cardSev").hidden = true; return; } $("sevStatus").textContent = `Could not load: ${e.message}`; return; }
+    catch (e) { if (first) { $("cardSev").hidden = true; return; } $("sevStatus").textContent = `Could not load: ${window.LGLoader.errorText(e)}`; return; }
     $("cardSev").hidden = false;
     if (first) tab = data.counts.not_rated ? "not_rated" : "all";
     render();
@@ -70,7 +70,7 @@
         data = await post("/api/kb/severity-map/rate", { name: x.name, level: v === "-" ? "" : v });
         $("sevStatus").textContent = v === "-" ? `${x.name}: not rated again.` : `${x.name}: rated ${WORD[v]}. The PDFs show it as a researcher's rating.`;
         render(false);
-      } catch (e) { $("sevStatus").textContent = `Not saved: ${e.message}`; sel.disabled = false; sel.value = ""; }
+      } catch (e) { $("sevStatus").textContent = `Not saved: ${window.LGLoader.errorText(e, true)}`; sel.disabled = false; sel.value = ""; }
     });
     td.append(sel);
     return td;

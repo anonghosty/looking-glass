@@ -59,7 +59,7 @@
       if (pw == null) return;
       save.disabled = true;
       try { P = await api("/api/password-policy", { enabled: on.checked, days: Number(days.value), password: pw }); draw(); say(turningOn ? "Saved: every account chooses a new password at its next sign-in." : "Saved."); }
-      catch (e) { say(e.message, true); save.disabled = false; }
+      catch (e) { say(window.LGLoader.errorText(e, true), true); save.disabled = false; }
     });
     const force = el("button", "lg-btn pp-force", "Require every account to change its password at next sign-in"); force.type = "button";
     force.addEventListener("click", async () => {
@@ -68,11 +68,11 @@
       if (pw == null) return;
       force.disabled = true;
       try { P = await api("/api/password-policy/force", { password: pw }); draw(); say("Done: every account chooses a new password at its next sign-in."); }
-      catch (e) { say(e.message, true); force.disabled = false; }
+      catch (e) { say(window.LGLoader.errorText(e, true), true); force.disabled = false; }
     });
     body.append(state, due, row, el("div", "wk-acts"), msg);
     body.lastChild.previousSibling.append(force);
   }
 
-  api("/api/password-policy").then((d) => { P = d; draw(); }).catch((e) => body.replaceChildren(el("p", "fd-empty", e.message)));
+  api("/api/password-policy").then((d) => { P = d; draw(); }).catch((e) => body.replaceChildren(el("p", "fd-empty", window.LGLoader.errorText(e))));
 })();

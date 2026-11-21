@@ -554,6 +554,14 @@ ok("loader.js: LGLoader.download fetches, makes a blob, names the file from Cont
 ok("quarterly.js: never shows the browser's own error text (no e.message / x.message on the page)",
    not re.search(r"\b[ex]\.message\b", qjs) and "could not be reached just now (it may be restarting)" in (qjs + ljs)
    and "Trying again…" in qjs and '"Retry"' in qjs)
+# r90: with no quarter to offer, Make it again shows only the sentence (can_make_note): no empty drop-down, no greyed
+# button; with quarters offered, the drop-down and the button as before
+mk = qjs[qjs.find("function adminTools("):qjs.find("// ---------------- the purge's switch")]
+ok("quarterly.js: no quarter to offer: neither the drop-down nor the button is shown, only the sentence",
+   "const none = !(d.can_make || []).length;" in mk and "if (none) {" in mk and "} else { t.append(sel, btn, msg); w.append(t); }" in mk
+   and "sel.disabled = true" not in mk and "if (none && d.can_make_note)" in mk, mk[:0])
+ok("quarterly.js: the pipeline's \"nothing to purge\" is shown as its own sentence (it names the quarter waiting next)",
+   'last.outcome === "nothing to purge" && last.why ? last.why' in mk)
 
 print("\nThe constituency (r89): the platforms' own Settings object and rule")
 import settings as lg_settings  # noqa: E402
@@ -574,6 +582,22 @@ ok("a communication is kept when its other side's host is in the constituency (t
    and not qq.keep_host(S, {"a": 64500, "h": "203.0.113.9", "oa": 64999, "oh": "203.0.113.250"}))
 ok("the purge's switch line and the card: the purge works on all networks (said in plain words)",
    "all networks in the database, not only the constituency" in qjs)
+
+
+def refused(fn):
+    try:
+        fn()
+        return False
+    except ValueError:
+        return True
+
+
+top = os.path.join(base, "data", "quarterly")
+ok("paths stay inside the quarterly folder: a quarter name or a kept file name can never point elsewhere",
+   qq.quarter_dir(base, "2026Q4").startswith(os.path.realpath(top) + os.sep)
+   and refused(lambda: qq.quarter_dir(base, "../2026Q4")) and refused(lambda: qq.quarter_dir(base, "2026Q4\n"))
+   and refused(lambda: qq.inside(top, "..", "x")) and refused(lambda: qq.inside(top, "/etc/passwd"))
+   and refused(lambda: qq.inside(top, "")))
 shutil.rmtree(base, ignore_errors=True)
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))
 sys.exit(1 if fails else 0)

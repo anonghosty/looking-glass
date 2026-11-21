@@ -410,9 +410,9 @@ class DayStore:
                     if e[f"{side}_asn"]:
                         asn[str(e[f"{side}_asn"])] += 1
             raw = len(rows)
-            # the address blocks in the country, for Settings → Constituency (address_blocks.py), before the constituency
-            blocks = _address_blocks.tally(rows, (("src_ip", "src_asn", "src_geo"), ("dst_ip", "dst_asn", "dst_geo")),
-                                           settings.data.get("country", ""))
+            # the address blocks, both sides like the networks above, for Settings → Network names & types
+            # (address_blocks.py), before the constituency
+            blocks = _address_blocks.tally(rows, (("src_ip", "src_asn"), ("dst_ip", "dst_asn")))
             # constituency (Settings): keep events whose source or destination host is in it
             if settings.restricted:
                 rows = [e for e in rows if settings.in_scope(e["src_asn"], e["src_ip"]) or settings.in_scope(e["dst_asn"], e["dst_ip"])]
@@ -2845,9 +2845,11 @@ def api_kb_entry():
 def api_infections():
     # who defined each one by full name, never the account name (external review, 2026-11-12: usernames were sent)
     out = {}
+    import external_access
+    outside = external_access.is_external(getattr(g, "user", None) and g.user.get("perms"))   # no staff names to externals
     for k, v in knowledge_base().items():
         e = {f: x for f, x in v.items() if f not in ("curated_by", "curated_by_name")}
-        if v.get("curated_by"):
+        if v.get("curated_by") and not outside:
             e["by"] = _by(v)
         out[k] = e
     return jsonify(out)
@@ -3210,9 +3212,15 @@ def api_networks():
     """The network registry (AS number -> company name and type) for editing: unreviewed first, then the busiest."""
     if not _nets_allowed():
         return jsonify(error="Editing network names needs the 'networks' permission (researchers, admins)."), 403
+    # "events": the network's records on the day the map shows (both platforms, before the constituency), the same
+    # count as Settings' network list; None when that day is not loaded. It used to be events_last_check, a figure
+    # Identify networks noted once and never updated (0 for every network it never looked up)
+    start = day_start(replay_now())
+    on_day = _address_blocks.network_records([store.days.get(start), svc["store"].days.get(start)])
+    recs = (lambda a: None) if on_day is None else (lambda a: on_day.get(a, 0))   # noqa: E731
     rows = [{"asn": a, "name": v.get("name", ""), "holder": v.get("holder", ""), "country": v.get("country", ""),
              "type": v.get("type", "unknown"), "role": v.get("role", ""), "reviewed": bool(v.get("reviewed")),
-             "source": v.get("source", ""), "note": v.get("note", ""), "events": v.get("events_last_check", 0),
+             "source": v.get("source", ""), "note": v.get("note", ""), "events": recs(a),
              "updated": v.get("updated", ""), "by": _by(v, "updated_by")} for a, v in asn_registry.all().items()]
     # every network in the reports is listed from the start, not only those Identify networks has looked up: one not
     # identified yet is "not reviewed", with its events and no name (2026-11-13: a fresh install showed an empty list)
@@ -3220,10 +3228,10 @@ def api_networks():
     counts, meta = _networks_in_data_cached()
     rows += [{"asn": a, "name": "", "holder": "", "country": (meta.get(a) or {}).get("country", ""), "type": "unknown",
               "role": (meta.get(a) or {}).get("role", ""), "reviewed": False, "source": "", "identified": False,
-              "note": "", "events": n, "updated": "", "by": ""} for a, n in counts.items() if a not in known]
-    rows.sort(key=lambda r: (r["reviewed"], -r["events"]))
+              "note": "", "events": recs(a), "updated": "", "by": ""} for a in counts if a not in known]
+    rows.sort(key=lambda r: (r["reviewed"], -(r["events"] or 0)))
     return jsonify(networks=rows, types=people.with_names(netypes.all_types(DATA_DIR)), identifying=bool(_ASN_JOB and _ASN_JOB.running()),
-                   can_lookup=_lookup_allowed())
+                   can_lookup=_lookup_allowed(), events_day=start.date().isoformat() if on_day is not None else "")
 
 
 def _lookup_allowed():
@@ -3525,6 +3533,13 @@ def api_settings_save():
         return jsonify(error="; ".join(errors)), 400
     changed_scope = (clean["networks"] != settings.data["networks"] or clean["cidrs"] != settings.data["cidrs"])
     settings.save(clean)
+    # which network each chosen block was ticked or added under (the Settings page's rows; address_blocks.py, r90):
+    # beside settings.json, never part of it; a failure only costs the page that hint
+    try:
+        kept = _address_blocks.remember(_address_blocks.chosen_path(settings), clean["cidrs"], body.get("block_networks"))
+    except OSError as e:
+        kept = 0
+        app.logger.warning("The chosen blocks' networks were not recorded: %s", e)
     if changed_scope:              # both platforms reload their days with the new constituency, straight away
         store.reset(); svc["store"].reset()
         rn = replay_now()
@@ -3533,7 +3548,7 @@ def api_settings_save():
                        len(clean["networks"]), len(clean["cidrs"]))
     AUTH["audit"].add("settings_changed", user=(getattr(g, "user", None) or {}).get("user", "token"),
                       detail=f"country {clean['country']}, time zone {clean['timezone']}, {len(clean['networks'])} networks, "
-                             f"{len(clean['cidrs'])} ranges")
+                             f"{len(clean['cidrs'])} ranges ({kept} kept with their network)")
     return jsonify(settings=settings.public())
 
 
@@ -3650,7 +3665,8 @@ INTELLIGENCE = _intelligence.install(app, {
     "csrf_ok": AUTH["csrf_ok"],             # the views it is sent in a request body (POST) carry the page's token
     "audit": AUTH["audit"], "svc_reports": lambda: {x["name"] for x in svc["registry"].get()},
     "network": lambda asn: asn_registry.company(asn, False) if asn else "",
-    "cross": lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"])})
+    "alias": asn_registry.alias,            # external accounts' masked view: a network by its demo alias, as on both platforms
+    "cross":lambda hosts: SVC_INTEL.for_hosts(hosts, SVC_KB["title_of"], kind_of=SVC_KB["kind_of"])})
 
 # A few heavy read-only answers, kept a few minutes and computed one at a time; any change starts afresh
 # (response_cache.py). Last, so every route exists.

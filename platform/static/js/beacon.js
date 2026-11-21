@@ -86,7 +86,7 @@
           : plain ? "Request value (not encoded)" : "Encoded request (not decoded)"));
         for (const b of d.beacons) s.append(one(b, ev.infection || ""));
       } catch (err) {
-        if (still()) s.replaceChildren(el("h3", null, "Decoded beacon"), el("p", "bc-msg", `Could not decode: ${err.message}`));
+        if (still()) s.replaceChildren(el("h3", null, "Decoded beacon"), el("p", "bc-msg", `Could not decode: ${window.LGLoader.errorText(err)}`));
       }
     })();
     return s;

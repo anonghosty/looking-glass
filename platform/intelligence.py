@@ -17,7 +17,12 @@ Addresses) reached anyone, mixed into the services platform. This module reads t
   accounts are masked unless the analyst asks to see them (and that is written to the audit log);
 * an analyst code and finding from a filtered view: the page sends the view's devices to /api/analyst-codes (acodes.py),
   which checks and keeps them as for any other selection;
-* management gets the counts only (/api/intelligence/totals): totals and the 7-day trend per group, never a host.
+* management gets the counts only (/api/intelligence/totals): totals and the 7-day trend per group, never a host;
+* external accounts (permissions exactly 'view', external_access.py; the user, 2026-11-21) get the masked view: the
+  summary and a report's rows through masked_fields.intelligence_row, the platforms' masking (an address becomes its
+  "Host 3f9a…" label, a network its demo alias, host names, organisations and accounts "hidden", every other own field
+  through hostmask.mask, anything else left out); filters and the search work on the masked values only; no export,
+  no host cross-view, no reveal, no analyst code.
 
 API (analysts and administrators): GET /api/intelligence, GET /api/intelligence/report,
 GET /api/intelligence/export.csv, GET /api/intelligence/host; management: GET /api/intelligence/totals.
@@ -90,6 +95,9 @@ MEANING = {
     "sandbox_dns": "A domain of the constituency that malware looked up when it ran in the sandbox.",
 }
 NO_IP = "The report names organisations, accounts or domains, not IP addresses: it reaches a CSIRT through a domain filter. Ask Shadowserver to add the constituency's domains."
+EXTERNAL_NO = "External accounts see Abused or Compromised masked: no download, no look-up of a host, no accounts shown."
+# masked view (external accounts): the fields whose masked value says nothing ("hidden"), never filtered or searched
+MASKED_HIDDEN = {"hostname", "email", "username", "entity_name"}
 NOT_RECEIVED = "Shadowserver sent no file of this report in the last {days} days: either nothing of this kind was seen in the constituency, or the subscription does not include it. Shadowserver can say which."
 
 
@@ -132,6 +140,22 @@ def install(app, ctx):
     def analyst():
         # analysts and administrators only (user, 2026-11-14): not other roles that also see addresses and export
         return (getattr(g, "user", None) or {}).get("role") in ("analyst", "admin") and hp("unmasked") and hp("export")
+
+    def external():
+        """External accounts (permissions exactly 'view', external_access.py) open the masked view (the user,
+        2026-11-21): no address, network or company name, host name or e-mail address; no export, no host look-up,
+        no reveal, no analyst code."""
+        import external_access
+        return external_access.is_external((getattr(g, "user", None) or {}).get("perms", ()))
+
+    def alias(asn):
+        """A network as masked viewers see it on both platforms: its demo alias (privacy.AsnRegistry.alias)."""
+        f = ctx.get("alias")
+        return f(asn) if f else ("Unlisted network" if asn else "")
+
+    def masked_rows(name, rows):
+        import masked_fields
+        return [masked_fields.intelligence_row(r, FIELDS.get(name, []), alias) for r in rows]
 
     def me():
         return (getattr(g, "user", None) or {}).get("user", "")
@@ -246,7 +270,10 @@ def install(app, ctx):
                 "generated": datetime.fromtimestamp((cache.get("counts") or (None, time.time()))[1], timezone.utc)
                              .isoformat(timespec="seconds").replace("+00:00", "Z")}
 
-    def refuse():
+    def refuse(masked_ok=False):
+        """masked_ok: the summary and a report's masked rows, which external accounts may open too."""
+        if external():
+            return None if masked_ok else (jsonify(error=EXTERNAL_NO), 403)
         if not analyst():
             return jsonify(error="Abused or Compromised is for analysts and administrators."), 403
         if ctx["is_demo"]():
@@ -284,11 +311,17 @@ def install(app, ctx):
     def entry_of(name):
         return next((e for e in entries() if e["name"] == name), None)
 
-    def view_rows(name, day, args, reveal):
-        """The rows of one report on one day, filtered on its own fields (exact values) and a free text."""
+    def view_rows(name, day, args, reveal, masked=False):
+        """The rows of one report on one day, filtered on its own fields (exact values) and a free text. masked: the
+        external accounts' view; the rows are masked FIRST, so filters and the search see only what is shown (a real
+        address, network or name typed into the request cannot tell whether it is in the data)."""
         rows = read(name, day)
         fields = FIELDS.get(name, []) + ["ip", "asn", "region"]
-        if name == "compromised_account" and not reveal:
+        if masked:
+            rows = masked_rows(name, rows)
+            fields = [f for f in fields if f not in MASKED_HIDDEN]
+            reveal = False
+        elif name == "compromised_account" and not reveal:
             # leaked accounts: a filter or search on the account itself would confirm a leak without the reveal being
             # logged (review 2026-11-14), so masked views filter and search only the other fields
             fields = [f for f in fields if f not in ACCOUNT_FIELDS]
@@ -298,18 +331,19 @@ def install(app, ctx):
         for r in rows:
             if any(_s(r.get(f)) not in set(v) for f, v in flt.items()):
                 continue
-            if text and not any(text in _s(v).lower() for k, v in r.items() if k not in SKIP
+            if text and not any(text in _s(v).lower() for k, v in r.items() if k not in SKIP and not (masked and k in MASKED_HIDDEN)
                                 and not (name == "compromised_account" and not reveal and k in ACCOUNT_FIELDS)):
                 continue
             out.append(r)
-        if name == "compromised_account" and not reveal:      # leaked accounts: masked unless asked for
+        if name == "compromised_account" and not reveal and not masked:      # leaked accounts: masked unless asked for
             out = [dict(r, email=_mask_email(r.get("email")), username=_mask_word(r.get("username"))) for r in out]
         return out, flt, text
 
-    def val(k, x):
-        """A field as the page shows it: a network by its name and number, never a bare number."""
+    def val(k, x, masked=False):
+        """A field as the page shows it: a network by its name and number, never a bare number (masked rows: as they
+        are, the network already its alias)."""
         v = _s(x.get(k))
-        if k == "asn" and v:
+        if k == "asn" and v and not masked:
             try:
                 nm = ctx["network"](v)
             except Exception:                               # noqa: BLE001
@@ -329,22 +363,23 @@ def install(app, ctx):
 
     @app.route("/intelligence")
     def intelligence_page():
-        if not analyst():
+        if not (analyst() or external()):
             return render_template("denied.html", message="Abused or Compromised is for analysts and administrators."), 403
         return render_template("intelligence.html")
 
     @app.route("/api/intelligence")
     def api_intelligence():
-        r = refuse()
+        r = refuse(masked_ok=True)
         if r:
             return r
         return jsonify(summary())
 
     @app.route("/api/intelligence/report", methods=["GET", "POST"])
     def api_intelligence_report():
-        r = refuse() or refuse_get(request.args.keys())
+        r = refuse(masked_ok=True) or refuse_get(request.args.keys())
         if r:
             return r
+        masked = external()
         args = params()
         name, day = (args.get("name") or "").strip(), (args.get("day") or "").strip() or today().isoformat()
         e = entry_of(name)
@@ -352,46 +387,54 @@ def install(app, ctx):
             return jsonify(error="Not an Intelligence report."), 404
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) or day not in days():
             return jsonify(error=f"Choose one of the last {DAYS} days."), 400
-        reveal = args.get("reveal") == "1" and name == "compromised_account"
-        rows, flt, text = view_rows(name, day, args, reveal)
+        reveal = args.get("reveal") == "1" and name == "compromised_account" and not masked
+        rows, flt, text = view_rows(name, day, args, reveal, masked=masked)
         rows.sort(key=lambda x: _s(x.get("timestamp")), reverse=True)        # the newest first
         if reveal:
             ctx["audit"].add("intelligence_reveal", user=me(), target=name, detail=f"{day} · {len(rows)} leaked account(s) shown unmasked")
         cols, extra = columns(name, rows)
+        hidden = (MASKED_HIDDEN if masked else set()) | (ACCOUNT_FIELDS if name == "compromised_account" and not reveal else set())
         facets = []
         for f in FIELDS.get(name, []):
-            if name == "compromised_account" and not reveal and f in ACCOUNT_FIELDS:
-                continue                                 # masked accounts are not offered as filters
+            if f in hidden:
+                continue                                 # masked accounts (and masked names) are not offered as filters
             c = Counter(_s(x.get(f)) for x in rows if _s(x.get(f)))
             if c:
                 facets.append({"key": f, "label": NAMES.get(f, f), "values": [{"value": v, "rows": k} for v, k in c.most_common(12)],
                                "more": max(0, len(c) - 12)})
-        # networks and regions too, as the platforms' analysis shows them (a network by its name; the filter is its number)
+        # networks and regions too, as the platforms' analysis shows them (a network by its name; the filter is its number;
+        # masked: by its alias, which is also the filter, as on both platforms)
         if rows and any(x.get("ip") for x in rows[:50]):
             for f, lab in (("asn", "Networks"), ("region", "Regions")):
                 c = Counter(_s(x.get(f)) for x in rows if _s(x.get(f)))
                 if c:
-                    facets.append({"key": f, "label": lab, "values": [{"value": v, "label": val(f, {f: v}), "rows": k} for v, k in c.most_common(12)],
+                    facets.append({"key": f, "label": lab, "values": [{"value": v, "label": val(f, {f: v}, masked), "rows": k} for v, k in c.most_common(12)],
                                    "more": max(0, len(c) - 12)})
-        hosts = sorted({_s(x.get("ip")) for x in rows if _ip_ok(x.get("ip"))})
+        if masked:                                       # the hosts by their masked labels (Host 3f9a…): counted, never named
+            hosts = sorted({_s(x.get("ip")) for x in rows if _s(x.get("ip"))})
+        else:
+            hosts = sorted({_s(x.get("ip")) for x in rows if _ip_ok(x.get("ip"))})
         stats = {"records": len(rows), "hosts": len(hosts),
                  "networks": len({_s(x.get("asn")) for x in rows if _s(x.get("asn"))}),
                  "regions": len({_s(x.get("region")) for x in rows if _s(x.get("region"))}),
                  "fields": [{"label": NAMES.get(f, f), "values": len({_s(x.get(f)) for x in rows if _s(x.get(f))})}
-                            for f in FIELDS.get(name, [])[:3] if not (name == "compromised_account" and not reveal and f in ACCOUNT_FIELDS)]}
+                            for f in FIELDS.get(name, [])[:3] if f not in hidden]}
         # the records' own days (their time stamps): an analyst code is made on the day most of them were seen
         rec_days = Counter(_s(x.get("extracted_date") or x.get("timestamp"))[:10] for x in rows if x.get("extracted_date") or x.get("timestamp"))
         code = None
-        # only a report the services platform holds: an analyst code stands for that platform's records (acodes.py)
-        if hosts and e.get("has_ip") is not False and name in ctx["svc_reports"]():
+        # only a report the services platform holds: an analyst code stands for that platform's records (acodes.py);
+        # never in the masked view (a code is made of the devices' addresses)
+        if not masked and hosts and e.get("has_ip") is not False and name in ctx["svc_reports"]():
             code = {"possible": len(hosts) <= CODE_HOSTS, "hosts": len(hosts), "max": CODE_HOSTS,
                     "query": "&".join([f"report={name}"] + [f"ip={h}" for h in hosts[:CODE_HOSTS]]),
                     "at": (rec_days.most_common(1)[0][0] + "T12:00:00Z") if rec_days else f"{day}T00:00:00Z"}
         return jsonify(name=name, title=e.get("title") or name, day=day, days=list(reversed(days())), total=len(rows), stats=stats,
                        hosts=len(hosts), shown=min(len(rows), SHOW_CAP), columns=[{"key": k, "label": NAMES.get(k, k.replace("_", " ").capitalize())} for k in cols],
-                       extra=extra, rows=[{k: val(k, x) for k in cols + extra if x.get(k) not in (None, "")} for x in rows[:SHOW_CAP]],
-                       facets=facets, filters={k: v for k, v in flt.items()}, q=text, masked=name == "compromised_account" and not reveal,
-                       can_reveal=name == "compromised_account", code=code, no_ip=e.get("has_ip") is False, meaning=MEANING.get(name, ""))
+                       extra=extra, rows=[{k: val(k, x, masked) for k in cols + extra if x.get(k) not in (None, "")} for x in rows[:SHOW_CAP]],
+                       facets=facets, filters={k: v for k, v in flt.items()}, q=text,
+                       masked=name == "compromised_account" and not reveal and not masked,
+                       can_reveal=name == "compromised_account" and not masked, masked_view=masked,
+                       code=code, no_ip=e.get("has_ip") is False, meaning=MEANING.get(name, ""))
 
     @app.route("/api/intelligence/export.csv", methods=["GET", "POST"])
     def api_intelligence_export():
@@ -455,7 +498,7 @@ def install(app, ctx):
     @app.route("/api/intelligence/totals")
     def api_intelligence_totals():
         """For the Executive portal (and anyone who may open the Intelligence portal): counts only, never a host."""
-        if not (hp("management") or analyst()):
+        if not (hp("management") or analyst() or external()):
             return jsonify(error="Not for this role."), 403
         s = summary()
         return jsonify(today=s["today"], days=s["days"], arriving=s["arriving"],

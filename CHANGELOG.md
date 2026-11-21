@@ -5,6 +5,57 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-21 (6)
+### Changed
+- **Pages no longer show the browser's own error text.** When Looking Glass cannot be reached (for example while it
+  restarts), pages say so in plain words. Reading data is tried again on its own after 2, 4, 8 and 15 seconds, then a
+  Retry button appears. Saving, sending or approving is never repeated on its own: the page says the action may not
+  have been done and leaves the button ready to try again. Messages from Looking Glass itself are shown as before.
+- **Network names & types: the Records column** shows each network's records on the day the map shows, both
+  platforms, before the constituency, and names that day; "not loaded" when that day is not loaded yet. It used to show a
+  figure from the last network look-up, or 0.
+- **Settings → Quarterly: the purge check says "Nothing to purge now"** when the latest quarter past its purge day had
+  no report rows before its cutoff, and names the next quarter and its purge day; a refusal names them too.
+- **Settings → Quarterly: with no quarter to make again,** only the sentence saying why is shown (no empty list or
+  greyed button).
+
+- **Updating tidies old files.** Files an earlier release shipped and the new one no longer uses are moved into a dated
+  backup folder (`backups/stale-<date>-<time>/`), never deleted, and the update lists each one. Files Looking Glass
+  never shipped, such as your own scripts, are never moved; the update names them and leaves them where they are. Your
+  data, settings, logs and backups are never touched. To keep the former files where they are too, run the update with
+  `LG_KEEP_STALE=1`.
+- **Each page is offered once.** The Overview no longer repeats its pages as header buttons: the Your pages cards open
+  them, and the header keeps the bell, Tutorial and Log out. The logo next to the Overview button is now only the logo.
+  Settings no longer has an Open Definitions card: use the Definitions button in the header. On the advisory portal, a
+  finding's number opens that finding on the Findings page.
+- **Findings are for the team only.** The Findings page, its buttons and its cards are shown only to researchers,
+  management, analysts, advisors and admins. Other accounts (external, auditor) are refused, since a finding is never
+  handed to them.
+- **External accounts open three pages only:** network communications (the map, with its Overview and glossary),
+  publicly accessible / vulnerable services, and Abused or Compromised. Every other page and API is refused on the
+  server. Abused or Compromised is now open to them in a masked view: IP addresses as host labels, networks by their
+  alias, host names, organisations, accounts and e-mail addresses hidden; filters and search work on the masked values;
+  no download, look-up or account reveal. They no longer get Copy JSON or Look up buttons, nor the names of the people
+  who wrote a definition. A role whose only permission is "view" is treated the same way.
+- **Settings, Network names & types:** every network with records lists every address block it has records in, on
+  either side, with its own count; a block two networks share is listed under both. Chosen blocks are shown first and
+  stay chosen until you untick them, with or without records, and Looking Glass remembers which network each was chosen
+  under. A network's row has an Add a block box. Other address ranges is a list with a remove button on each range and
+  a box to add one; ranges not seen in the reports yet are marked. What Apply settings saves for the platforms is
+  unchanged.
+- **Network communications and publicly accessible services:** when the day's reports are loaded and hold nothing, the
+  list says "No records for your constituency on &lt;day&gt;." (or "No records reported on &lt;day&gt;." without a
+  constituency) instead of waiting.
+
+### Fixed
+- **Quarterly reports: an infection row without a name** is named by what its tags stand for, a known tag's title, or
+  the report's name, never by its raw tags.
+- The tutorial on the platforms' Overview no longer points at buttons hidden behind it, and its Tutorial button sits
+  beside the bell and Log out.
+- "Back to the overview" on the Not allowed page opens your own Overview.
+- The Audit portal describes settings changes in plain words again (country, time zone, constituency).
+- **After updating:** nothing to do. External accounts that used to open other pages now get the Not allowed page.
+
 ## 2026-11-21 (5)
 ### Changed
 - **The constituency is chosen in one place.** In Settings, the network list's **Constituent** column has a drop-down

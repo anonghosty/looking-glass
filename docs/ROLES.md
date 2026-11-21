@@ -20,9 +20,10 @@ compare trends, masked.
 | **Advisor** | What do we tell the organisation? | Writes the advisory (subject, description, recommended actions), generates the PDF and CSV for each organisation, marks it sent. | Only the devices of the findings handed to them. |
 | **Auditor** | Was everything done properly? | The Audit portal: who did what and when, the access review, the controls mapping, Trace a leak. | The threat data itself. |
 | **Administrator** | Does the platform run? | Accounts and roles, settings, installation and updates; can act in any role when needed (recorded as such). | Nothing. |
-| **External viewer** | How do the trends compare? | A constituent, or a member of another CSIRT: both platforms, read only, to compare trends. | Addresses, host names and real network names (masked: `Host 3f9a2c41b07e`, "Telco 1"), exports and look-ups. |
+| **External viewer** | How do the trends compare? | A constituent, or a member of another CSIRT: three pages, read only, to compare trends: network communications, publicly accessible / vulnerable services, and Abused or Compromised. | Addresses, host names, organisations, e-mail addresses and real network names (masked); no downloads, look-ups or other pages. |
 
 An external viewer sees the whole constituency's trends, masked: the other organisations appear only as aliases.
+The rule follows the permissions: any role whose only permission is "view" gets exactly these three pages.
 
 ## A CSIRT and a SOC: what the sources say
 
@@ -59,7 +60,7 @@ SOC staff are commonly organised in tiers. This is industry practice, not a stan
 | **Advisor** | The incident handler's communication with constituents; the senior specialist who writes advisories | The responder who tells the IT team what to fix | Incident Response (its communication part) |
 | **Auditor** | Outside the core CSIRT roles | Outside the SOC | Security Control Assessment (OG-WRL-012) |
 | **Administrator** | Not a core role (often IT support) | SOC engineering | Defensive Cybersecurity (PD-WRL-001) |
-| **External viewer** | A constituent, or another CSIRT sharing information | Another team given a read-only view | — |
+| **External viewer** | A constituent, or another CSIRT sharing information | Another team given a read-only view | none |
 
 The difference that matters most: **a CSIRT warns other organisations** about problems on *their* networks (the
 advisor is central, and the CSIRT does not fix anything itself), while **a SOC protects its own organisation** (the

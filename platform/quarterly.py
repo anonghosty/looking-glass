@@ -449,7 +449,7 @@ def _add(R, name, e, k, n, day, region, sector, mi, kev, infection, light):
     R["region"][rg].add(h); R["region_recs"][rg] += n
     R["sector"][sc].add(h); R["sector_recs"][sc] += n
     if infection:
-        inf = next((str(k.get(x)).strip() for x in ("i", "f", "t") if str(k.get(x) or "").strip()), name)
+        inf = infection_key(k, name, e["kind"])        # named readably when the report is put together (infection_name)
         R["inf_hosts"][inf].add(h); R["inf_recs"][inf] += n
     if e["kind"] == "service":
         doc = {"tag": k.get("t"), "ssl_poodle": k.get("p"), "freak_vulnerable": k.get("fr"), "cert_expired": k.get("ce"),
@@ -639,10 +639,20 @@ def read_json(path):
         return None
 
 
+def inside(top, *parts):
+    """The path of parts under top, resolved, refused unless it stays inside top (a quarter name from an address, or a
+    file name read back from status.json, can never point elsewhere; CodeQL py/path-injection, 2026-11-21)."""
+    root = os.path.realpath(top)
+    p = os.path.realpath(os.path.join(root, *parts))
+    if not p.startswith(root + os.sep):
+        raise ValueError("outside the quarterly folder")
+    return p
+
+
 def quarter_dir(base, quarter):
     if not Q_RE.match(str(quarter or "")):
         raise ValueError("not a quarter")
-    return os.path.join(base, "data", "quarterly", quarter)
+    return inside(os.path.join(base, "data", "quarterly"), str(quarter))
 
 
 def previous_summary(db, base, y, q, today, exclude, netname, scope=None):
@@ -735,7 +745,11 @@ def figures(R, PS, base, today, cv=None):
     X["sectors"] = sorted(({"label": k, "unique": len(v), "records": R["sector_recs"][k]} for k, v in R["sector"].items()),
                           key=lambda r: (-r["unique"], r["label"]))
     titles = _infection_titles(base)
-    X["infections"] = sorted(({"label": titles.get(k.lower(), k), "unique": len(v), "records": R["inf_recs"][k]} for k, v in R["inf_hosts"].items()),
+    by_name = {}                      # two raw names with one readable name (an alias in the knowledge base) are one row
+    for k, v in R["inf_hosts"].items():
+        x = by_name.setdefault(infection_name(k, titles), [set(), 0])
+        x[0] |= v; x[1] += R["inf_recs"][k]
+    X["infections"] = sorted(({"label": lb, "unique": len(hs), "records": n} for lb, (hs, n) in by_name.items()),
                              key=lambda r: (-r["unique"], r["label"]))
     X["_cve_texts"] = used = set()
 
@@ -762,12 +776,51 @@ def figures(R, PS, base, today, cv=None):
 
 
 def _infection_titles(base):
-    try:
-        with open(os.path.join(base, "data", "infections.json"), encoding="utf-8") as f:
-            d = json.load(f).get("infections") or {}
-        return {k.lower(): (v.get("title") or k) for k, v in d.items() if isinstance(v, dict)}
-    except (OSError, ValueError):
-        return {}
+    """{name in lower case: readable title}, as the platform's knowledge base names infections: data/infections.json
+    (shipped) with this site's own definitions (data/definitions.json) on top (app.knowledge_base)."""
+    out = {}
+    for fn in ("infections.json", "definitions.json"):
+        try:
+            with open(os.path.join(base, "data", fn), encoding="utf-8") as f:
+                d = json.load(f).get("infections") or {}
+        except (OSError, ValueError, AttributeError):
+            continue
+        for k, v in d.items():
+            if isinstance(v, dict) and (v.get("title") or k.lower() not in out):
+                out[k.lower()] = str(v.get("title") or out.get(k.lower()) or k)
+    return out
+
+
+TAG_KEY = "\x1f"                       # marks an infection key made from a row with no infection or family
+
+
+def infection_key(k, name, kind):
+    """What a row of an infection report is counted under: its infection, else its family (as the map names it); a row
+    with neither is kept apart with its report and tags (never shown as is: infection_name names it)."""
+    for x in ("i", "f"):
+        v = str(k.get(x) or "").strip()
+        if v:
+            return v
+    return TAG_KEY.join(("", kind or "", name or "", str(k.get("t") or "").strip()))
+
+
+def infection_name(key, titles):
+    """The readable name of an infection key, as headers and lists show names ("Andromeda (Gamarue)"): the knowledge
+    base's title, else the name itself. A row with no infection or family: the title of one of its tags when the
+    knowledge base knows it, else the issues its tags stand for ("Badcandy, Device implant", issue_tags), else the
+    report's readable name; never the raw tag list ("badcandy;device-implant;ssl")."""
+    if not key.startswith(TAG_KEY):
+        return titles.get(key.lower(), key)
+    _, kind, name, tag = (key.split(TAG_KEY, 3) + ["", "", ""])[:4]
+    parts = [t.strip() for t in tag.replace(",", ";").split(";") if t.strip()]
+    for t in parts:
+        if titles.get(t.lower()):
+            return titles[t.lower()]
+    import issue_tags
+    named = issue_tags.split(parts)[0]
+    if named:
+        return ", ".join(named)
+    return readable(name, kind) if name else "Not named in the report"
 
 
 def cve_intel(base):
@@ -1747,7 +1800,10 @@ def install(app, ctx):
         f = (st.get("files") or {}).get(kind)
         if not f:
             return jsonify(error="No such file."), 404
-        path = os.path.join(quarter_dir(base, quarter), f["name"])
+        try:
+            path = inside(quarter_dir(base, quarter), os.path.basename(str(f["name"])))
+        except ValueError:
+            return jsonify(error="No such file."), 404
         try:
             with open(path, "rb") as fh:
                 data = fh.read()

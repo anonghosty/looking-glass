@@ -225,8 +225,21 @@ body.settings-page .hud { position: sticky; top: 0; }
 .nb-empty { padding: 4px 6px; }
 .nb-more { justify-self: start; }
 .nb-other { margin-top: 14px; }
-.nb-other textarea { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); }
-.nb-other textarea[readonly] { opacity: .8; }
+/* r90: Other address ranges as rows with a remove button; Add a block / Add a range */
+.nb-other { display: grid; gap: 8px; }
+.nb-other-title { margin: 0; font-size: 13.5px; font-weight: 600; }
+.nb-other .dz-hint { margin: 0; }
+.nb-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 8px; }
+.nb-chip { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 3px 4px 3px 10px; border-radius: 8px;
+  border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); white-space: normal; overflow-wrap: anywhere; }
+.nb-chip .nb-x { min-width: 28px; padding: 2px 8px; line-height: 1.2; }
+.nb-chip .nb-x:focus-visible, .nb-add input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.nb-add { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.nb-add[hidden] { display: none; }
+.nb-add-label { font-size: 12.5px; font-weight: 600; }
+#cardNets .nb-add .nb-add-input { flex: 0 1 240px; width: auto; min-width: 0; max-width: 100%; }
+.nb-add-msg { font-size: 12.5px; white-space: normal; overflow-wrap: anywhere; }
+.nb-add-hint { flex-basis: 100%; margin: 0; font-size: 12px; }
 
 /* dropdowns on Settings and Definitions */
 .st-field .lgs { min-width: 280px; }

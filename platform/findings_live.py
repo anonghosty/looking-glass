@@ -16,10 +16,12 @@ import json
 
 from flask import g, jsonify
 
+import finding_rules
+
 
 def team(hp):
-    """The roles that work the findings (as findings.install): the rest see only findings whose channel they are in."""
-    return hp("definitions") or hp("management") or hp("settings") or (hp("unmasked") and hp("export")) or hp("advisory")
+    """The roles that work the findings (finding_rules.is_team, the one rule)."""
+    return finding_rules.is_team(hp)
 
 
 def stamp(F, user, admin, strict):
@@ -46,7 +48,9 @@ def install(app, ctx):
         user = (getattr(g, "user", None) or {}).get("user", "")
         if not user:
             return jsonify(error="Sign in first."), 403
-        resp = jsonify(stamp=stamp(F, user, bool(hp("settings")), strict=not team(hp)))
+        if not team(hp):                                     # findings are the team's only (r90)
+            return jsonify(error=finding_rules.REFUSED), 403
+        resp = jsonify(stamp=stamp(F, user, bool(hp("settings")), strict=False))
         resp.headers["Cache-Control"] = "no-store"
         return resp
 

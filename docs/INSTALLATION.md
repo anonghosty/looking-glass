@@ -543,6 +543,23 @@ security_testing/security_retest.py && tests/run_all_checks.sh
 `tests/check_libraries.py`, and leaves an environment alone when its lock did not change. If it stops, nothing was
 changed: see [When a library file does not match](#when-a-library-file-does-not-match).
 
+**Old files are moved aside.** Each release lists the files it ships. When you update, any code file that an earlier
+Looking Glass release shipped and this one no longer does, for example a page script an older release used, is moved to
+`backups/stale-<date>-<time>/` in the same folder, under the same path. The update names every file it moved, and
+`moved.log` in that backup folder lists them too. Nothing is deleted: to bring a file back, move it back. Files Looking
+Glass never shipped, such as your own scripts, are never moved: the update names each one as left in place. Releases
+before this one carry no history list, so on the first update from them nothing is moved, and the files the new release
+does not list are named so you can check them.
+
+Only the code folders are tidied. Your data, `.env`, the Python environments, logs, backups, certificates and report
+folders are never touched. Your own scripts in the code folders are never moved, because only files an earlier release
+shipped can be moved. To keep former Looking Glass files where they are as well, run the update with `LG_KEEP_STALE=1`:
+it lists what would move and leaves everything in place. If the release's list is missing or looks wrong, nothing is
+moved and the update says why.
+
+> **Old files are moved aside.** Nothing to do. The first update may move leftovers from older releases into
+> `backups/stale-<date>-<time>/`.
+
 > **The quarterly purge is off until an administrator turns it on (from the release after 2026-11-21 (3)).** After
 > updating, no report rows are deleted by the quarterly purge until an administrator turns it on in Settings →
 > Quarterly (it shows what it would delete and when, and asks for their own password). An installation that wants the
@@ -629,7 +646,7 @@ it. It shows what it will remove and what it keeps, and asks before it starts.
 | `./uninstall.sh` | the platform service, the pipeline's schedule, the global `shadowserver` command (man page, completion) | the reports database, MongoDB, this folder (settings, accounts, findings, audit log) |
 | `./uninstall.sh --remove-database` | also the reports database and the accounts `lookingglass_pipeline` and `lookingglass_ro`, and `/etc/looking-glass` | other databases and accounts in the same MongoDB |
 | `./uninstall.sh --remove-mongodb` | also MongoDB itself and **all** its data, only if Looking Glass installed it | a MongoDB that was there before Looking Glass (never touched) |
-| `./uninstall.sh --remove-files` | also this folder | — |
+| `./uninstall.sh --remove-files` | also this folder | nothing |
 | `./uninstall.sh --all` | everything above | system packages (python3, cron, curl…) |
 
 - `./uninstall.sh --dry-run` (with any of the options) shows what would be done and changes nothing.

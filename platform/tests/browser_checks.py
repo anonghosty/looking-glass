@@ -8,7 +8,11 @@ test account on a RUNNING install and opens every page the role's Overview links
    shown twice in one box (a rule, 2026-11-19); a header button shows its hover label at once (header-tips.js);
 4. errors: no script error and no server error (5xx) while the page opens;
 5. loading: the loading logo shows at most once and draws itself at most once, loading lines do not come back after
-   they have finished, and nothing is still loading after 30 s.
+   they have finished, and nothing is still loading after 30 s;
+6. each destination once: no page offers the same destination twice on one screen (visible, uncovered navigation;
+   a deep link to another #part or ?query is another destination) (r90);
+7. the external account (r90): its three pages and every API answer they bring carry no IP address, e-mail address,
+   registry or record name; every route outside external_access.ALLOWED is refused to it.
 Needs Playwright with Chromium, a test system and its test accounts (never production, never real accounts):
     LG_BROWSER_BASE=http://127.0.0.1:5088 LG_BROWSER_ACCOUNTS=accounts.json python tests/browser_checks.py [role ...]
 accounts.json: {"analyst": {"name": "...", "pw": "...", "secret": "<TOTP secret>"}, ...}. Without these the check is
@@ -242,6 +246,45 @@ LOADER_LINKS = r"""() => {
 }"""
 
 
+# RULE (the user, r90): each destination is offered once per screen. The navigation a person can see and reach (links,
+# data-go buttons and the platforms' JS page buttons), not covered by another layer, is collected; one destination
+# offered twice is a problem. A deep link to another part (another #fragment or ?query) is another destination; two
+# parts of one item (a table row's number and title, a card) are one offer.
+NAV_ONCE = r"""() => {
+  const JS = { btnOverview: '/?intro=1', btnExplore: '/', btnSettings: '/settings?for=comms' };
+  const vis = (n) => { if (n.closest('[hidden],[inert]')) return false;
+    if (n.checkVisibility && !n.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return false;
+    const r = n.getBoundingClientRect(); return r.width > 2 && r.height > 2; };
+  const uncovered = (n) => { const r = n.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return true;      // scrolled away: still on the page
+    const t = document.elementFromPoint(x, y); return !t || t === n || n.contains(t) || t.contains(n) || !!t.closest('.lg-htip'); };
+  const skip = /^\/(api|static|logout|login|organisation\/logo)(\/|$)/, files = /\.(pdf|csv|zip|json|txt|png|svg)$/i;
+  const offers = new Map();
+  for (const n of document.querySelectorAll('a[href], [data-go], button[id]')) {
+    if (n.closest('.lg-tour, .lg-tour-offer') || !vis(n) || !uncovered(n)) continue;
+    let raw = n.getAttribute('data-go') || (n.tagName === 'A' ? n.getAttribute('href') : '') || JS[n.id] || '';
+    if (!raw || !raw.startsWith('/') || raw.startsWith('//') || n.target === '_blank' || n.hasAttribute('download')) continue;
+    const u = new URL(raw, location.href);
+    if (skip.test(u.pathname) || files.test(u.pathname)) continue;
+    const key = u.pathname + u.search + (raw.includes('#') ? '#' + raw.split('#')[1] : '');
+    const head = n.closest('header, .hud, .mg-top-actions, .intro-gear-wrap');
+    const item = head ? n : (n.closest('.fd-card, .portal-card') || n.closest('tr, li, article') || n);
+    const s = offers.get(key) || new Set(); s.add(item); offers.set(key, s);
+  }
+  const name = (n) => (n.getAttribute('aria-label') || n.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 30);
+  const out = [];
+  for (const [k, s] of offers) if (s.size > 1) out.push(`${k} x${s.size} (${[...s].map(name).join(' / ')})`);
+  return out.length ? ['a destination offered twice on one screen: ' + out.slice(0, 6).join('; ')] : [];
+}"""
+
+
+def nav_once(pg):
+    try:
+        return pg.evaluate(NAV_ONCE)
+    except Exception as e:  # noqa: BLE001
+        return [f"the destinations check could not finish: {str(e)[:120]}"]
+
+
 def loader_links(pg):
     if pg.evaluate("!document.querySelector('.hud-right, .mg-top-actions')"):
         return []                                    # not a signed-in page with a header
@@ -249,6 +292,114 @@ def loader_links(pg):
         return pg.evaluate(LOADER_LINKS)
     except Exception as e:  # noqa: BLE001  a page that navigated anyway is itself the problem
         return [f"the loader check could not finish: {str(e)[:120]}"]
+
+
+# 7. RULE (the user, 2026-11-21): an external account opens exactly three pages, all masked. As the external test account:
+# the map (its Overview too), the services platform and Abused or Compromised are opened, each analysis and record the
+# page offers first is opened, and every answer of the server (its APIs) is read: none may carry an IP address, an
+# e-mail address, a name from the network registry (data/asns.json of this copy, or LG_BROWSER_NAMES: a JSON list of
+# made-up names of the test system's data) or a host name of the records (LG_BROWSER_NAMES too). Masked host labels
+# ("Host 3f9a…") and network aliases are what is expected. Then every route outside the allow-list
+# (external_access.py) is asked for and must be refused (403, or a redirect away from it).
+EXT_PAGES = ("/?intro=1", "/", "/services", "/intelligence")
+EXT_REFERENCE = ("/api/infections", "/api/report_glossary", "/api/svc/glossary")   # write-ups: names only, no generic scan
+# an address, not a version ("openresty/1.9.3.1", "v1.2.3.4") or a clock time ("12:41:40"): an IPv4 address is not
+# glued to a letter, digit, dot, slash or dash; an IPv6 address has "::" or at least five groups (r90 staging found both)
+EXT_IP = r"(?<![\w./-])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])"
+EXT_IP6 = r"(?<![\w:])(?:(?:[0-9a-f]{1,4}:){4,7}[0-9a-f]{1,4}|(?:[0-9a-f]{1,4}:){1,6}:(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,5})?)(?![\w:])"
+EXT_MAIL = r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"
+
+
+def external_names():
+    import re as _re
+    names = []
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # the names of the system under test (LG_BROWSER_REGISTRY: its data/asns.json, copied from the test system), never
+    # this computer's own registry: r90 staging matched a device vendor on lg-test against a name in another registry
+    reg_path = os.environ.get("LG_BROWSER_REGISTRY") or os.path.join(here, "data", "asns.json")
+    try:
+        reg = json.load(open(reg_path, encoding="utf-8")).get("asns", {})
+        names += [str(v.get(k) or "").strip() for v in reg.values() for k in ("name", "holder")]
+    except (OSError, ValueError):
+        pass
+    extra = os.environ.get("LG_BROWSER_NAMES", "")
+    if extra and os.path.exists(extra):
+        names += [str(x) for x in json.load(open(extra, encoding="utf-8"))]
+    # a name that is also a report's own name ("Microsoft Sinkhole HTTP") is the report, not a network
+    try:
+        ref = open(os.path.join(here, "data", "service_reports.json"), encoding="utf-8").read()
+    except OSError:
+        ref = ""
+    return sorted({n for n in names if len(n) >= 6 and not _re.search(r"(?<![\w])" + _re.escape(n) + r"(?![\w])", ref + " Microsoft", _re.I)})
+
+
+def external_audit(pg):
+    import re as _re
+    names, probs, seen = external_names(), [], []
+
+    def on_response(r):
+        u = urlparse(r.url)
+        if u.netloc != urlparse(BASE).netloc or not u.path.startswith("/api/"):
+            return
+        try:
+            body = r.text()
+        except Exception:                                  # noqa: BLE001 (a redirect or an aborted request)
+            return
+        seen.append(u.path)
+        generic = u.path not in EXT_REFERENCE
+        kinds = []
+        if generic and _re.search(EXT_IP, body):
+            kinds.append("IPv4 address")
+        if generic and _re.search(EXT_IP6, body, _re.I):
+            kinds.append("IPv6 address")
+        if generic and any("<email>" not in m for m in _re.findall(EXT_MAIL, body)):
+            kinds.append("e-mail address")
+        if any(_re.search(r"(?<![\w])" + _re.escape(n) + r"(?![\w])", body, _re.I) for n in names):
+            kinds.append("a registry or record name")
+        if kinds:
+            probs.append(f"{u.path}: {', '.join(kinds)}")
+    pg.on("response", on_response)
+    try:
+        for path in EXT_PAGES:
+            pg.goto(urljoin(BASE, path), wait_until="domcontentloaded")
+            time.sleep(6)
+            # the first analysis and record each page offers (the map's stream, a services record, a report's records)
+            for sel in ("#stream li", "#stream .ev", ".it-card button", ".it-card", "#intelCol li"):
+                el_ = pg.query_selector(sel)
+                if el_ and el_.is_visible():
+                    try:
+                        el_.click(timeout=2000)
+                        time.sleep(2.5)
+                        pg.keyboard.press("Escape")
+                    except Exception:                      # noqa: BLE001 (covered or gone: the next one)
+                        pass
+        # every route outside the allow-list: refused
+        try:
+            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            import external_access
+            allowed = external_access.ALLOWED
+        except ImportError:
+            return probs + ["external_access.py not found: the refused routes were not checked"]
+        try:
+            import app as _app                             # the routes of this copy (the running install's own)
+            rules = sorted({_re.sub(r"<(?:[^:>]+:)?[^>]+>", "1", r.rule) for r in _app.app.url_map.iter_rules()})
+        except Exception:                                  # noqa: BLE001 (this copy cannot start the app here)
+            rules = ["/admin", "/settings", "/definitions", "/management", "/advisory", "/audit", "/combinations", "/findings",
+                     "/review/1", "/intel/LG-A-1", "/api/settings", "/api/networks", "/api/findings", "/api/copy/record",
+                     "/api/lookups/1", "/api/malpedia", "/api/kb/services", "/api/sources", "/api/diagnostics",
+                     "/api/svc/hosts.csv", "/api/insight/report", "/api/svc/report", "/api/intelligence/export.csv",
+                     "/api/beacon/unknown", "/api/admin/users", "/api/audit/events", "/api/mgmt/report", "/api/organisation"]
+        for path in rules:
+            if path.startswith(("/static/", "/login", "/logout", "/register", "/forgot", "/healthz")) or path in allowed:
+                continue
+            r = pg.request.get(urljoin(BASE, path), max_redirects=0)
+            if r.status not in (401, 403) and not (300 <= r.status < 400):
+                probs.append(f"{path} answered {r.status} (should be refused)")
+    finally:
+        pg.remove_listener("response", on_response)
+    if not seen:
+        probs.append("no API answer was seen on the three pages")
+    return probs
 
 
 fails = 0
@@ -289,6 +440,7 @@ with sync_playwright() as p:
                     "[...document.querySelectorAll('.i-loading, .st-loading, .lg-loading, .svc-loading, .kbn-loading, .mp-loading')]"
                     ".filter(e => e.offsetParent !== null).map(e => e.textContent.trim().slice(0, 40)).slice(0, 3)")))
             info = pg.evaluate(PAGE_JS, FOCUSABLE)
+            once = nav_once(pg)                           # as the page first shows, before anything is opened
             # hover labels (header-tips.js, 2026-11-19): a header button says what it is at once, on hover
             tip = pg.evaluate("""() => { const b = [...document.querySelectorAll('.nav-ic, .hud-right a, .hud-right button, .mg-top-actions a, .mg-top-actions button')]
                 .find(e => e.getBoundingClientRect().width > 0); if (!b) return 'none';
@@ -315,7 +467,7 @@ with sync_playwright() as p:
             missed = pg.evaluate("(got) => [...document.querySelectorAll('[data-kb]')].filter(e => !got.includes(e.dataset.kb) && e.isConnected"
                                  " && e.getBoundingClientRect().width > 0).map(e => e.tagName.toLowerCase() + ': ' + (e.getAttribute('aria-label') ||"
                                  " e.textContent || e.value || '').trim().slice(0, 40)).slice(0, 8)", sorted(reached))
-            tour = tour_walk(pg) + loader_links(pg)
+            tour = once + tour_walk(pg) + loader_links(pg)
             probs = tour + ([f"not reached by Tab: {missed}"] if missed else []) + (["focus trapped"] if same > 5 else []) + \
                     ([f"clickable but not a control: {info['pointer']}"] if info["pointer"] else []) + \
                     ([f"list holds a non-item: {info['lists']}"] if info["lists"] else []) + \
@@ -327,6 +479,13 @@ with sync_playwright() as p:
                 print(f"  FAIL {role} {path}: " + " | ".join(probs))
             else:
                 print(f"  ok   {role} {path} ({len([r for r in reached if r.isdigit()])}/{info['n']} controls by keyboard)")
+        if role == "external":                            # 7. the external account's masking audit (r90)
+            probs = external_audit(pg)
+            if probs:
+                fails += 1
+                print("  FAIL external masking: " + " | ".join(probs[:12]))
+            else:
+                print("  ok   external masking: the three pages and their APIs carry nothing of a host; every other route refused")
         ctx.close()
     br.close()
 print(f"\n{'all pages passed' if not fails else f'{fails} page(s) with a problem'}")

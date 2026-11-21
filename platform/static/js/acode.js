@@ -228,7 +228,7 @@
     try { r = await fetch(`/api/intel/acode/${encodeURIComponent(code)}`, { cache: "no-store" }); }
     catch (e) {                                // the connection dropped: say so, never a page that loads for ever (review 2026-11-13)
       $("axLoading")?.remove(); window.LGLoader?.ready();
-      main.append(el("p", "ax-empty", `Could not open it: ${e.message}`)); return;
+      main.append(el("p", "ax-empty", `Could not open it: ${window.LGLoader.errorText(e)}`)); return;
     }
     const d = await r.json().catch(() => ({}));
     $("axLoading")?.remove();
