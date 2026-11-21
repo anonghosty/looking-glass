@@ -54,6 +54,7 @@
       ["#cTop", "Top names", "Devices per infection or vulnerability. Click a name, or Explain all, for what it is in plain words."],
       ["#cReports", "Reports", "Every report in the selection, ranked by devices. Click one to focus on it."],
       ["#cCross", "Across reports", "Devices seen in several reports, and the report pairs they share most."],
+      ["#lgQuarterly", "Quarterly reports", "Each ended quarter's management report (PDF) and summary (CSV), made on the next quarter's 3rd day. Download it before the date shown: the raw report rows are deleted after it."],
     ],
     "/findings": [
       [".fd-hero", "Where every finding stands", "A finding's path: a note or an analysis, management's decision, the advisory sent, closed."],
@@ -68,6 +69,7 @@
       ["#apMain .ap-kpis + .av-card", "Waiting for an advisory", "Findings management decided and sent to you. Open one to write its advisory."],
       ["#apMain .ap-grid", "Charts", "Advisories per recipient, sent per month, the impacts and the reports they named."],
       ["#apMain .ap-grid + .av-card", "Advisories", "Every advisory with its reference, TLP, organisation, state and recipients."],
+      ["#lgQuarterly", "Quarterly reports", "Each ended quarter's advisor report (PDF) and CSVs: networks, organisations with the follow-up of their advisories, and issues per network. Download them before the date shown."],
     ],
     "/advisory/": [
       ["#avMain .av-hero", "The advisory", "The finding it is for, and the organisation's name and logo from Settings."],
@@ -111,7 +113,8 @@
       ["#invBox", "Add a person", "A one-time sign-up link with a role, for a limited time."],
     ],
     "/settings": [
-      [".st-tabs", "Tabs", "General, Workers (the report pipeline), Configuration and the Task monitor."],
+      [".st-tabs", "Tabs", "General, Workers (the report pipeline), Configuration, the Task monitor and Quarterly."],
+      ["[data-st-tab=\"quarterly\"]", "Quarterly", "Every quarter's reports, their accuracy checks, the purge dates and what the purge did. Make a quarter's report again here."],
       ["#cardCountry", "Country", "The country and time zone; region names in the reports are matched to the map here."],
       ["#cardScope", "Constituency", "The whole country, or chosen networks, address ranges and blocks. Both platforms and every export follow it."],
       ["#cardOrg", "Organisation", "The name and logo every advisory carries."],

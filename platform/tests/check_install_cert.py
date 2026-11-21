@@ -62,19 +62,29 @@ def ext(name, text):
     return P(name)
 
 
+# Certificates made here start 10 minutes in the past: one made "valid from now" and checked the same second failed
+# as "not yet valid" whenever the clock stepped back a moment (WSL resyncs it; 2026-11-20). OpenSSL 3.4+ sets the start
+# (-not_before); older ones (3.0 on Ubuntu 24.04 and GitHub's runners) cannot, so the check waits a little instead.
+_help = ossl("x509", "-help", check=False)
+_HAS_NB = "not_before" in (_help.stderr + _help.stdout)
+BACKDATE = ("-not_before", time.strftime("%Y%m%d%H%M%SZ", time.gmtime(time.time() - 600))) if _HAS_NB else ()
+
 # the test CA: root -> intermediate -> server certificates
 ossl("req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "root.key", "-out", "root.pem", "-days", "30", "-subj", "/CN=LG Test Root",
-     "-addext", "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign,cRLSign")
+     "-addext", "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign,cRLSign", *BACKDATE)
 ossl("req", "-newkey", "rsa:2048", "-nodes", "-keyout", "int.key", "-out", "int.csr", "-subj", "/CN=LG Test Intermediate")
 ossl("x509", "-req", "-in", "int.csr", "-CA", "root.pem", "-CAkey", "root.key", "-CAcreateserial", "-out", "int.pem", "-days", "30",
-     "-extfile", ext("int.ext", "basicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\n"))
+     "-extfile", ext("int.ext", "basicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\n"), *BACKDATE)
 
 
 def leaf(name, sans, days=20, bits=2048, extra=()):
     ossl("req", "-newkey", f"rsa:{bits}", "-nodes", "-keyout", f"{name}.key", "-out", f"{name}.csr", "-subj", f"/CN={sans[0]}")
     e = ext(f"{name}.ext", "basicConstraints=CA:FALSE\nextendedKeyUsage=serverAuth\nsubjectAltName=" + ",".join(f"DNS:{s}" for s in sans) + "\n")
+    start = () if "-not_before" in extra else BACKDATE          # a test that sets its own dates keeps them
     ossl("x509", "-req", "-in", f"{name}.csr", "-CA", "int.pem", "-CAkey", "int.key", "-CAcreateserial", "-out", f"{name}.pem",
-         "-days", str(days), "-extfile", e, *extra)
+         "-days", str(days), "-extfile", e, *start, *extra)
+    if not _HAS_NB:
+        time.sleep(2)                                           # older OpenSSL: let "now" pass the certificate's start
     return P(f"{name}.pem"), P(f"{name}.key")
 
 

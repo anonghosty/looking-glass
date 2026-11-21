@@ -58,7 +58,7 @@ jobs:
           MAPBOX_TOKEN: dummy-map-key-for-checks
         run: |
           set -e
-          for t in test_new_collections test_new_service_collections; do
+          for t in test_new_collections test_new_service_collections check_quarterly; do
             echo "::group::$t"
             # here the database is there: a skip (exit 77) is a failure
             if ! python tests/$t.py; then echo "$t did not pass"; exit 1; fi
@@ -88,6 +88,28 @@ jobs:
         if: always()
         working-directory: platform
         run: python tests/no_outside/report.py "$GUARD_LOG"
+  signoff:
+    # every commit of a pull request is signed off by its own author: the Developer Certificate of Origin 1.1
+    # (CONTRIBUTING.md, "Commits"; OpenSSF Best Practices "dco", 2026-11-20). Plain git, no outside action.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1      # v7.0.1, Node 24 (tag in actions/checkout)
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Commits signed off
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bad=0
+          for c in $(git rev-list "$BASE..$HEAD"); do
+            a="$(git show -s --format='%an <%ae>' "$c")"
+            if git show -s --format=%B "$c" | grep -qxF "Signed-off-by: $a"; then echo "ok   $c"; else
+              echo "::error::commit $c is not signed off by its author ($a): git commit --amend -s, or git rebase --signoff"; bad=1; fi
+          done
+          exit $bad
   dependencies:
     # known vulnerabilities in the platform's and the pipeline's libraries (PyPI advisory data, OSV)
     runs-on: ubuntu-24.04
@@ -168,7 +190,7 @@ jobs:
                    check_findings_ui check_notifications check_overview check_greetings check_peace check_networks_list check_wrong_types check_kb_report_names check_slow_log check_lockouts check_system_alerts check_response_cache check_task_monitor check_acode_chain check_intelligence check_code_collisions check_finding_watch check_acode_issue check_db_connect check_install_db check_install_cert check_installer_anim check_offline_names check_attack_map check_advisory_attack check_confirm_all check_cve_attack \
                    check_beacon_decode check_beacon_findings check_beacon_unknown check_spike_notice check_glossary_sync check_ai_framework check_masked_ids \
                    check_index_refresh check_beacon_keep check_day_skip check_config_page check_findings_live check_pdf_rows check_pdf_refs pdf_pages_check check_per_key_cache check_recent_days \
-                   check_select_enhancer check_invite_limit; do
+                   check_select_enhancer check_invite_limit check_quarterly_access check_feature_coverage; do
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
           done
           # the module part only: the filter and who sees it need the platform (run_all_checks.sh on the server)
@@ -181,7 +203,8 @@ jobs:
         run: |
           set -e
           for t in test_mail_auth test_dns_https test_mail_auth_pipeline test_sender_readiness test_worker_settings_effective test_link_downloads test_zip_limits test_line_hash test_report_api \
-                   test_report_types test_report_names test_equivalence test_refetch_and_rows test_retention test_no_ip_reports test_load_stamps; do
+                   test_report_types test_report_names test_equivalence test_refetch_and_rows test_retention test_no_ip_reports test_load_stamps \
+                   test_quarterly_purge; do
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
           done
           python -m unittest tests.test_mail_sources

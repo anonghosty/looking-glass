@@ -14,7 +14,7 @@ No address is ever in a notification: findings hold none. The texts are the find
 as text by the page, never as HTML.
 
 Administrators also get the system's alerts (system_alerts.py: restarts, pipeline runs, disk, the name refresh), first
-in the list, cleared the same way.
+in the list, cleared the same way. The quarterly report's "ready" alert goes to management and advisors too.
 
 API: GET /api/notifications · POST /api/notifications/clear {ids: [...]} or {all: true}. Installed from app.py.
 """
@@ -71,11 +71,12 @@ def install(app, ctx):
     system = ctx.get("system")                  # system_alerts.Alerts: restarts, pipeline runs, disk, name refresh
 
     def system_for(user):
-        """Administrators only ('settings'): the system's alerts, first (system_alerts.py)."""
-        if not system or not hp("settings"):
+        """The system's alerts, first (system_alerts.py): administrators ('settings') get theirs; an alert meant for
+        other roles too says so (the quarterly report: management and advisors), filtered by the person's permissions."""
+        if not system:
             return []
         try:
-            return system.for_user(user)
+            return system.for_user(user, has_perm=hp)
         except Exception:  # noqa: BLE001  (an unreadable status file never breaks the bell)
             return []
 

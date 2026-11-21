@@ -94,6 +94,8 @@ if [ -n "$DBDIR" ] && [ -f "$DBDIR/tests/test_link_downloads.py" ]; then run "pi
 else run "pipeline: link size cap, Block fails closed" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/tests/test_worker_settings_effective.py" ]; then run "pipeline: Workers rules read values as the pipeline does" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_worker_settings_effective.py"
 else run "pipeline: Workers rules read values as the pipeline does" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
+if [ -n "$DBDIR" ] && [ -f "$DBDIR/tests/test_quarterly_purge.py" ]; then run "pipeline: quarterly purge (permit, dates, report rows only)" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_quarterly_purge.py"
+else run "pipeline: quarterly purge (permit, dates, report rows only)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/report_api.py" ]; then run "pipeline: reports by Shadowserver API or e-mail" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_report_api.py"
 else run "pipeline: reports by Shadowserver API or e-mail" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/report_types.py" ]; then run "pipeline: new report types noticed" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_report_types.py"
@@ -149,6 +151,7 @@ run "spike notice on the Overview"      $PY tests/check_spike_notice.py
 run "AI attack frameworks are an issue"  $PY tests/check_ai_framework.py
 run "masked viewers: file names and ids" $PY tests/check_masked_ids.py
 run "glossary: docs page = in-app"      $PY tests/check_glossary_sync.py
+run "every feature: tutorial, glossary, docs" $PY tests/check_feature_coverage.py
 run "decoder on the latest day (counts)" $PY tests/verify_beacon_decode.py
 run "researchers' notes"              $PY tests/check_notes.py
 run "combination codes + search"      $PY tests/check_combos.py
@@ -163,6 +166,8 @@ run "PDF tables: rows fit their text"  $PY tests/check_pdf_rows.py
 run "PDF References by criticality; preview marks" $PY tests/check_pdf_refs.py
 run "Severity map: who, ratings, PDFs" $PY tests/check_severity_map.py
 run "Insider package: copies recorded, seals, Trace a leak" $PY tests/check_insider.py
+run "Quarterly reports: who gets what, seals, CSRF, bell, calendar" $PY tests/check_quarterly_access.py
+run "Quarterly report: known answers, guards, permit (throwaway database)" $PY tests/check_quarterly.py
 run "Anti-fingerprinting: what a signed-out visitor learns" tests/check_fingerprint.py
 run "Network changes: certificate and MongoDB addresses" tests/check_addresses.py
 run "Accounts: sign-up links, first administrator, sign-up bell" tests/check_accounts.py

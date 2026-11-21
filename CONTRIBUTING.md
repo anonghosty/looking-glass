@@ -82,6 +82,12 @@ Pull requests run the same checks in CI; they must pass.
 ## Commits
 
 - **Signed commits** (SSH or GPG) are required; unsigned commits are not merged.
+- **Signed off, under the Developer Certificate of Origin.** Every commit carries a `Signed-off-by:` line with your
+  name and e-mail, the same as the commit's author (`git commit -s` adds it). With it you certify the
+  [Developer Certificate of Origin 1.1](https://developercertificate.org/): that you wrote the change, or otherwise have
+  the right to submit it under the project's licence (AGPL-3.0). A pull request with a commit that is not signed off by
+  its author fails the "Commits signed off" check; `git commit --amend -s` (or `git rebase --signoff`) fixes it. The
+  maintainer's own commits are signed off the same way.
 - Write the message in plain words: what changed and why.
 
 ## How your contribution is reviewed

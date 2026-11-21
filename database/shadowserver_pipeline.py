@@ -16,6 +16,9 @@ The MongoDB layout is exactly the same as the original scripts produced
   discovered_fields_<service>  {category, field_name}  - one per CSV header seen
   files_<service>              {filename, category, path} - one per file on disk
 
+Once a quarter, after loading, the quarterly purge deletes the report rows dated before its cutoff, on its day only and
+with Looking Glass's permit (quarterly_purge.py); files dated before that cutoff are not loaded again.
+
 Usage:
   python shadowserver_pipeline.py                 # full run (e-mail + load)
   python shadowserver_pipeline.py --stage email   # only pull/unzip/sort
@@ -60,6 +63,7 @@ import report_api  # noqa: E402  the reports from Shadowserver's report API (REP
 import report_types  # noqa: E402  a report type that never arrived before is logged as new
 import worker_settings  # noqa: E402  Settings → Workers: the platform's requests, checked and applied here
 import retention  # noqa: E402  old sorted copies removed once in MongoDB (SORTED_KEEP_DAYS); the run's status and free disk
+import quarterly_purge  # noqa: E402  the quarterly purge, with Looking Glass's permit (rows before the cutoff, once a quarter)
 
 log = logging.getLogger("shadowserver")
 
@@ -1003,6 +1007,9 @@ def load_into_mongo(s: Settings, stats: Counter) -> None:
         log.info("Resuming %d file(s) from an interrupted run", len(retry))
 
     root = str(s.sorting_dir)
+    # rows dated before the last quarterly purge's cutoff were deleted on purpose: their files are never loaded again
+    # (a sorted copy still on disk, a mailbox fetched again; quarterly_purge.py)
+    purged = quarterly_purge.purged_before(s.base_dir)
     tasks = []  # (size, category, path, filename)
     known_fields: dict[str, set] = {}
     categories = []
@@ -1039,6 +1046,9 @@ def load_into_mongo(s: Settings, stats: Counter) -> None:
                         registered.add(fn)
                     if fn in loaded and (category, fn) not in retry:
                         stats["files_already_loaded"] += 1
+                        continue
+                    if quarterly_purge.is_purged(fn, purged):
+                        stats["files_purged_not_loaded"] += 1
                         continue
                     if fn.endswith((".csv", ".json")):
                         try:
@@ -1349,8 +1359,15 @@ def prune_sorted_backup(s: Settings, stats: Counter) -> None:
         if s.journal_path.exists():
             j = Journal(s.journal_path); pending = j.pending(); j.close()
 
+        purged = quarterly_purge.purged_before(s.base_dir)
+
+        class _Done(set):
+            """The loaded files, and those whose rows the quarterly purge deleted (their sorted copies can go too)."""
+            def __contains__(self, fn):
+                return set.__contains__(self, fn) or quarterly_purge.is_purged(fn, purged)
+
         def loaded_of(report):
-            return loaded_filenames(db[report]) if report_names.valid(report) else None
+            return _Done(loaded_filenames(db[report])) if report_names.valid(report) else None
         n, size = retention.prune_sorted(str(s.sorting_dir), str(s.base_dir), days, loaded_of, pending, log)
         stats["retention_files"] += n; stats["retention_bytes"] += size
     except Exception as exc:  # noqa: BLE001
@@ -1413,6 +1430,9 @@ def main(argv=None) -> int:
         if args.stage in ("all", "load"):
             load_into_mongo(s, stats)
             prune_sorted_backup(s, stats)
+            # the quarterly purge, on its day only and with Looking Glass's permit; never stops the run (quarterly_purge.py)
+            quarterly_purge.run_safely(lambda: mongo_client(s.mongo, serverSelectionTimeoutMS=10000)[s.mongo_db],
+                                       worker_settings.find_platform_data(PROJECT_DIR), s.base_dir, log)
     except BaseException:
         failed = True
         raise

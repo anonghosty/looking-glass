@@ -79,6 +79,10 @@ LABEL["data_exported"] = "Host list downloaded"
 # copies recorded before they happen, and the leak traces (insider.py, 2026-11-19): who, what, how many, never the text
 LABEL["copied"], TAB_OF["copied"] = "Copied", "copies"
 LABEL["leak_traced"], TAB_OF["leak_traced"] = "Leak traced", "copies"
+# the quarterly report (quarterly.py, r85): its downloads, each time it is made, and the pipeline's purge
+LABEL["quarterly_download"], TAB_OF["quarterly_download"] = "Quarterly report downloaded", "data"
+LABEL["quarterly_made"], TAB_OF["quarterly_made"] = "Quarterly report made", "system"
+LABEL["quarterly_purge"], TAB_OF["quarterly_purge"] = "Quarterly purge", "system"
 LABEL["audit_sealed"] = "Entries before the chain sealed"
 TAB_OF["audit_sealed"] = "system"
 LABEL["audit_archive_removed"] = "Old audit archive removed by the retention"

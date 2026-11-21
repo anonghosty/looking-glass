@@ -5,7 +5,8 @@ module with its own install(app, ctx), and gets one entry below, built from `cor
 
 core: db (the reports database, read only), registry (the communications reports), store (the communications day
 store), settings (the constituency), svc (the services platform: its "registry" and "store"), replay_now(),
-day_start(dt), AUTH (has_perm, csrf_ok, audit, ...), app_logger, findings (findings.Findings), acodes (acodes.install's api).
+day_start(dt), AUTH (has_perm, csrf_ok, audit, ...), app_logger, findings (findings.Findings), acodes (acodes.install's api),
+serving (True only in the running service: background jobs start then, never in a check that imports app.py).
 Returns {name: what each feature's install returned}, for tests and for other modules.
 """
 
@@ -141,6 +142,16 @@ def install(app, core):
         out["address_blocks"] = address_blocks.install(app, {
             "has_perm": A["has_perm"], "settings": st, "days": blocks_days,
             "company": lambda asn: asns.company(asn, False), "day": lambda: core["day_start"](core["replay_now"]()).date().isoformat()})
+
+    # the quarterly report and the quarterly purge's permit (quarterly.py, r85, the user 2026-11-20): made once a quarter
+    # has ended (a background check, only in the running service) or again by an administrator; downloads on the
+    # Executive portal (management), the advisory portal (advisors) and Settings → Quarterly (admins)
+    if core.get("db") is not None and all(k in A for k in ("has_perm", "csrf_ok", "audit")):
+        import quarterly
+        out["quarterly"] = quarterly.install(app, {
+            "base_dir": os.path.dirname(os.path.abspath(__file__)), "db": core["db"], "has_perm": A["has_perm"],
+            "csrf_ok": A["csrf_ok"], "audit": A["audit"], "findings": core.get("findings"), "logger": core.get("app_logger"),
+            "people_name": people_name if "users" in A else None, "serving": bool(core.get("serving"))})
 
     # the analyst codes' device counts worked out ahead after a start, so the Findings page does not wait for them
     # (acode_warm.py; only in the running service)

@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+"""The quarterly purge (quarterly_purge.py): its dates, the permit's checks, and a purge of made-up rows in a throwaway
+database that is dropped afterwards (the real database is never touched). Only documentation addresses.
+
+  * the working-day calendar for every quarter of 2026 to 2029 (and the platform's quarterly.py agrees, when it is
+    beside this pipeline);
+  * it deletes exactly the rows dated before the cutoff, from report collections only (never files_*,
+    discovered_fields_*, lg_* or a collection without the filename index);
+  * it refuses without a permit, with a NOT VALID permit, before the purge day, with a cutoff inside 31 days, with
+    dates that are not the rule's, and when run a second time;
+  * it writes its result (per collection), and files before the cutoff are not loaded again.
+Run: .venv/bin/python tests/test_quarterly_purge.py"""
+import datetime as dt
+import importlib.util
+import json
+import logging
+import os
+import shutil
+import sys
+import tempfile
+import uuid
+
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(HERE, "tests"))
+import quarterly_purge as qp  # noqa: E402
+
+checks, fails = 0, []
+
+
+def ok(label, cond, info=""):
+    global checks
+    checks += 1
+    if not cond:
+        fails.append(label)
+    print(f"  {'ok  ' if cond else 'FAIL'} {label}" + (f"  [{info}]" if info and not cond else ""), flush=True)
+
+
+log = logging.getLogger("t")
+log.addHandler(logging.NullHandler())
+D = dt.date
+
+print("The calendar: 15 working days (Mon-Fri) after the quarter, the purge on the next one, the last 31 days kept")
+by_hand = {(2026, 4): ("2027-01-21", "2027-01-22", "2026-12-22"), (2026, 1): ("2026-04-21", "2026-04-22", "2026-03-22"),
+           (2028, 3): ("2028-10-20", "2028-10-23", "2028-09-22"),        # the quarter ends on a Saturday
+           (2029, 3): ("2029-10-19", "2029-10-22", "2029-09-21")}        # ... on a Sunday
+for (y, q), want in by_hand.items():
+    d = qp.dates(y, q)
+    ok(f"{y}Q{q}: 15th working day {want[0]}, purge {want[1]}, cutoff {want[2]} (worked out by hand)",
+       (d["working_day_15"].isoformat(), d["purge_day"].isoformat(), d["cutoff"].isoformat()) == want, str(d))
+bad = []
+for y in range(2026, 2030):
+    for q in range(1, 5):
+        d = qp.dates(y, q)
+        last = d["last_day"]
+        weekdays = [last + dt.timedelta(days=i) for i in range(1, 40) if (last + dt.timedelta(days=i)).weekday() < 5]
+        if not (d["working_day_15"] == weekdays[14] and d["purge_day"] == weekdays[15] and d["purge_day"].weekday() < 5
+                and (d["purge_day"] - d["cutoff"]).days == 31 and (last + dt.timedelta(days=1)).day == 1):
+            bad.append(f"{y}Q{q}")
+ok("every quarter of 2026 to 2029: the 15th and 16th weekday after its last day, counted independently", not bad, ", ".join(bad))
+plat = next((p for p in (os.path.join(os.path.dirname(HERE), n, "quarterly.py") for n in ("platform", "threatmap")) if os.path.exists(p)), None)
+if plat:
+    spec = importlib.util.spec_from_file_location("lg_platform_quarterly", plat)
+    try:
+        sys.path.insert(0, os.path.dirname(plat))
+        pq = importlib.util.module_from_spec(spec); spec.loader.exec_module(pq)
+        diff = [f"{y}Q{q}" for y in range(2026, 2030) for q in range(1, 5)
+                if {k: v for k, v in pq.purge_dates(y, q).items() if k in qp.dates(y, q)} != qp.dates(y, q)]
+        ok("the platform's quarterly.py works out the same dates for every quarter of 2026 to 2029", not diff, ", ".join(diff))
+        ok("...and selects the same rows (the same filter)", pq.purge_filter("2026-12-22") == qp.purge_filter("2026-12-22"))
+    except Exception as exc:  # noqa: BLE001  (the platform's own libraries are not in this venv: its own test checks it)
+        print(f"  (the platform's quarterly.py could not be loaded here: {exc.__class__.__name__}; its own check compares)")
+ok("the quarter due on its purge day is that quarter; the day before, the one before",
+   qp.due_quarter(D(2027, 1, 22)) == (2026, 4) and qp.due_quarter(D(2027, 1, 21)) == (2026, 3))
+
+print("\nThe permit's checks (no database)")
+d4 = qp.dates(2026, 4)
+good = {"quarter": "2026Q4", "valid": True, "status": "VALID", "purge_day": "2027-01-22", "cutoff": "2026-12-22",
+        "generated_at": "2027-01-01T00:10:00+00:00"}
+ok("a VALID permit with the rule's dates, on the purge day: allowed", qp.check_permit(good, "2026Q4", d4, D(2027, 1, 22)) == "")
+ok("no permit: refused", "no purge permit" in qp.check_permit(None, "2026Q4", d4, D(2027, 1, 22)))
+ok("a NOT VALID permit: refused", "VALID" in qp.check_permit(dict(good, valid=False, status="NOT VALID"), "2026Q4", d4, D(2027, 1, 22)))
+ok("a permit for another quarter: refused", "another quarter" in qp.check_permit(dict(good, quarter="2026Q3"), "2026Q4", d4, D(2027, 1, 22)))
+ok("before the purge day: refused", "before the purge day" in qp.check_permit(good, "2026Q4", d4, D(2027, 1, 21)))
+ok("a cutoff that is not the rule's (an earlier purge, more deleted): refused",
+   "not the rule" in qp.check_permit(dict(good, cutoff="2027-01-10"), "2026Q4", d4, D(2027, 1, 22)))
+near = dict(d4, cutoff=D(2027, 1, 1))
+ok("a cutoff within 31 days of today: refused", "within 31 days" in qp.check_permit(dict(good, cutoff="2027-01-01"), "2026Q4", near, D(2027, 1, 22)))
+ok("a report made after its purge day: refused",
+   "not made before" in qp.check_permit(dict(good, generated_at="2027-02-01T00:00:00+00:00"), "2026Q4", d4, D(2027, 2, 2)))
+ok("a file dated before the cutoff counts as purged (not loaded again); one on the cutoff, or undated, does not",
+   qp.is_purged("2026-12-21-scan_http-ke.csv", "2026-12-22") and not qp.is_purged("2026-12-22-scan_http-ke.csv", "2026-12-22")
+   and not qp.is_purged("scan_http.csv", "2026-12-22") and not qp.is_purged("2026-01-01-x.csv", ""))
+
+# ------------------------------------------------------------------ the database part
+try:
+    import test_report_names as trn
+    s0, client = trn.throwaway_db()
+except Exception:  # noqa: BLE001
+    client = None
+if not client:
+    print("\nSKIPPED the database part: MongoDB not reachable, or no account here may create a throwaway database "
+          "(run the platform's tests/run_admin_db_tests.sh, or set LG_MONGO_ADMIN_FILE)")
+    print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))
+    sys.exit(1 if fails else 0)
+
+DBN = f"lg_test_purge_{uuid.uuid4().hex[:8]}"
+tmp = tempfile.mkdtemp(prefix="lg-purge-")
+plat_data = os.path.join(tmp, "platform", "data")
+base = os.path.join(tmp, "pipeline")
+os.makedirs(plat_data); os.makedirs(base)
+ROW_INDEX = [("filename", 1), ("category", 1), ("line_hash", 1)]
+DAYS = ["2026-07-15", "2026-09-30", "2026-10-01", "2026-12-21", "2026-12-22", "2026-12-31", "2027-01-15"]
+try:
+    db = client[DBN]
+    want = {}
+    for coll in ("scan_http", "event4_sinkhole_http"):
+        docs = [{"ip": f"192.0.2.{i}", "filename": f"{d}-{coll}-ke.csv", "category": coll, "line_hash": f"{d}{i}"}
+                for d in DAYS for i in range(3)]
+        db[coll].insert_many(docs)
+        db[coll].create_index(ROW_INDEX, unique=True)
+        want[coll] = sum(1 for x in docs if x["filename"][:10] < "2026-12-22")
+    db["scan_http"].insert_one({"ip": "192.0.2.99", "filename": "undated-scan_http.csv", "category": "scan_http", "line_hash": "u"})
+    # not report collections, or no filename index: never touched, whatever their rows' dates
+    db["files_scan_http"].insert_many([{"filename": f"{d}-scan_http-ke.csv"} for d in DAYS])
+    db["discovered_fields_scan_http"].insert_many([{"filename": f"{d}-x.csv", "field_name": "ip"} for d in DAYS])
+    db["lg_notes"].insert_many([{"filename": f"{d}-x.csv"} for d in DAYS])
+    db["scan_noindex"].insert_many([{"filename": f"{d}-scan_noindex-ke.csv"} for d in DAYS])
+    totals = {n: db[n].count_documents({}) for n in db.list_collection_names()}
+
+    def permit(**kw):
+        os.makedirs(os.path.join(plat_data, "quarterly", "2026Q4"), exist_ok=True)
+        with open(os.path.join(plat_data, "quarterly", "2026Q4", "purge_permit.json"), "w", encoding="utf-8") as fh:
+            json.dump(dict(good, **kw), fh)
+
+    def unchanged():
+        return all(db[n].count_documents({}) == k for n, k in totals.items())
+
+    print("\nRefusals: nothing is deleted")
+    r = qp.run(db, plat_data, base, log, today=D(2027, 1, 22))
+    ok("without a permit: refused, nothing deleted", r.get("outcome") == "refused" and "no purge permit" in r["why"] and unchanged(), str(r))
+    permit(valid=False, status="NOT VALID")
+    r = qp.run(db, plat_data, base, log, today=D(2027, 1, 22))
+    ok("with a NOT VALID permit: refused, nothing deleted", r.get("outcome") == "refused" and unchanged(), str(r))
+    permit(cutoff="2027-01-10")
+    r = qp.run(db, plat_data, base, log, today=D(2027, 1, 22))
+    ok("with a permit whose cutoff is inside the last 31 days (not the rule's): refused, nothing deleted",
+       r.get("outcome") == "refused" and unchanged(), str(r))
+    permit()
+    r = qp.run(db, plat_data, base, log, today=D(2027, 1, 21))
+    ok("the day before the purge day: nothing due for 2026Q4, nothing deleted",
+       r.get("quarter") != "2026Q4" and unchanged(), str(r))
+    os.symlink(os.path.join(plat_data, "quarterly", "2026Q4"), os.path.join(plat_data, "quarterly", "2026Q9"))
+    link = os.path.join(tmp, "elsewhere"); os.makedirs(link)
+    shutil.move(os.path.join(plat_data, "quarterly", "2026Q4"), os.path.join(link, "2026Q4"))
+    os.symlink(os.path.join(link, "2026Q4"), os.path.join(plat_data, "quarterly", "2026Q4"))
+    r = qp.run(db, plat_data, base, log, today=D(2027, 1, 22))
+    ok("a permit reached through a symbolic link is not read: refused", r.get("outcome") == "refused" and unchanged(), str(r))
+    os.remove(os.path.join(plat_data, "quarterly", "2026Q4")); os.remove(os.path.join(plat_data, "quarterly", "2026Q9"))
+    shutil.move(os.path.join(link, "2026Q4"), os.path.join(plat_data, "quarterly", "2026Q4"))
+
+    print("\nThe purge on its day, with a VALID permit")
+    r = qp.run(db, plat_data, base, log, today=D(2027, 1, 22))
+    ok("done", r.get("outcome") == "done", str(r))
+    ok("exactly the rows dated before the cutoff (2026-12-22) are deleted from each report collection",
+       all(r["collections"][c]["deleted"] == want[c] for c in want)
+       and all(db[c].count_documents({"filename": {"$lt": "2026-12-22", "$gte": "0"}}) == 0 for c in want), str(r.get("collections")))
+    ok("the rows from the cutoff on are kept (the last 31 days), and an undated row too",
+       all(db[c].count_documents({}) == totals[c] - want[c] for c in want)
+       and db["scan_http"].count_documents({"filename": "undated-scan_http.csv"}) == 1)
+    ok("files_*, discovered_fields_*, lg_* and a collection without the filename index are untouched",
+       all(db[n].count_documents({}) == totals[n] for n in ("files_scan_http", "discovered_fields_scan_http", "lg_notes", "scan_noindex")))
+    ok("...and the one without the index is said so", "scan_noindex" in r.get("skipped", {}), str(r.get("skipped")))
+    st = qp.read_status(base)
+    ok("the result is written: per collection, the rows deleted, the dates",
+       st.get("done", {}).get("2026Q4", {}).get("rows_deleted") == sum(want.values()) and st.get("purged_before") == "2026-12-22"
+       and st["last"]["collections"]["scan_http"]["deleted"] == want["scan_http"] and st["last"]["cutoff"] == "2026-12-22")
+    ok("its status file is the pipeline's own, owner-only", oct(os.stat(os.path.join(base, qp.STATUS_FILE)).st_mode & 0o777) == "0o600")
+    ok("files dated before the cutoff are not loaded again (purged_before)", qp.purged_before(base) == "2026-12-22")
+    db["scan_http"].insert_one({"filename": "2026-11-01-scan_http-ke.csv", "category": "scan_http", "line_hash": "late"})
+    r2 = qp.run(db, plat_data, base, log, today=D(2027, 1, 23))
+    ok("a second run for the same quarter: refused as already done, nothing deleted",
+       r2.get("outcome") == "already done" and db["scan_http"].count_documents({"line_hash": "late"}) == 1, str(r2))
+    r3 = qp.run_safely(lambda: (_ for _ in ()).throw(RuntimeError("no database")), plat_data, base, log, today=D(2027, 1, 23))
+    ok("a check that cannot run never raises (the pipeline's run goes on) and says so",
+       r3 == {} and qp.read_status(base)["last"]["outcome"] == "failed" and qp.read_status(base)["done"].get("2026Q4"))
+finally:
+    client.drop_database(DBN)
+    ok("the throwaway database is dropped", DBN not in client.list_database_names())
+    shutil.rmtree(tmp, ignore_errors=True)
+
+print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))
+sys.exit(1 if fails else 0)

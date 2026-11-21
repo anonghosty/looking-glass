@@ -5,6 +5,40 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-21
+### Added
+- **The quarterly report.** On the next quarter's 3rd day, once the quarter's last reports have arrived, Looking Glass
+  counts the quarter and keeps the result: records and unique
+  addresses per month, report, network, region and sector; infections and actively exploited CVEs; findings, cases and
+  management's decisions; advisories and their follow-up. Counts only, never an address. **Management** downloads the
+  management report (PDF) and its summary (CSV) on the Executive portal; **advisors** the advisor report (PDF) and three
+  CSVs on the advisory portal; **administrators** everything, with the purge figures, in the new **Settings →
+  Quarterly**, where they can also make a quarter's report again. Eight accuracy checks run every time; every report
+  says **VALID** or **NOT VALID** at the top. Each download is sealed, its CSV stamped with who and when, and in the
+  audit log. Researchers, analysts and external accounts do not get it. The bell tells management, advisors and
+  administrators when a quarter's reports are ready, and until when to download them.
+- **The quarterly purge.** On the working day after the 15th working day (Monday to Friday) after a quarter, the
+  database pipeline deletes the raw report rows older than 31 days, so the reports database stops growing. It runs only
+  when that quarter's report is VALID (Looking Glass then writes a purge permit), checks every date again itself, and
+  deletes from the report collections only, once per quarter. Findings, cases, advisories and the quarterly reports
+  are never deleted. The timing has no setting. The result is in the administrators' bell, Settings → Quarterly and
+  the audit log.
+- **Tutorials and glossary for the quarterly reports:** the Tutorial button on the Executive portal, the advisory
+  portal and Settings explains them, and the glossary has "Quarterly report" and "Quarterly purge". A new check makes
+  sure every feature ships with its tutorial steps, glossary terms and documentation.
+- **A certificate check in the tests no longer fails at random.** It made certificates valid from that very second
+  and checked them at once, so a clock that stepped back a moment made them "not yet valid". They now start a few
+  minutes earlier (or the check waits briefly where OpenSSL cannot set the start).
+- **Developer Certificate of Origin.** Every commit is signed off (`Signed-off-by:`, `git commit -s`): its author
+  certifies the [DCO 1.1](https://developercertificate.org/). Pull requests are checked for it ("Commits signed off");
+  see CONTRIBUTING.md, "Commits".
+- **After updating:** update the platform **and** the database pipeline (it gets `quarterly_purge.py`). Nothing to
+  configure. The first report made by itself is the one of the quarter that ends after the update; earlier quarters
+  can be made in Settings → Quarterly, without a purge. Include `data/quarterly/` in your backups (all of `data/` is
+  already): after a purge, those reports are the quarter's record. Tell management and advisors where their downloads
+  are, and that they have 15 working days after each quarter to keep a copy. Contributors: sign off your commits
+  (`git commit -s`).
+
 ## 2026-11-20 (9)
 ### Changed
 - **The security assurance case.** [Architecture and threat model](docs/ARCHITECTURE.md) has a new section, "Why the

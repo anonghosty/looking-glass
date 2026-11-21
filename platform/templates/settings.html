@@ -14,6 +14,7 @@
   <link href="{{ url_for('static', filename='css/settings.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/pipeline-settings.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/task-monitor.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/quarterly.css') }}" rel="stylesheet">
 </head>
 <body class="settings-page" data-user="{{ lg_user }}"{% if "users" in lg_perms %} data-admin="1"{% endif %}>
   <header class="hud">
@@ -32,6 +33,7 @@
     <nav class="st-tabs" role="tablist" aria-label="Settings">
       <button type="button" role="tab" data-st-tab="general" aria-selected="true">General</button>
       <button type="button" role="tab" data-st-tab="workers" aria-selected="false">Workers</button>
+      <button type="button" role="tab" data-st-tab="quarterly" aria-selected="false">Quarterly</button>
       <button type="button" role="tab" data-st-tab="config" aria-selected="false">Configuration</button>
       <button type="button" role="tab" data-st-tab="monitor" aria-selected="false">Task monitor</button>
     </nav>
@@ -175,6 +177,17 @@
       <div class="wk-card" id="wkHeld"></div>
     </section>
 
+    {# Quarterly: every kept quarter's reports, the accuracy checks, the purge's status, Make it again (quarterly.py, quarterly.js; r85) #}
+    <section class="st-card q-card q-pane" id="tabQuarterly" data-scope="admin" hidden>
+      <h2>Quarterly <span class="st-for">reports and the purge</span></h2>
+      <p class="st-hint">Once a quarter has ended, Looking Glass makes its reports: one for management, one for advisors, and the purge's
+        figures for you. Management, advisors and administrators are told in the bell. When every accuracy check passes (VALID),
+        Looking Glass gives the database pipeline its permit: 15 working days (Monday to Friday) after the quarter, on the next working
+        day, the pipeline deletes the raw report rows older than 31 days. Findings, cases, advisories and these reports are kept. The
+        timing cannot be changed here. Each download, each report made and the purge are in the audit log.</p>
+      <div class="q-body"></div>
+    </section>
+
     {# Configuration: every setting except secrets; tuning editable, security read-only (config_page.py, config-page.js) #}
     <section class="st-card cf-pane" id="tabConfig" hidden>
       <h2>Configuration <span class="st-for">the platform's .env, explained</span></h2>
@@ -262,7 +275,8 @@
   <script src="{{ url_for('static', filename='js/logo-tool.js') }}"></script>
   <script src="{{ url_for('static', filename='js/organisation.js') }}"></script>
   <script src="{{ url_for('static', filename='js/address-blocks.js') }}"></script>
-  {% if "settings" in lg_perms %}<script src="{{ url_for('static', filename='js/pipeline-settings.js') }}"></script>
+  {% if "settings" in lg_perms %}<script src="{{ url_for('static', filename='js/quarterly.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/pipeline-settings.js') }}"></script>
   <script src="{{ url_for('static', filename='js/password-policy.js') }}"></script>
   <script src="{{ url_for('static', filename='js/task-monitor.js') }}"></script>
   <script src="{{ url_for('static', filename='js/config-page.js') }}"></script>{% endif %}

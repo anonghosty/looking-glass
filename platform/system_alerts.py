@@ -13,6 +13,9 @@ like them so the bell shows them as they are:
   - people who signed up and wait for approval (one alert for all; it comes back when someone new signs up)
   - this computer's addresses no longer match the HTTPS certificate or MongoDB's listening address (network changes)
   - one person ran many small Trace a leak searches within 24 hours (insider.py: testing guesses one address at a time)
+  - the quarterly report (quarterly.py): ready, for management, advisors and administrators alike (the one alert that is
+    not for administrators only: an alert's "perms" says who sees it); NOT VALID, and the quarterly purge's result, for
+    administrators
 Each alert has an id that changes when something new happens; clearing one hides that alert for that person only
 (data/system_alerts_seen.json). Nothing here holds an address or a report's content.
 """
@@ -179,6 +182,7 @@ class Alerts:
         out += self._small_traces(now)
         out += self._addresses(now)
         out += count_alerts(now)
+        out += self._quarterly(now)
         cert = self._certificate()
         if cert and cert["days_left"] <= 30:
             days = cert["days_left"]
@@ -285,6 +289,15 @@ class Alerts:
                         "at": recent[-1], "link": "/audit"})
         return out
 
+    def _quarterly(self, now):
+        """The quarterly report (quarterly.py, r85): ready (management, advisors and admins: each sees it once), NOT VALID
+        (admins), the purge done or not run (admins). Each alert says who sees it (perms) and where it leads (links)."""
+        try:
+            import quarterly
+            return quarterly.bell(self.base_dir, now)
+        except Exception:                                # noqa: BLE001  never break the bell over this
+            return []
+
     def _addresses(self, now):
         """This computer's address changed and the certificate or MongoDB's listening address no longer match
         (net_drift.py, the user 2026-11-19). Worked out at most every 5 minutes (the bell asks often)."""
@@ -322,17 +335,25 @@ class Alerts:
     def _seen(self):
         return _read_json(self.seen_path) or {}
 
-    def for_user(self, user, now=None):
-        """This person's alerts not cleared yet, as bell items (notifications.js)."""
+    def for_user(self, user, now=None, has_perm=None):
+        """This person's alerts not cleared yet, as bell items (notifications.js). has_perm(p): only the alerts meant for
+        a permission they hold (an alert's "perms"; administrators' 'settings' when it names none); its "links" pick
+        where it leads for them."""
         mine = set(self._seen().get(user) or [])
         out = []
         for a in self.current(now):
             if a["key"] in mine:
                 continue
+            perms = a.get("perms") or ("settings",)
+            if has_perm is not None and not any(has_perm(p) for p in perms):
+                continue
+            link = a["link"]
+            if has_perm is not None and a.get("links"):
+                link = next((a["links"][p] for p in perms if p in a["links"] and has_perm(p)), link)
             out.append({"id": "sys:" + a["key"], "number": "System", "case": False, "network": "", "title": a["title"],
                         "status": "system", "status_label": "Needs a look" if a["problem"] else "For your information",
                         "by": "Looking Glass", "text": a["text"], "updates": 1, "at": float(a["at"] or 0),
-                        "when": _when(a["at"]), "waiting": a["problem"], "link": a["link"]})
+                        "when": _when(a["at"]), "waiting": a["problem"], "link": link})
         return out
 
     def clear(self, user, ids):

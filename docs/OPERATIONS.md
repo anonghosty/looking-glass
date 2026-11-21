@@ -261,6 +261,54 @@ To make one now, or to see the public key and its fingerprint:
 Checkpoints need `ssh-keygen` (package `openssh-client`, on Ubuntu servers by default). Without it they are written
 unsigned and the Audit portal says so.
 
+## The quarterly report and the purge
+
+The raw Shadowserver report rows are kept for about a quarter and a month, then deleted. Before they go, Looking Glass
+counts the quarter and keeps the result. The cycle, for every quarter (example: October to December 2026):
+
+| When | What happens |
+|---|---|
+| The first check after 00:00 UTC on the next quarter's 3rd day (3 January 2027), when the quarter's last day's reports have arrived | The service makes the quarter's reports by itself: the management PDF and summary CSV, the advisor PDF and three CSVs, the purge CSV for administrators. Every accuracy check is run; the outputs say **VALID** or **NOT VALID** at the top |
+| At once | Management, advisors and administrators each get one alert in the bell: "2026Q4 reports ready; download before Thursday 21 January 2027; the raw report rows older than Tuesday 22 December 2026 are deleted on Friday 22 January 2027" |
+| The 15 working days (Monday to Friday) after the quarter | People download their copies: management on the Executive portal, advisors on the advisory portal, administrators in Settings → Quarterly. Each download is sealed, its CSV stamped with who and when, and in the audit log |
+| The next working day (the purge day, 22 January 2027) | The database pipeline's next run deletes the report rows dated before the cutoff (the purge day minus 31 days: the last 31 days stay). Older quarters' rows go too |
+| After the purge | The administrators' bell says how many rows were deleted, from how many collections, before which day; the audit log has a "Quarterly purge" entry; Settings → Quarterly shows it |
+
+The cycle is the same every quarter; public holidays are not counted. The quarter's report is made from the reports
+loaded by then: the last day's reports usually arrive on the next morning, so if you want them in, use **Make it
+again** in Settings → Quarterly once they are loaded (any time before the purge day).
+
+**What is never deleted:** findings, cases, advisories, notes, the audit log, everything in the platform's `data/`
+folder, and the quarterly reports themselves (`data/quarterly/<YYYYQn>/`, with `summary.json`, the counts the next
+quarter compares against). Include `data/` in your backups ([Backups](#backups)): after the purge, these are the
+quarter's record. Only the pipeline's report collections lose their old rows; `files_*` and `discovered_fields_*` stay.
+
+**Who deletes:** the database pipeline, on its own account, never the web service. The service only writes a *purge
+permit* into its own `data/quarterly/<YYYYQn>/purge_permit.json`, and only when the report is VALID and made before
+the purge day. The pipeline reads it, works out the dates again itself and refuses anything else: no permit, a permit
+that is not VALID, dates that are not the rule's, a cutoff within 31 days of today, or a quarter already purged. Its
+result is in its `DATA_DIR`, `quarterly_purge_status.json`, and in its log (`[PURGE]` lines); a purge that cannot run
+never stops the pipeline's run.
+
+**When a report is NOT VALID:** the administrators' bell says so and names the checks that failed; no permit is written,
+so nothing is deleted for that quarter. In Settings → Quarterly, open the report's **Accuracy checks** to see which
+check failed and why:
+- *collection could not be read*: MongoDB could not answer for that report (a broken view, a permissions change). Fix
+  it, then **Make it again**;
+- *3 independent recount*: rows arrived or were removed while it was counting (a pipeline run at the same moment). Make
+  it again once the run has finished;
+- *8 no address in any output*: a text carried an address (for example a decision's comment the masking missed): every
+  output was removed. Tell the Looking Glass maintainers; do not copy the text anywhere.
+A report made again and VALID before the purge day writes the permit, and the purge runs on its day. Made after the
+purge day, it writes no permit: the next quarter's purge covers those rows, so nothing is lost.
+
+**Making a report again:** Settings → Quarterly → **Make it again** (administrators; in the audit log as "Quarterly
+report made"). It replaces the kept report of an ended quarter. A quarter whose raw rows were already purged cannot be
+counted again: its kept report stays the record.
+
+**Checking the pipeline's side:** `cat <pipeline DATA_DIR>/quarterly_purge_status.json` shows the last check (`outcome`
+done, refused or failed, with `why`) and every purge done, per collection.
+
 ## Reference data
 
 ### Network names (`data/asns.json`)

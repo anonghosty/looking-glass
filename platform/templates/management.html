@@ -12,6 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/management.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/quarterly.css') }}" rel="stylesheet">
 </head>
 <body class="mg"{% if "settings" in lg_perms %} data-settings="1"{% endif %}>
   <div class="mg-glow" aria-hidden="true"></div>
@@ -145,6 +146,14 @@
     <h2 class="mg-section" id="mgIntelHead" hidden>Abused or compromised</h2>
     <p class="mg-intel-note" id="mgIntelNote" hidden></p>
     <section class="mg-grid mg-grid-intel" id="mgIntel" hidden aria-label="Intelligence reports, counts only"></section>
+    <!-- the quarterly reports for management: the PDF and the summary CSV of every kept quarter (quarterly.py, quarterly.js; r85) -->
+    <h2 class="mg-section" id="quarterly">Quarterly reports</h2>
+    <section class="mg-grid">
+      <article class="mg-card mg-span3 q-card" id="lgQuarterly" data-scope="management" hidden>
+        <header><h2>Every quarter, for management</h2><p>The management report (PDF) and its summary (CSV), made once a quarter has ended. Counts only, no addresses. Each download is recorded under your name.</p></header>
+        <div class="q-body"></div>
+      </article>
+    </section>
     <p class="mg-foot">Aggregated figures for the constituency from the Shadowserver Foundation's daily reports. No individual addresses are shown.
       Devices are counted by IP address, as Shadowserver reports them: one address can stand for several devices (shared
       mobile connections), and one device can use several addresses in a day. Days and hours are UTC, as Shadowserver's reports.
@@ -168,5 +177,6 @@
   <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>
   <script src="{{ url_for('static', filename='js/localtime.js') }}"></script>
   <script src="{{ url_for('static', filename='js/management.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/quarterly.js') }}"></script>
 </body>
 </html>

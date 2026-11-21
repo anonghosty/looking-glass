@@ -1061,7 +1061,32 @@ The Traffic Light Protocol 2.0 (FIRST) is chosen on the advisory page and explai
 Every role has a **bell** in its header. It counts what changed in the findings you take part in: a finding sent to
 you, a decision, a reply, an advisory sent. Open it to see each one, with what happened and when; click one to go
 straight to it. **Clear all** clears your own list only. With Peace of mind on, an administrator gets no findings
-notifications.
+notifications. Management, advisors and administrators also get one alert when a quarter's reports are ready
+([Quarterly reports](#quarterly-reports)).
+
+## Quarterly reports
+
+Once a quarter has ended (on the next quarter's 3rd day, a little after midnight UTC, when the quarter's last day's
+reports have arrived), Looking Glass counts the
+quarter: records and unique addresses per month, report, network, region and sector; infections and actively exploited
+CVEs; findings, cases and management's decisions; advisories and their follow-up. Counts only: no report names an
+address. Every report says **VALID** (every accuracy check passed) or **NOT VALID** at the top.
+
+| Who | Where | What they download |
+|---|---|---|
+| Management | Executive portal, **Quarterly reports** at the bottom | the management report (PDF): the quarter at a glance, reports and networks, regions, sectors, infections and CISA KEV, over time with the cases and management's decisions (each with its reason and date, no person's name), advisories in summary, the retention dates and the accuracy checks; and its summary (CSV) |
+| Advisors | advisory portal, **Quarterly reports** below the portal | the advisor report (PDF): an overview, advisories per month and their impacts, each organisation with its open cases and how many of the devices named in its advisories were still seen afterwards, the cases that matter for advising, the top issues and CVEs per network; and three CSVs (networks and reports, organisations and follow-up, every issue and CVE per network with each CVE's full description) |
+| Administrators | Settings → **Quarterly** | everything above, the purge CSV (rows per report and month, and what the purge deletes), each report's accuracy checks, the purge's status, and **Make it again** |
+
+Researchers, analysts and external accounts do not get the quarterly reports. Every list keeps the past quarters too.
+
+**Download your copy in time.** The bell says until when: the 15th working day (Monday to Friday) after the quarter.
+On the next working day the database pipeline deletes the raw report rows older than 31 days, so the platforms can no
+longer show those days. The quarterly reports stay on these pages, and findings, cases and advisories are never
+deleted. Each download is recorded under your name; a CSV carries who downloaded it and when on its second line.
+
+Decisions are counted one per organisation of a case, so a quarter can have more decisions than findings: a case that
+goes to three organisations is decided three times.
 
 ## 6. Demo mode and public screens
 
@@ -1209,6 +1234,15 @@ holds). Making the pipeline stricter (including stricter unzip limits), folders 
 
 The pipeline uses the settings from its next run. When the pipeline runs on another computer, the tab says so and its
 settings stay in its own `.env`.
+
+### Quarterly (reports and the purge)
+
+Every kept quarter with all its files, **VALID** or **NOT VALID**, its accuracy checks (open them to see each one), the
+dates (download before, purge day, cutoff), whether the purge permit was written, and the purge's result once the
+pipeline has run it. **Make it again** counts an ended quarter again (for example once its last day's reports are
+loaded, or after a NOT VALID run); click it twice to confirm. The timing of the purge cannot be changed here or
+anywhere: [OPERATIONS.md](OPERATIONS.md#the-quarterly-report-and-the-purge) explains the cycle and what to do when a
+report is NOT VALID.
 
 ## 8. Administration
 

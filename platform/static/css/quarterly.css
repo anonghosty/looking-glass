@@ -1,0 +1,28 @@
+/* Looking Glass · the quarterly reports' card (quarterly.js): on the Executive portal, the advisory portal and
+   Settings → Quarterly. Every text wraps in full (no "…"). */
+.q-card { display: grid; gap: 12px; }
+.q-card h2 { margin: 0; }
+.q-hint { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.q-list { display: grid; gap: 10px; }
+.q-row { display: grid; gap: 8px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255, 255, 255, 0.02); min-width: 0; }
+.q-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.q-head b { font-size: 15px; }
+.q-tag { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; letter-spacing: .03em; border: 1px solid; }
+.q-tag.valid { color: #6ee7c8; border-color: rgba(34, 195, 166, .6); background: rgba(34, 195, 166, .12); }
+.q-tag.invalid { color: #ffb3ba; border-color: rgba(239, 93, 108, .6); background: rgba(239, 93, 108, .12); }
+.q-meta { color: var(--muted); font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.q-why { color: #ffb3ba; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.q-files { display: flex; flex-wrap: wrap; gap: 8px; }
+.q-files a.pill-btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; white-space: normal; text-align: left; }
+.q-files a.pill-btn small { color: var(--muted); font-weight: 400; }
+.q-guards { font-size: 12.5px; }
+.q-guards summary { cursor: pointer; color: var(--text); }
+.q-guards ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 3px; }
+.q-guards li { overflow-wrap: anywhere; line-height: 1.45; }
+.q-guards li.bad { color: #ffb3ba; }
+.q-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.q-tools select { min-width: 9em; }
+.q-msg { font-size: 13px; color: var(--muted); }
+.q-msg.bad { color: #ffb3ba; }
+.q-empty { margin: 0; padding: 18px; text-align: center; font-size: 13.5px; color: var(--muted); border-radius: 12px; border: 1px dashed var(--border); }
+.q-wrap-adv { padding-top: 0; }

@@ -117,6 +117,14 @@ button ticks it for you. With `log`, a forged report e-mail would be loaded
 and only flagged. `REPORT_SOURCE=api` (Shadowserver's report API) does not use e-mail at all, so the question does not
 arise; the e-mail path stays as a fallback.
 
+## Quarterly report and purge
+
+Nothing to set. The timing is fixed on purpose, so no one (an administrator, a stolen session, a changed `.env`) can
+make the raw rows go sooner: 15 working days (Monday to Friday) after a quarter ends, the purge runs on the next
+working day and deletes the raw report rows older than 31 days. Public holidays are not counted. The quarterly report
+uses `EXCLUDE_COLLECTIONS` like the platforms, and finds the pipeline by `PIPELINE_DIR` like Settings → Workers.
+How it works and what to do when a report is NOT VALID: [OPERATIONS.md](OPERATIONS.md#the-quarterly-report-and-the-purge).
+
 ## Executive portal: 7-day baseline
 
 The Executive page compares each figure with the 7 days before; a selection seen for the first time builds that
@@ -226,6 +234,8 @@ Created and kept by the service; private to its user and never committed:
 | `findings.json` | findings: notes tracked from the first look to the advisory, with their status history |
 | `seen_names.json` (+ `.done`) | where and when each name was last seen (30 days) |
 | `tls/` | HTTPS certificate and key (`deploy/make_tls_cert.sh`) |
+| `quarterly/<YYYYQn>/` | each quarter's reports (two PDFs, five CSVs), `status.json` (VALID or NOT VALID, every accuracy check, the dates), `summary.json` (the counts per network and report the next quarter compares against; no address; kept for ever), `purge_permit.json` (only while a VALID report allows the purge) and `purge_result.json` (what the purge deleted). Owner-only. Back it up with the rest of `data/`: after the purge, these reports are the quarter's record |
+| `quarterly/state.json` | the day the quarterly report was first installed (only quarters ending after it are made by themselves) |
 
 Shipped with the code (curated reference data, replaced by updates): `infections.json` (what each infection is and
 what to do about it, with evidence), `issues.json` (the services issues that are not CVEs) and `service_reports.json`

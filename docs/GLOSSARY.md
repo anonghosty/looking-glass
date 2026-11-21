@@ -7,7 +7,7 @@ the platform: the **Glossary** tab on the overview page and the **Glossary** but
 
 - [The basics](#the-basics) (8 terms)
 - [Who and where](#who-and-where) (10 terms)
-- [Threats](#threats) (25 terms)
+- [Threats](#threats) (27 terms)
 - [Numbers and measures](#numbers-and-measures) (14 terms)
 - [Using the platform](#using-the-platform) (11 terms)
 - [Accounts, roles and permissions](#accounts-roles-and-permissions) (48 terms)
@@ -136,6 +136,12 @@ Keyed fingerprints made when something is copied or downloaded: of the whole tex
 
 **Trace a leak**  
 In the Audit portal (auditors and administrators): text or a file found outside Looking Glass is matched against the seals of every copy and download, to say who copied or downloaded it, when, and how closely it matches. What is traced is not kept, and each trace is in the audit log (never what was searched).
+
+**Quarterly report**  
+Made on the next quarter's 3rd day, once the quarter's last reports have arrived: the quarter's records and unique addresses per month, report, network, region and sector, infections, actively exploited CVEs, findings, cases, decisions and advisories. Counts only, never an address. Management gets the management report, advisors the advisor report, administrators everything. It says VALID when every accuracy check passed, NOT VALID otherwise.
+
+**Quarterly purge**  
+On the working day after the 15th working day (Monday to Friday) after a quarter, the database pipeline deletes the raw report rows older than 31 days. Only when that quarter's report is VALID, once per quarter, and never findings, cases, advisories or the quarterly reports. Download your copy of the quarterly report before it.
 
 **Researcher's rating**  
 A level a researcher gave, on the severity map, to a name no Shadowserver record rates. The PDFs' References section uses it and flags it "Researcher's rating". When Shadowserver later rates the name, Shadowserver's level is used instead.
@@ -646,6 +652,8 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Population report](#publicly-accessible--vulnerable-services) · 
 [Proof package](#security-audit-and-the-pipeline) · 
 [Publicly accessible / vulnerable services](#publicly-accessible--vulnerable-services) · 
+[Quarterly purge](#threats) · 
+[Quarterly report](#threats) · 
 [Record](#publicly-accessible--vulnerable-services) · 
 [Regions heatmap](#publicly-accessible--vulnerable-services) · 
 [Replay (minus 24 h)](#the-basics) · 

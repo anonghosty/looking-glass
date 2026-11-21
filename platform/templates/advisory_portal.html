@@ -14,6 +14,7 @@
   <link href="{{ url_for('static', filename='css/settings.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/findings.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/advisory.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/quarterly.css') }}" rel="stylesheet">
 </head>
 <body class="settings-page fd-page av-page">
   <header class="hud">
@@ -28,9 +29,20 @@
   <main class="st-main av-main" id="apMain">
     <div class="st-loading" id="apLoading">Opening your advisories and the findings waiting for you…</div>
   </main>
+  {# the quarterly reports for advisors: the PDF and the three CSVs of every kept quarter (quarterly.py, quarterly.js; r85) #}
+  <div class="st-main av-main q-wrap-adv" id="quarterly">
+    <section class="av-card q-card" id="lgQuarterly" data-scope="advisor" hidden>
+      <h2>Quarterly reports</h2>
+      <p class="q-hint">The advisor report (PDF) with the networks, organisations and issues (CSV), made once a quarter has ended. Counts only, no addresses. Each download is recorded under your name.</p>
+      <div class="q-body"></div>
+    </section>
+  </div>
   <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
   <script src="{{ url_for('static', filename='js/notifications.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/findings-live.js') }}"></script>
   <script src="{{ url_for('static', filename='js/advisory-portal.js') }}"></script>
+  <!-- the quarterly reports (an admin's view has a drop-down: the Looking Glass one) -->
+  <script src="{{ url_for('static', filename='js/lg-select.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/quarterly.js') }}"></script>
 </body>
 </html>

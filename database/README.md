@@ -107,6 +107,30 @@ go straight to `sorting_backup/<service>/`, replacing an older copy. Everything 
 
 If the e-mail step fails (mail server down, network), the pipeline logs the error and still sorts and loads what is already on disk.
 
+**Step 4, the quarterly purge (once a quarter).** After loading, every run checks whether a quarterly purge is due
+(`quarterly_purge.py`). Looking Glass makes its quarterly reports once a quarter has ended and, when every accuracy check
+passed (VALID), writes a purge permit into its own data folder (`data/quarterly/<YYYYQn>/purge_permit.json`). The
+pipeline reads it read-only (never through a symbolic link) and checks everything again itself:
+
+- **When:** 15 working days (Monday to Friday; public holidays are not counted) after the quarter's last day, the purge
+  runs on the next working day, the *purge day*. Not before it, and only once per quarter.
+- **What:** the report rows whose file name starts with a day before the *cutoff*, the purge day minus 31 days: the last
+  31 days are always kept. Older quarters' rows go too. Only report collections are touched (the names the pipeline
+  loads reports into, with the row index that starts with `filename`), one at a time through that index. Never
+  `files_*`, `discovered_fields_*` or anything of the platform's: findings, cases, advisories and the quarterly
+  reports stay.
+- **Refused:** without a permit, with one that is not VALID, made after its purge day, or whose quarter, purge day or
+  cutoff differ from the rule worked out here, and when the cutoff would fall within 31 days of today. A refusal deletes
+  nothing and says why.
+- **Recorded:** `quarterly_purge_status.json` in `DATA_DIR` (owner-only): per collection the rows deleted, the cutoff and
+  the time. Looking Glass reads it to show the result in Settings → Quarterly and in the administrators' bell, and writes
+  it to its audit log. A purge that cannot run is recorded and logged (`[PURGE]`) and never stops the run.
+- **Afterwards:** files dated before the cutoff are not loaded again (a sorted copy still on disk, a mailbox fetched
+  again with `--all`), and `SORTED_KEEP_DAYS` removes their sorted copies like any loaded file.
+
+The timing has no setting: neither the platform's administrators nor this `.env` can change it. A forged permit (the
+platform's data folder belongs to the web service) can only start the purge the rules allow, on the day they allow it.
+
 ---
 
 ## 3. Command reference

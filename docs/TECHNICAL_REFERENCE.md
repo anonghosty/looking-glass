@@ -795,6 +795,66 @@ Front-end libraries: Mapbox GL JS 3.8.0 (satellite style) and deck.gl 9.1.14 (3D
 - **Design:** neutral grey surfaces with one blue accent. Severity colors are used only for severity, and infections use a separate palette with no red. Type is Inter for the UI (tabular numbers) and Geist Mono for IPs, hashes and timestamps.
 - **Below 1440 px**, Intel moves into a tab in the left panel. **Below 1100 px**, the left panel becomes a ☰ drawer. **On phones**, the stream is a bottom sheet of cards (tap the grabber to expand), and the detail view opens full screen.
 
+## The quarterly report and the purge (`quarterly.py`, `quarterly_pdf.py`)
+
+**When.** A background check (every 10 minutes, in the running service only) makes the previous quarter's report the
+first time it runs after 00:00 UTC on the next quarter's 3rd day (`make_due`, `MAKE_ON_DAY`; the quarter's last day's
+reports arrive the day after it), if that quarter ended after the feature was first
+installed (`data/quarterly/state.json`) and has no report yet. An administrator can make an ended quarter again
+(`POST /api/admin/quarterly/make`, CSRF, in the background, one at a time, a lock file across processes). A quarter
+whose rows the pipeline already purged is refused: it can no longer be counted.
+
+**Counting.** Read only: `find`, `aggregate` and `count_documents`. The quarter is chosen by `filename` (it starts with
+the report day and is indexed): from the first day, up to (not including) the next quarter's first day. Which field is
+the constituent's host comes from the platforms' own registries: single-host reports (`services.ServiceRegistry`) use
+`ip / asn / region / sector`; communications (`sources.Registry`) the first prefix of `sources.PREFIXES[layout]`
+(`src_`, none for the legacy layout, `http_referer_`; `dst_` for destination-only reports). MongoDB groups the rows by
+(month, network, host); Python counts the groups, so no document ever holds a network's addresses (an `$addToSet`
+would hit MongoDB's 16 MB limit). Addresses are kept only in memory, as hashes, and never written. Readable names
+come from `services.service_of` / `sources`, network names from the AS-number registry (`AsnRegistry.company`), regions
+in title case like the platforms, infections from `data/infections.json`, CVE names from the CVE cache only
+(`cves.CveIntel`, nothing downloaded): CISA's KEV name, else the issuer's title, else the name the description gives
+("aka a Terrapin attack"), else its first sentence or subject when short, else the id alone; the full description is in
+the advisor's issues CSV. Workflow figures come from `findings.Findings` and `advisory.Store` / `advisory.Impact`.
+"Vs the previous quarter" uses the previous quarter's kept `summary.json` (made before its rows were purged), or counts
+it from MongoDB when there is none.
+
+**Accuracy checks (guards), every time.** 1 the months add up to the quarter for every report and network; 2 unique
+addresses never exceed records, and the all-reports uniques lie between the largest report's and the sum; 3 an
+independent `count_documents` recount equals every report's total and month; 4 nothing lost (records = with a network
++ unknown network); 5 the purge's dry count equals `count_documents` and the cutoff keeps the last 31 days; 6 the counts
+of advisories and decisions equal the items listed, approved + rejected + waiting = decisions; 7 the first and last day
+are in and the days either side out; 8 after writing, no output holds an address (any address of the data, by its
+hash, or any address-shaped text that is not part of a published CVE text): every output is removed and the run fails.
+A collection that cannot be read is listed, never skipped silently. Any failure: NOT VALID, on the first line of every
+CSV and at the top of every PDF page.
+
+**Kept** in `data/quarterly/<YYYYQn>/` (owner-only; built in a temporary folder and put in place in one step): the
+two PDFs (`executive_pdf.Doc`'s look; every text whole, rows grow, tables carry on over pages), five CSVs (`csvsafe`),
+`status.json`, `summary.json`, `purge_permit.json` (VALID and made before the purge day only) and `purge_result.json`.
+
+**Routes.** Each checks its permission; downloads are attachments, so `insider.py` seals them; CSVs get a second line
+"Downloaded, <full name> (<account>), <time UTC>"; each is in the audit log (`quarterly_download`).
+
+| Route | Who | What |
+|---|---|---|
+| `GET /api/mgmt/quarterly`, `GET /api/mgmt/quarterly/<Q>/<kind>` | `management` | the management PDF and summary CSV |
+| `GET /api/advisory/quarterly`, `GET /api/advisory/quarterly/<Q>/<kind>` | `advisory` | the advisor PDF and three CSVs |
+| `GET /api/admin/quarterly`, `GET /api/admin/quarterly/<Q>/<kind>` | `settings` | every file, the checks, the purge's status, the quarters that can be made again |
+| `POST /api/admin/quarterly/make` `{quarter}` | `settings`, CSRF | make an ended quarter again (audit `quarterly_made`) |
+
+**The bell** (`system_alerts.Alerts._quarterly` → `quarterly.bell`): an alert may name the permissions that see it
+(`perms`) and where it leads for each (`links`); without them it is for administrators, as before. Ready: management,
+advisors and administrators, until the purge day. NOT VALID, the purge done (7 days), and a purge the pipeline refused
+although the permit was written: administrators.
+
+**The purge** is the pipeline's (`quarterly_purge.py` beside `shadowserver_pipeline.py`, run after loading): it reads
+the permit read-only (never through a symbolic link), works out the dates itself, deletes `filename` < cutoff (a report
+day prefix) from the report collections only (`report_names.valid`, not `files_*` / `discovered_fields_*` / `lg_*`, with
+the filename index), one at a time, records each collection's count in `<DATA_DIR>/quarterly_purge_status.json`, and
+afterwards leaves out files dated before the cutoff when loading. The platform copies a done purge into the quarter's
+`purge_result.json` once and writes the audit entry `quarterly_purge` (rows, collections, cutoff, when).
+
 ## Security, accounts and deployment
 
 Every page needs a sign-in with a password and an authenticator code. People request accounts on the sign-in page
