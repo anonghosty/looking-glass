@@ -27,6 +27,27 @@ if not wf_dir:
 files = sorted(glob.glob(os.path.join(wf_dir, "*.yml")))
 src = {os.path.basename(f): open(f, encoding="utf-8").read() for f in files}
 ok("the checks workflow is there", "checks.yml" in src)
+# the workflow must be valid YAML, or GitHub runs none of its jobs (2026-11-21: "--only-binary=:all: -r" unquoted after
+# run: made ": " a mapping and the whole workflow failed to start). An unquoted value may not hold ": " (nor " #",
+# which starts a comment); a full parse too where PyYAML is installed (the platform's own libraries do not include it)
+bad_yaml = []
+for f, s in src.items():
+    for n, line in enumerate(s.splitlines(), 1):
+        m = re.match(r"^\s*(?:-\s+)?[\w.-]+:\s+(\S.*)$", line)
+        if m and not line.lstrip().startswith("#") and m.group(1)[0] not in "'\"|>{[&*!":
+            val = m.group(1).split(" #", 1)[0]
+            if ": " in val or val.endswith(":"):
+                bad_yaml.append(f"{f}:{n}")
+try:
+    import yaml  # noqa: E402
+    for f in files:
+        try:
+            yaml.safe_load(open(f, encoding="utf-8"))
+        except yaml.YAMLError as e:
+            bad_yaml.append(f"{os.path.basename(f)}: {str(e).splitlines()[0]}")
+except ImportError:
+    pass
+ok("every workflow is valid YAML (no unquoted value holds ': ')", not bad_yaml, "; ".join(bad_yaml))
 uses = [(f, u) for f, s in src.items() for u in re.findall(r"uses:\s*([^\s#]+)", s)]
 loose = [f"{f}: {u}" for f, u in uses if not re.fullmatch(r"[\w.-]+/[\w.-]+(/[\w./-]+)?@[0-9a-f]{40}", u)]
 ok("every action is pinned to a full commit (a moved tag cannot run new code)", uses and not loose, "; ".join(loose))

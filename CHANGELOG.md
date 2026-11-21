@@ -5,6 +5,12 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-21 (3)
+### Fixed
+- **GitHub's checks run again.** One line of the checks workflow was not valid YAML (an unquoted value holding ": "),
+  so GitHub started none of its jobs. It is quoted now, and `tests/check_ci_pins.py` reads every workflow as YAML.
+- **After updating:** nothing to do.
+
 ## 2026-11-21 (2)
 ### Security
 - **Libraries only from lock files, every file checked.** The platform, the database pipeline and the documentation

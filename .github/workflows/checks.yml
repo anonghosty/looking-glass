@@ -37,7 +37,7 @@ jobs:
       # the libraries from the locks only: exact versions, every file checked against its sha256 value; a file that does
       # not match, or a library the lock does not list, stops the job (tools/lock_requirements.sh makes the locks)
       - name: Install the platform's libraries
-        run: python -m pip install --require-hashes --only-binary=:all: -r platform/requirements.lock
+        run: 'python -m pip install --require-hashes --only-binary=:all: -r platform/requirements.lock'
       - name: Start MongoDB 8.0 with a one-run administrator
         run: |
           set -e
