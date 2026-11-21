@@ -219,7 +219,7 @@ LOADER_LINKS = r"""() => {
   const stop = (e) => { e.preventDefault(); };
   window.addEventListener('click', stop);
   const skip = /^\/(api|static|login|logout|forgot|enrol|welcome|organisation\/logo)(\/|$)/;
-  const files = /\.(pdf|csv|zip|json|txt|png|svg)$/i, dl = /\/(report|preview|export)(\/|$)/;
+  const files = /\.(pdf|csv|zip|json|txt|png|svg)$/i, dl = /\/(report|preview|export|download|file)(\/|$)/;   // LGLoader.isDownload
   const out = [], seen = new Set();
   try {
     for (const a of document.querySelectorAll('a[href]')) {

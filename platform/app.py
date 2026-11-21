@@ -139,7 +139,7 @@ import request_limits  # noqa: E402
 HEAVY_LIMITS = request_limits.install(
     app, ("/api/stats", "/api/geo", "/api/insight", "/api/insight/drill", "/api/svc/stats", "/api/svc/insight",
           "/api/svc/drill", "/api/svc/regions", "/api/svc/hosts.csv", "/api/mgmt/report", "/api/insight/report",
-          "/api/svc/report", "/api/intelligence/host", "/api/intel/match"),
+          "/api/svc/report", "/api/insight/report.pdf", "/api/svc/report.pdf", "/api/intelligence/host", "/api/intel/match"),
     lambda: (None if (getattr(g, "user", None) or {}).get("automation")
              else ("u:" + g.user["user"]) if getattr(g, "user", None) else ("a:" + (request.remote_addr or ""))))
 # the security self-test clears this computer's login counters itself, so it never restarts the service (retest_reset.py)

@@ -85,7 +85,17 @@
       const head = el("div", "fd-adv-h");
       head.append(el("code", null, a.ref || "(not saved)"), el("span", `tlp-badge ${TLPC(a.tlp)}`, a.tlp), el("b", null, a.network || "All networks"),
         el("span", `fd-adv-st ${a.status}`, a.status === "sent" ? `Sent ${a.sent} to ${a.recipients.join(", ")}` : a.status_label));
-      if (data.can_advise && a.report) { const dl = el("a", "lg-btn sm ghost", "Report"); dl.href = `/advisory/${f.id}/file/${a.ref}/${a.report.n}`; dl.title = a.report.name; head.append(dl); }
+      if (data.can_advise && a.report) {
+        // the report file through the platform's one download helper (LGLoader.download, r89), never a plain link
+        const dl = el("button", "lg-btn sm ghost", "Report"); dl.type = "button"; dl.title = a.report.name;
+        const dm = el("span", "fd-msg bad"); dm.setAttribute("role", "status");
+        dl.addEventListener("click", async () => {
+          dm.textContent = "";
+          const res = await window.LGLoader.download(`/advisory/${f.id}/file/${a.ref}/${a.report.n}`, { button: dl, name: a.report.name });
+          if (!res.ok && res.message) dm.textContent = res.message;
+        });
+        head.append(dl, dm);
+      }
       if (data.can_advise) { const op = el("a", "lg-btn sm ghost", "Open"); op.href = `/advisory/${f.id}#${encodeURIComponent(a.network || "")}`; head.append(op); }
       r.append(head);
       if (a.status === "drafted" && data.can_advise) {

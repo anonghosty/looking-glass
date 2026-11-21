@@ -1,74 +1,98 @@
-/* Looking Glass · Settings → Constituency: pick address blocks from the reports (address_blocks.py; the user,
-   2026-11-19: "i still cant select ip ranges"). The blocks (/24) seen yesterday on both platforms, with their records
-   and network, ticked into the "Extra address ranges" box; typing a range there stays possible. Nothing is looked up
-   outside: only what the reports hold. Saved with Apply settings, like the rest of the constituency. */
+/* Looking Glass · Settings → Network names & types → Constituent column: a network's address blocks (address_blocks.py;
+   the user's design, 2026-11-21: one picker instead of two). "Some address blocks" opens the network's row in place with
+   its blocks (/24) that have records, busiest first, a search and the full list on demand; ticked blocks are saved as
+   address ranges with Apply settings (settings.js holds the choice, net-editor.js draws the row). Nothing is looked up
+   outside: only this server's list of what the reports hold. */
 (() => {
-  const $ = (id) => document.getElementById(id);
-  const box = $("blockPick"), area = $("cidrs");
-  if (!box || !area) return;
-  const SHOW = 300;                  // rows drawn at once; the search looks through every block listed
-  let rows = null, loading = false;
-  const fmt = (n) => Number(n || 0).toLocaleString();
+  "use strict";
+  const API = "/api/settings/address-blocks";
+  const FIRST = 50;                     // blocks drawn before "Show all N blocks"
+  const fmt = (n) => Number(n || 0).toLocaleString("en-US");
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
-  const lines = () => area.value.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean);
-  let own = false;                   // our own change to the box: the list is already right (and keeps the focus)
-  function setLines(list) {
-    area.value = list.join("\n");
-    own = true;
-    try { area.dispatchEvent(new Event("input", { bubbles: true })); } finally { own = false; }   // settings.js: the preview and Apply follow
-  }
+  const plural = (n, one, many) => `${fmt(n)} ${n === 1 ? one : (many || `${one}s`)}`;
+  const cache = new Map(), done = new Set();   // AS number -> the promise of its blocks; the ones already answered
 
-  async function load() {
-    if (rows || loading) return;
-    loading = true; $("blockCount").textContent = "Loading the address blocks…";
-    try {
-      const r = await fetch("/api/settings/address-blocks", { credentials: "same-origin", cache: "no-store" });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-      rows = d.blocks || [];
-      box.dataset.total = d.total || 0;
-      render();
-    } catch (e) {
-      $("blockCount").textContent = `The address blocks could not be read: ${e.message}`;
-    } finally { loading = false; }
+  async function get(url) {
+    const r = await fetch(url, { credentials: "same-origin", cache: "no-store" });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    return d;
   }
-
-  function render() {
-    if (!rows) return;
-    const q = $("blockSearch").value.trim().toLowerCase();
-    const have = new Set(lines());
-    const match = rows.filter((r) => !q || r.block.includes(q) || (r.network || "").toLowerCase().includes(q) || (r.asn && `as${r.asn}`.includes(q)) || (r.asn && r.asn === q));
-    const tb = $("blockTable").tBodies[0]; tb.replaceChildren();
-    for (const r of match.slice(0, SHOW)) {
-      const tr = el("tr"), cb = el("input");
-      cb.type = "checkbox"; cb.checked = have.has(r.block) || r.covered; cb.disabled = r.covered;
-      cb.setAttribute("aria-label", `Add ${r.block} (${r.network || "network unknown"}) to the extra address ranges`);
-      cb.addEventListener("change", () => {
-        const cur = lines().filter((x) => x !== r.block);
-        setLines(cb.checked ? [...cur, r.block] : cur);
-        count();
-      });
-      const net = el("td", null, r.network || (r.asn ? `AS${r.asn}` : "Not known"));
-      if (r.asn) net.append(el("span", "muted", ` AS${r.asn}`));
-      const state = el("td", "muted", r.covered ? "Already in (its network is chosen, or a range holds it)" : "");
-      const c0 = el("td"); c0.append(cb);
-      tr.append(c0, el("td", "mono", r.block), net, el("td", "num", fmt(r.records)), state);
-      tb.append(tr);
+  /** one network's blocks, asked once per page */
+  function list(asn) {
+    const k = String(asn);
+    if (!cache.has(k)) {
+      const p = get(`${API}?asn=${encodeURIComponent(k)}`);
+      p.then(() => done.add(k), () => cache.delete(k));
+      cache.set(k, p);
     }
-    if (!match.length) { const tr = el("tr"); const td = el("td", "muted", q ? "No block matches." : "No address blocks in yesterday's reports."); td.colSpan = 5; tr.append(td); tb.append(tr); }
-    count(match.length);
+    return cache.get(k);
+  }
+  /** how many blocks each network has, and which network each saved range that is one of its blocks belongs to */
+  const summary = () => get(`${API}?summary=1`);
+  /** "3 of 120 blocks chosen" (the collapsed row) */
+  function chosenText(n, total) {
+    return total == null ? `${plural(n, "block")} chosen` : `${fmt(n)} of ${plural(total, "block")} chosen`;
   }
 
-  function count(n) {
-    if (!rows) return;
-    const picked = rows.filter((r) => lines().includes(r.block)).length;
-    const shown = n == null ? null : Math.min(n, SHOW);
-    const total = Number(box.dataset.total || rows.length);
-    $("blockCount").textContent = `${picked} picked from this list` +
-      (shown == null ? "" : ` · showing ${fmt(shown)} of ${fmt(n)} matching` + (total > rows.length ? ` (the ${fmt(rows.length)} busiest of ${fmt(total)} blocks; search to narrow)` : ""));
+  /** the open row's content: o = {asn, name, picked() -> Set, toggle(block, on), onClose()} -> {node, focus()} */
+  function panel(o) {
+    const box = el("div", "nb-panel"); box.id = `nbPanel${o.asn}`;
+    box.setAttribute("role", "group"); box.setAttribute("aria-label", `Address blocks of ${o.name} (AS${o.asn})`);
+    const intro = el("p", "nb-intro", `The address blocks (/24) of ${o.name} (AS${o.asn}) with records yesterday, busiest first. ` +
+      "Tick the blocks that are your constituents; Apply settings, at the bottom, saves them.");
+    const tools = el("div", "nb-tools");
+    const q = el("input", "dz-search nb-search"); q.type = "search"; q.autocomplete = "off";
+    q.placeholder = "Search a block, for example 192.0.2"; q.setAttribute("aria-label", `Search the address blocks of ${o.name}`);
+    const status = el("span", "nb-count muted"); status.setAttribute("role", "status");
+    const close = el("button", "lg-btn sm", "Close"); close.type = "button";
+    close.setAttribute("aria-label", `Close the address blocks of ${o.name}`);
+    close.addEventListener("click", () => o.onClose());
+    tools.append(q, status, close);
+    const ul = el("ul", "nb-list"); ul.setAttribute("aria-label", `Address blocks of ${o.name}`);
+    const more = el("button", "lg-btn sm nb-more"); more.type = "button"; more.hidden = true;
+    box.append(intro, tools, ul, more);
+    let rows = null, all = false;
+
+    const counted = (shown, hits) => {
+      if (!rows) return;
+      status.textContent = `${chosenText(o.picked().size, rows.length)} · showing ${fmt(shown)} of ${plural(hits, "block")}` +
+        (q.value.trim() ? " matching" : "");
+    };
+    const draw = () => {
+      if (!rows) return;
+      const s = q.value.trim().toLowerCase();
+      const hits = s ? rows.filter((r) => r.block.includes(s)) : rows;
+      const shown = all ? hits : hits.slice(0, FIRST);
+      const have = o.picked();
+      ul.replaceChildren();
+      for (const r of shown) {
+        const li = el("li"), lab = el("label"), cb = el("input");
+        cb.type = "checkbox"; cb.checked = have.has(r.block); cb.value = r.block;
+        cb.addEventListener("change", () => { o.toggle(r.block, cb.checked); counted(shown.length, hits.length); });
+        lab.append(cb, el("span", "mono", r.block), el("span", "nb-recs", plural(r.records, "record")));
+        li.append(lab); ul.append(li);
+      }
+      if (!hits.length) ul.append(el("li", "nb-empty muted", s ? "No block matches." : "No address blocks with records yesterday."));
+      more.hidden = all || hits.length <= FIRST;
+      more.textContent = `Show all ${plural(hits.length, "block")}`;
+      counted(shown.length, hits.length);
+    };
+    q.addEventListener("input", () => { all = false; draw(); });
+    more.addEventListener("click", () => {
+      all = true; draw();
+      ul.querySelectorAll("input")[FIRST]?.focus();   // the first block that was not shown before
+    });
+
+    // a network asked for the first time: the page's loading animation while its list comes (LGLoader.busy)
+    const k = String(o.asn), L = window.LGLoader, slow = !done.has(k);
+    status.textContent = "Loading the address blocks…";
+    if (slow) L?.busy?.("Loading the address blocks");
+    list(k).then((d) => { rows = d.blocks || []; draw(); },
+      (e) => { status.textContent = `The address blocks could not be read: ${e.message}`; })
+      .finally(() => { if (slow) L?.ready?.(); });
+    return { node: box, focus: () => q.focus() };
   }
 
-  box.addEventListener("toggle", () => { if (box.open) load(); });
-  $("blockSearch").addEventListener("input", render);
-  area.addEventListener("input", () => { if (rows && !own) render(); });   // a range typed or removed by hand ticks or unticks
+  window.LGBlocks = { list, summary, panel, chosenText };
 })();

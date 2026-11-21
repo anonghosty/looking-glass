@@ -51,6 +51,7 @@ from services_intel import ISSUE, SINK         # a services code's part "the hos
 
 CODE_RX = re.compile(r"^LG-[CX]-[0-9A-F]{8}$")          # the researchers' codes (this module)
 ANY_RX = re.compile(r"^LG-[CXAB]-[0-9A-F]{8}$")         # and the analysts' (acodes.py) and decoded beacons (beacon_findings.py)
+SEARCH_ID = re.compile(r"[0-9a-f]{16}")                 # a Combinations page search (a review's report is review<N>)
 MAX_DAYS = 31                 # one history search reads at most this many days
 KEEP_CODES = 20000            # codes kept in data/combo_codes.json (the least recently shown go first)
 JOB_TTL = 3600                # a finished search can be downloaded for an hour
@@ -1165,9 +1166,9 @@ def install(app, ctx):
                 x_["ips"].append([d["ip"], d["records"]])
         tot = max(1, len(devs))
         if network and not summary_only:          # one network's report: a file of its own, nothing else changes
-            ctx["audit"].add("combo_export", user=job["user"], target=entry["code"],
-                             detail=f"{entry['name']} · {span} · network {network} · {len(devs)} devices, {len(rows)} records")
-            return {"name": f"{base}.zip", "bytes": z.getvalue()}
+            # logged where it leaves the platform (the download, or the review's report), once per download
+            return {"name": f"{base}.zip", "bytes": z.getvalue(),
+                    "audit": f"{entry['name']} · {span} · network {network} · {len(devs)} devices, {len(rows)} records"}
         summ = {"devices": len(devs), "records": len(rows), "repeat": repeat, "multi_day": multi_day,
                           "networks_all": [{"label": k, "asn": v["asn"], "devices": v["devices"], "records": v["records"]}
                                            for k, v in sorted(per_net.items(), key=lambda kv: -kv[1]["devices"])],
@@ -1190,9 +1191,13 @@ def install(app, ctx):
                           "enrich": enr or None}
         if summary_only:                          # the figures only (the page filtered to one network)
             return {"summary": summ}
+        detail = f"{entry['name']} · {span} · {len(devs)} devices, {len(rows)} records"
+        search = bool(SEARCH_ID.fullmatch(str(job.get("id") or "")))   # a search of the Combinations page (not a review's report)
+        if search and not job.get("result"):      # the search itself, once (the file is logged when it is downloaded)
+            ctx["audit"].add("combo_search", user=job["user"], target=entry["code"], detail=detail)
         job["summary"] = summ
-        ctx["audit"].add("combo_export", user=job["user"], target=entry["code"],
-                         detail=f"{entry['name']} · {span} · {len(devs)} devices, {len(rows)} records")
+        if not search:                            # a review's or an advisory's report: made for its caller, nothing kept
+            return {"name": f"{base}.zip", "bytes": z.getvalue(), "audit": detail}
         # kept on disk for an hour (owner-only files), so a service restart between the search and the download loses nothing
         try:
             os.makedirs(exports["dir"], mode=0o700, exist_ok=True)
@@ -1207,7 +1212,7 @@ def install(app, ctx):
         except OSError as exc:
             if ctx.get("logger"):
                 ctx["logger"].warning("combination export not kept on disk: %s", exc)
-        return {"name": f"{base}.zip", "bytes": z.getvalue()}
+        return {"name": f"{base}.zip", "bytes": z.getvalue(), "audit": detail}
 
     # where finished downloads are kept for an hour; a setting, so the checks keep theirs in a temporary folder and never
     # write to (or delete from) the installation's data/combo_exports (external review, 2026-11-11)
@@ -1400,9 +1405,9 @@ def install(app, ctx):
             if not (j and j.get("inputs")):
                 return jsonify(error="This search has expired (finished searches are kept for an hour): run it again."), 404
             res = package(j, *j["inputs"][:5], m=j["inputs"][5], network=network)
-            name, data = res["name"], res["bytes"]
+            name, data, detail, target = res["name"], res["bytes"], res.get("audit", ""), j.get("code", "")
         elif j and j["result"]:
-            name, data = j["result"]["name"], j["result"]["bytes"]
+            name, data, detail, target = j["result"]["name"], j["result"]["bytes"], j["result"].get("audit", ""), j.get("code", "")
         else:
             meta, data = from_disk(jid)
             if not meta or meta.get("user") != user():
@@ -1418,7 +1423,9 @@ def install(app, ctx):
                                      "user": user()})
                 if not allowed:
                     return jsonify(error=why, needs_review=True), 409
-            name = meta["name"]
+            name, detail, target = meta["name"], "kept on disk before a restart", meta.get("code", "")
+        # every download is its own audit entry (the same file twice included), whichever way it was served
+        ctx["audit"].add("combo_export", user=user(), target=target, detail=f"{detail} · {name}" if detail else name)
         return Response(data, mimetype="application/zip",
                         headers={"Content-Disposition": f'attachment; filename="{name}"', "Content-Length": str(len(data)),
                                  "Cache-Control": "no-store"})

@@ -1528,10 +1528,16 @@
     const iss = r.iss, kind = r.row_kind;
     {   // always fetched from the server, whole: every download is in the audit log as an export, a short list too
         // (review 2026-11-13: a list that fitted on screen was saved from the rows shown, with no request)
+      // the platform's shared fetch for files (LGLoader.fetchForFile: once more on its own, plain words; r89)
       const label = btn ? btn.textContent : ""; if (btn) { btn.disabled = true; btn.textContent = "Preparing…"; }
-      try { const p = new URLSearchParams(pairs); p.set("at", atParam()); p.set("metric", r.metric); p.set("all", "1"); p.set("download", "1"); r = await getJSON(`/api/svc/drill?${p}`); }
-      catch (err) { toast(`Not saved: ${err.message}`); return; }
-      finally { if (btn) { btn.disabled = false; btn.textContent = label; } }
+      let res;
+      try {
+        const p = new URLSearchParams(pairs); p.set("at", atParam()); p.set("metric", r.metric); p.set("all", "1"); p.set("download", "1");
+        if (state.demo) p.set("demo", "1");
+        res = await window.LGLoader.fetchForFile(`/api/svc/drill?${p}`);
+      } finally { if (btn) { btn.disabled = false; btn.textContent = label; } }
+      if (!res.ok) { toast(res.message); return; }
+      r = res.data;
     }
     // quoted, and spreadsheet-safe: a cell starting with = + - @ (not a plain number) would run as a formula
     const q = (s) => { s = String(s); if (/^[=+\-@\t\r\n＝＋－＠]/.test(s) && !/^([+-]?\d+([.,]\d+)*%?|-+)$/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; };
@@ -1542,9 +1548,8 @@
       lines.push(cells.join(","));
     }
     const blob = new Blob([lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
-    const a = document.createElement("a"), name = selTitle(pairs).replace(/[^\w.-]+/g, "-").slice(0, 40);
-    a.href = URL.createObjectURL(blob); a.download = `looking-glass-services_${d.day}_${name}_${r.metric}.csv`;
-    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    const name = selTitle(pairs).replace(/[^\w.-]+/g, "-").slice(0, 40);
+    window.LGLoader.saveBlob(blob, `looking-glass-services_${d.day}_${name}_${r.metric}.csv`);
   }
   // ---------------- issues explained: CVEs (NVD, CISA KEV, EPSS) and the others (definitions written by researchers)
   const LOOKUPS = !!(window.SVC_CONFIG || {}).lookups;

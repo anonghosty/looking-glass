@@ -1076,9 +1076,35 @@ address. Every report says **VALID** (every accuracy check passed) or **NOT VALI
 |---|---|---|
 | Management | Executive portal, **Quarterly reports** at the bottom | the management report (PDF): the quarter at a glance, reports and networks, regions, sectors, infections and CISA KEV, over time with the cases and management's decisions (each with its reason and date, no person's name), advisories in summary, the retention dates and the accuracy checks; and its summary (CSV) |
 | Advisors | advisory portal, **Quarterly reports** below the portal | the advisor report (PDF): an overview, advisories per month and their impacts, each organisation with its open cases and how many of the devices named in its advisories were still seen afterwards, the cases that matter for advising, the top issues and CVEs per network; and three CSVs (networks and reports, organisations and follow-up, every issue and CVE per network with each CVE's full description) |
-| Administrators | Settings → **Quarterly** | everything above, the purge CSV (rows per report and month, and what the purge deletes), each report's accuracy checks, the purge's status, and **Make it again** |
+| Administrators | Settings → **Quarterly** | only the purge CSV (rows per report and month, and what the purge deletes), each report's accuracy checks, the purge's status and switch, and **Make it again**; not the management or advisor reports |
 
-Researchers, analysts and external accounts do not get the quarterly reports. Every list keeps the past quarters too.
+Each role downloads only its own files. An administrator who opens the Executive portal or the advisory portal sees
+the card, where each quarter stands, with a note instead of the downloads: "Quarterly reports are for management only"
+(or "for advisors only"). Researchers, analysts, auditors and external accounts do not get the quarterly reports.
+Every list keeps the past quarters too.
+
+**What the cards say is true now.** Each card says whether the quarterly purge is on now, and for each quarter what
+its purge is as things stand: for example "No purge for this quarter: its purge day (Thursday 22 October 2026) had
+passed when it was made", or "Download before the end of …: the report rows dated before … are deleted on …". The card
+always says where the quarter stands, even before any report exists: "2026Q4 is in progress: it ends Thursday 31
+December 2026; its reports are made on Sunday 3 January 2027", and once it has ended "2026Q4 has ended: its reports
+are made on Sunday 3 January 2027". A quarter with no report rows says so: "No report rows were loaded for 2026Q3
+(Looking Glass holds report rows from 21 September 2026 on)." The PDFs keep what was true **when the report was
+made** (they are a record of that moment) and say so; the purge CSV keeps it too, unchanged. An empty quarter's PDFs
+say it on every page, and its CSVs on their first lines.
+
+**Counted for your constituency.** The reports count only the hosts in the constituency set in Settings →
+Constituency, like the rest of Looking Glass, and each says so: "Counted for: the whole country", or "Counted for: 3
+networks and 1 address range (the constituency set in Settings)", on its PDFs, its CSVs and its card. A comparison
+with a previous quarter counted for another constituency says "counted for a different constituency"; if you change
+the constituency, **Make it again** counts a quarter for the new one. The purge figures in Settings → Quarterly are
+for all networks in the database, not only the constituency, because the purge clears old stored rows.
+
+**Downloading.** Click the file's button: it shows that it is downloading, and the file arrives through the page.
+If Looking Glass could not be reached (for example while it restarts), it tries once more on its own; if that fails
+too, the card says "The download did not finish: Looking Glass could not be reached (it may be restarting). Try
+again." If the card itself cannot reach Looking Glass, it says so in plain words, tries again a few times, then offers
+**Retry**.
 
 **Download your copy in time.** The quarterly purge is off until an administrator turns it on in Settings →
 Quarterly; while it is off, no report rows are deleted and the bell and the reports say so. Once it is on, the bell
@@ -1122,12 +1148,13 @@ platform full screen. The display adapts to TVs and weaker devices by itself (`?
   the replay and current clocks, the record stream, event details, chart hours, messages and the Executive report (for
   example "12:15:41 UTC (15:15:41 Nairobi time)"). Daylight saving (Egypt, Morocco) is taken into account. For a zone
   that is UTC, as in Ghana, only UTC is shown. Changing it reloads nothing.
-- **Constituency:** the whole country, or the networks your CSIRT is responsible for: choose companies (all their
-  AS numbers) and add address ranges. Both platforms then show only your constituency. To add ranges, type them in
-  **Extra address ranges**, or open **Pick address blocks from the reports**: every address block (/24) in yesterday's
-  reports on both platforms, with its records and the network most of them belong to. Search by block, network or AS
-  number, and tick a block to add it (untick to take it off); blocks whose network is already chosen are marked as in
-  already. Nothing is looked up outside Looking Glass. **Apply settings** saves the choice.
+- **Constituency:** **Whole country** (everything in the reports), or **Only selected networks and address ranges**.
+  Every part of Looking Glass then follows it: both platforms, the Executive portal, findings and advisories,
+  combinations, the research pages, every export and the quarterly reports (each says "Counted for: …"). Only the
+  quarterly purge works on the whole database, since it clears old stored rows. The card shows a live summary of the
+  choice, for example "3 networks, 12 address blocks, 1 other range". The networks and blocks themselves are chosen in
+  one place, the **Constituent** column of **Network names & types** further down the page (see below).
+  **Apply settings** saves the choice.
 
 - **Organisation:** your CSIRT's name and logo (PNG or JPEG). **Choose a logo** opens a sizing step: the picture in
   the advisory's logo frame (2:1, its border highlighted), **Trim empty margins**, a size slider, dragging (or the arrow
@@ -1139,8 +1166,28 @@ platform full screen. The display adapts to TVs and weaker devices by itself (`?
 
 **Apply settings** saves and applies at once for everyone.
 
-Settings also lists the **network names and types** read-only, for reference; they are corrected on the Definitions
-page (**Edit on the Definitions page**). The researchers' work (definitions, Intel gathered, notes) is on that page too.
+Settings also lists the **network names and types**. The names and types are read-only here; they are corrected on
+the Definitions page (**Edit on the Definitions page**). The researchers' work (definitions, Intel gathered, notes) is
+on that page too.
+
+**Choosing the constituency.** In Settings, the network list's **Constituent** column has a drop-down on every network:
+
+- **Not in**: the network is not part of your constituency.
+- **The whole network**: every address of that network (its AS number) is in.
+- **Some address blocks**: the network's row opens in place, under it, with the network's address blocks (/24) that
+  had records yesterday, busiest first, each with its record count and a tick box. The first 50 are shown; **Show all
+  N blocks** shows the rest, and the search box finds a block (for example 192.0.2). Tick the blocks that are yours.
+  **Close** (or the row's button) folds the row again; folded, it says how many are chosen, for example "3 of 120
+  blocks chosen". The list grows the table while it is open. The first time a network's blocks are asked for, the
+  loading animation shows until they arrive.
+
+**Other address ranges**, under the table, is for ranges or single addresses that belong to no listed network (for
+example a government network without its own AS number), one per line, such as 198.51.100.0/22. Choosing a network or
+typing a range switches the Constituency card to **Only selected networks and address ranges**. Nothing is looked up
+outside Looking Glass. **Apply settings** saves it all: the whole networks as AS numbers, the ticked blocks and the
+other ranges as address ranges. When the page opens again, a saved range that is one of a network's blocks shows as
+that network's chosen block; any other range is under Other address ranges. Accounts without the Settings permission
+see the choices in words, without the controls.
 
 The list holds every network that appears in the reports, from the first day: one that has not been looked up yet is
 **Not reviewed**, without a name ("not identified yet"); you can type its name and type yourself, or press **Look up
@@ -1148,7 +1195,7 @@ all** at the top of the list (Settings and the Definitions page, for administrat
 network without a name, ten at a time with a running count, and saves what it finds as not reviewed, for you to check
 and Save. A reviewed network is never changed by a look-up.
 
-**Identify networks** (above the network list) looks up the company name and type of every network in the data that
+**Identify networks** (at the top of the network list in Settings) looks up the company name and type of every network in the data that
 is not identified yet, from PeeringDB and RIPEstat (free public sources; only AS numbers are sent). A window shows the
 progress: how many are looked up, identified, already known (skipped) or failed. Names you corrected by hand are never
 changed, and failed look-ups are tried again next time. The names then appear everywhere at once.
@@ -1255,10 +1302,15 @@ before the first VALID report it says there is no count yet, and gives the next 
   quarterly purge is off: turn it on in Settings → Quarterly, or leave it off to keep every report row."
 - Turned on after a quarter's purge day, nothing is deleted for that quarter; the next quarter's purge covers its rows.
 
-Below it: every kept quarter with all its files, **VALID** or **NOT VALID**, its accuracy checks (open them to see each one), the
-dates (download before, purge day, cutoff), whether the purge permit was written, and the purge's result once the
-pipeline has run it. **Make it again** counts an ended quarter again (for example once its last day's reports are
-loaded, or after a NOT VALID run); click it twice to confirm. The timing of the purge cannot be changed here or
+Below it: where the quarter stands now, with the purge day and the cutoff ("2026Q4 is in progress: it ends Thursday 31
+December 2026; its reports are made on Sunday 3 January 2027; with the quarterly purge on, the report rows dated before
+Tuesday 22 December 2026 are deleted on Friday 22 January 2027"), then every kept quarter with its purge CSV (the
+management and advisor reports are only for those roles, on their portals), **VALID** or **NOT VALID**, its accuracy
+checks (open them to see each one), its purge as it stands now, whether the purge permit was written, and the purge's
+result once the pipeline has run it. **Make it again** counts an ended quarter again (for example once its last day's
+reports are loaded, or after a NOT VALID run); click it twice to confirm. It offers only ended quarters of the last
+four that have report rows (from the oldest report day in the database on) and were not purged; with none it says
+"No ended quarter has report rows yet: the first report is made on <day>." The timing of the purge cannot be changed here or
 anywhere: [OPERATIONS.md](OPERATIONS.md#the-quarterly-report-and-the-purge) explains the cycle and what to do when a
 report is NOT VALID.
 
@@ -1337,7 +1389,7 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
   and the records on the services page, one host's activity, the hosts behind a figure, a record's details, an
   analysis. Each says who, when, from where and what was looked at (every filter of the view),
   hosts by their reference, never their address; the same person viewing the same thing again within 10 minutes is
-  not logged twice, but every download is, the same list twice included. `DATA_ACCESS_LOG=0` in `.env` turns view logging off (the Audit portal then says so). Each has its count, a search, *Alerts only*, and **Export CSV**.
+  not logged twice, but every download is, the same list twice included. `DATA_ACCESS_LOG=0` in `.env` turns view logging off (the Audit portal then says so); downloads are always logged. Each has its count, a search, *Alerts only*, and **Export CSV**.
   The installation check's events are kept apart in System and self-test.
 - **Copies:** every copy made with a copy button, recorded before it was copied: who, what (for example "the addresses
   of a combination (12)"), how many lines and addresses, which page, when, and its seal's reference (S-…); never the

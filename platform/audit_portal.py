@@ -44,7 +44,7 @@ for _tab, _events in {
     "sessions": ("kicked", "session_misuse", "user_kick"),
     "config": ("settings_changed", "networks_identify", "network_edited", "network_type_added", "definition_saved",
                "peace_of_mind", "organisation_set", "cache_cleared", "cache_time_changed"),
-    "data": ("report_pdf", "combo_export", "advisory_download", "advisory_export", "advisory_report", "audit_export",
+    "data": ("report_pdf", "combo_export", "combo_search", "advisory_download", "advisory_export", "advisory_report", "audit_export",
              "data_exported", "data_viewed"),
     "workflow": ("finding_created", "finding_status", "finding_decision", "finding_reply", "finding_review_decision",
                  "combo_review_sent", "advisory_saved", "advisory_drafted", "advisory_sent", "note_added", "note_removed",
@@ -68,7 +68,7 @@ LABEL = {"login": "Signed in", "login_failed": "Failed sign-in", "login_locked":
          "note_added": "Note added", "note_removed": "Note removed", "report_pdf": "Report downloaded",
          "finding_created": "Finding opened", "finding_status": "Finding moved", "finding_decision": "Finding decided",
          "finding_reply": "Finding replied to", "finding_review_decision": "Review decided", "combo_review_sent": "Sent to management",
-         "combo_export": "Combination report", "advisory_saved": "Advisory saved", "advisory_report": "Advisory report generated",
+         "combo_export": "Combination report downloaded", "combo_search": "Combination search run", "advisory_saved": "Advisory saved", "advisory_report": "Advisory report generated",
          "advisory_drafted": "Advisory drafted", "advisory_sent": "Advisory sent", "advisory_export": "Advisory exported",
          "advisory_download": "Advisory report downloaded", "organisation_set": "Organisation set", "peace_of_mind": "Peace of mind",
          "analyst_code": "Analyst code made", "combo_code": "Combination code made",
@@ -76,6 +76,8 @@ LABEL = {"login": "Signed in", "login_failed": "Failed sign-in", "login_locked":
          "audit_verified": "Audit log integrity checked"}
 LABEL["data_viewed"] = "Host-level data viewed"          # data_access.py (CIS 3.14)
 LABEL["data_exported"] = "Host list downloaded"
+# the Abused or Compromised portal's CSV (intelligence.py): a download, so in "Data access and exports" (r89)
+LABEL["intelligence_export"], TAB_OF["intelligence_export"] = "Abused or Compromised records downloaded", "data"
 # copies recorded before they happen, and the leak traces (insider.py, 2026-11-19): who, what, how many, never the text
 LABEL["copied"], TAB_OF["copied"] = "Copied", "copies"
 LABEL["leak_traced"], TAB_OF["leak_traced"] = "Leak traced", "copies"

@@ -58,7 +58,7 @@ jobs:
           MAPBOX_TOKEN: dummy-map-key-for-checks
         run: |
           set -e
-          for t in test_new_collections test_new_service_collections check_quarterly; do
+          for t in test_new_collections test_new_service_collections check_quarterly check_quarterly_purge_e2e; do
             echo "::group::$t"
             # here the database is there: a skip (exit 77) is a failure
             if ! python tests/$t.py; then echo "$t did not pass"; exit 1; fi
@@ -188,7 +188,7 @@ jobs:
                    check_findings_ui check_notifications check_overview check_greetings check_peace check_networks_list check_wrong_types check_kb_report_names check_slow_log check_lockouts check_system_alerts check_response_cache check_task_monitor check_acode_chain check_intelligence check_code_collisions check_finding_watch check_acode_issue check_db_connect check_install_db check_install_cert check_installer_anim check_offline_names check_attack_map check_advisory_attack check_confirm_all check_cve_attack \
                    check_beacon_decode check_beacon_findings check_beacon_unknown check_spike_notice check_glossary_sync check_ai_framework check_masked_ids \
                    check_index_refresh check_beacon_keep check_day_skip check_config_page check_findings_live check_pdf_rows check_pdf_refs pdf_pages_check check_per_key_cache check_recent_days \
-                   check_select_enhancer check_invite_limit check_quarterly_access check_feature_coverage check_installer_supply; do
+                   check_select_enhancer check_invite_limit check_quarterly_access check_feature_coverage check_installer_supply check_downloads check_screenshots; do
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
           done
           # the module part only: the filter and who sees it need the platform (run_all_checks.sh on the server)

@@ -54,7 +54,7 @@
       ["#cTop", "Top names", "Devices per infection or vulnerability. Click a name, or Explain all, for what it is in plain words."],
       ["#cReports", "Reports", "Every report in the selection, ranked by devices. Click one to focus on it."],
       ["#cCross", "Across reports", "Devices seen in several reports, and the report pairs they share most."],
-      ["#lgQuarterly", "Quarterly reports", "Each ended quarter's management report (PDF) and summary (CSV), made on the next quarter's 3rd day. When the quarterly purge is on, download it before the date shown: the raw report rows are deleted after it."],
+      ["#lgQuarterly", "Quarterly reports", "Each ended quarter's management report (PDF) and summary (CSV), made on the next quarter's 3rd day, for the management role only. The card says where the quarter stands and whether the quarterly purge is on now; when it is, download before the date shown: the raw report rows are deleted after it."],
     ],
     "/findings": [
       [".fd-hero", "Where every finding stands", "A finding's path: a note or an analysis, management's decision, the advisory sent, closed."],
@@ -69,7 +69,7 @@
       ["#apMain .ap-kpis + .av-card", "Waiting for an advisory", "Findings management decided and sent to you. Open one to write its advisory."],
       ["#apMain .ap-grid", "Charts", "Advisories per recipient, sent per month, the impacts and the reports they named."],
       ["#apMain .ap-grid + .av-card", "Advisories", "Every advisory with its reference, TLP, organisation, state and recipients."],
-      ["#lgQuarterly", "Quarterly reports", "Each ended quarter's advisor report (PDF) and CSVs: networks, organisations with the follow-up of their advisories, and issues per network. When the quarterly purge is on, download them before the date shown."],
+      ["#lgQuarterly", "Quarterly reports", "Each ended quarter's advisor report (PDF) and CSVs: networks, organisations with the follow-up of their advisories, and issues per network, for advisors only. The card says where the quarter stands and whether the quarterly purge is on now; when it is, download them before the date shown."],
     ],
     "/advisory/": [
       ["#avMain .av-hero", "The advisory", "The finding it is for, and the organisation's name and logo from Settings."],
@@ -114,11 +114,13 @@
     ],
     "/settings": [
       [".st-tabs", "Tabs", "General, Workers (the report pipeline), Configuration, the Task monitor and Quarterly."],
-      ["[data-st-tab=\"quarterly\"]", "Quarterly and the purge", "The quarterly purge is off until you turn it on here, at the top: it shows what it would delete and when, and asks for your password; turn it off the same way. Below: every quarter's reports, their accuracy checks and Make it again."],
+      ["[data-st-tab=\"quarterly\"]", "Quarterly and the purge", "The quarterly purge is off until you turn it on here, at the top: it shows what it would delete and when, and asks for your password; turn it off the same way. Below: where the quarter stands, Make it again, and every quarter with its purge figures (CSV) and accuracy checks. The management and advisor reports are downloaded by those roles only, on their portals."],
       ["#cardCountry", "Country", "The country and time zone; region names in the reports are matched to the map here."],
-      ["#cardScope", "Constituency", "The whole country, or chosen networks, address ranges and blocks. Both platforms and every export follow it."],
+      ["#cardScope", "Constituency", "The whole country, or only chosen networks and address ranges, with a live count: networks, address blocks, other ranges. Every part of Looking Glass follows it."],
       ["#cardOrg", "Organisation", "The name and logo every advisory carries."],
       ["#cardPwPolicy", "Password policy", "Password expiry, and making every account change its password."],
+      ["#cardNets", "Choosing the constituency", "In the Constituent column, choose Not in, The whole network, or Some address blocks for each network. Some address blocks opens the row with its blocks, busiest first: tick yours."],
+      ["#cidrs", "Other address ranges", "Ranges or single addresses that belong to no listed network, one per line."],
       ["#save", "Apply settings", "Applies the country and constituency."],
     ],
     "/review/": [

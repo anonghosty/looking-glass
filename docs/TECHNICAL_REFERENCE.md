@@ -338,7 +338,9 @@ server side is in small modules called from `app.py`:
   `POST /api/combo-codes/new` (researchers, admins: only the name's real indicators), `POST /api/combos/search`,
   `GET /api/combos/search/<id>`, `POST /api/combos/search/<id>/stop`, `GET /api/combos/search/<id>/download` (analysts,
   admins: `unmasked` + `export`, never in Demo mode, only the analyst who ran it), page `/combinations`. Audit events
-  `combo_code`, `combo_export`.
+  `combo_code`, `combo_search` (a search, once) and `combo_export` (each download of the ZIP, whichever way it is
+  served). The report of a decided review (`/review/<id>/report`) is one `combo_export` per call; it is made for its
+  caller and not kept in `data/combo_exports/`.
 - **`finding_watch.py`, findings over time.** A finding's reported days (its review's kept search, or its analyst
   code's day), kept with the finding; how many of its devices the latest day shows again for the same combination
   (computed in one background worker, one finding at a time); and the expiry: a finding in a state where nobody is acting on it
@@ -720,7 +722,7 @@ Shared by the map, the services platform and Settings:
   The script uses the ISO 3166-2 list of Ubuntu's `iso-codes` package. For the 54 African countries every ISO first-level subdivision lands on a map region, apart from where ISO's top level is above the map's units: the island groups of Cabo Verde and Equatorial Guinea (their municipalities and provinces match), and the uninhabited Cargados Carajos Shoals of Mauritius. Elsewhere the same step runs, and a name it cannot place is left for the administrator: the Settings page lists yesterday's report region names with a "Match" column, suggests the closest map region ("doesn't match, but this is what we found"), and an administrator confirms it, picks another region, or marks the name as the whole country. Choices are stored per country in `data/region_matches.json`, apply to the map, the Executive report and the "unknown region" checks, need a fresh sign-in, and are audited (region match set / removed). Matching ignores accents, letter case and words such as "Region" or "Governorate". `static/js/regions.js` does it in the browser for the services regions map and the Settings preview.
 
   Both maps label every region where the name fits without overlapping (regions with records first, then the largest), and hovering names any region with its ISO code and records. Several report names on one region (a newer province inside the old one) are added up, and the tooltip lists them. Report regions that are on no region of the map are listed under the map. `manage/fetch_world_boundaries.py` runs the alias step after downloading.
-- **Constituency.** Leave it on "Whole country", or choose the networks your CSIRT is responsible for. Networks are grouped by company, covering all their AS numbers, and can be searched and filtered by type. You can also add address ranges, such as a government network without its own AS number. Both platforms then keep only records whose host is in the constituency: on the map platform the source or destination side, on the services platform the host. Every figure, list, map, analysis and export follows. Saving reloads both platforms' data. Open pages refresh by themselves and show **Constituency: N networks** in their top bars; the intro page shows the same.
+- **Constituency.** Leave it on "Whole country", or choose the networks your CSIRT is responsible for. The card holds the mode and a live summary ("N networks, M address blocks, K other ranges"); the choice is made in the Constituent column of the network list (Network names & types, `net-editor.js`), one AS number at a time: **Not in**, **The whole network** (saved in the AS number list) or **Some address blocks** (an expansion row lists the network's /24 blocks with records, busiest first, from `GET /api/settings/address-blocks?asn=N` in `address_blocks.py`; a block belongs to the network most of its records are in; ticked blocks are saved as address ranges). **Other address ranges**, under the table, takes ranges that belong to no listed network, such as a government network without its own AS number. On load, `GET /api/settings/address-blocks?summary=1` gives each network's block count and which saved ranges are exactly one of those blocks; those show as that network's chosen blocks, any other saved range under Other address ranges. Saving is unchanged: `POST /api/settings` with `networks` (AS numbers) and `cidrs` (address ranges). Both platforms then keep only records whose host is in the constituency: on the map platform the source or destination side, on the services platform the host. Every figure, list, map, analysis and export follows. Saving reloads both platforms' data. Open pages refresh by themselves and show **Constituency: N networks** in their top bars; the intro page shows the same.
 - **Deployment.** The same settings can be given in `.env` as `COUNTRY`, `CONSTITUENT_ASNS` and `CONSTITUENT_CIDRS`. The page shows the lines for your current choice. Settings saved on the page are stored in `data/settings.json` and take precedence.
 - **Who can change them.** Accounts with the Settings permission (administrators), from a recent sign-in. Accounts without the permission do not see Settings. (The old `SETTINGS_TOKEN` header was removed: settings have one rule.)
 - **The replay schedule is unaffected.** It still waits for the reports themselves, so a narrow constituency with no records on a day is not mistaken for a missing report.
@@ -892,20 +894,59 @@ turning it off removes every waiting permit; each kept quarter's `status.json` i
 never runs while a report is being made (the same `data/quarterly/.lock`). The PDFs' retention page, the advisor PDF's
 "Keep your copy" and the admin CSV's head say whether the purge was on or off when they were made.
 
-**Routes.** Each checks its permission; downloads are attachments, so `insider.py` seals them; CSVs get a second line
-"Downloaded, <full name> (<account>), <time UTC>"; each is in the audit log (`quarterly_download`).
+**Who gets what (one rule, `quarterly.may_see` / `quarterly.may_download`).** Each file has one audience (`FILES`):
+the management PDF and summary CSV the management role; the advisor PDF and three CSVs the advisor role; the purge CSV
+administrators. An audience needs its permission (`management`, `advisory`, `settings`), and for the two portals an
+account whose role is not `admin`: admin accounts hold every permission (`auth.DEFAULT_ROLES["admin"]`) only to
+preview the portals, and the `management` and `advisory` permissions are otherwise exclusive to their roles
+(`auth.EXCLUSIVE_PERMS`). The lists and the download routes use the same rule: an admin's portal list carries no files
+and a `note` ("Quarterly reports are for management only: ..."), and every management or advisor file route answers
+403 to an admin. A file of another audience on a route is refused (403); an unknown kind or quarter is 404.
+
+**Routes.** Downloads are attachments, so `insider.py` seals them; CSVs get a second line "Downloaded, <full name>
+(<account>), <time UTC>"; each is in the audit log (`quarterly_download`). The page fetches each file
+(`LGLoader.download` in `loader.js`, the one download helper of every page: fetch (POST with headers when needed),
+blob, a temporary link (`saveBlob`) named from `Content-Disposition`, `filename*` first; one retry when there was no
+answer; plain-words errors), never a plain link with a `download` attribute. A file the page builds itself (a
+drill-down CSV) is fetched with `LGLoader.fetchForFile` and saved with `LGLoader.saveBlob`. `tests/check_downloads.py`
+keeps every download route audited and every page on the helper.
 
 | Route | Who | What |
 |---|---|---|
-| `GET /api/mgmt/quarterly`, `GET /api/mgmt/quarterly/<Q>/<kind>` | `management` | the management PDF and summary CSV |
-| `GET /api/advisory/quarterly`, `GET /api/advisory/quarterly/<Q>/<kind>` | `advisory` | the advisor PDF and three CSVs |
-| `GET /api/admin/quarterly`, `GET /api/admin/quarterly/<Q>/<kind>` | `settings` | every file, the checks, the purge's status, the quarters that can be made again |
-| `POST /api/admin/quarterly/make` `{quarter}` | `settings`, CSRF | make an ended quarter again (audit `quarterly_made`) |
+| `GET /api/mgmt/quarterly`, `GET /api/mgmt/quarterly/<Q>/<kind>` | list: `management`; files: the management role (not an admin) | the management PDF and summary CSV |
+| `GET /api/advisory/quarterly`, `GET /api/advisory/quarterly/<Q>/<kind>` | list: `advisory`; files: the advisor role (not an admin) | the advisor PDF and three CSVs |
+| `GET /api/admin/quarterly`, `GET /api/admin/quarterly/<Q>/<kind>` | `settings` | the purge CSV only, the checks, the purge's status, the quarters that can be made again |
+| `POST /api/admin/quarterly/make` `{quarter}` | `settings`, CSRF | make an ended quarter again (audit `quarterly_made`); only a quarter `can_make` offers (409 otherwise) |
 | `POST /api/admin/quarterly/purge` `{enabled, password, shown}` | `settings`, CSRF, a session under 12 hours, the administrator's own password (`password_policy.check_own_password`, the same re-check as Settings → Workers and Password policy: a wrong one counts as a failed sign-in, audit `quarterly_purge_password_failed`) | turn the quarterly purge on or off (audit `quarterly_purge_on` / `quarterly_purge_off`: who, the rows it would delete then, the permits written or removed). Turning it on refuses (409) when `shown` is no longer what the purge would delete; the same state twice is refused (409) |
 
 `GET /api/admin/quarterly` also returns `purge`: `{enabled, since, by, by_name, preview}`; `preview` is the newest VALID
 report's quarter, dry count (`rows_purge_deletes`), purge day, cutoff, whether that day has passed and whether its
 permit is waiting, and `next`, the rule's next purge day.
+
+**The constituency (r89).** The reports count only the hosts in the constituency, with the platforms' own settings
+object and rule (`settings.Settings.in_scope`, passed as `ctx["settings"]`; a communication is kept when its source or
+destination host is in it, as the map's day loader does). `quarterly.keep_host` applies it to each stage-1 group (for a
+communication the group key then also carries the other side's AS number and address); the rows outside it are counted
+apart (`rep_out`), so guard 3 checks `count_documents` = counted + outside, and guards 1, 2 and 4 hold on the counted
+figures. `quarterly.constituency` gives `{label, key}`: "the whole country" or "N networks and M address ranges (the
+constituency set in Settings)", in `status.json` (`constituency`, `constituency_key`, `rows_outside_constituency`),
+`summary.json`, every CSV's head ("Counted for") and the PDFs' Read me. A kept previous summary counted for another
+key is flagged in "better or worse" ("counted for a different constituency"); reports made before r89 count as the
+whole country. The purge is not scoped: `purge_all`, the admin CSV's stored rows and the PDFs' purge rows are the whole
+database and say "all networks in the database, not only the constituency".
+
+**What the cards say (true now).** Every list returns `now` (`quarterly.stands`: an ended quarter whose reports are not
+made yet, then the quarter in progress, with the dates the role needs: management and advisors the day to download by
+while the purge is on, administrators the purge day and the cutoff), `purge_state` (the switch today) and, per quarter,
+`purge_text` (`quarterly.purge_fact`: purged, NOT VALID, made after its purge day, purge day passed, off, the permit's
+dates), `rows` (`status.json`, or the kept `summary.json` for reports made before r89) and `empty_text`
+(`quarterly.empty_text`, when the quarter has no report rows). The admin list also returns `can_make`
+(`quarterly.can_make`: ended, the last four, from the oldest report day on, not purged), `can_make_note` and
+`oldest_day`. The oldest report day (`quarterly.oldest_day`: one indexed `find_one` per report collection, sorted by
+`filename`, never a scan) is cached in `data/quarterly/state.json` (`oldest_day`, `oldest_checked_ts`); the background
+check refreshes it every `OLDEST_EVERY` (6 hours), and making a report or taking a purge's result refreshes it too. The
+PDFs keep what was true when they were made ("when this report was made"); the CSVs are unchanged. A quarter with no
+report rows: the sentence on every PDF page (`QDoc.new_page`) and as the CSVs' third line ("No report rows", ...).
 
 **The bell** (`system_alerts.Alerts._quarterly` → `quarterly.bell`): an alert may name the permissions that see it
 (`perms`) and where it leads for each (`links`); without them it is for administrators, as before. Ready: management,
@@ -992,7 +1033,7 @@ Security scripts:
   characters before the address finder reads it (a half address at the cut is dropped), and every address is replaced
   by its host reference (`HostRefs`); a view is one entry per person and selection per 10 minutes, a download is
   an entry every time (the same list twice included); not for the installation check;
-  `DATA_ACCESS_LOG=0` turns it off.
+  `DATA_ACCESS_LOG=0` turns the views off; `data_exported` (downloads) is always written.
 - The address finder (`ip_find.py`) reads IPv6 candidates of at most 45 characters and 7 colons, split where three or
   more colons stand together, so its work grows with the text's length (thousands of colons: milliseconds). An
   IPv4-mapped address (`::ffff:41.66.1.2`) is that IPv4 host, masked whole, with the same label.

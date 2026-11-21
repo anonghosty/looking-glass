@@ -244,7 +244,7 @@
     for (const n of s.networks_all || []) ns.append(new Option(`${n.label}${n.asn ? ` (AS${n.asn})` : ""} · ${fmt(n.devices)} device${n.devices === 1 ? "" : "s"}`, n.label));
     ns.value = [...ns.options].some((o) => o.value === keep) ? keep : "";
     const setHref = () => {
-      $("cbDownload").href = `/api/combos/search/${job}/download${ns.value ? `?network=${encodeURIComponent(ns.value)}` : ""}`;
+      $("cbDownload").dataset.href = `/api/combos/search/${job}/download${ns.value ? `?network=${encodeURIComponent(ns.value)}` : ""}`;
       $("cbDownload").textContent = ns.value ? `Download the report for ${ns.value} (PDF + CSV)` : "Download PDF + CSV (ZIP)";
     };
     ns.onchange = setHref; setHref();
@@ -410,34 +410,29 @@
     }
   }
 
-  // the download goes through the page: the file keeps its name, and an expired search says so instead of a broken file
-  $("cbDownload").addEventListener("click", async (e) => {
-    e.preventDefault();
+  // the download goes through the platform's one helper (LGLoader.download): the file keeps its name, an expired search
+  // is run again, and a search waiting for management's decision says so instead of a broken file
+  $("cbDownload").addEventListener("click", async () => {
     const a = $("cbDownload");
-    if (a.dataset.busy) return;                   // a double click: one download (and at most one re-run)
+    if (a.dataset.busy || !a.dataset.href) return;      // a double click: one download (and at most one re-run)
     a.dataset.busy = "1";
-    const label = a.textContent; a.textContent = "Preparing the download…";
     try {
-      let r = await fetch(a.href, { cache: "no-store" });
-      if (r.status === 404 && entry) {
+      const res = await window.LGLoader.download(a.dataset.href, { button: a, busy: "Preparing the download…", name: "looking-glass_combination.zip" });
+      if (res.ok || !res.message) return;
+      if (res.status === 404 && entry) {
         // the search has expired (kept an hour): run it again with the same settings, then download
         a.textContent = "Running the search again…";
         autoDownload = true; start(); return;
       }
-      if (r.status === 409) {                // across-report data: management decides first (combo_review.py)
-        const d = await r.json().catch(() => ({}));
+      if (res.status === 409) {               // across-report data: management decides first (combo_review.py)
+        const d = res.data || {};
         const box = document.querySelector(".ce-review");
         if (box) { box.scrollIntoView({ behavior: "smooth", block: "start" }); box.classList.add("pulse"); setTimeout(() => box.classList.remove("pulse"), 1600); }
         const st = box?.querySelector(".ce-state"); if (st && d.error) { st.className = "ce-state todo"; st.textContent = d.error; } else alert(d.error || "Management decides first.");
         return;
       }
-      if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || `Download failed (HTTP ${r.status})`); return; }
-      const name = (r.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/)?.[1] || "looking-glass_combination.zip";
-      const url = URL.createObjectURL(await r.blob());
-      const tmp = el("a"); tmp.href = url; tmp.download = name; document.body.append(tmp); tmp.click(); tmp.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
-    } catch { alert("Download failed: the connection was interrupted. Try again."); }
-    finally { delete a.dataset.busy; if (!autoDownload) a.textContent = label; }
+      alert(res.message);
+    } finally { delete a.dataset.busy; }
   });
   // ---------------- the analysts' codes: a searchable drop-down list to revisit one and report on it again
   let acodes = [];

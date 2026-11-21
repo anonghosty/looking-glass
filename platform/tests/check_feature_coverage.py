@@ -28,6 +28,13 @@ FEATURES = {
         "docs": [("docs/USER_GUIDE.md", "## Quarterly reports"), ("docs/OPERATIONS.md", "The quarterly report and the purge"),
                  ("docs/TECHNICAL_REFERENCE.md", "quarterly.py")],
     },
+    # not a module of its own: the Settings constituency picker (Constituent column, address blocks, other ranges)
+    "constituency_picker": {
+        "tour": [("/settings", "#cardScope"), ("/settings", "#cardNets"), ("/settings", "#cidrs")],
+        "glossary": ["svc_constituency", "constituent", "address_block", "other_ranges"],
+        "docs": [("docs/USER_GUIDE.md", "Some address blocks"), ("docs/USER_GUIDE.md", "Other address ranges"),
+                 ("docs/CONFIGURATION.md", "Some address blocks"), ("docs/TECHNICAL_REFERENCE.md", "?asn=")],
+    },
     "library_supply": {
         "no_ui": "an alert in the administrators' existing bell and an entry in the audit log; no page or control of its own",
         "docs": [("docs/INSTALLATION.md", "When a library file does not match"),

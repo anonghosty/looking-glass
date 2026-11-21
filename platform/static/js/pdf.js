@@ -1,28 +1,16 @@
-/* Looking Glass · PDF reports: download a report built on the server, showing progress on the button. */
+/* Looking Glass · PDF reports: download a report built on the server, showing progress on the button. The download
+   itself is the platform's one shared helper (LGLoader.download in loader.js, r89): this only words the button. */
 (() => {
   "use strict";
   async function download(btn, url) {
     if (btn.disabled) return;
     const label = btn.textContent;
-    btn.disabled = true; btn.textContent = "Preparing the report…";
-    try {
-      const r = await fetch(url, { credentials: "same-origin", cache: "no-store" });
-      if (!r.ok) {
-        let msg = `${r.status}`;
-        try { msg = (await r.json()).error || msg; } catch { /* not JSON */ }
-        throw new Error(msg);
-      }
-      const blob = await r.blob();
-      const cd = r.headers.get("Content-Disposition") || "";
-      const name = (cd.match(/filename="([^"]+)"/) || [])[1] || "looking-glass-report.zip";
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob); a.download = name;
-      document.body.append(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-      btn.textContent = "Report downloaded ✓";
+    const res = await window.LGLoader.download(url, { button: btn, busy: "Preparing the report…", name: "looking-glass-report.zip" });
+    if (res.ok) {
+      btn.textContent = "Report downloaded ✓"; btn.disabled = true;
       setTimeout(() => { btn.textContent = label; btn.disabled = false; }, 2500);
-    } catch (e) {
-      btn.textContent = `Report failed: ${e.message} (retry)`; btn.disabled = false;
+    } else if (res.message) {
+      btn.textContent = `${res.message} (retry)`;
     }
   }
   window.LGPdf = { download };

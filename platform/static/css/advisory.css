@@ -91,6 +91,10 @@
 .av-preview p { margin: 2px 0; } .av-preview ul, .av-preview ol { margin: 4px 0; padding-left: 22px; }
 .av-fname { font-family: "Geist Mono", ui-monospace, monospace; font-size: 11.5px; overflow-wrap: anywhere; }
 .av-files { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; } .av-files a { color: #9cb7ff; overflow-wrap: anywhere; }
+/* a generated report: a button through the one download helper (r89), drawn as the link it was */
+.av-files .av-file-link { background: none; border: 0; padding: 0; font: inherit; color: #9cb7ff; text-decoration: underline; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
+.av-files .av-file-link:focus-visible { outline: 2px solid #9cb7ff; outline-offset: 2px; }
+.av-files .av-file-link[aria-busy="true"] { cursor: progress; opacity: .8; }
 .av-chip.lbl { border-color: var(--border-strong); background: rgba(255, 255, 255, .03); color: var(--text-2); font-weight: 500; }
 
 /* the TLP level of an advisory (TLP 2.0): the five levels, each with what it allows */

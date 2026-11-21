@@ -181,8 +181,12 @@ items = {
     "5": {"id": "5", "title": "Nobody answered", "status": "closed", "expired": True, "at": ts("2026-11-10 09:00:00"), "user": "a.researcher",
           "history": [H("management", "2026-11-10 09:00:00"), H("closed", "2026-12-20 09:00:00", kind="expired", user="looking-glass",
                                                                  comment="Time to act expired")]},
+    # opened after the quarter ended and still open: not one of the quarter's open cases (a quarter made again later
+    # counted it; Q3/Q4 test on lg-test, 2026-11-21)
+    "6": {"id": "6", "title": "Opened next quarter", "network": "Example Net A", "status": "management",
+          "at": ts("2027-01-02 09:00:00"), "user": "a.researcher", "history": [H("management", "2027-01-02 09:00:00")]},
 }
-J("findings.json", {"seq": 5, "items": items})
+J("findings.json", {"seq": 6, "items": items})
 J("advisories/ADV-2026-001.json", {"ref": "ADV-2026-001", "finding": "1", "network": "Example Net A", "status": "sent", "subject": "Exposed web panels",
                                    "sends": [{"at": ts("2026-11-15 10:00:00"), "by": "adv.otieno", "to": ["Example Net A"]}],
                                    "reports": [{"n": 1, "at": ts("2026-11-14 10:00:00"), "name": "x.pdf"}], "updated": ts("2026-11-15 10:00:00")})
@@ -315,6 +319,8 @@ try:
     ok("advisor follow-up: 6 devices named, 5 still seen after the advisory, 1 not seen since",
        [(r["organisation"], r["devices named in them"], r["still seen after the advisory was sent"], r["not seen since"]) for r in org]
        == [("Example Net A", "6", "5", "1")])
+    ok("advisor follow-up: a finding opened after the quarter is not one of its open cases (Example Net A: 0)",
+       [r.get("cases still open") for r in org if r["organisation"] == "Example Net A"] == ["0"], str(org))
     head, iss = table(files["issues"])
     ok("advisor: top issues per network, KEV marked",
        any(r["network"] == "Example Net A" and r["issue or CVE"].startswith("CVE-2099-0001") and r["in CISA KEV"] == "yes" and r["unique addresses"] == "10" for r in iss))
@@ -387,6 +393,99 @@ try:
     if have_pdf:
         ok("...and at the top of both PDFs", all("NOT VALID" in (pypdf.PdfReader(f4[k]).pages[0].extract_text() or "") for k in ("pdf_management", "pdf_advisor")))
     shutil.rmtree(out3, ignore_errors=True)
+
+    print("\nThe constituency (r89): one network plus one /24, the platforms' own Settings object")
+    import ipaddress
+
+    import settings as lg_settings
+    S = lg_settings.Settings(os.path.join(base, "data", "settings_check.json"))
+    clean, _errs = lg_settings.Settings.validate({"country": "KE", "networks": ["64501"], "cidrs": ["198.51.100.0/24"]})
+    S.save(clean)
+    RANGE = ipaddress.ip_network("198.51.100.0/24")
+
+    def mine(asn, ip):                       # by hand, independent of settings.py and quarterly.py
+        try:
+            in_range = ipaddress.ip_address(str(ip)) in RANGE
+        except ValueError:
+            in_range = False
+        return str(asn or "") == "64501" or in_range
+
+    def expected_in(keep):
+        recs, hosts, nets = 0, set(), defaultdict(set)
+        for c, docs in rows.items():
+            for d in docs:
+                if not (LO <= d["filename"][:10] < HI):
+                    continue
+                if c == "event4_sinkhole_http":
+                    k = keep(d.get("src_asn"), d["src_ip"]) or keep(d.get("dst_asn"), d.get("dst_ip"))
+                else:
+                    k = keep(d.get("asn"), d["ip"])
+                if k:
+                    recs += 1
+                    hosts.add(d[HOST[c]])
+                    nets[str(d.get(ASNF[c]) or "")].add(d[HOST[c]])
+        return recs, hosts, nets
+    er, eh, en = expected_in(mine)
+    Rs, PSs, Xs, Ws, As, rws_s, Gs = qq.make(db, "2026Q4", base, TODAY, [], scope=S)
+    out_s = tempfile.mkdtemp(prefix="lgq_scope_")
+    st_s, f_s = qq.publish(out_s, Rs, Xs, Ws, As, rws_s, Gs, "made by the check (constituency)")
+    ok("restricted: the counts include only the constituency's hosts (records, unique addresses, per network)",
+       sum(Rs["rep_total"].values()) == er and len(Rs["all_hosts"]) == len(eh) and 0 < er < sum(E["rec"].values())
+       and {a: len(h) for a, h in Rs["net_hosts"].items()} == {a: len(h) for a, h in en.items()},
+       f"{sum(Rs['rep_total'].values())} vs {er}; {len(Rs['all_hosts'])} vs {len(eh)}")
+    ok("...every guard still passes (the recount: counted + outside = every stored row), VALID",
+       st_s[0] == "VALID" and all(g[1] for g in Gs), "; ".join(f"{g[0]}: {g[2]}" for g in Gs if not g[1]))
+    ok("...the rows outside it are counted apart: in + out = the whole quarter",
+       sum(Rs["rep_total"].values()) + sum(Rs["rep_out"].values()) == sum(E["rec"].values()))
+    ok("...the purge's dry count and the admin CSV's stored rows stay the whole database",
+       Rs["purge_all"] == R["purge_all"] and rws_s["purge"] == rws["purge"])
+    texts_s = {k: open(p, encoding="utf-8").read() for k, p in f_s.items() if not k.startswith("pdf")}
+    ok("...every CSV says what it was counted for",
+       all("Counted for,1 network and 1 address range (the constituency set in Settings)" in t for t in texts_s.values()))
+    ok("...and the admin CSV says its rows and purge figures are all networks in the database",
+       "all networks in the database, not only the constituency" in texts_s["admin"])
+    ok("whole country: every CSV says \"Counted for: the whole country\"",
+       all("Counted for,the whole country" in open(p, encoding="utf-8").read() for k, p in files.items() if not k.startswith("pdf")))
+    if have_pdf:
+        ms = " ".join(" ".join((p.extract_text() or "") for p in pypdf.PdfReader(f_s["pdf_management"]).pages).split())
+        ok("...the PDFs say it too, and that the purge rows are all networks",
+           "Counted for: 1 network and 1 address range" in ms and "not only the constituency" in ms)
+    # the map's rule for communications: kept when the other side's host is in the constituency
+    S2 = lg_settings.Settings(os.path.join(base, "data", "settings_check2.json"))
+    S2.save(lg_settings.Settings.validate({"country": "KE", "networks": [], "cidrs": ["198.51.100.250/32"]})[0])
+    er2, eh2, _en2 = expected_in(lambda a, ip: str(ip) == "198.51.100.250")
+    R2s = qq.collect_db(db, 2026, 4, TODAY, [], scope=S2)
+    ok("a communication whose destination host is in the constituency is kept (source OR destination, as the map)",
+       sum(R2s["rep_total"].values()) == er2 and R2s["rep_total"]["event4_sinkhole_http"] == 40 and len(R2s["all_hosts"]) == len(eh2),
+       f"{sum(R2s['rep_total'].values())} vs {er2}")
+    shutil.rmtree(out_s, ignore_errors=True)
+    # a change of constituency between quarters is flagged
+    st_k = qq.build(db, base, "2026Q4", "made by the check (constituency)", today=date(2027, 1, 3), now=ts("2027-01-03 00:20:00"), scope=S)
+    summ_k = json.load(open(os.path.join(qq.quarter_dir(base, "2026Q4"), "summary.json")))
+    ok("status.json and summary.json record the constituency",
+       st_k["constituency"].startswith("1 network and 1 address range") and st_k["constituency_key"] == qq.constituency(S)["key"]
+       and summ_k["constituency"]["key"] == qq.constituency(S)["key"])
+    _R6, PS6, X6, *_ = qq.make(db, "2027Q1", base, date(2027, 4, 2), [])
+    ok("a quarter compared against one counted for a different constituency says so",
+       PS6.get("other_constituency") is True and PS6["source"].endswith("counted for a different constituency"))
+    _R7, PS7, *_ = qq.make(db, "2027Q1", base, date(2027, 4, 2), [], scope=S)
+    ok("...and not when it is the same constituency", PS7.get("other_constituency") is False
+       and PS7["source"] == "the previous quarter's kept summary")
+    shutil.rmtree(qq.quarter_dir(base, "2026Q4"), ignore_errors=True)
+
+    print("\nAn empty quarter says so (r89)")
+    out_e = tempfile.mkdtemp(prefix="lgq_empty_")
+    Re, PSe, Xe, We, Ae, rws_e, Ge = qq.make(db, "2026Q2", base, TODAY, [])
+    st_e, f_e = qq.publish(out_e, Re, Xe, We, Ae, rws_e, Ge, "made by the check (empty)")
+    want = f"No report rows were loaded for 2026Q2 (Looking Glass holds report rows from {qq.say_day(Re['oldest_day'], False)} on)."
+    ok("the oldest report day comes from the database (the fixture's oldest row, 15 August 2026)",
+       Re["oldest_day"] == date(2026, 8, 15), str(Re.get("oldest_day")))
+    ok("every CSV says it on its first lines", all(want in "\n".join(open(p, encoding="utf-8").read().splitlines()[:5])
+                                                    for k, p in f_e.items() if not k.startswith("pdf")))
+    if have_pdf:
+        pe = [" ".join((p.extract_text() or "").split()) for p in pypdf.PdfReader(f_e["pdf_management"]).pages]
+        ok("...and every page of the PDFs", all(want in t for t in pe), pe[0][:300])
+    shutil.rmtree(out_e, ignore_errors=True)
 
     print("\nWhat is kept in data/quarterly/ (status, summary, the purge permit)")
     now = ts("2027-01-03 00:20:00")

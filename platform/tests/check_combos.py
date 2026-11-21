@@ -256,8 +256,16 @@ try:
     ok("the name's card (map, services, Executive, PDF) carries the note's codes", any(c["code"] == c0["code"] for x in card.get("notes") or [] for c in x.get("codes") or []))
     code, d = call("/api/notes", RESEARCHER, "POST", {"section": "infections", "name": best[1], "text": "x", "codes": ["LG-C-00000000"]}, role="researcher")
     ok("a note with an unknown code is refused", code == 400, d.get("error", ""))
-    ok("every search and every code made is in the audit log", {a[0] for a, _ in audited} >= {"combo_export", "combo_code"},
-       ", ".join(sorted({a[0] for a, _ in audited})))
+    ok("every search, every download and every code made is in the audit log",
+       {a[0] for a, _ in audited} >= {"combo_search", "combo_export", "combo_code"}, ", ".join(sorted({a[0] for a, _ in audited})))
+    # one download = one entry (r89): the per-network report, the one in memory and the copy on disk each log once
+    n_before = sum(1 for a, _ in audited if a[0] == "combo_export")
+    j_ids = [k for k, v in book.jobs.items() if v.get("result") and v.get("inputs")]
+    if j_ids:
+        call(f"/api/combos/search/{j_ids[0]}/download", ANALYST, raw=True)
+        call(f"/api/combos/search/{j_ids[0]}/download", ANALYST, raw=True)
+        n_mid = sum(1 for a, _ in audited if a[0] == "combo_export")
+        ok("the same report downloaded twice: two entries, nothing logged while it was made", n_mid - n_before == 2, f"{n_mid - n_before}")
 finally:
     if real_gate:
         A.COMBOS.review_gate = real_gate

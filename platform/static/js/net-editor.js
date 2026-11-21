@@ -139,9 +139,72 @@
       tb.append(tr);
     }
   }
+  // ---- Settings: the Constituent column picks the constituency (the user's design, 2026-11-21: one picker). Each
+  // network is Not in, The whole network (its AS number is saved) or Some address blocks (its /24 blocks with records
+  // are listed in an expansion row under it; the ticked ones are saved as address ranges). settings.js holds the choice
+  // (window.LGConstituency) and saves it with Apply settings; address-blocks.js lists the blocks (window.LGBlocks).
+  const CHOICES = [["out", "Not in"], ["whole", "The whole network"], ["some", "Some address blocks"]];
+  const openRows = new Set();           // networks whose blocks are shown (kept while the table is drawn again)
+  let selfChange = false;               // our own change: this row is already right, the table is not drawn again
+  const blocksText = (C, asn) => (window.LGBlocks ? window.LGBlocks.chosenText(C.picked(asn).size, C.blockCount(asn))
+    : `${fmt(C.picked(asn).size)} chosen`);
+  function grow() {                     // the table's scroll area grows while a network's blocks are open
+    $("netEdTable").closest(".net-table")?.classList.toggle("nb-grow", !!$("netEdTable").querySelector("tr.nb-row"));
+  }
+  function own(fn) { selfChange = true; try { fn(); } finally { selfChange = false; } lastKey = window.LGConstituency.key(); }
+  function constituentCell(x, tr, C) {
+    const td = el("td", "dz-act nb-cell"), name = x.name || `AS${x.asn}`;
+    if (!C.writable()) {                // read only: the choice in words, no controls
+      return { td, sync() {
+        const s = C.state(x.asn);
+        tr.classList.toggle("dz-constituent", s !== "out");
+        td.replaceChildren(el("span", s === "out" ? "muted" : null,
+          s === "whole" ? "The whole network" : s === "some" ? `Some address blocks: ${blocksText(C, x.asn)}` : "Not in"));
+      } };
+    }
+    const sel = el("select", "nb-pick lg-enhance"); sel.dataset.nbSel = x.asn;
+    sel.setAttribute("aria-label", `AS${x.asn} ${name}: in your constituency`);
+    sel.title = "Your constituency: all of Looking Glass then shows only these networks and blocks (Apply settings, at the bottom)";
+    for (const [v, t] of CHOICES) { const o = el("option", null, t); o.value = v; sel.append(o); }
+    const tog = el("button", "lg-btn sm nb-toggle"); tog.type = "button"; tog.setAttribute("aria-controls", `nbPanel${x.asn}`);
+    td.append(sel, tog);
+    let prow = null;
+    const sync = () => {
+      const s = C.state(x.asn), open = s === "some" && openRows.has(x.asn);
+      sel.value = s;
+      tr.classList.toggle("dz-constituent", s !== "out");
+      tog.hidden = s !== "some";
+      tog.setAttribute("aria-expanded", String(open));
+      tog.replaceChildren(el("span", null, blocksText(C, x.asn)), el("span", "nb-caret", open ? "Hide blocks" : "Show blocks"));
+      if (open && !prow && window.LGBlocks) {
+        const ctl = window.LGBlocks.panel({
+          asn: x.asn, name,
+          picked: () => C.picked(x.asn),
+          toggle: (blk, on) => { own(() => C.toggleBlock(x.asn, blk, on)); tog.firstChild.textContent = blocksText(C, x.asn); },
+          onClose: () => { openRows.delete(x.asn); sync(); tog.focus(); },
+        });
+        prow = el("tr", "nb-row"); const c = el("td"); c.colSpan = 8; c.append(ctl.node); prow.append(c);
+        tr.after(prow);
+      } else if (!open && prow) { prow.remove(); prow = null; }
+      grow();
+    };
+    sel.addEventListener("change", () => {
+      const v = sel.value, wasSome = C.isSome();
+      if (v === "some") openRows.add(x.asn); else openRows.delete(x.asn);
+      own(() => C.setState(x.asn, v));
+      // switching from the whole country to chosen networks shows every remembered choice: the table is drawn again,
+      // and the focus stays on this network's choice
+      if (!wasSome && C.isSome()) { render(); $("netEdTable").querySelector(`select[data-nb-sel="${x.asn}"]`)?.focus(); return; }
+      sync();
+    });
+    // the row's toggle (aria-expanded): shows or hides the blocks; the focus stays on it
+    tog.addEventListener("click", () => { if (openRows.has(x.asn)) openRows.delete(x.asn); else openRows.add(x.asn); sync(); });
+    return { td, sync };
+  }
+
   function render() {
     for (const b of document.querySelectorAll("[data-net]")) b.setAttribute("aria-selected", String(b.dataset.net === view));
-    const tb = $("netEdTable").querySelector("tbody"); tb.replaceChildren();
+    const tb = $("netEdTable").querySelector("tbody"); tb.replaceChildren(); grow();
     $("netTypeFilter").hidden = view === "types";
     if (view === "types") { renderTypes(tb); return; }
     const C = RO ? window.LGConstituency : null;      // Settings: this list also picks the constituency (settings.js)
@@ -173,20 +236,13 @@
       if (RO) {                                     // read-only: the values, no inputs or Save
         const st = el("td"); st.append(x.reviewed ? pill("Reviewed", "ok") : pill("Not reviewed", "warn"));
         if (x.reviewed && (x.by || x.updated)) st.append(el("small", "dz-by", `${x.by || ""}${x.updated ? ` · ${x.updated}` : ""}`));
-        const pick = el("td", "dz-act");
-        if (C) {                                    // tick = part of the constituency (applied for everyone with Apply settings)
-          const cb = el("input"); cb.type = "checkbox"; cb.checked = C.has(x.asn);
-          cb.setAttribute("aria-label", `AS${x.asn} ${x.name} is a constituent`);
-          cb.title = "Part of your constituency: both platforms then show only your constituents' networks (Apply settings, at the bottom)";
-          cb.addEventListener("change", () => C.set(x.asn, cb.checked));
-          tr.classList.toggle("dz-constituent", cb.checked);
-          pick.append(cb);
-        }
+        // the Constituent column: Not in / The whole network / Some address blocks (applied with Apply settings)
+        const cell = C ? constituentCell(x, tr, C) : { td: el("td", "dz-act"), sync: () => {} };
         // a network in the reports not looked up yet (Identify networks): listed for review, without a name
         const nm = x.identified === false && !x.name ? el("td", "dz-w-name muted", "not identified yet") : el("td", "dz-w-name", x.name);
         tr.append(el("td", "mono dz-name", `AS${x.asn}`), nm, el("td", null, TYPES[x.type] || x.type), el("td", "muted", x.note || "—"),
-          el("td", "dz-seen", `${x.holder || "—"}${x.country ? ` (${x.country})` : ""}`), el("td", "num mono", fmt(x.events)), st, pick);
-        tb.append(tr); continue;
+          el("td", "dz-seen", `${x.holder || "—"}${x.country ? ` (${x.country})` : ""}`), el("td", "num mono", fmt(x.events)), st, cell.td);
+        tb.append(tr); cell.sync(); continue;
       }
       const name = el("input", "dz-input"); name.value = x.name; name.maxLength = 80; name.setAttribute("aria-label", `Company name for AS${x.asn}`);
       if (x.identified === false && !x.name) name.placeholder = canLookup ? "not identified yet: Look up all, or type the name" : "not identified yet: type the name";
@@ -262,8 +318,9 @@
   // the page's logo stays until this card has its data (LGLoader.wait, 2026-11-15)
   (window.LGLoader?.wait || ((p) => p))(load())
     .catch((e) => { console.error("Network names could not be loaded:", e); flash($("netStatus"), `Could not load: ${e.message}`, "bad"); });
-  // Settings: redraw the ticks when the constituency changes in the Constituency card (or here), only when it did
+  // Settings: redraw the choices when the constituency changes elsewhere (the Constituency card's mode, Undo changes, the
+  // blocks' counts arriving), only when it did; a change made in this table updates its own row
   if (RO && window.LGConstituency) window.LGConstituency.onChange(() => {
-    if (rows.length && view !== "types" && window.LGConstituency.key() !== lastKey) render();
+    if (!selfChange && rows.length && view !== "types" && window.LGConstituency.key() !== lastKey) render();
   });
 })();

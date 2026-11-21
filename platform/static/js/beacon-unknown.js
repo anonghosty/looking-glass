@@ -95,20 +95,18 @@
       cb.addEventListener("change", () => { go.disabled = !cb.checked; });
       const msg = el("span", "fd-msg"); msg.setAttribute("role", "status");
       go.addEventListener("click", async () => {
-        go.disabled = true;
         try {
-          const r = await fetch(`/api/beacon/unknown/${encodeURIComponent(f.id)}/request`, { credentials: "same-origin" });
-          if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
-          const blob = await r.blob(); const a = el("a"); a.href = URL.createObjectURL(blob); a.download = `looking-glass-decoding-request-${f.id}.json`;
-          document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+          // through the platform's one download helper (LGLoader.download, r89)
+          const res = await window.LGLoader.download(`/api/beacon/unknown/${encodeURIComponent(f.id)}/request`,
+            { button: go, name: `looking-glass-decoding-request-${f.id}.json` });
+          if (!res.ok) { if (res.message) msg.textContent = res.message; return; }
           const link = el("a", "lg-btn sm primary", "Open a private report for the Looking Glass creator");
           link.href = f.issue_url; link.target = "_blank"; link.rel = "noopener noreferrer";
           msg.replaceChildren(document.createTextNode("Downloaded. Title the report \"Decoding request\", paste the file's contents into it, then mark it as sent. "), link);
           const sent = el("button", "lg-btn sm", "Mark as sent"); sent.type = "button";
           sent.addEventListener("click", async () => { try { await state(f.id, "sent"); redraw(); } catch (e) { msg.textContent = e.message; } });
           act.append(sent);
-        } catch (e) { msg.textContent = `Not downloaded: ${e.message}`; }
-        go.disabled = !cb.checked;
+        } finally { go.disabled = !cb.checked; }
       });
       ask.append(lab, go, msg);
       act.append(ask);

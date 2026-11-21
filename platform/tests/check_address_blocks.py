@@ -1,10 +1,11 @@
 #!/bin/sh
 # runs itself with the project's own Python (.venv), from wherever it is called
 ''''exec "$(dirname -- "$0")/../.venv/bin/python" "$0" "$@" # '''
-"""Settings → Constituency: pick address blocks from the reports (address_blocks.py; the user, 2026-11-19), on made-up
-records (documentation addresses), no database: blocks counted before the constituency, the country's side only, the
-network most records belong to, blocks already in the constituency marked, administrators only, and the page's list.
-Usage: tests/check_address_blocks.py"""
+"""Settings: address blocks for the constituency (address_blocks.py), on made-up records (documentation addresses), no
+database: blocks counted before the constituency, the country's side only, the network most records belong to, blocks
+already in the constituency marked, one network's blocks and the saved ranges that are blocks, administrators only, and
+the page's one picker (the Constituent column of Network names & types; the user's design, 2026-11-21).
+Usage: tests/check_address_blocks.py   (LG_HELD_DIR=<folder>: check the held .new page files)"""
 import ipaddress
 import os
 import sys
@@ -76,18 +77,78 @@ ok("whole country (no constituency): nothing marked as already in", api2["covere
 fsrc = open(os.path.join(HERE, "features.py"), encoding="utf-8").read()
 ok("installed from features.py, with the network names (asns) from app.py", "address_blocks.install(app" in fsrc and '"asns": asn_registry' in src)
 
-print("5. The Settings page")
+print("5. One network's blocks, and the saved ranges that are blocks (the Constituent column's Some address blocks)")
+rows_n, total_n = AB.of_network([d1, d2], "64500")
+ok("a network's blocks: those most of whose records are in it, with all their records",
+   [r["block"] for r in rows_n] == ["192.0.2.0/24"] and rows_n[0]["records"] == 3 and total_n == 1)
+ok("…a network that is never the main one of a block has none", AB.of_network([d1, d2], "64502") == ([], 0))
+busy = SimpleNamespace(block_raw={("192.0.2.0/24", "64500"): 5, ("192.0.3.0/24", "64500"): 9, ("192.0.4.0/24", "64500"): 1})
+ok("…busiest first", [r["block"] for r in AB.of_network([busy], "64500")[0]] == ["192.0.3.0/24", "192.0.2.0/24", "192.0.4.0/24"])
+cnt, own = AB.summary([d1, d2], [ipaddress.ip_network("192.0.2.0/24"), ipaddress.ip_network("198.51.100.0/22"),
+                                 ipaddress.ip_network("203.0.113.0/24"), ipaddress.ip_network("192.0.2.7/32")])
+ok("blocks per network", cnt == {"64500": 1, "64501": 1}, cnt)
+ok("a saved range that is exactly a block belongs to that block's network; a wider or narrower range does not (Other address ranges)",
+   own == {"192.0.2.0/24": "64500", "203.0.113.0/24": "64501"}, own)
+perm["v"] = False
+ok("one network's blocks and the summary: administrators only",
+   c.get("/api/settings/address-blocks?asn=64500").status_code == 403 and c.get("/api/settings/address-blocks?summary=1").status_code == 403)
+perm["v"] = True
+j = c.get("/api/settings/address-blocks?asn=64500").get_json()
+ok("API: one network's blocks", j and j["asn"] == "64500" and j["total"] == 1 and j["blocks"] == [{"block": "192.0.2.0/24", "records": 3}], j)
+ok("API: an AS number is digits only", c.get("/api/settings/address-blocks?asn=AS64500").status_code == 400
+   and c.get("/api/settings/address-blocks?asn=1;drop").status_code == 400)
+j = c.get("/api/settings/address-blocks?summary=1").get_json()
+ok("API: the summary (the saved /23 is wider than a block: no network)", j and j["counts"] == {"64500": 1, "64501": 1} and j["owners"] == {}, j)
+
+print("6. The Settings page: one picker in Network names & types (held .new files when LG_HELD_DIR is set)")
 S = os.environ.get("LG_HELD_DIR", "")
 pick = lambda name, live: os.path.join(S, name + ".new") if S and os.path.exists(os.path.join(S, name + ".new")) else live  # noqa: E731
-html = open(pick("settings.html", os.path.join(HERE, "templates", "settings.html")), encoding="utf-8").read()
-jsp = pick("address-blocks.js", os.path.join(HERE, "static", "js", "address-blocks.js"))
-js = open(jsp, encoding="utf-8").read() if os.path.exists(jsp) else ""
-ok("a 'Pick address blocks from the reports' list under the extra address ranges, with a search",
-   'id="blockPick"' in html and 'id="blockSearch"' in html and "js/address-blocks.js" in html)
-ok("ticking adds the block to the extra address ranges and unticking takes it off (saved with Apply settings)",
-   "setLines(cb.checked ? [...cur, r.block] : cur)" in js and 'new Event("input"' in js)
-ok("…each box says what it adds (for screen readers)", 'cb.setAttribute("aria-label", `Add ${r.block}' in js)
-ok("…no outside look-up: only this server's list", js.count("fetch(") == 1 and '"/api/settings/address-blocks"' in js)
+rd = lambda p: open(p, encoding="utf-8").read() if os.path.exists(p) else ""  # noqa: E731
+html = rd(pick("settings.html", os.path.join(HERE, "templates", "settings.html")))
+card = rd(pick("_net_card.html", os.path.join(HERE, "templates", "_net_card.html")))
+js = rd(pick("address-blocks.js", os.path.join(HERE, "static", "js", "address-blocks.js")))
+nj = rd(pick("net-editor.js", os.path.join(HERE, "static", "js", "net-editor.js")))
+sj = rd(pick("settings.js", os.path.join(HERE, "static", "js", "settings.js")))
+scope = html.split('id="cardScope"', 1)[1].split("</section>", 1)[0] if 'id="cardScope"' in html else ""
+ok("the Constituency card keeps the mode choice and a live summary line",
+   'data-mode="all"' in scope and 'data-mode="some"' in scope and 'id="scopeSummary"' in scope)
+ok("…and its wording on where it applies (only the quarterly purge works on the whole database)",
+   "Only the quarterly purge works on the whole database" in scope)
+ok("…without its own network list, search, extra ranges box or pick-blocks list",
+   all(x not in html for x in ('id="netTable"', 'id="netSearch"', 'id="blockPick"', 'id="blockSearch"', "Pick address blocks",
+                                "Extra address ranges", 'id="someBox"')))
+ok("address-blocks.js loads before settings.js (settings.js asks it which saved ranges are blocks)",
+   0 <= html.find("js/address-blocks.js") < html.find("js/settings.js"))
+ok("the Constituent column is a drop-down with the three choices",
+   '["out", "Not in"]' in nj and '["whole", "The whole network"]' in nj and '["some", "Some address blocks"]' in nj
+   and 'el("select", "nb-pick lg-enhance")' in nj and '"Constituent"' in nj)   # lg-enhance: the Looking Glass drop-down
+ok("…Some address blocks opens the row in place (an expansion row under it, across the table)",
+   'el("tr", "nb-row")' in nj and "tr.after(prow)" in nj and "c.colSpan = 8" in nj and "window.LGBlocks.panel(" in nj)
+ok("…the row's toggle says what is chosen and has aria-expanded; the table's scroll area grows while a row is open",
+   'tog.setAttribute("aria-expanded"' in nj and "chosenText(" in nj and '"nb-grow"' in nj
+   and "of ${plural(total, \"block\")} chosen" in js)
+ok("…the focus stays on the network's choice, or goes back to its toggle when the blocks are closed",
+   "?.focus(); return; }" in nj and "sync(); tog.focus();" in nj)
+ok("…read only (no Settings permission): the choice in words, without controls", "if (!C.writable())" in nj
+   and '"The whole network" : s === "some" ? `Some address blocks: ' in nj and "readOnly = !data.writable" in sj)
+ok("the blocks: busiest first with their records, a search, the full list on demand, a labelled tick box each",
+   "Show all ${plural(hits.length, \"block\")}" in js and 'plural(r.records, "record")' in js
+   and 'q.setAttribute("aria-label", `Search the address blocks of' in js and 'lab.append(cb,' in js)
+ok("…the loading animation while a network's list is asked for the first time", 'L?.busy?.("Loading the address blocks")' in js
+   and "L?.ready?.()" in js)
+ok("…no outside look-up: only this server's list", js.count("fetch(") == 1 and 'const API = "/api/settings/address-blocks"' in js
+   and "?asn=" in js and "?summary=1" in js)
+ok("Other address ranges: a box under the table, in the read-only (Settings) card only",
+   "{% if readonly %}" in card.split('id="netEdTable"', 1)[-1] and 'id="cidrs"' in card and "Other address ranges" in card)
+ok("Identify networks moved to the network list", 'id="btnIdentify"' in card and 'id="unknownCount"' in card)
+ok("the live summary: N networks, M address blocks, K other ranges (singular and plural)",
+   '${plural(k.nets, "network")}, ${plural(k.blocks, "address block")}, ${plural(k.other, "other range")}' in sj
+   and "n === 1 ? one : (many || `${one}s`)" in sj)
+ok("saved as before: whole networks as AS numbers, chosen blocks and other ranges as address ranges, with Apply settings",
+   'networks: mode === "some" ? [...chosen].sort() : []' in sj and 'uniqSorted([...blockList(), ...cidrList()])' in sj
+   and 'fetch("/api/settings", { method: "POST"' in sj and "body: JSON.stringify(w)" in sj)
+ok("loading: a saved range that is a network's block shows as that network's chosen block, the rest as other ranges",
+   "const a = blockInfo.owners[c];" in sj and "pickSet(String(a)).add(c)" in sj and '$("cidrs").value = other.join("\\n")' in sj)
 
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {fails}" if fails else ""))
 sys.exit(1 if fails else 0)

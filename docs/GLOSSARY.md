@@ -6,7 +6,7 @@ the platform: the **Glossary** tab on the overview page and the **Glossary** but
 ## Contents
 
 - [The basics](#the-basics) (8 terms)
-- [Who and where](#who-and-where) (10 terms)
+- [Who and where](#who-and-where) (13 terms)
 - [Threats](#threats) (27 terms)
 - [Numbers and measures](#numbers-and-measures) (14 terms)
 - [Using the platform](#using-the-platform) (11 terms)
@@ -63,6 +63,15 @@ The country of the destination. For botnet reports this is where the sinkhole ru
 
 **Network (ASN)**  
 The company that operates the internet connection, such as an ISP, a university or a hosting provider. Each operator has an Autonomous System Number (ASN); Looking Glass shows the company name instead of the number.
+
+**Constituent (column)**  
+In Settings, the column of Network names & types where the constituency is chosen, one network at a time: Not in, The whole network (all its addresses), or Some address blocks (only the blocks you tick). Apply settings saves the choice for everyone.
+
+**Address block**  
+A group of 256 neighbouring IPv4 addresses (a /24, for example 192.0.2.0/24); for IPv6, a /48. In Settings, Some address blocks lists a network's blocks that had records yesterday, busiest first, with their record counts.
+
+**Other address ranges**  
+In Settings, the box under Network names & types for address ranges or single addresses that belong to no listed network, for example a government network without its own AS number. One per line.
 
 **Target port**  
 The network port (service) that was contacted, for example 80 for web, 22 for SSH, 23 for Telnet or 445 for Windows file sharing. It shows which service was being used or attacked.
@@ -138,7 +147,7 @@ Keyed fingerprints made when something is copied or downloaded: of the whole tex
 In the Audit portal (auditors and administrators): text or a file found outside Looking Glass is matched against the seals of every copy and download, to say who copied or downloaded it, when, and how closely it matches. What is traced is not kept, and each trace is in the audit log (never what was searched).
 
 **Quarterly report**  
-Made on the next quarter's 3rd day, once the quarter's last reports have arrived: the quarter's records and unique addresses per month, report, network, region and sector, infections, actively exploited CVEs, findings, cases, decisions and advisories. Counts only, never an address. Management gets the management report, advisors the advisor report, administrators everything. It says VALID when every accuracy check passed, NOT VALID otherwise.
+Made on the next quarter's 3rd day, once the quarter's last reports have arrived: the quarter's records and unique addresses per month, report, network, region and sector, infections, actively exploited CVEs, findings, cases, decisions and advisories. Counts only, never an address. Only the management role downloads the management report, and only advisors the advisor report; administrators get the purge's figures (rows per report and what the purge deletes) and the accuracy checks. A quarter with no report rows says so in plain words. It says VALID when every accuracy check passed, NOT VALID otherwise.
 
 **Quarterly purge**  
 Off on every installation until an administrator turns it on in Settings → Quarterly, after reading what it deletes, with their own password; it can be turned off there the same way. Once it is on: on the working day after the 15th working day (Monday to Friday) after a quarter, the database pipeline deletes the raw report rows older than 31 days. Only when that quarter's report is VALID, once per quarter, and never findings, cases, advisories or the quarterly reports. Download your copy of the quarterly report before it.
@@ -427,7 +436,7 @@ DNS servers that answer anyone's questions. Attackers use them to amplify denial
 A report listing every host that answers a protocol (for example Accessible ISAKMP or Open BGP Service (population)), whether or not it has a known problem. Useful as an inventory of what is exposed.
 
 **Constituency (Settings)**  
-The networks (AS numbers) and address ranges your CSIRT is responsible for, chosen on the Settings page. When set, both platforms show only records whose host is in the constituency; the top bar then shows 'Constituency: N networks'. Without it they show the whole country.
+The networks (AS numbers) and address ranges your CSIRT is responsible for, chosen on the Settings page (the Constituent column of Network names & types, and Other address ranges). When set, every part of Looking Glass shows only records whose host is in the constituency: both platforms, the Executive portal, findings and advisories, combinations, the research pages, every export and the quarterly reports (which say what they were counted for); the top bar then shows 'Constituency: N networks'. Only the quarterly purge works on the whole database, since it clears old stored rows. Without it everything shows the whole country.
 
 **Country (Settings)**  
 The country your CSIRT covers, chosen on the Settings page by continent, then country: any country or territory in the world. The publicly accessible / vulnerable services platform draws its regions map for it (boundaries from geoBoundaries, open data; a country without first-level regions there is drawn as one area).
@@ -545,6 +554,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Actively exploited (CISA KEV)](#accounts-roles-and-permissions) · 
 [Activity by 15 minutes](#numbers-and-measures) · 
 [Activity level](#numbers-and-measures) · 
+[Address block](#who-and-where) · 
 [Admin (role)](#accounts-roles-and-permissions) · 
 [Advisor (role)](#accounts-roles-and-permissions) · 
 [Advisory](#accounts-roles-and-permissions) · 
@@ -577,6 +587,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Combination search](#accounts-roles-and-permissions) · 
 [Confirmation on the server](#security-audit-and-the-pipeline) · 
 [Constituency (Settings)](#publicly-accessible--vulnerable-services) · 
+[Constituent (column)](#who-and-where) · 
 [Control check (LG-01 … LG-15)](#security-audit-and-the-pipeline) · 
 [Copy (recorded)](#threats) · 
 [Country (Settings)](#publicly-accessible--vulnerable-services) · 
@@ -644,6 +655,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [No source knows this name](#accounts-roles-and-permissions) · 
 [Note (researcher)](#accounts-roles-and-permissions) · 
 [Observed / Known for this malware / Possible](#accounts-roles-and-permissions) · 
+[Other address ranges](#who-and-where) · 
 [Password expiry](#security-audit-and-the-pipeline) · 
 [Peak](#numbers-and-measures) · 
 [Permission](#accounts-roles-and-permissions) · 

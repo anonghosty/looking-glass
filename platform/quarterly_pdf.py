@@ -1,14 +1,15 @@
 """The quarterly reports' two PDFs (quarterly.py), in the Executive report's look (executive_pdf.Doc):
 
-  write_management(path, ...)  management and admins: the quarter at a glance, reports and networks, regions, sectors,
+  write_management(path, ...)  the management role: the quarter at a glance, reports and networks, regions, sectors,
                                infections and CISA KEV, over time with the cases and management's decisions (each with
                                its full reason and date, no person's name), advisories in summary, data quality and
                                the retention dates
-  write_advisor(path, ...)     advisors and admins: a short overview, advisories (per month, impacts, per organisation
+  write_advisor(path, ...)     the advisor role: a short overview, advisories (per month, impacts, per organisation
                                with the follow-up), the cases that matter for advising, the top issues and CVEs per
                                network, and the accuracy checks. No management decisions.
 
-Both say VALID or NOT VALID at the top of every page. Every text is drawn whole (rows grow with wrapped text, tables
+Both say VALID or NOT VALID at the top of every page, and a quarter with no report rows says so on every page (r89).
+The retention dates and the purge are as they were when the report was made (a record); the cards say what is true now. Every text is drawn whole (rows grow with wrapped text, tables
 carry on over pages; never "…"). Counts only: no address. Each returns every text it drew, for the address check.
 """
 from datetime import date, datetime, timedelta, timezone
@@ -64,6 +65,8 @@ class QDoc(xp.Doc):
         if not valid:
             y = self.wrap(M, y - 2, f"NOT VALID: {self.meta['status'][1]}. Do not rely on these figures until the report is "
                                     "made again and says VALID.", Wd - 2 * M, 9.5, HexColor("#ff9aa4"), True) - 4
+        if self.meta.get("empty"):                   # every page, so no zero-filled chart stands without it (r89)
+            y = self.wrap(M, y - 2, self.meta["empty"], Wd - 2 * M, 9.5, HexColor("#ffd27a"), True) - 4
         return y
 
     def footer(self):
@@ -142,9 +145,24 @@ def _doc(R, status, made, audience):
     upto = min(R["today"], last)
     meta = {"quarter": R["quarter"], "platform_label": "Quarterly report", "audience": audience, "status": status,
             "made": made or "made by Looking Glass",
-            "generated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-            "selection": f"{lo:%d %b %Y} to {last:%d %b %Y}" + (f" (to date: {upto:%d %b %Y})" if upto < last else "")}
+            "generated": (datetime.fromtimestamp(R["now_ts"], timezone.utc) if R.get("now_ts") else
+                          datetime.now(timezone.utc)).strftime("%Y-%m-%d %H:%M UTC"),
+            "selection": f"{lo:%d %b %Y} to {last:%d %b %Y}" + (f" (to date: {upto:%d %b %Y})" if upto < last else ""),
+            "empty": "" if sum(R["rep_total"].values()) else _empty(R)}
     return QDoc(meta), upto < last
+
+
+def _empty(R):
+    import quarterly                                 # the one sentence (the cards and the CSVs say the same)
+    return quarterly.empty_text(R["quarter"], R.get("oldest_day"))
+
+
+def _no_purge_made_late(R):
+    """The report was made after its purge day: no purge for this quarter (what was true when it was made)."""
+    pd = R["purge"]
+    return R["today"] > pd["purge_day"], (f"No purge for this quarter: its purge day ({long_day(pd['purge_day'])}) had "
+                                          "passed when this report was made. Nothing is deleted for it; the next quarter's "
+                                          "purge covers its rows if the purge is on then")
 
 
 def _month_chart(d, R, X, x, y, w, h):
@@ -171,6 +189,8 @@ def _read_me(R, X, W, running):
              f"decides once per organisation of a case, so there can be more decisions ({fmt(W['reviews'])}) than findings."]
     if R["failed"]:
         notes.insert(0, "Collections that could not be read: " + ", ".join(sorted(R["failed"])) + ".")
+    notes.insert(0, f"Counted for: {(R.get('constituency') or {}).get('label') or 'the whole country'}. Every figure in this "
+                    "report follows the constituency set in Settings → Constituency.")
     return notes
 
 
@@ -287,14 +307,21 @@ def write_management(path, R, X, W, A, status, made):
     sec = "Data quality and retention"
     y = d.new_page(sec)
     pd = R["purge"]
-    if R.get("purge_on"):
+    late, late_text = _no_purge_made_late(R)
+    if late:
+        rows = [["The quarterly purge", late_text],
+                ["Quarter ends", long_day(pd["last_day"])],
+                ["Purge day for this quarter (passed when this report was made)", long_day(pd["purge_day"])],
+                ["Never deleted", "these reports, their statistics, findings, cases and advisories"],
+                ["Collections that could not be read", ", ".join(sorted(R["failed"])) or "none"]]
+    elif R.get("purge_on"):
         rows = [["The quarterly purge", "On when this report was made (turned on in Settings → Quarterly): it runs on the purge "
                  "day unless an administrator turns it off before then"],
                 ["Quarter ends", long_day(pd["last_day"])],
                 ["Download these reports before the end of (the 15th working day after, Mon-Fri)", long_day(pd["working_day_15"])],
                 ["Purge day (the next working day)", long_day(pd["purge_day"])],
                 ["Cutoff: report rows dated before it are deleted (the last 31 days are kept)", long_day(pd["cutoff"])],
-                ["Raw report rows the purge deletes (all quarters, counted now)", fmt(sum(R["purge_all"].values()))],
+                ["Raw report rows the purge deletes (all quarters, all networks in the database, not only the constituency; counted when this report was made)", fmt(sum(R["purge_all"].values()))],
                 ["Kept after the purge", "these reports, their statistics, findings, cases and advisories"],
                 ["Collections that could not be read", ", ".join(sorted(R["failed"])) or "none"]]
     else:
@@ -303,10 +330,12 @@ def write_management(path, R, X, W, A, status, made):
                 ["Quarter ends", long_day(pd["last_day"])],
                 ["If the purge is turned on before then: the purge day (16th working day after, Mon-Fri)", long_day(pd["purge_day"])],
                 ["If it is turned on: report rows dated before this day would be deleted (the last 31 days are kept)", long_day(pd["cutoff"])],
-                ["Raw report rows the purge would delete if turned on (all quarters, counted now)", fmt(sum(R["purge_all"].values()))],
+                ["Raw report rows the purge would delete if turned on (all quarters, all networks in the database, not only the constituency; counted when this report was made)",
+                 fmt(sum(R["purge_all"].values()))],
                 ["Never deleted", "these reports, their statistics, findings, cases and advisories"],
                 ["Collections that could not be read", ", ".join(sorted(R["failed"])) or "none"]]
-    y = d.table(y, sec, "Retention", None, [("Figure", 420, "start"), ("Value", 0, "start")], rows)
+    y = d.table(y, sec, "Retention", "As it was when this report was made: the Executive portal's card says what is true now",
+                [("Figure", 420, "start"), ("Value", 0, "start")], rows)
     _accuracy(d, y, sec, R)
     pdf = d.done()
     with open(path, "wb") as f:
@@ -366,14 +395,16 @@ def write_advisor(path, R, X, W, A, status, made):
     sec = "Accuracy checks"
     y = d.new_page(sec)
     pd = R["purge"]
-    keep = ([["Download these reports before the end of (the 15th working day after the quarter, Mon-Fri)", long_day(pd["working_day_15"])],
+    late, late_text = _no_purge_made_late(R)
+    keep = [["The quarterly purge", late_text]] if late else ([["Download these reports before the end of (the 15th working day after the quarter, Mon-Fri)", long_day(pd["working_day_15"])],
              ["The raw report rows dated before this day are deleted on the purge day", f"{long_day(pd['cutoff'])} (purge on {long_day(pd['purge_day'])})"],
              ["The quarterly purge", "On when this report was made: it runs on the purge day unless an administrator turns it off before then"]]
             if R.get("purge_on") else
             [["The quarterly purge", "Off on this installation when this report was made: no report rows will be deleted"],
              ["If an administrator turns it on before the purge day", f"the raw report rows dated before {long_day(pd['cutoff'])} would be "
               f"deleted on {long_day(pd['purge_day'])}: download your copy before the end of {long_day(pd['working_day_15'])}"]])
-    y = d.table(y, sec, "Keep your copy", None, [("Figure", 420, "start"), ("Value", 0, "start")], keep)
+    y = d.table(y, sec, "Keep your copy", "As it was when this report was made: the advisory portal's card says what is true now",
+                [("Figure", 420, "start"), ("Value", 0, "start")], keep)
     _accuracy(d, y, sec, R)
     pdf = d.done()
     with open(path, "wb") as f:

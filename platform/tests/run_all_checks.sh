@@ -168,7 +168,9 @@ run "PDF References by criticality; preview marks" $PY tests/check_pdf_refs.py
 run "Severity map: who, ratings, PDFs" $PY tests/check_severity_map.py
 run "Insider package: copies recorded, seals, Trace a leak" $PY tests/check_insider.py
 run "Quarterly reports: who gets what, seals, CSRF, bell, calendar" $PY tests/check_quarterly_access.py
+run "Every download in the audit log; one shared download helper on every page" $PY tests/check_downloads.py
 run "Quarterly report: known answers, guards, permit (throwaway database)" $PY tests/check_quarterly.py
+run "Quarterly purge end to end: permit, pipeline, audit, bell (throwaway database)" $PY tests/check_quarterly_purge_e2e.py
 run "Anti-fingerprinting: what a signed-out visitor learns" tests/check_fingerprint.py
 run "Network changes: certificate and MongoDB addresses" tests/check_addresses.py
 run "Accounts: sign-up links, first administrator, sign-up bell" tests/check_accounts.py
@@ -178,7 +180,7 @@ run "CVE / issue codes; what a pattern's devices carry" tests/check_issue_codes.
 run "Every port per address; researcher follows the review; Impact in the analysts' PDF" tests/check_ports_impact_follow.py
 run "Advisory options: References, insights, look, header; pipeline command copy" tests/check_advisory_options.py
 run "Drop-down counts follow the other filters (facets)" tests/check_facet_counts.py
-run "Settings: pick address blocks from the reports" tests/check_address_blocks.py
+run "Settings: the constituency picker (networks, address blocks, other ranges)" tests/check_address_blocks.py
 run "RULE: no ATT&CK technique or mitigation listed twice, anywhere" tests/check_attack_no_duplicates.py
 run "Sign-in: the card turns, the dive after signing in, no logo before" tests/check_signin_motion.py
 run "Hover labels on the header and portal buttons" tests/check_hover_labels.py
@@ -189,6 +191,7 @@ run "RULE: every page opens with the loading animation" $PY tests/check_loader_e
 run "Map filter: what else the devices carry; two ticked = carrying both" $PY tests/check_filter_overlap.py
 run "Nothing answers without signing in (every route, malformed requests)" $PY tests/check_signed_out.py
 run "Every page asking for the Looking Glass drop-downs loads lg-select.js" $PY tests/check_select_enhancer.py
+run "Docs screenshots match the page files they show" $PY tests/check_screenshots.py
 run "Sign-up links: the open limit, in fixed words; no error text in answers" $PY tests/check_invite_limit.py
 run "PDF pages: no overlap, no cut-off" $PY tests/pdf_pages_check.py
 run "analyst code counts: one lock per code" $PY tests/check_per_key_cache.py

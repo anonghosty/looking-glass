@@ -715,7 +715,7 @@ def register(app, ctx):
             w.writerow([r["ip"], r["events"], r["severity"], "; ".join(r["issues"]), "; ".join(r["services"]), "; ".join(r["ports"]),
                         r["city"], r["network"], r["vendor"], r["product"], r["first"], r["last"]])
         return Response(buf.getvalue(), mimetype="text/csv",
-                        headers={"Content-Disposition": f"attachment; filename=services-hosts-{day.start.date()}.csv"})
+                        headers={"Content-Disposition": f'attachment; filename="services-hosts-{day.start.date()}.csv"'})
 
     @app.route("/api/svc/glossary")
     def svc_glossary():

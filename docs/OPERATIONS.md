@@ -284,7 +284,7 @@ The cycle, for every quarter once the purge is on (example: October to December 
 |---|---|
 | The first check after 00:00 UTC on the next quarter's 3rd day (3 January 2027), when the quarter's last day's reports have arrived | The service makes the quarter's reports by itself: the management PDF and summary CSV, the advisor PDF and three CSVs, the purge CSV for administrators. Every accuracy check is run; the outputs say **VALID** or **NOT VALID** at the top, and whether the purge was on or off when they were made |
 | At once | Management, advisors and administrators each get one alert in the bell: "2026Q4 reports ready; download before Thursday 21 January 2027; the raw report rows older than Tuesday 22 December 2026 are deleted on Friday 22 January 2027". With the purge off, it says instead that no report rows are deleted, and administrators get one more alert: "The quarterly purge is off: turn it on in Settings → Quarterly, or leave it off to keep every report row" |
-| The 15 working days (Monday to Friday) after the quarter | People download their copies: management on the Executive portal, advisors on the advisory portal, administrators in Settings → Quarterly. Each download is sealed, its CSV stamped with who and when, and in the audit log |
+| The 15 working days (Monday to Friday) after the quarter | People download their own copies: the management role its report and summary on the Executive portal, advisors theirs on the advisory portal, administrators only the purge CSV in Settings → Quarterly (administrators do not download the management or advisor reports; previewing a portal, they see the card with a note instead). Each download is sealed, its CSV stamped with who and when, and in the audit log |
 | The next working day (the purge day, 22 January 2027) | The database pipeline's next run deletes the report rows dated before the cutoff (the purge day minus 31 days: the last 31 days stay). Older quarters' rows go too |
 | After the purge | The administrators' bell says how many rows were deleted, from how many collections, before which day; the audit log has a "Quarterly purge" entry; Settings → Quarterly shows it |
 
@@ -319,8 +319,21 @@ A report made again and VALID before the purge day writes the permit (when the p
 purge day, it writes no permit: the next quarter's purge covers those rows, so nothing is lost.
 
 **Making a report again:** Settings → Quarterly → **Make it again** (administrators; in the audit log as "Quarterly
-report made"). It replaces the kept report of an ended quarter. A quarter whose raw rows were already purged cannot be
-counted again: its kept report stays the record.
+report made"). It replaces the kept report of an ended quarter. It offers only ended quarters of the last four that
+have report rows: from the oldest report day in the database on (looked up with one indexed query per report
+collection, kept in `data/quarterly/state.json`, refreshed every six hours, after a report is made and after a purge).
+A quarter whose raw rows were already purged cannot be counted again: its kept report stays the record.
+
+**What the cards say, and what the files say:** the cards on the Executive portal, the advisory portal and Settings →
+Quarterly say what is true now: the purge's switch today, each quarter's purge as it stands (for example "No purge for
+this quarter: its purge day (Thursday 22 October 2026) had passed when it was made"), where the quarter stands even
+before any report exists, and a quarter with no report rows in plain words. The PDFs keep what was true when the
+report was made and say so; the purge CSV keeps it too, unchanged. A quarter with no report rows says so on every PDF
+page and on its CSVs' first lines.
+
+**When the card says Looking Glass could not be reached:** the service was restarting or the connection dropped. The
+card tries again a few times, then offers **Retry**; a download tries once more on its own. Nothing needs doing on the
+server unless it keeps happening (then check the service: [The service](#the-service)).
 
 **Checking the pipeline's side:** `cat <pipeline DATA_DIR>/quarterly_purge_status.json` shows the last check (`outcome`
 done, refused or failed, with `why`) and every purge done, per collection.

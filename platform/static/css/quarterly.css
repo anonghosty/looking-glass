@@ -13,8 +13,21 @@
 .q-meta { color: var(--muted); font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
 .q-why { color: #ffb3ba; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .q-files { display: flex; flex-wrap: wrap; gap: 8px; }
-.q-files a.pill-btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; white-space: normal; text-align: left; }
-.q-files a.pill-btn small { color: var(--muted); font-weight: 400; }
+/* r89: the downloads are buttons (LGLoader.download: fetch, then the file), busy while the file comes */
+.q-files .pill-btn { display: inline-flex; align-items: center; gap: 6px; white-space: normal; text-align: left; }
+.q-files .pill-btn small { color: var(--muted); font-weight: 400; }
+.q-files .pill-btn[aria-busy="true"] { cursor: progress; opacity: .85; }
+.q-files .pill-btn .lg-logo-wrap svg { width: 16px; height: 16px; }
+.q-files-msg { margin: 0; }
+/* r89: what is true now (where the quarter stands, the purge's switch), the note for an admin's preview, and the line
+   shown while Looking Glass cannot be reached (with Retry once the tries are over) */
+.q-now { display: grid; gap: 4px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border); background: rgba(91, 141, 239, .06); }
+.q-now p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
+.q-now p.q-meta { color: var(--muted); font-size: 12.5px; }
+.q-note { margin: 0; padding: 10px 14px; border-radius: 12px; border: 1px dashed rgba(245, 158, 11, .5); color: #fcd38d; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.q-emptyq { margin: 0; color: #fcd38d; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.q-net { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(245, 158, 11, .45); color: var(--text); font-size: 13px; line-height: 1.5; }
+.q-net[hidden] { display: none; }
 .q-guards { font-size: 12.5px; }
 .q-guards summary { cursor: pointer; color: var(--text); }
 .q-guards ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 3px; }

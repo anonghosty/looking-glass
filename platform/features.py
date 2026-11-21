@@ -145,7 +145,8 @@ def install(app, core):
 
     # the quarterly report and the quarterly purge's permit (quarterly.py, r85, the user 2026-11-20): made once a quarter
     # has ended (a background check, only in the running service) or again by an administrator; downloads on the
-    # Executive portal (management), the advisory portal (advisors) and Settings → Quarterly (admins)
+    # Executive portal (the management role only), the advisory portal (advisors only) and Settings → Quarterly (admins:
+    # the purge CSV only; r89)
     if core.get("db") is not None and all(k in A for k in ("has_perm", "csrf_ok", "audit")):
         import quarterly
         from flask import request as _rq
@@ -153,6 +154,9 @@ def install(app, core):
             "base_dir": os.path.dirname(os.path.abspath(__file__)), "db": core["db"], "has_perm": A["has_perm"],
             "csrf_ok": A["csrf_ok"], "audit": A["audit"], "findings": core.get("findings"), "logger": core.get("app_logger"),
             "people_name": people_name if "users" in A else None, "serving": bool(core.get("serving")),
+            # the constituency (Settings → Constituency, r89): the reports count only its hosts, with the same object and
+            # rule as the platforms' day loaders (settings.in_scope); the purge stays whole-database
+            "settings": st,
             # turning the quarterly purge on or off (r88) asks for the administrator's own password again
             **({"users": A["users"], "throttle": A["throttle"], "fresh": A["fresh"],
                 "client": lambda: (_rq.remote_addr or "", _rq.headers.get("User-Agent", ""))}

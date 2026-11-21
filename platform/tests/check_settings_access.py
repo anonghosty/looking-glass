@@ -79,12 +79,15 @@ try:
     ok("no token box or token header in the page's scripts", "X-Settings-Token" not in js and "Use token" not in js)
     ok("the read-only line names the Settings permission", "needs an account with the Settings permission" in rd("static/js/settings.js"))
     ok("the page no longer tells people to set SETTINGS_TOKEN", "SETTINGS_TOKEN" not in rd("templates/settings.html"))
-    # the network list picks constituents too (2026-11-12, the user's request): the same selection as the
-    # Constituency card, applied with the same Apply settings (LG_SETTINGS_JS / LG_NETED_JS: held-back copies)
-    sj = open(os.environ.get("LG_SETTINGS_JS") or os.path.join(root, "static/js/settings.js"), encoding="utf-8").read()
-    nj = open(os.environ.get("LG_NETED_JS") or os.path.join(root, "static/js/net-editor.js"), encoding="utf-8").read()
-    ok("Settings' network list has a Constituent tick box bound to the Constituency card's selection",
-       "window.LGConstituency" in sj and "set(asn, on)" in sj and 'setMode("some")' in sj and "C.set(x.asn, cb.checked)" in nj
+    # the network list is where the constituency is chosen (2026-11-12; one picker since 2026-11-21, the user's
+    # design): its Constituent column, applied with the same Apply settings (LG_SETTINGS_JS / LG_NETED_JS, or
+    # LG_HELD_DIR: held-back copies)
+    held = lambda n: os.path.join(os.environ.get("LG_HELD_DIR", ""), n + ".new")  # noqa: E731
+    pick = lambda env, n, live: os.environ.get(env) or (held(n) if os.environ.get("LG_HELD_DIR") and os.path.exists(held(n)) else live)  # noqa: E731
+    sj = open(pick("LG_SETTINGS_JS", "settings.js", os.path.join(root, "static/js/settings.js")), encoding="utf-8").read()
+    nj = open(pick("LG_NETED_JS", "net-editor.js", os.path.join(root, "static/js/net-editor.js")), encoding="utf-8").read()
+    ok("Settings' network list has a Constituent drop-down bound to the constituency (the Constituency card's mode follows)",
+       "window.LGConstituency" in sj and "setState(asn, s)" in sj and 'setMode("some")' in sj and "C.setState(x.asn, v)" in nj
        and '"Constituent"' in nj and "onChange(" in nj)
 finally:
     users.get, roles.perms = real_get, real_perms

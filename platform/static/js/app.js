@@ -2565,11 +2565,14 @@
     const mp = r.mp;
     {   // the file is always fetched from the server, whole: every download is then in the audit log as an export,
         // a short list that fits on screen too (review 2026-11-13: it was saved from the rows shown, with no request)
-      // busy while the full list loads; nothing is saved when the server refuses or does not answer
+      // busy while the full list loads; nothing is saved when the server refuses or does not answer (the platform's
+      // shared fetch for files, LGLoader.fetchForFile: once more on its own, plain words; r89)
       const label = btn ? btn.textContent : ""; if (btn) { btn.disabled = true; btn.textContent = "Preparing…"; }
-      try { r = await getJSON(`/api/insight/drill?kind=${encodeURIComponent(d.kind)}&value=${encodeURIComponent(d.value)}&metric=${r.metric}&at=${encodeURIComponent(d.as_of)}&all=1&download=1`); }
-      catch (err) { toast(`Not saved: ${err.message}`); return; }
+      let res;
+      try { res = await window.LGLoader.fetchForFile(`/api/insight/drill?kind=${encodeURIComponent(d.kind)}&value=${encodeURIComponent(d.value)}&metric=${r.metric}&at=${encodeURIComponent(d.as_of)}&all=1&download=1${state.demo ? "&demo=1" : ""}`); }
       finally { if (btn) { btn.disabled = false; btn.textContent = label; } }
+      if (!res.ok) { toast(res.message); return; }
+      r = res.data;
     }
     // quoted, and spreadsheet-safe: a cell starting with = + - @ (not a plain number) would run as a formula
     const q = (s) => { s = String(s); if (/^[=+\-@\t\r\n＝＋－＠]/.test(s) && !/^([+-]?\d+([.,]\d+)*%?|-+)$/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; };
@@ -2580,12 +2583,9 @@
       lines.push(cells.join(","));
     }
     const blob = new Blob([lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
-    const a = document.createElement("a");
     const day = String(d.as_of || "").slice(0, 10);
     const name = String(d.value_label || d.value).replace(/[^\w.-]+/g, "-").slice(0, 40);
-    a.href = URL.createObjectURL(blob); a.download = `looking-glass_${day}_${name}_${r.metric}.csv`;
-    document.body.append(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    window.LGLoader.saveBlob(blob, `looking-glass_${day}_${name}_${r.metric}.csv`);
   }
   /* A titled card holding one chart: kind = donut | canvas | sev | hist */
   function card(title, kind, sub) {

@@ -11,8 +11,8 @@ Who, when, from where and what, like every audit entry. A host appears only as i
 the pages use), never its address, so the audit log does not become a second copy of the data. The same person viewing
 the same thing again within REPEAT_WINDOW seconds is not logged again (the audit log is append-only; a page polls);
 every download is logged, the same list downloaded twice included.
-The built-in self-test's accounts are not logged. DATA_ACCESS_LOG=0 in .env turns it off (the Audit portal then says
-so, and CIS 3.14 is no longer backed by LG-15).
+The built-in self-test's accounts are not logged. DATA_ACCESS_LOG=0 in .env turns the views off (the Audit portal then
+says so, and CIS 3.14 is no longer backed by LG-15); downloads (data_exported) are always logged.
 """
 import os
 import re
@@ -83,16 +83,20 @@ class DataAccessLog:
         return (_cut(sel, 400) if sel else "") or "the whole selection"
 
     def record(self, path, args, status):
-        if not enabled() or status != 200 or path not in SENSITIVE:
-            return False
-        user = self.user_of() or ""
-        if not user or user.startswith("lg-selftest"):
+        if status != 200 or path not in SENSITIVE:
             return False
         event, what = SENSITIVE[path]
         if args.get("download") == "1" and path in DOWNLOADS:
             # the drill-down list saved as a CSV in the browser: the page fetches it for the file, so the download is
             # logged as an export (review 2026-11-13: a list that fitted on screen was saved with no request at all)
             event, what = "data_exported", DOWNLOADS[path]
+        # DATA_ACCESS_LOG=0 turns off the VIEWS only: a download is a copy of host data leaving the platform, so it is
+        # always written to the audit log (this module is the one place these downloads are logged: no second entry)
+        if event != "data_exported" and not enabled():
+            return False
+        user = self.user_of() or ""
+        if not user or user.startswith("lg-selftest"):
+            return False
         sel = self.selection(args)
         key = (user, path, sel)
         now = time.time()
@@ -135,7 +139,10 @@ def register(app, audit_add, user_of, host_ref):
                     log.record(rule, args, resp.status_code)
                 else:
                     log.record(request.path, request.args, resp.status_code)
-        except Exception:          # noqa: BLE001  (logging a view must never break the page)
-            pass
+        except Exception as exc:   # noqa: BLE001  (logging a view must never break the page)
+            try:
+                app.logger.warning("data access not logged for %s: %s", request.path, exc)
+            except Exception:      # noqa: BLE001, S110
+                pass
         return resp
     return log

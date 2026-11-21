@@ -253,16 +253,12 @@
     if (d.total) {
       // the view goes in the request body, never the address; the file comes back and is saved from the page
       const ex = el("button", "pill-btn", "Download CSV"); ex.type = "button"; ex.title = "Every record of this view, as a spreadsheet file. The download is written to the audit log.";
+      // through the platform's one download helper (LGLoader.download, r89): a POST with the CSRF token
       ex.addEventListener("click", async () => {
-        ex.disabled = true;
-        try {
-          const r = await postJSON("/api/intelligence/export.csv", body());
-          if (!r.ok) { const x = await r.json().catch(() => ({})); ex.textContent = x.error || `Not downloaded (HTTP ${r.status})`; return; }
-          const name = /filename="([^"]+)"/.exec(r.headers.get("Content-Disposition") || "")?.[1] || "looking-glass.csv";
-          const url = URL.createObjectURL(await r.blob()); const a = el("a"); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 2000);
-        } catch { ex.textContent = "The connection was interrupted. Try again."; }
-        finally { ex.disabled = false; }
+        const res = await window.LGLoader.download("/api/intelligence/export.csv", {
+          button: ex, name: "looking-glass.csv", method: "POST", body: JSON.stringify(body()),
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() } });
+        if (!res.ok && res.message) ex.textContent = res.message;
       });
       acts.append(ex);
     }

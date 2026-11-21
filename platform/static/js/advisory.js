@@ -489,7 +489,12 @@
       bar.append(gen);
     }
     if (D.saved) {
-      const js = el("a", "pill-btn", "Export JSON"); js.href = `/api/advisory/${fid}/export?${q(NET)}`; js.title = "The advisory as a JSON file (no address in it), for other tools";
+      // a button through the platform's one download helper (LGLoader.download, r89), never a plain link
+      const js = el("button", "pill-btn", "Export JSON"); js.type = "button"; js.title = "The advisory as a JSON file (no address in it), for other tools";
+      js.addEventListener("click", async () => {
+        const res = await window.LGLoader.download(`/api/advisory/${fid}/export?${q(NET)}`, { button: js, name: "advisory.json" });
+        if (!res.ok && res.message) say(res.message, true);
+      });
       bar.append(js);
     }
     bar.append(msg);
@@ -503,7 +508,12 @@
     if (a.generated.length) {
       const ul = el("ul", "av-files");
       a.generated.slice().reverse().forEach((x) => {
-        const li = el("li"), l = el("a", null, x.name); l.href = `/advisory/${fid}/file/${a.ref}/${x.n}`;
+        // the file through the one download helper: the "Opening the advisory" logo never stays up over a download
+        const li = el("li"), l = el("button", "av-file-link", x.name); l.type = "button";
+        l.addEventListener("click", async () => {
+          const res = await window.LGLoader.download(`/advisory/${fid}/file/${a.ref}/${x.n}`, { button: l, name: x.name });
+          if (!res.ok && res.message) say(res.message, true);
+        });
         li.append(l, el("small", "muted", ` · ${x.at} · ${x.by} · ${fmt(Math.round(x.size / 1024))} KB`)); ul.append(li);
       });
       r.append(ul);

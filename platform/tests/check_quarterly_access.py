@@ -2,7 +2,12 @@
 """Who gets which quarterly report, and how (quarterly.py's routes, the bell, the purge's record). No database: a small
 app with the real routes, the insider package's seals and a made-up kept quarter in a throwaway data folder.
 
-  * management sees and downloads only the management PDF and summary CSV; advisors only theirs; administrators all;
+  * management sees and downloads only the management PDF and summary CSV; advisors only theirs; administrators only
+    the purge CSV (r89: by role, so an admin previewing a portal gets 403 on its files and a note on its card);
+  * the cards' words (r89): where the quarter stands before, at and after its end and on the 3rd day; each quarter's
+    purge as it stands now; the empty-quarter sentence; Make it again's list from the oldest report day;
+  * the page's downloads go through the one shared helper (LGLoader.download), never a plain link with download;
+  * the constituency (r89): the platforms' own Settings object and rule, the "Counted for" label;
   * researchers, analysts and external accounts get nothing (403), signed out too;
   * every POST needs the page's CSRF token;
   * every download is sealed (insider.py), its CSV stamped with who and when, and in the audit log;
@@ -177,7 +182,36 @@ for role in ("management", "advisor", "admin"):
     seen[role] = sorted(f["kind"] for q in (r.json or {}).get("quarters", []) for f in q["files"])
 ok("management: the management PDF and summary CSV only", seen["management"] == ["management", "pdf_management"], str(seen["management"]))
 ok("advisors: the advisor PDF and their three CSVs only", seen["advisor"] == ["advisor", "issues", "orgs", "pdf_advisor"], str(seen["advisor"]))
-ok("administrators: all seven, the purge CSV and both PDFs included", seen["admin"] == sorted(qq.FILES), str(seen["admin"]))
+ok("administrators: only the purge CSV (r89: no management or advisor file)", seen["admin"] == ["admin"], str(seen["admin"]))
+print("\nEach role downloads only its own files (r89): by role, not only by permission (admins hold every permission)")
+MG_FILES = [k for k in qq.FILES if qq.FILES[k][2] == ("management",)]
+AD_FILES = [k for k in qq.FILES if qq.FILES[k][2] == ("advisor",)]
+ok("FILES: the management PDF and CSV for management only, the advisor PDF and three CSVs for advisors only, the purge CSV for admins",
+   sorted(MG_FILES) == ["management", "pdf_management"] and sorted(AD_FILES) == ["advisor", "issues", "orgs", "pdf_advisor"]
+   and qq.FILES["admin"][2] == ("admin",))
+codes = {p: get(p, "admin").status_code for p in [f"/api/mgmt/quarterly/{Q}/{k}" for k in qq.FILES]
+         + [f"/api/advisory/quarterly/{Q}/{k}" for k in qq.FILES]}
+ok("an admin gets 403 on every management and advisor file route", set(codes.values()) == {403}, str(codes))
+for role, mine in (("management", "/api/mgmt/quarterly"), ("advisor", "/api/advisory/quarterly")):
+    other = "/api/advisory/quarterly" if role == "management" else "/api/mgmt/quarterly"
+    theirs = [f"{other}/{Q}/{k}" for k in qq.FILES] + [f"/api/admin/quarterly/{Q}/{k}" for k in qq.FILES]
+    foreign = [f"{mine}/{Q}/{k}" for k in qq.FILES if role not in qq.FILES[k][2]]
+    c2 = {p: get(p, role).status_code for p in theirs + foreign}
+    ok(f"{role}: 403 on the other portal's files, the admin CSV and another audience's kind on its own route",
+       set(c2.values()) == {403}, str({p: v for p, v in c2.items() if v != 403}))
+pv_m, pv_a = get(LISTS["management"], "admin").json, get(LISTS["advisor"], "admin").json
+ok("an admin previewing the Executive portal: the card (quarters, where the quarter stands) without downloads, and a note",
+   pv_m["quarters"] and not any(q["files"] for q in pv_m["quarters"]) and pv_m["now"]
+   and pv_m["note"].startswith("Quarterly reports are for management only"), str(pv_m.get("note")))
+ok("...the advisory portal likewise", pv_a["quarters"] and not any(q["files"] for q in pv_a["quarters"])
+   and pv_a["note"].startswith("Quarterly reports are for advisors only"))
+ok("management and advisors get no note", get(LISTS["management"], "management").json["note"] == ""
+   and get(LISTS["advisor"], "advisor").json["note"] == "")
+ok("the one rule (may_see) by role: management yes, an admin no for the portals; the admin audience needs Settings",
+   qq.may_see("management", "management", lambda p: p == "management") and not qq.may_see("management", "admin", lambda p: True)
+   and not qq.may_see("advisor", "admin", lambda p: True) and qq.may_see("admin", "admin", lambda p: p == "settings")
+   and not qq.may_see("admin", "management", lambda p: p == "management")
+   and not qq.may_download("pdf_advisor", "management", "management", lambda p: True))
 ok("the lists carry the dates (download before, purge day, cutoff) and VALID",
    all(q["valid"] and q["download_before"] and q["purge_day"] and q["cutoff"] for q in get(LISTS["management"], "management").json["quarters"]))
 ok("only the admin's list has the accuracy checks and the purge's status",
@@ -422,6 +456,124 @@ os.remove(os.path.join(qd, "purge_result.json"))
 ref = {role: [x for x in bell(role) if x["id"].startswith("sys:quarterly-purge-refused")] for role in ROLES}
 ok("a purge Looking Glass allowed but the pipeline refused: a problem for admins only",
    len(ref["admin"]) == 1 and "not the rule" in ref["admin"][0]["text"] and not any(ref[r] for r in ROLES if r != "admin"))
+
+print("\nWhere the quarter stands (r89): before, at and after its end, and on the 3rd day")
+st_dec31 = qq.stands(date(2026, 12, 31), "management", ["2026Q3"], on=True)
+ok("on its last day: in progress, the day it ends, the day its reports are made, the day to download by (purge on)",
+   st_dec31 == ["2026Q4 is in progress: it ends Thursday 31 December 2026; its reports are made on Sunday 3 January 2027 "
+                "(download before the end of Thursday 21 January 2027)."], str(st_dec31))
+ok("...with the purge off, no download-by day for management",
+   qq.stands(date(2026, 11, 21), "advisor", ["2026Q3"], on=False)
+   == ["2026Q4 is in progress: it ends Thursday 31 December 2026; its reports are made on Sunday 3 January 2027."])
+ok("...administrators get the purge day and the cutoff",
+   qq.stands(date(2026, 11, 21), "admin", ["2026Q3"], on=True)
+   == ["2026Q4 is in progress: it ends Thursday 31 December 2026; its reports are made on Sunday 3 January 2027; with the "
+       "quarterly purge on, the report rows dated before Tuesday 22 December 2026 are deleted on Friday 22 January 2027."])
+st_jan1 = qq.stands(date(2027, 1, 1), "management", [], on=False)
+ok("the day after it ends: \"has ended: its reports are made on\", then the new quarter in progress",
+   st_jan1 == ["2026Q4 has ended: its reports are made on Sunday 3 January 2027.",
+               "2027Q1 is in progress: it ends Wednesday 31 March 2027; its reports are made on Saturday 3 April 2027."], str(st_jan1))
+ok("on the 3rd day, not made yet: \"made today\"; once kept, the line goes",
+   qq.stands(date(2027, 1, 3), "management", [], on=False)[0] == "2026Q4 has ended: its reports are made today, Sunday 3 January 2027."
+   and len(qq.stands(date(2027, 1, 3), "management", ["2026Q4"], on=False)) == 1)
+ok("after the 3rd day with none kept (and it should have been made): \"were due\"; admins are told how to make it",
+   qq.stands(date(2027, 1, 9), "admin", [], on=False, since="2026-11-20")[0]
+   == "2026Q4 has ended: its reports were due on Sunday 3 January 2027, and none is kept yet. Make them with Make it again."
+   and len(qq.stands(date(2027, 1, 9), "admin", [], on=False, since="2027-01-05")) == 1)
+
+print("\nEach quarter's purge as it stands NOW (r89), not as it was when the report was made")
+LIVE_Q3 = {"quarter": "2026Q3", "valid": True, "generated_at": "2026-11-20T10:00:00+00:00", "purge_day": "2026-10-22",
+           "cutoff": "2026-09-21", "working_day_15": "2026-10-21", "no_permit_why": qq.WHY_MADE_LATE}
+ok("made after its purge day (the live 2026Q3): no purge, said plainly, whether the purge is on or off",
+   qq.purge_fact(LIVE_Q3, True, date(2026, 11, 21)) == qq.purge_fact(LIVE_Q3, False, date(2026, 11, 21))
+   == "No purge for this quarter: its purge day (Thursday 22 October 2026) had passed when it was made.")
+Q4 = {"quarter": "2026Q4", "valid": True, "generated_at": "2027-01-03T00:20:00+00:00", "purge_day": "2027-01-22",
+      "cutoff": "2026-12-22", "working_day_15": "2027-01-21"}
+ok("on, with its permit: download before ..., rows dated before ... are deleted on ...",
+   qq.purge_fact(Q4, True, date(2027, 1, 5), permit=True) == "Download before the end of Thursday 21 January 2027: the report rows "
+   "dated before Tuesday 22 December 2026 are deleted on Friday 22 January 2027. These reports stay here.")
+ok("off now (whatever the report said when it was made): no rows deleted, and what turning it on would do",
+   qq.purge_fact(dict(Q4, purge_on=True), False, date(2027, 1, 5)).startswith("No report rows are deleted while the quarterly purge is off."))
+ok("NOT VALID, purged, and purge day passed each say so",
+   "NOT VALID" in qq.purge_fact(dict(Q4, valid=False), True, date(2027, 1, 5))
+   and qq.purge_fact(Q4, True, date(2027, 2, 1), result={"outcome": "done", "at": "2027-01-22T03:00:00", "cutoff": "2026-12-22"})
+   .startswith("Purged on Friday 22 January 2027")
+   and qq.purge_fact(Q4, True, date(2027, 2, 1)).startswith("No purge for this quarter: its purge day (Friday 22 January 2027) has passed"))
+ok("the portals' switch line follows purge_confirmed.json now (on: since when; off: the off sentence)",
+   qq.purge_state(False) == qq.OFF_TEXT and qq.purge_state(True, {"at": "2026-11-21T08:47:00+00:00"}).startswith(
+       "The quarterly purge is on (turned on 21 November 2026)"))
+qq._write_json(qq.confirm_path(base), {"enabled": True, "at": "2026-11-21T08:47:00+00:00"})
+json.dump(dict(STATUS, rows=0), open(os.path.join(qd, "status.json"), "w"))
+st_path = os.path.join(base, "data", "quarterly", "state.json")
+qq._write_json(st_path, dict(json.load(open(st_path)) if os.path.exists(st_path) else {}, oldest_day="2026-09-21", oldest_checked_ts=round(now)))
+lm = get(LISTS["management"], "management").json
+ok("the management card says the purge is on NOW (from purge_confirmed.json)", lm["purge_state"].startswith("The quarterly purge is on"),
+   lm.get("purge_state"))
+print("\nAn empty quarter says so (r89)")
+ok("the sentence", qq.empty_text("2026Q3", date(2026, 9, 21))
+   == "No report rows were loaded for 2026Q3 (Looking Glass holds report rows from 21 September 2026 on)."
+   and qq.empty_text("2026Q3") == "No report rows were loaded for 2026Q3.")
+ok("...on the card, for a quarter with no report rows, with the cached oldest report day",
+   lm["quarters"][0]["empty_text"] == f"No report rows were loaded for {Q} (Looking Glass holds report rows from 21 September 2026 on).",
+   lm["quarters"][0].get("empty_text"))
+json.dump(dict(STATUS, rows=5), open(os.path.join(qd, "status.json"), "w"))
+ok("...and not for a quarter with rows", get(LISTS["management"], "management").json["quarters"][0]["empty_text"] == "")
+
+print("\nMake it again offers only ended quarters with report rows (r89)")
+T = date(2026, 11, 21)
+ok("the oldest report day 21 September 2026: only 2026Q3", qq.can_make(T, "", date(2026, 9, 21), True) == ["2026Q3"])
+ok("no report row at all: none, and when the first report is made",
+   qq.can_make(T, "", None, True) == [] and qq.can_make_note(T, None)
+   == "No ended quarter has report rows yet: the first report is made on Sunday 3 January 2027.")
+ok("rows from long ago: the last four; a purge removes the quarters before its cutoff",
+   qq.can_make(T, "", date(2025, 1, 1), True) == ["2026Q3", "2026Q2", "2026Q1", "2025Q4"]
+   and qq.can_make(T, "2026-04-01", date(2026, 4, 5), True) == ["2026Q3", "2026Q2"])
+ok("the oldest day not known (no database answer yet): the last four not purged, as before",
+   qq.can_make(T, "", None, False) == ["2026Q3", "2026Q2", "2026Q1", "2025Q4"])
+adm = get(LISTS["admin"], "admin").json
+ok("the admin list uses the cached oldest day", adm["oldest_day"] == "2026-09-21" and "can_make_note" in adm, str(adm.get("oldest_day")))
+r = c.post("/api/admin/quarterly/make", json={"quarter": "2025Q1"}, headers={"X-Role": "admin", "X-CSRF-Token": "the-page-token"})
+ok("...and Make it again refuses a quarter it does not offer (409)", r.status_code == 409, str(r.status_code))
+
+print("\nThe page's downloads: the one shared helper (r89)")
+HELD = os.environ.get("LG_HELD_DIR", "")
+PLAT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def page_file(name):
+    p = os.path.join(HELD, name + ".new") if HELD else ""
+    return open(p if p and os.path.exists(p) else os.path.join(PLAT, "static", "js", name), encoding="utf-8").read()
+
+
+qjs, ljs = page_file("quarterly.js"), page_file("loader.js")
+ok("quarterly.js: no download attribute on a link (setAttribute(\"download\") or .download =), no href to a file",
+   'setAttribute("download"' not in qjs and not re.search(r"\.download\s*=", qjs) and ".href = f.url" not in qjs)
+ok("quarterly.js: every download goes through LGLoader.download", "LGLoader.download(" in qjs)
+ok("loader.js: LGLoader.download fetches, makes a blob, names the file from Content-Disposition, tries once more",
+   "async download(" in ljs and "createObjectURL" in ljs and "Content-Disposition" in ljs and "attempt < 2" in ljs)
+ok("quarterly.js: never shows the browser's own error text (no e.message / x.message on the page)",
+   not re.search(r"\b[ex]\.message\b", qjs) and "could not be reached just now (it may be restarting)" in (qjs + ljs)
+   and "Trying again…" in qjs and '"Retry"' in qjs)
+
+print("\nThe constituency (r89): the platforms' own Settings object and rule")
+import settings as lg_settings  # noqa: E402
+sp = os.path.join(base, "data", "settings_check.json")
+S = lg_settings.Settings(sp)
+clean, errs = lg_settings.Settings.validate({"country": "KE", "networks": ["64501"], "cidrs": ["198.51.100.0/24"]})
+S.save(clean)
+ok("Counted for: the whole country without a restriction",
+   qq.constituency(None) == {"label": "the whole country", "key": "all"})
+ok("Counted for: 1 network and 1 address range (the constituency set in Settings)",
+   qq.constituency(S)["label"] == "1 network and 1 address range (the constituency set in Settings)" and qq.constituency(S)["key"] != "all")
+ok("a host in the network, or in the range, is kept; another is not",
+   qq.keep_host(S, {"a": 64501, "h": "203.0.113.9"}) and qq.keep_host(S, {"a": "AS64500", "h": "198.51.100.7"})
+   and not qq.keep_host(S, {"a": 64500, "h": "203.0.113.9"}) and qq.keep_host(None, {"a": 1, "h": "x"}))
+ok("a communication is kept when its other side's host is in the constituency (the map's rule)",
+   qq.keep_host(S, {"a": 64500, "h": "203.0.113.9", "oa": 64999, "oh": "198.51.100.250"})
+   and qq.keep_host(S, {"a": 64500, "h": "203.0.113.9", "oh": "198.51.100.250"})      # no dst_asn: MongoDB leaves "oa" out
+   and not qq.keep_host(S, {"a": 64500, "h": "203.0.113.9", "oa": 64999, "oh": "203.0.113.250"}))
+ok("the purge's switch line and the card: the purge works on all networks (said in plain words)",
+   "all networks in the database, not only the constituency" in qjs)
 shutil.rmtree(base, ignore_errors=True)
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))
 sys.exit(1 if fails else 0)

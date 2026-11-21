@@ -202,6 +202,31 @@ body.settings-page .hud { position: sticky; top: 0; }
 .dz-table tr.dz-dirty td { background: rgba(91, 141, 239, .06); }
 .dz-table tr.dz-saved td { background: rgba(61, 214, 140, .09); transition: background .6s ease; }
 .net-table { max-height: 520px; }
+/* Settings: the Constituent column's choice and a network's address blocks, opened in place under its row
+   (net-editor.js, address-blocks.js); the table's scroll area grows while a row is open */
+.net-table.nb-grow { max-height: min(88vh, 1200px); }
+#cardNets td.nb-cell { white-space: normal; text-align: left; min-width: 200px; }
+#cardNets td.nb-cell select { min-width: 180px; }
+#cardNets .nb-toggle { margin-top: 6px; display: inline-flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; text-align: left; white-space: normal; }
+#cardNets .nb-toggle .nb-caret { color: var(--muted); font-size: 11.5px; }
+#cardNets .nb-toggle:focus-visible, #cardNets .nb-list input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dz-table tr.nb-row > td { background: var(--surface-2); padding: 12px 14px 16px; border-bottom: 1px solid var(--border-strong); }
+.dz-table tbody tr.nb-row:hover > td { background: var(--surface-2); }
+.nb-panel { display: grid; gap: 10px; }
+.nb-intro { margin: 0; font-size: 12.5px; color: var(--muted); }
+.nb-tools { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+#cardNets .nb-tools .nb-search { flex: 1 1 220px; width: auto; max-width: 360px; }
+.nb-count { font-size: 12.5px; }
+.nb-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 14px; }
+.nb-list label { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; padding: 4px 6px; border-radius: 6px; cursor: pointer; color: var(--text); }
+.nb-list label:hover { background: var(--surface); }
+#cardNets .nb-list input[type=checkbox] { width: 16px; height: 16px; min-width: 0; padding: 0; margin: 0; accent-color: var(--accent); }
+.nb-recs { color: var(--muted); font-size: 12px; }
+.nb-empty { padding: 4px 6px; }
+.nb-more { justify-self: start; }
+.nb-other { margin-top: 14px; }
+.nb-other textarea { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); }
+.nb-other textarea[readonly] { opacity: .8; }
 
 /* dropdowns on Settings and Definitions */
 .st-field .lgs { min-width: 280px; }

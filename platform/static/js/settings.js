@@ -13,7 +13,13 @@
   const SUFFIXES = [" REGION", " PROVINCE", " STATE", " GOVERNORATE", " COUNTY", " DISTRICT", " PREFECTURE", " DEPARTMENT", " WILAYA", " ATOLL"];
   const norm = (n) => { let s = String(n || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toUpperCase().trim(); for (const x of SUFFIXES) if (s.endsWith(x)) s = s.slice(0, -x.length).trim(); return s; };
   const FOR = new URLSearchParams(location.search).get("for") || "";
-  let data = null, chosen = new Set(), mode = "all", typeFilter = "", shapes = null, saved = null;
+  // the constituency (the user's design, 2026-11-21: one picker, in Network names & types): chosen = whole networks
+  // (AS numbers), someNets + picks = networks with some of their address blocks ticked, the "Other address ranges" box
+  // (#cidrs) = the rest. Saved as before: AS numbers and address ranges (CIDRs), with Apply settings.
+  let data = null, chosen = new Set(), someNets = new Set(), picks = new Map(), mode = "all", shapes = null, saved = null;
+  let blockInfo = { counts: null, owners: {} };      // address_blocks.py: blocks per network; saved range -> its network
+  const plural = (n, one, many) => `${fmt(n)} ${n === 1 ? one : (many || `${one}s`)}`;
+  const uniqSorted = (list) => [...new Set(list.map(String))].sort();
   try { sessionStorage.removeItem("lg.settingsToken"); } catch { /* the settings token is gone (2026-11-11) */ }
 
   // ---------------- which settings this page shows
@@ -29,10 +35,14 @@
     data = await (await fetch("/api/settings", { cache: "no-store" })).json();
     Object.assign(TYPE_NAMES, data.type_labels || {});          // every network type, the ones this site added included
     const s = data.settings;
-    saved = { country: s.country, timezone: s.timezone || "", networks: [...s.networks].map(String).sort(), cidrs: [...s.cidrs] };
-    chosen = new Set(s.networks.map(String));
+    saved = { country: s.country, timezone: s.timezone || "", networks: [...s.networks].map(String).sort(), cidrs: uniqSorted(s.cidrs) };
+    // which saved ranges are a network's address blocks, and how many blocks each network has (administrators only)
+    if (data.writable && window.LGBlocks) {
+      try { const b = await window.LGBlocks.summary(); blockInfo = { counts: b.counts || {}, owners: b.owners || {} }; }
+      catch (e) { console.warn("The address blocks could not be read:", e); }
+    }
     mode = s.restricted ? "some" : "all";
-    $("cidrs").value = s.cidrs.join("\n");
+    applySaved(saved.networks, saved.cidrs);
     // continent first, then its countries (2026-11-15: every country in the world)
     const conts = (data.continents && data.continents.length) ? data.continents : [...new Set(data.countries.map((c) => c.continent).filter(Boolean))];
     const cs = $("continent"); cs.replaceChildren();
@@ -43,7 +53,7 @@
     fillCountries(s.country);
     fillZones(s.timezone);
     access();
-    setMode(mode); buildTypes(); renderNets(); await renderCountry(); refresh();
+    setMode(mode); await renderCountry(); refresh();
     const unknown = data.networks.filter((n) => /^AS\d+$/.test(n.name)).length;
     $("unknownCount").textContent = unknown ? `· ${unknown} unidentified` : "";
   }
@@ -79,7 +89,12 @@
     if (st.state === "running") idTimer = setTimeout(idPoll, 1000);
     else {
       idTimer = null;                          // done, failed or stopped: no job to resume (review 2026-11-13)
-      if (st.state === "done" || st.state === "stopped") { const keep = new Set(chosen); await load(); chosen = keep; renderNets(); refresh(); }
+      if (st.state === "done" || st.state === "stopped") {
+        // the choices not applied yet stay as they were
+        const keep = { c: new Set(chosen), s: new Set(someNets), p: new Map([...picks].map(([a, v]) => [a, new Set(v)])), o: $("cidrs").value, m: mode };
+        await load();
+        chosen = keep.c; someNets = keep.s; picks = keep.p; $("cidrs").value = keep.o; setMode(keep.m);
+      }
     }
   }
   $("btnIdentify").addEventListener("click", async () => {
@@ -100,6 +115,7 @@
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("idModal").hidden) idShow(false); });
   function access() {
     const box = $("access");
+    $("cidrs").readOnly = !data.writable;         // read only: the other address ranges are shown, not changed
     if (data.writable) { box.hidden = true; return; }
     box.hidden = false; box.replaceChildren();
     box.append(document.createTextNode("Read only: changing settings needs an account with the Settings permission (administrators)."));
@@ -250,85 +266,93 @@
   function setMode(m) {
     mode = m;
     for (const b of document.querySelectorAll(".st-mode button")) b.setAttribute("aria-pressed", String(b.dataset.mode === m));
-    $("someBox").hidden = m !== "some"; refresh();
-  }
-  for (const b of document.querySelectorAll(".st-mode button")) b.addEventListener("click", () => setMode(b.dataset.mode));
-  function buildTypes() {
-    const box = $("typeChips"); box.replaceChildren();
-    const types = [...new Set(data.networks.map((n) => TYPE_NAMES[n.type] || "Other"))].sort();
-    for (const t of ["All types", ...types]) {
-      const b = el("button", "chip", t); b.type = "button"; b.setAttribute("aria-pressed", String((t === "All types" && !typeFilter) || t === typeFilter));
-      b.addEventListener("click", () => { typeFilter = t === "All types" ? "" : t; buildTypes(); renderNets(); });
-      box.append(b);
-    }
-  }
-  const shown = () => {
-    const q = $("netSearch").value.trim().toLowerCase();
-    return data.networks.filter((n) => (!typeFilter || (TYPE_NAMES[n.type] || "Other") === typeFilter)
-      && (!q || n.name.toLowerCase().includes(q) || n.asns.some((a) => String(a).includes(q.replace(/^as/, "")))));
-  };
-  const isOn = (n) => n.asns.every((a) => chosen.has(String(a)));
-  function renderNets() {
-    const tb = $("netTable").querySelector("tbody"); tb.replaceChildren();
-    for (const n of shown()) {
-      const tr = el("tr", isOn(n) ? "sel" : ""); const cb = el("input"); cb.type = "checkbox"; cb.checked = isOn(n);
-      cb.addEventListener("change", () => { for (const a of n.asns) cb.checked ? chosen.add(String(a)) : chosen.delete(String(a)); tr.classList.toggle("sel", cb.checked); refresh(); });
-      const td = el("td"); td.append(cb);
-      tr.append(td, el("td", null, n.name), el("td", null, TYPE_NAMES[n.type] || "Other"), el("td", "mono", n.asns.map((a) => `AS${a}`).join(", ")), el("td", "mono", fmt(n.records)));
-      tr.addEventListener("click", (e) => { if (e.target !== cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event("change")); } });
-      tb.append(tr);
-    }
     refresh();
   }
-  // the network list further down (Network names & types, net-editor.js) picks constituents too: the same selection and
-  // the same Apply settings. Ticking a network there switches this card to "Only selected networks".
+  for (const b of document.querySelectorAll(".st-mode button")) b.addEventListener("click", () => setMode(b.dataset.mode));
+  const pickSet = (asn) => { if (!picks.has(asn)) picks.set(asn, new Set()); return picks.get(asn); };
+  /** the saved AS numbers and ranges as the picker shows them: a range that is one of a network's address blocks is
+      that network's chosen block (Some address blocks); any other range goes to Other address ranges */
+  function applySaved(nets, cidrs) {
+    chosen = new Set(nets.map(String)); someNets = new Set(); picks = new Map();
+    const other = [];
+    for (const c of cidrs) {
+      const a = blockInfo.owners[c];
+      if (a && !chosen.has(String(a))) { someNets.add(String(a)); pickSet(String(a)).add(c); } else other.push(c);
+    }
+    $("cidrs").value = other.join("\n");
+  }
+  // the network list (Network names & types, net-editor.js) is where the constituency is chosen: its Constituent
+  // column (Not in / The whole network / Some address blocks). Choosing there switches this card to "Only selected".
   window.LGConstituency = {
     _l: [],
+    state(asn) {
+      const a = String(asn);
+      if (mode !== "some") return "out";
+      return chosen.has(a) ? "whole" : someNets.has(a) ? "some" : "out";
+    },
     has: (asn) => mode === "some" && chosen.has(String(asn)),
     isSome: () => mode === "some",
+    writable: () => !!(data && data.writable),
+    picked: (asn) => new Set(picks.get(String(asn)) || []),
+    blockCount: (asn) => (blockInfo.counts ? blockInfo.counts[String(asn)] || 0 : null),
     count: () => chosen.size,
-    key: () => `${mode}|${[...chosen].sort().join(",")}`,
-    set(asn, on) {
+    key: () => [mode, [...chosen].sort().join(","), [...someNets].sort().map((a) => `${a}:${(picks.get(a) || new Set()).size}`).join(","),
+      blockInfo.counts ? "1" : "0", data && data.writable ? "w" : "r"].join("|"),
+    setState(asn, s) {
       if (!data) return;
-      if (mode !== "some") setMode("some");
-      if (on) chosen.add(String(asn)); else chosen.delete(String(asn));
-      renderNets();
+      const a = String(asn);
+      chosen.delete(a); someNets.delete(a);
+      if (s === "whole") chosen.add(a); else if (s === "some") someNets.add(a);
+      if (mode !== "some" && s !== "out") setMode("some"); else refresh();
+    },
+    set(asn, on) { this.setState(asn, on ? "whole" : "out"); },
+    toggleBlock(asn, blk, on) {
+      if (!data) return;
+      const a = String(asn), set = pickSet(a);
+      if (on) { set.add(blk); blockInfo.owners[blk] = a; } else set.delete(blk);
+      refresh();
     },
     onChange(fn) { this._l.push(fn); },
   };
   function tell() { for (const f of (window.LGConstituency && window.LGConstituency._l) || []) { try { f(); } catch { /* the other card */ } } }
-  $("netSearch").addEventListener("input", renderNets);
-  $("selShown").addEventListener("click", () => { for (const n of shown()) for (const a of n.asns) chosen.add(String(a)); renderNets(); });
-  $("clearShown").addEventListener("click", () => { for (const n of shown()) for (const a of n.asns) chosen.delete(String(a)); renderNets(); });
-  $("cidrs").addEventListener("input", refresh);
+  // typing an other address range chooses "Only selected networks and address ranges", like a choice in the list
+  $("cidrs").addEventListener("input", () => { if (mode !== "some" && cidrList().length) setMode("some"); else refresh(); });
   const cidrList = () => $("cidrs").value.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean);
+  const blockList = () => [...someNets].flatMap((a) => [...(picks.get(a) || [])]);
 
   // ---------------- what would be applied, and whether it differs from what is in force
   function wanted() {
-    return { country: $("country").value, timezone: $("tzone").value, networks: mode === "some" ? [...chosen].sort() : [], cidrs: mode === "some" ? cidrList() : [] };
+    return { country: $("country").value, timezone: $("tzone").value, networks: mode === "some" ? [...chosen].sort() : [],
+      cidrs: mode === "some" ? uniqSorted([...blockList(), ...cidrList()]) : [] };
   }
+  /** N networks, M address blocks, K other ranges (a range that is a block of a network chosen whole counts as other) */
+  function counts(w) {
+    const blocks = w.cidrs.filter((c) => blockInfo.owners[c] && !w.networks.includes(String(blockInfo.owners[c]))).length;
+    return { nets: w.networks.length, blocks, other: w.cidrs.length - blocks };
+  }
+  const countsText = (k) => `${plural(k.nets, "network")}, ${plural(k.blocks, "address block")}, ${plural(k.other, "other range")}`;
   function describe(w) {
     const nets = data.networks.filter((n) => n.asns.some((a) => w.networks.includes(String(a))));
     const c = (data.countries.find((x) => x.iso2 === w.country) || {}).country || w.country;
-    const scope = w.networks.length || w.cidrs.length
-      ? `constituency of ${nets.length} network${nets.length === 1 ? "" : "s"}${nets.length ? ` (${nets.slice(0, 3).map((n) => n.name).join(", ")}${nets.length > 3 ? ", …" : ""})` : ""}${w.cidrs.length ? ` and ${w.cidrs.length} address range${w.cidrs.length > 1 ? "s" : ""}` : ""}`
-      : "whole country";
+    const names = nets.length ? ` (${nets.slice(0, 3).map((n) => n.name).join(", ")}${nets.length > 3 ? ` and ${nets.length - 3} more` : ""})` : "";
+    const scope = w.networks.length || w.cidrs.length ? `constituency of ${countsText(counts(w))}${names}` : "whole country";
     const z = (((data.zones || {})[w.country] || []).find((x) => x.zone === w.timezone) || {}).label || w.timezone || "UTC";
     return FOR === "comms" ? scope : `${c} · times also in ${z} · ${scope}`;
   }
   function refresh() {
     if (!data) return;
-    const sel = $("selCount"); const comp = data.networks.filter(isOn).length;
-    sel.textContent = `${comp} network${comp === 1 ? "" : "s"} selected (${chosen.size} AS number${chosen.size === 1 ? "" : "s"})`;
     const w = wanted();
-    // preview
-    const box = $("preview2");
-    if (mode === "all") box.textContent = `Whole country: both platforms show everything in the reports (yesterday: ${fmt(data.totals.communications)} communication events, ${fmt(data.totals.services)} services records).`;
-    else {
-      const recs = data.networks.filter((n) => n.asns.some((a) => chosen.has(String(a)))).reduce((a, n) => a + n.records, 0);
-      box.textContent = chosen.size || w.cidrs.length
-        ? `Selected networks account for about ${fmt(recs)} of yesterday's records on both platforms together${w.cidrs.length ? `, plus the records in ${w.cidrs.length} address range${w.cidrs.length > 1 ? "s" : ""}` : ""}.`
-        : "Nothing selected yet: choose networks or enter address ranges (applying with nothing selected means the whole country).";
+    // the live summary line (the choice itself is made in Network names & types, below)
+    const box = $("scopeSummary"), go = el("a", null, "Network names & types"); go.href = "#cardNets";
+    if (mode === "all") {
+      box.replaceChildren(document.createTextNode(`Whole country: both platforms show everything in the reports (yesterday: ${fmt(data.totals.communications)} communication events, ${fmt(data.totals.services)} services records). ` +
+        "To choose networks or address blocks instead, use the Constituent column of "), go, document.createTextNode(", below."));
+    } else {
+      const k = counts(w);
+      box.replaceChildren(el("b", null, countsText(k)), document.createTextNode(k.nets || k.blocks || k.other
+        ? ". Change them in the Constituent column of "
+        : ". Nothing chosen yet (applying with nothing chosen means the whole country): choose networks or address blocks in the Constituent column of "),
+      go, document.createTextNode(", below."));
     }
     $("envLines").textContent = `COUNTRY=${w.country}\nTIMEZONE=${w.timezone}\nCONSTITUENT_ASNS=${w.networks.join(",")}\nCONSTITUENT_CIDRS=${w.cidrs.join(",")}`;
     tell();                                       // the network list further down shows the same ticks
@@ -341,11 +365,11 @@
     $("revert").hidden = !dirty;
   }
   $("revert").addEventListener("click", () => {
-    chosen = new Set(saved.networks); $("cidrs").value = saved.cidrs.join("\n");
+    applySaved(saved.networks, saved.cidrs);
     const sc = data.countries.find((c) => c.iso2 === saved.country);
     if (sc && sc.continent) $("continent").value = sc.continent;
     fillCountries(saved.country); fillZones(saved.timezone);
-    setMode(saved.networks.length || saved.cidrs.length ? "some" : "all"); renderNets(); renderCountry();
+    setMode(saved.networks.length || saved.cidrs.length ? "some" : "all"); renderCountry();
   });
 
   // ---------------- apply, then confirm once both platforms have the new settings
@@ -359,7 +383,8 @@
       const r = await fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf }, body: JSON.stringify(w) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || r.statusText);
-      saved = { country: j.settings.country, timezone: j.settings.timezone || "", networks: [...j.settings.networks].map(String).sort(), cidrs: [...j.settings.cidrs] };
+      saved = { country: j.settings.country, timezone: j.settings.timezone || "", networks: [...j.settings.networks].map(String).sort(), cidrs: uniqSorted(j.settings.cidrs) };
+      applySaved(saved.networks, saved.cidrs);   // the ranges as the server keeps them (written the standard way)
       // wait until both platforms have reloaded their data with the new settings
       $("applyState").textContent = "Applied · both platforms are reloading…";
       let ok = false;

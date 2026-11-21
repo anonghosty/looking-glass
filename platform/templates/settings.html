@@ -72,43 +72,19 @@
     </section>
 
     <section class="st-card" id="cardScope">
-      <h2>Constituency <span class="st-for">both platforms</span></h2>
-      <p class="st-hint">The networks (AS numbers) your CSIRT is responsible for. Both platforms (network communications and publicly accessible / vulnerable services) then show only
-        records whose host is in these networks or address ranges: every figure, list, map, analysis and export. "Whole country" shows everything in the reports.</p>
+      <h2>Constituency <span class="st-for">all of Looking Glass</span></h2>
+      <p class="st-hint">The networks (AS numbers) your CSIRT is responsible for. Looking Glass then shows only records whose host is in these
+        networks or address ranges. Every part of Looking Glass follows it: both platforms, the Executive portal, findings and advisories,
+        combinations, the research pages, every export and the quarterly reports. Only the quarterly purge works on the whole database,
+        since it clears old stored rows. "Whole country" shows everything in the reports.</p>
+      {# one picker (the user's design, 2026-11-21): networks and their address blocks are chosen in the Constituent column of
+         Network names & types (net-editor.js, address-blocks.js), other ranges in the box under it; this card keeps the
+         mode and a live summary (settings.js) #}
       <div class="seg st-mode" role="group" aria-label="Constituency">
         <button type="button" data-mode="all" aria-pressed="true">Whole country (everything in the reports)</button>
         <button type="button" data-mode="some" aria-pressed="false">Only selected networks and address ranges</button>
       </div>
-      <div id="someBox">
-        <div class="st-row st-tools">
-          <input type="search" class="search" id="netSearch" placeholder="Search networks or AS numbers, for example telecom, university, 64500" autocomplete="off">
-          <div class="chips" id="typeChips"></div>
-        </div>
-        <div class="st-row st-tools">
-          <button class="pill-btn" id="selShown" type="button">Select all shown</button>
-          <button class="pill-btn" id="clearShown" type="button">Clear shown</button>
-          <span class="muted" id="selCount"></span>
-          <button class="pill-btn st-identify" id="btnIdentify" type="button" title="Look up the company name and type of every network in the data that is not identified yet (PeeringDB and RIPEstat, free public sources; only AS numbers are sent). Networks already identified are skipped.">
-            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM21 21l-5.2-5.2"/></svg>
-            Identify networks <span class="muted" id="unknownCount"></span></button>
-        </div>
-        <div class="table-wrap st-nets"><table class="hosts" id="netTable"><thead><tr><th></th><th>Network (company)</th><th>Type</th><th>AS numbers</th><th>Records yesterday</th></tr></thead><tbody></tbody></table></div>
-        <label class="st-field st-cidrs"><span>Extra address ranges (one per line, for example 41.66.0.0/16 or a single address)</span>
-          <textarea id="cidrs" rows="4" spellcheck="false" placeholder="196.10.0.0/22"></textarea></label>
-        {# pick address blocks from the reports (address_blocks.py, address-blocks.js; the user 2026-11-19) #}
-        <details class="st-blocks" id="blockPick">
-          <summary>Pick address blocks from the reports</summary>
-          <p class="st-hint">Every address block (/24) in yesterday's reports on both platforms, with its records and the network
-            most of them belong to. Tick a block to add it to the extra address ranges above; untick to take it off. Blocks
-            whose network is already chosen are in the constituency anyway. Nothing is looked up outside Looking Glass.</p>
-          <div class="st-row st-tools">
-            <input type="search" class="search" id="blockSearch" placeholder="Search a block or a network, for example 192.0.2, telecom or AS64500" autocomplete="off" aria-label="Search the address blocks">
-            <span class="muted" id="blockCount" role="status"></span>
-          </div>
-          <div class="table-wrap st-nets"><table class="hosts" id="blockTable"><thead><tr><th><span class="st-sr">Add</span></th><th>Address block</th><th>Network</th><th>Records yesterday</th><th>Note</th></tr></thead><tbody></tbody></table></div>
-        </details>
-      </div>
-      <div class="st-preview" id="preview2"></div>
+      <div class="st-preview" id="scopeSummary" role="status"></div>
     </section>
 
     {# the researchers' work (definitions, Intel gathered, notes, network names) is a page of its own: /definitions #}
@@ -162,7 +138,8 @@
     </section>
     {% endif %}
 
-    {# the networks (AS numbers) for reference: read-only here, edited on the Definitions page #}
+    {# the networks (AS numbers): names read-only here (edited on the Definitions page); the Constituent column and Other
+       address ranges choose the constituency #}
     {% with readonly=True %}{% include "_net_card.html" %}{% endwith %}
 
     {% if "settings" in lg_perms %}
@@ -180,8 +157,9 @@
     {# Quarterly: every kept quarter's reports, the accuracy checks, the purge's status, Make it again (quarterly.py, quarterly.js; r85) #}
     <section class="st-card q-card q-pane" id="tabQuarterly" data-scope="admin" hidden>
       <h2>Quarterly <span class="st-for">reports and the purge</span></h2>
-      <p class="st-hint">Once a quarter has ended, Looking Glass makes its reports: one for management, one for advisors, and the purge's
-        figures for you. Management, advisors and administrators are told in the bell. The quarterly purge is off until an administrator
+      <p class="st-hint">Once a quarter has ended, Looking Glass makes its reports: one for management and one for advisors, which only they
+        download, from their own portals; administrators get the purge's figures (rows per report and what the purge deletes), the
+        accuracy checks and the purge's switch here. Management, advisors and administrators are told in the bell. The quarterly purge is off until an administrator
         turns it on below. Once it is on, and when every accuracy check passes (VALID), Looking Glass gives the database pipeline its
         permit: 15 working days (Monday to Friday) after the quarter, on the next working day, the pipeline deletes the raw report rows
         older than 31 days. Findings, cases, advisories and these reports are kept. The timing cannot be changed. Each download, each
@@ -236,7 +214,7 @@
     <section class="st-card">
       <h2>For deployment (.env)</h2>
       <p class="st-hint">Read only: the <span class="mono">.env</span> lines that match what is set on this page, for an installation set up by
-        hand. To change them, use the cards above (the constituency: Constituency, then Apply settings at the bottom). Settings
+        hand. To change them, use the cards above (the constituency: Constituency and the Constituent column of Network names &amp; types, then Apply settings at the bottom). Settings
         applied here take precedence over <span class="mono">.env</span>; changing them needs the Settings permission (administrators).</p>
       <pre class="st-env mono" id="envLines"></pre>
     </section>
@@ -270,12 +248,13 @@
   <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
   <script src="{{ url_for('static', filename='js/notifications.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/regions.js') }}"></script>
+  {# address-blocks.js before settings.js: settings.js asks it which saved ranges are a network's blocks #}
+  <script src="{{ url_for('static', filename='js/address-blocks.js') }}"></script>
   <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
   <script src="{{ url_for('static', filename='js/pdf.js') }}"></script>
   <script src="{{ url_for('static', filename='js/net-editor.js') }}"></script>
   <script src="{{ url_for('static', filename='js/logo-tool.js') }}"></script>
   <script src="{{ url_for('static', filename='js/organisation.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/address-blocks.js') }}"></script>
   {% if "settings" in lg_perms %}<script src="{{ url_for('static', filename='js/quarterly.js') }}"></script>
   <script src="{{ url_for('static', filename='js/pipeline-settings.js') }}"></script>
   <script src="{{ url_for('static', filename='js/password-policy.js') }}"></script>

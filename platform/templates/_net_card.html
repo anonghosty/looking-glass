@@ -1,5 +1,6 @@
 {# Network names and types (AS-number registry): edited on the Definitions page; shown read-only in Settings
-   (readonly=True). Filled by static/js/net-editor.js. #}
+   (readonly=True), where its Constituent column and Other address ranges choose the constituency (settings.js,
+   address-blocks.js). Filled by static/js/net-editor.js. #}
     <section class="st-card dz" id="cardNets" hidden{% if readonly %} data-readonly="1"{% endif %}>
       <header class="dz-head">
         <div class="dz-icon dz-icon-net" aria-hidden="true">
@@ -14,6 +15,10 @@
         </div>
         <div class="dz-actions">
           {% if readonly %}
+          {# Identify networks (settings.js): moved here from the Constituency card with the network list (2026-11-21) #}
+          <button class="lg-btn st-identify" id="btnIdentify" type="button" title="Look up the company name and type of every network in the data that is not identified yet (PeeringDB and RIPEstat, free public sources; only AS numbers are sent). Networks already identified are skipped.">
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM21 21l-5.2-5.2"/></svg>
+            Identify networks <span class="muted" id="unknownCount"></span></button>
           <a class="lg-btn primary" href="/definitions#cardNets" title="Names and types are corrected on the Definitions page"><span>Edit on the Definitions page</span></a>
           {% else %}
           <button class="lg-btn" id="netTypeOpen" type="button" aria-expanded="false" aria-controls="netTypePanel">
@@ -22,8 +27,10 @@
           {% endif %}
         </div>
       </header>
-      {% if readonly %}<p class="dz-hint st-ro-note"><b>Tick the networks that are your constituents</b> (the Constituent column): both platforms then show
-        only those networks, for every user, once you press <b>Apply settings</b> at the bottom. It is the same choice as the Constituency card above.
+      {% if readonly %}<p class="dz-hint st-ro-note"><b>Choose your constituents in the Constituent column:</b> Not in, The whole network, or
+        Some address blocks (the network's row opens with its address blocks that have records, busiest first: tick the ones that
+        are yours). Ranges that belong to no listed network go in <b>Other address ranges</b>, under the table. Every part of
+        Looking Glass then shows only those, for every user, once you press <b>Apply settings</b> at the bottom; the Constituency card above sums it up.
         To correct a name or a type, open the Definitions page.</p>{% endif %}
       <div class="dz-panel" id="netTypePanel" hidden>
         <div class="dz-panel-row">
@@ -41,9 +48,14 @@
         <button class="dz-stat" type="button" role="tab" data-net="types" aria-selected="false"><b id="netN4">–</b><span>Types (sectors)</span><em id="netN4sub">built-in and your own</em></button>
       </div>
       <div class="dz-toolbar">
-        <input type="search" class="dz-search" id="netEdSearch" placeholder="Search a company, AS number, holder or type" autocomplete="off" aria-label="Search the networks">
+        <input type="search" class="dz-search" id="netEdSearch" placeholder="Search name, AS, holder, type" autocomplete="off" aria-label="Search the networks">
         <select class="dz-select lg-enhance" id="netTypeFilter" aria-label="Show one type"><option value="">All types</option></select>
         <span class="dz-status" id="netStatus" role="status"></span>
       </div>
       <div class="table-wrap dz-table net-table"><table id="netEdTable"><thead><tr><th>AS number</th><th>Company name</th><th>Type</th><th>Note</th><th>Registry holder</th><th class="num">Events</th><th>Status</th><th class="dz-act"></th></tr></thead><tbody></tbody></table></div>
+      {% if readonly %}
+      {# ranges not tied to a listed network (settings.js; replaces the Constituency card's "Extra address ranges") #}
+      <label class="st-field st-cidrs nb-other"><span>Other address ranges (one per line, for example 198.51.100.0/22 or a single address): ranges that belong to no listed network</span>
+        <textarea id="cidrs" rows="4" spellcheck="false" placeholder="198.51.100.0/22"></textarea></label>
+      {% endif %}
     </section>

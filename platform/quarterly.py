@@ -3,9 +3,9 @@
 Once a quarter has ended (the first check after 00:00 UTC on the next quarter's 3rd day, when the quarter's last
 day's reports have arrived; the user 2026-11-20), Looking Glass counts the
 quarter's Shadowserver reports and its own workflow, and keeps the result in data/quarterly/<YYYYQn>/:
-  quarterly_<Q>_management.pdf, management_summary_<Q>.csv              management (the Executive portal) and admins
+  quarterly_<Q>_management.pdf, management_summary_<Q>.csv              the management role only (the Executive portal)
   quarterly_<Q>_advisor.pdf, advisor_networks_ / advisor_organisations_ /
-  advisor_network_issues_<Q>.csv                                         advisors (the advisory portal) and admins
+  advisor_network_issues_<Q>.csv                                         the advisor role only (the advisory portal)
   admin_purge_<Q>.csv                                                    admins (Settings → Quarterly)
   summary.json   the counts the next quarter compares against (per network and report, no address); kept for ever:
                  the statistics that survive the purge
@@ -33,9 +33,21 @@ sector; communications (sources.Registry, detect_layout) use the constituent's s
 sources.PREFIXES[layout]; destination-only reports use dst_. The quarter is chosen by file name (it starts with the
 report day and is indexed): from the first day, up to (not including) the next quarter's first day.
 
-Who gets what: management the management PDF and summary CSV; advisors the advisor PDF and their three CSVs; admins
-everything, the purge CSV, "Make it again" and the purge's status. Researchers, analysts and external accounts get
-nothing. Every download is sealed (insider.py), stamped with who and when (CSV) and in the audit log.
+Who gets what (r89, the user 2026-11-21: each role downloads only its own): the management role the management PDF and
+summary CSV; the advisor role the advisor PDF and their three CSVs; administrators only the purge CSV, "Make it again",
+the accuracy checks and the purge's status and switch. Admin accounts hold every permission (to preview the portals),
+so the rule is by role as well (may_see / may_download): an admin previewing a portal sees where each quarter stands,
+without the downloads. Researchers, analysts, auditors and external accounts get nothing. Every download is sealed
+(insider.py), stamped with who and when (CSV) and in the audit log.
+The cards say what is true NOW (the purge's switch today, each quarter's purge as it stands, where the quarter stands,
+an empty quarter in plain words); the PDFs and the CSVs keep what was true when the report was made (a record).
+The oldest report day in the database (one indexed query per report collection) is cached in data/quarterly/state.json.
+The constituency (Settings → Constituency; r89): every count, figure and list counts only the hosts in it, with the
+platforms' own object and rule (settings.Settings.in_scope; a communication is kept when its source OR destination host
+is in it), applied in the second stage (keep_host); the rows outside it are counted apart, so the recount (guard 3)
+still accounts for every stored row. Each report says what it was counted for (status.json, summary.json, every CSV and
+PDF), and a comparison with a quarter counted for another constituency says so. The PURGE is not scoped: it clears old
+stored rows of every network, and its figures (the admin CSV, the PDFs' retention rows) say so.
 Installed from features.py: quarterly.install(app, ctx). The PDFs are drawn by quarterly_pdf.py.
 """
 import collections
@@ -71,6 +83,7 @@ ADDR_RE = re.compile(IPV4_FULL.pattern + "|" + IPV6.pattern)
 Q_RE = re.compile(r"\A\d{4}Q[1-4]\Z")      # \Z: "$" would also accept a trailing newline
 SYSTEM_USER = "looking-glass"
 CHECK_EVERY = 600                    # seconds between the background checks
+OLDEST_EVERY = 6 * 3600              # seconds between the background look-ups of the oldest report day (cached)
 # the collections the purge may touch: the pipeline's own rule (report_names.valid + quarterly_purge.NOT_REPORTS)
 REPORT_NAME = re.compile(r"^[a-z0-9][a-z0-9_]{0,63}$")
 NOT_REPORTS = ("files_", "discovered_fields_", "lg_", "system.")
@@ -87,18 +100,37 @@ OFF_TEXT = "The quarterly purge is off on this installation: no report rows are 
 
 # every output of a quarter: kind -> (file name, readable name, who gets it)
 FILES = {
-    "pdf_management": ("quarterly_{q}_management.pdf", "Management report (PDF)", ("management", "admin")),
-    "management": ("management_summary_{q}.csv", "Management summary (CSV)", ("management", "admin")),
-    "pdf_advisor": ("quarterly_{q}_advisor.pdf", "Advisor report (PDF)", ("advisor", "admin")),
-    "advisor": ("advisor_networks_{q}.csv", "Networks and reports (CSV)", ("advisor", "admin")),
-    "orgs": ("advisor_organisations_{q}.csv", "Organisations and follow-up (CSV)", ("advisor", "admin")),
-    "issues": ("advisor_network_issues_{q}.csv", "Issues and CVEs per network (CSV)", ("advisor", "admin")),
+    "pdf_management": ("quarterly_{q}_management.pdf", "Management report (PDF)", ("management",)),
+    "management": ("management_summary_{q}.csv", "Management summary (CSV)", ("management",)),
+    "pdf_advisor": ("quarterly_{q}_advisor.pdf", "Advisor report (PDF)", ("advisor",)),
+    "advisor": ("advisor_networks_{q}.csv", "Networks and reports (CSV)", ("advisor",)),
+    "orgs": ("advisor_organisations_{q}.csv", "Organisations and follow-up (CSV)", ("advisor",)),
+    "issues": ("advisor_network_issues_{q}.csv", "Issues and CVEs per network (CSV)", ("advisor",)),
     "admin": ("admin_purge_{q}.csv", "Rows and the purge (CSV)", ("admin",)),
 }
+# who is an audience: its permission, and for the two portals a role that is not "admin" (admins hold every permission
+# to preview the portals; the management and advisory permissions are otherwise exclusive to their roles, auth.py)
+AUDIENCE_PERM = {"management": "management", "advisor": "advisory", "admin": "settings"}
+PREVIEW_NOTE = {"management": "Quarterly reports are for management only: you see where each quarter stands, without the downloads.",
+                "advisor": "Quarterly reports are for advisors only: you see where each quarter stands, without the downloads."}
 
 
 def file_name(kind, quarter):
     return FILES[kind][0].format(q=quarter)
+
+
+def may_see(audience, role, has_perm):
+    """The one rule for a quarterly audience (its list and its files): the audience's permission, and for management and
+    advisors not an admin account (which holds every permission only to preview the portals)."""
+    perm = AUDIENCE_PERM.get(audience)
+    if not perm or not has_perm(perm):
+        return False
+    return audience == "admin" or role != "admin"
+
+
+def may_download(kind, audience, role, has_perm):
+    """A file is served (and listed) only on its own audience's route, to that audience (may_see)."""
+    return kind in FILES and audience in FILES[kind][2] and may_see(audience, role, has_perm)
 
 
 # ------------------------------------------------------------------ dates
@@ -180,6 +212,22 @@ def purgeable(db):
         if any((v.get("key") or [("", 0)])[0][0] == "filename" for v in idx.values()):
             out.append(n)
     return out
+
+
+def oldest_day(db, exclude=()):
+    """The oldest report day in the database, or None when no report row is there: one indexed query per report
+    collection (the filename index; a file name starts with its report day, as the report selects rows), never a scan.
+    Raises when the database cannot be read (the caller keeps the cached day)."""
+    best, ex = None, set(exclude)
+    for n in purgeable(db):
+        if n in ex or special_reports.is_special(n):
+            continue
+        doc = db[n].find_one({"filename": {"$gte": "0000-00-00", "$regex": "^[0-9]{4}-[0-9]{2}-[0-9]{2}"}},
+                             {"filename": 1, "_id": 0}, sort=[("filename", 1)])
+        d = _day((doc or {}).get("filename"))
+        if d and (best is None or d < best):
+            best = d
+    return best
 
 
 # ------------------------------------------------------------------ helpers
@@ -276,8 +324,11 @@ def classify(db, exclude):
     for e in comm.items + comm.unsupported:
         lay = e.get("layout")
         sp = "dst_" if lay == "target" else sources.PREFIXES.get(lay or "standard", ("src_", ""))[0]
+        # the other side, for the constituency: the map keeps an event when its source OR destination host is in it
+        dp = "" if lay in ("target", "inbound") else sources.PREFIXES.get(lay or "standard", ("src_", "dst_"))[1]
         out[e["name"]] = {"kind": "communication", "layout": lay or "unrecognised",
-                          "fields": {k: sp + k for k in ("ip", "asn", "region", "sector")}}
+                          "fields": {k: sp + k for k in ("ip", "asn", "region", "sector")},
+                          "other": {k: dp + k for k in ("ip", "asn")} if dp and dp != sp else None}
     svc = services.ServiceRegistry(db, exclude=exclude)
     svc.get(force=True)
     for e in svc.items + svc.unsupported:
@@ -298,7 +349,32 @@ def classify(db, exclude):
 
 
 # ------------------------------------------------------------------ collection
-def collect_db(db, y, q, today, exclude=(), kev=None, light=False):
+def keep_host(scope, k):
+    """The constituency (Settings → Constituency), the platforms' own rule and object: settings.Settings.in_scope, the
+    same call the day loaders make (app.py, services.py). A group of rows is kept when its host is in the constituency,
+    or, for a communication, its other side's host (k["oa"], k["oh"]). Always kept without a restriction."""
+    if scope is None or not getattr(scope, "restricted", False):
+        return True
+    if scope.in_scope(norm_asn(k.get("a")), str(k.get("h") or "").strip()):
+        return True
+    # (MongoDB leaves a missing field out of the group's key: a row without dst_asn still has its dst_ip)
+    return ("oa" in k or "oh" in k) and scope.in_scope(norm_asn(k.get("oa")), str(k.get("oh") or "").strip())
+
+
+def constituency(scope):
+    """What a report was counted for: {label, key}. key changes whenever the constituency does (a quarter compared
+    against one counted for another constituency says so)."""
+    if scope is None or not getattr(scope, "restricted", False):
+        return {"label": "the whole country", "key": "all"}
+    n, m = len(scope.asns), len(scope.nets)
+    parts = ([f"{n} network{'s' if n != 1 else ''}"] if n else []) + ([f"{m} address range{'s' if m != 1 else ''}"] if m else [])
+    key = hashlib.sha256(json.dumps([sorted(scope.asns), sorted(str(x) for x in scope.nets)]).encode()).hexdigest()[:16]
+    return {"label": " and ".join(parts) + " (the constituency set in Settings)", "key": key}
+
+
+def collect_db(db, y, q, today, exclude=(), kev=None, light=False, scope=None):
+    """scope: the platform's settings object (its constituency); None or unrestricted counts every network. The rows'
+    days (rep_day: the stored rows, for the admin's purge figures and the recount) are always the whole database."""
     lo, hi, months = quarter_range(y, q)
     match = {"filename": {"$gte": lo.isoformat(), "$lt": hi.isoformat()}}
     reps, other = classify(db, set(exclude))
@@ -312,7 +388,9 @@ def collect_db(db, y, q, today, exclude=(), kev=None, light=False):
          "sector": collections.defaultdict(set), "sector_recs": collections.Counter(),
          "inf_hosts": collections.defaultdict(set), "inf_recs": collections.Counter(),
          "issue_hosts": collections.defaultdict(set), "issue_recs": collections.Counter(),
-         "kev_hosts": set(), "kev_recs": 0, "cve_hosts": collections.defaultdict(set), "kev_cves": set()}
+         "kev_hosts": set(), "kev_recs": 0, "cve_hosts": collections.defaultdict(set), "kev_cves": set(),
+         "rep_out": collections.Counter(), "constituency": constituency(scope)}
+    restricted = scope is not None and getattr(scope, "restricted", False)
     mi = {m: i for i, m in enumerate(months)}
     for n, why in other.items():
         try:
@@ -327,6 +405,8 @@ def collect_db(db, y, q, today, exclude=(), kev=None, light=False):
             key.update(i="$infection", f="$family", t="$tag")
         if e["kind"] == "service" and not light:
             key.update(t="$tag", p="$ssl_poodle", fr="$freak_vulnerable", ce="$cert_expired", dt="$device_type")
+        if restricted and e.get("other"):              # the other side's host, only to decide the constituency
+            key.update(oa="$" + e["other"]["asn"], oh="$" + e["other"]["ip"])
         pipe = [{"$match": match},
                 {"$group": {"_id": key, "n": {"$sum": 1}, "d": {"$max": {"$substrCP": ["$filename", 0, 10]}},
                             "r": {"$first": "$" + f["region"]}, "s": {"$first": "$" + f["sector"]}}}]
@@ -339,7 +419,10 @@ def collect_db(db, y, q, today, exclude=(), kev=None, light=False):
             continue
         R["rep_day"][name] = days
         R["rep_total"][name] += 0
-        for g_ in groups:               # stage 2: counted here
+        for g_ in groups:               # stage 2: counted here, in the constituency only (rows outside it counted apart)
+            if not keep_host(scope, g_["_id"]):
+                R["rep_out"][name] += g_["n"]
+                continue
             _add(R, name, e, g_["_id"], g_["n"], g_.get("d") or "", g_.get("r"), g_.get("s"), mi, kev, infection, light)
     return R
 
@@ -486,7 +569,11 @@ def workflow(base, y, q, last_seen, title_of=lambda k: k, F=None):
         A["orgs"][org]["devices"] += len(devs)
         A["orgs"][org]["still_seen"] += sum(1 for h in devs if last_seen.get(h, "") > first_send)
     for x in items.values():
-        if x.get("kind") != "case" and x["status"] in findings.OPEN and x.get("network"):
+        # like "Still open": only findings opened before the quarter ended (a quarter made again later must not count
+        # cases opened after it; Q3/Q4 test on lg-test, 2026-11-21)
+        opened = x.get("at")
+        if (x.get("kind") != "case" and x["status"] in findings.OPEN and x.get("network")
+                and opened is not None and opened < t_hi):
             A["orgs"][x["network"]]["cases_open"] += 1
     return W, A
 
@@ -536,7 +623,8 @@ def summary_of(R, netname):
                     hosts.update(hs)
             per_rep[name] = {"label": R["reports"][name]["label"], "family": R["reports"][name]["family"], "records": v,
                              "unique": len(hosts)}
-    return {"quarter": R["quarter"], "totals": {"records": sum(R["rep_total"].values()), "unique": len(R["all_hosts"]),
+    return {"quarter": R["quarter"], "constituency": R.get("constituency") or constituency(None),
+            "totals": {"records": sum(R["rep_total"].values()), "unique": len(R["all_hosts"]),
                                                 "networks": sum(1 for v in R["net_total"].values() if v),
                                                 "reports": sum(1 for v in R["rep_total"].values() if v)},
             "per_network": per_net, "per_report": per_rep, "per_report_network": per_rn}
@@ -557,17 +645,21 @@ def quarter_dir(base, quarter):
     return os.path.join(base, "data", "quarterly", quarter)
 
 
-def previous_summary(db, base, y, q, today, exclude, netname):
+def previous_summary(db, base, y, q, today, exclude, netname, scope=None):
     """The previous quarter's counts: its kept summary.json (made before its rows were purged) when it was VALID, else
-    counted from MongoDB now (counts only)."""
+    counted from MongoDB now (counts only, for the constituency set now). A kept summary counted for another
+    constituency (or before r89, when every report counted the whole country) says so in its source."""
     py, pq = prev_quarter(y, q)
     try:
         s = read_json(os.path.join(quarter_dir(base, qname(py, pq)), "summary.json"))
     except ValueError:
         s = None
     if s and s.get("valid") and isinstance(s.get("totals"), dict):
-        return dict(s, source="the previous quarter's kept summary")
-    P = collect_db(db, py, pq, today, exclude, light=True)
+        was = (s.get("constituency") or {}).get("key", "all")
+        same = was == constituency(scope)["key"]
+        return dict(s, source="the previous quarter's kept summary" + ("" if same else ", counted for a different constituency"),
+                    other_constituency=not same)
+    P = collect_db(db, py, pq, today, exclude, light=True, scope=scope)
     return dict(summary_of(P, netname), source="counted from the reports now", failed=sorted(P["failed"]))
 
 
@@ -725,8 +817,9 @@ def guards(db, R, X, W, A, rows):
     for n in R["rep_total"]:
         try:
             k = db[n].count_documents({"filename": {"$gte": lo_s, "$lt": hi_s}})
-            if k != R["rep_total"][n] or k != sum(R["rep_day"][n].values()):
-                bad.append(f"{n}: {k} counted, {R['rep_total'][n]} in the report")
+            # every stored row is either counted (in the constituency) or set apart (outside it): none lost, none twice
+            if k != R["rep_total"][n] + R["rep_out"][n] or k != sum(R["rep_day"][n].values()):
+                bad.append(f"{n}: {k} counted, {R['rep_total'][n]} in the report + {R['rep_out'][n]} outside the constituency")
             for i, m in enumerate(months):
                 m_hi = months[i + 1] + "-01" if i + 1 < len(months) else hi_s
                 km = db[n].count_documents({"filename": {"$gte": m + "-01", "$lt": m_hi}})
@@ -734,7 +827,8 @@ def guards(db, R, X, W, A, rows):
                     bad.append(f"{n} {m}: {km} counted")
         except Exception as exc:       # noqa: BLE001
             bad.append(f"{n}: recount failed ({type(exc).__name__})")
-    ok("3 independent recount (count_documents) equals every report's total and month rows", not bad, "; ".join(bad[:5]))
+    ok("3 independent recount (count_documents) equals every report's total (in the constituency + outside it) and month rows",
+       not bad, "; ".join(bad[:5]))
     with_net = sum(v for a, v in R["net_total"].items() if a)
     unknown = R["net_total"].get("", 0)
     total = sum(R["rep_total"].values())
@@ -928,8 +1022,12 @@ def write_csvs(out, R, rows, status, made):
     Q, months = R["quarter"], R["months"]
     pd = R["purge"]
 
+    empty = [["No report rows", empty_text(Q, R.get("oldest_day"))]] if not sum(R["rep_total"].values()) else []
+
+    counted = ["Counted for", (R.get("constituency") or constituency(None))["label"]]
+
     def head(title):
-        return [["Report status", status[0], status[1]], [title, Q, made]]
+        return [["Report status", status[0], status[1]], [title, Q, made], counted] + empty
     files = {}
     p = os.path.join(out, file_name("advisor", Q))
     _write(p, head("Advisor: networks and reports"),
@@ -952,6 +1050,8 @@ def write_csvs(out, R, rows, status, made):
     p = os.path.join(out, file_name("admin", Q))
     on = bool(R.get("purge_on"))
     hd = head("Administrator: rows and the purge") + [
+        ["Rows and the purge", "all networks in the database, not only the constituency",
+         "the stored rows and the purge's figures below cover every network: the purge clears old stored rows"],
         ["Quarterly purge", "on" if on else "off",
          ("on when this report was made (turned on in Settings → Quarterly): the database pipeline deletes on the purge "
           "day unless an administrator turns it off before then") if on else
@@ -975,15 +1075,21 @@ def write_csvs(out, R, rows, status, made):
 
 
 # ------------------------------------------------------------------ the run
-def make(db, quarter, base, today=None, exclude=(), F=None):
+def make(db, quarter, base, today=None, exclude=(), F=None, scope=None):
+    """scope: the platform's settings object (Settings → Constituency): every count, figure and list follows it; the
+    purge's figures (purge_all, the admin CSV's stored rows) are always the whole database."""
     y, q = parse_quarter(quarter)
     today = today or datetime.now(timezone.utc).date()
     cv = cve_intel(base)
     kev = kev_ids(cv)
-    R = collect_db(db, y, q, today, exclude, kev)
+    R = collect_db(db, y, q, today, exclude, kev, scope=scope)
     R["kev_set"] = kev
     R["purge_on"] = purge_on(base)                     # what the reports say about the purge (and the permit's rule)
     R["purge"] = purge_dates(y, q)
+    try:                                               # the empty-quarter sentence says from which day rows are held
+        R["oldest_day"], R["oldest_known"] = oldest_day(db, exclude), True
+    except Exception:                  # noqa: BLE001  (not known: the sentence leaves the day out)
+        R["oldest_day"], R["oldest_known"] = None, False
     R["purge_all"] = {}
     for n in purgeable(db):
         try:
@@ -991,7 +1097,7 @@ def make(db, quarter, base, today=None, exclude=(), F=None):
         except Exception as exc:       # noqa: BLE001
             R["failed"].setdefault(n, no_addresses(f"{type(exc).__name__}: {exc}")[:300])
     reg = AsnRegistry(os.path.join(base, "data", "asns.json"))
-    PS = previous_summary(db, base, y, q, today, exclude, lambda a: (reg.company(a, False) if a else "") or UNKNOWN_NET)
+    PS = previous_summary(db, base, y, q, today, exclude, lambda a: (reg.company(a, False) if a else "") or UNKNOWN_NET, scope)
     X = figures(R, PS, base, today, cv)
     W, A = workflow(base, y, q, R["last_seen"], title_of=lambda k: readable(k, "service"), F=F)
     rows = csv_rows(R, X, W, A, PS)
@@ -1109,10 +1215,132 @@ def purge_on(base):
 
 
 def _day(text):
+    if isinstance(text, date):
+        return text
     try:
         return date.fromisoformat(str(text or "")[:10])
     except ValueError:
         return None
+
+
+# ------------------------------------------------------------------ what the cards say (true now; r89)
+def say_day(d, weekday=True):
+    """"Thursday 22 October 2026" (or "22 October 2026"): never a zero-padded day."""
+    d = _day(d)
+    if d is None:
+        return ""
+    return (f"{d:%A} " if weekday else "") + f"{d.day} {d:%B %Y}"
+
+
+def make_day(y, q):
+    """The day a quarter's reports are made automatically (the next quarter's MAKE_ON_DAY-th day)."""
+    return quarter_range(y, q)[1] + timedelta(days=MAKE_ON_DAY - 1)
+
+
+def empty_text(quarter, oldest=None):
+    """The plain sentence for a quarter with no report rows (the cards, the PDFs and the CSVs' first lines)."""
+    return f"No report rows were loaded for {quarter}" + (
+        f" (Looking Glass holds report rows from {say_day(oldest, False)} on)." if _day(oldest) else ".")
+
+
+def purge_state(on, conf=None):
+    """The purge's switch as it is now, for the portals' cards."""
+    if not on:
+        return OFF_TEXT
+    since = say_day((conf or {}).get("at"), False)
+    return (f"The quarterly purge is on{f' (turned on {since})' if since else ''}: on the working day after the "
+            f"{WORKING_DAYS}th working day after a quarter ends, the report rows older than {KEEP_DAYS} days are deleted. "
+            "These reports, findings, cases and advisories are kept.")
+
+
+def _tail(audience, y, q, on):
+    """The dates a role needs about a quarter that is not made yet: management and advisors the day to download by
+    (only while the purge is on); administrators the purge day and the cutoff."""
+    pd = purge_dates(y, q)
+    if audience == "admin":
+        if on:
+            return (f"; with the quarterly purge on, the report rows dated before {say_day(pd['cutoff'])} are deleted on "
+                    f"{say_day(pd['purge_day'])}")
+        return "; the quarterly purge is off, so nothing is deleted for it"
+    return f" (download before the end of {say_day(pd['working_day_15'])})" if on else ""
+
+
+def stands(today, audience, kept=(), on=False, since=""):
+    """Where the quarter stands now, in plain sentences (every card shows them, even with no report kept): an ended
+    quarter whose reports are not made yet, then the quarter in progress."""
+    out = []
+    y, q = quarter_of(today)
+    py, pq = prev_quarter(y, q)
+    pn, mk = qname(py, pq), make_day(py, pq)
+    auto = not since or quarter_range(py, pq)[1].isoformat() > str(since)      # made by itself (quarterly.tick)
+    if pn not in set(kept):
+        if today < mk:
+            out.append(f"{pn} has ended: its reports are made on {say_day(mk)}{_tail(audience, py, pq, on)}.")
+        elif today == mk and auto:
+            out.append(f"{pn} has ended: its reports are made today, {say_day(mk)}{_tail(audience, py, pq, on)}.")
+        elif auto:
+            out.append(f"{pn} has ended: its reports were due on {say_day(mk)}, and none is kept yet."
+                       + (" Make them with Make it again." if audience == "admin" else ""))
+    last = quarter_range(y, q)[1] - timedelta(days=1)
+    out.append(f"{qname(y, q)} is in progress: it ends {say_day(last)}; its reports are made on {say_day(make_day(y, q))}"
+               f"{_tail(audience, y, q, on)}.")
+    return out
+
+
+def purge_fact(st, on, today, permit=False, result=None):
+    """A kept quarter's purge as it stands NOW (the switch today, its own dates), for the cards. The PDFs and the CSVs
+    keep what was true when the report was made."""
+    pday, cut, d15, made = (_day(st.get(k)) for k in ("purge_day", "cutoff", "working_day_15", "generated_at"))
+    if result and result.get("outcome") == "done":
+        return (f"Purged on {say_day(result.get('at'))}: the report rows dated before {say_day(result.get('cutoff'))} "
+                "were deleted. These reports stay here.")
+    if not st.get("valid"):
+        return "No purge for this quarter: the report is NOT VALID, so nothing is deleted for it."
+    if pday is None:
+        return ""
+    if made and made > pday:
+        return f"No purge for this quarter: its purge day ({say_day(pday)}) had passed when it was made."
+    if today > pday:
+        if permit:
+            return f"Its purge day ({say_day(pday)}) has passed: the database pipeline has not reported the purge yet."
+        return (f"No purge for this quarter: its purge day ({say_day(pday)}) has passed"
+                + (" (the next quarter's purge covers its rows)." if on else "."))
+    if not on:
+        return (f"No report rows are deleted while the quarterly purge is off. If an administrator turns it on before "
+                f"{say_day(pday)}, the report rows dated before {say_day(cut)} are deleted that day: download before the end "
+                f"of {say_day(d15)}.")
+    if permit:
+        return (f"Download before the end of {say_day(d15)}: the report rows dated before {say_day(cut)} are deleted on "
+                f"{say_day(pday)}. These reports stay here.")
+    why = st.get("no_permit_why") or ""
+    if why == WHY_NOT_NEWEST:
+        return "No purge for this quarter: a newer quarter's report exists, and only the newest quarter's purge runs."
+    if why and why != WHY_OFF:
+        return f"No purge for this quarter: {why}."
+    return "No purge permit is written for this quarter, so nothing is deleted for it."
+
+
+def can_make(today, gone="", oldest=None, known=True):
+    """The quarters "Make it again" offers: ended, among the last four, with report rows (from the oldest report day in
+    the database on; all of the four when that day is not known) and not purged."""
+    out = []
+    y, q = prev_quarter(*quarter_of(today))
+    od = _day(oldest)
+    for _ in range(4):
+        lo, hi, _m = quarter_range(y, q)
+        if (not gone or str(gone) <= lo.isoformat()) and (not known or (od is not None and od < hi)):
+            out.append(qname(y, q))
+        y, q = prev_quarter(y, q)
+    return out
+
+
+def can_make_note(today, oldest=None):
+    """Why "Make it again" offers nothing, in plain words."""
+    cy, cq = quarter_of(today)
+    od = _day(oldest)
+    if od is None or od >= quarter_range(cy, cq)[0]:
+        return f"No ended quarter has report rows yet: the first report is made on {say_day(make_day(cy, cq))}."
+    return "No ended quarter of the last four can be counted again: their report rows were deleted by the quarterly purge."
 
 
 def purge_preview(base, today):
@@ -1186,7 +1414,7 @@ class Refused(Exception):
     """A quarter that cannot be made (not ended yet, or its raw rows were deleted)."""
 
 
-def build(db, base, quarter, made, today=None, now=None, exclude=(), F=None):
+def build(db, base, quarter, made, today=None, now=None, exclude=(), F=None, scope=None):
     """Make one quarter's outputs and put them in data/quarterly/<Q>/ in one step (the old ones replaced). The permit
     is written only when the report is VALID and made on or before its purge day. Returns its status.json."""
     y, q = parse_quarter(quarter)
@@ -1205,7 +1433,8 @@ def build(db, base, quarter, made, today=None, now=None, exclude=(), F=None):
     tmp = tempfile.mkdtemp(prefix=f".{quarter}.", dir=top)
     t0 = time.time()
     try:
-        R, PS, X, W, A, rows, G = make(db, quarter, base, today, exclude, F)
+        R, PS, X, W, A, rows, G = make(db, quarter, base, today, exclude, F, scope)
+        R["now_ts"] = now                  # the PDFs' "made" time is the build's own time (pretend dates in tests too)
         status, files = publish(tmp, R, X, W, A, rows, G, made)
         pd = R["purge"]
         valid = status[0] == "VALID"
@@ -1217,7 +1446,10 @@ def build(db, base, quarter, made, today=None, now=None, exclude=(), F=None):
               "failed_collections": sorted(R["failed"]),
               **{k: v.isoformat() for k, v in pd.items()}, "keep_days": KEEP_DAYS, "working_days": WORKING_DAYS,
               "permit": permit, "no_permit_why": no_permit_why, "purge_on": bool(R.get("purge_on")),
-              "rows_purge_deletes": sum(R["purge_all"].values()),
+              "rows_purge_deletes": sum(R["purge_all"].values()), "rows": sum(R["rep_total"].values()),
+              "constituency": R["constituency"]["label"], "constituency_key": R["constituency"]["key"],
+              "rows_outside_constituency": sum(R["rep_out"].values()),
+              **({"oldest_day": R["oldest_day"].isoformat() if R.get("oldest_day") else ""} if R.get("oldest_known") else {}),
               "files": {k: {"name": os.path.basename(p), "bytes": os.path.getsize(p),
                             "sha256": hashlib.sha256(open(p, "rb").read()).hexdigest()} for k, p in files.items()}}
         summ = dict(summary_of(R, X["netname"]), valid=valid, generated_at=gen,
@@ -1319,7 +1551,8 @@ def bell(base, now=None):
 
 # ------------------------------------------------------------------ the background check and the routes
 def install(app, ctx):
-    """ctx: base_dir, db, has_perm, csrf_ok, audit, people_name, findings, logger, serving, exclude."""
+    """ctx: base_dir, db, has_perm, csrf_ok, audit, people_name, findings, logger, serving, exclude, settings (the
+    platform's settings object: its constituency scopes the reports' counts)."""
     base, hp, audit = ctx["base_dir"], ctx["has_perm"], ctx["audit"]
     log = ctx.get("logger")
     top = os.path.join(base, "data", "quarterly")
@@ -1338,6 +1571,30 @@ def install(app, ctx):
             _write_json(state_path, s)
         return s
 
+    def remember_oldest(d):
+        s = state()
+        s.update(oldest_day=d.isoformat() if d else "", oldest_checked_ts=round(time.time()))
+        _write_json(state_path, s)
+
+    def oldest(refresh=False):
+        """(the oldest report day in the database or None, known): cached in state.json; looked up (one indexed query
+        per report collection) only when not cached yet, or when refresh asks (the background check, every
+        OLDEST_EVERY seconds; a report made and a purge done refresh it too)."""
+        s = read_json(state_path) or {}
+        if "oldest_day" in s and not refresh:
+            return _day(s["oldest_day"]), True
+        db = ctx.get("db")
+        if db is None:
+            return _day(s.get("oldest_day")), "oldest_day" in s
+        try:
+            d = oldest_day(db, exclude())
+        except Exception:              # noqa: BLE001  (the database cannot be read now: the cached day, if any)
+            if log:
+                log.exception("quarterly: the oldest report day could not be read")
+            return _day(s.get("oldest_day")), "oldest_day" in s
+        remember_oldest(d)
+        return d, True
+
     def make_now(quarter, made, by):
         """One quarter, one at a time (also across processes: a lock file)."""
         with lock:
@@ -1351,7 +1608,9 @@ def install(app, ctx):
                     fcntl.flock(lf, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except OSError:
                     raise Refused("another Looking Glass process is making a quarterly report") from None
-                st = build(ctx["db"], base, quarter, made, exclude=exclude(), F=ctx.get("findings"))
+                st = build(ctx["db"], base, quarter, made, exclude=exclude(), F=ctx.get("findings"), scope=ctx.get("settings"))
+            if "oldest_day" in st:                     # counted with the report: the cached oldest report day follows
+                remember_oldest(_day(st["oldest_day"]))
             audit.add("quarterly_made", user=by, target=quarter,
                       detail=f"{st['status']} · {made} · purge permit {'written' if st['permit'] else 'not written'}"
                              + ("" if st["valid"] else f" · {st['why'][:200]}"))
@@ -1367,6 +1626,7 @@ def install(app, ctx):
     def take_results():
         """The pipeline's purges, once each: kept with their quarter and written to the audit log."""
         ps = pipeline_purge(base)
+        took = False
         for q, res in (ps.get("done") or {}).items():
             if not Q_RE.match(str(q)) or not isinstance(res, dict):
                 continue
@@ -1386,6 +1646,9 @@ def install(app, ctx):
                       detail=(f"{int(clean['rows_deleted'] or 0):,} rows deleted from {int(clean['collections_touched'] or 0)} "
                               f"report collections, dated before {clean['cutoff']} (purge day {clean['purge_day']}); "
                               f"done by the database pipeline at {clean['at']}"))
+            took = True
+        if took:                                      # rows were deleted: the oldest report day moved
+            oldest(refresh=True)
 
     def tick(now=None):
         now = now or time.time()
@@ -1402,6 +1665,8 @@ def install(app, ctx):
                 os.path.lexists(os.path.join(quarter_dir(base, qn), "purge_permit.json")) for qn, _ in quarters(base)):
             sync_permits(base, False, today)          # off: no permit waits (one left from before r88 included)
         take_results()
+        if now - float((read_json(state_path) or {}).get("oldest_checked_ts") or 0) > OLDEST_EVERY:
+            oldest(refresh=True)                       # new reports loaded since: Make it again's list follows
 
     def loop():
         time.sleep(90)
@@ -1420,30 +1685,64 @@ def install(app, ctx):
     def me():
         return (getattr(g, "user", None) or {}).get("user", "")
 
-    def listing(audience, admin=False):
+    def role():
+        return (getattr(g, "user", None) or {}).get("role", "")
+
+    def listing(audience, admin=False, today=None):
+        """Every kept quarter as the card shows it: what is true now (the purge as it stands, an empty quarter in plain
+        words) and the files this person may download (may_download: none for an admin previewing a portal)."""
         out = []
         on = purge_on(base)
+        today = today or datetime.now(timezone.utc).date()
+        od, _known = oldest()
+        who_am_i = role()
+        here = constituency(ctx.get("settings"))["key"]
         for q, st in quarters(base):
+            d = quarter_dir(base, q)
             files = []
-            for kind, (_n, label, who) in FILES.items():
+            for kind, (_n, label, _who) in FILES.items():
                 f = (st.get("files") or {}).get(kind)
-                if f and audience in who and os.path.exists(os.path.join(quarter_dir(base, q), f["name"])):
+                if f and may_download(kind, audience, who_am_i, hp) and os.path.exists(os.path.join(d, f["name"])):
                     files.append({"kind": kind, "label": label, "name": f["name"], "bytes": f["bytes"],
                                   "url": f"{PREFIX[audience]}/{q}/{kind}"})
+            result = read_json(os.path.join(d, "purge_result.json"))
+            permit_file = os.path.isfile(os.path.join(d, "purge_permit.json"))
+            rows = st.get("rows")
+            if not isinstance(rows, (int, float)):        # reports made before r89: their kept summary's total
+                rows = ((read_json(os.path.join(d, "summary.json")) or {}).get("totals") or {}).get("records")
             row = {"quarter": q, "status": st.get("status"), "valid": st.get("valid"), "why": st.get("why", ""),
                    "generated_at": st.get("generated_at"), "made": st.get("made", ""), "last_day": st.get("last_day"),
                    "download_before": st.get("working_day_15"), "purge_day": st.get("purge_day"), "cutoff": st.get("cutoff"),
-                   "permit": bool(st.get("permit")) and on, "purge_on": on, "files": files}
+                   "permit": bool(st.get("permit")) and on and permit_file, "purge_on": on, "files": files,
+                   "purge_text": purge_fact(st, on, today, permit_file, result), "rows": rows,
+                   "empty_text": empty_text(q, od) if rows == 0 else "",
+                   # reports made before r89 counted every network: the whole country
+                   "counted_for": st.get("constituency") or "the whole country",
+                   "other_constituency": (st.get("constituency_key") or "all") != here}
             if admin:
                 row.update(guards=st.get("guards") or [], no_permit_why=st.get("no_permit_why", ""),
                            failed_collections=st.get("failed_collections") or [], rows_purge_deletes=st.get("rows_purge_deletes"),
-                           purge_result=read_json(os.path.join(quarter_dir(base, q), "purge_result.json")))
+                           purge_result=result)
             out.append(row)
         return out
 
+    def card(audience, admin=False):
+        """A card's whole answer: the quarters, where the quarter stands now, the purge's switch now, and for an admin
+        previewing a portal the note that replaces the downloads."""
+        today = datetime.now(timezone.utc).date()
+        on = purge_on(base)
+        kept = listing(audience, admin, today)
+        out = {"quarters": kept, "now": stands(today, audience, [k["quarter"] for k in kept], on, state().get("since", "")),
+               "purge_state": purge_state(on, confirmation(base)), "note": ""}
+        if not may_see(audience, role(), hp):
+            out["note"] = PREVIEW_NOTE.get(audience, "")
+        return out
+
     def download(audience, quarter, kind):
-        if not Q_RE.match(quarter or "") or kind not in FILES or audience not in FILES[kind][2]:
+        if not Q_RE.match(quarter or "") or kind not in FILES:
             return jsonify(error="No such file."), 404
+        if not may_download(kind, audience, role(), hp):
+            return jsonify(error=REFUSE[audience]), 403
         st = read_json(os.path.join(quarter_dir(base, quarter), "status.json")) or {}
         f = (st.get("files") or {}).get(kind)
         if not f:
@@ -1469,20 +1768,22 @@ def install(app, ctx):
                                                       "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
     PREFIX = {"management": "/api/mgmt/quarterly", "advisor": "/api/advisory/quarterly", "admin": "/api/admin/quarterly"}
-    REFUSE = {"management": "The quarterly management report is for the management role (and admins).",
-              "advisor": "The quarterly advisor report is for advisors (and admins).",
+    REFUSE = {"management": "The quarterly management report is for the management role only.",
+              "advisor": "The quarterly advisor report is for advisors only.",
               "admin": "The quarterly reports' administration is for administrators (permission 'settings')."}
-    PERM = {"management": "management", "advisor": "advisory", "admin": "settings"}
+    PERM = AUDIENCE_PERM
 
+    # the lists: the audience's permission (an admin previewing a portal gets the card without downloads); the files:
+    # may_download, the one rule (the role's own files only)
     @app.route("/api/mgmt/quarterly")
     def api_quarterly_mgmt():
         if not hp(PERM["management"]):
             return jsonify(error=REFUSE["management"]), 403
-        return jsonify(quarters=listing("management"))
+        return jsonify(**card("management"))
 
     @app.route("/api/mgmt/quarterly/<quarter>/<kind>")
     def api_quarterly_mgmt_file(quarter, kind):
-        if not hp(PERM["management"]):
+        if not may_see("management", role(), hp):
             return jsonify(error=REFUSE["management"]), 403
         return download("management", quarter, kind)
 
@@ -1490,29 +1791,24 @@ def install(app, ctx):
     def api_quarterly_advisor():
         if not hp(PERM["advisor"]):
             return jsonify(error=REFUSE["advisor"]), 403
-        return jsonify(quarters=listing("advisor"))
+        return jsonify(**card("advisor"))
 
     @app.route("/api/advisory/quarterly/<quarter>/<kind>")
     def api_quarterly_advisor_file(quarter, kind):
-        if not hp(PERM["advisor"]):
+        if not may_see("advisor", role(), hp):
             return jsonify(error=REFUSE["advisor"]), 403
         return download("advisor", quarter, kind)
 
     @app.route("/api/admin/quarterly")
     def api_quarterly_admin():
-        if not hp(PERM["admin"]):
+        if not may_see("admin", role(), hp):
             return jsonify(error=REFUSE["admin"]), 403
         today = datetime.now(timezone.utc).date()
-        gone = str(pipeline_purge(base).get("purged_before") or "")
-        can = []
-        y, q = prev_quarter(*quarter_of(today))
-        for _ in range(4):                               # the last four ended quarters whose rows are still there
-            lo = quarter_range(y, q)[0]
-            if not gone or gone <= lo.isoformat():
-                can.append(qname(y, q))
-            y, q = prev_quarter(y, q)
         ps = pipeline_purge(base)
-        return jsonify(quarters=listing("admin", admin=True), can_make=can, making=busy["quarter"], error=busy["error"],
+        od, known = oldest()
+        can = can_make(today, str(ps.get("purged_before") or ""), od, known)
+        return jsonify(**card("admin", admin=True), can_make=can, can_make_note="" if can else can_make_note(today, od),
+                       oldest_day=od.isoformat() if od else "", making=busy["quarter"], error=busy["error"],
                        pipeline={"found": bool(ps), "purged_before": ps.get("purged_before", ""),
                                  "last": {k: (ps.get("last") or {}).get(k) for k in ("quarter", "at", "outcome", "why",
                                                                                       "purge_day", "cutoff", "rows_deleted")}},
@@ -1585,7 +1881,7 @@ def install(app, ctx):
 
     @app.route("/api/admin/quarterly/<quarter>/<kind>")
     def api_quarterly_admin_file(quarter, kind):
-        if not hp(PERM["admin"]):
+        if not may_see("admin", role(), hp):
             return jsonify(error=REFUSE["admin"]), 403
         return download("admin", quarter, kind)
 
@@ -1600,8 +1896,13 @@ def install(app, ctx):
         if not Q_RE.match(quarter):
             return jsonify(error="Choose a quarter, like 2026Q4."), 400
         y, q = parse_quarter(quarter)
-        if datetime.now(timezone.utc).date() < quarter_range(y, q)[1]:
+        today = datetime.now(timezone.utc).date()
+        if today < quarter_range(y, q)[1]:
             return jsonify(error=f"{quarter} has not ended yet."), 409
+        od, known = oldest()
+        if quarter not in can_make(today, str(pipeline_purge(base).get("purged_before") or ""), od, known):
+            return jsonify(error=f"{quarter} cannot be made again: only an ended quarter of the last four with report rows "
+                                 "that were not purged can."), 409
         if busy["quarter"]:
             return jsonify(error=f"{busy['quarter']} is being made: wait until it is ready."), 409
         u = me()

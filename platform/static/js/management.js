@@ -832,14 +832,11 @@
     }
     b.disabled = true; b.classList.add("busy"); b.querySelector("b").textContent = "Preparing the report…";
     try {
-      const r = await fetch(`/api/mgmt/report?${p}`, { credentials: "same-origin", cache: "no-store" });
-      if (!r.ok) { let m = r.statusText; try { m = (await r.json()).error || m; } catch { /* not JSON */ } throw new Error(m); }
-      const blob = await r.blob(), a = document.createElement("a");
-      a.href = URL.createObjectURL(blob); a.download = ((r.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/) || [])[1] || "looking-glass-executive.zip";
-      document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-      toast("Executive report downloaded", "ok");
-    } catch (e) { toast(`The report failed: ${e.message}`, "bad"); }
-    finally { b.disabled = false; b.classList.remove("busy"); b.querySelector("b").textContent = "Executive report"; }
+      // through the platform's one download helper (LGLoader.download, r89); the button keeps its own busy look
+      const res = await window.LGLoader.download(`/api/mgmt/report?${p}`, { name: "looking-glass-executive.zip" });
+      if (res.ok) toast("Executive report downloaded", "ok");
+      else if (res.message) toast(res.message, "bad");
+    } finally { b.disabled = false; b.classList.remove("busy"); b.querySelector("b").textContent = "Executive report"; }
   });
   $("mgExplainAll").addEventListener("click", async () => {
     if (!state.data) return;      // clicked before the first load: nothing to explain yet (review 2026-11-13)

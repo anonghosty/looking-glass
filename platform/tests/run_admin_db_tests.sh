@@ -16,7 +16,7 @@ trap 'shred -u "$tmp" 2>/dev/null || rm -f "$tmp"' EXIT
 sudo cat "$ETC" > "$tmp" || { echo "Could not read $ETC with sudo."; exit 1; }
 export LG_MONGO_ADMIN_FILE=$tmp
 fail=0
-for t in tests/test_new_collections.py tests/test_new_service_collections.py tests/check_quarterly.py; do
+for t in tests/test_new_collections.py tests/test_new_service_collections.py tests/check_quarterly.py tests/check_quarterly_purge_e2e.py; do
   printf '%-45s ' "$t"; out=$(.venv/bin/python "$t" 2>&1); rc=$?
   [ $rc = 0 ] && echo passed || { echo "FAILED ($rc)"; echo "$out" | tail -5; fail=1; }
 done

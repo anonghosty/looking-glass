@@ -3,6 +3,9 @@
 Screenshots of Looking Glass. Everything here uses **dummy data**: documentation IP ranges
 (RFC 5737, RFC 2544, RFC 3849), private AS numbers and fictional network names, on an installation set to Kenya.
 
+Each screenshot is listed in `screens/manifest.json` with the page files it shows. A check fails when one of those files
+changes, until the screenshot is taken again or confirmed (`platform/tools/screens_manifest.py --update <name>`).
+
 ## Screenshots
 
 | | |

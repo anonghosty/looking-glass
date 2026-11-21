@@ -369,8 +369,11 @@ def install(app, ctx):
         if not out:
             return jsonify(error=err), 404 if "No such" in err else 409
         zname, zbytes, pname, pbytes = out
-        ctx["audit"].add("combo_export", user=me, target=f"review #{fid}", detail="the report of a decided review")
-        if request.args.get("as") == "pdf":
+        # one entry per call: the report is made here (book.package logs nothing and keeps no copy for a review's report)
+        preview = request.args.get("as") == "pdf"
+        ctx["audit"].add("combo_export", user=me, target=f"review #{fid}",
+                         detail=f"the report of a decided review · {pname if preview else zname}" + (" (preview)" if preview else ""))
+        if preview:
             r = Response(pbytes, mimetype="application/pdf",
                          headers={"Content-Disposition": f'inline; filename="{pname}"', "Cache-Control": "no-store"})
             # the browser's own PDF viewer shows it (the page policy would block its viewer)

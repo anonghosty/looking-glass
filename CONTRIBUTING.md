@@ -45,6 +45,13 @@ reports. The demo data (`lg_demo`) is enough for nearly every change.
 - **Text shows in full.** No cut-off text on pages or in PDFs; lists wrap.
 - **Readable names, not internal identifiers**, wherever people read them.
 - **Documentation** is updated in the same pull request when behaviour or a setting changes.
+- **Screenshots follow the pages.** `docs/media/screens/manifest.json` records, for every screenshot, the page files it
+  shows (template, scripts, styles) as they were when it was taken. When you change one of those files,
+  `tests/check_screenshots.py` names the screenshots that may now be out of date. Take each one again with made-up data,
+  or open the page and confirm the screenshot still matches, then record it:
+  `cd platform && python3 tools/screens_manifest.py --update 60-settings.png`. `--status` lists every screenshot that
+  needs attention. A new screenshot is added to `SCREENS` in that tool, with the address it is taken on, before
+  `--update`.
 - **Code standard:** Python passes [Ruff](https://docs.astral.sh/ruff/) with the rules in [ruff.toml](ruff.toml)
   (undefined and unused names, bare `except:`, mutable or computed default arguments, late-bound loop variables and
   the like) and [Bandit](https://bandit.readthedocs.io/) with no medium or high finding; shell scripts pass

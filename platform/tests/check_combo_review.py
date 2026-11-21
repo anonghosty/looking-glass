@@ -202,6 +202,14 @@ try:
         ok("…carrying exactly what was sent", sorted(r[5] for r in rows2[1:] if r[0] == "across reports") == sorted(tick))
     st, pdf = call("/review/1/report?as=pdf", ADVISOR, role="advisor", user="lg-check-advisor", raw=True)
     ok("…and its PDF to preview in the browser", st == 200 and pdf[:4] == b"%PDF")
+    # one call = one audit entry (r89: book.package logged it as well, so each report was two entries), and no copy is
+    # left in the search downloads folder (that copy could never be downloaded: it is not a search)
+    n0 = audited.count("combo_export")
+    st, _ = call("/review/1/report", ADVISOR, role="advisor", user="lg-check-advisor", raw=True)
+    ok("the review's report: exactly one audit entry per download", st == 200 and audited.count("combo_export") - n0 == 1,
+       f"{audited.count('combo_export') - n0} entries")
+    kept = book.export_paths["dir"]
+    ok("…and nothing of it kept with the searches' downloads", not any(n.startswith("review") for n in (os.listdir(kept) if os.path.isdir(kept) else [])))
     st, _ = call("/review/1/report", ANALYST)
     ok("the analyst no longer generates it", st == 403)
     st, _ = call("/review/1/report", MGMT, role="management", user="lg-check-management")

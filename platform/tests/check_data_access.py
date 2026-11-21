@@ -79,7 +79,15 @@ get("/api/related", user="", ref="h-anon")
 ok("POST, a failed answer, an unrelated page, the self-test and no user: none logged", len(entries) == n, str(entries[n:]))
 os.environ["DATA_ACCESS_LOG"] = "0"
 get("/api/related", ref="h-off")
-ok("DATA_ACCESS_LOG=0 turns it off", len(entries) == n and not data_access.enabled())
+ok("DATA_ACCESS_LOG=0 turns the views off", len(entries) == n and not data_access.enabled())
+get("/api/svc/hosts.csv", service="Accessible RDP")
+get("/api/svc/drill", metric="hosts", issue="CVE-2024-1", all="1", download="1")
+get("/api/insight/drill", kind="infection", value="mirai", metric="hosts", all="1", download="1")
+ok("…but never the downloads: each one is still an export entry (r89)", len(entries) == n + 3
+   and [x["event"] for x in entries[n:]] == ["data_exported"] * 3, str(entries[n:]))
+n = len(entries)
+get("/api/svc/hosts.csv", user="lg-selftest-admin")
+ok("…the self-test's downloads stay out, as before", len(entries) == n)
 os.environ.pop("DATA_ACCESS_LOG")
 
 print("Every download is its own entry, the same list twice included (review 2026-11-13)")

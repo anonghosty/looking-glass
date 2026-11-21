@@ -307,23 +307,22 @@
     finally { $("vfRun").disabled = false; window.LGLoader?.ready(); }
   });
   async function sha256hex(buf) { const h = await crypto.subtle.digest("SHA-256", buf); return [...new Uint8Array(h)].map((x) => x.toString(16).padStart(2, "0")).join(""); }
+  // through the platform's one download helper (LGLoader.download, r89), which hands back the file and its headers:
+  // the page shows the file's SHA-256 and, for the proof package, the head it holds
   async function download(url, label, boxId = "evDone") {
-    window.LGLoader?.busy(`Preparing ${label}`);
+    window.LGLoader.busy(`Preparing ${label}`);
     try {
-      const r = await fetch(url, { cache: "no-store" });
-      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || r.statusText); }
-      const buf = await r.arrayBuffer();
-      const name = (/filename="([^"]+)"/.exec(r.headers.get("Content-Disposition") || "") || [])[1] || "audit-evidence";
-      const a = el("a"); a.href = URL.createObjectURL(new Blob([buf], { type: r.headers.get("Content-Type") || "application/octet-stream" })); a.download = name;
-      document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      const res = await window.LGLoader.download(url, { name: "audit-evidence" });
+      if (!res.ok) { if (res.message) banner(`Could not prepare ${label}. ${res.message}`, true); return; }
+      const buf = await res.blob.arrayBuffer();
       let hex = ""; try { hex = await sha256hex(buf); } catch { /* an old browser without SubtleCrypto */ }
       const box = $(boxId); box.hidden = false; box.replaceChildren(); box.className = "au-ev-done";
-      box.append(el("b", null, `Downloaded ${name}`), el("span", "muted", ` · ${fmt(buf.byteLength)} bytes`));
+      box.append(el("b", null, `Downloaded ${res.name}`), el("span", "muted", ` · ${fmt(buf.byteLength)} bytes`));
       if (hex) { const p = el("p"); p.append(el("span", null, "SHA-256 "), el("code", "au-hash", hex)); box.append(p); }
-      const head = r.headers.get("X-Audit-Head");          // the proof package: the head it holds, to keep for the next audit
+      const head = res.headers.get("X-Audit-Head");        // the proof package: the head it holds, to keep for the next audit
       if (head) { const p = el("p"); p.append(el("span", null, "Head "), el("code", "au-hash", head)); box.append(p, el("p", "muted", "Keep both with your working papers.")); }
-    } catch (e) { banner(`Could not prepare ${label}: ${e.message}`, true); }
-    finally { window.LGLoader?.ready(); }
+    } catch { banner(`Could not prepare ${label}. ${window.LGLoader.downloadMessage(null)}`, true); }
+    finally { window.LGLoader.ready(); }
   }
   $("pfZip").addEventListener("click", () => download("/api/audit/proof.zip", "the proof package", "ctOut"));
   // compare with an earlier audit's head (hash@entry): the log up to it must be unchanged

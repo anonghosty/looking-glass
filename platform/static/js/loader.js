@@ -200,6 +200,107 @@
       }
     },
     hide,
+    /** the plain words when the server could not be reached (a restart, a dropped connection), never the browser's
+        own "Failed to fetch" */
+    UNREACHABLE: "Looking Glass could not be reached just now (it may be restarting).",
+    /** true for an error that means the request never got an answer (fetch's TypeError), not a refusal */
+    unreachable(e) { return !!e && (e.name === "TypeError" || e.unreachable === true); },
+    /** a file from the server (r89, the user 2026-11-21: quarterly downloads failed with "Network error"): through
+        fetch, a blob and a temporary link, never a plain <a href download> (on a self-signed certificate the browser's
+        download manager makes its own request, which often fails before it reaches Looking Glass). The button shows
+        that it is busy; the file name comes from Content-Disposition; when Looking Glass could not be reached it tries
+        once more on its own. The server seals, stamps and audit-logs the file as before (the same route).
+        Returns {ok, message}: message is plain words for the page to show. */
+    /** Every download of the platform goes through here (r89: one shared function, tests/check_downloads.py).
+        options: button (shown busy), busy (its words meanwhile), name (when the server gives none), method, body and
+        headers (a POST with the CSRF token). Returns {ok, message, status, data, headers, name}: message is plain
+        words for the page to show (empty on success); status and data (the server's JSON answer) let a page act on a
+        refusal itself (a search that expired, a review that is not decided yet); headers and blob are the file's
+        response headers and content (the Audit portal shows the package's head and SHA-256). */
+    async download(url, { button, name, busy, method, body, headers } = {}) {
+      const b = button || null;
+      if (b && b.getAttribute("aria-busy") === "true") return { ok: false, message: "" };
+      const kept = b ? [...b.childNodes] : [];
+      if (b) {
+        b.setAttribute("aria-busy", "true"); b.disabled = true;
+        b.classList.add("lg-loading"); b.textContent = busy || "Downloading…";
+      }
+      const restore = () => {
+        if (!b) return;
+        b.classList.remove("lg-loading", "lg-has-logo"); b.replaceChildren(...kept);
+        b.disabled = false; b.removeAttribute("aria-busy");
+      };
+      try {
+        const r = await window.LGLoader.fetchOnceMore(url, { method: method || "GET", body, headers, credentials: "same-origin", cache: "no-store" });
+        if (!r.ok) {
+          let data = {};
+          try { data = (await r.json()) || {}; } catch { /* not JSON */ }
+          return { ok: false, status: r.status, data, message: window.LGLoader.downloadMessage(null, data.error || `Looking Glass answered ${r.status}`) };
+        }
+        const blob = await r.blob();
+        const file = window.LGLoader.fileName(r.headers.get("Content-Disposition")) || name || "looking-glass-download";
+        window.LGLoader.saveBlob(blob, file);
+        return { ok: true, status: r.status, message: "", headers: r.headers, name: file, blob };
+      } catch (e) {
+        return { ok: false, status: 0, message: window.LGLoader.downloadMessage(e) };
+      } finally { restore(); }
+    },
+    /** the data for a file the page builds itself (a drill-down list saved as CSV with saveBlob): fetched like
+        download(), once more when Looking Glass could not be reached, with the same plain words.
+        Returns {ok, status, data, message}. */
+    async fetchForFile(url) {
+      try {
+        const r = await window.LGLoader.fetchOnceMore(url, { credentials: "same-origin", cache: "no-store" });
+        let data = {};
+        try { data = (await r.json()) || {}; } catch { /* not JSON */ }
+        if (!r.ok) return { ok: false, status: r.status, data, message: window.LGLoader.downloadMessage(null, data.error || `Looking Glass answered ${r.status}`) };
+        return { ok: true, status: r.status, data, message: "" };
+      } catch (e) {
+        return { ok: false, status: 0, data: {}, message: window.LGLoader.downloadMessage(e) };
+      }
+    },
+    /** fetch, trying once more on its own when Looking Glass could not be reached (a restart takes seconds) */
+    async fetchOnceMore(url, opts) {
+      let r = null;
+      for (let attempt = 0; attempt < 2 && !r; attempt++) {
+        try { r = await fetch(url, opts); }
+        catch (e) {
+          if (!window.LGLoader.unreachable(e) || attempt) throw e;
+          await new Promise((ok) => setTimeout(ok, 1500));
+        }
+      }
+      return r;
+    },
+    /** the plain words for a download that did not finish: e (an error thrown) or why (the server's own words) */
+    downloadMessage(e, why) {
+      if (why) return `The download did not finish: ${why}`;
+      return window.LGLoader.unreachable(e)
+        ? "The download did not finish: Looking Glass could not be reached (it may be restarting). Try again."
+        : "The download did not finish. Try again.";
+    },
+    /** the file name in a Content-Disposition header: filename* (RFC 6266, UTF-8) first, then filename="…" or filename=… */
+    fileName(cd) {
+      const h = cd || "";
+      const star = /filename\*\s*=\s*([^']*)'[^']*'([^;]+)/i.exec(h);
+      if (star) {
+        try { return decodeURIComponent(star[2].trim().replace(/^"|"$/g, "")); } catch { /* badly encoded: the plain name */ }
+      }
+      const quoted = /filename\s*=\s*"((?:[^"\\]|\\.)*)"/i.exec(h);
+      if (quoted) return quoted[1].replace(/\\(.)/g, "$1");
+      const bare = /filename\s*=\s*([^;\s]+)/i.exec(h);
+      return bare ? bare[1] : "";
+    },
+    /** save a file made in the browser (a drill-down list as CSV) or fetched by download(): a temporary link, removed */
+    saveBlob(blob, file) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = file || "looking-glass-download"; a.hidden = true;
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    },
+    /** a path that answers with a file, never a page: the loader's link handling leaves it alone */
+    isDownload(path) {
+      return /\.(pdf|csv|zip|json|txt|png|svg)$/i.test(path) || /\/(report|preview|export|download|file)(\/|$)/.test(path);
+    },
   };
   if (document.body) window.LGLoader.arrive(); else document.addEventListener("DOMContentLoaded", () => window.LGLoader.arrive());
 
@@ -220,7 +321,7 @@
     const u = new URL(href, location.href);
     if (u.origin !== location.origin) return;
     if (/^\/(api|static|login|logout|forgot|enrol|welcome|organisation\/logo)(\/|$)/.test(u.pathname)) return;
-    if (/\.(pdf|csv|zip|json|txt|png|svg)$/i.test(u.pathname) || /\/(report|preview|export)(\/|$)/.test(u.pathname)) return;
+    if (window.LGLoader.isDownload(u.pathname)) return;     // a file (an advisory's report too): never "Opening …"
     if (u.pathname === location.pathname && u.search === location.search) return;     // a place on this page
     e.preventDefault();
     window.LGLoader.go(u.pathname + u.search + u.hash);

@@ -5,6 +5,67 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-21 (5)
+### Changed
+- **The constituency is chosen in one place.** In Settings, the network list's **Constituent** column has a drop-down
+  on every network: **Not in**, **The whole network**, or **Some address blocks**, which opens the network's row with
+  its address blocks that had records, busiest first, with a search and **Show all N blocks**; folded, the row says
+  for example "3 of 120 blocks chosen". **Other address ranges**, under the table, takes ranges that belong to no listed
+  network. The Constituency card keeps the choice between the whole country and selected networks, with a live summary
+  ("3 networks, 12 address blocks, 1 other range"); its own network list, Extra address ranges and Pick address
+  blocks from the reports are gone. Saving is unchanged (AS numbers and address ranges, with Apply settings).
+  **After updating:** nothing to do. A saved range that is exactly one of a network's blocks shows as that network's
+  chosen block; any other saved range shows under Other address ranges.
+- **Every download is in the audit log, once each time the file is saved:** combination reports (the whole report, one
+  network's report, and one kept from before a restart), the report of a decided review, the services host list and
+  the drill-down lists. A combination search is logged once as "Combination search run". The report of a decided
+  review is no longer logged twice.
+- **`DATA_ACCESS_LOG=0` now stops only the logging of views;** downloads are always logged.
+- **Abused or Compromised downloads** are listed under "Data access and exports" in the Audit portal.
+- **Every page downloads files the same way:** the button shows it is busy, the file keeps its name (including
+  non-Latin names), Looking Glass tries once more when it could not be reached, and errors are in plain words.
+- **Screenshots kept in step with the pages.** A new check names any documentation screenshot whose page has changed
+  since it was taken. Retake or confirm it, then record it with `platform/tools/screens_manifest.py --update <name>`.
+- **The PDF-only report addresses** (`/api/insight/report.pdf`, `/api/svc/report.pdf`) now count towards the
+  per-person limits for heavy requests, like the other report addresses.
+
+### Fixed
+- **Quarterly downloads arrive on the first click.** The download buttons on the Executive portal, the advisory portal
+  and Settings → Quarterly fetch the file through the page, show that they are downloading, and try once more on their
+  own when Looking Glass could not be reached. Before, the browser's own download often failed with "Network error"
+  on a self-signed certificate. A download that still fails says so in plain words. Every download is still sealed,
+  stamped and in the audit log.
+- **No more "Failed to fetch" on the quarterly cards.** While Looking Glass restarts, a card says "Looking Glass could
+  not be reached just now (it may be restarting). Trying again…", tries a few more times, then offers **Retry**.
+- **Each role downloads only its own quarterly files.** The management report and summary are for the management role
+  only, the advisor report and its three CSVs for advisors only. Administrators get the purge CSV, the accuracy checks,
+  the purge's switch and **Make it again**; previewing a portal, they see the card with a note instead of the
+  downloads ("Quarterly reports are for management only").
+- **The quarterly cards say what is true now.** Each card says whether the quarterly purge is on now and, for each
+  quarter, its purge as things stand (for example "No purge for this quarter: its purge day (Thursday 22 October 2026)
+  had passed when it was made"), and where the quarter stands even before any report exists ("2026Q4 is in progress:
+  it ends Thursday 31 December 2026; its reports are made on Sunday 3 January 2027"). The PDFs keep what was true when
+  the report was made and say so; the purge CSV is unchanged.
+- **An empty quarter says so.** A quarter with no report rows says "No report rows were loaded for 2026Q3 (Looking
+  Glass holds report rows from 21 September 2026 on)." on its card, on every page of its PDFs and on its CSVs' first
+  lines.
+- **Make it again offers only quarters with report rows:** ended quarters of the last four, from the oldest report day
+  in the database on, not purged. With none, it says when the first report is made.
+- **The quarterly reports follow the constituency.** Like the rest of Looking Glass, they count only the hosts in the
+  constituency set in Settings → Constituency, and each report, CSV and card says what it was counted for ("Counted
+  for: the whole country", or "Counted for: 3 networks and 1 address range (the constituency set in Settings)"). A
+  comparison with a quarter counted for another constituency says so. The quarterly purge still clears old stored rows
+  of all networks, and its figures say "all networks in the database, not only the constituency".
+- **Open cases per organisation in the quarterly advisor report count only cases opened before the quarter ended.** A
+  quarter made again later no longer counts newer cases.
+- **An advisory's report file and its JSON export** download through the page and no longer leave the "Opening the
+  advisory" screen on.
+- **The services host list's file name** is quoted in its download header.
+- **The Constituency card says where it applies:** every part of Looking Glass follows it, and only the quarterly
+  purge works on the whole database.
+- **After updating:** nothing to do. Reports made before this update counted every network (the whole country); if a
+  constituency is set, use **Make it again** in Settings → Quarterly to count an ended quarter for it.
+
 ## 2026-11-21 (4)
 ### Changed
 - **The documentation's screenshots show today's Looking Glass.** All 50 were taken again (made-up data), under the

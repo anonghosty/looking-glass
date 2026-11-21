@@ -1,9 +1,17 @@
-/* Looking Glass · the quarterly reports (quarterly.py): every kept quarter with its downloads, on
-   - the Executive portal (management: the management PDF and summary CSV),
-   - the advisory portal (advisors: the advisor PDF and their three CSVs),
-   - Settings → Quarterly (administrators: everything, the purge CSV, each accuracy check, the purge's status and
-     "Make it again"), with the purge's switch at the top: off until an administrator turns it on after reading what it
+/* Looking Glass · the quarterly reports (quarterly.py): every kept quarter, on
+   - the Executive portal (the management role: the management PDF and summary CSV),
+   - the advisory portal (the advisor role: the advisor PDF and their three CSVs),
+   - Settings → Quarterly (administrators: only the purge CSV, each accuracy check, the purge's status and "Make it
+     again"), with the purge's switch at the top: off until an administrator turns it on after reading what it
      deletes, with their own password (r88).
+   Each role downloads only its own files (r89): an admin previewing a portal sees the card with a note instead of the
+   downloads. Every card says what is true now (where the quarter stands, the purge's switch today, each quarter's
+   purge as it stands, an empty quarter in plain words), as the server words it; the PDFs keep what was true when they
+   were made.
+   Downloads go through LGLoader.download (loader.js: fetch, then the file; busy on the button; once more on its own
+   when Looking Glass could not be reached), never a plain link with a download attribute. Every request here says in
+   plain words when Looking Glass could not be reached (a restart), tries again a few times with longer waits, then
+   offers Retry; never the browser's own error text.
    The card is #lgQuarterly or #tabQuarterly with data-scope="management|advisor|admin". It shows its loading line
    (LGLoader.card / LGLoader.pane) while it reads. Texts are set as text, never as HTML. Every download is sealed,
    stamped and in the audit log on the server (insider.py, quarterly.py). */
@@ -23,39 +31,81 @@
     const d = new Date(`${String(iso).slice(0, 10)}T00:00:00Z`);
     return isNaN(d) ? String(iso) : d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   };
-  let timer = null, confirmQ = null;
+  const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
+  let timer = null, confirmQ = null, drawnOnce = false;
 
-  function fileLinks(files) {
-    const w = el("div", "q-files");
-    for (const f of files) {
-      const a = el("a", "pill-btn", f.label); a.href = f.url; a.setAttribute("download", f.name);
-      a.title = `${f.name} · downloading it is recorded under your name`;
-      a.append(el("small", null, kb(f.bytes)));
-      w.append(a);
+  // ---------------- Looking Glass not reachable (a restart): plain words, a few tries with longer waits, then Retry
+  const UNREACH = window.LGLoader?.UNREACHABLE || "Looking Glass could not be reached just now (it may be restarting).";
+  const WAITING = `${UNREACH} Trying again…`;
+  const isNet = (e) => (window.LGLoader?.unreachable ? window.LGLoader.unreachable(e) : !!e && e.name === "TypeError");
+  const WAITS = [2000, 4000, 8000, 15000];
+  /** a request and its JSON answer; when no answer came, tries again after 2, 4, 8 and 15 s (onWait says so), then
+      throws an error that isNet() knows */
+  async function ask(url, opts, onWait) {
+    for (let i = 0; ; i++) {
+      try {
+        const r = await fetch(url, { credentials: "same-origin", ...opts });
+        const j = await r.json().catch(() => ({}));
+        return { r, j, tries: i };
+      } catch (e) {
+        if (!isNet(e) || i >= WAITS.length) throw e;
+        onWait?.(WAITING);
+        await sleep(WAITS[i]);
+      }
     }
-    return w;
+  }
+  const plain = (e) => (isNet(e) ? UNREACH : "That did not work. Try again.");
+  const net = el("div", "q-net"); net.setAttribute("role", "status"); net.tabIndex = -1; net.hidden = true;
+  body.before(net);
+  function showNet(text, retry) {
+    const line = box.querySelector(":scope > .lg-pane-loading");       // still opening: the loading line says it
+    if (line && !retry) { line.textContent = text; return; }
+    net.replaceChildren(el("span", null, text));
+    if (retry) {
+      const b = el("button", "pill-btn", "Retry"); b.type = "button";
+      b.addEventListener("click", () => { net.replaceChildren(el("span", "lg-loading", WAITING)); net.focus(); poll(); });
+      net.append(b);
+    }
+    net.hidden = false;
+  }
+  const hideNet = () => { net.hidden = true; net.replaceChildren(); };
+
+  // ---------------- the downloads: buttons, through the one shared helper (LGLoader.download)
+  function fileButtons(files) {
+    const w = el("div", "q-files");
+    const msg = el("p", "q-msg q-files-msg"); msg.setAttribute("role", "status");
+    for (const f of files) {
+      const b = el("button", "pill-btn", f.label); b.type = "button";
+      b.title = `${f.name} · downloading it is recorded under your name`;
+      b.append(el("small", null, kb(f.bytes)));
+      b.addEventListener("click", async () => {
+        msg.textContent = ""; msg.classList.remove("bad");
+        const res = await window.LGLoader.download(f.url, { button: b, name: f.name, busy: `Downloading ${f.label}…` });
+        if (!res.ok && res.message) { msg.textContent = res.message; msg.classList.add("bad"); }
+      });
+      w.append(b);
+    }
+    const out = document.createDocumentFragment(); out.append(w, msg);
+    return out;
   }
 
-  function row(q, admin) {
+  function row(q, admin, preview) {
     const r = el("div", "q-row");
     const h = el("div", "q-head");
     h.append(el("b", null, q.quarter), el("span", `q-tag ${q.valid ? "valid" : "invalid"}`, q.valid ? "VALID" : "NOT VALID"));
     h.append(el("span", "q-meta", `${q.made ? q.made[0].toUpperCase() + q.made.slice(1) : "Made"} · ${String(q.generated_at || "").replace("T", " ").slice(0, 16)} UTC`));
     r.append(h);
     if (!q.valid) r.append(el("p", "q-why", `Not valid: ${q.why}. Do not rely on these figures until the report is made again and says VALID.`));
-    if (q.permit) {
-      r.append(el("p", "q-meta", `Download before the end of ${day(q.download_before)}. The raw report rows dated before ${day(q.cutoff)} are deleted on ${day(q.purge_day)}; these reports stay here.`));
-    } else if (admin && q.no_permit_why) {
-      r.append(el("p", "q-meta", `No purge for this quarter: ${q.no_permit_why}.`));
-    } else if (!admin && q.purge_on === false) {
-      r.append(el("p", "q-meta", "The quarterly purge is off on this installation: no report rows are deleted. These reports stay here."));
+    if (q.counted_for) {
+      r.append(el("p", "q-meta", `Counted for: ${q.counted_for}.${q.other_constituency
+        ? ` That is not the constituency set in Settings now${admin ? ": Make it again counts it for the current one." : "."}` : ""}`));
     }
-    r.append(q.files.length ? fileLinks(q.files) : el("p", "q-meta", "No file of this quarter is kept for you."));
+    if (q.empty_text) r.append(el("p", "q-emptyq", q.empty_text));
+    if (q.purge_text) r.append(el("p", "q-meta", q.purge_text));
+    if (q.files.length) r.append(fileButtons(q.files));
+    else if (!preview) r.append(el("p", "q-meta", "No file of this quarter is kept for you."));
     if (admin) {
-      const pr = q.purge_result;
-      if (pr && pr.outcome === "done") {
-        r.append(el("p", "q-meta", `Purged on ${String(pr.at || "").slice(0, 10)}: ${Number(pr.rows_deleted || 0).toLocaleString("en-US")} rows dated before ${day(pr.cutoff)} deleted from ${pr.collections_touched || 0} report collections.`));
-      } else if (q.permit) {
+      if (q.permit && !(q.purge_result && q.purge_result.outcome === "done")) {
         r.append(el("p", "q-meta", `Purge permit written. Rows the purge would delete, counted when it was made: ${Number(q.rows_purge_deletes || 0).toLocaleString("en-US")}.`));
       }
       const g = el("details", "q-guards");
@@ -69,12 +119,24 @@
     return r;
   }
 
+  // ---------------- what is true now: the purge's switch (the portals) and where the quarter stands (every card)
+  function nowBox(d, admin) {
+    const w = el("div", "q-now");
+    if (!admin && d.purge_state) w.append(el("p", null, d.purge_state));
+    for (const t of d.now || []) w.append(el("p", null, t));
+    w.append(el("p", "q-meta", admin
+      ? "The PDFs and the purge CSV say what was true when each report was made; this page says what is true now."
+      : "Each report's PDF says what was true when it was made; this card says what is true now."));
+    return w;
+  }
+
   function adminTools(d) {
     const w = el("div", "q-row");
     w.append(el("b", null, "Make it again"));
     w.append(el("p", "q-hint", `Counts an ended quarter again and replaces its kept report, for example once its last day's reports `
-      + `are loaded, or after a NOT VALID run. A VALID report made before its purge day writes the purge permit again while the purge is on; a NOT VALID one `
-      + `removes it, so nothing is deleted. A quarter whose raw rows were purged cannot be counted again. The timing cannot be changed: `
+      + `are loaded, or after a NOT VALID run. Only ended quarters of the last four with report rows are offered (from the oldest report day in the database on), `
+      + `never one whose raw rows were purged. A VALID report made before its purge day writes the purge permit again while the purge is on; a NOT VALID one `
+      + `removes it, so nothing is deleted. The timing cannot be changed: `
       + `${d.rules.working_days} working days (Monday to Friday) after the quarter, the purge on the next working day, always keeping the last ${d.rules.keep_days} days.`));
     const t = el("div", "q-tools");
     const sel = el("select", "lg-enhance"); sel.setAttribute("aria-label", "Quarter to make again");
@@ -89,14 +151,19 @@
       if (confirmQ !== q) { confirmQ = q; btn.textContent = `Make ${q} again: click to confirm`; return; }
       confirmQ = null; btn.disabled = true; msg.className = "q-msg lg-loading"; msg.textContent = `Making ${q}…`;
       try {
-        const r = await fetch("/api/admin/quarterly/make", { method: "POST", credentials: "same-origin",
-          headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() }, body: JSON.stringify({ quarter: q }) });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+        const { r, j, tries } = await ask("/api/admin/quarterly/make", { method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() }, body: JSON.stringify({ quarter: q }) },
+        (text) => { msg.textContent = text; });
+        // tried again after no answer, and now "being made": the first request did reach Looking Glass
+        if (!r.ok && !(r.status === 409 && tries)) {
+          msg.className = "q-msg bad"; msg.textContent = j.error || `Looking Glass answered ${r.status}.`;
+          btn.disabled = false; btn.textContent = "Make it again"; return;
+        }
         poll();
-      } catch (e) { msg.className = "q-msg bad"; msg.textContent = e.message; btn.disabled = false; btn.textContent = "Make it again"; }
+      } catch (e) { msg.className = "q-msg bad"; msg.textContent = plain(e); btn.disabled = false; btn.textContent = "Make it again"; }
     });
     t.append(sel, btn, msg); w.append(t);
+    if (!(d.can_make || []).length && d.can_make_note) w.append(el("p", "q-meta", d.can_make_note));
     const p = d.pipeline || {};
     const last = p.last || {};
     w.append(el("p", "q-meta", p.found
@@ -162,11 +229,11 @@
       try {
         const payload = { enabled: turnOn, password: inp.value };
         if (turnOn) payload.shown = { quarter: pv.quarter, rows: pv.rows, purge_day: pv.purge_day || (pv.next || {}).purge_day };
-        const r = await fetch("/api/admin/quarterly/purge", { method: "POST", credentials: "same-origin",
-          headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() }, body: JSON.stringify(payload) });
-        const j = await r.json().catch(() => ({}));
+        const { r, j } = await ask("/api/admin/quarterly/purge", { method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() }, body: JSON.stringify(payload) },
+        (text) => { msg.textContent = text; });
         if (!r.ok) {
-          msg.className = "q-msg bad"; msg.textContent = j.error || `HTTP ${r.status}`;
+          msg.className = "q-msg bad"; msg.textContent = j.error || `Looking Glass answered ${r.status}.`;
           go.disabled = false; no.disabled = false; inp.value = ""; inp.focus();
           if (r.status === 409 && j.purge) { close(); await load().catch(() => {}); say(j.error, true); }
           return;
@@ -174,7 +241,7 @@
         close();
         await load().catch(() => {});
         say(turnOn ? "The quarterly purge is on. It is in the audit log." : "The quarterly purge is off: nothing is deleted. It is in the audit log.");
-      } catch (e) { msg.className = "q-msg bad"; msg.textContent = e.message; go.disabled = false; no.disabled = false; }
+      } catch (e) { msg.className = "q-msg bad"; msg.textContent = plain(e); go.disabled = false; no.disabled = false; }
     });
     document.body.append(back, m); inp.focus();
   }
@@ -190,6 +257,7 @@
       ? `On since ${day(p.since)}, confirmed by ${p.by_name || p.by}.`
       : "The quarterly purge is off on this installation: no report rows are deleted."));
     w.append(el("p", "q-meta", whatItDeletes(pv, p.enabled)));
+    w.append(el("p", "q-meta", "The purge works on all networks in the database, not only the constituency: it clears old stored rows. The quarterly reports themselves are counted for the constituency set in Settings."));
     if (!p.enabled) {
       w.append(el("p", "q-hint", "Looking Glass never deletes report rows until an administrator turns the purge on here, once, after reading what "
         + "it deletes. It stays on for every quarter after that, until someone turns it off. Turning it on or off needs your password, and each "
@@ -211,33 +279,46 @@
   function draw(d) {
     body.replaceChildren();
     const admin = scope === "admin";
-    if (admin) body.append(purgeCard(d), adminTools(d));
+    if (admin) body.append(purgeCard(d));
+    body.append(nowBox(d, admin));
+    if (d.note) body.append(el("p", "q-note", d.note));
+    if (admin) body.append(adminTools(d));
     const list = el("div", "q-list");
-    for (const q of d.quarters || []) list.append(row(q, admin));
-    if (!(d.quarters || []).length) list.append(el("p", "q-empty", "No quarterly report yet: the first is made once this quarter has ended."));
+    for (const q of d.quarters || []) list.append(row(q, admin, !!d.note));
+    if (!(d.quarters || []).length) list.append(el("p", "q-empty", "No quarterly report is kept yet."));
     body.append(list);
   }
 
   async function load() {
-    const r = await fetch(API, { cache: "no-store" });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) { body.replaceChildren(el("p", "q-empty", d.error || `Could not open the quarterly reports (HTTP ${r.status})`)); return true; }
-    draw(d);
+    let res;
+    try {
+      res = await ask(API, { cache: "no-store" }, (text) => showNet(text));
+    } catch (e) {
+      if (!isNet(e)) throw e;
+      showNet(UNREACH, true);
+      if (!drawnOnce) body.replaceChildren();
+      return true;
+    }
+    hideNet();
+    const { r, j: d } = res;
+    if (!r.ok) { body.replaceChildren(el("p", "q-empty", d.error || `Could not open the quarterly reports (Looking Glass answered ${r.status}).`)); return true; }
+    draw(d); drawnOnce = true;
     clearTimeout(timer);
     if (d.making) timer = setTimeout(poll, 5000);
     return true;
   }
-  const poll = () => load().catch(() => {});
+  const failed = () => { body.replaceChildren(el("p", "q-empty", "The quarterly reports could not be opened. Try again in a moment.")); return true; };
+  const poll = () => load().catch(failed);
 
   if (scope === "admin") {
     let opened = false;
     document.addEventListener("lg:settings-tab", (e) => {
       if (e.detail !== "quarterly" || opened) return;
       opened = true;
-      window.LGLoader?.pane ? window.LGLoader.pane(box, "Opening the quarterly reports…", () => load().catch((x) => body.replaceChildren(el("p", "q-empty", x.message)))) : poll();
+      window.LGLoader?.pane ? window.LGLoader.pane(box, "Opening the quarterly reports…", () => load().catch(failed)) : poll();
     });
   } else {
-    const work = () => load().catch((x) => { body.replaceChildren(el("p", "q-empty", `Could not open the quarterly reports: ${x.message}`)); return true; });
+    const work = () => load().catch(failed);
     (window.LGLoader?.card ? window.LGLoader.card(box, "Opening the quarterly reports…", work) : work()).then(() => {
       if (location.hash === "#quarterly") box.scrollIntoView({ block: "start" });
     });
