@@ -45,7 +45,8 @@ including Windows (WSL) and Linux servers, HTTPS and firewalls: [docs/INSTALLATI
 platform/
 ├── app.py, auth.py, security.py, ...   the application (Flask)
 ├── intel.py, notes.py, people.py, ...  researchers' intel and notes, names, CSV safety, last seen (one module each)
-├── gunicorn.conf.py, requirements.txt
+├── gunicorn.conf.py, requirements.txt   the libraries' caps (edited by people)
+├── requirements.lock                   the exact versions and sha256 values installed (tools/lock_requirements.sh)
 ├── .env.example                        configuration template (copy to .env)
 ├── templates/, static/                 pages, styles, scripts, logo, region maps of every country in the world
 ├── data/                               reference data shipped (infections.json, issues.json, service_reports.json);
@@ -60,8 +61,9 @@ The guides above are in the top-level docs/ folder.
 
 ## Requirements
 
-Ubuntu 24.04 or later, Desktop or Server, with systemd (on the computer itself, in a virtual machine or as Ubuntu on WSL 2; on Ubuntu Server, create the first administrator through an SSH tunnel: `ssh -L <your port>:127.0.0.1:<your port> user@server`, then open `http://localhost:<your port>`), Python 3.12+, MongoDB 6+ filled by the
-pipeline, a free Mapbox token, and optionally a Malpedia token. The browser needs WebGL 2 (any browser from about
+Ubuntu 24.04 or later, Desktop or Server, with systemd (on the computer itself, in a virtual machine or as Ubuntu on WSL 2; on Ubuntu Server, create the first administrator through an SSH tunnel: `ssh -L <your port>:127.0.0.1:<your port> user@server`, then open `http://localhost:<your port>`), Python 3.12, 3.13 or 3.14 on an x86_64 or aarch64 processor (checked first; anything else is refused), MongoDB 6+ filled by the
+pipeline, a free Mapbox token, and optionally a Malpedia token. The libraries are installed only from `requirements.lock`,
+each file checked against its sha256 value (`deploy/safe_libraries.py`). The browser needs WebGL 2 (any browser from about
 2021 on).
 
 ## Third-party data and services

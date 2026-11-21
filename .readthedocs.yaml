@@ -9,6 +9,8 @@ build:
 mkdocs:
   configuration: mkdocs.yml
 
+# the docs site's libraries from their lock: exact versions with their sha256 values, so pip checks every file
+# (tools/lock_requirements.sh makes docs/requirements.lock from docs/requirements.txt)
 python:
   install:
-    - requirements: docs/requirements.txt
+    - requirements: docs/requirements.lock

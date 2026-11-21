@@ -1,0 +1,3 @@
+# The tool that makes the lock files (tools/lock_requirements.sh), itself installed from tools/lock_tools.lock with
+# --require-hashes. Change the version here on purpose, then: tools/lock_requirements.sh --tools
+pip-tools==7.7.0

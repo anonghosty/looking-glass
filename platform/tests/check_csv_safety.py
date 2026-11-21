@@ -52,7 +52,7 @@ ok("writer: every planted cell comes back starting with an apostrophe, harmless 
 print("\n2. The code")
 SRC = {}
 for root, dirs, files in os.walk(BASE_DIR):
-    dirs[:] = [d for d in dirs if d not in (".venv", "tests", "security_testing", "tools", "__pycache__", "data", ".git")]
+    dirs[:] = [d for d in dirs if d not in (".venv", ".venvs", "tests", "security_testing", "tools", "__pycache__", "data", ".git")]   # .venvs: the libraries (r86)
     for f in files:
         if f.endswith(".py") and f != "csvsafe.py":
             p = os.path.join(root, f)

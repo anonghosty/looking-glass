@@ -125,6 +125,7 @@ run "the reports database: loopback or internal only, TLS" $PY tests/check_db_co
 run "the installer's database check: internal only, TLS, structure" $PY tests/check_install_db.py
 run "Bought certificate: checks, install, bell" $PY tests/check_install_cert.py
 run "the installer's animated logo" $PY tests/check_installer_anim.py
+run "Libraries: only files that match the lock (every install path, every source)" $PY tests/check_installer_supply.py
 run "offline names: MISP Galaxy + ATT&CK, nothing sent" $PY tests/check_offline_names.py
 run "ATT&CK mappings, versions, CVE links" $PY tests/check_attack_map.py
 run "ATT&CK in advisories (reviewed only)" $PY tests/check_advisory_attack.py

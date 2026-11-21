@@ -27,22 +27,26 @@ bind="$host:$port"
 step() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 [ "$(id -u)" != 0 ] || { echo "Run this as the user the service will run as, not as root."; exit 1; }
 
-step "1. Python"
+step "1. This computer and Python"
 command -v python3 >/dev/null || { echo "python3 is missing: sudo apt install python3 python3-venv"; exit 1; }
-python3 - <<'EOF'
-import sys
-v = sys.version_info
-print(f"python3 {v.major}.{v.minor}.{v.micro}")
-if v < (3, 12):
-    sys.exit("Looking Glass needs Python 3.12 or newer (Ubuntu 24.04 or later ships it).")
-EOF
+# Ubuntu 24.04 or later, Python 3.12, 3.13 or 3.14, an x86_64 or aarch64 processor: anything else is refused here,
+# before anything is installed (deploy/safe_libraries.py, the one place these rules live)
+python3 deploy/safe_libraries.py check-machine
 python3 -m venv --help >/dev/null 2>&1 || { echo "python3-venv is missing: sudo apt install python3-venv"; exit 1; }
 
-step "2. Virtual environment and packages (.venv)"
-[ -x .venv/bin/python ] || python3 -m venv .venv
-.venv/bin/pip install --quiet --upgrade pip
-.venv/bin/pip install --quiet -r requirements.txt
-.venv/bin/python -c "import flask, pymongo, dotenv, gunicorn; print('packages ok')"
+step "2. Virtual environment and libraries (.venv)"
+# only files that match requirements.lock (sha256), from PyPI, else the library repository, else the local copy; a new
+# environment beside the running one, and .venv switches to it only when everything matched and installed. A refused
+# file is reported (suspected-packages.txt); with no matching file anywhere, nothing changes (docs/INSTALLATION.md).
+lib_rc=0
+python3 deploy/safe_libraries.py install --lock requirements.lock --venv .venv --part platform \
+  --report-dir "${LG_SUPPLY_REPORT_DIR:-$project}" --import flask,pymongo,dotenv,gunicorn,reportlab || lib_rc=$?
+if [ "$lib_rc" = 10 ]; then
+  echo "WARNING: a library file from one source did not match the lock and was refused; a matching copy was installed."
+  echo "         See suspected-packages.txt and report it (docs/INSTALLATION.md, 'When a library file does not match')."
+elif [ "$lib_rc" != 0 ]; then
+  echo "The libraries were not installed (see above). Nothing was changed in .venv."; exit "$lib_rc"
+fi
 
 step "3. Configuration (.env) and data folder"
 if [ ! -f .env ]; then

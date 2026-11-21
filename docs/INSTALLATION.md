@@ -45,6 +45,19 @@ run these steps in the Ubuntu window. On Ubuntu, run them in a terminal, as the 
 
 Later updates are a `git pull` in the same folder (see [Updating](#updating)).
 
+**What the computer needs.** Before it asks anything or installs anything, the installer checks three things and
+refuses anything else, saying which one failed:
+
+| | Accepted |
+|---|---|
+| Operating system | **Ubuntu 24.04 or later** only (Desktop or Server, on the computer, in a virtual machine or on WSL 2), read from `/etc/os-release`. Other systems, Debian and systems based on Ubuntu among them, are refused |
+| Python | **3.12, 3.13 or 3.14**: the `python3` that will run Looking Glass (the one Ubuntu brings) |
+| Processor | **x86_64** (Intel, AMD) or **aarch64** (64-bit ARM) |
+
+The same check runs in `deploy/install.sh`, the pipeline's `deploy.sh` and `deploy/update_libraries.sh`. To run it on
+its own: `python3 platform/deploy/safe_libraries.py check-machine`. The Python libraries are then installed only from the
+lock files, each file checked first ([The libraries](#the-libraries-only-files-that-match-the-lock)).
+
 The rest of this guide is the same installation by hand, and the background the installer's questions refer to
 (access modes, HTTPS, firewall).
 
@@ -313,7 +326,10 @@ To show Looking Glass on a TV, a wall screen or colleagues' computers:
 
 ---
 
-## B. Linux server (Ubuntu / Debian)
+## B. Linux server (Ubuntu)
+
+Ubuntu 24.04 or later only, with Python 3.12, 3.13 or 3.14 on x86_64 or aarch64 (see *What the computer needs* above);
+`deploy/install.sh` refuses anything else before it installs anything.
 
 ### B1. System and database
 ```bash
@@ -462,16 +478,78 @@ sudo ufw enable
    files ([OPERATIONS.md, Encryption at rest](OPERATIONS.md#encryption-at-rest)). **Settings → Task monitor** shows
    whether it is. Day-to-day running: [OPERATIONS.md](OPERATIONS.md).
 
+## The libraries: only files that match the lock
+
+Looking Glass's Python libraries are installed from **lock files**: `platform/requirements.lock`,
+`database/requirements.lock` (and `docs/requirements.lock` for the documentation site). A lock names every library,
+the libraries they need included, at one exact version, with the sha256 value of every file published for it.
+`requirements.txt` beside it holds the ranges people edit; the lock is made from it on purpose
+([OPERATIONS.md, Updating the libraries on purpose](OPERATIONS.md#updating-the-libraries-on-purpose)), never during an
+installation. Every way of installing goes through one tool, `platform/deploy/safe_libraries.py` (the pipeline keeps a
+copy beside its `deploy.sh`): the guided installer, `deploy/install.sh`, the pipeline's `deploy.sh` and
+`deploy/update_libraries.sh`.
+
+### Where the files come from
+
+For each library, the sources are tried in this order, and **every file from every source is checked against the lock
+of this Looking Glass folder**:
+
+1. **PyPI**, the Python package index.
+2. **The library repository**: each release's library files, attached to that release on
+   [github.com/anonghosty/looking-glass-libraries](https://github.com/anonghosty/looking-glass-libraries) as
+   `looking-glass-libraries-<release>.tar.gz` (for Python 3.12, 3.13 and 3.14 on x86_64 and aarch64). It is used when
+   PyPI cannot give a matching file. The release is the folder's newest tag (`git describe --tags`).
+3. **The local copy**: `~/looking-glass/libraries/<release>/platform/` and `.../database/`, with a `SHA256SUMS` file.
+   After every successful installation, the files it checked are kept there, read-only, for the last 2 releases. It is
+   not part of the encrypted backups (`manage/backup.sh` leaves it out; copy it yourself if you want it elsewhere). For
+   a computer without internet, unpack the release's `looking-glass-libraries-<release>.tar.gz` into
+   `~/looking-glass/libraries/<release>/` and run the installer.
+
+Only ready-built files (wheels) are used, never source packages that would have to be built. The new environment is
+built **beside** the running one (`.venvs/` next to `.venv`), and `.venv` switches to it only when every file matched,
+installed and loads. Until then the running installation is untouched; the environment before it is kept in `.venvs/`.
+
+### When a library file does not match
+
+A file whose sha256 value is not in the lock is **refused**: it may have been tampered with on the way or at its source.
+
+- During the installation, a warning shows the library and version, the source, the sha256 value the lock expects and
+  the one received, and the next source is tried. The installation goes on only with a matching file.
+- If no source has a matching file, it stops with **"Nothing was changed"**: the running environment stays as it was.
+- Afterwards it is recorded in four places: `suspected-packages.json` and `suspected-packages.txt` in the installation
+  folder (the top of the Looking Glass folder for the guided installer, else `platform/` or `database/`), with the
+  library, version, source address, both sha256 values and the time; the installer's log; and, once the platform
+  restarts, the **audit log** (System tab: "Library file refused") and the **administrators' bell**.
+
+The guided installer also says so on its last screen. A library listed in no lock is refused too.
+
+### Reporting suspected library files
+
+Keep `suspected-packages.txt` and report it privately: on GitHub, **Security → Report a vulnerability** in the
+[Looking Glass repository](https://github.com/anonghosty/looking-glass/security), or as `.github/SECURITY.md` describes.
+Include the file (it holds library names, versions, sources and hashes only, nothing about your constituency). Do not
+delete the report until it has been looked at.
+
 ## Updating
 
 ```bash
 manage/backup.sh
 git pull
-.venv/bin/pip install -r requirements.txt
-.venv/bin/python tests/check_libraries.py   # the libraries: inside the supported versions, and working
+deploy/update_libraries.sh            # the libraries from requirements.lock only (and the pipeline's beside it)
 deploy/reload.sh                     # or: sudo systemctl restart looking-glass
 security_testing/security_retest.py && tests/run_all_checks.sh
 ```
+`deploy/update_libraries.sh` checks the computer, builds new environments beside the running ones from the locks, runs
+`tests/check_libraries.py`, and leaves an environment alone when its lock did not change. If it stops, nothing was
+changed: see [When a library file does not match](#when-a-library-file-does-not-match).
+
+> **Libraries only from the lock files (from the release after 2026-11-20 (9)).** `pip install -r requirements.txt` is
+> no longer used: every installation and update installs the exact versions in `requirements.lock`, each file checked
+> against its sha256 value (see [The libraries](#the-libraries-only-files-that-match-the-lock)). After `git pull`, run
+> `deploy/update_libraries.sh` once from the platform folder: it builds new environments for the platform and the
+> database pipeline, and `.venv` becomes a link into `.venvs/`. Then `deploy/reload.sh`. Ubuntu 24.04 or later with
+> Python 3.12-3.14 on x86_64 or aarch64 is required: on anything else it stops and changes nothing. If you run the
+> installer again on Debian, it is refused now.
 > **Backups need your public key (from 2026-11-15).** `manage/backup.sh` encrypts every backup to a public key and
 > **refuses to run without one** (it exits with "NOT BACKED UP" and says how to make the key). Before the first backup
 > after this update, make a key pair on your own computer and copy its public half to `data/backup_public_key`
@@ -508,8 +586,9 @@ security_testing/security_retest.py && tests/run_all_checks.sh
 >   `deploy/make_tls_cert.sh <the name people use>`. Each screen then trusts the new certificate once more. A certificate
 >   from your organisation's CA is not affected.
 
-`requirements.txt` lets each library update within its major version only, so an update brings fixes but no big
-changes. If `check_libraries.py` fails, its line names the library.
+An update installs exactly the versions in `requirements.lock`; the lock changes only when the maintainers make it
+again, inside the ranges in `requirements.txt` (each library within its major version, so fixes but no big changes).
+If `check_libraries.py` fails, its line names the library.
 If `deploy/looking-glass.service.template` changed, run `deploy/install.sh` again and copy the service file again (A4 / B3).
 
 ## Checking a release's signature
@@ -555,6 +634,8 @@ it. It shows what it will remove and what it keeps, and asks before it starts.
   key in `platform/data/backup_public_key` and refuses without one: [OPERATIONS.md, Backups](OPERATIONS.md#backups)),
   and `mongodump` for the reports.
 - Firewall rules you added for the platform's port (A7 / B6) are not removed: remove them yourself.
+- The local copy of the library files, `~/looking-glass/libraries`, goes with `--remove-files` only when it is inside
+  this folder. Elsewhere it stays (it is read-only): `chmod -R u+w ~/looking-glass/libraries && rm -r ~/looking-glass/libraries`.
 - After `./uninstall.sh` without options, `./install.sh` in the same folder installs again with the kept settings
   and data.
 

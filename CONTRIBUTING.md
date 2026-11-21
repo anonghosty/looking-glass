@@ -79,6 +79,22 @@ ruff check platform database
 
 Pull requests run the same checks in CI; they must pass.
 
+## Changing the libraries
+
+Installations take their Python libraries only from the lock files (`platform/requirements.lock`,
+`database/requirements.lock`, `docs/requirements.lock`), every file checked against its sha256 value. If your change
+adds, removes or re-ranges a library in a `requirements.txt`, make the locks again in the same pull request:
+
+```bash
+cd platform && tools/lock_requirements.sh      # needs the internet; versions already locked stay as they are
+```
+
+Commit the changed `requirements.lock` files with your `requirements.txt` change. Never edit a lock by hand, and do not
+add `--upgrade` unless updating every library is the point of the change. `tests/check_installer_supply.py` fails
+when a lock no longer fits its `requirements.txt` (a library missing, a version outside its range, a line without its
+sha256 values), and GitHub's checks install from the locks with `--require-hashes` and run pip-audit on them.
+OPERATIONS.md, "Updating the libraries on purpose", has the whole procedure.
+
 ## Commits
 
 - **Signed commits** (SSH or GPG) are required; unsigned commits are not merged.

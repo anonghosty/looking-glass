@@ -309,6 +309,45 @@ counted again: its kept report stays the record.
 **Checking the pipeline's side:** `cat <pipeline DATA_DIR>/quarterly_purge_status.json` shows the last check (`outcome`
 done, refused or failed, with `why`) and every purge done, per collection.
 
+## Updating the libraries on purpose
+
+Installations take their Python libraries from the lock files only (`requirements.lock` of the platform and of the
+database pipeline, `docs/requirements.lock` for the documentation site), every file checked against its sha256 value
+([INSTALLATION.md, The libraries](INSTALLATION.md#the-libraries-only-files-that-match-the-lock)). A library therefore
+changes only when someone makes the locks again, on purpose, with the one tool for it, and commits the result:
+
+1. **Change the range, if needed,** in the `requirements.txt` beside the lock (each library up to its next major
+   version). A raised cap is kept only once the new major version passes the full checklist (step 3).
+2. **Make the locks again** (needs the internet; run from the platform folder):
+   ```bash
+   tools/lock_requirements.sh              # adds or removes what requirements.txt changed; other versions stay
+   tools/lock_requirements.sh --upgrade    # the newest version of every library inside its range
+   ```
+   It writes the three locks, checks that every locked version is inside its range, and that every library's
+   dependencies are in the lock for Python 3.12, 3.13 and 3.14 on x86_64 and aarch64. It installs its own tool
+   (pip-tools) from `tools/lock_tools.lock`, with hashes too; `tools/lock_requirements.sh --tools` makes that lock again
+   after a change in `tools/lock_tools.in`.
+3. **Run the full release checklist**, `tests/run_all_checks.sh` among it (`tests/check_libraries.py` checks what the
+   platform uses of each library; `tests/check_installer_supply.py` checks the locks against their ranges and every
+   install path).
+4. **Check the locked versions for known vulnerabilities:**
+   ```bash
+   pip-audit --require-hashes --disable-pip -r requirements.lock -r ../database/requirements.lock -r ../docs/requirements.lock
+   ```
+   (GitHub's checks run the same on every change.)
+5. **Build the release's library bundle** for the library repository and for computers without internet:
+   ```bash
+   tools/build_wheelhouse.sh <release tag> <output folder>
+   ```
+   It downloads exactly the locked files for the six supported computers, checks each against its lock, writes
+   `SHA256SUMS` and stops if a library has no ready-built file for one of them. The release attaches
+   `looking-glass-libraries-<release>.tar.gz` to that release in the library repository.
+6. **Installations then update** with `deploy/update_libraries.sh` (INSTALLATION.md, Updating).
+
+Never install a library into `.venv` by hand: the next update replaces the environment from the lock anyway, and the
+library would be in no lock. The environments in `.venvs/` (the one in use and the one before) are rebuilt from the locks
+whenever needed and are not backed up.
+
 ## Reference data
 
 ### Network names (`data/asns.json`)

@@ -16,6 +16,7 @@ like them so the bell shows them as they are:
   - the quarterly report (quarterly.py): ready, for management, advisors and administrators alike (the one alert that is
     not for administrators only: an alert's "perms" says who sees it); NOT VALID, and the quarterly purge's result, for
     administrators
+  - a library file refused at installation because it did not match its lock, suspected tampering (library_supply.py)
 Each alert has an id that changes when something new happens; clearing one hides that alert for that person only
 (data/system_alerts_seen.json). Nothing here holds an address or a report's content.
 """
@@ -183,6 +184,7 @@ class Alerts:
         out += self._addresses(now)
         out += count_alerts(now)
         out += self._quarterly(now)
+        out += self._suspected_packages(now)
         cert = self._certificate()
         if cert and cert["days_left"] <= 30:
             days = cert["days_left"]
@@ -295,6 +297,15 @@ class Alerts:
         try:
             import quarterly
             return quarterly.bell(self.base_dir, now)
+        except Exception:                                # noqa: BLE001  never break the bell over this
+            return []
+
+    def _suspected_packages(self, now):
+        """A library file refused at installation because it did not match its lock (library_supply.py, r86): one alert
+        for the events of the last 30 days, administrators only."""
+        try:
+            import library_supply
+            return library_supply.bell(self.base_dir, now)
         except Exception:                                # noqa: BLE001  never break the bell over this
             return []
 

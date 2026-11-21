@@ -1,5 +1,8 @@
 .env
 .venv/
+.venv
+.venvs/
+suspected-packages.*
 __pycache__/
 logs/
 attachments_backup/

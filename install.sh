@@ -512,10 +512,19 @@ banner
 [ "$(id -u)" != 0 ] || { echo "Run ./install.sh as the ordinary user who will run Looking Glass (not root, not with sudo)."; exit 1; }
 [ -d "$DB_DIR" ] && [ -d "$PF_DIR" ] || { echo "Run it from the Looking Glass folder (it needs database/ and platform/ next to it)."; exit 1; }
 . /etc/os-release 2>/dev/null || true
-case "${ID:-}:${ID_LIKE:-}" in
-  ubuntu:*|debian:*|*:*debian*|*:*ubuntu*) ;;
-  *) echo "Looking Glass installs on Ubuntu 24.04+ or Debian 13+ (this is ${PRETTY_NAME:-unknown})."; exit 1 ;;
-esac
+# This computer: Ubuntu 24.04 or later, Python 3.12-3.14, an x86_64 or aarch64 processor, checked before anything is
+# installed by platform/deploy/safe_libraries.py (the one place these rules live; it says why when it refuses). Ubuntu
+# always brings python3; should it be missing, only Ubuntu goes on, to install it, and the full check follows then.
+SAFE_LIBS="$PF_DIR/deploy/safe_libraries.py"
+[ -f "$SAFE_LIBS" ] || { echo "platform/deploy/safe_libraries.py is missing: get the complete Looking Glass folder again (git clone)."; exit 1; }
+if command -v python3 >/dev/null 2>&1; then
+  python3 "$SAFE_LIBS" check-machine || exit 1
+elif [ "${ID:-}" != ubuntu ]; then
+  echo "Looking Glass installs on Ubuntu 24.04 or later only; this computer runs ${PRETTY_NAME:-an unknown system}."; exit 1
+fi
+# every library refused during this installation is reported in one place: suspected-packages.json/.txt here
+export LG_SUPPLY_REPORT_DIR="$ROOT"
+SUSPECT_BEFORE="$(stat -c %Y "$ROOT/suspected-packages.json" 2>/dev/null || echo 0)"
 IS_WSL=0; grep -qi microsoft /proc/version 2>/dev/null && IS_WSL=1
 if [ ! -d /run/systemd/system ]; then
   if [ $IS_WSL = 1 ]; then
@@ -556,8 +565,8 @@ requirements() {  # prints the checklist; sets MISSING
   done
   if command -v python3 >/dev/null; then
     local pv; pv=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')
-    if python3 -c 'import sys; sys.exit(sys.version_info < (3, 12))'; then row "$OKM" "Python version" "$pv (3.12 or newer needed)"
-    else row "$NOM" "Python version" "$pv: Looking Glass needs 3.12 or newer (Ubuntu 24.04+ / Debian 13+)"; PY_OLD=1; fi
+    if python3 "$SAFE_LIBS" check-machine >/dev/null 2>&1; then row "$OKM" "Python and processor" "Python $pv on $(uname -m) (3.12-3.14, x86_64 or aarch64)"
+    else row "$NOM" "Python and processor" "Python $pv on $(uname -m): Looking Glass needs Python 3.12, 3.13 or 3.14 on x86_64 or aarch64 (Ubuntu 24.04 or later)"; PY_OLD=1; fi
   fi
   detect_mongo
   if [ "$MDB_INSTALLED" = 1 ]; then
@@ -594,7 +603,7 @@ detect_mongo() {
 }
 PY_OLD=0; NO_NET=0
 requirements
-[ "$PY_OLD" = 1 ] && { echo; echo "Upgrade to Ubuntu 24.04 or later (or Debian 13), then run ./install.sh again."; exit 1; }
+[ "$PY_OLD" = 1 ] && { echo; python3 "$SAFE_LIBS" check-machine || true; echo "Then run ./install.sh again."; exit 1; }
 [ "$NO_NET" = 1 ] && { echo; echo "Connect this computer to the internet (or set http_proxy / https_proxy), then run ./install.sh again."; exit 1; }
 
 echo
@@ -620,8 +629,18 @@ fi
 
 CHK="$ROOT/.installer-venv/bin/python"
 printf '%sPreparing the answer checks%s (MongoDB, HTTP and signing libraries, in %s)\n' "$B" "$R" ".installer-venv"
-[ -x "$CHK" ] || run "checker environment" python3 -m venv "$ROOT/.installer-venv"
-[ "$REPLAY_TO" -gt 0 ] && [ -x "$CHK" ] || run "checker libraries" "$CHK" -m pip install -q --disable-pip-version-check "pymongo>=4.15,<5" "requests>=2.32,<3" "cryptography>=42"
+# the database pipeline's locked libraries (database/requirements.lock), every file checked against its sha256 value
+# (platform/deploy/safe_libraries.py; a lock already installed there is left alone)
+safe_libs() {  # LABEL safe_libraries.py install arguments...: 10 = installed, but a source's file was refused (reported)
+  local label="$1" rc=0; shift
+  log "\$ $label"
+  bg_wait python3 "$SAFE_LIBS" install "$@" || rc=$?      # (its lines go to the log)
+  if [ "$rc" = 0 ] || [ "$rc" = 10 ]; then [ $GAUGE_OPEN != 0 ] || printf '       %s✔%s %s\n' "$GRN" "$R" "$label"; return 0; fi
+  gauge_close
+  fail "$label: the libraries were not installed (exit code $rc). Nothing was changed. A refused file is listed in $ROOT/suspected-packages.txt."
+}
+[ "$REPLAY_TO" -gt 0 ] && [ -x "$CHK" ] || safe_libs "checker libraries" --lock "$DB_DIR/requirements.lock" \
+  --venv "$ROOT/.installer-venv" --part checker --report-dir "$ROOT" --no-local-copy --import pymongo,requests,cryptography
 printf '%s✔ Ready.%s The questions open in windows now.\n' "$GRN" "$R"
 [ "$REPLAY_TO" -gt 0 ] || sleep 1
 
@@ -1656,6 +1675,11 @@ Checks:"; for r in "${RESULTS[@]}"; do OUT+="
 Note: $DB_WARN"
 [ -n "$PF_WARN" ] && OUT+="
 Note: $PF_WARN"
+if [ "$(stat -c %Y "$ROOT/suspected-packages.json" 2>/dev/null || echo 0)" != "$SUSPECT_BEFORE" ]; then OUT+="
+
+WARNING: a library file from one source did not match the lock (suspected tampering). It was refused and a
+      matching copy from another source was installed. Details: suspected-packages.txt in this folder.
+      Please report it: docs/INSTALLATION.md, \"When a library file does not match\"."; fi
 if printf '%s\n' "${RESULTS[@]}" | grep -q '^FAIL.*run_all_checks'; then OUT+="
 Note: the platform checks need yesterday's reports in the database; they fail until the first
       reports are loaded. Run them again later: platform/tests/run_all_checks.sh"; fi

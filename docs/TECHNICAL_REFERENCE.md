@@ -420,14 +420,62 @@ For a public deployment where nobody may switch demo off, set `PUBLIC_DEMO=1` in
 
 ## Requirements and installation
 
-See [INSTALLATION.md](INSTALLATION.md). In short: Ubuntu 24.04 or later, Desktop or Server (or Ubuntu on WSL 2), Python 3.12+,
-MongoDB filled by the Shadowserver pipeline (`../database`), a Mapbox token, and optionally a Malpedia token.
-Python packages (from `requirements.txt`): Flask, Werkzeug, pymongo, python-dotenv, gunicorn and ReportLab. Each is
-allowed up to, not including, its next major version (for example `flask>=3.0,<4`): bug and security fixes still
-install, big changes do not. `tests/check_libraries.py` checks the installed versions against these limits and tries
-the parts of each library the platform uses; it needs no data, and the installer runs it. To allow a new major
-version, raise its limit, reinstall, and keep it only if the installation check (`tests/run_all_checks.sh` and
-`security_testing/security_retest.py`) passes.
+See [INSTALLATION.md](INSTALLATION.md). In short: Ubuntu 24.04 or later only, Desktop or Server (or Ubuntu on WSL 2),
+Python 3.12, 3.13 or 3.14 on an x86_64 or aarch64 processor, MongoDB filled by the Shadowserver pipeline
+(`../database`), a Mapbox token, and optionally a Malpedia token.
+Python packages: Flask, Werkzeug, pymongo, python-dotenv, gunicorn, ReportLab and tzdata. `requirements.txt` gives each a
+range up to, not including, its next major version (for example `flask>=3.0,<4`); `requirements.lock` fixes the exact
+version of every library and of what they need, with the sha256 value of every file. `tests/check_libraries.py` checks
+the installed versions against the ranges and tries the parts of each library the platform uses; it needs no data, and
+the installer runs it. To allow a new major version, raise its range, make the lock again
+([OPERATIONS.md](OPERATIONS.md#updating-the-libraries-on-purpose)), and keep it only if the installation check
+(`tests/run_all_checks.sh` and `security_testing/security_retest.py`) passes.
+
+### How the libraries are installed (`deploy/safe_libraries.py`, `library_supply.py`)
+
+One tool installs the Python libraries everywhere: `deploy/safe_libraries.py`, Python's standard library only, run by
+the guided installer (for the platform, the database pipeline and the installer's own answer checks), `deploy/install.sh`,
+`deploy/update_libraries.sh` and the pipeline's `deploy.sh` (a release copies the tool beside it, unchanged).
+
+1. **This computer** (`check-machine`): `ID=ubuntu` with `VERSION_ID` 24.04 or later in `/etc/os-release` (`ID_LIKE`
+   does not count), the `python3` that will run Looking Glass at 3.12, 3.13 or 3.14, and `platform.machine()` x86_64 or
+   aarch64. Anything else: exit 2 with every reason, before anything is made.
+2. **The lock** (`requirements.lock`, written by `tools/lock_requirements.sh` with pip-compile `--generate-hashes
+   --allow-unsafe`): every line must be `name==version` with at least one `--hash=sha256:` value. An option line
+   (`--index-url`, `--extra-index-url`, `-e`...), a range, a missing hash or a library listed twice: exit 4.
+3. **The new environment** is made first, `python3 -m venv .venvs/<name>-<time>`, beside the running `.venv`. Its own
+   pip (the one Python brings, never upgraded from outside) does the rest, with the user's pip settings and `PIP_*`
+   variables set aside, so the sources are only the ones below.
+4. **Each file** is fetched with `pip download --no-deps --only-binary=:all:` for that Python and processor
+   (`manylinux_2_28`, `manylinux2014`, `manylinux_2_17` and pure-Python wheels), into a quarantine folder, one source after
+   the other: PyPI (`LG_PYPI_URL`), the release's bundle from the library repository (`LG_LIBRARIES_URL`; unpacked with
+   tarfile's `data` filter, wheels only, at most 2 GB), then the local copy (`LG_LIBRARIES_DIR`, default
+   `~/looking-glass/libraries`, newest release first). Its sha256 is compared with the lock's values for that library and
+   version: a match moves it to the checked files; a mismatch is refused, printed (library, version, file, source,
+   expected values, received value) and kept as an event, and the next source is tried. A library with no match in any
+   source stops everything: exit 3, "Nothing was changed", the new environment removed.
+5. **The install** is `pip install --no-index --find-links <checked files> --require-hashes --only-binary=:all: -r
+   requirements.lock`: pip checks every hash again and refuses any library the lock does not list (a dependency
+   included). Then `pip check`, the modules that must load (`--import`), and the lock's sha256 written into the
+   environment (`lg-lock.sha256`: the same lock next time means nothing to do).
+6. **The switch:** `.venv` becomes a relative link to the new environment (a real `.venv` folder from before is moved
+   into `.venvs/` first); the newest two environments are kept. The service keeps its loaded libraries until it is
+   reloaded. The checked files are copied into the local copy (`<release>/<part>/` with `SHA256SUMS`, files 444, folders
+   555, the last 2 releases kept).
+7. **The report:** refused files are added to `suspected-packages.json` and `.txt` in the report folder (the guided
+   installer sets `LG_SUPPLY_REPORT_DIR` to the top of the Looking Glass folder; otherwise the part's folder), each with
+   an id, the time, library, version, file, source and address, expected and received sha256, the lock and the outcome.
+   Exit 10 means installed, but something was refused. `library_supply.py` (installed by `features.py`) reads the
+   reports of the platform's folder, the folder above it and the pipeline's, writes each event once into the audit log
+   (`library_suspected`, user `looking-glass`, a minute after the service starts; the ids written are kept in
+   `data/suspected_packages_audited.json`) and gives `system_alerts.py` one bell alert for administrators for the events
+   of the last 30 days.
+
+The release's bundle is made by `tools/build_wheelhouse.sh`: every locked file for Python 3.12-3.14 on x86_64 and
+aarch64, each checked against its lock, `SHA256SUMS`, the locks themselves, and an offline `pip install --dry-run` per
+computer to prove nothing is missing. `tests/check_installer_supply.py` (in `run_all_checks.sh` and the GitHub checks)
+rehearses all of it with a local package index on 127.0.0.1 and made-up wheels, and fails if any install path runs pip
+without `--require-hashes`.
 
 External services:
 - **MongoDB** (database `shadowserver` by default). The app only reads; it never writes to the database.

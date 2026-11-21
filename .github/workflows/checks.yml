@@ -34,10 +34,10 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0, Node 24 (tag in actions/setup-python)
         with:
           python-version: "3.12"
+      # the libraries from the locks only: exact versions, every file checked against its sha256 value; a file that does
+      # not match, or a library the lock does not list, stops the job (tools/lock_requirements.sh makes the locks)
       - name: Install the platform's libraries
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r platform/requirements.txt
+        run: python -m pip install --require-hashes --only-binary=:all: -r platform/requirements.lock
       - name: Start MongoDB 8.0 with a one-run administrator
         run: |
           set -e
@@ -118,11 +118,11 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0, Node 24 (tag in actions/setup-python)
         with:
           python-version: "3.12"
+      # the exact versions that are installed (the locks), the docs site's included; read as they are, nothing installed
       - name: pip-audit
         run: |
-          python -m pip install --upgrade pip
           python -m pip install pip-audit==2.10.1
-          pip-audit -r platform/requirements.txt -r database/requirements.txt --progress-spinner off
+          pip-audit --require-hashes --disable-pip -r platform/requirements.lock -r database/requirements.lock -r docs/requirements.lock --progress-spinner off
   static-analysis:
     # Static code analysis on every push and pull request, so on every release (OpenSSF Best Practices, 2026-11-15):
     # Bandit for the Python code (fails on medium or high severity; the low ones are listed) and ShellCheck for the
@@ -136,7 +136,6 @@ jobs:
           python-version: "3.12"
       - name: Install Bandit and ShellCheck
         run: |
-          python -m pip install --upgrade pip
           python -m pip install bandit==1.9.4 shellcheck-py==0.11.0.1 ruff==0.17.6
       # the coding rules (ruff.toml at the top of the repository): a change that breaks one fails here
       - name: Ruff (coding rules)
@@ -167,8 +166,7 @@ jobs:
           python-version: "3.12"
       - name: Install the platform's and the pipeline's libraries
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r platform/requirements.txt -r database/requirements.txt
+          python -m pip install --require-hashes --only-binary=:all: -r platform/requirements.lock -r database/requirements.lock
           # the PDF page check renders every page (tests/pdf_pages_check.py); only the checks need it, not the platform
           python -m pip install pypdfium2==5.15.2
       # every check that needs no database and no running service (review 2026-11-13: about 20 of them were left out,
@@ -190,7 +188,7 @@ jobs:
                    check_findings_ui check_notifications check_overview check_greetings check_peace check_networks_list check_wrong_types check_kb_report_names check_slow_log check_lockouts check_system_alerts check_response_cache check_task_monitor check_acode_chain check_intelligence check_code_collisions check_finding_watch check_acode_issue check_db_connect check_install_db check_install_cert check_installer_anim check_offline_names check_attack_map check_advisory_attack check_confirm_all check_cve_attack \
                    check_beacon_decode check_beacon_findings check_beacon_unknown check_spike_notice check_glossary_sync check_ai_framework check_masked_ids \
                    check_index_refresh check_beacon_keep check_day_skip check_config_page check_findings_live check_pdf_rows check_pdf_refs pdf_pages_check check_per_key_cache check_recent_days \
-                   check_select_enhancer check_invite_limit check_quarterly_access check_feature_coverage; do
+                   check_select_enhancer check_invite_limit check_quarterly_access check_feature_coverage check_installer_supply; do
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
           done
           # the module part only: the filter and who sees it need the platform (run_all_checks.sh on the server)

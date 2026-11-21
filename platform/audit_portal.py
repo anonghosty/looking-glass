@@ -83,6 +83,8 @@ LABEL["leak_traced"], TAB_OF["leak_traced"] = "Leak traced", "copies"
 LABEL["quarterly_download"], TAB_OF["quarterly_download"] = "Quarterly report downloaded", "data"
 LABEL["quarterly_made"], TAB_OF["quarterly_made"] = "Quarterly report made", "system"
 LABEL["quarterly_purge"], TAB_OF["quarterly_purge"] = "Quarterly purge", "system"
+# a library file refused at installation: it did not match its lock (library_supply.py, r86)
+LABEL["library_suspected"], TAB_OF["library_suspected"] = "Library file refused (did not match the lock)", "system"
 LABEL["audit_sealed"] = "Entries before the chain sealed"
 TAB_OF["audit_sealed"] = "system"
 LABEL["audit_archive_removed"] = "Old audit archive removed by the retention"

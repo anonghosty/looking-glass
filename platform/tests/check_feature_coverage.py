@@ -28,6 +28,12 @@ FEATURES = {
         "docs": [("docs/USER_GUIDE.md", "## Quarterly reports"), ("docs/OPERATIONS.md", "The quarterly report and the purge"),
                  ("docs/TECHNICAL_REFERENCE.md", "quarterly.py")],
     },
+    "library_supply": {
+        "no_ui": "an alert in the administrators' existing bell and an entry in the audit log; no page or control of its own",
+        "docs": [("docs/INSTALLATION.md", "When a library file does not match"),
+                 ("docs/OPERATIONS.md", "Updating the libraries on purpose"),
+                 ("docs/TECHNICAL_REFERENCE.md", "library_supply.py")],
+    },
 }
 # installed in features.py before this rule began (2026-11-20). Closed: never add to it.
 BEFORE_RULE = frozenset({"spike_notice", "config_page", "findings_live", "pdf_refs", "name_levels_catchup", "severity_map",

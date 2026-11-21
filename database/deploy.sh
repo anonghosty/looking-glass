@@ -57,6 +57,18 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# ---------------------------------------------------------------- 0. this computer
+# The libraries are installed only by safe_libraries.py: every file checked against requirements.lock, a new
+# environment beside the running one, switched to only when everything matched (the same tool as the platform's; a
+# release keeps a copy here, the platform's deploy/ holds the original). It first checks this computer: Ubuntu 24.04 or
+# later, Python 3.12-3.14, an x86_64 or aarch64 processor; anything else is refused before anything is installed.
+SAFE_LIBS=./safe_libraries.py
+[[ -f $SAFE_LIBS ]] || SAFE_LIBS=../platform/deploy/safe_libraries.py
+[[ -f $SAFE_LIBS ]] || die "safe_libraries.py is missing (it comes with Looking Glass, beside this script or in ../platform/deploy/): libraries are installed only through it"
+[[ -f requirements.lock ]] || die "requirements.lock is missing: libraries are installed only from it (with their sha256 values)"
+command -v python3 >/dev/null || die "python3 is missing: sudo apt install python3 python3-venv"
+python3 "$SAFE_LIBS" check-machine || exit 1
+
 # ---------------------------------------------------------------- 1. config
 if [[ ! -f .env ]]; then
   cp .env.example .env; chmod 600 .env
@@ -305,10 +317,17 @@ fi
 fi   # ------------------------------------------------------------------------ end of local MongoDB
 
 # ---------------------------------------------------------------- 7. python venv + folders
-info "Setting up Python virtualenv (.venv)"
-[[ -x .venv/bin/python ]] || python3 -m venv .venv
-.venv/bin/python -m pip install -q --upgrade pip
-.venv/bin/python -m pip install -q -r requirements.txt
+info "Python libraries (.venv): only files that match requirements.lock"
+# a new environment beside the running one; .venv switches to it only when every file matched and installed. A file
+# that does not match is refused and reported (suspected-packages.txt); with no matching file anywhere, nothing changes.
+lib_rc=0
+python3 "$SAFE_LIBS" install --lock requirements.lock --venv .venv --part database \
+  --report-dir "${LG_SUPPLY_REPORT_DIR:-$PROJECT_DIR}" --import requests,pymongo,cryptography,dns || lib_rc=$?
+if [[ $lib_rc == 10 ]]; then
+  warn "A library file from one source did not match the lock and was refused; a matching copy was installed. See suspected-packages.txt and report it (docs/INSTALLATION.md)."
+elif [[ $lib_rc != 0 ]]; then
+  die "The libraries were not installed (see above). Nothing was changed in .venv."
+fi
 chmod +x run.sh check.sh deploy.sh shadowserver_pipeline.py 2>/dev/null || true
 mkdir -p attachments_backup unzipped_backup sorting_backup logs backups
 if [[ $LOCAL == false ]]; then

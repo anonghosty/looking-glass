@@ -35,8 +35,9 @@ ok("MongoDB runs pinned by its image digest", re.search(r"mongo@sha256:[0-9a-f]{
 ok("its administrator password is made in the run and masked (none stored)", "openssl rand" in s and "::add-mask::" in s
    and not re.search(r"MONGO_INITDB_ROOT_PASSWORD=(?!\"\$PW\")\S+", s))
 ok("the database checks treat a skip as a failure", "if ! python tests/$t.py" in s and "test_new_collections" in s)
-ok("libraries are checked for known vulnerabilities, with a pinned pip-audit", re.search(r"pip-audit==\d+\.\d+\.\d+", s) is not None
-   and "pip-audit -r platform/requirements.txt -r database/requirements.txt" in s)
+ok("libraries are checked for known vulnerabilities, with a pinned pip-audit, on the exact versions installed (the locks)",
+   re.search(r"pip-audit==\d+\.\d+\.\d+", s) is not None
+   and "pip-audit --require-hashes --disable-pip -r platform/requirements.lock -r database/requirements.lock" in s)
 ok("the workflow token stays read-only", re.search(r"^permissions:\s*\n\s+contents:\s*read\s*$", s, re.M) is not None)
 
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))

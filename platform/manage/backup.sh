@@ -4,7 +4,8 @@
 # data/backup_public_key or BACKUP_PUBLIC_KEY in .env); the private key stays with you, off this server. The archive is
 # encrypted as it is written: no readable copy is ever on disk. Without a public key the backup is refused, unless you
 # ask for an unencrypted one on purpose with --unencrypted (review of d82a436).
-# The virtualenv is left out: recreate it with deploy/install.sh (or python3 -m venv .venv && .venv/bin/pip install -r requirements.txt).
+# The Python environments (.venv, .venvs/) are left out: recreate them with deploy/update_libraries.sh (only files that
+# match requirements.lock). The local copy of the library files (~/looking-glass/libraries) is not backed up either.
 # The checksum of the (encrypted) archive is signed with this installation's key (audit_checkpoint.py, namespace
 # looking-glass-backup) and the backup is recorded in the audit log. The private signing key itself is left out: a
 # restored installation makes a new one (recorded in the audit log); the public key stays in the archive and in the log.
@@ -44,12 +45,12 @@ umask 077
 if [ "$plain" = 1 ]; then
   out="$dest/$name-$stamp.tar.gz"
   echo "WARNING: an UNENCRYPTED backup (--unencrypted): anyone who gets this file can read .env and the accounts." >&2
-  tar -C "$(dirname "$project")" --exclude="$name/.venv" --exclude='__pycache__' \
+  tar -C "$(dirname "$project")" --exclude="$name/.venv" --exclude="$name/.venvs" --exclude='__pycache__' \
       --exclude="$name/data/audit_signing/signing_key" --exclude="$name/data/audit_signing/.lock" -czf "$out" "$name"
 else
   kind="$(bc_kind "$key")"
   out="$dest/$name-$stamp.tar.gz$(bc_ext "$kind")"
-  tar -C "$(dirname "$project")" --exclude="$name/.venv" --exclude='__pycache__' \
+  tar -C "$(dirname "$project")" --exclude="$name/.venv" --exclude="$name/.venvs" --exclude='__pycache__' \
       --exclude="$name/data/audit_signing/signing_key" --exclude="$name/data/audit_signing/.lock" -czf - "$name" \
     | bc_encrypt "$key" > "$out" || { rm -f "$out"; echo "NOT BACKED UP: encryption failed (see above)" >&2; exit 3; }
   echo "encrypted ($kind) to the public key in $key"

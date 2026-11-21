@@ -5,6 +5,34 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-21 (2)
+### Security
+- **Libraries only from lock files, every file checked.** The platform, the database pipeline and the documentation
+  site now install their Python libraries from `requirements.lock`: one exact version of every library (and of what it
+  needs) with the sha256 value of every file. Every installation and update checks each file before using it: the guided
+  installer, `deploy/install.sh`, the pipeline's `deploy.sh`, the new `deploy/update_libraries.sh` and GitHub's checks.
+  A file that does not match is refused with a warning (library, version, source, expected and received sha256), the
+  next source is tried (PyPI, then the release's files in the new library repository, then a read-only local copy of
+  the last two releases in `~/looking-glass/libraries`), and it is reported in `suspected-packages.txt`, the installer's
+  log, the audit log and the administrators' bell. With no matching file anywhere, the installation stops and nothing
+  is changed. A library no lock lists is refused.
+- **New environments beside the running one.** An installation or update builds the libraries in `.venvs/` and switches
+  `.venv` to them only when everything matched and installed; the running installation is untouched until then, and
+  the environment before is kept.
+- **The computer is checked first.** Ubuntu 24.04 or later only, Python 3.12, 3.13 or 3.14, an x86_64 or aarch64
+  processor; anything else is refused with the reason before anything is installed. **Debian is no longer accepted.**
+- **Changing a library is deliberate:** `tools/lock_requirements.sh` makes the locks (and checks them for every
+  supported Python and processor); `tools/build_wheelhouse.sh` builds a release's library bundle. pip-audit checks the
+  locked versions. A new check, `tests/check_installer_supply.py`, rehearses every case with a local package index and
+  fails if any install path skips the hashes.
+- **After updating:** after `git pull`, run `deploy/update_libraries.sh` once in `platform/` (instead of
+  `pip install -r requirements.txt`), then `deploy/reload.sh`. It needs Ubuntu 24.04 or later with Python 3.12-3.14 on
+  x86_64 or aarch64, and the internet (or the release's library bundle unpacked into
+  `~/looking-glass/libraries/<release>/`). `.venv` becomes a link into `.venvs/`; nothing else to configure. If it
+  reports a refused file, keep `suspected-packages.txt` and report it ([When a library file does not
+  match](docs/INSTALLATION.md#when-a-library-file-does-not-match)). Contributors: a change to a `requirements.txt` comes
+  with its regenerated lock (CONTRIBUTING.md, "Changing the libraries").
+
 ## 2026-11-21
 ### Added
 - **The quarterly report.** On the next quarter's 3rd day, once the quarter's last reports have arrived, Looking Glass

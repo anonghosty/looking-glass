@@ -55,14 +55,14 @@ def ok(label, cond, info=""):
 import secrets  # noqa: E402
 COPY_KEY = secrets.token_hex(32)           # the copy's own automation key (never the real one)
 # what the copy leaves out: everything that names people or holds a secret (the real service's, not the copy's)
-_NO_COPY = {".venv", "__pycache__", "backups", "users.json", "sessions.json", "automation.key", "tls", "findings.json",
+_NO_COPY = {".venv", ".venvs", "__pycache__", "backups", "users.json", "sessions.json", "automation.key", "tls", "findings.json",
             "notifications.json", "notes.json", "peace_of_mind.json", "advisories", "acodes", "review_searches",
             "combo_exports", "pipeline_requests", "pipeline_requests.logged.json", "password_policy.json",
             "throttle.json", "setup_code", "e2e_server.log"}
 
 
 def _copy_ignore(folder, names):
-    out = {n for n in names if n in (".venv", "__pycache__", "backups") or n.endswith((".log", ".key", ".pem"))
+    out = {n for n in names if n in (".venv", ".venvs", "__pycache__", "backups") or n.endswith((".log", ".key", ".pem"))
            or n.startswith(".env.")}
     if os.path.abspath(folder) == os.path.join(SRC, "data"):          # the data folder only (not audit_portal.py!)
         out |= {n for n in names if n in _NO_COPY or n.startswith(("audit", "cleared_findings"))}

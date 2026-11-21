@@ -3,6 +3,13 @@
 .env.*
 !.env.example
 .venv/
+# the Python environments (deploy/safe_libraries.py): .venv is a link to the one in use in .venvs/
+.venv
+.venvs/
+# the library files kept by the installer (~/looking-glass/libraries when this folder is ~/looking-glass) and the
+# report of refused library files: this computer's, never the repository's
+/libraries/
+suspected-packages.*
 __pycache__/
 *.pyc
 *.log
@@ -15,5 +22,6 @@ logs/
 # created by install.sh: its log (no secrets, but local details) and the checker's Python environment
 install-logs/
 .installer-venv/
+.installer-venv
 # marker left by platform/tools/make_release.py
 .looking-glass-release

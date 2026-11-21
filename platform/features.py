@@ -153,6 +153,14 @@ def install(app, core):
             "csrf_ok": A["csrf_ok"], "audit": A["audit"], "findings": core.get("findings"), "logger": core.get("app_logger"),
             "people_name": people_name if "users" in A else None, "serving": bool(core.get("serving"))})
 
+    # library files refused at installation because they did not match the lock (deploy/safe_libraries.py, r86): into
+    # the audit log once each, after a start (library_supply.py); the bell alert is system_alerts.py's
+    if "audit" in A:
+        import library_supply
+        out["library_supply"] = library_supply.install(app, {"base_dir": os.path.dirname(os.path.abspath(__file__)),
+                                                             "audit": A["audit"], "serving": bool(core.get("serving")),
+                                                             "logger": core.get("app_logger")})
+
     # the analyst codes' device counts worked out ahead after a start, so the Findings page does not wait for them
     # (acode_warm.py; only in the running service)
     if core.get("acodes") is not None:

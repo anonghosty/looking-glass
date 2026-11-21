@@ -33,7 +33,7 @@ class Catch(logging.Handler):
 
 
 try:
-    shutil.copytree(SRC, os.path.join(tmp, "p"), ignore=shutil.ignore_patterns(".venv", "__pycache__", "backups", "*.log", "mgmt_baseline.json"))
+    shutil.copytree(SRC, os.path.join(tmp, "p"), ignore=shutil.ignore_patterns(".venv", ".venvs", "__pycache__", "backups", "*.log", "mgmt_baseline.json"))
     P = os.path.join(tmp, "p")
     sys.path.insert(0, P); os.chdir(P)
     os.environ["TRUST_PROXY"] = "0"     # called in-process, not through a reverse proxy (proxy_guard.py)

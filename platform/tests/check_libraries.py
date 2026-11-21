@@ -49,7 +49,7 @@ for name, cons in reqs:
     try:
         have = metadata.version(name)
     except metadata.PackageNotFoundError:
-        ok(f"{name} installed", False, "not installed: .venv/bin/pip install -r requirements.txt"); continue
+        ok(f"{name} installed", False, "not installed: deploy/update_libraries.sh (only files matching requirements.lock)"); continue
     good = True
     for c in cons:
         op, v = re.match(r"(>=|<=|==|<|>)\s*(.+)", c).groups()

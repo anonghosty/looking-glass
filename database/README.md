@@ -63,8 +63,15 @@ shadowserver help               # all commands     |  man shadowserver  for the 
 ```
 
 Requirements: Ubuntu 24.04 or later, Desktop or Server, on the computer itself, in a virtual machine or as Ubuntu on WSL 2 on Windows, with systemd (on WSL:
-`/etc/wsl.conf` → `[boot] systemd=true`), Python 3.12+, internet access, sudo rights for `deploy`, and a mailbox that
-receives your Shadowserver reports (sign up for free at https://www.shadowserver.org/what-we-do/network-reporting/).
+`/etc/wsl.conf` → `[boot] systemd=true`), Python 3.12, 3.13 or 3.14, an x86_64 or aarch64 processor, internet access,
+sudo rights for `deploy`, and a mailbox that receives your Shadowserver reports (sign up for free at
+https://www.shadowserver.org/what-we-do/network-reporting/). `deploy.sh` checks the system, Python and processor first
+and refuses anything else before it installs anything.
+
+The Python libraries come only from `requirements.lock`: every file is checked against its sha256 value, a new `.venv`
+is built beside the running one and used only when every file matched (`safe_libraries.py`, the platform's
+`deploy/safe_libraries.py`). A file that does not match is refused and recorded in `suspected-packages.txt`; see the
+platform's docs/INSTALLATION.md, "When a library file does not match".
 
 ---
 
@@ -429,8 +436,10 @@ database/
 ├── docs/shadowserver.1           the manual (linked from /usr/local/share/man/man1)
 ├── .env                          settings + passwords (mode 600, never share)
 ├── .env.example                  documented template
-├── requirements.txt              Python packages (pymongo, requests)
-├── .venv/                        Python virtual environment (created by deploy)
+├── requirements.txt              Python packages and their caps (edited by people)
+├── requirements.lock             the exact versions and sha256 values installed (tools/lock_requirements.sh makes it)
+├── safe_libraries.py             installs only files that match the lock (a copy of the platform's deploy/ tool)
+├── .venv                         link to the Python environment in use, in .venvs/ (made by deploy)
 ├── attachments_backup/           saved attachments and downloaded link files
 ├── unzipped_backup/<zip>/        non-report files from each zip (a zip is extracted only once)
 ├── sorting_backup/<service>/     report CSVs by service - the input of the load step

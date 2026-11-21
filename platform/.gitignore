@@ -2,8 +2,12 @@
 .env
 .env.*
 !.env.example
-# Python
+# Python: .venv is a link to the environment in use in .venvs/ (deploy/safe_libraries.py)
 .venv/
+.venv
+.venvs/
+# refused library files, if any (deploy/safe_libraries.py): this computer's report
+suspected-packages.*
 __pycache__/
 *.pyc
 # runtime data: accounts, sessions, audit log, settings, caches, certificates, keys.
