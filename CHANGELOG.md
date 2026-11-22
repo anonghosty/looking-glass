@@ -5,6 +5,12 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-22 (5)
+### Added
+- The idea behind Looking Glass, the orb-weaver, on the documentation site's home page, with a short film of a real
+  orb-weaver at work by the Butterfly Pavilion (1:37), which plays from the Butterfly Pavilion's own YouTube channel.
+- **After updating:** nothing to do (documentation only).
+
 ## 2026-11-22 (4)
 ### Added
 - The film **Teardown** (5:11, narrated, with captions) on the documentation site's home page under *How it works*,

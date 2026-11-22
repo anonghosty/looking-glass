@@ -142,6 +142,19 @@ the device that tugs on the most threads.
 Every scene is animation with made-up data: every IP address, network name and AS number in it is fictional. The
 sources for each fact are in the film's description on YouTube.
 
+## The idea behind it: the orb-weaver
+
+An orb-weaver does not watch for prey. It waits at the hub and feels the vibrations in its threads, and can tell what
+has been caught from the way they tremble. Looking Glass works the same way: each report is a thread, the same address
+joins them, and the team moves on the tug. Even the husks it leaves in the web stay behind as a record of every catch,
+the way the audit log keeps a record of every action. This short film by the Butterfly Pavilion shows a real
+orb-weaver at work.
+
+<!-- film: orb-weaver -->
+
+The film belongs to the Butterfly Pavilion and plays from its own YouTube channel, not the Looking Glass creator's
+channel.
+
 ## See it working
 
 First the use cases, a needle through the haystack; then the new role, the advisor, from finding to advisory; then

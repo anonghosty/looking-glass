@@ -173,6 +173,11 @@ extra:
         - [129, "Part 3: The spider"]
         - [186, "Part 4: The system"]
         - [287, "Free and open source"]
+    orb-weaver:
+      id: 5_jFyqkLdX8
+      title: "Caught in the Web: Orb Weaver Hunting Behavior"
+      length: "1:37"
+      sound: "by the Butterfly Pavilion, on its YouTube channel"
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/anonghosty/looking-glass
