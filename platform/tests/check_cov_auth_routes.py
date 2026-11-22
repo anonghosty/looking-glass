@@ -13,7 +13,8 @@ first-run code and audit log are never touched (each store is pointed at the tem
   reset (a wrong code, then the right one: back to approval); an expired password replaced at sign-in (rules, not the
   old one, too many tries)
 - sign-up: a dead sign-up link, a bad or reserved name, the hourly limits, a name or address already used, the rules,
-  a name taken between the steps; forgot password: asking an administrator (the same answer for any name, a limit),
+  a name taken between the steps; fields added to the request by hand (role=admin, isAdmin, status, ...) change
+  nothing (mass assignment); forgot password: asking an administrator (the same answer for any name, a limit),
   a reset an administrator allowed (authenticator code only), the lock
 - admin: approve, role, revoke, restore, reset authenticator, allow reset, end sessions, delete (the name stays
   reserved), each with its refusals (own account, last administrator, wrong kind of body, unknown role or action, CSRF,
@@ -289,6 +290,28 @@ try:
         throttle.count(("register-dns", "127.0.0.1"), 3600, add=True)
     r = c.post("/register", data=dict(form, username="cov-new3", email="ama3@csirt-made-up.org"), headers=HD)
     ok("thirty e-mail domain look-ups from one address in an hour: 429", r.status_code == 429 and "hour" in r.get_data(as_text=True))
+    throttle.clear_address("127.0.0.1")
+    # mass assignment: fields the form never asks for, added to the request by hand at both steps, change nothing; the
+    # role comes only from the setup code, a sign-up link or the lowest role
+    SMUGGLED = {"role": "admin", "isAdmin": "true", "is_admin": "1", "admin": "1", "status": "active", "perms": "users",
+                "approved_by": "cov-admin", "invite": "", "setup": "1", "totp": "AAAA", "recovery": "x", "profile": "x"}
+    r = c.post("/register", data=dict(form, username="cov-smuggle", email="ama4@csirt-made-up.org", **SMUGGLED), headers=HD)
+    s_ = secret_of(r)
+    time.sleep(31 - time.time() % 30)
+    r = c.post("/register", data=dict(SMUGGLED, step="enrol", code=fresh_code(s_)), headers=HD)
+    nu = users.get("cov-smuggle") or {}
+    ok("sign-up with role=admin, isAdmin, status=active and more added to both steps: lowest role, waiting for approval",
+       r.status_code == 200 and nu.get("role") == auth.LOWEST_ROLE and nu.get("status") == "pending"
+       and not nu.get("approved_by") and not any(k in nu for k in ("isAdmin", "is_admin", "admin", "perms")),
+       f"{r.status_code} {nu.get('role')} {nu.get('status')}")
+    ok("…its profile holds only the four profile fields, as typed",
+       set(nu.get("profile", {})) == {"full_name", "organisation", "email", "country"} and nu["profile"]["full_name"] == "Ama Owusu",
+       str(nu.get("profile")))
+    ok("…and its authenticator is the one it enrolled, not a value sent with the request", nu.get("totp") == s_)
+    r = c.post("/register", json=dict(form, username="cov-smuggle2", email="ama5@csirt-made-up.org", **SMUGGLED), headers=HD)
+    ok("the same as a JSON body: no account is made from it", "cov-smuggle2" not in (users.all() or {}), str(r.status_code))
+    with users.lock:
+        users._load(); users.data["users"].pop("cov-smuggle", None); users.save()
     throttle.clear_address("127.0.0.1")
 
     print("Forgot password")

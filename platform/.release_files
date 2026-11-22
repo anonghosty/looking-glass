@@ -1,5 +1,5 @@
 # Looking Glass: every file this release ships in this folder (deploy/stale_files.py reads it on update)
-# files: 752
+# files: 756
 .env.example
 .gitignore
 README.md
@@ -537,6 +537,7 @@ tests/check_addresses.py
 tests/check_advisory_attack.py
 tests/check_advisory_options.py
 tests/check_ai_framework.py
+tests/check_api_no_secrets.py
 tests/check_at_rest.py
 tests/check_attack_map.py
 tests/check_attack_no_duplicates.py
@@ -662,6 +663,7 @@ tests/check_reports.py
 tests/check_request_limits.py
 tests/check_response_cache.py
 tests/check_retest_reset.py
+tests/check_role_refusals.py
 tests/check_sbom.py
 tests/check_scope_reload.py
 tests/check_screenshots.py
@@ -703,6 +705,7 @@ tests/fixtures/offline_names/cross_listings.json
 tests/fixtures/offline_names/misp_botnet.json
 tests/fixtures/offline_names/misp_malpedia.json
 tests/fixtures/offline_names/misp_tool.json
+tests/lg_no_db_fast.py
 tests/lgauth.py
 tests/mongo_derive.py
 tests/needs_db.py
@@ -710,6 +713,7 @@ tests/no_outside/report.py
 tests/no_outside/sitecustomize.py
 tests/output_lint.py
 tests/pdf_pages_check.py
+tests/role_access_map.json
 tests/run_admin_db_tests.sh
 tests/run_all_checks.sh
 tests/test_days.py

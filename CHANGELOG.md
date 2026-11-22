@@ -5,6 +5,20 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-22 (6)
+### Changed
+- **Trusting a self-signed certificate is the way, not clicking past the warning.** The installation guide shows how
+  to trust the certificate on Windows, macOS and Ubuntu after checking its SHA-256 fingerprint; `make_tls_cert.sh`
+  says so when it finishes, and the guided installer's summary shows the fingerprint with the same advice. A warning
+  on a screen that already trusts it means stop and tell the administrator.
+- **The user guide's sign-in section says Looking Glass never sends a link to sign in:** open it only from your own
+  bookmark or the address your administrator gave you; any message with a sign-in link is phishing, so report it.
+
+### Added
+- **Three security tests.** A sign-up that adds fields such as `role=admin` by hand gets the lowest role. No API
+  answer carries a secret, checked for every role. Every route refuses the roles it should, compared with a reviewed
+  permission map.
+
 ## 2026-11-22 (5)
 ### Added
 - The idea behind Looking Glass, the orb-weaver, on the documentation site's home page, with a short film of a real

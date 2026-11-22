@@ -308,11 +308,27 @@ Keep untrusted networks (hotel, mobile hotspot) on the **Public** profile.
 
 ### A8. Other screens (optional)
 To show Looking Glass on a TV, a wall screen or colleagues' computers:
-1. **HTTPS:** `deploy/make_tls_cert.sh` creates a certificate for this computer's names and addresses and switches
-   the service to HTTPS. A self-signed certificate warns once on each screen (or install `data/tls/cert.pem` as
-   trusted there); a certificate from your organisation's CA can replace the two files in `data/tls/`. The certificate
-   is named after the first name you give (`deploy/make_tls_cert.sh lookingglass.example.org`), else this computer's
-   name; never after the product, so internet scanners cannot list installations by it. Certificates made before
+1. **HTTPS:** `deploy/make_tls_cert.sh` creates a certificate for this computer's names and addresses, switches the
+   service to HTTPS and prints the certificate's SHA-256 fingerprint. Then make every screen that opens Looking Glass
+   trust it, so no warning ever appears there:
+   - **Check it first:** open the address once, view the certificate (the warning page's certificate details) and
+     compare its SHA-256 fingerprint with the one the script printed. Trust it only if they match.
+   - **Windows:** copy `data/tls/cert.pem` to the screen, rename it `looking-glass.crt`, double-click it, choose
+     Install Certificate, Local Machine, and place it in "Trusted Root Certification Authorities".
+   - **macOS:** double-click it to add it to the System keychain in Keychain Access, open it, and set Trust to
+     "Always Trust".
+   - **Ubuntu:** `sudo cp cert.pem /usr/local/share/ca-certificates/looking-glass.crt` then
+     `sudo update-ca-certificates`. Firefox keeps its own list: Settings, Certificates, View Certificates,
+     Authorities, Import.
+
+   A certificate from your organisation's CA can replace the two files in `data/tls/` instead; screens that already
+   trust that CA need nothing more.
+
+   **Never click past a certificate warning for Looking Glass.** A warning on a screen that already trusts the
+   certificate means something is wrong: stop and tell the administrator.
+
+   The certificate is named after the first name you give (`deploy/make_tls_cert.sh lookingglass.example.org`), else
+   this computer's name; never after the product, so internet scanners cannot list installations by it. Certificates made before
    2026-11-19 are named "Looking Glass": run the script again to replace yours (each screen then trusts the new one
    once more; the old pair is kept in `data/tls/previous-<time>/`).
 2. **Listen on the network:** run `deploy/install.sh --network`, then copy the service file again and restart (A4 commands, then `sudo systemctl restart looking-glass`).

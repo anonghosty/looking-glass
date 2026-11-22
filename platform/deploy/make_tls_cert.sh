@@ -7,8 +7,9 @@
 #     ./deploy/make_tls_cert.sh                      # this machine's name and all its addresses
 #     ./deploy/make_tls_cert.sh lookingglass.local   # plus extra names / addresses
 # gunicorn.conf.py serves HTTPS on the same port as soon as data/tls/cert.pem and key.pem exist; this script
-# reloads the service for you. Browsers warn once about a self-signed certificate; to avoid that, install
-# data/tls/cert.pem as trusted on the screens, or use a certificate from your organisation's CA (same file names).
+# reloads the service for you. Browsers warn about a self-signed certificate until each screen trusts it: install
+# data/tls/cert.pem as trusted there after checking its SHA-256 fingerprint (docs/INSTALLATION.md A8), or use a
+# certificate from your organisation's CA (same file names).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 me="$(id -un)"
@@ -60,3 +61,5 @@ if systemctl is-active --quiet looking-glass 2>/dev/null || systemctl is-active 
   bash deploy/reload.sh
 fi
 echo "Open https://localhost:$port here, or https://<one of the addresses above>:$port from other screens."
+echo "Trust this certificate on every screen that opens Looking Glass (docs/INSTALLATION.md, A8), after checking that"
+echo "its SHA-256 fingerprint matches the one above. Never click past a certificate warning."

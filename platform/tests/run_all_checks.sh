@@ -81,6 +81,8 @@ run "grades and shares (offline)"     $PY tests/check_calc_offline.py
 run "app routes: analysis, reports, look-ups, refusals (offline)" $PY tests/check_cov_app.py
 run "auth building blocks: codes, stores, audit gap (offline)" $PY tests/check_cov_auth_units.py
 run "auth routes: gate, sign-in steps, admin actions (offline)" $PY tests/check_cov_auth_routes.py
+run "no API answer carries a secret, every role (in-process)" $PY tests/check_api_no_secrets.py
+run "every route refuses the roles it should, the reviewed permission map (in-process)" $PY tests/check_role_refusals.py
 run "security headers, hosts, access modes (offline)" $PY tests/check_cov_security.py
 run "organisation, notes, task monitor, Workers (offline)" $PY tests/check_cov_admin_tools.py
 run "analyst codes: making, reading, channel rules (offline)" $PY tests/check_cov_acodes.py

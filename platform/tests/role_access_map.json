@@ -1,0 +1,2138 @@
+{
+ "GET /": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory",
+   "definitions",
+   "management",
+   "networks",
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "auditor",
+   "external",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /admin": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "audit",
+   "users"
+  ],
+  "roles": [
+   "admin",
+   "auditor"
+  ]
+ },
+ "GET /advisory": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "auditor"
+  ]
+ },
+ "GET /advisory/<fid>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory"
+  ],
+  "roles": [
+   "admin",
+   "advisor"
+  ]
+ },
+ "GET /advisory/<fid>/file/<ref>/<n>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory"
+  ],
+  "roles": [
+   "admin",
+   "advisor"
+  ]
+ },
+ "GET /advisory/<fid>/preview": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory"
+  ],
+  "roles": [
+   "admin",
+   "advisor"
+  ]
+ },
+ "GET /api/admin/audit": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "audit"
+  ],
+  "roles": [
+   "admin",
+   "auditor"
+  ]
+ },
+ "GET /api/admin/code-check": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "settings"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/admin/config": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "settings"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/admin/invites": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "users"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/admin/lockouts": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "users"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/admin/monitor": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "settings"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/admin/quarterly": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "settings"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/admin/quarterly/<quarter>/<kind>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "settings"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/admin/roles": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "users"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/admin/sessions": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "audit",
+   "users"
+  ],
+  "roles": [
+   "admin",
+   "auditor"
+  ]
+ },
+ "GET /api/admin/users": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "users"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/advisory/<fid>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory"
+  ],
+  "roles": [
+   "admin",
+   "advisor"
+  ]
+ },
+ "GET /api/advisory/<fid>/export": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory"
+  ],
+  "roles": [
+   "admin",
+   "advisor"
+  ]
+ },
+ "GET /api/advisory/<fid>/net": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory"
+  ],
+  "roles": [
+   "admin",
+   "advisor"
+  ]
+ },
+ "GET /api/advisory/dashboard": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory"
+  ],
+  "roles": [
+   "admin",
+   "advisor"
+  ]
+ },
+ "GET /api/advisory/quarterly": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory"
+  ],
+  "roles": [
+   "admin",
+   "advisor"
+  ]
+ },
+ "GET /api/advisory/quarterly/<quarter>/<kind>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory"
+  ],
+  "roles": [
+   "advisor"
+  ]
+ },
+ "GET /api/analyst-codes": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/asns": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/asns/identify": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/attack": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/attack/search": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/attack/shortlist": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/attack/technique/<tid>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory",
+   "definitions",
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /api/audit/access": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "auditor"
+  ]
+ },
+ "GET /api/audit/continuity": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "auditor"
+  ]
+ },
+ "GET /api/audit/events": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "auditor"
+  ]
+ },
+ "GET /api/audit/export.csv": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "auditor"
+  ]
+ },
+ "GET /api/audit/overview": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "auditor"
+  ]
+ },
+ "GET /api/audit/proof.zip": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "auditor"
+  ]
+ },
+ "GET /api/audit/report.pdf": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "auditor"
+  ]
+ },
+ "GET /api/audit/sender": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "auditor"
+  ]
+ },
+ "GET /api/audit/verify": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "auditor"
+  ]
+ },
+ "GET /api/beacon/code": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "researcher"
+  ]
+ },
+ "GET /api/beacon/finding/<fid>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory",
+   "definitions",
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /api/beacon/unknown": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/beacon/unknown/<fid>/request": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/clock": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/combo-codes/<code>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions",
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /api/combos/search/<jid>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/combos/search/<jid>/download": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/combos/search/<jid>/summary": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/diagnostics": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/events": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/facets": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/findings": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory",
+   "definitions",
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /api/findings/<fid>/again": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst"
+  ]
+ },
+ "GET /api/findings/people": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory",
+   "definitions",
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /api/findings/stamp": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory",
+   "definitions",
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /api/findings/watch": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory",
+   "definitions",
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /api/geo": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/infections": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/infections/missing": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/insight": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/insight/drill": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/insight/report": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/insight/report.pdf": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/intel": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/intel/acode/<code>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions",
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /api/intel/acode/<code>/devices": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions",
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /api/intel/leads": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/intel/match": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/intel/summary": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/intelligence": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/intelligence/export.csv": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/intelligence/report": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/intelligence/totals": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "management",
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external",
+   "management"
+  ]
+ },
+ "GET /api/issues/batch": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/kb/entry": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/kb/malpedia-search": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/kb/product-rules": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/kb/service": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/kb/service/fields": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/kb/service/intel": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/kb/services": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/kb/severity-map": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/kb/unresolved": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/lookups/<jid>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions",
+   "management",
+   "networks"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /api/malpedia": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/malpedia/batch": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/me": {
+  "open_to_any_signed_in": true,
+  "opened_by": [
+   "advisory",
+   "audit",
+   "definitions",
+   "export",
+   "malpedia",
+   "management",
+   "networks",
+   "settings",
+   "unmasked",
+   "users",
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "auditor",
+   "external",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /api/mgmt/<platform>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "management"
+  ]
+ },
+ "GET /api/mgmt/explain": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "management"
+  ]
+ },
+ "GET /api/mgmt/quarterly": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "management"
+  ]
+ },
+ "GET /api/mgmt/quarterly/<quarter>/<kind>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "management"
+  ],
+  "roles": [
+   "management"
+  ]
+ },
+ "GET /api/mgmt/report": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "management"
+  ]
+ },
+ "GET /api/name-sources": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/networks": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "networks"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/notes": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "GET /api/notifications": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory",
+   "definitions",
+   "management",
+   "networks",
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "auditor",
+   "external",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /api/organisation": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory"
+  ],
+  "roles": [
+   "admin",
+   "advisor"
+  ]
+ },
+ "GET /api/overview": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/overview/spikes": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions",
+   "management",
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /api/password-policy": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/peace": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/pipeline/held": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/pipeline/sender-week": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/pipeline/settings": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/related": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/replayed": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/report_glossary": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/review/<fid>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "management"
+  ]
+ },
+ "GET /api/settings": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/settings/address-blocks": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/settings/public": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/settings/region-matches": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/sources": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/stats": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/svc/clock": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/svc/detail": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/svc/diagnostics": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/svc/drill": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/svc/events": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/svc/facets": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/svc/glossary": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/svc/hosts.csv": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/svc/insight": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/svc/regions": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/svc/replayed": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/svc/report": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/svc/report.pdf": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/svc/stats": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /api/svc/summary": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /api/tour": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /audit": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "audit"
+  ],
+  "roles": [
+   "admin",
+   "auditor"
+  ]
+ },
+ "GET /combinations": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "GET /definitions": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory",
+   "definitions",
+   "management",
+   "networks"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "auditor",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /findings": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory",
+   "definitions",
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "auditor",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /intel/<code>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions",
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /intelligence": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "GET /management": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory",
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "auditor",
+   "management"
+  ]
+ },
+ "GET /organisation/logo": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory"
+  ],
+  "roles": [
+   "admin",
+   "advisor"
+  ]
+ },
+ "GET /overview": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory",
+   "definitions",
+   "management",
+   "networks",
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "auditor",
+   "external",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /review/<fid>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "management"
+  ]
+ },
+ "GET /review/<fid>/report": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /services": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory",
+   "definitions",
+   "management",
+   "networks",
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "auditor",
+   "external",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /settings": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory",
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "auditor",
+   "management"
+  ]
+ },
+ "GET /welcome": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "POST /api/admin/code-check/approve": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "settings"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/admin/code-check/quarantine": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "settings"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/admin/config": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "settings"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/admin/config/restart": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "settings"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/admin/invites": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "users"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/admin/invites/<iid>/revoke": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "users"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/admin/lockouts/unlock": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "users"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/admin/monitor/cache": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "settings"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/admin/quarterly/make": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "settings"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/admin/quarterly/purge": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "settings"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/admin/roles": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "users"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/admin/sessions/<sid>/end": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "users"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/admin/users/<name>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "users"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/advisory/<fid>/attack": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory"
+  ],
+  "roles": [
+   "admin",
+   "advisor"
+  ]
+ },
+ "POST /api/advisory/<fid>/drafted": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory"
+  ],
+  "roles": [
+   "admin",
+   "advisor"
+  ]
+ },
+ "POST /api/advisory/<fid>/generate": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory"
+  ],
+  "roles": [
+   "admin",
+   "advisor"
+  ]
+ },
+ "POST /api/advisory/<fid>/net": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory"
+  ],
+  "roles": [
+   "admin",
+   "advisor"
+  ]
+ },
+ "POST /api/advisory/<fid>/send": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory"
+  ],
+  "roles": [
+   "admin",
+   "advisor"
+  ]
+ },
+ "POST /api/analyst-codes": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "POST /api/asns/identify": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/attack/ctid-trust": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/attack/mapping": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "POST /api/attack/mapping/bulk": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "POST /api/audit/trace": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "auditor"
+  ]
+ },
+ "POST /api/beacon/decode": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "POST /api/beacon/finding": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "researcher"
+  ]
+ },
+ "POST /api/beacon/unknown/<fid>/state": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "POST /api/combo-codes/new": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "POST /api/combos/search": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "POST /api/combos/search/<jid>/acode": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "POST /api/combos/search/<jid>/enrich": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "POST /api/combos/search/<jid>/review": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "POST /api/combos/search/<jid>/stop": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "POST /api/copy/record": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory",
+   "definitions",
+   "management",
+   "networks"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "auditor",
+   "management",
+   "researcher"
+  ]
+ },
+ "POST /api/findings/<fid>/decision": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "management"
+  ]
+ },
+ "POST /api/findings/<fid>/reply": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory",
+   "definitions",
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "management",
+   "researcher"
+  ]
+ },
+ "POST /api/findings/<fid>/review-decision": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "management"
+  ]
+ },
+ "POST /api/findings/<fid>/status": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory",
+   "definitions",
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "management",
+   "researcher"
+  ]
+ },
+ "POST /api/intel/acode/<code>/issue": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions",
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "management",
+   "researcher"
+  ]
+ },
+ "POST /api/intelligence/export.csv": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "POST /api/intelligence/host": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "POST /api/intelligence/report": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ },
+ "POST /api/kb/check": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "POST /api/kb/entry": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "POST /api/kb/product-rules": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "POST /api/kb/service/fields": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "POST /api/kb/severity-map/rate": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "POST /api/lookups": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions",
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "management",
+   "researcher"
+  ]
+ },
+ "POST /api/lookups/<jid>/stop": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions",
+   "management",
+   "networks"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "management",
+   "researcher"
+  ]
+ },
+ "POST /api/name-sources/refresh": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/networks/entry": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "networks"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "POST /api/networks/lookup": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "networks"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "POST /api/networks/types": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "networks"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "POST /api/notes": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "POST /api/notes/delete": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "researcher"
+  ]
+ },
+ "POST /api/notifications/clear": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "advisory",
+   "definitions",
+   "management",
+   "networks",
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "auditor",
+   "external",
+   "management",
+   "researcher"
+  ]
+ },
+ "POST /api/organisation": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/password-policy": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": []
+ },
+ "POST /api/password-policy/force": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": []
+ },
+ "POST /api/peace": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/pipeline/apikey": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": []
+ },
+ "POST /api/pipeline/apikey/check": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/pipeline/lock": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/pipeline/release": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": []
+ },
+ "POST /api/pipeline/settings": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": []
+ },
+ "POST /api/pipeline/unlock": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": []
+ },
+ "POST /api/selftest/reset-login-counters": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": []
+ },
+ "POST /api/settings": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/settings/region-matches": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/tour": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "external"
+  ]
+ }
+}

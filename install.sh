@@ -1344,7 +1344,7 @@ To go ahead anyway, type: self-signed" "" v_confirm_self_signed
     ask_menu HTTPS "HTTPS" "Other computers must use HTTPS to sign in. How?
 (A self-signed certificate covers this computer's names and its addresses as they are now: give the
 server a fixed address or a name people use, or make it again after a change: deploy/make_tls_cert.sh)" selfsigned \
-      selfsigned "Certificate made here (self-signed; screens warn once)" \
+      selfsigned "Certificate made here (self-signed; trust it on each screen)" \
       domain     "A certificate bought for a domain name" \
       proxy      "A reverse proxy here does HTTPS (Caddy / nginx; you set it up)" \
       none       "No HTTPS: closed lab only (passwords readable on the network)"
@@ -1705,6 +1705,15 @@ HTTPS:   https://$TLS_DOMAIN$([ "$LG_PORT" = 443 ] || echo ":$LG_PORT") answers 
          $FW_NOTE}"
 elif [ "${ACCESS_MODE:-local}" != local ]; then OUT+="
 Other computers: allow port $LG_PORT in the firewall for them only (docs/INSTALLATION.md)."
+fi
+# a self-signed certificate: each screen trusts it once, after checking its fingerprint; nobody clicks past a warning
+if [ "${HTTPS:-none}" = selfsigned ] && [ -f "$PF_DIR/data/tls/cert.pem" ]; then
+  TLS_FP="$(openssl x509 -in "$PF_DIR/data/tls/cert.pem" -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2)"
+  OUT+="
+Certificate: self-signed, SHA-256 fingerprint
+         ${TLS_FP:-(read it with: openssl x509 -in platform/data/tls/cert.pem -noout -fingerprint -sha256)}
+         Trust platform/data/tls/cert.pem on every screen that opens Looking Glass, after checking that its
+         fingerprint matches this one (docs/INSTALLATION.md, A8). Never click past a certificate warning."
 fi
 # encryption at rest (platform/at_rest.py): MongoDB Community does not encrypt its files; an encrypted volume does
 if [ -f "$PF_DIR/at_rest.py" ]; then

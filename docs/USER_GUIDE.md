@@ -142,6 +142,9 @@ folded shut (a finding's details, say) opens with Enter on its heading; what is 
 closes, after an hour without use, or after 12 hours. After 5 failed attempts the account waits 15 minutes; the page
 says how many attempts are left.
 
+**Looking Glass never sends you a link to sign in.** Open it only from your own bookmark or the address your
+administrator gave you; any message with a sign-in link is phishing, so report it.
+
 ### Forgot password
 **Forgot password?** (right of the Sign in button) offers two ways:
 - **Reset it yourself:** with a code from your authenticator app plus one of your recovery codes.
