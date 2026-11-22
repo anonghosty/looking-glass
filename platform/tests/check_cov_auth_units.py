@@ -25,7 +25,9 @@ def ok(label, cond, info=""):
     checks += 1
     if not cond:
         fails.append(label)
-    print(f"  {'ok  ' if cond else 'FAIL'} {label}" + (f"  [{info}]" if info and not cond else ""), flush=True)
+    # the label only: these checks handle made-up secrets and codes, which are never printed, even on a failure
+    # (CodeQL py/clear-text-logging-sensitive-data, #42)
+    print(f"  {'ok  ' if cond else 'FAIL'} {label}", flush=True)
 
 
 tmp = tempfile.mkdtemp(prefix="lg-cov-auth-")

@@ -877,8 +877,9 @@ Shadowserver sends a group of **Intelligence** reports beside the two platforms:
 sandbox URLs, spam links), addresses on block lists or targeted, leaked accounts, and attacker infrastructure. The
 **Abused or Compromised** page (`/intelligence`) is for analysts and administrators, and for external accounts in a
 masked view; it is closed in Demo mode. External accounts see it masked: host labels instead of addresses, network
-aliases, and host names, organisations, accounts and e-mail addresses hidden; they cannot download, look up a host or
-show accounts.
+aliases, and host names, organisations, accounts and e-mail addresses hidden. Free text in a report (a defacement's
+message, a block list's reason, a user agent) is hidden too, and a ransomware victim shows only its ransomware group.
+They cannot download, look up a host or show accounts.
 
 - **Group tiles:** today's records in each group against the median of the 7 days before, with the 8 days as bars.
   While the day's files are still coming in, the page says so: "still arriving: N of the usual M reports".

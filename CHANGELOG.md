@@ -5,6 +5,18 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-22 (2)
+### Changed
+- **External accounts see less in Abused or Compromised.** Free text a report writes in words (a defacement's message,
+  a block list's reason, a user agent) is now shown as "hidden", because it can name a site or an organisation. A
+  ransomware victim shows only the ransomware group: its sector, place, website and published date are hidden, since
+  together with public leak-site trackers they could point at one organisation. Analysts and administrators see the
+  records as before.
+
+### Fixed
+- Two of the repository's own tests were tightened: one checks each web address by its host rather than by a piece of
+  its text, and one never prints the made-up secrets it works with, even when a check fails.
+
 ## 2026-11-22
 ### Changed
 - **Heavy jobs never run at the same time.** A quarterly report is not started while the database pipeline is loading

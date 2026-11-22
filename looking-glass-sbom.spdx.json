@@ -11,8 +11,8 @@
   "documentDescribes": [
     "SPDXRef-Package-looking-glass"
   ],
-  "documentNamespace": "https://github.com/anonghosty/looking-glass/sbom/v2026.11.22-292687ba6fbc6bbc",
-  "name": "looking-glass 2026.11.22",
+  "documentNamespace": "https://github.com/anonghosty/looking-glass/sbom/v2026.11.22.2-292687ba6fbc6bbc",
+  "name": "looking-glass 2026.11.22.2",
   "packages": [
     {
       "SPDXID": "SPDXRef-Action-actions-checkout-3d3c42e5aac5",
@@ -65,7 +65,7 @@
       "name": "looking-glass-docs-site",
       "primaryPackagePurpose": "OTHER",
       "supplier": "Organization: Looking Glass project",
-      "versionInfo": "2026.11.22"
+      "versionInfo": "2026.11.22.2"
     },
     {
       "SPDXID": "SPDXRef-Component-pipeline",
@@ -78,7 +78,7 @@
       "name": "looking-glass-pipeline",
       "primaryPackagePurpose": "APPLICATION",
       "supplier": "Organization: Looking Glass project",
-      "versionInfo": "2026.11.22"
+      "versionInfo": "2026.11.22.2"
     },
     {
       "SPDXID": "SPDXRef-Component-platform",
@@ -91,7 +91,7 @@
       "name": "looking-glass-platform",
       "primaryPackagePurpose": "APPLICATION",
       "supplier": "Organization: Looking Glass project",
-      "versionInfo": "2026.11.22"
+      "versionInfo": "2026.11.22.2"
     },
     {
       "SPDXID": "SPDXRef-Package-docs-site-babel-2.18.0",
@@ -2722,7 +2722,7 @@
       "name": "looking-glass",
       "primaryPackagePurpose": "APPLICATION",
       "supplier": "Organization: Looking Glass project",
-      "versionInfo": "2026.11.22"
+      "versionInfo": "2026.11.22.2"
     },
     {
       "SPDXID": "SPDXRef-Package-pipeline-certifi-2026.10.23",

@@ -80,6 +80,15 @@ def intelligence_row(row, fields, alias):
     field is left out, so a field a report adds tomorrow stays hidden. Returns the masked row."""
     import privacy
     out = {}
+    if "entity_name" in fields:
+        # a ransomware victim (the user, 2026-11-22: "Group only"): the group alone. Sector, place, website, published
+        # date and network would, with the public leak-site trackers, point at one organisation; the record's time is
+        # its day only (the page shows that day anyway). External accounts see how many victims and which groups.
+        for k, v in (row or {}).items():
+            if v in (None, "") or k in INTEL_INTERNAL:
+                continue
+            out[k] = (_value(v, k) if k in INTEL_VICTIM_KEPT else str(v)[:10] if k == "timestamp" else "hidden")
+        return out
     for k, v in (row or {}).items():
         if v in (None, "") or k in INTEL_INTERNAL:
             continue
@@ -87,7 +96,7 @@ def intelligence_row(row, fields, alias):
             out[k] = privacy.mask_ip(str(v))
         elif k == "asn":
             out[k] = alias(v) or ""
-        elif k in INTEL_HIDDEN:
+        elif k in INTEL_HIDDEN or k in INTEL_FREE_TEXT:
             out[k] = "hidden"
         elif k == "timestamp":
             out[k] = v
@@ -104,6 +113,11 @@ def intelligence_row(row, fields, alias):
 # region and city of a host, never its address); the time stamp is the record's own time
 INTEL_KEPT = frozenset({"timestamp", "region", "city", "geo", "country", "severity", "sector"})
 INTEL_HIDDEN = frozenset({"hostname", "email", "username", "entity_name"})   # a name: shown as "hidden"
+# free text written by whoever reported it (a defacement's message, a blocklist's reason, a client's user agent): it
+# can name a site or an organisation in plain words, which no address or e-mail masking catches, so it is "hidden"
+# (security review of 9e51e5e). The short coded fields (tag, application, server, method...) stay.
+INTEL_FREE_TEXT = frozenset({"detail", "reason", "user_agent"})
+INTEL_VICTIM_KEPT = frozenset({"ransomware"})          # a ransomware victim's row: the group only (see intelligence_row)
 INTEL_DATES = frozenset({"date_published"})                                     # a date only: kept as it is
 INTEL_INTERNAL = frozenset({"_id", "line_hash", "filename", "category", "extracted_date", "logged_date"})
 DATE_ONLY = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?Z?$")

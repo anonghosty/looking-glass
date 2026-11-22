@@ -99,7 +99,7 @@ MEANING = {
 NO_IP = "The report names organisations, accounts or domains, not IP addresses: it reaches a CSIRT through a domain filter. Ask Shadowserver to add the constituency's domains."
 EXTERNAL_NO = "External accounts see Abused or Compromised masked: no download, no look-up of a host, no accounts shown."
 # masked view (external accounts): the fields whose masked value says nothing ("hidden"), never filtered or searched
-MASKED_HIDDEN = {"hostname", "email", "username", "entity_name"}
+MASKED_HIDDEN = {"hostname", "email", "username", "entity_name", "detail", "reason", "user_agent"}   # + free text (review of 9e51e5e)
 NOT_RECEIVED = "Shadowserver sent no file of this report in the last {days} days: either nothing of this kind was seen in the constituency, or the subscription does not include it. Shadowserver can say which."
 
 

@@ -310,7 +310,15 @@ except Stop:
 ok("the loop: waits for the service, an error logged and survived, then every ARRIVALS_EVERY",
    naps == [150, RM.ARRIVALS_EVERY, RM.ARRIVALS_EVERY] and llog and "database away" in str(llog[0]), str(naps))
 os.environ.pop("REPORT_MAP_FETCH", None)
-ok("nothing left this computer (every request answered here)", all(".example.org" in u or "shadowserver" in u or "github" in u for u in SEEN))
+def _host(u):
+    from urllib.parse import urlsplit
+    return (urlsplit(u).hostname or "").lower()
+
+
+# the host itself, not a substring of the address (CodeQL py/incomplete-url-substring-sanitization, #43)
+ALLOWED_HOSTS = ("example.org", "shadowserver.org", "github.com", "githubusercontent.com")
+ok("nothing left this computer (every request answered here)",
+   all(any(_host(u) == h or _host(u).endswith("." + h) for h in ALLOWED_HOSTS) for u in SEEN), str(sorted({_host(u) for u in SEEN})))
 
 shutil.rmtree(TMP, ignore_errors=True)
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))

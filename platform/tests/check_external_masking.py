@@ -120,14 +120,19 @@ def intel_fixture():
     db = FakeDB({
         "compromised_website": Coll([row(D[1], n, ip=f"192.0.2.{n + 1}", hostname=f"www{n}.lakeside-tel.example",
                                          url=f"http://shop{n}.lakeside-tel.example/wp-login.php?from=192.0.2.200", tag="defacement",
-                                         application="wordpress", server="nginx", sector="Education", detail="seen on 192.0.2.9",
+                                         application="wordpress", server="nginx", sector="Education",
+                                         # free text naming an organisation in plain words (review of 9e51e5e)
+                                         detail="Hacked by Team X - Lakeside Ministry of Health portal, seen on 192.0.2.9",
                                          secret_note="Lakeside internal") for n in range(6)]),
-        "blocklist": Coll([row(D[1], n, ip=f"192.0.2.{n + 20}", source="list-a", reason="spam from 192.0.2.5 (noc@lakeside-tel.example)")
-                           for n in range(4)]),
+        "blocklist": Coll([row(D[1], n, ip=f"192.0.2.{n + 20}", source="list-a",
+                               reason="spam run for Lakeside Savings from 192.0.2.5 (noc@lakeside-tel.example)") for n in range(4)]),
+        "sandbox_url": Coll([row(D[1], 6, ip="192.0.2.60", url="http://dl.example.net/x.exe", method="GET",
+                                 user_agent="LakesideUpdater/2.1 (Lakeside Water Board)", sector="Government")]),
         "compromised_account": Coll([row(D[1], 1, email="alice@lakeside-tel.example", username="alice.lakeside", service="webmail",
                                          tag="stealer", public_source="paste", asn="", region="", city="")]),
         "ransomware_victim": Coll([row(D[1], 2, entity_name="Lakeside Telecom Ltd", website="www.lakeside-tel.example",
-                                       sector="Communications", ransomware="examplelocker", date_published="2026-11-19", asn="")]),
+                                       sector="Communications", ransomware="examplelocker", date_published="2026-11-19", asn="",
+                                       city="TEMA", region="GREATER ACCRA")]),
         "sandbox_dns": Coll([row(D[1], 3, request="mail.lakeside-tel.example", request_type="A", response="192.0.2.77",
                                  family="examplebot", source="sandbox", asn="")]),
         "scan_post_exploitation_framework": Coll([row(D[1], 4, ip="192.0.2.99", tag="cobaltstrike", beacon_type="http",
@@ -138,6 +143,7 @@ def intel_fixture():
     groups = {"compromised_website": "Compromised systems and victims", "blocklist": "Reputation: listed or targeted",
               "compromised_account": "Leaked accounts and credentials", "ransomware_victim": "Compromised systems and victims",
               "sandbox_dns": "Malicious content hosted in the constituency",
+              "sandbox_url": "Malicious content hosted in the constituency",
               "scan_post_exploitation_framework": "Attacker infrastructure found in the constituency",
               "compromised_iot6": "Compromised systems and victims"}
     no_ip = {"compromised_account", "ransomware_victim", "sandbox_dns"}
@@ -389,6 +395,29 @@ try:
     st, t2 = icall("/api/intelligence/report", *EX, body={"name": "compromised_account", "day": D[1], "reveal": "1"})
     ok("leaked accounts: 'reveal' means nothing to an external account, and nothing is logged as revealed",
        st == 200 and "lakeside" not in t2.lower() and not any(a[0] == "intelligence_reveal" for a in audited))
+    # free text (detail, reason, user agent) is "hidden": it can name a site or an organisation in plain words
+    free = {}
+    for name, f in (("compromised_website", "detail"), ("blocklist", "reason"), ("sandbox_url", "user_agent")):
+        st, t2 = icall("/api/intelligence/report", *EX, body={"name": name, "day": D[1], "filters": {}})
+        d2 = json.loads(t2) if st == 200 else {}
+        free[name] = {r.get(f) for r in d2.get("rows", [])}
+        free[name + " facet"] = any(x["key"] == f for x in d2.get("facets", []))
+    ok("free text (detail, reason, user agent) shown as 'hidden', never as a filter",
+       all(v == {"hidden"} for k, v in free.items() if not k.endswith("facet")) and not any(v for k, v in free.items() if k.endswith("facet")), free)
+    ok("…the short coded fields stay (tag, application, server, method)", d["rows"][0].get("tag") == "defacement"
+       and d["rows"][0].get("application") == "wordpress" and d["rows"][0].get("server") == "nginx", d["rows"][0])
+    # a ransomware victim: the group only (the user, 2026-11-22): sector, place, website and published date would,
+    # with the public leak-site trackers, point at one organisation
+    st, t2 = icall("/api/intelligence/report", *EX, body={"name": "ransomware_victim", "day": D[1], "filters": {}})
+    d2 = json.loads(t2) if st == 200 else {}
+    rv = d2.get("rows", [{}])[0]
+    ok("ransomware victims: the group only; sector, city, region, website, published date 'hidden'",
+       rv.get("ransomware") == "examplelocker" and all(rv.get(k) == "hidden" for k in ("sector", "city", "region", "website", "date_published", "entity_name"))
+       # in the rows and the filters (the page's own list of days names that date as a day to choose, which is fine)
+       and not any(s in json.dumps([d2.get("rows"), d2.get("facets"), d2.get("stats")]) for s in ("TEMA", "Communications", "2026-11-19")), rv)
+    ok("…its time is the day only", len(str(rv.get("timestamp", ""))) == 10, rv.get("timestamp"))
+    st, t2 = icall("/api/intelligence/report", *AN, body={"name": "ransomware_victim", "day": D[1], "filters": {}})
+    ok("…an analyst still sees the whole record", st == 200 and "TEMA" in t2 and "Communications" in t2 and "Lakeside Telecom Ltd" in t2)
     st, t2 = icall("/api/intelligence/export.csv", *EX, body={"name": "blocklist", "day": D[1]})
     ok("the CSV export is refused", st == 403)
     st, t2 = icall("/api/intelligence/host", *EX, body={"ip": "192.0.2.1"})
