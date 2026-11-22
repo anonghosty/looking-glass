@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · keyboard focus for every dialog (review 2026-11-13: focus left dialogs with Tab, was lost to the page
    when they closed, and one Escape closed several layers at once).
    Loaded on every page by loader.js. It needs nothing from the pages: any element marked aria-modal="true" counts as a

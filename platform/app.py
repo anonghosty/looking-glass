@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Shadowserver live threat map: Flask backend.
 
 Replays events from REPLAY_OFFSET_HOURS ago (default 24h: yesterday) as if they were happening now.
@@ -2800,11 +2802,13 @@ def api_kb_entry():
                 return jsonify(error=f"Malpedia has no family {mp_id}: use Find in Malpedia to pick the right one, or leave it empty."), 400
         except RuntimeError:
             pass                                        # Malpedia busy or unreachable: keep the administrator's id
-    if not (refs or mp_id):
-        return jsonify(error="Give at least one reference (evidence), or the Malpedia family id."), 400
+    # a CVE needs only a note or a reference (NVD, CISA and EPSS are shown anyway); the general rule below came first
+    # and refused a CVE note without a reference, so the CVE rule could never be reached (found by r91's coverage tests)
     if section == "issues" and cves.is_cve(display):
         if not (refs or desc):
             return jsonify(error="For a CVE, add a note or at least one reference (NVD, CISA and EPSS are shown anyway)."), 400
+    elif not (refs or mp_id):
+        return jsonify(error="Give at least one reference (evidence), or the Malpedia family id."), 400
     elif not mp_id and not (title and desc):
         return jsonify(error="Without a Malpedia family, give a title and a plain description."), 400
     with _MISSES_LOCK:

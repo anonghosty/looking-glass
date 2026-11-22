@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Limits for unpacking the report zips, so a zip bomb (a few kilobytes that unpack to gigabytes) or a zip with
 thousands of files cannot fill the disk or stall the pipeline.
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Findings over time (finding_watch.py, 2026-11-14): the day a finding's records were reported, its devices in the
 latest report again, who sees which addresses, and closing a finding whose time to act has passed.
 Run: .venv/bin/python tests/check_finding_watch.py"""

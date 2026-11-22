@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Who gets which quarterly report, and how (quarterly.py's routes, the bell, the purge's record). No database: a small
 app with the real routes, the insider package's seals and a made-up kept quarter in a throwaway data folder.
 

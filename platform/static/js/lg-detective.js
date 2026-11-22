@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass is thinking (the user, 2026-11-15): while Looking Glass compares the reports, a detective walks along
    the report sheets looking through his magnifying glass, a thought bubble over his head. If he finds something, a
    light bulb lights up; if not, he stops and shrugs. Line art in the platform's colours, drawn here (no image files).

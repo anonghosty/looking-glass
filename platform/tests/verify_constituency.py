@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Check that both platforms show exactly the constituency set in Settings (AS numbers only; address ranges are
 not counted here): every count is compared with MongoDB directly. Read-only.
 

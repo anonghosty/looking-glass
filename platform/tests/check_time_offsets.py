@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """A time in a request (?at=) with its own time-zone offset must not load another copy of the day (external review,
 2026-11-11: ?at=…+05:37, +05:38, … each kept a shifted day in memory that was never dropped). Every request time is
 turned into UTC, and both day caches start a day at 00:00 UTC whatever time they are given.

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """System alerts in the admins' bell (system_alerts.py, notifications.py): restarts, a failed or missing pipeline run,
 a low disk, a failed name refresh; admins only; cleared per person; a new event shows again; a broken file never
 breaks the bell. Throwaway folders only; no database. Run: .venv/bin/python tests/check_system_alerts.py"""

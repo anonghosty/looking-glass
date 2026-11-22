@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Behind a reverse proxy (TRUST_PROXY=1): which X-Forwarded-* headers are believed, and what happens without them.
 
 With TRUST_PROXY=1 the visitor's address, scheme and host come from the proxy's X-Forwarded-* headers (werkzeug

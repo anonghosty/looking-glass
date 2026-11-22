@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The pipeline's settings that Looking Glass's Settings → Workers may change, and how a change reaches the pipeline.
 
 One copy of the rules: which settings may change, and what each may be (FIELDS, validate). The platform loads this

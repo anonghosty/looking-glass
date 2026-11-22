@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Region names as Shadowserver writes them, matched to the country's map by the administrator (2026-11-15).
 
 The reports' region names come from IP geolocation and are spelt in many ways (ISO 3166-2, English, local, with or

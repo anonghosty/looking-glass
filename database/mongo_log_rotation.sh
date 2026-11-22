@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # mongo_log_rotation.sh - keep MongoDB's own log from growing without end (2026-11-17: one installation's
 # /var/log/mongodb/mongod.log had reached 412 MB; nothing rotated it).
 #
@@ -18,7 +20,7 @@ NOW=0
 for a in "$@"; do
   case "$a" in
     --now) NOW=1 ;;
-    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+    -h|--help) sed -n '4,15p' "$0"; exit 0 ;;
     *) echo "unknown option: $a (see --help)" >&2; exit 2 ;;
   esac
 done

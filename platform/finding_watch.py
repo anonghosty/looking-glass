@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Findings over time (user, 2026-11-14): when a finding's records were reported, how many of its devices the latest
 report shows again, and closing a finding whose time to act has passed.
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """MITRE ATT&CK mapping (2026-11-13, approved design, step 2).
 
 What it does:

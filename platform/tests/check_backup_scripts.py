@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The backup scripts as an operator runs them (manage/backup.sh, verify_backup.sh, restore_check.sh), on a throwaway
 installation: a signed backup verifies and rehearses as restorable; a genuine checksum and signature placed beside
 ANOTHER archive fail (the checksum is bound to the archive checked: security review of edd2d57); an archive changed

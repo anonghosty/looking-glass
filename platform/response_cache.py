@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """A short-lived cache for a few heavy read-only answers. With a large amount of data the Definitions services list,
 Intel summary and leads and the to-do list take seconds each to compute, and with one web process the other pages
 queue behind them when several people work at once.

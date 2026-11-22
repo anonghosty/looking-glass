@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The analyst codes' device counts worked out ahead, after a start (2026-11-18: right after a restart, the Findings page
 waited 30-45 s for four codes' counts, each loading a whole older day from the database).
 

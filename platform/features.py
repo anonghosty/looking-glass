@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """New features install themselves here, so app.py does not keep growing (the user, 2026-11-16).
 
 app.py calls install(app, core) once, at the end, with the platform's shared parts. A new feature lives in its own
@@ -177,6 +179,19 @@ def install(app, core):
         out["library_supply"] = library_supply.install(app, {"base_dir": os.path.dirname(os.path.abspath(__file__)),
                                                              "audit": A["audit"], "serving": bool(core.get("serving")),
                                                              "logger": core.get("app_logger")})
+
+    # the daily code check (code_integrity.py, r91): the installed code files against the release's fingerprints; each
+    # finding audited once, the administrators' bell, Settings → Code check (keep it, or move it to quarantine)
+    if all(k in A for k in ("has_perm", "csrf_ok", "fresh", "audit")):
+        import code_integrity
+        from flask import request as _rq2
+        out["code_integrity"] = code_integrity.install(app, {
+            "base_dir": os.path.dirname(os.path.abspath(__file__)), "has_perm": A["has_perm"], "csrf_ok": A["csrf_ok"],
+            "fresh": A["fresh"], "audit": A["audit"], "serving": bool(core.get("serving")), "logger": core.get("app_logger"),
+            "people_name": people_name if "users" in A else None,
+            **({"users": A["users"], "throttle": A["throttle"],
+                "client": lambda: (_rq2.remote_addr or "", _rq2.headers.get("User-Agent", ""))}
+               if all(k in A for k in ("users", "throttle")) else {})})
 
     # the analyst codes' device counts worked out ahead after a start, so the Findings page does not wait for them
     # (acode_warm.py; only in the running service)

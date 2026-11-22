@@ -12,7 +12,7 @@ the platform: the **Glossary** tab on the overview page and the **Glossary** but
 - [Using the platform](#using-the-platform) (11 terms)
 - [Accounts, roles and permissions](#accounts-roles-and-permissions) (48 terms)
 - [Publicly accessible / vulnerable services](#publicly-accessible--vulnerable-services) (14 terms)
-- [Security, audit and the pipeline](#security-audit-and-the-pipeline) (23 terms)
+- [Security, audit and the pipeline](#security-audit-and-the-pipeline) (24 terms)
 - [Related tools](#related-tools)
 - [A–Z index](#az-index)
 
@@ -475,6 +475,9 @@ Chosen in Settings next to the country: the zone the CSIRT reads its times in (f
 **Audit portal**  
 The auditor's page (/audit), read only: the audit log by tab (sign-ins, accounts, sessions, configuration, data access and exports, workflow, system), a dashboard of key figures, the control checks, the access review, the log's integrity, the sender check, and evidence to take away (CSV, the evidence report, the proof package).
 
+**Code check (fingerprints)**  
+A daily comparison of the installed code files with the list of fingerprints the release shipped. It names files that were changed or added, so an administrator can keep them or move them to quarantine.
+
 **Audit log (hash chain)**  
 The record of who did what, when and from where on Looking Glass. Each entry holds the hash of the entry before it, so changing, inserting or removing any entry breaks the chain from that point; archives and removals by the retention period are recorded in the chain too. The Audit portal checks it, and anyone can check it independently with the proof package.
 
@@ -585,6 +588,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [C2 / sinkhole domains](#threats) · 
 [CIS Controls (safeguard)](#security-audit-and-the-pipeline) · 
 [CIS mapping (not a certification)](#security-audit-and-the-pipeline) · 
+[Code check (fingerprints)](#security-audit-and-the-pipeline) · 
 [Combination](#accounts-roles-and-permissions) · 
 [Combination code (LG-C, LG-X)](#accounts-roles-and-permissions) · 
 [Combination search](#accounts-roles-and-permissions) · 

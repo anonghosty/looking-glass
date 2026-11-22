@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · MITRE ATT&CK mappings on the Definitions page (attack_map.py), built from the page's own parts:
    st-card dz, dz-stats tabs (click to filter), dz-toolbar search, dz-pill statuses, lg-btn buttons, dz-panel for the picker,
    dz-input fields. Each Shadowserver report is shown by its readable name (the collection id only in a small line).

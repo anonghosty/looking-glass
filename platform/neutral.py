@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """What someone who is not signed in can learn about this server: as little as possible (the user's anti-fingerprinting
 plan, 2026-11-18/19). Looking Glass is open source, so this is defence in depth: it stops scanners (Shodan, Censys and
 the like) from naming the product, its framework or its libraries' versions from the outside. The most effective step

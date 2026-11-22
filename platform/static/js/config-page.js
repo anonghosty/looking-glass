@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Settings → Configuration (config_page.py): every setting Looking Glass runs with, in plain words. Tuning settings can
    be changed (kept in data/config.json, applied after a restart); security, audit and database settings are shown
    with the .env line to change on the server; secrets only say whether one is set. Built as text, never as HTML. */

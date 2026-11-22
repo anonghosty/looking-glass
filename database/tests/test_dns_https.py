@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The sender check's key look-up over HTTPS (dns_https.py, mail_auth.Checker._lookup, 2026-11-15): asked only when
 the system's resolver does not answer; Cloudflare's and Google's answer shapes; a missing key is never retried
 elsewhere. Offline: nothing is sent anywhere (the HTTPS answers are made up here).

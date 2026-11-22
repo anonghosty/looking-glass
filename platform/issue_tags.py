@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Which Shadowserver tags are issues, and which only say what a device is.
 
 A services record's tags mix two things: weaknesses (exposed-admin-panel, eol-vmware-esxi, device-implant …) and labels

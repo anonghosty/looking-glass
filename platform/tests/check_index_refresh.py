@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Drill-down counts worked out behind the page (index_refresh.py; the user, 2026-11-17: the Definitions page and the
 combination filters made people wait 22 s after a start and 3-6 s after each change or hourly expiry, all of it
 Python). Made-up data only, no database:

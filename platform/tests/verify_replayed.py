@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Check "Replayed so far" against MongoDB: count records with extracted_date from 00:00 up to a moment of the
 replayed day directly in every reported collection, and compare with /api/replayed at the same moment.
 

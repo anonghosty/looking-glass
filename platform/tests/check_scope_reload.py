@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """A constituency change is never overtaken by a day load already running (external review, 2026-11-12): the load that
 began before the change is not stored; it loads again, so the day kept is the new constituency's. Both platforms'
 stores. No database: the loads are stand-ins.  Run: .venv/bin/python tests/check_scope_reload.py"""

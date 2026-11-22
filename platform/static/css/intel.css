@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Intel gathered (static/js/intel.js): the window per name, the "Looking Glass asks" card, the "Seen in" report cards,
    and researchers' notes in the define window (static/js/kb-notes.js). Looking Glass palette: accent #5b8def. */
 :root { --ig-net: #5b8def; --ig-web: #2bb07f; --ig-cred: #e5484d; --ig-cve: #f0616d; --ig-tag: #22b8a6; --ig-fp: #b18cf5;

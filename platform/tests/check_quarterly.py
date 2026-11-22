@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The quarterly report (quarterly.py, quarterly_pdf.py) against data whose answers are known in advance, its guards
 against data made inconsistent on purpose, and what it keeps in data/quarterly/ (status, summary, the purge permit).
 Builds its OWN throwaway MongoDB database (lg_quarterly_test_<random>), never the reports database, and drops it at the

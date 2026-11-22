@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Read the Docs: builds the documentation site from mkdocs.yml and docs/ on every push
 version: 2
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """When this computer's address changes (the user, 2026-11-19): what stops matching, and how to fix it.
 
 Looking Glass itself follows its own addresses (security.py reads them again every minute). Two settings do not:

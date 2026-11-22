@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """When did each report for a day arrive in MongoDB? (insert time from the ObjectId of its records)
 
 Usage: .venv/bin/python tools/report_arrivals.py [YYYY-MM-DD]   (default: yesterday UTC)

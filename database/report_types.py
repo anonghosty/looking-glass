@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """New Shadowserver report types: noticed the first time one arrives, whether by e-mail or through the report API.
 
 Every report file is sorted into sorting_backup/<type>/ by its name (for example 2026-11-11-scan_http-example-geo.csv

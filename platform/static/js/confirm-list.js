@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · a confirmation dialog that lists exactly what an action will change ("Confirm all"), in the page's own
    style (st-modal, lg-btn). Keyboard focus, Tab trapping and focus back to the opener are dialog-focus.js's (it handles
    every aria-modal element); Escape and the backdrop cancel. Text is always set as text.

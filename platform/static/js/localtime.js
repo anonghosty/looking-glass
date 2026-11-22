@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Local times next to UTC (Settings > Country > Time zone; timezones.py on the server).
  *
  * Shadowserver writes every time in UTC and a day runs 00:00 to 24:00 UTC, as its reports do: the platform keeps that.

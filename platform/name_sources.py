@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """One card per malware / botnet name, with every source side by side (2026-11-13, approved design, step 1).
 
 Sources, in order: the researchers' own definition (Looking Glass), Malpedia (with a token), MISP Galaxy, MITRE ATT&CK

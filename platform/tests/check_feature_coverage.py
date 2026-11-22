@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Every feature ships with its tutorial, its glossary terms and its documentation (the user, 2026-11-20: "dont forget to
 update tutorials and glossary and update docs ... it should be a check also").
 
@@ -40,6 +42,14 @@ FEATURES = {
         "tour": [("/intelligence", "#itMain .it-hero")],
         "glossary": ["role_external"],
         "docs": [("docs/ROLES.md", "Abused or Compromised"), ("docs/TECHNICAL_REFERENCE.md", "external_access.py")],
+    },
+    # r91: the daily code check (layer 3) and the verify command (layer 2)
+    "code_integrity": {
+        "tour": [("/settings", "#cardCode")],
+        "glossary": ["code_check"],
+        "docs": [("docs/OPERATIONS.md", "## The code check (Settings → Code check)"),
+                 ("docs/INSTALLATION.md", "verify_install.py --fetch"),
+                 ("docs/TECHNICAL_REFERENCE.md", "code_integrity.py")],
     },
     "library_supply": {
         "no_ui": "an alert in the administrators' existing bell and an entry in the audit log; no page or control of its own",

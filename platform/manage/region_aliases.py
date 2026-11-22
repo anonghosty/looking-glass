@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Make the 54 African region maps (static/data/adm1/<ISO2>.json) match the region names found in the reports.
 
 The reports' "region" field comes from IP geolocation, which names first-level subdivisions after ISO 3166-2

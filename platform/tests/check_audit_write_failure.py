@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """An audit entry that cannot be written no longer vanishes (review 2026-11-15): while writes fail, the admins' bell says
 so (system_alerts.py); once the log works again, the gap itself is the first entry written (audit_write_failed: how
 many, between when and when, why), and the chain is still whole. A throwaway folder; no database, no service.

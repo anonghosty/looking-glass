@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Beacons on the analyst's map (beacon_stats.py; the user, 2026-11-16): the Beacon filter, the "Decoded beacons" figure
 and its Details list. Made-up check-ins only (tests/beacon_samples.py, addresses from 192.0.2.0/24).
 1. the module: labels, filter options, counts and the Details list; a label is worked out once per record

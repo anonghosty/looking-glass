@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Limits on the heavy views per person (review of d82a436): Looking Glass answers from one process with 8 threads, and
 a view with new filters (statistics, map, analysis, drill-down lists, regions) works through the whole day. Without a
 limit, one signed-in person (an external viewer too) sending many such requests at once makes everyone else wait.

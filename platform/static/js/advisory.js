@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the advisory page (/advisory/<id>, advisory.py): one advisory per organisation (network).
    1. The advisor picks the organisation the advisory goes to (the networks in the finding's kept search).
    2. Its data shows: the IP addresses with their ports, reports, CVEs and issues; the impact of those reports.

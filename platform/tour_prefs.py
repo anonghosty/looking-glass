@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The guided tour's memory per person (tour.js; the user, 2026-11-19/20: a first-visit offer to take the tour or skip
 it, remembered per person, on every platform and portal).
 

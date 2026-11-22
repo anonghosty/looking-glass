@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The analyst codes' device counts on the Findings page (acodes.PerKeyCache; 2026-11-18 browser check: one lock for
 every code made a 16 s count hold every other code's count, and their placeholders spun for over 30 s). Made-up
 computations, no database:

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The map's infection list with infections ticked counts what else the matching devices carry (facets.overlap; the
 user, 2026-11-20: "when i filter it doesnt reflect on the other infections", chose overlap counts), and the filters
 move smoothly (rolling counts, rows sliding, arcs fading; "there is no smooth filtering animation").

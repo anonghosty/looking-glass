@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Drop-down counts that follow the other filters (the user, 2026-11-19: "when i filter from other sections the
 numbers should reflect everywhere including the dropdowns so its easier to drill down more than guess").
 

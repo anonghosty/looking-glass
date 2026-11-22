@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the Audit portal (/audit, audit_portal.py). Read only: the audit log split into tabs, the dashboard
    with the control checks, the access review, who is signed in, and the log's integrity with the evidence exports.
    Every value is inserted as text. Data: /api/audit/* (permission 'audit', checked on the server). */

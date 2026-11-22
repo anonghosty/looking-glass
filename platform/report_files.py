@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Shadowserver report file names, read for people (the user, 2026-11-15: held-back reports are listed by their
 Shadowserver file names, so an administrator sees exactly which reports they are about to process).
 

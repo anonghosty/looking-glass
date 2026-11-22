@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The severity map (severity_map.py, the user 2026-11-18/19), with made-up names only, a scratch folder and a throwaway
 Flask app; the installation's data/ is never read or written:
 1. every name the records carry is learned with its kind, rated or not (names and kinds only, never an address);

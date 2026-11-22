@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Clearing out old failed-login records (external review, 2026-11-11).
 
 auth.Throttle keeps a list of failure times per (address, name), per address, and per register/setup/forgot key.

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Combination codes and the analyst's combination export.
 
 A researcher sees, in Intel gathered, which exact combinations of indicators the devices of a name carry (the C2 domain

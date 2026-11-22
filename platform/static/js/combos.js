@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the analyst's combination search (/combinations, combos.py).
    Paste a researcher's combination code, see what it stands for (with the researchers' notes), search the days in memory
    or a date range of the stored history, follow the progress, download the PDF + CSV. */

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Display quality, shared by the intro page and both platforms (loaded in <head>, before anything is drawn).
 
    Full: every effect. Lite: for smart TVs and older computers (flat map, no blur or glow, fewer animated items).

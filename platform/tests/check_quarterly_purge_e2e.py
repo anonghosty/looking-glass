@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The quarterly purge end to end: the platform (quarterly.py) makes the report and writes the permit, the database
 pipeline (quarterly_purge.py) deletes, the platform records it (the audit log, the bell). Pretend dates only: no real
 waiting; "today" is handed to quarterly.build, quarterly_purge.run and the platform's background check (tick).
@@ -74,6 +76,8 @@ import quarterly as qq  # noqa: E402
 import quarterly_purge as qp  # noqa: E402
 import system_alerts  # noqa: E402
 
+# a run lock of this test's own (r91): never the pipeline folder's real .pipeline.lock, which a scheduled run takes
+qp.RUN_LOCK = os.path.join(tempfile.mkdtemp(prefix="lgpe_lock_"), ".pipeline.lock")
 print(f"The pipeline's quarterly_purge.py from {os.path.basename(PIPE_CODE)}/")
 
 Q = "2026Q4"

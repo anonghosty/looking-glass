@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Spreadsheet-safe CSV cells (no formula injection).
 
 A cell that starts with = + - @ (or tab / carriage return, or the full-width forms some Excel locales accept) is

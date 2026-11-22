@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Nothing answers without signing in (the user, 2026-11-20, after reading a write-up on a hospital system whose
 dashboard opened without a login and whose sign-in page carried activity figures: "add it" as a permanent check).
 

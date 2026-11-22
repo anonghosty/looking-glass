@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Older days kept a few minutes for analyst codes (recent_days.py; 2026-11-18: the same older day was loaded three times
 in 13 s for one analyst code's page and counts). Made-up days, no database:
 1. a day asked again while kept is not loaded again

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Right after signing in (the user, 2026-11-19): /welcome dives deep into the globe to pitch black, the Looking Glass
 logo draws itself, and the loading screen opens the page the sign-in was for (templates/welcome.html, static/js/welcome.js).
 

@@ -1,10 +1,12 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the project's contributors */
 /* Sign-in scene (decorative; no real data before sign-in)
    * Globe of dots in the shape of the continents (world-atlas land-110m, CC0, pinned with an integrity hash).
      Interactive: drag (mouse or finger) to spin, with inertia; scroll or pinch to zoom; hover lights up the land
      under the pointer; click or tap launches a burst of attacks from that spot. Keyboard / TV remote: focus the globe
      (Tab or the remote's arrows), then arrows turn it, + / - or channel keys zoom, OK launches a burst.
      Auto-rotates when left alone.
-   * Attacks arc in from around the world with impact rings. Looking Glass serves every country, so no country is fixed:
+   * Attacks arc in from around the world with impact rings. This serves every country, so no country is fixed:
      three countries are marked at a time, picked at random from cities on every continent and replaced one by one,
      and most attacks land on them.
      (It never shows the installation's own country: the page says nothing about the installation before sign-in.)

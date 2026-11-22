@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The one sentence Looking Glass shows wherever it links reports by device (external review follow-up, 2026-11-14).
 
 Shadowserver reports devices by IP address, and Looking Glass follows a device from one report to another by that

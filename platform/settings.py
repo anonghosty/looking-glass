@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Settings shared by both platforms (network communications map and publicly accessible / vulnerable services).
 
   country       ISO-3166 alpha-2 code of the country the CSIRT covers (default GH): any country in the world, chosen by

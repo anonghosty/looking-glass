@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Install a renewed certificate for the domain Looking Glass serves (a certificate bought for a domain): every check of
 # deploy/install_cert.py first (the key is the certificate's, it names the domain, it is valid, the chain verifies);
 # nothing changes unless all pass. Then the previous pair is kept in data/tls/previous-<time>/, the renewal is recorded
@@ -15,7 +17,7 @@ cd "$project"
 case "${1:-}" in
   --status) exec "$py" deploy/install_cert.py status ;;
   --check) shift; mode=check ;;
-  ""|-h|--help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  ""|-h|--help) sed -n '4,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   *) mode=install ;;
 esac
 [ $# -ge 3 ] || { echo "usage: manage/install_cert.sh [--check] DOMAIN CERTIFICATE KEY [INTERMEDIATES]"; exit 2; }

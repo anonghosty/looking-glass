@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Intel gathered gives a researcher no lasting code for a pattern fewer than 5 hosts carry (small_codes.py; external
 review 2026-11-11, option 2). The pattern itself and its device count are still shown, so a single odd device is still
 noticed; the drill-down is the analyst's, who keeps every code. An analyst's code page (a selection the analyst handed

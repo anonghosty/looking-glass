@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Findings pages that keep up on their own, and the role an administrator played (findings_live.py, findings.py;
 the user, 2026-11-18). Made-up findings only, in a temporary folder:
 1. the fingerprint stays the same while nothing changes, and changes when a finding is sent on, decided or replied to

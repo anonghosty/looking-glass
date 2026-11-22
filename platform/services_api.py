@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """HTTP API of the publicly accessible / vulnerable services platform (/services, /api/svc/...).
 
 Same replay schedule as the map (one day, replayed from 00:00), same filter model (every list and chart value is

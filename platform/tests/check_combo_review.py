@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # runs itself with the project's own Python (.venv), from wherever it is called
 ''''exec "$(dirname -- "$0")/../.venv/bin/python" "$0" "$@" # '''
 """Management decides which views an analyst's report carries (combo_review.py), end to end, in-process, on throwaway

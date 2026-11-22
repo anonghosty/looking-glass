@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The fields a day load leaves out (2026-11-17: app.DayStore._fetch_collection skips sources.INTERNAL, services._fetch
 skips services.SKIP) must be fields the platform throws away anyway. Made-up records carrying every skipped field and
 the usual ones are normalised whole and without the skipped fields: the results must be identical, for every report

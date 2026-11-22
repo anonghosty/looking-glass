@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """How accounts are named to people.
 
 * Definitions, notes, network corrections and reports name the person by the full name they registered with

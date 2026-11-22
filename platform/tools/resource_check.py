@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """How much this installation uses, against budgets (2026-11-14: measured by hand before a release; now one command,
 run by the release so a change that doubles memory or disk is seen before it reaches users).
 

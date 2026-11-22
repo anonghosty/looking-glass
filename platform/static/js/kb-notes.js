@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the researchers' Notes window (Definitions page and Settings), apart from the define window.
    New findings on a name ("the C2 moved to …", "seen with … since Monday"), dated and signed with the author's full
    name (data/notes.json, notes.py), shown on every card and in the PDF reports as "Notes shared by Researcher: <name>".

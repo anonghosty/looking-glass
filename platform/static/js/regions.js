@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · region names and labels for the country maps (services regions map and Settings preview).
 
    The reports' region names come from IP geolocation (ISO 3166-2 names, often local: "Alger", "Al Qāhirah", or English:

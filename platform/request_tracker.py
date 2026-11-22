@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Who is using the service, and what each request costs (Settings → Task monitor: Processes and Users).
 
 Every request is tracked while it runs: its route pattern (never an address or query text), the account and role once

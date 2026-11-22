@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The sender check's week and its hints (mail_auth.readiness, mail_auth.hint; 2026-11-15):
 - each kind of failure gets a plain hint, and a changed body points at the mail gateway
 - ready to block only when, on each of the last 7 days, e-mails passed and none failed

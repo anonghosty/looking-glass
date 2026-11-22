@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Confirm, on the server, a Looking Glass Settings -> Workers request that makes the pipeline less strict
 # (sender check lowered or another signer, certificate check off, a new API key, a held-back report released).
 # Run it on the pipeline's own account:

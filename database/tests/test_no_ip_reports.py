@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Reports without an IP address (2026-11-14): Compromised Account, Ransomware Victim and Sandbox-DNS carry no address,
 and may reach a CSIRT through a domain filter (file names ending -domain, not -geo). Their files must be recognised,
 sorted under their own report name and read row by row like any other report; the ordinary -geo names are unchanged.

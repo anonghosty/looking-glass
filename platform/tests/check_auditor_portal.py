@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The auditor role and the Audit portal (audit_portal.py, audit_chain.py, audit_report.py), in-process, on a
 temporary audit log (the real data/audit.log is never written by this check):
 * the auditor role is exactly 'audit' and no one can change or remove it;

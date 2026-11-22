@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the Findings page (/findings) */
 .fd-main { max-width: 1040px; margin: 0 auto; display: grid; gap: 16px; padding-bottom: 60px; }
 .fd-page { --s-new: #7c9cff; --s-management: #b18cf5; --s-researcher: #f5b54a; --s-analyst: #22b8a6; --s-advisory: #2bb07f; --s-closed: #7c7c85; }

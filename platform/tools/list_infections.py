@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """List every infection seen on a replay day, with counts, reports, tags, families and sample C2 hosts."""
 import os
 import sys

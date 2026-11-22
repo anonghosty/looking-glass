@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Settings → Task monitor (task_monitor.py): admins only; every section present; no address in it; the two actions
 (clear the kept answers, how long they are kept) need CSRF and a fresh sign-in, refuse bad values, take effect and are
 in the audit log. A throwaway file for the chosen time: the real setting is never changed.

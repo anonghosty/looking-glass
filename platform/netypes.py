@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Network types (the sector of the company behind an AS number), shared by the network-name editor, the Settings
 constituency filter, demo-mode aliases ("Telco 1", "Institution 2") and the automatic identification (PeeringDB,
 RIPEstat, name rules in asn_lookup.py).

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Addresses inside free text (banners, requests, extra fields) become "Host <reference>" in masked views, also at the
 end of a sentence ("from 41.66.1.2.") and next to an underscore ("ip_41.66.1.2"), which were left unmasked before
 2026-11-11 (external review). Numbers that only look like part of an address (versions, times, ratios) stay as they are.

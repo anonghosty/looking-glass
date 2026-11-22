@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Shadowserver's one-off Special Reports (special_reports.py; review, 2026-11-13): both platforms' report discovery
 skips them, so their placeholder timestamps (all rows at 00:00 of the day they were shared) never become a false spike
 in the replay, the day's totals or the Executive 7-day comparison; the Overview lists them apart, counts only; and the

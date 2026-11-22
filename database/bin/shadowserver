@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # shadowserver - global entry point for the Shadowserver pipeline.
 # Installed by deploy.sh as /usr/local/bin/shadowserver (a symlink to this file),
 # so it works from any folder. See: shadowserver help | man shadowserver

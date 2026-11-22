@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · animated logo for loading and page transitions (shared by all pages).
 
    1. Loading: every element with class i-loading, stream-empty (while loading) or st-loading gets the animated logo

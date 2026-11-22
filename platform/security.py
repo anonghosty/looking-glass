@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Request guards and security headers for Looking Glass (see docs/SECURITY.md).
 
 * Who may connect (report #1): this machine only, by default. Other screens (a TV, a colleague's laptop) are allowed

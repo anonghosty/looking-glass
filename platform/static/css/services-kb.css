@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · Services on the researchers' page (static/js/kb-services.js). Built on the Definitions cards
    (settings.css: .dz-*) and the notes window (intel.css: .kbn-*). */
 .dz-icon-svc { background: rgba(34, 195, 166, .12); color: #6fe3cc; border: 1px solid rgba(34, 195, 166, .35); }

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """What researchers may not see of a constituent host, masked out of free text: host names (also wildcards such as
 *.example.org), IP addresses, e-mail addresses, dates, times, and long numbers and IDs. The rest (software, versions,
 wording) stays, so values from the same software still match: "220 mail.example.org ESMTP Postfix (Ubuntu)" becomes

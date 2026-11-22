@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Publicly accessible / vulnerable services: the single-host Shadowserver reports (scan_*, population_*, device_id,
 compromised_*, blocklist). They describe one host in the constituency (ip, port, network, place) instead of a
 source -> destination communication, so they are shown without a map.

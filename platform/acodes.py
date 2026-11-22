@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Analyst codes (LG-A-XXXXXXXX): an analyst's selection, passed to the researchers and management without an address.
 
 The other way round from the researchers' combination codes (combos.py): an analyst, in an analysis window on the map

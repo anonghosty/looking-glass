@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Unpacking limits (zip_limits.py, used by shadowserver_pipeline._extract_zip): a normal Shadowserver-sized report
 goes through; a zip bomb, too many files, a zip that lies about its size, and file names that try to leave the
 folder are refused and quarantined with nothing left behind; a nearly full disk is retried later, not quarantined.

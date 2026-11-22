@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Slow requests are logged by route pattern only (slow_log.py), and the name index is rebuilt once when many requests
 arrive after it expired (app._name_evidence). No database, no network; a throwaway folder.
 Run: .venv/bin/python tests/check_slow_log.py"""

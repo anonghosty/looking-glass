@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Lets the check scripts on this computer call the Looking Glass API now that every page needs a login.
 
 `import lgauth` (first, before other urllib use):

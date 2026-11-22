@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Check that the platform's totals match MongoDB exactly for the replayed day.
 
 For every report (collection) it counts records with extracted_date on the day directly in MongoDB and

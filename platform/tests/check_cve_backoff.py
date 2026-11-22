@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """CVE look-ups cannot hold the server up (external review, 2026-11-12): a failed CISA KEV download waits KEV_RETRY
 before the next try (it used to try again, waiting up to 60 s, for every CVE), and a look-up with a time budget stops
 fetching CVE.org records once it is spent. No network: the fetches are stand-ins.

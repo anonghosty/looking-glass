@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """ASN -> company names, and demo-mode masking for public presentations.
 
 * data/asns.json maps AS numbers to a display name, a network type and a stable demo alias

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Every page of PDFs, checked as a reader sees them (the user, 2026-11-18: "tests always to be done"): text drawn over
 other text, the "…" cut-off, and text beyond the page's edge; and, per PDF, no MITRE ATT&CK technique or mitigation
 listed twice (a rule, 2026-11-19). Renders with pypdfium2; without it the check is skipped

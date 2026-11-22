@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # build_wheelhouse.sh: a release's library bundle, looking-glass-libraries-<version>.tar.gz. It holds exactly the
 # files the locks name (platform, database pipeline, docs site) for every supported computer: Python 3.12, 3.13 and
 # 3.14 on x86_64 and aarch64 (wheels tagged manylinux_2_28, manylinux2014 or manylinux_2_17, and pure-Python ones;
@@ -12,7 +14,7 @@
 # It needs the internet (PyPI) and nothing else. It stops when a library has no file for one of the six computers.
 set -euo pipefail
 VERSION="${1:-}"; OUT="${2:-.}"
-[[ $VERSION =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || { sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
+[[ $VERSION =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || { sed -n '4,14p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
 PF="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 TOP="$(dirname "$PF")"
 if [ -f "$TOP/install.sh" ] && [ -d "$TOP/database" ]; then DB="$TOP/database"; DOCS="$TOP/docs"

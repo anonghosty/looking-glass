@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · hover labels on the header and portal buttons (the user, 2026-11-19: "when you hover in a portal it
    should say what the button is"). The browser's own tooltip (title) comes late and not on every system; this shows
    the button's name at once, under it, on hover and on keyboard focus, on every page. The name is the button's

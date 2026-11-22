@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Addresses that come from .env are fetched over https only (static analysis, 2026-11-15): the report feed
 (REPORT_MAP_FEED_URL, report_map.py) and Shadowserver's report API (SHADOWSERVER_API_URL, pipeline_settings.py). A
 file: or plain http address is refused before anything is opened, so neither can read a local file or send the API key

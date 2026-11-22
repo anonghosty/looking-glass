@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Add a person: one-time sign-up links made on the Admin page (the user, 2026-11-19).
 
 An administrator chooses the person's role (and, if they like, the name they expect) and gets a link to send them. The

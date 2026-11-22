@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The installer's animated logo (tools/release_root/installer_anim.py, 2026-11-14), run in a pseudo-terminal as a
 person would see it: the splash draws the logo and ends by itself, the progress screen follows its status file and
 gives the terminal back when told STOP, and install.sh only animates for a person at a real terminal.

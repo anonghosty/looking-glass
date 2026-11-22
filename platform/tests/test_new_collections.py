@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """New-report detection test. Uses a throwaway database (lg_selftest_<pid>) on the same MongoDB server and
 drops it afterwards; the real database is only read (to copy three sample rows).
 

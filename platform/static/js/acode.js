@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · an analyst code seen by the researchers (/intel/LG-A-…, acodes.py): the analyst's finding and note,
    the selection in words (never an address), then one section per category for exactly those hosts:
      Infections · CVEs and issues · Services (their patterns) · Across reports (every name's cross-report patterns,

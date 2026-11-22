@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Advisories: the advisor's part, after management decided. One advisory per organisation (network).
 
 Management sends a decided finding to an advisor (findings.py: status "With the advisor"). On /advisory/<id> the advisor:

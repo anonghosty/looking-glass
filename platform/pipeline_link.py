@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The database pipeline beside the platform: where it is, its .env, and its sender check (mail_auth.py).
 
 Looking Glass installs the platform and the pipeline side by side (platform/ and database/, or ~/threatmap and

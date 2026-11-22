@@ -57,6 +57,16 @@ reports. The demo data (`lg_demo`) is enough for nearly every change.
   `deploy/update_libraries.sh` leaves it where it is and names it as "Not part of Looking Glass, left in place". You never
   edit `.release_files` or `.release_files_history`: the release builder writes both when a release is made, and your
   file joins the list then.
+- **Licence lines in every new file.** Every new source file starts with two lines naming its licence and copyright,
+  as a comment in the file's own syntax: `SPDX-License-Identifier: AGPL-3.0-only` and
+  `SPDX-FileCopyrightText: the Looking Glass contributors`. In scripts they go after the `#!` line; in JavaScript and
+  CSS in a `/* */` comment at the top; in page templates in a `{# ... -#}` comment at the very top.
+  `tests/check_spdx_headers.py` fails when a shipped source file lacks them. A file copied from another project keeps
+  its own licence and is listed in that check with it. The scripts and styles the sign-in page loads before anyone
+  signs in (`auth.PUBLIC_STATIC`) never name the product, so their second line reads
+  `SPDX-FileCopyrightText: the project's contributors`.
+- **The service writes only in `data/`.** Its code folders are read-only for it. A feature that writes a file writes it
+  under `data/`, and `tests/check_code_readonly.py` fails otherwise.
 - **Code standard:** Python passes [Ruff](https://docs.astral.sh/ruff/) with the rules in [ruff.toml](ruff.toml)
   (undefined and unused names, bare `except:`, mutable or computed default arguments, late-bound loop variables and
   the like) and [Bandit](https://bandit.readthedocs.io/) with no medium or high finding; shell scripts pass

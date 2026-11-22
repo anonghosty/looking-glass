@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Fetching over https only, redirects included (review 2026-11-15): an address that starts with https:// could still be
 redirected to http:// or file:, and urllib follows redirects by itself. open() refuses a first address that is not https
 and any redirect that leaves https, before anything is sent there. Used for the addresses that come from .env: the

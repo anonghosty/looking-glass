@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Looking Glass installer: the Shadowserver database pipeline and the Looking Glass platform, in one go.
 #
 #   ./install.sh                     guided installation (dialog windows; asks everything it needs)
@@ -33,7 +35,7 @@ while [ $# -gt 0 ]; do
     --answers) ANSWERS="${2:?--answers needs a file}"; shift 2 ;;
     --yes|-y) ASSUME_YES=1; shift ;;
     --no-animation) NO_ANIM=1; shift ;;
-    -h|--help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '4,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option $1 (./install.sh --help)"; exit 1 ;;
   esac
 done

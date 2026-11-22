@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Made-up CLogin check-ins for the beacon tests (check_beacon_decode.py, check_beacon_findings.py): every device value
 is invented here and encoded the way the sinkhole data shows the check-in is encoded. No real victim data."""
 import base64

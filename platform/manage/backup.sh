@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Back up Looking Glass, INCLUDING .env (credentials), accounts, sessions, settings and certificates in data/.
 # The backup is ENCRYPTED to your public key (manage/backup_crypt.sh: an age recipient or a GnuPG public key, in
 # data/backup_public_key or BACKUP_PUBLIC_KEY in .env); the private key stays with you, off this server. The archive is

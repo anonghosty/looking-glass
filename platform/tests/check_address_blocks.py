@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # runs itself with the project's own Python (.venv), from wherever it is called
 ''''exec "$(dirname -- "$0")/../.venv/bin/python" "$0" "$@" # '''
 """Settings: address blocks for the constituency (address_blocks.py), on made-up records (documentation addresses), no

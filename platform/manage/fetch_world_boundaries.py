@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Region maps for every country and territory in the world (ISO 3166-1, plus Kosovo), for Settings and the maps.
 
 For each country, static/data/adm1/<ISO2>.json and an entry in static/data/adm1/index.json:

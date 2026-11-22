@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The cache for heavy read-only answers (response_cache.py): kept for a while, computed once when many ask at once,
 started afresh after any change, kept apart per role and permissions (masking can never leak across), never an error
 kept, switch-off works; and the app wraps the five heavy endpoints. No database. Run: .venv/bin/python tests/check_response_cache.py"""

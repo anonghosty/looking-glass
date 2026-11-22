@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """A services report's name is never taken for malware (2026-11-13): on 10 November the combination reports asked
 Malpedia about scan_mikrotik_service, scan_http and scan_http_vulnerable as if they were malware names; they were
 recorded and stayed on the Definitions to-do list ("Malpedia doesn't know"). Now such a name is never recorded, and

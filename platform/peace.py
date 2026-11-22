@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Peace of mind: an admin's own switch to step out of the platforms and the work on findings and keep only the admin
 and audit duties and Settings. While it is on, their permissions are cut to those (auth.PEACE_PERMS) on every request,
 the other pages and APIs are closed to them (auth.PEACE_PATHS), the Findings and the portals leave their header and

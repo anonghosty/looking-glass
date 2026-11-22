@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """No page shows the browser's own error text (r90). No database needed.
 
 1. loader.js has the one shared helper: LGLoader.errorText(e, action) keeps the server's own message and puts plain

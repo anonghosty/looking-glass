@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Fast checks: the MongoDB connection, every report collection's size and filename index, and how long the
 replay day's rows take to count (the same indexed query the platform uses).
 

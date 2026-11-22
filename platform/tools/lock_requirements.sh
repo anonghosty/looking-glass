@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # lock_requirements.sh: the ONLY way Looking Glass's libraries change. It turns each human-edited requirements.txt (the
 # caps) into its requirements.lock: every library, its dependencies included, at one exact version with the sha256 of
 # every file published for it. Every installation and update installs from the locks with --require-hashes
@@ -26,7 +28,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --upgrade) UPGRADE=(--upgrade); shift ;;
     --tools) TOOLS=1; shift ;;
-    -h|--help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '4,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option $1 (tools/lock_requirements.sh --help)"; exit 1 ;;
   esac
 done

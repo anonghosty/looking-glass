@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Findings: a researcher's note the team follows up, from the first look to the advisory.
 
 The workflow behind it: a researcher finds something (Intel gathered, "Looking Glass asks") and writes a note with the

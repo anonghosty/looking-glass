@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Looking Glass runs in exactly one gunicorn worker (review 2026-11-15): sessions, sign-in limits and the days in memory
 live in that process, so more workers would sign people out at random. gunicorn.conf.py refuses to start otherwise, and
 the service runs --workers 1. Touches no file or service.

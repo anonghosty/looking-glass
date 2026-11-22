@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """World maps (static/data/adm1, manage/fetch_world_boundaries.py): every ISO 3166-1 country and Kosovo is listed
 under one of the seven continents with a map that loads (regions, or one area), a frame, a source with its licence,
 its names, and a size the browser can take; regions have names, polygons with at least a triangle, and land in the

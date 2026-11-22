@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Every write route checks the CSRF token, tested the way a browser reaches it (external review, 2026-11-12: most
 checks called view functions directly with the automation user, skipping sign-in, the path gate and CSRF).
 

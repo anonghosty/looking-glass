@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Verify a backup archive: the signature of its checksum file (this installation's key, or the public key you give),
 # that the signed checksum is THIS archive's (its name and its SHA-256, computed here), and, for an encrypted backup
 # opened with your private key (--identity) or an unencrypted one, .env identical to the live file and the number of

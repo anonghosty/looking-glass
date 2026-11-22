@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The reports from Shadowserver's report API (report_api.py) and the choice between API and e-mail
 (shadowserver_pipeline.fetch_reports), against a fake Shadowserver (nothing leaves the computer):
 - every call is signed as Shadowserver documents it (POST, JSON body with apikey, HMAC2 over the exact body)

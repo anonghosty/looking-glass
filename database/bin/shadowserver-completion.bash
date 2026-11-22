@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # bash completion for the 'shadowserver' command (installed by deploy.sh)
 _shadowserver() {
   local cur prev cmd

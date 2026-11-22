@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Every automated check of both platforms, in one go. Read-only against the real database and service (the
 # collection tests use throwaway databases that they drop). The end-to-end test (tests/e2e_test.py all) runs a
 # separate copy of the app and is started on its own because it takes a few minutes.
@@ -67,6 +69,7 @@ run "Strict-Transport-Security" $PY tests/check_hsts.py
 run "heavy views per person" $PY tests/check_request_limits.py
 run "encryption at rest (check)" $PY tests/check_at_rest.py
 run "file modes (only scripts executable)" $PY tests/check_file_modes.py
+run "licence and copyright lines in every source file (SPDX)" $PY tests/check_spdx_headers.py
 run "special reports kept out of the replay" $PY tests/check_special_reports.py
 run "views of host data in the audit log" $PY tests/check_data_access.py
 run "CVE look-ups: KEV backoff, time budget" $PY tests/check_cve_backoff.py
@@ -75,6 +78,21 @@ run "CSRF on every write route (real sign-in)" $PY tests/check_csrf_routes.py
 run "uninstaller removes only its own parts" $PY tests/check_uninstall.py
 run "sign-in, MFA, recovery, /forgot, role gates (offline)" $PY tests/check_auth_offline.py
 run "grades and shares (offline)"     $PY tests/check_calc_offline.py
+run "app routes: analysis, reports, look-ups, refusals (offline)" $PY tests/check_cov_app.py
+run "auth building blocks: codes, stores, audit gap (offline)" $PY tests/check_cov_auth_units.py
+run "auth routes: gate, sign-in steps, admin actions (offline)" $PY tests/check_cov_auth_routes.py
+run "security headers, hosts, access modes (offline)" $PY tests/check_cov_security.py
+run "organisation, notes, task monitor, Workers (offline)" $PY tests/check_cov_admin_tools.py
+run "analyst codes: making, reading, channel rules (offline)" $PY tests/check_cov_acodes.py
+run "Executive portal routes: refusals, errors (offline)" $PY tests/check_cov_mgmt.py
+run "look-ups: CVE, KEV, EPSS, Malpedia, networks, places (faked answers)" $PY tests/check_cov_lookups.py
+run "audit chain, checkpoints, the auditor's script (breaks found)" $PY tests/check_cov_audit.py
+run "Audit portal routes: permission, tabs, CSV" $PY tests/check_cov_audit_portal.py
+run "services for researchers: routes, patterns, no hosts (offline)" $PY tests/check_cov_services_kb.py
+run "findings over time: rules, retries, loop (offline)" $PY tests/check_cov_finding_watch.py
+run "report map: downloads, feed builder, command line (faked answers)" $PY tests/check_cov_report_map.py
+run "PDF builders: analysis, Executive, combination, advisory front" $PY tests/check_cov_pdf.py
+run "combination search: refusals, downloads kept, sweep (offline)" $PY tests/check_cov_combos.py
 DBDIR=""; for d in ../database ../shadowserver; do [ -f "$d/zip_limits.py" ] && [ -x "$d/.venv/bin/python" ] && DBDIR=$d && break; done
 if [ -n "$DBDIR" ]; then run "pipeline: unzip limits (zip bombs)" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_zip_limits.py"
 if [ -n "$DBDIR" ]; then run "pipeline: row hash limits and failed rows" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_line_hash.py"; fi
@@ -127,6 +145,8 @@ run "Bought certificate: checks, install, bell" $PY tests/check_install_cert.py
 run "the installer's animated logo" $PY tests/check_installer_anim.py
 run "Libraries: only files that match the lock (every install path, every source)" $PY tests/check_installer_supply.py
 run "update: old code files moved aside, nothing else touched" $PY tests/check_stale_files.py
+run "the service reads its code, writes only data/ (unit + every write site)" $PY tests/check_code_readonly.py
+run "code files against the release's fingerprints (verify command, daily check)" $PY tests/check_code_integrity.py
 run "offline names: MISP Galaxy + ATT&CK, nothing sent" $PY tests/check_offline_names.py
 run "ATT&CK mappings, versions, CVE links" $PY tests/check_attack_map.py
 run "ATT&CK in advisories (reviewed only)" $PY tests/check_advisory_attack.py
@@ -170,6 +190,7 @@ run "PDF References by criticality; preview marks" $PY tests/check_pdf_refs.py
 run "Severity map: who, ratings, PDFs" $PY tests/check_severity_map.py
 run "Insider package: copies recorded, seals, Trace a leak" $PY tests/check_insider.py
 run "Quarterly reports: who gets what, seals, CSRF, bell, calendar" $PY tests/check_quarterly_access.py
+run "Heavy scheduled jobs never overlap (schedule, locks)" $PY tests/check_job_overlap.py
 run "Every download in the audit log; one shared download helper on every page" $PY tests/check_downloads.py
 run "No page shows the browser's own error text; reads tried again, actions never" $PY tests/check_error_text.py
 run "Quarterly report: known answers, guards, permit (throwaway database)" $PY tests/check_quarterly.py
@@ -213,6 +234,7 @@ run "Audit portal permission" $PY tests/check_audit_portal.py
 run "Devices matched by IP note" $PY tests/check_device_note.py
 run "CVE titles in full" $PY tests/check_cve_titles.py
 run "CI stays pinned" $PY tests/check_ci_pins.py
+run "SBOM exact from the locks (SPDX)" $PY tests/check_sbom.py
 run "Audit checkpoints and signed backups" $PY tests/check_audit_checkpoint.py
 run "Backup scripts: bound and signed" $PY tests/check_backup_scripts.py
 run "auditor role + Audit portal (evidence)" $PY tests/check_auditor_portal.py

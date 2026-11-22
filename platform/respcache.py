@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Results that every viewer shares, computed once per change of the data.
 
 The statistics, filter lists and overview are worked out from the whole replay day in memory. Many screens ask for the

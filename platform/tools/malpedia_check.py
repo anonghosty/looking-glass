@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Look up every infection seen in the replay day on Malpedia (through the running app) and show what matched.
 
 Usage: .venv/bin/python tools/malpedia_check.py

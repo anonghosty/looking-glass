@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Every download is logged, and every page downloads the same way (r89). No database needed.
 
 1. The server (static analysis of every platform module, route by route):

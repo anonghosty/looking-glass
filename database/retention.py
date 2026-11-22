@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """How long the pipeline keeps its own copies of report files, and how much disk is left (sorting_backup only ever
 grew).
 

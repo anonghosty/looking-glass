@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # runs itself with the project's own Python (.venv), from wherever it is called
 ''''exec "$(dirname -- "$0")/../.venv/bin/python" "$0" "$@" # '''
 """Explore a match of "Looking Glass asks" (intel_match.py, 2026-11-15): every name and report of the match, each worked

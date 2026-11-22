@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The executive report of the management portal, drawn like the dashboard: dark pages, coloured key-figure tiles, the
 activity chart, the regions map, donuts, ranked threats, deeper insight and the explanations as cards.
 

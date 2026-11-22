@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* The platform's motion on the documentation site: what is below the fold rises into view as the reader scrolls
    (sections, cards, films, tables, code), cards and steps one after another. The load animations are CSS only
    (looking-glass.css), so a page is never left hidden if this script does not run; and nothing moves for readers

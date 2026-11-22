@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """A certificate bought for a domain: checked, then installed for Looking Glass (review follow-up item 5, 2026-11-15).
 
 Used by the installer (install.sh, HTTPS "A certificate bought for a domain") and for renewals (manage/install_cert.sh).

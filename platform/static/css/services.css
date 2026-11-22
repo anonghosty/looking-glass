@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · Publicly accessible / vulnerable services.
    Everything comes from app.css (the network communications platform), so both platforms look the same.
    This file only adds the stage that replaces the map: the services constellation and the Ghana regions heatmap. */

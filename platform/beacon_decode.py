@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Beacon decoder: encoded C2 check-ins inside the HTTP request a sinkhole report carries.
 
 Some bots put everything they know about the machine into one query value of their check-in (the "beacon"), encoded

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Shadowserver link downloads stop at ZIP_MAX_UNPACKED_MB and keep nothing past it (external review, 2026-11-12), and
 Block mode fails closed when the sender check cannot run. No network: a fake session stands in for requests.
 Run: .venv/bin/python tests/test_link_downloads.py"""

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Values of the wrong kind are refused, never a 500 (review 2026-11-13): a role sent as a list or a number, a time
 window like 1..2+3, a limit that is not a number. In-process, a throwaway admin session; no database needed.
 Run: .venv/bin/python tests/check_wrong_types.py"""

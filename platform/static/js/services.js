@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · Publicly accessible / vulnerable services.
    Same look and the same patterns as the network communications platform (app.js / app.css): top bar figures,
    Filters and Intel panels, a record stream, record details and an analysis dialog whose figures open the lists

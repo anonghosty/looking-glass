@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Which pages and data requests were slow in real use (slow_log.py): per route, how often, median and slowest time,
 and how many requests were running at once. Run on the server: ./manage/slow_requests.py [--days N]"""
 import os

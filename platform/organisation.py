@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The organisation behind this Looking Glass: its name and logo, set by an admin on the Settings page. Advisories
 (advisory.py) carry them: the name in the title, the logo in its section on the first page.
 

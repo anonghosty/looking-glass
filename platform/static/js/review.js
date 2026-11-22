@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the review page (/review/<id>, combo_review.py): management's final look at an analyst's request.
    What the researcher is saying (their notes and finding on the combination), then the views, each the Executive portal
    itself (embedded, counts only): the researcher's view (the combination), the analyst's view (the across-report

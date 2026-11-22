@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The spike notice on the Overview's buttons (spike_notice.py, features.py; the user, 2026-11-16). Made-up records only,
 in stand-in platforms (no MongoDB needed):
 1. the rule: a spike is 1.5 times the day before and 500 more; a drop the other way round; a small day never is

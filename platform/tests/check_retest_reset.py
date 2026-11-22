@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The security self-test clears this computer's login counters on request instead of restarting the service
 (retest_reset.py, 2026-11-11): only with the automation key, only for the loopback addresses, never anyone else's
 counters, and it is audited. In-process, on a throwaway counter state (the service's real counters are untouched).

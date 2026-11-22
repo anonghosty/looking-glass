@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · right after signing in (/welcome, signin_welcome.py; the user, 2026-11-19: "it zooms way deep into the
    globe into pitch black and the looking glass animation"). The globe dives in until the screen is black, the Looking
    Glass logo draws itself on the black (LGLoader, loader.js), and the loading screen opens the page the sign-in was for,

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the Findings page (/findings, findings.py): researchers' notes the team follows up.
    One card per finding: its number, title, name, the note, the combination codes (analysts: Search opens them on the
    Combinations page), the status with its history, and "Move it on" (a status and a short comment). */

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the project's contributors */
 /* Dropdowns in the platform's own design (instead of the browser's plain lists).
    Any <select class="lg-enhance"> becomes a styled button with a dark list, a search box for long lists, a tick on the
    current choice and full keyboard use (arrows, Home/End, Enter, Escape, typing to search). The real <select> stays in

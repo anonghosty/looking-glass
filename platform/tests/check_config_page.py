@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Settings → Configuration (config_page.py). A scratch folder and a throwaway Flask app; the real data/ and .env are
 never read or written, and no service is restarted (the signal is caught).
 1. the catalogue: every editable setting is read by the platform, with the same default; nothing in two kinds

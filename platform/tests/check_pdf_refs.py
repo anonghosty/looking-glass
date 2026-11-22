@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The PDFs' References section and the advisory preview's marks (the user, 2026-11-18), with made-up names and links
 only, no database:
 1. order: defined names first, by criticality (critical, high, medium, low, then "not rated"); an actively exploited

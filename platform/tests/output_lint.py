@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Content checks for every PDF and CSV Looking Glass makes (the user, 2026-11-20: "a test to check for every pdf and csv
 variation for issues ... so we dont get the errors like mitre again"). The layout check (tests/pdf_pages_check.py)
 looks at how pages are drawn; this reads what they say.

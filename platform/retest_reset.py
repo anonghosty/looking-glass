@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Lets the security self-test start with clean login counters without restarting the service.
 
 security_testing/security_retest.py fails logins on purpose (to check the locks), and the counters are kept in the

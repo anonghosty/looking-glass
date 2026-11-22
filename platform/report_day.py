@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Which day Intel gathered counts (the user, 2026-11-17: "across reports is supposed to count 16 Nov only ie
 yesterday"). Before, it counted every day in memory: on 17 Nov a services pattern counted 53 devices across 15 and 16
 Nov while the Executive portal, showing 16 Nov, counted 50 (and 43 on 16 Nov alone).

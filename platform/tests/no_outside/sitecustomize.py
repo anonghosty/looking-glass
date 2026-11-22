@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The outside-connection guard for the checks (2026-11-18): while LG_NO_OUTSIDE names a file, every Python process the
 checks start (PYTHONPATH includes this folder, so Python loads this file first) may connect only to this computer and
 to the configured database (MONGO_HOST). Any other connection, and any name look-up (DNS) of a name that is not this

@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the project's contributors */
+
 /* Sign-in and account pages
    * buttons open the matching form in place (sign in, create an account); Back returns to the choice
    * the eye shows / hides a password

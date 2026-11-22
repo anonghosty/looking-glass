@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the advisor's portal (/advisory, advisory.py): the findings waiting for an advisory, the advisories
    written and sent, to whom and when, the open findings in their channels, and the impacts most seen. */
 (() => {

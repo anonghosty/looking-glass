@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Settings → Task monitor, for administrators: how the service and what it depends on are doing right now, like a
 task manager, to watch and troubleshoot without a terminal.
 

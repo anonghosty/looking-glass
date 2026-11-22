@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Report map: where every Shadowserver report type belongs, kept up to date from Shadowserver's own schema.
 
 Shadowserver publishes its report types in https://github.com/The-Shadowserver-Foundation/report_schema:

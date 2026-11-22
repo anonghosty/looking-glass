@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Heavy views per person (request_limits.py, review of d82a436): at most HEAVY_PER_USER at once (the rest wait their
 turn, then 429 with Retry-After), at most HEAVY_PER_MINUTE a minute; each person on their own, light pages never
 limited, automation never limited, the slot always given back (errors too). No database needed.

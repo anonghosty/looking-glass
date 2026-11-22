@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* The "Decoded beacon" block of the communication-detail window (beacon_decode.py), for analysts and admins.
  *
  * A bot that encodes its check-in into one query value (the CLogin check-in: GET /CLogin?key=<Base64>) is decoded on

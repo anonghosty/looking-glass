@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """A MongoDB client that may create a throwaway database, for the tests that need one (test_new_collections.py,
 test_new_service_collections.py), or None.
 

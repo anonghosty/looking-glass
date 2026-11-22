@@ -28,6 +28,10 @@ project's Python (`.venv`); run the others with `.venv/bin/python <script>`.
 The replay needs nothing from you: it waits for each day's reports, then replays the day. The intro page and the
 top bar show "Waiting for the reports of …" while it waits.
 
+The service may read its code but not change it: its folder is read-only for it, and `data/` is the one place it
+writes. If you see "Read-only file system" in its log, something tried to write outside `data/`. Please report it as an
+issue.
+
 ### Watching it: Settings → Task monitor
 
 Administrators can watch the service without a terminal on **Settings → Task monitor**, refreshed every five seconds
@@ -241,8 +245,11 @@ kept **away from this server**; choose one way:
   ```bash
   sudo systemctl edit looking-glass      # add the two lines below, save, then: sudo systemctl restart looking-glass
   [Service]
-  ReadWritePaths=/mnt/lg-checkpoints
+  ReadWritePaths=-/mnt/lg-checkpoints
   ```
+  Keep the `-` in front of the folder: without it, Looking Glass does not start at all while the share is not mounted
+  (after a restart, for example). With it, Looking Glass starts and the checkpoint says the copy failed. Use a folder
+  outside `/tmp` and `/var/tmp`: the service has its own private ones, so a folder there is never the one it sees.
   A copy that fails (the share is not mounted, or not writable) is said in the audit log; the next checkpoint tries
   again.
 - **Fetched by another computer:** from a computer of your own, copy the folder regularly with an account that can only
@@ -260,6 +267,27 @@ To make one now, or to see the public key and its fingerprint:
 
 Checkpoints need `ssh-keygen` (package `openssh-client`, on Ubuntu servers by default). Without it they are written
 unsigned and the Audit portal says so.
+
+## The code check (Settings → Code check)
+
+Every release lists the fingerprint (SHA-256) of every file it ships. Once a day, at 03:45 UTC, and a few minutes after
+each start, Looking Glass compares its code files, and the database pipeline's if it is on the same computer, with that
+list. It names:
+- **Changed**: a file the release shipped whose content is now different;
+- **Not in the release**: a file in a code folder that the release does not list.
+
+Each finding is written to the audit log once, and administrators see one alert in the bell while any finding stands.
+In Settings → Code check, an administrator confirms with their password and chooses, per file:
+- **This is ours, keep it.** The file and its fingerprint are kept as approved. If it changes again, it is found again.
+- **Not ours, move to quarantine.** The decision is recorded and the page gives the command to run on the server, as
+  the account that owns the installation: `python3 deploy/verify_install.py --quarantine <path>`. The file is moved to
+  `backups/quarantine-<time>/`, never deleted. Looking Glass cannot move it itself, because its code is read-only for
+  it.
+
+Then check the whole installation against the signed release (`deploy/verify_install.py --fetch`, see
+[Checking a release's signature](INSTALLATION.md#checking-a-releases-signature)). A shipped file that was changed or
+moved is put back with `git checkout <tag> -- platform/<path>`, followed by a restart. The daily check reads files only
+and makes no outside connection.
 
 ## The quarterly report and the purge
 
@@ -323,6 +351,11 @@ report made"). It replaces the kept report of an ended quarter. It offers only e
 have report rows: from the oldest report day in the database on (looked up with one indexed query per report
 collection, kept in `data/quarterly/state.json`, refreshed every six hours, after a report is made and after a purge).
 A quarter whose raw rows were already purged cannot be counted again: its kept report stays the record.
+
+**The report, the purge and the pipeline never overlap.** A report waits for a pipeline load that is running and is
+tried again 10 minutes later; while it is being made, no pipeline run starts. The purge is skipped while a report is
+being made and is tried again at the next run. Make it again says "The database pipeline is loading reports now: try
+again in a few minutes." while a load is running.
 
 **What the cards say, and what the files say:** the cards on the Executive portal, the advisory portal and Settings →
 Quarterly say what is true now: the purge's switch today, each quarter's purge as it stands (for example "No purge for

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The Intelligence portal (/intelligence, 2026-11-14): Shadowserver's Intelligence reports for analysts.
 
 The report map (report_map.py) places 15 Shadowserver reports in its Intelligence section, in five groups: compromised

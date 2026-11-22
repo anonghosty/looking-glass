@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The beacon decoder's public answers kept across restarts (beacon_keep.py). Made-up request lines only, in a scratch
 folder; no database, nothing of the real data/ folder is read or written.
 1. kept answers come back after a "restart" (a new store on the same file), and the decoder is then not run again

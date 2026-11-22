@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Encryption of backups (sourced by manage/backup.sh, verify_backup.sh and restore_check.sh; review of d82a436: a backup
 # holds .env with the database passwords and API keys, the accounts, the sessions, the audit log and the TLS key).
 #

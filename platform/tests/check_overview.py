@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # runs itself with the project's own Python (.venv), from wherever it is called
 ''''exec "$(dirname -- "$0")/../.venv/bin/python" "$0" "$@" # '''
 """The Overview of every role (overview.py, _portal_cards.html, _page_nav.html), in-process: each built-in role opens an

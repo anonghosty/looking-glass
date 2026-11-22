@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """What masked viewers (role external, demo mode) receive for each record (privacy.py; security test of v2026.11.17.4).
 Made-up records only, no database needed:
 1. the report's file name: its date and report type only; the part naming the organisation and filters is gone

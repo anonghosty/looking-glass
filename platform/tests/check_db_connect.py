@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Where the reports database may be (db_connect.py, 2026-11-14): this computer or an internal network address only,
 never a public one; TLS for another computer (refused without it, unless MONGO_ALLOW_PLAINTEXT=1); certificate files
 that exist. The same file ships in the database pipeline. Run: .venv/bin/python tests/check_db_connect.py"""

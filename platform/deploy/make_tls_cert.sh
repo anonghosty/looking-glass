@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Create a self-signed HTTPS certificate for Looking Glass in data/tls/ and switch the service to HTTPS. The
 # certificate is named after the first name given here, else this machine's name (never the product's).
 # Run it as the user the service runs as (no sudo needed):

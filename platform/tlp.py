@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The Traffic Light Protocol (TLP 2.0, FIRST): how far an advisory may be shared. The advisor picks a level for each
 advisory (advisory.py); the report carries it on every page, top and bottom, and the JSON export carries it too. The
 Definitions page and the advisory page explain the colours (templates/_tlp_card.html).

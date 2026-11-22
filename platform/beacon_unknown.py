@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Requests Looking Glass could not decode: the long encoded values in the sinkhole reports' HTTP requests that no known
 format decodes (beacon_decode.FORMATS), no known undecodable family names (OPAQUE) and the generic fallback cannot read,
 grouped into families, so analysts see them and can send them to the Looking Glass creator for future automated decoding.

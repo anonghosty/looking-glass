@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the Combinations page (analysts): after a search, "Add the analysis across every category" puts what
    the devices show in the other categories into this search's report (services reports with their pattern codes, the
    CVEs and issues on them, the infections they call sinkholes as: combos.py /enrich), and "Send to management as a

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The Findings page's wording and reply box (static/js/findings.js): a closed finding takes no reply; only the
 researchers an analyst's code is for see "Reply to the analyst"; sub-findings of other channels are explained as
 such, never as "closed before this case was opened again". Run: .venv/bin/python tests/check_findings_ui.py"""

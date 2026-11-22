@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the advisory page and the advisor's portal (advisory.js, advisory-portal.js) */
 .av-main { max-width: 1400px; margin: 0 auto; display: grid; gap: 16px; padding: 0 clamp(12px, 2vw, 32px) 60px; }
 .av-main > * { min-width: 0; }

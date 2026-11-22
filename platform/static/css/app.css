@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the project's contributors */
 /* Neutral-grey surfaces, one accent, semantic severity colors only.
    Type: Inter (UI, tabular numerals) + Geist Mono (IPs, hashes, timestamps). */
 :root {

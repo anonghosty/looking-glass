@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · copying (insider.py, the user's insider package 2026-11-18).
    Text on the pages cannot be selected, copied, cut or dragged out, except in fields people type in. Copying happens
    only through the copy buttons, and every one goes through LGCopy.copy(): it asks the server to record the copy FIRST

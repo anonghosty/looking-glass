@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Independent check of a Looking Glass audit log: Python 3.8 or newer, standard library only.
 
 It ships inside every proof package (Audit portal -> Integrity and evidence -> Proof package) as verify_audit_log.py,

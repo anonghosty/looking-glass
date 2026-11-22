@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The reports straight from Shadowserver's report API, instead of (or as well as) by e-mail.
 
 REPORT_SOURCE in .env chooses how each run gets the reports: "email" (the mailbox, mail_sources.py) or "api" (this

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Environment check: Python, venv, and whether MongoDB (MONGO_HOST / MONGO_PORT from .env) is reachable.
 cd "$(dirname "$0")/.." || exit 1
 python3 --version

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · Executive (management portal) */
 body.mg { --mg-bg: #070a12; --mg-card: rgba(18, 23, 38, .72); --mg-card-b: rgba(120, 140, 190, .14); --mg-text: #eef2fb; --mg-dim: #9aa6bf;
   --mg-mute: #7a85a0;  /* 5.0:1 on the cards (was #6b7690, 4.1:1: below WCAG AA for text, review 2026-11-13) */ --mg-blue: #5b8def; --mg-violet: #8b5cf6; --mg-teal: #22c3a6; --mg-amber: #f5b54a; --mg-red: #ef5d6c;

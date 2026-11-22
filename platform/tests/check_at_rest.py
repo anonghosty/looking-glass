@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Encryption at rest, as the Task monitor and installer report it (at_rest.py): a path on a LUKS (dm-crypt) volume,
 directly or under LVM, is "encrypted"; on a plain disk "not encrypted"; inside WSL "wsl" (BitLocker decides, not
 visible from inside); anything it cannot look at "unknown", never a guess. The summary takes the weakest. MongoDB's

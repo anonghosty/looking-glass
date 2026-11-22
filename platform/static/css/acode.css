@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · an analyst code seen by the researchers (/intel/LG-A-…) */
 .ax-main { max-width: 1100px; margin: 0 auto; display: grid; gap: 16px; padding-bottom: 60px; }
 .ax-hero { display: grid; gap: 10px; padding: 24px 26px; border-radius: 20px; border: 1px solid rgba(245, 181, 74, .25);

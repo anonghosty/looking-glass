@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # The tests that need a throwaway database, run with the MongoDB administrator account.
 #
 # The everyday accounts cannot create a database (the platform's is read-only, the pipeline's writes only its own), and

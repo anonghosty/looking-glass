@@ -246,6 +246,10 @@ systemctl status looking-glass --no-pager | head -5; ss -ltn | grep <your port>;
 ```
 After changing the code or `.env`, restart it without sudo with `deploy/reload.sh`.
 
+The service file lets Looking Glass read its own code but never change it. The whole folder is read-only for the
+service, except `data/`, where it keeps everything it writes, and nothing in `data/` may be run as a program. You, as
+the account that owns the installation, update and change the code as usual: that happens outside the service.
+
 **Keeping WSL running:** WSL stops when nothing from Windows uses it. For an always-on screen, start it at Windows
 logon with a Task Scheduler task: trigger *At log on*, action `wsl.exe`, arguments
 `-d Ubuntu-24.04 --exec sleep infinity`, and tick "Run whether user is logged on or not".
@@ -357,6 +361,7 @@ sudo systemd-analyze verify /etc/systemd/system/looking-glass.service
 sudo systemctl daemon-reload && sudo systemctl enable --now looking-glass
 systemd-analyze security looking-glass --no-pager | tail -1
 ```
+As in A4, the service may read its code but write only in `data/`, and nothing in `data/` may be run as a program.
 
 ### B4. Accounts and database **(security)**
 ```bash
@@ -557,6 +562,17 @@ shipped can be moved. To keep former Looking Glass files where they are as well,
 it lists what would move and leaves everything in place. If the release's list is missing or looks wrong, nothing is
 moved and the update says why.
 
+> **The service file changed (from the release after 2026-11-21 (6)).** It adds one rule: nothing in `data/` may be
+> run as a program (the service could already write only there). Your own additions, such as an audit checkpoint copy
+> folder, need nothing. At the end of the update, `deploy/update_libraries.sh` compares the installed service file with the
+> one this release would write and says when it is out of date. Then run, in the `platform` folder:
+> ```bash
+> python3 deploy/service_unit.py install
+> ```
+> It shows what changes and asks first, keeps a copy of the old file in `backups/`, then installs the new one with sudo
+> and restarts Looking Glass. Your own additions made with `sudo systemctl edit` are kept. To only check, without
+> sudo: `python3 deploy/service_unit.py check`.
+
 > **Old files are moved aside.** Nothing to do. The first update may move leftovers from older releases into
 > `backups/stale-<date>-<time>/`.
 
@@ -613,7 +629,8 @@ moved and the update says why.
 An update installs exactly the versions in `requirements.lock`; the lock changes only when the maintainers make it
 again, inside the ranges in `requirements.txt` (each library within its major version, so fixes but no big changes).
 If `check_libraries.py` fails, its line names the library.
-If `deploy/looking-glass.service.template` changed, run `deploy/install.sh` again and copy the service file again (A4 / B3).
+If `deploy/looking-glass.service.template` changed, the update says so: run `python3 deploy/service_unit.py install`
+in the `platform` folder (it asks first and keeps your `sudo systemctl edit` additions).
 
 ## Checking a release's signature
 
@@ -635,6 +652,13 @@ git -c gpg.ssh.allowedSignersFile=allowed_signers tag -v v2026.11.16
 
 A good tag ends with `Good "git" signature ... with ED25519 key SHA256:OgsRca...`. Compare the fingerprint with the one
 on this page before you trust it. On GitHub, signed commits and tags show **Verified**.
+
+**Checking the installed files against the signed release.** In the `platform` folder, run
+`python3 deploy/verify_install.py --fetch`, and add `--folder ../database` for the database pipeline. It fetches the
+release's signed tag from GitHub, checks the signature against the key above, and compares every installed code file
+with the release's list. It names each file that was changed, added or is missing. It is the only time this tool
+connects anywhere. Without `--fetch` it compares with the list on this computer, which someone able to change the code
+could change too.
 
 ## Uninstalling
 

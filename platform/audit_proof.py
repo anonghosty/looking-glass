@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Proof the auditor takes away (2026-11-11): the audit log's proof package and the continuity check.
 
 The Integrity card's "chain whole" is Looking Glass checking itself. An auditor needs to check it without trusting

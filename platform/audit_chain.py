@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The audit log as evidence (2026-11-11): tamper-evident, and kept for a set time instead of thrown away.
 
 Tamper evidence. Every new entry carries "prev": the SHA-256 of the line before it, so the lines form a chain. Changing,
@@ -585,6 +587,8 @@ class Chain:
             try:
                 rec = json.loads(ln)
             except ValueError:
+                rec = None
+            if not isinstance(rec, dict):           # not JSON, or JSON that is not an entry ([1,2], "x"): r91 coverage
                 brk = brk or {"entry": i + 1, "what": "a line that is not a valid entry"}
                 prev_line_hash = sha(ln)
                 continue

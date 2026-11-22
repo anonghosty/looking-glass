@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """What a masked viewer (the external role, demo mode, the Demo button) sees instead of an IP address: an opaque label.
 
 Before, masking kept the 2nd and 4th parts of an address (x.161.x.34). A constituency sits in a handful of address

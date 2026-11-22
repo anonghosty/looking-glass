@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · Settings (both platforms): country and constituency.
    /settings?for=comms      opened from network communications: only the constituency (the map does not use a country)
    /settings?for=services   opened from publicly accessible / vulnerable services: country and constituency

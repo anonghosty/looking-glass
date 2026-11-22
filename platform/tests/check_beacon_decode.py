@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The beacon decoder (beacon_decode.py) and who sees what of a decoded beacon.
 
 Every blob here is made up: a sample JSON encoded by this test the way the zckypc check-in is encoded (JSON + trailer ->

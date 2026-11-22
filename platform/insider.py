@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Making misuse by people who may see the data traceable (the user's insider package, 2026-11-18).
 
 * Copies are recorded BEFORE they happen (fail closed): the page's copy buttons ask POST /api/copy/record first and copy

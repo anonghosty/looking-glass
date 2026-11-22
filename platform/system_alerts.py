@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """System alerts in the bell, for administrators: a restart, a failing pipeline run or a filling disk was only in log
 files, so nobody was told.
 
@@ -17,6 +19,8 @@ like them so the bell shows them as they are:
     not for administrators only: an alert's "perms" says who sees it); NOT VALID, and the quarterly purge's result, for
     administrators
   - a library file refused at installation because it did not match its lock, suspected tampering (library_supply.py)
+  - code files that are not as the release shipped them (changed, or added), found by the daily code check
+    (code_integrity.py)
 Each alert has an id that changes when something new happens; clearing one hides that alert for that person only
 (data/system_alerts_seen.json). Nothing here holds an address or a report's content.
 """
@@ -185,6 +189,7 @@ class Alerts:
         out += count_alerts(now)
         out += self._quarterly(now)
         out += self._suspected_packages(now)
+        out += self._code_check(now)
         cert = self._certificate()
         if cert and cert["days_left"] <= 30:
             days = cert["days_left"]
@@ -306,6 +311,15 @@ class Alerts:
         try:
             import library_supply
             return library_supply.bell(self.base_dir, now)
+        except Exception:                                # noqa: BLE001  never break the bell over this
+            return []
+
+    def _code_check(self, now):
+        """Code files that are not as the release shipped them, found by the daily code check (code_integrity.py, r91):
+        one alert while any stand, administrators only."""
+        try:
+            import code_integrity
+            return code_integrity.bell(self.base_dir, now)
         except Exception:                                # noqa: BLE001  never break the bell over this
             return []
 

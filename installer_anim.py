@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The installer's animated Looking Glass logo, drawn in the terminal like the platform's loading screen
 (static/img/logo-mark.svg: the lens, the globe lines, the blue-to-red arc, the red ring pinging, the handle).
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The one-time setup code for the first administrator.
 
 While no administrator exists, the first account created on this computer becomes one. "This computer" alone is not

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Run the compatibility diagnostic on every collection in MongoDB (read-only) and print the result:
 which reports the platform loads onto the map, and which match discovery but lack required fields.
 

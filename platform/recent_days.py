@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Older days loaded from the database, kept a few minutes (2026-11-18: an analyst code on an older day loaded that whole
 day - 44,252 records, 2.5-5 s - for its page, again for its records and again for each count; the same day three times
 in 13 s, and after a restart the Findings page waited 30-45 s).

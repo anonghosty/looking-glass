@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The installer's database check (install.sh check_mongo, 2026-11-14), run as the installer runs it: a public address
 is refused before any connection, an internal one without TLS is refused unless the trusted-link answer was given, the
 database is called internal, and the Looking Glass structure check is there with its own exit code (3). No database

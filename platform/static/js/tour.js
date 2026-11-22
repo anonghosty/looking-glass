@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the guided tour (the user, 2026-11-19: "a tutorial button on each platform so it shows what the
    sections, buttons and charts show, so anytime someone is lost they can click it ... new users should have a pop up
    asking whether to be taken through the tutorial or skip").
@@ -119,6 +121,7 @@
       ["#cardScope", "Constituency", "The whole country, or only chosen networks and address ranges, with a live count: networks, address blocks, other ranges. Every part of Looking Glass follows it."],
       ["#cardOrg", "Organisation", "The name and logo every advisory carries."],
       ["#cardPwPolicy", "Password policy", "Password expiry, and making every account change its password."],
+      ["#cardCode", "Code check", "Once a day the installed code files are compared with the fingerprints their release shipped. A changed or added file is listed here and in your bell: keep it if it is yours, or mark it as not yours and run the command shown, which moves it to a quarantine folder on the server; both ask for your password. The command at the bottom checks the whole installation against the signed release."],
       ["#cardNets", "Choosing the constituency", "In the Constituent column, choose Not in, The whole network, or Some address blocks for each network. Some address blocks opens the row with its blocks, busiest first: tick yours, or add one that is not listed. A choice stays until you untick it."],
       ["#cidrs", "Other address ranges", "Ranges or single addresses that belong to no listed network, one row each: add one in the box, remove one with its × button."],
       ["#save", "Apply settings", "Applies the country and constituency."],

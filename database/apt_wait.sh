@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # shellcheck shell=bash
 # Waiting for the system's package manager (sourced by install.sh and database/deploy.sh; the user, 2026-11-19).
 #

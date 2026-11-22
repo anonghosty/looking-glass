@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """External accounts (the user, 2026-11-21): exactly three things, all masked, and everything else refused on the server.
 
 1. Who is external: permissions exactly {"view"} (external_access.is_external); the built-in role always matches.

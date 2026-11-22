@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Every page whose drop-downs ask for the Looking Glass look (class "lg-enhance") loads the script that draws it
 (static/js/lg-select.js). 2026-11-20: the advisory page's two new drop-downs (the PDF's look, the name on its pages)
 showed as plain white browser menus, because advisory.html never loaded lg-select.js (spotted by the user).

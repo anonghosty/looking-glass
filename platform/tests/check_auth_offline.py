@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Sign-in, the authenticator and the role gates, offline (review 2026-11-13: these were only tested against a live
 installation, by the security retest). In-process, on throwaway accounts: no server, no database, nothing real touched.
 - password + authenticator code opens a session; a wrong code, or the same code again, does not

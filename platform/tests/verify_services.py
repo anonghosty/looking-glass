@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Check the publicly accessible / vulnerable services platform against MongoDB for one day:
 records per report (extracted_date on the day), total, hosts, and that demo mode hides IP addresses.
 

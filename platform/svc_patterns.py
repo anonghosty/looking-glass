@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Pattern fields of the publicly accessible / vulnerable services reports: which fields of a report make patterns for
 researchers, and what each record gives (used by services_intel.py).
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Address blocks to choose from in Settings, in the Network names & types table's Constituent column ("Some address
 blocks" opens a network's row with its blocks; the user's design, 2026-11-21).
 

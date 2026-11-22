@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · "Make analyst code" in the analysis window (map and services platform), for analysts.
    The analysis's current selection (window.LGAnalysis, set by app.js / services.js when an analysis opens) becomes an
    analyst code (LG-A-…, acodes.py) and a finding on the Findings page, with a title and a note. Researchers open the

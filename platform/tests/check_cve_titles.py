@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """A CVE's description shown as a title is its first sentence WHOLE, never cut mid-word (cves.short_title; the user's
 rule: text in full. 2026-11-15 the Executive portal showed "...found in OpenSSH before 9.6 an" from a 90-character cut).
 Abbreviations and version numbers do not end the sentence; a description with no sentence end is given whole. The

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The management portal (/management): aggregated statistics of both platforms for managers and executives.
 
 Only aggregates leave the server here: counts, shares, trends, regions, sectors, networks, infections and issues.

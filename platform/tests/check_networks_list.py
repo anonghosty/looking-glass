@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The network list (Settings and the Definitions page) lists every network in the reports from the start (2026-11-13: a
 fresh install showed an empty list until Identify networks had run). In-process, on a throwaway registry file and
 made-up days: no database, nothing real touched.

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Behind the reverse proxy (TRUST_PROXY=1, proxy_guard.py): a visitor cannot pass as this computer (review 2026-11-15).
 A proxy that appends to X-Forwarded-For (nginx's $proxy_add_x_forwarded_for) passes on whatever the visitor sent first;
 Looking Glass believes only the right-most address, the one the proxy itself added, and the same for the scheme. A

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · Admin → Users → Add a person (invites.py; the user 2026-11-19): a one-time sign-up link, shown once,
    copied through the recorded copy button (lg-copy.js; a link is a secret: recorded, not fingerprinted), and the open
    links with Revoke. Administrators only (checked on the server). Text from the server is set as text. */

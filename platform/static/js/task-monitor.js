@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · Settings → Task monitor (task_monitor.py): the server right now, like a task manager, refreshed every
    five seconds while the tab is open and the page is in view. Two actions: forget the kept answers, and how long heavy
    answers are kept (response_cache.py). Everything is built as text, never as HTML. */

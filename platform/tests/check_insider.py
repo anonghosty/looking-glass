@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The insider package (insider.py, the user 2026-11-18), with made-up text, a scratch folder and a throwaway Flask app;
 the installation's data/ is never read or written:
 1. seals: keyed fingerprints of the whole, each line and each address; never the text; another key, other seals;

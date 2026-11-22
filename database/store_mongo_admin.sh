@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Keep the MongoDB administrator (root) account where neither the pipeline nor the platform can read it.
 #
 # The pipeline and the platform each sign in with their own limited account (create_pipeline_db_user.py,

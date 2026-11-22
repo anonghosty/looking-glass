@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · Executive (management portal): aggregated figures only, two platforms, filters that every chart
    follows (click any bar, slice or region to focus on it), explanations of infections and vulnerabilities, and an
    executive PDF report of exactly what is on screen. Charts are plain SVG: no external libraries. */

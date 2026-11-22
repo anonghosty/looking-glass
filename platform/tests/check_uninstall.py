@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """uninstall.sh: removes only what belongs to its own folder, keeps data unless asked, never deletes without a
 confirmation. Runs against a scratch installation with stand-ins for sudo, systemctl and crontab: nothing on this
 computer is touched. No database needed."""

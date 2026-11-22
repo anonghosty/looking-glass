@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The quarterly purge: the raw Shadowserver report rows older than the cutoff are deleted, once per quarter, after the
 quarter's report was made and the people who need it had time to download it.
 
@@ -26,13 +28,21 @@ never writes here, and this module never trusts the permit on its own:
   * Files dated before the cutoff are not loaded again afterwards (the sorted copies, a mailbox fetched again): the
     loader asks purged_before() and leaves them out.
 
+  * Never beside a quarterly report being made (r91, the platform's job_schedule.py): the deletes run with the
+    platform's data/quarterly/.lock held shared (opened read only), so while Looking Glass makes a report the purge
+    waits for the next run ("waiting", logged once), and no report starts during the deletes. They also run with this
+    folder's run lock (.pipeline.lock) held: run.sh holds it for the whole run; a run started without run.sh takes it
+    here for the deletes, so the platform cannot start a report meanwhile.
+
 A forged permit (the platform's data folder is the web service's, which a fault or a break-in could write) can
 therefore only start the purge the rules already allow, on the day they allow it: never earlier, never more.
 
-    run(db, platform_data_dir, base_dir, log, today=None)   one check (the pipeline, after loading)
+    run(db, platform_data_dir, base_dir, log, today=None)   one check (the pipeline, after loading, under its run lock)
     purged_before(base_dir)                                  "YYYY-MM-DD" or "": rows before it were purged
 """
+import contextlib
 import datetime as dt
+import fcntl
 import json
 import os
 import re
@@ -42,6 +52,10 @@ import time
 import report_names
 import worker_settings
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+RUN_LOCK = os.path.join(HERE, ".pipeline.lock")   # this folder's run lock (run.sh: flock -n for the whole run)
+PLATFORM_LOCK = ".lock"           # in the platform's data/quarterly/: held while Looking Glass makes a quarterly report
+WAIT_REPORT = "Looking Glass is making a quarterly report now: the purge waits for the next run"
 KEEP_DAYS = 31                    # the last 31 days are always kept
 WORKING_DAYS = 15                 # the grace period after the quarter, in working days (Monday to Friday)
 STATUS_FILE = "quarterly_purge_status.json"
@@ -253,8 +267,48 @@ def check_permit(permit, quarter, d, today):
     return ""
 
 
+# ------------------------------------------------------------------ never beside a quarterly report (r91)
+class Busy(Exception):
+    """Looking Glass is making a quarterly report: the purge waits for the next run."""
+
+
+def _open_ro(path):
+    try:
+        return os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0))
+    except OSError:
+        return None
+
+
+@contextlib.contextmanager
+def quiet(platform_data_dir, run_lock=None):
+    """Hold, for the deletes, the platform's data/quarterly/.lock SHARED (read only; Busy when a report is being made)
+    and this folder's run lock: held by run.sh already (the attempt fails, as it should), else taken here. A lock file
+    that is not there (no report made yet, no run.sh run yet) has nothing to wait for."""
+    fds = []
+    try:
+        if platform_data_dir:
+            fd = _open_ro(os.path.join(str(platform_data_dir), "quarterly", PLATFORM_LOCK))
+            if fd is not None:
+                fds.append(fd)
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                except OSError:
+                    raise Busy(WAIT_REPORT) from None
+        fd = _open_ro(run_lock or RUN_LOCK)
+        if fd is not None:
+            fds.append(fd)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)      # free: a run without run.sh; now held here
+            except OSError:
+                pass                                                 # held: this run's own run.sh
+        yield
+    finally:
+        for fd in fds:
+            os.close(fd)
+
+
 # ------------------------------------------------------------------ the run
-def run(db, platform_data_dir, base_dir, log, today=None, now=None):
+def run(db, platform_data_dir, base_dir, log, today=None, now=None, run_lock=None):
     """One check, at the end of a pipeline run. Returns the result written (or {} when nothing was due)."""
     today = today or dt.datetime.now(dt.timezone.utc).date()
     due = due_quarter(today)
@@ -292,21 +346,31 @@ def run(db, platform_data_dir, base_dir, log, today=None, now=None):
     flt = purge_filter(d["cutoff"].isoformat())
     colls, skipped, total = {}, {}, 0
     failed = []
-    for name, no in report_collections(db).items():
-        if no:
-            if not name.startswith(NOT_REPORTS):
-                skipped[name] = no
-            continue
-        try:
-            before = db[name].count_documents(flt)
-            if not before:
-                continue
-            n = db[name].delete_many(flt).deleted_count
-            colls[name] = {"matched": before, "deleted": n}
-            total += n
-        except Exception as exc:  # noqa: BLE001  (recorded; the others carry on)
-            failed.append(name)
-            colls[name] = {"error": exc.__class__.__name__}
+    try:
+        with quiet(platform_data_dir, run_lock):
+            for name, no in report_collections(db).items():
+                if no:
+                    if not name.startswith(NOT_REPORTS):
+                        skipped[name] = no
+                    continue
+                try:
+                    before = db[name].count_documents(flt)
+                    if not before:
+                        continue
+                    n = db[name].delete_many(flt).deleted_count
+                    colls[name] = {"matched": before, "deleted": n}
+                    total += n
+                except Exception as exc:  # noqa: BLE001  (recorded; the others carry on)
+                    failed.append(name)
+                    colls[name] = {"error": exc.__class__.__name__}
+    except Busy:
+        res = dict(base, outcome="waiting", why=WAIT_REPORT)
+        last = st.get("last") or {}
+        if (last.get("quarter"), last.get("outcome")) != (quarter, "waiting"):
+            log.info("[PURGE] %s waits: %s", quarter, WAIT_REPORT)
+        st["last"] = res
+        _write_status(base_dir, st)
+        return res
     res = dict(base, outcome="failed" if failed else "done", rows_deleted=total, collections=colls,
                collections_touched=sum(1 for v in colls.values() if v.get("deleted")), skipped=skipped,
                why=("could not delete from: " + ", ".join(failed)) if failed else "")

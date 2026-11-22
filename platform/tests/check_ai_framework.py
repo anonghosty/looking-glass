@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Agentic AI attack frameworks in the Device Identification report (the user, 2026-11-17; Shadowserver began reporting
 them on 2026-11-16 as device type ai-attack-framework, severity high). Made-up records only, no database needed:
 1. a device_id row of that type is an issue, "AI attack framework", on the services platform (flagged, filterable)

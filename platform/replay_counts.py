@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """How many of a selection's records have been replayed, worked out once per loaded day and selection.
 
 The map and the services page ask every 2-3 seconds, per open tab, how many of the selected records the replay has

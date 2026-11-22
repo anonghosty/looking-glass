@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Every IP address inside a piece of text, found the same way by every masker (external review, 2026-11-12).
 
 Before, the researchers' masker (hostmask.py) and the masked viewers' (host_label.py) each had their own patterns,

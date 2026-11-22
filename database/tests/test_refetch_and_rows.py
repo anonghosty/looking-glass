@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Two pipeline fixes of the 2026-11-13 review, without MongoDB or a mailbox:
 - a downloaded file that is broken every time is fetched again at most MailState.REFETCH_MAX times, then left alone
   (it was deleted and fetched again on every run, for ever)

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Strict-Transport-Security (security.py, review of d82a436): sent on every answer over HTTPS (Looking Glass serving
 HTTPS itself, or behind a trusted proxy that says https), never over plain HTTP; one year by default;
 includeSubDomains and preload only when asked; HSTS_MAX_AGE=0 sends max-age=0 so browsers forget it. No database

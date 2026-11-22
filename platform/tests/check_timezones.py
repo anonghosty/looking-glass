@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Display time zones (timezones.py, Settings > Country): every country in the world with a map has a zone that loads
 (the capital's first, Kosovo and the half-hour and UTC+14 zones included), each
 conversion is right (whole-hour zones, daylight saving in Egypt, Morocco's Ramadan change, Cape Verde behind UTC, DR

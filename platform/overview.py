@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The Overview page of every role (/overview): Looking Glass's welcome and "Your pages", the portals this role opens,
 Findings among them for every role (templates/overview.html, _portal_cards.html). Roles that see the platforms ('view')
 have the platforms' own overview (/?intro=1), which shows the same "Your pages" under the two platforms; /overview sends

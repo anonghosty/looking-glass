@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """RULE (the user, r90): each destination is offered once per page, per role. Static, no database:
 
 1. The Overview screens (overview.html, the platforms' overview over the map in index.html) have no page buttons in

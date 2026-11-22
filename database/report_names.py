@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Report names that may become a folder and a MongoDB collection (external review, 2026-11-11).
 
 A report's name is cut out of its file name (2026-11-10-scan_http-ghana-geo.csv -> scan_http) and becomes the folder

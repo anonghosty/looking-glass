@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Load stamps and the address index (review of d82a436): when rows of a report are inserted, the pipeline marks the
 report and the day its file is named after (collection lg_load_stamps: rows added, when), so Looking Glass reads one
 small collection every 15 seconds instead of counting every report's rows; a file name without a date is not marked;

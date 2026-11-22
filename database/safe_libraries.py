@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """safe_libraries.py: Looking Glass's Python libraries, installed only when every file matches the lock.
 
 Every installation and every update installs the libraries through this one tool: the guided installer

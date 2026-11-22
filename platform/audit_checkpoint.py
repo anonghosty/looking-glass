@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Signed checkpoints of the audit log, and signed backup checksums (external review follow-up, 2026-11-14).
 
 The chain (audit_chain.py) shows that no entry was changed after it was written, but someone with full access to the

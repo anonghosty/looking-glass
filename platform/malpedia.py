@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Malpedia lookups (https://malpedia.caad.fkie.fraunhofer.de) for infections, tags and sample hashes.
 
 The API token stays on the server (MALPEDIA_TOKEN in .env); browsers only see the results. Answers are cached

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Where the reports database is, and how to reach it safely (2026-11-14).
 
 Looking Glass reads (the platform) and fills (the pipeline) one MongoDB: by default on this same computer, reached on

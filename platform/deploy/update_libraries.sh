@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Update the Python libraries after `git pull`, from the locks only (deploy/safe_libraries.py): the platform's .venv
 # and, when the database pipeline is beside it (../database), the pipeline's .venv. Each is built anew beside the
 # running one and switched to only when every file matched its requirements.lock and installed; the running service
@@ -12,7 +14,7 @@ set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
 project="$(pwd)"
 force=()
-case "${1:-}" in --force) force=(--force) ;; '') ;; -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+case "${1:-}" in --force) force=(--force) ;; '') ;; -h|--help) sed -n '4,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   *) echo "unknown option $1 (deploy/update_libraries.sh --help)"; exit 1 ;; esac
 python3 deploy/safe_libraries.py check-machine
 flagged=0
@@ -40,6 +42,9 @@ if [ -f "$db/requirements.lock" ] && [ -f "$db/shadowserver_pipeline.py" ]; then
   stale "$db" database
 fi
 .venv/bin/python tests/check_libraries.py
+# the installed service file against this release's (deploy/service_unit.py): never uses sudo, only says what to run
+# when the release changed the service's protections; nothing to say in a developer copy without an installed service
+python3 deploy/service_unit.py check | sed -n '1p;/^To update it/,$p' || true
 if [ "$flagged" = 1 ]; then
   echo "WARNING: a library file from one source did not match its lock and was refused; matching copies were installed."
   echo "         See suspected-packages.txt and report it (docs/INSTALLATION.md, 'When a library file does not match')."

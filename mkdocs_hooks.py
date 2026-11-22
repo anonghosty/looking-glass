@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """MkDocs hooks for the documentation site.
 
 * A link from a guide to a file outside docs/ (the installer, a script, a folder's README) has no page on the site, so

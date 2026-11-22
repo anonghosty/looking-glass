@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """PDF reports of an analysis figure (a "card") on either platform: an executive summary, key figures, activity charts,
 the infections / categories explained (Malpedia, threat actors, or the Looking Glass definitions written by researchers),
 breakdowns, the complete list and the report definitions.

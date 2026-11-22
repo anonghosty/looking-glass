@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the Intelligence portal (/intelligence, intelligence.py): Shadowserver's Intelligence reports for
    analysts and admins. Group tiles (today against the median of the 7 days before, "still arriving"), one card per
    report in plain words, a report's view on its own fields (filters, free text, CSV export, leaked accounts masked

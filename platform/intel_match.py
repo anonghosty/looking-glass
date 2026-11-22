@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Explore a match of "Looking Glass asks" (the user, 2026-11-15): exactly what Looking Glass stated, nothing around it.
 
 A match says "the domain X was seen for avalanche-generic in Sinkhole HTTP and for qsnatch in Sinkhole DNS". Explore

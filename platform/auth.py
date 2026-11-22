@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Login, accounts, roles and permissions, sessions and the audit log for Looking Glass (docs/SECURITY.md).
 
 Every page and API needs a login; /login, /register, /logout, /healthz (this computer only, neutral.py) and the few

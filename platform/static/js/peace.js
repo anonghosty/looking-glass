@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · Peace of mind (peace.py), on the Admin page: the admin's own switch. Turning it on or off reloads the
    page, so the header, the Overview and the bell follow at once. */
 (() => {

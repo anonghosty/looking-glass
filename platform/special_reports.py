@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Shadowserver's one-off Special Reports, kept apart from the daily replay (review, 2026-11-13).
 
 Special Reports are not daily reports: Shadowserver shares a one-off dataset (a campaign's victims, a historical botnet,

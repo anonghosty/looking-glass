@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Handing decoded beacons over: a researcher (or an analyst) sends the beacons Looking Glass decoded under a name to an
 analyst or a manager, as a finding (findings.py), so they are looked into seriously and not lost in a mailbox.
 

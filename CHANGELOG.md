@@ -5,6 +5,36 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-22
+### Changed
+- **Heavy jobs never run at the same time.** A quarterly report is not started while the database pipeline is loading
+  reports: it waits and is tried again 10 minutes later, and no pipeline run starts while a report is being made. The
+  quarterly purge does not start while a report is being made; it is tried again at the next run. In Settings →
+  Quarterly, Make it again says "The database pipeline is loading reports now: try again in a few minutes." when a load
+  is running.
+- **Nothing the service writes can be run.** The service could already write only in `data/`. The service file now
+  also names its code folder as read-only outright, and nothing in `data/` may be run as a program. A new check makes
+  sure every place the service writes is in `data/`. After updating, run the one step in
+  [Updating](docs/INSTALLATION.md#updating) to install the new service file; the update says when it is needed.
+- **Settings → Code check.** Once a day, and a few minutes after each start, Looking Glass compares its code files
+  with the list of files the release shipped and names any file that was changed or added. Each finding is written to
+  the audit log once, and administrators get one alert in the bell. An administrator marks a file "This is ours, keep
+  it", or "Not ours, move to quarantine", which gives the command to run on the server: the file is moved aside, never
+  deleted. `deploy/verify_install.py --fetch` checks every code file against the signed release on GitHub.
+- **Every release carries its exact list of libraries** (an SPDX software bill of materials,
+  `looking-glass-sbom.spdx.json`). It is in the release and attached to the release on GitHub, made from the same
+  hash-locked lists the installer uses.
+- **Every source file states its licence (AGPL-3.0-only) and copyright (the Looking Glass contributors)** in its first
+  lines, in the standard SPDX form. Pages, scripts and the service file work exactly as before.
+
+### Fixed
+- Saving a CVE entry in the knowledge base with a note and no reference was refused with "Give at least one
+  reference". A CVE needs only a note or a reference, as intended.
+- Checking the audit log no longer stops on a line that is valid JSON but not an audit entry. The line is reported as
+  damaged, like any other unreadable line.
+- The services knowledge base no longer fails with an error when the list of values seen in reports cannot be read.
+  The question that uses those values is simply left out.
+
 ## 2026-11-21 (6)
 ### Changed
 - **Pages no longer show the browser's own error text.** When Looking Glass cannot be reached (for example while it

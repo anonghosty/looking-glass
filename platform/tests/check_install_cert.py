@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """A bought certificate, checked and installed (deploy/install_cert.py, review follow-up item 5, 2026-11-15), against a
 throwaway test certificate authority (root, intermediate, server certificates for lg.test.example: a reserved name,
 never a real domain): a good one installs (chain completed from the intermediate, key owner-only, previous kept,

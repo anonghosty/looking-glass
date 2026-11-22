@@ -1076,6 +1076,19 @@ Security scripts:
   missing item in an old top-80 summary as unknown, never 0).
 - Parts of the installation check that read the reports database are skipped when MongoDB cannot be reached: they
   report SKIPPED (exit 77) instead of a connection error.
+- Scheduled jobs (`job_schedule.py`): one table lists every scheduled job of the platform and the pipeline, with its
+  time, how long it may take, and the lock it takes. `tests/check_job_overlap.py` simulates the schedule minute by
+  minute. It fails when two heavy jobs could overlap without a lock, when a lock in the table is not taken in the code,
+  or when a heavy job falls in working hours.
+- Code integrity: the release builder writes `.release_fingerprints` (SHA-256 of every shipped file) beside
+  `.release_files`. `code_integrity.py` runs the daily check (`/api/admin/code-check`, plus `/approve` and
+  `/quarantine`, both POST: the `settings` permission, the CSRF token, a session younger than 12 hours and the
+  administrator's password again). `deploy/verify_install.py` compares with the local list or, with `--fetch`, with the
+  list in the signed tag. The service file (`deploy/service_unit.py`) sets `ReadOnlyPaths` on the folder,
+  `ReadWritePaths` and `NoExecPaths` on `data/`.
+- Software bill of materials: `tools/make_sbom.py` writes `looking-glass-sbom.spdx.json` (SPDX 2.3) from the
+  hash-locked requirements, with each library's exact version and hash. `tests/check_sbom.py` checks that it matches
+  the locks.
 
 ## Scripts
 
@@ -1104,6 +1117,13 @@ Security scripts:
   - **several reports / multiple issues**: for every report family and the busiest reports, the figure, the analysis table, the filtered view, every bubble, what clicking a bubble shows and the regions map must agree with an independent count straight from MongoDB; it also checks that a filtered stream finds the latest records however long ago.
 - While the intro page is open, it refreshes the services card within about 15 seconds of a new services collection, late services records or a field-check result. Communications changes refresh it straight from the map's clock.
 - The "replay paused while this tab was in the background" notice appears only on the platforms, not over the intro page; the replay still pauses and resumes as before.
+- Checks that need no database, among others:
+  - `check_job_overlap.py`: no two heavy jobs overlap without a lock;
+  - `check_code_readonly.py`: the service writes only in `data/`;
+  - `check_code_integrity.py`: the daily code check, its findings and the administrator's choices;
+  - `check_sbom.py`: the SBOM matches the locks;
+  - `check_spdx_headers.py`: every shipped source file carries the SPDX licence and copyright lines within its first 10 lines; third-party files are listed with their own licences;
+  - `check_cov_*.py`: tests that reach the branches the other checks do not. Statement and branch coverage is measured with `coverage.py`.
 
 - `tools/envcheck.sh` checks Python, venv and whether MongoDB (`MONGO_HOST`/`MONGO_PORT` from `.env`) is reachable.
 - `tools/quickcheck.py` checks the connection, lists every report collection with its size and filename index, and times the replay day's count.

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Password expiry (password_policy.py, auth.py), through the real sign-in: name and password, the authenticator code,
 then, when the password has expired, the new-password step BEFORE any session exists, and straight into the platform
 afterwards (no second sign-in). Accounts, the policy and the audit log are temporary: nothing real is touched.
@@ -69,12 +71,13 @@ def sign_in(name, pw, secret):
     last = (users.get(name) or {}).get("totp_last")
     while True:
         now = time.time()
-        if (last is None or int(now) // 30 > last) and 1 <= now % 30 <= 27:
+        if (last is None or int(now) // 30 > last) and 3 <= now % 30 <= 25:
             break
         time.sleep(0.5)
-    c = A.app.test_client()
+    step = int(now) // 30          # the window checked above, not the clock again: a test system's clock can be stepped
+    c = A.app.test_client()        # back a little (WSL), which would land the code on the window already used
     r = c.post("/login", data={"username": name, "password": pw}, headers=UA)
-    r = c.post("/login", data={"step": "mfa", "code": code(secret, int(time.time()) // 30), "next": "/"}, headers=UA)
+    r = c.post("/login", data={"step": "mfa", "code": code(secret, step), "next": "/"}, headers=UA)
     return c, r
 
 

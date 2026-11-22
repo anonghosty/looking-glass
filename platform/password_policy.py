@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Password expiry: an administrator's policy that makes passwords expire, and a "change every password now" button.
 
 Asked for by the user (2026-11-12). In Settings (administrators, Settings permission):

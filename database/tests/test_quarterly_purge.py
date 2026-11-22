@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The quarterly purge (quarterly_purge.py): its dates, the permit's checks, and a purge of made-up rows in a throwaway
 database that is dropped afterwards (the real database is never touched). Only documentation addresses.
 
@@ -10,8 +12,11 @@ database that is dropped afterwards (the real database is never touched). Only d
     malformed, a symbolic link), logging that once per quarter;
   * it refuses without a permit, with a NOT VALID permit, before the purge day, with a cutoff inside 31 days, with
     dates that are not the rule's, and when run a second time;
-  * it writes its result (per collection), and files before the cutoff are not loaded again.
+  * it writes its result (per collection), and files before the cutoff are not loaded again;
+  * it waits (nothing deleted, logged once) while Looking Glass makes a quarterly report, and holds the locks that keep
+    a report from starting during its deletes (r91).
 Run: .venv/bin/python tests/test_quarterly_purge.py"""
+import atexit
 import datetime as dt
 import importlib.util
 import json
@@ -27,6 +32,11 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "tests"))
 import quarterly_purge as qp  # noqa: E402
 
+# this test's own run lock: never the folder's real .pipeline.lock (a scheduled run must never be kept from starting)
+_LOCKS = tempfile.mkdtemp(prefix="lg-purge-locks-")
+qp.RUN_LOCK = os.path.join(_LOCKS, ".pipeline.lock")
+open(qp.RUN_LOCK, "w").close()
+atexit.register(shutil.rmtree, _LOCKS, True)
 checks, fails = 0, []
 
 
@@ -172,6 +182,73 @@ try:
 finally:
     shutil.rmtree(sw, ignore_errors=True)
 
+print("\nNever beside a quarterly report being made (r91; no database: a purge that waits never reaches it)")
+import fcntl  # noqa: E402
+
+
+def hold(path, how=fcntl.LOCK_EX):
+    """Another process's lock on path (a separate open file: flock treats it as another holder)."""
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(fd, how | fcntl.LOCK_NB)
+    return fd
+
+
+def free(path, how=fcntl.LOCK_EX):
+    """Could another process take this lock now?"""
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, how | fcntl.LOCK_NB)
+        return True
+    except OSError:
+        return False
+    finally:
+        os.close(fd)
+
+
+bz = tempfile.mkdtemp(prefix="lg-purge-busy-")
+bz_data, bz_base = os.path.join(bz, "platform", "data"), os.path.join(bz, "pipeline")
+os.makedirs(os.path.join(bz_data, "quarterly", "2026Q4")); os.makedirs(bz_base)
+try:
+    with open(os.path.join(bz_data, "quarterly", "2026Q4", "purge_permit.json"), "w", encoding="utf-8") as fh:
+        json.dump(good, fh)
+    with open(os.path.join(bz_data, "quarterly", qp.CONFIRM_FILE), "w", encoding="utf-8") as fh:
+        fh.write('{"enabled": true, "by": "ada.admin"}')
+    plock = os.path.join(bz_data, "quarterly", qp.PLATFORM_LOCK)
+    making = hold(plock)                       # the platform making a report holds data/quarterly/.lock exclusive
+    counted.lines.clear()
+    try:
+        rs = [qp.run(None, bz_data, bz_base, slog, today=D(2027, 1, 22)) for _ in range(3)]
+    finally:
+        os.close(making)
+    ok("a VALID permit on its purge day, the purge on, but a quarterly report is being made: it waits (nothing deleted)",
+       all(r.get("outcome") == "waiting" and r.get("why") == qp.WAIT_REPORT for r in rs), str(rs[0]))
+    ok("...logged once, not at every run", len([x for x in counted.lines if "waits" in x]) == 1, str(counted.lines))
+    ok("...recorded in the pipeline's own status, not as done (tried again at the next run)",
+       qp.read_status(bz_base).get("last", {}).get("outcome") == "waiting" and not qp.read_status(bz_base).get("done"))
+    seen = {}
+    with qp.quiet(bz_data, qp.RUN_LOCK):
+        seen["report"] = free(plock)
+        seen["read"] = free(plock, fcntl.LOCK_SH)
+        seen["run"] = free(qp.RUN_LOCK, fcntl.LOCK_SH)
+    ok("during the deletes no report can start (data/quarterly/.lock held shared: another reader may, a maker may not)",
+       seen["report"] is False and seen["read"] is True, str(seen))
+    ok("...and, started without run.sh, the run lock is taken for them (the platform cannot pause the pipeline then)",
+       seen["run"] is False and free(qp.RUN_LOCK), str(seen))
+    runsh = hold(qp.RUN_LOCK)                  # run.sh holds the run lock for the whole run
+    try:
+        with qp.quiet(bz_data, qp.RUN_LOCK):
+            inside = True
+    except qp.Busy:
+        inside = False
+    finally:
+        os.close(runsh)
+    ok("under run.sh (its run lock already held) the deletes go ahead", inside)
+    os.remove(plock)
+    with qp.quiet(bz_data, os.path.join(bz, "no-such.lock")):
+        ok("no lock files at all (no report made, no run.sh run yet): nothing to wait for", True)
+finally:
+    shutil.rmtree(bz, ignore_errors=True)
+
 # ------------------------------------------------------------------ the database part
 try:
     import test_report_names as trn
@@ -268,6 +345,14 @@ try:
     ok("a permit reached through a symbolic link is not read: refused", r.get("outcome") == "refused" and unchanged(), str(r))
     os.remove(os.path.join(plat_data, "quarterly", "2026Q4")); os.remove(os.path.join(plat_data, "quarterly", "2026Q9"))
     shutil.move(os.path.join(link, "2026Q4"), os.path.join(plat_data, "quarterly", "2026Q4"))
+
+    making = hold(os.path.join(plat_data, "quarterly", qp.PLATFORM_LOCK))
+    try:
+        r = qp.run(db, plat_data, base, log, today=D(2027, 1, 22))
+    finally:
+        os.close(making)
+    ok("on its day with everything in order, but while a quarterly report is being made: waits, nothing deleted",
+       r.get("outcome") == "waiting" and unchanged(), str(r))
 
     print("\nThe purge on its day, with a VALID permit")
     r = qp.run(db, plat_data, base, log, today=D(2027, 1, 22))

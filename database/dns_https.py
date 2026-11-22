@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The sender check's key look-up over HTTPS (DNS over HTTPS), for networks that drop plain DNS TXT look-ups.
 
 Some networks inspect DNS and block TXT queries on port 53 (a rule against DNS tunnelling): the sender check then can

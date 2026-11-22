@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The generic fallback decoder and the requests Looking Glass could not decode (beacon_decode.generic, beacon_unknown.py).
 
 Made-up values only, encoded by this test. No real victim data.

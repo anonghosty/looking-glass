@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Findings pages that keep up on their own (the user, 2026-11-18: "when I send to management and they are still on the
 Findings page I have to manually refresh before it changes").
 

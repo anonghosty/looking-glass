@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Deploy / re-deploy the Shadowserver pipeline on this WSL machine. Safe to run repeatedly.
 #
 #   ./deploy.sh                      install MongoDB (native) + deps, configure, run checks
@@ -52,7 +54,7 @@ while [[ $# -gt 0 ]]; do
       sudo mandb -q >/dev/null 2>&1 || true
       info "Removed the global 'shadowserver' command, man page and completion (project files untouched)"
       exit 0 ;;
-    -h|--help) sed -n '2,/^set -e/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '4,/^set -e/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown option $1 (see ./deploy.sh --help)" ;;
   esac
 done

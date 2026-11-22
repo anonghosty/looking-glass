@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The libraries the platform runs on: installed, inside the versions requirements.txt allows, and doing what the
 platform relies on. Needs no database, no reports and no running service, so it means something on a fresh install
 (the installer runs it before the checks that need yesterday's reports).

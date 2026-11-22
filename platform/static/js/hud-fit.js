@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Keeps the top bar on one row on wide screens (figures strip layout, >= 1440px wide).
    When the buttons do not fit beside the name (more buttons for admins, browser zoom), the least
    important labels collapse to their icons step by step (the tooltip still names each button). */

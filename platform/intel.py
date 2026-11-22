@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Intel gathered: the indicators behind each infection / category and each issue, for researchers.
 
 The reports carry more than a name: the C2 domain a device called, the DNS name it looked up, the URL and user agent

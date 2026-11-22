@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Region matches (region_matches.py, Settings > Country): the report's region names are matched to the map by name,
 ISO alias, accent-free spelling or the administrator's choice; a name the map does not know gets a suggestion; the
 choices are kept per country in data/region_matches.json (0600), apply to whole-country maps, and the routes refuse

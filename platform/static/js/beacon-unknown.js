@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* "Requests Looking Glass could not decode" on the Findings page (beacon_unknown.py), for analysts and admins.
  *
  * Each family: its request shape (path, parameter, encoding, what the value looks like), the C2 hosts, names, reports,

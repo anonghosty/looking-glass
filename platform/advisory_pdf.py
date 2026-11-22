@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The advisory's own pages in the report (advisory.py): drawn first, before the analyst's report, which follows
 unchanged (combo_pdf.build calls front() and references()).
 

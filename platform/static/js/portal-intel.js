@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the Intelligence card on the Overview ("Your pages", _portal_cards.html): today's Intelligence records
    against the usual, and whether the day's reports are still arriving (counts only, /api/intelligence/totals). Only
    where the card is drawn: analysts and admins. */

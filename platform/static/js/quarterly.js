@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the quarterly reports (quarterly.py): every kept quarter, on
    - the Executive portal (the management role: the management PDF and summary CSV),
    - the advisory portal (the advisor role: the advisor PDF and their three CSVs),

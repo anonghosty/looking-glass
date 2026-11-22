@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """worker_settings.weakens() judges a Settings → Workers change by what each value MEANS to the pipeline. Its eff_*
 functions copy the rules of the modules that use the values (the platform loads worker_settings.py on its own, so it
 cannot import them). This check keeps the copies honest: for many spellings, each eff_* must agree with mail_auth.mode,

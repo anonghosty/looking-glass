@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · Settings: the organisation's name and logo, which head every advisory (organisation.py). The PDF's
    look and page name are the advisor's choice on each advisory (2026-11-20).
    Saved on its own, with its own button (not with Apply settings). */

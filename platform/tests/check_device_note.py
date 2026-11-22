@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Devices are matched by IP address (external review follow-up, 2026-11-14): the one sentence is the same on the pages
 (static/js/loader.js) and in the PDFs (device_note.py), and every place that links reports by device shows it: Across
 reports on Combinations and on an analyst code's page, the Executive portal's cross-report cards, and the Executive and

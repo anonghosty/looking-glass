@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The analysts' combination search counts like the researcher (the user, 2026-11-17: the search showed 53 devices where
 the researcher and the Executive portal showed 43). Made-up records only (documentation addresses), no database:
 1. the report day is the default: exactly the devices that carried the whole combination that day

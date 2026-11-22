@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Verify the Shadowserver pipeline setup: native MongoDB service + binaries, memory limits,
 # MongoDB auth, indexes, document structure, data folders and the IMAP login.
 # Exit code 0 = everything required is OK. Needs no sudo.

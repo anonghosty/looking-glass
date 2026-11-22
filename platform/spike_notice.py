@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """A spike (or a drop) on the Overview's buttons: the latest report day against the day before, per platform, with what
 is behind it (the user, 2026-11-16). Counts only: no host, address or network name.
 

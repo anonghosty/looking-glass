@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The Overview's greeting: by the person's first name (their name as the admin entered it, never the username).
 
 The first time someone opens an Overview: "Greetings, <name>! Welcome to Looking Glass". After that, one of 30

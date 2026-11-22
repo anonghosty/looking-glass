@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Services on the researchers' page (the Definitions page): every publicly accessible / vulnerable services report as
 something a researcher studies and defines, next to Infections and Issues.
 
@@ -132,8 +134,12 @@ def install(app, ctx):
         fields = [f for f in pat.fields_for(base) if f["kind"] != "tags"]
         if not fields:
             out.append("Choose its pattern fields: only its tags are read so far.")
-        if sintel and fields:
-            seen = {lbl for (lbl, _v) in (sintel.index()["vals"].get(base) or {})}
+        try:                                               # guarded like the list (line ~217): a failing index must not
+            vals = sintel.index()["vals"] if (sintel and fields) else None   # turn the knowledge base into an error 500
+        except Exception:                                  # noqa: BLE001  (r91 coverage: the question is just left out)
+            vals = None
+        if vals is not None:
+            seen = {lbl for (lbl, _v) in (vals.get(base) or {})}
             gone = [f["label"] for f in fields if f["label"] not in seen]
             if gone:
                 out.append(f"{', '.join(gone)}: no longer in the records. Check its pattern fields.")

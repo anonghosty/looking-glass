@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """What a masked viewer (the external role, demo mode, any account without 'unmasked') sees of a report's own fields.
 
 An allowlist, not a blocklist: a report field is shown only when it is named here (technical detail: protocol,

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """A masked viewer (external role, demo mode) cannot use the services host-name filter to find out whether a host is in
 the data (external review, 2026-11-11). Masked views show no host name ("hidden"), so in a masked request the filter
 matches nothing; an unmasked viewer filters on host names as before. The IP filter already refused raw addresses.

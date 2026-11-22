@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · Settings → Workers (pipeline_settings.py): the database pipeline's settings, locked until the
    administrator enters their own password; the Shadowserver report API key (write-only, checked with Shadowserver
    before it is kept); the reports held back by the sender check, released after the password. Passwords of the

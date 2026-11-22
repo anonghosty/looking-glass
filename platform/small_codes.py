@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """No lasting code for a pattern fewer than MIN_HOSTS hosts carry, for viewers who never see hosts (external review,
 2026-11-11, option 2 chosen by the CSIRT).
 

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the project's contributors */
 /* Sign-in, account and reset pages: animated scene (auth-bg.js) behind a frosted-glass card */
 .auth-page { margin: 0; min-height: 100vh; background: #05060a; color: var(--text); overflow-x: hidden; font-family: var(--font); }
 .auth-bg { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }

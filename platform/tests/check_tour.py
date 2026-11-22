@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The guided tour on every platform and portal (tour.js, tour_prefs.py; the user, 2026-11-20: "add the tour to every
 platform too ... also add a test to check these").
 

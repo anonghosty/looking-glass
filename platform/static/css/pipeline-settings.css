@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Settings → Workers (pipeline-settings.js) and the Settings tabs */
 .st-tabs { display: flex; gap: 6px; margin: 0 0 14px; border-bottom: 1px solid rgba(255,255,255,.08); }
 .st-tabs button { background: none; border: 0; border-bottom: 2px solid transparent; color: inherit; opacity: .7;

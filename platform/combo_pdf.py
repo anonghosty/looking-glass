@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The analyst's combination report (combos.py), drawn like the Executive report: dark pages, coloured key-figure tiles,
 the activity chart and key findings, the region map with each region's cities, ranked bars, and the explanations as
 cards. Unlike the Executive report it lists the devices' addresses: it is for analysts only, and every page says so.

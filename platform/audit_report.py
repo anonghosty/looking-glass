@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The Audit portal's evidence report (PDF): what an auditor files as evidence for a period. Read from audit_portal.py.
 
 Page 1: the period, who generated it and when, the key figures, and the log's integrity with its head hash (the

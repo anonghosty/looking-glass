@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """MITRE ATT&CK in advisories (2026-11-13, approved addition): each technique with MITRE's own short definition ("What it
 is", marked MITRE), why Looking Glass put it in this advisory ("Why it is in this advisory": the mapping's role and the
 advisory's own figures; not MITRE's words), and up to three of MITRE's mitigations that suit the kind of report ("How to

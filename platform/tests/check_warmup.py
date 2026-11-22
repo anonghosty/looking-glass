@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Warm-up (warmup.py): the Definitions page's heavy summaries and the first views are worked out in the background
 whenever the copies of the days in memory change, and only then; a job that fails is logged, the others still run,
 and it is tried again at the next change. No database needed.  Run: .venv/bin/python tests/check_warmup.py"""

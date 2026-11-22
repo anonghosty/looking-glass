@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Replay schedule: which day Looking Glass replays, and how far into it the replay is.
 
 Shadowserver delivers a day's reports during the following day, so "yesterday" is usually not in MongoDB

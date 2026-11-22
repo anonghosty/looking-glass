@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The time zone a CSIRT reads its times in (Settings > Country). Display only.
 
 Shadowserver writes every timestamp in UTC, and a moment is the same moment in every country, so the platform keeps

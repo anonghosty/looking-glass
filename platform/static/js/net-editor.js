@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · network names and types (AS-number registry): admins in Settings, researchers on the Definitions page.
    Same design as the definitions cards: stat tabs, search, type filter, pills, buttons that show what they do. */
 (() => {

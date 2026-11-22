@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Find infections in the data that are not yet defined in data/infections.json.
 
 Usage:  .venv/bin/python manage/infections_missing.py [days]      (default: the last 7 days)

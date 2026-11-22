@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The three mail sources against mocked servers (no network, no real credentials):
 Microsoft Graph (token, folder, paging, raw message, error hints), Gmail API (signed service-account token,
 label, paging, raw message), IMAP settings checks, and the MailState skip-list."""

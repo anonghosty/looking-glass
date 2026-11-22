@@ -1,9 +1,12 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 [Unit]
 Description=Looking Glass (replay of the previous day's Shadowserver events and exposed services)
 After=network-online.target mongod.service
 Wants=network-online.target
 
-# Template: deploy/install.sh fills in @USER@, @PROJECT@ and @BIND@ and writes deploy/looking-glass.service.
+# Template: deploy/service_unit.py (run by deploy/install.sh) fills in @USER@, @PROJECT@ and @BIND@ and writes
+# deploy/looking-glass.service. After an update, deploy/service_unit.py check says whether the installed copy is older.
 [Service]
 User=@USER@
 WorkingDirectory=@PROJECT@
@@ -21,7 +24,13 @@ PrivateTmp=true
 PrivateDevices=true
 ProtectSystem=strict
 ProtectHome=read-only
+# the code may be read, never changed: the whole folder is read-only for the service, data/ is the one exception, and
+# nothing in data/ may be run as a program. Updates run as the administrator, outside this sandbox. Every place the
+# service writes is in data/ (tests/check_code_readonly.py fails a release that writes anywhere else). A folder of your
+# own (AUDIT_CHECKPOINT_COPY_DIR): add it with `sudo systemctl edit`, which keeps it across updates (docs/OPERATIONS.md)
+ReadOnlyPaths=@PROJECT@
 ReadWritePaths=@PROJECT@/data
+NoExecPaths=@PROJECT@/data
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true

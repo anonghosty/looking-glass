@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the project's contributors */
 /* The sign-in card turns over (2026-11-19), in the page's usual look. Served before sign-in: it names no product
    (anti-fingerprinting, neutral.py).
    * LGTurn.turn(card, swap): the card turns away, swap() changes its side at the half turn, the new side turns in

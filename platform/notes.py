@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Researchers' notes on an infection / category or an issue: new findings, kept apart from the definitions.
 
 A definition says what a name is (and ships with Looking Glass); a note records what a researcher found on this site

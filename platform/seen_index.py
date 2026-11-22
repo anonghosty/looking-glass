@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Where and when each infection / category name was last seen, beyond the day held in memory.
 
 The Definitions page says which reports a name was seen in. Only the replay day is in memory, so a name seen a few days

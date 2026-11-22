@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The documentation screenshots show the pages as they ship (no database needed).
 
 docs/media/screens/manifest.json keeps, for every screenshot, the SHA-256 of the image and of each page file it shows

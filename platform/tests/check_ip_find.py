@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """One address finder for every masker (ip_find.py; external review, 2026-11-12). The reviewer's five spellings that
 escaped one masker or the other must be masked by BOTH: the researchers' (hostmask.mask, privacy.partial_mask_text)
 and the masked viewers' (host_label.label_text); things that are not addresses must stay.

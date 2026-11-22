@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Library files refused at installation (suspected tampering), in the audit log and the administrators' bell.
 
 deploy/safe_libraries.py installs every Python library only when its file matches the sha256 value in the lock

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The failed-login counter clears out old records (throttle_prune.py, external review 2026-11-11) and the locks
 still work exactly as before: 5 wrong tries for one name in 15 minutes, 20 from one address in an hour.
 Uses a clock it controls; touches no file, account or service.

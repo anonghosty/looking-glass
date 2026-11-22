@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · Settings → Network names & types → Constituent column: a network's address blocks (address_blocks.py;
    the user's design, 2026-11-21: one picker instead of two). "Some address blocks" opens the network's row in place with
    its blocks (/24) that have records, busiest first, a search and the full list on demand; ticked blocks are saved as

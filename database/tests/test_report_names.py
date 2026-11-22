@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Report names (report_names.py, external review 2026-11-11): a file whose report name could not be a folder and a
 MongoDB collection (scan$x, system., too long, capitals) is quarantined at unpacking, never loaded, and never met
 again; the good reports beside it load as usual; one report that fails while loading no longer stops the others.

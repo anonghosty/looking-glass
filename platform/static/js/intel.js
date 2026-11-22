@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · Intel gathered (researchers; the Definitions page).
    * window.LGIntel.open(name, section, report): the indicators behind an infection / category or an issue, per report
      (C2 domains, DNS lookups, URLs, user agents, credentials tried, fingerprints, certificates…), from /api/intel.

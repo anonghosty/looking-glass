@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Decoded beacons handed over as a finding (beacon_findings.py): who sees what, per role.
 
 Made-up check-ins only (encoded by tests/check_beacon_decode.py's encoder), in a throwaway findings file.

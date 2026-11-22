@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Cached answers are the same answers (external review, 2026-11-12: the services analysis took ~1.4 s on every
 request and the replayed counters went through the whole day on every 2-3 s poll). On the installation's own day:
 1. the replayed counters (services and map), now a binary search over a selection's records found once, give exactly

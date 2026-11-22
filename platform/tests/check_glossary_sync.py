@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The documentation's glossary (docs/GLOSSARY.md) is generated from the in-app one (static/js/glossary.js) by
 tools/glossary_md.py: this check regenerates it into a copy and fails when the two differ, so a term added in one place
 only (by hand in GLOSSARY.md, or in the app without regenerating) is caught (2026-11-16: one was).

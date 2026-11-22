@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the notification bell in every page's header (notifications.py): what changed in the findings this
    person takes part in, the ones waiting for them first and highlighted. One click opens the place to act (the
    advisory, the review, the finding) and clears that notification; "Clear all" clears theirs. Refreshed every minute

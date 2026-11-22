@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Offline explanations of malware / botnet / tool names, behind Malpedia (2026-11-13).
 
 Two free sources are downloaded once by manage/fetch_offline_names.py (at most once a week) and kept in data/:

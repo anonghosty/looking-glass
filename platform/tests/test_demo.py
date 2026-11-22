@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Demo mode and masked roles leak nothing: no real IP address, AS number, company name or host name in any answer of
 both platforms, whether masking comes from the Demo button (demo=1) or from a role without the 'unmasked' permission.
 

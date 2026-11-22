@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Logging who views host-level data (CIS Controls v8.1 safeguard 3.14, "Log Sensitive Data Access"; review, 2026-11-13).
 
 Exports were already logged per person (reports, CSV files, advisories, audit evidence). Viewing host-level data on the

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The documentation screenshots and the page files each one shows (docs/media/screens/manifest.json).
 
 For every screenshot the manifest keeps the SHA-256 of the image and of each page file it shows (the template, the

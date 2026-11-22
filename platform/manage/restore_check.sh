@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Rehearse a restore without touching this installation: check the backup's signature and checksum, unpack it into a
 # temporary folder, and check what a restore needs is there and sound: .env, the accounts and roles, the settings, the
 # TLS certificate, and the audit log, whose chain and signed checkpoints are checked by the same verifier an auditor

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Proves the new loader builds exactly the same MongoDB documents as mongo_added_json.py.
 
 Run:  .venv/bin/python -m unittest discover -s tests -v

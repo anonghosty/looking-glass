@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Settings have one rule: a signed-in account with the Settings permission (administrators), plus the page's CSRF
 token for changes. The old SETTINGS_TOKEN / X-Settings-Token shortcut is gone (external review, 2026-11-11): even
 with SETTINGS_TOKEN set in the environment, the header opens nothing. Nothing is saved: the administrator's change is

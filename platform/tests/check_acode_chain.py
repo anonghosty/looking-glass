@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """An analyst code's page shows how its selection came about: the codes it was made from (sel.from_code), oldest first,
 each with its finding's note; a code in a finding the reader is not part of is named but not shown; a loop or a long
 chain stops; no address anywhere. Stand-in code book and findings; nothing real touched.

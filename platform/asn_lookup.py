@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Identify networks (AS numbers): company name and type, from free public sources, into data/asns.json.
 
 Sources (no account or key needed; only AS numbers are sent):

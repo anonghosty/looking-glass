@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Intel gathered counts the report day (report_day.py; the user, 2026-11-17: "across reports is supposed to count 16
 Nov only ie yesterday"). A services pattern counted 53 devices across 15 and 16 Nov while the Executive portal, on 16
 Nov, counted 50 (43 on 16 Nov alone). Made-up records only (documentation addresses), no database needed:

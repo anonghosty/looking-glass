@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Consistency check of the publicly accessible / vulnerable services platform: for many filter combinations every
 endpoint must agree (stats, analysis, regions, replayed, stream over the whole day, drill-down lists), in normal and
 demo mode. Read-only; runs against the live service.

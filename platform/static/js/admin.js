@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · admin: users (approve, role, revoke, restore, reset authenticator, kick, delete), live sessions
    and roles & permissions (the audit log and the live sessions: /audit, audit.js). Every change is a JSON POST with the session's CSRF
    token; the server checks the permission again (auth.py). Data is inserted as text only. */

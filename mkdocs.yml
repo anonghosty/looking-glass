@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # The documentation site (Read the Docs, or any MkDocs host), built from the same docs/ folder GitHub shows.
 # Local preview (in a virtual environment):  pip install --require-hashes -r docs/requirements.lock && mkdocs serve
 site_name: Looking Glass

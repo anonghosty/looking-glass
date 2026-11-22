@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the review page (review.js): management's final look at an analyst's request */
 .rv-main { max-width: none; margin: 0 auto; display: grid; gap: 16px; padding: 0 clamp(12px, 2vw, 32px) 60px; }
 .rv-main > * { width: 100%; box-sizing: border-box; }     /* every section across the full width, like the views */

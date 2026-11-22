@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Masked viewers (the external role, demo mode, any account without 'unmasked') see only allowlisted report fields
 (masked_fields.py), and those with host names, addresses, e-mails, dates and IDs masked. The field names below are
 the real ones that reached masked viewers before the allowlist (external review, 2026-11-11), with made-up values.

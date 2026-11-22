@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Discover which Shadowserver collections describe a source -> destination communication, and
 normalise their different layouts into one event schema.
 

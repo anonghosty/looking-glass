@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Counting indexes worked out again behind the page, never while a person waits (the user, 2026-11-17).
 
 Intel gathered (intel.py) and the services patterns (services_intel.py) count every record of the report day in

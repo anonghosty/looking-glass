@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Old code files on update (deploy/stale_files.py): code files a former release shipped and the new one no longer does
 are moved aside to backups/stale-<time>/ with their relative paths, never deleted; files no release ever shipped are
 never moved, only named; nothing else is touched.

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Five workflow fixes from the external review (2026-11-12), each tried the way it went wrong. Nothing real is touched:
 advisories go to a temporary folder, accounts to a temporary users file, the audit log is not written, and no DNS
 look-up leaves the computer (the look-up is counted instead).

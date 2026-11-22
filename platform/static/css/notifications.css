@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the notification bell and its panel (notifications.js), on every page's header */
 .lg-bell { position: relative; }
 .lg-bell .lg-bell-label { display: none; }

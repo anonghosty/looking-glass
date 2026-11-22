@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Locked sign-ins (auth.Throttle limits from .env within bounds; lockouts.py: the admin's list and Unlock). In-process,
 no database, nothing real touched: a fresh Throttle for the counters, the app's own for the routes (test addresses only).
 Run: .venv/bin/python tests/check_lockouts.py"""

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass is thinking (lg-detective.js, 2026-11-15): a detective walks along the report sheets with his
    magnifying glass; a light bulb when he finds something, a shrug when he does not. Still with reduced motion. */
 .dt-stage { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 8px 10px; }

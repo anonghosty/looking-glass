@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Regenerate the documentation glossary (docs/GLOSSARY.md) from the in-app glossary (static/js/glossary.js), so the
 two never drift apart. The hand-written introduction and "Related tools" section of GLOSSARY.md are kept; the
 contents, every group of terms and the A–Z index are rebuilt.

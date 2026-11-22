@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · Settings → Password policy (password_policy.py): passwords expire after N days, and a button that makes
    every account choose a new password at its next sign-in. Both ask for the administrator's own password. */
 (() => {

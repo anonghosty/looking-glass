@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The row hash (line_hash) and failed rows (external review, 2026-11-14).
 
 line_hash stays exactly as the original loader made it, so its two known limits are pinned here (documented in

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The quarterly report and the quarterly purge (r85, the user 2026-11-20).
 
 Once a quarter has ended (the first check after 00:00 UTC on the next quarter's 3rd day, when the quarter's last
@@ -51,6 +53,7 @@ stored rows of every network, and its figures (the admin CSV, the PDFs' retentio
 Installed from features.py: quarterly.install(app, ctx). The PDFs are drawn by quarterly_pdf.py.
 """
 import collections
+import contextlib
 import csv
 import fcntl
 import hashlib
@@ -69,6 +72,7 @@ from datetime import date, datetime, timedelta, timezone
 from flask import Response, g, jsonify, request
 
 import csvsafe
+import job_schedule
 import services
 import sources
 import special_reports
@@ -1467,6 +1471,10 @@ class Refused(Exception):
     """A quarter that cannot be made (not ended yet, or its raw rows were deleted)."""
 
 
+class Waiting(Refused):
+    """Not now: a pipeline run is loading reports (job_schedule.pipeline_paused); the next check tries again."""
+
+
 def build(db, base, quarter, made, today=None, now=None, exclude=(), F=None, scope=None):
     """Make one quarter's outputs and put them in data/quarterly/<Q>/ in one step (the old ones replaced). The permit
     is written only when the report is VALID and made on or before its purge day. Returns its status.json."""
@@ -1656,12 +1664,24 @@ def install(app, ctx):
             busy.update(quarter=quarter, since=time.time(), error="", by=by)
         try:
             os.makedirs(top, mode=0o700, exist_ok=True)
-            with open(os.path.join(top, ".lock"), "w") as lf:
+            # never beside a pipeline run (r91, job_schedule.py): the pipeline's run lock is held shared while the report
+            # is made, so no run starts loading meanwhile, and a run that is loading now makes this wait for the next check
+            with contextlib.ExitStack() as paused:
                 try:
-                    fcntl.flock(lf, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except OSError:
-                    raise Refused("another Looking Glass process is making a quarterly report") from None
-                st = build(ctx["db"], base, quarter, made, exclude=exclude(), F=ctx.get("findings"), scope=ctx.get("settings"))
+                    held = paused.enter_context(job_schedule.pipeline_paused(base))
+                except job_schedule.PipelineBusy:
+                    raise Waiting(job_schedule.BUSY_TEXT) from None
+                if held is None and log:
+                    log.warning("quarterly %s: the database pipeline's run lock could not be read here; the report is made "
+                                "without waiting for a pipeline run", quarter)
+                with open(os.path.join(top, ".lock"), "w") as lf:
+                    try:
+                        fcntl.flock(lf, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except OSError:
+                        raise Refused("a quarterly report is being made by another process, or the database pipeline is "
+                                      "purging: try again in a few minutes") from None
+                    st = build(ctx["db"], base, quarter, made, exclude=exclude(), F=ctx.get("findings"),
+                               scope=ctx.get("settings"))
             if "oldest_day" in st:                     # counted with the report: the cached oldest report day follows
                 remember_oldest(_day(st["oldest_day"]))
             audit.add("quarterly_made", user=by, target=quarter,
@@ -1712,6 +1732,10 @@ def install(app, ctx):
         if quarter and hi.isoformat() > since and not os.path.exists(os.path.join(quarter_dir(base, quarter), "status.json")):
             try:
                 make_now(quarter, "made automatically after the quarter ended", SYSTEM_USER)
+            except Waiting:
+                if log:
+                    log.info("quarterly %s waits: the database pipeline is loading reports; tried again at the next "
+                             "check (in %d minutes)", quarter, CHECK_EVERY // 60)
             except Refused:
                 pass
         if not purge_on(base) and not busy["quarter"] and any(
@@ -1917,7 +1941,8 @@ def install(app, ctx):
             try:
                 fcntl.flock(lf, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except OSError:
-                return jsonify(error="A quarterly report is being made: try again once it is ready."), 409
+                return jsonify(error="A quarterly report is being made, or the database pipeline is purging: try again "
+                                     "in a few minutes."), 409
             if busy["quarter"]:
                 return jsonify(error=f"{busy['quarter']} is being made: try again once it is ready."), 409
             seen = {"quarter": pv["quarter"], "rows": pv["rows"], "purge_day": pv["purge_day"] or pv["next"]["purge_day"],
@@ -1961,6 +1986,8 @@ def install(app, ctx):
                                  "that were not purged can."), 409
         if busy["quarter"]:
             return jsonify(error=f"{busy['quarter']} is being made: wait until it is ready."), 409
+        if job_schedule.pipeline_running(base):        # never beside a pipeline run (r91)
+            return jsonify(error=job_schedule.BUSY_TEXT), 409
         u = me()
 
         def run():

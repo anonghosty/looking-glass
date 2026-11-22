@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The content security policy names outside sources by their exact files, never a whole site (review 2026-11-13 for
 scripts; 2026-11-15 for fetches: connect-src allowed all of cdn.jsdelivr.net for one map file). The sign-in page's globe
 reads its land map from Looking Glass itself, and the file is the one its integrity hash pins. No service needed.

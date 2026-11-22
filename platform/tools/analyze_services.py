@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Analyse the single-host ("publicly accessible / vulnerable services") collections: no src_/dst_ fields, just an ip.
 
 For each one: rows for a day (filename prefix), whether it has a filename index, and its field names

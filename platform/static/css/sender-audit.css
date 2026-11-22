@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Audit portal → Sender check (sender-audit.js) */
 #pane-sender .au-sub-h { margin: 18px 0 8px; }
 .sn-chart-wrap { border: 1px solid var(--border, rgba(255,255,255,.1)); border-radius: 10px; padding: 10px 12px; }

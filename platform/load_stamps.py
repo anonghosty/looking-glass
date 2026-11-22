@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Load stamps: the pipeline marks each report and day it adds rows for (collection lg_load_stamps, written by
 shadowserver_pipeline.stamp_loaded). Both platforms' 15-second check reads these marks, one small query, and counts
 every report's rows only when a mark moved, or every COUNT_EVERY seconds anyway (review of d82a436: the check counted

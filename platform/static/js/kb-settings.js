@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the researchers' work (Settings and the Definitions page):
    1. Infections & categories (network communications): Malpedia look-ups; definitions for the names Malpedia does not know.
    2. Issues (publicly accessible / vulnerable services): CVEs looked up (CISA KEV, EPSS, CVE.org, NVD); definitions for the rest.

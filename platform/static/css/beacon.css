@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Decoded beacons handed over (beacon-handover.js): the hand-over form and a finding's beacons. Text wraps, never cut. */
 .bh-wrap { display: inline-flex; flex-direction: column; gap: 6px; max-width: 100%; }
 .bh-form { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border, #2a2a30); border-radius: 10px;

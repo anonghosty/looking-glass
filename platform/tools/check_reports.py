@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Check the new-report detection: MongoDB row counts per report for a day, how long the check takes, and
 whether the running service has the same reports loaded (via /api/clock).
 

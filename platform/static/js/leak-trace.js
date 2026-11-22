@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · Trace a leak, in the Audit portal (insider.py): text or a file found outside is sent once to
    POST /api/audit/trace, fingerprinted there in memory and thrown away; the answer is the copies and downloads it
    matches. Auditors and administrators only (checked on the server). Every value is inserted as text. */

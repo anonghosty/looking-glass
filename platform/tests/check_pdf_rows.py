@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """PDF tables (analysts' report and advisory): a row is as tall as its tallest cell; a long name breaks at its hyphen;
 the advisory's table head and first row stay on one page with their heading.
 Earlier note: a row is as tall as its tallest cell (the user, 2026-11-18: in the analyst's devices PDF the "Other days"

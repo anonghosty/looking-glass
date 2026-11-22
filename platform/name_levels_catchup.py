@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Every name's criticality learned once from all the reports' records (the user, 2026-11-18: "can't we fix that").
 
 The PDFs' References section flags each infection and issue with the highest severity Shadowserver gave the records

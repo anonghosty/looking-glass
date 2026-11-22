@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The References section of every PDF (the user, 2026-11-18): the references leave the definition cards and are listed
 at the end, one group per defined name (infection, issue, CVE), then the Shadowserver reports, everything ordered by
 criticality and flagged with it. One function for every PDF (advisory, combination, analysis and Executive reports),

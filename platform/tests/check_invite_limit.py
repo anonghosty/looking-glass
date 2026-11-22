@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Add a person (invites.py): at most INVITES_OPEN_MAX sign-up links open at once, refused in fixed words; and nothing
 else an error says reaches the answer (CodeQL py/stack-trace-exposure, 2026-11-20: every ValueError's text was passed
 on). Made-up names only. Run: .venv/bin/python tests/check_invite_limit.py"""

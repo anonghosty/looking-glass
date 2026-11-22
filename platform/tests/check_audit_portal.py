@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The Audit portal and its permission: a role with only 'audit' opens /audit, reads the audit log and the signed-in
 sessions, but cannot end a session ('users' does that) nor open Admin's user list. Settings waits behind its loading line.
 Run: .venv/bin/python tests/check_audit_portal.py"""

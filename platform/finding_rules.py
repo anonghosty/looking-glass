@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Who may move a finding, and where (external review, 2026-11-11).
 
 Before, POST /api/findings/<id>/status took any status from anyone in the finding's channel: a researcher could send

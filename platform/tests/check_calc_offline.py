@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The calculations behind the Executive portal's grades and the analysis's shares, offline (review 2026-11-13).
 - the 7-day grade follows the published scale: a change on small numbers is Normal; "New this week" is Danger only at
   20 or more, under 20 it is Normal (it was amber); every level the grade gives is on the scale

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Ruff (https://docs.astral.sh/ruff/), run on every push and pull request by .github/workflows/checks.yml
 # (static-analysis job): a change that breaks one of these rules fails the checks. CONTRIBUTING.md says how to run it.
 #

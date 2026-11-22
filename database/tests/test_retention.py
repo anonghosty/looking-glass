@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Sorted copies are removed only when old, in MongoDB, and not waiting to load; folders, other files and symlinks stay;
 every removal is noted; the status file says how the run went and warns on low disk (retention.py). No database.
 Run: .venv/bin/python tests/test_retention.py"""

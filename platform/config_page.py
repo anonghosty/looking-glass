@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Settings → Configuration: every setting of the platform's .env except its secrets, explained, for administrators who
 do not work in a terminal (the user, 2026-11-17).
 

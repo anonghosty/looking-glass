@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · PDF reports: download a report built on the server, showing progress on the button. The download
    itself is the platform's one shared helper (LGLoader.download in loader.js, r89): this only words the button. */
 (() => {

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Build / update data/asns.json: one entry per network (AS number) seen in the data, with its company and type.
 
 Usage:  .venv/bin/python manage/asn_registry.py [days]       (default: the last 7 days)

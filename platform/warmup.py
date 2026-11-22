@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Warm-up: the heavy summaries of the Definitions page are worked out in the background, not by the first person who
 opens it (speed review, 2026-11-15: on the first visit after a start, or after the days changed, the page waited 14 s
 for Intel gathered and over 15 s for the services definitions, and its loading logo stayed 21 s).

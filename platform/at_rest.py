@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Encryption at rest: is what Looking Glass keeps on a disk volume that is encrypted? (review of d82a436; NIST SP 800-53
 SC-28). MongoDB Community does not encrypt its files, so the volume does it: LUKS (dm-crypt) on Linux, BitLocker for a
 Windows computer running Looking Glass in WSL. Nothing is changed here: this only looks, for the Task monitor and the

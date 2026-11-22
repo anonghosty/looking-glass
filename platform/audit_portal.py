@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The Audit portal's data (/audit, 2026-11-11): what an IT auditor (for example a CISA-certified one) asks for.
 
 Every answer is read only and needs the 'audit' permission: the auditor role (fixed, auth.AUDITOR_ROLE) and the
@@ -92,6 +94,14 @@ LABEL["quarterly_purge_password_failed"] = "Quarterly purge switch: wrong passwo
 TAB_OF["quarterly_purge_password_failed"] = "config"
 # a library file refused at installation: it did not match its lock (library_supply.py, r86)
 LABEL["library_suspected"], TAB_OF["library_suspected"] = "Library file refused (did not match the lock)", "system"
+# the daily code check (code_integrity.py, r91): each changed or added code file once, and what an administrator did
+LABEL["code_integrity_finding"], TAB_OF["code_integrity_finding"] = "Code file not as the release shipped it", "system"
+LABEL["code_integrity_approved"], TAB_OF["code_integrity_approved"] = "Code file kept as ours", "config"
+LABEL["code_integrity_quarantine_decided"] = "Code file marked not ours (to move to quarantine)"
+TAB_OF["code_integrity_quarantine_decided"] = "config"
+LABEL["code_integrity_removed"] = "Code file marked not ours has left the code folder"
+TAB_OF["code_integrity_removed"] = "system"
+LABEL["code_integrity_password_failed"], TAB_OF["code_integrity_password_failed"] = "Code check: wrong password", "config"
 LABEL["audit_sealed"] = "Entries before the chain sealed"
 TAB_OF["audit_sealed"] = "system"
 LABEL["audit_archive_removed"] = "Old audit archive removed by the retention"

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Who views host-level data is logged (data_access.py; CIS 3.14 "Log Sensitive Data Access", review 2026-11-13): one
 audit entry per view of one host's activity, the hosts behind a figure, a record's details or an analysis, and per host-list
 download; who and what, hosts by reference, NEVER an address; not twice for the same view within the window; never for

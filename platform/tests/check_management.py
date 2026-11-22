@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Management portal: aggregated answers only. Checks every management API answer (both platforms, with and without
 filters, and an executive PDF) for IP addresses, host references or host names, and that other roles are refused.
 

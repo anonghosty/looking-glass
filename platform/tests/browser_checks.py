@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Every page, for every role, in a real browser (the user, 2026-11-18: "tests always to be done"). Signs in as each
 test account on a RUNNING install and opens every page the role's Overview links to. On each page it checks:
 1. keyboard: every visible control is reached by the Tab key, focus is never trapped, and nothing that looks

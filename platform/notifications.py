@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Notifications: what changed in the findings a person takes part in, for the bell in every page's header
 (static/js/notifications.js).
 

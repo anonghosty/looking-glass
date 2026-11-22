@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """gunicorn reads this file automatically (it is in the service's working directory).
 
 HTTPS: when data/tls/cert.pem and data/tls/key.pem exist, Looking Glass is served over HTTPS on the same port.

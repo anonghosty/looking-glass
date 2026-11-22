@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* The film players (mkdocs_hooks.py draws them): YouTube loads only when the reader presses play or a chapter, from
    the privacy-enhanced youtube-nocookie.com; a chapter button (re)starts the film at its time. */
 (function () {

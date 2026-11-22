@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """RULE (the user, 2026-11-20: "this has to be a check ... make sure everywhere that needs a loading screen is well
 done"): every page opens with the loading animation (loader.js: the logo, "Opening …").
 

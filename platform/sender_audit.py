@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Audit portal → Sender check: who really sent the reports, as evidence for the auditor (read only).
 
 The pipeline checks every report e-mail's DKIM signature (mail_auth.py) and records the result in its

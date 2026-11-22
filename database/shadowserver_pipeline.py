@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """
 Shadowserver pipeline: pull report e-mails -> unzip -> sort by service -> load into MongoDB.
 

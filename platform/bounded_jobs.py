@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Background work with a fixed number of worker threads and a bounded waiting list.
 
 Before (external review, 2026-11-12) the Executive page started one thread per new filter combination for its 7-day

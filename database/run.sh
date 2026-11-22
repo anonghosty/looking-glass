@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Run the Shadowserver pipeline. ./run.sh --help for options, ./run.sh --man for the manual.
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"

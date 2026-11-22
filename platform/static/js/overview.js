@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the Overview page: rendered on the server, nothing to load; the cards open the pages with the logo. */
 (() => {
   "use strict";

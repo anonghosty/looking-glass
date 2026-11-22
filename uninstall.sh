@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Looking Glass uninstaller: undoes what ./install.sh set up on this computer.
 #
 #   ./uninstall.sh                     stop and remove the services, the schedule and the global command;
@@ -38,7 +40,7 @@ while [ $# -gt 0 ]; do
     --dry-run|-n) DRY=1 ;;
     --yes|-y) YES=1 ;;
     --i-understand-data-loss) FORCE_DATA=1 ;;
-    -h|--help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '4,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option $1 (./uninstall.sh --help)"; exit 1 ;;
   esac
   shift

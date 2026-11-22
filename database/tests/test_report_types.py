@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """New report types (report_types.py): the first run records the starting point without calling anything new; a type
 that arrives later for the first time is returned and logged once as new; the same type is never new twice; a broken
 state file never stops a run.

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Settings → Workers: the database pipeline's settings, changed from the web app.
 
 What is here (2026-11-12, at the user's request): how the reports are fetched (e-mail or Shadowserver's report API),

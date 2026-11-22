@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · Services on the researchers' page: a report's pattern fields (svc_patterns.py), drawn in the Intel
    gathered window (intel.js calls window.LGServicePatterns.fields(pane, name, onSaved)). The patterns, combinations,
    across reports and sinkholes are drawn by intel.js itself (services_intel.py, /api/intel?section=services).

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """A made-up week of reports for the checks that need report data (the GitHub checks' throwaway MongoDB; review of
 d82a436: check_combos, check_combo_review, check_acodes, check_management and check_ticked_names ran only on servers).
 

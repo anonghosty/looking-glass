@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Beacons on the analyst's map: the Beacon filter, the "Decoded beacons" figure and its Details list.
 
 Each record's beacon label ("CLogin check-in, Android") comes from beacon_decode.field(), which caches per request line,

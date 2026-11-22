@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """File modes (review of d82a436: combos.py and control_map.py were executable): a Python file is executable only when
 it is a script, one that starts with "#!"; every shell script that is run directly (a #! line) is executable. Checked
 in the platform, and in the pipeline beside it when there is one. Nothing is changed. No database needed.

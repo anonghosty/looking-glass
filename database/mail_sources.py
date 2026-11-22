@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Where the Shadowserver report e-mails come from.
 
 MAIL_PROVIDER in .env chooses the source:

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """What an external account may open (the user, 2026-11-21): exactly three things, all masked, plus what every
 signed-in account needs.
 

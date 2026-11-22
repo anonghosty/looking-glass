@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """What the checks tried to reach outside this computer (tests/no_outside/sitecustomize.py wrote it down, and refused
 every one): the places Looking Glass reaches by design are listed, anything else fails the run (exit 1).
 Usage: python tests/no_outside/report.py <the LG_NO_OUTSIDE file>"""

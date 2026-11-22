@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · "Send to": the person a finding goes to (findings.py: a finding is a channel, like a ticket; only the
    people in it see it and its trail). window.LGPeople.picker(kind) → { el, value(), check() } with kind management,
    researcher or analyst: a list of the active accounts that do that job (/api/findings/people), names only. */

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """For checks that drive the advisory routes with a made-up finding: give that finding what a real one has, its devices
 kept with it and a report that comes back as the advisory PDF AND its devices CSV (the rule, 2026-11-18: Generate report
 always gives both; a finding that keeps no devices is refused). Not a test on its own.

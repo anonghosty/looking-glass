@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The severity map (the user, 2026-11-18): every infection and issue the reports carried, with its criticality and where
 the criticality comes from, on the Definitions page. Researchers and administrators only (the user, 2026-11-19).
 

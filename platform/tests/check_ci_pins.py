@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The GitHub checks (.github/workflows) stay hardened (review follow-up item 7, 2026-11-15): every action pinned to a
 full commit, the MongoDB image pinned by digest with a password made in the run (none stored), a database job whose
 skips count as failures, and pip-audit pinned. Reads the workflow files beside platform/ (a release) or in

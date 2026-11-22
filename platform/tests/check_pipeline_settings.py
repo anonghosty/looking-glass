@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Settings → Workers (pipeline_settings.py) and Audit portal → Sender check (sender_audit.py), in-process, against a
 throwaway pipeline folder (its own .env, mail_auth.py, mail state and quarantine): the real pipeline, its .env, the
 audit log and Shadowserver are never touched (the audit log and the API call are replaced for the check).

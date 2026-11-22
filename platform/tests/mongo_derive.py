@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Shared by tests/verify_*.py: independent re-derivation of both platforms' records straight from MongoDB (own code, not the platform's)."""
 import re
 from datetime import datetime, timedelta, timezone

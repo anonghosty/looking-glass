@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Vulnerability (CVE) look-ups for the issues of the publicly accessible / vulnerable services platform.
 
 * NVD (NIST National Vulnerability Database): description, CVSS score and severity, weakness (CWE), dates, references.

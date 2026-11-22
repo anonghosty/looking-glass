@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Who really sent a report e-mail: its DKIM signature, checked here, recorded, never blocking (log only).
 
 Reports reach the pipeline by e-mail, and anyone who knows the mailbox address can send one (external review,

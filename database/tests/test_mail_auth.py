@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The sender check (mail_auth.py), with keys made here and DNS answered here (nothing leaves the computer):
 a correctly signed report passes; a changed body, a changed subject, a forged sender address, a signature by another
 domain, no signature, a missing key, DNS that does not answer and plain garbage are each recorded for what they are;

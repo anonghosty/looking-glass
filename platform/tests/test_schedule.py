@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Simulated days for the replay schedule (no MongoDB needed).  Run: .venv/bin/python tests/test_schedule.py"""
 import os
 import sys

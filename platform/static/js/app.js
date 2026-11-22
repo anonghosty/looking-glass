@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Threat Map front end: Mapbox satellite + deck.gl 3D arcs, live replay of the previous day. */
 (() => {
   "use strict";

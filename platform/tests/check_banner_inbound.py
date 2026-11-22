@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """What masked viewers and researchers get from banners, line hashes and Spam URL records (review 2026-11-13). Offline:
 no server, no database.
 - a masked event carries no line hash, event ID or record ID (a hash of the raw line confirms a guessed address)

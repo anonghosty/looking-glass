@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the severity map on the Definitions page (severity_map.py): every infection and issue the reports
    carried, with its criticality and where it comes from. Researchers and administrators only. Shadowserver's ratings are
    shown, never changed; a name no record rates can be rated by a researcher (audited), and the PDFs flag that rating

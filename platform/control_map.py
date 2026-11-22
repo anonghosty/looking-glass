@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Control checks LG-01… → NIST SP 800-53 Rev. 5 → CIS Critical Security Controls v8.1, for the Audit portal and its report.
 
 Every Looking Glass check names the NIST SP 800-53 Rev. 5 (Release 5.2.0, still the latest in NIST's OSCAL catalogue on

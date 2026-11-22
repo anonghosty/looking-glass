@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the analyst's combination search (/combinations) */
 .cb-main { max-width: 1040px; margin: 0 auto; display: grid; gap: 18px; padding-bottom: 60px; }
 .cb-hero { padding: 26px 26px 22px; border-radius: 20px; border: 1px solid rgba(124, 156, 255, .22);

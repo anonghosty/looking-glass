@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The libraries are installed only when every file matches the lock (r86): every way of installing, checked.
 
 1. Every install path goes through deploy/safe_libraries.py or pip --require-hashes from a lock: the guided installer,

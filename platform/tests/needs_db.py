@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """For checks that read the reports database: without a reachable MongoDB (a fresh clone, CI, a machine without the
 database) they are SKIPPED (exit 77), not crashed with a connection error (review follow-up, 2026-11-12). With MongoDB
 up, nothing changes: a database error later in the check is still a failure.

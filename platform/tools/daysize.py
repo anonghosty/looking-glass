@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """How big is one day? Rows and files per report for a day, counted with the filename index (no collection scan),
 plus the day's time range, top tags and countries.
 

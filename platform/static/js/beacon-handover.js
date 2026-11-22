@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Handing decoded beacons over (beacon_findings.py), and a finding's beacons at the viewer's level.
  *
  * LGBeaconHandover.button(sel, label): a "Hand over" button that opens a small form under it: an analyst or a manager,

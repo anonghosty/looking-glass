@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Locked sign-ins, for admins (2026-11-14): one office or partner behind a single public address can lock itself out
 (20 failures from one address in an hour lock the address), and the locks were invisible until they ran out.
 

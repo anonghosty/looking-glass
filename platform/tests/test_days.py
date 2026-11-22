@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Check which day the replay uses, and how each collection behaves for several days (read-only).
 
 For each test day it loads every registered collection the same way the server does and prints the

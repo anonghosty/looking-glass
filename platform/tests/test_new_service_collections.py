@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """New publicly accessible / vulnerable services report types: detection, field check and what gets announced.
 Uses a throwaway database (lg_svctest_<pid>) on the same MongoDB server and drops it afterwards; the real database
 is only read (to copy sample rows).

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The reverse-proxy trap and the first administrator (external review, 2026-11-11).
 
 1. proxy_guard.py: behind a proxy (TRUST_PROXY=1) a request from the loopback peer without X-Forwarded-For is refused

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The sender check inside the real pull_emails(), with a fake mailbox, keys made here and DNS answered here
 (nothing leaves the computer, nothing touches the real mailbox, folders or database):
 - blocking off (MAIL_AUTH=log): every report is processed, each result recorded;

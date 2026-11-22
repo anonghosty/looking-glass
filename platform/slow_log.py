@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Slow requests, recorded so the pages that are slow in use can be found and fixed (a test installation with little
 data cannot show what a large one costs).
 

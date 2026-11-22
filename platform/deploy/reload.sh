@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Reload the Looking Glass systemd service without sudo: stop its main process (it runs as this user) and let
 # systemd's Restart=always start it again with the current code. With sudo: sudo systemctl restart <service>.
 # The service name is LG_SERVICE, else the first installed of: looking-glass, threatmap.

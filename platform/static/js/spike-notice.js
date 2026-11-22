@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* The spike notice on the Overview's buttons (spike_notice.py): the latest report day against the day before, and
    what is behind a spike or a drop. Analysts and admins see it on the two platform buttons, management on the
    Executive portal's, researchers on Definitions'. Counts and names only; shown only when there is a spike or a drop.

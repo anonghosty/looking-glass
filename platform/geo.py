@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Resolve (country ISO2, region, city) -> (lon, lat) using the Mapbox Geocoding v6 API.
 
 Results are cached in memory and on disk (geocache.json) so each place is looked up once.

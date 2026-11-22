@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Signed checkpoints of the audit log and signed backup checksums (audit_checkpoint.py, review follow-up 2026-11-14),
 on a throwaway log: the key is made once and recorded in the chain; a checkpoint names the head at its entry and is
 signed; a copy goes to the copy folder and never replaces a file there; the verifier finds each checkpoint at its entry,

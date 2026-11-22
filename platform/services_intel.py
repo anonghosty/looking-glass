@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Intel gathered for a publicly accessible / vulnerable services report (the researchers' Services section): what its
 pattern fields (svc_patterns.py) show across the hosts of the report day, and what else those hosts do. One day, the
 report day (report_day.py, the user 2026-11-17), as the Executive portal counts it; the analysts' combination search

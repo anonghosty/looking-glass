@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """A loaded day is kept, with every cached answer, while MongoDB holds the same rows (speed review, 2026-11-15): when
 its 10 minutes are up the rows per report are counted again, and only a change, a forced reload (a report arrived, the
 schedule moved on) or a copy older than DAY_MAX_AGE_SECONDS loads it again. The cache key of a kept copy stays the

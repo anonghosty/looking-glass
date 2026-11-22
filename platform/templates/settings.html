@@ -1,3 +1,5 @@
+{# SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors -#}
 <!doctype html>
 <html lang="en">
 <head>
@@ -131,6 +133,19 @@
     </section>
     {% endif %}
 
+    {# the daily code check: the installed code files against the release's fingerprints (code_integrity.py, code-integrity.js; r91) #}
+    {% if "settings" in lg_perms %}
+    <section class="st-card ci-card" id="cardCode">
+      <h2>Code check <span class="st-for">the installed code against the release</span></h2>
+      <p class="st-hint">Once a day, and a few minutes after each start, Looking Glass compares its code files with the list of
+        fingerprints (SHA-256) its release shipped. A file that was changed, or added to a code folder, is written to the audit log
+        once and shown in your bell. Keep it if it is yours, or mark it as not yours: Looking Glass cannot change its own code, so
+        you then get the command that moves it to a quarantine folder on the server (never deleted). Both need your password
+        and are in the audit log. This compares with the list on this server; the command below compares with the signed release.</p>
+      <div id="ciBody"><div class="st-loading">Reading the last code check…</div></div>
+    </section>
+    {% endif %}
+
     {# the networks (AS numbers): names read-only here (edited on the Definitions page); the Constituent column and Other
        address ranges choose the constituency #}
     {% with readonly=True %}{% include "_net_card.html" %}{% endwith %}
@@ -251,6 +266,7 @@
   {% if "settings" in lg_perms %}<script src="{{ url_for('static', filename='js/quarterly.js') }}"></script>
   <script src="{{ url_for('static', filename='js/pipeline-settings.js') }}"></script>
   <script src="{{ url_for('static', filename='js/password-policy.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/code-integrity.js') }}"></script>
   <script src="{{ url_for('static', filename='js/task-monitor.js') }}"></script>
   <script src="{{ url_for('static', filename='js/config-page.js') }}"></script>{% endif %}
 </body>

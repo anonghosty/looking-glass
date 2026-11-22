@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Survey every collection in the Shadowserver DB: which ones carry source/destination fields?
 
 Read-only. For each collection: estimated size, indexes, field names (union of the latest 3 docs),

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 # Install Looking Glass in this folder: Python environment, .env, data folder and the systemd unit file.
 # Run it as the user the service will run as (not root). It never uses sudo itself: the last step prints the
 # sudo commands that install the service, for you to run.
@@ -18,7 +20,7 @@ while [ $# -gt 0 ]; do
     --no-sources) sources=0; shift ;;
     --port) port="${2:?--port needs a number}"; shift 2 ;;
     --name) name="${2:?--name needs a value}"; shift 2 ;;
-    -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '4,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option $1 (deploy/install.sh --help)"; exit 1 ;;
   esac
 done
@@ -66,15 +68,14 @@ find deploy manage security_testing tests tools -maxdepth 1 \( -name '*.sh' -o -
   | while IFS= read -r -d '' f; do [ "$(head -c2 "$f")" = '#!' ] && chmod +x "$f" || chmod -x "$f"; done
 
 step "4. Service unit (deploy/$name.service)"
-sed -e "s|@USER@|$(id -un)|g" -e "s|@PROJECT@|$project|g" -e "s|@BIND@|$bind|g" \
-  deploy/looking-glass.service.template > "deploy/$name.service"
-# a port under 1024 (443 for a domain with its certificate): the service may bind it, and nothing more. Only that one
-# capability is given; every other stays out of reach (CapabilityBoundingSet), the rest of the sandbox is unchanged
+# one place writes the service file (deploy/service_unit.py, also used after updates): the code read-only for the
+# service, data/ its only writable folder. A port under 1024 (443 for a domain with its certificate): the service may
+# bind it, and nothing more; only that one capability is given, every other stays out of reach (CapabilityBoundingSet)
+python3 deploy/service_unit.py render --user "$(id -un)" --project "$project" --bind "$bind" --out "deploy/$name.service"
 if [ "$port" -lt 1024 ]; then
-  sed -i -e 's/^CapabilityBoundingSet=$/CapabilityBoundingSet=CAP_NET_BIND_SERVICE/' \
-         -e 's/^AmbientCapabilities=$/AmbientCapabilities=CAP_NET_BIND_SERVICE/' "deploy/$name.service"
   echo "port $port is under 1024: the service gets CAP_NET_BIND_SERVICE only (to listen on it), nothing else"
 fi
+echo "the service may read this folder but write only $project/data (deploy/looking-glass.service.template)"
 echo "written for user $(id -un), folder $project, listening on $bind"
 if ! pidof systemd >/dev/null 2>&1 && [ ! -d /run/systemd/system ]; then
   echo "systemd is not running here. On WSL, enable it first (docs/INSTALLATION.md, part A1)."

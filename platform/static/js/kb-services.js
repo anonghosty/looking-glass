@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · Services on the researchers' page (services_kb.py): every publicly accessible / vulnerable services
    report, grouped by what the exposure means; what Shadowserver says, what Looking Glass says, what the reports show here
    (counts only: researchers never see a host), the issues on those hosts (linked to the Issues card), notes, and

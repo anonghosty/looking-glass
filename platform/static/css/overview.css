@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the Overview page of every role (overview.py) and the "Your pages" buttons (_portal_cards.html), which
    the platforms' overview shows too */
 .ov-main { max-width: 1100px; margin: 0 auto; display: grid; gap: 22px; padding: 10px clamp(12px, 2vw, 32px) 60px; }

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Smoke test: build the source registry, load the replay day from all collections, hit the APIs."""
 import json
 import os

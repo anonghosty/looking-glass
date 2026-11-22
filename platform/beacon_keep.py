@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The beacon decoder's public answers, kept across restarts (the user, 2026-11-17: after every restart Intel gathered
 took about 22 s, almost all of it decoding the day's request lines again: 1,535 lines at about 14 ms each).
 

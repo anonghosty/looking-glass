@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """Management decides which views an analyst's report carries.
 
 The researcher's view is a combination (an LG-C / LG-X code): exactly the devices that carry it. When an analyst opens it

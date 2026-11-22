@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """The quarterly reports' two PDFs (quarterly.py), in the Executive report's look (executive_pdf.Doc):
 
   write_management(path, ...)  the management role: the quarter at a glance, reports and networks, regions, sectors,

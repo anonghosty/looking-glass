@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
 """A CVE ticked on an analyst code's page (acodes.py, 2026-11-14): an analyst code of exactly the selection's devices
 that carry it, the same code when ticked again, nothing for a CVE none of them carry, the channel and CSRF rules, and
 no address in the answer. Stand-ins for the code book and the days (no database). Run: .venv/bin/python tests/check_acode_issue.py"""

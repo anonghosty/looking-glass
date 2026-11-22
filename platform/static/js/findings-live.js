@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · findings pages that keep up on their own (findings_live.py; the user, 2026-11-18: a finding sent to
    management did not show on their open Findings page until they refreshed it).
    LGFindingsLive.watch({ refresh, busy }) asks /api/findings/stamp every 15 seconds while the page is in front, and at

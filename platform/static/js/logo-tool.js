@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · Settings → Organisation: size and crop the organisation's logo before it is saved (the user,
    2026-11-19: a wide logo with white margins "looks bad", PNGs without a background, "accommodate sizes and cropping
    ratios which the admin will see ... and the recommended size"). The logo now appears on advisories only (the sign-in
