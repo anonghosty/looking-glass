@@ -160,6 +160,13 @@ to advisory under
 
 ## How it works
 
+The teardown film takes Looking Glass apart, piece by piece: a Shadowserver report and its fields, the web that links
+the same addresses across reports, the team that shares the work, and the system itself.
+
+<!-- film: teardown -->
+
+Every address, website and network name in the film is fictional.
+
 <div class="lg-steps" markdown>
 
 1. **Collect.** The database pipeline fetches your Shadowserver reports with your Shadowserver API key, or reads the

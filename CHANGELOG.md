@@ -5,6 +5,11 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-22 (4)
+### Added
+- The film **Teardown** (5:11, narrated, with captions) on the documentation site's home page under *How it works*,
+  with its chapters.
+
 ## 2026-11-22 (3)
 ### Changed
 - **External accounts no longer see ransomware victims.** The report is left out of their Abused or Compromised view:

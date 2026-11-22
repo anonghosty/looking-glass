@@ -161,6 +161,18 @@ extra:
         - [109, "Part 3: a finding with a name"]
         - [143, "Part 4: when a request can't be read"]
         - [172, "The analyst's call"]
+    teardown:
+      id: Z4crHSWL35k
+      title: "Teardown: Looking Glass, taken apart"
+      length: "5:11"
+      sound: "narrated, with captions"
+      chapters:
+        - [0, "The hunt"]
+        - [33, "Part 1: The report"]
+        - [83, "Part 2: The web"]
+        - [129, "Part 3: The spider"]
+        - [186, "Part 4: The system"]
+        - [287, "Free and open source"]
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/anonghosty/looking-glass
