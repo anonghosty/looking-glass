@@ -5,6 +5,13 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-22 (3)
+### Changed
+- **External accounts no longer see ransomware victims.** The report is left out of their Abused or Compromised view:
+  not listed, not counted in the group totals, and refused if asked for. Even a victim's ransomware group and day
+  could be matched with public leak-site trackers, which list victims by group, date and country. Analysts,
+  administrators and management see it as before.
+
 ## 2026-11-22 (2)
 ### Changed
 - **External accounts see less in Abused or Compromised.** Free text a report writes in words (a defacement's message,

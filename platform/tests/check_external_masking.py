@@ -367,7 +367,7 @@ try:
     ok("the summary answers, with nothing of a host", st == 200 and not leaks(txt), leaks(txt))
     st, txt = icall("/api/intelligence/totals", *EX)
     ok("the Overview card's counts answer", st == 200 and not leaks(txt))
-    for name in sorted(n for n in DB if n in MAP["reports"]):
+    for name in sorted(n for n in DB if n in MAP["reports"] and n not in getattr(I, "EXTERNAL_LEFT_OUT", {"ransomware_victim"})):
         st, txt = icall("/api/intelligence/report", *EX, body={"name": name, "day": D[1], "filters": {}})
         d = json.loads(txt) if st == 200 else {}
         ok(f"{name}: masked rows, no address, name, host or e-mail", st == 200 and d.get("total") and d.get("masked_view") is True
@@ -406,18 +406,29 @@ try:
        all(v == {"hidden"} for k, v in free.items() if not k.endswith("facet")) and not any(v for k, v in free.items() if k.endswith("facet")), free)
     ok("…the short coded fields stay (tag, application, server, method)", d["rows"][0].get("tag") == "defacement"
        and d["rows"][0].get("application") == "wordpress" and d["rows"][0].get("server") == "nginx", d["rows"][0])
-    # a ransomware victim: the group only (the user, 2026-11-22): sector, place, website and published date would,
-    # with the public leak-site trackers, point at one organisation
+    # ransomware victims are left out of the external view entirely (the user, 2026-11-22): even the group and the
+    # day can be matched with the public leak-site trackers, which list victims by group, date and country
     st, t2 = icall("/api/intelligence/report", *EX, body={"name": "ransomware_victim", "day": D[1], "filters": {}})
-    d2 = json.loads(t2) if st == 200 else {}
-    rv = d2.get("rows", [{}])[0]
-    ok("ransomware victims: the group only; sector, city, region, website, published date 'hidden'",
-       rv.get("ransomware") == "examplelocker" and all(rv.get(k) == "hidden" for k in ("sector", "city", "region", "website", "date_published", "entity_name"))
-       # in the rows and the filters (the page's own list of days names that date as a day to choose, which is fine)
-       and not any(s in json.dumps([d2.get("rows"), d2.get("facets"), d2.get("stats")]) for s in ("TEMA", "Communications", "2026-11-19")), rv)
-    ok("…its time is the day only", len(str(rv.get("timestamp", ""))) == 10, rv.get("timestamp"))
+    ok("ransomware victims: refused to an external account (not in their view at all)",
+       st == 404 and "examplelocker" not in t2 and "Lakeside" not in t2, st)
+    st, t2 = icall("/api/intelligence", *EX)
+    cards = [r["name"] for gr in json.loads(t2)["groups"] for r in gr["reports"]] if st == 200 else []
+    ok("…not in their report list", st == 200 and "ransomware_victim" not in cards and "compromised_website" in cards, cards)
+    st_a, ta = icall("/api/intelligence/totals", *AN)
+    st_e, te = icall("/api/intelligence/totals", *EX)
+    grp = "Compromised systems and victims"
+    per = lambda t: next((sum(p["rows"] for p in g_["per_day"]) for g_ in json.loads(t)["groups"] if g_["group"] == grp), None)
+    ok("…and not counted in their group totals (the analyst's totals still count it)",
+       st_a == 200 and st_e == 200 and per(ta) is not None and per(ta) - per(te) == len(DB["ransomware_victim"].rows), (per(ta), per(te)))
     st, t2 = icall("/api/intelligence/report", *AN, body={"name": "ransomware_victim", "day": D[1], "filters": {}})
     ok("…an analyst still sees the whole record", st == 200 and "TEMA" in t2 and "Communications" in t2 and "Lakeside Telecom Ltd" in t2)
+    st, t2 = icall("/api/intelligence", *AN)
+    ok("…and the analyst's report list still has it", st == 200 and "ransomware_victim" in t2)
+    # defence in depth: the row masking still keeps the group only, should a victim row ever reach a masked view
+    import masked_fields
+    mv = masked_fields.intelligence_row(DB["ransomware_victim"].rows[0], I.FIELDS["ransomware_victim"], lambda a: "")
+    ok("…(row masking, kept as a second guard) the group only, everything else 'hidden'",
+       mv.get("ransomware") == "examplelocker" and all(mv.get(k) == "hidden" for k in ("sector", "city", "website", "date_published", "entity_name")), mv)
     st, t2 = icall("/api/intelligence/export.csv", *EX, body={"name": "blocklist", "day": D[1]})
     ok("the CSV export is refused", st == 403)
     st, t2 = icall("/api/intelligence/host", *EX, body={"ip": "192.0.2.1"})

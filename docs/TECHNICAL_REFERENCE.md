@@ -983,8 +983,9 @@ the **Audit portal** (`/audit`). An optional password expiry policy is set in Se
 External accounts (permissions exactly "view"): `external_access.py` holds the allow-list of exact paths (the map, the
 services platform, Abused or Compromised and what every account needs). The sign-in gate refuses every other page and
 API before it runs. Abused or Compromised masks their rows with `masked_fields.intelligence_row`. Free text (`detail`,
-`reason`, `user_agent`) is shown as "hidden" and never offered as a filter, and a ransomware victim keeps only its group
-(`INTEL_FREE_TEXT`, `INTEL_VICTIM_KEPT`); `tests/check_external_masking.py` checks both with made-up records that name
+`reason`, `user_agent`) is shown as "hidden" and never offered as a filter, and the ransomware victims report is left
+out of their view entirely (`intelligence.EXTERNAL_LEFT_OUT`: the report list, the report and the group totals), with
+the group-only row masking kept as a second guard (`INTEL_FREE_TEXT`, `INTEL_VICTIM_KEPT`); `tests/check_external_masking.py` checks both with made-up records that name
 organisations in plain words.
 
 The audit log and its evidence, module by module:

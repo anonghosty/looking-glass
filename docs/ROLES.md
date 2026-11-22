@@ -20,7 +20,7 @@ compare trends, masked.
 | **Advisor** | What do we tell the organisation? | Writes the advisory (subject, description, recommended actions), generates the PDF and CSV for each organisation, marks it sent. | Only the devices of the findings handed to them. |
 | **Auditor** | Was everything done properly? | The Audit portal: who did what and when, the access review, the controls mapping, Trace a leak. | The threat data itself. |
 | **Administrator** | Does the platform run? | Accounts and roles, settings, installation and updates; can act in any role when needed (recorded as such). | Nothing. |
-| **External viewer** | How do the trends compare? | A constituent, or a member of another CSIRT: three pages, read only, to compare trends: network communications, publicly accessible / vulnerable services, and Abused or Compromised. | Addresses, host names, organisations, e-mail addresses, free-text details and real network names (masked); ransomware victims by their group only; no downloads, look-ups or other pages. |
+| **External viewer** | How do the trends compare? | A constituent, or a member of another CSIRT: three pages, read only, to compare trends: network communications, publicly accessible / vulnerable services, and Abused or Compromised. | Addresses, host names, organisations, e-mail addresses, free-text details and real network names (masked); no ransomware victims; no downloads, look-ups or other pages. |
 
 An external viewer sees the whole constituency's trends, masked: the other organisations appear only as aliases.
 The rule follows the permissions: any role whose only permission is "view" gets exactly these three pages.

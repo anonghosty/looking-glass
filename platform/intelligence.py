@@ -100,6 +100,10 @@ NO_IP = "The report names organisations, accounts or domains, not IP addresses: 
 EXTERNAL_NO = "External accounts see Abused or Compromised masked: no download, no look-up of a host, no accounts shown."
 # masked view (external accounts): the fields whose masked value says nothing ("hidden"), never filtered or searched
 MASKED_HIDDEN = {"hostname", "email", "username", "entity_name", "detail", "reason", "user_agent"}   # + free text (review of 9e51e5e)
+# reports external accounts never see at all (the user, 2026-11-22): a ransomware victim's group and day can be matched
+# with public leak-site trackers, which list victims by group, date and country, so even the masked rows point at one
+# organisation. Left out of the report list, the report itself and the group totals.
+EXTERNAL_LEFT_OUT = frozenset({"ransomware_victim"})
 NOT_RECEIVED = "Shadowserver sent no file of this report in the last {days} days: either nothing of this kind was seen in the constituency, or the subscription does not include it. Shadowserver can say which."
 
 
@@ -173,6 +177,15 @@ def install(app, ctx):
         return [(t - timedelta(days=i)).isoformat() for i in range(DAYS)]          # the latest report day first
 
     def entries():
+        """The Intelligence reports this person may see, in group order. External accounts: without the reports left out
+        of their view (EXTERNAL_LEFT_OUT); so the report list, opening a report and the group totals all leave them out.
+        The counts cache (counts) uses all_entries, so analysts' figures never depend on who asked first."""
+        out = all_entries()
+        if external():
+            out = [e for e in out if e["name"] not in EXTERNAL_LEFT_OUT]
+        return out
+
+    def all_entries():
         """The Intelligence reports of the report map, in its group order."""
         try:
             rep = (ctx["report_map"].get() or {}).get("reports") or {}
@@ -210,7 +223,7 @@ def install(app, ctx):
                 return hit[2]
         have = names()
         out = {}
-        for e in entries():
+        for e in all_entries():
             n = e["name"]
             if n not in have:
                 continue
@@ -509,6 +522,6 @@ def install(app, ctx):
                        not_received=len(s["not_received"]))
 
     api = type("IntelligenceAPI", (), {})()
-    api.summary, api.counts, api.read, api.entries = summary, counts, read, entries
+    api.summary, api.counts, api.read, api.entries = summary, counts, read, all_entries
     api.reset = lambda: cache.clear()
     return api

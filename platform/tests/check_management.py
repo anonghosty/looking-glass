@@ -32,6 +32,23 @@ def ok(label, cond, info=""):
 A.store.get(A.replay_now()); A.svc["store"].get(A.replay_now())
 known_ips = {e["src_ip"] for e in A.store.get(A.replay_now()).events if e["src_ip"]} | {e["ip"] for e in A.svc["store"].get(A.replay_now()).events}
 MGMT = {"user": "lg-selftest-mgmt", "role": "management", "perms": {"management"}, "csrf": None}
+# the opaque references of the day's hosts, as the platforms give them (a sample is enough: each is unique to a host)
+known_refs = {A.host_refs.ref(ip) for ip in list(known_ips)[:500]}
+HOST_KEYS = {"ref", "refs", "src_ref", "ip_ref", "src_ip", "dst_ip", "ip", "ips", "hostname", "src_hostname"}
+
+
+def host_keys(o, found=None):
+    """Every key in the answer that would carry a host (at any depth)."""
+    found = set() if found is None else found
+    if isinstance(o, dict):
+        for k, v in o.items():
+            if k in HOST_KEYS:
+                found.add(k)
+            host_keys(v, found)
+    elif isinstance(o, list):
+        for v in o:
+            host_keys(v, found)
+    return found
 
 
 def call(path, args, user=MGMT):
@@ -51,7 +68,13 @@ for platform, filt in (("comms", {}), ("comms", {"attack": "Botnet C2"}), ("serv
     d = json.loads(body)
     ok(f"{platform} {filt or 'everything'}: answers ({time.time() - t:.1f}s, {len(body) // 1024} KB)", code == 200, str(code))
     ok(f"{platform} {filt or 'everything'}: no IP address in the answer", not leaked, ", ".join(leaked[:3]))
-    ok(f"{platform} {filt or 'everything'}: no host references", '"ref' not in body and "src_ip" not in body and '"ip"' not in body)
+    # the answer's fields, not its text: a real C2 domain named "refurnharj.cfd" made the old text search ('"ref')
+    # fail on live data (2026-11-22). A host reference is a key (ref, refs, src_ip, ip...) or the reference value of a
+    # host of the day (host_refs.ref), which is looked for anywhere in the answer.
+    bad_keys = sorted(host_keys(d))
+    host_ref_values = [v for v in known_refs if v and v in body]
+    ok(f"{platform} {filt or 'everything'}: no host references", not bad_keys and not host_ref_values,
+       f"keys {bad_keys[:5]}, references {host_ref_values[:3]}")
     k = d.get("kpis", {})
     print("       ", {x: k[x] for x in list(k)[:6]})
     if platform == "comms":
