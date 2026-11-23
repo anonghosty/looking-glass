@@ -1108,18 +1108,18 @@
    "page": "/intel/"
   },
   "95-guided-installer.png": {
-   "confirmed": "2026-11-22",
+   "confirmed": "2026-11-23",
    "files_sha256": {
-    "install.sh": "5d86efdda05e2ba26ef2042ba834bdff58b150d7187d1991507d697140be1bb6",
+    "install.sh": "92b6324eb5d32d80fd1ddafc1dcfc30746ca66674557cb6df0fe0b0b42afa168",
     "installer_anim.py": "1aef1adf87355a9e4b75b48c170248a3ebb62f0a2bb874cd180e2d240b00ba74"
    },
    "image_sha256": "f6cc15ac55f05742bd24610c0dbd68d34393dbf60038297f5442fc2073ee2f3c",
    "page": "(not a page)"
   },
   "96-guided-installer-progress.png": {
-   "confirmed": "2026-11-22",
+   "confirmed": "2026-11-23",
    "files_sha256": {
-    "install.sh": "5d86efdda05e2ba26ef2042ba834bdff58b150d7187d1991507d697140be1bb6",
+    "install.sh": "92b6324eb5d32d80fd1ddafc1dcfc30746ca66674557cb6df0fe0b0b42afa168",
     "installer_anim.py": "1aef1adf87355a9e4b75b48c170248a3ebb62f0a2bb874cd180e2d240b00ba74"
    },
    "image_sha256": "dcebd3033cb0e1cc20e5f1020142daf63fe6446ddf810eb966a282e2f19a5fe7",

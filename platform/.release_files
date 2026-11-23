@@ -1,5 +1,5 @@
 # Looking Glass: every file this release ships in this folder (deploy/stale_files.py reads it on update)
-# files: 756
+# files: 758
 .env.example
 .gitignore
 README.md
@@ -45,6 +45,7 @@ data/report_map_snapshot.json
 data/service_reports.json
 data_access.py
 db_connect.py
+deploy/caddy_front.sh
 deploy/create_readonly_db_user.py
 deploy/install.sh
 deploy/install_cert.py
@@ -554,6 +555,7 @@ tests/check_beacon_findings.py
 tests/check_beacon_keep.py
 tests/check_beacon_stats.py
 tests/check_beacon_unknown.py
+tests/check_caddy_front.py
 tests/check_calc_offline.py
 tests/check_ci_pins.py
 tests/check_code_collisions.py

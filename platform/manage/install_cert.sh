@@ -27,6 +27,13 @@ args=("$mode" --domain "$1" --cert "$2" --key "$3" --by "$(id -un)")
 [ "$mode" = check ] && exit 0
 bash deploy/reload.sh
 port="$(grep -E '^LG_PORT=' .env 2>/dev/null | cut -d= -f2-)"; port="${port:-443}"
+# Caddy in front (deploy/caddy_front.sh): it serves its own copy of the certificate, so the renewed one is copied
+# there too (needs sudo once), and the site is checked on Caddy's public port
+if head -1 /etc/caddy/Caddyfile 2>/dev/null | grep -q 'Managed by Looking Glass'; then
+  echo "Caddy is in front: copying the renewed certificate to it (sudo asks for your password if needed)"
+  sudo bash deploy/caddy_front.sh sync --project "$project"
+  port="$(sed -n 's#^https://[^:]*:\([0-9]*\) {#\1#p' /etc/caddy/Caddyfile)"
+fi
 cab=(); [ -n "${LG_CA_BUNDLE:-}" ] && cab=(--cacert "$LG_CA_BUNDLE")
 for _ in $(seq 1 30); do
   if curl -sf --max-time 10 "${cab[@]}" --resolve "$1:$port:127.0.0.1" "https://$1:$port/healthz" >/dev/null 2>&1; then

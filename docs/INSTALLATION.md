@@ -151,10 +151,11 @@ In every mode, everything behind the sign-in page needs an account with MFA, and
 over HTTPS. The service must also listen on the network (`deploy/install.sh --network`, or a reverse proxy) and the
 firewall must let the traffic through (A6, A7, B6).
 
-**An internet-facing site always uses HTTPS.** For `public`, the guided installer does not offer "No HTTPS", and a
-self-signed certificate must be confirmed by typing `self-signed`: every visitor's browser would warn, and people who
-learn to click through warnings are what a look-alike site needs. The recommended choice is a certificate bought for a
-domain (B4a).
+**An internet-facing site always uses HTTPS with Caddy in front.** For `public`, the guided installer offers one choice
+only: a certificate for your domain (a free one, for example from Let's Encrypt, or a bought one), with Caddy set up in
+front of Looking Glass (B4a). "No HTTPS", a self-signed certificate and a reverse proxy of your own are not offered for
+`public`: every visitor would see a warning, or Caddy could not be guaranteed in front. Looking Glass itself never
+faces the internet.
 
 ---
 
@@ -407,10 +408,24 @@ The installer checks them before anything is installed, and installs nothing if 
 | DNS | (a note only) the domain does not point to an address of this computer; nothing is asked of an outside service |
 
 Then it copies the certificate with its chain and the key into `platform/data/tls/` (the key readable only by
-Looking Glass's user), listens on port 443 (the service gets only the one capability needed for a port under 1024,
-`CAP_NET_BIND_SERVICE`, and nothing else), opens 443 in `ufw` when it is active, and checks
-`https://lookingglass.example.org` by its name, with the certificate verified as a browser does. The installation is
-recorded in the audit log. Point the domain's DNS record at the server's public address.
+Looking Glass's user) and puts **Caddy** in front: Caddy answers on port 443, and Looking Glass itself listens only on
+this computer (`127.0.0.1`, on a port of its own between 5000 and 5099), so a few deliberately slow connections can
+never hold it up. `deploy/caddy_front.sh` installs Caddy from its own signed package repository (its signing key is
+accepted only with the fingerprint `65760C51EDEA2017CEA2CA15155B6D79CA56EA34`), gives Caddy a root-owned copy of the
+certificate in `/etc/caddy/looking-glass/`, and writes `/etc/caddy/Caddyfile`. Caddy fetches no certificate of its
+own, has no admin endpoint, reads each request in full under time limits (its headers within 10 seconds), speaks
+HTTP/1.1 and HTTP/2 over TCP only, and names itself in no answer. Caddy's service runs locked down (a systemd drop-in,
+`caddy.service.d/looking-glass.conf`): only the right to listen on a low port, nothing writable but its own state
+folder, no new privileges, the usual system calls only. It is kept within 1 GB of memory and 512 processes, staples no
+OCSP answer (it never calls the certificate authority), and a firewall table of Looking Glass's own (`inet lg_caddy`,
+nftables) lets it send only to this computer and holds each address to 100 connections at once
+(`deploy/caddy_front.sh setup --conn-limit N` changes it); those rules are loaded again whenever the nftables service
+starts or reloads. Caddy's security updates install by themselves (its repository is added to Ubuntu's automatic
+updates). It reaches Looking Glass over HTTPS, checking its
+certificate for the domain. A Caddyfile you wrote yourself is never replaced: the installer stops and says so. The
+installer then opens 443 in `ufw` when it is active, and checks `https://lookingglass.example.org` by its name,
+through Caddy, with the certificate verified as a browser does. The installation is recorded in the audit log. Point
+the domain's DNS record at the server's public address.
 
 **Renewal:** the bell warns administrators 30, 14 and 3 days before the certificate expires. Install the renewed one
 as Looking Glass's user; the same checks run first, the previous pair is kept in `data/tls/previous-<time>/`, the
@@ -420,6 +435,8 @@ manage/install_cert.sh lookingglass.example.org new.crt new.key ca-bundle.crt
 manage/install_cert.sh --check lookingglass.example.org new.crt new.key ca-bundle.crt   # the checks only
 manage/install_cert.sh --status                                                       # domain, days left
 ```
+When Caddy is in front, `manage/install_cert.sh` also copies the renewed certificate to Caddy (it asks for sudo once)
+and checks the site on Caddy's port.
 
 ### B5. HTTPS with a reverse proxy **(security)**
 **Caddy** (simplest: it gets and renews certificates by itself when the name is reachable from the internet; on an
@@ -450,6 +467,9 @@ server {
 }
 server { listen 80; server_name lookingglass.example.org; return 301 https://$host$request_uri; }
 ```
+**Keep nginx patched.** When a security advisory concerns nginx's HTTP/2, change `listen 443 ssl http2;` to
+`listen 443 ssl;` until nginx is updated; browsers fall back to HTTP/1.1. Looking Glass itself speaks only HTTP/1.1.
+
 In `.env`:
 - `TRUST_PROXY=1`: the real client address and `https` come from the proxy's headers, so session binding, address checks and Secure cookies work. The proxy **must** send `X-Forwarded-For` (Caddy does by itself; for nginx keep the `proxy_set_header` lines above): a request without it is refused, because it would look like it came from the server itself. The headers are believed only from a proxy on this computer. With `TRUST_PROXY=1`, an SSH tunnel to `<your port>` is refused too (it carries no such header): use the proxy's address. **One proxy, on this computer:** Looking Glass takes the **last** address in `X-Forwarded-For` (the one your proxy added) and the last `X-Forwarded-Proto`, so a proxy that appends to what the visitor sent (nginx's `$proxy_add_x_forwarded_for`) still gives the visitor's real address, never a forged `127.0.0.1`. With two proxies in a row (a CDN or load balancer in front of nginx), the last address is the first proxy's: have the outer one's address replace the header at the inner proxy (nginx `real_ip` module), or the sign-in limits and session binding will see that proxy, not your visitors;
 - `ALLOWED_HOSTS=lookingglass.example.org`;
@@ -577,6 +597,13 @@ folders are never touched. Your own scripts in the code folders are never moved,
 shipped can be moved. To keep former Looking Glass files where they are as well, run the update with `LG_KEEP_STALE=1`:
 it lists what would move and leaves everything in place. If the release's list is missing or looks wrong, nothing is
 moved and the update says why.
+
+> **Public installations with a bought certificate (from this release).** The guided installer now puts Caddy in
+> front of them. An installation made earlier keeps serving the internet directly until you run the guided installer
+> again with the same answers: it moves Looking Glass to `127.0.0.1` and sets up Caddy on the same public port.
+> Internal installations (`local`, `private`), and installations behind your own reverse proxy, need nothing.
+> A public installation that used a self-signed certificate or a proxy of its own needs a certificate for its domain
+> first (a free one, for example from Let's Encrypt, works): public now offers only a certificate with Caddy in front.
 
 > **The service file changed (from the release after 2026-11-21 (6)).** It adds one rule: nothing in `data/` may be
 > run as a program (the service could already write only there). Your own additions, such as an audit checkpoint copy

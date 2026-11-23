@@ -5,6 +5,25 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-23
+### Security
+- **A public installation with a bought certificate has Caddy in front.** A few deliberately slow connections could
+  hold up Looking Glass's own server when it faced the internet directly. Caddy now takes the public port, reads every
+  request in full under time limits, and passes it on to Looking Glass, which listens on the server itself only. Caddy
+  comes from its own signed repository (key pinned by fingerprint), fetches no certificate, has no admin endpoint and
+  names itself in no answer, error answers included. Renewals update Caddy's copy of the certificate; the uninstaller
+  removes only what Looking Glass wrote. Caddy's service runs locked down (systemd's exposure score 1.4 instead of the
+  package's 8.8). It staples no OCSP answer, stays within memory and process limits, may send only to the server
+  itself, and each address may hold at most 100 connections at once. Its security updates install by themselves, and its
+  firewall rules are loaded again whenever the nftables service starts or reloads.
+- **`public` offers one HTTPS choice only:** a certificate for the domain with Caddy in front. A self-signed certificate
+  and a reverse proxy of your own are no longer offered for `public` (they still are for `private`).
+- **After updating:** a public installation with a bought certificate runs the guided installer again with the same
+  answers (see Updating). Others need nothing.
+
+### Added
+- **A check of Caddy's setup** (its configuration, package source and the installer's wiring), run on every release.
+
 ## 2026-11-22 (6)
 ### Changed
 - **Trusting a self-signed certificate is the way, not clicking past the warning.** The installation guide shows how

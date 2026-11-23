@@ -10,6 +10,7 @@ label. The installer offers it, never "No HTTPS" to the internet, and asks a typ
 site; the bell warns before expiry. Needs openssl. Run: .venv/bin/python tests/check_install_cert.py"""
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -194,8 +195,12 @@ print("The installer")
 inst = next((p for p in (os.path.join(HERE, "..", "install.sh"), os.path.join(HERE, "tools", "release_root", "install.sh")) if os.path.isfile(p)))
 s = open(inst, encoding="utf-8").read()
 ok("it offers a certificate bought for a domain", 'domain     "A certificate bought for a domain name' in s and "install_cert.py" in s)
-ok("an internet-facing site is never offered No HTTPS", 'if [ "$ACCESS_MODE" = public ]' in s and "PUBLIC_HTTPS" in s)
-ok("a public self-signed site needs a typed confirmation", "CONFIRM_SELF_SIGNED" in s and "v_confirm_self_signed" in s)
+pub = s.split('if [ "$ACCESS_MODE" = public ]; then', 1)[1].split('elif [ "$ACCESS_MODE" != local ]', 1)[0] if 'if [ "$ACCESS_MODE" = public ]; then' in s else ""
+pub_tags = re.findall(r'^\s+(\w+)\s+"[^"]*"\s*\\?$', pub.split("ask_menu PUBLIC_HTTPS", 1)[-1].split('HTTPS="$REPLY"', 1)[0], re.M)
+ok("an internet-facing site has one HTTPS choice only: a certificate for a domain, with Caddy in front",
+   "ask_menu PUBLIC_HTTPS" in pub and pub_tags == ["domain"], pub_tags)
+ok("…so never No HTTPS, never self-signed, never a proxy of its own", not re.search(r'^\s+(none|selfsigned|proxy)\s+"', pub, re.M)
+   and "CONFIRM_SELF_SIGNED" not in s)
 ok("port 443 gets only the one capability it needs", "CAP_NET_BIND_SERVICE" in open(os.path.join(HERE, "deploy", "install.sh")).read())
 # a service named otherwise than looking-glass (the installer asks): reload.sh, and with it a renewal, reloads the right
 # one (2026-11-15 on lg-fresh: "no Looking Glass service installed", so the renewed certificate was not served)

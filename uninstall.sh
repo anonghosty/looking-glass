@@ -170,6 +170,11 @@ for u in "${UNITS[@]}"; do
   done_ "$u stopped, disabled and removed"
 done
 [ ${#UNITS[@]} -gt 0 ] && { do_ sudo systemctl daemon-reload || true; } || skip "none for this folder"
+# Caddy in front (deploy/caddy_front.sh): only the configuration and certificate copy Looking Glass wrote
+if head -1 /etc/caddy/Caddyfile 2>/dev/null | grep -q 'Managed by Looking Glass' && [ -f "$ROOT/platform/deploy/caddy_front.sh" ]; then
+  do_ sudo bash "$ROOT/platform/deploy/caddy_front.sh" remove || true
+  done_ "Caddy in front: its Looking Glass configuration and certificate copy removed (the caddy package stays)"
+fi
 
 # ------------------------------------------------------------------------------------------------ 2. schedule
 say "${B}2. Pipeline schedule${R}"
