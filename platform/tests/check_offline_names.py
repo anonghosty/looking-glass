@@ -365,7 +365,7 @@ try:
     import subprocess
     sch = os.path.join(tmp, "my lg")
     os.makedirs(os.path.join(sch, "manage")); os.makedirs(os.path.join(sch, "bin"))
-    for f in ("offline_names.py", "attack_map.py"):
+    for f in ("offline_names.py", "attack_map.py", "filesig.py"):
         shutil.copy(os.path.join(ROOT, f), os.path.join(sch, f))
     shutil.copy(os.path.join(ROOT, "manage", "fetch_offline_names.py"), os.path.join(sch, "manage", "fetch_offline_names.py"))
     crontxt = os.path.join(tmp, "cron.txt")

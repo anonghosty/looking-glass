@@ -31,7 +31,7 @@ if not shutil.which("ssh-keygen"):
 tmp = tempfile.mkdtemp(prefix="lg-bk-")
 proj = os.path.join(tmp, "platform")
 os.makedirs(os.path.join(proj, "manage")); os.makedirs(os.path.join(proj, "data"))
-for f in ("audit_checkpoint.py", "audit_verifier.py", "audit_chain.py"):
+for f in ("audit_checkpoint.py", "audit_verifier.py", "audit_chain.py", "filesig.py"):
     shutil.copy(os.path.join(HERE, f), proj)
 for f in ("backup.sh", "verify_backup.sh", "restore_check.sh", "backup_crypt.sh"):
     shutil.copy(os.path.join(HERE, "manage", f), os.path.join(proj, "manage", f))

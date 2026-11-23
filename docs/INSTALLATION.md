@@ -467,9 +467,6 @@ server {
 }
 server { listen 80; server_name lookingglass.example.org; return 301 https://$host$request_uri; }
 ```
-**Keep nginx patched.** When a security advisory concerns nginx's HTTP/2, change `listen 443 ssl http2;` to
-`listen 443 ssl;` until nginx is updated; browsers fall back to HTTP/1.1. Looking Glass itself speaks only HTTP/1.1.
-
 In `.env`:
 - `TRUST_PROXY=1`: the real client address and `https` come from the proxy's headers, so session binding, address checks and Secure cookies work. The proxy **must** send `X-Forwarded-For` (Caddy does by itself; for nginx keep the `proxy_set_header` lines above): a request without it is refused, because it would look like it came from the server itself. The headers are believed only from a proxy on this computer. With `TRUST_PROXY=1`, an SSH tunnel to `<your port>` is refused too (it carries no such header): use the proxy's address. **One proxy, on this computer:** Looking Glass takes the **last** address in `X-Forwarded-For` (the one your proxy added) and the last `X-Forwarded-Proto`, so a proxy that appends to what the visitor sent (nginx's `$proxy_add_x_forwarded_for`) still gives the visitor's real address, never a forged `127.0.0.1`. With two proxies in a row (a CDN or load balancer in front of nginx), the last address is the first proxy's: have the outer one's address replace the header at the inner proxy (nginx `real_ip` module), or the sign-in limits and session binding will see that proxy, not your visitors;
 - `ALLOWED_HOSTS=lookingglass.example.org`;

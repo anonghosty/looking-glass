@@ -31,6 +31,7 @@ import threading
 from datetime import datetime, timezone
 
 from offline_names import ATTACK_FILE, FULL_FILE, TID
+import filesig  # noqa: E402
 
 RULES_FILE = "attack_rules.json"
 MAPPINGS_FILE = "attack_mappings.json"
@@ -158,7 +159,7 @@ class AttackMap:
     def rules(self):
         path = os.path.join(self.dir, RULES_FILE)
         try:
-            m = os.path.getmtime(path)
+            m = filesig.sig(path)
         except OSError:
             return {"rules": [], "names": []}
         if self._rules[0] != m:
@@ -227,14 +228,49 @@ class AttackMap:
                                                    e.get("title"), d.get("def"), d.get("why")))
         return hashlib.sha256(text.encode()).hexdigest()[:16], f"{e.get('type') or '?'} · {e.get('title') or key}"
 
+    @staticmethod
+    def rule_sig(r):
+        """What a rule suggests, as a short fingerprint: a suggestion revised in the shipped rules (for example after
+        checking the report against its Shadowserver page) is noticed by sync()."""
+        if not r:
+            return "none"
+        txt = json.dumps([sorted(r.get("techniques") or []), bool(r.get("nofit")), r.get("certainty", ""), r.get("role", "")])
+        return hashlib.sha256(txt.encode()).hexdigest()[:12]
+
     def _fresh_entry(self, key, e, now):
         r = self.suggest(key, e)
         sig, txt = self.basis(key, e)
-        base = {"first_seen": now, "basis": sig, "basis_text": txt, "note": "", "by": "", "at": ""}
+        base = {"first_seen": now, "basis": sig, "basis_text": txt, "note": "", "by": "", "at": "", "rule_sig": self.rule_sig(r)}
         if r:
             return {**base, "status": "suggested", "techniques": list(r.get("techniques") or []), "rule": r.get("id"),
-                    "certainty": r.get("certainty", "possible"), "role": r.get("role", "exposure"), "why": r.get("why", "")}
+                    "nofit": bool(r.get("nofit")), "certainty": r.get("certainty", "possible"), "role": r.get("role", "exposure"),
+                    "why": r.get("why", "")}
         return {**base, "status": "none", "techniques": [], "rule": "", "certainty": "", "role": "", "why": ""}
+
+    def _revised(self, key, e, m, now):
+        """The shipped suggestion for a report changed: a suggestion or an unmapped report takes the new one; a reviewed
+        mapping goes to "please check" with the new suggestion offered and the reviewed one kept as 'previous'.
+        A mapping made before rule fingerprints existed is only marked when it differs from the new suggestion."""
+        r = self.suggest(key, e)
+        new = self.rule_sig(r)
+        if m.get("rule_sig") == new:
+            return False
+        offer = sorted((r or {}).get("techniques") or [])
+        if not m.get("rule_sig") and m.get("status") in ("reviewed", "suggested") and sorted(m.get("techniques") or []) == offer \
+                and bool(m.get("nofit")) == bool((r or {}).get("nofit")):
+            m["rule_sig"] = new                              # already what the new rule says: nothing to review
+            return True
+        if m.get("status") == "reviewed":
+            m["previous"] = {k: m.get(k) for k in ("techniques", "nofit", "note", "by", "at")}
+            m.update(status="check", rule_sig=new, check_suggest=offer,
+                     check_reason="Looking Glass revised its suggestion for this report after checking it against "
+                                  "Shadowserver's own report page" + (" (no ATT&CK technique fits)" if (r or {}).get("nofit") else ""))
+        elif m.get("status") == "check":
+            m.update(rule_sig=new, check_suggest=offer)
+        else:
+            fresh = self._fresh_entry(key, e, m.get("first_seen") or now)
+            m.update({k: v for k, v in fresh.items() if k != "first_seen"})
+        return True
 
     def sync(self):
         """New reports get their suggestion; a report whose type or description Shadowserver changed goes back to
@@ -251,6 +287,8 @@ class AttackMap:
                     continue
                 sig, txt = self.basis(key, e)
                 if m.get("basis") == sig:
+                    if self._revised(key, e, m, now):        # the shipped suggestion was revised
+                        n += 1
                     continue
                 if m.get("status") in ("reviewed", "check"):
                     if m.get("status") == "reviewed":
@@ -264,7 +302,8 @@ class AttackMap:
             return n
         # cheap when nothing changed: compare first, write only when something is new
         d = self._read()
-        if all(k in d["reports"] and d["reports"][k].get("basis") == self.basis(k, e)[0] for k, e in reports.items()):
+        if all(k in d["reports"] and d["reports"][k].get("basis") == self.basis(k, e)[0]
+               and d["reports"][k].get("rule_sig") == self.rule_sig(self.suggest(k, e)) for k, e in reports.items()):
             return 0
         return self._locked(go)
 
@@ -353,7 +392,7 @@ class AttackMap:
     def kev(self):
         path = os.path.join(self.dir, KEV_FILE)
         try:
-            m = os.path.getmtime(path)
+            m = filesig.sig(path)
         except OSError:
             return {}
         if self._kev[0] != m:
@@ -552,7 +591,8 @@ class AttackMap:
                     ok_.append((key, m))
             now = _now()
             for key, m in ok_:                             # 2. then apply them all, in this one write
-                m.update(status="reviewed", nofit=False, note="", by=user, by_name=name or user, at=now, version=ver)
+                # a "no technique fits" suggestion stays exactly that once confirmed
+                m.update(status="reviewed", nofit=bool(m.get("nofit")), note="", by=user, by_name=name or user, at=now, version=ver)
                 for k in ("previous", "check_reason", "check_suggest", "check_offer", "retired"):
                     m.pop(k, None)
             return [(k, list(m.get("techniques") or [])) for k, m in ok_], skipped

@@ -8,7 +8,6 @@ a filter), same demo masking. Registered from app.py with `register(app, ctx)`.
 import bisect
 import csvsafe
 import io
-import os
 import threading
 import time
 import urllib.parse
@@ -46,6 +45,7 @@ from services import (BANNER, banner_mask, EMPTY,FAMILIES, FILTER_KEYS, SEV_ORDE
                        parse_time, report_info)
 
 import facets as _facets  # noqa: E402  (drop-down counts that follow the other filters)
+import filesig  # noqa: E402
 
 DRILL_LIMIT = 300
 # the request parameters that can change an answer: the filters and the view's own. Cache keys are built from these
@@ -103,7 +103,7 @@ def register(app, ctx):
         if now - net_cache["checked"] > 30:          # the registry file is re-checked at most every 30 s
             net_cache["checked"] = now
             try:
-                stamp = os.path.getmtime(asns.path)
+                stamp = filesig.sig(asns.path)
             except OSError:
                 stamp = None
             if stamp != net_cache["stamp"]:

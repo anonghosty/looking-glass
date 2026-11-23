@@ -84,6 +84,7 @@ run "auth routes: gate, sign-in steps, admin actions (offline)" $PY tests/check_
 run "no API answer carries a secret, every role (in-process)" $PY tests/check_api_no_secrets.py
 run "every route refuses the roles it should, the reviewed permission map (in-process)" $PY tests/check_role_refusals.py
 run "Caddy in front of a public installation: its configuration, source and wiring (offline)" $PY tests/check_caddy_front.py
+run "ATT&CK suggestions checked against Shadowserver's pages; revised ones reach existing mappings (offline)" $PY tests/check_attack_audit.py
 run "security headers, hosts, access modes (offline)" $PY tests/check_cov_security.py
 run "organisation, notes, task monitor, Workers (offline)" $PY tests/check_cov_admin_tools.py
 run "analyst codes: making, reading, channel rules (offline)" $PY tests/check_cov_acodes.py

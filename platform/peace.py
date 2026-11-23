@@ -16,6 +16,7 @@ import time
 
 import auth
 from flask import g, jsonify, request
+import filesig  # noqa: E402
 
 
 class Peace:
@@ -26,7 +27,7 @@ class Peace:
 
     def _load(self):
         try:
-            m = os.path.getmtime(self.path)
+            m = filesig.sig(self.path)
         except OSError:
             return {}
         if self._c[0] != m:

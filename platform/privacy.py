@@ -20,6 +20,7 @@ import os
 import re
 import threading
 import time
+import filesig  # noqa: E402
 
 IPV4 = re.compile(r"\b(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}\b")
 IPV4_FULL = re.compile(r"\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b")
@@ -48,7 +49,7 @@ class AsnRegistry:
             return
         self._checked = now
         try:
-            m = os.path.getmtime(self.path)
+            m = filesig.sig(self.path)
         except OSError:
             return
         if m == self.mtime:

@@ -1,104 +1,1866 @@
 {
-  "about": "Shipped with Looking Glass (attack_map.py). The SUGGESTED MITRE ATT&CK techniques for each Shadowserver report, from its name, type and group. The first rule that matches a report gives its suggestion, which a researcher confirms or changes on the Definitions page; a reviewed mapping is never replaced by a suggestion. certainty: observed = the report saw it happen; possible = an exposure an attacker could use. role: used = 'this device was used for ...'; target = 'this address was the target of ...'; host = 'this host was used for ...'; exposure = 'attackers can use this exposure for ...'. shortlist: the techniques the picker offers first. Reports no rule matches are 'not mapped yet' and are asked about on the Definitions page.",
-  "version": 1,
-  "rules": [
-    {"id": "sinkhole-dns", "match": {"report": "^event[46]_sinkhole_dns$"},
-     "techniques": ["T1071.004"], "certainty": "observed", "role": "used",
-     "why": "The device looked up a command-and-control name that now points at a sinkhole (C2 over DNS).",
-     "shortlist": ["T1071.004", "T1071", "T1568", "T1568.002", "T1071.001", "T1572"]},
-    {"id": "sinkhole-http", "match": {"report": "^event[46]_(microsoft_)?sinkhole_http(_referer)?$"},
-     "techniques": ["T1071.001"], "certainty": "observed", "role": "used",
-     "why": "The device contacted a sinkholed command-and-control server over HTTP (C2 over web protocols).",
-     "shortlist": ["T1071.001", "T1071", "T1568", "T1568.002", "T1573", "T1102", "T1105"]},
-    {"id": "sinkhole", "match": {"report": "^event[46]_(microsoft_)?sinkhole$"},
-     "techniques": ["T1071.001", "T1071.004"], "certainty": "observed", "role": "used",
-     "why": "The device contacted a sinkholed command-and-control server (C2 over web protocols or DNS).",
-     "shortlist": ["T1071", "T1071.001", "T1071.004", "T1095", "T1568", "T1568.002", "T1573", "T1008"]},
-    {"id": "initial-access-broker", "match": {"report": "^event[46]_initial_access_broker$"},
-     "techniques": ["T1071"], "certainty": "observed", "role": "used",
-     "why": "The device contacted infrastructure of malware used to sell access to victims (command and control).",
-     "shortlist": ["T1071", "T1071.001", "T1133", "T1078", "T1105"]},
-    {"id": "brute-force", "match": {"type": ["brute-force"]},
-     "techniques": ["T1110.001"], "certainty": "observed", "role": "used",
-     "why": "The device tried to log in to a decoy system by guessing passwords.",
-     "shortlist": ["T1110.001", "T1110", "T1110.003", "T1110.004", "T1078", "T1021.004"]},
-    {"id": "ddos-amplification-victim", "match": {"report": "^event4_honeypot_ddos_(amp|target)$"},
-     "techniques": ["T1498.002"], "certainty": "observed", "role": "target",
-     "why": "Decoy amplifiers received forged requests in this address's name: it was the target of a reflection attack.",
-     "shortlist": ["T1498.002", "T1498", "T1498.001", "T1499"]},
-    {"id": "ddos-participant", "match": {"type": ["ddos"]},
-     "techniques": ["T1498"], "certainty": "observed", "role": "used",
-     "why": "The device took part in a denial-of-service attack.",
-     "shortlist": ["T1498", "T1498.001", "T1498.002", "T1499", "T1499.002"]},
-    {"id": "spoofer", "match": {"type": ["masquerade"]},
-     "techniques": ["T1498.002"], "certainty": "possible", "role": "exposure",
-     "why": "The network lets devices send packets with forged sender addresses, which reflection attacks depend on.",
-     "shortlist": ["T1498.002", "T1498"]},
-    {"id": "scanner", "match": {"type": ["scanner"]},
-     "techniques": ["T1595"], "certainty": "observed", "role": "used",
-     "why": "The device scanned the internet (it reached decoy systems looking for services).",
-     "shortlist": ["T1595", "T1595.001", "T1595.002", "T1046", "T1190", "T1210"]},
-    {"id": "darknet", "match": {"report": "^event[46]_honeypot_darknet$"},
-     "techniques": ["T1595.001"], "certainty": "observed", "role": "used",
-     "why": "The device sent traffic to unused address space, as scanning does.",
-     "shortlist": ["T1595", "T1595.001", "T1046"]},
-    {"id": "malware-distribution", "match": {"report": "^(malware_url|sandbox_url)$"},
-     "techniques": ["T1189"], "certainty": "observed", "role": "host",
-     "why": "The host served malware or a link to it (drive-by delivery, traffic distribution).",
-     "shortlist": ["T1189", "T1608.001", "T1105", "T1204.002", "T1566.002"]},
-    {"id": "sandbox-c2", "match": {"report": "^sandbox_conn$"},
-     "techniques": ["T1071"], "certainty": "observed", "role": "host",
-     "why": "Malware run in a sandbox connected to this host: it serves the malware's command and control.",
-     "shortlist": ["T1071", "T1071.001", "T1095", "T1105", "T1583.003", "T1584.004"]},
-    {"id": "sandbox-dns", "match": {"report": "^sandbox_dns$"},
-     "techniques": ["T1071.004"], "certainty": "observed", "role": "host",
-     "why": "Malware run in a sandbox looked up names that resolve to this host.",
-     "shortlist": ["T1071.004", "T1071", "T1568", "T1568.002"]},
-    {"id": "spam", "match": {"type": ["spam"]},
-     "techniques": ["T1566.002"], "certainty": "observed", "role": "host",
-     "why": "A link to this host was found in spam (phishing by link).",
-     "shortlist": ["T1566.002", "T1566", "T1598.003", "T1608.005"]},
-    {"id": "ransomware-victim", "match": {"report": "^ransomware_victim$"},
-     "techniques": ["T1486"], "certainty": "observed", "role": "target",
-     "why": "The organisation was named as a ransomware victim (data encrypted or stolen for extortion).",
-     "shortlist": ["T1486", "T1657", "T1567", "T1490"]},
-    {"id": "open-proxy", "match": {"report": "^(scan6?_http_proxy|scan_socks|population6?_http_proxy|scan6?_ip_tunnel)$"},
-     "techniques": ["T1090"], "certainty": "possible", "role": "exposure",
-     "why": "An open proxy or tunnel: attackers can send their traffic through it and hide behind its address.",
-     "shortlist": ["T1090", "T1090.002", "T1090.003", "T1572"]},
-    {"id": "amplifier", "match": {"group": ["Can be abused for attacks (amplification, tunnels)"],
-                                  "report": "^(scan6?_(dns|ntp|ntpmonitor|ssdp|memcached|chargen|qotd|snmp|ldap_udp|mdns|portmapper|netbios|ws_discovery|ubiquiti|slp|coap|tftp|xdmcp|dvr_dhcpdiscover|ard|rdpeudp|db2|mssql|ddos_middlebox|loop_dos|sip|cwmp|ipmi|nat_pmp)|scan6?_.*)$"},
-     "techniques": ["T1498.002"], "certainty": "possible", "role": "exposure",
-     "why": "The service answers small forged requests with large replies: attackers can use the host as a tool to flood someone else (the victim is elsewhere).",
-     "shortlist": ["T1498.002", "T1498", "T1499"]},
-    {"id": "amplifier-by-name", "match": {"report": "^scan6?_(dns|ntp|ntpmonitor|ssdp|memcached|chargen|qotd|snmp|ldap_udp|mdns|portmapper|netbios|ws_discovery|ubiquiti|slp|coap|tftp|dvr_dhcpdiscover|rdpeudp|db2|mssql|ddos_middlebox|loop_dos)$"},
-     "techniques": ["T1498.002"], "certainty": "possible", "role": "exposure",
-     "why": "The service answers small forged requests with large replies: attackers can use the host as a tool to flood someone else (the victim is elsewhere).",
-     "shortlist": ["T1498.002", "T1498", "T1499"]},
-    {"id": "remote-access", "match": {"report": "^scan6?_(rdp|vnc|telnet|ssh|radmin|ard|xdmcp|smb|msrpc|adb|mikrotik_service|kubernetes|docker|ipmi|ftp|cisco_smart_install|epmd|afp|rsync)$"},
-     "techniques": ["T1133", "T1021"], "certainty": "possible", "role": "exposure",
-     "why": "A remote access or management service open to the internet: attackers can log in or take control through it.",
-     "shortlist": ["T1133", "T1021", "T1021.001", "T1021.002", "T1021.004", "T1021.005", "T1078", "T1110", "T1190"]},
-    {"id": "ics-exposed", "match": {"report": "^scan6?_ics$"},
-     "techniques": ["T0883"], "certainty": "possible", "role": "exposure",
-     "why": "An industrial control system reachable from the internet: attackers can connect to it directly.",
-     "shortlist": ["T0883", "T0886", "T0822", "T0866", "T0846"]},
-    {"id": "open-database", "match": {"report": "^scan6?_(elasticsearch|mongodb|redis|couchdb|mysql|postgres|hadoop|amqp|mqtt|mqtt_anon|activemq|ldap_tcp)$"},
-     "techniques": ["T1530", "T1213"], "certainty": "possible", "role": "exposure",
-     "why": "A database or data service open to the internet: attackers can read or change the data it holds.",
-     "shortlist": ["T1530", "T1213", "T1190", "T1078", "T1485", "T1486"]},
-    {"id": "vulnerable-public-facing", "match": {"group": ["Known vulnerability"]},
-     "techniques": ["T1190"], "certainty": "possible", "role": "exposure",
-     "why": "A public-facing service with a known weakness: attackers can exploit it to get in.",
-     "shortlist": ["T1190", "T1210", "T1133", "T1557", "T1040"]},
-    {"id": "vulnerable-by-name", "match": {"report": "^scan6?_(http_vulnerable|exchange|imap_vulnerable|pop3_vulnerable|smtp_vulnerable|netis_router|synfulknock|isakmp)$"},
-     "techniques": ["T1190"], "certainty": "possible", "role": "exposure",
-     "why": "A public-facing service with a known weakness: attackers can exploit it to get in.",
-     "shortlist": ["T1190", "T1210", "T1133"]}
-  ],
-  "names": [
-    {"id": "dga", "match": "(^|[._-])dga([._-]|$)",
-     "techniques": ["T1568.002"], "certainty": "observed", "role": "used",
-     "why": "Shadowserver names it a DGA family: its malware generates the names of its command-and-control servers."}
-  ]
+ "about": "Shipped with Looking Glass (attack_map.py). The SUGGESTED MITRE ATT&CK techniques for each Shadowserver report, from its name, type and group. The first rule that matches a report gives its suggestion, which a researcher confirms or changes on the Definitions page; a reviewed mapping is never replaced by a suggestion. certainty: observed = the report saw it happen; possible = an exposure an attacker could use. role: used = 'this device was used for ...'; target = 'this address was the target of ...'; host = 'this host was used for ...'; exposure = 'attackers can use this exposure for ...'. shortlist: the techniques the picker offers first. Reports no rule matches are 'not mapped yet' and are asked about on the Definitions page. Rules whose id starts with ss- were checked against the report's own Shadowserver page (2026-11-23; source = the page); nofit = the suggestion is that no ATT&CK technique fits.",
+ "version": 1,
+ "rules": [
+  {
+   "id": "ss-blocklist",
+   "match": {
+    "report": "^blocklist$"
+   },
+   "techniques": [],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Shadowserver's page describes awareness of what is visible, not attacker behaviour: no ATT&CK technique fits.",
+   "shortlist": [],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/blocklist-report/",
+   "nofit": true
+  },
+  {
+   "id": "ss-compromised_account",
+   "match": {
+    "report": "^compromised_account$"
+   },
+   "techniques": [
+    "T1078"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Attackers probably hold this account's password and can sign in as its owner.",
+   "shortlist": [
+    "T1078"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/compromised-account-report/"
+  },
+  {
+   "id": "ss-compromised_website",
+   "match": {
+    "report": "^compromised_website$"
+   },
+   "techniques": [
+    "T1505.003",
+    "T1189"
+   ],
+   "certainty": "observed",
+   "role": "host",
+   "why": "The site was found compromised: it carries a web shell or implant, or serves injected script that attacks its visitors.",
+   "shortlist": [
+    "T1505.003",
+    "T1189"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/compromised-website-report/"
+  },
+  {
+   "id": "ss-device_id",
+   "match": {
+    "report": "^device_id$"
+   },
+   "techniques": [],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Shadowserver's page describes awareness of what is visible, not attacker behaviour: no ATT&CK technique fits.",
+   "shortlist": [],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/device-identification-report/",
+   "nofit": true
+  },
+  {
+   "id": "ss-device_id6",
+   "match": {
+    "report": "^device_id6$"
+   },
+   "techniques": [],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Shadowserver's page describes awareness of what is visible, not attacker behaviour: no ATT&CK technique fits.",
+   "shortlist": [],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/device-identification-report/",
+   "nofit": true
+  },
+  {
+   "id": "ss-event4_honeypot_darknet",
+   "match": {
+    "report": "^event4_honeypot_darknet$"
+   },
+   "techniques": [
+    "T1595.001"
+   ],
+   "certainty": "possible",
+   "role": "used",
+   "why": "The device sent traffic to unused address space. Usually scanning or malware spreading, but it can be replies from a DDoS victim.",
+   "shortlist": [
+    "T1595.001"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/honeypot-darknet-events-report/"
+  },
+  {
+   "id": "ss-event4_honeypot_ddos",
+   "match": {
+    "report": "^event4_honeypot_ddos$"
+   },
+   "techniques": [
+    "T1498"
+   ],
+   "certainty": "observed",
+   "role": "host",
+   "why": "This host sent botnet orders to flood a victim: it is a command server directing a denial-of-service attack.",
+   "shortlist": [
+    "T1498"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/honeypot-ddos-events/"
+  },
+  {
+   "id": "ss-event4_honeypot_ddos_target",
+   "match": {
+    "report": "^event4_honeypot_ddos_target$"
+   },
+   "techniques": [
+    "T1498",
+    "T1499"
+   ],
+   "certainty": "observed",
+   "role": "target",
+   "why": "Botnet control servers ordered their bots to flood this address, so it was the target of a denial of service attack.",
+   "shortlist": [
+    "T1498",
+    "T1499"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/honeypot-ddos-target-events-report/"
+  },
+  {
+   "id": "ss-event4_honeypot_http_scan",
+   "match": {
+    "report": "^event4_honeypot_http_scan$"
+   },
+   "techniques": [
+    "T1595.002",
+    "T1190"
+   ],
+   "certainty": "observed",
+   "role": "used",
+   "why": "The device sent web requests to decoy servers looking for, or trying to exploit, known flaws in web software.",
+   "shortlist": [
+    "T1595.002",
+    "T1190"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/honeypot-http-scanner-events/"
+  },
+  {
+   "id": "ss-event4_microsoft_sinkhole",
+   "match": {
+    "report": "^event4_microsoft_sinkhole$"
+   },
+   "techniques": [
+    "T1095"
+   ],
+   "certainty": "observed",
+   "role": "used",
+   "why": "The device contacted a sinkholed command-and-control server over plain TCP or UDP (not web or DNS).",
+   "shortlist": [
+    "T1095"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/microsoft-sinkhole-events-report/"
+  },
+  {
+   "id": "ss-event4_sinkhole",
+   "match": {
+    "report": "^event4_sinkhole$"
+   },
+   "techniques": [
+    "T1095",
+    "T1071"
+   ],
+   "certainty": "observed",
+   "role": "used",
+   "why": "The device contacted a sinkholed control server over TCP or UDP outside the web, a sign of malware calling home.",
+   "shortlist": [
+    "T1095",
+    "T1071"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/sinkhole-events-report/"
+  },
+  {
+   "id": "ss-event4_sinkhole_dns",
+   "match": {
+    "report": "^event4_sinkhole_dns$"
+   },
+   "techniques": [
+    "T1071.004"
+   ],
+   "certainty": "possible",
+   "role": "used",
+   "why": "A resolver here looked up a sinkholed command-and-control name for some device behind it, which is probably infected.",
+   "shortlist": [
+    "T1071.004"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/sinkhole-dns-events-report/"
+  },
+  {
+   "id": "ss-event4_sinkhole_http_referer",
+   "match": {
+    "report": "^event4_sinkhole_http_referer$"
+   },
+   "techniques": [
+    "T1189"
+   ],
+   "certainty": "possible",
+   "role": "host",
+   "why": "A web page on this host sent visitors' browsers to a formerly malicious domain, as injected links or scripts do.",
+   "shortlist": [
+    "T1189"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/sinkhole-http-referer-events-report/"
+  },
+  {
+   "id": "ss-event6_sinkhole",
+   "match": {
+    "report": "^event6_sinkhole$"
+   },
+   "techniques": [
+    "T1071",
+    "T1095"
+   ],
+   "certainty": "observed",
+   "role": "used",
+   "why": "The device contacted a sinkholed command-and-control server over a non-web protocol.",
+   "shortlist": [
+    "T1071",
+    "T1095"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/sinkhole-events-report/"
+  },
+  {
+   "id": "ss-event6_sinkhole_http_referer",
+   "match": {
+    "report": "^event6_sinkhole_http_referer$"
+   },
+   "techniques": [
+    "T1189"
+   ],
+   "certainty": "possible",
+   "role": "host",
+   "why": "A web page on this host sent visitors' browsers to a formerly malicious domain, as injected links or scripts do.",
+   "shortlist": [
+    "T1189"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/sinkhole-http-referer-events-report/"
+  },
+  {
+   "id": "ss-malware_url",
+   "match": {
+    "report": "^malware_url$"
+   },
+   "techniques": [
+    "T1608.001",
+    "T1105"
+   ],
+   "certainty": "observed",
+   "role": "host",
+   "why": "Attacks on other systems told them to download files from this host, so it was used to stage and deliver malware.",
+   "shortlist": [
+    "T1608.001",
+    "T1105"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/malware-url-report/"
+  },
+  {
+   "id": "ss-population6_isakmp",
+   "match": {
+    "report": "^population6_isakmp$"
+   },
+   "techniques": [],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Shadowserver's page describes awareness of what is visible, not attacker behaviour: no ATT&CK technique fits.",
+   "shortlist": [],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-isakmp-report/",
+   "nofit": true
+  },
+  {
+   "id": "ss-population6_msmq",
+   "match": {
+    "report": "^population6_msmq$"
+   },
+   "techniques": [
+    "T1190"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A message queue service open to the internet; it has had serious remote code flaws attackers can exploit to get in.",
+   "shortlist": [
+    "T1190"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-msmq-service-report/"
+  },
+  {
+   "id": "ss-population_isakmp",
+   "match": {
+    "report": "^population_isakmp$"
+   },
+   "techniques": [],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Shadowserver's page describes awareness of what is visible, not attacker behaviour: no ATT&CK technique fits.",
+   "shortlist": [],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-isakmp-report/",
+   "nofit": true
+  },
+  {
+   "id": "ss-population_msmq",
+   "match": {
+    "report": "^population_msmq$"
+   },
+   "techniques": [
+    "T1190"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A message queue service open to the internet; it has had serious remote code flaws attackers can exploit to get in.",
+   "shortlist": [
+    "T1190"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-msmq-service-report/"
+  },
+  {
+   "id": "ss-population_ntrip",
+   "match": {
+    "report": "^population_ntrip$"
+   },
+   "techniques": [],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Shadowserver's page describes awareness of what is visible, not attacker behaviour: no ATT&CK technique fits.",
+   "shortlist": [],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-ntrip-report/",
+   "nofit": true
+  },
+  {
+   "id": "ss-ransomware_victim",
+   "match": {
+    "report": "^ransomware_victim$"
+   },
+   "techniques": [
+    "T1657"
+   ],
+   "certainty": "observed",
+   "role": "target",
+   "why": "A ransomware group named the organisation on its leak site to extort payment; encryption is likely but not shown.",
+   "shortlist": [
+    "T1657"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/ransomware-victim-report/"
+  },
+  {
+   "id": "ss-sandbox_conn",
+   "match": {
+    "report": "^sandbox_conn$"
+   },
+   "techniques": [
+    "T1071"
+   ],
+   "certainty": "possible",
+   "role": "host",
+   "why": "Malware run in a sandbox connected to this host; it may be the malware's control server, a download site or a scan target.",
+   "shortlist": [
+    "T1071"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/sandbox-connection-report/"
+  },
+  {
+   "id": "ss-sandbox_url",
+   "match": {
+    "report": "^sandbox_url$"
+   },
+   "techniques": [
+    "T1071.001"
+   ],
+   "certainty": "possible",
+   "role": "host",
+   "why": "Malware run in a sandbox requested a web address on this host. It may be control or download traffic, or harmless.",
+   "shortlist": [
+    "T1071.001"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/sandbox-url-report/"
+  },
+  {
+   "id": "ss-scan6_activemq",
+   "match": {
+    "report": "^scan6_activemq$"
+   },
+   "techniques": [
+    "T1190"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A message broker open to the internet with known remote code execution flaws: attackers can exploit it to get in.",
+   "shortlist": [
+    "T1190"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-activemq-service-report/"
+  },
+  {
+   "id": "ss-scan6_cwmp",
+   "match": {
+    "report": "^scan6_cwmp$"
+   },
+   "techniques": [
+    "T1190"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A router management service open to the internet: botnets have exploited flaws in it to take over devices.",
+   "shortlist": [
+    "T1190"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-cwmp-report/"
+  },
+  {
+   "id": "ss-scan6_elasticsearch",
+   "match": {
+    "report": "^scan6_elasticsearch$"
+   },
+   "techniques": [
+    "T1213.006"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A database open to the internet: attackers can read, change or delete the data it holds.",
+   "shortlist": [
+    "T1213.006"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-elasticsearch-report/"
+  },
+  {
+   "id": "ss-scan6_ftp",
+   "match": {
+    "report": "^scan6_ftp$"
+   },
+   "techniques": [
+    "T1040"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Plain FTP sends passwords and files unencrypted: anyone on the network path can read them.",
+   "shortlist": [
+    "T1040"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-ftp-report/"
+  },
+  {
+   "id": "ss-scan6_http",
+   "match": {
+    "report": "^scan6_http$"
+   },
+   "techniques": [],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Shadowserver's page describes awareness of what is visible, not attacker behaviour: no ATT&CK technique fits.",
+   "shortlist": [],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-http-report/",
+   "nofit": true
+  },
+  {
+   "id": "ss-scan6_imap",
+   "match": {
+    "report": "^scan6_imap$"
+   },
+   "techniques": [
+    "T1110"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A mail login service open to the internet: attackers can guess passwords against it.",
+   "shortlist": [
+    "T1110"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-imap-report/"
+  },
+  {
+   "id": "ss-scan6_isakmp",
+   "match": {
+    "report": "^scan6_isakmp$"
+   },
+   "techniques": [
+    "T1190",
+    "T1498.002"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Some listed VPN services have known critical flaws attackers exploit; others can be used to flood third parties.",
+   "shortlist": [
+    "T1190",
+    "T1498.002"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/vulnerable-isakmp-report/"
+  },
+  {
+   "id": "ss-scan6_ldap_tcp",
+   "match": {
+    "report": "^scan6_ldap_tcp$"
+   },
+   "techniques": [
+    "T1590"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A directory server open to the internet: attackers can read details about the organisation's network and accounts.",
+   "shortlist": [
+    "T1590"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-ldap-tcp-report/"
+  },
+  {
+   "id": "ss-scan6_mongodb",
+   "match": {
+    "report": "^scan6_mongodb$"
+   },
+   "techniques": [
+    "T1213",
+    "T1190"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A database open to the internet, often without a password; attackers can read its data or exploit a known flaw.",
+   "shortlist": [
+    "T1213",
+    "T1190"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-mongodb-report/"
+  },
+  {
+   "id": "ss-scan6_mqtt",
+   "match": {
+    "report": "^scan6_mqtt$"
+   },
+   "techniques": [
+    "T1213"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A message broker open to the internet: anyone can read the messages it carries, often without a password.",
+   "shortlist": [
+    "T1213"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-mqtt-report/"
+  },
+  {
+   "id": "ss-scan6_mqtt_anon",
+   "match": {
+    "report": "^scan6_mqtt_anon$"
+   },
+   "techniques": [
+    "T1213"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A message broker that lets anyone connect without a password: attackers can read the data passing through it.",
+   "shortlist": [
+    "T1213"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-mqtt-report/"
+  },
+  {
+   "id": "ss-scan6_mysql",
+   "match": {
+    "report": "^scan6_mysql$"
+   },
+   "techniques": [
+    "T1213"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A database open to the internet: attackers who get in can read or change the data it holds.",
+   "shortlist": [
+    "T1213"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-mysql-server-report/"
+  },
+  {
+   "id": "ss-scan6_pop3",
+   "match": {
+    "report": "^scan6_pop3$"
+   },
+   "techniques": [
+    "T1110"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A mail login open to the internet: attackers can guess passwords against it.",
+   "shortlist": [
+    "T1110"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-pop3-report/"
+  },
+  {
+   "id": "ss-scan6_pop3_vulnerable",
+   "match": {
+    "report": "^scan6_pop3_vulnerable$"
+   },
+   "techniques": [
+    "T1040",
+    "T1110.001"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Mail login without encryption: passwords can be read on the way, and the open login invites password guessing.",
+   "shortlist": [
+    "T1040",
+    "T1110.001"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/vulnerable-pop3-report/"
+  },
+  {
+   "id": "ss-scan6_postgres",
+   "match": {
+    "report": "^scan6_postgres$"
+   },
+   "techniques": [
+    "T1213.006"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A database server open to the internet: attackers can try to log in and read or change its data.",
+   "shortlist": [
+    "T1213.006"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-postgresql-server-report/"
+  },
+  {
+   "id": "ss-scan6_slp",
+   "match": {
+    "report": "^scan6_slp$"
+   },
+   "techniques": [
+    "T1190"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A service discovery port open to the internet; versions of it have remote code flaws used in ransomware attacks.",
+   "shortlist": [
+    "T1190"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-slp-service-report/"
+  },
+  {
+   "id": "ss-scan6_smtp",
+   "match": {
+    "report": "^scan6_smtp$"
+   },
+   "techniques": [],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Shadowserver's page describes awareness of what is visible, not attacker behaviour: no ATT&CK technique fits.",
+   "shortlist": [],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-smtp-report/",
+   "nofit": true
+  },
+  {
+   "id": "ss-scan6_ssl",
+   "match": {
+    "report": "^scan6_ssl$"
+   },
+   "techniques": [],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Shadowserver's page describes awareness of what is visible, not attacker behaviour: no ATT&CK technique fits.",
+   "shortlist": [],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-ssl-report/",
+   "nofit": true
+  },
+  {
+   "id": "ss-scan6_ssl_freak",
+   "match": {
+    "report": "^scan6_ssl_freak$"
+   },
+   "techniques": [
+    "T1557"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Weak export encryption lets an attacker in the traffic path downgrade, decrypt or alter connections.",
+   "shortlist": [
+    "T1557"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/ssl-freak-report/"
+  },
+  {
+   "id": "ss-scan6_ssl_poodle",
+   "match": {
+    "report": "^scan6_ssl_poodle$"
+   },
+   "techniques": [
+    "T1557"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Server still accepts old SSL 3.0: someone on the network path can decrypt parts of the traffic.",
+   "shortlist": [
+    "T1557"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/ssl-poodle-report/"
+  },
+  {
+   "id": "ss-scan_activemq",
+   "match": {
+    "report": "^scan_activemq$"
+   },
+   "techniques": [
+    "T1190"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A message broker open to the internet; some versions have remote code flaws that attackers exploit to get in.",
+   "shortlist": [
+    "T1190"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-activemq-service-report/"
+  },
+  {
+   "id": "ss-scan_afp",
+   "match": {
+    "report": "^scan_afp$"
+   },
+   "techniques": [
+    "T1039"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A file-sharing service open to the internet: attackers can reach shared folders and copy the files.",
+   "shortlist": [
+    "T1039"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-afp-report/"
+  },
+  {
+   "id": "ss-scan_amqp",
+   "match": {
+    "report": "^scan_amqp$"
+   },
+   "techniques": [
+    "T1213"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A message service open to the internet: attackers may read or interfere with the messages it carries.",
+   "shortlist": [
+    "T1213"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-amqp-report/"
+  },
+  {
+   "id": "ss-scan_ard",
+   "match": {
+    "report": "^scan_ard$"
+   },
+   "techniques": [
+    "T1498.002"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "The service answers small forged requests with large replies: attackers can use the host to flood someone else.",
+   "shortlist": [
+    "T1498.002"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-apple-remote-desktop-ard-report/"
+  },
+  {
+   "id": "ss-scan_cisco_smart_install",
+   "match": {
+    "report": "^scan_cisco_smart_install$"
+   },
+   "techniques": [
+    "T1602.002"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A switch setup feature open to the internet: anyone can read the switch configuration and possibly change it.",
+   "shortlist": [
+    "T1602.002"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-cisco-smart-install-report/"
+  },
+  {
+   "id": "ss-scan_couchdb",
+   "match": {
+    "report": "^scan_couchdb$"
+   },
+   "techniques": [
+    "T1213.006",
+    "T1190"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A database open to the internet: attackers can list and read its data, or exploit a known flaw to run code.",
+   "shortlist": [
+    "T1213.006",
+    "T1190"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-couchdb-report/"
+  },
+  {
+   "id": "ss-scan_elasticsearch",
+   "match": {
+    "report": "^scan_elasticsearch$"
+   },
+   "techniques": [
+    "T1213.006"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A database open to the internet, often without a password: attackers can read, change or delete its data.",
+   "shortlist": [
+    "T1213.006"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-elasticsearch-report/"
+  },
+  {
+   "id": "ss-scan_epmd",
+   "match": {
+    "report": "^scan_epmd$"
+   },
+   "techniques": [
+    "T1190"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A cluster name service open to the internet: it points attackers at nodes with known flaws that run their code.",
+   "shortlist": [
+    "T1190"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-erlang-port-mapper-report-daemon/"
+  },
+  {
+   "id": "ss-scan_ftp",
+   "match": {
+    "report": "^scan_ftp$"
+   },
+   "techniques": [
+    "T1040"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "File transfer without encryption: passwords and files can be read by anyone on the network path.",
+   "shortlist": [
+    "T1040"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-ftp-report/"
+  },
+  {
+   "id": "ss-scan_hadoop",
+   "match": {
+    "report": "^scan_hadoop$"
+   },
+   "techniques": [
+    "T1213",
+    "T1590"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A data cluster's web console open to the internet: attackers can learn about the network and read or change stored data.",
+   "shortlist": [
+    "T1213",
+    "T1590"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-hadoop-report/"
+  },
+  {
+   "id": "ss-scan_http",
+   "match": {
+    "report": "^scan_http$"
+   },
+   "techniques": [],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Shadowserver's page describes awareness of what is visible, not attacker behaviour: no ATT&CK technique fits.",
+   "shortlist": [],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-http-report/",
+   "nofit": true
+  },
+  {
+   "id": "ss-scan_imap",
+   "match": {
+    "report": "^scan_imap$"
+   },
+   "techniques": [
+    "T1110"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A mail login open to the internet: attackers can guess passwords against it.",
+   "shortlist": [
+    "T1110"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-imap-report/"
+  },
+  {
+   "id": "ss-scan_imap_vulnerable",
+   "match": {
+    "report": "^scan_imap_vulnerable$"
+   },
+   "techniques": [
+    "T1040",
+    "T1110.001"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Mail login without encryption: passwords can be read on the way, and the open login invites password guessing.",
+   "shortlist": [
+    "T1040",
+    "T1110.001"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/vulnerable-imap-report/"
+  },
+  {
+   "id": "ss-scan_ipp",
+   "match": {
+    "report": "^scan_ipp$"
+   },
+   "techniques": [],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Shadowserver's page describes awareness of what is visible, not attacker behaviour: no ATT&CK technique fits.",
+   "shortlist": [],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-ipp-report/",
+   "nofit": true
+  },
+  {
+   "id": "ss-scan_isakmp",
+   "match": {
+    "report": "^scan_isakmp$"
+   },
+   "techniques": [
+    "T1190",
+    "T1498.002"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A VPN service with known flaws attackers exploit to get in; some versions can also be used to flood others.",
+   "shortlist": [
+    "T1190",
+    "T1498.002"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/vulnerable-isakmp-report/"
+  },
+  {
+   "id": "ss-scan_ldap_tcp",
+   "match": {
+    "report": "^scan_ldap_tcp$"
+   },
+   "techniques": [
+    "T1590"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A directory server open to the internet: attackers can read details about the organisation's network and accounts.",
+   "shortlist": [
+    "T1590"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-ldap-tcp-report/"
+  },
+  {
+   "id": "ss-scan_loop_dos",
+   "match": {
+    "report": "^scan_loop_dos$"
+   },
+   "techniques": [
+    "T1498"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "One forged message can make this service and another answer each other forever, flooding both and the link between them.",
+   "shortlist": [
+    "T1498"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/high-loop-dos-report/"
+  },
+  {
+   "id": "ss-scan_mdns",
+   "match": {
+    "report": "^scan_mdns$"
+   },
+   "techniques": [
+    "T1590",
+    "T1498.002"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "The service reveals device names and internal addresses to anyone, and can be abused to reflect traffic at others.",
+   "shortlist": [
+    "T1590",
+    "T1498.002"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-mdns-report/"
+  },
+  {
+   "id": "ss-scan_memcached",
+   "match": {
+    "report": "^scan_memcached$"
+   },
+   "techniques": [
+    "T1498.002",
+    "T1213.006"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "An open cache with no password: attackers can read or change its data, and use it to flood someone else.",
+   "shortlist": [
+    "T1498.002",
+    "T1213.006"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-memcached-report/"
+  },
+  {
+   "id": "ss-scan_mongodb",
+   "match": {
+    "report": "^scan_mongodb$"
+   },
+   "techniques": [
+    "T1213",
+    "T1190"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A database open to the internet, often without a password; attackers can read its data or exploit a known flaw.",
+   "shortlist": [
+    "T1213",
+    "T1190"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-mongodb-report/"
+  },
+  {
+   "id": "ss-scan_mqtt",
+   "match": {
+    "report": "^scan_mqtt$"
+   },
+   "techniques": [
+    "T1213"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A message broker open to the internet: anyone can read the messages it carries, often without a password.",
+   "shortlist": [
+    "T1213"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-mqtt-report/"
+  },
+  {
+   "id": "ss-scan_mqtt_anon",
+   "match": {
+    "report": "^scan_mqtt_anon$"
+   },
+   "techniques": [
+    "T1213"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A message broker that lets anyone connect without a password: attackers can read the data passing through it.",
+   "shortlist": [
+    "T1213"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-mqtt-report/"
+  },
+  {
+   "id": "ss-scan_mysql",
+   "match": {
+    "report": "^scan_mysql$"
+   },
+   "techniques": [
+    "T1213.006"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A database server open to the internet: attackers can try to log in and read or change its data.",
+   "shortlist": [
+    "T1213.006"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-mysql-server-report/"
+  },
+  {
+   "id": "ss-scan_nat_pmp",
+   "match": {
+    "report": "^scan_nat_pmp$"
+   },
+   "techniques": [
+    "T1590"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A router port-mapping service open to the internet: it tells attackers about the network behind it.",
+   "shortlist": [
+    "T1590"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-nat-pmp-report/"
+  },
+  {
+   "id": "ss-scan_pop3",
+   "match": {
+    "report": "^scan_pop3$"
+   },
+   "techniques": [
+    "T1110"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A mail login open to the internet: attackers can guess passwords against it.",
+   "shortlist": [
+    "T1110"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-pop3-report/"
+  },
+  {
+   "id": "ss-scan_pop3_vulnerable",
+   "match": {
+    "report": "^scan_pop3_vulnerable$"
+   },
+   "techniques": [
+    "T1040",
+    "T1110.001"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Mail login without encryption: passwords can be read on the way, and the open login invites password guessing.",
+   "shortlist": [
+    "T1040",
+    "T1110.001"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/vulnerable-pop3-report/"
+  },
+  {
+   "id": "ss-scan_post_exploitation_framework",
+   "match": {
+    "report": "^scan_post_exploitation_framework$"
+   },
+   "techniques": [
+    "T1071",
+    "T1588.002"
+   ],
+   "certainty": "observed",
+   "role": "host",
+   "why": "Scanning found attack tooling such as Cobalt Strike running here: the host serves as a command server for intrusions.",
+   "shortlist": [
+    "T1071",
+    "T1588.002"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/post-exploitation-framework/"
+  },
+  {
+   "id": "ss-scan_postgres",
+   "match": {
+    "report": "^scan_postgres$"
+   },
+   "techniques": [
+    "T1213.006"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A database open to the internet: attackers can try to log in and read or change its data.",
+   "shortlist": [
+    "T1213.006"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-postgresql-server-report/"
+  },
+  {
+   "id": "ss-scan_quic",
+   "match": {
+    "report": "^scan_quic$"
+   },
+   "techniques": [],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Shadowserver's page describes awareness of what is visible, not attacker behaviour: no ATT&CK technique fits.",
+   "shortlist": [],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-quic-report/",
+   "nofit": true
+  },
+  {
+   "id": "ss-scan_redis",
+   "match": {
+    "report": "^scan_redis$"
+   },
+   "techniques": [
+    "T1213.006",
+    "T1190"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A database open with no password: attackers can read or change its data, and malware has used it to run commands.",
+   "shortlist": [
+    "T1213.006",
+    "T1190"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-redis-report/"
+  },
+  {
+   "id": "ss-scan_rsync",
+   "match": {
+    "report": "^scan_rsync$"
+   },
+   "techniques": [
+    "T1039"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A file-copy service open without a password: attackers can list shared folders and copy the files.",
+   "shortlist": [
+    "T1039"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-rsync-report/"
+  },
+  {
+   "id": "ss-scan_sip",
+   "match": {
+    "report": "^scan_sip$"
+   },
+   "techniques": [
+    "T1498.002",
+    "T1110"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "The service can bounce amplified traffic at others, and its logins face password guessing for call fraud.",
+   "shortlist": [
+    "T1498.002",
+    "T1110"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-sip-report/"
+  },
+  {
+   "id": "ss-scan_slp",
+   "match": {
+    "report": "^scan_slp$"
+   },
+   "techniques": [
+    "T1190"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A service discovery port open to the internet; versions of it have remote code flaws used in ransomware attacks.",
+   "shortlist": [
+    "T1190"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-slp-service-report/"
+  },
+  {
+   "id": "ss-scan_smtp",
+   "match": {
+    "report": "^scan_smtp$"
+   },
+   "techniques": [],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Shadowserver's page describes awareness of what is visible, not attacker behaviour: no ATT&CK technique fits.",
+   "shortlist": [],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-smtp-report/",
+   "nofit": true
+  },
+  {
+   "id": "ss-scan_ssl",
+   "match": {
+    "report": "^scan_ssl$"
+   },
+   "techniques": [],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Shadowserver's page describes awareness of what is visible, not attacker behaviour: no ATT&CK technique fits.",
+   "shortlist": [],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-ssl-report/",
+   "nofit": true
+  },
+  {
+   "id": "ss-scan_ssl_freak",
+   "match": {
+    "report": "^scan_ssl_freak$"
+   },
+   "techniques": [
+    "T1557"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "The server still accepts weak export encryption: an attacker on the path can downgrade and read or alter traffic.",
+   "shortlist": [
+    "T1557"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/ssl-freak-report/"
+  },
+  {
+   "id": "ss-scan_ssl_poodle",
+   "match": {
+    "report": "^scan_ssl_poodle$"
+   },
+   "techniques": [
+    "T1557"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "The server still accepts old SSL 3.0: an attacker in the path can decrypt parts of the traffic.",
+   "shortlist": [
+    "T1557"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/ssl-poodle-report/"
+  },
+  {
+   "id": "ss-scan_synfulknock",
+   "match": {
+    "report": "^scan_synfulknock$"
+   },
+   "techniques": [
+    "T1601.001"
+   ],
+   "certainty": "observed",
+   "role": "target",
+   "why": "The router answered like the SYNful Knock implant: its system image was likely altered to hide a backdoor.",
+   "shortlist": [
+    "T1601.001"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/synful-scan-report/"
+  },
+  {
+   "id": "ss-scan_vnc",
+   "match": {
+    "report": "^scan_vnc$"
+   },
+   "techniques": [
+    "T1133",
+    "T1021.005"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A remote desktop service open to the internet, sometimes with no password: attackers can log in and take control.",
+   "shortlist": [
+    "T1133",
+    "T1021.005"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-vnc-report/"
+  },
+  {
+   "id": "ss-scan_xdmcp",
+   "match": {
+    "report": "^scan_xdmcp$"
+   },
+   "techniques": [
+    "T1498.002",
+    "T1133"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A remote desktop login service open to the internet: it can be used to flood others and offers a graphical login.",
+   "shortlist": [
+    "T1498.002",
+    "T1133"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-xdmcp-service-report/"
+  },
+  {
+   "id": "ss-spam_url",
+   "match": {
+    "report": "^spam_url$"
+   },
+   "techniques": [
+    "T1566.002"
+   ],
+   "certainty": "possible",
+   "role": "host",
+   "why": "A link to this host appeared in spam; such links can lead to phishing or malware, but some are legitimate.",
+   "shortlist": [
+    "T1566.002"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/spam-url-report/"
+  },
+  {
+   "id": "ss-targeted_host",
+   "match": {
+    "report": "^targeted_host$"
+   },
+   "techniques": [
+    "T1190",
+    "T1110"
+   ],
+   "certainty": "observed",
+   "role": "target",
+   "why": "Attackers were seen trying exploits or password guessing against this address; whether they succeeded is not known.",
+   "shortlist": [
+    "T1190",
+    "T1110"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/targeted-host-report/"
+  },
+  {
+   "id": "ss-targeted_host6",
+   "match": {
+    "report": "^targeted_host6$"
+   },
+   "techniques": [
+    "T1190",
+    "T1110"
+   ],
+   "certainty": "observed",
+   "role": "target",
+   "why": "Attackers were seen trying exploits or password guessing against this host; check whether they got in.",
+   "shortlist": [
+    "T1190",
+    "T1110"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/targeted-host-report/"
+  },
+  {
+   "id": "sinkhole-dns",
+   "match": {
+    "report": "^event[46]_sinkhole_dns$"
+   },
+   "techniques": [
+    "T1071.004"
+   ],
+   "certainty": "observed",
+   "role": "used",
+   "why": "The device looked up a command-and-control name that now points at a sinkhole (C2 over DNS).",
+   "shortlist": [
+    "T1071.004",
+    "T1071",
+    "T1568",
+    "T1568.002",
+    "T1071.001",
+    "T1572"
+   ]
+  },
+  {
+   "id": "sinkhole-http",
+   "match": {
+    "report": "^event[46]_(microsoft_)?sinkhole_http(_referer)?$"
+   },
+   "techniques": [
+    "T1071.001"
+   ],
+   "certainty": "observed",
+   "role": "used",
+   "why": "The device contacted a sinkholed command-and-control server over HTTP (C2 over web protocols).",
+   "shortlist": [
+    "T1071.001",
+    "T1071",
+    "T1568",
+    "T1568.002",
+    "T1573",
+    "T1102",
+    "T1105"
+   ]
+  },
+  {
+   "id": "sinkhole",
+   "match": {
+    "report": "^event[46]_(microsoft_)?sinkhole$"
+   },
+   "techniques": [
+    "T1095",
+    "T1071"
+   ],
+   "certainty": "observed",
+   "role": "used",
+   "why": "The device contacted a sinkholed command-and-control server over a TCP or UDP protocol other than web or DNS.",
+   "shortlist": [
+    "T1071",
+    "T1071.001",
+    "T1071.004",
+    "T1095",
+    "T1568",
+    "T1568.002",
+    "T1573",
+    "T1008"
+   ]
+  },
+  {
+   "id": "initial-access-broker",
+   "match": {
+    "report": "^event[46]_initial_access_broker$"
+   },
+   "techniques": [
+    "T1071"
+   ],
+   "certainty": "observed",
+   "role": "used",
+   "why": "The device contacted infrastructure of malware used to sell access to victims (command and control).",
+   "shortlist": [
+    "T1071",
+    "T1071.001",
+    "T1133",
+    "T1078",
+    "T1105"
+   ]
+  },
+  {
+   "id": "brute-force",
+   "match": {
+    "type": [
+     "brute-force"
+    ]
+   },
+   "techniques": [
+    "T1110.001"
+   ],
+   "certainty": "observed",
+   "role": "used",
+   "why": "The device tried to log in to a decoy system by guessing passwords.",
+   "shortlist": [
+    "T1110.001",
+    "T1110",
+    "T1110.003",
+    "T1110.004",
+    "T1078",
+    "T1021.004"
+   ]
+  },
+  {
+   "id": "ddos-amplification-victim",
+   "match": {
+    "report": "^event4_honeypot_ddos_(amp|target)$"
+   },
+   "techniques": [
+    "T1498.002"
+   ],
+   "certainty": "observed",
+   "role": "target",
+   "why": "Decoy amplifiers received forged requests in this address's name: it was the target of a reflection attack.",
+   "shortlist": [
+    "T1498.002",
+    "T1498",
+    "T1498.001",
+    "T1499"
+   ]
+  },
+  {
+   "id": "ddos-participant",
+   "match": {
+    "type": [
+     "ddos"
+    ]
+   },
+   "techniques": [
+    "T1498"
+   ],
+   "certainty": "observed",
+   "role": "used",
+   "why": "The device took part in a denial-of-service attack.",
+   "shortlist": [
+    "T1498",
+    "T1498.001",
+    "T1498.002",
+    "T1499",
+    "T1499.002"
+   ]
+  },
+  {
+   "id": "spoofer",
+   "match": {
+    "type": [
+     "masquerade"
+    ]
+   },
+   "techniques": [
+    "T1498.002"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "The network lets devices send packets with forged sender addresses, which reflection attacks depend on.",
+   "shortlist": [
+    "T1498.002",
+    "T1498"
+   ]
+  },
+  {
+   "id": "scanner",
+   "match": {
+    "type": [
+     "scanner"
+    ]
+   },
+   "techniques": [
+    "T1595"
+   ],
+   "certainty": "observed",
+   "role": "used",
+   "why": "The device scanned the internet (it reached decoy systems looking for services).",
+   "shortlist": [
+    "T1595",
+    "T1595.001",
+    "T1595.002",
+    "T1046",
+    "T1190",
+    "T1210"
+   ]
+  },
+  {
+   "id": "darknet",
+   "match": {
+    "report": "^event[46]_honeypot_darknet$"
+   },
+   "techniques": [
+    "T1595.001"
+   ],
+   "certainty": "observed",
+   "role": "used",
+   "why": "The device sent traffic to unused address space, as scanning does.",
+   "shortlist": [
+    "T1595",
+    "T1595.001",
+    "T1046"
+   ]
+  },
+  {
+   "id": "malware-distribution",
+   "match": {
+    "report": "^(malware_url|sandbox_url)$"
+   },
+   "techniques": [
+    "T1189"
+   ],
+   "certainty": "observed",
+   "role": "host",
+   "why": "The host served malware or a link to it (drive-by delivery, traffic distribution).",
+   "shortlist": [
+    "T1189",
+    "T1608.001",
+    "T1105",
+    "T1204.002",
+    "T1566.002"
+   ]
+  },
+  {
+   "id": "sandbox-c2",
+   "match": {
+    "report": "^sandbox_conn$"
+   },
+   "techniques": [
+    "T1071"
+   ],
+   "certainty": "observed",
+   "role": "host",
+   "why": "Malware run in a sandbox connected to this host: it serves the malware's command and control.",
+   "shortlist": [
+    "T1071",
+    "T1071.001",
+    "T1095",
+    "T1105",
+    "T1583.003",
+    "T1584.004"
+   ]
+  },
+  {
+   "id": "sandbox-dns",
+   "match": {
+    "report": "^sandbox_dns$"
+   },
+   "techniques": [
+    "T1071.004"
+   ],
+   "certainty": "observed",
+   "role": "host",
+   "why": "Malware run in a sandbox looked up names that resolve to this host.",
+   "shortlist": [
+    "T1071.004",
+    "T1071",
+    "T1568",
+    "T1568.002"
+   ]
+  },
+  {
+   "id": "spam",
+   "match": {
+    "type": [
+     "spam"
+    ]
+   },
+   "techniques": [
+    "T1566.002"
+   ],
+   "certainty": "observed",
+   "role": "host",
+   "why": "A link to this host was found in spam (phishing by link).",
+   "shortlist": [
+    "T1566.002",
+    "T1566",
+    "T1598.003",
+    "T1608.005"
+   ]
+  },
+  {
+   "id": "ransomware-victim",
+   "match": {
+    "report": "^ransomware_victim$"
+   },
+   "techniques": [
+    "T1486"
+   ],
+   "certainty": "observed",
+   "role": "target",
+   "why": "The organisation was named as a ransomware victim (data encrypted or stolen for extortion).",
+   "shortlist": [
+    "T1486",
+    "T1657",
+    "T1567",
+    "T1490"
+   ]
+  },
+  {
+   "id": "open-proxy",
+   "match": {
+    "report": "^(scan6?_http_proxy|scan_socks|population6?_http_proxy|scan6?_ip_tunnel)$"
+   },
+   "techniques": [
+    "T1090"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "An open proxy or tunnel: attackers can send their traffic through it and hide behind its address.",
+   "shortlist": [
+    "T1090",
+    "T1090.002",
+    "T1090.003",
+    "T1572"
+   ]
+  },
+  {
+   "id": "amplifier",
+   "match": {
+    "group": [
+     "Can be abused for attacks (amplification, tunnels)"
+    ],
+    "report": "^(scan6?_(dns|ntp|ntpmonitor|ssdp|memcached|chargen|qotd|snmp|ldap_udp|mdns|portmapper|netbios|ws_discovery|ubiquiti|slp|coap|tftp|xdmcp|dvr_dhcpdiscover|ard|rdpeudp|db2|mssql|ddos_middlebox|loop_dos|sip|cwmp|ipmi|nat_pmp)|scan6?_.*)$"
+   },
+   "techniques": [
+    "T1498.002"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "The service answers small forged requests with large replies: attackers can use the host as a tool to flood someone else (the victim is elsewhere).",
+   "shortlist": [
+    "T1498.002",
+    "T1498",
+    "T1499"
+   ]
+  },
+  {
+   "id": "amplifier-by-name",
+   "match": {
+    "report": "^scan6?_(dns|ntp|ntpmonitor|ssdp|memcached|chargen|qotd|snmp|ldap_udp|mdns|portmapper|netbios|ws_discovery|ubiquiti|slp|coap|tftp|dvr_dhcpdiscover|rdpeudp|db2|mssql|ddos_middlebox|loop_dos)$"
+   },
+   "techniques": [
+    "T1498.002"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "The service answers small forged requests with large replies: attackers can use the host as a tool to flood someone else (the victim is elsewhere).",
+   "shortlist": [
+    "T1498.002",
+    "T1498",
+    "T1499"
+   ]
+  },
+  {
+   "id": "remote-access",
+   "match": {
+    "report": "^scan6?_(rdp|vnc|telnet|ssh|radmin|ard|xdmcp|smb|msrpc|adb|mikrotik_service|kubernetes|docker|ipmi|ftp|cisco_smart_install|epmd|afp|rsync)$"
+   },
+   "techniques": [
+    "T1133",
+    "T1021"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A remote access or management service open to the internet: attackers can log in or take control through it.",
+   "shortlist": [
+    "T1133",
+    "T1021",
+    "T1021.001",
+    "T1021.002",
+    "T1021.004",
+    "T1021.005",
+    "T1078",
+    "T1110",
+    "T1190"
+   ]
+  },
+  {
+   "id": "ics-exposed",
+   "match": {
+    "report": "^scan6?_ics$"
+   },
+   "techniques": [
+    "T0883"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "An industrial control system reachable from the internet: attackers can connect to it directly.",
+   "shortlist": [
+    "T0883",
+    "T0886",
+    "T0822",
+    "T0866",
+    "T0846"
+   ]
+  },
+  {
+   "id": "open-database",
+   "match": {
+    "report": "^scan6?_(elasticsearch|mongodb|redis|couchdb|mysql|postgres|hadoop|amqp|mqtt|mqtt_anon|activemq|ldap_tcp)$"
+   },
+   "techniques": [
+    "T1213.006"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A database open to the internet: attackers can read or change the data it holds.",
+   "shortlist": [
+    "T1213.006",
+    "T1213",
+    "T1190",
+    "T1485"
+   ]
+  },
+  {
+   "id": "vulnerable-public-facing",
+   "match": {
+    "group": [
+     "Known vulnerability"
+    ]
+   },
+   "techniques": [
+    "T1190"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A public-facing service with a known weakness: attackers can exploit it to get in.",
+   "shortlist": [
+    "T1190",
+    "T1210",
+    "T1133",
+    "T1557",
+    "T1040"
+   ]
+  },
+  {
+   "id": "vulnerable-by-name",
+   "match": {
+    "report": "^scan6?_(http_vulnerable|exchange|imap_vulnerable|pop3_vulnerable|smtp_vulnerable|netis_router|synfulknock|isakmp)$"
+   },
+   "techniques": [
+    "T1190"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A public-facing service with a known weakness: attackers can exploit it to get in.",
+   "shortlist": [
+    "T1190",
+    "T1210",
+    "T1133"
+   ]
+  }
+ ],
+ "names": [
+  {
+   "id": "dga",
+   "match": "(^|[._-])dga([._-]|$)",
+   "techniques": [
+    "T1568.002"
+   ],
+   "certainty": "observed",
+   "role": "used",
+   "why": "Shadowserver names it a DGA family: its malware generates the names of its command-and-control servers."
+  }
+ ]
 }

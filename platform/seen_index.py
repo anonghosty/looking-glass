@@ -20,6 +20,7 @@ import os
 import threading
 import time
 from datetime import date, timedelta
+import filesig  # noqa: E402
 
 KEEP_DAYS = 30
 BACKFILL_DAYS = 14
@@ -35,7 +36,7 @@ class SeenIndex:
     def refresh(self):
         """Read the record if another worker (or the backfill) changed it."""
         try:
-            m = os.path.getmtime(self.path)
+            m = filesig.sig(self.path)
         except OSError:
             return
         if m == self.mtime:
@@ -92,7 +93,7 @@ class SeenIndex:
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(self.data, f, indent=1, sort_keys=True)
             os.replace(tmp, self.path)
-            self.mtime = os.path.getmtime(self.path)
+            self.mtime = filesig.sig(self.path)
         except OSError as exc:
             if self.log:
                 self.log.warning("seen index not saved: %s", exc)

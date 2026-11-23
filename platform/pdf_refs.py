@@ -13,6 +13,7 @@ Criticality, each from where it is known; nothing is given a level it does not h
 """
 import json
 import os
+import filesig  # noqa: E402
 
 # Shadowserver's own scale, "info" its lowest (an inventory report): shown as Shadowserver says it, never as "not rated"
 LEVELS = ("critical", "high", "medium", "low", "info")
@@ -144,7 +145,7 @@ _SNAP = {}
 def _snapshot(base_dir):
     p = os.path.join(base_dir, "data", "report_map_snapshot.json")
     try:
-        m = os.path.getmtime(p)
+        m = filesig.sig(p)
     except OSError:
         return {}
     if _SNAP.get(p, (None,))[0] != m:
@@ -318,7 +319,7 @@ KNOWN_MAX = 50000
 def _known():
     p = KNOWN["path"]
     try:
-        m = os.path.getmtime(p)
+        m = filesig.sig(p)
     except OSError:
         return KNOWN["levels"]
     if KNOWN["mtime"] != m:
@@ -349,7 +350,7 @@ def remember(levels):
         with open(tmp, "w", encoding="utf-8") as fh:
             json.dump(cur, fh, sort_keys=True)
         os.replace(tmp, p)
-        KNOWN["levels"], KNOWN["mtime"] = cur, os.path.getmtime(p)
+        KNOWN["levels"], KNOWN["mtime"] = cur, filesig.sig(p)
     except OSError:
         pass                                             # a read-only folder: the levels in memory still work
 
@@ -365,7 +366,7 @@ def all_kinds():
     """{name: "Infection" | "Issue"} for every name the reports carried (days loaded and the one-time read of every report)."""
     p = SEEN["path"]
     try:
-        m = os.path.getmtime(p)
+        m = filesig.sig(p)
     except OSError:
         return SEEN["kinds"]
     if SEEN["mtime"] != m:
@@ -393,7 +394,7 @@ def remember_kinds(kinds):
         with open(tmp, "w", encoding="utf-8") as fh:
             json.dump(cur, fh, sort_keys=True)
         os.replace(tmp, p)
-        SEEN["kinds"], SEEN["mtime"] = cur, os.path.getmtime(p)
+        SEEN["kinds"], SEEN["mtime"] = cur, filesig.sig(p)
     except OSError:
         pass
 

@@ -12,6 +12,7 @@ import json
 import os
 import re
 import threading
+import filesig  # noqa: E402
 
 # key, label, demo-mode alias word. Keys never change (they are stored in data/asns.json).
 BUILTIN = [
@@ -54,7 +55,7 @@ def _path(data_dir):
 def all_types(data_dir):
     """[{key, label, alias, builtin}] in display order: built-in first, then the site's own (alphabetical)."""
     p = _path(data_dir)
-    m = os.path.getmtime(p) if os.path.exists(p) else 0
+    m = filesig.sig(p) if os.path.exists(p) else 0
     if _CACHE["path"] != p or _CACHE["mtime"] != m:
         custom = {}
         try:

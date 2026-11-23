@@ -49,6 +49,7 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 
 import https_only
+import filesig  # noqa: E402
 
 REPO = "The-Shadowserver-Foundation/report_schema"
 API_COMMIT = f"https://api.github.com/repos/{REPO}/commits/main"
@@ -68,7 +69,7 @@ PAGE_SAFETY = 90 * 24 * 3600              # with the sitemap: a page is read aga
 PAGES_PER_RUN = 40
 PAGE_DELAY = 3.0                          # seconds between two page requests
 EVENTS_KEPT = 300
-NO_REPORT = ("files_", "discovered_fields_", "system.")
+NO_REPORT = ("files_", "discovered_fields_", "system.", "lg_")   # lg_: Looking Glass's own collections (e.g. lg_load_stamps)
 PLATFORM_COMMS, PLATFORM_SVC, PLATFORM_NONE = "Network communications", "Publicly accessible services", "none yet (no IP address)"
 UNPLACED = "Not yet placed: check"
 PAGE_FACTS = ("title", "last_updated", "severity", "filenames", "field_names", "hash", "fetched")    # always in the feed
@@ -558,7 +559,7 @@ class ReportMap:
         for key in ("map", "snapshot"):
             p = self.paths[key]
             try:
-                m = (p, os.path.getmtime(p))
+                m = (p, filesig.sig(p))
             except OSError:
                 continue
             if self._cache["mtime"] != m:
@@ -678,11 +679,17 @@ class ReportMap:
             fields = sorted(self.fields_of(n)) if self.fields_of else []
             new[n] = {"taxonomy": None, "type": None, "fields": [f for f in fields if f != "_id"], "name": "",
                       "url": "", "title": n, "severity": ""}
-        if not new:
+        # a collection placed before it was known not to be a report (lg_load_stamps, 2026-11-23) leaves the map again
+        stale = [k for k in (self.get().get("facts_db") or {}) if k.startswith(NO_REPORT)]
+        if not new and not stale:
             return "every report collection is in the map"
         with self.lock:
             cur = self.get()
-            self._save(dict(cur, facts_db={**(cur.get("facts_db") or {}), **new}))
+            kept = {k: v for k, v in (cur.get("facts_db") or {}).items() if not k.startswith(NO_REPORT)}
+            self._save(dict(cur, facts_db={**kept, **new}))
+        if not new:
+            self.rebuild(note="removed collections that are not reports: " + ", ".join(sorted(stale)))
+            return f"removed {len(stale)} collection(s) that are not reports: {', '.join(sorted(stale))}"
         ev = self.rebuild(note="placed report collections found only in the database")
         return f"{len(new)} report collection(s) not in the schema, placed and flagged: {', '.join(sorted(new))} ({len(ev)} event(s))"
 

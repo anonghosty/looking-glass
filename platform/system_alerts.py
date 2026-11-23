@@ -31,6 +31,7 @@ import threading
 import time
 
 import pipeline_link
+import filesig  # noqa: E402
 
 RESTART_SHOW_S = 24 * 3600
 GAP_SHOW_S = 7 * 24 * 3600
@@ -342,7 +343,7 @@ class Alerts:
         paths = [os.path.join(self.data, "tls", n) for n in ("cert.pem", "meta.json")]
         if not os.path.exists(paths[0]):
             return None
-        stamp = tuple(os.path.getmtime(p) if os.path.exists(p) else 0 for p in paths)
+        stamp = tuple(filesig.sig(p) if os.path.exists(p) else 0 for p in paths)
         cached = getattr(self, "_cert_cache", None)
         if cached and cached[0] == stamp:            # read again only when the certificate files change
             c = cached[1]

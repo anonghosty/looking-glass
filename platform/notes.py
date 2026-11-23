@@ -23,6 +23,7 @@ import time
 from flask import g, jsonify, request
 
 import beacon_findings     # a note carrying an LG-B code becomes a finding about that exact selection
+import filesig  # noqa: E402
 
 ROLE_LABEL = {"researcher": "Researcher", "admin": "Administrator", "analyst": "Analyst", "management": "Management"}
 MAX_LEN = 2000
@@ -45,7 +46,7 @@ class Notes:
 
     def _load(self):
         try:
-            m = os.path.getmtime(self.path)
+            m = filesig.sig(self.path)
         except OSError:
             return
         if m == self.mtime:
@@ -65,7 +66,7 @@ class Notes:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(self.data, f, indent=1, ensure_ascii=False)
         os.replace(tmp, self.path)
-        self.mtime = os.path.getmtime(self.path)
+        self.mtime = filesig.sig(self.path)
 
     @staticmethod
     def _key(name):

@@ -100,25 +100,27 @@ try:
     print("the shipped rule table")
     am0 = AM.AttackMap(os.path.join(ROOT, "data"), None, report_map=lambda: {})
     want = {("event4_sinkhole_http", "infected-system", ""): (["T1071.001"], "observed", "used"),
-            ("event4_sinkhole_dns", "other", ""): (["T1071.004"], "observed", "used"),
+            # checked against Shadowserver's pages (2026-11-23): the listed address may be the resolver, not the device
+            ("event4_sinkhole_dns", "other", ""): (["T1071.004"], "possible", "used"),
             ("event4_honeypot_brute_force", "brute-force", ""): (["T1110.001"], "observed", "used"),
             ("event4_honeypot_rdp_scan", "scanner", ""): (["T1595"], "observed", "used"),
             ("event4_honeypot_ddos_amp", "ddos", ""): (["T1498.002"], "observed", "target"),
             ("scan_dns", "vulnerable-system", "Can be abused for attacks (amplification, tunnels)"): (["T1498.002"], "possible", "exposure"),
             ("scan_ntp", "vulnerable-system", ""): (["T1498.002"], "possible", "exposure"),
             ("scan_http_proxy", "vulnerable-system", "Can be abused for attacks (amplification, tunnels)"): (["T1090"], "possible", "exposure"),
-            ("malware_url", "malware-distribution", ""): (["T1189"], "observed", "host"),
-            ("spam_url", "spam", ""): (["T1566.002"], "observed", "host"),
+            ("malware_url", "malware-distribution", ""): (["T1608.001", "T1105"], "observed", "host"),
+            ("spam_url", "spam", ""): (["T1566.002"], "possible", "host"),
             ("scan_rdp", "vulnerable-system", ""): (["T1133", "T1021"], "possible", "exposure"),
             ("scan_http_vulnerable", "vulnerable-system", "Known vulnerability"): (["T1190"], "possible", "exposure"),
-            ("scan_elasticsearch", "vulnerable-system", ""): (["T1530", "T1213"], "possible", "exposure")}
+            ("scan_elasticsearch", "vulnerable-system", ""): (["T1213.006"], "possible", "exposure")}
     bad = []
     for (k, ty, gr), (tech, cert, role) in want.items():
         r = am0.suggest(k, {"type": ty, "group": gr}) or {}
         if (r.get("techniques"), r.get("certainty"), r.get("role")) != (tech, cert, role):
             bad.append((k, r.get("id"), r.get("techniques")))
     ok("every report kind in the design gets its technique, certainty and role", not bad, bad)
-    ok("a report no rule knows: not mapped yet", am0.suggest("blocklist", {"type": "blocklist"}) is None)
+    ok("a report no rule knows: not mapped yet", am0.suggest("made_up_new_report", {"type": "made-up"}) is None)
+    ok("the Block List (third-party lists): 'no technique fits'", (am0.suggest("blocklist", {"type": "blocklist"}) or {}).get("nofit") is True)
     ok("DGA family names: T1568.002 observed", [t["id"] for t in AM.AttackMap(os.path.join(ROOT, "data"), None).name_items("tinba-dga")] == ["T1568.002"])
 
     print("mappings")

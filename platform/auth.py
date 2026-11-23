@@ -59,6 +59,7 @@ import throttle_prune
 import password_policy
 import external_access
 import system_alerts
+import filesig  # noqa: E402
 
 # one-time sign-up links (invites.py sets these): check(token) -> the open invite or None; use(token, user) -> it, once
 INVITE = {"check": None, "use": None}
@@ -379,7 +380,7 @@ class Users:
 
     def _load(self):
         try:
-            m = os.path.getmtime(self.path)
+            m = filesig.sig(self.path)
         except OSError:
             self.data, self.mtime = {"users": {}}, None
             return
@@ -407,7 +408,7 @@ class Users:
     def save(self):
         with self.lock:
             _secure_write(self.path, self.data)
-            self.mtime = os.path.getmtime(self.path)
+            self.mtime = filesig.sig(self.path)
 
     def set_password(self, name, password, role=None, status=None):
         with self.lock:

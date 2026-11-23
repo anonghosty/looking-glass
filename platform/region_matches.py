@@ -26,6 +26,7 @@ import threading
 import unicodedata
 
 from flask import g, jsonify, request
+import filesig  # noqa: E402
 
 COUNTRY = "__country__"
 SUFFIXES = (" REGION", " PROVINCE", " STATE", " GOVERNORATE", " COUNTY", " DISTRICT", " PREFECTURE", " DEPARTMENT",
@@ -54,7 +55,7 @@ class Matches:
 
     def all(self):
         try:
-            m = os.path.getmtime(self.path)
+            m = filesig.sig(self.path)
         except OSError:
             return {}
         if self._cache[0] != m:
@@ -150,7 +151,7 @@ def map_region_names(adm1_dir, cc):
         return set()
     p = os.path.join(adm1_dir, f"{cc}.json")
     try:
-        m = os.path.getmtime(p)
+        m = filesig.sig(p)
     except OSError:
         return set()
     hit = _NAMES_CACHE.get(p)

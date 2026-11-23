@@ -20,6 +20,7 @@ import json
 import os
 import re
 import threading
+import filesig  # noqa: E402
 
 MISP_FILE = "names_misp_galaxy.json"
 ATTACK_FILE = "names_attack.json"
@@ -257,7 +258,7 @@ class OfflineNames:
     def _load(self, fname):
         path = os.path.join(self.dir, fname)
         try:
-            m = os.path.getmtime(path)
+            m = filesig.sig(path)
         except OSError:
             return None, {}
         with self.lock:

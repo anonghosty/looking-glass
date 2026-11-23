@@ -40,6 +40,7 @@ import finding_rules
 import issue_tags
 import tlp
 from organisation import BRANDS, LOOKS      # the advisory PDF's looks and page names (the advisor chooses per advisory)
+import filesig  # noqa: E402
 
 SCHEMA, VERSION = "looking-glass/advisory", 2
 MAX_TEXT, MAX_SUBJECT, MAX_RECIPIENTS, MAX_RECIPIENT = 6000, 200, 30, 120
@@ -234,7 +235,7 @@ class Impact:
     def _json(self, name):
         p = os.path.join(self.base, "data", name)
         try:
-            m = os.path.getmtime(p)
+            m = filesig.sig(p)
         except OSError:
             return {}
         if self._c.get(name, (None,))[0] != m:

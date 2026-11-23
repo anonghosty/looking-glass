@@ -58,6 +58,7 @@ DAY_RELOAD_SECONDS = int(os.environ.get("DAY_RELOAD_SECONDS", "600"))
 SETTLE_SECONDS = int(os.environ.get("REPORT_SETTLE_SECONDS", "600"))
 
 import db_connect  # noqa: E402  (where the database is: loopback or internal only; TLS for one on another computer)
+import filesig  # noqa: E402
 try:
     _DB_KW = db_connect.kwargs(os.environ.get)
 except db_connect.Refused as _why:     # a public or unencrypted database: the service does not start, and says why
@@ -1945,7 +1946,7 @@ def knowledge_base():
     automatically when either file changes."""
     import json
     try:
-        m = (os.path.getmtime(KB_PATH), os.path.getmtime(LOCAL_DEFS_PATH) if os.path.exists(LOCAL_DEFS_PATH) else 0)
+        m = (filesig.sig(KB_PATH), filesig.sig(LOCAL_DEFS_PATH) if os.path.exists(LOCAL_DEFS_PATH) else 0)
         if m != _kb["mtime"]:
             with open(KB_PATH, encoding="utf-8") as f:
                 data = {k.lower(): v for k, v in json.load(f).get("infections", {}).items()}
@@ -1972,8 +1973,8 @@ def issues_kb():
     keeps its display name in 'name'."""
     import json
     try:
-        m = (os.path.getmtime(ISSUES_PATH) if os.path.exists(ISSUES_PATH) else 0,
-             os.path.getmtime(LOCAL_DEFS_PATH) if os.path.exists(LOCAL_DEFS_PATH) else 0)
+        m = (filesig.sig(ISSUES_PATH) if os.path.exists(ISSUES_PATH) else 0,
+             filesig.sig(LOCAL_DEFS_PATH) if os.path.exists(LOCAL_DEFS_PATH) else 0)
         if m != _ikb["mtime"]:
             data = {}
             for path in (ISSUES_PATH, LOCAL_DEFS_PATH):
@@ -3371,7 +3372,7 @@ def _country_index():
     consulted for every record when deciding whether a region is 'unknown'."""
     path = os.path.join(ADM1_DIR, "index.json")
     try:
-        m = os.path.getmtime(path)
+        m = filesig.sig(path)
         if m != _COUNTRY_INDEX["mtime"]:
             with open(path, encoding="utf-8") as f:
                 raw = json.load(f)

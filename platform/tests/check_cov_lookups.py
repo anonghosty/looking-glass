@@ -477,6 +477,15 @@ try:
     ok("an unreadable file: built-in types still; adding starts a new file",
        len(netypes.all_types(nd)) == len(netypes.BUILTIN) and netypes.add(nd, "Second Sector", "") == "second-sector"
        and netypes.aliases(nd)["second-sector"] == "Organisation")
+    # the same tick (filesig.py): a file rewritten with its modification time put back exactly is still seen as changed
+    tp = os.path.join(nd, "network_types.json")
+    st = os.stat(tp)
+    netypes.all_types(nd)
+    with open(tp, "w", encoding="utf-8") as f:
+        f.write("{broken again}")
+    os.utime(tp, ns=(st.st_atime_ns, st.st_mtime_ns))
+    ok("a file rewritten within the same clock tick (same modification time) is still read again",
+       os.stat(tp).st_mtime_ns == st.st_mtime_ns and len(netypes.all_types(nd)) == len(netypes.BUILTIN))
 
     # ------------------------------------------------------------------ geo.py
     print("Places (geocoder)")

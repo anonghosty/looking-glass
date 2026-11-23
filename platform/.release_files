@@ -1,5 +1,5 @@
 # Looking Glass: every file this release ships in this folder (deploy/stale_files.py reads it on update)
-# files: 758
+# files: 760
 .env.example
 .gitignore
 README.md
@@ -62,6 +62,7 @@ executive_pdf.py
 external_access.py
 facets.py
 features.py
+filesig.py
 finding_rules.py
 finding_watch.py
 findings.py
@@ -540,6 +541,7 @@ tests/check_advisory_options.py
 tests/check_ai_framework.py
 tests/check_api_no_secrets.py
 tests/check_at_rest.py
+tests/check_attack_audit.py
 tests/check_attack_map.py
 tests/check_attack_no_duplicates.py
 tests/check_audit_checkpoint.py

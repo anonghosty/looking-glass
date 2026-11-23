@@ -146,6 +146,7 @@ ok("…but not a.b.test.example (one label only)", not ic._covers(["*.test.examp
 print("Installing")
 proj = P("proj"); os.makedirs(os.path.join(proj, "data", "tls"))
 shutil.copy(os.path.join(HERE, "audit_chain.py"), proj); shutil.copy(os.path.join(HERE, "audit_verifier.py"), proj)
+shutil.copy(os.path.join(HERE, "filesig.py"), proj)   # audit_chain needs it, as in a real installation
 os.makedirs(os.path.join(proj, "deploy")); shutil.copy(os.path.join(HERE, "deploy", "install_cert.py"), os.path.join(proj, "deploy"))
 open(os.path.join(proj, "data", "tls", "cert.pem"), "w").write("old certificate\n")
 open(os.path.join(proj, "data", "tls", "key.pem"), "w").write("old key\n")

@@ -27,6 +27,7 @@ import time
 from flask import g, jsonify, request
 
 import pdf_refs
+import filesig  # noqa: E402
 
 CVE_RX = re.compile(r"^CVE-\d{4}-\d{4,7}$", re.I)
 NAME_RX = re.compile(r"^[^\x00-\x1f<>]{1,120}$")
@@ -42,7 +43,7 @@ class Ratings:
 
     def all(self):
         try:
-            m = os.path.getmtime(self.path)
+            m = filesig.sig(self.path)
         except OSError:
             return {}
         if self._cache[0] == m:

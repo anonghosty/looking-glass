@@ -35,6 +35,7 @@ import load_stamps
 from respcache import settled
 from sources import Registry, _is_time
 import special_reports
+import filesig  # noqa: E402
 
 CORE = ("ip", "port", "protocol", "asn", "geo", "region", "city", "hostname", "naics", "sector", "severity", "tag",
         "category")
@@ -77,9 +78,8 @@ SS_BASE = "https://www.shadowserver.org/what-we-do/network-reporting/"
 
 def report_info(name):
     """Official Shadowserver report name, rating, definition and link for a collection (IPv6 variants included)."""
-    import os
     try:
-        m = os.path.getmtime(DEFS_PATH)
+        m = filesig.sig(DEFS_PATH)
         if m != _DEFS["mtime"]:
             with open(DEFS_PATH) as f:
                 _DEFS["data"] = json.load(f).get("reports", {})

@@ -24,6 +24,7 @@ import time
 
 import hostmask
 from report_map import sibling
+import filesig  # noqa: E402
 
 MIN_HOSTS = 5
 HEX = re.compile(r"^(?:0x)?[0-9a-f]{8,}$", re.I)
@@ -64,7 +65,7 @@ class Patterns:
     def _load(self, key, default):
         p = self.paths[key]
         try:
-            m = os.path.getmtime(p)
+            m = filesig.sig(p)
         except OSError:
             m = None
         c = self._c.get(key)

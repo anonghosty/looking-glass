@@ -5,6 +5,17 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-23 (2)
+### Changed
+- **ATT&CK and impact checked against each report's own Shadowserver page.** Every report's suggested MITRE ATT&CK
+  techniques and impact flags were compared with what Shadowserver's page says the report contains; 73 suggestions
+  were corrected and 14 now say no technique fits (for example the Block List, which gathers third-party lists).
+  Mappings a researcher already reviewed are not changed: they show "please check" with the new suggestion beside
+  the old one. Impact flags were corrected for 68 reports.
+- **Internal collections are no longer listed as reports.**
+- **Looking Glass notices a file changed even within the same clock tick** (a check could fail on fast servers).
+- **After updating:** researchers review the reports marked "please check" on the Definitions page.
+
 ## 2026-11-23
 ### Security
 - **A public installation with a bought certificate has Caddy in front.** A few deliberately slow connections could

@@ -24,6 +24,7 @@ import time
 from flask import g, jsonify, render_template, request
 
 import finding_rules
+import filesig  # noqa: E402
 
 STATUSES = [("new", "New"), ("management", "With management"), ("approved", "Approved by management"),
             ("researcher", "Back with the researcher"), ("analyst", "With the analyst"), ("advisor", "With the advisor"),
@@ -150,7 +151,7 @@ class Findings:
 
     def _load(self):
         try:
-            m = os.path.getmtime(self.path)
+            m = filesig.sig(self.path)
         except OSError:
             return
         if m == self.mtime:
@@ -170,7 +171,7 @@ class Findings:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(self.data, f, indent=1, ensure_ascii=False)
         os.replace(tmp, self.path)
-        self.mtime = os.path.getmtime(self.path)
+        self.mtime = filesig.sig(self.path)
 
     def create(self, note, section, name, title, user, role, to=None, kind="management", extra=None):
         """A finding from a saved note (notes.Notes.add's raw note: id, text, codes), sent to `to` (a manager).

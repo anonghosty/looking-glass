@@ -25,6 +25,7 @@ import hashlib
 import json
 import os
 import time
+import filesig  # noqa: E402
 
 ZERO = "0" * 64
 
@@ -274,7 +275,7 @@ class Chain:
 
     def _lines_of(self, p):
         if p.endswith(".gz"):
-            m = os.path.getmtime(p)
+            m = filesig.sig(p)
             c = self._cache.get(p)
             if c and c[0] == m:
                 return c[1]

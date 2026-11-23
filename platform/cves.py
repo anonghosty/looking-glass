@@ -25,6 +25,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import filesig  # noqa: E402
 
 CVE_RE = re.compile(r"^CVE-\d{4}-\d{4,7}$")
 NVD = "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId="
@@ -76,7 +77,7 @@ class CveIntel:
             self.cache = {}
         for k in ("nvd", "epss", "cveorg"):
             self.cache.setdefault(k, {})
-        self._mtime, self._checked = (os.path.getmtime(cache_path) if os.path.exists(cache_path) else 0), time.time()
+        self._mtime, self._checked = (filesig.sig(cache_path) if os.path.exists(cache_path) else 0), time.time()
         self.cache.setdefault("kev", {"t": 0, "items": {}})
 
     # ------------------------------------------------------------------ plumbing
@@ -86,7 +87,7 @@ class CveIntel:
             return
         self._checked = time.time()
         try:
-            m = os.path.getmtime(self.path)
+            m = filesig.sig(self.path)
             if m <= self._mtime:
                 return
             with open(self.path, encoding="utf-8") as f:
@@ -109,7 +110,7 @@ class CveIntel:
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(self.cache, f)
             os.replace(tmp, self.path)
-            self._mtime = os.path.getmtime(self.path)
+            self._mtime = filesig.sig(self.path)
         except OSError:
             pass
 
