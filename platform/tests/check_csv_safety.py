@@ -62,7 +62,8 @@ for root, dirs, files in os.walk(BASE_DIR):
 bare = [n for n, t in SRC.items() if re.search(r"(?<![\w.])csv\.writer\(|DictWriter\(", t)]
 ok("no server code writes CSV without csvsafe (bare csv.writer / DictWriter)", not bare, ", ".join(bare))
 users = sorted(n for n, t in SRC.items() if "csvsafe" in t)
-ok("the exports use csvsafe: app.py, management.py, services_api.py", {"app.py", "management.py", "services_api.py"} <= set(users), ", ".join(users))
+ok("the exports use csvsafe: report_downloads.py (was app.py), management.py, services_api.py",
+   {"report_downloads.py", "management.py", "services_api.py"} <= set(users), ", ".join(users))
 for js in ("static/js/app.js", "static/js/services.js"):
     t = open(os.path.join(BASE_DIR, js), encoding="utf-8").read()
     m = re.search(r"const q = \(s\) => \{ s = String\(s\); if \(/(.+?)/\.test\(s\) && !/(.+?)/\.test\(s\)\) s = \"'\" \+ s;", t)

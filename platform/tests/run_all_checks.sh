@@ -86,6 +86,7 @@ run "every route refuses the roles it should, the reviewed permission map (in-pr
 run "Caddy in front of a public installation: its configuration, source and wiring (offline)" $PY tests/check_caddy_front.py
 run "ATT&CK suggestions checked against Shadowserver's pages; revised ones reach existing mappings (offline)" $PY tests/check_attack_audit.py
 run "Shadowserver's fields: readable labels, its own event mapping, certificate facts, exports (offline)" $PY tests/check_shadowserver_fields.py
+run "The parts moved out of app.py still fit together (names, re-exports, routes)" $PY tests/check_moved_modules.py
 run "security headers, hosts, access modes (offline)" $PY tests/check_cov_security.py
 run "organisation, notes, task monitor, Workers (offline)" $PY tests/check_cov_admin_tools.py
 run "analyst codes: making, reading, channel rules (offline)" $PY tests/check_cov_acodes.py

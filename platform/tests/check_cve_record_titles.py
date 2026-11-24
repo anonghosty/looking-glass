@@ -76,7 +76,11 @@ with tempfile.TemporaryDirectory() as tmp:
     ok("…nothing for a CVE never looked up, nor for a name that is not a CVE", ci.known_description("CVE-2099-0009") == "" and ci.known_description("Expired certificate") == "")
 
 print("2. the platform uses the one rule")
-src = open(os.path.join(HERE, "app.py"), encoding="utf-8").read()
+# app.py's code, including the parts moved into their own modules (2026-11-24), read as written there (no _A. prefix)
+APP_PARTS = ("app.py", "analytics_api.py", "report_downloads.py", "infection_kb.py", "lookup_jobs.py", "card_notes.py",
+             "name_definitions.py", "intel_match_api.py")
+src = "\n".join(open(os.path.join(HERE, p), encoding="utf-8").read().replace("_A.", "").replace("@_R.", "@app.")
+                for p in APP_PARTS if os.path.exists(os.path.join(HERE, p)))   # @_R.route: app.route, recorded
 body = re.search(r"def _defined_titles\(\):\n(.*?)\n    return out", src, re.S)
 body = body.group(1) if body else ""
 ok("the code cards' definitions include the CVEs' public titles", "cve_intel.known_titles()" in body)

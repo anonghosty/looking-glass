@@ -1,5 +1,5 @@
 # Looking Glass: every file this release ships in this folder (deploy/stale_files.py reads it on update)
-# files: 768
+# files: 776
 .env.example
 .gitignore
 README.md
@@ -9,6 +9,7 @@ address_blocks.py
 advisory.py
 advisory_attack.py
 advisory_pdf.py
+analytics_api.py
 app.py
 asn_lookup.py
 at_rest.py
@@ -27,6 +28,7 @@ beacon_stats.py
 beacon_unknown.py
 bounded_jobs.py
 caddy_watch.py
+card_notes.py
 code_integrity.py
 combo_pdf.py
 combo_review.py
@@ -78,9 +80,11 @@ host_label.py
 hostmask.py
 https_only.py
 index_refresh.py
+infection_kb.py
 insider.py
 intel.py
 intel_match.py
+intel_match_api.py
 intelligence.py
 invites.py
 ip_find.py
@@ -89,6 +93,7 @@ job_schedule.py
 library_supply.py
 load_stamps.py
 lockouts.py
+lookup_jobs.py
 malpedia.py
 manage/asn_registry.py
 manage/backup.sh
@@ -104,6 +109,7 @@ manage/slow_requests.py
 manage/verify_backup.sh
 management.py
 masked_fields.py
+name_definitions.py
 name_levels_catchup.py
 name_sources.py
 net_drift.py
@@ -128,6 +134,7 @@ recent_days.py
 region_matches.py
 replay_counts.py
 report_day.py
+report_downloads.py
 report_files.py
 report_map.py
 reports_pdf.py
@@ -646,6 +653,7 @@ tests/check_management.py
 tests/check_masked_fields.py
 tests/check_masked_hostname.py
 tests/check_masked_ids.py
+tests/check_moved_modules.py
 tests/check_nav_once.py
 tests/check_networks_list.py
 tests/check_notes.py

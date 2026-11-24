@@ -293,6 +293,13 @@ server side is in small modules called from `app.py`:
 - **`features.py`, where new features install themselves.** app.py calls `features.install(app, core)` once, at the
   end, with the shared parts (`db`, `registry`, `svc`, `replay_now`, `day_start`, `AUTH`); each new feature has its own
   module and one entry there, so app.py does not grow.
+- **Older features moved out of app.py (2026-11-24), behaviour unchanged:** `analytics_api.py` (the Analyse panels),
+  `report_downloads.py` (the PDF and ZIP reports of an analysis figure), `infection_kb.py` (the infection knowledge
+  base), `lookup_jobs.py` (look-up jobs with a progress window), `card_notes.py` (the researchers' notes on every
+  card), `name_definitions.py` (definitions for names Malpedia does not know) and `intel_match_api.py` (Explore a
+  match). Each reads the names it uses from app.py when it runs (`_A.name`), so it works exactly as it did inside
+  app.py; app.py imports and installs each where its code was and keeps every moved name, so other modules and the
+  checks find them unchanged. The start-up wiring of those parts (stores, other modules' installs) stays in app.py.
 - **`spike_notice.py`, the spike notice on the Overview's buttons.** For each platform, the latest report day (the
   replay day) against the day before: `count_documents` per report on `extracted_date` (date or ISO string), and for a
   spike or a drop what moved most (communications: `$group` by `infection` per report; services: the reports). Scope

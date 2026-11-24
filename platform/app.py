@@ -23,13 +23,13 @@ import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl  # noqa: F401  (analytics_api.py's, through this module)
 
 from bson import ObjectId
 from dotenv import load_dotenv
-from flask import Flask, Response, g, jsonify, render_template, request
+from flask import Flask, Response, g, jsonify, render_template, request  # noqa: F401  (Response: also the moved modules', through this module)
 from pymongo import MongoClient
-from werkzeug.datastructures import MultiDict
+from werkzeug.datastructures import MultiDict  # noqa: F401  (analytics_api.py's, through this module)
 
 from geo import Geocoder
 from malpedia import Malpedia
@@ -119,7 +119,7 @@ settings = Settings(os.path.join(BASE_DIR, "data", "settings.json"))
 host_refs = HostRefs(os.environ.get("REF_SECRET"))
 malpedia = Malpedia(os.environ.get("MALPEDIA_TOKEN"), os.path.join(BASE_DIR, "data", "malpedia_cache.json"), logger=app.logger)
 import cves  # noqa: E402  (NVD, CISA KEV and EPSS for the services platform's issues)
-from malpedia import MAX_PER_MINUTE as MAX_MP  # noqa: E402
+from malpedia import MAX_PER_MINUTE as MAX_MP  # noqa: E402,F401  (lookup_jobs.py's, through this module)
 import offline_names  # noqa: E402  (MISP Galaxy + MITRE ATT&CK, read from data/ only: behind Malpedia, nothing sent out)
 OFFLINE_NAMES = offline_names.OfflineNames(os.path.join(BASE_DIR, "data"), needles=Malpedia.needles)
 cve_intel = cves.CveIntel(os.path.join(BASE_DIR, "data", "cve_cache.json"), os.environ.get("NVD_API_KEY", ""), logger=app.logger)
@@ -1038,899 +1038,33 @@ INSIGHT_KINDS = {
     # any combination of the map filters, as a query string: "attack_class=Scanning&src_city=ACCRA"
     "filters": "Filtered selection",
 }
-
-
-def _parse_time_value(value):
-    """'1080+60|infection|android.badbox2' -> (1080, 60, 'infection', 'android.badbox2')."""
-    span, _, scope = (value or "").partition("|")
-    start_s, _, dur_s = span.partition("+")
-    try:   # minutes; fractions allowed so a window can end exactly at the replay position
-        start, dur = max(0.0, min(1439.0, float(start_s))), max(1 / 60, min(1440.0, float(dur_s or 60)))
-    except ValueError:
-        start, dur = 0.0, 1440.0
-    sk, _, sv = scope.partition("|")
-    if sk not in INSIGHT_KINDS or sk == "time":
-        sk, sv = "", ""
-    return start, dur, sk, sv
-
-
-def _hm(minutes):
-    if minutes >= 1440:
-        return "24:00"
-    m = int(minutes)
-    s = int(round((minutes - m) * 60))
-    return f"{m // 60 % 24:02d}:{m % 60:02d}" + (f":{s:02d}" if s else "")
+# Analytics: the figures, breakdowns and drill-downs of the Analyse panels on both platforms (analytics_api.py, moved out of app.py unchanged, 2026-11-24)
+import analytics_api as _mod_analytics_api  # noqa: E402
+_mod_analytics_api.install(app, sys.modules[__name__])
+from analytics_api import _parse_time_value  # noqa: E402,F401  (analytics_api.py)
+from analytics_api import _hm  # noqa: E402,F401  (analytics_api.py)
 # values that are concealed in demo mode: the browser gets an opaque reference instead, resolved here
 REF_KINDS = ("dst_ip", "http_host", "http_agent", "request")
-
-
-def _place_parts(v):
-    city, _, cc = (v or "").partition("|")
-    return city, cc
-
-
-def _median(xs):
-    xs = sorted(xs)
-    n = len(xs)
-    if not n:
-        return None
-    return xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2
-
-
-def _top(events, field, n=8, label=None, key=None):
-    c = Counter((key(e[field]) if key else e[field]) for e in events if e[field])
-    # a share is of the whole selection, events without a value included (review 2026-11-13: it was of the events
-    # that had one, so a field filled in on a tenth of the events read as 100 %)
-    total = len(events) or 1
-    return [{"value": v, "label": label(v) if label else v, "count": k, "share": round(k / total, 4)} for v, k in c.most_common(n)]
-
-
-def _request_path(url):
-    # "GET /sck/29965/?m=a11&step=669 HTTP/1.0" -> "GET /sck/29965/"
-    parts = url.split(" ")
-    if len(parts) >= 2:
-        return f"{parts[0]} {parts[1].split('?')[0]}"
-    return url.split("?")[0]
-
-
-def _fmt_dur(seconds):
-    if seconds is None:
-        return None
-    if seconds < 90:
-        return f"{seconds:.0f}s"
-    if seconds < 5400:
-        return f"{seconds / 60:.1f} min"
-    return f"{seconds / 3600:.1f} h"
-
-
-def _select_slice(kind, value, rn):
-    """(day, all events of the whole replay day, events matching kind=value)."""
-    return _slice_on(store.get(rn), kind, value)
-
-
-def _slice_on(day, kind, value):
-    """The same selection on a given day (also one loaded from the history: analyst codes, combos.py)."""
-    sofar = day.events
-    if kind == "time":
-        start, dur, sk, sv = _parse_time_value(value)
-        t0 = day.start.timestamp() + start * 60
-        t1 = t0 + dur * 60
-        base = _slice_on(day, sk, sv)[2] if sk else sofar
-        return day, sofar, [e for e in base if t0 <= e["_t"] < t1]
-    if kind == "filters":
-        # the same filter logic as the map, stream and Intel, so the numbers agree everywhere
-        pairs = parse_qsl(value or "", keep_blank_values=False)
-        flt = narrow_filters(parse_filters(MultiDict(pairs)), day, MultiDict(pairs))
-        # a time window ("time=1080+60") narrows by event time; it is not a map filter
-        windows = []
-        for k, v in pairs:
-            if k == "time":
-                start, dur, _, _ = _parse_time_value(v)
-                t0 = day.start.timestamp() + start * 60
-                windows.append((t0, t0 + dur * 60))
-        return day, sofar, [e for e in sofar if matches(e, flt) and all(a <= e["_t"] < b for a, b in windows)]
-    if kind in REF_KINDS:
-        value = host_refs.resolve(value)                # opaque reference (demo mode) or the value itself
-    match_value = "" if value == EMPTY_LABEL.get(kind) else value
-    if kind == "request":
-        ev = [e for e in sofar if e["http_url"] and _request_path(e["http_url"]) == value]
-    elif kind == "dst_port":
-        ev = [e for e in sofar if str(e["dst_port"] or "") == str(match_value)]
-    elif kind in ("src_asn", "dst_asn"):
-        wanted = asn_registry.resolve(value)            # company name, demo alias or AS number
-        ev = [e for e in sofar if e[kind] in wanted]
-    elif kind == "src_ip":
-        real_ip = host_refs.resolve(value)              # opaque host reference or IP
-        ev = [e for e in sofar if e["src_ip"] == real_ip]
-    elif kind == "route":
-        s, _, d = value.partition(">")
-        (sc, sg), (dc, dg) = _place_parts(s), _place_parts(d)
-        ev = [e for e in sofar if (e["src_city"] or "") == sc and (e["src_geo"] or "") == sg
-              and (e["dst_city"] or "") == dc and (e["dst_geo"] or "") == dg]
-    elif kind == "dst_place":
-        dc, dg = _place_parts(value)
-        ev = [e for e in sofar if (e["dst_city"] or "") == dc and (e["dst_geo"] or "") == dg]
-    else:
-        ev = [e for e in sofar if e[kind] == match_value]
-    return day, sofar, ev
-
-
-def _rhythm(ts):
-    """(median gap in seconds, coefficient of variation) for a host's event times, or (None, None)."""
-    if len(ts) < 3:
-        return None, None
-    d = [b - a for a, b in zip(ts, ts[1:]) if b > a]
-    if len(d) < 2:
-        return None, None
-    mean = sum(d) / len(d)
-    sd = (sum((x - mean) ** 2 for x in d) / len(d)) ** 0.5
-    return _median(d), (sd / mean if mean else None)
-
-
-def _hhmmss(t):
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%H:%M:%S")
+from analytics_api import _place_parts  # noqa: E402,F401  (analytics_api.py)
+from analytics_api import _median  # noqa: E402,F401  (analytics_api.py)
+from analytics_api import _top  # noqa: E402,F401  (analytics_api.py)
+from analytics_api import _request_path  # noqa: E402,F401  (analytics_api.py)
+from analytics_api import _fmt_dur  # noqa: E402,F401  (analytics_api.py)
+from analytics_api import _select_slice  # noqa: E402,F401  (analytics_api.py)
+from analytics_api import _slice_on  # noqa: E402,F401  (analytics_api.py)
+from analytics_api import _rhythm  # noqa: E402,F401  (analytics_api.py)
+from analytics_api import _hhmmss  # noqa: E402,F401  (analytics_api.py)
 
 
 DRILL_METRICS = ("events", "share", "hosts", "c2", "dst_ips", "interval", "multi", "reports", "cross", "beacons")
 DRILL_LIMIT = 300
+from analytics_api import api_insight_drill  # noqa: E402,F401  (analytics_api.py)
 
 
-@app.route("/api/insight/drill")
-def api_insight_drill():
-    """The list behind one figure of the analysis view: which hosts, domains, reports or destinations it counts,
-    with follow-up priorities for hosts. Demo mode masks IPs, networks and domains like everywhere else."""
-    kind = request.args.get("kind", "")
-    value = request.args.get("value", "")
-    metric = request.args.get("metric", "")
-    if kind not in INSIGHT_KINDS or metric not in DRILL_METRICS:
-        return jsonify(error="unknown kind or metric"), 400
-    rn = parse_iso(request.args.get("at"), replay_now())
-    demo = is_demo()
-    day, sofar, ev = _select_slice(kind, value, rn)
-    mip = mask_ip if demo else (lambda s: s)
-    mt = mask_text if demo else (lambda s: s)
-    labels = {s["name"]: s["label"] for s in registry.get()}
-    classes = {s["name"]: s["class"] for s in registry.get()}
-    n = len(ev)
-
-    # per-host profile inside the selection, plus whole-day context for the same hosts
-    hosts = {}
-    for e in ev:
-        if not e["src_ip"]:          # destination-only reports have no source host to follow up
-            continue
-        h = hosts.get(e["src_ip"])
-        if h is None:
-            h = hosts[e["src_ip"]] = {"ts": [], "e": e, "crit": 0}
-        h["ts"].append(e["_t"])
-        if e["severity"] == "critical":
-            h["crit"] += 1
-    day_src, day_inf = {}, {}
-    for e in sofar:
-        if e["src_ip"] in hosts:
-            day_src.setdefault(e["src_ip"], set()).add(e["source"])
-            day_inf.setdefault(e["src_ip"], set()).add(e["infection"] or "unknown")
-
-    def host_row(ip):
-        h = hosts[ip]
-        s = h["e"]
-        med, cv = _rhythm(h["ts"])
-        srcs, infs = day_src.get(ip, set()), day_inf.get(ip, set())
-        kinds = {classes.get(x) for x in srcs} - {None}
-        reasons, score = [], 0
-        if len(kinds) > 1:
-            reasons.append("Several kinds of activity"); score += 4
-        if len(srcs) > 1:
-            reasons.append(f"In {len(srcs)} reports"); score += 2
-        if len(infs) > 1:
-            reasons.append(f"{len(infs)} infections / categories"); score += 2
-        if cv is not None and cv < 0.5:
-            reasons.append("Regular beaconing"); score += 1
-        if h["crit"]:
-            reasons.append("Critical"); score += 1
-        return {
-            "ref": s["src_ref"], "ip": mip(ip), "followup": reasons, "score": score, "events": len(h["ts"]),
-            "infections": sorted(infs), "reports": sorted(labels.get(x, x) for x in srcs),
-            "kinds": sorted(kinds), "city": s["src_city"], "network": asn_registry.label(s["src_asn"], demo) or "",
-            "interval": _fmt_dur(med) or "", "rhythm": "" if cv is None else ("Regular" if cv < 0.5 else "Irregular"),
-            "first": _hhmmss(h["ts"][0]), "last": _hhmmss(h["ts"][-1]),
-        }
-
-    def ranked(ips):
-        rows = [host_row(ip) for ip in ips]
-        rows.sort(key=lambda r: (-r["score"], -r["events"]))
-        return rows
-
-    def group(field, key=None):
-        g = {}
-        for e in ev:
-            v = e[field]
-            if not v:
-                continue
-            v = key(v) if key else v
-            x = g.get(v)
-            if x is None:
-                x = g[v] = {"events": 0, "hosts": set(), "crit": 0, "inf": set(), "dst": set(), "geo": set(),
-                            "asn": set(), "ports": set(), "dom": set(), "src": set(), "t0": e["_t"], "t1": e["_t"]}
-            x["events"] += 1; x["inf"].add(e["infection"] or "unknown")
-            if e["src_ip"]: x["hosts"].add(e["src_ip"])
-            if e["dst_ip"]: x["dst"].add(e["dst_ip"])
-            x["src"].add(e["source"]); x["t1"] = e["_t"]
-            if e["severity"] == "critical": x["crit"] += 1
-            if e["dst_geo"]: x["geo"].add(e["dst_geo"])
-            if e["dst_asn"]: x["asn"].add(e["dst_asn"])
-            if e["dst_port"]: x["ports"].add(str(e["dst_port"]))
-            if e["http_host"]: x["dom"].add(mt(e["http_host"]))
-        return sorted(g.items(), key=lambda kv: -kv[1]["events"])
-
-    H = {"ip": "Host IP", "followup": "Follow-up", "events": "Events", "infections": "Infections / categories",
-         "reports": "Reports", "city": "City", "network": "Network", "interval": "Repeat interval",
-         "rhythm": "Rhythm", "first": "First seen", "last": "Last seen", "kinds": "Kinds of activity"}
-    cols = lambda *keys: [[k, H[k]] for k in keys]
-    out = {"metric": metric, "row_kind": None, "intro": "", "empty": "Nothing to list for this selection yet."}
-
-    if metric == "hosts":
-        rows = ranked(hosts)
-        n_fu = sum(1 for r in rows if r["score"] >= 2)
-        out.update(title="Source hosts, ranked for follow-up", row_kind="src_ip",
-                   intro=f"{len(rows):,} source hosts. {n_fu:,} of them have stronger signs of compromise "
-                         "(several kinds of activity, several reports or several infections) and are listed first.",
-                   columns=cols("ip", "followup", "events", "infections", "reports", "city", "network", "interval", "first", "last"),
-                   rows=rows)
-    elif metric == "cross":
-        rows = ranked([ip for ip in hosts if len(day_src.get(ip, ())) > 1])
-        mixed = sum(1 for r in rows if len(r["kinds"]) > 1)
-        out.update(title="Hosts seen in more than one report", row_kind="src_ip",
-                   intro=f"{len(rows):,} hosts appear in several Shadowserver reports on the same day. "
-                         f"{mixed:,} of them show more than one kind of activity (for example botnet C2 traffic and attacks) "
-                         "and should be followed up first.",
-                   columns=cols("ip", "reports", "kinds", "followup", "events", "infections", "city", "network", "first", "last"),
-                   rows=rows, empty="None of these hosts appear in another report yet.")
-    elif metric == "multi":
-        rows = ranked([ip for ip in hosts if len(day_inf.get(ip, ())) > 1])
-        out.update(title="Hosts with more than one infection / category", row_kind="src_ip",
-                   intro=f"{len(rows):,} hosts carry more than one infection or category on the same day. "
-                         "This suggests several infections on one device, or proxy software bundled with malware.",
-                   columns=cols("ip", "infections", "followup", "events", "reports", "city", "network", "first", "last"),
-                   rows=rows, empty="No host in this selection shows more than one infection / category yet.")
-    elif metric == "interval":
-        rows = [r for r in (host_row(ip) for ip in hosts) if r["interval"]]
-        rows.sort(key=lambda r: (r["rhythm"] != "Regular", -r["events"]))
-        reg = sum(1 for r in rows if r["rhythm"] == "Regular")
-        out.update(title="Repeat behaviour of hosts", row_kind="src_ip",
-                   intro=f"{len(rows):,} hosts were seen at least three times. {reg:,} repeat at a regular rhythm, "
-                         "which points to automated beaconing or scripted attacks; they are listed first.",
-                   columns=cols("ip", "interval", "rhythm", "events", "infections", "followup", "city", "network", "first", "last"),
-                   rows=rows, empty="No host has been seen often enough (three times or more) to measure a rhythm yet.")
-    elif metric in ("events", "reports"):
-        if metric == "events":
-            g = {}
-            for e in ev:
-                k = (e["infection"] or "unknown", e["source"])
-                x = g.setdefault(k, {"events": 0, "hosts": set(), "crit": 0})
-                x["events"] += 1; x["crit"] += e["severity"] == "critical"
-                if e["src_ip"]: x["hosts"].add(e["src_ip"])
-            rows = [{"value": inf, "infection": inf, "report": labels.get(src, src), "events": x["events"],
-                     "hosts": len(x["hosts"]), "critical": x["crit"], "share": f"{x['events'] / max(1, n):.1%}"}
-                    for (inf, src), x in sorted(g.items(), key=lambda kv: -kv[1]["events"])]
-            out.update(title="Events by infection / category and report", row_kind="infection",
-                       intro=f"{n:,} events, split by what Shadowserver reported and in which report.",
-                       columns=[["infection", "Infection / category"], ["report", "Report"], ["events", "Events"],
-                                ["hosts", "Source hosts"], ["critical", "Critical"], ["share", "Share of selection"]],
-                       rows=rows)
-        else:
-            rows = [{"value": src, "report": labels.get(src, src), "kind": classes.get(src, ""), "events": x["events"],
-                     "hosts": len(x["hosts"]), "critical": x["crit"], "infections": len(x["inf"]),
-                     "share": f"{x['events'] / max(1, n):.1%}"} for src, x in group("source")]
-            out.update(title="Reports in this selection", row_kind="source",
-                       intro=f"{len(rows):,} Shadowserver report{'s' if len(rows) != 1 else ''} contain these events.",
-                       columns=[["report", "Report"], ["kind", "Attack type"], ["events", "Events"], ["hosts", "Source hosts"],
-                                ["infections", "Infections / categories"], ["critical", "Critical"], ["share", "Share of selection"]],
-                       rows=rows)
-    elif metric == "share":
-        mine = Counter(e["source"] for e in ev)
-        allc = Counter(e["source"] for e in sofar)
-        tot = max(1, len(sofar))
-        rows = [{"value": src, "report": labels.get(src, src), "kind": classes.get(src, ""), "all": k,
-                 "share_all": f"{k / tot:.1%}", "mine": mine.get(src, 0),
-                 "mine_share": f"{mine.get(src, 0) / k:.1%}" if k else ""} for src, k in allc.most_common()]
-        out.update(title="How this selection compares with all events", row_kind="source",
-                   intro=f"This selection has {n:,} of the {len(sofar):,} events Shadowserver reported for the day ({n / tot:.1%}). "
-                         "Each report below shows its size and how much of it belongs to this selection.",
-                   columns=[["report", "Report"], ["kind", "Attack type"], ["all", "All events"], ["share_all", "Share of all events"],
-                            ["mine", "In this selection"], ["mine_share", "Selection's part of the report"]],
-                   rows=rows)
-    elif metric == "c2":
-        rows = [{"value": host_refs.ref(d) if demo else d, "domain": mt(d), "events": x["events"], "hosts": len(x["hosts"]),
-                 "infections": sorted(x["inf"]), "dst": len(x["dst"]), "first": _hhmmss(x["t0"]), "last": _hhmmss(x["t1"])}
-                for d, x in group("http_host")]
-        out.update(title="C2 / sinkhole domains contacted", row_kind="http_host",
-                   intro=f"{len(rows):,} domain names the hosts tried to reach, most contacted first.",
-                   columns=[["domain", "Domain"], ["events", "Events"], ["hosts", "Source hosts"], ["infections", "Infections / categories"],
-                            ["dst", "Destination IPs"], ["first", "First seen"], ["last", "Last seen"]],
-                   rows=rows,
-                   empty="These reports record only IP addresses, not domain names. Open Destination IPs to see where the hosts connected.")
-    elif metric == "dst_ips":
-        rows = []
-        for d, x in group("dst_ip"):
-            rows.append({"value": d, "dst": mip(d), "country": next(iter(x["geo"]), ""),
-                         "network": asn_registry.label(next(iter(x["asn"])), demo) if x["asn"] else "",
-                         "ports": sorted(x["ports"], key=lambda p: int(p) if p.isdigit() else 0), "domains": sorted(x["dom"])[:3],
-                         "events": x["events"], "hosts": len(x["hosts"]), "infections": sorted(x["inf"])})
-        out.update(title="Destination IPs contacted", row_kind="dst_ip",
-                   intro=f"{len(rows):,} destination addresses (sinkholes, honeypot sensors or targets), most contacted first.",
-                   columns=[["dst", "Destination IP"], ["country", "Country"], ["network", "Network"], ["ports", "Ports"],
-                            ["domains", "Domains"], ["events", "Events"], ["hosts", "Source hosts"], ["infections", "Infections / categories"]],
-                   rows=rows)
-        if demo:
-            for r in rows:
-                r["value"] = host_refs.ref(r["value"])   # concealed, but still clickable
-
-    elif metric == "beacons":
-        if demo:                          # analysts and admins only, like the figure
-            out.update(title="Decoded beacons", rows=[], empty="Decoded beacons are shown to analysts and administrators.")
-        elif not beacon_stats.ready(day):
-            out.update(title="Decoded beacons", rows=[], empty="The day's beacons are still being decoded. Try again in a minute.")
-        else:
-            out.update(beacon_stats.drill(ev, mt))
-
-    rows = out.get("rows", [])
-    out["total"] = len(rows)
-    out["rows"] = rows if request.args.get("all") == "1" else rows[:DRILL_LIMIT]   # all=1: CSV export
-    out.setdefault("columns", [])
-    return jsonify(out)
-
-
-# ------------------------------------------------------------------ PDF reports of an analysis figure (both platforms)
-def _scope_text():
-    idx = _country_index().get(settings.data["country"], {})
-    c = idx.get("country", settings.data["country"])
-    if settings.restricted:
-        n, k = len(settings.data["networks"]), len(settings.data["cidrs"])
-        return f"{c} · constituency: {n} network{'s' if n != 1 else ''}" + (f" and {k} address range{'s' if k != 1 else ''}" if k else "")
-    return f"{c} · whole country"
-
-
-def _view_json(name):
-    """Run another endpoint's view with this request's arguments; (data, None) or (None, error response)."""
-    res = app.view_functions[name]()
-    if isinstance(res, tuple):
-        return None, res
-    return res.get_json(), None
-
-
-def _pdf_label():
-    import re as _re
-    return _re.sub(r"[\x00-\x1f]", " ", request.args.get("label") or "").strip()[:160]
-
-
-def _file_base(parts):
-    import re as _re
-    return "looking-glass_" + ("_".join(_re.sub(r"[^\w.-]+", "-", str(p)).strip("-")[:40] for p in parts if p) or "report")
-
-
-def _report_response(pdf, base, cols, prow):
-    """format=pdf: the PDF alone. Otherwise (default) a ZIP with the PDF and the complete list as CSV."""
-    import io as _io, zipfile
-    if request.args.get("format") == "pdf":
-        return Response(pdf, mimetype="application/pdf",
-                        headers={"Content-Disposition": f'attachment; filename="{base}.pdf"', "Cache-Control": "no-store"})
-    import csvsafe   # no spreadsheet formulas in any cell
-    buf = _io.StringIO()
-    w = csvsafe.writer(buf)
-    w.writerow([lbl for _, lbl in cols])
-    for r in prow:
-        w.writerow([r.get(k, "") for k, _ in cols])
-    z = _io.BytesIO()
-    with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(f"{base}.pdf", pdf)
-        zf.writestr(f"{base}.csv", "\ufeff" + buf.getvalue())
-    return Response(z.getvalue(), mimetype="application/zip",
-                    headers={"Content-Disposition": f'attachment; filename="{base}.zip"', "Cache-Control": "no-store"})
-
-
-def _short(x):
-    if x.get("kind") == "cve":
-        bits = [f"CVSS {x['cvss']['score']} {x['cvss'].get('severity', '')}".strip()] if x.get("cvss") else []
-        if x.get("exploited"):
-            bits.append("ACTIVELY EXPLOITED (CISA KEV)")
-        if x.get("epss") is not None:
-            bits.append(f"EPSS {x['epss']:.1%}")
-        if x.get("pending"):
-            bits.append("not looked up yet")
-        elif not x.get("found"):
-            bits.append("no public record")
-        name = (x.get("kev") or {}).get("name") or __import__("cves").short_title(x.get("description"))   # whole first sentence
-        return f"{name} ({', '.join(bits)})" if name else ", ".join(bits)
-    if x.get("found") and x.get("kind") == "actor":
-        return f"{x.get('name')} (threat actor)"
-    if x.get("found"):
-        return f"{x.get('name')} ({x.get('family')})"
-    if x.get("curated"):
-        return f"{x.get('title')} (Looking Glass definition)"
-    if x.get("reference"):
-        return f"{x.get('name')} ({x.get('source_label')})"
-    if x.get("nosource"):
-        return f"no source knows this name: {x.get('title')}"
-    return x.get("title") or "no source knows this name"
-
-
-def _enrich_names(ordered):
-    """[(name, stat)] -> ({name: card}, {name: stat}, note). At most 60 names (Malpedia answers are cached)."""
-    if not AUTH["has_perm"]("malpedia"):
-        return {}, {}, ""
-    out, stats = {}, {}
-    for name, stat in ordered:
-        if len(out) >= 60:
-            break
-        if not name or name.startswith("ref:") or name in out:
-            continue
-        try:
-            out[name] = mp_resolve(name)[0]
-        except ValueError:
-            continue
-        except RuntimeError as exc:
-            out[name] = {"found": False, "pending": True, "title": "Not checked yet",
-                         "reason": f"Malpedia did not answer in time ({security.public_error(exc, 'no answer')}). Download the report again in a minute."}
-        stats[name] = stat
-    note = ("Each infection / category was looked up on Malpedia, the malware encyclopedia of Fraunhofer FKIE (malware "
-            "families, and threat actors for group names). Names Malpedia does not list are explained from the definitions "
-            "written by the security researchers of the organisation that uses this platform, with their references, then "
-            "from MISP Galaxy and MITRE ATT&CK (copies kept on the server), or from the evidence in the reports."
-            if malpedia.enabled else
-            "Malpedia is not set up on this platform, so the infections / categories are explained from the definitions "
-            "written by the security researchers of the organisation that uses this platform (with their references) and "
-            "the Looking Glass knowledge base, then from MISP Galaxy and MITRE ATT&CK (copies kept on the server), or from "
-            "the evidence in the reports.")
-    return out, stats, note
-
-
-def _bd_rows(rows, total, hosts=False):
-    out = []
-    for r in rows:
-        share = r.get("share")
-        share = share if isinstance(share, (int, float)) else (r.get("count", 0) / max(1, total))
-        row = [r.get("label") or r.get("value") or "(none)", f"{r.get('count', 0):,}"]
-        if hosts:
-            row.append(f"{r.get('hosts', 0):,}")
-        out.append(row + [f"{share:.1%}"])
-    return out
-
-
-def _pdf_rows(columns, rows, enr, issues=False, row_name=False):
-    """Cells as printed text; plus what each infection (or issue) is, when the list has them."""
-    has_inf = enr and (row_name or any(k in (("issues",) if issues else ("infections", "infection")) for k, _ in columns))
-    label = "What it is (CVE: NVD / CISA KEV / EPSS; others: definition)" if issues else "What it is"
-    cols = columns + ([["_explained", label]] + ([] if issues else [["_source", "Source"]]) + [["_attack", "MITRE ATT&CK"]]
-                      if has_inf else [])
-    out = []
-    for r in rows:
-        x = {}
-        for k, _ in cols:
-            v = r.get(k)
-            if k == "_explained":
-                names = ([r.get("name")] if row_name else (r.get("issues") or [])) if issues else \
-                    [n for n in ([r.get("infection")] if r.get("infection") else (r.get("infections") or [])) if n]
-                v = "; ".join(f"{n}: {_short(enr[n])}" for n in names if n in enr)
-            elif k == "_attack":                  # the ATT&CK techniques (IDs) of each name / issue, with the version used
-                names = ([r.get("name")] if row_name else (r.get("issues") or [])) if issues else \
-                    [n for n in ([r.get("infection")] if r.get("infection") else (r.get("infections") or [])) if n]
-                v = "; ".join(f"{n}: {attack_map.ids_text(enr[n].get('attack'))}" for n in names if n in enr and enr[n].get("attack"))
-            elif k == "_source":                  # which source answered, and the others that know the name
-                names = [n for n in ([r.get("infection")] if r.get("infection") else (r.get("infections") or [])) if n]
-                v = "; ".join(f"{n}: {', '.join(enr[n].get('sources') or []) or 'no source knows this name'}" for n in names if n in enr)
-            elif k == "followup":
-                v = "; ".join(v or []) or "Monitor"
-            elif isinstance(v, list):
-                v = ", ".join(str(i) for i in v)
-            elif isinstance(v, (int, float)):
-                v = f"{v:,}"
-            elif k in ("first", "last") and isinstance(v, str) and "T" in v:
-                v = v.replace("T", " ")[:19]
-            elif k == "city":
-                v = (v or "").title()
-            x[k] = "" if v is None else v
-        out.append(x)
-    return cols, out
-
-
-SOURCES_TEXT = [
-    "Data: the Shadowserver Foundation's free daily network reports for the constituency (sinkholes, honeypots and "
-    "internet-wide scans). An event is one report row; one host can appear in many rows and reports.",
-    "Malware families and threat actors: Malpedia (Fraunhofer FKIE), malpedia.caad.fkie.fraunhofer.de.",
-    "Looking Glass definitions: written by the security researchers of the organisation that uses this platform, for "
-    "names that Malpedia does not list and for issues that are not CVEs, each with its references (evidence) and the "
-    "name of the researcher who wrote it.",
-    "Names neither Malpedia nor the researchers explain: MISP Galaxy (its Malpedia cluster is Malpedia content, "
-    "CC BY-NC-SA 3.0; Botnet and Tool clusters CC0 1.0 / BSD 2-Clause) and MITRE ATT&CK (© The MITRE Corporation, "
-    "reproduced and distributed with the permission of The MITRE Corporation), read from copies kept on the server.",
-    "Vulnerabilities (CVEs): NIST National Vulnerability Database (description, CVSS score), CISA Known Exploited "
-    "Vulnerabilities catalog (confirmed active exploitation) and FIRST EPSS (probability of exploitation in the next 30 days).",
-    "Figures describe the replay day up to the time of the analysis. The complete list is in the CSV file delivered "
-    "with this report.",
-]
-
-
-@app.route("/api/insight/report.pdf")
-@app.route("/api/insight/report")
-def api_insight_report_pdf():
-    """PDF of one analysis figure on the network-communications platform (same arguments as the drill-down + all=1)."""
-    if not AUTH["has_perm"]("export"):
-        return jsonify(error="Your role cannot download reports (permission 'export')."), 403
-    if request.args.get("all") != "1":
-        return jsonify(error="all=1 expected"), 400
-    I, err = _view_json("api_insight")
-    if err:
-        return err
-    D, err = _view_json("api_insight_drill")
-    if err:
-        return err
-    import reports_pdf
-    rows = D.get("rows") or []
-    # what to explain: the selection's infections by events, then any other name in the list
-    inf_b = (I.get("breakdowns") or {}).get("infection") or []
-    ordered = [(r["value"], f"{r['count']:,} events ({r['share']:.1%} of the selection)") for r in inf_b if r.get("value")]
-    if I.get("kind") == "infection":
-        ordered.insert(0, (I["value"], f"{I['total']:,} events"))
-    seen = Counter(n for r in rows for n in ([r.get("infection")] if r.get("infection") else (r.get("infections") or [])) if n)
-    ordered += [(n, f"on {k:,} listed entr{'y' if k == 1 else 'ies'}") for n, k in seen.most_common()]
-    enr, stats, note = _enrich_names(ordered)
-
-    pts = list(I.get("insights") or [])
-    hostish = D.get("row_kind") == "src_ip"
-    priorities = None
-    if hostish and rows:
-        top = [r for r in rows if r.get("score", 0) >= 2][:15] or rows[:10]
-        priorities = (["Host IP", "Follow-up", "Events", "Infections / categories", "Reports", "Network"],
-                      [[r.get("ip"), "; ".join(r.get("followup") or []) or "Monitor", f"{r.get('events', 0):,}",
-                        ", ".join(r.get("infections") or []), ", ".join(r.get("reports") or []), r.get("network")] for r in top],
-                      [0.12, 0.2, 0.07, 0.23, 0.23, 0.15])
-    if enr:
-        f = sum(1 for x in enr.values() if x.get("found") and x.get("kind") != "actor")
-        a = sum(1 for x in enr.values() if x.get("kind") == "actor")
-        c = sum(1 for x in enr.values() if x.get("curated"))
-        o = sum(1 for x in enr.values() if x.get("reference"))      # MISP Galaxy / MITRE ATT&CK answered (name_sources.py)
-        rest = len(enr) - f - a - c - o
-        pts.append(f"Of the {len(enr)} infections / categories explained in this report, {f} are malware families in Malpedia"
-                   + (f", {a} {'is a threat actor' if a == 1 else 'are threat actors'}" if a else "")
-                   + (f", {c} {'has' if c == 1 else 'have'} a Looking Glass definition" if c else "")
-                   + (f", {o} {'is' if o == 1 else 'are'} described by MISP Galaxy or MITRE ATT&CK" if o else "")
-                   + (f" and {rest} {'is' if rest == 1 else 'are'} known to no source (explained from the report evidence)"
-                      if rest else "") + ".")
-    peak = I.get("peak_hour")
-    kpis = [(f"{I.get('total', 0):,}", "events in this selection"), (f"{I.get('share', 0):.1%}", f"of the day's {I.get('all_total', 0):,} events"),
-            (f"{I.get('hosts', 0):,}", "source hosts"), (f"{I.get('reports', 0):,}", "reports"),
-            (f"{I.get('cross_report_hosts', 0):,}", "hosts in several reports"), (f"{I.get('multi_infected', 0):,}", "hosts with several infections"),
-            (f"{I.get('regular_beacons', 0):,}", "hosts beaconing regularly"), (I.get("beacon_median_label") or "", "typical repeat interval"),
-            (f"{I.get('c2_hosts', 0):,}", "C2 / sinkhole domains"), (f"{I.get('dst_ips', 0):,}", "destination IPs"),
-            (f"{peak:02d}:00 UTC" if peak is not None else "", "peak hour"), (f"{len(rows):,}", "entries in this list")]
-    if I.get("decoded_beacons") is not None:
-        kpis.append((f"{I['decoded_beacons']:,}", "decoded beacons"))
-    B = I.get("breakdowns") or {}
-    for r in B.get("src_city") or []:
-        r["label"] = str(r.get("label") or "").title()
-    titles = [("source", "Reports"), ("attack_class", "Attack types"), ("infection", "Infections / categories"), ("severity", "Severity"),
-              ("src_city", "Cities"), ("src_asn", "Source networks"), ("http_host", "C2 / sinkhole domains"), ("dst_geo", "Destination countries"),
-              ("dst_asn", "Destination networks"), ("dst_ip", "Destination IPs"), ("dst_port", "Destination ports"), ("tag", "Tags"),
-              ("request", "Requested paths"), ("http_agent", "User agents")]
-    total = I.get("total", 0)
-    bds = [(lbl, [lbl, "Events", "Share"], _bd_rows(B[k], total)) for k, lbl in titles if B.get(k)]
-    charts = [(lbl, B[k]) for k, lbl in (("source", "Reports"), ("infection", "Infections / categories"), ("src_asn", "Source networks"),
-                                          ("src_city", "Cities"), ("attack_class", "Attack types"), ("dst_geo", "Destination countries")) if B.get(k)]
-    gl = []
-    labels = {x["name"]: x["label"] for x in registry.get()}
-    for r in B.get("source") or ([{"value": I["value"]}] if I.get("kind") == "source" else []):
-        d = _report_def(r["value"])
-        item = (d.get("title") or labels.get(r["value"], r["value"]), " ".join(v for v in (d.get("def"), d.get("why")) if v), d.get("url"))
-        if item[0] not in {x[0] for x in gl}:
-            gl.append(item)
-    cols, prow = _pdf_rows(D.get("columns") or [], rows, enr)
-    sel = _pdf_label() or f"{I.get('kind_label', '')}: {I.get('value_label') or I.get('value', '')}"
-    base = _file_base([(I.get("as_of") or "")[:10], sel, D.get("metric")])
-    spec = {"platform_label": "Network communications", "csv_name": f"{base}.csv", "title": D.get("title"), "selection": sel, "day": (I.get("as_of") or "")[:10],
-            "generated_by": (getattr(g, "user", None) or {}).get("user", ""), "scope": _scope_text(), "demo": is_demo(),
-            "intro": D.get("intro"), "summary_points": pts, "kpis": kpis, "hours": I.get("hours"), "peak_hour": peak,
-            "priorities": priorities, "enrichment": enr, "enrichment_stats": stats, "enrichment_note": note,
-            "columns": cols, "rows": prow, "total": D.get("total", len(rows)), "breakdowns": bds, "charts": charts,
-            "glossary": gl, "sources": SOURCES_TEXT}
-    pdf = reports_pdf.build(spec)
-    AUTH["audit"].add("report_pdf", user=(getattr(g, "user", None) or {}).get("user", ""), target=f"comms:{D.get('metric')}",
-                      detail=f"{sel[:80]} · {len(rows)} rows")
-    return _report_response(pdf, base, cols, prow)
-
-
-@app.route("/api/svc/report.pdf")
-@app.route("/api/svc/report")
-def api_svc_report_pdf():
-    """PDF of one analysis figure on the publicly accessible / vulnerable services platform."""
-    if not AUTH["has_perm"]("export"):
-        return jsonify(error="Your role cannot download reports (permission 'export')."), 403
-    if request.args.get("all") != "1":
-        return jsonify(error="all=1 expected"), 400
-    I, err = _view_json("svc_insight")
-    if err:
-        return err
-    D, err = _view_json("svc_drill")
-    if err:
-        return err
-    import reports_pdf
-    rows = D.get("rows") or []
-    pts = list(I.get("findings") or [])
-    priorities = None
-    if D.get("row_kind") == "ip" and rows:
-        top = [r for r in rows if len(r.get("issues") or []) > 1 or "critical" in (r.get("followup") or [])][:15] or rows[:10]
-        priorities = (["Host IP", "Follow-up", "Issues", "Reports / services", "Records", "Network", "Device / product"],
-                      [[r.get("ip"), "; ".join(r.get("followup") or []) or "Monitor", ", ".join(r.get("issues") or []),
-                        ", ".join(r.get("services") or []), f"{r.get('events', 0):,}", r.get("network"), r.get("device")] for r in top],
-                      [0.11, 0.13, 0.22, 0.22, 0.06, 0.13, 0.13])
-    hours = None
-    hb = I.get("hours_by_family") or {}
-    if hb:
-        hours = [sum(v[i] for v in hb.values()) for i in range(24)]
-    peak = I.get("peak_hour")
-    kpis = [(f"{I.get('total', 0):,}", "records in this selection"), (f"{I.get('share', 0):.1%}", f"of the day's {I.get('day_total', 0):,} records"),
-            (f"{I.get('hosts', 0):,}", "hosts"), (f"{I.get('vulnerable_hosts', 0):,}", "hosts with a concrete issue"),
-            (f"{I.get('multi_issue_hosts', 0):,}", "hosts with several issues"), (f"{I.get('cross_report_hosts', 0):,}", "hosts in several reports"),
-            (f"{I.get('critical', 0):,}", "critical records"), (f"{I.get('high', 0):,}", "high-severity records"),
-            (f"{I.get('services', 0):,}", "services (reports)"), (f"{I.get('networks', 0):,}", "networks"),
-            (f"{I.get('issues', 0):,}", "different issues"), (f"{I.get('regions', 0):,}", "regions")]
-    B = I.get("breakdowns") or {}
-    total = I.get("total", 0)
-    titles = [("service", "Services (reports)"), ("family", "Report families"), ("issue", "Issues"), ("severity", "Severity"),
-              ("network", "Networks"), ("region", "Regions"), ("city", "Cities"), ("port", "Ports"), ("tag", "Tags"),
-              ("vendor", "Vendors"), ("product", "Products"), ("device_type", "Device types"), ("sector", "Sectors")]
-    bds = [(lbl, [lbl, "Records", "Hosts", "Share"], _bd_rows(B[k], total, hosts=True)) for k, lbl in titles if B.get(k)]
-    charts = [(lbl, B[k]) for k, lbl in (("service", "Services (reports)"), ("issue", "Issues"), ("network", "Networks"),
-                                          ("region", "Regions"), ("port", "Ports"), ("vendor", "Vendors")) if B.get(k)]
-    G, _ = _view_json("svc_glossary")
-    gl = []
-    names = {str(r.get("value")) for r in B.get("service") or []} | {str(r.get("label")) for r in B.get("service") or []}
-    for x in (G or {}).get("reports", []):
-        if x["name"] in names or x["label"] in names:
-            if (x.get("title") or x["label"]) not in {y[0] for y in gl}:
-                gl.append((x.get("title") or x["label"], " ".join(v for v in (x.get("def"), x.get("why")) if v), x.get("url")))
-    # the issues explained: CVEs (NVD, CISA KEV, EPSS) and the others (definitions; never looked up)
-    enr, stats, note = {}, {}, ""
-    if AUTH["has_perm"]("malpedia"):
-        counts = {}
-        for r in B.get("issue") or []:
-            counts[r["value"]] = (r.get("count", 0), r.get("hosts", 0))
-        listed = Counter(i for r in rows for i in ([r.get("name")] if D.get("row_kind") == "issue" else (r.get("issues") or [])) if i)
-        order = sorted(set(counts) | set(listed), key=lambda i: (-counts.get(i, (0, 0))[1], -listed.get(i, 0)))[:80]
-        enr = issues_resolve(order, budget=20)
-        for i in order:
-            c = counts.get(i)
-            stats[i] = f"{c[0]:,} records on {c[1]:,} hosts" if c else f"on {listed.get(i, 0):,} listed entr{'y' if listed.get(i, 0) == 1 else 'ies'}"
-        kev = [i for i, x in enr.items() if x.get("exploited")]
-        if kev:
-            pts.insert(0, f"{len(kev)} of the issues in this selection {'is a vulnerability' if len(kev) == 1 else 'are vulnerabilities'} "
-                          f"that CISA confirms {'is' if len(kev) == 1 else 'are'} being actively exploited (Known Exploited Vulnerabilities "
-                          f"catalog): {', '.join(kev[:8])}"
-                          # the rest named as a count, never cut off with "…" (2026-11-18)
-                          + (f" and {len(kev) - 8} more, each explained under Issues explained" if len(kev) > 8 else "")
-                          + ". Hosts with these should be patched first.")
-        crit = [i for i, x in enr.items() if (x.get("cvss") or {}).get("score") and x["cvss"]["score"] >= 9]
-        if crit:
-            pts.append(f"{len(crit)} CVE{'s' if len(crit) != 1 else ''} in this selection {'is' if len(crit) == 1 else 'are'} rated critical (CVSS 9 or more).")
-        note = ("Issues that are CVEs were looked up in the NIST National Vulnerability Database (description, CVSS score), "
-                "CISA's Known Exploited Vulnerabilities catalog (confirmed active exploitation, required action) and FIRST EPSS "
-                "(probability of exploitation in the next 30 days). Other issues are not looked up anywhere: they are explained "
-                "from the definitions written by the security researchers of the organisation that uses this platform and the "
-                "Looking Glass knowledge base, with their references.")
-    cols, prow = _pdf_rows(D.get("columns") or [], rows, enr, issues=True, row_name=D.get("row_kind") == "issue")
-    sel = _pdf_label() or "Selection"
-    base = _file_base([I.get("day"), sel, D.get("metric")])
-    spec = {"platform_label": "Publicly accessible / vulnerable services", "title": D.get("title"), "selection": sel,
-            "csv_name": f"{base}.csv", "enrichment": enr, "enrichment_stats": stats, "enrichment_note": note,
-            "enrichment_title": "Issues explained",
-            "day": I.get("day"), "generated_by": (getattr(g, "user", None) or {}).get("user", ""), "scope": _scope_text(),
-            "demo": is_demo(), "intro": D.get("intro"), "summary_points": pts, "kpis": kpis, "hours": hours, "peak_hour": peak,
-            "priorities": priorities, "columns": cols, "rows": prow, "total": D.get("total", len(rows)), "breakdowns": bds,
-            "charts": charts, "glossary": gl[:40], "sources": [SOURCES_TEXT[0], SOURCES_TEXT[2], SOURCES_TEXT[3], SOURCES_TEXT[4]]}
-    pdf = reports_pdf.build(spec)
-    AUTH["audit"].add("report_pdf", user=(getattr(g, "user", None) or {}).get("user", ""), target=f"services:{D.get('metric')}",
-                      detail=f"{sel[:80]} · {len(rows)} rows")
-    return _report_response(pdf, base, cols, prow)
-
-
-@app.route("/api/insight")
-def api_insight():
-    """Analytics for one entity (city, infection, C2 host, country, host, ASN) over the whole replay day."""
-    kind = request.args.get("kind", "")
-    value = request.args.get("value", "")
-    if kind not in INSIGHT_KINDS:
-        return jsonify(error="unknown kind"), 400
-    rn = parse_iso(request.args.get("at"), replay_now())
-    demo = is_demo()
-    day, sofar, ev = _select_slice(kind, value, rn)
-    n = len(ev)
-    mip = mask_ip if demo else (lambda s: s)
-
-    # per-host timing -> beaconing analysis
-    by_host = {}
-    for e in ev:
-        if e["src_ip"]:
-            by_host.setdefault(e["src_ip"], []).append(e["_t"])
-    intervals, regular = [], 0
-    multi = 0
-    for ip, ts in by_host.items():
-        if len(ts) >= 3:
-            d = [b - a for a, b in zip(ts, ts[1:]) if b > a]
-            if len(d) >= 2:
-                m = _median(d)
-                intervals.append(m)
-                mean = sum(d) / len(d)
-                sd = (sum((x - mean) ** 2 for x in d) / len(d)) ** 0.5
-                if mean and sd / mean < 0.5:
-                    regular += 1
-    host_infections = {}
-    for e in ev:
-        if e["src_ip"]:
-            host_infections.setdefault(e["src_ip"], set()).add(e["infection"] or "unknown")
-    # co-infection: hosts in this slice that show >1 infection anywhere today
-    all_inf = {}
-    for e in sofar:
-        if e["src_ip"] in by_host:
-            all_inf.setdefault(e["src_ip"], set()).add(e["infection"] or "unknown")
-    multi = sum(1 for s in all_inf.values() if len(s) > 1)
-
-    hours = [0] * 24
-    for e in ev:
-        hours[int((e["_t"] - day.start.timestamp()) // 3600) % 24] += 1
-    peak_hour = max(range(24), key=lambda h: hours[h]) if n else None
-
-    # --- extra chart data for the analysis view
-    t0 = day.start.timestamp()
-    cur_hour = max(0, min(23, int((rn.timestamp() - t0) // 3600)))   # replay position marker only
-    hours_by_class = {}
-    timeline = [0] * 96
-    for e in ev:
-        hours_by_class.setdefault(e["attack_class"], [0] * 24)[int((e["_t"] - t0) // 3600) % 24] += 1
-        timeline[min(95, int((e["_t"] - t0) // 900))] += 1
-    severity = [{"value": v or "unrated", "count": k} for v, k in Counter(e["severity"] for e in ev).most_common()]
-
-    hosts_sorted = sorted(by_host.items(), key=lambda kv: -len(kv[1]))
-    top_hosts = []
-    for ip, ts in hosts_sorted[:10]:
-        sample = next(e for e in ev if e["src_ip"] == ip)
-        top_hosts.append({
-            "ip": mip(ip), "ref": sample["src_ref"], "count": len(ts), "city": sample["src_city"],
-            "asn": asn_registry.label(sample["src_asn"], demo),
-            "infections": sorted(host_infections.get(ip, [])),
-            "first": iso(datetime.fromtimestamp(ts[0], timezone.utc)), "last": iso(datetime.fromtimestamp(ts[-1], timezone.utc)),
-        })
-    top10_share = sum(len(ts) for _, ts in hosts_sorted[:10]) / n if n else 0
-    company = lambda a: asn_registry.company(a, demo)
-
-    labels = {s["name"]: s["label"] for s in registry.get()}
-    mt = mask_text if demo else (lambda s: s)
-    breakdowns = {
-        "source": _top(ev, "source", 12, label=lambda v: labels.get(v, v)),
-        "attack_class": _top(ev, "attack_class"),
-        "infection": _top(ev, "infection"),
-        "src_city": _top(ev, "src_city"),
-        "src_asn": _top(ev, "src_asn", key=company),          # grouped by company (or alias)
-        # grouped by the real value, shown masked in demo mode (the value becomes an opaque reference below)
-        "http_host": _top(ev, "http_host", label=mt),
-        "dst_ip": _top(ev, "dst_ip", label=mip),
-        "dst_geo": _top(ev, "dst_geo"),
-        "dst_asn": _top(ev, "dst_asn", key=company),
-        "dst_port": _top(ev, "dst_port"),
-        "http_agent": _top(ev, "http_agent", 5, label=mt),
-        "severity": _top(ev, "severity"),
-        "tag": _top(ev, "tag", 6),
-    }
-    paths = Counter(_request_path(e["http_url"]) for e in ev if e["http_url"])
-    breakdowns["request"] = [{"value": v, "label": mt(v), "count": k, "share": round(k / (len(ev) or 1), 4)} for v, k in paths.most_common(6)]
-    if demo:
-        for key in REF_KINDS:
-            for r in breakdowns.get(key, []):
-                r["value"] = host_refs.ref(r["value"])
-    for r in breakdowns["dst_port"]:
-        r["value"] = str(r["value"])
-    breakdowns = {k: v for k, v in breakdowns.items() if v and not (k == kind)}
-
-    # cross-report correlation: the same hosts seen in other collections today
-    slice_hosts = set(by_host)
-    host_sources = {}
-    for e in sofar:
-        if e["src_ip"] in slice_hosts:
-            host_sources.setdefault(e["src_ip"], set()).add(e["source"])
-    cross_hosts = [ip for ip, s in host_sources.items() if len(s) > 1]
-    other_src = Counter(s for ip in cross_hosts for s in host_sources[ip] if not (kind == "source" and s == value))
-    n_reports = len({e["source"] for e in sofar})
-
-    # plain-language findings
-    insights = []
-    if n:
-        day_txt = rn.strftime("%Y-%m-%d")
-        share = n / max(1, len(sofar))
-        share_txt = "less than 0.1%" if 0 < share < 0.001 else f"{share:.1%}"
-        insights.append(f"Shadowserver reported {n:,} event{'' if n == 1 else 's'} for {day_txt}. "
-                        f"That is {share_txt} of all {len(sofar):,} events across {n_reports} reports.")
-        src_b = breakdowns.get("source")
-        if src_b and kind != "source":
-            parts = ", ".join(f"{r['label']} {r['share']:.0%}" for r in src_b[:4])
-            insights.append(f"Found in {len(src_b)} report{'s' if len(src_b) > 1 else ''}: {parts}.")
-        insights.append(f"{len(by_host):,} different source hosts were involved. The 10 most active hosts account for {top10_share:.0%} of these events.")
-        if cross_hosts and kind != "src_ip":
-            top_other = ", ".join(f"{labels.get(s, s)} ({k:,})" for s, k in other_src.most_common(3))
-            cls = {s["name"]: s["class"] for s in registry.get()}
-            mixed = sum(1 for ip in cross_hosts if len({cls.get(s) for s in host_sources[ip]}) > 1)
-            msg = f"{len(cross_hosts):,} of these hosts also appear in other reports on the same day, most often in {top_other}."
-            if mixed:
-                msg += (f" {mixed:,} of them {'shows' if mixed == 1 else 'show'} more than one kind of activity"
-                        " (for example botnet C2 traffic and attacks), which strongly suggests a compromised device.")
-            else:
-                msg += " They contact several sinkholes, which suggests several infections or command channels on the same device."
-            insights.append(msg)
-        # the host's address, not its reference: host_sources is keyed by address (review 2026-11-13: the reference
-        # never matched, so this sentence never showed)
-        host_ip = host_refs.resolve(value) if kind == "src_ip" else None
-        if kind == "src_ip" and len(host_sources.get(host_ip, ())) > 1:
-            insights.append(f"This host appears in {len(host_sources[host_ip])} different reports on the same day.")
-        if intervals:
-            insights.append(f"Hosts seen more than once typically repeat every {_fmt_dur(_median(intervals))} (median). "
-                            f"{regular:,} of these {len(intervals):,} hosts repeat at a regular rhythm, which points to automated beaconing or scripted attacks.")
-        if multi:
-            insights.append(f"{multi:,} of these hosts show more than one infection / category on the same day, which suggests several infections on one device or proxy software bundled with malware.")
-        if peak_hour is not None:
-            insights.append(f"Activity peaked between {peak_hour:02d}:00 and {(peak_hour + 1) % 24:02d}:00 UTC, with {hours[peak_hour]:,} events.")
-        for key, what in (("source", "report"), ("infection", "infection / category"), ("src_asn", "source network"), ("http_host", "C2 domain"), ("src_city", "affected city")):
-            b = breakdowns.get(key)
-            if b and b[0]["share"] >= 0.5 and len(b) > 1:
-                lbl = b[0]["label"].title() if key == "src_city" else b[0]["label"]
-                insights.append(f"By {what}, {lbl} accounts for most of these events ({b[0]['share']:.0%}).")
-        hosts_n = len({e["http_host"] for e in ev if e["http_host"]})
-        if kind != "http_host" and hosts_n > 1:
-            insights.append(f"{hosts_n:,} different C2 / sinkhole domains were contacted.")
-
-    return jsonify(
-        kind=kind, kind_label=INSIGHT_KINDS[kind], value=value, as_of=iso(rn),
-        total=n, share=round(n / max(1, len(sofar)), 4), all_total=len(sofar),
-        # an empty value is not a network or an address (review 2026-11-13: both counts included it)
-        hosts=len(by_host), asns=len({e["src_asn"] for e in ev if e["src_asn"]}), c2_hosts=len({e["http_host"] for e in ev if e["http_host"]}),
-        dst_ips=len({e["dst_ip"] for e in ev if e["dst_ip"]}),
-        first=ev[0]["extracted_date"] if ev else None, last=ev[-1]["extracted_date"] if ev else None,
-        beacon_median=_median(intervals), beacon_median_label=_fmt_dur(_median(intervals)), regular_beacons=regular,
-        multi_infected=multi, hours=hours, peak_hour=peak_hour,
-        # decoded_beacons, beacon_devices: analysts and admins, once the day is labelled (beacon_stats.ready)
-        **({} if is_demo() or not beacon_stats.ready(day) else beacon_stats.counts(ev)),
-        hours_by_class=hours_by_class, current_hour=cur_hour, timeline=timeline, severity=severity,        insights=insights, breakdowns=breakdowns, top_hosts=top_hosts,
-        cross_report_hosts=len(cross_hosts), reports=len({e["source"] for e in ev}),
-        value_label=_value_label(kind, value, demo, labels),
-        scope=dict(zip(("kind", "value"), _parse_time_value(value)[2:])) if kind == "time" else None,
-        scope_label=(lambda s: _value_label(s[2], s[3], demo, labels) if s[2] else None)(_parse_time_value(value)) if kind == "time" else None,
-        asns_covered=[] if demo or kind not in ("src_asn", "dst_asn") else sorted(asn_registry.resolve(value)),
-    )
-
-
-def _value_label(kind, value, demo, labels):
-    """Human (and, in demo mode, concealed) title for the entity being analysed."""
-    if kind == "time":
-        start, dur, sk, sv = _parse_time_value(value)
-        return f"{_hm(start)} to {_hm(start + dur)} UTC"   # the browser adds the selection it belongs to
-    if kind == "source":
-        return labels.get(value, value)
-    if kind in ("src_asn", "dst_asn"):
-        asns = sorted(asn_registry.resolve(value))
-        if demo:
-            return asn_registry.alias(asns[0]) if asns else value
-        name = asn_registry.name(asns[0]) if asns else None
-        return f"{name} ({', '.join('AS' + a for a in asns)})" if name else f"AS{value}"
-    if kind == "src_ip":
-        ip = host_refs.resolve(value)
-        return mask_ip(ip) if demo else ip
-    if kind in REF_KINDS:
-        value = host_refs.resolve(value)
-    if kind == "dst_ip":
-        return mask_ip(value) if demo else value
-    if kind in ("http_host", "http_agent", "request"):
-        return mask_text(value) if demo else value
-    if kind == "dst_port":
-        return f"Port {value}"
-    return None   # route / dst_place: the browser writes them with full country names
-
-
+# The PDF and ZIP reports of an analysis figure, on both platforms (report_downloads.py, moved out of app.py unchanged, 2026-11-24)
+import report_downloads as _mod_report_downloads  # noqa: E402
+_mod_report_downloads.install(app, sys.modules[__name__])
+from report_downloads import SOURCES_TEXT, _bd_rows, _enrich_names, _file_base, _pdf_label, _pdf_rows, _report_response, _scope_text, _short, _value_label, _view_json, api_insight, api_insight_report_pdf, api_svc_report_pdf  # noqa: E402,F401
 # ---------------------------------------------------------------- infection knowledge base
 KB_PATH = os.path.join(BASE_DIR, "data", "infections.json")
 _kb = {"mtime": None, "data": {}}
@@ -1939,313 +1073,37 @@ _kb = {"mtime": None, "data": {}}
 # The definitions this site's researchers and admins write (Settings / Definitions page) are kept apart from the
 # shipped knowledge base, so an upgrade (which replaces data/infections.json) never loses them.
 LOCAL_DEFS_PATH = os.path.join(BASE_DIR, "data", "definitions.json")
-
-
-def knowledge_base():
-    """data/infections.json (shipped) with data/definitions.json (this site's own definitions) on top; re-read
-    automatically when either file changes."""
-    import json
-    try:
-        m = (filesig.sig(KB_PATH), filesig.sig(LOCAL_DEFS_PATH) if os.path.exists(LOCAL_DEFS_PATH) else 0)
-        if m != _kb["mtime"]:
-            with open(KB_PATH, encoding="utf-8") as f:
-                data = {k.lower(): v for k, v in json.load(f).get("infections", {}).items()}
-            try:
-                with open(LOCAL_DEFS_PATH, encoding="utf-8") as f:
-                    for k, v in (json.load(f).get("infections") or {}).items():
-                        data[k.lower()] = dict(data.get(k.lower(), {}), **v)
-            except FileNotFoundError:
-                pass
-            except ValueError as exc:
-                app.logger.warning("Local definitions (data/definitions.json) not loaded: %s", exc)
-            _kb["data"], _kb["mtime"] = data, m
-    except (OSError, ValueError) as exc:
-        app.logger.warning("Infection knowledge base not loaded: %s", exc)
-    return _kb["data"]
+# The infection knowledge base: researchers' definitions and the curated notes (infection_kb.py, moved out of app.py unchanged, 2026-11-24)
+import infection_kb as _mod_infection_kb  # noqa: E402
+_mod_infection_kb.install(app, sys.modules[__name__])
+from infection_kb import knowledge_base  # noqa: E402,F401  (infection_kb.py)
 
 
 ISSUES_PATH = os.path.join(BASE_DIR, "data", "issues.json")
 _ikb = {"mtime": None, "data": {}}
-
-
-def issues_kb():
-    """data/issues.json (shipped) with the 'issues' of data/definitions.json on top. Keys are lower-case; each entry
-    keeps its display name in 'name'."""
-    import json
-    try:
-        m = (filesig.sig(ISSUES_PATH) if os.path.exists(ISSUES_PATH) else 0,
-             filesig.sig(LOCAL_DEFS_PATH) if os.path.exists(LOCAL_DEFS_PATH) else 0)
-        if m != _ikb["mtime"]:
-            data = {}
-            for path in (ISSUES_PATH, LOCAL_DEFS_PATH):
-                try:
-                    with open(path, encoding="utf-8") as f:
-                        for k, v in (json.load(f).get("issues") or {}).items():
-                            data[k.lower()] = dict(data.get(k.lower(), {}), **v, name=v.get("name") or k)
-                except FileNotFoundError:
-                    pass
-            _ikb["data"], _ikb["mtime"] = data, m
-    except (OSError, ValueError) as exc:
-        app.logger.warning("Issue definitions not loaded: %s", exc)
-    return _ikb["data"]
-
-
-def issue_resolve(name, fetch=True):
-    """What an issue is: a CVE (NVD, CISA KEV, EPSS; plus the researchers' notes), or the definition of a non-CVE
-    issue (never looked up anywhere: its definition and references are used)."""
-    cur = issues_kb().get((name or "").strip().lower())
-    if cves.is_cve(name):
-        c = cve_intel.card(name, fetch=fetch)
-        if cur and (cur.get("references") or cur.get("description")):
-            c["curated_references"], c["note"] = cur.get("references", []), cur.get("description", "")
-            c["note_by"], c["note_updated"] = _by(cur), cur.get("updated", "")
-        return c
-    if cur:
-        return {"found": False, "curated": True, "kind": "issue", "title": cur.get("title") or name, "type": cur.get("type", ""),
-                "description": cur.get("description", ""), "references": cur.get("references", []),
-                "updated": cur.get("updated", ""), "by": _by(cur)}
-    return {"found": False, "offline": True, "kind": "issue", "title": "No definition yet",
-            "text": f'"{name}" has no definition yet. A security researcher of your organisation can add one, with '
-                    "references, on the Definitions page."}
-
-
-def issues_resolve(names, budget=15.0, progress=None, stop=None):
-    """Several issues: CVEs as one batch (CISA KEV, EPSS per 100, CVE.org four at a time; NVD's analysis from the
-    background check), then the others (definitions, never looked up). stop: () -> True once the look-up was stopped."""
-    names = [n for n in dict.fromkeys(str(x).strip() for x in names) if n]
-    out = {}
-    ids = [n for n in names if cves.is_cve(n)]
-    if ids:
-        # budget: no more fetching once spent (external review, 2026-11-12: it was ignored); a progress window (the
-        # look-up the user started and watches) has no limit
-        cards = cve_intel.lookup_many(ids, progress=progress, budget=None if progress else budget, stop=stop)
-        for n in ids:
-            out[n] = issue_resolve(n, fetch=False) if cards.get(n.upper()) is None else cards[n.upper()]
-            cur = issues_kb().get(n.lower())
-            if cur and (cur.get("references") or cur.get("description")):
-                out[n].update(curated_references=cur.get("references", []), note=cur.get("description", ""),
-                              note_by=_by(cur), note_updated=cur.get("updated", ""))
-    others = [n for n in names if n not in out]
-    if others and progress:
-        progress("step", f"{len(others)} other issue{'s' if len(others) != 1 else ''} (not CVEs): explained from their definitions, never looked up")
-    for n in others:
-        out[n] = issue_resolve(n, fetch=False)
-        if progress:
-            progress("item", f"{n}: {'definition by ' + (out[n].get('by') or 'Looking Glass') if out[n].get('curated') else 'no definition yet'}")
-    return out
-
-
-@app.route("/api/issues/batch")
-def api_issues_batch():
-    """Explain the issues of a services list: CVEs from NVD / CISA KEV / EPSS, other issues from their definitions."""
-    if not AUTH["has_perm"]("malpedia"):
-        return jsonify(error="Your role cannot use look-ups (permission 'malpedia')."), 403
-    names = [v.strip() for v in (request.args.get("values") or "").split(",") if v.strip() and len(v.strip()) <= 80]
-    names = list(dict.fromkeys(names))
-    if len(names) > 120:
-        return jsonify(error="At most 120 issues at a time."), 400
-    try:
-        res = issues_resolve(names)
-    except ValueError as exc:
-        return jsonify(error=security.public_error(exc)), 400
-    return jsonify(results=res, pending=sum(1 for x in res.values() if x.get("pending")), cve=cve_intel.status())
+from infection_kb import issues_kb  # noqa: E402,F401  (infection_kb.py)
+from infection_kb import issue_resolve  # noqa: E402,F401  (infection_kb.py)
+from infection_kb import issues_resolve  # noqa: E402,F401  (infection_kb.py)
+from infection_kb import api_issues_batch  # noqa: E402,F401  (infection_kb.py)
 
 
 _SVC_ISSUES = {"at": 0.0, "data": {}}
-
-
-def _svc_issue_stats():
-    """issue -> {records, hosts} over the services days in memory (refreshed at most every minute)."""
-    if time.time() - _SVC_ISSUES["at"] < 60 and _SVC_ISSUES["data"]:
-        return _SVC_ISSUES["data"]
-    st = {}
-    for d in list(svc["store"].days.values()):
-        for e in d.events:
-            for i in e["issues"]:
-                x = st.setdefault(i, {"records": 0, "hosts": set()})
-                x["records"] += 1; x["hosts"].add(e["ip"])
-    _SVC_ISSUES.update(at=time.time(), data=st)
-    return st
-
-
-def _cve_loop():
-    """Every 30 minutes: look up the CVEs the services reports contain (at NVD's pace), one worker at a time."""
-    import fcntl
-    time.sleep(120)
-    while True:
-        try:
-            with open(os.path.join(BASE_DIR, "data", ".cve_check.lock"), "w") as lf:
-                try:
-                    fcntl.flock(lf, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except OSError:
-                    lf = None
-                if lf:
-                    ids = [i for i in _svc_issue_stats() if cves.is_cve(i)]
-                    if ids:
-                        cve_intel.prefetch(ids)
-        except Exception as exc:                       # never let the background check stop the platform
-            app.logger.warning("CVE background check: %s", exc)
-        time.sleep(600)                                # NVD's analysis follows within minutes of new CVEs
+from infection_kb import _svc_issue_stats  # noqa: E402,F401  (infection_kb.py)
+from infection_kb import _cve_loop  # noqa: E402,F401  (infection_kb.py)
 
 
 # ------------------------------------------------------------------ look-up jobs (progress window on the page)
 _JOBS, _JOBS_LOCK = {}, threading.Lock()
-
-
-class _LookupStopped(Exception):
-    """A look-up stopped by the person who started it (POST /api/lookups/<id>/stop)."""
-
-
-def _job_new(kind, total, user):
-    import secrets as _secrets
-    jid = _secrets.token_urlsafe(12)
-    with _JOBS_LOCK:
-        for k in [k for k, j in _JOBS.items() if time.time() - j["t0"] > 1800]:     # finished jobs are kept 30 minutes
-            _JOBS.pop(k, None)
-        _JOBS[jid] = {"id": jid, "kind": kind, "user": user, "t0": time.time(), "state": "running", "total": total,
-                      "done": 0, "cached": 0, "failed": 0, "current": "", "log": [], "results": None, "error": ""}
-    return _JOBS[jid]
-
-
-def _job_log(job, text):
-    job["log"].append(f"{time.strftime('%H:%M:%S', time.gmtime())}  {text}")
-    del job["log"][:-400]
-
-
-@app.route("/api/lookups", methods=["POST"])
-def api_lookups_start():
-    """Start a look-up of many names in the background: kind=issues (CVEs: CISA KEV, EPSS, CVE.org; others: definitions)
-    or kind=malpedia (infections / categories). The page follows it with GET /api/lookups/<id>."""
-    if not (AUTH["has_perm"]("malpedia") or AUTH["has_perm"]("definitions") or AUTH["has_perm"]("management")):
-        return jsonify(error="Your role cannot use look-ups."), 403
-    if not AUTH["csrf_ok"]():
-        return jsonify(error="Refused (the request did not come from this page)."), 403
-    b = request.get_json(silent=True) or {}
-    kind = b.get("kind")
-    values = list(dict.fromkeys(str(v).strip() for v in (b.get("values") or []) if str(v).strip() and len(str(v).strip()) <= 100))
-    if kind not in ("issues", "malpedia") or not values:
-        return jsonify(error="kind (issues or malpedia) and values expected"), 400
-    if len(values) > 400:
-        return jsonify(error="At most 400 names at a time."), 400
-    user = (getattr(g, "user", None) or {}).get("user", "")
-    with _JOBS_LOCK:
-        if sum(1 for j in _JOBS.values() if j["user"] == user and j["state"] == "running") >= 2:
-            return jsonify(error="You already have two look-ups running; wait for one to finish."), 429
-    demo = is_demo()
-    job = _job_new(kind, len(values), user)
-
-    def say(kind_, text, done=None):
-        if job.get("cancel"):                     # closed by the person who started it: stop between two names
-            raise _LookupStopped()
-        if kind_ == "item":
-            job["current"] = text
-            if done is None:
-                job["done"] += 1
-            else:
-                job["done"] = done
-            if "failed" in text or "could not" in text or "answered" in text:
-                job["failed"] += 1
-        _job_log(job, text)
-
-    def run_issues():
-        ids = [v for v in values if cves.is_cve(v)]
-        _job_log(job, f"{len(values)} issue{'s' if len(values) != 1 else ''}: {len(ids)} CVE{'s' if len(ids) != 1 else ''}, "
-                      f"{len(values) - len(ids)} other{'s' if len(values) - len(ids) != 1 else ''}")
-        job["results"] = issues_resolve(values, progress=say, stop=lambda: bool(job.get("cancel")))
-        job["done"] = job["total"]
-
-    def run_malpedia():
-        out = {}
-        _job_log(job, f"{len(values)} name{'s' if len(values) != 1 else ''}; Malpedia " + ("is set up: answers are cached a week, "
-                 f"at most {MAX_MP} new questions a minute" if malpedia.enabled else
-                 "is not set up: the Looking Glass definitions and knowledge base answer"))
-        for v in values:
-            if job.get("cancel"):                 # closed by the person who started it
-                raise _LookupStopped()
-            if demo and v.startswith("ref:"):
-                job["done"] += 1
-                continue
-            job["current"] = v
-            for attempt in range(8):
-                if job.get("cancel"):
-                    raise _LookupStopped()
-                try:
-                    card = mp_resolve(v)[0]
-                    break
-                except ValueError as exc:
-                    card = {"found": False, "reason": str(exc)}
-                    break
-                except RuntimeError as exc:
-                    if "Too many" in str(exc) and attempt < 7:
-                        _job_log(job, f"{v}: Malpedia's limit reached ({MAX_MP} questions a minute): waiting 15 s, then continuing")
-                        for _ in range(15):           # the wait ends at once when the look-up is stopped
-                            if job.get("cancel"):
-                                raise _LookupStopped()
-                            time.sleep(1)
-                        continue
-                    card = {"found": False, "pending": True, "reason": f"Not checked yet: {security.public_error(exc, 'Malpedia did not answer')}."}
-                    job["failed"] += 1
-                    break
-            out[v] = card
-            job["done"] += 1
-            what = ("Malpedia: " + card.get("name", "") + (" (threat actor)" if card.get("kind") == "actor" else f" ({card.get('family')})")) \
-                if card.get("found") else ("definition: " + card.get("title", "")) if card.get("curated") else (card.get("title") or card.get("reason") or "not found")
-            _job_log(job, f"{v}: {what}")
-        job["results"] = out
-
-    def run():
-        try:
-            (run_issues if kind == "issues" else run_malpedia)()
-            job["state"] = "done"
-            _job_log(job, f"Finished: {job['total']} looked up in {time.time() - job['t0']:.0f} s"
-                          + (f", {job['failed']} could not be checked" if job["failed"] else ""))
-        except _LookupStopped:                        # closed by the person who started it (the user, 2026-11-19)
-            job["state"] = "stopped"
-            _job_log(job, f"Stopped by you after {job['done']} of {job['total']}")
-        except Exception as exc:                      # the page shows it; the platform carries on
-            app.logger.exception("look-up job %s failed", kind)   # full details in the server log only
-            job["state"], job["error"] = "failed", security.public_error(exc)
-            _job_log(job, f"Stopped: {job['error']}")
-    threading.Thread(target=run, daemon=True, name=f"lookup-{kind}").start()
-    return jsonify(id=job["id"], total=job["total"])
-
-
-@app.route("/api/lookups/<jid>/stop", methods=["POST"])
-def api_lookups_stop(jid):
-    """Stop a look-up: the window was closed before it finished (the user, 2026-11-19: "I should be able to close it
-    even when it's loading so it stops searching"). Only the person who started it; it stops between two names."""
-    if not AUTH["csrf_ok"]():
-        return jsonify(error="Refused (the request did not come from this page)."), 403
-    j = _JOBS.get(jid)
-    if not j or j["user"] != (getattr(g, "user", None) or {}).get("user", ""):
-        return jsonify(error="No such look-up."), 404
-    if j["state"] == "running":
-        j["cancel"] = True
-    return jsonify(ok=True, state=j["state"])
-
-
-@app.route("/api/lookups/<jid>")
-def api_lookups_status(jid):
-    j = _JOBS.get(jid)
-    if not j or j["user"] != (getattr(g, "user", None) or {}).get("user", ""):
-        return jsonify(error="No such look-up (finished ones are kept 30 minutes)."), 404
-    try:                                   # a bad value is the start of the log, not a server error (external review)
-        since = max(0, int(request.args.get("since") or 0))
-    except ValueError:
-        since = 0
-    out = {k: j[k] for k in ("id", "kind", "state", "total", "done", "failed", "current", "error")}
-    out.update(elapsed=round(time.time() - j["t0"]), log=j["log"][since:], log_len=len(j["log"]))
-    if j["state"] == "done":
-        out["results"] = j["results"]
-    return jsonify(out)
-
-
-@app.route("/api/asns")
-def api_asns():
-    """The ASN registry (company names). Not available in demo mode."""
-    if is_demo():
-        return jsonify(error="not available in demo mode"), 403
-    return jsonify(asn_registry.all())
+# Look-up jobs with a progress window on the page: names and issues explained, checked against the sources (lookup_jobs.py, moved out of app.py unchanged, 2026-11-24)
+import lookup_jobs as _mod_lookup_jobs  # noqa: E402
+_mod_lookup_jobs.install(app, sys.modules[__name__])
+from lookup_jobs import _LookupStopped  # noqa: E402,F401  (lookup_jobs.py)
+from lookup_jobs import _job_new  # noqa: E402,F401  (lookup_jobs.py)
+from lookup_jobs import _job_log  # noqa: E402,F401  (lookup_jobs.py)
+from lookup_jobs import api_lookups_start  # noqa: E402,F401  (lookup_jobs.py)
+from lookup_jobs import api_lookups_stop  # noqa: E402,F401  (lookup_jobs.py)
+from lookup_jobs import api_lookups_status  # noqa: E402,F401  (lookup_jobs.py)
+from lookup_jobs import api_asns  # noqa: E402,F401  (lookup_jobs.py)
 
 
 MALPEDIA_FIELDS = ("infection", "tag", "family", "hash", "md5", "sha1", "sha256")
@@ -2271,240 +1129,26 @@ _EV_OFFLINE = threading.local()
 _EV_BUILD = threading.Lock()
 from seen_index import SeenIndex  # noqa: E402
 SEEN = SeenIndex(os.path.join(BASE_DIR, "data", "seen_names.json"), logger=app.logger)
-
-
-def _name_evidence():
-    """name -> {'classes': set, 'reports': set} over the days in memory (refreshed at most every minute)."""
-    if getattr(_EV_OFFLINE, "on", False):
-        return _EVIDENCE["data"] or {}
-    if time.time() - _EVIDENCE["at"] < 60 and _EVIDENCE["data"]:
-        return _EVIDENCE["data"]
-    if _EVIDENCE["data"]:
-        if not _EV_BUILD.acquire(blocking=False):
-            return _EVIDENCE["data"]                 # another request is rebuilding it: this one uses the last copy
-    else:
-        _EV_BUILD.acquire()                          # the first build: wait for it rather than build it twice
-        if _EVIDENCE["data"]:
-            _EV_BUILD.release()
-            return _EVIDENCE["data"]
-    try:
-        return _build_name_evidence()
-    finally:
-        _EV_BUILD.release()
-
-
-def _build_name_evidence():
-    labels = {x["name"]: x["label"] for x in registry.get()}
-    ev = {}
-    for d in list(store.days.values()):
-        for e in d.events:
-            x = ev.setdefault((e["infection"] or "").lower(), {"classes": set(), "reports": set()})
-            x["classes"].add(e["attack_class"]); x["reports"].add(labels.get(e["source"], e["source"]))
-        SEEN.update(d.start.date().isoformat(), d.events, labels)      # where and when, kept beyond this day (seen_index.py)
-    SEEN.refresh()
-    SEEN.backfill(store._load, day_start, utcnow, lambda: {x["name"]: x["label"] for x in registry.get()})
-    _EVIDENCE.update(at=time.time(), data=ev)
-    return ev
-
-
-def _last_seen(name, now_reports):
-    """For a name not in the replay day: [{report, date}] where it was last seen (newest first), from seen_index.py."""
-    if now_reports:
-        return []
-    return [{"report": r, "date": d} for r, d in SEEN.last_seen(name)[:3]]
-
-
-def malpedia_explain(name):
-    """What a name that Malpedia does not list really is, why it is not there, and what to do; for non-specialists."""
-    import re as _re
-    n = (name or "").strip()
-    low = n.lower()
-    kb = knowledge_base().get(low, {})
-    kind = (kb.get("type") or "")
-    ev = _name_evidence().get(low, {"classes": set(), "reports": set()})
-    classes, reports = ev["classes"], sorted(ev["reports"])
-    seen = ", ".join(reports) if reports else ""
-    acts = [c for c in classes if c in _ACTIVITY]
-    if acts and len(acts) == len(classes):
-        doing = " and ".join(_ACTIVITY[c] for c in sorted(acts))
-        return {"verdict": "activity", "title": "Not malware: an activity",
-                "text": (f'"{n}" is not the name of a malicious program. Shadowserver\'s decoy systems '
-                         f'({seen or "honeypots"}) saw this device {doing}. Malpedia only describes malicious programs, '
-                         "so it has no entry for an activity."),
-                "advice": "The device is probably infected or being misused: check what software runs on it, update it, "
-                          "and change its passwords.", "seen_in": reports}
-    if _re.search(r"proxy|socks|residential", f"{low} {kind.lower()}") and "botnet" in kind.lower():
-        return {"verdict": "proxy-botnet", "title": "Malware that turns devices into proxies",
-                "text": (f'"{n}"{f" ({kb.get("title")})" if kb.get("title") else ""} is malware that secretly turns the '
-                         "infected device into a proxy, so criminals can send their traffic through it and hide behind "
-                         f"the owner's address. Shadowserver saw the device contacting its servers ({seen or 'sinkhole'}). "
-                         "Malpedia has no entry under exactly this name."),
-                "advice": "Treat the device as infected: reset or reinstall it, update it, and change its passwords.",
-                "seen_in": reports}
-    if _re.search(r"proxy|socks|residential", f"{low} {kind.lower()}"):
-        return {"verdict": "proxy", "title": "A proxy network, not a single malware program",
-                "text": (f'"{n}"{f" ({kb.get("title")})" if kb.get("title") else ""} is a network that sends other people\'s '
-                         "internet traffic through devices like this one, often through an app or software kit bundled with "
-                         f"free apps. Shadowserver saw the device contacting this network's servers ({seen or 'sinkhole'}). "
-                         "Malpedia describes malware families; proxy networks are services (often abused) and are usually "
-                         "not listed there."),
-                "advice": "Find and remove the app that added the device to the proxy network: strangers may be using "
-                          "the owner's internet connection.", "seen_in": reports}
-    if _re.search(r"adware|hijack|miner|unwanted|riskware", kind.lower()):
-        return {"verdict": "unwanted", "title": "Unwanted software, rather than a malware family",
-                "text": (f'"{n}"{f" ({kind})" if kind else ""} is unwanted software: it shows advertising, changes browser '
-                         "settings or uses the computer to mine cryptocurrency, usually after being installed together with "
-                         "something else. Malpedia concentrates on malware used in attacks, so it may not list it."),
-                "advice": "Uninstall the unwanted program and check the browser's extensions and settings.",
-                "seen_in": reports}
-    if _re.search(r"abandon|misconfig", kind.lower()) or low in ("popcorntime", "non-authoritative-whois", "cryptodns-resolver"):
-        first = (kb.get("description") or "").split(". ")[0].rstrip(".")
-        return {"verdict": "software", "title": "Old or misconfigured software, not a malware family",
-                "text": ((first + ". ") if first else "") + ("Its old servers are now run by Shadowserver (a 'sinkhole'), "
-                         "so devices that still use it are reported, but it is not a malicious program in itself, so "
-                         "Malpedia does not list it."),
-                "advice": "Remove or update the software on the device.", "seen_in": reports}
-    if _re.search(r"generic|unknown|unclassified|^event\d?_|^wd$", low) or kind.lower() in ("unclassified", "malware (unidentified)"):
-        return {"verdict": "generic", "title": "A general label, not a specific malware",
-                "text": ("Shadowserver's sinkhole saw this device connect to a server once used by malware, but could not "
-                         f'tell which malware it was, so it used the general label "{n}". Malpedia lists specific malware '
-                         "families, so there is nothing to match."),
-                "advice": "Treat the device as possibly infected: run a security scan on it.", "seen_in": reports}
-    what = f" ({kind})" if kind else ""
-    return {"verdict": "unlisted", "title": "Probably malware, but no source lists it under this name",
-            "text": (f'"{n}" looks like malware{what}, but none of the sources (Malpedia, MISP Galaxy, MITRE ATT&CK) has '
-                     "an entry under this name: it may be new, seen mostly in one region, or called something else there."
-                     + (f" Looking Glass describes it as: {kb.get('title')}." if kb.get("title") else "")),
-            "advice": "Treat the device as infected: run a security scan, and read the Looking Glass description of "
-                      "this name.", "seen_in": reports}
+from lookup_jobs import _name_evidence  # noqa: E402,F401  (lookup_jobs.py)
+from lookup_jobs import _build_name_evidence  # noqa: E402,F401  (lookup_jobs.py)
+from lookup_jobs import _last_seen  # noqa: E402,F401  (lookup_jobs.py)
+from lookup_jobs import malpedia_explain  # noqa: E402,F401  (lookup_jobs.py)
 
 
 _MISSES_PATH = os.path.join(BASE_DIR, "data", "malpedia_names.json")
 _MISSES_LOCK = threading.Lock()
-
-
-def _read_names():
-    import json as _json
-    try:
-        with open(_MISSES_PATH, encoding="utf-8") as f:
-            return _json.load(f)
-    except (OSError, ValueError):
-        return {}
-
-
-def _write_names(m):
-    import json as _json
-    tmp = f"{_MISSES_PATH}.{os.getpid()}.tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        _json.dump(m, f, indent=1)
-    os.replace(tmp, _MISSES_PATH)
-
-
-def _is_services_report(name):
-    """True for the name of a publicly accessible / vulnerable services report (scan_mikrotik_service, scan_http...): a
-    report, never malware. 2026-11-13: on 10 November the combination reports asked Malpedia about services report
-    names as if they were malware; they were recorded and stayed on the Definitions to-do list."""
-    n = (name or "").strip().lower()
-    if not n:
-        return False
-    try:
-        if n in {s["name"].lower() for s in svc["registry"].get()}:
-            return True
-    except Exception:                              # noqa: BLE001  (no registry yet: the report map still answers)
-        pass
-    try:
-        reps = REPORT_MAP.get().get("reports") or {}
-        e = reps.get(n)
-        return bool(e and e.get("section") == "Services")
-    except Exception:                              # noqa: BLE001
-        return False
-
-
-def _record_check(name, family, asked=True):
-    """Remember that a name was checked against Malpedia and what came back ("" = nothing). Names with nothing that
-    no administrator has defined yet are the to-do list in Settings. A services report's name is never recorded."""
-    if _is_services_report(name):
-        return
-    now = utcnow().isoformat(timespec="seconds")
-    with _MISSES_LOCK:
-        m = _read_names()
-        x = m.setdefault(name.lower(), {"first": now, "count": 0})
-        x["family"], x["checked"] = family or "", now
-        if asked:
-            x["count"] = x.get("count", 0) + 1; x["last"] = now
-        _write_names(m)
-
-
-def _unchecked_names():
-    """Infections / categories in the loaded reports that nobody has checked against Malpedia yet (new reports
-    bring new names; they appear here by themselves)."""
-    seen, ev = _read_names(), _name_evidence()
-    return sorted(n for n, x in ev.items() if n and n not in seen and not _curated(n)
-                  and not (x["classes"] and x["classes"] <= set(_ACTIVITY)))
+from lookup_jobs import _read_names  # noqa: E402,F401  (lookup_jobs.py)
+from lookup_jobs import _write_names  # noqa: E402,F401  (lookup_jobs.py)
+from lookup_jobs import _is_services_report  # noqa: E402,F401  (lookup_jobs.py)
+from lookup_jobs import _record_check  # noqa: E402,F401  (lookup_jobs.py)
+from lookup_jobs import _unchecked_names  # noqa: E402,F401  (lookup_jobs.py)
 
 
 _AUTOCHECK = {"running": False, "done": 0, "left": 0, "error": "", "at": ""}
-
-
-def _autocheck(limit=None):
-    """Check the new names against Malpedia in the background, slowly (at most 20 a minute, so users' own lookups
-    still fit in the 30-a-minute limit). One worker process at a time (a lock file)."""
-    import fcntl
-    if _AUTOCHECK["running"] or not malpedia.enabled:
-        return False
-    lockf = open(os.path.join(BASE_DIR, "data", ".malpedia_check.lock"), "w")
-    try:
-        fcntl.flock(lockf, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
-        lockf.close()
-        return False
-    names = _unchecked_names()[: limit or None]
-    _AUTOCHECK.update(running=True, done=0, left=len(names), error="", at=utcnow().isoformat(timespec="seconds"))
-
-    def run():
-        try:
-            for n in names:
-                try:
-                    lr = malpedia.lookup("infection", n)
-                    _record_check(n, (lr.get("family") or {}).get("id") or (f"actor:{lr['actor']['id']}" if lr.get("actor") else ""), asked=False)
-                except ValueError:
-                    _record_check(n, "", asked=False)
-                except RuntimeError as exc:          # rate limit / unreachable: wait and carry on later
-                    _AUTOCHECK["error"] = str(exc)
-                    time.sleep(60)
-                    continue
-                _AUTOCHECK["done"] += 1; _AUTOCHECK["left"] -= 1
-                time.sleep(3)
-        finally:
-            _AUTOCHECK["running"] = False
-            fcntl.flock(lockf, fcntl.LOCK_UN); lockf.close()
-    threading.Thread(target=run, daemon=True, name="malpedia-autocheck").start()
-    return True
-
-
-def _autocheck_loop():
-    """Every 30 minutes (the report schedule), check names that new reports brought in."""
-    time.sleep(90)
-    while True:
-        try:
-            if malpedia.enabled and _unchecked_names():
-                _autocheck(limit=200)
-        except Exception as exc:                       # never let the background check stop the platform
-            app.logger.warning("Malpedia background check: %s", exc)
-        time.sleep(1800)
-
-
-def _curated(name):
-    """The administrator's definition of a name (data/infections.json), when it carries references or a Malpedia id."""
-    e = knowledge_base().get((name or "").lower()) or {}
-    return e if (e.get("references") or e.get("malpedia")) else None
-
-
-def mp_resolve(name):
-    """Look a name up the way users see it: one card, the researchers' definition first, else the first source that
-    knows it (Malpedia, MISP Galaxy, MITRE ATT&CK), with every other source under "Also described by"; else "No source
-    knows this name" with the plain explanation (name_sources.py). Malpedia's checks still fill the to-do list."""
-    return NAME_SOURCES.resolve(name)
+from lookup_jobs import _autocheck  # noqa: E402,F401  (lookup_jobs.py)
+from lookup_jobs import _autocheck_loop  # noqa: E402,F401  (lookup_jobs.py)
+from lookup_jobs import _curated  # noqa: E402,F401  (lookup_jobs.py)
+from lookup_jobs import mp_resolve  # noqa: E402,F401  (lookup_jobs.py)
 
 
 import name_sources  # noqa: E402  (one card per name, all sources side by side; refresh of the local copies)
@@ -2516,10 +1160,7 @@ _NAME_SOURCES_API = name_sources.install(app, {
     "can_refresh": lambda: AUTH["has_perm"]("settings"), "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"],
     "audit": AUTH["audit"], "python": os.path.join(BASE_DIR, ".venv", "bin", "python")
     if os.path.exists(os.path.join(BASE_DIR, ".venv", "bin", "python")) else sys.executable})
-
-
-class _ReportDefs:                                   # Shadowserver's description of a report, for the ATT&CK mapping's basis
-    get = staticmethod(lambda k, default=None: _report_def(k))
+from lookup_jobs import _ReportDefs  # noqa: E402,F401  (lookup_jobs.py)
 
 
 import attack_map  # noqa: E402  (MITRE ATT&CK: report mappings, malware techniques, CVE links; step 2)
@@ -2534,346 +1175,37 @@ attack_map.install(app, {"map": ATTACK, "allowed": lambda: _kb_allowed(), "chang
                          "readers": lambda: any(AUTH["has_perm"](p) for p in ("view", "definitions", "advisory", "management")),
                          # admins: the "trust CTID's CVE mappings in advisories" setting (off by default)
                          "can_admin": lambda: AUTH["has_perm"]("settings"), "csrf_ok": AUTH["csrf_ok"]})
-
-
-def _mp_card(r):
-    """The Malpedia family of a lookup result, for the page (the same fields as the single look-up card); or the
-    threat actor, when the name is a group rather than a malware family."""
-    fam = r.get("family")
-    if not fam and r.get("actor"):
-        a, m = r["actor"], r.get("actor_match") or {}
-        return {"found": True, "kind": "actor", "actor": a["id"], "family": "", "name": a["name"], "url": a["url"],
-                "matched_by": m.get("matched_by", ""), "description": a["description"], "alt_names": a["synonyms"],
-                "country": a["country"], "sponsor": a["sponsor"], "targets": a["targets"], "sectors": a["sectors"],
-                "families": a["families"], "references": a["references"][:6], "reference_count": a["reference_count"]}
-    if not fam:
-        return None
-    best = (r.get("matches") or [{}])[0]
-    return {"found": True, "family": fam["id"], "name": fam.get("name") or fam["id"], "url": fam.get("url"),
-            "matched_by": best.get("matched_by", ""), "description": fam.get("description") or "",
-            "alt_names": (fam.get("alt_names") or [])[:8], "attribution": (fam.get("attribution") or [])[:6],
-            "updated": fam.get("updated"), "references": (fam.get("references") or [])[:6],
-            "reference_count": fam.get("reference_count", 0)}
+from lookup_jobs import _mp_card  # noqa: E402,F401  (lookup_jobs.py)
 
 
 # Every explanation card carries the researchers' notes on its name (notes.py): the map, services, Executive and the PDF
 # reports all use these three look-ups, so the notes are added here once.
 _mp_resolve_plain, _issue_resolve_plain, _issues_resolve_plain = mp_resolve, issue_resolve, issues_resolve
-
-
-def _noted(card, section, name):
-    n = globals().get("NOTES")
-    return n.attach(card, section, name) if n else card
-
-
-def mp_resolve(name):  # noqa: F811
-    card, r = _mp_resolve_plain(name)
-    return _noted(card, "infections", name), r
-
-
-def _with_attack(card, name):
-    """ATT&CK techniques of a CVE, or of the CVEs an issue names (CTID's KEV mappings, local copy; attack_map.py)."""
-    try:
-        att = ATTACK.issue_attack(card, name)
-    except Exception:                              # noqa: BLE001  (a damaged copy must never break a look-up)
-        att = None
-    if att:
-        card = dict(card, attack=att)
-    return card
-
-
-def issue_resolve(name, fetch=True):  # noqa: F811
-    return _with_attack(_noted(_issue_resolve_plain(name, fetch=fetch), "issues", name), name)
-
-
-def issues_resolve(names, budget=15.0, progress=None, stop=None):  # noqa: F811
-    return {n: _with_attack(_noted(c, "issues", n), n)
-            for n, c in _issues_resolve_plain(names, budget=budget, progress=progress, stop=stop).items()}
-
-
-@app.route("/api/malpedia/batch")
-def api_malpedia_batch():
-    """Enrich a list of infections / categories: each unique name is looked up once (cached for a week, so repeated
-    lists cost no Malpedia calls). ?values=a,b,c (at most 80). For each: the matching Malpedia family, or why none."""
-    if not AUTH["has_perm"]("malpedia"):
-        return jsonify(error="Your role cannot use Malpedia lookups (permission 'malpedia')."), 403
-    names = []                                       # without a Malpedia token the researchers' definitions answer
-    for v in (request.args.get("values") or "").split(","):
-        v = v.strip()
-        if v and len(v) <= 100 and v.lower() not in {n.lower() for n in names}:
-            names.append(v)
-    if len(names) > 80:
-        return jsonify(error="At most 80 names at a time."), 400
-    out, pending = {}, 0
-    for v in names:
-        if is_demo() and v.startswith("ref:"):          # masked references are not names
-            continue
-        try:
-            out[v] = mp_resolve(v)[0]
-            continue
-        except ValueError as exc:
-            out[v] = {"found": False, "reason": security.public_error(exc)}
-            continue
-        except RuntimeError as exc:                     # rate limit or Malpedia unreachable: try again later
-            pending += 1
-            out[v] = {"found": False, "pending": True, "reason": f"Not checked yet: {security.public_error(exc, 'Malpedia did not answer')}. Try again in a minute."}
-    return jsonify(results=out, looked_up=len(names), pending=pending, malpedia=malpedia.enabled)
-
-
-@app.route("/api/malpedia")
-def api_malpedia():
-    """Look up a field value on Malpedia: ?field=infection|tag|family|md5|sha256&value=... (token stays here)."""
-    if not AUTH["has_perm"]("malpedia"):          # permission first: the answer must not depend on the set-up
-        return jsonify(error="Your role cannot use Malpedia lookups (permission 'malpedia')."), 403
-    field = request.args.get("field", "infection")
-    value = request.args.get("value", "")
-    if not malpedia.enabled and field not in ("infection", "tag"):     # names still get the researchers' definitions
-        return jsonify(error="Malpedia lookups are not set up (MALPEDIA_TOKEN in .env)."), 503
-    if field not in MALPEDIA_FIELDS:
-        return jsonify(error=f"field must be one of {', '.join(MALPEDIA_FIELDS)}"), 400
-    try:
-        if field in ("infection", "tag"):
-            card, r = mp_resolve(value)
-            r = dict(r)
-            r["card"] = card                         # the whole card, all sources (name_sources.py): the page shows it as is
-            if card.get("kind") == "actor":
-                r["actor_card"] = card
-            elif card.get("curated"):
-                r["curated"] = card
-            elif not card.get("found"):
-                r["explain"] = card
-            elif card.get("curated_references"):
-                r["curated_references"] = card["curated_references"]
-                if card.get("matched_by") == "the administrator's definition":
-                    r["matches"] = [{"id": card["family"], "matched_by": card["matched_by"], "alt_names": []}]
-        else:
-            r = malpedia.lookup(field, value)
-    except ValueError as e:
-        return jsonify(error=security.public_error(e)), 400
-    except RuntimeError as e:
-        return jsonify(error=security.public_error(e, "Malpedia did not answer. Try again in a minute.")), 429 if "Too many" in str(e) else 502
-    return jsonify(r)
+# The researchers' notes on every explanation card (map, services, Executive, PDF) (card_notes.py, moved out of app.py unchanged, 2026-11-24)
+import card_notes as _mod_card_notes  # noqa: E402
+_mod_card_notes.install(app, sys.modules[__name__])
+from card_notes import _noted  # noqa: E402,F401  (card_notes.py)
+from card_notes import mp_resolve  # noqa: E402,F401  (card_notes.py)
+from card_notes import _with_attack  # noqa: E402,F401  (card_notes.py)
+from card_notes import issue_resolve  # noqa: E402,F401  (card_notes.py)
+from card_notes import issues_resolve  # noqa: E402,F401  (card_notes.py)
+from card_notes import api_malpedia_batch  # noqa: E402,F401  (card_notes.py)
+from card_notes import api_malpedia  # noqa: E402,F401  (card_notes.py)
 
 
 # ---------------------------------------------------------------- Settings: definitions for names Malpedia does not know
 _URL_RE = __import__("re").compile(r"^https?://[^\s<>\"']{4,500}$")
-
-
-@app.route("/api/kb/unresolved")
-def api_kb_unresolved():
-    """Names a look-up could not match (most seen first), and the names already defined by an administrator."""
-    if not _kb_allowed():
-        return jsonify(error="Definitions are for researchers and admins."), 403
-    db_ok = True
-    try:
-        _name_evidence()
-    except _MongoError:
-        db_ok = False                      # list the names anyway; "seen in" shows only what is in memory
-        _EV_OFFLINE.on = True
-    try:
-        return _kb_unresolved(db_ok)
-    finally:
-        _EV_OFFLINE.on = False
-
-
-def _kb_unresolved(db_ok):
-    names = _read_names()
-    misses = {n: x for n, x in names.items() if not x.get("family")}
-    kb, ev = knowledge_base(), _name_evidence()
-    def row(n, m=None):
-        e, x = kb.get(n.lower()) or {}, ev.get(n.lower(), {"classes": set(), "reports": set()})
-        return {"name": n, "count": (m or {}).get("count", 0), "last": (m or {}).get("last") or (m or {}).get("checked", ""),
-                "family_found": (names.get(n.lower()) or {}).get("family", ""),
-                "reports": sorted(x["reports"]), "last_seen": _last_seen(n, x["reports"]), "seen_days": SEEN.covered_days(),
-                "kinds": sorted(x["classes"]), "title": e.get("title", ""),
-                "type": e.get("type", ""), "description": e.get("description", ""), "references": e.get("references", []),
-                "malpedia": e.get("malpedia", ""), "defined": bool(e.get("references") or e.get("malpedia")),
-                "updated": e.get("updated", ""), "by": _by(e) or ("Looking Glass" if defined_entry(e) else ""),
-                # which sources know the name (Malpedia from its recorded check, MISP Galaxy / ATT&CK from the copies)
-                "sources": NAME_SOURCES.known_by(n, (names.get(n.lower()) or {}).get("family", ""))}
-    todo =[row(n, m) for n, m in sorted(misses.items(), key=lambda kv: -kv[1].get("count", 0))
-            if not _curated(n) and malpedia_explain(n)["verdict"] != "activity" and not _is_services_report(n)]
-    todo = [r for r in todo if not r["sources"]]     # "No source knows": none of Malpedia, MISP Galaxy, ATT&CK
-    done = [row(n) for n, e in sorted(kb.items()) if e.get("references") or e.get("malpedia")]
-    new = [row(n) for n in _unchecked_names()]
-    for r in new:
-        r["unchecked"] = True
-    # every infection / category in the loaded reports (activities such as scanning left out)
-    every = [row(n, names.get(n)) for n, x in sorted(ev.items(), key=lambda kv: -len(kv[1]["reports"]))
-             if n and not (x["classes"] and x["classes"] <= set(_ACTIVITY))]
-    # issues of the services platform: CVEs (looked up) and the others (defined by researchers)
-    ikb, issues = issues_kb(), []
-    for name, x in sorted(_svc_issue_stats().items(), key=lambda kv: -len(kv[1]["hosts"])):
-        e = ikb.get(name.lower()) or {}
-        item = {"name": name, "records": x["records"], "hosts": len(x["hosts"]), "cve": cves.is_cve(name),
-                "defined": bool(e.get("description") or e.get("references")), "title": e.get("title", ""),
-                "by": _by(e) or ("Looking Glass" if defined_entry(e) else ""), "updated": e.get("updated", "")}
-        if item["cve"]:
-            c = cve_intel.card(name, fetch=False)
-            item.update(found=c["found"], pending=c["pending"], exploited=c["exploited"],
-                        cvss=(c.get("cvss") or {}).get("score"), severity=(c.get("cvss") or {}).get("severity", ""),
-                        epss=c.get("epss"), title=item["title"] or cve_intel.known_title(name))   # KEV name, CNA title or 1st sentence
-        # what it is, in full under its title (the user, 2026-11-19): a CVE's public description; another issue's definition
-        desc = cve_intel.known_description(name) if item["cve"] else ""
-        item["description"] = desc if desc and desc != item["title"] else ("" if item["cve"] else e.get("description", ""))
-        issues.append(item)
-    return jsonify(unresolved=todo, defined=done, unchecked=new, all=every, check=_AUTOCHECK, malpedia=malpedia.enabled,
-                   issues=issues, cve=cve_intel.status(), database=db_ok,
-                   database_note="" if db_ok else ("The report database cannot be read just now, so where and when each name "
-                                                   "was seen may be missing. The names themselves are listed."))
-
-
-@app.route("/api/kb/malpedia-search")
-def api_kb_malpedia_search():
-    """Settings editor: find the Malpedia family a malware is listed under (any name or alias, e.g. 'proslikefan')."""
-    if not _kb_allowed():
-        return jsonify(error="Definitions are for researchers and admins."), 403
-    if not malpedia.enabled:
-        return jsonify(error="Malpedia lookups are not set up (MALPEDIA_TOKEN in .env)."), 503
-    q = (request.args.get("q") or "").strip()
-    if not 3 <= len(q) <= 60:
-        return jsonify(error="Type 3 to 60 characters."), 400
-    try:
-        hits = malpedia.find(q)[:10]
-        actors = malpedia._get("find/actor/" + __import__("urllib.parse").parse.quote(q.lower(), safe="")) or []
-    except RuntimeError as e:
-        return jsonify(error=security.public_error(e, "Malpedia did not answer. Try again in a minute.")), 429
-    out = [{"id": h["id"], "alt_names": h["alt_names"][:6], "matched_by": h["matched_by"],
-            "url": "https://malpedia.caad.fkie.fraunhofer.de/details/" + h["id"]} for h in hits]
-    out += [{"id": "actor:" + a["name"], "alt_names": (a.get("synonyms") or [])[:6], "matched_by": f"threat actor {a.get('common_name') or a['name']}",
-             "url": "https://malpedia.caad.fkie.fraunhofer.de/actor/" + a["name"]} for a in actors[:6] if a.get("name")]
-    return jsonify(results=out)
-
-
-@app.route("/api/kb/check", methods=["POST"])
-def api_kb_check():
-    """Settings: check the new names (from new reports) against Malpedia now, in the background."""
-    if not _kb_change_allowed():
-        return jsonify(error="Only researchers and admins can start this."), 403
-    if not malpedia.enabled:
-        return jsonify(error="Malpedia lookups are not set up (MALPEDIA_TOKEN in .env)."), 503
-    started = _autocheck()
-    return jsonify(started=started, check=_AUTOCHECK,
-                   note="" if started else "A check is already running (perhaps in another worker); refresh in a minute.")
-
-
-@app.route("/api/kb/entry", methods=["GET", "POST"])
-def api_kb_entry():
-    """GET ?name= : one name's definition. POST: an administrator defines or corrects a name (data/infections.json):
-    title, type, plain description, references (evidence, http/https links) and optionally the Malpedia family id."""
-    if request.method == "GET":
-        if not _kb_allowed():
-            return jsonify(error="Definitions are for researchers and admins."), 403
-        n = (request.args.get("name") or "").strip()
-        e = (issues_kb() if request.args.get("section") == "issues" else knowledge_base()).get(n.lower()) or {}
-        others = NAME_SOURCES.other_sources(n) if n and request.args.get("section") != "issues" else []
-        return jsonify(name=n, title=e.get("title", ""), type=e.get("type", ""), description=e.get("description", ""),
-                       references=e.get("references", []), malpedia=e.get("malpedia", ""), updated=e.get("updated", ""),
-                       by=_by(e), sources=others)       # the other sources' text and links, shown alongside the editor
-    if not _kb_change_allowed():
-        return jsonify(error="Only researchers and admins can change definitions."), 403
-    if not AUTH["fresh"]():
-        return jsonify(error="Sign in again to make changes (your session is older than 12 hours)."), 403
-    import json as _json, re as _re
-    b = request.get_json(silent=True)
-    if not isinstance(b, dict):
-        return jsonify(error="JSON expected"), 400
-    section = "issues" if b.get("section") == "issues" else "infections"
-    display = str(b.get("name") or "").strip()
-    name = display.lower()
-    if section == "issues":
-        if not _re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 ._:()/+-]{0,79}", display):
-            return jsonify(error="The issue: letters, digits, spaces and . _ : ( ) / + -, up to 80 characters."), 400
-        if cves.is_cve(display):
-            display = display.upper()
-    elif not _re.fullmatch(r"[a-z0-9][a-z0-9 ._:-]{0,79}", name):
-        return jsonify(error="The name: letters, digits, dot, dash, underscore or space, up to 80 characters."), 400
-    title, kind = str(b.get("title") or "").strip()[:120], str(b.get("type") or "").strip()[:80]
-    desc = str(b.get("description") or "").strip()[:2000]
-    refs = [str(u).strip() for u in (b.get("references") or []) if str(u).strip()][:12]
-    bad = [u for u in refs if not _URL_RE.match(u)]
-    if bad:
-        return jsonify(error=f"References must be web links starting with http:// or https:// ({bad[0][:60]})."), 400
-    mp_id = str(b.get("malpedia") or "").strip() if section == "infections" else ""
-    if mp_id and not _re.fullmatch(r"[a-z0-9]{2,10}\.[a-z0-9_]{2,60}|actor:[a-z0-9][a-z0-9_-]{1,80}", mp_id):
-        return jsonify(error="The Malpedia id looks like win.lumma or apk.badbox, or actor:tick for a threat actor (or leave it empty)."), 400
-    if mp_id and malpedia.enabled:
-        try:
-            if not (malpedia.actor(mp_id[6:]) if mp_id.startswith("actor:") else malpedia.family(mp_id)):
-                return jsonify(error=f"Malpedia has no family {mp_id}: use Find in Malpedia to pick the right one, or leave it empty."), 400
-        except RuntimeError:
-            pass                                        # Malpedia busy or unreachable: keep the administrator's id
-    # a CVE needs only a note or a reference (NVD, CISA and EPSS are shown anyway); the general rule below came first
-    # and refused a CVE note without a reference, so the CVE rule could never be reached (found by r91's coverage tests)
-    if section == "issues" and cves.is_cve(display):
-        if not (refs or desc):
-            return jsonify(error="For a CVE, add a note or at least one reference (NVD, CISA and EPSS are shown anyway)."), 400
-    elif not (refs or mp_id):
-        return jsonify(error="Give at least one reference (evidence), or the Malpedia family id."), 400
-    elif not mp_id and not (title and desc):
-        return jsonify(error="Without a Malpedia family, give a title and a plain description."), 400
-    with _MISSES_LOCK:
-        try:
-            with open(LOCAL_DEFS_PATH, encoding="utf-8") as f:
-                data = _json.load(f)
-        except FileNotFoundError:
-            data = {"about": "Definitions written on this site (Settings / Definitions page). Kept on upgrades; "
-                             "they take precedence over data/infections.json.", "infections": {}}
-        inf = data.setdefault(section, {})
-        key = next((k for k in inf if k.lower() == name), display if section == "issues" else name)
-        base = (issues_kb() if section == "issues" else knowledge_base()).get(name) or {}
-        e = inf.setdefault(key, {k: v for k, v in base.items() if k != "name"})
-        e.update({k: v for k, v in (("title", title), ("type", kind), ("description", desc)) if v})
-        e["references"] = refs
-        if section == "infections":
-            e["malpedia"] = mp_id
-        e["status"], e["confidence"] = "reviewed", e.get("confidence") or "high"
-        e["updated"] = utcnow().date().isoformat()
-        e["curated_by"], e["curated_by_name"] = _me()     # username (stable) and full name (kept if the account goes)
-        tmp = LOCAL_DEFS_PATH + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            _json.dump(data, f, indent=2, ensure_ascii=False)
-        os.replace(tmp, LOCAL_DEFS_PATH)
-        if section == "infections":
-            m = _read_names()
-            if name in m:                               # checked again on the next look-up, with the new definition
-                m.pop(name)
-                _write_names(m)
-    _kb["mtime"] = _ikb["mtime"] = None
-    AUTH["audit"].add("definition_saved", user=(getattr(g, "user", None) or {}).get("user", "token"),
-                      target=(f"issue:{display}" if section == "issues" else name),
-                      detail=f"{'malpedia ' + mp_id + ', ' if mp_id else ''}{len(refs)} reference(s)")
-    return jsonify(saved=True, name=key)
-
-
-@app.route("/api/infections")
-def api_infections():
-    # who defined each one by full name, never the account name (external review, 2026-11-12: usernames were sent)
-    out = {}
-    import external_access
-    outside = external_access.is_external(getattr(g, "user", None) and g.user.get("perms"))   # no staff names to externals
-    for k, v in knowledge_base().items():
-        e = {f: x for f, x in v.items() if f not in ("curated_by", "curated_by_name")}
-        if v.get("curated_by") and not outside:
-            e["by"] = _by(v)
-        out[k] = e
-    return jsonify(out)
-
-
-@app.route("/api/infections/missing")
-def api_infections_missing():
-    """Infections in the replay day that have no knowledge-base entry (or only a needs-review one)."""
-    kb = knowledge_base()
-    day = store.get(parse_iso(request.args.get("at"), replay_now()))
-    seen = Counter((e["infection"] or "unknown").lower() for e in day.events)
-    missing = [{"infection": k, "count": n} for k, n in seen.most_common() if k not in kb]
-    review = [{"infection": k, "count": n} for k, n in seen.most_common() if k in kb and kb[k].get("status") != "reviewed"]
-    return jsonify(day=day.start.date().isoformat(), seen=len(seen), missing=missing, needs_review=review)
-
-
-@app.route("/healthz")
-def healthz():
-    return jsonify(ok=True, replay_now=iso(replay_now()))
+# Settings: definitions for names Malpedia does not know, and the names checked against the sources (name_definitions.py, moved out of app.py unchanged, 2026-11-24)
+import name_definitions as _mod_name_definitions  # noqa: E402
+_mod_name_definitions.install(app, sys.modules[__name__])
+from name_definitions import api_kb_unresolved  # noqa: E402,F401  (name_definitions.py)
+from name_definitions import _kb_unresolved  # noqa: E402,F401  (name_definitions.py)
+from name_definitions import api_kb_malpedia_search  # noqa: E402,F401  (name_definitions.py)
+from name_definitions import api_kb_check  # noqa: E402,F401  (name_definitions.py)
+from name_definitions import api_kb_entry  # noqa: E402,F401  (name_definitions.py)
+from name_definitions import api_infections  # noqa: E402,F401  (name_definitions.py)
+from name_definitions import api_infections_missing  # noqa: E402,F401  (name_definitions.py)
+from name_definitions import healthz  # noqa: E402,F401  (name_definitions.py)
 
 
 # Load the replay day and run the replay schedule as soon as the process starts (gunicorn and `python app.py`).
@@ -2963,56 +1295,13 @@ _beacon_decode.install(app, {"csrf_ok": AUTH["csrf_ok"], "sees_hosts": lambda: n
 
 # combination codes and the analyst's combination search (combos.py)
 import combos as _combos  # noqa: E402
-
-
-def _combo_fetch(section, cols, start):
-    """One day of the given reports straight from MongoDB, inside the constituency, as the day stores load them."""
-    end = start + timedelta(days=1)
-    out = []
-    if section == "infections":
-        for s in registry.get():
-            if s["name"] not in cols:
-                continue
-            rows, _ = store._fetch_collection(s, start, end)
-            if settings.restricted:
-                rows = [e for e in rows if settings.in_scope(e["src_asn"], e["src_ip"]) or settings.in_scope(e["dst_asn"], e["dst_ip"])]
-            for e in rows:
-                for f, v in list(e.items()):
-                    if isinstance(v, datetime):
-                        e[f] = iso(v)
-            out += rows
-    else:
-        st = svc["store"]
-        for s in svc["registry"].get():
-            if s["name"] not in cols:
-                continue
-            rows, _ = st._fetch(s, start, end)
-            if settings.restricted:
-                rows = [e for e in rows if settings.in_scope(e["asn"], e["ip"])]
-            out += rows
-    return out
-
-
-def _combo_explain(section, name):
-    try:
-        return issue_resolve(name, fetch=False) if section == "issues" else mp_resolve(name)[0]
-    except Exception:                    # noqa: BLE001  (an explanation is a nice-to-have in the PDF)
-        return None
-
-
-def _adm1_shapes():
-    """The country's first-level regions (static/data/adm1/<country>.json), as the Executive report draws them; None if absent."""
-    p = os.path.join(app.static_folder, "data", "adm1", f"{settings.data['country']}.json")
-    try:
-        with open(p, encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, ValueError):
-        return None
-
-
-def _combo_pdf(spec):
-    import reports_pdf
-    return reports_pdf.build(spec)
+# Explore a match of Looking Glass asks: only the records that carry the indicator, per name and report (intel_match_api.py, moved out of app.py unchanged, 2026-11-24)
+import intel_match_api as _mod_intel_match_api  # noqa: E402
+_mod_intel_match_api.install(app, sys.modules[__name__])
+from intel_match_api import _combo_fetch  # noqa: E402,F401  (intel_match_api.py)
+from intel_match_api import _combo_explain  # noqa: E402,F401  (intel_match_api.py)
+from intel_match_api import _adm1_shapes  # noqa: E402,F401  (intel_match_api.py)
+from intel_match_api import _combo_pdf  # noqa: E402,F401  (intel_match_api.py)
 
 
 import advisory as _advisory_mod  # noqa: E402
@@ -3042,19 +1331,7 @@ FINDINGS = _findings.install(app, {"people": people, "audit": AUTH["audit"], "fr
                                    "has_perm": AUTH["has_perm"], "describe": COMBOS.describe, "base_dir": BASE_DIR,
                                    "known": lambda c: bool(COMBOS.resolve_any(c)), "logger": app.logger})
 NOTES.findings = FINDINGS
-
-
-def _people_of(kind):
-    """The active accounts that do a job, by what their role may do (roles are configurable): managers (management),
-    researchers (definitions), analysts (see addresses and export). Names only, for the "send to" lists."""
-    need = {"management": {"management"}, "researcher": {"definitions"}, "analyst": {"unmasked", "export"}, "advisor": {"advisory"}}[kind]
-    out = []
-    for name, u in AUTH["users"].all().items():
-        if (u or {}).get("status") != "active" or name.startswith(auth.TEST_PREFIX):
-            continue
-        if need <= set(AUTH["roles"].perms(u.get("role") or "")):
-            out.append({"user": name, "name": people.name(name), "role": u.get("role") or ""})
-    return sorted(out, key=lambda p: p["name"].lower())
+from intel_match_api import _people_of  # noqa: E402,F401  (intel_match_api.py)
 
 
 FINDINGS.people_of = _people_of
@@ -3077,29 +1354,7 @@ import acodes as _acodes  # noqa: E402
 
 import recent_days as _recent_days                  # noqa: E402
 RECENT_DAYS = _recent_days.RecentDays()
-
-
-def _day_for(platform, iso):
-    """A day of either platform: the copy in memory, or loaded from MongoDB and kept a few minutes (recent_days.py:
-    an analyst code's page and its counts share one load instead of loading the day again each time)."""
-    st = store if platform == "comms" else svc["store"]
-    try:
-        start = datetime.fromisoformat(iso).replace(tzinfo=timezone.utc)
-    except (TypeError, ValueError):
-        return None
-    d = st.days.get(start)
-    if d is not None:
-        return d
-    # the version a kept copy is valid for: the constituency (settings) and the stored data (the store's generation)
-    version = (getattr(getattr(st, "settings", None) or settings, "version", 0), getattr(st, "gen", 0))
-
-    def load():
-        try:
-            return st._load(start)
-        except Exception:                # noqa: BLE001  (an unreadable day: the code has no records)
-            app.logger.exception("Analyst code: day %s could not be loaded", iso)
-            return None
-    return RECENT_DAYS.get((platform, iso), version, load)
+from intel_match_api import _day_for  # noqa: E402,F401  (intel_match_api.py)
 
 
 ACODES = _acodes.install(app, {
@@ -3139,11 +1394,7 @@ FINDING_WATCH = _finding_watch.install(app, {
 
 # the organisation (name and logo, set in Settings) and the advisor's advisories on decided findings
 import organisation as _organisation  # noqa: E402
-
-
-def _site_demo():
-    """Demo mode for the site (public demo or ?demo=1), not a role without addresses: advisors and admins write here."""
-    return bool(PUBLIC_DEMO or request.args.get("demo") == "1")
+from intel_match_api import _site_demo  # noqa: E402,F401  (intel_match_api.py)
 
 
 import advisory as _advisory  # noqa: E402

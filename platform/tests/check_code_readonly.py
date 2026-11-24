@@ -64,11 +64,12 @@ INVENTORY = {
     "advisory.py::Store.save": (3, "data: data/advisories/"),
     "advisory.py::install._build": (1, "memory: the ZIP mailed to the organisation"),
     "app.py::<module>": (1, "data: the shipped geocache.json copied to data/geocache.json once"),
-    "app.py::_autocheck": (1, "data: data/.malpedia_check.lock"),
-    "app.py::_cve_loop": (1, "data: data/.cve_check.lock"),
-    "app.py::_report_response": (1, "memory: the report download"),
-    "app.py::_write_names": (2, "data: data/malpedia_names.json"),
-    "app.py::api_kb_entry": (2, "data: data/definitions.json"),
+    # moved out of app.py unchanged (2026-11-24): the same writes, in their new modules
+    "lookup_jobs.py::_autocheck": (1, "data: data/.malpedia_check.lock"),
+    "infection_kb.py::_cve_loop": (1, "data: data/.cve_check.lock"),
+    "report_downloads.py::_report_response": (1, "memory: the report download"),
+    "lookup_jobs.py::_write_names": (2, "data: data/malpedia_names.json"),
+    "name_definitions.py::api_kb_entry": (2, "data: data/definitions.json"),
     "app.py::api_networks_entry": (2, "data: data/asns.json"),
     "asn_lookup.py::save": (2, "data: data/asns.json"),
     "at_rest.py::_run": (1, "runs: findmnt/lsblk/cryptsetup status, read only"),
@@ -216,9 +217,17 @@ def _mode(call, pos):
     return m.value if isinstance(m, ast.Constant) and isinstance(m.value, str) else "?"
 
 
+MOVED_FROM_APP = {"analytics_api.py", "report_downloads.py", "infection_kb.py", "lookup_jobs.py", "card_notes.py",
+                  "name_definitions.py", "intel_match_api.py"}
+
+
 def writes_in(rel, text=None):
     """[(qualname, line, kind, path source)] of every write in one file (or in TEXT)."""
     text = open(os.path.join(ROOT, rel), encoding="utf-8").read() if text is None else text
+    # the parts moved out of app.py (2026-11-24) reach app.py's names as _A.name (_A.os.replace, _A.open...): read as
+    # written in app.py, so every write in them is found (the prefix is the same length on each line it is taken from)
+    if os.path.basename(rel) in MOVED_FROM_APP:
+        text = text.replace("_A.", "")
     tree = ast.parse(text)
     out = []
     # a path from a small helper of the same file (done_path(base_dir)): what it returns is shown with it

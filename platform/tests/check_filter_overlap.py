@@ -69,7 +69,11 @@ k_both = RC.filters_key({"infection": {"a", "b"}, "_carries_all": {"192.0.2.1", 
 ok("cached answers for 'either' and 'both' are kept apart; the device set is not in the key", k_either != k_both and "192.0.2.1" not in str(k_both))
 
 print("2. Used by the map's filter counts")
-src = read(os.path.join(HERE, "app.py"))
+# app.py's code, including the parts moved into their own modules (2026-11-24), read as it was written there: the moved
+# code reaches app.py's names as _A.name, so the prefix is taken away and the same text and counts are checked
+APP_PARTS = ("app.py", "analytics_api.py", "report_downloads.py", "infection_kb.py", "lookup_jobs.py", "card_notes.py",
+             "name_definitions.py", "intel_match_api.py")
+src = "\n".join(read(os.path.join(HERE, f)).replace("_A.", "") for f in APP_PARTS if os.path.exists(os.path.join(HERE, f)))
 ok("'both' applies only when the page asks (inf_all=1): a saved analyst code or finding keeps its devices",
    'args.get("inf_all") != "1"' in src and src.count("narrow_filters(parse_filters(") == 6)
 ok("…on the map's records, stream, figures, places, replay counts and analyses alike", all(

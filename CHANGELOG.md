@@ -5,6 +5,15 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-24 (2)
+### Changed
+- **app.py split into modules, behaviour unchanged.** The analysis panels, the PDF and ZIP reports of an analysis
+  figure, the infection knowledge base, the look-up jobs, the researchers' notes on cards, the definitions for names
+  Malpedia does not know and Explore a match now live in their own files (`analytics_api.py`, `report_downloads.py`,
+  `infection_kb.py`, `lookup_jobs.py`, `card_notes.py`, `name_definitions.py`, `intel_match_api.py`). Every address,
+  answer and permission is as before: the release's checks compare all 209 routes with the previous release's.
+- **After updating:** nothing to do.
+
 ## 2026-11-24
 ### Added
 - **Readable names for every report field.** The detail windows, Abused or Compromised and its CSV show each

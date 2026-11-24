@@ -39,8 +39,13 @@ long_one = "word " * 120 + "end"
 ok("no sentence end at all: the whole description, however long (the page wraps it)", short_title(long_one) == long_one.strip())
 ok("empty or missing: empty", short_title(None) == "" and short_title("   ") == "")
 ok("spaces and line breaks are tidied", short_title("Two   spaces\nand a break.") == "Two spaces and a break.")
+# app.py's code includes the parts moved into their own modules (2026-11-24), read as written there (no _A. prefix)
+APP_PARTS = ("app.py", "analytics_api.py", "report_downloads.py", "infection_kb.py", "lookup_jobs.py", "card_notes.py",
+             "name_definitions.py", "intel_match_api.py")
 for f, needle in (("management.py", "short_title(c.get(\"description\"))"), ("app.py", "short_title(x.get(\"description\"))")):
-    src = open(os.path.join(HERE, f), encoding="utf-8").read()
+    parts = APP_PARTS if f == "app.py" else (f,)
+    src = "\n".join(open(os.path.join(HERE, p), encoding="utf-8").read().replace("_A.", "") for p in parts
+                    if os.path.exists(os.path.join(HERE, p)))
     ok(f"{f} uses it instead of a 90-character cut", needle in src and '(c.get("description") or "")[:90]' not in src
        and '(x.get("description") or "")[:90]' not in src)
 
