@@ -159,6 +159,9 @@ button { font: inherit; color: inherit; }
   .hud > .kpis .kpi:first-child { padding-left: 16px; }
   .hud > .kpis .kpi-label { font-size: 11.5px; letter-spacing: .01em; }
   .hud > .kpis .kpi-value { font-size: 20px; }
+  /* the buttons still need a second row (hud-fit.js): the bar takes its real height, buttons to the right */
+  .hud.hud-fit-wrap { height: auto; }
+  .hud.hud-fit-wrap > .hud-right { margin-left: auto; }
 }
 
 .level { display: flex; flex-direction: column; gap: 3px; }
@@ -709,13 +712,18 @@ body.demo .pin, body.demo #mPin, body.demo #mCopy { display: none !important; }
 .tip { position: fixed; z-index: 2100; pointer-events: none; max-width: 260px; padding: 7px 10px; border-radius: 7px; background: #1f1f24; border: 1px solid var(--border-strong); box-shadow: 0 10px 30px rgba(0,0,0,.5); font-size: 12px; line-height: 1.45; color: var(--text-2); }
 .tip b { color: var(--text); font-weight: 600; }
 .tip .tip-n { font-family: var(--mono); color: var(--text); }
-.m-route { display: grid; grid-template-columns: 1fr 140px 1fr; gap: 14px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+/* the two ends take the room their text needs; the connector fills the whole gap between them, so its label sits
+   midway between the two places (the user, 2026-11-23: it sat off-centre in a fixed 140 px column) */
+.m-route { display: grid; grid-template-columns: auto minmax(120px, 1fr) auto; gap: 18px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
 .m-ep { min-width: 0; }
 .ep-k { font-size: 11px; color: var(--muted); }
 .ep-place { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 14px; margin: 3px 0 1px; }
 .ep-ip { font-size: 14px; color: var(--text); }
-.m-wire { display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
-.wire { position: relative; width: 100%; height: 1px; background: var(--border-strong); overflow: hidden; }
+.m-wire { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.wire { position: relative; width: 100%; height: 2px; border-radius: 1px; background: var(--border-strong); overflow: hidden; }
+/* a dot where it starts, an arrowhead where it arrives, both on the line */
+.m-wire::before { content: ""; position: absolute; left: -3px; bottom: -2px; width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong); }
+.m-wire::after { content: ""; position: absolute; right: -2px; bottom: -4px; border-left: 8px solid var(--border-strong); border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
 .wire i { position: absolute; top: 0; left: -30%; width: 30%; height: 100%; background: linear-gradient(90deg, transparent, var(--mc, var(--accent))); animation: wire 1.6s linear infinite; }
 @keyframes wire { to { left: 100%; } }
 .m-body { overflow-y: auto; padding: 16px 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
@@ -726,6 +734,11 @@ body.demo .pin, body.demo #mPin, body.demo #mCopy { display: none !important; }
 .m-sec dt { color: var(--muted); font-size: 12px; }
 .m-sec dd { margin: 0; font: 12px var(--mono); overflow-wrap: anywhere; color: var(--text); }
 .m-sec dd.empty { color: #4a4a52; }
+.m-sec.ss-attack dd a { color: var(--accent); text-decoration: none; }
+.m-sec.ss-attack dd a:hover, .m-sec.ss-attack dd a:focus-visible { text-decoration: underline; }
+.m-sec .ss-note { margin: 10px 0 0; font-size: 11.5px; color: var(--muted); }
+/* certificate and TLS facts (tls_facts.py): the ones a reader would act on stand out, in words as well as colour */
+.m-sec.tls-facts dd.flag { color: #f0a35e; font-weight: 600; }
 .m-sec pre { margin: 0; padding: 10px 12px; border-radius: 7px; background: #0e0e10; border: 1px solid var(--border); font: 12px/1.6 var(--mono); color: var(--text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
 .m-sec pre .verb { color: var(--accent); }
 .m-sec pre .hk { color: var(--muted); }
@@ -1056,6 +1069,10 @@ td.mp-cell { min-width: 260px; max-width: 420px; white-space: normal; }
 .am-picker-h { margin: 0; font-size: 13px; }
 .am-chosen { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: 9px; background: rgba(255, 255, 255, .02); }
 .am-chosen .am-ba-label { margin-right: 4px; }
+/* Shadowserver's own tags on a report's events (ss_attack.py): a comparison, not a mapping */
+.am-ss { margin-top: 10px; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 8px; }
+.am-ss .am-ba-label { text-transform: none; letter-spacing: 0; margin-bottom: 6px; }
+.am-ss-n { align-self: center; font: 11px var(--mono); color: var(--muted); margin: 0 6px 0 -2px; }
 .am-groups { display: grid; gap: 6px; }
 .am-group { margin: 0; padding: 6px 10px 8px; border: 1px solid var(--border); border-radius: 9px; min-width: 0; }
 .am-group legend { padding: 0 4px; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }

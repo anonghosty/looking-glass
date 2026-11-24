@@ -36,7 +36,7 @@
       ["#speed", "Replay speed", "How fast the day is replayed, from 1x to 60x."],
       ["#drawer, #btnDrawer", "Filters", "Attack type, report, severity, infection, city or country, networks, tag, port and protocol. The counts follow the other filters."],
       ["#intelCol", "Threat intel", "The activity over the day, attack types, severity and the top networks, reports, infections, cities and domains. Click an entry to analyse it."],
-      ["#stream", "Event stream", "The replayed events as a list. Click a row for its details; Pause and Catch up are at its top."],
+      ["#stream", "Event stream", "The replayed events as a list. Click a row for its details, with Shadowserver's own ATT&CK and CVE when the report gives them; Pause and Catch up are at its top."],
     ],
     "/services": [
       ["#stage", "The view", "One bubble per service, sized by its records, pulsing as records are replayed. Click a bubble to analyse it."],
@@ -44,7 +44,7 @@
       ["#kpis", "Key figures", "Records, replayed, exposed hosts, reports, hosts with issues and critical ones. Click a tile for its breakdown."],
       ["#drawer, #btnDrawer", "Filters", "Only hosts with issues, several issues or several reports; report family, service, severity, issue, region, city, network, port, vendor and device type."],
       ["#intelCol", "Intel", "The day's activity, report families, severity and the top issues, services, networks, regions, vendors, products and ports."],
-      ["#stream", "Record stream", "The replayed records. Click one for its details, to analyse the host or service, or to filter the view."],
+      ["#stream", "Record stream", "The replayed records. Click one for its details, with the certificate and TLS facts when the scan has them, to analyse the host or service, or to filter the view."],
     ],
     "/management": [
       [".mg-switch", "Platform", "Infections and attacks (network communications) or exposure and vulnerabilities (services)."],
@@ -83,7 +83,7 @@
     ],
     "/definitions": [
       ["#cardLeads", "Looking Glass asks", "Matches between names and reports for researchers to look into."],
-      ["#cardAttack", "MITRE ATT&CK", "Each report's suggested ATT&CK techniques, to confirm or change."],
+      ["#cardAttack", "MITRE ATT&CK", "Each report's suggested ATT&CK techniques, to confirm or change, beside the techniques Shadowserver tagged its events with."],
       ["#cardInf", "Infections and categories", "Names from the sinkhole and honeypot reports, looked up in Malpedia, MISP Galaxy and ATT&CK; define one with references."],
       ["#cardIss", "Issues", "CVEs are looked up (CISA KEV, EPSS, CVE.org, NVD); other issues need a definition with references."],
       ["#cardSev", "Severity map", "Each name with its criticality and where it comes from."],
@@ -94,7 +94,7 @@
       ["#cbCodeForm", "1 · The combination", "The code, then Look up."],
       ["#cbStep2Box", "2 · Where to look", "The report day, the days in memory, or a range of stored days; then Search."],
       ["#cbStep3Box", "3 · The devices", "The devices found, a map of them per region and a breakdown per day."],
-      ["#cbDownload", "Download", "A PDF summary and CSV files of the devices and records, as a ZIP."],
+      ["#cbDownload", "Download", "A PDF summary and CSV files of the devices, the records and every field of every record, as a ZIP."],
     ],
     "/intelligence": [
       ["#itMain .it-hero", "Abused or Compromised", "What Shadowserver's Intelligence reports say about the constituency: yesterday against the 7 days before."],

@@ -917,4 +917,54 @@
     }
     $("mgIntelHead").hidden = note.hidden = box.hidden = false;
   }
+
+  // ---------------- every chart's value on hover, at once (the user, 2026-11-23: "when I hover on the charts some
+  // don't show the value"). The charts name each bar, slice, point and row in a title: the browser shows that only after
+  // a still second, never over a label or mark lying on top of it. One tooltip in the map's style shows it at once for
+  // the element under the mouse or its nearest named parent; the text moves to data-tip (and aria-description, so a
+  // screen reader still reads it) and the browser's own tooltip stays away. The region map keeps its own panel.
+  const chartTip = el("div", "mg-charttip"); chartTip.hidden = true; chartTip.setAttribute("role", "tooltip");
+  document.body.append(chartTip);
+  const tipOf = (t) => {
+    for (let e = t; e && e.nodeType === 1; e = e.parentNode) {
+      // the map drawing keeps its own panel; the region list beside it, inside the same frame, gets this one
+      if (e.closest?.("svg.mg-map, .mg-maptip") || !e.closest?.(".mg-card")) return null;
+      // a title set again after an earlier hover (a chart updated in place) wins over the kept text
+      const own = e.getAttribute("title") || (e instanceof SVGElement && [...e.children].find((c) => c.tagName.toLowerCase() === "title")?.textContent);
+      if (!(own && own.trim()) && e.dataset?.tip) return e;
+      if (own && own.trim()) {
+        e.dataset.tip = own.trim();
+        e.removeAttribute("title");
+        [...e.children].filter((c) => c.tagName.toLowerCase() === "title").forEach((c) => c.remove());
+        if (!e.getAttribute("aria-label")) e.setAttribute("aria-description", own.trim());
+        return e;
+      }
+      if (e.classList?.contains("mg-card")) return null;
+    }
+    return null;
+  };
+  const placeTip = (x, y) => {
+    const w = chartTip.offsetWidth, h = chartTip.offsetHeight;
+    let left = x + 14, top = y + 16;
+    if (left + w > innerWidth - 8) left = Math.max(8, x - w - 14);
+    if (top + h > innerHeight - 8) top = Math.max(8, y - h - 12);
+    chartTip.style.left = `${left}px`; chartTip.style.top = `${top}px`;
+  };
+  let tipFor = null;
+  document.addEventListener("mousemove", (ev) => {
+    const t = tipOf(ev.target);
+    if (!t) { if (tipFor) { chartTip.hidden = true; tipFor = null; } return; }
+    if (t !== tipFor) { chartTip.textContent = t.dataset.tip; chartTip.hidden = false; tipFor = t; }
+    placeTip(ev.clientX, ev.clientY);
+  }, { passive: true });
+  document.addEventListener("mouseleave", () => { chartTip.hidden = true; tipFor = null; });
+  document.addEventListener("scroll", () => { chartTip.hidden = true; tipFor = null; }, { passive: true, capture: true });
+  // the keyboard: a focused bar, row or button of a chart shows its value the same way
+  document.addEventListener("focusin", (ev) => {
+    const t = tipOf(ev.target);
+    if (!t) { chartTip.hidden = true; tipFor = null; return; }
+    const r = t.getBoundingClientRect();
+    chartTip.textContent = t.dataset.tip; chartTip.hidden = false; tipFor = t; placeTip(r.left, r.bottom - 8);
+  });
+  document.addEventListener("focusout", () => { chartTip.hidden = true; tipFor = null; });
 })();

@@ -2,7 +2,7 @@
   "SPDXID": "SPDXRef-DOCUMENT",
   "creationInfo": {
     "comment": "Made from the lock files only (tools/make_sbom.py): the date is the release's, the same lock files always give the same file.",
-    "created": "2026-11-23T00:00:00Z",
+    "created": "2026-11-24T00:00:00Z",
     "creators": [
       "Tool: looking-glass-make_sbom"
     ]
@@ -11,8 +11,8 @@
   "documentDescribes": [
     "SPDXRef-Package-looking-glass"
   ],
-  "documentNamespace": "https://github.com/anonghosty/looking-glass/sbom/v2026.11.23.2-d652bcf990f8c772",
-  "name": "looking-glass 2026.11.23.2",
+  "documentNamespace": "https://github.com/anonghosty/looking-glass/sbom/v2026.11.24-fdd284237f1e9517",
+  "name": "looking-glass 2026.11.24",
   "packages": [
     {
       "SPDXID": "SPDXRef-Action-actions-checkout-3d3c42e5aac5",
@@ -65,7 +65,7 @@
       "name": "looking-glass-docs-site",
       "primaryPackagePurpose": "OTHER",
       "supplier": "Organization: Looking Glass project",
-      "versionInfo": "2026.11.23.2"
+      "versionInfo": "2026.11.24"
     },
     {
       "SPDXID": "SPDXRef-Component-pipeline",
@@ -78,7 +78,7 @@
       "name": "looking-glass-pipeline",
       "primaryPackagePurpose": "APPLICATION",
       "supplier": "Organization: Looking Glass project",
-      "versionInfo": "2026.11.23.2"
+      "versionInfo": "2026.11.24"
     },
     {
       "SPDXID": "SPDXRef-Component-platform",
@@ -91,7 +91,7 @@
       "name": "looking-glass-platform",
       "primaryPackagePurpose": "APPLICATION",
       "supplier": "Organization: Looking Glass project",
-      "versionInfo": "2026.11.23.2"
+      "versionInfo": "2026.11.24"
     },
     {
       "SPDXID": "SPDXRef-Package-docs-site-babel-2.18.0",
@@ -2722,7 +2722,7 @@
       "name": "looking-glass",
       "primaryPackagePurpose": "APPLICATION",
       "supplier": "Organization: Looking Glass project",
-      "versionInfo": "2026.11.23.2"
+      "versionInfo": "2026.11.24"
     },
     {
       "SPDXID": "SPDXRef-Package-pipeline-certifi-2026.10.23",

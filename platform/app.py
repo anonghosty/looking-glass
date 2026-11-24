@@ -3730,7 +3730,7 @@ import features as _features  # noqa: E402
 FEATURES = _features.install(app, {"db": db, "registry": registry, "svc": svc, "replay_now": replay_now,
                                    "day_start": day_start, "AUTH": AUTH, "app_logger": app.logger,
                                    "store": store, "settings": settings, "findings": FINDINGS, "acodes": ACODES,
-                                   "asns": asn_registry, "serving": _SERVING})
+                                   "asns": asn_registry, "serving": _SERVING, "attack": ATTACK})
 
 if __name__ == "__main__":
     # `python app.py` (tests, development) listens on this computer only unless BIND_HOST says otherwise; the service

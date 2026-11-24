@@ -1,5 +1,5 @@
 # Looking Glass: every file this release ships in this folder (deploy/stale_files.py reads it on update)
-# files: 760
+# files: 768
 .env.example
 .gitignore
 README.md
@@ -26,6 +26,7 @@ beacon_keep.py
 beacon_stats.py
 beacon_unknown.py
 bounded_jobs.py
+caddy_watch.py
 code_integrity.py
 combo_pdf.py
 combo_review.py
@@ -59,9 +60,11 @@ deploy/update_libraries.sh
 deploy/verify_install.py
 device_note.py
 executive_pdf.py
+export_fields.py
 external_access.py
 facets.py
 features.py
+field_labels.py
 filesig.py
 finding_rules.py
 finding_watch.py
@@ -152,6 +155,7 @@ small_codes.py
 sources.py
 special_reports.py
 spike_notice.py
+ss_attack.py
 static/css/acode.css
 static/css/advisory.css
 static/css/app.css
@@ -426,6 +430,7 @@ static/data/adm1/ZA.json
 static/data/adm1/ZM.json
 static/data/adm1/ZW.json
 static/data/adm1/index.json
+static/data/field_labels.json
 static/data/ghana_regions.json
 static/data/land-110m.json
 static/img/logo-mark-light.svg
@@ -469,6 +474,7 @@ static/js/kb-settings.js
 static/js/leak-trace.js
 static/js/lg-copy.js
 static/js/lg-detective.js
+static/js/lg-fields.js
 static/js/lg-select.js
 static/js/loader.js
 static/js/localtime.js
@@ -676,6 +682,7 @@ tests/check_services_consistency.py
 tests/check_services_kb.py
 tests/check_settings_access.py
 tests/check_severity_map.py
+tests/check_shadowserver_fields.py
 tests/check_signed_out.py
 tests/check_signin_motion.py
 tests/check_single_worker.py
@@ -739,6 +746,7 @@ tests/verify_totals.py
 throttle_prune.py
 timezones.py
 tlp.py
+tls_facts.py
 tools/analyze_services.py
 tools/build_wheelhouse.sh
 tools/check_reports.py

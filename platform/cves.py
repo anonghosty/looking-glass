@@ -77,7 +77,9 @@ class CveIntel:
             self.cache = {}
         for k in ("nvd", "epss", "cveorg"):
             self.cache.setdefault(k, {})
-        self._mtime, self._checked = (filesig.sig(cache_path) if os.path.exists(cache_path) else 0), time.time()
+        # a signature (filesig.sig) is compared only with == and != (review 2026-11-23: "<=" against the start value 0
+        # raised TypeError when another process wrote the cache first, and a same-tick smaller file counted as older)
+        self._mtime, self._checked = (filesig.sig(cache_path) if os.path.exists(cache_path) else None), time.time()
         self.cache.setdefault("kev", {"t": 0, "items": {}})
 
     # ------------------------------------------------------------------ plumbing
@@ -88,7 +90,7 @@ class CveIntel:
         self._checked = time.time()
         try:
             m = filesig.sig(self.path)
-            if m <= self._mtime:
+            if m == self._mtime:
                 return
             with open(self.path, encoding="utf-8") as f:
                 disk = json.load(f)

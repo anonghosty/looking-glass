@@ -51,6 +51,14 @@ FEATURES = {
                  ("docs/INSTALLATION.md", "verify_install.py --fetch"),
                  ("docs/TECHNICAL_REFERENCE.md", "code_integrity.py")],
     },
+    # 2026-11-23: Shadowserver's own ATT&CK per event; the Definitions page counts what it tagged each report's events with
+    "ss_attack": {
+        "tour": [("/definitions", "#cardAttack")],
+        "glossary": ["ss-event-mapping"],
+        "docs": [("docs/USER_GUIDE.md", "Shadowserver's mapping for this event."),
+                 ("docs/USER_GUIDE.md", "Shadowserver tagged N events of this report with"),
+                 ("docs/TECHNICAL_REFERENCE.md", "ss_attack.py")],
+    },
     "library_supply": {
         "no_ui": "an alert in the administrators' existing bell and an entry in the audit log; no page or control of its own",
         "docs": [("docs/INSTALLATION.md", "When a library file does not match"),

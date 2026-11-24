@@ -850,7 +850,12 @@ def install(app, ctx):
             am.sync()
         except OSError:
             pass
-        return jsonify(summary=am.summary(), todo=am.todo(), reviewed=am.reviewed(),
+        seen = getattr(am, "ss_seen", None)               # ss_attack.Seen, set by features.py
+        try:
+            ss_seen = seen.get() if seen else {}
+        except Exception:                                 # noqa: BLE001  (the map's days are loading: shown next time)
+            ss_seen = {}
+        return jsonify(summary=am.summary(), todo=am.todo(), reviewed=am.reviewed(), ss_seen=ss_seen,
                        certainty=CERTAINTY, roles=ROLE, can_admin=bool(ctx.get("can_admin", lambda: False)()))
 
     @app.route("/api/attack/search")

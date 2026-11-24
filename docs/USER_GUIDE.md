@@ -317,6 +317,16 @@ Come back to it at any time with the **Overview** button, which is in every page
   device's MAC address, hardware UUID and CPU id.
   (The services record stream does the same, for records and hosts.)
 
+  **Shadowserver's mapping for this event.** Some reports, mostly the honeypot scanner events, carry Shadowserver's
+  own tags for each event: the MITRE ATT&CK techniques and tactics, the vulnerability (a CVE, with its CVSS score) and
+  the device it targeted. The detail window shows them in their own section, linked to MITRE's and cve.org's pages.
+  They are Shadowserver's statement about that one event; Looking Glass's suggestion for the whole report stays as it
+  is. Most events carry none: Shadowserver fills these fields only sometimes.
+
+  **Readable field names.** A report's own fields are shown by a short readable name, for example "Certificate
+  expires" for `cert_expiration_date`, here, on the services page and in Abused or Compromised. Copy JSON keeps
+  Shadowserver's own field names.
+
   ![An event's details](media/screens/23-comms-event.png)
 
 - **Playback:** pause, speed (1×, 5×, 15×, 60×) and **Catch up**. A hidden browser tab pauses itself and resumes
@@ -345,6 +355,11 @@ The same layout, without a map:
   follow the other filters, as on the map; with *Hosts in several reports* or *Hosts with multiple issues* on, they
   count those hosts' records.
 - **Intel and stream** as on the map, with the report's definition in every record's details.
+- **Certificate and TLS** (a record's details): when the scan carries them, the certificate's expiry (and whether it
+  had expired when the host was scanned), whether it is self-signed, passed Shadowserver's validity check and is
+  trusted by browsers (with the browser's reason), and whether SSLv3, an old and broken protocol, is still on and TLS
+  1.3 is supported. The ones to act on are marked. Researchers see them without dates and without the browser's
+  reason, which can name the host.
 
 ![The regions view](media/screens/31-services-view-kenya-regions.png)
 
@@ -507,6 +522,10 @@ local copy; retired techniques are hidden). Several techniques can be chosen, or
 optional note. Every change is in the audit log, and a reviewed mapping is never replaced by a suggestion: it only goes
 back to *please check*, keeping the old mapping shown, when Shadowserver changes the report's type or description, or
 when MITRE retires one of its techniques.
+
+Beside a report's mapping, **Shadowserver tagged N events of this report with** lists the techniques Shadowserver
+itself gave that report's events in the days the map holds, with how often. Use it to check a mapping; it never
+changes one.
 
 **New ATT&CK versions** (MITRE publishes about twice a year) are noticed by the weekly refresh and compared with the old
 one: a technique MITRE revoked gets MITRE's named replacement as the suggestion and is shown as *retired in vN* until
@@ -710,6 +729,12 @@ or the Findings page) is for roles that see addresses and may export:
    Accessible SSL`) and one row per record. The columns
    have fixed names, ready for enrichment and dashboards. If the search has expired (after an hour), the button runs it
    again and then downloads.
+   The ZIP also holds an **all-fields CSV**: every field of every record, one line per field, with its readable name
+   (it stops at 1,000,000 lines and says so in its last line). The devices CSV, the file an advisory sends, has one
+   column for each value the pattern analysis groups devices by: certificate SHA-256, subject and issuer, JARM, HASSH,
+   SSH and server software, page hash, the usernames and passwords tried, the SSH client and the request pattern, with
+   Shadowserver's own ATT&CK and CVE or the certificate facts. With them a network provider can find the same devices
+   in their own network.
 5. **A report for one network provider**, to attach to the advisory sent to that operator: choose it in **Report for**
    next to the download button, or click the network in the *Networks* card. The PDF and both CSV files then cover
    only that provider's devices and records, and its name is in the title and the file names.

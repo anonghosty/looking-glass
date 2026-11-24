@@ -42,6 +42,7 @@ from datetime import datetime, timedelta, timezone
 from flask import Response, g, jsonify, render_template, request
 
 import csvsafe
+import field_labels
 
 DAYS = 8                     # today and the 7 days it is compared with
 ROW_CAP = 20000              # rows read per report and day at most (a report this size would be unusual)
@@ -444,7 +445,7 @@ def install(app, ctx):
                     "query": "&".join([f"report={name}"] + [f"ip={h}" for h in hosts[:CODE_HOSTS]]),
                     "at": (rec_days.most_common(1)[0][0] + "T12:00:00Z") if rec_days else f"{day}T00:00:00Z"}
         return jsonify(name=name, title=e.get("title") or name, day=day, days=list(reversed(days())), total=len(rows), stats=stats,
-                       hosts=len(hosts), shown=min(len(rows), SHOW_CAP), columns=[{"key": k, "label": NAMES.get(k, k.replace("_", " ").capitalize())} for k in cols],
+                       hosts=len(hosts), shown=min(len(rows), SHOW_CAP), columns=[{"key": k, "label": NAMES.get(k) or field_labels.label(k)} for k in cols],
                        extra=extra, rows=[{k: val(k, x, masked) for k in cols + extra if x.get(k) not in (None, "")} for x in rows[:SHOW_CAP]],
                        facets=facets, filters={k: v for k, v in flt.items()}, q=text,
                        masked=name == "compromised_account" and not reveal and not masked,
@@ -465,7 +466,7 @@ def install(app, ctx):
         cols, extra = columns(name, rows)
         buf = io.StringIO()
         w = csvsafe.writer(buf)          # a value starting with = + - @ never runs as a spreadsheet formula
-        w.writerow(cols + extra)
+        w.writerow([NAMES.get(k) or field_labels.label(k) for k in cols + extra])   # readable headers, as on the page
         for x in rows:
             w.writerow([val(k, x) for k in cols + extra])
         ctx["audit"].add("intelligence_export", user=me(), target=name,

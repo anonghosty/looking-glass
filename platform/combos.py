@@ -45,6 +45,8 @@ from datetime import datetime, timedelta, timezone
 from flask import Response, g, jsonify, render_template, request, has_request_context
 
 import csvsafe
+import export_fields
+import tls_facts
 import issue_tags
 import intel as I
 import pdf_refs
@@ -733,7 +735,11 @@ def install(app, ctx):
         network is only its name in the report (external review, 2026-11-12: a renamed network matched nothing by name)."""
         section = entry["section"]
         T = _TITLE["of"] if section == "services" else (lambda n: n)       # what people read: a report's title
-        cols = COMMS_COLS if section == "infections" else SVC_COLS
+        # the fixed columns, then the values the pattern analysis groups devices by and Shadowserver's own mapping or the
+        # certificate facts (export_fields.py, 2026-11-23): added before the code, which stays the last column, so tools
+        # mapping the CSV by name keep working
+        base_cols, more = (COMMS_COLS, export_fields.COMMS_PATTERN_COLS) if section == "infections" else (SVC_COLS, export_fields.SVC_PATTERN_COLS)
+        cols = base_cols[:-1] + more + base_cols[-1:]
         labels = ctx["labels"]()
         m = m or Matcher(entry, labels)
         is_a = entry.get("kind") == "a"
@@ -754,10 +760,10 @@ def install(app, ctx):
             h = m.host(e)
             asn = e.get("src_asn") if section == "infections" else e.get("asn")
             extra = {"_network": net(asn), "_report": m.report(e), "_code": entry["code"],
-                     "_issue": ", ".join(e.get("issues") or []) if is_a else entry["name"]}
+                     "_issue": ", ".join(e.get("issues") or []) if is_a else entry["name"], **export_fields.computed(e, section)}
             rows.append([extra[k] if k in extra else _cell(e, k) for _, k in cols])
             d = devices.setdefault(h, {"ip": h, "asn": asn or "", "network": extra["_network"], "records": 0, "first": None, "last": None,
-                                       "reports": set(), "days": set(), "ports": set(), "hostname": "",
+                                       "reports": set(), "days": set(), "ports": set(), "hostname": "", "pattern": collections.defaultdict(set),
                                        "country": e.get("src_geo") if section == "infections" else e.get("geo"),
                                        "region": e.get("src_region") if section == "infections" else e.get("region"),
                                        "city": e.get("src_city") if section == "infections" else e.get("city")})
@@ -773,6 +779,12 @@ def install(app, ctx):
                 d["ports"].add(str(port))
             if e.get("hostname") and not d["hostname"]:
                 d["hostname"] = str(e["hostname"])
+            # the pattern values per device (export_fields.py): the devices CSV is the file an advisory sends to the
+            # organisation, so what a network provider needs to find the same devices goes there too
+            for c, k in more:
+                v = extra[k] if k in extra else _cell(e, k)
+                if v:
+                    d["pattern"][c].add(v)
         devs = sorted(devices.values(), key=lambda d: (-d["records"], d["ip"]))
         # what each device is that day: its infections, issues and CVEs (on its last day with the combination), and on
         # the report day whether it carried the same combination on the other days in memory, or what instead
@@ -802,13 +814,15 @@ def install(app, ctx):
             return sorted({T(r) for r in set(per_dev.get(d["ip"], {})) - d["reports"]})
         # ports: the ports of this selection's own records; all_ports_and_services: every port the address was seen open
         # on that day in the services reports, with the service (the user, 2026-11-19)
+        pat_cols = [c for c, _ in more]
         dev_cols = ["ip", "host_name", "ports", "all_ports_and_services", "asn", "network", "country", "region", "city", "records", "days", "first_seen", "last_seen", "reports",
-                    "also_seen_in", "infections", "issues", "cves", "other_days", "combination_code", "cross_report_code"]
+                    "also_seen_in", "infections", "issues", "cves", "other_days", *pat_cols, "combination_code", "cross_report_code"]
         dev_rows = [[d["ip"], d["hostname"], ", ".join(sorted(d["ports"], key=lambda p: (len(p), p))), d["flags"].get("ports") or "",
                      d["asn"], d["network"], d["country"] or "", (d["region"] or "").title(), (d["city"] or "").title(), d["records"],
                      len(d["days"]), d["first"] or "", d["last"] or "", ", ".join(sorted(d["reports"])),
                      ", ".join(sorted(set(per_dev.get(d["ip"], {})) - d["reports"])), ", ".join(d["flags"]["infections"]),
                      ", ".join(d["flags"]["issues"]), ", ".join(d["flags"]["cves"]), earlier_text(d),
+                     *[" | ".join(sorted(d["pattern"].get(c) or ())) for c in pat_cols],
                      entry["code"], xcode.get(d["ip"], "")] for d in devs]
         countries, regions, details, city_rows = geography(devs, section)
         shapes = ctx["shapes"]() if devs else None
@@ -977,6 +991,26 @@ def install(app, ctx):
         city_tab = [[c, r, f"{n:,}", f"{n / max(1, len(devs)):.1%}"] for (c, r), n in city_rows.most_common(15)]
         x_rows = [[" | ".join(f"{T(p['report'])}: {' + '.join(p['items']) or 'the name only'}" for p in pt["parts"]), f"{pt['devices']:,}", pt["code"]]
                   for pt in x["patterns"]]
+        # Shadowserver's own ATT&CK and CVE tags on these records, and the certificate facts the scans give
+        # (export_fields.py): counted for the PDF, each record once per value
+        ss_n, tls_n = collections.Counter(), collections.Counter()
+        for e in found:
+            if section == "infections":
+                mm = e.get("ss_attack") or {}
+                for t in mm.get("techniques") or []:
+                    ss_n[f"{t['id']} {t['name']}" if t["name"] != t["id"] else t["id"]] += 1
+                for t in mm.get("tactics") or []:
+                    ss_n[f"Tactic {t['id']} {t['name']}" if t["name"] != t["id"] else f"Tactic {t['id']}"] += 1
+                v = mm.get("vulnerability")
+                if v:
+                    ss_n[v["id"] + (f" (CVSS {v['score']})" if v.get("score") else "")] += 1
+            else:
+                for fct in tls_facts.facts(e.get("extras"), e.get("timestamp") or e.get("extracted_date")):
+                    if fct["key"] in ("expires", "self_signed", "valid", "trusted", "sslv3", "tlsv13"):
+                        val = "Expired before the scan" if fct["key"] == "expires" and fct["flag"] else "Not expired when scanned" if fct["key"] == "expires" else fct["value"]
+                        tls_n[f"{fct['label'] if fct['key'] != 'expires' else 'Certificate'}: {val}"] += 1
+        ss_rows = [[k, f"{n:,}", f"{n / max(1, len(rows)):.1%}"] for k, n in ss_n.most_common(15)]
+        tls_rows = [[k, f"{n:,}", f"{n / max(1, len(rows)):.1%}"] for k, n in sorted(tls_n.items())]
         spec = {"platform_label": "Network communications" if section == "infections" else "Publicly accessible services",
                 "title": f"Combination {entry['code']}", "selection": describe(entry)[:150], "day": span,
                 "generated_by": job["user"], "scope": ctx["scope_text"](), "demo": False,
@@ -1013,6 +1047,8 @@ def install(app, ctx):
                     ("Devices per region", ["Region", "Devices", "Share"], geo_rows),
                     ("Devices per city", ["City", "Region", "Devices", "Share"], city_tab, [0.3, 0.3, 0.2, 0.2]),
                     ("What the devices are (as the reports name them)", ["Vendor, type / product", "Records", "Share"], kind_rows),
+                    ("Shadowserver's own ATT&CK and CVE tags on these records", ["Technique, tactic or CVE", "Records", "Share"], ss_rows, [0.7, 0.15, 0.15]),
+                    ("Certificate and TLS facts, as scanned", ["Fact", "Records", "Share"], tls_rows, [0.7, 0.15, 0.15]),
                     (("Destination ports" if section == "infections" else "Ports the services listen on"), ["Port / protocol", "Records", "Share"], port_rows),
                     ("Records per day", ["Day", "Records", "Share"], [[d, f"{n:,}", f"{n / max(1, len(rows)):.1%}"] for d, n in per_day])] if b[2]],
                 "columns": [[c, c] for c in dev_cols], "rows": [], "total": len(devs), "csv_name": f"{base}_devices.csv",
@@ -1155,6 +1191,12 @@ def install(app, ctx):
             if enr:                                   # the analysis across every category, one row per finding
                 zf.writestr(f"{base}_other_categories.csv",
                             csv_text(*without(["category", "report", "value", "hosts", "records", "code"], enrich_rows(enr), CODES)))
+            # every field of every record, one line each with its readable label (export_fields.py): what a network
+            # provider needs to find the same devices; a cut is said in the file's last line, never silent
+            af, cut = export_fields.all_fields_rows(sorted(found, key=lambda e: e.get("_t") or 0), section, m.report)
+            if cut:
+                af.append(["", "", "", "", "", "", f"Stopped at {export_fields.ALL_FIELDS_MAX:,} lines: choose fewer devices or days for the rest"])
+            zf.writestr(f"{base}_all_fields.csv", csv_text(export_fields.ALL_FIELDS_HEAD, af))
         # for the page: the key analytics, and per region what the map shows on hover (with the devices' addresses: this
         # page is for analysts only)
         reg_det = {}

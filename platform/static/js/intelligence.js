@@ -328,7 +328,7 @@
           extraRow = el("tr", "it-extra"); extraRow.hidden = true;
           const cell = el("td"); cell.colSpan = cols.length + 1;
           const dl = el("dl", "it-extra-dl");
-          for (const k of more) { const item = el("div"); const dd = el("dd"); cellText(dd, k, r[k]); item.append(el("dt", null, k.replace(/_/g, " ")), dd); dl.append(item); }
+          for (const k of more) { const item = el("div"); const dd = el("dd"); cellText(dd, k, r[k]); item.append(el("dt", null, window.LGFields ? window.LGFields.label(k) : k.replace(/_/g, " ")), dd); dl.append(item); }
           cell.append(dl); extraRow.append(cell);
           b.addEventListener("click", () => {
             const open = extraRow.hidden; extraRow.hidden = !open;

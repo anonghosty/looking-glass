@@ -1232,9 +1232,16 @@
         ["Product", e.product, e.product ? ["product", e.product] : null], ["Version", e.version], ["Tags", e.tags.join(", ")]]),
       section("This host yesterday", [["Records", fmt(d.host_records)], ["Reports / services", d.host_services.join(", ")]]),
     );
+    // certificate and TLS facts as Shadowserver's scan gives them (tls_facts.py): facts only, the ones to act on marked
+    if ((e.tls || []).length) {
+      const s = section("Certificate and TLS", e.tls.map((f) => [f.label, f.value]), true);
+      s.classList.add("tls-facts");
+      s.querySelectorAll("dd").forEach((dd, i) => { if (e.tls[i]?.flag) dd.classList.add("flag"); });
+      body.append(s);
+    }
     const ex = Object.entries(e.extras || {});
     const hid = e.extras_hidden ? ` (${e.extras_hidden} identifying or unlisted field${e.extras_hidden === 1 ? "" : "s"} hidden in the masked view)` : "";
-    if (ex.length || hid) body.append(section(`${e.service} specific fields${hid}`, ex.map(([k, v]) => [k.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()), v]), true));
+    if (ex.length || hid) body.append(section(`${e.service} specific fields${hid}`, ex.map(([k, v]) => [window.LGFields ? window.LGFields.label(k) : k.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()), v]), true));
     $("modal").hidden = false; $("modalScrim").hidden = false; $("btnModalClose").focus();
   }
   openModal.seq = 0; openModal.loading = null;

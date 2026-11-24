@@ -9,13 +9,22 @@
   const left = hud.querySelector(".hud-left"), right = hud.querySelector(".hud-right");
   if (!left || !right) return;
   const STEPS = ["hud-fit-1", "hud-fit-2", "hud-fit-3"];
+  const root = document.documentElement;
   const wrapped = () => right.offsetTop > left.offsetTop + 4;
   function fit() {
-    hud.classList.remove(...STEPS);
+    hud.classList.remove(...STEPS, "hud-fit-wrap");
+    root.style.removeProperty("--hud-h");
     if (innerWidth < 1440) return;            // narrower layouts wrap by design
     for (const s of STEPS) {
       if (!wrapped()) return;
       hud.classList.add(s);
+    }
+    // still two rows (a long name, every button, browser zoom): the bar grows to hold them, the figures strip stays
+    // inside it with its background, and everything placed under the bar (--hud-h) moves down by the real height
+    // (the user, 2026-11-23: the figures had dropped out of the bar onto the map)
+    if (wrapped()) {
+      hud.classList.add("hud-fit-wrap");
+      root.style.setProperty("--hud-h", `${hud.offsetHeight}px`);
     }
   }
   let t;

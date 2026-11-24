@@ -5,6 +5,43 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-24
+### Added
+- **Readable names for every report field.** The detail windows, Abused or Compromised and its CSV show each
+  Shadowserver field by a short readable name, for example "IP header: URG flag" instead of `ip_header_urg`, for all
+  746 fields the reports use.
+- **Shadowserver's own ATT&CK and CVE for an event.** When Shadowserver tags an event with MITRE ATT&CK techniques and
+  tactics, a CVE or the device it targeted (the honeypot scanner reports), the map's detail window shows them under
+  "Shadowserver's mapping for this event". On the Definitions page, each report shows the techniques Shadowserver
+  tagged its events with, beside Looking Glass's mapping. They never change a mapping.
+- **Certificate and TLS facts.** When a scan carries them, the services detail window shows whether the certificate
+  had expired when it was scanned, is self-signed, passed Shadowserver's check and is trusted by browsers, and whether
+  SSLv3 is still on and TLS 1.3 supported. Researchers see them without dates.
+- **Combination downloads carry what a network provider needs.** The devices CSV and the records CSV gain the values
+  the pattern analysis groups devices by (certificate fingerprints and names, JARM, HASSH, SSH and server software,
+  page hash, brute-force usernames and passwords, SSH client, request pattern), Shadowserver's own ATT&CK and CVE and
+  the certificate facts, before `combination_code`. A new all-fields CSV lists every field of every record with its
+  readable name. The PDF counts Shadowserver's tags and the certificate facts.
+- **Caddy kept up to date.** `deploy/caddy_front.sh update` updates Caddy from its signed repository after checking its
+  key against the pinned fingerprint, keeps Looking Glass's Caddyfile, hardening and firewall, and checks the site
+  through Caddy afterwards. Setup makes sure Ubuntu's automatic updates are installed and says plainly when they are
+  switched off. `status` shows the installed and newest version, and the administrators' bell warns when Caddy is
+  behind or its updates do not install by themselves.
+
+### Fixed
+- **The figures stay in the top bar** on wide screens when the buttons need a second row (a long name, browser zoom);
+  they no longer drop onto the map.
+- **The detail window's connector** sits midway between the two places, drawn from one to the other with an arrow.
+- **Every chart on the Executive portal shows its value on hover**, at once, also over a chart's labels and in the
+  regions list.
+- **CVE look-ups no longer fail after another process writes the CVE cache first** (a fresh installation started
+  without the cache file; since 2026-11-23 (2)).
+- **GitHub's checks no longer stop MongoDB while it starts** (the check for "is it up" wrote into MongoDB's data folder).
+
+### Changed
+- MITRE ATT&CK tactics are kept by ID from the next weekly refresh of the name sources. Until then a tactic shows its
+  ID, linked to MITRE's page.
+
 ## 2026-11-23 (2)
 ### Changed
 - **ATT&CK and impact checked against each report's own Shadowserver page.** Every report's suggested MITRE ATT&CK

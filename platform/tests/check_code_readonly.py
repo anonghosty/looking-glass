@@ -74,6 +74,7 @@ INVENTORY = {
     "at_rest.py::_run": (1, "runs: findmnt/lsblk/cryptsetup status, read only"),
     "attack_map.py::AttackMap._locked": (1, "data: data/.attack_mappings.lock"),
     "attack_map.py::AttackMap._write": (3, "data: data/attack_mappings.json"),
+    "caddy_watch.py::_run": (1, "runs: dpkg-query/apt-cache policy/dpkg --compare-versions/apt-config dump, read only"),
     "audit_chain.py::Chain._adopt_old_copy": (1, "data: data/audit_archive/"),
     "audit_chain.py::Chain._gzip": (2, "data: data/audit_archive/"),
     "audit_chain.py::Chain._set_recorded_count": (3, "data: data/audit_archive/removed.recorded"),

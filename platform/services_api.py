@@ -18,6 +18,7 @@ from flask import Response, jsonify, render_template, request
 from werkzeug.datastructures import MultiDict
 
 import masked_fields
+import tls_facts
 from privacy import mask_ip, masked_id
 
 _MASKED = {}            # id(day) -> ((serial, records, list), {masked id: record}); only the days someone opened a record of
@@ -130,6 +131,10 @@ def register(app, ctx):
                 out["extras"], out["extras_hidden"] = masked_fields.service_extras(ex)
             else:
                 out["extras"] = ex
+            # certificate and TLS facts (tls_facts.py), from the raw fields; masked viewers get them without dates
+            tls = tls_facts.facts(ex, e.get("timestamp") or e.get("extracted_date"), dates=not demo)
+            if tls:
+                out["tls"] = tls
         return out
 
     def day_for(at=None):

@@ -334,7 +334,16 @@ server side is in small modules called from `app.py`:
   ZIP (PDF from `combo_pdf.py`, drawn with `executive_pdf.Doc`'s parts: tiles, activity, findings, the region map and
   tree, bars, explanation cards for the name and every CVE in the combination, plus the devices table and note cards;
   `reports_pdf.build` only as a fallback; devices CSV, records CSV, both through `csvsafe`), kept in memory and in `data/combo_exports/` (0600, one hour) so a restart before the download loses
-  nothing. Routes: `GET /api/combo-codes/<code>` (researchers, management, analysts, admins; no address),
+  nothing. `export_fields.py` adds, before `combination_code` in both CSVs, the values the pattern analysis groups by
+  (communications `request_pattern`, `brute_force_username`, `brute_force_password`, `ssh_client`,
+  `shadowserver_attack`; services `server_software`, `ssh_software`, `ssh_hassh`, `tls_jarm`, `certificate_sha256`,
+  `certificate_subject`, `certificate_issuer`, `web_page_sha256`, `certificate_and_tls`; per device, each kind's values
+  joined with ` | `), and an all-fields CSV (`time, ip, port, report, field, label, value`, at most
+  `LG_ALL_FIELDS_MAX_LINES` lines). Readable field names: `field_labels.py` with `static/js/lg-fields.js`, both reading
+  `static/data/field_labels.json`. Shadowserver's own mapping of an event: `ss_attack.py` (`sources.normalise` adds
+  `ss_attack`; `ss_attack.Seen` gives the Definitions page's counts in `GET /api/attack`'s `ss_seen`; tactic names from
+  the `tactics` of `data/names_attack.json`). Certificate and TLS facts: `tls_facts.py` (`/api/svc/detail`'s `tls`;
+  without dates or the browser's error text in the masked view). Routes: `GET /api/combo-codes/<code>` (researchers, management, analysts, admins; no address),
   `POST /api/combo-codes/new` (researchers, admins: only the name's real indicators), `POST /api/combos/search`,
   `GET /api/combos/search/<id>`, `POST /api/combos/search/<id>/stop`, `GET /api/combos/search/<id>/download` (analysts,
   admins: `unmasked` + `export`, never in Demo mode, only the analyst who ran it), page `/combinations`. Audit events

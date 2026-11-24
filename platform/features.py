@@ -193,6 +193,19 @@ def install(app, core):
                 "client": lambda: (_rq2.remote_addr or "", _rq2.headers.get("User-Agent", ""))}
                if all(k in A for k in ("users", "throttle")) else {})})
 
+    # Shadowserver's own ATT&CK techniques per event (ss_attack.py, 2026-11-23): on the Definitions page, beside Looking
+    # Glass's suggestion for each report, the techniques Shadowserver tagged that report's events with (the days the
+    # map holds); read by attack_map's GET /api/attack, never changing a mapping
+    if core.get("attack") is not None:
+        import json as _json
+        import ss_attack
+
+        def _facts():
+            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "report_map.json"), encoding="utf-8") as f:
+                return _json.load(f).get("facts") or {}
+        core["attack"].ss_seen = ss_attack.Seen(store, _facts)
+        out["ss_attack"] = core["attack"].ss_seen
+
     # the analyst codes' device counts worked out ahead after a start, so the Findings page does not wait for them
     # (acode_warm.py; only in the running service)
     if core.get("acodes") is not None:

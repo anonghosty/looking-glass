@@ -15,6 +15,11 @@ test account on a RUNNING install and opens every page the role's Overview links
    a deep link to another #part or ?query is another destination) (r90);
 7. the external account (r90): its three pages and every API answer they bring carry no IP address, e-mail address,
    registry or record name; every route outside external_access.ALLOWED is refused to it.
+8. layout and hover values (the user, 2026-11-23: "all of this are supposed to be checked"): on the two platforms the
+   figures strip stays inside the top bar at wide sizes (also when the buttons need a second row) and nothing under the
+   bar starts above its bottom; the first event or record's connector has its label midway between the two places and
+   its line spans the gap; on the Executive portal every chart element shows its value on hover, and every region the
+   map shows shows its figures.
 Needs Playwright with Chromium, a test system and its test accounts (never production, never real accounts):
     LG_BROWSER_BASE=http://127.0.0.1:5088 LG_BROWSER_ACCOUNTS=accounts.json python tests/browser_checks.py [role ...]
 accounts.json: {"analyst": {"name": "...", "pw": "...", "secret": "<TOTP secret>"}, ...}. Without these the check is
@@ -404,6 +409,82 @@ def external_audit(pg):
     return probs
 
 
+HUD_JS = """() => { const h = document.querySelector('.hud'), k = document.querySelector('.hud > .kpis');
+  if (!h || !k || k.getBoundingClientRect().height < 1) return null;
+  const below = [...document.querySelectorAll('.drawer, .stage-bar, .intel-col')].map(e => e.getBoundingClientRect()).filter(r => r.height > 0);
+  const hb = h.getBoundingClientRect().bottom, kb = k.getBoundingClientRect().bottom;
+  return {inside: kb <= hb + 1, under: below.every(r => r.top >= hb - 1), hud: Math.round(hb), kpis: Math.round(kb)}; }"""
+ROUTE_JS = """() => { const m = document.querySelector('#modal .m-route'); if (!m || m.offsetParent === null) return null;
+  const [a, w, b] = [...m.children]; const wire = w.querySelector('.wire'), lab = w.querySelector('span');
+  if (!wire || !lab || getComputedStyle(m).gridTemplateColumns.split(' ').length < 3) return null;      // phones: one column
+  const right = (els) => Math.max(...[...els].map(e => e.getBoundingClientRect().right));
+  const left = (els) => Math.min(...[...els].map(e => e.getBoundingClientRect().left));
+  const aT = right(a.querySelectorAll('.ep-k, .ep-place > *, .ep-ip')), bT = left(b.querySelectorAll('.ep-k, .ep-place, .ep-ip'));
+  const wr = wire.getBoundingClientRect(), lr = lab.getBoundingClientRect();
+  return {off: Math.round(Math.abs((aT + bT) / 2 - (lr.left + lr.right) / 2)), gapL: Math.round(wr.left - aT), gapR: Math.round(bT - wr.right)}; }"""
+SPOT_JS = """(t) => { const r = t.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return null;
+  const f = t.ownerSVGElement ? t.ownerSVGElement.getBoundingClientRect() : null;
+  const L = f ? Math.max(r.left, f.left) : r.left, T = f ? Math.max(r.top, f.top) : r.top;
+  const W = (f ? Math.min(r.right, f.right) : r.right) - L, H = (f ? Math.min(r.bottom, f.bottom) : r.bottom) - T;
+  if (W < 1 || H < 1) return null;
+  for (let k = 0; k < 400; k++) { const x = L + W * ((k * 0.618 + .5) % 1), y = T + H * ((k * 0.382 + .5) % 1);
+    const u = document.elementFromPoint(x, y); if (u && (u === t || t.contains(u))) return [x, y]; }
+  return 'covered'; }"""
+
+
+def layout_checks(pg, path):
+    """8. what a person sees fit together (the user, 2026-11-23): see the module's docstring."""
+    probs = []
+    if path in ("/", "/services"):
+        for w, h in ((1536, 860), (1680, 900), (1920, 1000)):
+            pg.set_viewport_size({"width": w, "height": h}); time.sleep(1.2)
+            r = pg.evaluate(HUD_JS)
+            if r and not (r["inside"] and r["under"]):
+                probs.append(f"at {w}px the figures strip is outside the top bar or something starts under it ({r})")
+        pg.evaluate("() => { const r = document.querySelector('#rows li'); if (r) r.click(); }"); time.sleep(2.5)
+        r = pg.evaluate(ROUTE_JS)
+        if r and (r["off"] > 4 or r["gapL"] > 40 or r["gapR"] > 40):
+            probs.append(f"the detail window's connector is not centred between the two places ({r})")
+        pg.keyboard.press("Escape"); time.sleep(.5)
+        pg.set_viewport_size({"width": 1400, "height": 900}); time.sleep(.8)
+    if path == "/management":
+        pg.set_viewport_size({"width": 1920, "height": 1100}); time.sleep(2)
+        n = pg.evaluate("""() => { let i = 0; for (const e of document.querySelectorAll('.mg-card [title], .mg-card [data-tip], .mg-card svg title')) {
+            const t = e.tagName.toLowerCase() === 'title' ? e.parentNode : e; if (t.closest('svg.mg-map')) continue; t.dataset.hv = String(i++); } return i; }""")
+        silent = []
+        for i in range(min(n, 300)):
+            loc = pg.locator(f'[data-hv="{i}"]').first
+            try:
+                loc.scroll_into_view_if_needed(timeout=1500)
+            except Exception:                              # noqa: BLE001 (gone after a redraw)
+                continue
+            pt = loc.evaluate(SPOT_JS)
+            if not pt:
+                continue
+            if pt == "covered":
+                silent.append(loc.evaluate("e => (e.dataset.tip || e.getAttribute('title') || e.textContent || '').trim().slice(0, 40)") + " (covered)")
+                continue
+            pg.mouse.move(0, 0); pg.mouse.move(*pt); time.sleep(.08)
+            if not pg.evaluate("() => { const t = document.querySelector('.mg-charttip'); return !!t && !t.hidden && t.textContent.trim().length > 0; }"):
+                silent.append(loc.evaluate("e => (e.dataset.tip || e.getAttribute('title') || e.textContent || '').trim().slice(0, 40)"))
+        if silent:
+            probs.append(f"{len(silent)} chart element(s) show no value on hover: {silent[:6]}")
+        regions = pg.locator("svg.mg-map path.rg")
+        mute = []
+        for i in range(regions.count()):
+            loc = regions.nth(i)
+            pt = loc.evaluate(SPOT_JS)
+            if not pt or pt == "covered":
+                continue
+            pg.mouse.move(0, 0); pg.mouse.move(*pt); time.sleep(.08)
+            if not pg.evaluate("() => { const t = document.getElementById('mgMapTip'); return !!t && !t.hidden; }"):
+                mute.append(loc.get_attribute("aria-label"))
+        if mute:
+            probs.append(f"map regions show no figures on hover: {mute[:6]}")
+        pg.set_viewport_size({"width": 1400, "height": 900}); time.sleep(.8)
+    return probs
+
+
 fails = 0
 with sync_playwright() as p:
     br = p.chromium.launch()
@@ -469,7 +550,7 @@ with sync_playwright() as p:
             missed = pg.evaluate("(got) => [...document.querySelectorAll('[data-kb]')].filter(e => !got.includes(e.dataset.kb) && e.isConnected"
                                  " && e.getBoundingClientRect().width > 0).map(e => e.tagName.toLowerCase() + ': ' + (e.getAttribute('aria-label') ||"
                                  " e.textContent || e.value || '').trim().slice(0, 40)).slice(0, 8)", sorted(reached))
-            tour = once + tour_walk(pg) + loader_links(pg)
+            tour = once + tour_walk(pg) + loader_links(pg) + layout_checks(pg, path)
             probs = tour + ([f"not reached by Tab: {missed}"] if missed else []) + (["focus trapped"] if same > 5 else []) + \
                     ([f"clickable but not a control: {info['pointer']}"] if info["pointer"] else []) + \
                     ([f"list holds a non-item: {info['lists']}"] if info["lists"] else []) + \

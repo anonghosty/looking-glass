@@ -191,6 +191,7 @@ class Alerts:
         out += self._quarterly(now)
         out += self._suspected_packages(now)
         out += self._code_check(now)
+        out += self._caddy(now)
         cert = self._certificate()
         if cert and cert["days_left"] <= 30:
             days = cert["days_left"]
@@ -321,6 +322,15 @@ class Alerts:
         try:
             import code_integrity
             return code_integrity.bell(self.base_dir, now)
+        except Exception:                                # noqa: BLE001  never break the bell over this
+            return []
+
+    def _caddy(self, now):
+        """The Caddy in front of a public installation is behind its newest version, or its updates do not install by
+        themselves (caddy_watch.py, the user 2026-11-23): administrators only, asked at most once an hour."""
+        try:
+            import caddy_watch
+            return caddy_watch.bell(self.base_dir, now)
         except Exception:                                # noqa: BLE001  never break the bell over this
             return []
 

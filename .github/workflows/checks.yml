@@ -50,7 +50,9 @@ jobs:
           umask 077
           printf 'MONGO_USER=ci\nMONGO_PASSWORD=%s\nMONGO_AUTH_SOURCE=admin\n' "$PW" > "$RUNNER_TEMP/mongo-admin.env"
           echo "LG_MONGO_ADMIN_FILE=$RUNNER_TEMP/mongo-admin.env" >> "$GITHUB_ENV"
-          for i in $(seq 1 30); do docker exec mongo mongosh --quiet --eval 'db.runCommand({ping: 1}).ok' >/dev/null 2>&1 && exit 0; sleep 2; done
+          # HOME=/tmp: mongosh keeps its state files in its home, which in this image is /data/db; written there while the
+          # image's start script still changes the folder's owner, a vanishing lock file stopped MongoDB (CI 2026-11-23)
+          for i in $(seq 1 90); do docker exec -e HOME=/tmp mongo mongosh --quiet --eval 'db.runCommand({ping: 1}).ok' >/dev/null 2>&1 && exit 0; sleep 2; done
           echo "MongoDB did not start"; docker logs mongo | tail -20; exit 1
       - name: Checks that need a database
         working-directory: platform
@@ -191,7 +193,7 @@ jobs:
                    check_beacon_decode check_beacon_findings check_beacon_unknown check_spike_notice check_glossary_sync check_ai_framework check_masked_ids \
                    check_index_refresh check_beacon_keep check_day_skip check_config_page check_findings_live check_pdf_rows check_pdf_refs pdf_pages_check check_per_key_cache check_recent_days \
                    check_select_enhancer check_invite_limit check_quarterly_access check_job_overlap check_feature_coverage check_installer_supply check_stale_files check_code_readonly check_code_integrity check_downloads check_error_text check_screenshots check_nav_once check_external_masking check_spdx_headers \
-                   check_cov_app check_cov_auth_units check_cov_auth_routes check_cov_security check_cov_admin_tools check_cov_acodes check_cov_mgmt check_cov_lookups check_cov_audit check_cov_audit_portal check_cov_services_kb check_cov_finding_watch check_cov_report_map check_cov_pdf check_cov_combos check_api_no_secrets check_role_refusals check_caddy_front check_attack_audit; do
+                   check_cov_app check_cov_auth_units check_cov_auth_routes check_cov_security check_cov_admin_tools check_cov_acodes check_cov_mgmt check_cov_lookups check_cov_audit check_cov_audit_portal check_cov_services_kb check_cov_finding_watch check_cov_report_map check_cov_pdf check_cov_combos check_api_no_secrets check_role_refusals check_caddy_front check_attack_audit check_shadowserver_fields; do
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
           done
           # the module part only: the filter and who sees it need the platform (run_all_checks.sh on the server)

@@ -126,6 +126,72 @@ ok("…and refused when the downloaded key differs", '[ "$fp" = "$KEY_FP" ] ||' 
 ok("the repository is Caddy's stable one, signed-by that keyring, and preferred for the caddy package",
    "signed-by=$KEYRING" in src and "dl.cloudsmith.io/public/caddy/stable/deb/debian" in src and "Pin-Priority: 900" in src)
 
+print("Keeping Caddy up to date (update, status, the administrators' bell)")
+rc, out, err = run("update")
+ok("update needs root (nothing is changed without sudo)", (rc != 0 and "sudo" in err) or os.geteuid() == 0, err)
+upd = src.split("  update)", 1)[1].split(";;", 1)[0] if "  update)" in src else ""
+ok("update: only where Looking Glass set Caddy up", 'grep -qF "$MARK" || die "Caddy is not set up by Looking Glass here' in upd)
+ok("…the repository key checked against the pinned fingerprint before anything is fetched",
+   "key_ok" in upd and upd.index("key_ok") < upd.index("apt-get update") and 'gpg --show-keys --with-colons "$KEYRING"' in src
+   and '[ "$fp" = "$KEY_FP" ] || die "Caddy\'s repository key has an unexpected fingerprint' in src)
+ok("…Caddy only, from its own repository list, keeping our Caddyfile",
+   "--only-upgrade -o Dpkg::Options::=--force-confold caddy" in upd and '-o Dir::Etc::sourcelist="$LIST"' in upd)
+ok("…our Caddyfile and hardening checked afterwards, then the site through Caddy",
+   'die "$CONF was replaced during the update' in upd and '[ -f "$DROPIN" ]' in upd and upd.rstrip().find("check_front") > upd.find("apt-get install"))
+ok("…restarted only when the version changed, and it says which", 'if [ "$before" != "$after" ]; then' in upd and "Caddy updated: $before -> $after" in upd)
+setup_part = src.split("  setup)", 1)[1].split(";;", 1)[0]
+ok("setup and update make sure Ubuntu's automatic updates are there", "auto_updates || true" in setup_part and "auto_updates || true" in upd
+   and "apt-get install -y -qq unattended-upgrades" in src)
+ok("…an administrator who switched them off is not overruled: said plainly, with what to do",
+   "APT::Periodic::Unattended-Upgrade" in src and 'APT::Periodic::Unattended-Upgrade "1"' not in src
+   and "dpkg-reconfigure -plow unattended-upgrades" in src)
+st_part = src.split("  status)", 1)[1].split(";;", 1)[0]
+ok("status: the installed and the newest version, and whether automatic updates are on", "versions" in st_part
+   and "available: sudo deploy/caddy_front.sh update" in st_part and "automatic updates: OFF for Caddy" in st_part)
+
+sys.path.insert(0, ROOT)
+import tempfile  # noqa: E402
+
+import caddy_watch  # noqa: E402
+tmp = tempfile.mkdtemp()
+mine, other, auto = (os.path.join(tmp, n) for n in ("Caddyfile", "Caddyfile.other", "52looking-glass-caddy"))
+open(mine, "w").write(caddy_watch.MARK + ": changes here are replaced\n{\n}\n")
+open(other, "w").write("example.org {\n}\n")
+open(auto, "w").write("x\n")
+
+
+def fake(installed="2.10.0", candidate="2.10.2", uu="install ok installed", periodic='APT::Periodic::Unattended-Upgrade "1";\n'):
+    def run_(args):
+        if args[:2] == ["dpkg-query", "-W"] and args[-1] == "caddy":
+            return 0, installed
+        if args[:2] == ["apt-cache", "policy"]:
+            return 0, f"caddy:\n  Installed: {installed}\n  Candidate: {candidate}\n"
+        if args[0] == "dpkg" and args[1] == "--compare-versions":
+            a, b = args[2], args[4]
+            return (0 if tuple(map(int, a.split("."))) < tuple(map(int, b.split("."))) else 1), ""
+        if args[:2] == ["dpkg-query", "-W"] and args[-1] == "unattended-upgrades":
+            return 0, uu
+        if args[:2] == ["apt-config", "dump"]:
+            return 0, periodic
+        return 1, ""
+    return run_
+
+
+ok("the bell: nothing where Looking Glass did not set Caddy up", caddy_watch.state(conf=other, autoupd=auto, run=fake()) is None
+   and caddy_watch.bell(conf=other, autoupd=auto, run=fake()) == [])
+b = caddy_watch.bell(conf=mine, autoupd=auto, run=fake())
+ok("…a newer Caddy in its repository: one alert, for administrators, saying the command", len(b) == 1 and b[0]["key"] == "caddy-behind:2.10.2"
+   and b[0]["perms"] == ("settings",) and "caddy_front.sh update" in b[0]["text"], b)
+ok("…up to date and automatic updates on: no alert", caddy_watch.bell(conf=mine, autoupd=auto, run=fake(candidate="2.10.0")) == [])
+b = caddy_watch.bell(conf=mine, autoupd=auto, run=fake(candidate="2.10.0", periodic='APT::Periodic::Unattended-Upgrade "0";\n'))
+ok("…automatic updates switched off: said, with how to switch them on", len(b) == 1 and b[0]["key"].startswith("caddy-autoupdates:")
+   and "switched off" in b[0]["text"] and "dpkg-reconfigure" in b[0]["text"], b)
+b = caddy_watch.bell(conf=mine, autoupd=os.path.join(tmp, "missing"), run=fake(candidate="2.10.0", uu="unknown ok not-installed"))
+ok("…the package missing and Caddy's repository not among them: both reasons", len(b) == 1 and "not installed" in b[0]["text"]
+   and "is missing" in b[0]["text"], b)
+sa = open(os.path.join(ROOT, "system_alerts.py"), encoding="utf-8").read()
+ok("…on the administrators' bell, never breaking it", "out += self._caddy(now)" in sa and "caddy_watch.bell(self.base_dir, now)" in sa)
+
 print("The installer, renewals and the uninstaller")
 inst = find("tools/release_root/install.sh", "install.sh", "../install.sh")
 ok("a bought certificate puts Caddy in front on the public port", 'PUBLIC_PORT="$LG_PORT"; TRUST_PROXY=1' in inst

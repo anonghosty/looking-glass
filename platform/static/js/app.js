@@ -1561,10 +1561,17 @@
       section("Threat", [["Attack type", ev.attack_class], ["Report", ev.source_label && `${ev.source_label} (${ev.source})`], ["Infection / category", ev.infection], ["Family", ev.family], ["Tag", ev.tag], ["Severity", ev.severity], ["Protocol", ev.protocol], ["Application", ev.application], ["Version", ev.version], ["Reported by", ev.public_source]]),
       section("TLS / device", [["SSL server name", ev.ssl_servername], ["SSL cipher", ev.ssl_cipher], ["Device vendor", ev.device_vendor], ["Device type", ev.device_type], ["Device model", ev.device_model], ["Machine name", ev.machine_name]]),
     );
-    const extras = Object.entries(ev.extras || {});
+    // Shadowserver's own ATT&CK techniques, tactics and CVE for this one event, when its report gives them (ss_attack.py):
+    // Shadowserver's statement, shown apart from Looking Glass's per-report suggestion; the raw fields then stay out of
+    // the report's specific fields below
+    const SSM_FIELDS = new Set(["threat_framework", "threat_tactic_id", "threat_technique_id", "vulnerability_enum", "vulnerability_id",
+      "vulnerability_class", "vulnerability_score", "vulnerability_severity", "vulnerability_version", "target_vendor", "target_product", "target_class"]);
+    if (ev.ss_attack) body.append(ssAttackSection(ev.ss_attack));
+    const extras = Object.entries(ev.extras || {}).filter(([k]) => !(ev.ss_attack && SSM_FIELDS.has(k)));
     const hid = ev.extras_hidden ? ` (${ev.extras_hidden} identifying or unlisted field${ev.extras_hidden === 1 ? "" : "s"} hidden in the masked view)` : "";
     if (extras.length || hid) {
-      const pretty = (k) => k.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+      // readable labels in Looking Glass's words (lg-fields.js; static/data/field_labels.json)
+      const pretty = (k) => (window.LGFields ? window.LGFields.label(k) : k.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()));
       const xs = section(`${ev.source_label || "Report"} specific fields${hid}`, extras.map(([k, v]) => [pretty(k), v]), true);
       // report fields holding a malware family or a sample hash can be looked up on Malpedia
       for (const [k, v] of extras) {
@@ -1597,6 +1604,34 @@
         if (state.modalEv === ev) related.replaceWith(section("This host yesterday", [["Status", `Could not load: ${window.LGLoader.errorText(err)}`]]));
       }
     }
+  }
+  function ssAttackSection(m) {
+    const s = el("section", "m-sec wide ss-attack");
+    s.append(el("h3", null, "Shadowserver's mapping for this event"));
+    const dl = el("dl");
+    const link = (href, text, title) => { const a = el("a", null, text); a.href = href; a.target = "_blank"; a.rel = "noopener noreferrer"; if (title) a.title = title; return a; };
+    const row = (k, nodes) => {
+      dl.append(el("dt", null, k));
+      const dd = el("dd");
+      if (!nodes.length) { dd.className = "empty"; dd.textContent = "Not given"; } else nodes.forEach((n, i) => { if (i) dd.append(document.createTextNode(", ")); dd.append(n); });
+      dl.append(dd);
+    };
+    const named = (x) => link(x.url, x.name && x.name !== x.id ? `${x.id} ${x.name}` : x.id, x.known ? "" : "Not in the local copy of MITRE ATT&CK yet: opens MITRE's page");
+    if ((m.techniques || []).length || (m.tactics || []).length) {
+      row("ATT&CK techniques", (m.techniques || []).map(named));
+      row("ATT&CK tactics", (m.tactics || []).map(named));
+    }
+    const v = m.vulnerability;
+    if (v) {
+      const head = v.is_cve ? link(`https://www.cve.org/CVERecord?id=${encodeURIComponent(v.id)}`, v.id) : el("span", null, v.kind ? `${v.kind} ${v.id}` : v.id);
+      const sc = [v.score && `${v.scheme || "CVSS"}${v.scheme_version ? " " + v.scheme_version : ""} score ${v.score}`, v.severity].filter(Boolean).join(", ");
+      row("Vulnerability", sc ? [head, el("span", null, sc)] : [head]);
+    }
+    const t = m.target;
+    if (t) row("Device targeted", [el("span", null, [t.vendor, t.product].filter(Boolean).join(" ") + (t.class ? `${t.vendor || t.product ? " · " : ""}${t.class}` : ""))]);
+    s.append(dl);
+    s.append(el("p", "ss-note", "As Shadowserver tagged this event. Looking Glass's own suggestion for the whole report is on the Definitions page and is not changed by this."));
+    return s;
   }
   function setPlace(id, cc, parts) {
     const node = $(id); node.replaceChildren(flagImg(cc), el("span", null, parts.filter(Boolean).join(", ")));

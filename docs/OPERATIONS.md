@@ -23,6 +23,7 @@ project's Python (`.venv`); run the others with `.venv/bin/python <script>`.
 | Logs (live) | `journalctl -u looking-glass -f` |
 | Health | `curl -s localhost:<your port>/healthz` (or `curl -sk https://localhost:<your port>/healthz` with HTTPS; `<your port>` is the port you selected, `LG_PORT` in `.env`); on this computer only, others get "Not Found" |
 | HTTPS certificate for other screens | `deploy/make_tls_cert.sh [extra names or addresses]` ▶ (no sudo; renews by running it again) |
+| Caddy in front (public installations) | `sudo deploy/caddy_front.sh status`; to update now: `sudo deploy/caddy_front.sh update` |
 | MongoDB's own log | `/var/log/mongodb/mongod.log`, rotated daily (or past 100 MB), 14 kept, by `/etc/logrotate.d/looking-glass-mongod`. Installed with MongoDB from 2026-11-17; an older installation adds it once: `sudo database/mongo_log_rotation.sh --now` |
 
 The replay needs nothing from you: it waits for each day's reports, then replays the day. The intro page and the
@@ -84,6 +85,11 @@ Glass's user. It checks the new certificate first (key, domain, dates, chain) an
 otherwise it keeps the previous pair in `data/tls/previous-<time>/`, records the renewal in the audit log, reloads the
 service and checks the site over HTTPS. The bell warns administrators 30, 14 and 3 days before expiry, and once it has
 expired. `manage/install_cert.sh --status` shows the installed certificate and its days left.
+
+**Caddy.** On a public installation Caddy updates itself through Ubuntu's automatic updates. The bell tells
+administrators when a newer Caddy is available or when its updates do not install by themselves; then run
+`sudo deploy/caddy_front.sh update`. It checks the repository's key against the pinned fingerprint first and changes
+nothing if it differs, updates Caddy only, keeps Looking Glass's configuration, and checks the site through Caddy.
 
 ### When the server's address changes
 

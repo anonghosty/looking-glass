@@ -22,7 +22,8 @@
 #   deploy/caddy_front.sh setup  --domain D --public-port P --backend-port B [--ca-bundle FILE] [--project DIR]
 #   deploy/caddy_front.sh sync   [--project DIR]    copy a renewed certificate to Caddy and restart it
 #   deploy/caddy_front.sh render --domain D --public-port P --backend-port B [--ca-bundle FILE]   print the Caddyfile
-#   deploy/caddy_front.sh status
+#   deploy/caddy_front.sh update                    Caddy's newest version (key checked; ours kept; checked through it)
+#   deploy/caddy_front.sh status                    where it points, installed / newest version, automatic updates
 #   deploy/caddy_front.sh remove                    Looking Glass's Caddyfile and certificate copy (the package stays)
 set -euo pipefail
 KEY_FP="65760C51EDEA2017CEA2CA15155B6D79CA56EA34"
@@ -234,6 +235,36 @@ write_conf() {
   install -m 644 -o root -g root "$tmp" "$CONF"; rm -f "$tmp"
 }
 
+key_ok() {   # the repository key apt checks Caddy's packages with is still the one pinned above
+  [ -f "$KEYRING" ] || die "Caddy's repository key ($KEYRING) is missing: run setup again"
+  local fp; fp="$(gpg --show-keys --with-colons "$KEYRING" 2>/dev/null | awk -F: '/^fpr/ {print $10; exit}')"
+  [ "$fp" = "$KEY_FP" ] || die "Caddy's repository key has an unexpected fingerprint (${fp:-none}, expected $KEY_FP): nothing updated"
+}
+
+auto_updates() {   # Ubuntu's automatic updates, which install Caddy's updates by themselves (the 52looking-glass-caddy file)
+  if ! dpkg-query -W -f='${Status}' unattended-upgrades 2>/dev/null | grep -q 'install ok installed'; then
+    echo "installing Ubuntu's automatic updates (unattended-upgrades), so Caddy's updates install by themselves"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unattended-upgrades \
+      || echo "WARNING: unattended-upgrades could not be installed: update Caddy with deploy/caddy_front.sh update"
+  fi
+  local on; on="$(apt-config dump APT::Periodic::Unattended-Upgrade 2>/dev/null | sed -n 's/^APT::Periodic::Unattended-Upgrade "\(.*\)";$/\1/p' | tail -1)"
+  # an administrator who switched them off is not overruled: said plainly, with what to do instead
+  if [ -z "$on" ] || [ "$on" = 0 ]; then
+    echo "WARNING: Ubuntu's automatic updates are switched off here, so Caddy's updates do not install by themselves."
+    echo "         Switch them on (sudo dpkg-reconfigure -plow unattended-upgrades) or run deploy/caddy_front.sh update regularly."
+    return 1
+  fi
+  echo "Caddy's updates install by themselves (Ubuntu's automatic updates are on)"
+}
+
+versions() {   # "installed candidate" ("none" when apt does not know one)
+  local inst cand
+  inst="$(dpkg-query -W -f='${Version}' caddy 2>/dev/null || true)"
+  cand="$(apt-cache policy caddy 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
+  [ "$cand" = "(none)" ] && cand=""
+  echo "${inst:-none} ${cand:-none}"
+}
+
 check_front() {
   local ca=(); [ -n "$cab" ] && ca=(--cacert "$cab")
   for _ in $(seq 1 20); do
@@ -266,7 +297,28 @@ case "$cmd" in
     systemctl daemon-reload
     systemctl enable caddy >/dev/null 2>&1 || true
     systemctl restart caddy
-    check_front ;;
+    check_front
+    auto_updates || true ;;
+  update)
+    # Caddy only, from its signed repository, after checking the key; our Caddyfile, certificate copy, hardening and
+    # firewall stay (--force-confold keeps the Caddyfile: Ubuntu's automatic updates skip a package whose shipped
+    # configuration file changed, so this is also the way through when that happens)
+    need_root
+    head -1 "$CONF" 2>/dev/null | grep -qF "$MARK" || die "Caddy is not set up by Looking Glass here: nothing to update"
+    command -v caddy >/dev/null || die "Caddy is not installed: run setup"
+    key_ok
+    before="$(dpkg-query -W -f='${Version}' caddy)"
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq -o Dir::Etc::sourcelist="$LIST" -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --only-upgrade -o Dpkg::Options::=--force-confold caddy
+    after="$(dpkg-query -W -f='${Version}' caddy)"
+    head -1 "$CONF" | grep -qF "$MARK" || die "$CONF was replaced during the update: run setup again"
+    [ -f "$DROPIN" ] || die "the hardening drop-in $DROPIN is gone: run setup again"
+    domain="$(sed -n 's#^https://\([^:]*\):\([0-9]*\) {#\1#p' "$CONF")"; pport="$(sed -n 's#^https://[^:]*:\([0-9]*\) {#\1#p' "$CONF")"
+    [ -f "$CERTS/ca-bundle.pem" ] && cab="$CERTS/ca-bundle.pem"
+    if [ "$before" != "$after" ]; then systemctl daemon-reload; systemctl restart caddy; fi
+    check_front
+    if [ "$before" = "$after" ]; then echo "Caddy $after is the newest version in its repository"; else echo "Caddy updated: $before -> $after"; fi
+    auto_updates || true ;;
   sync)
     need_root
     head -1 "$CONF" 2>/dev/null | grep -qF "$MARK" || die "Caddy is not set up by Looking Glass here: nothing to copy"
@@ -278,6 +330,13 @@ case "$cmd" in
   status)
     if head -1 "$CONF" 2>/dev/null | grep -qF "$MARK"; then
       echo "Caddy in front: $(sed -n 's#^\(https://[^ ]*\) {#\1#p' "$CONF") -> $(sed -n 's#.*reverse_proxy \(https://[^ ]*\) {#\1#p' "$CONF"), service $(systemctl is-active caddy 2>/dev/null || true)"
+      read -r inst cand <<< "$(versions)"
+      if [ "$cand" != none ] && [ "$inst" != "$cand" ] && dpkg --compare-versions "$inst" lt "$cand" 2>/dev/null; then
+        echo "Caddy $inst installed, $cand available: sudo deploy/caddy_front.sh update"
+      else echo "Caddy $inst installed (the newest apt knows of)"; fi
+      on="$(apt-config dump APT::Periodic::Unattended-Upgrade 2>/dev/null | sed -n 's/^APT::Periodic::Unattended-Upgrade "\(.*\)";$/\1/p' | tail -1)"
+      if [ -n "$on" ] && [ "$on" != 0 ] && [ -f "$AUTOUPD" ]; then echo "automatic updates: on"
+      else echo "automatic updates: OFF for Caddy (sudo deploy/caddy_front.sh update, or switch them on)"; fi
     else echo "no Caddy set up by Looking Glass here"; fi ;;
   remove)
     need_root

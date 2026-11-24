@@ -252,6 +252,29 @@ try:
     os.utime(cpath, (time.time() + 20, time.time() + 20))
     ci._refresh()
     ok("…an unreadable file is ignored", "CVE-2099-0888" in ci.cache["nvd"])
+    # started with no cache file, then another process (the background check, quarterly.py) writes it first: the next
+    # look-up merges it instead of failing (review 2026-11-23: "<=" between a signature and the start value raised)
+    fresh_path = os.path.join(TMP, "fresh-start.json")
+    late = cves.CveIntel(fresh_path)
+    writer = cves.CveIntel(fresh_path)
+    writer.cache["nvd"]["CVE-2099-0777"] = {"t": time.time() + 5, "data": {"description": "Written by another process."}}
+    writer._save()
+    late._checked = 0
+    try:
+        late._refresh()
+        raised = ""
+    except Exception as exc:          # noqa: BLE001  (the check reports what was raised)
+        raised = f"{type(exc).__name__}: {exc}"
+    ok("no cache file at the start, another process writes it first: merged, nothing raised",
+       not raised and late.cache["nvd"].get("CVE-2099-0777", {}).get("data", {}).get("description") == "Written by another process.", raised)
+    # the file replaced within the same tick by a smaller one is still read (signatures compare only with ==)
+    st = os.stat(fresh_path)
+    writer.cache["nvd"] = {"CVE-2099-0776": {"t": time.time() + 9, "data": {"description": "Smaller, same tick."}}}
+    writer._save()
+    os.utime(fresh_path, ns=(st.st_atime_ns, st.st_mtime_ns))
+    late._checked = 0
+    late._refresh()
+    ok("…a smaller file written in the same tick is read too", "CVE-2099-0776" in late.cache["nvd"])
     broken = cves.CveIntel(os.path.join(TMP, "no-such-folder", "c.json"))
     broken._save()
     ok("a cache that cannot be written: no crash", broken.cache["kev"]["items"] == {})

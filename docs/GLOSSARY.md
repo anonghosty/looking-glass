@@ -10,7 +10,7 @@ the platform: the **Glossary** tab on the overview page and the **Glossary** but
 - [Threats](#threats) (27 terms)
 - [Numbers and measures](#numbers-and-measures) (14 terms)
 - [Using the platform](#using-the-platform) (11 terms)
-- [Accounts, roles and permissions](#accounts-roles-and-permissions) (48 terms)
+- [Accounts, roles and permissions](#accounts-roles-and-permissions) (52 terms)
 - [Publicly accessible / vulnerable services](#publicly-accessible--vulnerable-services) (14 terms)
 - [Security, audit and the pipeline](#security-audit-and-the-pipeline) (24 terms)
 - [Related tools](#related-tools)
@@ -320,6 +320,12 @@ A short code for one exact combination Intel gathered shows: LG-C-… for one re
 **Combination search**  
 The analysts' page (/combinations) that turns a combination code into the devices behind it, over the days in memory or up to 31 days of stored history, with a PDF summary (region map, across reports, each name and CVE explained with its references, and the researchers' notes on every name) and CSV files of the devices and records. A chart with nothing to show is left out of the PDF. It lists real addresses, so it is only for roles that see them and may export, and is off in Demo mode.
 
+**All-fields CSV**  
+In a combination download: every field of every record, one line per field, with its readable name.
+
+**Pattern columns**  
+In a combination's devices and records CSVs: the values the pattern analysis groups devices by (certificate fingerprints and names, JARM, HASSH, software, page hash, the usernames and passwords tried). A network provider can use them to find the same devices in their own network.
+
 **Analyst code (LG-A)**  
 A code for exactly the records of an analyst's selection on one day (for example a network and one host), made in an analysis window. It becomes a finding: researchers open it without any address and answer with their own codes, management filters the Executive portal by it, and analysts report on it again from the Combinations page.
 
@@ -367,6 +373,12 @@ How sure an ATT&CK technique is. Observed: the report saw it happen. Known for t
 
 **ATT&CK mapping**  
 Which ATT&CK techniques a Shadowserver report stands for. Looking Glass suggests one from the report's type; researchers confirm or change it on the Definitions page, or record that none fits. A reviewed mapping never changes by itself: a new ATT&CK version or a changed report only puts it back to "please check".
+
+**Shadowserver's mapping for an event**  
+The MITRE ATT&CK techniques and tactics, the CVE (with its CVSS score) and the device targeted that Shadowserver tags some events with, mostly in its honeypot scanner reports. Shown as Shadowserver's statement about that one event, apart from Looking Glass's suggestion for the whole report, which it never changes.
+
+**Certificate and TLS facts**  
+What a scan says about a service's certificate and encryption: whether the certificate had expired when it was scanned, is self-signed, passed Shadowserver's validity check and is trusted by browsers, and whether SSLv3 (old and broken) is still on and TLS 1.3 supported. Facts only, as Shadowserver gives them; researchers see them without dates.
 
 **CTID mapping (CVE techniques)**  
 MITRE's Center for Threat-Informed Defense (CTID) maps the vulnerabilities in CISA's Known Exploited Vulnerabilities list to ATT&CK techniques (Mappings Explorer, Apache License 2.0): how attackers exploit it, what they gain first, what they can do next. CVE and issue cards show them; in advisories they are suggestions the advisor confirms, unless an administrator trusts CTID's mappings (off by default, audited).
@@ -567,6 +579,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Affected city](#who-and-where) · 
 [AI attack framework](#publicly-accessible--vulnerable-services) · 
 [All of the day's connections (map)](#using-the-platform) · 
+[All-fields CSV](#accounts-roles-and-permissions) · 
 [Also described by](#accounts-roles-and-permissions) · 
 [Analysis view](#using-the-platform) · 
 [Analyst (role)](#accounts-roles-and-permissions) · 
@@ -586,6 +599,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Brute force](#threats) · 
 [C2 (command and control)](#threats) · 
 [C2 / sinkhole domains](#threats) · 
+[Certificate and TLS facts](#accounts-roles-and-permissions) · 
 [CIS Controls (safeguard)](#security-audit-and-the-pipeline) · 
 [CIS mapping (not a certification)](#security-audit-and-the-pipeline) · 
 [Code check (fingerprints)](#security-audit-and-the-pipeline) · 
@@ -664,6 +678,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Observed / Known for this malware / Possible](#accounts-roles-and-permissions) · 
 [Other address ranges](#who-and-where) · 
 [Password expiry](#security-audit-and-the-pipeline) · 
+[Pattern columns](#accounts-roles-and-permissions) · 
 [Peak](#numbers-and-measures) · 
 [Permission](#accounts-roles-and-permissions) · 
 [Pin](#using-the-platform) · 
@@ -701,6 +716,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Severity](#threats) · 
 [Severity map](#threats) · 
 [Shadowserver](#the-basics) · 
+[Shadowserver's mapping for an event](#accounts-roles-and-permissions) · 
 [Share of all events](#numbers-and-measures) · 
 [Sign-up link](#threats) · 
 [Sinkhole](#threats) · 

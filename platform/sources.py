@@ -21,6 +21,7 @@ import time
 from datetime import datetime, timezone
 
 import special_reports
+import ss_attack
 
 STD_FIELDS = [
     "timestamp", "extracted_date", "logged_date", "protocol", "severity", "infection", "tag", "family", "category",
@@ -136,6 +137,11 @@ def normalise(doc, src):
     out["source_label"] = src["label"]
     out["attack_class"] = src["class"]
     out["extras"] = extras
+    # Shadowserver's own ATT&CK techniques, tactics and CVE for this event, when the report gives them (ss_attack.py);
+    # the raw fields stay in extras as well
+    ssm = ss_attack.for_row(doc)
+    if ssm:
+        out["ss_attack"] = ssm
     return out
 
 

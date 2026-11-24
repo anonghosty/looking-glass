@@ -180,6 +180,7 @@ The control checks give evidence, not a pass or fail: the conclusion is the audi
 | `SETTLE_MAX_SECONDS` | `120` | new rows are loaded once their counts stop changing (two checks in a row), or at least this often while a pipeline run keeps adding them; only the reports that changed are read again |
 | `COUNT_EVERY_SECONDS` | `600` | with the pipeline's marks (`lg_load_stamps`), the 15-second check counts every report's rows only when a mark moved, or at least this often |
 | `MGMT_PAST_RECORDS` | `3000000` | records of past days the Executive portal keeps in memory for its 7-day baselines (roughly 200 to 300 MB per million); above it, older days are loaded from MongoDB when needed |
+| `LG_ALL_FIELDS_MAX_LINES` | `1000000` | lines at most in a combination download's all-fields CSV (one line per field of a record); its last line says when it stopped |
 | `REGISTRY_REFRESH_SECONDS` | `3600` | how often the list of reports is fully re-checked (new reports are found within 15 s anyway) |
 | `HEAVY_PER_USER` | `3` | heavy views (statistics, map, analysis, drill-down lists, regions, reports) one person may have worked on at once; more wait their turn. `0`: no limit |
 | `HEAVY_PER_MINUTE` | `240` | heavy views one person may ask for in a minute; more get 429 with Retry-After. `0`: no limit |

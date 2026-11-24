@@ -195,6 +195,17 @@
       else card.append(chips(x.techniques || []));
       card.append(el("p", "dz-by", `Reviewed by ${x.by || "?"}${x.at ? ` on ${String(x.at).slice(0, 10)}` : ""}${x.version ? ` · ATT&CK v${x.version}` : ""}${x.note ? ` · Note: ${x.note}` : ""}`));
     } else if ((x.techniques || []).length) card.append(chips(x.techniques));
+    // Shadowserver's own tags on this report's events (ss_attack.py): what to compare the mapping with, never applied
+    const seen = data.ss_seen?.techniques?.[x.report] || [];
+    if (seen.length) {
+      const n = data.ss_seen.events?.[x.report] || 0;
+      const box = el("div", "am-ss");
+      box.append(el("span", "am-ba-label", `Shadowserver tagged ${fmt(n)} event${n === 1 ? "" : "s"} of this report (the days the map holds) with`));
+      const cl = el("div", "am-chips");
+      for (const t of seen) { cl.append(chip(t)); cl.append(el("span", "am-ss-n", `×${fmt(t.count)}`)); }
+      box.append(cl);
+      card.append(box);
+    }
     const sug = x.status === "check" ? (x.check_suggest || []) : x.status === "suggested" ? (x.techniques || []) : [];
     const acts = el("div", "am-acts");
     if (sug.length) {

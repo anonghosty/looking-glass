@@ -161,6 +161,7 @@ def build_attack(bundles):
     entries, notice, seen, versions = [], "", set(), {}
     techs, by_stix, sw_of, uses, groups, revoked_by = {}, {}, {}, {}, {}, {}
     coas, mitigates, full = {}, [], {}                    # mitigations (course-of-action), their links, full texts
+    tactics = {}                                          # TA0001 -> {name, url, domain} (Shadowserver's honeypot events name tactics by ID)
     for dom in ATTACK_URLS:
         b = bundles.get(dom)
         if not isinstance(b, dict) or not isinstance(b.get("objects"), list):
@@ -199,6 +200,11 @@ def build_attack(bundles):
                     coas[o.get("id")] = mid
                     techs.setdefault("_mitigations", {})[mid] = {"name": _s(o.get("name"), 120), "text": short_text(o.get("description"), 200),
                                                                  "url": (_urls([own.get("url")]) or [""])[0]}
+            elif t == "x-mitre-tactic":                   # a tactic by its ID (TA0043 Reconnaissance), as MITRE names it
+                ext, own = _own_ref(o)
+                ta = _s(own.get("external_id"), 12)
+                if re.match(r"^TA\d{4}$", ta) and not o.get("revoked") and not o.get("x_mitre_deprecated"):
+                    tactics.setdefault(ta, {"name": _s(o.get("name"), 80), "url": (_urls([own.get("url")]) or [""])[0], "domain": dom})
             elif t == "intrusion-set":
                 groups[o.get("id")] = _s(o.get("name"), 80)
             elif t == "relationship":
@@ -242,7 +248,7 @@ def build_attack(bundles):
         entries[i]["techniques"] = tl[:150]
         entries[i]["groups"] = sorted({groups[g] for g, ds in uses.items() if g in groups and sid in ds})[:30]
     return {"source": "mitre-attack", "notice": notice, "versions": versions, "entries": entries, "techniques": techs,
-            "mitigations": mits, "full": full}           # "full" is written to its own file by the fetch script
+            "mitigations": mits, "tactics": tactics, "full": full}   # "full" is written to its own file by the fetch script
 
 
 # ---------------------------------------------------------------------------------------------- looking names up

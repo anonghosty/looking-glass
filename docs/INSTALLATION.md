@@ -313,7 +313,9 @@ To show Looking Glass on a TV, a wall screen or colleagues' computers:
    service to HTTPS and prints the certificate's SHA-256 fingerprint. Then make every screen that opens Looking Glass
    trust it, so no warning ever appears there:
    - **Check it first:** open the address once, view the certificate (the warning page's certificate details) and
-     compare its SHA-256 fingerprint with the one the script printed. Trust it only if they match.
+     compare its SHA-256 fingerprint with the one the script printed. Trust it only if they match. Get that
+     fingerprint from the person who ran the script in person or by phone, never by e-mail or chat: a message can be
+     changed on the way.
    - **Windows:** copy `data/tls/cert.pem` to the screen, rename it `looking-glass.crt`, double-click it, choose
      Install Certificate, Local Machine, and place it in "Trusted Root Certification Authorities".
    - **macOS:** double-click it to add it to the System keychain in Keychain Access, open it, and set Trust to
@@ -421,7 +423,7 @@ OCSP answer (it never calls the certificate authority), and a firewall table of 
 nftables) lets it send only to this computer and holds each address to 100 connections at once
 (`deploy/caddy_front.sh setup --conn-limit N` changes it); those rules are loaded again whenever the nftables service
 starts or reloads. Caddy's security updates install by themselves (its repository is added to Ubuntu's automatic
-updates). It reaches Looking Glass over HTTPS, checking its
+updates; setup installs them when missing and says so when they are switched off). It reaches Looking Glass over HTTPS, checking its
 certificate for the domain. A Caddyfile you wrote yourself is never replaced: the installer stops and says so. The
 installer then opens 443 in `ufw` when it is active, and checks `https://lookingglass.example.org` by its name,
 through Caddy, with the certificate verified as a browser does. The installation is recorded in the audit log. Point
