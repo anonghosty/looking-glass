@@ -181,7 +181,8 @@ From a finding to the organisation that can act on it, with a name on every hand
 ## 2026-11-10: combination codes, the analyst's combination search and findings
 
 The team's workflow, end to end: a researcher finds something and names the exact combination, management weighs it
-against the trends, an analyst pulls exactly those devices and writes the advisory.
+against the trends, an analyst pulls exactly those devices and sends them to management for the advisory, and an
+advisor writes it.
 
 **New**
 
@@ -203,9 +204,10 @@ against the trends, an analyst pulls exactly those devices and writes the adviso
   a chart with nothing to show is left out) and two CSV files (one row per device, one per record). A finished search survives a service
   restart for an hour; an expired one is run again by the download button. Off in Demo mode; every search is in the
   audit log.
-- **Findings** (`/findings`). A note can be tracked as a finding: it gets a number and a status (*New → With
-  management → Back with the researcher → With the analyst → Advisory sent → Closed*). Each move records who, when and
-  a comment. Researchers, management, analysts and admins share the page; it never shows an address. Analysts get a
+- **Findings** (`/findings`). A note can be tracked as a finding: it gets a number and a status (*With
+  management → Back with the researcher → With the analyst → With the advisor → Closed*). Each move records who, when
+  and a comment. Researchers, management, analysts, advisors and admins work on the page, each seeing the findings
+  they take part in; it never shows an address. Analysts get a
   **Search** button on every code.
 
 - **Analyst codes (LG-A) and replies.** An analyst turns the selection of any analysis window (map or services

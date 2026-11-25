@@ -14,27 +14,34 @@ The details of each control are in [Security](SECURITY.md), and the logic of the
 Looking Glass is two programs that share one database. By default everything except the browsers runs on one server;
 the database can instead be an internal MongoDB on another server of your network (see below):
 
-```
- Shadowserver
-   │  e-mail to the mailbox, or the report API (HTTPS)
-   ▼
- database/   the pipeline: its own database account (cron)
-   fetch → check the sender (DKIM) → unzip within limits
-         → sort → load
-   │  read and write, its own database only
-   ▼
- MongoDB     127.0.0.1 (default), or an internal server of your
-             network over TLS; never a public address; login required
-   │  read only
-   ▼
- platform/   the web app: a sandboxed systemd service
-   data/: accounts, sessions, audit log, findings, advisories
-   │  HTTPS (Caddy in front on private and public);
-   │  sign-in: password + TOTP, or a passkey (public)
-   ▼
- staff browsers, one role each:
-   analyst · researcher · management · advisor
-   auditor · admin · external
+```mermaid
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 34, "rankSpacing": 50, "padding": 14}}}%%
+flowchart TD
+    SS(["<b>Shadowserver</b>"]):::src
+    subgraph DB["database/ · the pipeline · cron · its own database account"]
+        direction LR
+        F1["fetch"]:::pipe --> F2["check the sender<br/>DKIM"]:::pipe --> F3["unzip<br/>within limits"]:::pipe --> F4["sort"]:::pipe --> F5["load"]:::pipe
+    end
+    M[("<b>MongoDB</b><br/>127.0.0.1 by default, or an internal server over TLS<br/>never a public address · login required")]:::db
+    subgraph PF["platform/ · the web app · a sandboxed systemd service"]
+        W["<b>Looking Glass</b><br/>data/: accounts, sessions, audit log, findings, advisories"]:::app
+    end
+    B(["<b>Staff browsers</b>, one role each<br/>analyst · researcher · management · advisor · auditor · admin · external"]):::people
+    C(["<b>Your OpenCTI or MISP</b>"]):::ext
+    SS -- "e-mail to the mailbox, or the report API (HTTPS)" --> F1
+    F5 -- "read and write, its own database only" --> M
+    M -- "read only" --> W
+    W -- "HTTPS · Caddy in front on private and public<br/>password + TOTP, or a passkey (public)" --> B
+    W -. "connectors · HTTPS, outbound only" .-> C
+    classDef src fill:#0369a1,stroke:#075985,color:#fff
+    classDef pipe fill:#4f46e5,stroke:#4338ca,color:#fff
+    classDef db fill:#0f766e,stroke:#115e59,color:#fff
+    classDef app fill:#6d28d9,stroke:#5b21b6,color:#fff
+    classDef people fill:#475569,stroke:#334155,color:#fff
+    classDef ext fill:#b45309,stroke:#92400e,color:#fff
+    style DB fill:transparent,stroke:#6366f1,stroke-width:1.5px,stroke-dasharray:6 4,color:#6366f1
+    style PF fill:transparent,stroke:#8b5cf6,stroke-width:1.5px,stroke-dasharray:6 4,color:#8b5cf6
+    linkStyle default stroke:#94a3b8,stroke-width:2px
 ```
 
 | Part | What it does | Runs as | Can write |

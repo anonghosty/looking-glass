@@ -77,24 +77,26 @@ platform's docs/INSTALLATION.md, "When a library file does not match".
 
 ## 2. How it works
 
-```
- IMAP mailbox (read-only)
-        │  step 1: e-mail
-        ▼
- attachments_backup/          ← attachments + files downloaded from dl.shadowserver.org links
-        │  step 2: unzip + sort
-        ├──────────────► unzipped_backup/<zip name>/     (non-report files from each zip)
-        ▼
- sorting_backup/<service>/    ← report CSVs, one folder per service (scan_http, blocklist, ...)
-        │  step 3: load
-        ▼
- MongoDB  database "shadowserver"
-        <service>                    one document per unique CSV row
-        discovered_fields_<service>  one document per CSV column
-        files_<service>              one document per file
+```mermaid
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 40, "rankSpacing": 46, "padding": 14}}}%%
+flowchart TD
+    I(["<b>The mailbox</b>, read-only<br/>IMAP, Gmail API or Microsoft Graph"]):::src
+    A["<b>attachments_backup/</b><br/>attachments, and files downloaded from Shadowserver"]:::pipe
+    S["<b>sorting_backup/#lt;service#gt;/</b><br/>report CSVs, one folder per service"]:::pipe
+    U["<b>unzipped_backup/#lt;zip name#gt;/</b><br/>the other files of each zip"]:::side
+    M[("<b>MongoDB</b> · database shadowserver<br/>#lt;service#gt;: one document per unique CSV row<br/>discovered_fields_#lt;service#gt;: one per column<br/>files_#lt;service#gt;: one per file")]:::db
+    I -- "step 1 · e-mail" --> A
+    A -- "step 2 · unzip and sort" --> S
+    A -. "not a report" .-> U
+    S -- "step 3 · load" --> M
+    classDef src fill:#0369a1,stroke:#075985,color:#fff
+    classDef pipe fill:#4f46e5,stroke:#4338ca,color:#fff
+    classDef side fill:#64748b,stroke:#475569,color:#fff
+    classDef db fill:#0f766e,stroke:#115e59,color:#fff
+    linkStyle default stroke:#94a3b8,stroke-width:2px
 ```
 
-**Step 1, e-mail.** The pipeline reads the mailbox **read-only** (messages stay unread) over IMAP, the Gmail API (Google Workspace) or Microsoft Graph (Microsoft 365): `MAIL_PROVIDER`, set up as described in [docs/MAIL_SETUP.md](../docs/MAIL_SETUP.md). E-mails and links already handled on an earlier run are skipped (`.mail_state.sqlite`), so a run with nothing new takes a second or two. It fetches all messages received in the last `N` days (default 1 = since yesterday), 25 per round trip. New attachments are saved to `attachments_backup/`; attachments that are already there are skipped. If an e-mail brought no new attachment, its `https://dl.shadowserver.org/...` links are downloaded instead, 4 at a time. This is the same rule as the original script.
+**Step 1, e-mail.** The pipeline reads the mailbox **read-only** (messages stay unread) over IMAP, the Gmail API (Google Workspace) or Microsoft Graph (Microsoft 365): `MAIL_PROVIDER`, set up as described in [docs/MAIL_SETUP.md](docs/MAIL_SETUP.md). E-mails and links already handled on an earlier run are skipped (`.mail_state.sqlite`), so a run with nothing new takes a second or two. It fetches all messages received in the last `N` days (default 1 = since yesterday), 25 per round trip. New attachments are saved to `attachments_backup/`; attachments that are already there are skipped. If an e-mail brought no new attachment, its `https://dl.shadowserver.org/...` links are downloaded instead, 4 at a time. This is the same rule as the original script.
 
 **Step 2, unzip and sort.** Each zip is extracted once; a zip already extracted on an earlier run is skipped. Files whose name matches the report pattern
 
@@ -291,7 +293,7 @@ All settings live in `.env` in the project folder. Its permissions are `600`, so
 | Setting | Meaning | Default |
 |---|---|---|
 | `REPORT_SOURCE` | how each run gets the reports: `email` (the mailbox) or `api` (Shadowserver's report API, `report_api.py`). If the chosen way cannot be used on a run and the other is set up, that run uses the other and logs why | `email` |
-| `MAIL_PROVIDER` | `imap`, `gmail_api` or `microsoft_graph` ([docs/MAIL_SETUP.md](../docs/MAIL_SETUP.md)) | `imap` |
+| `MAIL_PROVIDER` | `imap`, `gmail_api` or `microsoft_graph` ([docs/MAIL_SETUP.md](docs/MAIL_SETUP.md)) | `imap` |
 | `GMAIL_SERVICE_ACCOUNT_FILE`, `GMAIL_USER`, `GMAIL_LABEL` | Gmail API: service account key, mailbox, label | –, –, `INBOX` |
 | `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_MAILBOX`, `MS_FOLDER` | Microsoft Graph app registration and mailbox | –, –, –, –, `inbox` |
 | `IMAP_SERVER` | mail server | – |

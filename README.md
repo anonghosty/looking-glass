@@ -209,17 +209,23 @@ a tamper-evident audit log with control checks mapped to NIST SP 800-53 and CIS 
 
 ## How it works
 
-```
- Shadowserver report e-mails ──► database/  (pipeline: fetch attachments and links, unzip, sort, load, every 30 min)
-                                     │
-                                     ▼
-                                  MongoDB  (one collection per report type)
-                                     │  read-only account
-                                     ▼
-                                 platform/  (Looking Glass: replay, analysis, reports, accounts)
-                                     │  HTTPS
-                                     ▼
-                     analysts' browsers · wall screens · executives · partners (masked)
+```mermaid
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 40, "rankSpacing": 46, "padding": 14}}}%%
+flowchart TD
+    S(["<b>Shadowserver</b><br/>report e-mails or the report API"]):::src
+    P["<b>Pipeline</b> · database/<br/>fetch · unzip · sort · load<br/>every 30 minutes"]:::pipe
+    M[("<b>MongoDB</b><br/>one collection per report type")]:::db
+    L["<b>Looking Glass</b> · platform/<br/>replay · analysis · reports · accounts"]:::app
+    U(["<b>People</b><br/>analysts · wall screens · executives · partners, masked"]):::people
+    S --> P --> M
+    M -- "read-only account" --> L
+    L -- "HTTPS" --> U
+    classDef src fill:#0369a1,stroke:#075985,color:#fff
+    classDef pipe fill:#4f46e5,stroke:#4338ca,color:#fff
+    classDef db fill:#0f766e,stroke:#115e59,color:#fff
+    classDef app fill:#6d28d9,stroke:#5b21b6,color:#fff
+    classDef people fill:#475569,stroke:#334155,color:#fff
+    linkStyle default stroke:#94a3b8,stroke-width:2px
 ```
 
 1. **Collect.** The database pipeline fetches your Shadowserver reports with your Shadowserver API key, or reads the
