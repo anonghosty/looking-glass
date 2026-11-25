@@ -29,7 +29,8 @@ the database can instead be an internal MongoDB on another server of your networ
    ▼
  platform/   the web app: a sandboxed systemd service
    data/: accounts, sessions, audit log, findings, advisories
-   │  HTTPS; sign-in with password + TOTP
+   │  HTTPS (Caddy in front on private and public);
+   │  sign-in: password + TOTP, or a passkey (public)
    ▼
  staff browsers, one role each:
    analyst · researcher · management · advisor
@@ -41,6 +42,8 @@ the database can instead be an internal MongoDB on another server of your networ
 | **Pipeline** (`database/`) | On its schedule (every 30 minutes recommended): fetches the reports (mailbox read-only, or Shadowserver's report API), checks who sent each e-mail, unzips within limits, sorts and loads each CSV row into MongoDB | the installing user's cron, outside the web app's sandbox | its folders, and its own database through `lookingglass_pipeline` |
 | **MongoDB** | Holds the reports: one document per row, per report type | `mongod`, bound to 127.0.0.1 (or an internal server: see below) | n/a |
 | **Platform** (`platform/`) | The web app: the map, services, Intel gathered, findings, the Executive portal, advisories and the Audit portal | a systemd service with `NoNewPrivileges`, `ProtectSystem=strict` and `ProtectHome=read-only`; writable only in `data/` | only `data/`; the database through the read-only account `lookingglass_ro` |
+| **Unusual activity counter** (`unusual_worker.py`) | Every hour: counts each network's and report's records against its own normal, for the Unusual activity page; counts only, never an address | its own systemd timer and service, in the same sandbox as the web app | only `data/` |
+| **Connector sender** (`connectors_worker.py`) | Every 15 minutes, only when an administrator has set up and turned on a target: sends Looking Glass's own analysis of each report day to the CSIRT's own OpenCTI or MISP | its own systemd timer and service, in the same sandbox as the web app | only `data/` |
 | **Browser** | Shows the pages; all report data is inserted as text, under a strict Content-Security-Policy | the user's computer | nothing on the server, except through the signed-in API |
 
 **Where the database may be.** On this server (127.0.0.1, the default), or an internal MongoDB on another server of
@@ -91,25 +94,28 @@ server, on the pipeline's own account ([Security, section 1](SECURITY.md#pipelin
 | B1 | Internet → pipeline | e-mails and report files | DKIM signature by the expected signer; zip limits; safe file names; HTTPS to Shadowserver, with each API request signed with the secret (`HMAC2`) |
 | B2 | Pipeline → database | report rows | the pipeline's own account: its database only, no account management |
 | B3 | Database → platform | report rows | a read-only account; every value is treated as untrusted text (it came from scanned hosts) |
-| B4 | Network → platform | HTTP requests | `ACCESS_MODE` and the allow list; the host-name check (against DNS rebinding); HTTPS for remote sign-in; a 64 KB request limit |
+| B4 | Network → platform | HTTP requests | `ACCESS_MODE` and the allow list; the host-name check (against DNS rebinding); HTTPS for remote sign-in; a 64 KB request limit; Caddy in front on private and public installations (each request read in full under time limits); Looking Glass itself listens on 127.0.0.1 only |
 | B5 | Signed-in user → data | API calls | role permissions enforced on the server; masking done on the server; CSRF token and same-origin checks on changes |
 | B6 | Platform → pipeline | setting requests | re-checked by the pipeline; loosening needs a confirmation on the server, bound to the request's SHA-256 |
 | B7 | Platform and pipeline → outside services | look-ups | only what each service needs: AS numbers (PeeringDB, RIPEstat), CVE IDs (NVD, FIRST, CISA), malware hashes and families (Malpedia), place names (Mapbox geocoding); the pipeline asks Cloudflare and Google over HTTPS (1.1.1.1, 1.0.0.1, 8.8.8.8, 8.8.4.4, by IP address, certificates checked) for Shadowserver's DKIM key when the network drops DNS TXT look-ups, sending only that key's name (`MAIL_AUTH_DNS_SERVERS`). No constituent IP address is sent to any of them |
 | B8 | Server → auditor | the proof package | the auditor's own verifier, standard library only, run off the server; an earlier head kept by the auditor; signed daily checkpoints, optionally copied to another computer (`AUDIT_CHECKPOINT_COPY_DIR`), which the verifier and the proof package check |
 | B9 | Analyst → the Looking Glass creator | a decoding request | sent by hand, never by Looking Glass: only the HTTP request lines (up to 5) with their infection names, each keeping only its undecoded value (every other parameter value reads `<value>`, any address `<address>`; the path keeps only its shape, best effort: plain path words and file names stay, any other segment reads `<seg>`, `<n>`, `<long>`, `<address>` or `<email>`, `;` parameters lose their values and keep only plain-word names; a name that is itself a plain word stays, so the administrator checks the exact lines), no host, address, user agent or count; the analyst confirms the TLP rules allow it; recorded as an export; pasted into a private report on the separate [HTTP Requests Decoding](https://github.com/anonghosty/http-requests-decoding) repository, never a public issue |
 | B10 | Platform → pipeline | the quarterly purge permit | written only for a VALID quarterly report and only while an administrator has turned the purge on in Settings → Quarterly (their own password again; `purge_confirmed.json`); the pipeline also requires that confirmation, read-only, and refuses without it; the pipeline works out the quarter's dates itself and refuses a permit that differs, one made after its purge day, or a cutoff within 31 days of today; it deletes only report rows dated before the cutoff, from report collections only, once per quarter |
+| B11 | Platform → the CSIRT's own OpenCTI or MISP | Looking Glass's own analysis of each report day: the devices' addresses as victims (never as indicators to block), their malware, CVEs and ATT&CK links; never Shadowserver's raw rows, findings, notes, names, time to act or combination codes | only administrators set a target up, and every change asks for a passkey or code; saved only after its test passed; HTTPS only, the certificate always checked; the address looked up once and refused when it is this computer, link-local, cloud metadata or reserved; no redirects, 20 seconds, 1 MB; the key stored encrypted (AES-GCM under `CONNECTOR_KEY_SECRET`) and never sent back to the page; every send in the audit log and on the Audit portal's Data sent out tab |
 
 ## 4. What an attacker would want
 
 | Asset | Where | Why it matters |
 |---|---|---|
 | **Constituent identities**: IP addresses, host names and network names of the organisations in the reports | MongoDB; shown to analysts | A list of vulnerable or infected hosts in the country is a target list |
-| **Credentials**: mailbox and database passwords, the Shadowserver API key, `REF_SECRET`, TLS key, session store | `.env`, `data/` (mode 600), `/etc/looking-glass/mongo-admin.env` (root only) | They open everything else. `REF_SECRET` is what makes masked host labels unguessable |
+| **Credentials**: mailbox and database passwords, the Shadowserver API key, `REF_SECRET`, `CONNECTOR_KEY_SECRET`, TLS key, session store | `.env`, `data/` (mode 600), `/etc/looking-glass/mongo-admin.env` (root only) | They open everything else. `REF_SECRET` is what makes masked host labels unguessable |
 | **The audit log** | `data/audit.log`, its archives, `audit.head`, `audit.seal` | It is the evidence an auditor and the CSIRT rely on |
 | **The integrity of the reports** | the pipeline's intake, MongoDB | Forged reports would send analysts and advisories after the wrong hosts |
 | **Pipeline settings** | the pipeline's `.env` | Turning the sender check or the unzip limits off would open the intake |
 | **Findings and advisories** | `data/findings.json`, `data/advisories/` | They say who is affected and what to do; they are not for every role |
 | **Accounts and roles** | `data/users.json`, roles | A role change is a way into everything above |
+| **Passkeys** | `data/passkeys.json` (public keys and counters only, mode 600) | A passkey added to an account is a lasting way to sign in as that person |
+| **Connector keys** | `data/connector_keys.enc` (mode 600), encrypted under `CONNECTOR_KEY_SECRET` | They let whoever holds them write into the CSIRT's OpenCTI or MISP |
 
 ## 5. Who might attack, and what stops them
 
@@ -126,6 +132,9 @@ Each row below names a threat and the control that stops it.
 | Make a signed-in user's browser change things (CSRF, DNS rebinding) | CSRF token, JSON only, `Origin` and `Sec-Fetch-Site` checks, host-name allow list |
 | Become the first administrator | A one-time setup code readable only on the server; over HTTPS only from another computer; a wrongly set up reverse proxy can't make everyone look local |
 | Inject script through report values (banners come from scanned hosts) | Everything inserted as text; CSP with a per-request nonce, no eval, no inline handlers; CSV cells that look like formulas are neutralised |
+| Relay a password and a code through a look-alike site, in real time | On `public` installations everyone signs in with a passkey, which the browser binds to the real site; an internal installation that sees sign-ins from the internet says so in the administrators' bell |
+| Hold the service up with a few deliberately slow connections | Caddy in front of `private` and `public` installations reads each request in full under time limits, 100 connections per address at most; Looking Glass listens on this computer only |
+| Learn internal details from error messages (in the next release, in testing now) | An answer shows only messages Looking Glass wrote for the reader (`user_words.py`); a library's or Python's own text gets a fixed message, and its detail goes to the service's log or the audit |
 
 ### A2. Someone who can send e-mail to the mailbox
 
@@ -152,6 +161,10 @@ Each row below names a threat and the control that stops it.
 | A researcher reads a device's decoded beacon (its MAC address, hardware ID, CPU id) | Decoding is answered only with the *unmasked* permission; researchers get the threat-side parts (format, operator, version, OS) once 5 or more devices carry them; masked views read `<clogin beacon>` or `<encoded value>`; the devices of a hand-over open only for analysts and admins, and each opening is logged |
 | Send an organisation a report that no longer says what the advisory's record says (edited text or TLP) | The report keeps a fingerprint of its text; drafted and sent are refused until it is generated again |
 | Register a look-alike name ("Grace" beside "grace") | Names and e-mail addresses that differ only in letter case are one |
+| Use a session left signed in, or malware in a signed-in browser, for a high-value action | A fresh check (a passkey, or a fresh authenticator code) before complete or unmasked downloads, unmasking, tracing, settings, the purge and advisories, valid 10 minutes; changes to accounts, roles, sign-up links, connectors and passkeys ask every time, the confirmation used once for that one request. One table on the server (`stepup.py`), checked before every request |
+| Add their own passkey to someone's account from such a session, or remove theirs | Adding or removing a passkey asks every time (except the first two registered right after signing in); the person's own bell says so for 7 days (in the next release, in testing now); the audit log records it |
+| Send constituent data out through a connector | Only administrators, every change asks every time; only Looking Glass's own analysis goes, to a target that passed its test; every send is in the audit log, and the auditor sees every target and everything sent |
+| Read addresses through Unusual activity | Counts only; the devices and the Confirm and Dismiss buttons need the *unmasked* permission; researchers see the suggestions without devices |
 
 ### A4. A takeover of the web app through a bug
 
@@ -162,6 +175,7 @@ Each row below names a threat and the control that stops it.
 | Read the database administrator's password | It is kept in `/etc/looking-glass/mongo-admin.env`, which only root can read |
 | Write outside `data/` | systemd sandbox (rated by `systemd-analyze security`); `/run/user` and D-Bus are hidden from it, so it can't confirm its own requests |
 | Forge a purge permit to delete the reports database | The pipeline also requires the administrator's confirmation (`purge_confirmed.json`, written only after their password was checked again; the purge is off until then) and refuses without it. It trusts no date in the permit: it recomputes the purge day and cutoff, keeps the last 31 days, deletes only from report collections and only once per quarter; findings, cases, advisories and the quarterly reports are never deleted. Every purge is in the audit log |
+| Make the platform connect somewhere it should not (a connector address that points inside) | `connector_net.py`: HTTPS only with the certificate checked, the address looked up once and connected to exactly (no DNS rebinding in between), this computer, link-local, cloud metadata, multicast and reserved addresses refused, no redirects, 20 seconds, 1 MB |
 | A shell as the Linux user, outside the sandbox | **Not stopped by these controls.** Platform and pipeline share that user, so it can edit the pipeline's `.env` and confirm requests itself. Protect the account (SSH keys, no shared password, no passwordless sudo); see section 6 |
 
 ### A5. Someone who edits the audit log
@@ -203,7 +217,19 @@ These risks are known and accepted, or left to the operator. They are listed her
   addresses over a week. The Executive portal and its PDF say so beside the figures.
 - **One server.** There is no failover. Availability depends on the server, and recovery on the backups
   (`manage/backup.sh`) being taken and kept elsewhere.
-- **Dependencies come from PyPI and the CDNs** with version ranges (Python) or pinned versions with hashes (browser).
+- **Internal installations check people with authenticator codes**, which a look-alike site can relay in real time.
+  Passkeys are required only on `public` installations; internal ones may add them. The administrators' bell says
+  when an internal installation sees sign-ins from the internet.
+- **A fresh check lasts 10 minutes.** Within that window a session can repeat the window's actions (downloads,
+  unmasking, settings) without asking again; changes to accounts, roles, sign-up links, connectors and passkeys always
+  ask.
+- **What a connector sends is then protected by the receiving platform.** It goes to the CSIRT's own OpenCTI or MISP
+  with its TLP and, in MISP, shared with your organisation only and never published; who can read it there is that
+  platform's to decide. Whoever can read `.env` (`CONNECTOR_KEY_SECRET`) can decrypt the stored connector keys.
+- **Peace of mind hides the bell**, so an administrator using it does not see the notice of a passkey added to their
+  account (in the next release, in testing now); the audit log still records it.
+- **Dependencies come from PyPI and the CDNs**, pinned to exact versions with their hashes (Python libraries
+  installed with `--require-hashes`; browser libraries with integrity hashes), with an SBOM attached to every release.
   The checks on GitHub run `pip-audit` against known advisories; a compromised upstream package with no advisory yet
   is not something Looking Glass would catch.
 - **The audit portal shows evidence, not verdicts.** Its 15 control checks give the facts, and the auditor decides.
@@ -242,12 +268,12 @@ section argues that secure design principles were applied and that common implem
 | A02 Cryptographic failures | scrypt passwords, TLS 1.2 and newer, SHA-256 and HMAC-SHA-256, encrypted backups |
 | A03 Injection | No request value reaches a database query as an operator; values are written into pages as text, with a per-request CSP nonce; CSV cells that look like formulas are neutralised |
 | A04 Insecure design | This threat model, kept true with every release (section 8), and outside reviews |
-| A05 Security misconfiguration | A hardened service unit, security headers, plain error pages, and an installer that refuses to open the service to the whole internet without HTTPS |
-| A06 Vulnerable and outdated components | `pip-audit` on every push; browser libraries pinned with integrity hashes |
-| A07 Identification and authentication failures | A second factor for every account, lockouts, sessions bound to their browser |
+| A05 Security misconfiguration | A hardened service unit, security headers, plain error pages, error answers that show only messages written for the reader, and an installer that refuses to open the service to the whole internet without HTTPS |
+| A06 Vulnerable and outdated components | Python and browser libraries pinned with hashes, `pip-audit` on every push, an SBOM with every release |
+| A07 Identification and authentication failures | A second factor for every account, passkeys on public installations, a fresh check before high-value actions, lockouts, sessions bound to their browser |
 | A08 Software and data integrity failures | Signed commits and tags, CI actions pinned to a commit, DKIM-checked report e-mails |
 | A09 Security logging and monitoring failures | A hash-chained audit log and the administrators' bell |
-| A10 Server-side request forgery | Looking Glass contacts a fixed list of services only and follows only Shadowserver's download links; a guard in CI fails any check that tries to reach anywhere else |
+| A10 Server-side request forgery | Looking Glass contacts a fixed list of services, plus the OpenCTI or MISP an administrator sets up as a connector (HTTPS, certificate checked, never this computer or a metadata address, no redirects), and follows only Shadowserver's download links; a guard in CI fails any check that tries to reach anywhere else |
 
 Static analysis (Bandit, CodeQL, Ruff, ShellCheck) and the full test suite run before every release.
 
@@ -259,3 +285,5 @@ Static analysis (Bandit, CodeQL, Ruff, ShellCheck) and the full test suite run b
   after.
 - The installation check (`platform/security_testing/security_retest.py` and `platform/tests/run_all_checks.sh`)
   must pass before a release.
+- After every release, this page and Security are checked against the release's CHANGELOG, in the repository and on
+  the documentation site (built from these same files).

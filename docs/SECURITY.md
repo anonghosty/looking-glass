@@ -91,6 +91,9 @@ The sign-in card opens on a choice: **Sign in** or **Create an account**, plus *
   sign-ins from public internet addresses, the administrators' bell says so: it is reachable from outside (a port
   forward, a proxy) but checks people with codes a look-alike site can relay. Close it off, or switch it to
   `public`, which requires passkeys.
+- **Your bell when a passkey changes (in the next release, in testing now).** When a passkey is added to or removed from your account, other than the first
+  two you register right after signing in, your own bell says so for 7 days, with its name and when. Only you see it;
+  the audit log records it too.
 
 ### Forgot password
 - **Use my authenticator:** user name + a code from the app + **one recovery code** + a new password. Both are needed,
@@ -229,6 +232,15 @@ plain file, results carry a fixed list of fields and are never named after an id
 "result" cannot become a confirmation), and each change is judged by what its value means to the pipeline. So a bug in the web app or a takeover of its account cannot use
 this route to switch the pipeline's checks off or reach the mailbox password.
 
+### Connectors (Settings → Connectors)
+Outbound only, to the CSIRT's own OpenCTI or MISP. Only administrators set one up, every change asks for a passkey or
+code, and a target is saved only after its test passed. Every connection is HTTPS with the certificate checked, to an
+address looked up once; this computer, link-local and cloud metadata addresses are refused, and no redirect is
+followed. Keys are stored encrypted (AES-GCM under `CONNECTOR_KEY_SECRET`) and never sent back to the page. Only
+Looking Glass's own analysis goes out, with the devices as victims, never Shadowserver's raw rows, findings or notes;
+every send is in the audit log and on the Audit portal's Data sent out tab. Details:
+[Connecting OpenCTI and MISP](CONNECTORS.md).
+
 ### Why TOTP, and what about OAuth / single sign-on
 TOTP is built in: it is free, works offline and no outside service sees your sign-ins. If your staff already have
 central accounts, single sign-on through OpenID Connect is the next step: Microsoft Entra ID or Google Workspace (MFA
@@ -270,6 +282,8 @@ of it (above).
   It reads each request in full under strict time limits (its headers within 10 seconds) before Looking Glass sees
   it, and holds each address to 100 connections at once, so a few deliberately slow connections, from the internet
   or from inside, cannot hold Looking Glass up. Looking Glass itself listens on `127.0.0.1` only.
+- **Error answers (in the next release, in testing now):** an answer shows an error's words only when Looking Glass wrote them for the reader; a library's
+  or Python's own text gets a fixed message, and the detail goes to the service's log or the audit.
 - **Separate database accounts:** the platform reads with a read-only MongoDB account; the pipeline has its own
   account limited to its database; the administrator account is kept root-only in `/etc/looking-glass/`.
 - **Report intake:** unpacking limits against oversized or malicious archives, report names checked before they become
@@ -321,6 +335,11 @@ browser; recovery-code use; and settings changes. The audit log (Audit portal) r
 it was not changed is in [How the audit log proves itself](AUDIT_LOG_PROOF.md).
 
 ## 5. Supported versions and changes
+
+**In testing now.** GitHub's code scanning (CodeQL) found that, on the new connector and passkey pages, an
+error answer could include an error's own text, such as a library's message. The fix shows only words written
+for the reader. Because every release goes through the full test checklist first, it ships in the next release,
+within 6 hours. Nothing to do on your side.
 
 Security fixes are made on the latest version (the `main` branch). Update with the steps in
 [INSTALLATION.md](INSTALLATION.md#updating).

@@ -370,22 +370,28 @@ Details: [User guide → Roles](docs/USER_GUIDE.md#roles).
 
 Please report security problems **privately** through the repository's Security tab
 ([Report a vulnerability](https://github.com/anonghosty/looking-glass/security/advisories/new)), not in a public issue.
-See the [security policy](.github/SECURITY.md).
+See the [security policy](.github/SECURITY.md). A fix for findings of GitHub's code scanning is in testing now and
+ships in the next release, within 6 hours ([Security, section 5](docs/SECURITY.md#5-supported-versions-and-changes)).
 
 ## Looking Glass, IntelMQ and Elastic
 
 | | IntelMQ | Elastic Stack | **Looking Glass** |
 |---|:---:|:---:|:---:|
-| Free to use | ✅ | ✅ | ✅ |
+| Free to use | ✅ | ✅ Basic tier | ✅ |
 | Ready-made views of Shadowserver data | no | ◐ build them | ✅ |
+| Everything installed in one go, ready for production | ◐ the core, then the Manager, API, Redis and add-ons, each on its own | ◐ Elasticsearch, Kibana, then Logstash or Agent, each on its own (start-local is for testing) | ✅ one guided installer |
 | Useful straight after installing | ◐ configure bots | ◐ build dashboards | ✅ |
 | Executive reports and dashboard | no | ◐ build them | ✅ |
+| Unusual activity against each network's own normal | no | ◐ machine learning, paid tiers | ✅ |
+| Follow-up: findings, cases, advisories | ◐ separate add-ons (Mailgen, certbund-contact, Fody), each with its own install and database | ◐ case management | ✅ |
+| Into MISP or OpenCTI | ✅ MISP | ◐ build it | ✅ both, its own analysis |
 | Automatic notification of constituents | ✅ | no | no |
 | Many feeds besides Shadowserver | ✅ | ✅ | no |
 | Search across any data, at scale | no | ✅ | no |
 
 ✅ built in · ◐ partly, or with work · no: not its job.
-**Use them together:** IntelMQ notifies, Elastic searches, Looking Glass shows. Full comparison with sources:
+**Use them together:** Looking Glass complements IntelMQ and Elastic, it does not compete with them: IntelMQ
+notifies, Elastic searches, Looking Glass shows, and its connectors add its analysis to your OpenCTI or MISP. Full comparison with sources:
 [docs/COMPARISON.md](docs/COMPARISON.md).
 
 ## Requirements
