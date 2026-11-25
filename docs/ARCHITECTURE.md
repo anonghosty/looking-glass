@@ -142,7 +142,7 @@ Each row below names a threat and the control that stops it.
 | Inject script through report values (banners come from scanned hosts) | Everything inserted as text; CSP with a per-request nonce, no eval, no inline handlers; CSV cells that look like formulas are neutralised |
 | Relay a password and a code through a look-alike site, in real time | On `public` installations everyone signs in with a passkey, which the browser binds to the real site; an internal installation that sees sign-ins from the internet says so in the administrators' bell |
 | Hold the service up with a few deliberately slow connections | Caddy in front of `private` and `public` installations reads each request in full under time limits, 100 connections per address at most; Looking Glass listens on this computer only |
-| Learn internal details from error messages (in the next release, in testing now) | An answer shows only messages Looking Glass wrote for the reader (`user_words.py`); a library's or Python's own text gets a fixed message, and its detail goes to the service's log or the audit |
+| Learn internal details from error messages | An answer shows only messages Looking Glass wrote for the reader (`user_words.py`); a library's or Python's own text gets a fixed message, and its detail goes to the service's log or the audit |
 
 ### A2. Someone who can send e-mail to the mailbox
 
@@ -170,7 +170,7 @@ Each row below names a threat and the control that stops it.
 | Send an organisation a report that no longer says what the advisory's record says (edited text or TLP) | The report keeps a fingerprint of its text; drafted and sent are refused until it is generated again |
 | Register a look-alike name ("Grace" beside "grace") | Names and e-mail addresses that differ only in letter case are one |
 | Use a session left signed in, or malware in a signed-in browser, for a high-value action | A fresh check (a passkey, or a fresh authenticator code) before complete or unmasked downloads, unmasking, tracing, settings, the purge and advisories, valid 10 minutes; changes to accounts, roles, sign-up links, connectors and passkeys ask every time, the confirmation used once for that one request. One table on the server (`stepup.py`), checked before every request |
-| Add their own passkey to someone's account from such a session, or remove theirs | Adding or removing a passkey asks every time (except the first two registered right after signing in); the person's own bell says so for 7 days (in the next release, in testing now); the audit log records it |
+| Add their own passkey to someone's account from such a session, or remove theirs | Adding or removing a passkey asks every time (except the first two registered right after signing in); the person's own bell says so for 7 days; the audit log records it |
 | Send constituent data out through a connector | Only administrators, every change asks every time; only Looking Glass's own analysis goes, to a target that passed its test; every send is in the audit log, and the auditor sees every target and everything sent |
 | Read addresses through Unusual activity | Counts only; the devices and the Confirm and Dismiss buttons need the *unmasked* permission; researchers see the suggestions without devices |
 
@@ -235,7 +235,7 @@ These risks are known and accepted, or left to the operator. They are listed her
   with its TLP and, in MISP, shared with your organisation only and never published; who can read it there is that
   platform's to decide. Whoever can read `.env` (`CONNECTOR_KEY_SECRET`) can decrypt the stored connector keys.
 - **Peace of mind hides the bell**, so an administrator using it does not see the notice of a passkey added to their
-  account (in the next release, in testing now); the audit log still records it.
+  account; the audit log still records it.
 - **Dependencies come from PyPI and the CDNs**, pinned to exact versions with their hashes (Python libraries
   installed with `--require-hashes`; browser libraries with integrity hashes), with an SBOM attached to every release.
   The checks on GitHub run `pip-audit` against known advisories; a compromised upstream package with no advisory yet

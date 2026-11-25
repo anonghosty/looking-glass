@@ -1,5 +1,5 @@
 # Looking Glass: every file this release ships in this folder (deploy/stale_files.py reads it on update)
-# files: 802
+# files: 804
 .env.example
 .gitignore
 README.md
@@ -731,6 +731,7 @@ tests/check_timezones.py
 tests/check_tour.py
 tests/check_uninstall.py
 tests/check_unusual.py
+tests/check_user_words.py
 tests/check_view_cache.py
 tests/check_warmup.py
 tests/check_workflow_fixes.py
@@ -801,4 +802,5 @@ tour_prefs.py
 unusual.py
 unusual_detect.py
 unusual_worker.py
+user_words.py
 warmup.py

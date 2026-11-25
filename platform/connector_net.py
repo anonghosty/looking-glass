@@ -22,6 +22,8 @@ import socket
 import ssl
 from urllib.parse import urlsplit
 
+import user_words
+
 TIMEOUT = 20
 MAX_ANSWER = 1024 * 1024
 METADATA = {ipaddress.ip_address("169.254.169.254"), ipaddress.ip_address("fd00:ec2::254"), ipaddress.ip_address("100.100.100.200")}
@@ -33,6 +35,7 @@ class Refused(Exception):
     def __init__(self, step, text):
         super().__init__(text)
         self.step = step
+        user_words.register(self, text)      # written for the reader: Test connection may show them
 
 
 def parse(address):

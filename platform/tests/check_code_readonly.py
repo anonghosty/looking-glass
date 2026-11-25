@@ -182,6 +182,7 @@ INVENTORY = {
     "svc_patterns.py::Patterns.save": (2, "data: data/pattern_fields_local.json"),
     "system_alerts.py::Alerts.clear": (2, "data: data/system_alerts_seen.json"),
     "system_alerts.py::note_start": (2, "data: data/restarts.jsonl"),
+    "system_alerts.py::note_passkey_change": (3, "data: data/passkey_events.json (stepup.py passes the passkey store's own folder, data/)"),
     "task_monitor.py::_cron": (1, "runs: crontab -l, read only"),
     "task_monitor.py::_mongod": (1, "runs: ps, read only"),
     "task_monitor.py::snapshot": (1, "none: Sampler.touch(), the performance sampler, not a file"),

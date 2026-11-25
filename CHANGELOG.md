@@ -5,6 +5,18 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-25 (2)
+### Security
+- **Error messages show only what Looking Glass wrote for you.** On Settings → Connectors and in the passkey checks,
+  an answer showed the text of any error, so a library's own message could reach the browser. Now an answer shows
+  only messages written for the reader; anything else gets a fixed message, and the detail goes to the audit log or
+  the service's log. A failed passkey check now says "The passkey could not be checked. Try again, or use another
+  passkey."; the library's reason is in the audit.
+- **Your bell says when a passkey is added to or removed from your account.** Adding or removing a passkey already
+  asked you to confirm it's you every time; now your own bell also tells you, for 7 days, with the passkey's name and
+  when, so one added from a session left signed in does not go unnoticed. Only you see it. The two passkeys
+  registered right after your first sign-in do not ring.
+
 ## 2026-11-25
 ### Added
 - **Connectors: send Looking Glass's analysis to your own OpenCTI or MISP.** On Settings → Connectors an

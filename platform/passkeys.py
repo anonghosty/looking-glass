@@ -19,6 +19,8 @@ import secrets
 import threading
 import time
 
+from user_words import Said
+
 from webauthn import (generate_authentication_options, generate_registration_options, options_to_json,
                       verify_authentication_response, verify_registration_response)
 from webauthn.helpers import base64url_to_bytes, bytes_to_base64url
@@ -90,9 +92,9 @@ class Store:
             d = self._load()
             lst = d["users"].setdefault(user, [])
             if len(lst) >= MAX_PER_USER:
-                raise ValueError(f"At most {MAX_PER_USER} passkeys per person.")
+                raise Said(f"At most {MAX_PER_USER} passkeys per person.")
             if any(c["id"] == cred_id for c in lst):
-                raise ValueError("This passkey is already registered.")
+                raise Said("This passkey is already registered.")
             lst.append({"id": cred_id, "pk": public_key, "count": int(count), "created": int(_now()), "last_used": None,
                         "name": clean_name(name, len(lst) + 1), "transports": [str(t) for t in transports][:6]})
             self._save(d)
@@ -180,12 +182,12 @@ def register(store, challenges, bound, user, credential, name, rp_id, origin):
     """Check a new passkey and keep it. Raises ValueError with a plain reason."""
     ch = challenges.take(bound, "register")
     if ch is None:
-        raise ValueError("The passkey request expired. Try again.")
+        raise Said("The passkey request expired. Try again.")
     try:
         v = verify_registration_response(credential=credential, expected_challenge=ch, expected_rp_id=rp_id,
                                          expected_origin=origin, require_user_verification=True)
     except Exception as e:  # noqa: BLE001  (the library's own errors: shown as one plain reason)
-        raise ValueError("The passkey could not be checked: " + str(e)[:160]) from None
+        raise Said("The passkey could not be checked. Try again, or use another passkey.", detail=str(e)[:160]) from None
     transports = []
     try:
         transports = list((credential.get("response") or {}).get("transports") or []) if isinstance(credential, dict) else []
@@ -206,17 +208,17 @@ def authenticate(store, challenges, bound, user, credential, rp_id, origin):
     """True when the credential is one of this person's passkeys and signed this challenge. Raises ValueError."""
     ch = challenges.take(bound, "auth")
     if ch is None:
-        raise ValueError("The passkey request expired. Try again.")
+        raise Said("The passkey request expired. Try again.")
     cid = credential.get("id") if isinstance(credential, dict) else None
     hit = next((c for c in store.of(user) if c["id"] == cid), None)
     if not hit:
-        raise ValueError("That passkey is not registered for this account.")
+        raise Said("That passkey is not registered for this account.")
     try:
         v = verify_authentication_response(credential=credential, expected_challenge=ch, expected_rp_id=rp_id,
                                            expected_origin=origin, credential_public_key=base64url_to_bytes(hit["pk"]),
                                            credential_current_sign_count=int(hit.get("count") or 0),
                                            require_user_verification=True)
     except Exception as e:  # noqa: BLE001
-        raise ValueError("The passkey could not be checked: " + str(e)[:160]) from None
+        raise Said("The passkey could not be checked. Try again, or use another passkey.", detail=str(e)[:160]) from None
     store.used(user, hit["id"], v.new_sign_count)
     return True

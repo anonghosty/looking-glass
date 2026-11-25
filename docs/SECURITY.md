@@ -91,7 +91,7 @@ The sign-in card opens on a choice: **Sign in** or **Create an account**, plus *
   sign-ins from public internet addresses, the administrators' bell says so: it is reachable from outside (a port
   forward, a proxy) but checks people with codes a look-alike site can relay. Close it off, or switch it to
   `public`, which requires passkeys.
-- **Your bell when a passkey changes (in the next release, in testing now).** When a passkey is added to or removed from your account, other than the first
+- **Your bell when a passkey changes.** When a passkey is added to or removed from your account, other than the first
   two you register right after signing in, your own bell says so for 7 days, with its name and when. Only you see it;
   the audit log records it too.
 
@@ -282,7 +282,7 @@ of it (above).
   It reads each request in full under strict time limits (its headers within 10 seconds) before Looking Glass sees
   it, and holds each address to 100 connections at once, so a few deliberately slow connections, from the internet
   or from inside, cannot hold Looking Glass up. Looking Glass itself listens on `127.0.0.1` only.
-- **Error answers (in the next release, in testing now):** an answer shows an error's words only when Looking Glass wrote them for the reader; a library's
+- **Error answers:** an answer shows an error's words only when Looking Glass wrote them for the reader; a library's
   or Python's own text gets a fixed message, and the detail goes to the service's log or the audit.
 - **Separate database accounts:** the platform reads with a read-only MongoDB account; the pipeline has its own
   account limited to its database; the administrator account is kept root-only in `/etc/looking-glass/`.
@@ -335,11 +335,6 @@ browser; recovery-code use; and settings changes. The audit log (Audit portal) r
 it was not changed is in [How the audit log proves itself](AUDIT_LOG_PROOF.md).
 
 ## 5. Supported versions and changes
-
-**In testing now.** GitHub's code scanning (CodeQL) found that, on the new connector and passkey pages, an
-error answer could include an error's own text, such as a library's message. The fix shows only words written
-for the reader. Because every release goes through the full test checklist first, it ships in the next release,
-within 6 hours. Nothing to do on your side.
 
 Security fixes are made on the latest version (the `main` branch). Update with the steps in
 [INSTALLATION.md](INSTALLATION.md#updating).

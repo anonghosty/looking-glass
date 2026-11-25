@@ -25,6 +25,8 @@ from flask import g, jsonify, redirect, render_template, request
 
 import passkeys
 import security
+import system_alerts
+from user_words import words
 
 WINDOW = 600                     # seconds one confirmation covers (the user, P5a)
 GRANT_SECONDS = 120              # an every-time confirmation: used once, within this time, for that request only
@@ -249,8 +251,8 @@ def install(app, ctx):
             passkeys.authenticate(store, challenges, "stepup:" + skey(), name, b.get("credential") or {}, rp, origin)
         except ValueError as e:
             throttle.failed(ip, name)
-            audit.add("stepup_failed", user=name, detail=f"passkey: {str(e)[:120]}")
-            return jsonify(error=str(e)), 401
+            audit.add("stepup_failed", user=name, detail=f"passkey: {(getattr(e, 'detail', '') or str(e))[:120]}")
+            return jsonify(error=words(e)), 401
         throttle.ok(ip, name)
         t = target()
         audit.add("stepup_ok", user=name, target=t[1], detail="passkey")
@@ -293,13 +295,16 @@ def install(app, ctx):
         if not rp:
             return jsonify(error=origin), 400
         b = request.get_json(silent=True) or {}
+        enrolling = bool(public() and session_field("needs_passkeys"))     # the first two, right after signing in
         try:
             passkeys.register(store, challenges, "reg:" + skey(), name, b.get("credential") or {}, b.get("name"), rp, origin)
         except ValueError as e:
-            audit.add("passkey_add_failed", user=name, detail=str(e)[:160])
-            return jsonify(error=str(e)), 400
+            audit.add("passkey_add_failed", user=name, detail=(getattr(e, 'detail', '') or str(e))[:160])
+            return jsonify(error=words(e)), 400
         n = store.count(name)
         audit.add("passkey_added", user=name, detail=f"{n} passkey(s) now")
+        if not enrolling:                   # the person's own bell says so (review 2026-11-25)
+            system_alerts.note_passkey_change(os.path.dirname(store.path), name, "added", passkeys.clean_name(b.get("name"), n))
         if n >= passkeys.MIN_PUBLIC and session_field("needs_passkeys"):
             mark(needs_passkeys=False)
             audit.add("passkeys_enrolled", user=name, detail=f"{n} passkeys registered: the account is open")
@@ -319,10 +324,12 @@ def install(app, ctx):
         name = me()
         if not name or not csrf_ok():
             return jsonify(error="Refused (sign in again)."), 403
+        gone = next((c.get("name") or "Passkey" for c in store.of(name) if c["id"][:16] == pid[:16]), "Passkey")
         ok, why = store.remove(name, pid[:16], keep_at_least=passkeys.MIN_PUBLIC if public() else 0)
         if not ok:
             return jsonify(error=why), 400
         audit.add("passkey_removed", user=name, detail=f"{store.count(name)} passkey(s) left")
+        system_alerts.note_passkey_change(os.path.dirname(store.path), name, "removed", gone)   # beside the store
         return jsonify(ok=True, passkeys=store.public_list(name))
 
     # ---------------- an administrator's reset (a person who lost every passkey): every time, audited

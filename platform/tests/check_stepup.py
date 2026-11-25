@@ -148,7 +148,8 @@ NAMED = [("GET", "/api/svc/hosts.csv", "export"), ("GET", "/api/combos/search/x/
          ("POST", "/api/admin/invites", "accounts"), ("POST", "/api/admin/invites/x/revoke", "accounts"),
          ("POST", "/api/settings", "settings"), ("POST", "/api/admin/config", "settings"), ("POST", "/api/admin/quarterly/purge", "purge"),
          ("POST", "/api/advisory/x/generate", "advisory"), ("POST", "/api/advisory/x/send", "advisory"),
-         ("POST", "/api/admin/users/x/passkeys/reset", "accounts"), ("POST", "/api/passkeys/x/remove", "passkeys")]
+         ("POST", "/api/admin/users/x/passkeys/reset", "accounts"), ("POST", "/api/passkeys/x/remove", "passkeys"),
+         ("POST", "/api/passkeys", "passkeys")]
 for m, p, kind in NAMED:
     with A.app.test_request_context(p, method=m):
         ok(f"{m} {p} is high-value ({kind})", (stepup.rule_for(m, p) or ("",))[0] == kind, stepup.rule_for(m, p))
@@ -301,6 +302,40 @@ g = call(ps, ps_csrf, "POST", "/api/stepup/passkey", {"credential": keys[1].get(
                                                        "path": f"/api/passkeys/{lst[0]['id']}/remove"}).get_json() or {}
 r = call(ps, ps_csrf, "POST", f"/api/passkeys/{lst[0]['id']}/remove", {}, {"X-LG-Stepup": g.get("grant", "")})
 ok("…and never leaves fewer than 2 on a public installation", r.status_code == 400 and store.count("lgsu-other") == 2, (r.status_code, r.get_json(silent=True)))
+# adding one more after enrolment: every time (a session left signed in cannot add someone else's passkey; review 2026-11-25)
+k3 = Authenticator()
+o = call(ps, ps_csrf, "POST", "/api/passkeys/options", {}).get_json() or {}
+r = call(ps, ps_csrf, "POST", "/api/passkeys", {"credential": k3.create(o), "name": "Device 3"})
+a, j = asked(r)
+ok("adding a passkey after enrolment asks every time, and adds nothing until confirmed", a and j.get("every_time") and store.count("lgsu-other") == 2, (r.status_code, j))
+o = call(ps, ps_csrf, "POST", "/api/stepup/passkey/options", {}).get_json() or {}
+g = call(ps, ps_csrf, "POST", "/api/stepup/passkey", {"credential": keys[1].get(o), "method": "POST", "path": "/api/passkeys"}).get_json() or {}
+o = call(ps, ps_csrf, "POST", "/api/passkeys/options", {}).get_json() or {}
+r = call(ps, ps_csrf, "POST", "/api/passkeys", {"credential": k3.create(o), "name": "Device 3"}, {"X-LG-Stepup": g.get("grant", "")})
+ok("…confirmed with one of the person's own passkeys: added", r.status_code == 200 and store.count("lgsu-other") == 3, (r.status_code, r.get_json(silent=True)))
+# the person's own bell (review 2026-11-25): a passkey added or removed outside the first registration says so
+bell = system_alerts.Alerts(tmp)
+bell.data, bell.seen_path = tmp, os.path.join(tmp, "system_alerts_seen.json")
+ev = (json.load(open(os.path.join(tmp, system_alerts.PASSKEY_EVENTS))) or {}).get("events") or []
+ok("the record is beside the passkey store (a test never writes the real data folder)", ev and all(e["user"] == "lgsu-other" for e in ev), ev)
+ok("…the first two, registered right after signing in, rang nothing; the third did", [e["what"] for e in ev] == ["added"], ev)
+mine = [n for n in bell.for_user("lgsu-other", has_perm=lambda p: False) if n["id"].startswith("sys:passkey-added")]
+ok("their bell: \"A passkey was added to your account\", naming it, leading to Your account, whatever their role",
+   len(mine) == 1 and "Device 3" in mine[0]["text"] and mine[0]["link"] == "/account" and mine[0]["waiting"], mine)
+ok("…nobody else's bell, administrators included, and not in the shared list the monitor shows",
+   not [n for n in bell.for_user("lgsu-admin", has_perm=lambda p: True) if n["id"].startswith("sys:passkey-")]
+   and not [a for a in bell.current() if a["key"].startswith("passkey-")])
+lst = (call(ps, ps_csrf, "GET", "/api/passkeys").get_json() or {}).get("passkeys") or []
+third = next(x for x in lst if x["name"] == "Device 3")
+o = call(ps, ps_csrf, "POST", "/api/stepup/passkey/options", {}).get_json() or {}
+g = call(ps, ps_csrf, "POST", "/api/stepup/passkey", {"credential": keys[0].get(o), "method": "POST",
+                                                       "path": f"/api/passkeys/{third['id']}/remove"}).get_json() or {}
+r = call(ps, ps_csrf, "POST", f"/api/passkeys/{third['id']}/remove", {}, {"X-LG-Stepup": g.get("grant", "")})
+gone = [n for n in bell.for_user("lgsu-other") if n["id"].startswith("sys:passkey-removed")]
+ok("removing one (confirmed): \"A passkey was removed from your account\"", r.status_code == 200 and len(gone) == 1
+   and "Device 3" in gone[0]["text"], (r.status_code, gone))
+bell.clear("lgsu-other", [n["id"] for n in bell.for_user("lgsu-other") if n["id"].startswith("sys:passkey-")])
+ok("…cleared from the bell like any other notification", not [n for n in bell.for_user("lgsu-other") if n["id"].startswith("sys:passkey-")])
 # signing in with a passkey
 print("== signing in on a public installation: password, then passkey")
 c = A.app.test_client()

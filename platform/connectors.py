@@ -32,6 +32,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from flask import g, jsonify, request
 
 import connector_net as net
+from user_words import Said, words
 
 KINDS = {"opencti": "OpenCTI (TAXII Push)", "misp": "MISP"}
 TLPS = ("clear", "green", "amber", "amber+strict", "red")
@@ -57,7 +58,7 @@ class Vault:
     def _aes(self):
         secret = (self.env.get("CONNECTOR_KEY_SECRET") or "").strip()
         if len(secret) < 32:
-            raise ValueError("CONNECTOR_KEY_SECRET is not set in .env (64 random hex characters; the installer makes it).")
+            raise Said("CONNECTOR_KEY_SECRET is not set in .env (64 random hex characters; the installer makes it).")
         return AESGCM(hashlib.sha256(b"looking-glass connectors|" + secret.encode()).digest())
 
     def _load(self):
@@ -140,25 +141,25 @@ def key_of(vault, tid, environ=os.environ):
 # ---------------- the checks, one platform each: [(step, ok, words)]; a check that fails stops the rest
 def _check(out, step, fn):
     try:
-        words = fn()
-        out.append({"step": step, "ok": True, "text": words})
+        result = fn()
+        out.append({"step": step, "ok": True, "text": result})
         return True
     except net.Refused as e:
-        out.append({"step": e.step or step, "ok": False, "text": str(e)})
+        out.append({"step": e.step or step, "ok": False, "text": words(e)})
     except ValueError as e:
-        out.append({"step": step, "ok": False, "text": str(e)})
+        out.append({"step": step, "ok": False, "text": words(e)})
     return False
 
 
 def _json(status, body, what):
     if status in (401, 403):
-        raise ValueError(f"The key was refused ({status}): check the key, and that its user is active.")
+        raise Said(f"The key was refused ({status}): check the key, and that its user is active.")
     if status >= 400:
-        raise ValueError(f"{what} answered {status}.")
+        raise Said(f"{what} answered {status}.")
     try:
         return json.loads(body or b"{}")
     except ValueError:
-        raise ValueError(f"{what} did not answer with JSON: is this the right address?") from None
+        raise Said(f"{what} did not answer with JSON: is this the right address?") from None
 
 
 def collection_url(address):
@@ -187,11 +188,11 @@ def probe(kind, address, key, tlp, send_test=True):
             if s == 404:
                 # OpenCTI answers 404 for a TAXII Push ingester that exists but is stopped (new ones start stopped;
                 # checked on OpenCTI 7.261119)
-                raise ValueError("OpenCTI does not know this collection, or its TAXII Push ingester is stopped. In OpenCTI: "
+                raise Said("OpenCTI does not know this collection, or its TAXII Push ingester is stopped. In OpenCTI: "
                                  "Data > Ingestion > TAXII Push, check the address's collection id and start the ingester.")
             j = _json(s, b, "OpenCTI's TAXII collection")
             if not j.get("can_write"):
-                raise ValueError("This TAXII collection does not accept objects from this key's user: in OpenCTI, give "
+                raise Said("This TAXII collection does not accept objects from this key's user: in OpenCTI, give "
                                  "the TAXII Push ingester to that user.")
             return f"Certificate trusted, key accepted; the collection \"{j.get('title') or j.get('id')}\" accepts objects."
         if not _check(out, "platform", collection):
@@ -203,7 +204,7 @@ def probe(kind, address, key, tlp, send_test=True):
                                       {"objects": connector_payload.test_objects(tlp)["objects"]})
                 if s not in (200, 201, 202):
                     _json(s, b, "The test send")
-                    raise ValueError(f"The test send answered {s}.")
+                    raise Said(f"The test send answered {s}.")
                 return "A test object was sent (in OpenCTI: Analyses -> Notes, \"Looking Glass connector test\")."
             if not _check(out, "test send", test_send):
                 return False, out
@@ -224,10 +225,10 @@ def probe(kind, address, key, tlp, send_test=True):
         missing = [w for k, w in (("perm_add", "create events"), ("perm_tagger", "tag"), ("perm_tag_editor", "create tags"))
                    if not role.get(k)]
         if missing:
-            raise ValueError(f"This key's user may not {' or '.join(missing)}: in MISP, give it a role with the Add, Tagger and "
+            raise Said(f"This key's user may not {' or '.join(missing)}: in MISP, give it a role with the Add, Tagger and "
                              "Tag Editor rights only (Administration -> Add Role; no publishing, no sync).")
         if role.get("perm_site_admin") or role.get("perm_admin") or role.get("perm_sync"):
-            raise ValueError("This key's user has more rights than Looking Glass needs (administrator or sync): give it a role "
+            raise Said("This key's user has more rights than Looking Glass needs (administrator or sync): give it a role "
                              "with the Add, Tagger and Tag Editor rights only.")
         return f"The key's user ({(j.get('User') or {}).get('email', '?')}) may create events, tag them and create the looking-glass tags."
 
@@ -237,7 +238,7 @@ def probe(kind, address, key, tlp, send_test=True):
         rows = j if isinstance(j, list) else []
         on = any(((r.get("Taxonomy") or {}).get("namespace") == "tlp" and (r.get("Taxonomy") or {}).get("enabled")) for r in rows)
         if not on:
-            raise ValueError("The tlp taxonomy is not enabled: in MISP, Event Actions -> Taxonomies, enable tlp.")
+            raise Said("The tlp taxonomy is not enabled: in MISP, Event Actions -> Taxonomies, enable tlp.")
         return "The tlp taxonomy is enabled."
     for step, fn in (("platform", version), ("rights", rights), ("taxonomy", taxonomy)):
         if not _check(out, step, fn):
@@ -285,12 +286,12 @@ def install(app, ctx):
     def clean(b):
         kind = str(b.get("kind") or "")
         if kind not in KINDS:
-            raise ValueError("Choose OpenCTI or MISP.")
+            raise Said("Choose OpenCTI or MISP.")
         address = str(b.get("address") or "").strip()[:300]
         net.parse(address)
         tlp = str(b.get("tlp") or "amber").lower()
         if tlp not in TLPS:
-            raise ValueError("Choose a TLP: clear, green, amber, amber+strict or red.")
+            raise Said("Choose a TLP: clear, green, amber, amber+strict or red.")
         name = NAME_RX.sub("", str(b.get("name") or "")).strip()[:60] or f"{KINDS[kind].split(' ')[0]} {urlsplit(address).hostname}"
         return kind, address, tlp, name
 
@@ -325,7 +326,7 @@ def install(app, ctx):
         try:
             kind, address, tlp, name = clean(b)
         except (ValueError, net.Refused) as e:
-            return jsonify(error=str(e)), 400
+            return jsonify(error=words(e)), 400
         key = str(b.get("key") or "").strip()
         tid = str(b.get("id") or "")
         if not key and ID_RX.match(tid):
@@ -356,7 +357,7 @@ def install(app, ctx):
         try:
             kind, address, tlp, name = clean(b)
         except (ValueError, net.Refused) as e:
-            return jsonify(error=str(e)), 400
+            return jsonify(error=words(e)), 400
         key = str(b.get("key") or "").strip()
         with plock:
             p = passes.pop(str(b.get("pass") or ""), None)
@@ -386,7 +387,7 @@ def install(app, ctx):
         try:
             scope = clean_scope(b.get("scope") or {}, settings)
         except ValueError as e:
-            return jsonify(error=str(e)), 400
+            return jsonify(error=words(e)), 400
         t["scope"] = scope
         targets.save(tid, t)
         audit.add("connector_scope", user=me(), target=t["name"], detail=scope_words(scope))
@@ -496,10 +497,10 @@ def clean_scope(s, settings):
         try:
             a = int(str(asn).upper().replace("AS", ""))
         except ValueError:
-            raise ValueError(f"{asn} is not an AS number.") from None
+            raise Said(f"{asn} is not an AS number.") from None
         if allowed_asns is not None and a not in allowed_asns and not any(
                 getattr(settings, "in_scope", lambda *_: False)(a, b.split("/")[0]) for b in (v if isinstance(v, list) else [])):
-            raise ValueError(f"AS{a} is not in the constituency.")
+            raise Said(f"AS{a} is not in the constituency.")
         if v == "whole":
             out["networks"][str(a)] = "whole"
         elif isinstance(v, list) and v:
@@ -507,7 +508,7 @@ def clean_scope(s, settings):
             for b in v[:4096]:
                 n = ipaddress.ip_network(str(b), strict=True)
                 if n.version == 4 and n.prefixlen != 24:
-                    raise ValueError(f"{b}: address blocks are /24.")
+                    raise Said(f"{b}: address blocks are /24.")
                 blocks.append(str(n))
             out["networks"][str(a)] = sorted(set(blocks))
     own = {str(ipaddress.ip_network(c, strict=False)) for c in ((getattr(settings, "data", None) or {}).get("cidrs") or [])}
@@ -515,9 +516,9 @@ def clean_scope(s, settings):
         try:
             n = str(ipaddress.ip_network(str(c), strict=False))
         except ValueError:
-            raise ValueError(f"{c} is not an address range.") from None
+            raise Said(f"{c} is not an address range.") from None
         if restricted and n not in own:
-            raise ValueError(f"{n} is not one of the constituency's other address ranges.")
+            raise Said(f"{n} is not one of the constituency's other address ranges.")
         out["cidrs"].append(n)
     return out
 

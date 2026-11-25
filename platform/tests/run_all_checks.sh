@@ -93,6 +93,7 @@ run "Shadowserver's fields: readable labels, its own event mapping, certificate 
 run "The parts moved out of app.py still fit together (names, re-exports, routes)" $PY tests/check_moved_modules.py
 run "Passkeys and the fresh check before high-value actions" $PY tests/check_stepup.py
 run "Connectors: the way out, keys, test before save, scope, payload" $PY tests/check_connectors.py
+run "Error words in answers: only words written for the reader"   $PY tests/check_user_words.py
 run "Unusual activity: the normal, the summary, Confirm and Dismiss, who sees what" $PY tests/check_unusual.py
 run "security headers, hosts, access modes (offline)" $PY tests/check_cov_security.py
 run "organisation, notes, task monitor, Workers (offline)" $PY tests/check_cov_admin_tools.py

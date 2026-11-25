@@ -21,6 +21,9 @@ like them so the bell shows them as they are:
   - a library file refused at installation because it did not match its lock, suspected tampering (library_supply.py)
   - code files that are not as the release shipped them (changed, or added), found by the daily code check
     (code_integrity.py)
+  - for the person themselves only: a passkey added to or removed from their own account, for 7 days (stepup.py
+    writes data/passkey_events.json; review 2026-11-25: a passkey added from a session left signed in must not go
+    unnoticed). These are personal: they are not in current(), so no other account and no monitor lists them.
 Each alert has an id that changes when something new happens; clearing one hides that alert for that person only
 (data/system_alerts_seen.json). Nothing here holds an address or a report's content.
 """
@@ -61,6 +64,30 @@ def _read_json(path):
 
 def _when(t):
     return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(t)) if t else ""
+
+
+PASSKEY_EVENTS = "passkey_events.json"
+PASSKEY_SHOW_S = 7 * 24 * 3600
+_PK_LOCK = threading.Lock()
+
+
+def note_passkey_change(data_dir, user, what, name, now=None):
+    """stepup.py: a passkey was added ("added") to or removed ("removed") from this person's account, outside the
+    first registration right after signing in. Kept 7 days (at most 500 entries), owner-only file; no address."""
+    now = now or time.time()
+    path = os.path.join(data_dir, PASSKEY_EVENTS)
+    with _PK_LOCK:
+        ev = [e for e in ((_read_json(path) or {}).get("events") or [])
+              if isinstance(e, dict) and now - float(e.get("at") or 0) < PASSKEY_SHOW_S]
+        ev.append({"user": str(user), "what": "removed" if what == "removed" else "added",
+                   "name": str(name or "Passkey")[:40], "at": now})
+        ev = ev[-500:]
+        os.makedirs(data_dir, exist_ok=True)
+        tmp = f"{path}.{os.getpid()}.tmp"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump({"events": ev}, f)
+        os.replace(tmp, path)
 
 
 def note_start(data_dir, now=None):
@@ -449,17 +476,36 @@ class Alerts:
     def _seen(self):
         return _read_json(self.seen_path) or {}
 
+    def personal(self, user, now=None):
+        """This person's own alerts (never another's): passkeys added to or removed from their account, 7 days."""
+        now = now or time.time()
+        out = []
+        for e in (_read_json(os.path.join(self.data, PASSKEY_EVENTS)) or {}).get("events") or []:
+            if not isinstance(e, dict) or e.get("user") != user or now - float(e.get("at") or 0) >= PASSKEY_SHOW_S:
+                continue
+            at, added = float(e["at"]), e.get("what") != "removed"
+            name = str(e.get("name") or "Passkey")[:40]
+            out.append({"key": f"passkey-{'added' if added else 'removed'}:{round(at * 1000)}", "problem": True,
+                        "title": "A passkey was added to your account" if added else "A passkey was removed from your account",
+                        "text": (f"\"{name}\" was {'added' if added else 'removed'} at {_when(at)}. If this was not you, "
+                                 + ("remove it on Your account, " if added else "")
+                                 + "change your password and tell an administrator."),
+                        "at": at, "link": "/account"})
+        return out
+
     def for_user(self, user, now=None, has_perm=None):
         """This person's alerts not cleared yet, as bell items (notifications.js). has_perm(p): only the alerts meant for
         a permission they hold (an alert's "perms"; administrators' 'settings' when it names none); its "links" pick
-        where it leads for them."""
+        where it leads for them. Their own personal alerts come first."""
         mine = set(self._seen().get(user) or [])
         out = []
-        for a in self.current(now):
+        for a in self.personal(user, now) + self.current(now):
             if a["key"] in mine:
                 continue
             perms = a.get("perms") or ("settings",)
-            if has_perm is not None and not any(has_perm(p) for p in perms):
+            if a["key"].startswith("passkey-"):
+                perms = ()                   # personal: for this person whatever their role
+            elif has_perm is not None and not any(has_perm(p) for p in perms):
                 continue
             link = a["link"]
             if has_perm is not None and a.get("links"):
@@ -475,7 +521,7 @@ class Alerts:
         keys = {i[4:] for i in ids if isinstance(i, str) and i.startswith("sys:")}
         if not keys:
             return 0
-        live = {a["key"] for a in self.current()}
+        live = {a["key"] for a in self.personal(user) + self.current()}
         with self.lock:
             d = self._seen()
             mine = (set(d.get(user) or []) | keys) & live

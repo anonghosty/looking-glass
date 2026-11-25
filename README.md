@@ -382,8 +382,7 @@ Details: [User guide → Roles](docs/USER_GUIDE.md#roles).
 
 Please report security problems **privately** through the repository's Security tab
 ([Report a vulnerability](https://github.com/anonghosty/looking-glass/security/advisories/new)), not in a public issue.
-See the [security policy](.github/SECURITY.md). A fix for findings of GitHub's code scanning is in testing now and
-ships in the next release, within 6 hours ([Security, section 5](docs/SECURITY.md#5-supported-versions-and-changes)).
+See the [security policy](.github/SECURITY.md).
 
 ## Looking Glass, IntelMQ and Elastic
 
