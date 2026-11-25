@@ -43,7 +43,8 @@ run these steps in the Ubuntu window. On Ubuntu, run them in a terminal, as the 
      person); the first administrator always signs up with the setup code either way.
 4. **Open the address it shows** and create the first administrator (see [A6](#a6-the-first-administrator-security)).
 
-Later updates are a `git pull` in the same folder (see [Updating](#updating)).
+Later updates are a `git pull` in the same folder, then the libraries and a reload (see [Updating](#updating)): a
+`git pull` on its own is not enough.
 
 **What the computer needs.** Before it asks anything or installs anything, the installer checks three things and
 refuses anything else, saying which one failed:
@@ -597,6 +598,26 @@ delete the report until it has been looked at.
 
 ## Updating
 
+> **Updated recently and something stopped working?**
+>
+> - **After `git pull`, the service restarts every few seconds** (`systemctl status looking-glass` shows
+>   `activating (auto-restart)`, exit status 3): a `git pull` on its own is not an update. In the platform folder, as
+>   Looking Glass's user, run `deploy/update_libraries.sh`, then `deploy/reload.sh`.
+> - **Everyone is asked to register passkeys, and the page says "Passkeys need the site's host name, not an IP
+>   address":** the installation is set to `ACCESS_MODE=public`, which since the release of 2026-11-25 asks everyone
+>   for passkeys. If it serves your internal network, set these two lines in the platform's `.env`, then run
+>   `deploy/reload.sh`; sign-in uses the authenticator code again:
+>
+>   ```
+>   ACCESS_MODE=private
+>   VIEWER_NETWORKS=internal
+>   ```
+>
+>   `internal` means any computer on your internal network (private addresses only), never the internet. Before
+>   19 November the installer had no such choice, so `public` was the way to let a whole office network in.
+> - **The bell says "This internal installation has no Caddy in front":** nothing is broken. A guided step that puts
+>   Caddy in front of an installation that is already running, keeping its settings, comes in the next release.
+
 ```bash
 manage/backup.sh
 git pull
@@ -766,6 +787,9 @@ it. It shows what it will remove and what it keeps, and asks before it starts.
 |---|---|
 | `install.sh`: Python too old | Ubuntu 24.04 or later (Desktop or Server), or install a newer `python3` |
 | Service does not start | `journalctl -u looking-glass -n 50`; usually `.env` (MongoDB address or account) or a path in the service file |
+| After `git pull`, the service restarts every few seconds (`activating (auto-restart)`, exit status 3) | The libraries were not updated: `deploy/update_libraries.sh`, then `deploy/reload.sh` ([Updating](#updating)) |
+| Everyone is asked for passkeys; "Passkeys need the site's host name, not an IP address" | `ACCESS_MODE=public` asks for passkeys. For an internal network set `ACCESS_MODE=private` and `VIEWER_NETWORKS=internal` in `.env`, then `deploy/reload.sh` ([Updating](#updating)) |
+| `cannot schedule new futures after interpreter shutdown` in the log | Written while the service stops or restarts (an update, a reload); nothing is lost. Check that it started again: `systemctl status looking-glass` |
 | Pages load but show no data | The database has no reports for the replay day yet: check the pipeline (`shadowserver status`), and `tools/diagnose_reports.py` |
 | "Unknown host name" (400) | The name in the address bar is not allowed: add it to `ALLOWED_HOSTS` (or `*` for any name) |
 | "Looking Glass is not available from your network" (403) | `ACCESS_MODE` is `local`, or the address is not in `VIEWER_NETWORKS` |

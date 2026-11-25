@@ -46,6 +46,8 @@ Free and open source (AGPL-3.0) · built in Africa, for CSIRTs in every country<
 
 ---
 
+> **Updated recently and something stopped working?** The service restarting after `git pull`, or everyone asked for passkeys on an internal network: see [the fixes in Updating](docs/INSTALLATION.md#updating).
+
 ## Contents
 
 1. [Why Looking Glass](#why-looking-glass)
