@@ -1,7 +1,8 @@
 # What is new in Looking Glass
 
-New features and notable changes, newest first, with the date they reached the platform. Each entry says where to
-read more. Dates are UTC.
+What Looking Glass does, grouped under the release that brought each part, newest first. Each entry describes the
+feature as it works now and says where to read more. The [Changelog](../CHANGELOG.md) keeps the history. Dates are
+UTC.
 
 ## Contents
 
@@ -20,305 +21,184 @@ read more. Dates are UTC.
 
 ## 2026-11-13: special reports, the Executive Reports card, CIS backing by the evidence
 
-- **Special reports kept apart.** Shadowserver's one-off Special Reports (`YYYY-MM-DD-special...`, often a placeholder
-  00:00 time on every row) are loaded but never replayed nor counted in a day's totals or the Executive 7-day
-  comparison, so they cannot show as a false midnight spike; the intro page lists them with the day they were shared,
-  rows and hosts.
-- **Every report on the Executive portal.** A Reports card lists every report of the selection, ranked by devices
-  (click one to focus on it), and the Executive report has a Reports page with all of them, names never cut.
-- **CIS backing follows the evidence.** A safeguard is "backed" only while the system meets CIS's own figure: MFA
-  required (6.3, 6.5), audit records kept at least 90 days (8.10), dormant accounts after 45 days and none still active
-  (5.3), weekly audit-log reviews (8.11); otherwise "related", saying what differs. 8.4 stays related (CIS asks for two
-  time sources). The defaults are now CIS's figures: `AUDIT_DORMANT_DAYS=45`, `AUDIT_REVIEW_DAYS=7`.
+- **Special reports kept apart.** Shadowserver's one-off Special Reports are loaded but never replayed or counted in
+  a day's totals or the 7-day comparison, so they cannot show as a false midnight spike. The intro page lists them.
+- **Every report on the Executive portal.** A Reports card ranks the selection's reports by devices; click one to
+  focus on it. The Executive report has a Reports page with all of them.
+- **CIS backing follows the evidence.** A safeguard is "backed" only while the system meets CIS's own figure (MFA,
+  90 days of audit records, dormant accounts after 45 days and none still active, weekly log reviews); otherwise it is "related", saying what
+  differs. The defaults are CIS's figures. ([User guide](USER_GUIDE.md#the-audit-portal-audit))
 - **tzdata** is a requirement, so local times never vanish on a server without its own time-zone data.
-- **Views of host-level data are logged** in the audit log (Data access and exports): one host's activity, the hosts
-  behind a figure, a record's details, an analysis, and the services host-list download, which had no entry before.
-  Who, when and what, hosts by reference, never their address. LG-15 now backs CIS 3.14, Log Sensitive Data Access.
-- **Nothing cut in the Executive report:** every label and every key finding is printed in full (smaller or on two
-  lines when needed, never "…"); findings that do not fit the first page continue on the next.
-- **The story film**, *The devices that kept calling* (4:54): why Looking Glass exists, from botnet takedowns whose
-  devices keep calling to the question CSIRT teams across Africa kept asking. On the documentation site's home page
-  ("The story behind it", with chapters) and in the README.
+- **Views of host-level data are logged** (Data access and exports): who, when and what, with hosts by reference,
+  never their address. LG-15 backs CIS 3.14, Log Sensitive Data Access.
+- **Nothing cut in the Executive report.** Every label and key finding is printed in full; findings that do not fit
+  the first page continue on the next.
+- **The story film**, *The devices that kept calling* (4:54), on the documentation site's home page and in the README.
 
 ## 2026-11-12 (night): local times, Executive figures by devices, every report on the Overview
 
-- **Time zone (Settings > Country).** Shadowserver's times are UTC and stay UTC (days, storage, totals), and each
-  time is now **also shown in your zone**: the clocks, the record stream, details, chart hours, messages and the
-  Executive report ("12:15:41 UTC (15:15:41 Nairobi time)"). Every country has its zones (the
-  capital's first where there are several, such as DR Congo, Brazil or Russia), daylight saving included; for a UTC zone such as Ghana's nothing changes.
+- **Time zone (Settings > Country).** Shadowserver's times stay UTC for days, storage and totals, and each time is
+  also shown in your zone, daylight saving included. For a UTC zone such as Ghana's nothing changes.
 - **Executive portal ranked by devices.** Networks, regions, reports, services, sectors, infections and issues are
-  ranked by distinct devices (IP addresses), records breaking ties, so one chatty device can no longer put its network
-  on top. Every infection, issue, service and network of the day is in the filter menus (they stopped at 80 or 40).
-- **7-day baseline complete.** Each past day keeps every infection and issue (it kept the top 80, so one ranked lower
-  all week could be flagged red "New this week"); older summaries count a missing item as unknown, never as zero.
-- **Devices are counted by IP address:** said on the Executive page and in its report (one address can hide several
-  devices on shared mobile connections; one device can use several addresses in a day).
-- **Every report on the Overview:** the two report lists show all reports, in as many columns as fit, instead of a
-  small scroll box.
-- **CIS wording made exact (Audit portal and report).** CIS's safeguards stay exactly as CIS publishes them; beside
-  each, as a separate badge marked as ours, Looking Glass's own conservative reading: backed (the check produces
-  evidence for the safeguard as CIS words it), related, or not backed with the reason (LG-10 → 3.11 encryption at rest,
-  LG-15 → DNS, URL, command-line and service provider logs, LG-01 → 6.4 VPN MFA...). The overview counts what it says:
-  "M CIS safeguards backed by a check (K more related by CIS's mapping)". The CIS Controls are used here as a map, to guide Looking Glass's security and make the auditor's work easier. They are voluntary best practice, not a law or a requirement, and CIS issues no certificate for meeting them: organisations measure themselves with CIS's free Self Assessment Tool (CSAT) or with an auditor, and those that need a formal certificate usually go for ISO 27001 or SOC 2, with the CIS Controls as a guide.
+  ranked by distinct devices (IP addresses), records breaking ties. The filter menus hold every item of the day.
+- **7-day baseline complete.** Each past day keeps every infection and issue, so "New this week" is never shown for an
+  item seen all week. A missing item in an older summary counts as unknown, never as zero.
+- **Devices are counted by IP address**, as the Executive page and its report say.
+- **Every report on the Overview**, in as many columns as fit.
+- **CIS wording kept exact (Audit portal and report).** CIS's safeguards appear as CIS publishes them. Beside each, a
+  badge marked as ours gives Looking Glass's own conservative reading: backed, related, or not backed with the reason
+  (LG-10 → 3.11 encryption at rest, LG-15 → DNS, URL, command-line and service provider logs, LG-01 → 6.4 VPN MFA).
+  The CIS Controls are a voluntary map, not a law or a certificate.
 
 ## 2026-11-12 (evening): uninstaller
 
-- **`./uninstall.sh`** undoes what `./install.sh` set up: the platform service, the pipeline's schedule and the
-  global `shadowserver` command. The reports database and the folder are kept unless asked
-  (`--remove-database`, `--remove-mongodb`, `--remove-files`, `--all`), each after a typed confirmation.
-- It removes only what belongs to its own folder: other installations, other cron jobs and a MongoDB that Looking
-  Glass did not install are left alone. `--dry-run` shows the plan without changing anything.
-- In MongoDB it removes only the reports database and the two Looking Glass accounts; other databases and accounts
-  stay. Details: docs/INSTALLATION.md, Uninstalling.
+- **`./uninstall.sh`** undoes what `./install.sh` set up: the service, the pipeline's schedule and the `shadowserver`
+  command. It removes only what belongs to its own folder, keeps the database and files unless asked, and confirms
+  each removal. `--dry-run` shows the plan. Details: docs/INSTALLATION.md, Uninstalling.
 
 ## 2026-11-12 (later): security fixes
 
-**Fixed**
-
-- **Settings → Workers:** request files can no longer forge a server confirmation (no symlinks followed, results built
-  from a fixed list of fields), and each change is judged by what its value means to the pipeline (`block` is Block).
-- **Sender check (DKIM):** a message whose headers can be read two ways is not trusted; a pass needs a signed From
-  in the signer's domain. Block mode fails closed when the check cannot run. Report e-mails are keyed by the mailbox's
-  own message number, not the sender's Message-ID. Link downloads stop at the unzip size limit.
-- **Advisories:** one organisation's advisory is chosen by its network numbers (ASNs) and never widened to everyone;
-  a closed finding's advisories can no longer be changed or sent; regenerating a drafted report puts it back to draft.
-- **Masking:** one address finder for every masker, so spellings such as `v41.66.1.2` or `ip:2001:db8::1` are masked
-  everywhere; lasting codes for patterns on fewer than 5 hosts are held back everywhere they were still given out.
-- **Audit log:** the portal and the auditor's verifier are one implementation; deleted or rewritten side files
-  (`audit.seal`, `audit.head`, retention notes) no longer let a change pass.
-- **Accounts and workflow:** the forgot-password form tells nothing before identity is proven; recovery codes, the
-  authenticator and expired-password steps, restore and command-line account creation are tightened; a review closed
-  by hand is withdrawn instead of blocking the analyst.
+- **Settings → Workers:** request files cannot forge a server confirmation (no symlinks followed, results built from a
+  fixed list of fields). Each change is judged by what its value means to the pipeline.
+- **Sender check (DKIM):** headers that can be read two ways are not trusted, and a pass needs a signed From in the
+  signer's domain. Block mode fails closed. Report e-mails are keyed by the mailbox's own message number, not the
+  sender's Message-ID. Link downloads stop at the unzip size limit.
+- **Advisories:** chosen by the organisation's network numbers (ASNs), never widened to everyone. A closed finding's
+  advisories cannot be changed or sent; regenerating a drafted report puts it back to draft.
+- **Masking:** one address finder serves every masker, so unusual spellings of an address are masked everywhere.
+  Lasting codes for patterns on fewer than 5 hosts are held back.
+- **Audit log:** the portal and the auditor's verifier are one implementation; deleting or rewriting side files does
+  not let a change pass. ([How the audit log proves itself](AUDIT_LOG_PROOF.md))
+- **Accounts and workflow:** the forgot-password form tells nothing before identity is proven. Recovery codes, the
+  authenticator and expired-password steps, restore and command-line account creation are hardened too. A review
+  closed by hand is withdrawn instead of blocking the analyst.
 - **Load:** cache keys ignore unknown parameters, CISA KEV backs off after a failure, look-ups keep their time budget,
-  Executive baselines are bounded, a constituency change always wins over a day load already running.
+  Executive baselines are bounded, and a constituency change wins over a day load already running.
 
 ## 2026-11-12: audit evidence (NIST and CIS), report intake checks, the pipeline from Settings, password expiry
 
 Evidence an auditor can check without trusting Looking Glass, and reports that are checked before they are loaded.
 
-**New**
-
-- **LG → NIST → CIS.** Each control check (LG-01 to LG-15) names the NIST SP 800-53 Rev. 5 (5.2.0) controls it
-  supports and, through CIS's own official mapping, the CIS Critical Security Controls v8.1 safeguards, with CIS's
-  relationship (equivalent, subset, superset). In the Audit portal and the evidence report (PDF), with CIS's licence
-  notice. Evidence only: the conclusion is the auditor's. ([User guide](USER_GUIDE.md#the-audit-portal-audit))
-- **The audit log as CSV in the proof package.** Every entry in the package's log files, numbered as in the chain; the
-  verifier reports a changed CSV. ([How the audit log proves itself](AUDIT_LOG_PROOF.md))
-- **Sender check (DKIM).** Each report e-mail's signature is checked against Shadowserver's key in DNS: record only,
-  or hold back what does not pass until an administrator releases it. The Audit portal's **Sender check** page shows
-  the results, the signing keys and the new report types that arrived.
-- **Reports straight from Shadowserver's API**, as an alternative to the mailbox, with the API key checked by
-  Shadowserver before it is saved. If the chosen way fails on a run, the other is used and the log says why. Report
-  types Shadowserver adds later are fetched and noticed automatically.
-- **Settings → Workers:** the pipeline's own settings from the web app (how reports are fetched, the sender check,
-  mailbox folder and certificate check, performance, unzip limits, the API key, held-back reports), behind the
-  administrator's own password. Changes are requests the pipeline checks again and applies at its next run; one that
-  would make the pipeline less strict also needs `./confirm_request.sh` on the server.
-  ([User guide](USER_GUIDE.md#workers-the-database-pipeline))
-- **Password expiry (optional).** An administrator sets the number of days, or makes every account change now; after
-  the password and the authenticator code the person chooses a new one and goes straight in. Off by default.
-  ([User guide](USER_GUIDE.md#password-policy))
-- **The constituency from the network list:** Settings' network list has a *Constituent* tick box on each network.
-
-**Changed**
-
-- The mail server's certificate is checked by default (`IMAP_VERIFY_TLS=true`).
-- The service unit template runs the web app hardened (read-only system, only its own `data/` writable).
-- Faster Services figures and replay counts (cached per view, masking included in every cache key).
-- Workflow: an advisory saved in two tabs is refused as "changed meanwhile" instead of overwritten; a finding closes
-  only when every organisation's advisory is sent; only pending accounts can be approved.
+- **LG → NIST → CIS.** Each control check (LG-01 to LG-15) names the NIST SP 800-53 Rev. 5 controls it supports and,
+  through CIS's official mapping, the CIS v8.1 safeguards with CIS's relationship (equivalent, subset, superset).
+  Evidence only: the conclusion is the auditor's. ([User guide](USER_GUIDE.md#the-audit-portal-audit))
+- **The audit log as CSV in the proof package**, numbered as in the chain; the verifier reports a changed CSV.
+  ([How the audit log proves itself](AUDIT_LOG_PROOF.md))
+- **Sender check (DKIM).** Each report e-mail's signature is checked against Shadowserver's key in DNS: record only, or
+  hold back what fails until an administrator releases it. The mail server's certificate is checked by default
+  (`IMAP_VERIFY_TLS=true`).
+- **Reports straight from Shadowserver's API**, as an alternative to the mailbox. If the chosen way fails on a run, the
+  other is used and the log says why.
+- **Settings → Workers:** the pipeline's settings from the web app, behind the administrator's own password. Changes
+  are requests the pipeline checks and applies at its next run; a less strict one also needs `./confirm_request.sh` on
+  the server. ([User guide](USER_GUIDE.md#workers-the-database-pipeline))
+- **Password expiry (optional, off by default).** ([User guide](USER_GUIDE.md#password-policy))
+- **The constituency from the network list:** each network has a *Constituent* tick box.
+- The web app runs hardened (read-only system, only its own `data/` writable). Services figures and replay counts are
+  cached per view, with masking in every cache key. An advisory saved in two tabs is
+  refused, not overwritten. Only pending accounts can be approved.
 
 ## 2026-11-11: advisories, cases, an Overview for every role, the Audit portal
 
 From a finding to the organisation that can act on it, with a name on every hand-over.
 
-**New**
-
-- **The advisor role and advisories.** One advisory per organisation (network), with that organisation's devices, the
-  reports they appear in, what they are (*Seen as*), their weaknesses and the impact of each report. Never from a blank
-  page: the advisor writes a short description and the actions, and the report carries the **insights** (the analysis
-  behind the finding) and the **technical details** (every weakness and tag defined from the researchers' definitions,
-  with references). The advisor chooses the TLP and generates the report.
-  It is signed by the CSIRT (name and logo from Settings), never a person; the person is in the audit log. What goes
-  to the organisation is two files: the PDF and the devices CSV, named `CSIRT_organisation_title_yyyymmdd`. No internal
-  codes or notes travel with it. ([User guide](USER_GUIDE.md#advisories-the-advisor))
-- **TLP 2.0.** Chosen per advisory (TLP:AMBER unless the advisor chooses), explained on the advisory page and on the
-  Definitions page, printed in the header line and at the bottom right of every page.
+- **The advisor role and advisories.** One advisory per organisation (network). The advisor writes the description
+  and the actions, chooses the TLP and generates the report; Looking Glass adds the insights and technical details. It
+  is signed by the CSIRT, never a person, and carries no internal codes or notes.
+  ([User guide](USER_GUIDE.md#advisories-the-advisor))
+- **TLP 2.0**, chosen per advisory (TLP:AMBER unless the advisor chooses) and printed on every page.
   ([User guide](USER_GUIDE.md#tlp-how-far-an-advisory-may-travel))
-- **Cases and sub-findings.** An analyst picks the networks before sending to management: several open a case with one
-  sub-finding per organisation, each decided on its own. Management approves to a named advisor, or rejects with a
-  reason. **Mark as drafted** on the advisory page and **Mark as sent** on the Findings page: the sub-finding closes,
-  then the case when every sub-finding is closed, all logged. ([User guide](USER_GUIDE.md#findings-cases-and-who-holds-them))
-- **Case → finding → sub-findings in one card.** A researcher's finding on a combination is the top of its case. Every
-  request an analyst sends to management on that same combination sits inside it, and each request's organisations
-  inside the request. Each keeps its own state and channel: someone outside a request's channel sees the researcher's
-  finding without it. Findings made before this are grouped the same way.
-- **The Findings page as a ticket tree**, folding at every level, with closed sub-findings in their own group and
-  state pills that name who holds each one.
-- **Findings pages keep up on their own.** When someone sends a finding on, decides, replies or marks an advisory as
-  sent, the Findings page and the advisor's portal show it within about 15 seconds, without a reload. The changed cards
-  flash. While you are typing a comment or choosing a person, nothing is redrawn: a notice offers **Show the changes**.
-  The review and advisory pages show the same notice.
-- **The role an administrator played.** An administrator can do every role's work, so a step they took is named by the
-  role it was: *Administrator acting as researcher* for a note or a finding started from a note, *acting as analyst*
-  for a request sent from the analyst's tools, *acting as management* for a decision. Management's review page shows
-  *What the researcher is saying* and *What the analyst is saying* side by side.
-- **The advisor's dashboard:** waiting, drafts, drafted, sent, recipients, open and closed findings and cases, days to
-  send, and the impacts carried.
-- **Notifications.** A bell on every role's pages: what changed in your findings, one click to go there, clear your own.
-- **An Overview for every role.** A greeting by first name (*Greetings, Name! Welcome to Looking Glass* the first time,
-  then one of thirty at random), *Your pages* for that role in titled groups, and the Overview button in every header.
+- **Cases and sub-findings.** Several networks open a case with one sub-finding per organisation, each decided on its
+  own. Management approves to a named advisor or rejects with a reason. A sub-finding closes when its advisory is
+  marked as sent, and the case when every sub-finding is closed.
+  ([User guide](USER_GUIDE.md#findings-cases-and-who-holds-them))
+- **Case → finding → sub-findings in one card.** A researcher's finding tops its case, with the analyst's requests and
+  their organisations inside. Each keeps its own state and channel. The Findings page folds at every level, with state
+  pills that name who holds each one.
+- **Findings pages keep up on their own**, within about 15 seconds, and never redraw while you type.
+- **The role an administrator played** is named on each step (*Administrator acting as researcher*, and so on).
+- **The advisor's dashboard**, **notifications** (a bell on every role's pages) and **loading animations** on every
+  page and tab that loads data.
+- **An Overview for every role**: a greeting by first name and *Your pages* for that role. Log out is always last in
+  the header.
 - **Peace of mind** for administrators: Admin, Audit, Settings and the Overview only, with no findings notifications.
-- **The Audit portal** (`/audit`): the audit log and the sessions on a page of their own. The `audit` permission opens
-  it; an auditor reads the sessions but only `users` can end one.
-- **Loading animations** on every page and every tab that loads data.
-
-**Changed**
-
-- No general "move it on": every step is a decision by the person who holds the finding.
-- Settings comes just before Log out, and Log out is always last in the header.
+- **The Audit portal** (`/audit`): the audit log and the sessions. An auditor reads the sessions but only `users` can
+  end one.
 
 ## 2026-11-10: combination codes, the analyst's combination search and findings
 
-The team's workflow, end to end: a researcher finds something and names the exact combination, management weighs it
-against the trends, an analyst pulls exactly those devices and sends them to management for the advisory, and an
-advisor writes it.
+The team's workflow, end to end: a researcher names the exact combination, management weighs it against the trends,
+an analyst pulls exactly those devices and sends them to management for the advisory, and an advisor writes it.
 
-**New**
-
-- **Combination codes.** Every combination in Intel gathered has a short code: `LG-C-…` for one report, `LG-X-…` for a
-  cross-report pattern. A code carries no address, so researchers and management can pass it on
-  safely. ([User guide](USER_GUIDE.md#combination-codes-the-combination-search-and-findings))
-- **A Notes window of its own.** Notes have their own **Notes** button on every row of both tables, apart from Define.
-  A note can carry combination codes, picked from every combination of that name (grouped by report, with a filter),
-  built by ticking the name's real indicators, or pasted (and checked). Nothing is typed by hand, so there are no
-  typos. Notes and the PDF reports print the codes. For CVEs, the define button is now *Add context* / *Edit context*.
-- **The analyst's combination search** (`/combinations`, for roles that see addresses and may export). Paste a code to
-  see what it stands for and the researchers' notes. Then search the days in memory (exactly the counts the researcher
-  saw) or up to 31 days of stored history, read one day at a time in the background. The results show the key figures,
-  a map of the country's regions (hover a region for its devices, cities, networks and IP addresses), networks,
-  cities, activity by hour, what the devices are, ports and the busiest IP addresses. The download is a ZIP with a PDF in the
-  Executive report's design (overview and key findings, the region map with each region's cities, the devices with
-  their addresses, across reports, and the explanations of the name (each name, for an analyst code) and every CVE
-  in the combination, each with its references and where it comes from, with the researchers' notes on those names;
-  a chart with nothing to show is left out) and two CSV files (one row per device, one per record). A finished search survives a service
-  restart for an hour; an expired one is run again by the download button. Off in Demo mode; every search is in the
-  audit log.
-- **Findings** (`/findings`). A note can be tracked as a finding: it gets a number and a status (*With
+- **Combination codes.** `LG-C-…` for one report, `LG-X-…` for a cross-report pattern. A code carries no address, so it
+  can be passed on safely. ([User guide](USER_GUIDE.md#combination-codes-the-combination-search-and-findings))
+- **A Notes window of its own**, with its own **Notes** button on every row. Codes in a note are picked, built from
+  real indicators or pasted and checked, never typed by hand.
+- **The analyst's combination search** (`/combinations`): paste a code, search the days in memory or up to 31 days of
+  history, and download a ZIP with a PDF and two CSV files. A finished search survives a service restart for an hour.
+  Off in Demo mode; every search is in the audit log.
+- **Findings** (`/findings`). A note can be tracked as a finding with a number and a status (*With
   management → Back with the researcher → With the analyst → With the advisor → Closed*). Each move records who, when
-  and a comment. Researchers, management, analysts, advisors and admins work on the page, each seeing the findings
-  they take part in; it never shows an address. Analysts get a
-  **Search** button on every code.
-
-- **Analyst codes (LG-A) and replies.** An analyst turns the selection of any analysis window (map or services
-  platform), say a network and one host, into an analyst code and a finding, with a title and a note. Researchers open
-  it at `/intel/LG-A-…`: the names in exactly those records, their definitions, and their combinations and
-  cross-report patterns with codes, never an address. They tick codes and **reply on the finding**; every reply, with
-  its codes, is in the finding's history. Management filters the Executive portal by the analyst code (that day, counts
-  only). Analysts find every analyst code again in a searchable list on the Combinations page and download its PDF +
-  CSV for the advisory. The code keeps the exact records of the selection, so every role sees the same ones.
-- **A report per network provider.** On the Combinations page, **Report for** (or a click on a network) gives the PDF +
-  CSV for one operator only, named after it, to attach to the advisory sent to that provider.
-- **Management follows a finding in the Executive portal.** On the Findings page management gets **Show in Executive**
-  for each code: the portal opens filtered to exactly that combination (a *Combination code* chip, counts only, never an
-  address; the 7-day comparison is left out, as past days do not keep the indicators). The combination search with the
-  addresses stays with the analysts.
-- **Definitions tables: sorting and the Across reports flag.** Click a column heading to sort (↕, then ▲ / ▼): name,
-  seen in / hosts, status, and the new **Across reports** column, which flags every name whose devices or hosts turn up
-  in more than one of its reports (⇄ with the count); one click opens its cross-report view.
-
-**Changed**
-
-- **Network names stay editable.** A reviewed network can always be changed (a company renames or rebrands): the list
-  opens on every network when none is left to review, the empty review queue offers *Show every network*, and the
-  search looks through every network whatever the tab.
-- **Overview:** the page buttons (Executive, Admin, Definitions, Combinations, Findings, Settings) are centred at the
-  top; Log out and the scope stay on the right.
-- **Day change:** loading a new day no longer holds up the pages. The reload runs after the replay schedule's lock is
-  released, so the replay position and status answer at once while a day loads.
-- **Intel gathered:** Sinkhole DNS lookups (and TLS server names) are part of the combinations, so a DNS report no
-  longer looks like "the name only". When a name's devices never share a report, the window explains why (IPv6 and IPv4
-  reports, and DNS reports that see the resolver). Switching report keeps your place instead of jumping to the top.
+  and a comment. Each person sees only the findings they take part in, and never an address.
+- **Analyst codes (LG-A) and replies.** An analyst turns any analysis selection into an analyst code and a finding.
+  Researchers open it at `/intel/LG-A-…`, never seeing an address, and reply on the finding with codes.
+- **A report per network provider** (**Report for** on the Combinations page): the PDF + CSV for one operator only.
+- **Show in Executive** opens the Executive portal filtered to a finding's combination, counts only.
+- **Definitions tables** sort by any column, and **Across reports** flags names whose devices turn up in more than one
+  of their reports.
+- **Network names stay editable**, also after review; the empty review queue offers *Show every network*.
+- **Day change:** loading a new day does not hold up the pages.
 
 ## 2026-11-09: researchers' intel, notes and a page of their own
 
-**New**
-
-- **Intel gathered.** Every infection and issue on the Definitions page has an *Intel gathered* button: what the
-  reports carry for it, organised as name › report › what comes with it there. C2 domains, DNS lookups, TLS server
-  names, URLs, user agents, request patterns and brute-force usernames for infections; other CVEs on the same hosts,
-  associated tags, products, certificate names and fingerprints for issues. Each value shows records, share and hosts,
-  with *Copy* for other tools. Indicators only: hosts are never shown.
+- **Intel gathered.** For every infection and issue, what the reports carry for it (C2 domains, DNS lookups, URLs,
+  user agents, CVEs, tags, products and more), with records, share and hosts. Indicators only: hosts are never shown.
   ([User guide](USER_GUIDE.md#5-analysis-and-follow-up), [Technical reference](TECHNICAL_REFERENCE.md#researchers-intel-notes-and-where-a-name-was-seen))
-- **Combinations and repeating hosts.** The exact sets of tags and CVEs (and for communications C2 domain and user
-  agent) that occur together on one record, with records, share, hosts and ↻ the hosts that repeat them: why one
-  indicator counts less than another, and which patterns are campaigns rather than one-offs.
-- **Across reports.** For a name seen in several reports: the combinations each device carried in each report, the
-  sets of reports that see the same devices, and the indicators that turn up in more than one report.
-- **Looking Glass asks: can you look into this?** Matches the platform finds in the reports: the same indicator under
-  two names, in two reports for one name, or on both platforms. It points out when one of the names has no definition
-  yet. Values common to everything are never raised.
-- **Researchers' notes.** Dated, signed notes on new findings, kept apart from the definitions and never replaced by an
-  update; shown on every card and in the PDF reports as "Notes shared by Researcher: *full name* (*date*)".
-- **Seen in, as report cards.** Each report a name appears in shows *intel · N kinds* or *name only*; one click opens
-  that report's intel. Names not in today's reports show **Last seen in *report* on *date*** (30 days remembered).
-- **Adding people.** Sign-up on the sign-in page (administrators are told in the bell) or a one-time sign-up link from
-  Admin → Add a person, with the role chosen; the person sets their own password and authenticator.
-- **A guided installer that lets you go back**, explains its choices (including any computer on your internal
-  network), waits for Ubuntu's updates instead of failing, and warns later when a network change breaks the certificate
-  or MongoDB's address.
-- **Nothing to recognise from the outside.** Signed out, the pages name no product, framework or library version:
-  the sign-in pages carry the organisation's name only (no logo or picture), error pages are plain, and the platform's
-  own files need a sign-in. ([Installation, Updating](INSTALLATION.md#updating))
-- **A guided tour on every page.** A Tutorial button in every header walks through the page's parts and buttons, by
-  mouse or keyboard; the first visit to a page offers it, remembered per person.
-  ([User guide](USER_GUIDE.md#the-guided-tour))
-- **Every copy recorded, every copy and download sealed, Trace a leak.** Copying only through the copy buttons, each
-  copy recorded under the person's name before it happens (not recorded = not copied); keyed fingerprints of every
-  copy and downloaded file; auditors trace text or a file found outside back to who copied or downloaded it, and when.
-  Every header names the person signed in. ([User guide](USER_GUIDE.md#everything-is-recorded-under-your-name))
-- **The severity map.** Every infection and issue the reports carried, with its criticality and its source: rated by
-  Shadowserver, not rated (listed first) or rated by a researcher. Researchers rate only the names no record rates;
-  Shadowserver's ratings are never changed; every rating is audited, and the PDFs flag a researcher's rating as such.
-  Researchers and administrators only. ([User guide](USER_GUIDE.md#5-analysis-and-follow-up))
-- **The Definitions page stands on its own** (`/definitions`), with the Looking Glass loading animation; admins reach it
-  from the intro page, the map, the services platform and Settings. Settings shows network names read-only.
-- **Full names.** Definitions, notes, network corrections and reports name people by their registered full name; the
-  audit log shows *Full Name (username)* and finds people by either. The audit table fits the page.
-- **Knowledge base checked and completed.** Every infection now carries evidence (a Malpedia family or references to
-  Shadowserver's report documentation and vendor or CERT research); three new names defined; the amplification-DDoS
-  entry corrected (the report names the victim, not the attacker); Sinkhole DNS entries explain that the address is
+- **Combinations and repeating hosts**, and **Across reports** for a name seen in several reports.
+- **Looking Glass asks: can you look into this?** The same indicator under two names, in two reports or on both
+  platforms. Values common to everything are never raised.
+- **Researchers' notes**: dated and signed, kept apart from the definitions, printed in the PDF reports.
+- **Seen in, as report cards**, and **Last seen in *report* on *date*** for names not in today's reports.
+- **Adding people**: sign-up on the sign-in page or a one-time link from Admin; the person sets their own password and
+  authenticator.
+- **A guided installer that lets you go back**, explains its choices and waits for Ubuntu's updates instead of failing.
+- **Nothing to recognise from the outside.** Signed out, the pages name no product, framework or library version.
+  ([Installation, Updating](INSTALLATION.md#updating))
+- **A guided tour on every page**, offered on the first visit. ([User guide](USER_GUIDE.md#the-guided-tour))
+- **Every copy recorded, every copy and download sealed, Trace a leak.** Copying works only through the copy buttons;
+  a copy not recorded is not made. Auditors can trace a copy or file found outside back to who made it, and when.
+  ([User guide](USER_GUIDE.md#everything-is-recorded-under-your-name))
+- **The severity map**: each infection and issue with its criticality and source. Researchers rate only what no
+  record rates, and Shadowserver's ratings are never changed. ([User guide](USER_GUIDE.md#5-analysis-and-follow-up))
+- **The Definitions page stands on its own** (`/definitions`).
+- **Full names** for people in definitions, notes, network corrections, reports and the audit log.
+- **A checked knowledge base.** Every infection carries evidence. Sinkhole DNS entries explain that the address is
   usually a resolver. Shipped entries are signed *Looking Glass*.
-- **Documentation in one place.** Every guide is in `docs/`, including the security policy (`docs/SECURITY.md`); the
-  glossary has the new terms.
+- **Documentation in one place**: every guide is in `docs/`.
 
 ## 2026-11-09: security fixes
 
-- **Safe CSV exports:** no cell can run as a spreadsheet formula (formula characters get a leading apostrophe).
-- **Masked views accept only aliases:** a real network name or AS number no longer works as a filter in Demo mode or
-  for roles without *unmasked*, so a viewer cannot find out whether a network is in the data.
-- **Pinned events** belong to the signed-in account and are deleted at log-out; masked accounts keep none.
-- **Release builds:** publishable only after a clean scan, images and PDFs scanned for hidden metadata, curated data
-  checked to reach the repository, documentation links checked.
-- **Maintenance tools repaired** (`tools/daysize.py`, `tools/quickcheck.py`, `tools/list_infections.py`,
-  `manage/manage_users.py`).
+- **Safe CSV exports:** no cell can run as a spreadsheet formula.
+- **Masked views accept only aliases**, so a viewer cannot find out whether a network is in the data.
+- **Pinned events** belong to the signed-in account and are deleted at log-out.
+- **Release builds** are publishable only after a clean scan, with images and PDFs scanned for hidden metadata, curated data
+  checked to reach the repository, and documentation links checked.
 
 ([SECURITY.md](SECURITY.md#5-supported-versions-and-changes))
 
 ## 2026-11-09: faster platforms and a sharper Executive portal
 
-- **Shared results:** figures computed once and shared by everyone viewing the same day and filters, so busy days and
-  many viewers answer quickly; new reports still appear as soon as they arrive.
-- **Executive portal:** clickable "Top findings" combinations that filter the whole portal, full vulnerability names,
-  and the 7-day baseline from compact past days (quicker, same results).
-- **Event stream:** clear messages while a report waits for its replay time, and "IP address(es) or host(s)" wording.
+- **Shared results:** figures are computed once for everyone viewing the same day and filters; new reports still
+  appear as soon as they arrive.
+- **Executive portal:** clickable "Top findings" combinations that filter the whole portal, and full vulnerability
+  names.
+- **Event stream:** clear messages while a report waits for its replay time.
 
 ## 2026-11-08: Executive portal, 7-day baseline, vulnerabilities and network types
 
 - **Executive portal** for the management role: aggregated figures only, never an address, with executive PDF reports.
 - **7-day baseline:** every figure compared with its own average over the previous 7 days, graded on a stated scale.
-- **Vulnerabilities explained in batches** (CISA KEV, EPSS, CVE.org, NVD) with a progress window; reports as a ZIP of
-  PDF plus CSV.
+- **Vulnerabilities explained in batches** (CISA KEV, EPSS, CVE.org, NVD); reports as a ZIP of PDF plus CSV.
 - **Network names and types** for researchers, with types (sectors) a site can add.
 - **Licence:** GNU AGPL-3.0.
 

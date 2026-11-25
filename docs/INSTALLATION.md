@@ -350,7 +350,7 @@ To show Looking Glass on a TV, a wall screen or colleagues' computers:
    New-NetFirewallHyperVRule -Name LookingGlassScreens -DisplayName "Looking Glass (screens)" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts <your port> -RemoteAddresses <screen-address> -Action Allow
    ```
 5. **On the screen:** open `https://<computer-name>:<your port>` and sign in. For a public screen, use an **external**
-   account (always masked) or set `PUBLIC_DEMO=1`, and tick **Stay signed in for 5 days**.
+   account (always masked) or set `PUBLIC_DEMO=1`, and tick **Stay signed in** (5 days).
 
 ---
 

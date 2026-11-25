@@ -440,102 +440,87 @@ day, so a blocklisted host that also runs an outdated web server shows up in bot
 **Decoded beacons** (analysts and admins): how many records of the selection carry a beacon Looking Glass decoded.
 Its **Details ›** lists each kind of beacon with the system it reports and its **Status**: *Decoded*; *Encoded,
 cannot be decoded* (encrypted with a key the app keeps); *Encoded, not decoded yet*; or *Not encoded* (a one-way hash,
-an ID or a campaign token, with nothing in it to decode). Then its operators and versions, the records and
-devices, the names Shadowserver filed it under, the C2 domains and the first and last time seen. Click a row to narrow
-the analysis to that beacon. Like the beacon on the map, the list says what the beacons hold, never what to do about
-them. Researchers and Demo mode don't get the figure or the list; they see beacons in Intel gathered.
+an ID or a campaign token). Then its operators and versions, records and devices, the names Shadowserver filed it
+under, the C2 domains and the first and last time seen. Click a row to narrow the analysis to that beacon. The list
+says what the beacons hold, never what to do about them. Researchers and Demo mode don't get it; researchers see
+beacons in Intel gathered.
 
 **Explaining names** (analysts and admins; permission *malpedia*): host lists with infections have **Explain the
-names**, which looks up every infection / category of the list once (the researchers' definitions, Malpedia with a
-token, MISP Galaxy, MITRE ATT&CK) and adds *What it is* and *Source* columns to the table, and to the CSV *What it is*,
-*Description and references*, *Source* (with the licence) and *Also described by*. Names no source knows are explained
-from the reports (an activity such as scanning, a proxy network, a generic sinkhole label, or simply not catalogued).
-A host's own analysis (click its IP) looks up all its infections at once; **Look up** in an event's details explains
-one name.
+names**. It looks up each infection / category of the list once (the researchers' definitions, Malpedia with a token,
+MISP Galaxy, MITRE ATT&CK) and adds *What it is* and *Source* columns; the CSV gets *What it is*, *Description and
+references*, *Source* (with the licence) and *Also described by*. Names no source knows are explained from the reports
+(an activity such as scanning, a proxy network, a generic sinkhole label, or simply not catalogued). A host's own
+analysis (click its IP) looks up all its infections at once; **Look up** in an event's details explains one name.
 
 ![The Definitions page (researcher role)](media/screens/61-definitions.png)
 
-**Definitions for names no source knows** (researchers and admins: the **Definitions** page at `/definitions`,
-a page of its own; admins open it with the **Definitions** button on the intro page, the map, the services platform
-and Settings).
-Names that none of the sources (Malpedia, MISP Galaxy, MITRE ATT&CK) can match are listed under **No source knows**; names
-that new reports bring in appear under **New, not checked yet** by themselves and are checked with Malpedia in the
-background every 30 minutes (or at once with **Look up names**). Scanning, brute-force and other activities are not
-malware and are left out. The **Definition / sources** column shows which sources know each name. **Define** opens an
-editor; when other sources describe the name, their text, other names, links and licence are shown above the form
-(each folded; **Add as reference** copies a link into your references):
+**Definitions for names no source knows** (researchers and admins): the **Definitions** page (`/definitions`); admins
+open it with the **Definitions** button on the intro page, the map, the services platform and Settings. Names no
+source (Malpedia, MISP Galaxy, MITRE ATT&CK) matches are under **No source knows**. Names new reports bring in appear
+under **New, not checked yet** and are checked with Malpedia every 30 minutes (or at once with **Look up names**).
+Activities such as scanning and brute force are not malware and are left out. The **Definition / sources** column
+shows which sources know each name. **Define** opens an editor, with the other sources' text, names, links and licence
+above the form (each folded; **Add as reference** copies a link into your references):
 
-- **Name in Malpedia** (optional): if Malpedia lists the malware under another name, search it with **Find in Malpedia**
-  and pick the family (for example `lumma-stealer-beacon` → `win.lumma`). Future look-ups of the name show that family.
-  Leave it empty when Malpedia does not have the malware at all. Names of attacker groups (threat actors, such as
-  `tick`) are found automatically and shown as a *Malpedia · threat actor* card; the search also lists actors
-  (`actor:tick`).
-- **Title, type and a plain description**, and **References (evidence)**: web links to the research that supports the
-  definition (vendor blogs, CERT advisories). At least one reference is needed; only `http(s)` links are accepted.
+- **Name in Malpedia** (optional): if Malpedia lists the malware under another name, use **Find in Malpedia** and pick
+  the family (for example `lumma-stealer-beacon` → `win.lumma`); future look-ups show that family. Leave it empty when
+  Malpedia does not have it. Threat actors (such as `tick`) are found automatically and shown as a *Malpedia · threat
+  actor* card; the search also lists actors (`actor:tick`).
+- **Title, type and a plain description**, and **References (evidence)**: links to the supporting research (vendor
+  blogs, CERT advisories). At least one is needed; only `http(s)` links are accepted.
 
-From then on every user sees the definition first (badge *Looking Glass definition*, with its references and who wrote
-it and when) in the stream, host lists, host analysis, the CSV and the PDF reports, with the sources that also know the
-name below it. A researcher's definition always comes first and is never overwritten by a source. Every change is in
-the audit log. Definitions written on a site are kept in `data/definitions.json` (kept on upgrades, included in
-backups); the definitions that come with Looking Glass are in `data/infections.json` and `data/issues.json`.
+From then on everyone sees the definition first (badge *Looking Glass definition*, with its references, author and
+date) in the stream, host lists, host analysis, the CSV and the PDFs. A researcher's definition always comes first and
+is never overwritten by a source. Every change is in the audit log. Site definitions are kept in
+`data/definitions.json` (kept on upgrades, in backups); the shipped ones are in `data/infections.json` and
+`data/issues.json`.
 
-**One card per name, every source side by side.** Names are explained from four sources: the researchers' own
-definition, **Malpedia** (with a token), **MISP Galaxy** (its Malpedia, Botnet and Tool clusters) and **MITRE ATT&CK**
-(malware and tools). The last two are free public lists that Looking Glass keeps a copy of on the server. The card's
-headline is the researchers' definition when there is one, else the first source that knows the name, in that order.
-Under it, **Also described by** lists every other source that knows the name, each folded (click to open) with its
-description, other names, references and its own credit and licence. When none knows it, the card says **No source
-knows this name** and explains it from the evidence in the reports. Each card names its source and licence: Malpedia's
-content (also the MISP Galaxy Malpedia cluster) is licensed **CC BY-NC-SA 3.0**; the MISP Botnet and Tool clusters are
-CC0 1.0 / BSD 2-Clause; ATT&CK carries MITRE's notice (© The MITRE Corporation, reproduced and distributed with its
-permission). Names are matched by name or alternative name, ignoring case; only entries with a description count, and
-names the reports show are activities (scanning, brute force), general labels or old software are never matched to these
-lists.
+**One card per name, every source side by side.** Sources, in order: the researchers' definition, **Malpedia** (with a
+token), **MISP Galaxy** (Malpedia, Botnet and Tool clusters) and **MITRE ATT&CK** (malware and tools); Looking Glass
+keeps a copy of the last two, free public lists. The first that knows the name is the headline; **Also described by**
+lists the others, each folded, with description, other names, references, credit and licence. When none knows it, the
+card says **No source knows this name** and explains it from the reports. Licences: Malpedia (also the MISP Galaxy
+Malpedia cluster) **CC BY-NC-SA 3.0**; MISP Botnet and Tool clusters CC0 1.0 / BSD 2-Clause; ATT&CK carries MITRE's
+notice (© The MITRE Corporation, reproduced and distributed with its permission). Names match by name or alternative
+name, ignoring case; only entries with a description count; activities (scanning, brute force), general labels and
+old software are never matched. The same card is used by **Look up**, **Explain the names**, the analysis,
+combination and Executive PDFs (description, *Source: …* with the licence, *Also described by*), the Executive
+portal's **Explain** and the advisories' **Technical Details**.
 
-The same card is used everywhere names are explained: **Look up** in the event details and host analysis, **Explain the
-names** on the analysis lists (the table and the CSV get *What it is* and *Source* columns), the analysis, combination
-and Executive PDFs (description, then *Source: …* with the licence, then *Also described by*), the Executive portal's
-**Explain**, and the advisories' **Technical Details**.
+**References in the PDFs.** In every PDF (analysis, combination, Executive, advisory) a name's links go to a
+**References** section at the end: one heading per name with numbered links, then the **Shadowserver reports** the PDF
+draws on, each with its page on shadowserver.org. All is ordered by criticality, flagged CRITICAL, HIGH, MEDIUM, LOW
+or INFO (Shadowserver's lowest level), with NOT RATED last:
 
-**References in the PDFs.** In every PDF (analysis, combination, Executive and the advisory) a name's card keeps its
-explanation, and its links are listed at the end, in a **References** section: one heading per name with its numbered
-links, then the **Shadowserver reports** the PDF draws on, each with its page on shadowserver.org. Everything is ordered
-by criticality, flagged CRITICAL, HIGH, MEDIUM, LOW or INFO (Shadowserver's lowest level), and NOT RATED last when no
-severity is known:
-
-- a CVE: the CVSS severity NVD gives it, with its score; one CISA lists as actively exploited keeps that level, is
-  flagged **Actively exploited**, and comes first within its level;
-- an infection or an issue: the highest severity Shadowserver gave the records that carry it (in the report's own
-  records, else in the days in memory; a name whose days have left memory keeps the level it had, remembered in
-  `data/name_levels.json`, names and levels only, never shipped);
+- a CVE: NVD's CVSS severity, with its score; one CISA lists as actively exploited is flagged **Actively exploited**
+  and comes first within its level;
+- an infection or an issue: the highest severity Shadowserver gave its records (in the report, else in the days in
+  memory; a name whose days have left memory keeps its level, in `data/name_levels.json`, names and levels only, never
+  shipped);
 - a Shadowserver report: the severity Shadowserver gives that report type.
 
-A name no record rates can be given a level by a researcher on the severity map (below); the PDFs then use that level
-and flag it **Researcher's rating**.
+A name no record rates can be rated by a researcher on the severity map; the PDFs then flag it **Researcher's
+rating**.
 
-**The severity map** (Definitions page; researchers and administrators only, permission *definitions*) lists every
-infection and issue the reports carried, with its criticality and where it comes from: **Rated by Shadowserver** (the
-highest severity Shadowserver gave the records that carry it, learned as report days load), **Not rated** (no record
-rates it) or **Rated by researchers**. The not-rated names come first. A researcher rates a not-rated name with the
-picker in its row (Critical, High, Medium, Low or Info), or takes their rating back; each change is in the audit log
-(`severity_rated`: who, which name, from what to what). Shadowserver's own ratings are never changed here: when
-Shadowserver later rates a name a researcher rated, Shadowserver's level is used and the researcher's is shown as
-replaced. CVEs are not on the map; they are rated by their CVSS score. The names and their kinds are kept in
-`data/name_kinds.json` and the researchers' ratings in `data/name_ratings.json` (names only: no host, no address, no
-count).
+**The severity map** (Definitions page; researchers and administrators, permission *definitions*) lists every
+infection and issue the reports carried, with its criticality and source: **Rated by Shadowserver** (learned as report
+days load), **Not rated** or **Rated by researchers**; not-rated names first. A researcher rates one with the picker in
+its row (Critical, High, Medium, Low or Info), or takes the rating back; each change is in the audit log
+(`severity_rated`: who, which name, from what to what). Shadowserver's ratings are never changed: when Shadowserver
+later rates a name, its level is used and the researcher's is shown as replaced. CVEs are rated by CVSS and are not on
+the map. Names and kinds are in `data/name_kinds.json`, ratings in `data/name_ratings.json` (names only: no host,
+address or count).
 
-**The advisory's preview** names who opened it and when: "PREVIEW · NOT FOR DISTRIBUTION · name · date and time ·
-reference" at the top and the foot of every page, and a faint watermark across each page, behind the text. A screenshot
-of the preview therefore shows who took it. The report the advisor generates for the organisation carries none of it.
+**The advisory's preview** carries "PREVIEW · NOT FOR DISTRIBUTION · name · date and time · reference" at the top and
+foot of every page, and a faint watermark behind the text, so a screenshot shows who took it. The report generated for
+the organisation carries none of it.
 
-**Keeping the copies current.** The installer downloads the first copies, so a new installation has them from the
-start (without internet it goes on without them and says so), and schedules a weekly refresh (Mondays 04:17, the user's crontab;
-`manage/fetch_offline_names.py --schedule`, `--unschedule` to remove it). A download is used only if it is valid, has
-enough entries and is not suddenly much smaller than the copy in use (under 70%); otherwise the old copy stays and the
-reason is logged. On the Definitions page the line above the table shows each copy's entries, download date and the
-ATT&CK version, and the last refresh; administrators (permission *settings*) have **Refresh sources** (at most once an
-hour). Every refresh, automatic or manual, is in the audit log with its date, counts and the ATT&CK version. From the
-command line:
+**Keeping the copies current.** The installer downloads the first copies (without internet it goes on and says so)
+and schedules a weekly refresh (Mondays 04:17). A download that is invalid, too small or under 70% of the copy in use
+is refused; the old copy stays and the reason is logged. The line above the Definitions table shows each copy's
+entries, download date and ATT&CK version, and the last refresh; administrators (permission *settings*) have **Refresh
+sources** (at most once an hour). Every refresh is in the audit log. Scheduling and files:
+[OPERATIONS.md](OPERATIONS.md#reference-data). From the command line:
 
 ```
 manage/fetch_offline_names.py            # download (skipped if the copy is less than 7 days old)
@@ -543,413 +528,347 @@ manage/fetch_offline_names.py --status   # what is installed, when it was downlo
 manage/fetch_offline_names.py --force    # download now
 ```
 
-The copies are `data/names_misp_galaxy.json`, `data/names_attack.json` and `data/attack_kev.json` (a few MB; the
-refresh log is `data/names_refresh.log`). A look-up only reads these files: no name, host or report is sent anywhere;
-only the downloads of the public files leave the server. Without them, look-ups work as before.
+The copies are `data/names_misp_galaxy.json`, `data/names_attack.json` and `data/attack_kev.json` (a few MB; log
+`data/names_refresh.log`). Look-ups only read these files: no name, host or report is sent anywhere; only the
+downloads of the public files leave the server. Without them, look-ups work as before.
 
-**MITRE ATT&CK techniques.** Cards, documents and the Definitions page show which ATT&CK techniques a name, a report or a
-CVE stands for, always with how sure that is and what the constituent's part was. In PDFs the technique's line says only
-**Observed** or **Possible**; the constituent's part is in the cards and in the advisory's "Why it is in this advisory":
+**MITRE ATT&CK techniques.** Cards, documents and the Definitions page show the ATT&CK techniques a name, a report or
+a CVE stands for, with how sure that is and the constituent's part (in PDFs only **Observed** or **Possible**; the
+part is in the cards and the advisory's "Why it is in this advisory"):
 
-- **Observed** (the report saw it): for example a device that contacted a sinkholed command-and-control server over
-  HTTP: *T1071.001 Web Protocols, this device was used for it*; an address that decoy amplifiers saw forged requests
-  for: *T1498.002 Reflection Amplification, this address was the target of it*.
-- **Known for this malware** (MITRE's links): the techniques MITRE links to the ATT&CK Software entry that matches the
-  name, by tactic, with the groups MITRE says use it.
-- **Possible** (an exposure an attacker could use): for example an open DNS resolver: *T1498.002, attackers can use this
-  exposure for it* (the host is the tool; the victim is someone else); an open RDP service: *T1133, T1021*.
-- **CVEs**: the techniques MITRE's Center for Threat-Informed Defense maps to CISA KEV vulnerabilities (Mappings
-  Explorer, Apache 2.0): how it is exploited, its main and further impact.
+| Certainty | Example |
+|---|---|
+| **Observed** (the report saw it) | a device that contacted a sinkholed C2 server over HTTP: *T1071.001 Web Protocols, this device was used for it*; an address decoy amplifiers saw forged requests for: *T1498.002 Reflection Amplification, this address was the target of it* |
+| **Known for this malware** | the techniques MITRE links to the matching ATT&CK Software entry, by tactic, with the groups MITRE says use it |
+| **Possible** (an exposure an attacker could use) | an open DNS resolver: *T1498.002, attackers can use this exposure for it* (the host is the tool; the victim is someone else); an open RDP service: *T1133, T1021* |
+| **CVEs** | the techniques MITRE's Center for Threat-Informed Defense (CTID) maps to CISA KEV vulnerabilities (Mappings Explorer, Apache 2.0): how it is exploited, its main and further impact |
 
-**CVE and issue cards.** A CVE card on the Services page shows CTID's techniques as chips (ID, readable name, tactic),
-each with what the mapping means in plain words (*how attackers exploit it*, *what attackers gain first*, *what attackers
-can do next*), CTID's own comment, and MITRE's definition and mitigations on hover or with **What it is and how to
-defend**. An issue card gets the techniques of every CVE it names, each marked with its CVE. CTID mapped KEV with an
-older ATT&CK version (the source line says which, for example *CTID Mappings Explorer, KEV mappings (ATT&CK 16.1)*); when
-MITRE has since renamed a technique the card shows the current name and the old one, when MITRE revoked it the card shows
-MITRE's named replacement with a note naming both, and a deprecated technique is noted as such.
+**CVE and issue cards.** A CVE card on the Services page shows CTID's techniques as chips (ID, name, tactic), each
+with its meaning (*how attackers exploit it*, *what attackers gain first*, *what attackers can do next*), CTID's
+comment, and MITRE's definition and mitigations on hover or with **What it is and how to defend**. An issue card gets
+the techniques of every CVE it names, marked with the CVE. The source line names the older ATT&CK version CTID used
+(for example *CTID Mappings Explorer, KEV mappings (ATT&CK 16.1)*). A renamed technique shows the current and old
+name; a revoked one MITRE's named replacement, with a note naming both; a deprecated one is noted. In advisories the
+CVEs' techniques are *suggested* for the advisor to confirm or remove, unless an administrator chose to **trust CTID's
+mappings** (Definitions page, below the toolbar; permission *settings*, off by default, CSRF token, fresh sign-in,
+audited); trusted ones go out as reviewed and say so in their "why" line.
 
-In advisories, the techniques of the CVEs the advisory names come under the same **reviewed-only** rule: they are
-*suggested* and the advisor confirms or removes them, unless an administrator has chosen to **trust CTID's mappings**
-(Definitions page, below the toolbar; permission *settings*, off by default, CSRF token, fresh sign-in, audited). Trusted
-CVE techniques go out as reviewed and say so in their "why" line.
+Every Shadowserver report has a **mapping**, *suggested* on arrival by a shipped rule table (`data/attack_rules.json`)
+from the report's name, type and group until a researcher reviews it. **Looking Glass asks: which MITRE ATT&CK
+techniques fit these reports?** (Definitions page) lists reports to look at (*please check*, *suggested*, *not mapped
+yet*). **Confirm** accepts the suggestion; **Change** offers 5 to 10 techniques that fit that kind of report, then a
+search of all of ATT&CK by ID, word or tactic (local copy; retired techniques hidden). Choose several, or **No ATT&CK
+technique fits**, with an optional note; each change is audited. A reviewed mapping is never replaced by a
+suggestion; it goes back to *please check* (old mapping shown) only when Shadowserver changes the report's type or
+description, or MITRE retires one of its techniques. **Shadowserver tagged N events of this report with** shows the
+techniques Shadowserver gave the report's events in the days the map holds, with how often: a check, never a change.
 
-Every Shadowserver report has a **mapping**. A shipped rule table (`data/attack_rules.json`) suggests the technique
-from the report's name, type and group when the report first arrives; it is *suggested* until a researcher reviews it.
-On the Definitions page, **Looking Glass asks: which MITRE ATT&CK techniques fit these reports?** lists the reports to
-look at (*please check*, *suggested*, *not mapped yet*). **Confirm** accepts the suggestion; **Change** opens a short
-list of 5 to 10 techniques that fit that kind of report, then a search over all of ATT&CK by ID, word or tactic (from the
-local copy; retired techniques are hidden). Several techniques can be chosen, or **No ATT&CK technique fits**, with an
-optional note. Every change is in the audit log, and a reviewed mapping is never replaced by a suggestion: it only goes
-back to *please check*, keeping the old mapping shown, when Shadowserver changes the report's type or description, or
-when MITRE retires one of its techniques.
+**New ATT&CK versions** (about twice a year) are noticed by the weekly refresh: a revoked technique's named
+replacement becomes the suggestion, shown as *retired in vN* until confirmed; a deprecated one without replacement goes
+to *please check*; a split one offers its sub-techniques; a renamed one shows its new name; malware families' links
+and the picker update themselves. One notice per update (for example *ATT&CK v18 → v19: 2 mappings to check, 14 new
+techniques, 3 malware families updated*) has a button to show those mappings; the audit log gets one entry (old and
+new version, counts).
 
-Beside a report's mapping, **Shadowserver tagged N events of this report with** lists the techniques Shadowserver
-itself gave that report's events in the days the map holds, with how often. Use it to check a mapping; it never
-changes one.
+**What each technique means, and how to defend.** Every technique carries MITRE's short definition and up to three
+MITRE mitigations, those that suit the report first (an exposed service: *M1035 Limit Access to Resource Over
+Network*; an infection or C2 traffic: network intrusion prevention and traffic filtering), shown on cards, the
+Definitions page and the Executive portal on hover or with **What it is and how to defend**.
 
-**New ATT&CK versions** (MITRE publishes about twice a year) are noticed by the weekly refresh and compared with the old
-one: a technique MITRE revoked gets MITRE's named replacement as the suggestion and is shown as *retired in vN* until
-confirmed; one deprecated with no replacement goes to *please check* with the short list; one split into sub-techniques
-offers them; a renamed one simply shows its new name; the malware families' technique links are updated by themselves;
-new techniques are in the picker at once. The Definitions page shows one notice per update (for example *ATT&CK v18 →
-v19: 2 mappings to check, 14 new techniques, 3 malware families updated*) with a button to show just those mappings, and
-the update is one entry in the audit log (old and new version, counts).
+**ATT&CK in advisories.** The advisory's **MITRE ATT&CK techniques** section (PDF, preview and advisory page) gives
+each technique's ID, name, tactic and certainty; **What it is (MITRE)**; **Why it is in this advisory (Looking
+Glass)**, from the mapping and the advisory's figures (hosts, products seen most); **How to defend (MITRE
+mitigations)**; the link to attack.mitre.org; and on the page **MITRE's full description**. **Only reviewed mappings
+go to recipients**: the advisor confirms or removes each *suggested* one for this advisory. Until all are decided the
+report cannot be generated (the server refuses), and a report carrying an unreviewed mapping cannot be marked as sent.
+Each decision is in the advisory's history and the audit log; changing one after generating makes the report out of
+date.
 
-**What each technique means, and how to defend.** Every technique carries MITRE's own short definition (the first
-sentences of its description) and up to three of MITRE's mitigations, the ones that suit the kind of report first: for
-an exposed or accessible service *M1035 Limit Access to Resource Over Network* comes first; for an infection or
-command-and-control traffic, network intrusion prevention and traffic filtering. Cards, the Definitions page and the
-Executive portal show them on hover (or with **What it is and how to defend**).
+**Documents keep the version they were made with.** PDFs and CSVs name their ATT&CK version (*MITRE ATT&CK v18*) and
+are never rewritten. Each generated advisory report keeps its techniques, definitions, mitigations, "why" lines and
+version, so a sent advisory shows exactly what the recipient got.
 
-**ATT&CK in advisories.** The advisory's **MITRE ATT&CK techniques** section (in the PDF, the preview and the advisory
-page) gives for each technique: its ID, name, tactic and certainty; **What it is (MITRE)**; **Why it is in this advisory
-(Looking Glass)**, our own words from the mapping and the advisory's figures (how many hosts, the products seen most);
-**How to defend (MITRE mitigations)**; and the link to attack.mitre.org. On the advisory page, **MITRE's full
-description** opens under each one. **Only reviewed mappings go to recipients**: a mapping still only *suggested* is
-flagged on the advisory page, and the advisor confirms it for this advisory or removes it. Until every one is decided,
-the report cannot be generated (the server refuses, not only the page), and a report that somehow carries an unreviewed
-mapping cannot be marked as sent. Each decision is in the advisory's history and the audit log, and changing one after
-generating makes the report out of date.
+**Who wrote it.** Definitions, notes and network corrections name their author by the **full name** given at
+registration, not the username. The shipped definitions are signed **Looking Glass**.
 
-**Documents keep the version they were made with.** PDFs and CSV files name the ATT&CK version they used (*MITRE ATT&CK
-v18*) and are never rewritten. An advisory keeps, with each generated report, the techniques, MITRE's definitions and
-mitigations, our "why" lines and the version it carried, so a sent advisory still shows exactly what the recipient got;
-new documents use the current version. ATT&CK is © The MITRE
-Corporation and is reproduced and distributed with its permission.
-
-**Who wrote it.** Definitions, notes and network corrections name their author by the **full name** given when the
-account was registered, not the username. The definitions that come with Looking Glass are signed **Looking Glass**.
-
-**Seen in.** The *Seen in* column shows each report a name was seen in as a small card: **intel · N kinds** when that
+**Seen in.** The *Seen in* column shows each report a name was seen in as a small card: **intel · N kinds** when the
 report carries indicators for it (domains, URLs, user agents…), **name only** when it carries just the name. Click a
-card to open *Intel gathered* on that report. A name that is not in today's reports shows **Last seen in *report* on
-*date*** (the last 30 days are remembered), or *Not seen in the last N days*.
+card for *Intel gathered* on that report. A name not in today's reports shows **Last seen in *report* on *date*** (30
+days are remembered), or *Not seen in the last N days*.
 
-**Intel gathered** (button on every infection and issue). What the reports carry for that name, organised as
-**name › report › what comes with it there**:
+**Intel gathered** (button on every infection and issue): what the reports carry for that name, as **name › report ›
+what comes with it there**:
 
-- for infections and categories: the C2 domains contacted, DNS lookups, TLS server names, URLs, user agents, request
+- infections and categories: the C2 domains contacted, DNS lookups, TLS server names, URLs, user agents, request
   patterns and the usernames tried by brute-force bots;
-- for issues: the other CVEs found on the same hosts, the associated tags, products, certificate names and fingerprints;
+- issues: the other CVEs on the same hosts, the associated tags, products, certificate names and fingerprints;
 - **Combinations**: the exact sets that occur together on one record (for example *iot + router-os + winbox*), with
-  the number of records, their share of the report, the number of devices and how many devices **repeat** it (↻: more
-  than one record each). A combination many devices keep repeating is a pattern, not a one-off;
-- every value shows records, share and devices, and can be copied: one value, one set, or a whole card as lines or as
+  records, share of the report, devices and how many devices **repeat** it (↻: more than one record each). A
+  combination many devices keep repeating is a pattern, not a one-off;
+- every value shows records, share and devices, and can be copied: one value, one set, or a whole card as lines or
   one line.
 
-Indicators only: researchers never see the hosts themselves, and addresses inside URLs and banners are masked.
+Indicators only: researchers never see the hosts, and addresses inside URLs and banners are masked.
 
-**Decoded beacons.** When records of a name carry an encoded check-in that Looking Glass can decode (see *Decoded
-beacon* on the map), Intel gathered lists its threat-side parts as indicators: **Beacon format**, **Beacon operator**,
-**Beacon version** and **Beacon OS** (the operating system family only), each with its records and devices, so the
-records of the *Beacon format* card are the number of decoded check-ins. A family that cannot be decoded shows in
-*Beacon format* with what its value is, for example *ttyunos API request (encrypted)* or *pixellog device registration
-(device ID, not encoded)*. The XOR key is not an indicator: every check-in
-draws a new one. A researcher sees a value only when 5 or more devices carry it; below that it is counted as held
-back. The rest of the beacon (MAC address, hardware UUID, CPU id, CPU hash, memory) identifies one device and is never
-shown to researchers. In the *URL* card the encoded value reads `<clogin beacon>`.
+**Decoded beacons.** When records of a name carry a check-in Looking Glass can decode (see *Decoded beacon* on the
+map), Intel gathered lists **Beacon format** (its records are the decoded check-ins), **Beacon operator**, **Beacon
+version** and **Beacon OS** (family only), each with records and devices. A family that cannot be decoded shows in
+*Beacon format* with what its value is (*ttyunos API request (encrypted)*, *pixellog device registration (device ID,
+not encoded)*). The XOR key is new in every check-in, so it is no indicator. A researcher sees a value only when 5 or
+more devices carry it; below that it is counted as held back. The rest of the beacon (MAC address, hardware UUID, CPU
+id, CPU hash, memory) identifies one device and is never shown to researchers. The *URL* card reads `<clogin beacon>`.
 
-**Moving decoded beacons to notes.** Decoded beacons need a serious look, so they go to notes like every other
-pattern: under a report's cards, *Decoded beacons here need a serious look* lists each operator 5 or more devices
-carry, and a *Beacon vs name* match has its own line. Each has a **beacon code** (`LG-B-…`) and **Move to notes**,
-which opens a new note with the code attached. Write what you found, and **track it as a finding** to send it to a
-manager: the finding carries exactly that drill-down (the name and the beacon's parts), so it is worked on in
-*Findings*, where analysts open its devices. Without a title of your own, the finding is titled for management and
-advisors to read at a glance, for example *BADBOX 2.0 beacons from Windows machines (android.badbox2)*. The finding
-also carries an analyst code (`LG-A-…`) made of exactly its records, so management opens it with **Show in
-Executive** and sees the normal Executive portal on those devices: networks, regions, days and devices, counts only.
+**Moving decoded beacons to notes.** Under a report's cards, *Decoded beacons here need a serious look* lists each
+operator 5 or more devices carry, and a *Beacon vs name* match has its own line, each with a **beacon code**
+(`LG-B-…`) and **Move to notes** (a new note with the code attached). Tracked as a finding, it carries exactly that
+drill-down (the name and the beacon's parts), a readable title unless you give one (*BADBOX 2.0 beacons from Windows
+machines (android.badbox2)*), and an analyst code (`LG-A-…`) of exactly its records, so **Show in Executive** shows
+those devices' networks, regions, days and devices, counts only. Analysts open its devices in *Findings*.
 
+**Looking Glass asks: can you look into this?** The card at the top of the Definitions page lists matches found in the
+reports:
+- the same indicator under two names (one family under two names, or shared infrastructure; it says so when one has
+  no definition yet);
+- the same indicator in two reports for one name (a probable indicator, worth a note);
+- an infection's C2 domain that is also the certificate name of a service in the constituency;
+- **Beacon vs name**: decoded beacons whose operating system contradicts their name (for example *Windows* under
+  *android.badbox2*: the wrong name, or a family on more than one system); for researchers once 5 or more devices
+  carry it, for analysts and admins at once;
+- **Unusual activity**: a network and report, or two reports together, well above its own normal on the latest report
+  day; **Explore** opens its chart and numbers, and an analyst checks the devices behind it.
 
-**Looking Glass asks: can you look into this?** The card at the top of the Definitions page lists matches the platform
-found in the reports: the same indicator under two names (possibly one family under two names, or shared
-infrastructure; it says so when one of them has no definition yet), the same indicator in two reports for one name (a
-probable indicator of that name, worth putting in its notes), an infection's C2 domain that is also the certificate
-name of a service in the constituency, and **Beacon vs name**: decoded beacons whose operating system contradicts the
-name they are filed under (for example beacons saying *Windows* under *android.badbox2*: the records may be filed under
-the wrong name, or the family runs on more than one system). Researchers get a *Beacon vs name* match once 5 or more
-devices carry it; analysts and admins see it at once. Each match is an analysis box: what kind of match, the indicator (with copy),
-**where Looking Glass saw it** (every name and report with its records, and whether the name is defined; click a name to
-open its intel on that report) and what Looking Glass saw, in words. Looking Glass states what it saw and leaves the
-conclusions to the researcher. At the top of the card: how many matches, names involved and names without a definition,
-and chips to show one kind of match. Values that are common to everything (stock browser user agents, "/", usernames
-such as *root*) are never raised. It also lists **Unusual activity**: a network and report, or two reports together,
-well above its own normal on the latest report day. **Explore** opens its chart and its numbers; an analyst checks the
-devices behind it.
+Each match shows its kind, the indicator (with copy), **where Looking Glass saw it** (every name and report with its
+records, and whether the name is defined; click a name for its intel there) and what it saw, in words; the conclusions
+are the researcher's. The card counts matches, names involved and names without a definition, with chips per kind.
+Values common to everything (stock browser user agents, "/", usernames such as *root*) are never raised.
 
-**Explore** on a match opens exactly what Looking Glass stated. Every name and report of the match is listed, each
-worked out over **only the records that carry the indicator**. For example, a domain shared by *avalanche-generic* in
-Sinkhole HTTP and *qsnatch* in Sinkhole DNS shows both names. The **Side by side** view gives each place its own
-column: its tags (a tag found in every place is marked), the sets that come with the indicator on the same record, and
-its other indicators (user agent, URL, DNS lookup). The indicator itself is highlighted. Open one place for its full
-cards and combinations, or **All of** *name* for that name's whole picture. A match in two reports for one name shows
-the two reports the same way. Explore works only for matches Looking Glass is asking about. As everywhere in Intel
-gathered, devices are counted and never listed.
+**Explore** on a match works out every name and report of the match over **only the records that carry the
+indicator** (for example a domain shared by *avalanche-generic* in Sinkhole HTTP and *qsnatch* in Sinkhole DNS). **Side
+by side** gives each place a column: its tags (a tag in every place is marked), the sets that come with the indicator
+on the same record, and its other indicators (user agent, URL, DNS lookup), the indicator highlighted. Open one place
+for its full cards and combinations, or **All of** *name* for the whole name. Explore works only for matches on this
+card. Devices are counted, never listed.
 
-**Across reports** (first in the report rail when a name is seen in two or more reports) looks at the reports together:
-**combinations across reports** (for the devices seen in more than one report, exactly what each carried in each report,
-for example *iot + router-os* in one report **and** the same set in another, with the number of devices), the
-**reports seeing the same devices** (the exact sets of reports per device), and the **indicators in more than one
-report** (for example a domain looked up in Sinkhole DNS and contacted in Sinkhole HTTP), with records per report.
-Each combination across reports also says **what its devices carry**: the CVEs, issues and infections on them, each with
-how many of that combination's devices; click a name to open its Intel gathered. Names and counts only.
+**Across reports** (first in the report rail when a name is in two or more reports): **combinations across reports**
+(exactly what each device seen in more than one report carried in each, for example *iot + router-os* in one **and**
+the same set in another, with the number of devices), the **reports seeing the same devices** (the exact sets of
+reports per device) and the **indicators in more than one report** (for example a domain looked up in Sinkhole DNS and
+contacted in Sinkhole HTTP), with records per report. Each combination also says **what its devices carry**: CVEs,
+issues and infections, with how many devices; click a name for its Intel gathered. Names and counts only.
 
-**In every other category** (also under Across reports) shows the same devices in the services reports, with the CVEs,
-issues and infections on them. Every infection, CVE and issue there has **one code** (its devices, in the reports they
-were found in, which are listed under it) and **Move to notes**. A group of fewer than 5 devices is shown without a
-lasting code; an analyst can still drill into it.
+**In every other category** (also under Across reports) shows the same devices in the services reports, with their
+CVEs, issues and infections. Each has **one code** (its devices, in the reports listed under it) and **Move to
+notes**. A group of fewer than 5 devices has no lasting code; an analyst can still drill into it.
 
-In the Intel window the combinations are shown as a **List** (each set as its values joined with +) or as a **Matrix**
-(values as columns, sets as rows). *Devices* counts the distinct devices that carry a value; they are counted, never
-shown. Values are listed with the most records first. **Focus** (click a value) dims everything that does not carry
-it; **search** (`/`) works across all cards; `[` and `]` switch report, Esc clears the search, then the focus, then closes.
+The Intel window shows combinations as a **List** (values joined with +) or a **Matrix** (values as columns, sets as
+rows). *Devices* counts the distinct devices that carry a value, never shown. Values are listed most records first.
+**Focus** (click a value) dims everything that does not carry it; **search** (`/`) works across all cards; `[` and `]`
+switch report; Esc clears the search, then the focus, then closes.
 
-**Notes.** Every row of both tables has a **Notes** button, apart from Define. It opens the name's Notes window for new
-findings ("the C2 moved to …", "seen together with … since Monday"). A note is saved at once, dated and signed, and
-appears on every card of that name (map, services, Executive) and in the PDF reports as **Notes shared by Researcher:
-*full name* (*date*)**. Notes are kept apart from the definitions (`data/notes.json`) and are never replaced by an
-update. The author or an administrator can remove a note; both are in the audit log. (For a CVE, the define button reads
-*Add context*: your organisation's remarks on the CVE, which NVD describes.) A CVE's title in the lists comes from its
-public record once it has been looked up: CISA's name for it, else the title its issuer gave it, else the first
-sentence of its description. Context your researchers add comes first.
+**Notes.** Every row of both tables has a **Notes** button beside Define ("the C2 moved to …"). A note is saved at
+once, dated and signed, and shown on every card of that name (map, services, Executive) and in the PDFs as **Notes
+shared by Researcher: *full name* (*date*)**. Notes are kept apart (`data/notes.json`), never replaced by an update,
+and removed by the author or an administrator; adding and removing are audited. For a CVE the define button reads
+*Add context*: your organisation's remarks beside NVD's description, shown first. A CVE's title comes from its public
+record once looked up: CISA's name, else its issuer's title, else its description's first sentence.
 
 ### Combination codes, the combination search and findings
 
-These three tie the team's work together: the researcher names exactly what was found, management decides it matters,
-the analyst pulls exactly those devices, and the advisor writes the advisory management approved. Two complete walk-throughs, with the figures of the
-demonstration data, are in [Use case scenarios: a needle through the haystack](USE_CASES.md).
+The researcher names exactly what was found, management decides it matters, the analyst pulls exactly those devices,
+and the advisor writes the advisory management approved. Who does what, and the life of a finding, are drawn from the
+code in [Use case scenarios: Who does what](USE_CASES.md#3-who-does-what); two complete walk-throughs with
+the demonstration data are in [Use case scenarios: a needle through the haystack](USE_CASES.md). This
+section keeps what the diagrams do not show.
 
 **Combination codes.** Every combination in Intel gathered carries a code: **`LG-C-…`** for one exact combination in
 one report, **`LG-X-…`** for a cross-report pattern (what a device carried in each of several reports), and
 **`LG-B-…`** for decoded beacons under a name (every record whose beacon says, for example, *Windows*). A code
 carries no address. Click a code to copy it. A beacon code is worked on in *Findings*, not on the Combinations page.
 
-**Ticking a CVE.** On an analyst code's page, a CVE or issue under *CVEs and issues* can be ticked like a combination: it becomes a code of exactly this selection's devices that carry it, sent with the reply.
+**Ticking a CVE.** On an analyst code's page, a CVE or issue under *CVEs and issues* can be ticked like a combination:
+it becomes a code of exactly this selection's devices that carry it, sent with the reply.
 
 ![CVEs ticked on an analyst code's page](media/screens/94-cve-tick.png)
 
-**Attaching codes to a note.** The Notes window has a **Combinations for this note** section with three ways in:
-- **Seen in the reports:** every combination of the name, grouped by report like a detailed drop-down list, with
-  records, devices and repeating devices, and a filter. One click attaches it.
+**Attaching codes to a note.** The Notes window's **Combinations for this note** has three ways in:
+- **Seen in the reports:** every combination of the name, grouped by report, with records, devices and repeating
+  devices, and a filter. One click attaches it.
 - **Build one:** pick a report and tick the indicators that must come together (the name's real values only). Looking
   Glass makes the code and says how many records and devices carry exactly that now.
-- **Paste a code:** a code from another note or colleague; it is checked before it is attached.
+- **Paste a code:** from another note or colleague; it is checked before it is attached.
 
 The note's codes are printed with it on every card and in the PDFs (Executive reports included).
 
-**Track as a finding.** Tick it in the Notes window (with a short title) to follow the note up on the **Findings** page
-(`/findings`). It gets a number (#1, #2…) and a status, and goes to the person named (see
-[Findings, cases and who holds them](#findings-cases-and-who-holds-them)); no address is ever shown there. Management gets
-**Show in Executive** on each code: the Executive portal opens filtered to exactly that combination (a *Combination
-code* chip; counts only; no 7-day comparison for a code). Analysts get **Search**, the combination search below.
+**The buttons, per role.** Every finding is on the **Findings** page (`/findings`) with a number (#1, #2…) and a
+status, and goes to the person named (see [Findings, cases and who holds them](#findings-cases-and-who-holds-them)).
+No address is ever shown there. Any finding takes replies (text and codes) from everyone who works on it.
 
-**Analyst codes: the other way round.** In any analysis window (map or services platform), **Make analyst code** turns
-the current selection (for example *Source network: Example Telecom · Host: …*) into an analyst code, **`LG-A-…`**, and a
-finding with your title and note. The code keeps exactly the records of that selection on that day.
-- *Researchers* open it from the finding (**Open as researcher**, or `/intel/LG-A-…`): the selection in words (a host
-  is "1 host", never its address), the analyst's note, and for every name in those records its definition, its
-  combinations and cross-report patterns with their codes. Tick the codes that answer the analyst and **Send the
-  reply**: it goes into the finding's history with the codes.
-- *Management* uses **Show in Executive**: the portal opens on the code's day, filtered to exactly those records
-  (counts only).
-- *Analysts* find every analyst code in the searchable **Analysts' codes** list at the top of the Combinations page,
-  to revisit one and download its PDF + CSV for the advisory (**Report (PDF + CSV)** on the finding does the same).
+| Researcher | What happens |
+|---|---|
+| **Track as a finding** (Notes window, with a short title) | the note becomes a finding, sent to the manager you name |
+| **Open as researcher** (or `/intel/LG-A-…`) | an analyst code's selection in words (a host is "1 host", never its address), the analyst's note, and each name's definition, combinations and cross-report patterns with their codes |
+| **Send the reply** | the codes you ticked go into the finding's history |
 
-Any finding takes replies (text and codes) from everyone who works on it.
+| Analyst | What happens |
+|---|---|
+| **Make analyst code** (any analysis window, map or services) | the current selection (for example *Source network: Example Telecom · Host: …*) becomes an **`LG-A-…`** code of exactly its records that day, and a finding with your title and note |
+| **Search** | the combination search below, with the code |
+| **Search within the selection** (a researcher's reply to your analyst code) | the researcher's code limited to your analyst code's devices, on its own days; the review, report and advisory carry only those devices |
+| **Report (PDF + CSV)** | the code's PDF + CSV for the advisory, as in the searchable **Analysts' codes** list at the top of the Combinations page |
+
+| Management | What happens |
+|---|---|
+| **Show in Executive** | the Executive portal filtered to exactly that code (a *Combination code* chip; counts only; no 7-day comparison for a code); for an analyst code, on the code's day |
 
 **Sorting and the Across reports flag.** Both tables on the Definitions page sort by a click on a column heading (↕,
 then ▲ / ▼). The **Across reports** column flags every name whose devices (or hosts) were seen in more than one of its
-reports, with how many; click the flag to open that name's cross-report view.
+reports, with how many; click the flag for that name's cross-report view.
 
 **The combination search (analysts).** The **Combinations** page (`/combinations`, from the map, the services platform
 or the Findings page) is for roles that see addresses and may export:
-1. Paste the code and **Look up**: what it stands for, the name, the report(s), and the researchers' notes (the ones on
+1. Paste the code and **Look up**: what it stands for, the name, the report(s), and the researchers' notes (those on
    this code are marked).
-2. Choose where to look: **the report day** (the default: exactly the devices the researcher counted in Intel
-   gathered and the Executive portal shows), **the days in memory**, or **a date range of the stored history** (up to
-   31 days, read from the database one day at a time; the progress shows each day). Every day is matched on its own:
-   a device counts on a day when it carried the whole combination that day (a router seen on one day and a sinkhole
-   call on the next is not that device carrying the combination).
-3. The result: the key figures (devices, records, repeating, on several days, in other reports, networks, regions and
-   cities, peak hour); a **map** of the country's regions coloured by devices (hover a region for its devices,
-   records, cities, networks and IP addresses) with each region and its cities beside it; networks, cities, activity
-   by hour, what the devices are and ports; **the busiest devices** (address, network, region, city, records, last
-   seen, each device's **infections**, **issues** and **CVEs** that day, other reports and, on the report day,
-   **Other days**: whether the device carried the same combination on the other days in memory, or *changed* and what
-   it carried there instead); and **across reports**: what these devices carried in the name's other reports, each exact
-   pattern with its own `LG-X` code to search next.
-4. **Download PDF + CSV (ZIP)**: a PDF in the Executive report's design (overview with key findings and activity, the
-   region map with its cities, networks and cities, the devices with their addresses, across reports, and the
-   explanations of the name (each name, for an analyst code) and of every CVE in the combination, each with its
-   references as links and where it comes from, and the researchers' notes on those names, or a line saying there are
-   none yet; a chart with nothing to show, such as across reports when no device was in another report, is left out;
-   and an **Impact** section, as in an advisory: what the reports these devices were found in can lead to, the most
-   severe first, with the reports behind each)
-   and two CSV files: one
-   row per device (with the other reports it was seen in, its infections, issues and CVEs, the other days, and its
-   cross-report code; `ports` holds the ports of the selection's own records, and `all_ports_and_services` every port
-   the address was seen open on that day with the service there, for example `22/tcp Accessible SSH; 443/tcp
-   Accessible SSL`) and one row per record. The columns
-   have fixed names, ready for enrichment and dashboards. If the search has expired (after an hour), the button runs it
-   again and then downloads.
-   The devices CSV, the file an advisory sends, has one
-   column for each value the pattern analysis groups devices by: certificate SHA-256, subject and issuer, JARM, HASSH,
-   SSH and server software, page hash, the usernames and passwords tried, the SSH client and the request pattern, with
-   Shadowserver's own ATT&CK and CVE or the certificate facts. With them a network provider can find the same devices
-   in their own network.
-5. **A report for one network provider**, to attach to the advisory sent to that operator: choose it in **Report for**
-   next to the download button, or click the network in the *Networks* card. The PDF and both CSV files then cover
-   only that provider's devices and records, and its name is in the title and the file names.
-
+2. Choose where to look: **the report day** (the default: exactly the devices the researcher counted and the Executive
+   portal shows), **the days in memory**, or **a date range of the stored history** (up to 31 days, read one day at a
+   time, with progress per day). Each day is matched on its own: a device counts on a day when it carried the whole
+   combination that day.
+3. The result: key figures (devices, records, repeating, on several days, in other reports, networks, regions and
+   cities, peak hour); a **map** of the regions coloured by devices (hover a region for its devices, records, cities,
+   networks and IP addresses) with its cities beside it; networks, cities, activity by hour, device types and ports;
+   **the busiest devices** (address, network, region, city, records, last seen, that day's **infections**, **issues**
+   and **CVEs**, other reports and, on the report day, **Other days**: the same combination on the other days in
+   memory, or *changed* and what it carried instead); and **across reports**: what these devices carried in the
+   name's other reports, each pattern with its own `LG-X` code to search next.
+4. **Download PDF + CSV (ZIP)**. The PDF (Executive report design): overview, key findings and activity, the region
+   map with cities, networks, the devices with their addresses, across reports, the explanations of the name (each
+   name, for an analyst code) and of every CVE in the combination with references and sources, the researchers' notes
+   (or a line saying there are none yet), and an **Impact** section as in an advisory (what the reports can lead to,
+   most severe first, with the reports behind each). Empty charts are left out. Two CSVs with fixed column names: one row per record, one per device
+   (other reports, infections, issues, CVEs, other days, cross-report code; `ports` holds the selection's own ports,
+   `all_ports_and_services` every port open that day with its service, for example `22/tcp Accessible SSH; 443/tcp
+   Accessible SSL`). The devices CSV, the file an advisory sends, also has a column per value the pattern analysis
+   groups by (certificate SHA-256, subject and issuer, JARM, HASSH, SSH and server software, page hash, usernames and
+   passwords tried, SSH client, request pattern), with Shadowserver's own ATT&CK and CVE or the certificate facts, so
+   a provider can find the same devices in their own network. An expired search (after an hour) is run again, then
+   downloaded.
+5. **A report for one network provider**: choose it in **Report for** next to the download button, or click the
+   network in the *Networks* card. The PDF and both CSVs then cover only that provider's devices and records, named
+   in the title and file names.
 6. **Send to management** (when the devices turn up in other reports, the download waits for this): tick the
-   across-report patterns, write a title and a comment, name the manager, and **pick the networks** it concerns. No
-   network: an overview, and the advisor picks the organisations later. One network: a finding for that organisation.
-   Several: a **case** with one sub-finding per organisation, each decided on its own.
-   Under **every category for these devices** you can also tick **infections** and **CVEs and issues** for the report:
-   each one is checked against this search's own devices, management sees the names and counts (never an address),
-   and the report and the advisory carry them on each organisation's own devices.
-
-7. **Management decides** on the review page. What you ticked is your drill-down: the report and the advisory cover
-   exactly those devices (for example the few with a critical CVE), whichever view management approves:
+   across-report patterns, write a title and a comment, name the manager, and **pick the networks**. No network: an
+   overview, and the advisor picks the organisations later. One network: a finding for that organisation. Several: a
+   **case** with one sub-finding per organisation, each decided on its own. Under **every category for these devices**
+   you can also tick **infections** and **CVEs and issues**: each is checked against this search's devices,
+   management sees names and counts (never an address), and the report and advisory carry them on each
+   organisation's own devices.
+7. **Management decides** on the review page. What you ticked is the drill-down: the report and advisory cover
+   exactly those devices (for example the few with a critical CVE), whichever view is approved:
    - **Use the researcher's view:** those devices, with the combination's own analysis and nothing added;
-   - **Use the analyst's view:** those devices, with the patterns, infections and CVEs/issues you ticked added;
+   - **Use the analyst's view:** those devices, with your ticked patterns, infections and CVEs/issues added;
    - **Reject and close**, with the reason.
 
    With nothing ticked, management approves the whole combination or rejects it.
-
-8. **A researcher's reply to your analyst code:** on the finding, **Search within the selection** opens the
-   researcher's code limited to the devices of your analyst code, on its own days. The review, the report and the
-   advisory then carry only those devices.
 
 "Exactly" means the record carries these indicators and no other indicator of the kinds compared (C2 domain, DNS
 lookup, TLS name, user agent and tags; for services, the associated tags and CVEs). The search is off in Demo mode, a
 search can be downloaded for an hour by the analyst who ran it, and every search is in the audit log.
 
-**Without a Malpedia token** the same buttons (**Explain the names**, the look-ups in the stream and the host
-analysis) still work: they show the Looking Glass definitions written by researchers and the built-in knowledge base,
-then MISP Galaxy and MITRE ATT&CK when their copies are installed (`manage/fetch_offline_names.py`, see Definitions),
-and a plain explanation for anything not defined yet ("No definition yet").
+**Without a Malpedia token** **Explain the names** and **Look up** still work: they show the researchers' definitions and the built-in
+knowledge base, then MISP Galaxy and MITRE ATT&CK when their copies are installed (`manage/fetch_offline_names.py`),
+and "No definition yet" for anything not defined.
 
 ![Issues on the services platform](media/screens/32-services-insight.png)
 
 **Issues explained** (publicly accessible / vulnerable services; permission *malpedia*). Lists with issues have
-**Explain issues**. Issues that are CVEs are looked up in the NIST National Vulnerability Database (description, CVSS
-score, weakness, references), in CISA's Known Exploited Vulnerabilities catalog (**actively exploited**, with the date
-CISA added it, ransomware use and CISA's required action) and in FIRST EPSS (probability of exploitation in the next 30
-days). Issues that are not CVEs (Exposed admin panel, Expired certificate, POODLE, BADCANDY…) are never looked up: their
-definition and references are used. A progress window shows each step and every issue as it is looked up (it takes a few seconds; the look-up continues if you close the window). The CVEs are looked up in batches: the official CVE.org records at once, NVD's own analysis in the background within minutes. **Explain the names** (network communications) uses the same progress window.
+**Explain issues**. CVEs are looked up in the NIST National Vulnerability Database (description, CVSS score,
+weakness, references), CISA's Known Exploited Vulnerabilities catalog (**actively exploited**, with the date CISA
+added it, ransomware use and CISA's required action) and FIRST EPSS (probability of exploitation in the next 30
+days). Issues that are not CVEs (Exposed admin panel, Expired certificate, POODLE, BADCANDY…) are never looked up:
+their definition and references are used. A progress window shows each step and issue (a few seconds; the look-up
+continues if you close it). CVEs are looked up in batches: the official CVE.org records at once, NVD's own analysis in
+the background within minutes. **Explain the names** uses the same progress window.
 
-**Network names and types** (on the Definitions page, researchers and admins; permission *networks*. Settings shows
-them read-only for reference). Correct a
-network's company name, type (sector) and note; the change is marked reviewed and is never overwritten by the automatic
-look-ups. Types come from PeeringDB's categories and the company name (bank, university, hospital, power company…); if a
-sector is missing, **Add a type** (with the word used for it in Demo mode, for example Institution). Added types are kept
-in `data/network_types.json` and offered everywhere, also in the Settings constituency filter.
-
-The Records column counts each network's records on the day the map shows (both platforms, before the constituency);
-the header names the day. It says "not loaded" while that day's reports are not loaded yet.
+**Network names and types** (Definitions page, researchers and admins; permission *networks*; Settings shows them
+read-only). Correct a network's company name, type (sector) and note; the change is marked reviewed and never
+overwritten by the automatic look-ups. Types come from PeeringDB's categories and the company name (bank, university,
+hospital, power company…); if a sector is missing, **Add a type** (with its word in Demo mode, for example
+Institution). Added types are kept in `data/network_types.json` and offered everywhere, also in the Settings
+constituency filter. The Records column counts each network's records on the day the map shows (both platforms,
+before the constituency), named in the header; "not loaded" while that day's reports are not loaded yet.
 
 **Reports (PDF + CSV).** Every list behind an analysis figure, on both platforms, has **Download report (PDF + CSV)**
-next to **Download CSV** (permission *export*). It is a ZIP file with the PDF and the complete list as CSV; the PDF
-does not repeat every address, it refers to the CSV. The PDF contains:
+next to **Download CSV** (permission *export*): a ZIP with the PDF and the complete list as CSV (the platform's
+columns, plus what each infection / issue is), which the PDF refers to instead of repeating every address. The PDF
+has a cover block (report day, selection, figure, constituency, who generated it and when); an **executive summary**,
+key figures and activity by hour; **priorities** (the hosts with the strongest signs); **breakdowns** with charts
+(reports, attack types, networks, cities, countries, services, issues, ports…); the Shadowserver definitions of the
+reports and the sources; and, explained, the **infections and categories** (Malpedia family or threat actor with
+description, aliases, attribution and references, or the Looking Glass definition with its evidence, or why it is not
+malware; with or without a Malpedia token) or the **issues** (actively exploited CVEs first, each with CVSS, EPSS,
+CISA KEV status and required action, NVD description and references; other issues from their definitions).
 
-- a cover block: report day, selection, figure, constituency, who generated it and when;
-- an **executive summary**, the key figures, and activity by hour of the day;
-- **priorities**: the hosts with the strongest signs, to be followed up first;
-- on network communications, **the infections and categories explained**: each one's Malpedia family or threat actor
-  (description, aliases, attribution, references), or the Looking Glass definition with its evidence, or why it is not
-  malware; with or without a Malpedia token;
-- **breakdowns** with charts (reports, attack types, networks, cities, countries, services, issues, ports…);
-- on publicly accessible / vulnerable services, **the issues explained**: actively exploited CVEs first, each with
-  CVSS, EPSS, CISA KEV status and required action, NVD description and references; other issues from their definitions;
-- **the complete list**: a pointer to the CSV file in the same ZIP (same columns as on the platform, plus what each
-  infection / issue is);
-- the Shadowserver definitions of the reports involved, and the sources.
-
-In Demo mode the PDF is masked like the page. Each download is recorded in the audit log (`report_pdf`).
-
-CSV files are safe to open in a spreadsheet: a cell that would start a formula (`=`, `+`, `-`, `@`) gets a leading
-apostrophe, so text that came from scanned devices (a vendor or product banner) can never run as a formula.
+In Demo mode the PDF is masked like the page. Each download is in the audit log (`report_pdf`). CSV files are safe in
+a spreadsheet: a cell that would start a formula (`=`, `+`, `-`, `@`) gets a leading apostrophe, so text from scanned
+devices (a vendor or product banner) can never run as a formula.
 
 ### Findings, cases and who holds them
 
 ![A case with one sub-finding per organisation](media/screens/70-findings-case.png)
 
-**Every hand-over names a person.** A finding always goes to someone by name: the researcher sends it to a manager,
-the analyst sends a combination to a manager, the manager approves it to a named advisor. Nothing moves on its own, and
-there is no general "move it on".
+**Every hand-over names a person**, and **findings are channels**: only the people a finding has passed through (and
+administrators) see it; others never learn it exists. A researcher who answers an analyst's request with a code
+follows it on: when the analyst sends that code to management, the researcher is in the review's channel (seeing it,
+not acting on it) and finds it inside the request on the Findings page, through management's decision and the
+advisory. The statuses and every hand-over are drawn in [Use case scenarios: Who does what](USE_CASES.md#3-who-does-what).
+A finding closes once every organisation in it has its advisory sent; a case closes once every one of its
+sub-findings is closed. Every step is in the finding's history and the audit log.
 
-**Findings are channels.** Only the people a finding has passed through (and administrators) see it. Others never
-learn it exists. A researcher who answers an analyst's request with a code follows it on: when the analyst sends that
-code to management, the researcher is in the review's channel (seeing it, not acting on it) and finds it inside the
-request on the Findings page, through management's decision and the advisory.
-
-**The flow:**
-1. A researcher (from a note) or an analyst (from the combination search) opens a finding and sends it to a manager.
-2. Management **approves** it and names the analyst or advisor who takes it next, or **rejects** it with a reason (it
-   closes, on the record).
-3. For an advisory: the analyst sends the combination for one or more networks; management decides each organisation
-   on its own and approves it to an advisor.
-4. The advisor writes the organisation's advisory and marks it **sent** on the Findings page. The finding closes once
-   every organisation in it has its advisory sent. A case closes once every one of its sub-findings is closed. Every step is in the finding's history and the audit
-   log.
-
-**When it was reported, and whether it is still there.** Each finding shows the day its records were reported
-(a finding opened from a name shows the day it was found), how many of its devices are in the latest report again for
-the same combination, and the day its time to act runs out. Its links open the Executive portal and the combination
-search on the day it was reported, so an old finding can still be worked on. Analysts (on the combination search) and
-advisors (in the advisory's device list) see the devices reported again marked **again**, with a line above the list;
-the Findings page itself never shows an address.
+**When it was reported, and whether it is still there.** Each finding shows the day its records were reported (one
+opened from a name: the day it was found), how many of its devices are in the latest report again for the same
+combination, and the day its time to act runs out. Its links open the Executive portal and the combination search on
+the day it was reported, so an old finding can still be worked on. Analysts (combination search) and advisors (the
+advisory's device list) see devices reported again marked **again**, with a line above the list; the Findings page
+never shows an address.
 
 **Decoded beacons handed over.** A finding about decoded beacons (a note with a beacon code tracked as a finding, or
-an analyst's *Hand over* from the map's *Decoded beacon*) shows a **Decoded beacons** block: what was handed over in words, its parts (format, operator,
-version, OS), and how many records, devices, reports and days carry it in the days in memory. Everyone in the channel
-sees that much; while fewer than 5 devices carry the beacons, only analysts and admins see the parts. Analysts and
-admins also get **Show the devices**: every record with its host, time, report, C2 host and the whole decoded JSON
-with its notes. Until that button is pressed the page shows no address, and opening the devices is recorded in the
-audit log.
+an analyst's *Hand over* from the map's *Decoded beacon*) shows a **Decoded beacons** block: what was handed over, its
+parts (format, operator, version, OS), and how many records, devices, reports and days carry it in the days in memory.
+While fewer than 5 devices carry the beacons, only analysts and admins see the parts. They also get **Show the
+devices**: every record with its host, time, report, C2 host and the whole decoded JSON with its notes. Until then the
+page shows no address; opening the devices is in the audit log.
 
-**Requests Looking Glass could not decode** (analysts and admins, below the findings). The encoded request values in
-the days in memory that Looking Glass cannot decode yet, grouped into families: those no known format decodes, no
-known family names and the generic fallback cannot read, and those of a known family that is not decoded yet (for
-example *sustat statistics request*) or of a known format whose value did not decode, shown with their *Known family*.
-Encrypted values, hashes, IDs and tokens are not listed: sending them cannot lead to decoding. An event's Decoded beacon
-and the Decoded beacons list point here (*Ask to send it for decoding*) for every family that can be sent. A family is one request shape: the path, the query parameter, the encoding and what the value looks like
-(*hash-sized*, *whole 16-byte blocks: likely a block cipher*, *random-looking*), with the C2 hosts it was sent to (one
-family often spans many generated domains), the names it is filed under, the reports, the days, and how many records
-and devices carry it. Devices are counted, never listed. Each family also shows **What would be sent**: the exact
-request lines its decoding request holds. Nothing goes to the Looking Glass creator until an administrator approves it.
-For each family:
+**Requests Looking Glass could not decode** (analysts and admins, below the findings): the encoded request values in
+the days in memory that no known format decodes, no known family names and the generic fallback cannot read, and
+those of a known family not decoded yet (for example *sustat statistics request*) or of a known format whose value did
+not decode, shown with their *Known family*. Encrypted values, hashes, IDs and tokens are not listed: sending them
+cannot lead to decoding. An event's Decoded beacon and the Decoded beacons list point here (*Ask to send it for
+decoding*). A family is one request shape (path, query parameter, encoding and what the value looks like:
+*hash-sized*, *whole 16-byte blocks: likely a block cipher*, *random-looking*), with its C2 hosts (often many
+generated domains), names, reports, days, and records and devices (counted, never listed). **What would be sent**
+shows the exact request lines. Nothing goes to the Looking Glass creator until an administrator approves it:
 
-- **Ask to send to the Looking Glass creator.** An analyst (or admin) asks, saying why it should be decoded. Every
-  administrator's bell then says *A decoding request waits for your approval*, leading to the family.
-- **Approve sending / Do not approve** (administrators). The administrator checks the request lines and approves, or
-  does not approve with the reason, which the analyst sees; the family is open again and can be asked for once more.
-  An approval is for exactly the lines on the administrator's screen: the download holds those lines and no others,
-  and if new ones arrived after the page was opened, the page asks to be reloaded and checked again.
-- **Send to the Looking Glass creator** (once approved). Download the *decoding request*: a JSON file holding only the family's HTTP
-  requests (up to 5), each with the infection name it is filed under, and no host, address, user agent or count.
-  In each request only the value Looking Glass could not decode is kept: every other parameter's value reads
-  `<value>` (a bot's own parameters can carry the device's address or machine name), and any address left reads
-  `<address>`. Then open the private report on the separate **HTTP Requests Decoding** repository
-  (only you and the Looking Glass creator see it), title it *Decoding request* and paste the file's contents into it,
-  so a future release can decode the family automatically. Looking Glass sends nothing itself. Decoded, a request's value may hold the device's own data, so the
-  download asks you to confirm your organisation's rules (TLP) allow sharing it, and every download is recorded in the
-  audit log as an export. Then **Mark as sent**.
-- **Not a beacon.** Puts away a family that is a session token, an ID or the like. Put-away and sent families are listed
-  under *Sent or put away*, with who asked, who approved and who sent it; **Reopen** brings a put-away one back. Every
-  step is in the audit log.
+| Button | What happens |
+|---|---|
+| **Ask to send to the Looking Glass creator** (analyst or admin, with the reason) | every administrator's bell says *A decoding request waits for your approval*, leading to the family |
+| **Approve sending / Do not approve** (administrators, after checking the lines) | a refusal's reason is shown to the analyst, who can ask again. An approval covers exactly the lines on screen; if new ones arrived since the page opened, it asks to be reloaded and checked again |
+| **Send to the Looking Glass creator** (once approved) | downloads the *decoding request*: a JSON file of the family's HTTP requests (up to 5), each with its infection name, no host, address, user agent or count. Only the undecoded value is kept: other parameters read `<value>` (a bot's own parameters can carry the device's address or machine name), any address left reads `<address>`. Decoded, a value may hold the device's own data, so you confirm your organisation's rules (TLP) allow sharing it; each download is in the audit log as an export |
+| **Mark as sent** | after you open the private report on the separate **HTTP Requests Decoding** repository (only you and the Looking Glass creator see it), title it *Decoding request* and paste the file's contents, so a future release can decode the family automatically. Looking Glass sends nothing itself |
+| **Not a beacon** | puts away a session token, an ID or the like. Put-away and sent families are under *Sent or put away*, with who asked, approved and sent; **Reopen** brings a put-away one back |
+
+Every step is in the audit log.
 
 ![A finding with the day it was reported, its devices in the latest report and its time to act](media/screens/92-finding-watch.png)
 
 **Time to act.** A finding nobody is acting on yet (new, with management, back with the researcher, or with the
-analyst) closes on its own once its time to act has passed: `FINDING_ACT_DAYS` days (30 unless set in `.env`; `0`
-turns it off) after its devices were last seen. While the latest report still shows them, the clock starts again. A
-finding approved by management, with the advisor, or with an advisory not yet sent never closes this way, and a finding
-always has at least `FINDING_GRACE_DAYS` (7) days from the day it was opened. Its history then says *Time to act
-expired*, by Looking Glass; everyone in its channel sees it in the bell, and it is in the audit log.
+analyst) closes on its own `FINDING_ACT_DAYS` days (30 unless set in `.env`; `0` turns it off) after its devices were
+last seen; while the latest report still shows them, the clock starts again. A finding approved by management, with
+the advisor, or with an advisory not yet sent never closes this way, and every finding has at least
+`FINDING_GRACE_DAYS` (7) days from the day it was opened. Its history then says *Time to act expired*, by Looking
+Glass; everyone in its channel sees it in the bell, and it is in the audit log.
 
-**The review.** Management's final look at a combination the analyst sent: what the researcher is saying, what the analyst ticked, and the drill-down, the whole combination and the analyst's view as the Executive portal shows them, each on the day its records were reported.
+**The review.** Management's final look at a combination the analyst sent: what the researcher says, what the analyst
+ticked, and the drill-down, the whole combination and the analyst's view as the Executive portal shows them, each on
+the day its records were reported.
 
 ![A review: the drill-down and the views as the Executive portal shows them](media/screens/93-review-drilldown.png)
 
@@ -1277,325 +1196,289 @@ platform full screen. The display adapts to TVs and weaker devices by itself (`?
 ![Settings](media/screens/60-settings.png)
 
 **Settings** (gear on the intro page, or the button in the top bar):
-- **Continent and country:** any country or territory in the world: choose its continent, then the country. The
-  services platform shows its regions (or the whole country as one area, where the open map data has no regions) and
-  uses its name. Below the map, **Regions in the reports and on the map** lists each region name in yesterday's
-  reports as Shadowserver spells it. A name the map does not know gets the closest region as a suggestion: **Use** it,
-  choose another region, or say it is the country itself. Your choices are kept for this installation, every map uses
-  them, and each one is in the audit log.
-- **Time zone:** the zone your team reads its times in, next to the country (it starts at the country's usual zone;
-  DR Congo offers Kinshasa and Lubumbashi; UTC can always be chosen). Shadowserver writes every time in UTC and a day
-  runs 00:00 to 24:00 UTC, as its reports do, so Looking Glass keeps that and **also** shows each time in this zone:
-  the replay and current clocks, the record stream, event details, chart hours, messages and the Executive report (for
-  example "12:15:41 UTC (15:15:41 Nairobi time)"). Daylight saving (Egypt, Morocco) is taken into account. For a zone
-  that is UTC, as in Ghana, only UTC is shown. Changing it reloads nothing.
-- **Constituency:** **Whole country** (everything in the reports), or **Only selected networks and address ranges**.
-  Every part of Looking Glass then follows it: both platforms, the Executive portal, findings and advisories,
-  combinations, the research pages, every export and the quarterly reports (each says "Counted for: …"). Only the
-  quarterly purge works on the whole database, since it clears old stored rows. The card shows a live summary of the
-  choice, for example "3 networks, 12 address blocks, 1 other range". The networks and blocks themselves are chosen in
-  one place, the **Constituent** column of **Network names & types** further down the page (see below).
-  **Apply settings** saves the choice.
-
-- **Organisation:** your CSIRT's name and logo (PNG or JPEG). **Choose a logo** opens a sizing step: the picture in
-  the advisory's logo frame (2:1, its border highlighted), **Trim empty margins**, a size slider, dragging (or the arrow
-  keys) to place it, a background for a picture with see-through parts (keep it, white or dark), and previews of the
-  logo card on the dark and the plain advisory. It recommends about 464 × 232 pixels and makes the saved logo small
-  enough (at most 40 KB) in your browser; nothing is sent until you save. Advisories are signed with them. The
-  sign-in pages show the name only, never a logo: they name no product and show no image, so that internet scanners
-  cannot tell what runs here.
+- **Continent and country:** any country or territory in the world. The services platform shows its regions (or the
+  whole country as one area, where the open map data has no regions) and uses its name. Below the map, **Regions in
+  the reports and on the map** lists each region name in yesterday's reports as Shadowserver spells it. A name the map
+  does not know gets the closest region as a suggestion: **Use** it, choose another region, or say it is the country
+  itself. The choices are kept, every map uses them, and each is in the audit log.
+- **Time zone:** the zone your team reads times in (starts at the country's usual zone; DR Congo offers Kinshasa and
+  Lubumbashi; UTC can always be chosen). Days and times stay UTC, as in Shadowserver's reports; Looking Glass **also**
+  shows each time in this zone (clocks, stream, event details, chart hours, messages, the Executive report: "12:15:41
+  UTC (15:15:41 Nairobi time)"), with daylight saving (Egypt, Morocco). For a UTC zone, as in Ghana, only UTC is
+  shown. Changing it reloads nothing. See `TIMEZONE` in [CONFIGURATION.md](CONFIGURATION.md#country-and-constituency-also-on-the-settings-page).
+- **Constituency:** **Whole country**, or **Only selected networks and address ranges**. Every part of Looking Glass
+  follows it (both platforms, the Executive portal, findings and advisories, combinations, the research pages, every
+  export and the quarterly reports, each saying "Counted for: …"); only the quarterly purge works on the whole
+  database. The card summarises the choice, for example "3 networks, 12 address blocks, 1 other range". Networks and
+  blocks are chosen in the **Constituent** column of **Network names & types** (below).
+- **Organisation:** your CSIRT's name and logo (PNG or JPEG), which sign the advisories. **Choose a logo** opens a
+  sizing step: the picture in the advisory's 2:1 logo frame, **Trim empty margins**, a size slider, dragging (or arrow
+  keys) to place it, a background for see-through parts (keep it, white or dark), and previews on the dark and the
+  plain advisory. It recommends about 464 × 232 pixels and shrinks the logo to at most 40 KB in your browser; nothing
+  is sent until you save. The sign-in pages show the name only, no product and no image, so internet scanners cannot
+  tell what runs here.
 
 **Apply settings** saves and applies at once for everyone.
 
-Settings also lists the **network names and types**. The names and types are read-only here; they are corrected on
-the Definitions page (**Edit on the Definitions page**). The researchers' work (definitions, Intel gathered, notes) is
-on that page too.
+Settings also lists the **network names and types**, read-only here; they are corrected on the Definitions page
+(**Edit on the Definitions page**), with the researchers' work.
 
-**Choosing the constituency.** In Settings, the network list's **Constituent** column has a drop-down on every network:
+**Choosing the constituency.** The network list's **Constituent** column has a drop-down on every network: **Not in**,
+**The whole network** (every address of its AS number) or **Some address blocks** (only the blocks you tick).
 
-- **Not in**: the network is not part of your constituency.
-- **The whole network**: every address of that network (its AS number) is in.
-- **Some address blocks**: only the blocks you tick are in.
+**Some address blocks** opens the network's row: every /24 block with records yesterday, busiest first, after the
+blocks already chosen, each with its record count and a tick box. A chosen block stays chosen until you untick it,
+also without records ("no records yesterday") or if it never appears in the reports. **Add a block** takes an unlisted
+block (for example 192.0.2.0/24, or a single address for its /24). The first 50 are shown; **Show all N blocks** shows
+the rest, and the search box finds one (for example 192.0.2). **Close** (or the row's button) folds the row, which
+then says, for example, "3 of 120 blocks chosen". The loading animation shows the first time a network's blocks load.
 
-Choose **Some address blocks** in a network's Constituent column to open its row. It lists every /24 block in which the
-network had records yesterday, busiest first, after the blocks you already chose. Tick the blocks that are yours. Your
-choice is kept until you untick it; blocks without records stay chosen and show "no records yesterday". A block you
-tick or add stays in that network's row after **Apply settings**, even if it never appears in the reports. To choose a
-block that is not listed, type it in **Add a block** (for example 192.0.2.0/24, or a single address to add the /24 it
-is in) and press **Add**. Each block shows its record count and a tick box. The first 50 are shown; **Show all N
-blocks** shows the rest, and the search box finds a block (for example 192.0.2). **Close** (or the row's button) folds
-the row again; folded, it says how many are chosen, for example "3 of 120 blocks chosen". The list grows the table
-while it is open. The first time a network's blocks are asked for, the loading animation shows until they arrive.
+Under the table, **Other address ranges** holds ranges of no listed network, one per row (add in the box, remove with
+×): a single address or a block such as 198.51.100.0/22 (for example a government network without its own AS number).
+One not seen in the reports yet is marked as such. Choosing a network or adding a range switches the Constituency card
+to **Only selected networks and address ranges**. Nothing is looked up outside Looking Glass. **Apply settings** saves
+whole networks as AS numbers, and ticked blocks and other ranges as address ranges. Reopened, a saved range that is a
+network's block shows in that network; any other under Other address ranges. Accounts without the Settings permission
+see the choices in words.
 
-Under the table, **Other address ranges** lists ranges that belong to no listed network, one per row: add one in the
-box, remove one with its × button. A range not seen in the reports yet stays there, marked as such. A range can be a
-single address or a block such as 198.51.100.0/22 (for example a government network without its own AS number).
-Choosing a network or adding a range switches the Constituency card to **Only selected networks and address ranges**.
-Nothing is looked up outside Looking Glass. Press **Apply settings** at the bottom to save: the whole networks as AS
-numbers, the ticked blocks and the other ranges as address ranges. When the page opens again, a saved range that is one of a network's blocks shows as
-that network's chosen block; any other range is under Other address ranges. Accounts without the Settings permission
-see the choices in words, without the controls.
+The list holds every network in the reports, from the first day. One not looked up yet is **Not reviewed** ("not
+identified yet"): type its name and type yourself, or press **Look up all** (Settings and the Definitions page,
+administrators and researchers), which looks up every unnamed network, ten at a time with a running count, and saves
+what it finds as not reviewed, for you to check and Save. A reviewed network is never changed by a look-up.
 
-The list holds every network that appears in the reports, from the first day: one that has not been looked up yet is
-**Not reviewed**, without a name ("not identified yet"); you can type its name and type yourself, or press **Look up
-all** at the top of the list (Settings and the Definitions page, for administrators and researchers): it looks up every
-network without a name, ten at a time with a running count, and saves what it finds as not reviewed, for you to check
-and Save. A reviewed network is never changed by a look-up.
-
-**Identify networks** (at the top of the network list in Settings) looks up the company name and type of every network in the data that
-is not identified yet, from PeeringDB and RIPEstat (free public sources; only AS numbers are sent). A window shows the
-progress: how many are looked up, identified, already known (skipped) or failed. Names you corrected by hand are never
-changed, and failed look-ups are tried again next time. The names then appear everywhere at once.
+**Identify networks** (top of the list in Settings) looks up the company name and type of every unidentified network
+from PeeringDB and RIPEstat (free public sources; only AS numbers are sent), with a progress window (looked up,
+identified, already known, failed). Hand-corrected names are never changed; failed look-ups are tried again next time.
+The names appear everywhere at once.
 
 ### Password policy
 
-**Settings → Password policy** (administrators) makes passwords expire. Tick **Make passwords expire**, set how many
-days a password lasts, and **Save the policy** (it asks for your own password). Switching it on makes **every account
-choose a new password at its next sign-in**, then every time its password is older than that. **Require every account to
-change its password at next sign-in** does the same at any moment, for example after a suspected leak (also with your
-password). The card shows how many accounts must choose a new password; every change is in the audit log.
+**Settings → Password policy** (administrators): tick **Make passwords expire**, set how many days a password lasts,
+and **Save the policy** (with your own password). **Every account then chooses a new password at its next sign-in**,
+and again whenever its password is older than that. **Require every account to change its password at next sign-in**
+does the same at any moment, for example after a suspected leak (also with your password). The card shows how many
+accounts must choose a new password; every change is in the audit log.
 
-What people see: they sign in as always (name and password, then the authenticator code). If their password has
-expired, a box says so and asks for a new one, before the platform opens. The new password follows the usual rules and
-cannot be the one that expired. Once it is saved they go straight in, without signing in again, and their other open
-sessions end.
+People sign in as always; if their password has expired, a box asks for a new one before the platform opens. It
+follows the usual rules and cannot be the expired one. Once saved they go straight in, and their other open sessions
+end.
 
-NIST SP 800-63B advises against forcing periodic password changes when there is no sign a password was exposed; some
-audits and regulators still require them. The card says so; the choice is the installation's.
+NIST SP 800-63B advises against forced periodic changes without a sign a password was exposed; some audits and
+regulators still require them. The card says so; the choice is the installation's.
 
 ### Workers (the database pipeline)
 
-The **Workers** tab of Settings holds the pipeline's own settings, so they need not be edited in its `.env`. It is
-**locked**: **Edit** asks for *your own* password (the one you sign in with) and unlocks it for 10 minutes, in this
-session only. **Save the settings** locks it again. The web app never writes the pipeline's files itself: a save is a
-**request** that the pipeline checks again and applies at the start of its next run (within about 30 minutes with the
-usual schedule). The tab shows what is **waiting for the pipeline's next run** and what the pipeline **applied** or
-**refused**, and each result is in the audit log. A wrong password counts like a failed sign-in, and every unlock,
-change (old → new value), key and release is in the audit log. Mailbox and database **passwords are never shown or
-changed here**: they stay in the pipeline's `.env`, set by the installer.
+The **Workers** tab of Settings holds the pipeline's own settings, so its `.env` need not be edited. It is **locked**:
+**Edit** asks for *your own* sign-in password and unlocks it for 10 minutes, in this session only; **Save the
+settings** locks it again. A save is a **request**: the web app never writes the pipeline's files; the pipeline checks
+it again and applies it at the start of its next run (within about 30 minutes with the usual schedule; how:
+[CONFIGURATION.md](CONFIGURATION.md#the-database-pipeline-from-the-platform)). The tab shows what is **waiting for the
+pipeline's next run** and what it **applied** or **refused**. A wrong password counts like a failed sign-in; every
+unlock, change (old → new value), key, release and result is in the audit log. Mailbox and database **passwords are
+never shown or changed here**: they stay in the pipeline's `.env`, set by the installer.
 
-**Changes that make the pipeline less strict also need the server.** Turning the sender check down (Block → Record
+**Changes that make the pipeline less strict also need the server**: turning the sender check down (Block → Record
 only → Off), changing the expected signer, turning the mail server's certificate check off, going back from the
 Shadowserver API to e-mail, loosening an unzip limit (larger unpacked size, ratio or file count, or less disk space
-kept free), saving a new Shadowserver API key and releasing a held-back report are requested here as usual, but the pipeline does not apply them on the
-web app's word alone. The tab marks them **waits for confirmation on the server** and shows the command; someone with
-access to the server runs it on the pipeline's account, in the pipeline's folder:
+kept free), saving a new Shadowserver API key and releasing a held-back report. The tab marks them **waits for
+confirmation on the server** and shows the command, which someone with server access runs on the pipeline's account,
+in the pipeline's folder:
 
 ```bash
 ./confirm_request.sh <id>
 ```
 
-The next run then applies it, and the audit log records who requested it and who confirmed it on the server. Without a
-confirmation it is refused after 7 days. Why: if the web app were ever broken into, it could otherwise switch these
-checks off itself (for example the certificate check, and with it expose the mailbox password, which the web app never
-holds). Making the pipeline stricter (including stricter unzip limits), folders and performance need no confirmation.
+The next run applies it; the audit log records who requested and who confirmed it. Unconfirmed, it is refused after 7
+days. Otherwise a broken-into web app could switch these checks off itself (for example the certificate check, and
+with it expose the mailbox password, which the web app never holds). Stricter settings (including stricter unzip
+limits), folders and performance need no confirmation.
 
-- **Getting the reports:** *By e-mail* (the mailbox the reports are sent to) or *Shadowserver report API* (straight
-  from Shadowserver, with the API key below; save the key first). Every scheduled run uses your choice and fetches only
-  what is new; if your choice cannot be used on a run and the other way is set up, that run uses the other way and its
-  log says why. *Days back per run* applies to both.
-- **Sender check (DKIM):** applies to reports that come by e-mail. *Check the sender of every report* verifies each report e-mail's signature with the sender's
-  public key from DNS and records the result (Audit portal → Sender check). *Block reports that do not pass* also holds
-  back a report that is not validly signed by the expected domain (*Expected signer*, `shadowserver.org`): it is kept
-  apart and not loaded until an administrator releases it. A report passes only when the signature covers its sender
-  (the From line) and the sender is in the signer's domain, and when its headers can be read only one way; a message
-  with lines added above its headers is held back, not trusted. Start with blocking off: a footer or forwarding rule added
-  on the way breaks a genuine signature too, so check first that every genuine report passes.
-- **Sender check, last 7 days:** day by day, how many report e-mails passed, did not pass, or could not be checked, and
-  each kind of failure with what it usually means (for example *the body was changed after it was signed*: a mail
-  gateway or forwarding rule on the way, so deliver Shadowserver's mail unmodified). When every e-mail passed on each of
-  the 7 days and blocking is off, the card says blocking can be switched on safely, with a button that ticks it (save to
+- **Getting the reports:** *By e-mail* (the mailbox the reports are sent to) or *Shadowserver report API* (with the API
+  key below; save the key first). Every scheduled run fetches only what is new; if your choice cannot be used on a run
+  and the other way is set up, that run uses the other way and its log says why. *Days back per run* applies to both.
+- **Sender check (DKIM)**, for reports by e-mail: *Check the sender of every report* verifies each report e-mail's
+  signature with the sender's public key from DNS and records the result (Audit portal → Sender check). *Block reports
+  that do not pass* also holds back a report not validly signed by the *Expected signer* (`shadowserver.org`) until an
+  administrator releases it. A report passes only when the signature covers its sender (the From line), the sender is
+  in the signer's domain, and its headers can be read only one way; a message with lines added above its headers is
+  held back. Start with blocking off: a footer or forwarding rule on the way breaks a genuine signature too.
+- **Sender check, last 7 days:** per day, how many report e-mails passed, did not pass or could not be checked, and
+  each kind of failure with what it usually means (for example *the body was changed after it was signed*: a gateway
+  or forwarding rule on the way, so deliver Shadowserver's mail unmodified). When every e-mail passed on each of the 7
+  days and blocking is off, the card says blocking can be switched on safely, with a button that ticks it (save to
   apply), and the bell says so once. Days without mail, or whose e-mails could not be checked, do not count. If the
   newest e-mails could not be checked at all, the card and the bell say **the check is not working**: neither this
-  server's DNS nor the resolvers asked over HTTPS (`MAIL_AUTH_DNS_SERVERS`, by default Cloudflare and Google) answered
-  the look-up of Shadowserver's signing key (a TXT record), so no report is verified, and with blocking on they would
-  wait at every run. When the server's own DNS drops TXT look-ups, the HTTPS look-up gets the key anyway; when that is
-  blocked too, let this server reach those resolvers over HTTPS, or its DNS answer TXT look-ups.
-- **E-mail settings** (in the same group): the mailbox folder (or Gmail label), messages per fetch, the mail server's
-  certificate check, the timeout.
+  server's DNS nor the HTTPS resolvers (`MAIL_AUTH_DNS_SERVERS`) answered the look-up of Shadowserver's signing key (a
+  TXT record), so no report is verified, and with blocking on they would wait at every run. Let this server's DNS
+  answer TXT look-ups, or let it reach those resolvers over HTTPS
+  ([how the look-up works](CONFIGURATION.md#the-database-pipeline-from-the-platform)).
+- **E-mail settings:** mailbox folder (or Gmail label), messages per fetch, the mail server's certificate check, the
+  timeout.
 - **Loading performance:** loader processes, records per insert, download threads.
 - **Unzip limits:** the largest unpacked size, compression ratio and file count, and the disk space kept free.
-- **Shadowserver report API:** paste the API key and secret Shadowserver gave you. **Check with Shadowserver and save**
-  asks Shadowserver first (is the key accepted, and which report lists may it fetch) and saves them only if it accepts
-  them; afterwards the page only says they are set and when they were last checked, never the values. **Check with
-  Shadowserver now** checks the saved ones again. The key is what *Shadowserver report API* above uses.
+- **Shadowserver report API:** paste the API key and secret. **Check with Shadowserver and save** asks Shadowserver
+  first (is the key accepted, which report lists may it fetch) and saves only if it accepts; afterwards the page says
+  only that they are set and when last checked, never the values. **Check with Shadowserver now** checks them again.
 - **Reports held back by the sender check:** each held-back e-mail with its report files **by their Shadowserver
-  names** (for example `2026-11-15-scan_http-example-geo.csv`, with the report it is and its day), why it was held back
-  and what that usually means. A file that is not named like a Shadowserver report is flagged: check that e-mail before
-  processing it. Tick the reports to process, one by one or **Select all**, then **Process selected** (after your
-  password): Looking Glass lists what you chose and asks before going on. The chosen reports go to the pipeline as one
-  request, so one confirmation on the server (above) lets them all through, and the pipeline loads them at its next
-  run. Process only reports you know are genuine. Processed reports stay on record, each in the audit log.
+  names** (for example `2026-11-15-scan_http-example-geo.csv`, with the report and its day), why it was held back and
+  what that usually means. A file not named like a Shadowserver report is flagged: check that e-mail first. Tick the
+  reports (or **Select all**), then **Process selected** (after your password); Looking Glass lists your choice and
+  asks before going on. They go to the pipeline as one request, so one confirmation on the server lets them all
+  through at its next run. Process only reports you know are genuine. Processed reports stay on record, each in the
+  audit log.
 
-The pipeline uses the settings from its next run. When the pipeline runs on another computer, the tab says so and its
-settings stay in its own `.env`.
+When the pipeline runs on another computer, the tab says so and its settings stay in its own `.env`.
 
 ### Quarterly (reports and the purge)
 
-**The quarterly purge** is at the top, and it is **off** on every installation until an administrator turns it on. Off,
-it says: "The quarterly purge is off on this installation: no report rows are deleted.", then what it would do once on:
-the purge day, the cutoff, and how many rows it would delete (counted when the newest VALID quarterly report was made;
-before the first VALID report it says there is no count yet, and gives the next purge day by the rule).
-
-- **Turn on the quarterly purge** opens a window that shows exactly what will be deleted and when: the raw report rows
-  dated before the cutoff, from the report collections only, on the purge day; the last 31 days are always kept;
-  findings, cases, advisories and the quarterly reports are never deleted. Confirm with the password you sign in with
-  (a wrong one counts like a failed sign-in). Once on, it stays on for every quarter after, and the card says
-  "On since <day>, confirmed by <full name>." with the next purge's day and rows.
-- **Turn off the quarterly purge** works the same way and is always there while it is on. Nothing is deleted while it
-  is off: a purge that has not run yet does not run.
-- Both need the Settings permission and your password, and each change is in the audit log (who, when, and the rows it
-  would delete then). While it is off and a VALID report exists, administrators get one bell alert per quarter: "The
-  quarterly purge is off: turn it on in Settings → Quarterly, or leave it off to keep every report row."
-- Turned on after a quarter's purge day, nothing is deleted for that quarter; the next quarter's purge covers its rows.
+**The quarterly purge** card is at the top. The purge is **off** until an administrator turns it on; off, the card
+says "The quarterly purge is off on this installation: no report rows are deleted.", then what it would do once on:
+the purge day, the cutoff and the rows it would delete (counted by the newest VALID quarterly report; before the
+first, it says there is no count yet and gives the next purge day). **Turn on the quarterly purge** shows exactly what
+will be deleted and when, and asks for your sign-in password; once on, the card says "On since <day>, confirmed by
+<full name>." with the next purge's day and rows. **Turn off the quarterly purge** is always there while it is on.
+While it is off and a VALID report exists, administrators get one bell alert per quarter. What is deleted, what is
+kept, the checks and the alerts: [OPERATIONS.md](OPERATIONS.md#the-quarterly-report-and-the-purge).
 
 Below it: where the quarter stands now, with the purge day and the cutoff ("2026Q4 is in progress: it ends Thursday 31
 December 2026; its reports are made on Sunday 3 January 2027; with the quarterly purge on, the report rows dated before
 Tuesday 22 December 2026 are deleted on Friday 22 January 2027"), then every kept quarter with its purge CSV (the
 management and advisor reports are only for those roles, on their portals), **VALID** or **NOT VALID**, its accuracy
-checks (open them to see each one), its purge as it stands now, whether the purge permit was written, and the purge's
+checks (open them to see each), its purge as it stands now, whether the purge permit was written, and the purge's
 result once the pipeline has run it. **Make it again** counts an ended quarter again (for example once its last day's
 reports are loaded, or after a NOT VALID run); click it twice to confirm. It offers only ended quarters of the last
-four that have report rows (from the oldest report day in the database on) and were not purged; with none it says
-"No ended quarter has report rows yet: the first report is made on <day>." When no ended quarter can be counted, Make it
-again shows only the reason. The pipeline's last purge check says "Nothing to purge now" when the latest quarter past
-its purge day had no report rows before its cutoff, and names the next quarter and its purge day. The timing of the purge cannot be changed here or
-anywhere: [OPERATIONS.md](OPERATIONS.md#the-quarterly-report-and-the-purge) explains the cycle and what to do when a
-report is NOT VALID.
+four that have report rows and were not purged; with none it says "No ended quarter has report rows yet: the first
+report is made on <day>.", or gives the reason no ended quarter can be counted. The pipeline's last purge check says
+"Nothing to purge now" when the latest quarter past its purge day had no report rows before its cutoff, and names the
+next quarter and its purge day. The timing of the purge cannot be changed here or anywhere:
+[OPERATIONS.md](OPERATIONS.md#the-quarterly-report-and-the-purge) explains the cycle and what to do when a report is
+NOT VALID.
 
 ## 8. Administration
 
 ![Admin: users](media/screens/50-admin-users.png)
 
 **Admin** in the top bar (administrators):
-- **Users:** approve new accounts with a role (only accounts waiting for approval; an active account's role changes
-  with Role, which never removes the last administrator), change roles, revoke or restore, reset an authenticator, allow a
-  password reset, end someone's sessions, delete. Each account shows its profile and when it last signed in.
-  You cannot remove the last administrator or your own account. When someone signs up, the bell says so (one notice
-  for everyone waiting, *"N people are waiting for your approval"*), leading here.
-- **Users → Add a person:** a one-time sign-up link for someone you want to add (any role but an administrator's or an
-  auditor's: those sign up on the sign-in page and are approved here): choose their role (and, if you like,
-  write their name for the list), then **Make a sign-up link** and copy it (shown once; the copy is recorded, never the
-  link). Send it by your organisation's usual secure channel. They set their own password and authenticator; nothing
-  secret passes through you. The link works once, for 72 hours (`INVITE_HOURS`), even when sign-up on the sign-in page
-  is closed; the open links are listed with **Revoke**. Making, using and revoking a link are in the audit log, never
-  the link itself.
+- **Users:** approve accounts waiting for approval with a role, change roles (**Role**, which never removes the last
+  administrator), revoke or restore, reset an authenticator, allow a password reset, end someone's sessions, delete.
+  Each account shows its profile and last sign-in. You cannot remove the last administrator or your own account. The
+  bell announces sign-ups (one notice for everyone waiting, *"N people are waiting for your approval"*), leading here.
+- **Users → Add a person:** a one-time sign-up link (any role but administrator or auditor, who sign up on the
+  sign-in page and are approved here). Choose the role (and, if you like, their name for the list), **Make a sign-up
+  link** and copy it (shown once; the copy is recorded, never the link). Send it by your organisation's usual secure
+  channel. They set their own password and authenticator; nothing secret passes through you. The link works once, for
+  72 hours (`INVITE_HOURS`), even when sign-up on the sign-in page is closed; open links are listed with **Revoke**.
+  Making, using and revoking a link are in the audit log, never the link itself.
 - **Roles & permissions:** the permissions of each role, and custom roles.
-- **Peace of mind** (just for you): turn it on to step out of the day-to-day work. The two platforms, Findings,
-  Definitions, Combinations and the Executive and Advisory portals close for you, and no findings notification comes
-  in. You keep Admin, the Audit portal, Settings and the Overview (to keep an eye on the database). Turn it off to have
-  everything back. It changes only your own account, and each switch is in the audit log.
+- **Peace of mind** (just for you): steps you out of the day-to-day work. The two platforms, Findings, Definitions,
+  Combinations and the Executive and Advisory portals close for you, and no findings notification comes in. You keep
+  Admin, the Audit portal, Settings and the Overview (to keep an eye on the database). It changes only your own
+  account; each switch is in the audit log.
 
 ![With Peace of mind on: Admin, Settings and the Overview](media/screens/56-peace-of-mind.png)
 
 ### The Audit portal (`/audit`)
 
-For the **Auditor** role and administrators (permission *audit*). It is built for an IT audit (for example by a
-CISA-certified auditor) and is **read only**: nothing on it changes anything. Choose the **period** at the top
-(7 days, 30 days, 90 days, 12 months, or any two dates, in UTC); every tab follows it.
+For the **Auditor** role and administrators (permission *audit*). Built for an IT audit (for example by a
+CISA-certified auditor) and **read only**. The **period** at the top (7 days, 30 days, 90 days, 12 months, or any two
+dates, in UTC) applies to every tab.
 
 - **Overview:** the key figures (sign-ins, failed sign-ins and the failure rate, lockouts, privileged changes,
   exports, sign-ins outside working hours), sign-ins per day and by hour, events by kind, failed sign-ins by address,
-  exports by person, the recent privileged changes, and the **control checks** LG-01 to LG-15. Each is an automated
-  check of Looking Glass's own controls, **mapped to the NIST SP 800-53 Rev. 5 (Release 5.2.0) controls** it supports,
-  cited by their official titles (for example LG-01 → IA-2(1), IA-2(2) multi-factor authentication; LG-06 → AC-7
-  unsuccessful logon attempts; LG-10 → AU-9, AU-9(3) protection of audit information; LG-11 → AU-11 retention). The LG
-  numbers are Looking Glass's own, not NIST control numbers. Through those NIST controls each check also lists the
-  **CIS Critical Security Controls v8.1 safeguards** that CIS's own official mapping ("CIS Controls v8.1 Mapping to
-  NIST SP 800-53 Rev 5", July 2026) relates to them, with the NIST control each comes through and CIS's relationship
-  (Equivalent; Subset: the safeguard covers part of the NIST control; Superset: it covers more), so one chain reads
-  **LG → NIST → CIS** (for example LG-09 → AU-3 → 8.5 *Collect Detailed Audit Logs*, Equivalent). Looking Glass does
-  not choose these safeguards; a NIST control CIS does not map (AU-9, AC-2(7)) is shown as such. CIS's number, title
-  and relationship are shown exactly as CIS publishes them; next to each, as a separate badge marked as ours, **Looking
-  Glass's own reading**:
+  exports by person, recent privileged changes, and the **control checks** LG-01 to LG-15: automated checks of Looking
+  Glass's own controls, **mapped to the NIST SP 800-53 Rev. 5 (Release 5.2.0) controls** they support, by official
+  title (for example LG-01 → IA-2(1), IA-2(2) multi-factor authentication; LG-06 → AC-7 unsuccessful logon attempts;
+  LG-10 → AU-9, AU-9(3) protection of audit information; LG-11 → AU-11 retention). LG numbers are Looking Glass's
+  own, not NIST's. Through those NIST controls each check lists the **CIS Critical Security Controls v8.1 safeguards**
+  that CIS's official mapping ("CIS Controls v8.1 Mapping to NIST SP 800-53 Rev 5", July 2026) relates to them, with
+  the NIST control and CIS's relationship (Equivalent; Subset: the safeguard covers part of the NIST control;
+  Superset: it covers more): **LG → NIST → CIS** (for example LG-09 → AU-3 → 8.5 *Collect Detailed Audit Logs*,
+  Equivalent). Looking Glass does not choose these safeguards; a NIST control CIS does not map (AU-9, AC-2(7)) is
+  shown as such. CIS's number, title and relationship are shown exactly as CIS publishes them; beside each, a separate
+  badge marked as ours gives **Looking Glass's own reading**:
   - **backed**: the check produces evidence for the safeguard as CIS words it, CIS's figures included, **on this
-    system, now** (for example LG-09 → 8.5 detailed audit logs). Conservative: only the pairs listed in
-    `control_map.py` (BACKED), and only while the evidence meets CIS's figure: 6.3 and 6.5 while MFA is required and
-    every account has an authenticator; 8.10 while audit records are kept at least 90 days; 5.3 only with
-    `AUDIT_DORMANT_DAYS` at 45 or less and no dormant account still active; 8.11 only with `AUDIT_REVIEW_DAYS` at 7 or
-    less and a review recorded. Otherwise the row is **related**, saying what differs ("Looking Glass lists accounts
-    unused for 90 days; CIS asks for 45"), which is advice for the auditor. The defaults are CIS's own figures
-    (`AUDIT_DORMANT_DAYS=45`, `AUDIT_REVIEW_DAYS=7`). 3.14 (Log Sensitive Data Access) is backed by LG-15 while
-    views of host-level data are logged as well as exports (on by default). 8.4 is never backed: the check reads
-    whether the server's clock is synchronised, and CIS asks for at least two time sources.
+    system, now** (for example LG-09 → 8.5). Only the pairs listed in `control_map.py` (BACKED), and only while the
+    evidence meets CIS's figure: 6.3 and 6.5 while MFA is required and every account has an authenticator; 8.10 while
+    audit records are kept at least 90 days; 5.3 only with `AUDIT_DORMANT_DAYS` at 45 or less and no dormant account
+    still active; 8.11 only with `AUDIT_REVIEW_DAYS` at 7 or less and a review recorded. Otherwise the row is
+    **related**, saying what differs ("Looking Glass lists accounts unused for 90 days; CIS asks for 45"), as advice
+    for the auditor. The defaults are CIS's figures. 3.14 (Log Sensitive Data Access) is backed by LG-15 while views of
+    host-level data are logged as well as exports (on by default). 8.4 is never backed: the check reads whether the
+    server's clock is synchronised, and CIS asks for at least two time sources.
   - **not backed**: the mapping reaches it but the check does not look at its subject, with the reason: LG-01 → 6.4
     MFA for remote network access; LG-06 → 4.10 lockout on portable devices; LG-07 → 4.3 and 12.3; LG-10 → 3.11
     encryption at rest (LG-10 protects the audit log's integrity but encrypts nothing); LG-15 → 8.6 DNS, 8.7 URL,
     8.8 command-line and 8.12 service provider logs.
   - **related**: everything else; CIS's mapping relates it, and nothing more is claimed.
-  The overview counts what it says: "evidence for N NIST controls · M CIS safeguards backed by a check (K more related
-  by CIS's mapping)". **The CIS Controls are used here as a map, to guide Looking Glass's security and make the auditor's work easier. They are voluntary best practice, not a law or a requirement, and CIS issues no certificate for meeting them: organisations measure themselves with CIS's free Self Assessment Tool (CSAT) or with an auditor, and those that need a formal certificate usually go for ISO 27001 or SOC 2, with the CIS Controls as a guide.** The CIS Controls apply to the whole environment (accounts, assets, backups, incident response...), and
-  Looking Glass supports only part of Controls 3, 5, 6 and 8. The CIS Controls are
-  © Center for Internet Security, Inc., cited unchanged under CC BY-NC-ND 4.0 (not under Looking Glass's licence);
-  the portal and the report carry that notice. Each check gives its evidence and **no pass or fail**:
-  whether a control is implemented and operating effectively is the auditor's conclusion. Click a check to open the
-  records behind it. The evidence report states the scope and limits of the checks.
+  The overview counts it: "evidence for N NIST controls · M CIS safeguards backed by a check (K more related by CIS's
+  mapping)". **The CIS Controls are used here as a map, to guide Looking Glass's security and ease the auditor's work.
+  They are voluntary best practice, not a law or a requirement, and CIS issues no certificate for meeting them:
+  organisations measure themselves with CIS's free Self Assessment Tool (CSAT) or an auditor, and those needing a
+  formal certificate usually go for ISO 27001 or SOC 2, with the CIS Controls as a guide.** They apply to the whole
+  environment (accounts, assets, backups, incident response...); Looking Glass supports only part of Controls 3, 5, 6
+  and 8. The CIS Controls are © Center for Internet Security, Inc., cited unchanged under CC BY-NC-ND 4.0 (not under
+  Looking Glass's licence); the portal and the report carry that notice. Each check gives evidence and **no pass or
+  fail**: whether a control is implemented and operating effectively is the auditor's conclusion. Click a check for
+  the records behind it. The evidence report states the scope and limits of the checks.
 
   ![Control checks: NIST controls, CIS's safeguards as published, and Looking Glass's own reading beside each](media/screens/57-audit-cis.png)
 - **One tab per kind of event:** Authentication, Accounts and access, Sessions, Configuration changes, Data access
-  and exports, Workflow, and System and self-test. **Data access and exports** holds every export (reports, CSV
-  files, advisories, audit evidence, host-list downloads) and every **view of host-level data**: the events on the map
-  and the records on the services page, one host's activity, the hosts behind a figure, a record's details, an
-  analysis. Each says who, when, from where and what was looked at (every filter of the view),
-  hosts by their reference, never their address; the same person viewing the same thing again within 10 minutes is
-  not logged twice, but every download is, the same list twice included. `DATA_ACCESS_LOG=0` in `.env` turns view logging off (the Audit portal then says so); downloads are always logged. Each has its count, a search, *Alerts only*, and **Export CSV**.
-  The installation check's events are kept apart in System and self-test.
+  and exports, Workflow, and System and self-test (which keeps the installation check's events apart). Each has its
+  count, a search, *Alerts only* and **Export CSV**. **Data access and exports** holds every export (reports, CSV
+  files, advisories, audit evidence, host-list downloads) and every **view of host-level data** (map events, services
+  records, one host's activity, the hosts behind a figure, a record's details, an analysis): who, when, from where and
+  what (every filter of the view), hosts by their reference, never their address. The same person viewing the same
+  thing again within 10 minutes is logged once; every download is logged, the same list twice included.
+  `DATA_ACCESS_LOG=0` in `.env` turns view logging off (the portal then says so); downloads are always logged.
 - **Copies:** every copy made with a copy button, recorded before it was copied: who, what (for example "the addresses
   of a combination (12)"), how many lines and addresses, which page, when, and its seal's reference (S-…); never the
   copied text. Also every leak traced (who, when, how many matches).
 - **Trace a leak:** text or a file found outside Looking Glass (a pasted list, a CSV, a ZIP someone shared) is matched
-  against the seals of every copy and download: who copied or downloaded it, when, what, and how closely it matches
-  ("the exact text copied", "the exact file", or "3 of its 40 lines and addresses"). A file found inside a ZIP is
-  matched even when the file was renamed and zipped again. What you give is fingerprinted in memory and thrown away;
-  each trace is in the audit log (who, when, how many matches, never what was searched); at most 5 a minute and 100 a
-  day per person. A copy or download is shown when it is exactly what you gave, or holds at least half of its lines or
-  of its addresses (so a list of guessed addresses never matches, while a real excerpt does, even reformatted). Give
-  at most 1,000 lines and 1,000 addresses to find partial matches; with more, only copies and downloads of exactly
-  that text or file are looked for, and the answer says so. A line found in many people's copies and downloads (a
-  CSV's header) does not count as a match, and the answer says how many were left out. Small traces (at most 3
-  lines each) are watched: one or two addresses at a time can be used to test guesses, so when one person runs 20 of
-  them within 24 hours (`SMALL_TRACE_ALERT`), the administrators get an alert in the bell, linking here, and again at
-  every further 20. Only the person and the times are kept for this, never what was traced.
+  against the seals of every copy and download: who, when, what, and how closely ("the exact text copied", "the exact
+  file", or "3 of its 40 lines and addresses"); a file inside a ZIP matches even renamed and zipped again. The input is
+  fingerprinted in memory and thrown away; each trace is in the audit log (who, when, how many matches, never what was
+  searched); at most 5 a minute and 100 a day per person. A copy or download is shown when it is exactly what you
+  gave, or holds at least half of its lines or addresses (so guessed addresses never match, while a real excerpt does,
+  even reformatted). Partial matches are looked for up to 1,000 lines and 1,000 addresses; above that only exact ones,
+  and the answer says so. A line in many people's copies and downloads (a CSV's header) does not count, and the answer
+  says how many were left out. Small traces (at most 3 lines each) can test guesses, so when one person runs 20 within
+  24 hours (`SMALL_TRACE_ALERT`) the administrators get a bell alert linking here, and again at every further 20. Only
+  the person and the times are kept for this.
 - **Access review:** every account with its role and what that role may do, its authenticator, last sign-in, who
   approved it and flags (no authenticator, dormant, pending too long, every permission), and the roles matrix.
 - **Signed in now:** every session with its address, location, browser and expiry (read only).
-- **Sender check:** who really sent the reports. The pipeline verifies every report e-mail's DKIM signature, and this
-  tab shows, for the period: the mode (record only or blocking), how many reports were checked and the share validly
-  signed by the expected domain, how many did not pass (signature fails, not signed, another signer, cannot be checked)
-  and how many were held back or released; results per day; the signing keys seen (domain, selector, algorithm, key
-  size); every report that did not pass and what happened to it; and the settings changes and releases.
-  **New report types:** a report type that arrives for the first time (by e-mail or API; Shadowserver adds reports
-  from time to time) is listed with the day it first arrived and whether the report definitions know it yet (*new
-  report, no definition yet* until the definitions, kept current from Shadowserver's schema, carry it). It is loaded
-  like any other in the meantime. Next to the
-  evidence, what the current standards ask: RFC 6376 (DKIM), RFC 8301 (algorithms and key sizes), RFC 8463 (Ed25519),
-  RFC 7489 (DMARC alignment), NIST SP 800-177 Rev. 1 (Trustworthy Email) and NIST SP 800-53 Rev. 5 SI-7 (information
-  integrity). Evidence only, no verdict.
-- **Data sent out:** what Looking Glass sent to the CSIRT's own OpenCTI and MISP (Settings → Connectors). Each target
-  as it is set up (platform, address, TLP, what it receives, on, off or paused, who added it and when), then, for the
-  period, every send (report day, devices, objects, TLP), every object sent again because the platform had not taken
-  it, every revocation and every failure, with the period's totals. Looking Glass's own analysis only: never raw
-  report rows, findings, notes, names or keys. Evidence only, no verdict.
-- **Integrity and evidence:** **Verify the audit log** walks every entry. Each one carries the fingerprint (SHA-256)
-  of the one before it, so a changed, inserted or removed entry breaks the chain and the check says where. It shows
-  the **head** (hash@entry), and the **signed checkpoints**: the daily signed copies of the head, each found at its
-  entry or not, the signing key's fingerprint, and whether a copy goes away from the server
-  ([AUDIT_LOG_PROOF.md](AUDIT_LOG_PROOF.md#between-audits-signed-checkpoints)). Then download the **evidence report (PDF)** or **every event (CSV)** for the period. After
-  each download the page shows the file's own SHA-256 to note with it. Every check and every export is itself in the
-  audit log.
-- **Proof to take away:** Verify is Looking Glass checking itself. The **proof package (ZIP)** lets the auditor check
-  it without trusting Looking Glass: the log's files exactly as stored, `audit_log.csv` (every entry in those files as a
-  spreadsheet, numbered as in the chain, made from the same copy), `MANIFEST.json` with the SHA-256 of each, and
-  `verify_audit_log.py`, a short verifier in plain Python (standard library only) that recomputes the whole chain on
-  the auditor's own computer (`python verify_audit_log.py`). The auditor keeps the package's SHA-256 and its head. At
-  the next audit, **Compare with an earlier audit** (or `python verify_audit_log.py --earlier HASH@ENTRY` on a new
-  package): each entry's hash depends on every entry before it, so if the earlier head is still at its entry number,
-  the log up to it is unchanged, even against someone able to rewrite the whole log on the server. The package's
-  SHA-256 is written into the log too, so each package carries the receipt of the one before. How and why this works,
-  step by step, and what it does not cover: [How the audit log proves itself](AUDIT_LOG_PROOF.md).
+- **Sender check:** the pipeline's DKIM results for the period: the mode (record only or blocking), reports checked
+  and the share validly signed by the expected domain, those that did not pass (signature fails, not signed, another
+  signer, cannot be checked), held back or released; results per day; the signing keys seen (domain, selector,
+  algorithm, key size); every report that did not pass and what happened to it; settings changes and releases.
+  **New report types** (by e-mail or API) are listed with the day each first arrived and *new report, no definition
+  yet* until the report definitions, kept current from Shadowserver's schema, carry it; it is loaded like any other
+  meanwhile. Beside the evidence, what the standards ask: RFC 6376 (DKIM), RFC 8301 (algorithms and key sizes), RFC
+  8463 (Ed25519), RFC 7489 (DMARC alignment), NIST SP 800-177 Rev. 1 (Trustworthy Email) and NIST SP 800-53 Rev. 5
+  SI-7 (information integrity). Evidence only, no verdict.
+- **Data sent out:** what Looking Glass sent to the CSIRT's own OpenCTI and MISP (Settings → Connectors): each target
+  as set up (platform, address, TLP, what it receives, on, off or paused, who added it and when), then, for the period,
+  every send (report day, devices, objects, TLP), resend of an object the platform had not taken, revocation and
+  failure, with totals. Looking Glass's own analysis only: never raw report rows, findings, notes, names or keys.
+  Evidence only, no verdict.
+- **Integrity and evidence:** **Verify the audit log** walks every entry; each carries the SHA-256 of the one before,
+  so a changed, inserted or removed entry breaks the chain and the check says where. It shows the **head**
+  (hash@entry) and the **signed checkpoints** (the daily signed copies of the head, each found at its entry or not, the
+  signing key's fingerprint, and whether a copy goes away from the server:
+  [AUDIT_LOG_PROOF.md](AUDIT_LOG_PROOF.md#between-audits-signed-checkpoints)). Download the **evidence report (PDF)**
+  or **every event (CSV)** for the period; the page then shows the file's SHA-256 to note. Every check and export is
+  in the audit log.
+- **Proof to take away:** the **proof package (ZIP)** lets the auditor check the log without trusting Looking Glass:
+  the log's files as stored, `audit_log.csv` (every entry, numbered as in the chain), `MANIFEST.json` with each file's
+  SHA-256, and `verify_audit_log.py`, a short standard-library Python verifier that recomputes the chain on the
+  auditor's computer (`python verify_audit_log.py`). The auditor keeps the package's SHA-256 and its head. Next time,
+  **Compare with an earlier audit** (or `python verify_audit_log.py --earlier HASH@ENTRY`): if the earlier head is
+  still at its entry number, the log up to it is unchanged, even against someone able to rewrite the whole log. The
+  package's SHA-256 is written into the log, so each package carries the receipt of the one before. Step by step, and
+  what it does not cover: [How the audit log proves itself](AUDIT_LOG_PROOF.md).
 
-Entries are archived, not deleted, when the log grows (kept `AUDIT_RETENTION_DAYS`, default 400 days); the thresholds
-of the checks are in `.env` ([CONFIGURATION.md](CONFIGURATION.md)).
+Entries are archived, not deleted, when the log grows (kept `AUDIT_RETENTION_DAYS`, default 400 days); the checks'
+thresholds are in `.env` ([CONFIGURATION.md](CONFIGURATION.md)).
 
 ![The Audit portal: the audit log](media/screens/52-admin-audit.png)
 

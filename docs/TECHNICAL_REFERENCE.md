@@ -70,327 +70,187 @@ The base covers the infections and categories that Shadowserver's event reports 
 
 ## Researchers: intel, notes and where a name was seen
 
-The Definitions page (`/definitions`, permissions *definitions* / *networks*, admins too) is the researchers' page. Its
-server side is in small modules called from `app.py`:
+The Definitions page (`/definitions`, permissions *definitions* / *networks*, admins too) is the researchers' page.
+What each part shows and how it is used: [USER_GUIDE.md, Analysis and follow-up](USER_GUIDE.md#5-analysis-and-follow-up).
+Its server side is in small modules called from `app.py`:
 
-- **`intel.py`, Intel gathered.** From the report day (`report_day.py`: the day being replayed, or the newest day in
-  memory when that day is not there; the Executive portal passes the day it shows; code look-ups and the analysts'
-  combination search use every day in memory) it collects, per name and per report, the indicators the
-  records carry: C2 domains, destination host names, TLS server names, DNS lookups, URLs, user agents, request patterns,
-  brute-force usernames and passwords; for services issues the other CVEs on the same hosts, associated tags, products,
-  certificate names and fingerprints (SHA-256, JARM, HASSH), server software and web page hashes. For each value and for
-  each **combination** (the exact set on one record: tags and CVEs; for communications also C2 domain and user agent) it
-  counts records, share, hosts and **repeating hosts** (hosts with more than one record). It also raises **leads**: the
-  same indicator under two names, in two reports for one name, or an infection's domain that is a certificate name on a
-  services host; values common to everything are filtered out. No source address, host name or constituent address is
-  ever returned; addresses inside free text are masked. `GET /api/intel?section=infections|issues&name=…`,
-  `GET /api/intel/leads`, `GET /api/intel/summary` (per name and report: how many kinds of indicator, for the
-  *Seen in* cards). Cached for five minutes per set of days. These counts, and the services patterns'
-  (`services_intel.py`), are worked out behind the page (`index_refresh.Gate`): counts that are out of date are served
-  at once while one background thread counts again, and two first requests share one count. The Executive portal's day,
-  when it is the report day, uses the report day's counts.
-- **`intel_match.py`, Explore a match.** `GET /api/intel/match?kind=…&value=…` (the Definitions permission) answers
-  only for a match currently in the leads: for every name and report of the match, the indicators, tags and
-  combinations of only the records that carry the indicator, in the same shape as a report of `/api/intel`, with the
-  same masking, the 5-device rule on the services side and the same combination codes. Devices are counted, never
-  returned. Kept per set of days for up to an hour; a heavy view (per-person limits).
-- **`beacon_decode.py`, decoded beacons.** Finds encoded C2 check-ins in a record's `http_url` and decodes them. Pure
-  functions: no network, no files; a request line over 16,384 characters or a query value over 8,192 is not looked at,
-  values under 40 characters are not candidates, at most 4 values per line, 0.25 s per line for all formats together;
-  results cached by request line (4,096). A **registry of formats** (`FORMATS`): each has its usual path and query
-  parameter (tried there first, elsewhere too), its key length and key alphabet, its trailer XOR byte, the JSON fields it
-  must carry and a `describe` function for its notes. The first is the **CLogin check-in** (`clogin`, `GET
-  /CLogin?key=…`; operators zckypc, WT, PKS, HTM): Base64 → repeating XOR with a 32-character lowercase hex key, a new
-  key per check-in → the Base64 text of the JSON followed by a trailer (46–52 hex characters, each XORed with 0x72).
-  A second layout of the same check-in: the JSON and a few more bytes in Base64 text that needs no padding, then `=` and
-  a short trailer as it is (not XORed), all under the key. `split_b64` takes an `=` that cannot be padding as the start
-  of the trailer, and the note says *after '=', plain hex* or *after '=', as it is* (a byte that is not printable is
-  shown as `\xNN`).
-  The key is recovered from the beacon: per key position, the hex characters that map that column into the Base64
-  alphabet up to the trailer (`boundary_columns`: each character is judged up to the first byte it cannot map, three key
-  lengths short of the longest stretch); per 4-character group (Base64 groups and the key line up, the key length being
-  a multiple of 4), the 12 best choices by how JSON-like the bytes they decode to read; then up to three passes trying
-  each group's other choices against the whole text (valid JSON, the format's field names, any `"name":"` pair, hex
-  values that stay hex). **Families that cannot be decoded** (`OPAQUE`, by C2 host, path and
-  parameter): ttyunos (`/api/desk/getData`, `/api/language/getList`, `a`/`b`) and weatherlive
-  (`/br_upgrade/widget/getConfigs`, `scsl`), whole 16-byte blocks of a block cipher whose key the app keeps;
-  adoverocean (`/ota/api/tasks/v2`, `m`), a 32-hex hash; pixellog (`/regdev`, `userid`), an opaque device ID; clickby
-  (`/s.php`, `/s2.php`, `d`), one constant campaign token; sustat (`/u.php`, `/pic.php`, `p`), a few short binary
-  values. `seen()` names them for analysts ("not decoded", with what they are); `mask_url()` replaces their values
-  (`<ttyunos value>`) wherever the path and parameter match. **Generic fallback** (`generic()`, for a candidate no
-  format fits and no `OPAQUE` family sits at): up to 3 layers of hex, Base64 (standard or URL-safe), zlib / gzip /
-  deflate (64 KiB out at most) and a one-byte XOR (binary only, the three most text-like keys), kept only when the
-  result reads as JSON, at least two `key=value` pairs, or words (97% printable, 60% letters, two distinct words); the
-  result is `format: "generic"`, its title names the layers, its text is cut at 4,000 characters. `unknown()` lists the
-  candidates nothing decodes or names, with `shape()` (encoding, decoded length, 16-byte alignment, entropy, a hint:
-  hash-sized, block cipher, random-looking, structured binary); the analysts' view says "Unknown encoding" with that
-  shape and never the value. In masked views every candidate that is not a known format reads `<encoded value>`. Notes: `cpuid` written out as ASCII; the MAC
-  prefix (00:FF TAP-Windows, VirtualBox, VMware, Hyper-V, QEMU/KVM, Xen); the trailer; the OS the beacon names against
-  the OS the infection name points to (`name_os`: *android*, *badbox*… → Android; *win32*… → Windows). Such a
-  contradiction is a note only: the decoder says what the beacon holds and never adds an action; the event's
-  *Recommended action* stays the name's definition. Who sees what:
-  `POST /api/beacon/decode` (`{url, name}` in the body, so the request line stays out of URLs and logs; the page's CSRF
-  token and the *unmasked* permission, demo off) answers the whole JSON, key and notes for the map's *Decoded beacon*
-  block (`static/js/beacon.js`, called from `app.js`). `mask_url()` replaces an encoded value with `<clogin beacon>`
-  in every masked view (`privacy.mask_event`) and in Intel gathered's URL values; a value at a format's own path and
-  parameter is replaced even when it does not decode. For researchers, `intel.py` adds the kinds *Beacon format* (the
-  readable title; "(not decoded)" for an `OPAQUE` family), *Beacon operator*, *Beacon version* and *Beacon OS* (family)
-  (`public()`: nothing else of the beacon), each value shown only when 5 or more devices carry it (`intel.held()`, also
-  in Explore and Across reports), and the lead kind *Beacon vs name* (priority 5, listed first): per OS family, the
-  decoded beacons whose OS contradicts the names they are filed under, for researchers from 5 devices. Format and OS
-  are never matched between names (shared by every beacon of a format). The XOR key is not an indicator: a new one per
-  check-in. Never shown to researchers: MAC, hardware UUID (`spare1`), `cpuid`, `cpumd5`, `mem`, the key. Test:
-  `tests/check_beacon_decode.py` (made-up beacons from `tests/beacon_samples.py`, random keys).
-- **`config_page.py`, Settings → Configuration.** A catalogue of the platform's settings: `TUNING` (key, group, label,
-  kind, default, range, help: editable), `READ_ONLY` (security, sign-in locks, audit, database, country: shown with the
-  `.env` line) and `SECRETS` (only whether set). Values are kept in `data/config.json` (mode 600); `load()` keeps only
-  valid tuning values, so a hand-edited file cannot switch a security setting. `apply()` runs in `gunicorn.conf.py`
-  before the app is loaded: `.env` first (read with python-dotenv's own parser, never replacing what the service was
-  given), then the kept values, which take precedence; so every module, also those that read a setting as they are
-  imported, sees the same values. `GET/POST /api/admin/config`, `POST /api/admin/config/restart` (SIGTERM to the gunicorn
-  master; systemd's `Restart=always` starts it again; one a minute). Settings permission; changes need JSON, the CSRF
-  token and a recent sign-in; each is audited (`config_changed`, `service_restarted`). Registered in `features.py`.
-  Test: `tests/check_config_page.py` (the catalogue against the code's own defaults, validation, precedence, secrets
-  never in an answer, every guard, the restart signal).
-- **`beacon_keep.py`, decoded answers kept across restarts.** The public summary of each request line's beacon
-  (`beacon_decode.public`: format, operator, version, OS family, state) is kept in `data/beacon_summaries.json` (mode
-  600), keyed by a SHA-256 of the request line and host; the line, the host and the device details are never written.
-  The file carries a fingerprint of `beacon_decode.py` and is not used by a different decoder. At most 200,000 answers
-  (`BEACON_KEEP_MAX`), written at most once a minute while new answers come in, and at exit; each different summary
-  is held once in memory. Switched on by `beacon_decode.install` (the
-  running platform only). Deleting the file is safe: the answers are worked out again. Test: `tests/check_beacon_keep.py`.
+- **`intel.py`, Intel gathered.** Over the report day (`report_day.py`: the replayed day, else the newest in memory;
+  the Executive portal passes its day; code look-ups and the combination search use every day in memory), per name and
+  report: the records' indicators, and per value and **combination** (one record's exact tags and CVEs; for
+  communications also C2 domain and user agent) records, share, hosts and repeating hosts. **Leads:** one indicator
+  under two names, in two reports of one name, or an infection's domain that is a certificate name on a services host.
+  Never returns a source address, host name or constituent address. `GET /api/intel?section=infections|issues&name=…`,
+  `GET /api/intel/leads`, `GET /api/intel/summary` (the *Seen in* cards). Cached five minutes per set of days; with
+  `services_intel.py`'s patterns, counted behind the page (`index_refresh.Gate`): stale counts are served while one
+  thread counts again.
+- **`intel_match.py`, Explore a match.** `GET /api/intel/match?kind=…&value=…` (Definitions permission), only for a
+  match in the leads: per name and report, what `/api/intel` gives for only the records with the indicator, with the
+  same masking, 5-device rule and codes. Devices are counted, never returned. Kept per set of days up to an hour;
+  per-person limits.
+- **`beacon_decode.py`, decoded beacons** (what analysts see:
+  [USER_GUIDE.md](USER_GUIDE.md#3-reported-network-communications-the-map)). Pure functions (no network, no files)
+  that decode encoded C2 check-ins in a record's `http_url`; cached by request line (4,096). A request line over
+  16,384 characters or a query value over 8,192 is not looked at, values under 40 characters are not candidates, at
+  most 4 values per line, and 0.25 s per line for all formats together. Formats are registered
+  in `FORMATS`. The **CLogin check-in** (`clogin`, `GET /CLogin?key=…`): Base64 → repeating XOR with a 32-character
+  hex key, new per check-in and recovered from the beacon → the JSON's Base64 text plus a trailer (46–52 hex
+  characters, each XORed with 0x72). Every decode passes `recheck`; `instruction_like` adds `INJECTION_NOTE` to text
+  that reads like instructions. Named, not decoded (`OPAQUE`, by C2 host, path and parameter): ttyunos and
+  weatherlive (block cipher), adoverocean (hash), pixellog (device ID), clickby (campaign token), sustat (short binary
+  values). `generic()` tries up to 3 layers of hex, Base64, zlib / gzip / deflate and one-byte XOR; `unknown()` lists
+  the rest with `shape()`, never the value. States (`STATUS`): decoded, encrypted, hash, id, token, unknown, cut.
+  `POST /api/beacon/decode` (`{url, name}` in the body; CSRF, *unmasked* permission, demo off) feeds the map's
+  *Decoded beacon* block (`static/js/beacon.js`). `mask_url()` hides encoded values in masked views
+  (`privacy.mask_event`) and Intel gathered. Researchers get only *Beacon format*, *Beacon operator*, *Beacon
+  version* and *Beacon OS* (`public()`), each from 5 devices (`intel.held()`), and the lead *Beacon vs name*; never
+  MAC, hardware UUID (`spare1`), `cpuid`, `cpumd5`, `mem` or the key. Tests: `tests/check_beacon_decode.py`,
+  `tests/verify_beacon_decode.py` (the latest day, counts only).
+- **`config_page.py`, Settings → Configuration.** Catalogue: `TUNING` (editable), `READ_ONLY` (shown with the `.env`
+  line), `SECRETS` (only whether set). Values in `data/config.json` (mode 600); `load()` keeps only valid tuning
+  values. `apply()` runs in `gunicorn.conf.py` before the app loads: `.env` first, then the kept values, which win.
+  `GET/POST /api/admin/config`, `POST /api/admin/config/restart` (SIGTERM to the gunicorn master, which systemd
+  restarts; one a minute). Settings permission, CSRF, a recent sign-in; audited `config_changed`,
+  `service_restarted`. Test: `tests/check_config_page.py`.
+- **`beacon_keep.py`, decoded answers kept across restarts.** Each request line's `beacon_decode.public` summary in
+  `data/beacon_summaries.json` (mode 600), keyed by SHA-256 of request line and host, which are never written; ignored
+  by a different `beacon_decode.py`. At most 200,000 answers (`BEACON_KEEP_MAX`), written at most once a minute and at
+  exit. Deleting it is safe. Test: `tests/check_beacon_keep.py`.
 - **`recent_days.py`, older days kept for analyst codes.** `app._day_for` gives an analyst code its day: the copy in
-  memory, or else the day loaded from MongoDB and kept by `RecentDays` for `ANALYST_DAY_KEEP_S` seconds, at most
-  `ANALYST_DAY_KEEP` days (default 1; 0 keeps none). A kept copy is valid only for the version it was loaded at (the
-  constituency's settings version and the store's generation). Room is made before a load, so a code spanning many
-  days is read one day at a time, and two requests for the same day at once load it once. Kept days are read only,
-  like the days in memory. Test: `tests/check_recent_days.py`.
-- **`pdf_refs.py`, the PDFs' References section.** One function orders and flags every PDF's references: each
-  explained name (by criticality: a CVE's CVSS severity, an actively exploited one first within its level; an
-  infection's or issue's highest record severity), then the Shadowserver reports (by Shadowserver's severity, matched
-  by their shadowserver.org page). Record levels come from the PDF's records, the days in memory (`DAYS`, set by
-  `features.py`) and `data/name_levels.json` (names and levels only, the most severe kept). Also draws the References
-  pages on the canvas PDFs; `reports_pdf.py` draws its own with the same groups.
-- **`name_levels_catchup.py`, every name's level learned once.** `NAME_LEVELS_DELAY_S` seconds after a start (the
-  running service only), one thread reads every report collection once, projecting only infection, issues, tags and
-  severity, in batches with short pauses between them, and keeps each name's highest level in `data/name_levels.json`; it
-  writes `data/name_levels.done` at the end and never runs again. Since version 2 of its marker it also keeps every name
-  the records carried, rated or not, with its kind in `data/name_kinds.json`; an installation updated from version 1
-  reads every report once more.
-- **`invites.py`, Add a person.** One-time sign-up links: `data/invites.json` (owner-only) keyed by the SHA-256 of a
-  256-bit token (never a working link), with role, name, maker, made and expiry (`INVITE_HOURS`, 72), used or revoked;
-  at most 50 open; entries finished 90 days ago are dropped. `GET/POST /api/admin/invites`,
-  `POST /api/admin/invites/<id>/revoke` (permission *users*, CSRF, a recent sign-in; audited as `invite_made`,
-  `invite_revoked`, and `invite_used` by auth.py). It sets `auth.INVITE` (`check`, `use`): `/register?invite=` opens
-  sign-up also when `REGISTRATION=0`; at enrolment the link is used once and the account is created **active** with the
-  link's role, `approved_by` its maker. auth.py also opens sign-up while no administrator exists (the first one, with
-  the setup code), whatever `REGISTRATION` says. Page: `static/js/invites-admin.js`. Test: `tests/check_accounts.py`
-  and the security retest (a full sign-up through a link).
-- **`net_drift.py`, network changes.** `drift(base_dir)` compares this computer's addresses (`hostname -I`) with the
-  IP addresses of a self-signed `data/tls/cert.pem` (read with `openssl x509`; not checked for a CA's certificate or
-  `ACCESS_MODE=local`) and with `MONGO_BIND` in the pipeline's `.env`; each mismatch comes with its fix. Used by
-  `system_alerts.py` (the bell; at most every 5 minutes) and `tests/check_addresses.py` (a warning, not a failure).
-  `system_alerts.py` also announces people waiting for approval (one alert; its key is the newest sign-up's time).
-- **`neutral.py`, what a signed-out visitor learns (anti-fingerprinting).** An `after_request` hook rewrites every
-  status line to the standard reason phrase (`http.HTTPStatus`), empties Werkzeug's "Redirecting..." bodies and
-  replaces its default error pages with a plain one, replaces the static files' ETag with 24 hex characters of its
-  SHA-256 (answering 304 to a matching `If-None-Match`), and, for requests without a signed-in user, sets a short
-  Content-Security-Policy naming no outside library (`/login` and `/register` keep the QR-code library of the
-  authenticator set-up). `/healthz` answers loopback only (a `before_request` 404). `security.py` sends no `Server`
-  header. `auth.PUBLIC_STATIC` lists the only files served signed out (the sign-in pages' styles and scripts, the
-  world outline of their scene); any other `/static/` path is 404 signed out and served to every signed-in role before
-  the role path lists apply. The sign-in pages (`auth_base.html`, `login.html`, `forgot.html`) show the organisation's
-  name only: no image and an empty tab icon (`data:,`). After a sign-in, `auth.start_session` redirects to
-  `/welcome?next=…` (`signin_welcome.py`, not public: signed out it is the sign-in page), which plays the globe dive and
-  opens `next` (a path on this site, `auth._safe_next`). `deploy/make_tls_cert.sh` names the certificate
-  after the first name given or the machine. Registered in `features.py`. Test: `tests/check_fingerprint.py`.
-- **`insider.py`, copies recorded, seals and Trace a leak.** `POST /api/copy/record` (`{kind, what, page, text}`;
-  signed in, CSRF token, at most `COPY_PER_MINUTE` (30) a minute per person, else 429) seals the text (HMAC-SHA-256, key `COPY_SEAL_KEY` or `data/copy_seal.key`: the whole
-  normalised text, each line of 4+ characters, each IP address found by `ip_find`; fingerprints cut to 96 bits) into
-  `data/copy_seals.jsonl` (owner-only, fsynced) and only then writes the audit entry `copied` and answers; a write that
-  fails answers 503 and nothing is audited, and `static/js/lg-copy.js` (`LGCopy.copy`) copies only after a 200. The
-  page script also blocks selecting, copying, cutting and dragging outside editable fields. An `after_request` hook
-  seals every 200 response with `Content-Disposition: attachment` (SHA-256 of the body; each file of a ZIP; the lines
-  and addresses of text files) and the JSON of `download=1` lists (their addresses); people only, never the
-  self-test's accounts or the local check scripts' automation key. `POST /api/audit/trace` (permission
-  *audit*, CSRF, 5 a minute and `TRACE_PER_DAY` (100) a day per person; JSON `{text}` or a multipart `file`)
-  fingerprints the input in memory and returns the matching seals: exact by whole text or SHA-256; else, when at most
-  `TRACE_MAX_ITEMS` (1,000) lines and addresses were given, a seal holding at least `TRACE_MIN_SHARE` (half) of the
-  given lines or of the given addresses (`exact_only` in the answer when more were given). Items held by more than
-  20 % of the PEOPLE with seals are not counted (by people, not seals, so one person's repeated copies cannot hide
-  rows). The seals file is read twice, a line at a time. Audited as `leak_traced` with the number of matches only. These two routes take bodies up to 12 MB and
-  26 MB (`request.max_content_length`); every other route keeps the 64 KB of `security.py`. At most 50,000 items are
-  kept per seal (`cut` says when more were left out); seals older than `AUDIT_RETENTION_DAYS` are removed at start and then once a day.
-  Also the template value `lg_name` (the signed-in person's full name, `people.py`). Registered in `features.py`;
-  `/api/copy/` is in the path lists of the roles limited to their portals (`auth.py`). Test: `tests/check_insider.py`.
-- **`severity_map.py`, the severity map.** `GET /api/kb/severity-map` and `POST /api/kb/severity-map/rate` (`{name,
-  level}`, level `""` takes a rating back), both under the Definitions page's addresses and both needing the
-  *definitions* permission (researchers and administrators only); a rating needs the CSRF token and is audited
-  (`severity_rated`). The rows join `pdf_refs.all_levels()` (Shadowserver's), `pdf_refs.all_kinds()` (every name the
-  records carried, `data/name_kinds.json`) and the researchers' ratings (`data/name_ratings.json`); CVEs are left out.
-  A name Shadowserver rates is refused (409). `pdf_refs.researcher_level()` gives the PDFs a researcher's level only
-  where no record rates the name, flagged "Researcher's rating". Registered in `features.py`; page:
-  `static/js/severity-map.js`. Test: `tests/check_severity_map.py`.
-- **`acode_warm.py`, analyst code counts worked out after a start.** `ANALYST_WARM_DELAY_S` seconds after the service
-  starts (the running service only, `index_refresh.SERVING`), one thread calls `acodes.api.warm()`: the device counts
-  (`/api/intel/acode/<code>/devices`) of every analyst code the open findings carry, at both viewer levels, kept apart
-  in `acodes.PerKeyCache` (one lock per code). The counts use `view(code, sees_hosts, with_chain=False)`, which depends
-  on no signed-in person. Tests: `tests/check_recent_days.py`, `tests/check_per_key_cache.py`, `tests/check_acodes.py`.
-- **`beacon_findings.py`, decoded beacons handed over.** `POST /api/beacon/finding` (`{name, format, operator, version,
-  os_family, kind: analyst|management, to, comment, title}`; the *definitions*, *settings* or *unmasked* permission,
-  CSRF token, a fresh sign-in) makes a finding (`findings.Findings.create(..., extra={"beacon": selection})`) in the
-  named person's hands. The finding holds the selection (name and threat-side parts), never a device. A viewer who does
-  not see hosts may hand over only a selection 5 or more devices carry. `GET /api/beacon/finding/<id>` (people in the
-  channel and admins; on the researchers', management's and advisors' paths in `auth.py`, closed in Peace of mind)
-  works the selection out again over the days in memory: counts (records, devices, reports, days) and the parts, held
-  back while fewer than 5 devices carry them, for viewers who do not see hosts; with `records=1`, for analysts and
-  admins only, every record (host, port, time, report's readable name, C2 host, `beacon_decode.view`), at most 500.
-  That view is in `data_access.SENSITIVE`. Findings page block: `static/js/beacon-handover.js` (also the map's *Hand
-  over* button), `static/css/beacon.css`. **Beacon codes:** `GET /api/beacon/code?name=&format=&operator=&version=&os_family=`
-  (the *definitions*, *settings* or *unmasked* permission) answers the selection's `LG-B-XXXXXXXX` code, made from the
-  selection (`code_key`, SHA-256) and kept in the combination code book (`combos.CodeBook.put`, kind `b`: name and
-  parts, no address); a viewer who does not see hosts gets it only for a selection 5 or more devices carry, with the
-  same answer as for no records at all. Intel gathered shows it with *Move to notes*; `notes.py` accepts `LG-B` codes,
-  and a note tracked as a finding passes the selection on (`findings.create(..., extra={"beacon": ..., "beacon_code":
-  ...})`), keeping it out of the finding's combination codes. The Combinations page answers an `LG-B` code with where
-  it is worked on. **Management's view:** when a beacon finding is made (from a note or a hand-over), `attach()` makes
-  an analyst selection of exactly its records (`acodes.make_selection("comms", records, LG-B code, title)`) and adds the
-  `LG-A` code to the finding (`beacon_selection`); its channel alone opens it, and the Findings page's *Show in
-  Executive* filters the Executive portal to it. A beacon finding made before this gets it the first time its beacons
-  are opened. Test: `tests/check_beacon_findings.py`.
-- **`beacon_unknown.py`, requests Looking Glass could not decode.** Groups `beacon_decode.unknown()` over the days in
-  memory into families keyed by (path with numbers and long parts folded, parameter, encoding, shape hint, length in
-  16-byte steps up to 256, then 128); per family: records, devices (counted), distinct values (`constant` when one
-  value repeats), C2 hosts (12 shown, all counted), top user agents and names, reports, days, length range, and up to 5
-  distinct (infection name, request line) pairs kept on the server (`request_line(url, param)`: an absolute
-  `GET http://host/...` cut to its path; only the undecoded parameter keeps its value, every other value reads
-  `<value>` with its name kept, and any address `ip_find` finds reads `<address>`).
-  Kept per set of days for up to an hour. `GET /api/beacon/unknown` (the *unmasked* permission, demo off): the families
-  without their request lines, each with its state and the link to send it: a private report on the separate
-  `anonghosty/http-requests-decoding` repository (`SEND_URL`, its *security/advisories/new* form; never a public issue). `GET /api/beacon/unknown/<id>/request`: the decoding request as a JSON
-  download holding only `requests` (`{infection, request}` pairs) and when it was made: no host, user agent or count.
-  `request_line()` reads method, target and protocol whatever the shape (`&` or `;`, raw spaces, no leading `/`), keeps
-  only the longest copy of the undecoded parameter and writes `<value>` for every other value and `<address>` for any
-  address. An LG-B code's meaning comes from `combos.described()`, which answers only viewers `book.beacon_visible()`
-  allows; `findings.shown()` and `acodes.chain_of()` drop the code wherever it gives nothing. Every
-  download is audit event `data_exported`; the page asks the analyst to confirm the TLP rules allow it. `POST
-  /api/beacon/unknown/<id>/state` (`dismissed` | `sent` | `open`, CSRF token; audit event `beacon_family_state`), kept in
-  `data/beacon_unknown.json` (0600, run-time data). The steps: `asked` (a reason) by an analyst or admin, then
-  `approved` or `rejected` (a reason) by an administrator (`settings`), then `sent`; the request download answers 409
-  until approved. `system_alerts._decoding_asks()` puts each waiting ask in the administrators' bell. The listing
-  carries each family's request lines (`requests`), as the file would hold them. Each family's value has a state
-  (`beacon_decode.STATUS`: decoded, encrypted, hash, id, token, unknown, cut), in `public()`, `seen()` and the Decoded
-  beacons list's Status column. Findings page section: `static/js/beacon-unknown.js`. Test:
-  `tests/check_beacon_unknown.py`.
-- **`beacon_decode.py`, reading again and rechecking (2026-11-16).** `_try` reads a value with the first recovered key
-  (`_read`, strict); only when that fails does it fix the first key characters from the format's `known_start` (the
-  CLogin JSON starts with `{"operator":"`, so its Base64 text is known; `known_start_key`) and settle the others
-  (`refine_key`, judged by whether the JSON parses, then `_text_score`), then read again leniently (a stray `=`, and a
-  JSON whose very end was cut short: the complete fields kept, with a note). Every decode passes `recheck`: field names
-  within the format's vocabulary, and `cpumd5`, `mac`, `bandwidth` with their shape. `instruction_like` adds
-  `INJECTION_NOTE` to a decode whose text reads like instructions to a reader. `tests/verify_beacon_decode.py` checks
-  the installation's latest day (counts only).
+  memory, or a day loaded from MongoDB and kept by `RecentDays` for `ANALYST_DAY_KEEP_S` seconds, at most
+  `ANALYST_DAY_KEEP` days (default 1; 0 keeps none), valid only for the constituency settings version and store
+  generation it was loaded at. A many-day code is read a day at a time. Test: `tests/check_recent_days.py`.
+- **`pdf_refs.py`, the PDFs' References section.** Orders every PDF's references: explained names by criticality (a
+  CVE's CVSS severity, actively exploited first; an infection's or issue's highest record severity), then Shadowserver
+  reports by Shadowserver's severity. Levels come from the PDF's records, the days in memory (`DAYS`) and
+  `data/name_levels.json`. `reports_pdf.py` draws its own References with the same groups.
+- **`name_levels_catchup.py`, every name's level learned once.** `NAME_LEVELS_DELAY_S` seconds after a start, one
+  thread reads every report collection once, in batches, and keeps each name's highest level in
+  `data/name_levels.json` and every name with its kind in `data/name_kinds.json`; `data/name_levels.done` marks it done
+  (an installation updated from marker version 1 reads every report once more).
+- **`invites.py`, Add a person** ([USER_GUIDE.md](USER_GUIDE.md#8-administration)). `data/invites.json` (owner-only),
+  keyed by the SHA-256 of a 256-bit token; expiry `INVITE_HOURS` (72); at most 50 open; finished entries dropped
+  after 90 days. `GET/POST /api/admin/invites`, `POST /api/admin/invites/<id>/revoke` (permission *users*, CSRF,
+  recent sign-in; audited `invite_made`, `invite_revoked`, `invite_used`). `/register?invite=` works also when
+  `REGISTRATION=0`, once, and makes an **active** account with the link's role, `approved_by` its maker. Page:
+  `static/js/invites-admin.js`. Test: `tests/check_accounts.py`.
+- **`net_drift.py`, network changes.** Compares this computer's addresses (`hostname -I`) with the IPs of a
+  self-signed `data/tls/cert.pem` (not for a CA's certificate or `ACCESS_MODE=local`) and `MONGO_BIND` in the
+  pipeline's `.env`, each mismatch with its fix, for `system_alerts.py` (the bell, at most every 5 minutes; it also
+  announces people waiting for approval) and `tests/check_addresses.py` (a warning).
+- **`neutral.py`, what a signed-out visitor learns (anti-fingerprinting).** Standard status phrases, plain error and
+  redirect bodies, hashed static ETags and, signed out, a short Content-Security-Policy. `/healthz` answers loopback
+  only; `security.py` sends no `Server` header. `auth.PUBLIC_STATIC` lists the only files served signed out. The
+  sign-in pages (`auth_base.html`, `login.html`, `forgot.html`) show the organisation's name only. After sign-in,
+  `auth.start_session` redirects to `/welcome?next=…` (`signin_welcome.py`), then `next` (`auth._safe_next`).
+  `deploy/make_tls_cert.sh` names the certificate after the first name given or the machine. Test:
+  `tests/check_fingerprint.py`.
+- **`insider.py`, copies recorded, seals and Trace a leak** ([USER_GUIDE.md](USER_GUIDE.md#the-audit-portal-audit)).
+  `POST /api/copy/record` (CSRF, at most `COPY_PER_MINUTE` (30) a minute per person) seals the text (HMAC-SHA-256 with
+  `COPY_SEAL_KEY` or `data/copy_seal.key`: the whole text, each line, each IP address) into `data/copy_seals.jsonl`
+  (owner-only), then audits `copied`; a seal that cannot be written answers 503 and nothing is audited, and
+  `static/js/lg-copy.js` copies only after a 200. Every download is sealed too (people only). `POST /api/audit/trace` (permission *audit*, CSRF, 5 a minute and `TRACE_PER_DAY` (100) a day per
+  person; text or a file) returns matching seals: exact, else, up to `TRACE_MAX_ITEMS` (1,000) items, seals holding
+  at least `TRACE_MIN_SHARE` (half) of the lines or addresses; items held by more than 20 % of the people with seals
+  are not counted, so one person's repeated copies cannot hide rows. Audited `leak_traced` (match count only). These
+  two routes take bodies up to 12 MB and 26 MB; every other route keeps the 64 KB of `security.py`. Seals older
+  than `AUDIT_RETENTION_DAYS` are removed. Also the template value `lg_name` (full name, `people.py`). Test:
+  `tests/check_insider.py`.
+- **`severity_map.py`, the severity map.** `GET /api/kb/severity-map`, `POST /api/kb/severity-map/rate` (`{name,
+  level}`; level `""` takes a rating back; CSRF; audited `severity_rated`), *definitions* permission (researchers and
+  administrators). Joins Shadowserver's levels (`pdf_refs.all_levels()`), every name (`pdf_refs.all_kinds()`) and the
+  researchers' ratings (`data/name_ratings.json`); CVEs left out; a name Shadowserver rates is refused (409). PDFs use
+  a researcher's level (`pdf_refs.researcher_level()`, flagged "Researcher's rating") only where no record rates the
+  name. Page `static/js/severity-map.js`. Test: `tests/check_severity_map.py`.
+- **`acode_warm.py`, analyst code counts after a start.** `ANALYST_WARM_DELAY_S` seconds after start, one thread works
+  out the device counts (`/api/intel/acode/<code>/devices`) of every analyst code on open findings, at both viewer
+  levels, into `acodes.PerKeyCache` (one lock per code). Tests: `tests/check_per_key_cache.py`,
+  `tests/check_acodes.py`.
+- **`beacon_findings.py`, decoded beacons handed over** ([USER_GUIDE.md](USER_GUIDE.md#findings-cases-and-who-holds-them)).
+  `POST /api/beacon/finding` (`{name, format, operator, version, os_family, kind: analyst|management, to, comment,
+  title}`; *definitions*, *settings* or *unmasked* permission, CSRF, a fresh sign-in) makes a finding holding the
+  selection (name and threat-side parts), never a device; viewers who do not see hosts need 5 devices.
+  `GET /api/beacon/finding/<id>` (the channel's people and admins) gives counts and parts; with `records=1`,
+  analysts and admins only, up to 500 records (`data_access.SENSITIVE`). Page: `static/js/beacon-handover.js`.
+  `GET /api/beacon/code?name=&format=&operator=&version=&os_family=` (same permissions) gives the selection's
+  `LG-B-XXXXXXXX` code (code book kind `b`, no address). `attach()` also gives a beacon finding an `LG-A` selection of
+  exactly its records for *Show in Executive*. Test: `tests/check_beacon_findings.py`.
+- **`beacon_unknown.py`, requests Looking Glass could not decode**
+  ([USER_GUIDE.md](USER_GUIDE.md#findings-cases-and-who-holds-them)). Groups `beacon_decode.unknown()` over the days in
+  memory into families, each with up to 5 (infection name, request line) pairs; `request_line()` keeps only the
+  undecoded value (`<value>` and `<address>` for the rest). `GET /api/beacon/unknown` (*unmasked* permission, demo
+  off): the families, their state, request lines and the link to send them (`SEND_URL`: a private report on
+  `anonghosty/http-requests-decoding`, never a public issue). `GET /api/beacon/unknown/<id>/request`: a JSON download
+  of only the `{infection, request}` pairs (audit `data_exported`); 409 until approved.
+  `POST /api/beacon/unknown/<id>/state` (CSRF; audit `beacon_family_state`), kept in `data/beacon_unknown.json` (0600):
+  `asked` (analyst or admin), `approved` or `rejected` (an administrator), `sent`; waiting asks go to the
+  administrators' bell. Page: `static/js/beacon-unknown.js`. Test: `tests/check_beacon_unknown.py`.
 - **`features.py`, where new features install themselves.** app.py calls `features.install(app, core)` once, at the
-  end, with the shared parts (`db`, `registry`, `svc`, `replay_now`, `day_start`, `AUTH`); each new feature has its own
-  module and one entry there, so app.py does not grow.
-- **Older features moved out of app.py (2026-11-24), behaviour unchanged:** `analytics_api.py` (the Analyse panels),
-  `report_downloads.py` (the PDF and ZIP reports of an analysis figure), `infection_kb.py` (the infection knowledge
-  base), `lookup_jobs.py` (look-up jobs with a progress window), `card_notes.py` (the researchers' notes on every
-  card), `name_definitions.py` (definitions for names Malpedia does not know) and `intel_match_api.py` (Explore a
-  match). Each reads the names it uses from app.py when it runs (`_A.name`), so it works exactly as it did inside
-  app.py; app.py imports and installs each where its code was and keeps every moved name, so other modules and the
-  checks find them unchanged. The start-up wiring of those parts (stores, other modules' installs) stays in app.py.
-- **`spike_notice.py`, the spike notice on the Overview's buttons.** For each platform, the latest report day (the
-  replay day) against the day before: `count_documents` per report on `extracted_date` (date or ISO string), and for a
-  spike or a drop what moved most (communications: `$group` by `infection` per report; services: the reports). Scope
-  `all` when the platform's total moved, `part` when only one report or infection did. Kept per day for
-  `SPIKE_CACHE_SECONDS`. `GET /api/overview/spikes` ('view', 'management', 'definitions' or 'settings'; in
-  `auth.DEFINITIONS_PATHS` and `MANAGEMENT_PATHS`); `static/js/spike-notice.js` fills every `[data-spike]` line
-  (`comms`, `services` or `both`). Test: `tests/check_spike_notice.py` (no database; also in CI).
-- **`beacon_stats.py`, beacons on the analyst's map.** `label(e)` is a record's beacon as the *Beacon* filter shows it
-  (`"<format title>, <OS>"` from `beacon_decode.field()`, or `"<title> (not decoded)"`), kept on the record as `_bc`
-  so a loaded day is decoded once (`app.public()` strips it). A decodable check-in takes about 14 ms, so `ready(day)`
-  labels a loaded day in one background thread (one day at a time) and the options (`beacon_pending` until then), the
-  figure and the list wait for it rather than slowing a request. `app.py` adds `beacon` to `FILTER_FIELDS` (`matches()`
-  compares the label), the options to `/api/facets` (`beacon`), `decoded_beacons` / `beacon_devices` to `/api/insight`
-  and the `beacons` metric to `/api/insight/drill` (`drill()`: one row per label, `row_kind` `beacon`). Options, figure
-  and list are left out for masked viewers (`is_demo()`); the filter itself is applied for every viewer, so a code
-  made with it selects the same records for whoever opens it. Test: `tests/check_beacon_stats.py` (the module part
-  also runs in CI with `LG_UNIT_ONLY=1`).
-- **`notes.py`, researchers' notes.** New findings per name in `data/notes.json` (run-time data: never shipped, never
-  overwritten by an update), each with author, role and date. The look-ups `mp_resolve`, `issue_resolve` and
-  `issues_resolve` attach the notes to every explanation card, so the map, services, Executive and both PDF builders
-  show them ("Notes shared by Researcher: *full name* (*date*)"). `GET /api/notes`, `POST /api/notes` (with
-  optional `codes` and `finding: {title}`), `POST /api/notes/delete` (author or admin); audit events `note_added`,
-  `note_removed`. A note's combination codes must be known to the code book; they are printed with the note.
-- **`combos.py`, combination codes and the analysts' combination search.** Each exact combination gets a code, `LG-C-?` / `LG-X-?`
-  (no address). `intel.record_items` is the one matching rule: Intel gathered counts with it and the search matches with it
-  so both agree for every name and report. Codes shown to a researcher go to
-  `data/combo_codes.json`; a code not there is looked for in memory. The search is a background thread per
-  analyst (one at a time): the report day (default, `report_day.py`), the days in memory, or a date range (at most 31
-  days) read day by day from MongoDB with `app._combo_fetch` (only the name's reports, inside the constituency). Each
-  day is matched on its own (a services code with that day's sinkhole calls: `SVC_INTEL.matcher(entry, day)`). On the
-  report day each device gets its other days in memory (`earlier_notes`: the same combination, or what it carried
-  there instead), and every device its infections, issues and CVEs that day (`services_intel.host_flags`, which also
-  gives `ports`: every port/protocol the address was open on in the services reports, with their titles, from the
-  index's `host_ports`; the devices CSV's `all_ports_and_services`); the PDF's Impact section comes from
-  `advisory.Impact.of_names` over the report's own and also-seen-in reports (the advisory's rule, `Impact.summary`) and
-  is drawn by `advisory_pdf.draw_impact`, shared with the advisory; a review
-  keeps both with its records (`combo_review.keep_search`), so the advisory shows what the search showed. For the devices found it also
-  follows them into the name's other reports (cross-report patterns with their codes, sets of reports). The result is a
-  ZIP (PDF from `combo_pdf.py`, drawn with `executive_pdf.Doc`'s parts: tiles, activity, findings, the region map and
-  tree, bars, explanation cards for the name and every CVE in the combination, plus the devices table and note cards;
-  `reports_pdf.build` only as a fallback; devices CSV, records CSV, both through `csvsafe`), kept in memory and in `data/combo_exports/` (0600, one hour) so a restart before the download loses
-  nothing. `export_fields.py` adds, before `combination_code` in both CSVs, the values the pattern analysis groups by
-  (communications `request_pattern`, `brute_force_username`, `brute_force_password`, `ssh_client`,
-  `shadowserver_attack`; services `server_software`, `ssh_software`, `ssh_hassh`, `tls_jarm`, `certificate_sha256`,
-  `certificate_subject`, `certificate_issuer`, `web_page_sha256`, `certificate_and_tls`; per device, each kind's values
-  joined with ` | `). Readable field names: `field_labels.py` with `static/js/lg-fields.js`, both reading
-  `static/data/field_labels.json`. Shadowserver's own mapping of an event: `ss_attack.py` (`sources.normalise` adds
-  `ss_attack`; `ss_attack.Seen` gives the Definitions page's counts in `GET /api/attack`'s `ss_seen`; tactic names from
-  the `tactics` of `data/names_attack.json`). Certificate and TLS facts: `tls_facts.py` (`/api/svc/detail`'s `tls`;
-  without dates or the browser's error text in the masked view). Routes: `GET /api/combo-codes/<code>` (researchers, management, analysts, admins; no address),
-  `POST /api/combo-codes/new` (researchers, admins: only the name's real indicators), `POST /api/combos/search`,
-  `GET /api/combos/search/<id>`, `POST /api/combos/search/<id>/stop`, `GET /api/combos/search/<id>/download` (analysts,
-  admins: `unmasked` + `export`, never in Demo mode, only the analyst who ran it), page `/combinations`. Audit events
-  `combo_code`, `combo_search` (a search, once) and `combo_export` (each download of the ZIP, whichever way it is
-  served). The report of a decided review (`/review/<id>/report`) is one `combo_export` per call; it is made for its
-  caller and not kept in `data/combo_exports/`.
-- **`finding_watch.py`, findings over time.** A finding's reported days (its review's kept search, or its analyst
-  code's day), kept with the finding; how many of its devices the latest day shows again for the same combination
-  (computed in one background worker, one finding at a time); and the expiry: a finding in a state where nobody is acting on it
-  (`new`, `management`, `researcher`, `analyst`; never `approved`, `advisor`, or one with an advisory not yet sent)
-  whose devices were last seen more than `FINDING_ACT_DAYS` (30) days ago, and opened more than `FINDING_GRACE_DAYS`
-  (7) days ago, is closed with "Time to act expired" (history kind `expired`, audit `finding_status` by
-  `looking-glass`). "Last seen" is the latest report while it still shows the devices again. Routes: `GET /api/findings/watch` (counts and days of the findings in the user's channel, never an
-  address), `GET /api/findings/<id>/again` (the addresses, for analysts, advisors and admins in the channel). The
-  Executive portal loads a past day of the last week for a view filtered to a code (`/api/mgmt/<platform>?code=?&day=?`),
-  one such day at a time.
-- **`acodes.py`, analyst codes.** `LG-A-?`. Made from an analysis
-  window's selection (`kind`/`value` on the map, the query arguments on the services platform; `app._slice_on` and
-  `services_api.scope_events` apply them to any day). The exact record IDs of the selection are kept in
-  `data/acodes/<code>.json` (0600), so masked roles (whose filters accept only aliases) see the same records; what
-  the code stands for is in the code book (kind `a`, with the selection described without host addresses). Routes:
-  `POST /api/analyst-codes` (analysts, admins; never in Demo mode) makes the code and a finding,
-  `GET /api/analyst-codes` lists them for analysts, `GET /api/intel/acode/<code>` and page `/intel/<code>` show
-  researchers, management and analysts the names, definitions, combinations and cross-report patterns of exactly
-  those records. The Executive portal's `code` filter and the Combinations search accept analyst codes (the code's
-  day only). Audit event `analyst_code`.
-- **`findings.py`, findings.** A note tracked as a finding: number, title, the note's text and codes (a copy), status and
-  history in `data/findings.json`. Statuses `new`, `management`, `researcher`, `analyst`, `advisory`, `closed`.
-  `GET /api/findings?state=open|all`, `POST /api/findings/<id>/status {status, comment}` (CSRF, a recent sign-in),
-  page `/findings` for researchers, management, analysts (`unmasked` + `export`) and admins; `/findings` and
-  `/api/findings` are in the researcher and management roles' allowed paths. Audit events `finding_created`,
-  `finding_status`. A review or case an analyst creates on a code takes in the researchers whose reply to an analyst's
-  request carried that code (`Findings._answerers`, from the history, so earlier answers count; `_add_seen` adds them
-  to `participants` without making them the assignee), and `request_links` links it to that request when no
-  researcher's own finding on the code comes first.
-- **`seen_index.py`, last seen.** `data/seen_names.json` remembers, for every name, the last date it was seen in each
-  report (readable report names, no hosts). Every replay day is added as it passes; once per installation the last 14
-  days are read from MongoDB in the background by one worker (`seen_names.json.done` marks it done). Kept 30 days.
-- **`people.py`, names.** Definitions, notes and network corrections store the username and are shown with the
-  registered full name, looked up when displayed (a corrected name appears everywhere at once); the audit log shows
-  *Full Name (username)*.
+  end, with the shared parts (`db`, `registry`, `svc`, `replay_now`, `day_start`, `AUTH`); each new feature has its
+  own module and one entry there (among them `config_page.py`, `neutral.py`, `insider.py`, `severity_map.py`), so
+  app.py does not grow.
+- **Moved out of app.py (2026-11-24), behaviour unchanged:** `analytics_api.py`, `report_downloads.py`,
+  `infection_kb.py`, `lookup_jobs.py`, `card_notes.py`, `name_definitions.py` and `intel_match_api.py`. Each reads its
+  names from app.py at run time (`_A.name`); app.py keeps every moved name and its start-up wiring.
+- **`spike_notice.py`, the spike notice on the Overview's buttons** ([USER_GUIDE.md](USER_GUIDE.md#2-the-intro-page)).
+  Per platform, the latest report day against the day before (`count_documents` per report on `extracted_date`), and
+  what moved most. Kept per day for `SPIKE_CACHE_SECONDS`. `GET /api/overview/spikes` ('view', 'management',
+  'definitions' or 'settings'); `static/js/spike-notice.js` fills every `[data-spike]` line. Test:
+  `tests/check_spike_notice.py` (no database; also in CI).
+- **`beacon_stats.py`, beacons on the analyst's map.** `label(e)` is a record's *Beacon* filter label, kept as `_bc`.
+  `ready(day)` labels a loaded day in one background thread (about 14 ms per check-in); until then the options read
+  `beacon_pending`. Adds `beacon` to `FILTER_FIELDS` and `/api/facets`, `decoded_beacons` / `beacon_devices` to
+  `/api/insight` and the `beacons` metric to `/api/insight/drill`. Masked viewers (`is_demo()`) get no options,
+  figure or list, but the filter applies for all. Test: `tests/check_beacon_stats.py` (also in CI with
+  `LG_UNIT_ONLY=1`).
+- **`notes.py`, researchers' notes.** Per name in `data/notes.json` (run-time data, never shipped or overwritten),
+  with author, role and date; `mp_resolve`, `issue_resolve` and `issues_resolve` attach them to every explanation
+  card, on the pages and in the PDFs. `GET /api/notes`, `POST /api/notes` (optional `codes`, which must be in the code
+  book, and `finding: {title}`), `POST /api/notes/delete` (author or admin); audit `note_added`, `note_removed`.
+- **`combos.py`, combination codes and the combination search**
+  ([USER_GUIDE.md](USER_GUIDE.md#combination-codes-the-combination-search-and-findings)). Each exact combination gets
+  a code, `LG-C-?` / `LG-X-?` (no address). `intel.record_items` is the one matching rule, so Intel gathered's counts
+  and the search agree. Codes shown to a researcher go to `data/combo_codes.json`. The search is one background
+  thread per analyst over the report day (default), the days in memory, or up to 31 days read from MongoDB
+  (`app._combo_fetch`, inside the constituency). Devices get that day's infections, issues, CVEs and open ports
+  (`services_intel.host_flags`) and are followed into the name's other reports. The PDF's Impact section is
+  `advisory.Impact.of_names` (`advisory_pdf.draw_impact`); a review keeps it (`combo_review.keep_search`). Result: a
+  ZIP (PDF from `combo_pdf.py`, devices and records CSVs through `csvsafe`) kept in memory and in
+  `data/combo_exports/` (0600, one hour). `export_fields.py` adds, before `combination_code` in both CSVs, the
+  pattern analysis's values (communications `request_pattern`, `brute_force_username`, `brute_force_password`,
+  `ssh_client`, `shadowserver_attack`; services `server_software`, `ssh_software`, `ssh_hassh`, `tls_jarm`,
+  `certificate_sha256`, `certificate_subject`, `certificate_issuer`, `web_page_sha256`, `certificate_and_tls`; joined
+  with ` | `). Readable field names: `field_labels.py` and `static/js/lg-fields.js`, from
+  `static/data/field_labels.json`. Shadowserver's own event mapping: `ss_attack.py` (`GET /api/attack`'s `ss_seen`;
+  tactics from `data/names_attack.json`). Certificate and TLS facts: `tls_facts.py` (`/api/svc/detail`'s `tls`).
+  Routes: `GET /api/combo-codes/<code>` (researchers, management, analysts, admins), `POST /api/combo-codes/new`
+  (researchers, admins), `POST /api/combos/search`, `GET /api/combos/search/<id>`,
+  `POST /api/combos/search/<id>/stop`, `GET /api/combos/search/<id>/download` (`unmasked` + `export`, never in Demo
+  mode, only the analyst who ran it), page `/combinations`. Audit `combo_code`, `combo_search` and `combo_export` (each
+  ZIP download, and each call of a decided review's report, `/review/<id>/report`, which is not kept).
+- **`finding_watch.py`, findings over time** ([USER_GUIDE.md](USER_GUIDE.md#findings-cases-and-who-holds-them)). Keeps
+  a finding's reported days and how many of its devices the latest day shows again (one background worker). A finding
+  nobody is acting on (`new`, `management`, `researcher`, `analyst`) whose devices were last seen over
+  `FINDING_ACT_DAYS` (30) days ago, opened over `FINDING_GRACE_DAYS` (7) days ago, closes with "Time to act expired"
+  (history kind `expired`, audit `finding_status` by `looking-glass`). `GET /api/findings/watch` (counts and days, never
+  an address), `GET /api/findings/<id>/again` (the addresses; analysts, advisors and admins in the channel). The
+  Executive portal loads a past day of the last week for a code (`/api/mgmt/<platform>?code=?&day=?`).
+- **`acodes.py`, analyst codes.** `LG-A-?`, from an analysis window's selection. The exact record IDs are kept in
+  `data/acodes/<code>.json` (0600), so masked roles see the same records; the code book holds what it stands for
+  (kind `a`, no host addresses). `POST /api/analyst-codes` (analysts, admins; never in Demo mode) makes the code and a
+  finding; `GET /api/analyst-codes` lists them; `GET /api/intel/acode/<code>` and page `/intel/<code>` show
+  researchers, management and analysts those records' names, definitions, combinations and patterns. The Executive
+  `code` filter and the Combinations search accept them (the code's day only). Audit `analyst_code`.
+- **`findings.py`, findings.** Number, title, a copy of the note's text and codes, status and history in
+  `data/findings.json`. Statuses `new`, `management`, `researcher`, `analyst`, `advisory`, `closed`.
+  `GET /api/findings?state=open|all`, `POST /api/findings/<id>/status {status, comment}` (CSRF, recent sign-in), page
+  `/findings` for researchers, management, analysts (`unmasked` + `export`) and admins. Audit `finding_created`,
+  `finding_status`. A review or case on a code takes in the researchers whose reply to an analyst's request carried
+  that code (`Findings._answerers`), and `request_links` links it to that request.
+- **`seen_index.py`, last seen.** `data/seen_names.json`: per name, the last date seen in each report (no hosts). Each
+  replay day is added as it passes; once per installation the last 14 days are read from MongoDB
+  (`seen_names.json.done`). Kept 30 days.
+- **`people.py`, names.** Definitions, notes and network corrections store the username and show the registered full
+  name, looked up when displayed; the audit log shows *Full Name (username)*.
 
 ## Network names (ASN registry)
 
@@ -438,218 +298,29 @@ For a public deployment where nobody may switch demo off, set `PUBLIC_DEMO=1` in
 
 ## Requirements and installation
 
-See [INSTALLATION.md](INSTALLATION.md). In short: Ubuntu 24.04 or later only, Desktop or Server (or Ubuntu on WSL 2),
-Python 3.12, 3.13 or 3.14 on an x86_64 or aarch64 processor, MongoDB filled by the Shadowserver pipeline
-(`../database`), a Mapbox token, and optionally a Malpedia token.
-Python packages: Flask, Werkzeug, pymongo, python-dotenv, gunicorn, ReportLab and tzdata. `requirements.txt` gives each a
-range up to, not including, its next major version (for example `flask>=3.0,<4`); `requirements.lock` fixes the exact
-version of every library and of what they need, with the sha256 value of every file. `tests/check_libraries.py` checks
-the installed versions against the ranges and tries the parts of each library the platform uses; it needs no data, and
-the installer runs it. To allow a new major version, raise its range, make the lock again
-([OPERATIONS.md](OPERATIONS.md#updating-the-libraries-on-purpose)), and keep it only if the installation check
-(`tests/run_all_checks.sh` and `security_testing/security_retest.py`) passes.
+See [INSTALLATION.md](INSTALLATION.md). In short: Ubuntu 24.04 or later (Desktop, Server or Ubuntu on WSL 2), Python
+3.12, 3.13 or 3.14 on x86_64 or aarch64, MongoDB filled by the Shadowserver pipeline (`../database`), a Mapbox token,
+and optionally a Malpedia token. Python packages: Flask, Werkzeug, pymongo, python-dotenv, gunicorn, ReportLab and
+tzdata. `requirements.txt` gives each a range below its next major version (for example `flask>=3.0,<4`);
+`requirements.lock` fixes every version, dependencies included, with each file's sha256. `tests/check_libraries.py`
+(no data needed; the installer runs it) checks the installed versions against the ranges and tries the parts the
+platform uses. To allow a new major version, raise its range, make the lock again
+([OPERATIONS.md](OPERATIONS.md#updating-the-libraries-on-purpose)), and keep it only if `tests/run_all_checks.sh` and
+`security_testing/security_retest.py` pass.
 
-### How the libraries are installed (`deploy/safe_libraries.py`, `library_supply.py`)
+External services: **MongoDB** (database `shadowserver` by default; read only, never written); **Mapbox** (a public
+`pk.` token for map tiles in the browser and the Geocoding v6 API on the server, each place looked up once and cached
+in `data/geocache.json`); flag images from `flagcdn.com` and fonts from Google Fonts.
 
-One tool installs the Python libraries everywhere: `deploy/safe_libraries.py`, Python's standard library only, run by
-the guided installer (for the platform, the database pipeline and the installer's own answer checks), `deploy/install.sh`,
-`deploy/update_libraries.sh` and the pipeline's `deploy.sh` (a release copies the tool beside it, unchanged).
-
-Each release carries `.release_files` in `platform/` and `database/`, listing every file it ships.
-`deploy/stale_files.py`, run during the update, moves code files that are on `.release_files_history` (every file any
-published release shipped in that folder) but not on `.release_files` to `backups/stale-<time>/`, and names every other
-unlisted code file as left in place; with no history list it moves nothing. It refuses a list it cannot trust and never
-follows links.
-
-1. **This computer** (`check-machine`): `ID=ubuntu` with `VERSION_ID` 24.04 or later in `/etc/os-release` (`ID_LIKE`
-   does not count), the `python3` that will run Looking Glass at 3.12, 3.13 or 3.14, and `platform.machine()` x86_64 or
-   aarch64. Anything else: exit 2 with every reason, before anything is made.
-2. **The lock** (`requirements.lock`, written by `tools/lock_requirements.sh` with pip-compile `--generate-hashes
-   --allow-unsafe`): every line must be `name==version` with at least one `--hash=sha256:` value. An option line
-   (`--index-url`, `--extra-index-url`, `-e`...), a range, a missing hash or a library listed twice: exit 4.
-3. **The new environment** is made first, `python3 -m venv .venvs/<name>-<time>`, beside the running `.venv`. Its own
-   pip (the one Python brings, never upgraded from outside) does the rest, with the user's pip settings and `PIP_*`
-   variables set aside, so the sources are only the ones below.
-4. **Each file** is fetched with `pip download --no-deps --only-binary=:all:` for that Python and processor
-   (`manylinux_2_28`, `manylinux2014`, `manylinux_2_17` and pure-Python wheels), into a quarantine folder, one source after
-   the other: PyPI (`LG_PYPI_URL`), the release's bundle from the library repository (`LG_LIBRARIES_URL`; unpacked with
-   tarfile's `data` filter, wheels only, at most 2 GB), then the local copy (`LG_LIBRARIES_DIR`, default
-   `~/looking-glass/libraries`, newest release first). Its sha256 is compared with the lock's values for that library and
-   version: a match moves it to the checked files; a mismatch is refused, printed (library, version, file, source,
-   expected values, received value) and kept as an event, and the next source is tried. A library with no match in any
-   source stops everything: exit 3, "Nothing was changed", the new environment removed.
-5. **The install** is `pip install --no-index --find-links <checked files> --require-hashes --only-binary=:all: -r
-   requirements.lock`: pip checks every hash again and refuses any library the lock does not list (a dependency
-   included). Then `pip check`, the modules that must load (`--import`), and the lock's sha256 written into the
-   environment (`lg-lock.sha256`: the same lock next time means nothing to do).
-6. **The switch:** `.venv` becomes a relative link to the new environment (a real `.venv` folder from before is moved
-   into `.venvs/` first); the newest two environments are kept. The service keeps its loaded libraries until it is
-   reloaded. The checked files are copied into the local copy (`<release>/<part>/` with `SHA256SUMS`, files 444, folders
-   555, the last 2 releases kept).
-7. **The report:** refused files are added to `suspected-packages.json` and `.txt` in the report folder (the guided
-   installer sets `LG_SUPPLY_REPORT_DIR` to the top of the Looking Glass folder; otherwise the part's folder), each with
-   an id, the time, library, version, file, source and address, expected and received sha256, the lock and the outcome.
-   Exit 10 means installed, but something was refused. `library_supply.py` (installed by `features.py`) reads the
-   reports of the platform's folder, the folder above it and the pipeline's, writes each event once into the audit log
-   (`library_suspected`, user `looking-glass`, a minute after the service starts; the ids written are kept in
-   `data/suspected_packages_audited.json`) and gives `system_alerts.py` one bell alert for administrators for the events
-   of the last 30 days.
-
-The release's bundle is made by `tools/build_wheelhouse.sh`: every locked file for Python 3.12-3.14 on x86_64 and
-aarch64, each checked against its lock, `SHA256SUMS`, the locks themselves, and an offline `pip install --dry-run` per
-computer to prove nothing is missing. `tests/check_installer_supply.py` (in `run_all_checks.sh` and the GitHub checks)
-rehearses all of it with a local package index on 127.0.0.1 and made-up wheels, and fails if any install path runs pip
-without `--require-hashes`.
-
-External services:
-- **MongoDB** (database `shadowserver` by default). The app only reads; it never writes to the database.
-- **Mapbox**: a public `pk.` token used for map tiles in the browser and the Geocoding v6 API on the server, which
-  turns city/region/country into coordinates. Each place is looked up once and cached in `data/geocache.json`.
-- Flag images come from `flagcdn.com`, and fonts come from Google Fonts.
-
-For development, `.venv/bin/python app.py` runs it without the service on `http://localhost:<PORT>` (`PORT` in `.env`).
-
-### Always on: a new day every day
-
-**Each day is replayed in full, from 00:00 to 24:00, starting when its report has arrived** (`schedule.py`). Shadowserver delivers a day's reports during the following day, so a fixed "now − 24 h" clock would skip everything before the import. Instead:
-
-1. When the replayed day reaches 24:00, the next day starts straight away if its report is already in MongoDB (no gap).
-2. If it isn't, the platform shows **"Waiting for the reports of YYYY-MM-DD"**, holds at 00:00 (counters 0), and checks MongoDB every 15 seconds.
-3. When reports appear, the stream lists which ones are in so far. Once **no new report has arrived for** `REPORT_SETTLE_SECONDS` (default 10 minutes; each new report restarts the wait), the day **replays from 00:00**. Open pages switch over by themselves within 15 seconds.
-4. If the replay ever falls more than a day behind (for example after downtime), it skips to the newest available day.
-
-**Reports arrive at different times.** Every 15 seconds the server counts each report's rows for the replayed day in MongoDB (indexed filename prefix, about 0.2 s). When a report is new or has grown, the day is reloaded at once, and open pages refresh their totals, filters, Intel, analysis and map within 15 seconds. They also announce it in a toast and at the top of the stream, for example *"New report data for 2026-11-06: Microsoft Sinkhole HTTP (78 events), received 07:31 UTC"*. The receive time is when the rows were inserted into MongoDB, taken from their ObjectId. `/api/clock` lists the day's reports with their receive times (`reports`) and recent arrivals (`report_changes`). `tools/report_arrivals.py [day]` shows when each report was inserted, and `tools/check_reports.py [day]` compares MongoDB with the running service.
-
-**New report types (collections) are found automatically.** Every 15 seconds the server lists MongoDB's collections, which costs next to nothing. When one is created or dropped, or a collection that was still empty gets its first rows, the report list is rebuilt at once. A full rebuild also happens every `REGISTRY_REFRESH_SECONDS` (default 1 hour) as a safety net. A collection counts as a report when:
-- its latest documents have `src_*`/`dst_*` fields (or the referer source fields), matching one of the known layouts (standard, legacy, referer, inbound);
-- it is not excluded (`EXCLUDE_COLLECTIONS`);
-- it is in `MONGO_COLLECTIONS`, when that is set (empty = all).
-
-**Two tracks on the intro page.** Under the overview there are two cards, each with its own "Explore the platform" and "Explore in demo mode" buttons:
-- **Reported network communications** (available): this platform. It shows how many reports are monitored and the day's event count.
-- **Publicly accessible / vulnerable services** (available, opens `/services`): see the section below.
-
-### Publicly accessible / vulnerable services (`/services`)
-
-A second platform for the single-host reports: the collections with an `ip` but no source and destination (`scan_*`, `scan6_*`, `population_*`, `device_id*`, `compromised_*`, `blocklist`). It has no map. It shares the replay schedule with the map, so it shows the same day at the same replay time, and it has the same features.
-
-**Discovery and compatibility check.** `services.py` `ServiceRegistry` finds these collections automatically, every 15 seconds, like the map's registry. Each one is checked against the fields the platform needs:
-- **Required:** `extracted_date` (a date), `ip`, `geo`, and `filename` with an index.
-- **Recommended:** port, city or region, network, severity, tag.
-
-Compatible reports are loaded. Others are listed as "not processed yet", with what they lack.
-
-**Common fields.** `tools/analyze_services.py` measured the fields across the 86 collections. These are in essentially all of them: ip, port, protocol, asn, geo, region, city, hostname, naics, sector, severity, tag, category, timestamp, extracted_date and filename. About a third add device details (`device_vendor`/`type`/`model`/`version`), product banners (`server`, `server_type`, `serverid_software`, `application`) or issue markers. Each record is normalised into the common fields plus:
-- **service:** from the report, e.g. SSH, SSL/TLS, MikroTik service, with IPv6 reports marked;
-- **family:** Exposed service, Service population, Identified device, Compromised or Blocklisted;
-- **vendor, device type, product, version;**
-- **issues:** CVE tags, POODLE, FREAK, expired certificate, exposed admin panel, device implant, compromise. A host with any issue counts as "with issues".
-
-Every other field is kept and shown in the record details.
-
-**Same look as the map platform.** `templates/services.html` uses the map platform's stylesheet (`app.css`) and markup: the top bar, the Filters drawer, the Intel column, the stream rows, the details dialog and the analysis dialog. `services.css` only adds the stage that replaces the map. The brand mark and **Overview** open the intro page (`/?intro=1`).
-
-**What the page has**
-
-| Area | What it does |
-|---|---|
-| Top bar | Records yesterday, Replayed so far, Exposed hosts, Reports, Hosts with issues, Critical. Every figure opens an analysis, with its list already open where that fits. |
-| Filters | Only hosts with issues, report family, service report (searchable, with definitions on hover), severity, issue (searchable), region, city, network, port, vendor, device type. |
-| Stage: Services constellation | One bubble per service, with area proportional to its records. A dot, coloured by severity, flies into the bubble as each record replays, and the bubble pulses. Click a bubble to analyse that service. |
-| Stage: regions map | A heatmap of the chosen country's regions, coloured by records with the active filters. Regions flash as their records replay. Hovering shows what makes up a region (reports, issues, cities, networks, hosts with issues); clicking analyses it. Records whose region is unknown are counted separately. Boundaries: `static/data/adm1/<country>.json` (geoBoundaries ADM1, CC BY 4.0). |
-| Intel | Activity yesterday (15-minute bars), a report-families donut, records by hour and family, severity mix, issues, services, networks, regions, cities, vendors, products, ports. Every line and bar is clickable. |
-| Record stream | The same rows as the map platform: time, severity, service and family, host (address, place, network), device or product, protocol and port, issues and tags. Clicking one opens the record details: the report's definition, links to analyses for every value, and all report-specific fields. |
-
-**In-depth analysis.** This has the same dialog and drill-downs as the map platform. Each figure tile has **Details ›**, which shows the list behind it with **Download CSV** (all rows):
-
-| Figure | List behind it |
-|---|---|
-| Records / Exposed hosts | Hosts ranked for follow-up, with reasons such as "10 issues · critical · 5 reports" |
-| Share of all records | By report family |
-| Hosts with issues | Hosts with a concrete issue |
-| Issues | Every issue, with records, hosts and services |
-| Hosts with multiple issues | Hosts with more than one issue (the largest attack surface) |
-| Reports | Every report, so you can look at one on its own or several together |
-| Hosts in several reports | Cross-report hosts, the same idea as on the map platform |
-| Networks | Networks of the hosts |
-| Regions | Regions of the chosen country |
-
-The dialog also shows key findings, a composition donut (families, or services), an issues donut, records by hour and family, activity by 15 minutes, severity mix, twelve clickable breakdowns and the hosts to follow up first. Every click narrows the analysis (for example SSH · Ashanti · CVE-2023-48795). Selection chips open a part on its own or widen it again, and **Filter the view** applies the selection to the page.
-
-Speed, pause, Catch up, demo mode (IPs, host names, network names and identifying certificate fields hidden), Hide list (key **L**), dragging the stream edge to resize it, new-report alerts, and the TV and phone layouts all work as on the map.
-
-**Official report names.** Every services report is shown under its official Shadowserver name without the word "Report", for example DNS Open Resolvers, Open mDNS, Accessible HTTP, Vulnerable ISAKMP, Accessible ISAKMP, Open HTTP Proxy and Accessible HTTP Proxy. IPv6 reports carry "(IPv6)", and `population_bgp` is "Open BGP Service (population)".
-
-Each collection was matched to its report in two ways:
-- in MongoDB, its file names and `category` field carry the collection name (for example `scan_dns` records are tagged `openresolver`);
-- on Shadowserver's report page, the "Filename" line lists that same name.
-
-`_verified` in `data/service_reports.json` records the exceptions:
-- **BGP:** `population_bgp` is the population variant of `scan_bgp`.
-- **MikroTik:** Shadowserver's page spells the filename `scan_miktrotik_service`.
-- **NTRIP and Radmin:** their pages list no filename.
-
-**Hosts in several reports / with multiple issues show all their reports.** Both host figures compare the selected hosts against all their reports of the day. The view then shows those hosts with every one of their records: bubbles, regions map, stream, figures, analysis and CSV.
-- **Hosts in several reports** (`cross`): the selection's hosts that appear in more than one report. For example, DNS Open Resolvers + several reports = the resolvers that also appear in other reports, with all their records; Block List + several reports = the blocklisted hosts that also appear elsewhere (Device Identification, Accessible SSL, Accessible HTTP…), with all their records.
-- **Hosts with multiple issues** (`multi`): the selection's hosts with more than one issue across all their reports. For example, Block List: 3 blocklisted hosts with an expired certificate and an exposed admin panel found in their Accessible SSL and Device Identification records (before, issues were counted only inside the selection, so Block List showed 0).
-- **What chooses the hosts, and what narrows the view.** The filters set when the figure is switched on (checkbox, card, **Filter the view**) choose the hosts. They travel in the value: `cross=seed:family=Blocklisted`. Any filter added afterwards narrows the hosts' widened records. So Blocklisted → several reports → the Accessible HTTP bubble shows the 16 Accessible HTTP records of the 10 blocklisted hosts that have them: exactly what the bubble counted. Before, every filter chose the hosts, and no record is both Blocklisted and Accessible HTTP, so it showed 0.
-- Old links with `cross=1` / `multi=1` keep their meaning: every filter in the link chooses the hosts.
-- Host filters (region, city, network, host) always apply. The constellation outlines the starting report, and the hint under the view switch says what is shown, e.g. "hosts of Blocklisted that are in several reports · showing their Accessible HTTP records".
-- In the analysis, the tables of these two figures list each host's issues and reports of the whole day, as they were compared. The figure, the table and the filtered view always give the same hosts.
-
-**Record stream.** With or without filters, the record stream opens with the latest (matching) records of the day up to the replay time, however long ago, then adds new ones as they replay. Shadowserver's service reports arrive in bursts, so the last few minutes are often empty; the stream no longer shows "Waiting for records" in those gaps (or for Block List, whose records all arrive between 01:00 and 03:00). "Waiting for records" now only appears before the day's first record has replayed.
-
-The figures, stream, Intel, regions map and analysis all follow this one rule.
-
-**Cards as filters.** Two analysis cards can be part of **Filter the view**: Hosts with multiple issues and Hosts in several reports, as well as Hosts with issues. With one of them open, the button reads "Filter the view · Hosts in several reports", and the page shows exactly the hosts of the card's table, with all their reports. They are also checkboxes under Filters (`multi`, `cross`, `vulnerable=1`; usable in the address too).
-
-**Intro page.**
-- **Badges:** each track shows **Available**. With no data for the day it shows **Currently unavailable** and "waiting for reports from Shadowserver".
-- **Services report list:** a card lists all services reports with their official names and record counts. Hovering shows the definition; clicking opens the services platform filtered to that report (`/services?service=…`).
-- **Glossary tab:** has a "Publicly accessible / vulnerable services" group with its terms and figures, plus the definitions of all communication and services reports.
-
-**Report definitions.** `data/service_reports.json` defines every report in plain language. It is written from Shadowserver's report pages (https://www.shadowserver.org/what-we-do/network-reporting/) and holds each report's official name, Shadowserver's severity rating, what it means, why it matters and a link to its page. It covers all 86 single-host reports and the 12 communication reports. It is used by:
-- the services glossary (button "Glossary");
-- the tooltips on services, bubbles, filters and Intel;
-- the record details;
-- the map platform's glossary tab, which has new groups for both kinds of report;
-- the map platform's overview report tooltips.
-
-**API.** All endpoints are under `/api/svc/`: `clock`, `events`, `detail`, `replayed`, `stats`, `facets`, `insight`, `hosts.csv`, `glossary`, `diagnostics` and `summary`.
-
-**Compatibility check.** Every discovered collection is checked against the fields the platform uses (`diagnose` in `sources.py`).
-
-Required (the report is loaded onto the map only if all of these are present):
-
-| Need | Field |
-|---|---|
-| Event time | `extracted_date`, which must be a date |
-| Source host | `src_ip`, `ip` or `http_referer_ip`, depending on the format |
-| Source country | `src_geo`, `geo` or `http_referer_geo` |
-| Day loading | `filename` with an index, or `FALLBACK_SCAN=1` |
-
-Recommended (the report still loads; the tooltip in the overview list says what it lacks): destination IP or country, source city/region, destination country, source network, severity, infection/category. A report without a destination shows each event as a point at the source with no arc; Sinkhole DNS is like that.
-
-What happens in each case:
-- **Source and destination:** loaded, with arcs.
-- **Source only:** loaded, with points at the source (like Sinkhole DNS).
-- **Destination only** (no `src_*` fields): loaded, with points at the destination. This is the "target" format, and it requires `dst_ip` and `dst_geo` instead of the source fields. The stream shows the source as "not reported", and such events are left out of source-host figures (hosts to follow up, rhythm, cross-report hosts). Destination analyses (target country, city, IP, network) include them.
-- **Older format**, where `ip`/`geo` is the local host and `dst_*` the far end: loaded.
-
-Reports that match discovery but fail a required check are not loaded. They are listed on the overview under "N more report types discovered, not supported yet", with what they lack and "Support will be added in a future update". A new report type is announced either way: "compatibility check passed … loaded onto the map", or "discovered but cannot be shown yet: missing …". `/api/diagnostics` gives the full check for every report, and `tools/diagnose_reports.py` runs it read-only from the command line.
-
-Single-host scan, population, device and blocklist reports have no source and destination fields at all, so they are not candidates. Rows are loaded by filename prefix (`YYYY-MM-DD-…`), so a new collection needs a `filename` index, or `FALLBACK_SCAN=1`. When the report list changes, open pages update the overview ("N reports monitored"), filters and figures, and announce the new type.
-
-So the replay time can be more than 24 hours behind the current time; the top bar shows both (**Replay time (UTC)** from `extracted_date`, and **Current time (UTC)**), and every stream row shows its own replay time. The schedule is saved in `data/schedule.json`, so a service restart continues where it was. A restart also keeps a running settle time, even before the day has been reloaded. Only the server runs the schedule; scripts that import `app.py` do not touch it. At faster speeds (demos) the day loops instead of running past 24:00.
-
-Run it as a service with gunicorn. Use **one worker**, since the day cache is in memory, and threads for concurrent viewers:
+For development, `.venv/bin/python app.py` runs it on `http://localhost:<PORT>` (`PORT` in `.env`). As a service, use
+gunicorn with **one worker** (the day cache is in memory) and threads for viewers:
 
 ```bash
 .venv/bin/gunicorn --workers 1 --threads 8 --bind 127.0.0.1:<your port> app:app
 ```
 
-A hardened systemd unit is included: `deploy/install.sh` writes `deploy/looking-glass.service` from
-`deploy/looking-glass.service.template` for your user and folder ([INSTALLATION.md](INSTALLATION.md)).
+`deploy/install.sh` writes the hardened systemd unit `deploy/looking-glass.service` from
+`deploy/looking-glass.service.template` for your user and folder ([INSTALLATION.md](INSTALLATION.md)):
 
 ```bash
 sudo cp deploy/looking-glass.service /etc/systemd/system/
@@ -657,6 +328,124 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now looking-glass
 journalctl -u looking-glass -f
 ```
+
+### How the libraries are installed (`deploy/safe_libraries.py`, `library_supply.py`)
+
+Sources, refusals and the reports as an operator sees them:
+[INSTALLATION.md, The libraries](INSTALLATION.md#the-libraries-only-files-that-match-the-lock). `deploy/safe_libraries.py`
+uses Python's standard library only; the guided installer also uses it for its own answer checks, and a release copies
+it unchanged beside the pipeline's `deploy.sh`. Its steps and exit codes:
+
+1. **`check-machine`:** `ID=ubuntu` and `VERSION_ID` 24.04 or later in `/etc/os-release` (`ID_LIKE` does not count),
+   the `python3` that will run Looking Glass at 3.12-3.14, `platform.machine()` x86_64 or aarch64. Else exit 2 with
+   every reason, before anything is made.
+2. **The lock** (from `tools/lock_requirements.sh`: pip-compile `--generate-hashes --allow-unsafe`): every line
+   `name==version` with at least one `--hash=sha256:`. An option line (`--index-url`, `--extra-index-url`, `-e`...), a
+   range, a missing hash or a duplicate: exit 4.
+3. **`python3 -m venv .venvs/<name>-<time>`**; its own pip (never upgraded from outside) does the rest, with the
+   user's pip settings and `PIP_*` variables set aside.
+4. **Each file:** `pip download --no-deps --only-binary=:all:` for that Python and processor (`manylinux_2_28`,
+   `manylinux2014`, `manylinux_2_17`, pure-Python) into a quarantine folder, from PyPI (`LG_PYPI_URL`), the release
+   bundle (`LG_LIBRARIES_URL`; tarfile's `data` filter, wheels only, at most 2 GB), then the local copy
+   (`LG_LIBRARIES_DIR`, default `~/looking-glass/libraries`, newest release first). No match in any source: exit 3,
+   the new environment removed.
+5. **Install:** `pip install --no-index --find-links <checked files> --require-hashes --only-binary=:all: -r
+   requirements.lock`, then `pip check`, the required modules (`--import`), and the lock's sha256 in
+   `lg-lock.sha256` (the same lock next time: nothing to do).
+6. **Switch:** `.venv` becomes a relative link (an older real `.venv` folder moves into `.venvs/` first); the newest
+   two environments are kept; the service keeps its loaded libraries until reloaded. The local copy is
+   `<release>/<part>/` with `SHA256SUMS`, files 444, folders 555.
+7. **Report:** refused files go to `suspected-packages.json` and `.txt` (in `LG_SUPPLY_REPORT_DIR`), each with an
+   id, the lock and the outcome. Exit 10: installed, but something was refused. `library_supply.py` (via
+   `features.py`) reads the reports of the platform's folder, the one above and the pipeline's, audits each event once
+   (`library_suspected`, user `looking-glass`, a minute after start; ids in `data/suspected_packages_audited.json`)
+   and raises one bell alert for the last 30 days' events.
+
+`.release_files` (in `platform/` and `database/`) lists every file a release ships. During an update,
+`deploy/stale_files.py` moves code files on `.release_files_history` (every file any release shipped there) but not on
+`.release_files` to `backups/stale-<time>/`; with no history list it moves nothing. It refuses a list it cannot trust
+and never follows links ([INSTALLATION.md, Updating](INSTALLATION.md#updating)).
+
+`tools/build_wheelhouse.sh` makes the release bundle: every locked file for Python 3.12-3.14 on x86_64 and aarch64,
+each checked against its lock, `SHA256SUMS`, the locks, and an offline `pip install --dry-run` per computer.
+`tests/check_installer_supply.py` (in `run_all_checks.sh` and the GitHub checks) rehearses it all with a local package
+index on 127.0.0.1 and made-up wheels, and fails if any install path runs pip without `--require-hashes`.
+
+### Always on: a new day every day
+
+**Each day is replayed in full, 00:00 to 24:00, once its report has arrived** (`schedule.py`), since Shadowserver
+delivers a day's reports during the following day:
+
+1. At 24:00 the next day starts at once if its report is in MongoDB.
+2. If not, the platform shows **"Waiting for the reports of YYYY-MM-DD"**, holds at 00:00 and checks every 15 seconds.
+3. Once no new report has arrived for `REPORT_SETTLE_SECONDS` (default 10 minutes; each new report restarts the
+   wait), the day replays from 00:00; open pages switch within 15 seconds.
+4. A replay more than a day behind (after downtime, say) skips to the newest day.
+
+So the replay can be more than 24 hours behind; the top bar shows **Replay time (UTC)** (from `extracted_date`) and
+**Current time (UTC)**. The schedule is saved in `data/schedule.json`, so a restart continues where it was, settle
+time included. Only the server runs it; scripts that import `app.py` do not. At demo speeds the day loops.
+
+**Late reports.** Every 15 seconds the server counts each report's rows for the replayed day (indexed filename
+prefix); a new or grown report reloads the day at once, and open pages refresh within 15 seconds. The receive time
+is the rows' MongoDB insert time (ObjectId). `/api/clock` lists the day's reports (`reports`) and recent arrivals
+(`report_changes`); `tools/report_arrivals.py [day]` and `tools/check_reports.py [day]` (MongoDB against the running
+service) check them.
+
+**New collections.** Collections are listed every 15 seconds; a change rebuilds the report list at once, with a full
+rebuild every `REGISTRY_REFRESH_SECONDS` (default 1 hour). A report has `src_*`/`dst_*` fields (or the referer
+source fields) in a known layout (standard, legacy, referer, inbound), is not in `EXCLUDE_COLLECTIONS`, and is in
+`MONGO_COLLECTIONS` when that is set (empty = all).
+
+### Publicly accessible / vulnerable services (`/services`)
+
+The platform for the single-host reports (what it shows:
+[USER_GUIDE.md](USER_GUIDE.md#4-publicly-accessible--vulnerable-services)): collections with an `ip` but no source and
+destination (`scan_*`, `scan6_*`, `population_*`, `device_id*`, `compromised_*`, `blocklist`). No map; the same
+replay schedule and features as the map platform.
+
+**Discovery.** `services.py` `ServiceRegistry` finds these collections every 15 seconds. **Required:**
+`extracted_date` (a date), `ip`, `geo`, and `filename` with an index. **Recommended:** port, city or region, network,
+severity, tag. Others are listed as "not processed yet", with what they lack.
+
+**Fields.** `tools/analyze_services.py` measures the fields across the 86 collections. Records are normalised to
+the common fields plus **service**, **family** (Exposed service, Service population, Identified device,
+Compromised, Blocklisted), vendor, device type, product, version and **issues** (CVE tags, POODLE, FREAK, expired
+certificate, exposed admin panel, device implant, compromise). Every other field is kept for the record details.
+
+**Page.** `templates/services.html` uses the map platform's `app.css` and markup; `services.css` only adds the stage
+that replaces the map. Region boundaries: `static/data/adm1/<country>.json` (geoBoundaries ADM1, CC BY 4.0). Demo
+mode also hides identifying certificate fields.
+
+**Official report names.** Shadowserver's names without "Report"; IPv6 reports carry "(IPv6)". Collections were
+matched to reports by their file names and `category` and the "Filename" line of Shadowserver's report page.
+`_verified` in `data/service_reports.json` records the exceptions: `population_bgp` ("Open BGP Service
+(population)", the population variant of `scan_bgp`), MikroTik (spelled `scan_miktrotik_service`), NTRIP and Radmin
+(no filename).
+
+**Hosts in several reports (`cross`) and with multiple issues (`multi`).** Both compare the selected hosts against all
+their reports of the day and show every one of their records. The filters set when the figure is switched on choose
+the hosts and travel in the value (`cross=seed:family=Blocklisted`); later filters narrow the records; host filters
+always apply. Old links with `cross=1` / `multi=1` let every filter choose the hosts. In the address: `multi`,
+`cross`, `vulnerable=1`; a report: `/services?service=…`.
+
+**Report definitions.** `data/service_reports.json`, written from Shadowserver's report pages
+(https://www.shadowserver.org/what-we-do/network-reporting/): each report's official name, Shadowserver's severity,
+what it means, why it matters and a link, for all 86 single-host and 12 communication reports. Glossaries, tooltips
+and record details use it.
+
+**API.** Under `/api/svc/`: `clock`, `events`, `detail`, `replayed`, `stats`, `facets`, `insight`, `hosts.csv`,
+`glossary`, `diagnostics` and `summary`.
+
+**The map's compatibility check** (`diagnose` in `sources.py`). Required: `extracted_date` (a date); source host
+`src_ip`, `ip` or `http_referer_ip` and country `src_geo`, `geo` or `http_referer_geo`, by format; `filename` with
+an index, or `FALLBACK_SCAN=1`. Recommended (the report still loads; the overview tooltip says what it lacks):
+destination IP or country, source city/region, destination country, source network, severity, infection/category.
+Source only (like Sinkhole DNS) shows points at the source. Destination only (the "target" format) needs `dst_ip`
+and `dst_geo` and is left out of source-host figures. The older format (`ip`/`geo` the local host, `dst_*` the far
+end) loads too. A report failing a required check is listed on the overview as "not supported yet".
+`/api/diagnostics` gives the full check; `tools/diagnose_reports.py` runs it read-only. Rows load by filename prefix
+(`YYYY-MM-DD-…`).
 
 ## Configuration (`.env`)
 
@@ -1043,6 +832,11 @@ encrypted key store, the test before saving, the API), `connector_net.py` (every
 the address resolved once and refused when it is loopback, link-local, a cloud metadata address or reserved, the
 certificate and name checked, no redirects, a size cap), `connector_payload.py` (what is sent: STIX 2.1 for OpenCTI,
 a MISP event) and `connectors_worker.py` (the sender, run by its own systemd timer: `deploy/connectors_timer.sh`).
+
+Error words in answers: `user_words.py`. An answer shows an error's text only when Looking Glass wrote it for the
+reader (raised as `Said`, or registered, as the connectors' refusals are); any other error, a library's or Python's
+own, gets a fixed message, and its detail goes to the audit or the service's log. The connectors and the passkey
+checks answer this way (`tests/check_user_words.py`).
 
 - **`docs/SECURITY.md`:** how Looking Glass is secured, the operator checklist, checking an installation and reporting a vulnerability.
 - **`docs/INSTALLATION.md`:** installing on Windows with WSL or on a Linux server, HTTPS, firewall, updating, troubleshooting.
