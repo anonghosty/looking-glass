@@ -10,16 +10,15 @@
     var src = "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(id) +
       "?autoplay=1&rel=0&playsinline=1&cc_load_policy=1&start=" + start;
     var frame = fig.querySelector(".lg-film-frame");
-    var ifr = frame.querySelector("iframe");
-    if (!ifr) {
-      ifr = document.createElement("iframe");
-      ifr.title = fig.querySelector(".lg-film-title").textContent;
-      ifr.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
-      ifr.allowFullscreen = true;
-      ifr.referrerPolicy = "strict-origin-when-cross-origin";
-      frame.replaceChildren(ifr);
-    }
+    // a new frame each time, its address set before it is placed: changing the address of a frame already on the
+    // page is a navigation the browser keeps, so Back would step through the chapters instead of leaving the page
+    var ifr = document.createElement("iframe");
+    ifr.title = fig.querySelector(".lg-film-title").textContent;
+    ifr.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+    ifr.allowFullscreen = true;
+    ifr.referrerPolicy = "strict-origin-when-cross-origin";
     ifr.src = src;
+    frame.replaceChildren(ifr);
     fig.classList.add("is-playing");
     fig.querySelectorAll(".lg-film-ch").forEach(function (b) {
       b.classList.toggle("is-on", parseInt(b.getAttribute("data-t"), 10) === start);
