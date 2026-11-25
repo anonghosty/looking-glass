@@ -218,20 +218,12 @@ flowchart TD
     L["<b>Looking Glass</b> · the platform"]:::app
     S --> P --> M
     M -- "read only" --> L
-    subgraph IN["The CSIRT · one role each"]
-        direction LR
-        R("<b>Researcher</b><br/>threats, no address"):::people
-        A("<b>Analyst</b><br/>the devices"):::people
-        G("<b>Management</b><br/>figures, decisions"):::people
-        V("<b>Advisor</b><br/>the advisories"):::people
-        U("<b>Auditor</b><br/>the audit log"):::people
-        D("<b>Admin</b><br/>the platform"):::people
-    end
-    E("<b>External viewer</b><br/>a constituent or another CSIRT<br/>3 pages, masked"):::ext
-    O("<b>The organisation</b><br/>its own devices only"):::ext
+    IN("<b>The CSIRT</b>, one role each<br/>researcher · analyst · management<br/>advisor · auditor · admin"):::people
+    E("<b>External viewer</b>, masked<br/>a constituent or another CSIRT<br/>3 pages, read only"):::ext
+    O("<b>The organisation</b><br/>its advisory: its own devices only"):::ext
     L -- "HTTPS" --> IN
-    L -- "HTTPS · masked" --> E
-    V -. "the advisory, PDF + CSV" .-> O
+    L -- "HTTPS" --> E
+    IN -. "the advisor sends it" .-> O
     classDef src fill:#0369a1,stroke:#075985,color:#fff
     classDef pipe fill:#4f46e5,stroke:#4338ca,color:#fff
     classDef db fill:#0f766e,stroke:#115e59,color:#fff
@@ -239,7 +231,6 @@ flowchart TD
     classDef people fill:#475569,stroke:#334155,color:#fff
     classDef ext fill:#b45309,stroke:#92400e,color:#fff
     linkStyle default stroke:#94a3b8,stroke-width:2px
-    style IN fill:transparent,stroke:#64748b,stroke-width:1.5px,stroke-dasharray:6 4,color:#64748b
 ```
 
 1. **Collect.** The database pipeline fetches your Shadowserver reports with your Shadowserver API key, or reads the
@@ -247,8 +238,9 @@ flowchart TD
    other when needed. It skips what it already has.
 2. **Load.** Each report goes into MongoDB, one collection per report type, without duplicates.
 3. **Replay.** Shadowserver sends a day's reports during the next day; Looking Glass replays that day **in full, at
-   the same time of day**, so a wall screen always shows a living picture.
-4. **Analyse and share.** Analysts drill down and export; executives get aggregates; partners see masked views.
+   the same time of day**, so the map always shows a living picture.
+4. **Analyse and share.** Analysts drill down and export; management gets aggregates; external viewers (a
+   constituent or another CSIRT) see three pages, masked.
 
 | Folder | What it is | Start here |
 |---|---|---|

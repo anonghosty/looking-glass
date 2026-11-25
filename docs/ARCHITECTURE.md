@@ -18,9 +18,8 @@ the database can instead be an internal MongoDB on another server of your networ
 %%{init: {"themeVariables": {"fontSize": "13px"}, "flowchart": {"curve": "basis", "nodeSpacing": 24, "rankSpacing": 34, "padding": 10, "wrappingWidth": 240}}}%%
 flowchart TD
     SS(["<b>Shadowserver</b>"]):::src
-    subgraph DB["database/ · the pipeline · cron · its own database account"]
-        direction LR
-        F1["fetch"]:::pipe --> F2["check the sender<br/>DKIM"]:::pipe --> F3["unzip<br/>within limits"]:::pipe --> F4["sort"]:::pipe --> F5["load"]:::pipe
+    subgraph DB["database/ · the pipeline"]
+        F1["<b>Pipeline</b> · cron, its own database account<br/>fetch · check the sender (DKIM)<br/>unzip within limits · sort · load"]:::pipe
     end
     M[("<b>MongoDB</b><br/>127.0.0.1 by default, or an internal server over TLS<br/>never a public address · login required")]:::db
     subgraph PF["platform/ · the web app · a sandboxed systemd service"]
@@ -30,7 +29,7 @@ flowchart TD
     E("<b>External viewers</b>, masked<br/>a constituent or another CSIRT · 3 pages"):::ext
     C(["<b>Your OpenCTI or MISP</b>"]):::ext
     SS -- "e-mail to the mailbox, or the report API (HTTPS)" --> F1
-    F5 -- "read and write, its own database only" --> M
+    F1 -- "read and write, its own database only" --> M
     M -- "read only" --> W
     W -- "HTTPS · Caddy in front on private and public<br/>password + TOTP, or a passkey (public)" --> B
     W -- "HTTPS · masked, read only" --> E
