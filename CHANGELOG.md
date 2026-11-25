@@ -5,6 +5,76 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-25
+### Added
+- **Connectors: send Looking Glass's analysis to your own OpenCTI or MISP.** On Settings → Connectors an
+  administrator adds a target, its key and its TLP (AMBER unless chosen), and ticks what it receives: networks of
+  the constituency, some of their address blocks, other ranges. A target is saved only after its test passed (the
+  address, the certificate, the key and its rights, and one test object), and saved off. Turned on, it receives the
+  last 30 days, then each report day once its reports have arrived: in OpenCTI a grouping per device with a note per
+  report, linked to the platform's own MITRE ATT&CK entries; in MISP one event per day, shared with your
+  organisation only and never published, with an event report. It sends only Looking Glass's own analysis, never
+  Shadowserver's raw rows, findings, notes, names, time to act or combination codes, and the devices go as victims,
+  never as indicators to block. A day whose data changes is updated in place; what is no longer true is revoked
+  in OpenCTI. Every change to a target asks for your passkey or authenticator code, and every send is in the audit
+  log. A paused target rings the administrators' bell, and the auditor sees every target and everything sent out on
+  the Audit portal's new Data sent out tab. Works in every access mode, `local` included. Guide: [Connecting OpenCTI and MISP](docs/CONNECTORS.md).
+- **After updating:** nothing to do unless you will use connectors. Then: `deploy/connectors_timer.sh install`
+  (once), and if Settings → Connectors says keys cannot be stored, add `CONNECTOR_KEY_SECRET` to `.env`
+  (`openssl rand -hex 32`) and run `deploy/reload.sh`.
+- **Passkeys, and a fresh check before high-value actions.** On installations open to the internet
+  (`ACCESS_MODE=public`) everyone signs in with a passkey (Windows Hello, Touch ID, a phone or a security key),
+  which a look-alike site cannot relay; each person registers two on their first sign-in after the update. Before
+  high-value actions (complete or unmasked downloads, unmasking, tracing, settings, the purge, advisories) every
+  installation asks you to confirm it's you, with a passkey or a fresh authenticator code, for 10 minutes; changes to
+  accounts, roles, sign-up links, connectors and passkeys ask every time. Your account (in the menu) lists your
+  passkeys; administrators can reset a person's passkeys. An internal installation that sees sign-ins from the
+  internet says so in the administrators' bell.
+- **After updating:** on an installation open to the internet, tell your users before the update that their next
+  sign-in asks them to register two passkeys, and that it needs the site's host name (not its IP address). Internal
+  installations: nothing to do.
+- **Unusual activity.** Every network and report, and every pair of reports, now has its own normal: the middle of its
+  last 28 report days. Analysts see what is well above its normal on the latest report day on a new page, Unusual
+  activity: each card in words, with its chart, the devices behind it and a link that filters the map or the services
+  platform. Confirm makes it a thread your team watches every day; Dismiss keeps it quiet for 30 days. Each report
+  learns from these decisions how readily to ask, and says why. Researchers see the suggestions, without devices, in
+  Looking Glass asks; management sees Unusual this week on the Executive portal. Counted every hour by its own service;
+  counts only, never an address.
+- **After updating:** `sudo platform/deploy/unusual_timer.sh install` once (new installations do this by themselves).
+  The first count reads the last weeks and takes a few minutes; the page is empty until then.
+
+### Changed
+- **Caddy in front of internal installations too.** A few deliberately slow connections from inside a network could
+  hold Looking Glass up for everyone. The guided installer now puts Caddy in front of `private` installations as well,
+  with their own self-signed certificate or one for a domain, and Looking Glass listens on this computer only. For
+  `private`, "No HTTPS" and a reverse proxy of your own are no longer offered. An internal installation without Caddy
+  in front is reminded in the administrators' bell every day.
+- **After updating:** `local` and `public` installations: nothing to do. `private` installations: run the guided
+  installer again with the same answers to put Caddy in front; until then the bell reminds you daily.
+- **A shorter top bar on the map and services pages.** The line under the title no longer shows the report source,
+  the number of reports or "replay of yesterday"; the page's name and who is signed in stay.
+- **The security retest runs on public installations too.** There, its temporary accounts register two passkeys made
+  by the test itself (kept in memory and removed at the end) and use them to sign in and to confirm high-value
+  actions, so the passkey sign-in, a replayed passkey answer, another account's passkey and the confirmation are all
+  checked. On an installation that listens on this computer only, the network address check says so instead of
+  failing.
+
+### Removed
+- **The all-fields CSV is no longer part of combination downloads.** The ZIP keeps the PDF, the devices CSV and the
+  records CSV, with the pattern values, Shadowserver's own ATT&CK and CVE and the certificate facts as before.
+- **After updating:** nothing to do. `LG_ALL_FIELDS_MAX_LINES` is no longer read; you can delete it from `.env`.
+
+### Fixed
+- **ATT&CK suggestions checked again against Shadowserver's own pages.** Open IPP (IPv4 and IPv6) now suggests
+  T1190 Exploit Public-Facing Application: Shadowserver names code execution found on printer models and access to
+  print jobs, and never amplification. The general amplification rule now applies only to the reports it names; STUN,
+  IPv6 STUN and GTP keep Reflection Amplification from their own pages. An IPv4 and an IPv6 report that share one
+  Shadowserver page now get the same suggestion (CWMP, IMAP, MySQL, rsync and VNC differed).
+- **After updating:** a researcher sees these reports marked *check* on the Definitions page, with the new suggestion
+  offered and the earlier one kept; nothing changes until they confirm.
+- The Overview greeting for an account with no name entered no longer starts a sentence with a lowercase "there";
+  such accounts get only the greetings that open with a salutation, such as "Hello there".
+
 ## 2026-11-24 (2)
 ### Changed
 - **app.py split into modules, behaviour unchanged.** The analysis panels, the PDF and ZIP reports of an analysis

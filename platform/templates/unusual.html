@@ -1,0 +1,57 @@
+{# SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors -#}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0d">
+  <meta name="csrf-token" content="{{ lg_csrf }}">
+  <title>Looking Glass · Unusual activity</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo-mark.svg') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/settings.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/combos.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/unusual.css') }}" rel="stylesheet">
+</head>
+<body class="settings-page cb-page pt-page" data-decide="{{ '1' if can_decide else '0' }}" data-masked="{{ '1' if masked else '0' }}">
+  <header class="hud">
+    <div class="hud-left">
+      <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Unusual activity · signed in as {{ lg_name }} ({{ lg_role }})</span></div></div>
+    </div>
+    <div class="hud-right">
+      {% set nav_here = "unusual" %}{% set nav_go = false %}{% include "_page_nav.html" %}
+    </div>
+  </header>
+  <main class="st-main cb-main">
+    <section class="cb-hero" id="ptHero">
+      <div class="cb-eyebrow">Unusual activity · suggested</div>
+      <h1>What is vibrating differently today</h1>
+      <p>Each network and report, and each pair of reports the same devices are in, has its own normal: the middle of its
+        last weeks. Looking Glass suggests a thread only when it is well above its normal and big enough to matter.
+        These are suggestions: open one to see why, then confirm it to watch it, or dismiss it.{% if masked %} You see the
+        figures without devices or addresses.{% endif %}</p>
+    </section>
+
+    <section class="cb-card" id="ptToday" aria-labelledby="ptTodayH">
+      <h2 id="ptTodayH">Unusual on the latest report day</h2>
+      <p class="cb-msg" id="ptStatus" role="status"></p>
+      <div id="ptList" class="st-loading">Loading the suggestions…</div>
+    </section>
+
+    <section class="cb-card" id="ptMine" aria-labelledby="ptMineH">
+      <h2 id="ptMineH">Watched by your team</h2>
+      <p class="cb-msg">Threads your team confirmed, followed every day against their own normal.</p>
+      <div id="ptConfirmed"></div>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/notifications.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/lg-stepup.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/unusual.js') }}"></script>
+</body>
+</html>

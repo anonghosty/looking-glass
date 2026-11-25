@@ -421,3 +421,12 @@ body.is-loading .mg-grid, body.is-loading .mg-kpis { opacity: 1; }
 
 /* a row with no Focus (a botnet-sinkhole row on services) keeps the button's place: every row lines up (2026-11-15) */
 .mg-mini-ph { visibility: hidden; pointer-events: none; }
+
+/* Unusual this week (unusual.py): the days of the week, then the latest day's strongest threads in words */
+.mg-unusual { display: grid; gap: 10px; }
+.mg-unusual h3 { margin: 4px 0 0; font-size: 13px; color: #d6ddee; }
+.mg-pt-days { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.mg-pt-days li { font-size: 12.5px; padding: 3px 10px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .1); color: var(--mg-mute); }
+.mg-pt-days li.on { color: #ffd38a; border-color: rgba(255, 211, 138, .35); }
+.mg-pt-top { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13.4px; line-height: 1.5; color: #d6ddee; }
+.mg-unusual .mg-empty { text-align: left; padding: 4px 0; }

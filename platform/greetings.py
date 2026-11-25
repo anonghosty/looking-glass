@@ -10,6 +10,7 @@ Installed from app.py: the templates call lg_greeting() and show its three parts
 """
 import json
 import os
+import re
 import secrets
 import threading
 import time
@@ -149,11 +150,21 @@ ROLE_GREETINGS = {
         "Welcome, {name}. The portal is read only.", "{name}, the logs never forget."],
 }
 FIRST = "Greetings, {name}! Welcome to Looking Glass"
+NO_NAME = "there"
+# with no name entered, "there" stands in: only the greetings that open with a salutation read right with it ("Hello
+# there", "Welcome back, there"); "{name}, the root of all good things." would start with a lowercase "there" (2026-11-24)
+SALUTED = re.compile(r"^(Hi|Hey|Hello|Hello again|Howdy|Welcome|Welcome back|Good to see you|Nice to see you|Greetings|"
+                     r"Akwaaba|Bonjour|Salut|Good day),? \{name\}")
 
 
 def for_role(role):
     """The 30 greetings of a role (an external viewer's, or a role an admin made: the general ones)."""
     return ROLE_GREETINGS.get(str(role or ""), GREETINGS)
+
+
+def without_name(texts):
+    """The greetings of a list that read right with "there" in place of a name."""
+    return [t for t in texts if SALUTED.match(t)]
 
 
 class Welcomed:
@@ -198,17 +209,20 @@ def install(app, ctx):
     def first_name(user):
         full = (ctx["people_name"](user) or "").strip()
         if not full or full == user:
-            return "there"                     # no name entered: never the username
+            return NO_NAME                     # no name entered: never the username
         return full.split()[0][:40]
 
     def lg_greeting():
         """(before, name, after, first) for the signed-in person; called by the Overview templates."""
         u = getattr(g, "user", None) or {}
         user = u.get("user", "")
-        name = first_name(user) if user and not u.get("automation") else "there"
+        name = first_name(user) if user and not u.get("automation") else NO_NAME
         if user and not u.get("automation") and welcomed.first_time(user):
             return (*split(FIRST, name), True)
-        text = secrets.choice(for_role(u.get("role")))           # a new one every time the Overview opens, the role's own
+        texts = for_role(u.get("role"))
+        if name == NO_NAME:
+            texts = without_name(texts) or texts
+        text = secrets.choice(texts)                             # a new one every time the Overview opens, the role's own
         return (*split(text, name), False)
 
     app.jinja_env.globals["lg_greeting"] = lg_greeting

@@ -60,6 +60,11 @@ if systemctl is-active --quiet looking-glass 2>/dev/null || systemctl is-active 
   echo "Reloading the service on HTTPS..."
   bash deploy/reload.sh
 fi
+if head -1 /etc/caddy/Caddyfile 2>/dev/null | grep -q 'Managed by Looking Glass' && grep -q '^# internal: ' /etc/caddy/Caddyfile 2>/dev/null; then
+  # Caddy in front of this internal installation (deploy/caddy_front.sh --internal): it serves its own copy
+  port="$(sed -n 's#^https://:\([0-9]*\) {#\1#p' /etc/caddy/Caddyfile)"
+  echo "Caddy is in front: give it the new certificate now:  sudo deploy/caddy_front.sh sync"
+fi
 echo "Open https://localhost:$port here, or https://<one of the addresses above>:$port from other screens."
 echo "Trust this certificate on every screen that opens Looking Glass (docs/INSTALLATION.md, A8), after checking that"
 echo "its SHA-256 fingerprint matches the one above. Never click past a certificate warning."

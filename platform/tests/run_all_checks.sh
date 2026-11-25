@@ -8,6 +8,10 @@
 cd "$(dirname "$0")/.." || exit 1
 PY=.venv/bin/python
 pass=0; fail=0; skip=0; failed=()
+# the in-process checks sign in with throwaway sessions and test other things: the fresh check before high-value
+# actions (stepup.py) is off for them; tests/check_stepup.py switches it on for itself and tests it. The running
+# service never has this set (the security retest checks that a high-value request on it is refused without the check).
+export LG_STEPUP_TESTS_OFF=1
 # LG_NO_OUTSIDE=1: the outside-connection guard (tests/no_outside/sitecustomize.py) in every check, with a made-up map
 # key so the paths that reach outside are switched on: only this computer and the database may be reached, every other
 # attempt is refused and written down, and the last line below fails on any place not by design (2026-11-18)
@@ -87,6 +91,9 @@ run "Caddy in front of a public installation: its configuration, source and wiri
 run "ATT&CK suggestions checked against Shadowserver's pages; revised ones reach existing mappings (offline)" $PY tests/check_attack_audit.py
 run "Shadowserver's fields: readable labels, its own event mapping, certificate facts, exports (offline)" $PY tests/check_shadowserver_fields.py
 run "The parts moved out of app.py still fit together (names, re-exports, routes)" $PY tests/check_moved_modules.py
+run "Passkeys and the fresh check before high-value actions" $PY tests/check_stepup.py
+run "Connectors: the way out, keys, test before save, scope, payload" $PY tests/check_connectors.py
+run "Unusual activity: the normal, the summary, Confirm and Dismiss, who sees what" $PY tests/check_unusual.py
 run "security headers, hosts, access modes (offline)" $PY tests/check_cov_security.py
 run "organisation, notes, task monitor, Workers (offline)" $PY tests/check_cov_admin_tools.py
 run "analyst codes: making, reading, channel rules (offline)" $PY tests/check_cov_acodes.py

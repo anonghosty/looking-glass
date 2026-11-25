@@ -141,7 +141,8 @@ READ_ONLY = [
 ]
 # never shown: only whether one is set
 SECRETS = [("MONGO_PASSWORD", "Database password"), ("MAPBOX_TOKEN", "Mapbox token"), ("MALPEDIA_TOKEN", "Malpedia token"),
-           ("NVD_API_KEY", "NVD API key"), ("REF_SECRET", "Host reference secret")]
+           ("NVD_API_KEY", "NVD API key"), ("REF_SECRET", "Host reference secret"),
+           ("CONNECTOR_KEY_SECRET", "Connector keys' encryption secret")]
 SECRET_KEYS = {k for k, _ in SECRETS}
 GROUPS = ["Replay", "Loading and counting", "Memory and speed", "Findings", "Alerts", "Access and security", "Sign-in locks",
           "Audit", "Database", "Country", "Secrets"]

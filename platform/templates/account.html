@@ -1,0 +1,51 @@
+{# SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors -#}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0d">
+  <meta name="csrf-token" content="{{ lg_csrf }}">
+  <title>Looking Glass · Your account</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo-mark.svg') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/settings.css') }}" rel="stylesheet">
+</head>
+<body class="settings-page" data-public="{{ '1' if is_public else '0' }}" data-minimum="{{ minimum }}" data-enrol="{{ '1' if enrol else '0' }}">
+  <header class="hud">
+    <div class="hud-left">
+      <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Your account · signed in as {{ lg_name }} ({{ lg_role }})</span></div></div>
+    </div>
+    <div class="hud-right">
+      {% set nav_here = "account" %}{% set nav_go = false %}{% include "_page_nav.html" %}
+    </div>
+  </header>
+  <main class="st-main">
+    <section class="st-card" id="pkCard">
+      <h2>Passkeys</h2>
+      {% if is_public %}
+      <p class="st-hint" id="pkIntro">This site asks for a passkey when you sign in and before high-value actions. Register at least {{ minimum }} (for example this computer and your phone, or a security key), so losing one device does not lock you out.</p>
+      {% else %}
+      <p class="st-hint" id="pkIntro">This site asks for a code from your authenticator app before high-value actions. You may also add a passkey and use it instead.</p>
+      {% endif %}
+      <p class="st-access" id="pkEnrol" {% if not enrol %}hidden{% endif %} role="status">Register your passkeys to continue: Looking Glass opens once you have {{ minimum }}.</p>
+      {% if not can %}<p class="st-access" id="pkWhy">{{ why }}</p>{% endif %}
+      <div id="pkList" class="st-loading">Loading your passkeys…</div>
+      <div class="st-row">
+        <label class="st-field">Name for a new passkey <input type="text" id="pkName" maxlength="40" placeholder="e.g. Office laptop"></label>
+        <button type="button" class="pill-btn primary" id="pkAdd" {% if not can %}disabled{% endif %}>Add a passkey</button>
+      </div>
+      <p class="st-msg err" id="pkError" role="alert"></p>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/notifications.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/lg-stepup.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/account.js') }}"></script>
+</body>
+</html>

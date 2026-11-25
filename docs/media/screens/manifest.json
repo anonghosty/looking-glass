@@ -2,33 +2,34 @@
  "about": "The page files each documentation screenshot shows, with the SHA-256 of each file and of the image as they were when the screenshot was taken or confirmed. Made by platform/tools/screens_manifest.py; checked by platform/tests/check_screenshots.py.",
  "screens": {
   "00-login.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/auth.css": "326ee7edb5eed628a44ddc57f4b29567e11f1bc1d8f24be013d8960c656eb667",
     "platform/static/js/auth-bg.js": "66666ff47080dc833087c855682384860a2032d4df1508f4ade551fde7bee7c8",
     "platform/static/js/auth-card.js": "0d3da77d8d079688cf14c55d167197d9ea22de72620baff13abe53759b72166a",
+    "platform/static/js/auth-passkey.js": "e2753a8982d67905b7947968f0ccd8e442952912eff7133e1c568b45a1195a4e",
     "platform/static/js/auth-turn.js": "b077577d8fe89f47c3fc50e74b452e8e66777809e1d15e88363778c40f4e9898",
     "platform/static/js/lg-select.js": "0b453c6da32b94e45e981860e58b6e8588510340ba9b110f8f4fadd6f66dc8e1",
     "platform/templates/auth_base.html": "a5f60dfcc478ab3792cd7123649098a175b7704e6bf7957aaadf841fe919c5a1",
-    "platform/templates/login.html": "6c1b4a657a4e2e6ea21bd791f89abea38b5cca5474bc1c074f334659df2ef516"
+    "platform/templates/login.html": "92d5a26314ed69fe3900c9d1673b61d8de005bc306e0060b1ff53700a5699049"
    },
-   "image_sha256": "fae32f277ef6a5bed6e2645dce4e9c8f5bdbf6d47cfdee4f11c038d1c494685f",
+   "image_sha256": "da455cfc695028db13ad4db07074e39c5e3e775aa47fb4aacb3c111c6ee20586",
    "page": "/login"
   },
   "10-overview.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/overview.css": "9b4204417cf0f9b7b22c28d13bda0f4acba9ac11e93c4f7b8619ecfe0125f574",
     "platform/static/js/acode-make.js": "ea9c7d70e045706c9b391dfef1bea2191423eaf356f942741645225ee87005c1",
-    "platform/static/js/app.js": "34d2efe7637b03ab69b1bcf1e2ecade6e049c43518fce592d9e8609ae2baeb3c",
+    "platform/static/js/app.js": "38028b0c47b3731efd9fd4dafcb76cd396817222c2ce23bf425f669a7718b2c0",
     "platform/static/js/beacon-handover.js": "84508c17867e18216e82620c4c268b7b6d24057ddc48a485c1577cd85323486c",
     "platform/static/js/beacon.js": "e4797deed743cb27cd46912c22b6bdc5e500d050d23c7b38296b27cd7342539d",
     "platform/static/js/display.js": "7b21167f9e3b5bc8aa2e1b36aee80023d1bd217ea9795f12d4a92d43a5550489",
-    "platform/static/js/glossary.js": "3de6dad98a251ea2340930fdf709005895344aa0cfc9606338a242bfb74434c4",
+    "platform/static/js/glossary.js": "9dd4e230ebba36ec584107296699d76d42090cdfd34167173dbf20101b3bf23a",
     "platform/static/js/hud-fit.js": "51c10be402918e93a332de1a9cef5786e13587738eb62b2c6800e5b795714fc2",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-fields.js": "0f35010ff950422f5e770cec9bbae140c24a508e4ef63775e565feb24947c646",
@@ -38,16 +39,16 @@
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/portal-intel.js": "bbff5241eae1d0d628ed18d960f3ee781a45665985b37be1aa9daf6a510028bb",
     "platform/static/js/spike-notice.js": "c4dc955746b4fd1122edfc999753d93cf4173698362d2e4272789551effe1619",
-    "platform/templates/_portal_cards.html": "8dec63943c8a5a47de9e27f66a0d396457f8892acccc942134377524fc3ee95a",
-    "platform/templates/index.html": "ea1d6e3a33c841171ca27f3ffa7cc602ca8bc21fca58b26beebfa10f99123f55"
+    "platform/templates/_portal_cards.html": "bd5bbd4b38b3d16afee91636f11dbb656c54bf91341788b6eb3fff3af202a66a",
+    "platform/templates/index.html": "5de13801a3c1785696bfe1bb4d5fcd9aad138f145ebeda05ec7a95f3a2aae760"
    },
-   "image_sha256": "58260a5803a86f5385df396fe790001d736168f22402788b3b39462fa80f97c2",
+   "image_sha256": "31b43ff850792005e9e1844aefaa4a0c6a0053eb9d7f0c5e63925f7f704a05ad",
    "page": "/"
   },
   "11-overview-roles.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/overview.css": "9b4204417cf0f9b7b22c28d13bda0f4acba9ac11e93c4f7b8619ecfe0125f574",
     "platform/static/css/settings.css": "ac57b6c967e871f6a9807120d312545c85677877621b6fda10dc32c9359c95be",
@@ -56,26 +57,26 @@
     "platform/static/js/overview.js": "12dcbc3f281c50cb8da6c81fff4328a32676602753ab490d77c6fb4740151f24",
     "platform/static/js/portal-intel.js": "bbff5241eae1d0d628ed18d960f3ee781a45665985b37be1aa9daf6a510028bb",
     "platform/static/js/spike-notice.js": "c4dc955746b4fd1122edfc999753d93cf4173698362d2e4272789551effe1619",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
-    "platform/templates/_portal_cards.html": "8dec63943c8a5a47de9e27f66a0d396457f8892acccc942134377524fc3ee95a",
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
+    "platform/templates/_portal_cards.html": "bd5bbd4b38b3d16afee91636f11dbb656c54bf91341788b6eb3fff3af202a66a",
     "platform/templates/overview.html": "b131e7c9656541efca9e891d7f89428fddd5f61632bcf0cdb459b85dcbf4986d"
    },
-   "image_sha256": "d977ccbf4349e793722cfad80743d95714fc76923c9e6d037c9c671bb1577bdc",
+   "image_sha256": "416de4a546cf7abb29c4168984421ff3dfd1712cccfed6a9e68101c25ee46220",
    "page": "/overview"
   },
   "12-overview-glossary.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/overview.css": "9b4204417cf0f9b7b22c28d13bda0f4acba9ac11e93c4f7b8619ecfe0125f574",
     "platform/static/js/acode-make.js": "ea9c7d70e045706c9b391dfef1bea2191423eaf356f942741645225ee87005c1",
-    "platform/static/js/app.js": "34d2efe7637b03ab69b1bcf1e2ecade6e049c43518fce592d9e8609ae2baeb3c",
+    "platform/static/js/app.js": "38028b0c47b3731efd9fd4dafcb76cd396817222c2ce23bf425f669a7718b2c0",
     "platform/static/js/beacon-handover.js": "84508c17867e18216e82620c4c268b7b6d24057ddc48a485c1577cd85323486c",
     "platform/static/js/beacon.js": "e4797deed743cb27cd46912c22b6bdc5e500d050d23c7b38296b27cd7342539d",
     "platform/static/js/display.js": "7b21167f9e3b5bc8aa2e1b36aee80023d1bd217ea9795f12d4a92d43a5550489",
-    "platform/static/js/glossary.js": "3de6dad98a251ea2340930fdf709005895344aa0cfc9606338a242bfb74434c4",
+    "platform/static/js/glossary.js": "9dd4e230ebba36ec584107296699d76d42090cdfd34167173dbf20101b3bf23a",
     "platform/static/js/hud-fit.js": "51c10be402918e93a332de1a9cef5786e13587738eb62b2c6800e5b795714fc2",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-fields.js": "0f35010ff950422f5e770cec9bbae140c24a508e4ef63775e565feb24947c646",
@@ -85,25 +86,25 @@
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/portal-intel.js": "bbff5241eae1d0d628ed18d960f3ee781a45665985b37be1aa9daf6a510028bb",
     "platform/static/js/spike-notice.js": "c4dc955746b4fd1122edfc999753d93cf4173698362d2e4272789551effe1619",
-    "platform/templates/_portal_cards.html": "8dec63943c8a5a47de9e27f66a0d396457f8892acccc942134377524fc3ee95a",
-    "platform/templates/index.html": "ea1d6e3a33c841171ca27f3ffa7cc602ca8bc21fca58b26beebfa10f99123f55"
+    "platform/templates/_portal_cards.html": "bd5bbd4b38b3d16afee91636f11dbb656c54bf91341788b6eb3fff3af202a66a",
+    "platform/templates/index.html": "5de13801a3c1785696bfe1bb4d5fcd9aad138f145ebeda05ec7a95f3a2aae760"
    },
-   "image_sha256": "4192a394a4512fefa37c4e71f5091744ec5bbc59a0cb6111144f928ae4a71c5f",
+   "image_sha256": "9c99cf3e71e4b8260edef69b82e6beeaffadf9760a1a4959d8c8a3f25d137c9c",
    "page": "/"
   },
   "12-overview-reports.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/overview.css": "9b4204417cf0f9b7b22c28d13bda0f4acba9ac11e93c4f7b8619ecfe0125f574",
     "platform/static/js/acode-make.js": "ea9c7d70e045706c9b391dfef1bea2191423eaf356f942741645225ee87005c1",
-    "platform/static/js/app.js": "34d2efe7637b03ab69b1bcf1e2ecade6e049c43518fce592d9e8609ae2baeb3c",
+    "platform/static/js/app.js": "38028b0c47b3731efd9fd4dafcb76cd396817222c2ce23bf425f669a7718b2c0",
     "platform/static/js/beacon-handover.js": "84508c17867e18216e82620c4c268b7b6d24057ddc48a485c1577cd85323486c",
     "platform/static/js/beacon.js": "e4797deed743cb27cd46912c22b6bdc5e500d050d23c7b38296b27cd7342539d",
     "platform/static/js/display.js": "7b21167f9e3b5bc8aa2e1b36aee80023d1bd217ea9795f12d4a92d43a5550489",
-    "platform/static/js/glossary.js": "3de6dad98a251ea2340930fdf709005895344aa0cfc9606338a242bfb74434c4",
+    "platform/static/js/glossary.js": "9dd4e230ebba36ec584107296699d76d42090cdfd34167173dbf20101b3bf23a",
     "platform/static/js/hud-fit.js": "51c10be402918e93a332de1a9cef5786e13587738eb62b2c6800e5b795714fc2",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-fields.js": "0f35010ff950422f5e770cec9bbae140c24a508e4ef63775e565feb24947c646",
@@ -113,25 +114,25 @@
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/portal-intel.js": "bbff5241eae1d0d628ed18d960f3ee781a45665985b37be1aa9daf6a510028bb",
     "platform/static/js/spike-notice.js": "c4dc955746b4fd1122edfc999753d93cf4173698362d2e4272789551effe1619",
-    "platform/templates/_portal_cards.html": "8dec63943c8a5a47de9e27f66a0d396457f8892acccc942134377524fc3ee95a",
-    "platform/templates/index.html": "ea1d6e3a33c841171ca27f3ffa7cc602ca8bc21fca58b26beebfa10f99123f55"
+    "platform/templates/_portal_cards.html": "bd5bbd4b38b3d16afee91636f11dbb656c54bf91341788b6eb3fff3af202a66a",
+    "platform/templates/index.html": "5de13801a3c1785696bfe1bb4d5fcd9aad138f145ebeda05ec7a95f3a2aae760"
    },
-   "image_sha256": "21723d50d25fd698ed9365344130a5a874dbe0d5ad2b3f528c3ab8498d59aa3b",
+   "image_sha256": "0e156f1b14ec1168e3fc8c43a6ed625297f603840888a3c5e56468e8e3edd09c",
    "page": "/"
   },
   "20-comms-map.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/overview.css": "9b4204417cf0f9b7b22c28d13bda0f4acba9ac11e93c4f7b8619ecfe0125f574",
     "platform/static/js/acode-make.js": "ea9c7d70e045706c9b391dfef1bea2191423eaf356f942741645225ee87005c1",
-    "platform/static/js/app.js": "34d2efe7637b03ab69b1bcf1e2ecade6e049c43518fce592d9e8609ae2baeb3c",
+    "platform/static/js/app.js": "38028b0c47b3731efd9fd4dafcb76cd396817222c2ce23bf425f669a7718b2c0",
     "platform/static/js/beacon-handover.js": "84508c17867e18216e82620c4c268b7b6d24057ddc48a485c1577cd85323486c",
     "platform/static/js/beacon.js": "e4797deed743cb27cd46912c22b6bdc5e500d050d23c7b38296b27cd7342539d",
     "platform/static/js/display.js": "7b21167f9e3b5bc8aa2e1b36aee80023d1bd217ea9795f12d4a92d43a5550489",
-    "platform/static/js/glossary.js": "3de6dad98a251ea2340930fdf709005895344aa0cfc9606338a242bfb74434c4",
+    "platform/static/js/glossary.js": "9dd4e230ebba36ec584107296699d76d42090cdfd34167173dbf20101b3bf23a",
     "platform/static/js/hud-fit.js": "51c10be402918e93a332de1a9cef5786e13587738eb62b2c6800e5b795714fc2",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-fields.js": "0f35010ff950422f5e770cec9bbae140c24a508e4ef63775e565feb24947c646",
@@ -141,25 +142,25 @@
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/portal-intel.js": "bbff5241eae1d0d628ed18d960f3ee781a45665985b37be1aa9daf6a510028bb",
     "platform/static/js/spike-notice.js": "c4dc955746b4fd1122edfc999753d93cf4173698362d2e4272789551effe1619",
-    "platform/templates/_portal_cards.html": "8dec63943c8a5a47de9e27f66a0d396457f8892acccc942134377524fc3ee95a",
-    "platform/templates/index.html": "ea1d6e3a33c841171ca27f3ffa7cc602ca8bc21fca58b26beebfa10f99123f55"
+    "platform/templates/_portal_cards.html": "bd5bbd4b38b3d16afee91636f11dbb656c54bf91341788b6eb3fff3af202a66a",
+    "platform/templates/index.html": "5de13801a3c1785696bfe1bb4d5fcd9aad138f145ebeda05ec7a95f3a2aae760"
    },
-   "image_sha256": "f6dd6a7ebfc6174d54fdff0789aac46b65742f2f33e1c599175d226a3286e99c",
+   "image_sha256": "5da3d63a5227aa1532a557cf6ae2aca34a448a93e5822f3e408ad20ed667765b",
    "page": "/"
   },
   "21-comms-insight.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/overview.css": "9b4204417cf0f9b7b22c28d13bda0f4acba9ac11e93c4f7b8619ecfe0125f574",
     "platform/static/js/acode-make.js": "ea9c7d70e045706c9b391dfef1bea2191423eaf356f942741645225ee87005c1",
-    "platform/static/js/app.js": "34d2efe7637b03ab69b1bcf1e2ecade6e049c43518fce592d9e8609ae2baeb3c",
+    "platform/static/js/app.js": "38028b0c47b3731efd9fd4dafcb76cd396817222c2ce23bf425f669a7718b2c0",
     "platform/static/js/beacon-handover.js": "84508c17867e18216e82620c4c268b7b6d24057ddc48a485c1577cd85323486c",
     "platform/static/js/beacon.js": "e4797deed743cb27cd46912c22b6bdc5e500d050d23c7b38296b27cd7342539d",
     "platform/static/js/display.js": "7b21167f9e3b5bc8aa2e1b36aee80023d1bd217ea9795f12d4a92d43a5550489",
-    "platform/static/js/glossary.js": "3de6dad98a251ea2340930fdf709005895344aa0cfc9606338a242bfb74434c4",
+    "platform/static/js/glossary.js": "9dd4e230ebba36ec584107296699d76d42090cdfd34167173dbf20101b3bf23a",
     "platform/static/js/hud-fit.js": "51c10be402918e93a332de1a9cef5786e13587738eb62b2c6800e5b795714fc2",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-fields.js": "0f35010ff950422f5e770cec9bbae140c24a508e4ef63775e565feb24947c646",
@@ -169,25 +170,25 @@
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/portal-intel.js": "bbff5241eae1d0d628ed18d960f3ee781a45665985b37be1aa9daf6a510028bb",
     "platform/static/js/spike-notice.js": "c4dc955746b4fd1122edfc999753d93cf4173698362d2e4272789551effe1619",
-    "platform/templates/_portal_cards.html": "8dec63943c8a5a47de9e27f66a0d396457f8892acccc942134377524fc3ee95a",
-    "platform/templates/index.html": "ea1d6e3a33c841171ca27f3ffa7cc602ca8bc21fca58b26beebfa10f99123f55"
+    "platform/templates/_portal_cards.html": "bd5bbd4b38b3d16afee91636f11dbb656c54bf91341788b6eb3fff3af202a66a",
+    "platform/templates/index.html": "5de13801a3c1785696bfe1bb4d5fcd9aad138f145ebeda05ec7a95f3a2aae760"
    },
-   "image_sha256": "754d4b5a9e147980d178786282836119b4d80e57a9c2d04c2a2dff8ec54a6374",
+   "image_sha256": "fb4b3161a782c50e136d48bbdec455cb4a5bce6af78be00cd15afcb08f5d9330",
    "page": "/"
   },
   "22-comms-insight-drill.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/overview.css": "9b4204417cf0f9b7b22c28d13bda0f4acba9ac11e93c4f7b8619ecfe0125f574",
     "platform/static/js/acode-make.js": "ea9c7d70e045706c9b391dfef1bea2191423eaf356f942741645225ee87005c1",
-    "platform/static/js/app.js": "34d2efe7637b03ab69b1bcf1e2ecade6e049c43518fce592d9e8609ae2baeb3c",
+    "platform/static/js/app.js": "38028b0c47b3731efd9fd4dafcb76cd396817222c2ce23bf425f669a7718b2c0",
     "platform/static/js/beacon-handover.js": "84508c17867e18216e82620c4c268b7b6d24057ddc48a485c1577cd85323486c",
     "platform/static/js/beacon.js": "e4797deed743cb27cd46912c22b6bdc5e500d050d23c7b38296b27cd7342539d",
     "platform/static/js/display.js": "7b21167f9e3b5bc8aa2e1b36aee80023d1bd217ea9795f12d4a92d43a5550489",
-    "platform/static/js/glossary.js": "3de6dad98a251ea2340930fdf709005895344aa0cfc9606338a242bfb74434c4",
+    "platform/static/js/glossary.js": "9dd4e230ebba36ec584107296699d76d42090cdfd34167173dbf20101b3bf23a",
     "platform/static/js/hud-fit.js": "51c10be402918e93a332de1a9cef5786e13587738eb62b2c6800e5b795714fc2",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-fields.js": "0f35010ff950422f5e770cec9bbae140c24a508e4ef63775e565feb24947c646",
@@ -197,25 +198,25 @@
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/portal-intel.js": "bbff5241eae1d0d628ed18d960f3ee781a45665985b37be1aa9daf6a510028bb",
     "platform/static/js/spike-notice.js": "c4dc955746b4fd1122edfc999753d93cf4173698362d2e4272789551effe1619",
-    "platform/templates/_portal_cards.html": "8dec63943c8a5a47de9e27f66a0d396457f8892acccc942134377524fc3ee95a",
-    "platform/templates/index.html": "ea1d6e3a33c841171ca27f3ffa7cc602ca8bc21fca58b26beebfa10f99123f55"
+    "platform/templates/_portal_cards.html": "bd5bbd4b38b3d16afee91636f11dbb656c54bf91341788b6eb3fff3af202a66a",
+    "platform/templates/index.html": "5de13801a3c1785696bfe1bb4d5fcd9aad138f145ebeda05ec7a95f3a2aae760"
    },
-   "image_sha256": "7cf703e7408703ae45fa3ba59c5b041004c77e6a0bc0523a3aa35d202331cb17",
+   "image_sha256": "526baf3df0a95fc84eed2aa61434239014adcbd8a92d8480fe9afbfc0605b129",
    "page": "/"
   },
   "23-comms-event.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/overview.css": "9b4204417cf0f9b7b22c28d13bda0f4acba9ac11e93c4f7b8619ecfe0125f574",
     "platform/static/js/acode-make.js": "ea9c7d70e045706c9b391dfef1bea2191423eaf356f942741645225ee87005c1",
-    "platform/static/js/app.js": "34d2efe7637b03ab69b1bcf1e2ecade6e049c43518fce592d9e8609ae2baeb3c",
+    "platform/static/js/app.js": "38028b0c47b3731efd9fd4dafcb76cd396817222c2ce23bf425f669a7718b2c0",
     "platform/static/js/beacon-handover.js": "84508c17867e18216e82620c4c268b7b6d24057ddc48a485c1577cd85323486c",
     "platform/static/js/beacon.js": "e4797deed743cb27cd46912c22b6bdc5e500d050d23c7b38296b27cd7342539d",
     "platform/static/js/display.js": "7b21167f9e3b5bc8aa2e1b36aee80023d1bd217ea9795f12d4a92d43a5550489",
-    "platform/static/js/glossary.js": "3de6dad98a251ea2340930fdf709005895344aa0cfc9606338a242bfb74434c4",
+    "platform/static/js/glossary.js": "9dd4e230ebba36ec584107296699d76d42090cdfd34167173dbf20101b3bf23a",
     "platform/static/js/hud-fit.js": "51c10be402918e93a332de1a9cef5786e13587738eb62b2c6800e5b795714fc2",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-fields.js": "0f35010ff950422f5e770cec9bbae140c24a508e4ef63775e565feb24947c646",
@@ -225,25 +226,25 @@
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/portal-intel.js": "bbff5241eae1d0d628ed18d960f3ee781a45665985b37be1aa9daf6a510028bb",
     "platform/static/js/spike-notice.js": "c4dc955746b4fd1122edfc999753d93cf4173698362d2e4272789551effe1619",
-    "platform/templates/_portal_cards.html": "8dec63943c8a5a47de9e27f66a0d396457f8892acccc942134377524fc3ee95a",
-    "platform/templates/index.html": "ea1d6e3a33c841171ca27f3ffa7cc602ca8bc21fca58b26beebfa10f99123f55"
+    "platform/templates/_portal_cards.html": "bd5bbd4b38b3d16afee91636f11dbb656c54bf91341788b6eb3fff3af202a66a",
+    "platform/templates/index.html": "5de13801a3c1785696bfe1bb4d5fcd9aad138f145ebeda05ec7a95f3a2aae760"
    },
-   "image_sha256": "3f309f839067b82616a825aeddf530ced39017e59552de3c447c236aa333f364",
+   "image_sha256": "776646bda726fccf6af8aeb511ee0a7884ed88bc7d5fddf78e80b3ba7d886a4f",
    "page": "/"
   },
   "26-comms-demo.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/overview.css": "9b4204417cf0f9b7b22c28d13bda0f4acba9ac11e93c4f7b8619ecfe0125f574",
     "platform/static/js/acode-make.js": "ea9c7d70e045706c9b391dfef1bea2191423eaf356f942741645225ee87005c1",
-    "platform/static/js/app.js": "34d2efe7637b03ab69b1bcf1e2ecade6e049c43518fce592d9e8609ae2baeb3c",
+    "platform/static/js/app.js": "38028b0c47b3731efd9fd4dafcb76cd396817222c2ce23bf425f669a7718b2c0",
     "platform/static/js/beacon-handover.js": "84508c17867e18216e82620c4c268b7b6d24057ddc48a485c1577cd85323486c",
     "platform/static/js/beacon.js": "e4797deed743cb27cd46912c22b6bdc5e500d050d23c7b38296b27cd7342539d",
     "platform/static/js/display.js": "7b21167f9e3b5bc8aa2e1b36aee80023d1bd217ea9795f12d4a92d43a5550489",
-    "platform/static/js/glossary.js": "3de6dad98a251ea2340930fdf709005895344aa0cfc9606338a242bfb74434c4",
+    "platform/static/js/glossary.js": "9dd4e230ebba36ec584107296699d76d42090cdfd34167173dbf20101b3bf23a",
     "platform/static/js/hud-fit.js": "51c10be402918e93a332de1a9cef5786e13587738eb62b2c6800e5b795714fc2",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-fields.js": "0f35010ff950422f5e770cec9bbae140c24a508e4ef63775e565feb24947c646",
@@ -253,16 +254,16 @@
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/portal-intel.js": "bbff5241eae1d0d628ed18d960f3ee781a45665985b37be1aa9daf6a510028bb",
     "platform/static/js/spike-notice.js": "c4dc955746b4fd1122edfc999753d93cf4173698362d2e4272789551effe1619",
-    "platform/templates/_portal_cards.html": "8dec63943c8a5a47de9e27f66a0d396457f8892acccc942134377524fc3ee95a",
-    "platform/templates/index.html": "ea1d6e3a33c841171ca27f3ffa7cc602ca8bc21fca58b26beebfa10f99123f55"
+    "platform/templates/_portal_cards.html": "bd5bbd4b38b3d16afee91636f11dbb656c54bf91341788b6eb3fff3af202a66a",
+    "platform/templates/index.html": "5de13801a3c1785696bfe1bb4d5fcd9aad138f145ebeda05ec7a95f3a2aae760"
    },
-   "image_sha256": "d7791c32edcedb6d393966aa21f499641a2bc59b1304f01b08b2663dd5447d99",
+   "image_sha256": "492875d62ff3501dea132fce1de8ebb35aaf42b407f2809b8dca3a30025e6931",
    "page": "/"
   },
   "30-services.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/services.css": "6433e5f725762a4bf9a5b30c9bae38ddd583fb2e7552f412f310a8828ea5843b",
     "platform/static/js/acode-make.js": "ea9c7d70e045706c9b391dfef1bea2191423eaf356f942741645225ee87005c1",
@@ -275,16 +276,16 @@
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/regions.js": "b5db5358d02ceff3cf41b61296f4a270e08929969f7d12594c8f5980f5bfa4ae",
-    "platform/static/js/services.js": "89b32904e13ee14905508beec931fd6fa3c471523fbfccd6d6070c93313c3d94",
-    "platform/templates/services.html": "2c1dc2c64cc38bf1ecf98afcd6fa18cfeae90df8b26efb82b57dc7c924737b06"
+    "platform/static/js/services.js": "54baad355d6f2988b2a95311908746c9539c4eaa912f22f5f319f66001d9e45a",
+    "platform/templates/services.html": "0da3e78d4c618bb198493ee2c6a8483bc24eb49b85fcfbe08229486536beba56"
    },
-   "image_sha256": "03a29510e0cb49c3fb8a79ddda0b515248b7ea80495fc2fa4d4f03b09bd25bd1",
+   "image_sha256": "7cd424a0d662574af845574917910045d1e897ee712fa0c6037922fbe3db9ef4",
    "page": "/services"
   },
   "31-services-view-kenya-regions.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/services.css": "6433e5f725762a4bf9a5b30c9bae38ddd583fb2e7552f412f310a8828ea5843b",
     "platform/static/js/acode-make.js": "ea9c7d70e045706c9b391dfef1bea2191423eaf356f942741645225ee87005c1",
@@ -297,16 +298,16 @@
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/regions.js": "b5db5358d02ceff3cf41b61296f4a270e08929969f7d12594c8f5980f5bfa4ae",
-    "platform/static/js/services.js": "89b32904e13ee14905508beec931fd6fa3c471523fbfccd6d6070c93313c3d94",
-    "platform/templates/services.html": "2c1dc2c64cc38bf1ecf98afcd6fa18cfeae90df8b26efb82b57dc7c924737b06"
+    "platform/static/js/services.js": "54baad355d6f2988b2a95311908746c9539c4eaa912f22f5f319f66001d9e45a",
+    "platform/templates/services.html": "0da3e78d4c618bb198493ee2c6a8483bc24eb49b85fcfbe08229486536beba56"
    },
-   "image_sha256": "8575118dfccc3ee658776a5b83b82494bf3bca5a6ee16653b2ebaadfd43e0c11",
+   "image_sha256": "0a97c37461efcc7715031a2447e2da671cdad4a1c54bbba3370a3ede132b2404",
    "page": "/services"
   },
   "32-services-insight.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/services.css": "6433e5f725762a4bf9a5b30c9bae38ddd583fb2e7552f412f310a8828ea5843b",
     "platform/static/js/acode-make.js": "ea9c7d70e045706c9b391dfef1bea2191423eaf356f942741645225ee87005c1",
@@ -319,16 +320,16 @@
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/regions.js": "b5db5358d02ceff3cf41b61296f4a270e08929969f7d12594c8f5980f5bfa4ae",
-    "platform/static/js/services.js": "89b32904e13ee14905508beec931fd6fa3c471523fbfccd6d6070c93313c3d94",
-    "platform/templates/services.html": "2c1dc2c64cc38bf1ecf98afcd6fa18cfeae90df8b26efb82b57dc7c924737b06"
+    "platform/static/js/services.js": "54baad355d6f2988b2a95311908746c9539c4eaa912f22f5f319f66001d9e45a",
+    "platform/templates/services.html": "0da3e78d4c618bb198493ee2c6a8483bc24eb49b85fcfbe08229486536beba56"
    },
-   "image_sha256": "41f867365a0cefae99ce2471df8d21d8ced6ff04ca7a59edb17f9ad57f7dc28d",
+   "image_sha256": "55bf29b70a89e637a56f23c19f331803d33ce9cdd56b0d4a46c4acb78d04cc39",
    "page": "/services"
   },
   "33-services-host-analysis.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/services.css": "6433e5f725762a4bf9a5b30c9bae38ddd583fb2e7552f412f310a8828ea5843b",
     "platform/static/js/acode-make.js": "ea9c7d70e045706c9b391dfef1bea2191423eaf356f942741645225ee87005c1",
@@ -341,16 +342,16 @@
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/regions.js": "b5db5358d02ceff3cf41b61296f4a270e08929969f7d12594c8f5980f5bfa4ae",
-    "platform/static/js/services.js": "89b32904e13ee14905508beec931fd6fa3c471523fbfccd6d6070c93313c3d94",
-    "platform/templates/services.html": "2c1dc2c64cc38bf1ecf98afcd6fa18cfeae90df8b26efb82b57dc7c924737b06"
+    "platform/static/js/services.js": "54baad355d6f2988b2a95311908746c9539c4eaa912f22f5f319f66001d9e45a",
+    "platform/templates/services.html": "0da3e78d4c618bb198493ee2c6a8483bc24eb49b85fcfbe08229486536beba56"
    },
-   "image_sha256": "b17ce1cb9a8efa0068f7591c6cb525087913afb5f3d46f49d91921a6eca96ec3",
+   "image_sha256": "dd591fbae968b4f5a86470246cf0b6d469199ac926e97a5f7d542290c310502c",
    "page": "/services"
   },
   "33-services-host.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/services.css": "6433e5f725762a4bf9a5b30c9bae38ddd583fb2e7552f412f310a8828ea5843b",
     "platform/static/js/acode-make.js": "ea9c7d70e045706c9b391dfef1bea2191423eaf356f942741645225ee87005c1",
@@ -363,218 +364,218 @@
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/regions.js": "b5db5358d02ceff3cf41b61296f4a270e08929969f7d12594c8f5980f5bfa4ae",
-    "platform/static/js/services.js": "89b32904e13ee14905508beec931fd6fa3c471523fbfccd6d6070c93313c3d94",
-    "platform/templates/services.html": "2c1dc2c64cc38bf1ecf98afcd6fa18cfeae90df8b26efb82b57dc7c924737b06"
+    "platform/static/js/services.js": "54baad355d6f2988b2a95311908746c9539c4eaa912f22f5f319f66001d9e45a",
+    "platform/templates/services.html": "0da3e78d4c618bb198493ee2c6a8483bc24eb49b85fcfbe08229486536beba56"
    },
-   "image_sha256": "5ab4fdc761d3f2b615746eacf9888cf453f57221a57053f5588ca0845b0e8cc0",
+   "image_sha256": "ef928254b25976fda3d7889f4d04321c87b3472352b4314de2a4059d0380ff9b",
    "page": "/services"
   },
   "40-executive-comms-baseline.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
-    "platform/static/css/management.css": "595e8d2973fd4c20c69009c057371b71f0ee8aeaecb9ed3b19dd9c0de49974c0",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
+    "platform/static/css/management.css": "37c6b2030bc2908d2de27b690e479b9d29ab9831ae07ea9ba49b17292333a6ff",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/quarterly.css": "12775d0965d666455c1b77f133e8f998aa5b899ce0cacf09c238e8448b5b1ef9",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-select.js": "0b453c6da32b94e45e981860e58b6e8588510340ba9b110f8f4fadd6f66dc8e1",
     "platform/static/js/localtime.js": "c65b03919f74b30270f561c50090f4afbc022b7e53a851780554678eda823382",
-    "platform/static/js/management.js": "c5db6916226f722ee3b80afea4608b687e98239b58e7bdcaebb12f73a72ad588",
+    "platform/static/js/management.js": "42d3c83b1e85740f0f0289eb4562d0742535fc093fe128b4e363b55353f258a6",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/quarterly.js": "876fe4e02c42deba78217ada344b520b095ed1599373c4fda583dbd970581b25",
     "platform/static/js/regions.js": "b5db5358d02ceff3cf41b61296f4a270e08929969f7d12594c8f5980f5bfa4ae",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
-    "platform/templates/management.html": "f8e72eb9646212ad439b682d2d9dc27178358c9f6fd89c5138c8c4d1443fab35"
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
+    "platform/templates/management.html": "e1bddad9b4a99431ed4940e8476ce162325cf20c3d4ffeb4fb68596abf5df561"
    },
-   "image_sha256": "427ab26ce7818ab616c6c39f844c9e0dd4e1696d94e1b5d59a1fd7c10b2f7cb4",
+   "image_sha256": "52f51523386fd1c430e476aafcfe21cabbe40103478a145bc2e4f03ed88e1cae",
    "page": "/management"
   },
   "40-executive-comms.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
-    "platform/static/css/management.css": "595e8d2973fd4c20c69009c057371b71f0ee8aeaecb9ed3b19dd9c0de49974c0",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
+    "platform/static/css/management.css": "37c6b2030bc2908d2de27b690e479b9d29ab9831ae07ea9ba49b17292333a6ff",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/quarterly.css": "12775d0965d666455c1b77f133e8f998aa5b899ce0cacf09c238e8448b5b1ef9",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-select.js": "0b453c6da32b94e45e981860e58b6e8588510340ba9b110f8f4fadd6f66dc8e1",
     "platform/static/js/localtime.js": "c65b03919f74b30270f561c50090f4afbc022b7e53a851780554678eda823382",
-    "platform/static/js/management.js": "c5db6916226f722ee3b80afea4608b687e98239b58e7bdcaebb12f73a72ad588",
+    "platform/static/js/management.js": "42d3c83b1e85740f0f0289eb4562d0742535fc093fe128b4e363b55353f258a6",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/quarterly.js": "876fe4e02c42deba78217ada344b520b095ed1599373c4fda583dbd970581b25",
     "platform/static/js/regions.js": "b5db5358d02ceff3cf41b61296f4a270e08929969f7d12594c8f5980f5bfa4ae",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
-    "platform/templates/management.html": "f8e72eb9646212ad439b682d2d9dc27178358c9f6fd89c5138c8c4d1443fab35"
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
+    "platform/templates/management.html": "e1bddad9b4a99431ed4940e8476ce162325cf20c3d4ffeb4fb68596abf5df561"
    },
-   "image_sha256": "b23f73f4f513a21c05730d359890b22f78062a7b1701d80d269a52d3ddf067f9",
+   "image_sha256": "c88ca55812fc250ce89759d0b1a28e862f3e0e4b6cdb14aa6fdbd0d68191057d",
    "page": "/management"
   },
   "41-executive-services-top.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
-    "platform/static/css/management.css": "595e8d2973fd4c20c69009c057371b71f0ee8aeaecb9ed3b19dd9c0de49974c0",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
+    "platform/static/css/management.css": "37c6b2030bc2908d2de27b690e479b9d29ab9831ae07ea9ba49b17292333a6ff",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/quarterly.css": "12775d0965d666455c1b77f133e8f998aa5b899ce0cacf09c238e8448b5b1ef9",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-select.js": "0b453c6da32b94e45e981860e58b6e8588510340ba9b110f8f4fadd6f66dc8e1",
     "platform/static/js/localtime.js": "c65b03919f74b30270f561c50090f4afbc022b7e53a851780554678eda823382",
-    "platform/static/js/management.js": "c5db6916226f722ee3b80afea4608b687e98239b58e7bdcaebb12f73a72ad588",
+    "platform/static/js/management.js": "42d3c83b1e85740f0f0289eb4562d0742535fc093fe128b4e363b55353f258a6",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/quarterly.js": "876fe4e02c42deba78217ada344b520b095ed1599373c4fda583dbd970581b25",
     "platform/static/js/regions.js": "b5db5358d02ceff3cf41b61296f4a270e08929969f7d12594c8f5980f5bfa4ae",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
-    "platform/templates/management.html": "f8e72eb9646212ad439b682d2d9dc27178358c9f6fd89c5138c8c4d1443fab35"
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
+    "platform/templates/management.html": "e1bddad9b4a99431ed4940e8476ce162325cf20c3d4ffeb4fb68596abf5df561"
    },
-   "image_sha256": "2db6086aa9329386b364a85213276471fee00a61d4e9ab9e9498e1b7641ee8ad",
+   "image_sha256": "b9ecdad1b95329902f50a9a8dd81e789c2574494a188e09ab8812547060b9019",
    "page": "/management"
   },
   "41-executive-services.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
-    "platform/static/css/management.css": "595e8d2973fd4c20c69009c057371b71f0ee8aeaecb9ed3b19dd9c0de49974c0",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
+    "platform/static/css/management.css": "37c6b2030bc2908d2de27b690e479b9d29ab9831ae07ea9ba49b17292333a6ff",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/quarterly.css": "12775d0965d666455c1b77f133e8f998aa5b899ce0cacf09c238e8448b5b1ef9",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-select.js": "0b453c6da32b94e45e981860e58b6e8588510340ba9b110f8f4fadd6f66dc8e1",
     "platform/static/js/localtime.js": "c65b03919f74b30270f561c50090f4afbc022b7e53a851780554678eda823382",
-    "platform/static/js/management.js": "c5db6916226f722ee3b80afea4608b687e98239b58e7bdcaebb12f73a72ad588",
+    "platform/static/js/management.js": "42d3c83b1e85740f0f0289eb4562d0742535fc093fe128b4e363b55353f258a6",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/quarterly.js": "876fe4e02c42deba78217ada344b520b095ed1599373c4fda583dbd970581b25",
     "platform/static/js/regions.js": "b5db5358d02ceff3cf41b61296f4a270e08929969f7d12594c8f5980f5bfa4ae",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
-    "platform/templates/management.html": "f8e72eb9646212ad439b682d2d9dc27178358c9f6fd89c5138c8c4d1443fab35"
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
+    "platform/templates/management.html": "e1bddad9b4a99431ed4940e8476ce162325cf20c3d4ffeb4fb68596abf5df561"
    },
-   "image_sha256": "e0878d92eacdeeb35e470e3932ca2612ffd92aad6c3a5ff91b228c2e91f909a7",
+   "image_sha256": "d76811f4e98c09714d7a579f7d82d6d1f7a141aadb0e4b10d0efa6cbfb689dc3",
    "page": "/management"
   },
   "42-executive-reports.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
-    "platform/static/css/management.css": "595e8d2973fd4c20c69009c057371b71f0ee8aeaecb9ed3b19dd9c0de49974c0",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
+    "platform/static/css/management.css": "37c6b2030bc2908d2de27b690e479b9d29ab9831ae07ea9ba49b17292333a6ff",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/quarterly.css": "12775d0965d666455c1b77f133e8f998aa5b899ce0cacf09c238e8448b5b1ef9",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-select.js": "0b453c6da32b94e45e981860e58b6e8588510340ba9b110f8f4fadd6f66dc8e1",
     "platform/static/js/localtime.js": "c65b03919f74b30270f561c50090f4afbc022b7e53a851780554678eda823382",
-    "platform/static/js/management.js": "c5db6916226f722ee3b80afea4608b687e98239b58e7bdcaebb12f73a72ad588",
+    "platform/static/js/management.js": "42d3c83b1e85740f0f0289eb4562d0742535fc093fe128b4e363b55353f258a6",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/quarterly.js": "876fe4e02c42deba78217ada344b520b095ed1599373c4fda583dbd970581b25",
     "platform/static/js/regions.js": "b5db5358d02ceff3cf41b61296f4a270e08929969f7d12594c8f5980f5bfa4ae",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
-    "platform/templates/management.html": "f8e72eb9646212ad439b682d2d9dc27178358c9f6fd89c5138c8c4d1443fab35"
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
+    "platform/templates/management.html": "e1bddad9b4a99431ed4940e8476ce162325cf20c3d4ffeb4fb68596abf5df561"
    },
-   "image_sha256": "26b6a612c94b5936d78feb7a02cde60b98e06efec4169b400d5ceeff47fe312a",
+   "image_sha256": "0a20248d299e490a30ee8e6940afc65090a69a3470f2194183f11898da1d3ab3",
    "page": "/management"
   },
   "50-admin-users.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/settings.css": "ac57b6c967e871f6a9807120d312545c85677877621b6fda10dc32c9359c95be",
-    "platform/static/js/admin.js": "8eeb9a08f712502928766ff0f2092289ff6399f370a90aaf1575ae28e0dc33fc",
+    "platform/static/js/admin.js": "a46cfd0bd8e35aae439912ca51cf0278e1080d7c511a01d62bcbc90701acb3fc",
     "platform/static/js/invites-admin.js": "d9dcdd2adb1b42a497a5e1866bbdb520f8b0158c6cf45c178d6079003105fbdc",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-select.js": "0b453c6da32b94e45e981860e58b6e8588510340ba9b110f8f4fadd6f66dc8e1",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/peace.js": "f94e7426c7a7704c0af85fc9e184d11fc23f20b6d1e8c798694aa3043a9a5273",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
     "platform/templates/admin.html": "aa3e3593d1779aa5a850523a47754747a4af874d785e085e359fc4c15bfe261e"
    },
-   "image_sha256": "35dead8a3925f52b4e7ee9794828dba81aae06ab575b3880e0097ce94d598bd9",
+   "image_sha256": "d4b4b1df239bbd12b3e7970e4e809b65540c3f595e258788c90442bcffa4ff55",
    "page": "/admin"
   },
   "51-admin-sessions.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
-    "platform/static/css/audit.css": "aa0110c06a6b7455aa18394bc69b0238b8104858fe2843b620738236ad8e9261",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
+    "platform/static/css/audit.css": "1279c31e3f3dd2beeddbc3e99f478169a85b104fed35f27518840dd3369c8b14",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/sender-audit.css": "b4ca9ac776947c8d346b854c46d82e585190c55810027c38867a8558bea5d4c8",
     "platform/static/css/settings.css": "ac57b6c967e871f6a9807120d312545c85677877621b6fda10dc32c9359c95be",
-    "platform/static/js/audit.js": "ba07680b422bd34f04cb0aaef09a2815ed684cedd5203b1537c45b11bc19d565",
+    "platform/static/js/audit.js": "abaec45f9c6ea1b91845405fffe065e4dd99a5509322626095925e01ad665636",
     "platform/static/js/leak-trace.js": "cee81db986cbdf32ba63c6095831ad6a7747e90ceb80dbb09b8c9b3a6b4227ba",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/sender-audit.js": "b03fc3f735d215dc674bf408bd8c878d5bcfd5775c67c866f6210029c6454606",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
-    "platform/templates/audit.html": "41298fb8a55f6ded0588efaea776b2873b46fb65a0915ea770aa3de1708ca159"
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
+    "platform/templates/audit.html": "3455eeaa36a928156b6947f867354bb73d7138cf80712b418ad9276ff5ca17ae"
    },
-   "image_sha256": "c33fd34c26a35885a3ebf72ce76badf84364c1b4af9774a05c42e3352afe6b0d",
+   "image_sha256": "dd9881d7f8d1c4474dd4073e732487d62d5b2b0dfeb7ae10305b2831229319f9",
    "page": "/audit"
   },
   "52-admin-audit.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
-    "platform/static/css/audit.css": "aa0110c06a6b7455aa18394bc69b0238b8104858fe2843b620738236ad8e9261",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
+    "platform/static/css/audit.css": "1279c31e3f3dd2beeddbc3e99f478169a85b104fed35f27518840dd3369c8b14",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/sender-audit.css": "b4ca9ac776947c8d346b854c46d82e585190c55810027c38867a8558bea5d4c8",
     "platform/static/css/settings.css": "ac57b6c967e871f6a9807120d312545c85677877621b6fda10dc32c9359c95be",
-    "platform/static/js/audit.js": "ba07680b422bd34f04cb0aaef09a2815ed684cedd5203b1537c45b11bc19d565",
+    "platform/static/js/audit.js": "abaec45f9c6ea1b91845405fffe065e4dd99a5509322626095925e01ad665636",
     "platform/static/js/leak-trace.js": "cee81db986cbdf32ba63c6095831ad6a7747e90ceb80dbb09b8c9b3a6b4227ba",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/sender-audit.js": "b03fc3f735d215dc674bf408bd8c878d5bcfd5775c67c866f6210029c6454606",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
-    "platform/templates/audit.html": "41298fb8a55f6ded0588efaea776b2873b46fb65a0915ea770aa3de1708ca159"
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
+    "platform/templates/audit.html": "3455eeaa36a928156b6947f867354bb73d7138cf80712b418ad9276ff5ca17ae"
    },
-   "image_sha256": "123dc7a96c55a56155198df31bb87a9eb0643022dd7bbea5dc578c867553b0b9",
+   "image_sha256": "a3f2170f32e3bd35609026807fcf43a1a6f9ea9042f95400d91a5bf311b61175",
    "page": "/audit"
   },
   "53-admin-roles.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/settings.css": "ac57b6c967e871f6a9807120d312545c85677877621b6fda10dc32c9359c95be",
-    "platform/static/js/admin.js": "8eeb9a08f712502928766ff0f2092289ff6399f370a90aaf1575ae28e0dc33fc",
+    "platform/static/js/admin.js": "a46cfd0bd8e35aae439912ca51cf0278e1080d7c511a01d62bcbc90701acb3fc",
     "platform/static/js/invites-admin.js": "d9dcdd2adb1b42a497a5e1866bbdb520f8b0158c6cf45c178d6079003105fbdc",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-select.js": "0b453c6da32b94e45e981860e58b6e8588510340ba9b110f8f4fadd6f66dc8e1",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/peace.js": "f94e7426c7a7704c0af85fc9e184d11fc23f20b6d1e8c798694aa3043a9a5273",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
     "platform/templates/admin.html": "aa3e3593d1779aa5a850523a47754747a4af874d785e085e359fc4c15bfe261e"
    },
    "image_sha256": "9ce0ebeeac9d8ae97dca7eb53d03d810ea042c4c70114c3dd7afaf4fb2c05044",
    "page": "/admin"
   },
   "55-audit-sessions.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
-    "platform/static/css/audit.css": "aa0110c06a6b7455aa18394bc69b0238b8104858fe2843b620738236ad8e9261",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
+    "platform/static/css/audit.css": "1279c31e3f3dd2beeddbc3e99f478169a85b104fed35f27518840dd3369c8b14",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/sender-audit.css": "b4ca9ac776947c8d346b854c46d82e585190c55810027c38867a8558bea5d4c8",
     "platform/static/css/settings.css": "ac57b6c967e871f6a9807120d312545c85677877621b6fda10dc32c9359c95be",
-    "platform/static/js/audit.js": "ba07680b422bd34f04cb0aaef09a2815ed684cedd5203b1537c45b11bc19d565",
+    "platform/static/js/audit.js": "abaec45f9c6ea1b91845405fffe065e4dd99a5509322626095925e01ad665636",
     "platform/static/js/leak-trace.js": "cee81db986cbdf32ba63c6095831ad6a7747e90ceb80dbb09b8c9b3a6b4227ba",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/sender-audit.js": "b03fc3f735d215dc674bf408bd8c878d5bcfd5775c67c866f6210029c6454606",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
-    "platform/templates/audit.html": "41298fb8a55f6ded0588efaea776b2873b46fb65a0915ea770aa3de1708ca159"
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
+    "platform/templates/audit.html": "3455eeaa36a928156b6947f867354bb73d7138cf80712b418ad9276ff5ca17ae"
    },
-   "image_sha256": "c23970d59afe7ac936f1bec60d08b26e53f9f0b24f8607d0521d52130ca452ea",
+   "image_sha256": "4fa2bf8bf62d18a392f756b856974984914bbd977f5eb857d797fb2b5d003616",
    "page": "/audit"
   },
   "56-peace-of-mind.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/overview.css": "9b4204417cf0f9b7b22c28d13bda0f4acba9ac11e93c4f7b8619ecfe0125f574",
     "platform/static/js/acode-make.js": "ea9c7d70e045706c9b391dfef1bea2191423eaf356f942741645225ee87005c1",
-    "platform/static/js/app.js": "34d2efe7637b03ab69b1bcf1e2ecade6e049c43518fce592d9e8609ae2baeb3c",
+    "platform/static/js/app.js": "38028b0c47b3731efd9fd4dafcb76cd396817222c2ce23bf425f669a7718b2c0",
     "platform/static/js/beacon-handover.js": "84508c17867e18216e82620c4c268b7b6d24057ddc48a485c1577cd85323486c",
     "platform/static/js/beacon.js": "e4797deed743cb27cd46912c22b6bdc5e500d050d23c7b38296b27cd7342539d",
     "platform/static/js/display.js": "7b21167f9e3b5bc8aa2e1b36aee80023d1bd217ea9795f12d4a92d43a5550489",
-    "platform/static/js/glossary.js": "3de6dad98a251ea2340930fdf709005895344aa0cfc9606338a242bfb74434c4",
+    "platform/static/js/glossary.js": "9dd4e230ebba36ec584107296699d76d42090cdfd34167173dbf20101b3bf23a",
     "platform/static/js/hud-fit.js": "51c10be402918e93a332de1a9cef5786e13587738eb62b2c6800e5b795714fc2",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-fields.js": "0f35010ff950422f5e770cec9bbae140c24a508e4ef63775e565feb24947c646",
@@ -584,35 +585,35 @@
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/portal-intel.js": "bbff5241eae1d0d628ed18d960f3ee781a45665985b37be1aa9daf6a510028bb",
     "platform/static/js/spike-notice.js": "c4dc955746b4fd1122edfc999753d93cf4173698362d2e4272789551effe1619",
-    "platform/templates/_portal_cards.html": "8dec63943c8a5a47de9e27f66a0d396457f8892acccc942134377524fc3ee95a",
-    "platform/templates/index.html": "ea1d6e3a33c841171ca27f3ffa7cc602ca8bc21fca58b26beebfa10f99123f55"
+    "platform/templates/_portal_cards.html": "bd5bbd4b38b3d16afee91636f11dbb656c54bf91341788b6eb3fff3af202a66a",
+    "platform/templates/index.html": "5de13801a3c1785696bfe1bb4d5fcd9aad138f145ebeda05ec7a95f3a2aae760"
    },
-   "image_sha256": "c2943ebf2859024839d99f7afa23b5b5dcb7ebfdad3e6f1aecff5fa665fdb25a",
+   "image_sha256": "521c0f1701dd19ac342db30070d15546fbb13601c199172a74f57eb549628cd2",
    "page": "/"
   },
   "57-audit-cis.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
-    "platform/static/css/audit.css": "aa0110c06a6b7455aa18394bc69b0238b8104858fe2843b620738236ad8e9261",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
+    "platform/static/css/audit.css": "1279c31e3f3dd2beeddbc3e99f478169a85b104fed35f27518840dd3369c8b14",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/sender-audit.css": "b4ca9ac776947c8d346b854c46d82e585190c55810027c38867a8558bea5d4c8",
     "platform/static/css/settings.css": "ac57b6c967e871f6a9807120d312545c85677877621b6fda10dc32c9359c95be",
-    "platform/static/js/audit.js": "ba07680b422bd34f04cb0aaef09a2815ed684cedd5203b1537c45b11bc19d565",
+    "platform/static/js/audit.js": "abaec45f9c6ea1b91845405fffe065e4dd99a5509322626095925e01ad665636",
     "platform/static/js/leak-trace.js": "cee81db986cbdf32ba63c6095831ad6a7747e90ceb80dbb09b8c9b3a6b4227ba",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/sender-audit.js": "b03fc3f735d215dc674bf408bd8c878d5bcfd5775c67c866f6210029c6454606",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
-    "platform/templates/audit.html": "41298fb8a55f6ded0588efaea776b2873b46fb65a0915ea770aa3de1708ca159"
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
+    "platform/templates/audit.html": "3455eeaa36a928156b6947f867354bb73d7138cf80712b418ad9276ff5ca17ae"
    },
    "image_sha256": "11a08083bb1ab6b99eb8c42faa5425f8bb653aaf4449e0b278afab3fa8b0a37d",
    "page": "/audit"
   },
   "60-settings.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/pipeline-settings.css": "4a90a92da0b74d66d30f9e43cd2b4d88062fe0b60e245391f7fe440045b1a913",
     "platform/static/css/quarterly.css": "12775d0965d666455c1b77f133e8f998aa5b899ce0cacf09c238e8448b5b1ef9",
@@ -621,6 +622,7 @@
     "platform/static/js/address-blocks.js": "f2b59ac07649788f1bbd786666b6b53a384ffdfd031da1fd35d3004028de44b6",
     "platform/static/js/code-integrity.js": "58935153329194241e8dc1dcb21d8a5306d0d954ba4f67849e38212c83a5c568",
     "platform/static/js/config-page.js": "bca78a5dd10102e088b755a700a65f538f7be80148b01f1402a0beea4793aa18",
+    "platform/static/js/connectors-admin.js": "709e911daf541c502932d2bf96d46c872ec033e4502c97503200f6a8aa031198",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-select.js": "0b453c6da32b94e45e981860e58b6e8588510340ba9b110f8f4fadd6f66dc8e1",
     "platform/static/js/logo-tool.js": "856af53b8923e2db52cda38734d69566103622b866ed4b702fa5988ff3678607",
@@ -628,24 +630,24 @@
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/organisation.js": "7ab9f46fd81665710cd38c53d16f3a6a4677279a02474c830f730ff406a7c4a6",
     "platform/static/js/password-policy.js": "eb16ad7904db0e95141e9844e0cb7f0dd7ecb5d41db99b407b4a16ddef1f29ae",
-    "platform/static/js/pipeline-settings.js": "f1d77a828972e9bb62f86d7f45dce18374e9395e7c5c2dc48da50a0aa36ef879",
+    "platform/static/js/pipeline-settings.js": "692f0d52f0f2e9311de8ae12a821fecb13b1f6c870478370354abeb8074fda0c",
     "platform/static/js/quarterly.js": "876fe4e02c42deba78217ada344b520b095ed1599373c4fda583dbd970581b25",
     "platform/static/js/regions.js": "b5db5358d02ceff3cf41b61296f4a270e08929969f7d12594c8f5980f5bfa4ae",
     "platform/static/js/settings.js": "a28fe77c29334084c5e923b54dc92ec49ce15b128d198e11a3f86821e31b0d1a",
     "platform/static/js/task-monitor.js": "3cb0b44b2b1e004a4b050f766f36494477e0595568339a254b388602fa3e8e08",
     "platform/templates/_net_card.html": "5fdd0d962c0b5ecac545fa4c0ea143ca97f290e68ebdc7bbae830d70ffdae2d0",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
-    "platform/templates/settings.html": "2ec1ee8f33d4dc953a65f89fe4cc8312ec228cbe10013546407bc63d887d4264"
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
+    "platform/templates/settings.html": "6d00737208219ceb04d44e6126cd040f8f34565c675d813face7b7abd8a3c075"
    },
-   "image_sha256": "54f1fcd448e0ebc791333c61005a6fa22995bc94eefe1ee957eb9f7b51969312",
+   "image_sha256": "8872d13f183e69bbdc5e92b5b1d7d30f5232aa02e34383b8de3e16a096c3933a",
    "page": "/settings"
   },
   "61-definitions.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
-    "platform/static/css/intel.css": "7a00fa4887a81e03dee9a1606cbdb129d0fd0237b837adf980b311eb5b097315",
+    "platform/static/css/intel.css": "7db3792d1ebca58b11928bfc4a07e23997f7a0fc3b1f412f4ed05a8a6f36767d",
     "platform/static/css/lg-detective.css": "bef85161ab24180eb907ec0ccb1de2007744aa4c90042df5bb4df8b83fe8e66b",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/services-kb.css": "078bff15a918b9742c163ac69a56be144bcf122e3fce9e6396f6ad4c009a86f0",
@@ -653,7 +655,7 @@
     "platform/static/js/attack-map.js": "842775b003a8be26bfd034205b39019111d76d4e392c38a4eb697bf7ec02c5ec",
     "platform/static/js/beacon-handover.js": "84508c17867e18216e82620c4c268b7b6d24057ddc48a485c1577cd85323486c",
     "platform/static/js/confirm-list.js": "75649bde601194fac16f9fe1419d0c05b6f8b972678adae722b3a8331e48d0b8",
-    "platform/static/js/intel.js": "db6cfd1039bf511a045536da351748e8ed025a511fa54e920f1ead22481f96ba",
+    "platform/static/js/intel.js": "7c4808b059d37ab61811975beaa30d9488a6aa4da1776d6ddb6e58b5842e52b9",
     "platform/static/js/kb-notes.js": "949d7ee2b51f2ecb9c394670a0b1885d9aa5daf7c738375f55efe62a2fd811df",
     "platform/static/js/kb-services-patterns.js": "bfcf5b89886deb28b81a8147671a8cc03d06551022a40e9f6d879b558d7c576f",
     "platform/static/js/kb-services.js": "be75b39358b2d4bb3285037e7eed6833869ad67256de4817a9a682e3b08b58b3",
@@ -667,19 +669,19 @@
     "platform/static/js/severity-map.js": "e67ec2fe7631774173cfb44d27a34881430d7145cd972170ca9e8aeca9cb5800",
     "platform/templates/_kb_cards.html": "2a646d49ced6613e9be9bc0559af95425033ea9c04ecc7ba71f6de8c1374ca68",
     "platform/templates/_net_card.html": "5fdd0d962c0b5ecac545fa4c0ea143ca97f290e68ebdc7bbae830d70ffdae2d0",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
     "platform/templates/_tlp_card.html": "d7d9393ca339701ee656a8e3fc71a4b14a147710908f8f609245441340647f53",
     "platform/templates/definitions.html": "bee782752a61efe78337b95f6165949e6ff1e826a20900763c8b3dcca3626b49"
    },
-   "image_sha256": "ab0e0f6ab985e5bc1a7b2bb1b8747526e9a546099dd926e89a1403008c44e1f1",
+   "image_sha256": "565db97b0f12983a9877afd3e15d7c8a642184d475f51cbeeb6317653e033959",
    "page": "/definitions"
   },
   "62-definitions-leads.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
-    "platform/static/css/intel.css": "7a00fa4887a81e03dee9a1606cbdb129d0fd0237b837adf980b311eb5b097315",
+    "platform/static/css/intel.css": "7db3792d1ebca58b11928bfc4a07e23997f7a0fc3b1f412f4ed05a8a6f36767d",
     "platform/static/css/lg-detective.css": "bef85161ab24180eb907ec0ccb1de2007744aa4c90042df5bb4df8b83fe8e66b",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/services-kb.css": "078bff15a918b9742c163ac69a56be144bcf122e3fce9e6396f6ad4c009a86f0",
@@ -687,7 +689,7 @@
     "platform/static/js/attack-map.js": "842775b003a8be26bfd034205b39019111d76d4e392c38a4eb697bf7ec02c5ec",
     "platform/static/js/beacon-handover.js": "84508c17867e18216e82620c4c268b7b6d24057ddc48a485c1577cd85323486c",
     "platform/static/js/confirm-list.js": "75649bde601194fac16f9fe1419d0c05b6f8b972678adae722b3a8331e48d0b8",
-    "platform/static/js/intel.js": "db6cfd1039bf511a045536da351748e8ed025a511fa54e920f1ead22481f96ba",
+    "platform/static/js/intel.js": "7c4808b059d37ab61811975beaa30d9488a6aa4da1776d6ddb6e58b5842e52b9",
     "platform/static/js/kb-notes.js": "949d7ee2b51f2ecb9c394670a0b1885d9aa5daf7c738375f55efe62a2fd811df",
     "platform/static/js/kb-services-patterns.js": "bfcf5b89886deb28b81a8147671a8cc03d06551022a40e9f6d879b558d7c576f",
     "platform/static/js/kb-services.js": "be75b39358b2d4bb3285037e7eed6833869ad67256de4817a9a682e3b08b58b3",
@@ -701,19 +703,19 @@
     "platform/static/js/severity-map.js": "e67ec2fe7631774173cfb44d27a34881430d7145cd972170ca9e8aeca9cb5800",
     "platform/templates/_kb_cards.html": "2a646d49ced6613e9be9bc0559af95425033ea9c04ecc7ba71f6de8c1374ca68",
     "platform/templates/_net_card.html": "5fdd0d962c0b5ecac545fa4c0ea143ca97f290e68ebdc7bbae830d70ffdae2d0",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
     "platform/templates/_tlp_card.html": "d7d9393ca339701ee656a8e3fc71a4b14a147710908f8f609245441340647f53",
     "platform/templates/definitions.html": "bee782752a61efe78337b95f6165949e6ff1e826a20900763c8b3dcca3626b49"
    },
-   "image_sha256": "19436d91e000d939fc35da57fb78881d62b1f46f36332870ed03390d5db71982",
+   "image_sha256": "882dc288b202b5b6ce99f127f1fbf908ec1683c71721b6e1bf8c15da09bcb9a2",
    "page": "/definitions"
   },
   "63-issues-across.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
-    "platform/static/css/intel.css": "7a00fa4887a81e03dee9a1606cbdb129d0fd0237b837adf980b311eb5b097315",
+    "platform/static/css/intel.css": "7db3792d1ebca58b11928bfc4a07e23997f7a0fc3b1f412f4ed05a8a6f36767d",
     "platform/static/css/lg-detective.css": "bef85161ab24180eb907ec0ccb1de2007744aa4c90042df5bb4df8b83fe8e66b",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/services-kb.css": "078bff15a918b9742c163ac69a56be144bcf122e3fce9e6396f6ad4c009a86f0",
@@ -721,7 +723,7 @@
     "platform/static/js/attack-map.js": "842775b003a8be26bfd034205b39019111d76d4e392c38a4eb697bf7ec02c5ec",
     "platform/static/js/beacon-handover.js": "84508c17867e18216e82620c4c268b7b6d24057ddc48a485c1577cd85323486c",
     "platform/static/js/confirm-list.js": "75649bde601194fac16f9fe1419d0c05b6f8b972678adae722b3a8331e48d0b8",
-    "platform/static/js/intel.js": "db6cfd1039bf511a045536da351748e8ed025a511fa54e920f1ead22481f96ba",
+    "platform/static/js/intel.js": "7c4808b059d37ab61811975beaa30d9488a6aa4da1776d6ddb6e58b5842e52b9",
     "platform/static/js/kb-notes.js": "949d7ee2b51f2ecb9c394670a0b1885d9aa5daf7c738375f55efe62a2fd811df",
     "platform/static/js/kb-services-patterns.js": "bfcf5b89886deb28b81a8147671a8cc03d06551022a40e9f6d879b558d7c576f",
     "platform/static/js/kb-services.js": "be75b39358b2d4bb3285037e7eed6833869ad67256de4817a9a682e3b08b58b3",
@@ -735,19 +737,19 @@
     "platform/static/js/severity-map.js": "e67ec2fe7631774173cfb44d27a34881430d7145cd972170ca9e8aeca9cb5800",
     "platform/templates/_kb_cards.html": "2a646d49ced6613e9be9bc0559af95425033ea9c04ecc7ba71f6de8c1374ca68",
     "platform/templates/_net_card.html": "5fdd0d962c0b5ecac545fa4c0ea143ca97f290e68ebdc7bbae830d70ffdae2d0",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
     "platform/templates/_tlp_card.html": "d7d9393ca339701ee656a8e3fc71a4b14a147710908f8f609245441340647f53",
     "platform/templates/definitions.html": "bee782752a61efe78337b95f6165949e6ff1e826a20900763c8b3dcca3626b49"
    },
-   "image_sha256": "aa8e31996bb25a18d1b52ee9c6e033950fcd458a76e0e266a2077c8018752735",
+   "image_sha256": "be9a5b377c63dfc4501ac8be279e58e5304fe2685df78ebabcc642923885d366",
    "page": "/definitions"
   },
   "64-intel-combinations.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
-    "platform/static/css/intel.css": "7a00fa4887a81e03dee9a1606cbdb129d0fd0237b837adf980b311eb5b097315",
+    "platform/static/css/intel.css": "7db3792d1ebca58b11928bfc4a07e23997f7a0fc3b1f412f4ed05a8a6f36767d",
     "platform/static/css/lg-detective.css": "bef85161ab24180eb907ec0ccb1de2007744aa4c90042df5bb4df8b83fe8e66b",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/services-kb.css": "078bff15a918b9742c163ac69a56be144bcf122e3fce9e6396f6ad4c009a86f0",
@@ -755,7 +757,7 @@
     "platform/static/js/attack-map.js": "842775b003a8be26bfd034205b39019111d76d4e392c38a4eb697bf7ec02c5ec",
     "platform/static/js/beacon-handover.js": "84508c17867e18216e82620c4c268b7b6d24057ddc48a485c1577cd85323486c",
     "platform/static/js/confirm-list.js": "75649bde601194fac16f9fe1419d0c05b6f8b972678adae722b3a8331e48d0b8",
-    "platform/static/js/intel.js": "db6cfd1039bf511a045536da351748e8ed025a511fa54e920f1ead22481f96ba",
+    "platform/static/js/intel.js": "7c4808b059d37ab61811975beaa30d9488a6aa4da1776d6ddb6e58b5842e52b9",
     "platform/static/js/kb-notes.js": "949d7ee2b51f2ecb9c394670a0b1885d9aa5daf7c738375f55efe62a2fd811df",
     "platform/static/js/kb-services-patterns.js": "bfcf5b89886deb28b81a8147671a8cc03d06551022a40e9f6d879b558d7c576f",
     "platform/static/js/kb-services.js": "be75b39358b2d4bb3285037e7eed6833869ad67256de4817a9a682e3b08b58b3",
@@ -769,19 +771,19 @@
     "platform/static/js/severity-map.js": "e67ec2fe7631774173cfb44d27a34881430d7145cd972170ca9e8aeca9cb5800",
     "platform/templates/_kb_cards.html": "2a646d49ced6613e9be9bc0559af95425033ea9c04ecc7ba71f6de8c1374ca68",
     "platform/templates/_net_card.html": "5fdd0d962c0b5ecac545fa4c0ea143ca97f290e68ebdc7bbae830d70ffdae2d0",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
     "platform/templates/_tlp_card.html": "d7d9393ca339701ee656a8e3fc71a4b14a147710908f8f609245441340647f53",
     "platform/templates/definitions.html": "bee782752a61efe78337b95f6165949e6ff1e826a20900763c8b3dcca3626b49"
    },
-   "image_sha256": "dc7eb63c3a185462931b2b04d7c2bd9305257c40403494a688b63386ba894dc7",
+   "image_sha256": "86d3c6e2b869f1e0c910c8d84d1cecd6bfbebb93f635073b4ca0843d58725181",
    "page": "/definitions"
   },
   "65-notes-codes.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
-    "platform/static/css/intel.css": "7a00fa4887a81e03dee9a1606cbdb129d0fd0237b837adf980b311eb5b097315",
+    "platform/static/css/intel.css": "7db3792d1ebca58b11928bfc4a07e23997f7a0fc3b1f412f4ed05a8a6f36767d",
     "platform/static/css/lg-detective.css": "bef85161ab24180eb907ec0ccb1de2007744aa4c90042df5bb4df8b83fe8e66b",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/services-kb.css": "078bff15a918b9742c163ac69a56be144bcf122e3fce9e6396f6ad4c009a86f0",
@@ -789,7 +791,7 @@
     "platform/static/js/attack-map.js": "842775b003a8be26bfd034205b39019111d76d4e392c38a4eb697bf7ec02c5ec",
     "platform/static/js/beacon-handover.js": "84508c17867e18216e82620c4c268b7b6d24057ddc48a485c1577cd85323486c",
     "platform/static/js/confirm-list.js": "75649bde601194fac16f9fe1419d0c05b6f8b972678adae722b3a8331e48d0b8",
-    "platform/static/js/intel.js": "db6cfd1039bf511a045536da351748e8ed025a511fa54e920f1ead22481f96ba",
+    "platform/static/js/intel.js": "7c4808b059d37ab61811975beaa30d9488a6aa4da1776d6ddb6e58b5842e52b9",
     "platform/static/js/kb-notes.js": "949d7ee2b51f2ecb9c394670a0b1885d9aa5daf7c738375f55efe62a2fd811df",
     "platform/static/js/kb-services-patterns.js": "bfcf5b89886deb28b81a8147671a8cc03d06551022a40e9f6d879b558d7c576f",
     "platform/static/js/kb-services.js": "be75b39358b2d4bb3285037e7eed6833869ad67256de4817a9a682e3b08b58b3",
@@ -803,17 +805,17 @@
     "platform/static/js/severity-map.js": "e67ec2fe7631774173cfb44d27a34881430d7145cd972170ca9e8aeca9cb5800",
     "platform/templates/_kb_cards.html": "2a646d49ced6613e9be9bc0559af95425033ea9c04ecc7ba71f6de8c1374ca68",
     "platform/templates/_net_card.html": "5fdd0d962c0b5ecac545fa4c0ea143ca97f290e68ebdc7bbae830d70ffdae2d0",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
     "platform/templates/_tlp_card.html": "d7d9393ca339701ee656a8e3fc71a4b14a147710908f8f609245441340647f53",
     "platform/templates/definitions.html": "bee782752a61efe78337b95f6165949e6ff1e826a20900763c8b3dcca3626b49"
    },
-   "image_sha256": "4eb73e3fd2e9e6022dc58f5d3e88beb8e29b5abe6d50d6f79d928c681ba70505",
+   "image_sha256": "4e8ec09c67711fb816008b8d132fbf64b50e08793f511f2ecdfc53e83e17a579",
    "page": "/definitions"
   },
   "66-findings.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
     "platform/static/css/findings.css": "1ad4644e17b37508e95c047671ee20ef4ce7812acedfdd511fb067f1c8e9709f",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
@@ -826,36 +828,36 @@
     "platform/static/js/lg-select.js": "0b453c6da32b94e45e981860e58b6e8588510340ba9b110f8f4fadd6f66dc8e1",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
     "platform/templates/findings.html": "e198e140320f72e399c64486d6d3657ad6916592dfdcf21bbba441024cf81c34"
    },
-   "image_sha256": "fdc24604a38f59116c1172d0e9453aab2b92786710a7d2c3f082d8569a13ef37",
+   "image_sha256": "a1f8dd9167aef98beac6b0ef64682460de7e63e547943478c43859100ba3410d",
    "page": "/findings"
   },
   "67-executive-code.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
-    "platform/static/css/management.css": "595e8d2973fd4c20c69009c057371b71f0ee8aeaecb9ed3b19dd9c0de49974c0",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
+    "platform/static/css/management.css": "37c6b2030bc2908d2de27b690e479b9d29ab9831ae07ea9ba49b17292333a6ff",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/quarterly.css": "12775d0965d666455c1b77f133e8f998aa5b899ce0cacf09c238e8448b5b1ef9",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-select.js": "0b453c6da32b94e45e981860e58b6e8588510340ba9b110f8f4fadd6f66dc8e1",
     "platform/static/js/localtime.js": "c65b03919f74b30270f561c50090f4afbc022b7e53a851780554678eda823382",
-    "platform/static/js/management.js": "c5db6916226f722ee3b80afea4608b687e98239b58e7bdcaebb12f73a72ad588",
+    "platform/static/js/management.js": "42d3c83b1e85740f0f0289eb4562d0742535fc093fe128b4e363b55353f258a6",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/quarterly.js": "876fe4e02c42deba78217ada344b520b095ed1599373c4fda583dbd970581b25",
     "platform/static/js/regions.js": "b5db5358d02ceff3cf41b61296f4a270e08929969f7d12594c8f5980f5bfa4ae",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
-    "platform/templates/management.html": "f8e72eb9646212ad439b682d2d9dc27178358c9f6fd89c5138c8c4d1443fab35"
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
+    "platform/templates/management.html": "e1bddad9b4a99431ed4940e8476ce162325cf20c3d4ffeb4fb68596abf5df561"
    },
-   "image_sha256": "07051d1851ea5eb9eef554769bb0f1ef0eadf5646c17d8ab09f36ba15a2a3ceb",
+   "image_sha256": "27cefbee947a744e2a488a6a674f4611f87695030ca382c384741c8748deff36",
    "page": "/management"
   },
   "68-combinations.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/combos.css": "346fac6eb1e457b10e39564abd693899a1edaa6298612f0b31ffdd295489f8e3",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/settings.css": "ac57b6c967e871f6a9807120d312545c85677877621b6fda10dc32c9359c95be",
@@ -866,16 +868,16 @@
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/regions.js": "b5db5358d02ceff3cf41b61296f4a270e08929969f7d12594c8f5980f5bfa4ae",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
     "platform/templates/combinations.html": "0a1870e1549d197ca13bf098dd889073c834770d53265ebeb2f2f6291be6b537"
    },
-   "image_sha256": "2bfc4f21ab3b107ec96f6d5528e30ae57d88b6be896bdfc2c5fd96e6014349d0",
+   "image_sha256": "37e8e6c87b9d7bcc72d3ac07da6dc85d7311db733cf24684d2595c5d8934f055",
    "page": "/combinations"
   },
   "70-findings-case.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
     "platform/static/css/findings.css": "1ad4644e17b37508e95c047671ee20ef4ce7812acedfdd511fb067f1c8e9709f",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
@@ -888,25 +890,25 @@
     "platform/static/js/lg-select.js": "0b453c6da32b94e45e981860e58b6e8588510340ba9b110f8f4fadd6f66dc8e1",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
     "platform/templates/findings.html": "e198e140320f72e399c64486d6d3657ad6916592dfdcf21bbba441024cf81c34"
    },
-   "image_sha256": "ddeed9b0d7fff126994445a86f4d7b8d8bc688adb81baea6bd59f071cada5593",
+   "image_sha256": "35568f26957e7edce4c71b1e816c12e0e6d4bb81d55439b061470f9c74da9608",
    "page": "/findings"
   },
   "70-mobile-map.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/overview.css": "9b4204417cf0f9b7b22c28d13bda0f4acba9ac11e93c4f7b8619ecfe0125f574",
     "platform/static/js/acode-make.js": "ea9c7d70e045706c9b391dfef1bea2191423eaf356f942741645225ee87005c1",
-    "platform/static/js/app.js": "34d2efe7637b03ab69b1bcf1e2ecade6e049c43518fce592d9e8609ae2baeb3c",
+    "platform/static/js/app.js": "38028b0c47b3731efd9fd4dafcb76cd396817222c2ce23bf425f669a7718b2c0",
     "platform/static/js/beacon-handover.js": "84508c17867e18216e82620c4c268b7b6d24057ddc48a485c1577cd85323486c",
     "platform/static/js/beacon.js": "e4797deed743cb27cd46912c22b6bdc5e500d050d23c7b38296b27cd7342539d",
     "platform/static/js/display.js": "7b21167f9e3b5bc8aa2e1b36aee80023d1bd217ea9795f12d4a92d43a5550489",
-    "platform/static/js/glossary.js": "3de6dad98a251ea2340930fdf709005895344aa0cfc9606338a242bfb74434c4",
+    "platform/static/js/glossary.js": "9dd4e230ebba36ec584107296699d76d42090cdfd34167173dbf20101b3bf23a",
     "platform/static/js/hud-fit.js": "51c10be402918e93a332de1a9cef5786e13587738eb62b2c6800e5b795714fc2",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-fields.js": "0f35010ff950422f5e770cec9bbae140c24a508e4ef63775e565feb24947c646",
@@ -916,17 +918,17 @@
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/portal-intel.js": "bbff5241eae1d0d628ed18d960f3ee781a45665985b37be1aa9daf6a510028bb",
     "platform/static/js/spike-notice.js": "c4dc955746b4fd1122edfc999753d93cf4173698362d2e4272789551effe1619",
-    "platform/templates/_portal_cards.html": "8dec63943c8a5a47de9e27f66a0d396457f8892acccc942134377524fc3ee95a",
-    "platform/templates/index.html": "ea1d6e3a33c841171ca27f3ffa7cc602ca8bc21fca58b26beebfa10f99123f55"
+    "platform/templates/_portal_cards.html": "bd5bbd4b38b3d16afee91636f11dbb656c54bf91341788b6eb3fff3af202a66a",
+    "platform/templates/index.html": "5de13801a3c1785696bfe1bb4d5fcd9aad138f145ebeda05ec7a95f3a2aae760"
    },
-   "image_sha256": "b4420b9e9c7a230ab9bca9e287730e9c0adb94942737b02bde4a0d50d41604c5",
+   "image_sha256": "895dde565c8f6694b0d94c03286a72e6d6034e1570e76b4a89479346b81b90ec",
    "page": "/"
   },
   "72-advisory.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
     "platform/static/css/advisory.css": "f377cee4ddf894fb53fe1c912b389470cc0e4eeb181f301c6feb0a85169cefda",
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/findings.css": "1ad4644e17b37508e95c047671ee20ef4ce7812acedfdd511fb067f1c8e9709f",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/settings.css": "ac57b6c967e871f6a9807120d312545c85677877621b6fda10dc32c9359c95be",
@@ -936,26 +938,26 @@
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-select.js": "0b453c6da32b94e45e981860e58b6e8588510340ba9b110f8f4fadd6f66dc8e1",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
     "platform/templates/advisory.html": "5787c9dd9f683797d47bf827b167a452b7fda67a3ec4cddd53ce943ad7dc6f91"
    },
-   "image_sha256": "7b6de4e359be6fbd729299e9d874e6b27115a15e33989b9a49b5ede9621fa83b",
+   "image_sha256": "33bdd9318e283e500faa73e58eeaef15f0c08124bf98f9d75dffa0b62f0bc7bf",
    "page": "/advisory/"
   },
   "73-advisory-report.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
     "platform/advisory_pdf.py": "1eec3c5a0c4b6bdd21ce4aecc7bd2619c8440bd98759b8233ce988efdd522089",
     "platform/executive_pdf.py": "30b130179f035265952b7e3307885097308ea71bd57d2fe76eb1a561447a6de2"
    },
-   "image_sha256": "63b973b4124ea1e9faba9124517a8ce7c9062a412428a1b8e7969308a26b5396",
+   "image_sha256": "8f33728efb985f5f60d0ba729f3749a4f86643050a488b45cf88b8a6853c73fb",
    "page": "(not a page)"
   },
   "74-advisor-dashboard.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
     "platform/static/css/advisory.css": "f377cee4ddf894fb53fe1c912b389470cc0e4eeb181f301c6feb0a85169cefda",
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/findings.css": "1ad4644e17b37508e95c047671ee20ef4ce7812acedfdd511fb067f1c8e9709f",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/quarterly.css": "12775d0965d666455c1b77f133e8f998aa5b899ce0cacf09c238e8448b5b1ef9",
@@ -966,25 +968,25 @@
     "platform/static/js/lg-select.js": "0b453c6da32b94e45e981860e58b6e8588510340ba9b110f8f4fadd6f66dc8e1",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/quarterly.js": "876fe4e02c42deba78217ada344b520b095ed1599373c4fda583dbd970581b25",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
     "platform/templates/advisory_portal.html": "fae619e3f100dd12bb93044eb8d22d9c2ce1c8e29661b7d504f927b375bedcca"
    },
-   "image_sha256": "2218bc587ead6f2cb29925d0c44593833869a4517f3b6788486678f44669e204",
+   "image_sha256": "feccdb20d2a582ad97b92fa6c82d79a919804ea5690a457ba466ee3e91fe8cc2",
    "page": "/advisory"
   },
   "80-external-masked.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/overview.css": "9b4204417cf0f9b7b22c28d13bda0f4acba9ac11e93c4f7b8619ecfe0125f574",
     "platform/static/js/acode-make.js": "ea9c7d70e045706c9b391dfef1bea2191423eaf356f942741645225ee87005c1",
-    "platform/static/js/app.js": "34d2efe7637b03ab69b1bcf1e2ecade6e049c43518fce592d9e8609ae2baeb3c",
+    "platform/static/js/app.js": "38028b0c47b3731efd9fd4dafcb76cd396817222c2ce23bf425f669a7718b2c0",
     "platform/static/js/beacon-handover.js": "84508c17867e18216e82620c4c268b7b6d24057ddc48a485c1577cd85323486c",
     "platform/static/js/beacon.js": "e4797deed743cb27cd46912c22b6bdc5e500d050d23c7b38296b27cd7342539d",
     "platform/static/js/display.js": "7b21167f9e3b5bc8aa2e1b36aee80023d1bd217ea9795f12d4a92d43a5550489",
-    "platform/static/js/glossary.js": "3de6dad98a251ea2340930fdf709005895344aa0cfc9606338a242bfb74434c4",
+    "platform/static/js/glossary.js": "9dd4e230ebba36ec584107296699d76d42090cdfd34167173dbf20101b3bf23a",
     "platform/static/js/hud-fit.js": "51c10be402918e93a332de1a9cef5786e13587738eb62b2c6800e5b795714fc2",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-fields.js": "0f35010ff950422f5e770cec9bbae140c24a508e4ef63775e565feb24947c646",
@@ -994,25 +996,25 @@
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/portal-intel.js": "bbff5241eae1d0d628ed18d960f3ee781a45665985b37be1aa9daf6a510028bb",
     "platform/static/js/spike-notice.js": "c4dc955746b4fd1122edfc999753d93cf4173698362d2e4272789551effe1619",
-    "platform/templates/_portal_cards.html": "8dec63943c8a5a47de9e27f66a0d396457f8892acccc942134377524fc3ee95a",
-    "platform/templates/index.html": "ea1d6e3a33c841171ca27f3ffa7cc602ca8bc21fca58b26beebfa10f99123f55"
+    "platform/templates/_portal_cards.html": "bd5bbd4b38b3d16afee91636f11dbb656c54bf91341788b6eb3fff3af202a66a",
+    "platform/templates/index.html": "5de13801a3c1785696bfe1bb4d5fcd9aad138f145ebeda05ec7a95f3a2aae760"
    },
-   "image_sha256": "9ff2ae8c637af20a8d06cc3c47d9a5ef655f9838c6f4e512273e22d835ea826a",
+   "image_sha256": "a441683fb75139fd3617db8da8ab754984b51024eb46494103aa2ccb71c9d701",
    "page": "/"
   },
   "81-external-event.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/overview.css": "9b4204417cf0f9b7b22c28d13bda0f4acba9ac11e93c4f7b8619ecfe0125f574",
     "platform/static/js/acode-make.js": "ea9c7d70e045706c9b391dfef1bea2191423eaf356f942741645225ee87005c1",
-    "platform/static/js/app.js": "34d2efe7637b03ab69b1bcf1e2ecade6e049c43518fce592d9e8609ae2baeb3c",
+    "platform/static/js/app.js": "38028b0c47b3731efd9fd4dafcb76cd396817222c2ce23bf425f669a7718b2c0",
     "platform/static/js/beacon-handover.js": "84508c17867e18216e82620c4c268b7b6d24057ddc48a485c1577cd85323486c",
     "platform/static/js/beacon.js": "e4797deed743cb27cd46912c22b6bdc5e500d050d23c7b38296b27cd7342539d",
     "platform/static/js/display.js": "7b21167f9e3b5bc8aa2e1b36aee80023d1bd217ea9795f12d4a92d43a5550489",
-    "platform/static/js/glossary.js": "3de6dad98a251ea2340930fdf709005895344aa0cfc9606338a242bfb74434c4",
+    "platform/static/js/glossary.js": "9dd4e230ebba36ec584107296699d76d42090cdfd34167173dbf20101b3bf23a",
     "platform/static/js/hud-fit.js": "51c10be402918e93a332de1a9cef5786e13587738eb62b2c6800e5b795714fc2",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/lg-fields.js": "0f35010ff950422f5e770cec9bbae140c24a508e4ef63775e565feb24947c646",
@@ -1022,18 +1024,18 @@
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/portal-intel.js": "bbff5241eae1d0d628ed18d960f3ee781a45665985b37be1aa9daf6a510028bb",
     "platform/static/js/spike-notice.js": "c4dc955746b4fd1122edfc999753d93cf4173698362d2e4272789551effe1619",
-    "platform/templates/_portal_cards.html": "8dec63943c8a5a47de9e27f66a0d396457f8892acccc942134377524fc3ee95a",
-    "platform/templates/index.html": "ea1d6e3a33c841171ca27f3ffa7cc602ca8bc21fca58b26beebfa10f99123f55"
+    "platform/templates/_portal_cards.html": "bd5bbd4b38b3d16afee91636f11dbb656c54bf91341788b6eb3fff3af202a66a",
+    "platform/templates/index.html": "5de13801a3c1785696bfe1bb4d5fcd9aad138f145ebeda05ec7a95f3a2aae760"
    },
-   "image_sha256": "2e8208ebe0871ec60b5fc8f79e667d450b3da7f2a15e4de3eb66ebe21195624e",
+   "image_sha256": "5d8ce4c62c422a9e8756442e1cdafc08347dc55966bf880c89766ea09c444f44",
    "page": "/"
   },
   "90-abused-compromised.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/findings.css": "1ad4644e17b37508e95c047671ee20ef4ce7812acedfdd511fb067f1c8e9709f",
-    "platform/static/css/intelligence.css": "e42f5960b97ff2dc448355acaf51bf503105e4f7ba3b6b622d2cc80c1b02cd5a",
+    "platform/static/css/intelligence.css": "a20bff0a3b025ded5964c12d86c0610a061af318d7c6287d89447e9e03b7e434",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/settings.css": "ac57b6c967e871f6a9807120d312545c85677877621b6fda10dc32c9359c95be",
     "platform/static/js/intelligence.js": "dfc0c7dbaa72967bb3a0c48f0b4ebaa0f4251346b3ded8a8fae378e075add328",
@@ -1042,18 +1044,18 @@
     "platform/static/js/lg-select.js": "0b453c6da32b94e45e981860e58b6e8588510340ba9b110f8f4fadd6f66dc8e1",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
     "platform/templates/intelligence.html": "329602f2539d8a3fd33c80d0acc1fb6588c6b1f861392c63c191b8b2d5160f42"
    },
-   "image_sha256": "5818ce68cc6f685e1aeb7481a0c1688c14f0d7a6deb9e024317ca39b418002b7",
+   "image_sha256": "cf23ae489a968c7d6b3b5f0f06ccd43c99ceb4221e06ca0bd6d01ae09a3226a7",
    "page": "/intelligence"
   },
   "91-abused-records.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/findings.css": "1ad4644e17b37508e95c047671ee20ef4ce7812acedfdd511fb067f1c8e9709f",
-    "platform/static/css/intelligence.css": "e42f5960b97ff2dc448355acaf51bf503105e4f7ba3b6b622d2cc80c1b02cd5a",
+    "platform/static/css/intelligence.css": "a20bff0a3b025ded5964c12d86c0610a061af318d7c6287d89447e9e03b7e434",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/settings.css": "ac57b6c967e871f6a9807120d312545c85677877621b6fda10dc32c9359c95be",
     "platform/static/js/intelligence.js": "dfc0c7dbaa72967bb3a0c48f0b4ebaa0f4251346b3ded8a8fae378e075add328",
@@ -1062,16 +1064,16 @@
     "platform/static/js/lg-select.js": "0b453c6da32b94e45e981860e58b6e8588510340ba9b110f8f4fadd6f66dc8e1",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
     "platform/templates/intelligence.html": "329602f2539d8a3fd33c80d0acc1fb6588c6b1f861392c63c191b8b2d5160f42"
    },
-   "image_sha256": "662039544615dd36f89c24b4558f480292410678174c858fda25ae9e81a62497",
+   "image_sha256": "f5620e48a0376789215cfba71f3d926330509c0cf5e9712d94d12c1f51c4ba4a",
    "page": "/intelligence"
   },
   "92-finding-watch.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/beacon.css": "d49979a9fe4a5d1d9145fef261ca36fa1a94e50c3b5f3d03c325ccbfa545e6f7",
     "platform/static/css/findings.css": "1ad4644e17b37508e95c047671ee20ef4ce7812acedfdd511fb067f1c8e9709f",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
@@ -1084,16 +1086,16 @@
     "platform/static/js/lg-select.js": "0b453c6da32b94e45e981860e58b6e8588510340ba9b110f8f4fadd6f66dc8e1",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
     "platform/templates/findings.html": "e198e140320f72e399c64486d6d3657ad6916592dfdcf21bbba441024cf81c34"
    },
-   "image_sha256": "194ae2392b801c94de91988ea3f777a59b79a084b3ba8362f594de81d9196cf4",
+   "image_sha256": "640b392d9068eea4e150d51c7bb2b7d82f99b1ff723dc1f85859f1a9576fde60",
    "page": "/findings"
   },
   "93-review-drilldown.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/findings.css": "1ad4644e17b37508e95c047671ee20ef4ce7812acedfdd511fb067f1c8e9709f",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/review.css": "0522ce1972f22d5b07f865c5e8f500d213a59b554a496cb8bdc0af0f2345e982",
@@ -1104,41 +1106,41 @@
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
     "platform/static/js/people-pick.js": "d358e60688c8c583f4bd2ca8446bfd1f59afd965d63679e67b6c090d5a82de63",
     "platform/static/js/review.js": "620d6950402d1efb054424a09e0c530fe52b39c05d95e24a7ef59aaf90179877",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
     "platform/templates/review.html": "1cd07f8f17e0f222b34dcea5558b7b630269abbcec9eab9623e479de5db906db"
    },
-   "image_sha256": "1784724222e436e2f734df29e247a8ba3773f427196409feeac41dff7d0b4348",
+   "image_sha256": "9b0a4440ffba3982bf8b1e38242fdb74a9ff788f1da1edbc51dbd2f48a408cf6",
    "page": "/review/"
   },
   "94-cve-tick.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
     "platform/static/css/acode.css": "e20743d0c626fb75105d36fdf429814db1e0574dbdba119a1b24c6107bc11adb",
-    "platform/static/css/app.css": "fb020a4d2450c3b4586d58d633fb6fa0e6b017473f7b8a09f2928313b8184635",
+    "platform/static/css/app.css": "8d36c24e20269f1d5156e3da5c7e28b71a204d478a7ec9753b875572927f2f0e",
     "platform/static/css/notifications.css": "88d9992a482c02319d50b41fff612a97a8bdd7b70adcd2917273d64938dcef01",
     "platform/static/css/settings.css": "ac57b6c967e871f6a9807120d312545c85677877621b6fda10dc32c9359c95be",
     "platform/static/js/acode.js": "02cff7891ac355e8274e1ea14e0ae989a0c4ee505f71e7ec7763c5694d6f811f",
     "platform/static/js/lg-copy.js": "5f26465d4878de4f64faaac459df957761e01510522a0b26fc2659323948516a",
     "platform/static/js/notifications.js": "650fb0a567d9b6082bb902091d983f59cb95e31d10adabdd0c0e1332cc35a155",
-    "platform/templates/_page_nav.html": "b2f797506db3fc6633073103bcb75669774d5bac05a1efe69eb57302e0826144",
+    "platform/templates/_page_nav.html": "7dc385b097b14472c267054e1098d60dcec38c4d1ad52c8e72c31ba56aed2e6c",
     "platform/templates/acode.html": "5f7273836af96d5dc0705499df5f5f53eab629cf6c4fd1de8abe51504068bf5a"
    },
    "image_sha256": "ffe92f9162f2f315b28419e4428c309f4e1ef531344219c6c421ccc26fec91ed",
    "page": "/intel/"
   },
   "95-guided-installer.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "install.sh": "92b6324eb5d32d80fd1ddafc1dcfc30746ca66674557cb6df0fe0b0b42afa168",
+    "install.sh": "90ec5899ac142146dec57774bf6602b45a1d2a7d2d23a12e5081b076ba2a3d0e",
     "installer_anim.py": "1aef1adf87355a9e4b75b48c170248a3ebb62f0a2bb874cd180e2d240b00ba74"
    },
    "image_sha256": "f6cc15ac55f05742bd24610c0dbd68d34393dbf60038297f5442fc2073ee2f3c",
    "page": "(not a page)"
   },
   "96-guided-installer-progress.png": {
-   "confirmed": "2026-11-23",
+   "confirmed": "2026-11-24",
    "files_sha256": {
-    "install.sh": "92b6324eb5d32d80fd1ddafc1dcfc30746ca66674557cb6df0fe0b0b42afa168",
+    "install.sh": "90ec5899ac142146dec57774bf6602b45a1d2a7d2d23a12e5081b076ba2a3d0e",
     "installer_anim.py": "1aef1adf87355a9e4b75b48c170248a3ebb62f0a2bb874cd180e2d240b00ba74"
    },
    "image_sha256": "dcebd3033cb0e1cc20e5f1020142daf63fe6446ddf810eb966a282e2f19a5fe7",

@@ -18,8 +18,14 @@
 # Server, Via or Alt-Svc header; its error answers carry no body naming it). An /etc/caddy/Caddyfile that Looking
 # Glass did not write is never replaced (only the caddy package's untouched sample is, and it is kept aside).
 #
+# Internal installations (ACCESS_MODE=private, the user 2026-11-24: an insider's slow connections must not hold Looking
+# Glass up either) use --internal instead of --domain: Caddy answers on the port for whatever name or address people
+# use, with the installation's own certificate (self-signed, deploy/make_tls_cert.sh, or the organisation's), and checks
+# Looking Glass behind it against that same certificate (the name it is for, read from the certificate).
+#
 # Run as root (sudo), from the platform folder or with --project:
 #   deploy/caddy_front.sh setup  --domain D --public-port P --backend-port B [--ca-bundle FILE] [--project DIR]
+#   deploy/caddy_front.sh setup  --internal --public-port P --backend-port B [--ca-bundle FILE] [--project DIR]
 #   deploy/caddy_front.sh sync   [--project DIR]    copy a renewed certificate to Caddy and restart it
 #   deploy/caddy_front.sh render --domain D --public-port P --backend-port B [--ca-bundle FILE]   print the Caddyfile
 #   deploy/caddy_front.sh update                    Caddy's newest version (key checked; ours kept; checked through it)
@@ -125,11 +131,12 @@ EOF
 }
 
 cmd="${1:-}"; [ $# -gt 0 ] && shift
-project="$(cd "$(dirname "$0")/.." && pwd)"; domain=""; pport=""; bport=""; cab=""; limit=100
+project="$(cd "$(dirname "$0")/.." && pwd)"; domain=""; pport=""; bport=""; cab=""; limit=100; internal=0; name=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --conn-limit) limit="$2"; shift 2 ;;
     --domain) domain="${2,,}"; shift 2 ;;
+    --internal) internal=1; shift ;;
     --public-port) pport="$2"; shift 2 ;;
     --backend-port) bport="$2"; shift 2 ;;
     --ca-bundle) cab="$2"; shift 2 ;;
@@ -139,8 +146,26 @@ while [ $# -gt 0 ]; do
 done
 die() { echo "caddy_front: $*" >&2; exit 1; }
 need_root() { [ "$(id -u)" = 0 ] || die "run it with sudo"; }
+# an internal installation's certificate: the first name it is for (a DNS name, else an IP address); Caddy offers it to
+# visitors that send no name (an address typed in) and checks Looking Glass behind it under that name
+cert_name() {
+  local f="${1:-$project/data/tls/cert.pem}" san
+  [ -f "$f" ] || return 1
+  san="$(openssl x509 -in "$f" -noout -ext subjectAltName 2>/dev/null | tail -n +2 | tr ',' '\n' | sed 's/^ *//')"
+  # the name people use first (deploy/make_tls_cert.sh lists localhost and 127.0.0.1 first: only when nothing else)
+  # (sed -n 1p reads to the end: head would close the pipe early, and under pipefail that can fail the whole function)
+  { printf '%s\n' "$san" | sed -n 's/^DNS://p' | grep -vx 'localhost' || true
+    printf '%s\n' "$san" | sed -n 's/^IP Address://p' | grep -vxE '127\..*|::1|0:0:0:0:0:0:0:1' || true
+    printf '%s\n' "$san" | sed -n 's/^DNS://p'; printf '%s\n' "$san" | sed -n 's/^IP Address://p'; } | sed -n 1p
+}
 valid() {
-  [[ "$domain" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] || die "not a domain name: $domain"
+  if [ "$internal" = 1 ]; then
+    [ -z "$domain" ] || die "--internal and --domain: one or the other"
+    [ -n "$name" ] || name="$(cert_name)" || true
+    [[ "$name" =~ ^[A-Za-z0-9.:-]+$ ]] || die "no usable name in the certificate $project/data/tls/cert.pem (make it first: deploy/make_tls_cert.sh)"
+  else
+    [[ "$domain" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] || die "not a domain name: $domain"
+  fi
   [[ "$pport" =~ ^[0-9]+$ ]] && [ "$pport" -ge 1 ] && [ "$pport" -le 65535 ] || die "public port: $pport"
   [[ "$bport" =~ ^[0-9]+$ ]] && [ "$bport" -ge 1 ] && [ "$bport" -le 65535 ] || die "backend port: $bport"
   [ "$pport" != "$bport" ] || die "the public and the backend port must differ"
@@ -149,14 +174,20 @@ valid() {
 }
 
 render() {
-  local trust=""
+  local trust="" site="https://$domain:$pport" sni="" back="$domain" tag=""
   [ -n "$cab" ] && trust=$'\n\t\t\ttls_trusted_ca_certs '"$CERTS/ca-bundle.pem"
+  if [ "$internal" = 1 ]; then
+    # any name or address people use; the installation's own certificate is also what Looking Glass behind is checked
+    # against (a self-signed certificate is its own authority)
+    site="https://:$pport"; sni=$'\n\tdefault_sni '"$name"; back="$name"; tag=$'\n'"# internal: $name"
+    [ -n "$cab" ] || trust=$'\n\t\t\ttls_trusted_ca_certs '"$CERTS/cert.pem"
+  fi
   cat <<EOF
-$MARK
+$MARK$tag
 {
 	admin off
 	auto_https off
-	ocsp_stapling off
+	ocsp_stapling off$sni
 	servers {
 		protocols h1 h2
 		timeouts {
@@ -168,7 +199,7 @@ $MARK
 	}
 }
 
-https://$domain:$pport {
+$site {
 	tls $CERTS/cert.pem $CERTS/key.pem
 	# no fingerprint: nothing in an answer names Caddy (anti-fingerprinting, like Looking Glass's own answers)
 	header {
@@ -179,7 +210,7 @@ https://$domain:$pport {
 	reverse_proxy https://127.0.0.1:$bport {
 		header_up Host {host}
 		transport http {
-			tls_server_name $domain$trust
+			tls_server_name $back$trust
 		}
 	}
 	# Caddy's own error answers (Looking Glass down or restarting) skip the rules above: the same, and a plain line
@@ -266,12 +297,28 @@ versions() {   # "installed candidate" ("none" when apt does not know one)
 }
 
 check_front() {
-  local ca=(); [ -n "$cab" ] && ca=(--cacert "$cab")
+  local ca=() host="$domain"
+  [ -n "$cab" ] && ca=(--cacert "$cab")
+  if [ "$internal" = 1 ]; then host="$name"; [ -n "$cab" ] || ca=(--cacert "$CERTS/cert.pem"); fi
+  local h="$host"; [[ "$h" == *:* ]] && h="[$h]"           # an IPv6 address in a URL
   for _ in $(seq 1 20); do
-    curl -sf --max-time 10 "${ca[@]}" --resolve "$domain:$pport:127.0.0.1" "https://$domain:$pport/healthz" >/dev/null 2>&1 && { echo "https://$domain:$pport answers through Caddy"; return 0; }
+    # by the certificate's own name, connected to this computer (also before DNS points there); the certificate checked
+    curl -sf --max-time 10 "${ca[@]}" --connect-to "$host:$pport:127.0.0.1:$pport" "https://$h:$pport/healthz" >/dev/null 2>&1 \
+      && { echo "https://$h:$pport answers through Caddy"; return 0; }
     sleep 1
   done
-  die "https://$domain:$pport does not answer through Caddy (journalctl -u caddy)"
+  die "https://$h:$pport does not answer through Caddy (journalctl -u caddy)"
+}
+
+# an earlier setup's site, read back from the Caddyfile Looking Glass wrote (for update and sync)
+read_site() {
+  if grep -q '^# internal: ' "$CONF"; then
+    internal=1; name="$(sed -n 's/^# internal: //p' "$CONF" | head -1)"; pport="$(sed -n 's#^https://:\([0-9]*\) {#\1#p' "$CONF")"
+  else
+    domain="$(sed -n 's#^https://\([^:]*\):\([0-9]*\) {#\1#p' "$CONF")"; pport="$(sed -n 's#^https://[^:]*:\([0-9]*\) {#\1#p' "$CONF")"
+  fi
+  [ -f "$CERTS/ca-bundle.pem" ] && cab="$CERTS/ca-bundle.pem"
+  return 0
 }
 
 case "$cmd" in
@@ -313,8 +360,7 @@ case "$cmd" in
     after="$(dpkg-query -W -f='${Version}' caddy)"
     head -1 "$CONF" | grep -qF "$MARK" || die "$CONF was replaced during the update: run setup again"
     [ -f "$DROPIN" ] || die "the hardening drop-in $DROPIN is gone: run setup again"
-    domain="$(sed -n 's#^https://\([^:]*\):\([0-9]*\) {#\1#p' "$CONF")"; pport="$(sed -n 's#^https://[^:]*:\([0-9]*\) {#\1#p' "$CONF")"
-    [ -f "$CERTS/ca-bundle.pem" ] && cab="$CERTS/ca-bundle.pem"
+    read_site
     if [ "$before" != "$after" ]; then systemctl daemon-reload; systemctl restart caddy; fi
     check_front
     if [ "$before" = "$after" ]; then echo "Caddy $after is the newest version in its repository"; else echo "Caddy updated: $before -> $after"; fi
@@ -322,9 +368,14 @@ case "$cmd" in
   sync)
     need_root
     head -1 "$CONF" 2>/dev/null | grep -qF "$MARK" || die "Caddy is not set up by Looking Glass here: nothing to copy"
-    domain="$(sed -n 's#^https://\([^:]*\):\([0-9]*\) {#\1#p' "$CONF")"; pport="$(sed -n 's#^https://[^:]*:\([0-9]*\) {#\1#p' "$CONF")"
-    [ -f "$CERTS/ca-bundle.pem" ] && cab="$CERTS/ca-bundle.pem"
+    read_site
     copy_certs
+    if [ "$internal" = 1 ]; then
+      # a self-signed certificate made again (a new address): its first name may have changed, so the Caddyfile is too
+      name="$(cert_name "$CERTS/cert.pem")" || die "no usable name in the new certificate"
+      bport="$(sed -n 's#.*reverse_proxy https://127\.0\.0\.1:\([0-9]*\) {#\1#p' "$CONF")"
+      write_conf
+    fi
     systemctl restart caddy
     check_front ;;
   status)

@@ -563,11 +563,11 @@
     "report": "^scan6_mysql$"
    },
    "techniques": [
-    "T1213"
+    "T1213.006"
    ],
    "certainty": "possible",
    "role": "exposure",
-   "why": "A database open to the internet: attackers who get in can read or change the data it holds.",
+   "why": "A database server open to the internet: attackers can try to log in and read or change its data.",
    "shortlist": [
     "T1213"
    ],
@@ -913,13 +913,151 @@
    "match": {
     "report": "^scan_ipp$"
    },
-   "techniques": [],
+   "techniques": [
+    "T1190"
+   ],
    "certainty": "possible",
    "role": "exposure",
-   "why": "Shadowserver's page describes awareness of what is visible, not attacker behaviour: no ATT&CK technique fits.",
-   "shortlist": [],
-   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-ipp-report/",
-   "nofit": true
+   "why": "Shadowserver notes remote code execution flaws found on various printer models, and access to and manipulation of print jobs: an open IPP service lets attackers try them.",
+   "shortlist": [
+    "T1190"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-ipp-report/"
+  },
+  {
+   "id": "ss-scan_stun",
+   "match": {
+    "report": "^scan_stun$"
+   },
+   "techniques": [
+    "T1498.002"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Shadowserver: a UDP message amplifier (on average about 4 times on IPv4, 6 times on IPv6) that can be abused for reflected DDoS attacks on someone else.",
+   "shortlist": [
+    "T1498.002",
+    "T1498"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-stun-service-report/"
+  },
+  {
+   "id": "ss-scan_gtp",
+   "match": {
+    "report": "^scan_gtp$"
+   },
+   "techniques": [
+    "T1498.002"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Shadowserver notes a potential for amplification attacks: the service may be used to flood someone else.",
+   "shortlist": [
+    "T1498.002",
+    "T1498"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-gprs-tunneling-protocol-gtp-report/"
+  },
+  {
+   "id": "ss-scan6_ipp",
+   "match": {
+    "report": "^scan6_ipp$"
+   },
+   "techniques": [
+    "T1190"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Shadowserver notes remote code execution flaws found on various printer models, and access to and manipulation of print jobs: an open IPP service lets attackers try them.",
+   "shortlist": [
+    "T1190"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-ipp-report/"
+  },
+  {
+   "id": "ss-scan6_stun",
+   "match": {
+    "report": "^scan6_stun$"
+   },
+   "techniques": [
+    "T1498.002"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Shadowserver: a UDP message amplifier (on average about 4 times on IPv4, 6 times on IPv6) that can be abused for reflected DDoS attacks on someone else.",
+   "shortlist": [
+    "T1498.002",
+    "T1498"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-stun-service-report/"
+  },
+  {
+   "id": "ss-scan_cwmp",
+   "match": {
+    "report": "^scan_cwmp$"
+   },
+   "techniques": [
+    "T1190"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A router management service open to the internet: botnets have exploited flaws in it to take over devices.",
+   "shortlist": [
+    "T1190"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/open-cwmp-report/"
+  },
+  {
+   "id": "ss-scan6_imap_vulnerable",
+   "match": {
+    "report": "^scan6_imap_vulnerable$"
+   },
+   "techniques": [
+    "T1040",
+    "T1110.001"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "Mail login without encryption: passwords can be read on the way, and the open login invites password guessing.",
+   "shortlist": [
+    "T1040",
+    "T1110.001"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/vulnerable-imap-report/"
+  },
+  {
+   "id": "ss-scan6_rsync",
+   "match": {
+    "report": "^scan6_rsync$"
+   },
+   "techniques": [
+    "T1039"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A file-copy service open without a password: attackers can list shared folders and copy the files.",
+   "shortlist": [
+    "T1039"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-rsync-report/"
+  },
+  {
+   "id": "ss-scan6_vnc",
+   "match": {
+    "report": "^scan6_vnc$"
+   },
+   "techniques": [
+    "T1133",
+    "T1021.005"
+   ],
+   "certainty": "possible",
+   "role": "exposure",
+   "why": "A remote desktop service open to the internet, sometimes with no password: attackers can log in and take control.",
+   "shortlist": [
+    "T1133",
+    "T1021.005"
+   ],
+   "source": "https://www.shadowserver.org/what-we-do/network-reporting/accessible-vnc-report/"
   },
   {
    "id": "ss-scan_isakmp",
@@ -1720,7 +1858,7 @@
     "group": [
      "Can be abused for attacks (amplification, tunnels)"
     ],
-    "report": "^(scan6?_(dns|ntp|ntpmonitor|ssdp|memcached|chargen|qotd|snmp|ldap_udp|mdns|portmapper|netbios|ws_discovery|ubiquiti|slp|coap|tftp|xdmcp|dvr_dhcpdiscover|ard|rdpeudp|db2|mssql|ddos_middlebox|loop_dos|sip|cwmp|ipmi|nat_pmp)|scan6?_.*)$"
+    "report": "^(scan6?_(dns|ntp|ntpmonitor|ssdp|memcached|chargen|qotd|snmp|ldap_udp|mdns|portmapper|netbios|ws_discovery|ubiquiti|slp|coap|tftp|xdmcp|dvr_dhcpdiscover|ard|rdpeudp|db2|mssql|ddos_middlebox|loop_dos|sip|cwmp|ipmi|nat_pmp))$"
    },
    "techniques": [
     "T1498.002"

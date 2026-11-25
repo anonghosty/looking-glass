@@ -47,6 +47,7 @@
       <button type="button" role="tab" data-tab="access" aria-selected="false">Access review</button>
       <button type="button" role="tab" data-tab="live" aria-selected="false">Signed in now</button>
       <button type="button" role="tab" data-tab="sender" aria-selected="false">Sender check</button>
+      <button type="button" role="tab" data-tab="sent" aria-selected="false">Data sent out</button>
       <button type="button" role="tab" data-tab="evidence" aria-selected="false">Integrity and evidence</button>
       <button type="button" role="tab" data-tab="trace" aria-selected="false">Trace a leak</button>
     </nav>
@@ -92,6 +93,20 @@
         on the message exactly as it was downloaded, and records the result. Evidence for the period chosen above, next to what the current
         standards ask. No verdict: the auditor decides.</p>
       <div id="snBody"></div>
+    </section>
+
+    <section class="st-card adm-pane au-pane" id="pane-sent" hidden>
+      <h2>Data sent out</h2>
+      <p class="st-hint">What Looking Glass sent to the CSIRT's own OpenCTI and MISP (Settings, Connectors): each target as it is set up, then
+        every send, retry, revocation and failure in the period chosen above. Looking Glass's own analysis only; never raw report rows,
+        findings, notes, names or keys. No verdict: the auditor decides.</p>
+      <p class="au-sent-sum" id="snSum" role="status"></p>
+      <h3>Targets</h3>
+      <div class="table-wrap"><table class="st-table" id="snTargets"><thead><tr><th>Target</th><th>Platform</th><th>Address</th><th>TLP</th>
+        <th>Receives</th><th>State</th><th>Added</th></tr></thead><tbody></tbody></table></div>
+      <h3>In the period</h3>
+      <div class="table-wrap"><table class="st-table" id="snEvents"><thead><tr><th>When (UTC)</th><th>Target</th><th>Report day</th><th>What</th>
+        <th>Devices</th><th>Objects</th><th>TLP</th><th>Detail</th></tr></thead><tbody></tbody></table></div>
     </section>
 
     <section class="st-card adm-pane au-pane" id="pane-evidence" hidden>

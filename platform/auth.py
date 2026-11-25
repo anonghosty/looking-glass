@@ -63,12 +63,17 @@ import filesig  # noqa: E402
 
 # one-time sign-up links (invites.py sets these): check(token) -> the open invite or None; use(token, user) -> it, once
 INVITE = {"check": None, "use": None}
+# passkeys (stepup.py fills it: store, challenges, min_public): on a public installation the sign-in asks for a passkey
+# instead of the authenticator code, and a person with fewer than min_public registers them right after signing in
+PASSKEYS = {}
+# every signed-in account reaches its own details, passkeys and the fresh check (stepup.py), whatever its role's portal
+OWN_PATHS = ("/api/me", "/account", "/api/passkeys", "/api/stepup")
 PUBLIC_PATHS = ("/login", "/register", "/forgot", "/logout", "/healthz", "/favicon.ico")
 # the only files served without signing in: what the sign-in, account and reset pages use (anti-fingerprinting,
 # 2026-11-19: every script and style was readable by anyone, which named the product and its libraries; neutral.py)
 PUBLIC_STATIC = frozenset("/static/" + f for f in (
     "css/app.css", "css/auth.css", "js/auth-bg.js", "js/lg-select.js", "js/auth-card.js", "js/enrol.js",
-    "js/auth-turn.js", "data/land-110m.json"))   # no logo before sign-in at all (2026-11-19, neutral.py)
+    "js/auth-turn.js", "js/auth-passkey.js", "data/land-110m.json"))   # no logo before sign-in at all (2026-11-19, neutral.py)
 # sign-up attempts whose e-mail domain is looked up in DNS, per address and hour (room for typing mistakes)
 REGISTER_DNS_PER_HOUR = 30
 NAME_RE = re.compile(r"^[a-zA-Z0-9._-]{2,40}$")
@@ -115,7 +120,8 @@ DEFINITIONS_PATHS = ("/definitions", "/api/kb/", "/api/copy/", "/api/networks", 
                      "/api/attack", "/api/name-sources",      # ATT&CK mappings and the name sources' status (attack_map.py, name_sources.py)
                      "/api/beacon/finding",                   # handing decoded beacons over, and a finding's beacons (counts)
                      "/api/overview/spikes",                  # the spike notice on the Overview's buttons (counts only)
-                     "/api/beacon/code")                      # a beacon selection's LG-B code, for Move to notes (5+ devices)
+                     "/api/beacon/code",                      # a beacon selection's LG-B code, for Move to notes (5+ devices)
+                     "/api/unusual")                          # unusual activity in "Looking Glass asks", without devices (unusual.py)
 MANAGEMENT_PATHS = ("/management", "/api/mgmt/", "/api/copy/", "/api/lookups", "/api/combo-codes/", "/findings", "/api/findings",
                     "/intel/", "/api/intel/acode/", "/review/", "/api/review/", "/api/notifications", "/overview",
                     "/api/attack/technique/",
@@ -131,7 +137,7 @@ PEACE_PERMS = {"users", "audit", "settings", "view"}      # view: the platforms'
 # the work they step out of, by its addresses: the platforms, the findings and the portals (pages and their data)
 PEACE_CLOSED = ("/services", "/findings", "/api/findings", "/advisory", "/api/advisory", "/management", "/api/mgmt/", "/review/",
                 "/api/review/", "/combinations", "/api/combos", "/definitions", "/api/kb/", "/api/notes", "/intel/", "/api/intel",
-                "/api/analyst-codes", "/api/combo-codes/", "/api/attack", "/api/beacon/",
+                "/api/analyst-codes", "/api/combo-codes/", "/api/attack", "/api/beacon/", "/unusual", "/api/unusual",
                 # the platforms' host-level data (review 2026-11-13: these answered an admin in Peace of mind, complete
                 # lists and the hosts CSV included); the Overview needs none of them (the map's stream stays: the page
                 # polls it behind the Overview, and Peace of mind sees it masked)
@@ -1006,7 +1012,7 @@ def install(app, base_dir, logger):
                 # the platform's files (scripts, styles, images): for anyone signed in, whatever their role
                 if p.startswith("/static/"):
                     return None
-                if g.user.get("peace") and not p.startswith(("/api/me", "/admin", "/api/admin", "/audit")):
+                if g.user.get("peace") and not p.startswith((*OWN_PATHS, "/admin", "/api/admin", "/audit")):
                     if p.startswith(PEACE_CLOSED):
                         if p.startswith("/api/"):
                             return jsonify(error="Peace of mind is on: Admin, the audit log, Settings and the Overview only."), 403
@@ -1025,7 +1031,7 @@ def install(app, base_dir, logger):
                         if p.startswith("/api/"):
                             return jsonify(error=why), 403
                         return render_template("denied.html", message=why), 403
-                if not p.startswith(("/api/me", "/admin", "/api/admin", "/audit")) and "view" not in g.user["perms"]:
+                if not p.startswith((*OWN_PATHS, "/admin", "/api/admin", "/audit")) and "view" not in g.user["perms"]:
                     # management: only the management portal (the start page sends them there)
                     if MANAGEMENT_ONLY in g.user["perms"] and not ({"definitions", "networks"} & g.user["perms"]):
                         if p.startswith(MANAGEMENT_PATHS):
@@ -1083,6 +1089,11 @@ def install(app, base_dir, logger):
         u = getattr(g, "user", None) or {}
         return bool(u.get("automation")) or not u.get("persist") or _now() - u.get("created", 0) < 12 * 3600
 
+    def passkeys_public():
+        """Passkeys are required here: a public installation (ACCESS_MODE=public) with the passkey store in place."""
+        import security
+        return bool(PASSKEYS.get("store")) and security.access_mode() == "public"
+
     @app.context_processor
     def _user():
         u = getattr(g, "user", None) or {}
@@ -1126,6 +1137,12 @@ def install(app, base_dir, logger):
         if old:
             sessions.end(old)                                   # a new id at every login (no session fixation)
         token = sessions.create(name, ip, ua, persist=persist)
+        if passkeys_public() and PASSKEYS["store"].count(name) < PASSKEYS["min_public"]:
+            # public installation, fewer passkeys than required: the account opens only its passkey page until they
+            # are registered (stepup.py's gate; no grace, the user 2026-11-24)
+            with sessions.lock:
+                sessions.s[_h(token)]["needs_passkeys"] = True
+                sessions._persist(force=True)
         with users.lock:
             users._load()
             users.data["users"][name]["last_login"] = {"at": int(_now()), "ip": ip, "location": location(ip), "ua": ua[:200]}
@@ -1247,6 +1264,8 @@ def install(app, base_dir, logger):
                 users.save()
             throttle.ok(ip, name)
             return finish_login(name, nxt, persist=st.get("remember", False))
+        if step == "passkey":                                   # public installations: the passkey step
+            return passkey_submit(nxt)
         if step == "expired":                                   # the password expired: a new one before the session
             return expired_submit(nxt)
         if step == "enrol":                                     # after an admin reset the authenticator
@@ -1278,8 +1297,60 @@ def install(app, base_dir, logger):
         if status == "pending":
             audit.add("login_refused", user=name, detail="awaiting approval")
             return page("login.html", 403, next=nxt, view="signin", error="Your account is waiting for an admin to approve it.")
+        if passkeys_public() and PASSKEYS["store"].count(name) >= PASSKEYS["min_public"]:
+            # public installation: the passkey replaces the authenticator code (a look-alike site cannot relay it)
+            tok = new_step({"kind": "passkey", "user": name, "remember": remember})
+            return step_response(page("login.html", next=nxt, view="passkey"), tok)
         tok = new_step({"kind": "mfa", "user": name, "remember": remember})
         return step_response(page("login.html", next=nxt, view="mfa"), tok)
+
+    @app.route("/login/passkey-options", methods=["POST"])
+    def login_passkey_options():
+        """The challenge for the passkey step of a sign-in (public installations): bound to that sign-in step."""
+        import passkeys as _pk
+        st, tok = get_step("passkey")
+        if not st or not PASSKEYS.get("store"):
+            return jsonify(error="The sign-in step expired. Enter your name and password again."), 401
+        rp, why = _pk.rp_of(request.host, request.is_secure)
+        if not rp:
+            return jsonify(error=why), 400
+        return jsonify(_pk.authentication_options(PASSKEYS["store"], PASSKEYS["challenges"], "login:" + _h(tok), st["user"], rp))
+
+    def passkey_submit(nxt):
+        """The passkey step of a sign-in: one of this person's passkeys signed this step's challenge."""
+        import passkeys as _pk
+        st, tok = get_step("passkey")
+        if not st or not PASSKEYS.get("store"):
+            return page("login.html", 401, next=nxt, view="signin", error="The sign-in step expired. Enter your name and password again.")
+        name = st["user"]
+        u = users.get(name)
+        if u and u.get("status", "active") != "active":
+            drop_step(tok)
+            audit.add("login_refused", user=name, detail="account no longer active at the passkey step")
+            return page("login.html", 403, next=nxt, view="signin", error="This account cannot sign in.")
+        ip, _ = client()
+        if not u or throttle.locked(ip, name):
+            return page("login.html", 429, next=nxt, view="signin", error=locked_msg(ip, name))
+        rp, origin = _pk.rp_of(request.host, request.is_secure)
+        try:
+            cred = json.loads(request.form.get("credential") or "{}")
+        except ValueError:
+            cred = {}
+        try:
+            if not rp:
+                raise ValueError(origin)
+            _pk.authenticate(PASSKEYS["store"], PASSKEYS["challenges"], "login:" + _h(tok), name, cred, rp, origin)
+        except ValueError as e:
+            throttle.failed(ip, name)
+            st["tries"] += 1
+            if st["tries"] >= 5:
+                drop_step(tok)
+            audit.add("login_failed", user=name, detail=f"passkey not accepted: {str(e)[:120]}")
+            return step_response(page("login.html", 401, next=nxt, view="passkey",
+                                      error=attempts_msg("The passkey was not accepted.", ip, name)), tok)
+        drop_step(tok)
+        throttle.ok(ip, name)
+        return finish_login(name, nxt, persist=st.get("remember", False))
 
     def expired_submit(nxt):
         """The new password for an expired one: the usual rules, not the expired one again. Then the session opens

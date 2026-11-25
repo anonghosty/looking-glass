@@ -85,6 +85,31 @@ of …"), then replays the whole day from 00:00 to 24:00. Details: [TECHNICAL_RE
 
 What each protection does: [../docs/SECURITY.md](SECURITY.md).
 
+## Connectors (OpenCTI and MISP)
+
+Set up on Settings → Connectors; how, step by step: [CONNECTORS.md](CONNECTORS.md).
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `CONNECTOR_KEY_SECRET` | set by the installer | 64 hex characters: the keys entered on Settings → Connectors are stored encrypted with it (`data/connector_keys.enc`). Without it no key can be stored, and the page says so. Changing it makes the stored keys unreadable: enter them again with **New key** |
+| `CONNECTOR_CA_FILE` | empty | your organisation's certificate authority (PEM), for an OpenCTI or MISP whose certificate it signed; empty = the system's trusted authorities. The authority's certificate needs the key usage extension |
+| `CONNECTOR_BACKFILL_DAYS` | `30` | how many past report days a target receives when it is turned on (1 to 90) |
+| `LG_TARGET_<ID>_KEY` | not set | a target's key kept in `.env` instead of the encrypted store; the exact name is on the target's card. Used in place of the stored key |
+
+## Unusual activity
+
+Counted every hour by its own service (`deploy/unusual_timer.sh install`; the guided installer sets it up).
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `UNUSUAL_WINDOW_DAYS` | `28` | the report days the normal is worked out from (7 to 90) |
+| `UNUSUAL_MIN_DEVICES` | `10` | a thread smaller than this is never suggested |
+| `UNUSUAL_RATIO` | `2.0` | how many times its normal a thread must be (before the team's decisions move it) |
+| `UNUSUAL_Z` | `4.0` | how far outside its usual day-to-day spread it must be |
+| `UNUSUAL_MIN_HISTORY_DAYS` | `7` | a thread with fewer earlier days is not judged yet |
+| `UNUSUAL_MIN_LIFT` | `2.0` | two reports together: how many times more often than chance |
+| `UNUSUAL_MAX_SECONDS`, `UNUSUAL_MAX_DEVICES` | `1800`, `3000000` | limits for one count; a day cut short is counted again at the next run |
+
 ## The database pipeline from the platform
 
 Settings → Workers shows the pipeline's settings and the Audit portal's Sender check reads its results; both find the
@@ -180,7 +205,6 @@ The control checks give evidence, not a pass or fail: the conclusion is the audi
 | `SETTLE_MAX_SECONDS` | `120` | new rows are loaded once their counts stop changing (two checks in a row), or at least this often while a pipeline run keeps adding them; only the reports that changed are read again |
 | `COUNT_EVERY_SECONDS` | `600` | with the pipeline's marks (`lg_load_stamps`), the 15-second check counts every report's rows only when a mark moved, or at least this often |
 | `MGMT_PAST_RECORDS` | `3000000` | records of past days the Executive portal keeps in memory for its 7-day baselines (roughly 200 to 300 MB per million); above it, older days are loaded from MongoDB when needed |
-| `LG_ALL_FIELDS_MAX_LINES` | `1000000` | lines at most in a combination download's all-fields CSV (one line per field of a record); its last line says when it stopped |
 | `REGISTRY_REFRESH_SECONDS` | `3600` | how often the list of reports is fully re-checked (new reports are found within 15 s anyway) |
 | `HEAVY_PER_USER` | `3` | heavy views (statistics, map, analysis, drill-down lists, regions, reports) one person may have worked on at once; more wait their turn. `0`: no limit |
 | `HEAVY_PER_MINUTE` | `240` | heavy views one person may ask for in a minute; more get 429 with Retry-After. `0`: no limit |
@@ -239,6 +263,14 @@ Created and kept by the service; private to its user and never committed:
 | `tls/` | HTTPS certificate and key (`deploy/make_tls_cert.sh`) |
 | `quarterly/<YYYYQn>/` | each quarter's reports (two PDFs, five CSVs), `status.json` (VALID or NOT VALID, every accuracy check, the dates), `summary.json` (the counts per network and report the next quarter compares against; no address; kept for ever), `purge_permit.json` (only while a VALID report allows the purge and the purge is turned on) and `purge_result.json` (what the purge deleted); beside them `purge_confirmed.json`, the purge's switch (off until an administrator turns it on in Settings → Quarterly). Owner-only. Back it up with the rest of `data/`: after the purge, these reports are the quarter's record |
 | `quarterly/state.json` | the day the quarterly report was first installed (only quarters ending after it are made by themselves) |
+| `connectors.json` | the connector targets (no keys) |
+| `connector_keys.enc` | the connector keys, encrypted with `CONNECTOR_KEY_SECRET`. Owner-only |
+| `connectors_state.json` | what was sent, per target and day |
+| `connectors_sent/` | the objects sent to OpenCTI, kept to revoke them later. Owner-only |
+| `connectors_log.jsonl` | every send, retry, revocation and failure |
+| `unusual/days/` | one summary per report day for unusual activity: counts only, no address |
+| `unusual/suggestions.json` | the latest unusual-activity suggestions |
+| `unusual/decisions.json` | confirmed, dismissed, and what each report learned. Owner-only |
 
 Shipped with the code (curated reference data, replaced by updates): `infections.json` (what each infection is and
 what to do about it, with evidence), `issues.json` (the services issues that are not CVEs) and `service_reports.json`

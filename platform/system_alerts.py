@@ -185,6 +185,9 @@ class Alerts:
         out += self._sender_check(now)
         out += self._decoding_asks()
         out += self._signups()
+        out += self._public_signins(now)
+        out += self._no_caddy_internal(now)
+        out += self._connectors_paused(now)
         out += self._small_traces(now)
         out += self._addresses(now)
         out += count_alerts(now)
@@ -270,6 +273,81 @@ class Alerts:
         return [{"key": f"signup:{round(newest)}", "problem": True, "title": title,
                  "text": (f"waiting for your approval: {who}. On the Admin page, approve each with a role, or refuse."),
                  "at": newest, "link": "/admin"}]
+
+    def _public_signins(self, now):
+        """An internal installation (ACCESS_MODE local or private) that sees sign-ins from public internet addresses in
+        the last 7 days (the user, 2026-11-24): it is reachable from outside (a port forward, a proxy), but checks people
+        with authenticator codes only, which a look-alike site can relay. Close it off, or switch it to public, which
+        requires passkeys."""
+        import ipaddress
+        spec = str(self.env.get("VIEWER_NETWORKS") or "").strip().lower()
+        mode = str(self.env.get("ACCESS_MODE") or "").strip().lower()
+        if spec in ("any", "*", "all", "0.0.0.0/0") or mode == "public":
+            return []
+        users = (_read_json(os.path.join(self.data, "users.json")) or {}).get("users") or {}
+        now = now or time.time()
+        seen = []
+        for name, u in users.items():
+            last = (u or {}).get("last_login") or {} if isinstance(u, dict) else {}
+            try:
+                at, ip = float(last.get("at") or 0), ipaddress.ip_address(str(last.get("ip") or "").split("%")[0])
+            except ValueError:
+                continue
+            if now - at < 7 * 86400 and ip.is_global and not str(name).startswith("lg-selftest"):
+                seen.append((at, str(ip), str(name)))
+        if not seen:
+            return []
+        seen.sort()
+        at, ip, name = seen[-1]
+        return [{"key": f"public-signin:{ip}", "problem": True,
+                 "title": "Sign-ins from the internet on an internal installation",
+                 "text": (f"{len(seen)} sign-in(s) in the last 7 days came from public internet addresses, the latest {ip} "
+                          f"({name}). This installation is set to {mode or 'local'} access, so it checks people with "
+                          "authenticator codes only. Close it off from the internet, or switch it to public access, which "
+                          "requires passkeys (docs: Configuration, ACCESS_MODE)."),
+                 "at": at, "link": "/settings#configuration"}]
+
+    def _connectors_paused(self, now):
+        """A connector target that stopped sending (connectors_worker.py pauses it when its checks before a send fail, or
+        after three failed sends in a row): one alert per target and reason, until an administrator turns it on again."""
+        import hashlib
+        targets = (_read_json(os.path.join(self.data, "connectors.json")) or {}).get("targets") or {}
+        out = []
+        for tid, t in targets.items():
+            why = str((t or {}).get("paused") or "")
+            if not why:
+                continue
+            kind = {"opencti": "OpenCTI", "misp": "MISP"}.get(t.get("kind"), t.get("kind") or "")
+            out.append({"key": f"connector-paused:{tid}:{hashlib.sha256(why.encode()).hexdigest()[:10]}", "problem": True,
+                        "title": f"Connector paused: {t.get('name') or tid} ({kind})",
+                        "text": f"{why} Nothing is sent to it until the cause is fixed on the platform and the target is turned "
+                                "on again (Settings, Connectors).",
+                        "at": (t.get("last") or {}).get("at") or now, "link": "/settings#connectors"})
+        return out
+
+    CADDYFILE = "/etc/caddy/Caddyfile"
+
+    def _no_caddy_internal(self, now):
+        """An internal installation (ACCESS_MODE=private) with no Caddy in front (the user, 2026-11-24, decision C2a): its
+        own server faces the office network, where a few deliberately slow connections from inside can hold it up. Said
+        again every day until Caddy is in front; nothing stops working meanwhile."""
+        mode = str(self.env.get("ACCESS_MODE") or "").strip().lower()
+        if mode != "private":
+            return []
+        try:
+            with open(self.CADDYFILE, encoding="utf-8") as f:
+                if "Managed by Looking Glass" in f.readline():
+                    return []
+        except OSError:
+            pass
+        day = time.strftime("%Y-%m-%d", time.gmtime(now))
+        return [{"key": f"no-caddy-internal:{day}", "problem": True,
+                 "title": "This internal installation has no Caddy in front",
+                 "text": ("Looking Glass's own server answers the network directly, so a few deliberately slow connections from "
+                          "inside can hold it up for everyone. Run the installer again with the same answers: it now puts Caddy "
+                          "in front and keeps your settings (docs: Installation, Caddy in front). Nothing stops working "
+                          "meanwhile; this reminder comes every day until then."),
+                 "at": now, "link": "/settings#monitor"}]
 
     def _small_traces(self, now):
         """Someone ran many small Trace a leak searches (at most 3 lines or addresses each) within 24 hours: one or two addresses at a

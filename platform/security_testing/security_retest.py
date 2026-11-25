@@ -32,6 +32,88 @@ B = ("https" if TLS else "http") + f"://127.0.0.1:{PORT}"
 users = Users(os.path.join(ROOT, "data", "users.json"))
 
 
+def _access_mode():
+    """This installation's ACCESS_MODE, as security.py reads it (.env, then the environment)."""
+    try:
+        from dotenv import dotenv_values
+        v = dotenv_values(os.path.join(ROOT, ".env")).get("ACCESS_MODE")
+    except Exception:  # noqa: BLE001  (no python-dotenv: the environment only)
+        v = None
+    if v is not None:
+        os.environ.setdefault("ACCESS_MODE", v)
+    sys.path.insert(0, ROOT)
+    import security as _s
+    return _s.access_mode()
+
+
+# A public installation (ACCESS_MODE=public) requires two passkeys per account, at sign-in and before high-value actions
+# (passkeys.py, stepup.py). The temporary accounts then register two passkeys made by this test (SoftKey below: a key
+# pair kept in memory and thrown away at the end), through the same pages a browser uses. Passkeys need the site's name,
+# never a bare address, so every request to this installation presents itself as localhost (allowed by security.py's
+# host check, and by browsers for passkeys); it still connects to 127.0.0.1.
+PUBLIC = _access_mode() == "public"
+NAME_HOST = f"localhost:{PORT}"
+ORIGIN = ("https" if TLS else "http") + "://" + NAME_HOST
+PK = {}     # account -> [SoftKey, ...] registered by this run
+
+
+def _b64(b):
+    import base64
+    return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+
+
+class SoftKey:
+    """A passkey made by this test: an ES256 key pair in memory, answering as an authenticator does (no attestation,
+    the person present and verified). Registered only for the temporary accounts; nothing of it is written anywhere."""
+
+    def __init__(self):
+        from cryptography.hazmat.primitives.asymmetric import ec
+        self._ec = ec
+        self.key = ec.generate_private_key(ec.SECP256R1())
+        self.cid = secrets.token_bytes(32)
+        self.count = 0
+
+    def _auth_data(self, rp_id, attested):
+        import hashlib
+        self.count += 1
+        flags = 0x01 | 0x04 | (0x40 if attested else 0)            # user present, user verified, (credential data)
+        ad = hashlib.sha256(rp_id.encode()).digest() + bytes([flags]) + self.count.to_bytes(4, "big")
+        if attested:
+            import cbor2
+            n = self.key.public_key().public_numbers()
+            cose = cbor2.dumps({1: 2, 3: -7, -1: 1, -2: n.x.to_bytes(32, "big"), -3: n.y.to_bytes(32, "big")})
+            ad += bytes(16) + len(self.cid).to_bytes(2, "big") + self.cid + cose
+        return ad
+
+    def _client_data(self, kind, challenge):
+        return json.dumps({"type": kind, "challenge": challenge, "origin": ORIGIN, "crossOrigin": False}).encode()
+
+    def create(self, opts):
+        """The answer to /api/passkeys/options (a new passkey)."""
+        import cbor2
+        cd = self._client_data("webauthn.create", opts["challenge"])
+        att = cbor2.dumps({"fmt": "none", "attStmt": {}, "authData": self._auth_data(opts["rp"]["id"], True)})
+        return {"id": _b64(self.cid), "rawId": _b64(self.cid), "type": "public-key", "authenticatorAttachment": "platform",
+                "response": {"clientDataJSON": _b64(cd), "attestationObject": _b64(att), "transports": ["internal"]},
+                "clientExtensionResults": {}}
+
+    def get(self, opts):
+        """The answer to a sign-in's or a confirmation's challenge."""
+        import hashlib
+        from cryptography.hazmat.primitives import hashes
+        cd = self._client_data("webauthn.get", opts["challenge"])
+        ad = self._auth_data(opts["rpId"], False)
+        sig = self.key.sign(ad + hashlib.sha256(cd).digest(), self._ec.ECDSA(hashes.SHA256()))
+        return {"id": _b64(self.cid), "rawId": _b64(self.cid), "type": "public-key",
+                "response": {"clientDataJSON": _b64(cd), "authenticatorData": _b64(ad), "signature": _b64(sig)},
+                "clientExtensionResults": {}}
+
+
+def _passkey_store():
+    import passkeys as _pk
+    return _pk.Store(os.path.join(ROOT, "data", "passkeys.json"))
+
+
 def _restart_service():
     """Only for an older service without the reset request below: restart it (a few seconds unreachable)."""
     import subprocess
@@ -127,10 +209,57 @@ def client():
     return op, jar
 
 
-def req(op, path, data=None, headers=None, method=None, base=B):
+OPS = {}    # id(opener) -> (account, authenticator secret): the fresh check before high-value actions (stepup.py)
+
+
+def req(op, path, data=None, headers=None, method=None, base=B, stepup=True):
+    """A request; a high-value one the server refuses until the person confirms (stepup.py) is confirmed with a fresh
+    authenticator code, as a person would, and sent once more (stepup=False: the refusal itself, unanswered)."""
+    out = _req(op, path, data, headers, method, base)
+    if stepup and out[0] == 403 and id(op) in OPS and '"stepup"' in out[2]:
+        m = (method or ("POST" if data is not None else "GET")).upper()
+        grant = _stepup(op, m, urllib.parse.urlsplit(path).path)
+        if grant is not None:
+            h = dict(headers or {})
+            if grant:
+                h["X-LG-Stepup"] = grant
+            return _req(op, path, data, h, method, base)
+    return out
+
+
+def _stepup(op, method, path):
+    """Confirm with a fresh authenticator code (a passkey on a public installation): the grant for an every-time
+    action, "" for the 10-minute window, None when it did not work."""
+    name, secret = OPS[id(op)]
+    if PUBLIC:
+        if not PK.get(name):
+            return None
+        h = {"Content-Type": "application/json", "X-CSRF-Token": csrf(op)}
+        s, _, b = _req(op, "/api/stepup/passkey/options", b"{}", h, "POST")
+        if s != 200:
+            return None
+        s, _, b = _req(op, "/api/stepup/passkey", json.dumps({"credential": PK[name][0].get(json.loads(b)), "method": method,
+                                                               "path": path}), h, "POST")
+        return (json.loads(b).get("grant") or "") if s == 200 else None
+    for _try in range(2):             # a code used by a sign-in this test did not count: the next step then
+        step = int(time.time() // 30)
+        while step <= LAST.get(name, -1):
+            time.sleep(30 - time.time() % 30 + 0.5)
+            step = int(time.time() // 30)
+        s, _, b = _req(op, "/api/stepup/code", json.dumps({"code": totp_at(secret, step), "method": method, "path": path}),
+                       {"Content-Type": "application/json", "X-CSRF-Token": csrf(op)}, "POST")
+        LAST[name] = step
+        if s == 200:
+            return json.loads(b).get("grant") or ""
+    return None
+
+
+def _req(op, path, data=None, headers=None, method=None, base=B):
     body = None
     h = dict(headers or {})
     h.setdefault("X-Forwarded-For", "127.0.0.1")   # this computer; needed behind a reverse proxy (proxy_guard.py)
+    if PUBLIC and base == B:
+        h.setdefault("Host", NAME_HOST)             # the site's name for passkeys (see PUBLIC above); a check's own Host stays
     if isinstance(data, dict):
         body = urllib.parse.urlencode(data).encode(); h.setdefault("Content-Type", "application/x-www-form-urlencoded")
     elif isinstance(data, (bytes, str)):
@@ -147,6 +276,8 @@ def req(op, path, data=None, headers=None, method=None, base=B):
 
 def make_user(name, role):
     pw = secrets.token_urlsafe(18)
+    PK.pop(name, None)
+    _passkey_store().reset(name)        # a temporary account starts without passkeys (an interrupted run may have left some)
     users.set_password(name, pw, role)
     secret = totp_new_secret()
     codes, hashes = new_recovery_codes()
@@ -159,9 +290,41 @@ def make_user(name, role):
 LAST = {}   # name -> last 30-second step used (the server accepts each code once)
 
 
+def _enrol_passkeys(op, name):
+    """A public installation: right after the first sign-in the account opens only Your account until it has two
+    passkeys; register them as a person would (/api/passkeys/options, then /api/passkeys). True when it has two."""
+    keys = PK.setdefault(name, [])
+    h = {"Content-Type": "application/json", "X-CSRF-Token": csrf(op)}
+    while len(keys) < 2:
+        s, _, b = _req(op, "/api/passkeys/options", b"{}", h, "POST")
+        if s != 200:
+            return False
+        k = SoftKey()
+        s, _, b = _req(op, "/api/passkeys", json.dumps({"credential": k.create(json.loads(b)), "name": f"Retest key {len(keys) + 1}"}),
+                       h, "POST")
+        if s != 200:
+            return False
+        keys.append(k)
+    return True
+
+
+def passkey_answer(op, key):
+    """The sign-in's passkey step (after the password, on a public installation): its challenge signed by key."""
+    s, _, b = _req(op, "/login/passkey-options", b"{}", {"Content-Type": "application/json"}, "POST")
+    if s != 200:
+        return None
+    return key.get(json.loads(b))
+
+
 def login(name, pw, secret, op=None, code=None, nxt="/", remember=False):
     op, jar = (op, None) if op else client()
     s1, h1, b1 = req(op, "/login", dict({"username": name, "password": pw, "next": nxt}, **({"remember": "1"} if remember else {})))
+    if PUBLIC and code is None and s1 == 200 and 'name="step" value="passkey"' in b1 and PK.get(name):
+        cred = passkey_answer(op, PK[name][0])
+        s2, h2, _ = req(op, "/login", {"step": "passkey", "credential": json.dumps(cred or {}), "next": nxt})
+        if s2 == 302:
+            OPS[id(op)] = (name, secret)
+        return op, (s2, h2.get("Location", "")), h2
     if s1 != 200 or 'name="step" value="mfa"' not in b1:
         return op, (s1, "no MFA step"), h1
     fresh = code is None
@@ -174,6 +337,10 @@ def login(name, pw, secret, op=None, code=None, nxt="/", remember=False):
     s2, h2, _ = req(op, "/login", {"step": "mfa", "code": code, "next": nxt})
     if fresh and s2 == 302:
         LAST[name] = step
+    if s2 == 302:
+        OPS[id(op)] = (name, secret)
+        if PUBLIC and len(PK.get(name, [])) < 2 and not _enrol_passkeys(op, name):
+            return op, (403, "the two passkeys could not be registered"), h2
     return op, (s2, h2.get("Location", "")), h2
 
 
@@ -249,9 +416,33 @@ try:
     if TLS:
         ok("over HTTPS: cookie is Secure and uses the __Host- prefix", "Secure" in cookie and cookie.startswith("__Host-"), cookie.split("=")[0])
     s, _, _ = req(op, "/api/clock"); ok("logged-in API access works", s == 200, str(s))
-    _, (s, _), _ = login(ADMIN, apw, asec, code=used); ok("the same code cannot be used twice (replay)", s == 401, str(s))
-    _, (s, _), _ = login(ADMIN, apw, asec, code=acodes[0]); ok("recovery code works", s == 302, str(s))
-    _, (s, _), _ = login(ADMIN, apw, asec, code=acodes[0]); ok("recovery code works only once", s == 401, str(s))
+    if not PUBLIC:
+        _, (s, _), _ = login(ADMIN, apw, asec, code=used); ok("the same code cannot be used twice (replay)", s == 401, str(s))
+        _, (s, _), _ = login(ADMIN, apw, asec, code=acodes[0]); ok("recovery code works", s == 302, str(s))
+        _, (s, _), _ = login(ADMIN, apw, asec, code=acodes[0]); ok("recovery code works only once", s == 401, str(s))
+    else:
+        # a public installation: after the first sign-in the account registered its two passkeys, and from then on the
+        # passkey replaces the authenticator code (a look-alike site cannot relay it)
+        ok("public installation: the first sign-in registered the account's two passkeys", len(PK.get(ADMIN, [])) == 2
+           and _passkey_store().count(ADMIN) == 2, str(_passkey_store().count(ADMIN)))
+        pop_, _ = client()
+        s, _, b_ = req(pop_, "/login", {"username": ADMIN, "password": apw, "next": "/"})
+        ok("public installation: after the password, the passkey step (no code is asked)",
+           s == 200 and 'name="step" value="passkey"' in b_ and 'name="step" value="mfa"' not in b_, str(s))
+        cred = passkey_answer(pop_, PK[ADMIN][0])
+        s, _, _ = req(pop_, "/login", {"step": "passkey", "credential": json.dumps(cred or {}), "next": "/"})
+        ok("password + passkey -> logged in", s == 302, str(s))
+        rop_, _ = client()
+        req(rop_, "/login", {"username": ADMIN, "password": apw, "next": "/"})
+        passkey_answer(rop_, PK[ADMIN][1])                       # a new challenge for this sign-in
+        s, _, _ = req(rop_, "/login", {"step": "passkey", "credential": json.dumps(cred or {}), "next": "/"})
+        ok("a passkey answer cannot be used twice (replay)", s == 401, str(s))
+        fop_, _ = client()
+        req(fop_, "/login", {"username": ADMIN, "password": apw, "next": "/"})
+        s, _, _ = req(fop_, "/login", {"step": "passkey", "credential": json.dumps(passkey_answer(fop_, SoftKey()) or {}), "next": "/"})
+        ok("a passkey that is not this account's is refused", s == 401, str(s))
+        s, _, b_ = req(fop_, "/login", {"step": "mfa", "code": totp_at(asec, int(time.time() // 30)), "next": "/"})
+        ok("public installation: the authenticator code cannot stand in for the passkey", s != 302, str(s))
     lock_user = "lg-selftest-lock"
     for i in range(5):
         login(lock_user, "wrong-" + str(i) * 12, asec)
@@ -386,7 +577,9 @@ try:
     ok("registration shows the QR enrolment (otpauth URI for the QR code)", s == 200 and bool(m) and 'id="qr"' in page_, str(s))
     nsec = m.group(1) if m else ""
     s, _, _ = req(reg, "/register", {"step": "enrol", "code": "000000"}); ok("wrong enrolment code refused", s == 401, str(s))
-    s, _, done = req(reg, "/register", {"step": "enrol", "code": totp_at(nsec, int(time.time() // 30))})
+    _enrol_step = int(time.time() // 30)
+    s, _, done = req(reg, "/register", {"step": "enrol", "code": totp_at(nsec, _enrol_step)})
+    LAST["lg-selftest-new"] = _enrol_step      # that code is used: the sign-in below waits for the next one
     ok("enrolment confirmed: recovery codes shown once, account pending", s == 200 and done.count('<li>') >= 8 and "waiting for approval" in done, str(s))
     _, (s, _), _ = login("lg-selftest-new", npw, nsec); ok("pending account cannot log in", s in (403, 200) and s != 302, str(s))
     u_new = users.get("lg-selftest-new") or {}
@@ -421,6 +614,9 @@ try:
     ev3 = events(nop, "/api/svc/events?latest=1&limit=50")
     _, _, home2 = req(nop, "/")
     ok("analyst: no masking flag, Demo switch available", 'data-masked' not in home2 and 'id="btnDemo"' in home2 and json.loads(req(nop, "/api/clock")[2]).get("demo_forced") is False)
+    s, _, b_ = req(nop, "/api/svc/hosts.csv", stepup=False)
+    ok("a high-value action (a complete export) is refused until the person confirms it is them (stepup.py)",
+       s == 403 and '"stepup"' in b_, f"{s} {b_[:120]}")
     if ev3 or HAVE_DATA:
         ok("analyst sees unmasked data and may export", ev3 and not any(masked(e["ip"]) for e in ev3) and req(nop, "/api/svc/hosts.csv")[0] == 200)
     else:
@@ -616,6 +812,11 @@ try:
         if mode == "local":
             ok(f"ACCESS_MODE=local: the network address {lan[0]} is refused", s in (403, -1),
                "403" if s == 403 else "not even listening on the network" if s == -1 else str(s))
+        elif s == -1:
+            # nothing answers there: the service listens on this computer only (its bind address, set at installation),
+            # so the network reaches no page at all; said, not counted (2026-11-24: a test system switched to public)
+            print(f"  info ACCESS_MODE={mode}, but Looking Glass does not listen on the network address {lan[0]} "
+                  "(its service is bound to this computer): nothing to check there")
         else:
             ok(f"ACCESS_MODE={mode}: the network address {lan[0]} reaches the public pages only", s == 200 and req(anon, "/api/clock", base=f"{'https' if TLS else 'http'}://{lan[0]}:{PORT}")[0] in (401, 403), str(s))
 except Stop as why:
@@ -626,6 +827,11 @@ finally:
     for n in (ADMIN, VIEWER, "lg-selftest-new", "lg-selftest-res", "lg-selftest-ext", "lg-selftest-inv"):
         users.data["users"].pop(n, None)
     users.save()
+    _pks = _passkey_store()
+    for n in (ADMIN, VIEWER, "lg-selftest-new", "lg-selftest-res", "lg-selftest-ext", "lg-selftest-inv"):
+        _pks.reset(n)                               # the temporary accounts' passkeys go with them
+    if PUBLIC:
+        print(f"temporary passkeys removed: {not any(_pks.count(n) for n in (ADMIN, VIEWER, 'lg-selftest-new', 'lg-selftest-res', 'lg-selftest-ext'))}")
     print(f"\ntemporary accounts removed: {not any(n in users.all() for n in (ADMIN, VIEWER, 'lg-selftest-res', 'lg-selftest-ext'))}")
 print(("\nALL PASSED" if not fails else f"\n{fails} FAILED")
       + (f" ({len(SKIPS)} skipped until reports are loaded: run it again later)" if SKIPS else ""))

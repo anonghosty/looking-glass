@@ -157,8 +157,51 @@
   function close() { back.hidden = true; box.hidden = true; document.documentElement.classList.remove("ig-open"); st = null; }
 
   // ---------------- "Looking Glass asks": one analysis box per match
-  const KIND_OF = { 1: "Both platforms", 2: "Undefined name", 3: "Two names", 4: "Two reports", 5: "Beacon vs name" };
+  const KIND_OF = { 1: "Both platforms", 2: "Undefined name", 3: "Two names", 4: "Two reports", 5: "Beacon vs name", 6: "Unusual activity" };
+  // unusual activity (unusual.py, the user 2026-11-24): a network-and-report thread, or two reports together, well above
+  // its own normal on the latest report day; counts only, never a device. Explore opens its chart and its numbers.
+  function unusualItem(x) {
+    const li = el("li", "ig-lead p6");
+    const h = el("div", "ig-lead-h");
+    h.append(el("span", "ig-lead-tag", KIND_OF[6]), el("b", "ig-lead-v", x.network || ""), el("span", "ig-lead-n", plural(x.value, "device")));
+    const say = el("div", "ig-lead-say");
+    say.append(el("p", null, x.words));
+    if (x.learned) say.append(el("p", null, x.learned));
+    li.append(h, say);
+    const go = el("button", "ig-explore"); go.type = "button";
+    go.append(svg(ICON.ask, 14), document.createTextNode("Explore"));
+    go.setAttribute("aria-expanded", "false");
+    const box = el("div", "ig-unusual-x"); box.hidden = true;
+    go.addEventListener("click", () => {
+      const open_ = box.hidden;
+      box.hidden = !open_; go.setAttribute("aria-expanded", String(open_));
+      if (!open_ || box.childNodes.length) return;
+      const ns = "http://www.w3.org/2000/svg", hist = x.history || [];
+      const s = document.createElementNS(ns, "svg");
+      s.setAttribute("viewBox", "0 0 300 64"); s.setAttribute("preserveAspectRatio", "none"); s.setAttribute("role", "img");
+      s.setAttribute("aria-label", `Devices per day; the last bar is ${x.day}, the dashed line its normal (${x.normal})`);
+      const top = Math.max(1, ...hist.map((p) => p.value), x.normal || 0), w = 300 / Math.max(1, hist.length);
+      hist.forEach((p, i) => {
+        const r = document.createElementNS(ns, "rect"), hh = Math.max(1, (p.value / top) * 58);
+        r.setAttribute("x", (i * w + w * 0.15).toFixed(2)); r.setAttribute("width", (w * 0.7).toFixed(2));
+        r.setAttribute("y", (62 - hh).toFixed(2)); r.setAttribute("height", hh.toFixed(2));
+        r.setAttribute("class", i === hist.length - 1 ? "bar today" : "bar");
+        const t = document.createElementNS(ns, "title"); t.textContent = `${p.day}: ${p.value} devices`; r.append(t); s.append(r);
+      });
+      if (x.normal != null) {
+        const y = (62 - (x.normal / top) * 58).toFixed(2), l = document.createElementNS(ns, "line");
+        l.setAttribute("x1", "0"); l.setAttribute("x2", "300"); l.setAttribute("y1", y); l.setAttribute("y2", y); l.setAttribute("class", "norm"); s.append(l);
+      }
+      const facts = [`normally about ${x.normal}`, x.new ? "new: normally none" : `${x.ratio}x its normal`];
+      if (x.lift) facts.push(`${x.lift}x more often together than chance`);
+      if (x.first_day) facts.push(`first in these weeks: ${x.first_day}`);
+      box.append(s, el("p", null, `${hist[0]?.day || ""} to ${hist[hist.length - 1]?.day || ""}: ${facts.join(" · ")}. An analyst checks the devices behind it.`));
+    });
+    li.append(go, box);
+    return li;
+  }
   function leadItem(x, current) {
+    if (x.priority === 6) return unusualItem(x);
     const li = el("li", `ig-lead p${x.priority}`);
     // header: what kind of match, what Looking Glass concludes, how much evidence
     const h = el("div", "ig-lead-h");
@@ -1009,6 +1052,12 @@
       else card.hidden = true;
       return;
     }
+    // …and what is unusual on the latest report day (unusual.py): listed first, as kind 6; a page that cannot read it
+    // (or an installation where it has not run) shows the other matches as before
+    try {
+      const u = await get("/api/unusual");
+      d.leads = (u.suggestions || []).map((x) => ({ ...x, priority: 6, names: [] })).concat(d.leads);
+    } catch { /* the other matches stand on their own */ }
     if (!d.leads.length) {
       // the user's words (2026-11-15): "Looking Glass has nothing to ask"; and how much it compared, so a day that holds
       // only its first reports is said to (2026-11-15: after a restart it compared one day's first five reports)
@@ -1063,7 +1112,7 @@
         if (!more.hidden) easeIn(more, Math.min(5, ul.children.length) + 1);
       }
     };
-    for (const p of [0, 5, 1, 2, 3, 4]) {           // 5: a decoded beacon contradicts its name (listed first)
+    for (const p of [0, 6, 5, 1, 2, 3, 4]) {        // 6: unusual activity; 5: a decoded beacon contradicts its name
       const n = p ? d.leads.filter((x) => x.priority === p).length : d.leads.length;
       if (p && !n) continue;
       const b = el("button", `ig-lchip p${p}`); b.type = "button"; b.dataset.p = p;

@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
+[Unit]
+Description=Looking Glass connectors: send the analysis to your own OpenCTI and MISP (connectors_worker.py)
+After=network-online.target
+Wants=network-online.target
+
+# Template: deploy/connectors_timer.sh fills in @USER@ and @PROJECT@. Started every 15 minutes by its timer; a run that
+# is still busy makes the next one wait (systemd does not start a oneshot service twice).
+[Service]
+Type=oneshot
+User=@USER@
+WorkingDirectory=@PROJECT@
+ExecStart=@PROJECT@/.venv/bin/python @PROJECT@/connectors_worker.py
+TimeoutStartSec=50min
+UMask=0077
+# the same sandbox as the web service: the code read-only, data/ the one place it writes, nothing there run
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadOnlyPaths=@PROJECT@
+ReadWritePaths=@PROJECT@/data
+NoExecPaths=@PROJECT@/data
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictNamespaces=true
+SystemCallArchitectures=native
+# sockets: MongoDB, DNS and HTTPS to the platforms (netlink for the C library's name lookups)
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictRealtime=true
+ProtectClock=true
+ProtectKernelLogs=true
+ProtectHostname=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+InaccessiblePaths=-/run/user -/run/dbus -/var/run/dbus

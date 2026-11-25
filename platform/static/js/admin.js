@@ -100,6 +100,12 @@
           () => confirm(`Let ${u.name} set a new password with their authenticator code during the next 24 hours?`) && act(u.name, "allow_reset", {}, `${u.name} may reset their password for 24 hours.`));
         if (u.status !== "disabled") btn("Revoke", "warn", () => confirm(`Revoke ${u.name}? They are logged out and can no longer log in.`) && act(u.name, "revoke", {}, `${u.name} revoked.`));
         if (u.mfa) btn("Reset authenticator", "", () => confirm(`Remove ${u.name}'s authenticator? They set it up again at next login and need approval again.`) && act(u.name, "reset_mfa", {}, `${u.name}'s authenticator reset.`));
+        // a person who lost every passkey (stepup.py): they sign in with the authenticator code and register new ones
+        btn("Reset passkeys", "", async () => {
+          if (!confirm(`Remove every passkey of ${u.name}? They are signed out, sign in with their authenticator code and register new passkeys.`)) return false;
+          try { const j = await post(`/api/admin/users/${encodeURIComponent(u.name)}/passkeys/reset`, {}); banner(`${u.name}'s passkeys reset (${j.removed || 0} removed).`); loadUsers(); return true; }
+          catch (e) { banner(window.LGLoader.errorText(e, true), true); return false; }
+        });
         btn("Delete", "danger", () => confirm(`Delete the account ${u.name}? This cannot be undone.`) && act(u.name, "delete", {}, `${u.name} deleted.`));
       }
       tr.append(name, st, roleTd, mfa, reg, last, ses, actTd); tb.append(tr);

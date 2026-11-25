@@ -5,7 +5,7 @@
 ''''exec "$(dirname -- "$0")/../.venv/bin/python" "$0" "$@" # '''
 """The Overview's greeting (greetings.py), in-process, on a throwaway file: the first time it says "Greetings, <first
 name>! Welcome to Looking Glass", after that one of the 30 greetings; always the person's name, never their username
-(no name entered: "there"); a name with markup is shown as text; every greeting is short enough to fit.
+(no name entered: "there", and only the greetings that open with a salutation); a name with markup is shown as text; every greeting is short enough to fit.
 Usage: tests/check_greetings.py"""
 import os, sys, tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -58,6 +58,10 @@ try:
     ok("…always the first name", all(greet("lg-g-ike")[1] == "Ike" for _ in range(5)))
     x = greet("lg-g-noname")
     ok("no name entered: never the username", x[1] == "there" and "lg-g-noname" not in "".join(x[:3]), "".join(x[:3]))
+    odd = {x[0] + "{name}" + x[2] for x in (greet("lg-g-noname") for _ in range(120)) if not x[0]}
+    ok("…and only greetings that open with a salutation (never a sentence starting 'there,')", not odd, ", ".join(sorted(odd))[:200])
+    few = {r: len(greetings.without_name(v)) for r, v in list(greetings.ROLE_GREETINGS.items()) + [("general", greetings.GREETINGS)]}
+    ok("…every role keeps at least 8 of them, so the greeting still varies", min(few.values()) >= 8, str(few))
     with A.app.test_request_context("/overview"):
         g.user = {"user": "lg-g-evil", "role": "researcher", "perms": {"definitions"}, "csrf": "t"}
         html = render_template("overview.html", lg_perms=["definitions"], lg_user="lg-g-evil", lg_role="researcher", lg_csrf="t", lg_peace=False)

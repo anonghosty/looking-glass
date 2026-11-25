@@ -237,6 +237,18 @@ for shown, p in sorted(files.items()):
     if k == "block" and not text.startswith("/*"):
         bad_top.append(f"{shown}: the comment is not at the top")
 
+# a file served before sign-in that the release adds, still only a held copy (LG_HELD_DIR): read that copy
+_held = os.environ.get("LG_HELD_DIR", "")
+for shown in sorted(p for p in PUBLIC if p.endswith((".js", ".css")) and p not in public_seen):
+    hp = os.path.join(_held, os.path.basename(shown) + ".new") if _held else ""
+    if hp and os.path.exists(hp):
+        text = open(hp, encoding="utf-8-sig").read()
+        public_seen.append(shown)
+        if PRODUCT in text:
+            public_named.append(shown + " (held copy)")
+        if not any(L2_PUBLIC in ln for ln in text.splitlines()[:HEAD_LINES]):
+            missing.append(f"{shown} (held copy; served before sign-in: needs '{L2_PUBLIC}')")
+
 total = sum(n_by_kind.values())
 print(f"  {total} source files read: " + ", ".join(f"{n} {k}-comment" for k, n in sorted(n_by_kind.items())))
 ok("there are source files to check (the file list was found)", total > 100, str(total))

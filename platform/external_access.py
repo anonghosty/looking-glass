@@ -7,7 +7,7 @@ signed-in account needs.
 2. Publicly accessible / vulnerable services (/services) and the APIs it calls.
 3. Abused or Compromised (/intelligence), in its masked view (intelligence.py, masked_fields.intelligence_row).
 Plus: the Overview over the map (/?intro=1, its glossary included), the sign-in welcome, the account's own
-details (/api/me), the tour's memory, the bell, the platform's files (/static/), signing in and out (public paths).
+details (/api/me) and passkeys (/account, ACCOUNT), the tour's memory, the bell, the platform's files (/static/), signing in and out (public paths).
 
 Everything else is refused on the server, pages and APIs alike, by auth.py's sign-in gate (_require_login), which
 asks refused(path) on every request of such an account, before any page or API runs. The list is an allow-list of
@@ -22,6 +22,7 @@ so renaming or copying the role cannot widen what such an account opens. A role 
 is_external(perms) -> bool      refused(path) -> None (allowed) or the reason (refused)
 install(app) registers the templates' lg_external(perms), the same test (features.py).
 """
+import re
 
 EXTERNAL_PERMS = frozenset({"view"})
 
@@ -48,7 +49,14 @@ SERVICES_API = frozenset({"/api/svc/clock", "/api/svc/detail", "/api/svc/drill",
 # Not the export, not a host's cross-view, not the reveal of leaked accounts (intelligence.py refuses those too)
 INTELLIGENCE_API = frozenset({"/api/intelligence", "/api/intelligence/report", "/api/intelligence/totals"})
 
-ALLOWED = PAGES | COMMON_API | MAP_API | SERVICES_API | INTELLIGENCE_API
+# every account's own passkeys and the fresh check before a high-value action (stepup.py, 2026-11-24): on a public
+# installation an external account registers its passkeys like everyone else; the check itself opens nothing
+ACCOUNT = frozenset({"/account", "/api/passkeys", "/api/passkeys/options", "/api/stepup/status", "/api/stepup/code",
+                     "/api/stepup/passkey/options", "/api/stepup/passkey"})
+# its own passkeys by id: rename or remove (exactly this shape)
+ACCOUNT_RX = re.compile(r"/api/passkeys/[A-Za-z0-9_-]{1,16}/(rename|remove)\Z")
+
+ALLOWED = PAGES | COMMON_API | MAP_API | SERVICES_API | INTELLIGENCE_API | ACCOUNT
 
 REFUSED = "External accounts open the two platforms and Abused or Compromised only."
 
@@ -64,7 +72,7 @@ def is_external(perms):
 def refused(path):
     """None when an external account may open this path, else the reason. Exact paths only: /api/insight is allowed,
     /api/insight/report (the PDF) is not. The platform's files are always served."""
-    if path in ALLOWED or path.startswith("/static/"):
+    if path in ALLOWED or path.startswith("/static/") or ACCOUNT_RX.match(path):
         return None
     return REFUSED
 

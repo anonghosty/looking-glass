@@ -443,7 +443,7 @@ v_lg_port() {  # free, or already a Looking Glass service (a re-run); never one 
   [[ $BROWSER_BLOCKED == *" $1 "* ]] && { echo "Browsers refuse to open port $1 (Chrome, Edge and Firefox show ERR_UNSAFE_PORT). Choose another, for example $(safe_free_port)."; return 1; }
   in_use "$1" || return 0
   # Caddy in front of an earlier installation (deploy/caddy_front.sh) listens on the public port: a re-run keeps it
-  head -1 /etc/caddy/Caddyfile 2>/dev/null | grep -q 'Managed by Looking Glass' && grep -qE "^https://[^ ]*:$1 \{" /etc/caddy/Caddyfile && return 0
+  head -1 /etc/caddy/Caddyfile 2>/dev/null | grep -q 'Managed by Looking Glass' && grep -qE "^https://[^ ]*:$1 \{|^https://:$1 \{" /etc/caddy/Caddyfile && return 0
   local s; for s in looking-glass threatmap; do
     systemctl show -p ExecStart --value "$s" 2>/dev/null | grep -qE -- "--bind [^ ]*:$1( |;|$)" && [ "$(stat -c %U "$PF_DIR")" = "$(id -un)" ] && [ "$s" = looking-glass ] && return 0
   done
@@ -1337,13 +1337,14 @@ A free certificate (for example from Let's Encrypt) or a bought one both work." 
       domain     "A certificate for a domain name, with Caddy in front"
     HTTPS="$REPLY"
   elif [ "$ACCESS_MODE" != local ]; then
-    ask_menu HTTPS "HTTPS" "Other computers must use HTTPS to sign in. How?
+    # an internal network too has Caddy in front (the user, 2026-11-24): a few deliberately slow connections from inside
+    # could otherwise hold Looking Glass up. So no proxy of your own and no "No HTTPS" here either.
+    ask_menu HTTPS "HTTPS" "Other computers must use HTTPS to sign in, with Caddy in front of Looking Glass (set up here;
+Looking Glass itself listens on this computer only). Which certificate?
 (A self-signed certificate covers this computer's names and its addresses as they are now: give the
 server a fixed address or a name people use, or make it again after a change: deploy/make_tls_cert.sh)" selfsigned \
-      selfsigned "Certificate made here (self-signed; trust it on each screen)" \
-      domain     "A certificate bought for a domain name" \
-      proxy      "A reverse proxy here does HTTPS (Caddy / nginx; you set it up)" \
-      none       "No HTTPS: closed lab only (passwords readable on the network)"
+      selfsigned "Certificate made here (self-signed; trust it on each screen), with Caddy in front" \
+      domain     "A certificate bought for a domain name, with Caddy in front"
     HTTPS="$REPLY"
   fi
   if [ "$ACCESS_MODE" != local ]; then
@@ -1381,7 +1382,7 @@ Leave empty if none." "" ""; ALLOWED_HOSTS="$REPLY"
   in_use "$LG_PORT" && passed "Port $LG_PORT is used by Looking Glass itself (a re-install): it will be kept." \
                     || passed "Port $LG_PORT is free for Looking Glass."
   PUBLIC_PORT=""
-  if [ "$HTTPS" = domain ]; then
+  if [ "$HTTPS" = domain ] || [ "$HTTPS" = selfsigned ]; then
     # Caddy takes the port people use; Looking Glass itself listens on this computer only, on a port of its own, so a
     # few deliberately slow connections can never hold it up (deploy/caddy_front.sh). Behind Caddy: TRUST_PROXY=1.
     PUBLIC_PORT="$LG_PORT"; TRUST_PROXY=1
@@ -1567,10 +1568,13 @@ if [ $WANT_PF = 1 ]; then
     env_set "$PF_DIR/.env" MAPBOX_TOKEN "$MAPBOX_TOKEN"
     env_set "$PF_DIR/.env" MALPEDIA_TOKEN "$MALPEDIA_TOKEN"
     env_set "$PF_DIR/.env" REF_SECRET "$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+    # the connectors' stored keys are encrypted under this (connectors.py); the service can read .env, never change it
+    env_set "$PF_DIR/.env" CONNECTOR_KEY_SECRET "$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
   fi
   gauge 60 "Setting up the platform's Python environment and packages..."
   # --no-sources: the name sources are downloaded below as a step of their own, which never stops the installation
-  iargs=(--port "$LG_PORT" --name "$SERVICE_NAME" --no-sources); [ "$ACCESS_MODE" != local ] && [ "$HTTPS" != proxy ] && [ "$HTTPS" != domain ] && iargs+=(--network)
+  # Looking Glass never listens on the network itself: locally it serves this computer, otherwise Caddy is in front
+  iargs=(--port "$LG_PORT" --name "$SERVICE_NAME" --no-sources)
   run "platform install (deploy/install.sh)" bash -c "cd '$PF_DIR' && deploy/install.sh ${iargs[*]}"
   # MISP Galaxy and MITRE ATT&CK (public files from GitHub): what explains malware names Malpedia and the researchers do
   # not, and the ATT&CK techniques of reports, advisories and CVEs. Refreshed weekly by cron (deploy/install.sh step 5).
@@ -1614,19 +1618,26 @@ if [ $WANT_PF = 1 ]; then
   fi
   PF_URL="$scheme://localhost:$LG_PORT"
   FW_NOTE=""
-  if [ "$HTTPS" = domain ]; then
+  if [ -n "$PUBLIC_PORT" ]; then
     # Caddy in front (deploy/caddy_front.sh): installed from its signed repository (the key checked by fingerprint),
-    # the same certificate, strict time limits for slow connections; Looking Glass stays on 127.0.0.1:$LG_PORT
+    # the same certificate, strict time limits for slow connections; Looking Glass stays on 127.0.0.1:$LG_PORT.
+    # A domain's certificate (public, or internal with one), or an internal installation's own (--internal).
     gauge 79 "Putting Caddy in front of Looking Glass on port $PUBLIC_PORT..."
-    cfargs=(setup --project "$PF_DIR" --domain "$TLS_DOMAIN" --public-port "$PUBLIC_PORT" --backend-port "$LG_PORT")
+    if [ "$HTTPS" = domain ]; then
+      cfargs=(setup --project "$PF_DIR" --domain "$TLS_DOMAIN" --public-port "$PUBLIC_PORT" --backend-port "$LG_PORT")
+    else
+      cfargs=(setup --project "$PF_DIR" --internal --public-port "$PUBLIC_PORT" --backend-port "$LG_PORT")
+    fi
     [ -n "${LG_CA_BUNDLE:-}" ] && cfargs+=(--ca-bundle "$LG_CA_BUNDLE")
     run "Caddy in front (port $PUBLIC_PORT)" sudo bash "$PF_DIR/deploy/caddy_front.sh" "${cfargs[@]}"
     # the firewall: when ufw is on, the HTTPS port is opened (Caddy listens on no other port); otherwise say so
     if command -v ufw >/dev/null 2>&1 && sudo ufw status 2>/dev/null | grep -q "^Status: active"; then
       run "firewall: allow $PUBLIC_PORT/tcp" sudo ufw allow "$PUBLIC_PORT/tcp" comment "Looking Glass HTTPS"
     else
-      FW_NOTE="No active ufw firewall here: make sure only port $PUBLIC_PORT (HTTPS) of this server is open to the internet."
+      FW_NOTE="No active ufw firewall here: make sure only port $PUBLIC_PORT (HTTPS) of this server is open$([ "$ACCESS_MODE" = public ] && echo " to the internet" || echo " on your network")."
     fi
+  fi
+  if [ "$HTTPS" = domain ]; then
     # SELF_CHECK_HTTPS: the site, by its domain, over HTTPS with the certificate verified the way a browser does (no -k);
     # the domain is pointed at this computer for the check only (--resolve), so it works before DNS has changed.
     # LG_CA_BUNDLE: a private certificate authority's roots (test installations), else the system's
@@ -1638,6 +1649,17 @@ if [ $WANT_PF = 1 ]; then
       gauge_close; fail "Looking Glass runs, but https://$TLS_DOMAIN:$PUBLIC_PORT does not answer with a certificate a browser would accept. The log says why."
     fi
     PF_URL="https://$TLS_DOMAIN$([ "$PUBLIC_PORT" = 443 ] || echo ":$PUBLIC_PORT")"
+  elif [ -n "$PUBLIC_PORT" ]; then
+    # an internal installation through Caddy, by the name its certificate is for (caddy_front.sh checked it answers)
+    iname="$(sudo sed -n 's/^# internal: //p' /etc/caddy/Caddyfile 2>/dev/null | head -1)"
+    [[ "$iname" == *:* ]] && iname="[$iname]"
+    PF_URL="https://${iname:-localhost}$([ "$PUBLIC_PORT" = 443 ] || echo ":$PUBLIC_PORT")"
+  fi
+  # unusual activity (unusual_worker.py): its own timer, every hour; counts only, the platform's read-only account
+  gauge 81 "Setting up unusual activity (an hourly count of the report days)..."
+  log "\$ unusual activity timer (deploy/unusual_timer.sh install)"
+  if ! bg_wait sudo bash "$PF_DIR/deploy/unusual_timer.sh" install; then
+    PF_WARN="${PF_WARN:+$PF_WARN }Unusual activity is not counted yet: run sudo platform/deploy/unusual_timer.sh install."
   fi
   [ -z "$MAPBOX_TOKEN" ] && PF_WARN="No Mapbox token yet: add MAPBOX_TOKEN to platform/.env, then platform/deploy/reload.sh."
   [ -n "$SOURCES_WARN" ] && PF_WARN="${PF_WARN:+$PF_WARN }$SOURCES_WARN"

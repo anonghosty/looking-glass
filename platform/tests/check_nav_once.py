@@ -172,7 +172,9 @@ ok("app.js: no handler on the removed logo button or the intro's Settings button
    and '$("introSettings")' not in app_js, [s for s in ('$("btnIntro")', '$("introSettings")') if s in app_js])
 
 print("6. External accounts: only the two platforms and Abused or Compromised are offered (r90, external_access.py)")
-EXT_OK = {"/", "/services", "/intelligence", "/overview"}          # by page (a ?query or #part is the same page)
+# by page (a ?query or #part is the same page); Your account too: on a public installation an external account
+# registers its passkeys like everyone else (external_access.ACCOUNT, 2026-11-24)
+EXT_OK = {"/", "/services", "/intelligence", "/overview", "/account"}
 for name in ("index.html", "services.html", "intelligence.html"):
     html = render(name, "external")
     offered = sorted({re.split(r"[?#]", t)[0] for t in targets(html)} - EXT_OK - {""})

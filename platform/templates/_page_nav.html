@@ -5,7 +5,7 @@
 <script src="{{ url_for('static', filename='js/tour.js') }}" defer></script>
 {#- The header buttons of the pages beside the two platforms (Definitions, Findings, Combinations, analyst codes, Settings,
     Admin): icon buttons like the platforms', their names in the tooltip, Log out last with its label.
-    Set before including: nav_here (this page: definitions | findings | combinations | acode | settings | admin), and
+    Set before including: nav_here (this page: definitions | findings | combinations | unusual | acode | settings | admin), and
     nav_go (true on pages that guard unsaved changes: buttons with data-go instead of links). -#}
 {%- set _defs = ("settings" in lg_perms or "definitions" in lg_perms) and not lg_peace -%}
 {%- set _analyst = "unmasked" in lg_perms and "export" in lg_perms -%}
@@ -22,6 +22,8 @@
    "M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15zM21 21l-4.3-4.3M7.5 10.5h6M10.5 7.5v6"),
   ("combinations", _analyst, "/combinations", "Combinations", "Combination search: paste a combination code (LG-C-…, LG-X-…) to get exactly those devices, as PDF + CSV",
    "M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L11.8 5.8M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.4-1.4"),
+  ("unusual", "unmasked" in lg_perms and not lg_peace, "/unusual", "Unusual activity", "Unusual activity: networks and reports well above their own normal on the latest report day, suggested for your team to confirm or dismiss",
+   "M3 17l5-5 4 4 8-8M15 8h5v5"),
   ("intelligence", (lg_role in ("analyst", "admin") and _analyst or _ext) and not lg_peace, "/intelligence", "Abused or Compromised", "Abused or Compromised: compromised sites and devices, block lists, leaked accounts (Shadowserver's Intelligence reports), today against the week",
    "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"),
   ("findings", _findings, "/findings", "Findings", "Findings: researchers' notes the team follows up, from the first look to the advisory",
@@ -34,6 +36,8 @@
    "M8 4h8l3 3v13H5V4h3zM9 10h6M9 14h6M9 18h4"),
   ("admin", "users" in lg_perms, "/admin", "Admin", "Users, sessions, roles and Peace of mind",
    "M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6zM9 12l2 2 4-4"),
+  ("account", true, "/account", "Your account", "Your account: your passkeys, and how this site checks it is you",
+   "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0"),
   ("settings", "settings" in lg_perms, "/settings", "Settings", "Settings for both platforms: country and constituency",
    "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"),
 ] -%}

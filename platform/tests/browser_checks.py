@@ -128,16 +128,45 @@ PAGE_JS = """(sel) => {
   return {n, pointer, lists, cut, dup: dup.slice(0, 8)}; }"""
 
 
+_TOTP_LAST = {}          # the last 30-second step used per account: each code works once (sign-in and step-up alike)
+
+
 def totp(secret):
+    """A fresh authenticator code: never the step used last for this account, never in a step's last seconds."""
     key = base64.b32decode(secret + "=" * (-len(secret) % 8), casefold=True)
-    if 30 - int(time.time()) % 30 < 6:
-        time.sleep(7)
-    d = hmac.new(key, struct.pack(">Q", int(time.time()) // 30), hashlib.sha1).digest()
+    while 30 - int(time.time()) % 30 < 6 or _TOTP_LAST.get(secret) == int(time.time()) // 30:
+        time.sleep(1)
+    step = int(time.time()) // 30
+    _TOTP_LAST[secret] = step
+    d = hmac.new(key, struct.pack(">Q", step), hashlib.sha1).digest()
     o = d[-1] & 0x0F
     return f"{(struct.unpack('>I', d[o:o + 4])[0] & 0x7FFFFFFF) % 1_000_000:06d}"
 
 
+# the fresh check before high-value actions (stepup.py, lg-stepup.js): the sweep answers it as a person would, with
+# a fresh authenticator code, so downloads and other high-value actions carry on (internal installations ask for a code)
+STEPUP_AUTO = """(() => { const fix = () => {
+    if (!window.LGStepUp || window.LGStepUp.lgAuto) return;
+    window.LGStepUp.ask = async (info, target) => {
+      if (info.stepup !== 'code' || !window.lgStepupCode) return { ok: false };
+      const code = await window.lgStepupCode();
+      const r = await fetch('/api/stepup/code', { method: 'POST', credentials: 'same-origin', lgStepupDone: true,
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '' },
+        body: JSON.stringify({ code, ...target }) });
+      return r.ok ? r.json() : { ok: false };
+    };
+    window.LGStepUp.lgAuto = true; };
+  document.addEventListener('DOMContentLoaded', fix); setInterval(fix, 250); })();"""
+
+
+_STEPUP_CTX = set()
+
+
 def sign_in(ctx, acc):
+    if acc.get("secret") and id(ctx) not in _STEPUP_CTX:
+        ctx.expose_function("lgStepupCode", lambda: totp(acc["secret"]))
+        ctx.add_init_script(STEPUP_AUTO)
+        _STEPUP_CTX.add(id(ctx))
     pg = ctx.new_page()
     pg.goto(urljoin(BASE, "/login"))
     with pg.expect_navigation():

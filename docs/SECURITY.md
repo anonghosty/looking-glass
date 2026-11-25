@@ -74,6 +74,24 @@ The sign-in card opens on a choice: **Sign in** or **Create an account**, plus *
 - Pending accounts are told they await approval; revoked accounts are told they have been revoked (only after the
   right password).
 
+### Passkeys and the fresh check
+- **Passkeys (WebAuthn / FIDO2)** on installations open to the internet (`ACCESS_MODE=public`): at sign-in they
+  replace the authenticator code, and each person registers two before anything else opens. A passkey is bound to
+  the site's real address by the browser, so a look-alike site that relays a password and a code in real time
+  (adversary in the middle) cannot relay a passkey. Looking Glass keeps only public keys and counters
+  (`data/passkeys.json`, mode 600): a stolen copy lets nobody sign in. User verification (a PIN or biometric on the
+  device) is required.
+- **A fresh check before high-value actions**, on every installation, against malware riding a signed-in browser:
+  a passkey, or a fresh authenticator code on internal installations. One check covers 10 minutes; changes to
+  accounts, roles, sign-up links, connectors and passkeys ask every time, and that confirmation is used once, for
+  that one request. The list of actions is one table on the server (`stepup.py`), checked before every request, so
+  no page can forget it. Confirmations, failures and refusals are in the audit log, and wrong codes count towards
+  the sign-in lock.
+- **An internal installation that is reached from outside.** When an installation set to `local` or `private` sees
+  sign-ins from public internet addresses, the administrators' bell says so: it is reachable from outside (a port
+  forward, a proxy) but checks people with codes a look-alike site can relay. Close it off, or switch it to
+  `public`, which requires passkeys.
+
 ### Forgot password
 - **Use my authenticator:** user name + a code from the app + **one recovery code** + a new password. Both are needed,
   so a stolen phone alone is not enough.
@@ -215,7 +233,8 @@ this route to switch the pipeline's checks off or reach the mailbox password.
 TOTP is built in: it is free, works offline and no outside service sees your sign-ins. If your staff already have
 central accounts, single sign-on through OpenID Connect is the next step: Microsoft Entra ID or Google Workspace (MFA
 and leavers managed centrally), or a self-hosted Keycloak or Authentik. The login is a separate module (`auth.py`), so
-an OpenID Connect provider can be added later.
+an OpenID Connect provider can be added later. On installations open to the internet, passkeys are required on top
+of it (above).
 
 ## 2. Session hijacking defences
 
@@ -247,6 +266,10 @@ an OpenID Connect provider can be added later.
 - **systemd sandbox:** `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=read-only`, writable only `data/`,
   `PrivateTmp`, `UMask=0077` and more. Check it with `systemd-analyze security looking-glass`.
 - **Request limits:** request line, number of header fields and field size (gunicorn), and a 64 KB body limit.
+- **Slow connections:** on every installation other computers can reach (`private` and `public`), Caddy is in front.
+  It reads each request in full under strict time limits (its headers within 10 seconds) before Looking Glass sees
+  it, and holds each address to 100 connections at once, so a few deliberately slow connections, from the internet
+  or from inside, cannot hold Looking Glass up. Looking Glass itself listens on `127.0.0.1` only.
 - **Separate database accounts:** the platform reads with a read-only MongoDB account; the pipeline has its own
   account limited to its database; the administrator account is kept root-only in `/etc/looking-glass/`.
 - **Report intake:** unpacking limits against oversized or malicious archives, report names checked before they become

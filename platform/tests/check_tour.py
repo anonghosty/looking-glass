@@ -90,6 +90,12 @@ for d in (TDIR, JDIR):
     for f in os.listdir(d):
         if f.endswith((".html", ".js")) and f != "tour.js":
             corpus += read(os.path.join(d, f))
+# a page or script the release adds, still only a held copy (no live file yet)
+if S and os.path.isdir(S):
+    for f in os.listdir(S):
+        base = f[:-4] if f.endswith(".new") else ""
+        if base.endswith((".html", ".js")) and base != "tour.js" and not any(os.path.exists(os.path.join(d, base)) for d in (TDIR, JDIR)):
+            corpus += open(os.path.join(S, f), encoding="utf-8").read()
 missing = []
 for sel, _t, _x in steps:
     for alt in sel.split(","):

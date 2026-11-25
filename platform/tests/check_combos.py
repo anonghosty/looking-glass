@@ -158,9 +158,10 @@ try:
        and oct(os.stat(os.path.join(EXPORTS, d["id"] + ".zip")).st_mode & 0o777) == "0o600")
     zf = zipfile.ZipFile(io.BytesIO(z))
     names = zf.namelist()
-    ok("the ZIP holds a PDF, the devices CSV, the records CSV and the all-fields CSV", len(names) == 4 and any(n.endswith(".pdf") for n in names)
+    ok("the ZIP holds a PDF, the devices CSV and the records CSV (no all-fields CSV: removed 2026-11-24)",
+       len(names) == 3 and any(n.endswith(".pdf") for n in names)
        and any(n.endswith("_devices.csv") for n in names) and any(n.endswith("_records.csv") for n in names)
-       and any(n.endswith("_all_fields.csv") for n in names), ", ".join(names))
+       and not any(n.endswith("_all_fields.csv") for n in names), ", ".join(names))
     pdf = zf.read(next(n for n in names if n.endswith(".pdf")))
     ok("the PDF is a PDF", pdf[:5] == b"%PDF-", f"{len(pdf):,} bytes")
     devs = zf.read(next(n for n in names if n.endswith("_devices.csv"))).decode("utf-8-sig").splitlines()
@@ -172,9 +173,6 @@ try:
     ok("…and in the devices CSV, the file an advisory sends (one cell per kind, each device's values)",
        all(f",{c}," in devs[0] for c in ("brute_force_username", "ssh_client", "request_pattern", "shadowserver_attack"))
        and devs[0].endswith("combination_code,cross_report_code"), devs[0])
-    af = zf.read(next(n for n in names if n.endswith("_all_fields.csv"))).decode("utf-8-sig").splitlines()
-    ok("the all-fields CSV: one line per field, with its readable label", af[0] == "time,ip,port,report,field,label,value" and len(af) > len(recs), f"{len(af) - 1} lines")
-    ok("…no Looking Glass internals in it (_t, _id, references)", not any(re.search(r",(_t|_id|src_ref|ip_ref),", line) for line in af[1:]))
     ok("no cell starts like a spreadsheet formula", not any(re.search(r'(^|,)"?[=+@]', line) for line in devs[1:] + recs[1:]))
     # after a restart (the search gone from memory) the copy on disk is served only if the review gate allows it NOW
     # (review 2026-11-13: the flag kept with it was a snapshot)

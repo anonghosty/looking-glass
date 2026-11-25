@@ -136,9 +136,36 @@ a time with the **Left** and **Right** arrows (**Home** and **End** for the firs
 analyse it; the time and its count are written under the chart and read out by a screen reader. A section that is
 folded shut (a finding's details, say) opens with Enter on its heading; what is inside is reached once it is open.
 
+**Shortcuts**
+
+| Where | Keys | What they do |
+|---|---|---|
+| Any page | **Tab** / **Shift+Tab** | Next or previous control |
+| | **Enter**, **Space** | Act on the control |
+| | **Escape** | Close a dialog, a menu or a drop-down |
+| The map | **L** | Show or hide the event list (not while typing in a box) |
+| | **Arrow keys**, **+** / **-** | Move and zoom the map |
+| The event and record lists | **Up** / **Down** | Move between rows |
+| | **Enter** or **Space** | Open the row's details |
+| Drop-down lists | **Up** / **Down**, **Home** / **End** | Move through the choices |
+| | Typing | Search a long list |
+| | **Enter** / **Escape** | Choose, or close without changing |
+| Intel gathered | **/** | Go to the search box |
+| | **]** or **Right** / **Down**, **[** or **Left** / **Up** | Next or previous report |
+| The guided tour | **Right** / **Left** | Next or previous step |
+| The sign-in globe | **Arrow keys**, **+** / **-** | Turn and zoom the globe |
+
+**Confirming it's you** opens a dialog with the focus already in the code box (or on **Use your passkey**): type the
+code and press **Enter**. **Escape** or **Cancel** stops the action; until then the focus stays inside the dialog.
+
+On **Unusual activity**, each card's actions (**Show the devices**, **Confirm**, **Dismiss**, **Stop watching**) are
+ordinary buttons, and **Confirm** asks for the thread's name in the browser's own box. Each chart is described in words
+for screen readers: its dates and its normal.
+
 ### Signing in
-**Sign in** asks for your user name and password, then the 6-digit code from your authenticator app. Tick
-**Stay signed in** on a computer or screen only you use (up to 5 days); otherwise the session ends when the browser
+**Sign in** asks for your user name and password, then the 6-digit code from your authenticator app. On an
+installation open to the internet, a **passkey** takes the place of the code once you have registered yours (see
+[Your account and passkeys](#your-account-and-passkeys)). Tick **Stay signed in** on a computer or screen only you use (up to 5 days); otherwise the session ends when the browser
 closes, after an hour without use, or after 12 hours. After 5 failed attempts the account waits 15 minutes; the page
 says how many attempts are left.
 
@@ -150,6 +177,39 @@ administrator gave you; any message with a sign-in link is phishing, so report i
 - **Reset it yourself:** with a code from your authenticator app plus one of your recovery codes.
 - **Ask an administrator:** the administrators are notified; one of them allows a reset in **Admin → Users**, and
   you then set a new password with your authenticator code.
+
+### Your account and passkeys
+**Your account** (in the menu of every page) shows your passkeys. A passkey is kept by your device: Windows Hello,
+Touch ID or Face ID, your phone, or a security key. Looking Glass keeps only its public half, and a look-alike site
+cannot use it: your browser offers it to the real site only.
+
+- **On an installation open to the internet**, everyone signs in with a passkey. The first time, after your password
+  and authenticator code, Looking Glass opens only Your account until you have registered **two** passkeys (for
+  example this computer and your phone, or a security key), so losing one device does not lock you out. You cannot
+  remove a passkey if that would leave you with fewer than two.
+- **On an internal installation** you sign in with your authenticator code as before, and may add a passkey to use
+  instead of the code when Looking Glass asks you to confirm. Browsers allow passkeys only on a site with a host name
+  and a trusted certificate; the page says when that is not the case.
+
+Give each passkey a name you will recognise (**Rename**), and remove one you no longer have (**Remove**). Adding or
+removing a passkey asks you to confirm it's you first. Lost all your devices? An administrator uses **Reset
+passkeys** on your account (Admin → Users); at your next sign-in you register new ones.
+
+### Confirming it's you
+Before a high-value action, Looking Glass asks you to confirm it's you: with a passkey, or with a fresh code from
+your authenticator app on an internal installation. This stops malware that has taken over your signed-in browser,
+since it has neither your device nor your phone. One confirmation covers 10 minutes of these actions:
+
+- downloading a complete or unmasked list;
+- showing leaked accounts unmasked;
+- tracing a leak;
+- changing the constituency or the configuration;
+- running the quarterly purge;
+- generating or sending an advisory.
+
+These ask **every time**, even within the 10 minutes: changing accounts, roles or sign-up links, turning on or
+changing a connector, and adding or removing a passkey. Each confirmation, and each failed one, is in the audit log;
+wrong codes count towards the sign-in lock.
 
 ### Roles
 | Role | Sees | Can |
@@ -612,7 +672,9 @@ devices carry it; analysts and admins see it at once. Each match is an analysis 
 open its intel on that report) and what Looking Glass saw, in words. Looking Glass states what it saw and leaves the
 conclusions to the researcher. At the top of the card: how many matches, names involved and names without a definition,
 and chips to show one kind of match. Values that are common to everything (stock browser user agents, "/", usernames
-such as *root*) are never raised.
+such as *root*) are never raised. It also lists **Unusual activity**: a network and report, or two reports together,
+well above its own normal on the latest report day. **Explore** opens its chart and its numbers; an analyst checks the
+devices behind it.
 
 **Explore** on a match opens exactly what Looking Glass stated. Every name and report of the match is listed, each
 worked out over **only the records that carry the indicator**. For example, a domain shared by *avalanche-generic* in
@@ -729,8 +791,7 @@ or the Findings page) is for roles that see addresses and may export:
    Accessible SSL`) and one row per record. The columns
    have fixed names, ready for enrichment and dashboards. If the search has expired (after an hour), the button runs it
    again and then downloads.
-   The ZIP also holds an **all-fields CSV**: every field of every record, one line per field, with its readable name
-   (it stops at 1,000,000 lines and says so in its last line). The devices CSV, the file an advisory sends, has one
+   The devices CSV, the file an advisory sends, has one
    column for each value the pattern analysis groups devices by: certificate SHA-256, subject and issuer, JARM, HASSH,
    SSH and server software, page hash, the usernames and passwords tried, the SSH client and the request pattern, with
    Shadowserver's own ATT&CK and CVE or the certificate facts. With them a network provider can find the same devices
@@ -930,6 +991,38 @@ They cannot download, look up a host or show accounts.
 Hosts outside the constituency (Settings) are left out everywhere on the page. Management sees the totals per group
 and their 7 days on the Executive portal, never a host.
 
+## Unusual activity (analysts)
+
+Every network and report has its own normal, and so has every pair of reports that the same devices are in on one
+day. **Unusual activity** (`/unusual`, for analysts and administrators) lists what is well above its normal on the
+latest report day. It answers *what changed*, not *what something is*.
+
+**How the normal is worked out.** For each thread (one network and one report, a report over the whole
+constituency, or two reports together), Looking Glass takes the number of devices on each of the last 28 report days.
+The normal is the middle value, so one odd day does not move it. A thread is suggested only when it is **well above
+its normal and big enough to matter**: at least twice its normal, clearly outside its usual day-to-day spread, and 10
+devices or more. A network going from 1 device to 3 is not news. Two reports together are suggested only when their
+devices are in both at least twice as often as chance would give. Days a report did not arrive are left out.
+
+**Each card** says it in plain words, for example *AS64514 Lakeside, Sinkhole HTTP: 48 devices, normally about 11
+(4.4x).* Below it: the thread's chart (each day's devices, the latest in red, the normal as a dashed line), the first
+day it appeared in these weeks, and how many earlier days were this size.
+
+- **Show the devices**: the addresses behind the card on that day, with their network and records.
+- **Open on the map** / **Open on the services platform**: the platform filtered to that report and network.
+- **Confirm**: give it a name your team uses. It moves to **Watched by your team** and is followed every day against
+  its own normal; when it jumps again, its card says *Growing again today*. **Stop watching** ends that.
+- **Dismiss**: that thread stays quiet for 30 days, unless it doubles.
+
+**It learns from your team.** Each report has its own bar. Every Dismiss of one of its threads raises the bar a step,
+every Confirm lowers it, never below three quarters or above twice the starting bar, and the card says why: *Looking
+Glass asks from 1.5x its normal for Sinkhole HTTP, after 0 dismissal(s) and 1 confirmation(s) by your team.*
+
+Confirm, Dismiss and Stop watching are in the audit log. The count runs every hour on its own (after the reports
+arrive) and follows the constituency; it keeps counts only, never an address. Researchers see the same suggestions,
+without devices, in **Looking Glass asks** on the Definitions page; management sees **Unusual this week** on the
+Executive portal.
+
 ## Management portal (Executive)
 
 ![The Executive portal](media/screens/40-executive-comms.png)
@@ -1000,6 +1093,12 @@ The same scale is printed on the portal under the 7-day baseline card and in the
 The management role has this portal, its Overview and the Findings it decides: it cannot see the platforms, lists,
 Settings or Definitions, and the permission cannot be given to any other role (the roles editor locks it; the server
 enforces it).
+
+### Unusual this week
+
+The **Unusual this week** card shows, for each day of the week, how many networks and reports were well above their
+own normal, and the strongest of the latest day in words. It covers the whole constituency and every report,
+whatever the filters. The analysts confirm or dismiss them (see Unusual activity).
 
 ## Advisories (the advisor)
 
@@ -1470,6 +1569,11 @@ CISA-certified auditor) and is **read only**: nothing on it changes anything. Ch
   evidence, what the current standards ask: RFC 6376 (DKIM), RFC 8301 (algorithms and key sizes), RFC 8463 (Ed25519),
   RFC 7489 (DMARC alignment), NIST SP 800-177 Rev. 1 (Trustworthy Email) and NIST SP 800-53 Rev. 5 SI-7 (information
   integrity). Evidence only, no verdict.
+- **Data sent out:** what Looking Glass sent to the CSIRT's own OpenCTI and MISP (Settings → Connectors). Each target
+  as it is set up (platform, address, TLP, what it receives, on, off or paused, who added it and when), then, for the
+  period, every send (report day, devices, objects, TLP), every object sent again because the platform had not taken
+  it, every revocation and every failure, with the period's totals. Looking Glass's own analysis only: never raw
+  report rows, findings, notes, names or keys. Evidence only, no verdict.
 - **Integrity and evidence:** **Verify the audit log** walks every entry. Each one carries the fingerprint (SHA-256)
   of the one before it, so a changed, inserted or removed entry breaks the chain and the check says where. It shows
   the **head** (hash@entry), and the **signed checkpoints**: the daily signed copies of the head, each found at its

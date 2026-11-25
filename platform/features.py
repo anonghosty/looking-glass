@@ -206,6 +206,47 @@ def install(app, core):
         core["attack"].ss_seen = ss_attack.Seen(store, _facts)
         out["ss_attack"] = core["attack"].ss_seen
 
+    # passkeys and the fresh check before high-value actions (stepup.py, passkeys.py; the user 2026-11-24): public
+    # installations passkeys at sign-in and before high-value actions, internal ones a fresh authenticator code; the
+    # most dangerous actions every time. Its gate runs after auth.py's sign-in check on every request.
+    if all(k in A for k in ("users", "sessions", "audit", "throttle", "csrf_ok", "fresh")):
+        import auth as _auth2
+        import stepup
+        from people import People as _People
+        out["stepup"] = stepup.install(app, {
+            "base_dir": os.path.dirname(os.path.abspath(__file__)), "users": A["users"], "sessions": A["sessions"],
+            "audit": A["audit"], "throttle": A["throttle"], "csrf_ok": A["csrf_ok"], "fresh": A["fresh"],
+            "totp_check": _auth2.totp_check, "hook": _auth2.PASSKEYS,
+            "people_name": _People(A["users"]).full_name})
+
+    # connectors (connectors.py, the user 2026-11-24): Looking Glass's own analysis pushed to the CSIRT's own OpenCTI
+    # and MISP; Settings -> Connectors sets them up (administrators, tested before saving), connectors_worker.py sends
+    if all(k in A for k in ("has_perm", "csrf_ok", "fresh", "audit")):
+        import connectors
+        out["connectors"] = connectors.install(app, {"base_dir": os.path.dirname(os.path.abspath(__file__)), "has_perm": A["has_perm"],
+                                                     "csrf_ok": A["csrf_ok"], "fresh": A["fresh"], "audit": A["audit"],
+                                                     "settings": core.get("settings"),
+                                                     "people_name": people_name if "users" in A else None})
+
+    # unusual activity (unusual.py, unusual_detect.py; the user, 2026-11-24): each network-and-report thread and each
+    # report pair against its own normal; unusual_worker.py (its own timer) counts, the Unusual activity page and the Executive
+    # card show; analysts and administrators confirm or dismiss
+    if all(k in A for k in ("has_perm", "csrf_ok", "audit")):
+        import unusual
+        from people import People as _People2
+
+        _svc_reg, _asns = core["svc"]["registry"], core.get("asns")
+
+        def _svc_label(name):
+            return next((x.get("label") or name for x in (_svc_reg.get() or []) if x.get("name") == name), name)
+
+        def _network(asn):
+            return _asns.company(asn, False) if _asns is not None else None
+        out["unusual"] = unusual.install(app, {
+            "base_dir": os.path.dirname(os.path.abspath(__file__)), "has_perm": A["has_perm"], "csrf_ok": A["csrf_ok"],
+            "audit": A["audit"], "db": core.get("db"), "settings": st, "svc_label": _svc_label, "network": _network,
+            "people_name": _People2(A["users"]).full_name if "users" in A else None})
+
     # the analyst codes' device counts worked out ahead after a start, so the Findings page does not wait for them
     # (acode_warm.py; only in the running service)
     if core.get("acodes") is not None:

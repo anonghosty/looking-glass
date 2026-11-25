@@ -18,6 +18,31 @@
    "researcher"
   ]
  },
+ "GET /account": {
+  "open_to_any_signed_in": true,
+  "opened_by": [
+   "advisory",
+   "audit",
+   "definitions",
+   "export",
+   "malpedia",
+   "management",
+   "networks",
+   "settings",
+   "unmasked",
+   "users",
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "auditor",
+   "external",
+   "management",
+   "researcher"
+  ]
+ },
  "GET /admin": {
   "open_to_any_signed_in": false,
   "opened_by": [
@@ -307,6 +332,14 @@
    "auditor"
   ]
  },
+ "GET /api/audit/connectors": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "auditor"
+  ]
+ },
  "GET /api/audit/continuity": {
   "open_to_any_signed_in": false,
   "opened_by": [],
@@ -459,6 +492,20 @@
   "roles": [
    "admin",
    "analyst"
+  ]
+ },
+ "GET /api/connectors": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/connectors/<tid>/log": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
   ]
  },
  "GET /api/diagnostics": {
@@ -941,6 +988,16 @@
    "management"
   ]
  },
+ "GET /api/mgmt/unusual-week": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "management"
+  ],
+  "roles": [
+   "admin",
+   "management"
+  ]
+ },
  "GET /api/name-sources": {
   "open_to_any_signed_in": false,
   "opened_by": [
@@ -1021,6 +1078,31 @@
   "roles": [
    "admin",
    "analyst",
+   "external",
+   "management",
+   "researcher"
+  ]
+ },
+ "GET /api/passkeys": {
+  "open_to_any_signed_in": true,
+  "opened_by": [
+   "advisory",
+   "audit",
+   "definitions",
+   "export",
+   "malpedia",
+   "management",
+   "networks",
+   "settings",
+   "unmasked",
+   "users",
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "auditor",
    "external",
    "management",
    "researcher"
@@ -1154,6 +1236,31 @@
    "admin",
    "analyst",
    "external"
+  ]
+ },
+ "GET /api/stepup/status": {
+  "open_to_any_signed_in": true,
+  "opened_by": [
+   "advisory",
+   "audit",
+   "definitions",
+   "export",
+   "malpedia",
+   "management",
+   "networks",
+   "settings",
+   "unmasked",
+   "users",
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "auditor",
+   "external",
+   "management",
+   "researcher"
   ]
  },
  "GET /api/svc/clock": {
@@ -1315,6 +1422,25 @@
    "admin",
    "analyst",
    "external"
+  ]
+ },
+ "GET /api/unusual": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "definitions"
+  ],
+  "roles": [
+   "admin",
+   "analyst",
+   "researcher"
+  ]
+ },
+ "GET /api/unusual/<tid>/devices": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
   ]
  },
  "GET /audit": {
@@ -1482,6 +1608,14 @@
    "management"
   ]
  },
+ "GET /unusual": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
  "GET /welcome": {
   "open_to_any_signed_in": false,
   "opened_by": [
@@ -1602,6 +1736,15 @@
   ]
  },
  "POST /api/admin/users/<name>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "users"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/admin/users/<name>/passkeys/reset": {
   "open_to_any_signed_in": false,
   "opened_by": [
    "users"
@@ -1785,6 +1928,41 @@
   "roles": [
    "admin",
    "analyst"
+  ]
+ },
+ "POST /api/connectors": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/connectors/<tid>/<action>": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/connectors/<tid>/scope": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/connectors/<tid>/tlp": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/connectors/test": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin"
   ]
  },
  "POST /api/copy/record": {
@@ -2054,6 +2232,106 @@
    "admin"
   ]
  },
+ "POST /api/passkeys": {
+  "open_to_any_signed_in": true,
+  "opened_by": [
+   "advisory",
+   "audit",
+   "definitions",
+   "export",
+   "malpedia",
+   "management",
+   "networks",
+   "settings",
+   "unmasked",
+   "users",
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "auditor",
+   "external",
+   "management",
+   "researcher"
+  ]
+ },
+ "POST /api/passkeys/<pid>/remove": {
+  "open_to_any_signed_in": true,
+  "opened_by": [
+   "advisory",
+   "audit",
+   "definitions",
+   "export",
+   "malpedia",
+   "management",
+   "networks",
+   "settings",
+   "unmasked",
+   "users",
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "auditor",
+   "external",
+   "management",
+   "researcher"
+  ]
+ },
+ "POST /api/passkeys/<pid>/rename": {
+  "open_to_any_signed_in": true,
+  "opened_by": [
+   "advisory",
+   "audit",
+   "definitions",
+   "export",
+   "malpedia",
+   "management",
+   "networks",
+   "settings",
+   "unmasked",
+   "users",
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "auditor",
+   "external",
+   "management",
+   "researcher"
+  ]
+ },
+ "POST /api/passkeys/options": {
+  "open_to_any_signed_in": true,
+  "opened_by": [
+   "advisory",
+   "audit",
+   "definitions",
+   "export",
+   "malpedia",
+   "management",
+   "networks",
+   "settings",
+   "unmasked",
+   "users",
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "auditor",
+   "external",
+   "management",
+   "researcher"
+  ]
+ },
  "POST /api/password-policy": {
   "open_to_any_signed_in": false,
   "opened_by": [],
@@ -2124,6 +2402,81 @@
    "admin"
   ]
  },
+ "POST /api/stepup/code": {
+  "open_to_any_signed_in": true,
+  "opened_by": [
+   "advisory",
+   "audit",
+   "definitions",
+   "export",
+   "malpedia",
+   "management",
+   "networks",
+   "settings",
+   "unmasked",
+   "users",
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "auditor",
+   "external",
+   "management",
+   "researcher"
+  ]
+ },
+ "POST /api/stepup/passkey": {
+  "open_to_any_signed_in": true,
+  "opened_by": [
+   "advisory",
+   "audit",
+   "definitions",
+   "export",
+   "malpedia",
+   "management",
+   "networks",
+   "settings",
+   "unmasked",
+   "users",
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "auditor",
+   "external",
+   "management",
+   "researcher"
+  ]
+ },
+ "POST /api/stepup/passkey/options": {
+  "open_to_any_signed_in": true,
+  "opened_by": [
+   "advisory",
+   "audit",
+   "definitions",
+   "export",
+   "malpedia",
+   "management",
+   "networks",
+   "settings",
+   "unmasked",
+   "users",
+   "view"
+  ],
+  "roles": [
+   "admin",
+   "advisor",
+   "analyst",
+   "auditor",
+   "external",
+   "management",
+   "researcher"
+  ]
+ },
  "POST /api/tour": {
   "open_to_any_signed_in": false,
   "opened_by": [
@@ -2133,6 +2486,30 @@
    "admin",
    "analyst",
    "external"
+  ]
+ },
+ "POST /api/unusual/<tid>/confirm": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "POST /api/unusual/<tid>/dismiss": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
+  ]
+ },
+ "POST /api/unusual/<tid>/untrack": {
+  "open_to_any_signed_in": false,
+  "opened_by": [],
+  "roles": [
+   "admin",
+   "analyst"
   ]
  }
 }

@@ -35,7 +35,11 @@ def ok(label, cond, info=""):
 
 
 D = os.path.join(HERE, "data")
-R = json.load(open(os.path.join(D, "attack_rules.json"), encoding="utf-8"))["rules"]
+# the release's rules: a held copy when there is one (LG_HELD_DIR: the live service re-reads data/attack_rules.json
+# when it changes, so a revision waits there until the release), else the installed file
+_held = os.path.join(os.environ.get("LG_HELD_DIR", ""), "attack_rules.json.new")
+RULES_PATH = _held if os.environ.get("LG_HELD_DIR") and os.path.exists(_held) else os.path.join(D, "attack_rules.json")
+R = json.load(open(RULES_PATH, encoding="utf-8"))["rules"]
 ss = [r for r in R if r["id"].startswith("ss-")]
 print("The page-checked rules")
 ok("there are page-checked rules", len(ss) >= 80, len(ss))
@@ -106,6 +110,32 @@ try:
     ok("…and a second sync changes nothing more", n == 0, n)
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
+
+print("The amplifier rules and the IPv4 / IPv6 pairs (2026-11-24: Open IPP)")
+amp = next((r for r in R if r["id"] == "amplifier"), None)
+ok("the generic amplifier rule lists the reports by name: it does not catch every scan report of its group",
+   amp is not None and "scan6?_.*" not in amp["match"].get("report", ""), (amp or {}).get("match"))
+rm_p = os.path.join(D, "report_map.json")
+if os.path.exists(rm_p):
+    _rm = json.load(open(rm_p, encoding="utf-8"))
+    reports, facts = _rm.get("reports") or {}, _rm.get("facts") or {}
+    tmpd = tempfile.mkdtemp(prefix="lg-attack-pairs-")
+    shutil.copy(RULES_PATH, os.path.join(tmpd, "attack_rules.json"))
+    amr = attack_map.AttackMap(tmpd, None, report_map=lambda: reports, report_defs=lambda: {})
+
+    def said(k):
+        r = amr.suggest(k)
+        return ("no fit" if r.get("nofit") else sorted(r.get("techniques") or [])) if r else "none"
+    pairs = [(m.group(1) + "_" + m.group(2), k) for k in reports for m in [re.match(r"^(\w+?)6_(.+)$", k)] if m]
+    pairs = [(a, b) for a, b in pairs if a in reports and (facts.get(a) or {}).get("url") and
+             (facts.get(a) or {}).get("url") == (facts.get(b) or {}).get("url")]
+    off = [f"{a}: {said(a)} / {b}: {said(b)}" for a, b in pairs if said(a) != said(b)]
+    ok(f"an IPv4 and an IPv6 report that share one Shadowserver page get the same suggestion ({len(pairs)} pairs)", pairs and not off, off)
+    ok("Open IPP (both): T1190, from Shadowserver's own page (no amplification there)",
+       said("scan_ipp") == ["T1190"] and (said("scan6_ipp") == ["T1190"] or "scan6_ipp" not in reports), (said("scan_ipp"), said("scan6_ipp")))
+    shutil.rmtree(tmpd, ignore_errors=True)
+else:
+    print("  (no report map here: the pairs are checked where it is)")
 
 print(f"\n{checks - len(fails)} of {checks} ATT&CK audit checks passed" + (f"; FAILED: {fails}" if fails else ""))
 sys.exit(1 if fails else 0)

@@ -59,6 +59,7 @@ html.ig-open { overflow: hidden; }
 .ig-lead::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--lc); box-shadow: 0 0 18px var(--lc); }
 .ig-lead.p1 { --lc: #e5484d; } .ig-lead.p2 { --lc: #f5b54a; } .ig-lead.p3 { --lc: #b18cf5; } .ig-lead.p4 { --lc: #5b8def; }
 .ig-lead.p5 { --lc: #2fb8a6; }
+.ig-lead.p6 { --lc: #ffb35c; }
 .ig-lead-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .ig-lead-tag { padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
   color: var(--lc); background: color-mix(in srgb, var(--lc) 14%, transparent); border: 1px solid color-mix(in srgb, var(--lc) 40%, transparent); }
@@ -106,6 +107,7 @@ html.ig-open { overflow: hidden; }
 .ig-lchip.p0 i { background: linear-gradient(135deg, #e5484d, #f5b54a, #b18cf5, #5b8def); }
 .ig-lchip.p1 { --lc: #e5484d; } .ig-lchip.p2 { --lc: #f5b54a; } .ig-lchip.p3 { --lc: #b18cf5; } .ig-lchip.p4 { --lc: #5b8def; }
 .ig-lchip.p5 { --lc: #2fb8a6; }
+.ig-lchip.p6 { --lc: #ffb35c; }
 .ig-lchip:hover { color: #fff; border-color: var(--lc); }
 .ig-lchip[aria-pressed="true"] { color: #fff; border-color: var(--lc); background: color-mix(in srgb, var(--lc) 16%, transparent); }
 .ig-lchip[aria-pressed="true"] em { color: var(--text-2); }
@@ -591,3 +593,10 @@ body.kbn-open { overflow: hidden; }
 .ig-cmp-kinds dd { margin: 0; font-family: "Geist Mono", ui-monospace, monospace; color: var(--text); overflow-wrap: anywhere; }
 .ig-cmp-kinds dd.mark { color: #f5d9a8; }
 .ig-cmp-none { margin: 0; font-size: 12px; color: var(--muted); }
+/* Looking Glass asks: unusual activity (unusual.py) - the thread's chart, opened by Explore */
+.ig-unusual-x { display: grid; gap: 8px; margin-top: 8px; }
+.ig-unusual-x svg { width: 100%; height: 64px; display: block; }
+.ig-unusual-x .bar { fill: rgba(255, 179, 92, .45); }
+.ig-unusual-x .bar.today { fill: #ff8a8f; }
+.ig-unusual-x .norm { stroke: #c9c9d2; stroke-width: 1; stroke-dasharray: 4 3; }
+.ig-unusual-x p { margin: 0; font-size: 12.5px; color: var(--muted); }

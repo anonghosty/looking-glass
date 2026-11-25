@@ -299,9 +299,15 @@ try:
     adapter = A.app.url_map.bind("localhost")
     unknown = []
     for p in sorted(X.ALLOWED):
-        try:
-            adapter.match(p, method="POST" if p == "/api/notifications/clear" else "GET")
-        except Exception:                                # noqa: BLE001
+        found = False
+        for m in ("GET", "POST"):                     # a passkey or fresh-check call is a POST only (stepup.py)
+            try:
+                adapter.match(p, method=m)
+                found = True
+                break
+            except Exception:                            # noqa: BLE001
+                pass
+        if not found:
             unknown.append(p)
     ok("every path on the allow-list is a route of the app", not unknown, unknown)
     tried, wrong = 0, []
@@ -309,7 +315,7 @@ try:
         if r.rule.startswith("/static/") or r.rule.startswith(auth.PUBLIC_PATHS):
             continue
         path = re.sub(r"<(?:[^:>]+:)?[^>]+>", "1", r.rule)
-        if path in X.ALLOWED:
+        if path in X.ALLOWED or X.ACCOUNT_RX.match(path):     # its own passkeys by id: allowed on purpose
             continue
         for m in sorted((r.methods or set()) - {"HEAD", "OPTIONS"}):
             tried += 1

@@ -647,8 +647,39 @@
       const reset = el("button", "mg-reset", "Reset all"); reset.type = "button"; reset.addEventListener("click", () => { state.filters[state.plat] = {}; load(); }); act.append(reset);
     }
   }
+  // Unusual this week (unusual.py): per day, how many network-and-report threads were well above their normal, and the
+  // latest day's strongest in words; the whole constituency, whatever the filters (asked once per page)
+  let unusualAsked = false;
+  async function unusualCard() {
+    if (unusualAsked) return;
+    unusualAsked = true;
+    const box = $("chUnusual");
+    if (!box) return;
+    try {
+      const r = await fetch("/api/mgmt/unusual-week", { cache: "no-store", credentials: "same-origin" });
+      const p = await r.json();
+      if (!r.ok) throw new Error(p.error || `Looking Glass answered ${r.status}`);
+      box.replaceChildren();
+      if (!p.ready) { box.append(el("p", "mg-empty", "Not counted yet: unusual activity has not been counted on this installation.")); return; }
+      const days = el("ul", "mg-pt-days");
+      for (const x of p.days) {
+        const label = new Date(`${x.day}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+        days.append(el("li", x.unusual ? "on" : null, `${label}: ${x.unusual ? `${x.unusual} unusual` : "all within normal"}`));
+      }
+      box.append(days);
+      const top = el("ul", "mg-pt-top");
+      for (const t of p.top) top.append(el("li", null, t));
+      if (!p.top.length) top.append(el("li", null, "Nothing unusual on the latest report day."));
+      box.append(el("h3", null, `Latest report day (${p.day})`), top);
+      if (p.confirmed) box.append(el("p", "mg-empty", `${p.confirmed} thread(s) your team watches are followed on the Unusual activity page.`));
+    } catch (e) {
+      box.replaceChildren(el("p", "mg-empty", window.LGLoader.errorText(e)));
+    }
+  }
+
   function render() {
     const d = state.data, comms = d.platform === "comms";
+    unusualCard();
     window.LGTime?.set(d.tz);              // the CSIRT's time zone that day (Settings > Country)
     document.body.dataset.plat = d.platform;
     for (const b of document.querySelectorAll("button[data-plat]")) b.setAttribute("aria-selected", String(b.dataset.plat === d.platform));

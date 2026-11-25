@@ -6,7 +6,8 @@
 """Peace of mind (peace.py, auth.py), through the real sign-in check and request guard: a throwaway admin session (a
 reserved test name, never a real account; ended afterwards) on a throwaway peace file. With it off the admin opens
 everything; with it on, only Admin, the audit log and Settings: the platforms, Findings, the portals and their APIs are
-refused, the start page goes to the Overview, its Overview shows Settings, Admin and the audit log only, no findings
+refused, the start page goes to the Overview, its Overview shows Settings, Admin, the audit log and Your account only
+(passkeys stay manageable), no findings
 notification comes in; only an admin has the switch, the change needs the page's token and is in the audit log; off
 again, everything is back.
 Usage: tests/check_peace.py"""
@@ -81,7 +82,10 @@ try:
     if needs_db.reachable()[0]:          # its figures need the reports database (none on a fresh clone or in CI)
         ok("…and its figures load", get("/api/clock").status_code == 200)
     cards = set(re.findall(r'class="portal-card pc-\w+" href="([^"]+)"', html))
-    ok("its Overview: Settings, Admin and the audit log only", cards == {"/settings", "/admin", "/audit"}, ", ".join(sorted(cards)))
+    # Your account (passkeys) is on every Overview, Peace of mind too, wherever the page file offers it
+    with open(os.path.join(A.app.root_path, A.app.template_folder or "templates", "_portal_cards.html"), encoding="utf-8") as f:
+        want = {"/settings", "/admin", "/audit"} | ({"/account"} if '"/account"' in f.read() else set())
+    ok("its Overview: Settings, Admin, the audit log and Your account only", cards == want, ", ".join(sorted(cards)))
     ok("…saying Peace of mind is on", "Peace of mind is on" in html)
     nav = set(re.findall(r'aria-label="([^"]+)"', get("/audit").get_data(as_text=True)))
     ok("its header: Overview, Settings, Admin; no Findings, Definitions, platforms or portals", {"Overview", "Settings", "Admin"} <= nav

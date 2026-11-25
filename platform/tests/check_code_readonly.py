@@ -110,6 +110,11 @@ INVENTORY = {
     "combos.py::install._sweep": (1, "data: data/combo_exports/"),
     "combos.py::install.package": (3, "data: data/combo_exports/ (and a ZIP in memory)"),
     "config_page.py::_save": (2, "data: data/configuration.json"),
+    # the approved-features release (2026-11-24): connector targets, their encrypted keys, passkeys
+    "connectors.py::Targets.save": (2, "data: data/connectors.json"),
+    "connectors.py::Vault._save": (2, "data: data/connector_keys.enc"),
+    "passkeys.py::Store._save": (2, "data: data/passkeys.json"),
+    "unusual.py::Decisions.save": (3, "data: data/unusual/decisions.json"),
     "code_integrity.py::_write_json": (3, "data: data/code_integrity.json, data/code_approved.json"),
     "cves.py::CveIntel._save": (2, "data: data/cve_cache.json"),
     "findings.py::Findings._save": (2, "data: data/findings.json"),

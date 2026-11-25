@@ -75,6 +75,7 @@ nav:
       - Installation: INSTALLATION.md
       - Connecting the mailbox: MAIL_SETUP.md
       - Configuration: CONFIGURATION.md
+      - Connecting OpenCTI and MISP: CONNECTORS.md
   - Using Looking Glass:
       - User guide: USER_GUIDE.md
       - "Who does what: roles at a CSIRT, a SOC and a division": ROLES.md

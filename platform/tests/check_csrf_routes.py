@@ -33,7 +33,8 @@ def ok(label, cond, info=""):
     print(f"  {'ok  ' if cond else 'FAIL'} {label}" + (f"  [{info}]" if info else ""))
 
 
-PUBLIC = {"/login", "/logout", "/register", "/forgot"}            # forms before a session exists (Origin checks apply)
+PUBLIC = {"/login", "/logout", "/register", "/forgot",           # forms before a session exists (Origin checks apply)
+          "/login/passkey-options"}                               # the sign-in's passkey step, bound to that sign-in step
 AUTOMATION_ONLY = {"/api/selftest/reset-login-counters"}
 MARK = re.compile(r"csrf_ok|guard_write|guard\(change=True\)|need\(\s*\"\w+\",\s*change=|_settings_change_allowed|"
                   r"_kb_change_allowed|change_allowed\"\]\(|can_note\"\]\(|"

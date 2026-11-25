@@ -59,6 +59,29 @@ FEATURES = {
                  ("docs/USER_GUIDE.md", "Shadowserver tagged N events of this report with"),
                  ("docs/TECHNICAL_REFERENCE.md", "ss_attack.py")],
     },
+    # 2026-11-24: connectors to the CSIRT's own OpenCTI and MISP (Settings -> Connectors; the sender runs as its own timer)
+    "connectors": {
+        "tour": [("/settings", '[data-st-tab=\\"connectors\\"]'), ("/audit", "#pane-sent")],
+        "glossary": ["connector", "connector_target", "connector_paused", "opencti_misp", "connector_revoked", "data_sent_out"],
+        "docs": [("docs/CONNECTORS.md", "## Setting up OpenCTI"), ("docs/CONNECTORS.md", "## Setting up MISP"),
+                 ("docs/CONNECTORS.md", "## How the data stays up to date"),
+                 ("docs/CONFIGURATION.md", "## Connectors (OpenCTI and MISP)")],
+    },
+    # 2026-11-24: passkeys (required on public installations) and the fresh check before high-value actions
+    "stepup": {
+        "tour": [("/account", "#pkCard"), ("/account", "#pkAdd")],
+        "glossary": ["passkey", "stepup", "stepup_every_time", "passkey_reset"],
+        "docs": [("docs/USER_GUIDE.md", "### Your account and passkeys"), ("docs/USER_GUIDE.md", "### Confirming it's you"),
+                 ("docs/SECURITY.md", "### Passkeys and the fresh check"),
+                 ("docs/TECHNICAL_REFERENCE.md", "stepup.py")],
+    },
+    # 2026-11-24: unusual activity (renamed from "patterns", the researchers' word): each thread against its own normal
+    "unusual": {
+        "tour": [("/unusual", "#ptToday"), ("/unusual", "#ptMine"), ("/management", "#cUnusual"), ("/definitions", "#cardLeads")],
+        "glossary": ["unusual", "unusual_normal", "unusual_watched", "unusual_learned"],
+        "docs": [("docs/USER_GUIDE.md", "## Unusual activity (analysts)"), ("docs/USER_GUIDE.md", "### Unusual this week"),
+                 ("docs/CONFIGURATION.md", "## Unusual activity"), ("docs/TECHNICAL_REFERENCE.md", "unusual_worker.py")],
+    },
     "library_supply": {
         "no_ui": "an alert in the administrators' existing bell and an entry in the audit log; no page or control of its own",
         "docs": [("docs/INSTALLATION.md", "When a library file does not match"),

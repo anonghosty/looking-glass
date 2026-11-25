@@ -213,7 +213,6 @@
     }
     announce(c);
     state.dataVersion = c.data_version; state.sourcesVersion = c.sources_version;
-    $("collectionName").textContent = `Shadowserver · ${c.sources} reports`;
     const w = $("waiting"); w.hidden = !state.waiting;
     if (state.waiting) w.textContent = c.state === "waiting"
       ? `Waiting for Shadowserver's reports for ${c.replay_day}. The replay starts from 00:00 once they arrive (checked every 15 seconds).`

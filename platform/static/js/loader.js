@@ -94,6 +94,21 @@
     if (waited && !onWait) netWaiting--;
     if (r.ok) netHide();                         // Looking Glass answers again: the line goes
     else if (waited && !onWait && r.status >= 500) netLine(UNREACH, true);
+    // a high-value action asks for a fresh check first (stepup.py, the user 2026-11-24): the person confirms with a
+    // passkey or an authenticator code in a small dialog (lg-stepup.js), then the same request is sent once more,
+    // with the one-time grant for an action that asks every time. Cancelled or failed: the refusal stands.
+    if (r.status === 403 && !opts.lgStepupDone && /json/i.test(r.headers.get("Content-Type") || "")) {
+      const info = await r.clone().json().catch(() => null);
+      if (info && info.stepup && window.LGStepUp?.ask) {
+        const path = new URL(input instanceof Request ? input.url : String(input), location.href).pathname;
+        const res = await window.LGStepUp.ask(info, { method, path });
+        if (res && res.ok) {
+          const headers = new Headers(opts.headers || (input instanceof Request ? input.headers : undefined));
+          if (res.grant) headers.set("X-LG-Stepup", res.grant);
+          return window.fetch(input, { ...opts, headers, lgStepupDone: true });
+        }
+      }
+    }
     if (r.status === 401 && !leaving) {
       leaving = true;
       location.href = `/login?next=${encodeURIComponent(location.pathname + location.search)}`;
@@ -433,10 +448,12 @@
     window.LGLoader.go(u.pathname + u.search + u.hash);
   });
 
-  // keyboard focus for every dialog on every page (dialog-focus.js): loaded from here, which every page already has
-  if (!document.querySelector('script[src*="dialog-focus.js"]')) {
+  // keyboard focus for every dialog on every page (dialog-focus.js) and the fresh check before high-value actions
+  // (lg-stepup.js): loaded from here, which every page already has
+  for (const f of ["dialog-focus.js", "lg-stepup.js"]) {
+    if (document.querySelector(`script[src*="${f}"]`)) continue;
     const s = document.createElement("script");
-    s.src = (document.currentScript?.src || "/static/js/loader.js").replace(/loader\.js(\?.*)?$/, "dialog-focus.js");
+    s.src = (document.currentScript?.src || "/static/js/loader.js").replace(/loader\.js(\?.*)?$/, f);
     s.defer = true;
     document.head.append(s);
   }

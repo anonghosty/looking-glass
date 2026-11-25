@@ -79,6 +79,49 @@ for args, why in ((["--domain", "bad domain", "--public-port", "443", "--backend
 rc, out, err = run("setup", "--domain", "x.example.org", "--public-port", "443", "--backend-port", "5000")
 ok("setup needs root (nothing is changed without sudo)", (rc != 0 and "sudo" in err) or os.geteuid() == 0, err)
 
+print("Internal installations (ACCESS_MODE=private): Caddy in front too, with the installation's own certificate")
+import tempfile  # noqa: E402
+for san, first in (("IP:10.20.0.5,DNS:lg-ops", "lg-ops"), ("IP:10.20.0.5", "10.20.0.5"),
+                   ("DNS:localhost,IP:127.0.0.1,DNS:lg-ops,IP:10.20.0.5", "lg-ops"),   # make_tls_cert.sh's order
+                   ("DNS:localhost,IP:127.0.0.1,IP:10.20.0.5", "10.20.0.5"), ("DNS:localhost,IP:127.0.0.1", "localhost")):
+    proj = tempfile.mkdtemp(prefix="lg-caddy-int-")
+    os.makedirs(os.path.join(proj, "data", "tls"))
+    subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2", "-subj", "/CN=lg-made-up",
+                    "-addext", f"subjectAltName={san}", "-keyout", os.path.join(proj, "data", "tls", "key.pem"),
+                    "-out", os.path.join(proj, "data", "tls", "cert.pem")], capture_output=True, check=True)
+    rc, ci, err = run("render", "--internal", "--project", proj, "--public-port", "8443", "--backend-port", "5001")
+    ok(f"it renders from the certificate ({san})", rc == 0 and ci, err)
+    ok("…any name or address people use, on the network port", "https://:8443 {" in ci)
+    ok(f"…the certificate's first name offered to visitors that send none, and remembered ({first})",
+       re.search(rf"^\s*default_sni {re.escape(first)}$", ci, re.M) and f"# internal: {first}" in ci)
+    ok("…Looking Glass behind it checked under that name, against that certificate only, never skipped",
+       f"tls_server_name {first}" in ci and "tls_trusted_ca_certs /etc/caddy/looking-glass/cert.pem" in ci and "insecure" not in ci.lower())
+    ok("…the same strict time limits and no fingerprint", "read_header 10s" in ci and "-Server" in ci and "admin off" in ci)
+import time  # noqa: E402
+
+sys.path.insert(0, ROOT)
+import system_alerts  # noqa: E402
+bd = tempfile.mkdtemp(prefix="lg-caddy-bell-")
+os.makedirs(os.path.join(bd, "data"), exist_ok=True)
+cf = os.path.join(bd, "Caddyfile")
+system_alerts.Alerts.CADDYFILE = cf
+al = system_alerts.Alerts(bd, env={"ACCESS_MODE": "private"})._no_caddy_internal(time.time())
+ok("an internal installation with no Caddy in front: the administrators' bell says so", al and al[0]["problem"]
+   and "no Caddy in front" in al[0]["title"] and "installer again" in al[0]["text"], al)
+ok("…again every day (one alert per day)", al and al[0]["key"].startswith("no-caddy-internal:" + time.strftime("%Y-%m-%d", time.gmtime())))
+with open(cf, "w") as f:
+    f.write("# Managed by Looking Glass (deploy/caddy_front.sh): changes here are replaced by the next setup or renewal.\n")
+ok("…and not once Looking Glass's Caddy is in front", system_alerts.Alerts(bd, env={"ACCESS_MODE": "private"})._no_caddy_internal(time.time()) == [])
+with open(cf, "w") as f:
+    f.write("example.org {\n}\n")
+ok("…a Caddyfile someone else wrote does not count", system_alerts.Alerts(bd, env={"ACCESS_MODE": "private"})._no_caddy_internal(time.time()) != [])
+ok("…a local or public installation: no reminder", system_alerts.Alerts(bd, env={"ACCESS_MODE": "local"})._no_caddy_internal(time.time()) == []
+   and system_alerts.Alerts(bd, env={"ACCESS_MODE": "public"})._no_caddy_internal(time.time()) == [])
+rc, out, err = run("render", "--internal", "--project", tempfile.mkdtemp(), "--public-port", "8443", "--backend-port", "5001")
+ok("refused: an internal installation without its certificate", rc != 0 and not out and "make_tls_cert" in err, err)
+rc, out, _ = run("render", "--internal", "--domain", "x.example.org", "--project", proj, "--public-port", "8443", "--backend-port", "5001")
+ok("refused: --internal and --domain together", rc != 0 and not out)
+
 print("Caddy's service, locked down (a drop-in over the package's unit)")
 rc, unit, _ = run("hardening")
 lines = set(unit.split("\n"))
@@ -196,10 +239,18 @@ print("The installer, renewals and the uninstaller")
 inst = find("tools/release_root/install.sh", "install.sh", "../install.sh")
 ok("a bought certificate puts Caddy in front on the public port", 'PUBLIC_PORT="$LG_PORT"; TRUST_PROXY=1' in inst
    and 'caddy_front.sh" "${cfargs[@]}"' in inst)
-ok("…Looking Glass itself not on the network then (no --network)", '[ "$HTTPS" != domain ] && iargs+=(--network)' in inst)
+ok("…Looking Glass itself never on the network (no --network for any choice: Caddy is in front)",
+   'iargs+=(--network)' not in inst and 'iargs=(--port "$LG_PORT" --name "$SERVICE_NAME" --no-sources)' in inst)
+ok("an internal installation puts Caddy in front too, with its own certificate (--internal)",
+   '[ "$HTTPS" = domain ] || [ "$HTTPS" = selfsigned ]; then' in inst and '--internal --public-port "$PUBLIC_PORT"' in inst)
+priv = inst.split('elif [ "$ACCESS_MODE" != local ]; then', 1)[1].split("HTTPS=\"$REPLY\"", 1)[0] if 'elif [ "$ACCESS_MODE" != local ]; then' in inst else ""
+ok("…and offers no proxy of your own and no 'No HTTPS' there (Caddy could not be guaranteed in front)",
+   priv and not re.search(r'^\s+(proxy|none)\s+"', priv, re.M) and re.search(r'^\s+selfsigned\s+"', priv, re.M)
+   and re.search(r'^\s+domain\s+"', priv, re.M), priv[-400:])
 ok("…the firewall and the self-check use Caddy's port", 'sudo ufw allow "$PUBLIC_PORT/tcp"' in inst
    and '--resolve "$TLS_DOMAIN:$PUBLIC_PORT:127.0.0.1"' in inst)
-ok("…a re-run keeps the port Caddy already holds", "grep -qE \"^https://[^ ]*:$1 \\{\" /etc/caddy/Caddyfile" in inst)
+ok("…a re-run keeps the port Caddy already holds (a domain's site or an internal one)",
+   "grep -qE \"^https://[^ ]*:$1 \\{|^https://:$1 \\{\" /etc/caddy/Caddyfile" in inst)
 ren = find("manage/install_cert.sh")
 ok("a renewal copies the certificate to Caddy and checks Caddy's port", "caddy_front.sh sync" in ren)
 un = find("tools/release_root/uninstall.sh", "uninstall.sh", "../uninstall.sh")

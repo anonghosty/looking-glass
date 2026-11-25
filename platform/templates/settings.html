@@ -37,6 +37,7 @@
       <button type="button" role="tab" data-st-tab="workers" aria-selected="false">Workers</button>
       <button type="button" role="tab" data-st-tab="quarterly" aria-selected="false">Quarterly</button>
       <button type="button" role="tab" data-st-tab="config" aria-selected="false">Configuration</button>
+      <button type="button" role="tab" data-st-tab="connectors" aria-selected="false">Connectors</button>
       <button type="button" role="tab" data-st-tab="monitor" aria-selected="false">Task monitor</button>
     </nav>
     {% endif %}
@@ -193,6 +194,16 @@
       <div id="cfBody"></div>
     </section>
 
+    {# Connectors: Looking Glass's own analysis pushed to the CSIRT's own OpenCTI and MISP (connectors.py, connectors-admin.js) #}
+    <section class="st-card cn-pane" id="tabConnectors" hidden>
+      <h2>Connectors <span class="st-for">your own OpenCTI and MISP</span></h2>
+      <p class="st-hint">Looking Glass sends its own analysis (devices across reports, impact, ATT&amp;CK reasons, recommended
+        actions) to your OpenCTI or MISP, never Shadowserver's raw rows. It only sends out: nothing connects to this server.
+        Connectors work with every access mode, local included; the server needs to reach the platform over HTTPS
+        (firewall, proxy, DNS, and for your own certificate authority CONNECTOR_CA_FILE in .env).</p>
+      <div id="cnBody" class="st-loading">Loading the connectors…</div>
+    </section>
+
     {# Task monitor: the service, its jobs, requests, cache, database, machine and pipeline (task_monitor.py, task-monitor.js) #}
     <section class="st-card tm-pane" id="tabMonitor" hidden>
       <h2>Task monitor <span class="st-for">this server, right now</span></h2>
@@ -268,6 +279,7 @@
   <script src="{{ url_for('static', filename='js/password-policy.js') }}"></script>
   <script src="{{ url_for('static', filename='js/code-integrity.js') }}"></script>
   <script src="{{ url_for('static', filename='js/task-monitor.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/config-page.js') }}"></script>{% endif %}
+  <script src="{{ url_for('static', filename='js/config-page.js') }}"></script>
+<script src="{{ url_for('static', filename='js/connectors-admin.js') }}"></script>{% endif %}
 </body>
 </html>

@@ -9,6 +9,15 @@ python-dotenv>=1.0,<2
 # own test run (review of d82a436)
 gunicorn>=26.2,<27
 reportlab>=4.0,<6
+# passkeys (WebAuthn / FIDO2) for sign-in and the fresh check before high-value actions on public installations
+# (passkeys.py): Duo Labs' py_webauthn, approved 2026-11-24
+webauthn>=2.0,<3
+# the connectors' stored keys, encrypted (connectors.py, AES-GCM); already in the lock through webauthn, named here
+# because Looking Glass uses it directly
+cryptography>=50.0,<51
+# pyOpenSSL (through webauthn) needs it on Python 3.12: named here so the lock carries it for every Python (a lock made
+# on Python 3.14 left it out, 2026-11-24)
+typing-extensions>=4.9,<5
 # the IANA time-zone database for local times (timezones.py): Python's zoneinfo reads the server's own copy, which
 # minimal servers and containers can lack; versions are years (2025.2...), so the cap is far away on purpose
 tzdata>=2024.1,<2100

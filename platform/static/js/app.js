@@ -967,7 +967,6 @@
     announceReports(c);
     state.dataVersion = c.data_version; state.sourcesVersion = c.sources_version;
     renderWaiting();
-    if (c.sources) $("collectionName").textContent = `Shadowserver · ${c.sources} reports`;
     if (c.demo_forced && !state.demoForced) { state.demoForced = true; setDemo(true, false); }
   }
   const hhmmUtc = (iso) => (iso ? iso.slice(11, 16) : "");
@@ -3138,6 +3137,13 @@
   // the address says whether the intro is open (?intro=1), so a refresh (e.g. after the tab sat minimised) stays there
   const wantIntro = new URLSearchParams(location.search).get("intro") === "1";
   if (introSeen && !wantIntro) $("intro").hidden = true; else openIntro();
+
+  // opened with filters in the address (a pattern's card: /?source=<report>&src_asn=<network>), like the services platform
+  {
+    const q = new URLSearchParams(location.search);
+    for (const v of q.getAll("source")) if (v) state.filters.source.add(v);
+    if (/^\d{1,10}$/.test(q.get("src_asn") || "")) state.filters.src_asn = q.get("src_asn");
+  }
 
   // ------------------------------------------------------------------ boot
   (async () => {

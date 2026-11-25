@@ -148,8 +148,13 @@ default): older days are then read from MongoDB when needed, a little slower.
 | `public` | any address (`VIEWER_NETWORKS=any` means the same) | an internet-facing deployment, with HTTPS in front (B5) |
 
 In every mode, everything behind the sign-in page needs an account with MFA, and other computers can only sign in
-over HTTPS. The service must also listen on the network (`deploy/install.sh --network`, or a reverse proxy) and the
-firewall must let the traffic through (A6, A7, B6).
+over HTTPS. For `private` and `public`, Caddy answers on the network and Looking Glass itself listens on this
+computer only; the firewall must let Caddy's port through (A6, A7, B6).
+
+**An internal site also has Caddy in front.** A few deliberately slow connections, from anyone on your network, could
+otherwise hold Looking Glass up for everyone. For `private`, the guided installer offers a self-signed certificate
+(B4b) or a certificate for a domain (B4a), both with Caddy in front. "No HTTPS" and a reverse proxy of your own are
+not offered there.
 
 **An internet-facing site always uses HTTPS with Caddy in front.** For `public`, the guided installer offers one choice
 only: a certificate for your domain (a free one, for example from Let's Encrypt, or a bought one), with Caddy set up in
@@ -440,6 +445,26 @@ manage/install_cert.sh --status                                                 
 When Caddy is in front, `manage/install_cert.sh` also copies the renewed certificate to Caddy (it asks for sudo once)
 and checks the site on Caddy's port.
 
+### B4b. HTTPS on an internal network: a self-signed certificate, with Caddy in front **(security)**
+The guided installer's first choice for `private`. It makes a certificate for this computer's names and its addresses
+as they are now (`deploy/make_tls_cert.sh`), then puts Caddy in front exactly as in B4a, with
+`deploy/caddy_front.sh setup --internal`: Caddy answers on the port people use, for whatever name or address they
+type, with the same certificate; Looking Glass listens on `127.0.0.1` only. Caddy checks Looking Glass behind it
+against that certificate, under the server's own name (the first name in the certificate that is not `localhost`).
+Everything else is as in B4a: the same time limits, the locked-down service, the firewall table with its connection
+limit per address, the automatic security updates, and no answer naming Caddy. Caddy is installed from its signed
+repository, so the server needs to reach it, as it needs the internet for its look-ups anyway.
+
+Trust the certificate on each screen once, after checking its SHA-256 fingerprint (A8).
+
+**A new address or name:** make the certificate again, then give it to Caddy (the first command says so):
+```bash
+deploy/make_tls_cert.sh
+sudo deploy/caddy_front.sh sync
+```
+An organisation's own certificate authority works the same way: put its certificate in `data/tls/` and add
+`--ca-bundle` with the authority's certificate when you run setup.
+
 ### B5. HTTPS with a reverse proxy **(security)**
 **Caddy** (simplest: it gets and renews certificates by itself when the name is reachable from the internet; on an
 internal network use your CA or `tls internal`). In `/etc/caddy/Caddyfile`:
@@ -600,9 +625,15 @@ moved and the update says why.
 > **Public installations with a bought certificate (from this release).** The guided installer now puts Caddy in
 > front of them. An installation made earlier keeps serving the internet directly until you run the guided installer
 > again with the same answers: it moves Looking Glass to `127.0.0.1` and sets up Caddy on the same public port.
-> Internal installations (`local`, `private`), and installations behind your own reverse proxy, need nothing.
+> `local` installations need nothing; internal ones, see below.
 > A public installation that used a self-signed certificate or a proxy of its own needs a certificate for its domain
 > first (a free one, for example from Let's Encrypt, works): public now offers only a certificate with Caddy in front.
+
+> **Internal installations (from this release).** The guided installer now puts Caddy in front of `private`
+> installations too. One made earlier keeps working as before, and the administrators' bell reminds them every day
+> that it has no Caddy in front. Run the guided installer again with the same answers: it moves Looking Glass to
+> `127.0.0.1` and sets up Caddy on the same port. An internal installation that used "No HTTPS" or a reverse proxy
+> of its own chooses a certificate then (self-signed, or one for a domain). `local` installations need nothing.
 
 > **The service file changed (from the release after 2026-11-21 (6)).** It adds one rule: nothing in `data/` may be
 > run as a program (the service could already write only there). Your own additions, such as an audit checkpoint copy

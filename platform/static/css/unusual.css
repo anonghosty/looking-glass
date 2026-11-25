@@ -1,0 +1,23 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+   SPDX-FileCopyrightText: the Looking Glass contributors */
+/* Looking Glass · Unusual activity (unusual.js): the suggestion cards, their chart and the devices behind them. */
+.pt-cards { display: grid; gap: 12px; }
+.pt-card { padding: 16px 18px; border-radius: 14px; border: 1px solid var(--border); background: rgba(255, 255, 255, .02); display: grid; gap: 10px; min-width: 0; }
+.pt-card h3 { margin: 0; font-size: 15px; line-height: 1.45; color: #f1f1f4; }
+.pt-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.pt-chip { font-size: 12px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-2); }
+.pt-chip.kind { color: #9cbcff; border-color: rgba(156, 188, 255, .35); }
+.pt-chip.new { color: #ffd38a; border-color: rgba(255, 211, 138, .35); }
+.pt-chart { width: 100%; height: 72px; display: block; }
+.pt-chart .bar { fill: rgba(156, 188, 255, .45); }
+.pt-chart .bar.today { fill: #ff8a8f; }
+.pt-chart .norm { stroke: #c9c9d2; stroke-width: 1; stroke-dasharray: 4 3; }
+.pt-legend { font-size: 12px; color: var(--muted); margin: -4px 0 0; }
+.pt-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pt-devices { overflow-x: auto; }
+.pt-devices table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pt-devices th, .pt-devices td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.pt-devices td.num, .pt-devices th.num { text-align: right; }
+.pt-empty { margin: 0; font-size: 14px; color: var(--text-2); }
+.pt-by { font-size: 12px; color: var(--muted); margin: 0; }
+.pt-growing { margin: 0; font-size: 13px; color: #ffd38a; }

@@ -1191,12 +1191,6 @@ def install(app, ctx):
             if enr:                                   # the analysis across every category, one row per finding
                 zf.writestr(f"{base}_other_categories.csv",
                             csv_text(*without(["category", "report", "value", "hosts", "records", "code"], enrich_rows(enr), CODES)))
-            # every field of every record, one line each with its readable label (export_fields.py): what a network
-            # provider needs to find the same devices; a cut is said in the file's last line, never silent
-            af, cut = export_fields.all_fields_rows(sorted(found, key=lambda e: e.get("_t") or 0), section, m.report)
-            if cut:
-                af.append(["", "", "", "", "", "", f"Stopped at {export_fields.ALL_FIELDS_MAX:,} lines: choose fewer devices or days for the rest"])
-            zf.writestr(f"{base}_all_fields.csv", csv_text(export_fields.ALL_FIELDS_HEAD, af))
         # for the page: the key analytics, and per region what the map shows on hover (with the devices' addresses: this
         # page is for analysts only)
         reg_det = {}

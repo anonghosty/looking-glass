@@ -345,8 +345,7 @@ server side is in small modules called from `app.py`:
   (communications `request_pattern`, `brute_force_username`, `brute_force_password`, `ssh_client`,
   `shadowserver_attack`; services `server_software`, `ssh_software`, `ssh_hassh`, `tls_jarm`, `certificate_sha256`,
   `certificate_subject`, `certificate_issuer`, `web_page_sha256`, `certificate_and_tls`; per device, each kind's values
-  joined with ` | `), and an all-fields CSV (`time, ip, port, report, field, label, value`, at most
-  `LG_ALL_FIELDS_MAX_LINES` lines). Readable field names: `field_labels.py` with `static/js/lg-fields.js`, both reading
+  joined with ` | `). Readable field names: `field_labels.py` with `static/js/lg-fields.js`, both reading
   `static/data/field_labels.json`. Shadowserver's own mapping of an event: `ss_attack.py` (`sources.normalise` adds
   `ss_attack`; `ss_attack.Seen` gives the Definitions page's counts in `GET /api/attack`'s `ss_seen`; tactic names from
   the `tactics` of `data/names_attack.json`). Certificate and TLS facts: `tls_facts.py` (`/api/svc/detail`'s `tls`;
@@ -823,6 +822,16 @@ The map has two layers:
 
 Events without a destination location (for example Sinkhole DNS, which records no destination) appear only as their source place.
 
+## Unusual activity (`unusual.py`, `unusual_detect.py`, `unusual_worker.py`)
+
+`unusual_worker.py` runs every hour from its own systemd timer (`deploy/unusual_timer.sh`) with the platform's
+read-only database account. It counts each report day of the window that is new or changed into a summary (devices
+per report, per network and report, and per report pair; counts only), then compares the latest days with each
+thread's normal. `unusual_detect.py` holds the arithmetic: the median and median absolute deviation, the thresholds,
+the lift of a pair, and each report's bar learned from the team's decisions. `unusual.py` serves the page
+(`/unusual`, analysts and administrators), `/api/unusual` (also researchers, without devices), the devices behind a
+card, Confirm, Dismiss and Stop watching (audited), and `/api/mgmt/unusual-week` for the Executive card.
+
 ## UI
 
 Front-end libraries: Mapbox GL JS 3.8.0 (satellite style) and deck.gl 9.1.14 (3D arcs), both loaded from CDNs.
@@ -1022,6 +1031,19 @@ is flagged). `POST /api/pipeline/release` takes one id (`id`) or several chosen 
 become one release request (`qids`), refused whole when any id is not a held-back report, so one confirmation on the
 server releases them all.
 
+Passkeys and the fresh check: `passkeys.py` (registration and sign-in with Duo Labs' py_webauthn: the store in
+`data/passkeys.json`, single-use challenges of 5 minutes, the site's name taken from its host name; an IP address
+is refused, since browsers refuse passkeys there) and `stepup.py` (the table of high-value actions, the check before
+every request, the 10-minute window, the single-use confirmation for the every-time actions, Your account
+(`/account`, `/api/passkeys`) and the administrators' passkey reset). The page asks through `static/js/lg-stepup.js`:
+a request answered 403 with `stepup` opens the dialog, and is sent again with the one-time confirmation.
+
+Connectors (the guide: [CONNECTORS.md](CONNECTORS.md)): `connectors.py` (Settings → Connectors: targets, the
+encrypted key store, the test before saving, the API), `connector_net.py` (every outgoing connection: HTTPS only,
+the address resolved once and refused when it is loopback, link-local, a cloud metadata address or reserved, the
+certificate and name checked, no redirects, a size cap), `connector_payload.py` (what is sent: STIX 2.1 for OpenCTI,
+a MISP event) and `connectors_worker.py` (the sender, run by its own systemd timer: `deploy/connectors_timer.sh`).
+
 - **`docs/SECURITY.md`:** how Looking Glass is secured, the operator checklist, checking an installation and reporting a vulnerability.
 - **`docs/INSTALLATION.md`:** installing on Windows with WSL or on a Linux server, HTTPS, firewall, updating, troubleshooting.
 
@@ -1032,6 +1054,9 @@ placeholder are left as they are.
 
 Security scripts:
 - `security_testing/security_retest.py`: about 120 checks of every protection against the running service.
+  On a public installation (`ACCESS_MODE=public`) its temporary accounts register two passkeys made by the test (in
+  memory, removed with the accounts at the end) and sign in and confirm actions with them; it reaches the service as
+  `localhost`, since passkeys need a host name.
 - `manage/manage_users.py`: accounts on the command line (recovery when no administrator can sign in).
 - `deploy/create_readonly_db_user.py`: a read-only MongoDB account for the app.
 - `deploy/make_tls_cert.sh`: HTTPS for other screens.

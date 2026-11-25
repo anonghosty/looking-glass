@@ -11,13 +11,6 @@ tests and a note in the [CHANGELOG](https://github.com/anonghosty/looking-glass/
   out there becomes a decoder in a release, written and tested with made-up values only.
 - **New and changed Shadowserver reports** recognised as Shadowserver publishes them.
 
-## The mailbox and the sender check
-
-- **Moving to enforce safely.** Settings shows when every report e-mail of the last 7 days passed the sender check,
-  and only then suggests switching from recording to enforcing.
-- Help for mail gateways that rewrite messages, and for reports kept in a dedicated mailbox folder.
-- A daily limit for the report API, so a misconfigured schedule can't use up an account's allowance.
-
 ## Quality and security
 
 - **Test coverage measured** on GitHub, aiming at 80% of statements.

@@ -24,7 +24,8 @@
   // tab other than General is one pane; the page is told which tab shows (lg:settings-tab) so a pane can start or stop
   const tabs = [...document.querySelectorAll(".st-tabs [data-st-tab]")];
   const PANES = { workers: pane, quarterly: document.getElementById("tabQuarterly"),     // Quarterly: quarterly.js (r85)
-    config: document.getElementById("tabConfig"), monitor: document.getElementById("tabMonitor") };
+    config: document.getElementById("tabConfig"), monitor: document.getElementById("tabMonitor"),
+    connectors: document.getElementById("tabConnectors") };                              // Connectors: connectors-admin.js
   const panes = () => Object.values(PANES).filter(Boolean);
   const general = () => [...document.querySelectorAll("#stMain > .st-card, #stMain > .st-access")].filter((x) => !panes().some((p) => p === x || p.contains(x)));
   let loaded = false;

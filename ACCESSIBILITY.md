@@ -18,12 +18,16 @@ on that team should be able to use it, whatever the way they work.
   every control is reached, shows a visible focus ring, and none traps the focus. The chart legends and the hourly
   and 15-minute charts, mouse-only until then, became keyboard controls (Enter on a legend; Left and Right arrows, then
   Enter, on a time chart). How to use them: *With the keyboard only* in the user guide.
+- The keyboard shortcuts (L on the map, / in Intel gathered, the arrows in lists, drop-downs and the tour) are listed
+  under *With the keyboard only* in the user guide.
 
 ### Known limitations
 
 - **The 3D map and the charts** are visual. Their figures are also given as text: the analysis window, the tables,
   the key findings and the PDF and CSV reports carry the same information. The charts' legends and time slots can be
   chosen with the keyboard; the map itself is panned and zoomed with the arrow keys and + / -.
+- **Unusual activity's charts** give their dates and normal in words, but each day's count only on hover; the card's
+  text and **Show the devices** carry the figures.
 - **Dialogs keeping the focus inside them** has not yet been checked dialog by dialog.
 - **The dark theme's contrast** is being checked page by page against WCAG 2.2 AA; small grey helper text may fall
   short in places.

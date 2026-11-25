@@ -11,7 +11,7 @@
 - certificate and TLS facts (tls_facts.py): expired, self-signed, valid, trusted, SSLv3, TLS 1.3; the masked view
   gives no dates and no browser error text (it can name the host)
 - exports (export_fields.py): every pattern-analysis field of intel.py has a combination CSV column; the all-fields
-  rows leave out Looking Glass's internals and say when they stop
+  CSV stays removed (2026-11-24)
 Run: .venv/bin/python tests/check_shadowserver_fields.py"""
 import json
 import os
@@ -156,18 +156,11 @@ ok("every pattern-analysis field of intel.py has a combination CSV column", want
 names_ = [c for c, _ in export_fields.COMMS_PATTERN_COLS + export_fields.SVC_PATTERN_COLS]
 ok("new column names are stable snake_case, none clashing with the old ones",
    all(re.match(r"^[a-z0-9_]+$", c) for c in names_) and not set(names_) & {c for c, _ in combos.COMMS_COLS + combos.SVC_COLS})
-recs = [dict(ev, _t=1, _id="x", src_ref="r1", id="9"), dict(ev2, _t=2)]
-rows, cut = export_fields.all_fields_rows(recs, "infections")
-ok("all-fields: one line per field with its label", rows and len(rows[0]) == len(export_fields.ALL_FIELDS_HEAD) and not cut
-   and any(r[4] == "threat_technique_id" and r[5] == field_labels.label("threat_technique_id") for r in rows))
-ok("…no Looking Glass internals (_t, _id, id, references)", not any(r[4] in ("_t", "_id", "id", "src_ref", "ss_attack", "extras") for r in rows))
-old = export_fields.ALL_FIELDS_MAX
-export_fields.ALL_FIELDS_MAX = 5
-rows, cut = export_fields.all_fields_rows(recs, "infections")
-export_fields.ALL_FIELDS_MAX = old
-ok("…stops at the limit and says so", cut and len(rows) == 5)
+# the all-fields CSV was removed (2026-11-24): nothing writes it or reads its limit any more
 cs = open(os.path.join(HERE, "combos.py"), encoding="utf-8").read()
-ok("the combination ZIP writes the all-fields file and says when it was cut", "_all_fields.csv" in cs and "Stopped at" in cs)
+ok("the all-fields CSV stays removed: no all-fields code, file or limit",
+   not hasattr(export_fields, "all_fields_rows") and "_all_fields.csv" not in cs
+   and "LG_ALL_FIELDS_MAX_LINES" not in open(os.path.join(HERE, "export_fields.py"), encoding="utf-8").read())
 
 print(f"\n{checks - len(fails)} of {checks} Shadowserver field checks passed" + (f"; FAILED: {fails}" if fails else ""))
 sys.exit(1 if fails else 0)

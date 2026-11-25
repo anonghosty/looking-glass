@@ -25,6 +25,9 @@ jobs:
       MONGO_DB: shadowserver     # empty here: the checks use made-up rows when it has none
       LG_QUIET: "1"
       THREATMAP_SCHEDULE: "0"
+      # the in-process checks sign in with throwaway sessions and test other things: the fresh check before high-value
+      # actions is off for them (stepup.tests_off); tests/check_stepup.py tests it switched on
+      LG_STEPUP_TESTS_OFF: "1"
       # the outside-connection guard (platform/tests/no_outside), set on the check steps only (never on pip): only this
       # runner and the database may be reached, every other attempt is refused and written down; a made-up map key
       # switches the map look-ups on, so a check that should send nothing is seen if it tries (2026-11-18: an
@@ -160,6 +163,7 @@ jobs:
       MONGO_PORT: "1"
       LG_QUIET: "1"
       THREATMAP_SCHEDULE: "0"
+      LG_STEPUP_TESTS_OFF: "1"   # as in the database job; tests/check_stepup.py switches it on for itself
       # the outside-connection guard and a made-up map key on the check steps, as in the database job
       GUARD_LOG: ${{ github.workspace }}/outside-unit.jsonl
       GUARD_PATH: ${{ github.workspace }}/platform/tests/no_outside
@@ -193,7 +197,7 @@ jobs:
                    check_beacon_decode check_beacon_findings check_beacon_unknown check_spike_notice check_glossary_sync check_ai_framework check_masked_ids \
                    check_index_refresh check_beacon_keep check_day_skip check_config_page check_findings_live check_pdf_rows check_pdf_refs pdf_pages_check check_per_key_cache check_recent_days \
                    check_select_enhancer check_invite_limit check_quarterly_access check_job_overlap check_feature_coverage check_installer_supply check_stale_files check_code_readonly check_code_integrity check_downloads check_error_text check_screenshots check_nav_once check_external_masking check_spdx_headers \
-                   check_cov_app check_cov_auth_units check_cov_auth_routes check_cov_security check_cov_admin_tools check_cov_acodes check_cov_mgmt check_cov_lookups check_cov_audit check_cov_audit_portal check_cov_services_kb check_cov_finding_watch check_cov_report_map check_cov_pdf check_cov_combos check_api_no_secrets check_role_refusals check_caddy_front check_attack_audit check_shadowserver_fields check_moved_modules; do
+                   check_cov_app check_cov_auth_units check_cov_auth_routes check_cov_security check_cov_admin_tools check_cov_acodes check_cov_mgmt check_cov_lookups check_cov_audit check_cov_audit_portal check_cov_services_kb check_cov_finding_watch check_cov_report_map check_cov_pdf check_cov_combos check_api_no_secrets check_role_refusals check_caddy_front check_attack_audit check_shadowserver_fields check_moved_modules check_stepup check_connectors check_unusual; do
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
           done
           # the module part only: the filter and who sees it need the platform (run_all_checks.sh on the server)

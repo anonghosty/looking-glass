@@ -256,6 +256,33 @@
 
   // ---------------- signed in now
   const fmtAgo = (s) => (s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`);
+  // Data sent out (connectors.py /api/audit/connectors): the targets as set up, and what went out in the period
+  const SENT_WHAT = { sent: "Sent", retry: "Sent again (missing on the platform)", refused: "Refused by the platform",
+    failed: "Failed", paused: "Paused", revoked: "Revoked (the purge removed the day)" };
+  async function loadSent() {
+    const d = await getJSON(`/api/audit/connectors?${per()}`);
+    const t = d.totals || {};
+    $("snSum").textContent = d.targets.length
+      ? `${fmt(d.targets.length)} target(s). In the period: ${fmt(t.sends)} send(s) covering ${fmt(t.devices)} device-day(s) and ${fmt(t.objects)} object(s)`
+        + `${t.revoked ? `, ${fmt(t.revoked)} object(s) revoked` : ""}, ${fmt(t.failed)} failure(s) or pause(s).`
+      : "No connector target is set up: nothing is sent out.";
+    const row = (cells) => { const tr = el("tr"); for (const c of cells) tr.append(el("td", null, c)); return tr; };
+    const tb = $("snTargets").querySelector("tbody"); tb.replaceChildren();
+    for (const x of d.targets) {
+      tb.append(row([x.name, x.kind, x.address, `TLP:${x.tlp}`, x.receives,
+        x.paused ? `Paused: ${x.paused}` : x.on ? "On" : "Off", `${x.added_by || "–"}, ${fmtT(x.added)}`]));
+    }
+    if (!d.targets.length) { const tr = el("tr"); const td = el("td", "muted", "None."); td.colSpan = 7; tr.append(td); tb.append(tr); }
+    const eb = $("snEvents").querySelector("tbody"); eb.replaceChildren();
+    for (const e of d.events) {
+      const what = e.status === "sent" && e.revoked ? `Sent; ${fmt(e.revoked)} revoked (no longer true)` : (SENT_WHAT[e.status] || e.status);
+      eb.append(row([fmtT(e.at), e.target_name || "–", e.day || "–", what, e.devices != null ? fmt(e.devices) : "–",
+        e.objects != null ? fmt(e.objects) : "–", e.tlp ? `TLP:${String(e.tlp).toUpperCase()}` : "–", e.detail || ""]));
+    }
+    if (!d.events.length) { const tr = el("tr"); const td = el("td", "muted", "Nothing went out in this period."); td.colSpan = 8; tr.append(td); eb.append(tr); }
+    if (d.more) { const tr = el("tr"); const td = el("td", "muted", `${fmt(d.more)} earlier entries in the period: choose a shorter period to see them.`); td.colSpan = 8; tr.append(td); eb.append(tr); }
+  }
+
   async function loadSessions() {
     const d = await getJSON("/api/admin/sessions");
     const tb = $("sessionsTable").querySelector("tbody"); tb.replaceChildren();
@@ -358,6 +385,7 @@
     : tab === "evidence" ? async () => evPeriod()
     : tab === "trace" ? async () => window.LGTrace?.ready()          // leak-trace.js: Trace a leak
     : tab === "sender" ? () => window.LGSender.load(per())          // sender-audit.js: the DKIM sender check
+    : tab === "sent" ? loadSent                                      // Data sent out: the connectors
     : () => loadLog(true);
   function show(tab, first) {
     current = tab;

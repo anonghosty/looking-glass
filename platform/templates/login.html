@@ -84,6 +84,21 @@
   </form>
   {% endif %}
 
+  {# second step on a public installation: a passkey instead of the code (stepup.py, passkeys.py) #}
+  {% if view == "passkey" %}
+  <form class="auth-view" data-v="passkey" method="post" action="/login" autocomplete="off" id="pkForm">
+    <h1>Verify it's you</h1>
+    <p class="auth-sub">Use your passkey: this computer's sign-in (fingerprint, face or PIN), your phone, or your security key.</p>
+    <input type="hidden" name="step" value="passkey">
+    <input type="hidden" name="next" value="{{ next }}">
+    <input type="hidden" name="credential" id="pkCredential" value="">
+    <button class="auth-btn" type="button" id="pkGo"><span>Use your passkey</span></button>
+    <div class="auth-alert err" id="pkErr" role="alert" hidden></div>
+    <p class="auth-hint">Lost every passkey? An administrator can reset them; you then sign in with your authenticator code and register new ones.</p>
+    <div class="auth-links"><a href="/login?form=signin">Back</a></div>
+  </form>
+  {% endif %}
+
   {# the password expired (password_policy.py): a new one before the session opens; no second sign-in #}
   {% if view == "expired" %}
   <form class="auth-view" data-v="expired" method="post" action="/login" autocomplete="off">
@@ -99,4 +114,4 @@
   {% endif %}
 </div>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='js/auth-card.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/auth-card.js') }}"></script>{% if view == "passkey" %}<script src="{{ url_for('static', filename='js/auth-passkey.js') }}"></script>{% endif %}{% endblock %}

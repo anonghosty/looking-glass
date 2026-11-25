@@ -9,10 +9,10 @@ the platform: the **Glossary** tab on the overview page and the **Glossary** but
 - [Who and where](#who-and-where) (14 terms)
 - [Threats](#threats) (27 terms)
 - [Numbers and measures](#numbers-and-measures) (14 terms)
-- [Using the platform](#using-the-platform) (11 terms)
-- [Accounts, roles and permissions](#accounts-roles-and-permissions) (52 terms)
+- [Using the platform](#using-the-platform) (15 terms)
+- [Accounts, roles and permissions](#accounts-roles-and-permissions) (51 terms)
 - [Publicly accessible / vulnerable services](#publicly-accessible--vulnerable-services) (14 terms)
-- [Security, audit and the pipeline](#security-audit-and-the-pipeline) (24 terms)
+- [Security, audit and the pipeline](#security-audit-and-the-pipeline) (34 terms)
 - [Related tools](#related-tools)
 - [A–Z index](#az-index)
 
@@ -223,6 +223,18 @@ The busiest hour or 15-minute period so far.
 
 ## Using the platform
 
+**Unusual activity**  
+A network and report, or two reports together, well above its own normal on the latest report day. Analysts see it on the Unusual activity page with the devices behind it; researchers in Looking Glass asks, without devices; management as Unusual this week.
+
+**A thread's normal**  
+The middle number of devices of one network and report (or two reports together) over its last 28 report days. One odd day does not move it. A thread is suggested when it is at least twice its normal, clearly outside its usual spread, and 10 devices or more.
+
+**Watched thread**  
+A suggestion your team confirmed under a name of its own: followed every day against its normal, and marked Growing again today when it jumps.
+
+**Learned bar**  
+How readily Looking Glass asks about one report, learned from your team: each Dismiss of one of its threads raises the bar a step, each Confirm lowers it, within limits. The card says when the bar has moved, and why.
+
 **Event stream**  
 The table at the bottom listing each event as it plays. Click a row for full details, or pin it to keep it.
 
@@ -319,9 +331,6 @@ A short code for one exact combination Intel gathered shows: LG-C-… for one re
 
 **Combination search**  
 The analysts' page (/combinations) that turns a combination code into the devices behind it, over the days in memory or up to 31 days of stored history, with a PDF summary (region map, across reports, each name and CVE explained with its references, and the researchers' notes on every name) and CSV files of the devices and records. A chart with nothing to show is left out of the PDF. It lists real addresses, so it is only for roles that see them and may export, and is off in Demo mode.
-
-**All-fields CSV**  
-In a combination download: every field of every record, one line per field, with its readable name.
 
 **Pattern columns**  
 In a combination's devices and records CSVs: the values the pattern analysis groups devices by (certificate fingerprints and names, JARM, HASSH, software, page hash, the usernames and passwords tried). A network provider can use them to find the same devices in their own network.
@@ -466,6 +475,36 @@ One bubble per report, sized by its records for the day. A dot flies into a bubb
 
 ## Security, audit and the pipeline
 
+**Passkey**  
+A sign-in key kept by your device (Windows Hello, Touch ID or Face ID, a phone, a security key), unlocked with your PIN or fingerprint. Looking Glass keeps only its public half. Your browser offers it to the real site only, so a look-alike site cannot use it. Required at sign-in on installations open to the internet, two per person.
+
+**Confirm it's you (fresh check)**  
+The question Looking Glass asks before a high-value action: a passkey, or a fresh code from your authenticator app on an internal installation. It stops malware that has taken over a signed-in browser. One confirmation covers 10 minutes of high-value actions.
+
+**Every-time action**  
+A high-value action that asks you to confirm it's you each time, even within the 10 minutes: changing accounts, roles or sign-up links, turning on or changing a connector, adding or removing a passkey.
+
+**Reset passkeys**  
+An administrator's action on Admin → Users for someone who lost their devices: their passkeys are removed, and at their next sign-in they register new ones. It asks the administrator to confirm it's them, and it is in the audit log.
+
+**Connector**  
+Looking Glass sending its own analysis of the reports to the CSIRT's own OpenCTI or MISP, set up by an administrator on Settings → Connectors. It only sends; nothing comes back. Shadowserver's raw rows, findings, notes, names of people, time to act and combination codes are never sent, and the devices go as victims, never as indicators to block.
+
+**Connector target**  
+One OpenCTI or MISP that receives: its address, its key (stored encrypted, never shown again), its TLP (AMBER unless chosen) and what it receives (networks, address blocks, ranges; nothing until something is ticked). It is saved only after its test passed, and saved off.
+
+**Paused target**  
+A target that stopped sending because its checks before a send failed, or three sends in a row failed. Settings → Connectors says why; once the cause is fixed on the platform, an administrator turns it on again.
+
+**OpenCTI and MISP**  
+Two free, open-source threat intelligence platforms many CSIRTs run: OpenCTI (by Filigran) and MISP (the MISP Project). Looking Glass sends to OpenCTI in STIX 2.1 over TAXII, the OASIS standards for threat information and for sending it, and to MISP through its own API.
+
+**Data sent out**  
+The Audit portal's tab for the connectors: every OpenCTI and MISP target as it is set up, and everything Looking Glass sent, sent again, revoked or failed to send in the period, with totals. Read only; never a key.
+
+**Revoked (OpenCTI)**  
+Marked as no longer valid, without being deleted. Looking Glass revokes what it sent for a report day when it is no longer true for that day (a device taken out of what the target receives) or when the quarterly purge removed the day; in MISP that day's tags are removed or its event deleted.
+
 **Masking**  
 What viewers without the unmasked permission see instead of real data: every IP address becomes an opaque label (Host 3f9a2c41b07e) that cannot be turned back into the address, network names become aliases (Telco 1) and host names are removed. Researchers never see a constituent's IP address; report data (banners, URLs, user agents, DNS and SNI values, patterns) is shown to them as reported with the addresses in it masked, while team notes and free text also mask host names, e-mail addresses and IDs.
 
@@ -569,6 +608,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 
 ## A–Z index
 
+[A thread's normal](#using-the-platform) · 
 [Actively exploited (CISA KEV)](#accounts-roles-and-permissions) · 
 [Activity by 15 minutes](#numbers-and-measures) · 
 [Activity level](#numbers-and-measures) · 
@@ -579,7 +619,6 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Affected city](#who-and-where) · 
 [AI attack framework](#publicly-accessible--vulnerable-services) · 
 [All of the day's connections (map)](#using-the-platform) · 
-[All-fields CSV](#accounts-roles-and-permissions) · 
 [Also described by](#accounts-roles-and-permissions) · 
 [Analysis view](#using-the-platform) · 
 [Analyst (role)](#accounts-roles-and-permissions) · 
@@ -606,7 +645,10 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Combination](#accounts-roles-and-permissions) · 
 [Combination code (LG-C, LG-X)](#accounts-roles-and-permissions) · 
 [Combination search](#accounts-roles-and-permissions) · 
+[Confirm it's you (fresh check)](#security-audit-and-the-pipeline) · 
 [Confirmation on the server](#security-audit-and-the-pipeline) · 
+[Connector](#security-audit-and-the-pipeline) · 
+[Connector target](#security-audit-and-the-pipeline) · 
 [Constituency (Settings)](#publicly-accessible--vulnerable-services) · 
 [Constituent (column)](#who-and-where) · 
 [Control check (LG-01 … LG-15)](#security-audit-and-the-pipeline) · 
@@ -620,6 +662,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [CVE](#accounts-roles-and-permissions) · 
 [CVSS score](#accounts-roles-and-permissions) · 
 [Data access log](#security-audit-and-the-pipeline) · 
+[Data sent out](#security-audit-and-the-pipeline) · 
 [Database pipeline](#security-audit-and-the-pipeline) · 
 [DDoS](#threats) · 
 [Decoded beacon](#threats) · 
@@ -638,6 +681,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Event stream](#using-the-platform) · 
 [Event time (UTC)](#the-basics) · 
 [Events yesterday](#numbers-and-measures) · 
+[Every-time action](#security-audit-and-the-pipeline) · 
 [Evidence report (PDF)](#security-audit-and-the-pipeline) · 
 [Exposed host](#publicly-accessible--vulnerable-services) · 
 [External (role)](#accounts-roles-and-permissions) · 
@@ -658,6 +702,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [IP address](#who-and-where) · 
 [Issue](#publicly-accessible--vulnerable-services) · 
 [Key findings](#using-the-platform) · 
+[Learned bar](#using-the-platform) · 
 [Looking Glass asks (lead)](#accounts-roles-and-permissions) · 
 [Looking Glass definition](#accounts-roles-and-permissions) · 
 [Malpedia](#accounts-roles-and-permissions) · 
@@ -676,9 +721,12 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [No source knows this name](#accounts-roles-and-permissions) · 
 [Note (researcher)](#accounts-roles-and-permissions) · 
 [Observed / Known for this malware / Possible](#accounts-roles-and-permissions) · 
+[OpenCTI and MISP](#security-audit-and-the-pipeline) · 
 [Other address ranges](#who-and-where) · 
+[Passkey](#security-audit-and-the-pipeline) · 
 [Password expiry](#security-audit-and-the-pipeline) · 
 [Pattern columns](#accounts-roles-and-permissions) · 
+[Paused target](#security-audit-and-the-pipeline) · 
 [Peak](#numbers-and-measures) · 
 [Permission](#accounts-roles-and-permissions) · 
 [Pin](#using-the-platform) · 
@@ -705,8 +753,10 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Request path](#who-and-where) · 
 [Researcher (role)](#accounts-roles-and-permissions) · 
 [Researcher's rating](#threats) · 
+[Reset passkeys](#security-audit-and-the-pipeline) · 
 [Residential proxy](#threats) · 
 [Retention note and rotation entry](#security-audit-and-the-pipeline) · 
+[Revoked (OpenCTI)](#security-audit-and-the-pipeline) · 
 [Role](#accounts-roles-and-permissions) · 
 [Scanning](#threats) · 
 [Seal](#threats) · 
@@ -731,5 +781,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Time zone (display)](#security-audit-and-the-pipeline) · 
 [TLP (Traffic Light Protocol)](#accounts-roles-and-permissions) · 
 [Trace a leak](#threats) · 
+[Unusual activity](#using-the-platform) · 
 [User agent](#who-and-where) · 
+[Watched thread](#using-the-platform) · 
 [Workers (Settings)](#security-audit-and-the-pipeline)
