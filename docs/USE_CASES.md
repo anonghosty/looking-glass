@@ -98,15 +98,12 @@ lives in one place.
 ### The codes, and where they go
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 38, "rankSpacing": 48, "padding": 14}}}%%
-flowchart LR
-    subgraph MADE["The codes · none carries an address"]
-        direction TB
-        CC["<b>LG-C</b> · one exact combination in one report<br/>researcher · Intel gathered"]:::research
-        CX["<b>LG-X</b> · a pattern across several reports<br/>researcher · Intel gathered"]:::research
-        CB["<b>LG-B</b> · decoded beacons that share a part<br/>researcher or analyst · under 5 devices, analysts only"]:::research
-        CA["<b>LG-A</b> · exactly an analyst's selection, one day<br/>analyst · an analysis window"]:::analyst
-    end
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 28, "rankSpacing": 56, "padding": 12, "wrappingWidth": 260}}}%%
+flowchart TD
+    CC["<b>LG-C</b><br/>one exact combination<br/>in one report<br/><i>researcher · Intel gathered</i>"]:::research
+    CX["<b>LG-X</b><br/>a pattern across<br/>several reports<br/><i>researcher · Intel gathered</i>"]:::research
+    CB["<b>LG-B</b><br/>decoded beacons<br/>that share a part<br/><i>researcher or analyst</i>"]:::research
+    CA["<b>LG-A</b><br/>exactly an analyst's<br/>selection, one day<br/><i>analyst · an analysis window</i>"]:::analyst
     N["<b>A note</b><br/>Track as a finding"]:::research
     F(["<b>The finding</b><br/>carries the codes"]):::mgmt
     E["<b>Show in Executive</b><br/>management · the figures behind a code"]:::mgmt
@@ -132,7 +129,6 @@ flowchart LR
     classDef closed fill:#475569,stroke:#334155,color:#fff
     classDef ext fill:#b45309,stroke:#92400e,color:#fff
     linkStyle default stroke:#94a3b8,stroke-width:2px
-    style MADE fill:transparent,stroke:#64748b,stroke-width:1.5px,stroke-dasharray:6 4,color:#64748b
 ```
 
 A code names exactly a set of records and never an address, so researchers and management can pass it on; only the
@@ -141,8 +137,8 @@ analyst's **Search** turns it into devices, and only the advisory report sends d
 ### The life of a finding
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 38, "rankSpacing": 48, "padding": 14}}}%%
-flowchart LR
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 28, "rankSpacing": 56, "padding": 12, "wrappingWidth": 260}}}%%
+flowchart TD
     RN(["<b>Researcher</b><br/>Track as a finding"]):::research
     AN(["<b>Analyst</b><br/>Make analyst code"]):::analyst
     M["<b>With management</b>"]:::mgmt
@@ -178,7 +174,7 @@ or close it. An administrator can do every role's work; the history shows which 
 ### A researcher's view
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 38, "rankSpacing": 48, "padding": 14}}}%%
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 38, "rankSpacing": 48, "padding": 14, "wrappingWidth": 280}}}%%
 flowchart TD
     S(["<b>Intel gathered</b> · Looking Glass asks<br/>names, definitions, indicators; never an address"]):::research
     N["<b>A note</b> with combination codes<br/>LG-C · LG-X · LG-B"]:::research
@@ -204,7 +200,7 @@ flowchart TD
 ### An analyst's view
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 38, "rankSpacing": 48, "padding": 14}}}%%
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 38, "rankSpacing": 48, "padding": 14, "wrappingWidth": 280}}}%%
 flowchart TD
     W(["<b>The map or the services platform</b><br/>a selection of devices"]):::analyst
     K["<b>Make analyst code</b> · LG-A<br/>names a researcher"]:::analyst
@@ -237,7 +233,7 @@ manager they name.
 ### Management's view
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 38, "rankSpacing": 48, "padding": 14}}}%%
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 38, "rankSpacing": 48, "padding": 14, "wrappingWidth": 280}}}%%
 flowchart TD
     I(["<b>With management</b><br/>a researcher's finding, or an analyst's request"]):::mgmt
     X["<b>Show in Executive</b><br/>the figures behind any of its codes, no addresses"]:::mgmt
@@ -265,7 +261,7 @@ flowchart TD
 ### An advisor's view
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 38, "rankSpacing": 48, "padding": 14}}}%%
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 38, "rankSpacing": 48, "padding": 14, "wrappingWidth": 280}}}%%
 flowchart TD
     I(["<b>With the advisor</b><br/>only after management approved"]):::advisor
     W["<b>Write the advisory</b><br/>one per organisation, with its TLP"]:::advisor
