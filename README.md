@@ -210,22 +210,36 @@ a tamper-evident audit log with control checks mapped to NIST SP 800-53 and CIS 
 ## How it works
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 40, "rankSpacing": 46, "padding": 14}}}%%
+%%{init: {"themeVariables": {"fontSize": "13px"}, "flowchart": {"curve": "basis", "nodeSpacing": 24, "rankSpacing": 34, "padding": 10, "wrappingWidth": 240}}}%%
 flowchart TD
-    S(["<b>Shadowserver</b><br/>report e-mails or the report API"]):::src
-    P["<b>Pipeline</b> · database/<br/>fetch · unzip · sort · load<br/>every 30 minutes"]:::pipe
-    M[("<b>MongoDB</b><br/>one collection per report type")]:::db
-    L["<b>Looking Glass</b> · platform/<br/>replay · analysis · reports · accounts"]:::app
-    U(["<b>People</b><br/>analysts · wall screens · executives · partners, masked"]):::people
+    S(["<b>Shadowserver</b> · e-mails or the report API"]):::src
+    P["<b>Pipeline</b> · fetch, unzip, sort, load<br/>every 30 minutes"]:::pipe
+    M[("<b>MongoDB</b> · one collection per report")]:::db
+    L["<b>Looking Glass</b> · the platform"]:::app
     S --> P --> M
-    M -- "read-only account" --> L
-    L -- "HTTPS" --> U
+    M -- "read only" --> L
+    subgraph IN["The CSIRT · one role each"]
+        direction LR
+        R("<b>Researcher</b><br/>threats, no address"):::people
+        A("<b>Analyst</b><br/>the devices"):::people
+        G("<b>Management</b><br/>figures, decisions"):::people
+        V("<b>Advisor</b><br/>the advisories"):::people
+        U("<b>Auditor</b><br/>the audit log"):::people
+        D("<b>Admin</b><br/>the platform"):::people
+    end
+    E("<b>External viewer</b><br/>a constituent or another CSIRT<br/>3 pages, masked"):::ext
+    O("<b>The organisation</b><br/>its own devices only"):::ext
+    L -- "HTTPS" --> IN
+    L -- "HTTPS · masked" --> E
+    V -. "the advisory, PDF + CSV" .-> O
     classDef src fill:#0369a1,stroke:#075985,color:#fff
     classDef pipe fill:#4f46e5,stroke:#4338ca,color:#fff
     classDef db fill:#0f766e,stroke:#115e59,color:#fff
     classDef app fill:#6d28d9,stroke:#5b21b6,color:#fff
     classDef people fill:#475569,stroke:#334155,color:#fff
+    classDef ext fill:#b45309,stroke:#92400e,color:#fff
     linkStyle default stroke:#94a3b8,stroke-width:2px
+    style IN fill:transparent,stroke:#64748b,stroke-width:1.5px,stroke-dasharray:6 4,color:#64748b
 ```
 
 1. **Collect.** The database pipeline fetches your Shadowserver reports with your Shadowserver API key, or reads the

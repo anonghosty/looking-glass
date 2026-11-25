@@ -15,7 +15,7 @@ Looking Glass is two programs that share one database. By default everything exc
 the database can instead be an internal MongoDB on another server of your network (see below):
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 34, "rankSpacing": 50, "padding": 14}}}%%
+%%{init: {"themeVariables": {"fontSize": "13px"}, "flowchart": {"curve": "basis", "nodeSpacing": 24, "rankSpacing": 34, "padding": 10, "wrappingWidth": 240}}}%%
 flowchart TD
     SS(["<b>Shadowserver</b>"]):::src
     subgraph DB["database/ · the pipeline · cron · its own database account"]
@@ -26,12 +26,14 @@ flowchart TD
     subgraph PF["platform/ · the web app · a sandboxed systemd service"]
         W["<b>Looking Glass</b><br/>data/: accounts, sessions, audit log, findings, advisories"]:::app
     end
-    B(["<b>Staff browsers</b>, one role each<br/>analyst · researcher · management · advisor · auditor · admin · external"]):::people
+    B("<b>The CSIRT's staff</b>, one role each<br/>researcher · analyst · management · advisor · auditor · admin"):::people
+    E("<b>External viewers</b>, masked<br/>a constituent or another CSIRT · 3 pages"):::ext
     C(["<b>Your OpenCTI or MISP</b>"]):::ext
     SS -- "e-mail to the mailbox, or the report API (HTTPS)" --> F1
     F5 -- "read and write, its own database only" --> M
     M -- "read only" --> W
     W -- "HTTPS · Caddy in front on private and public<br/>password + TOTP, or a passkey (public)" --> B
+    W -- "HTTPS · masked, read only" --> E
     W -. "connectors · HTTPS, outbound only" .-> C
     classDef src fill:#0369a1,stroke:#075985,color:#fff
     classDef pipe fill:#4f46e5,stroke:#4338ca,color:#fff
@@ -39,9 +41,9 @@ flowchart TD
     classDef app fill:#6d28d9,stroke:#5b21b6,color:#fff
     classDef people fill:#475569,stroke:#334155,color:#fff
     classDef ext fill:#b45309,stroke:#92400e,color:#fff
+    linkStyle default stroke:#94a3b8,stroke-width:2px
     style DB fill:transparent,stroke:#6366f1,stroke-width:1.5px,stroke-dasharray:6 4,color:#6366f1
     style PF fill:transparent,stroke:#8b5cf6,stroke-width:1.5px,stroke-dasharray:6 4,color:#8b5cf6
-    linkStyle default stroke:#94a3b8,stroke-width:2px
 ```
 
 | Part | What it does | Runs as | Can write |

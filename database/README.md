@@ -78,12 +78,12 @@ platform's docs/INSTALLATION.md, "When a library file does not match".
 ## 2. How it works
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 40, "rankSpacing": 46, "padding": 14}}}%%
+%%{init: {"themeVariables": {"fontSize": "13px"}, "flowchart": {"curve": "basis", "nodeSpacing": 24, "rankSpacing": 34, "padding": 10, "wrappingWidth": 240}}}%%
 flowchart TD
-    I(["<b>The mailbox</b>, read-only<br/>IMAP, Gmail API or Microsoft Graph"]):::src
+    I("<b>The mailbox</b>, read-only<br/>IMAP, Gmail API or Microsoft Graph"):::src
     A["<b>attachments_backup/</b><br/>attachments, and files downloaded from Shadowserver"]:::pipe
     S["<b>sorting_backup/#lt;service#gt;/</b><br/>report CSVs, one folder per service"]:::pipe
-    U["<b>unzipped_backup/#lt;zip name#gt;/</b><br/>the other files of each zip"]:::side
+    U["<b>unzipped_backup/#lt;zip name#gt;/</b><br/>the other files of each zip"]:::people
     M[("<b>MongoDB</b> · database shadowserver<br/>#lt;service#gt;: one document per unique CSV row<br/>discovered_fields_#lt;service#gt;: one per column<br/>files_#lt;service#gt;: one per file")]:::db
     I -- "step 1 · e-mail" --> A
     A -- "step 2 · unzip and sort" --> S
@@ -91,8 +91,10 @@ flowchart TD
     S -- "step 3 · load" --> M
     classDef src fill:#0369a1,stroke:#075985,color:#fff
     classDef pipe fill:#4f46e5,stroke:#4338ca,color:#fff
-    classDef side fill:#64748b,stroke:#475569,color:#fff
     classDef db fill:#0f766e,stroke:#115e59,color:#fff
+    classDef app fill:#6d28d9,stroke:#5b21b6,color:#fff
+    classDef people fill:#475569,stroke:#334155,color:#fff
+    classDef ext fill:#b45309,stroke:#92400e,color:#fff
     linkStyle default stroke:#94a3b8,stroke-width:2px
 ```
 

@@ -51,19 +51,22 @@ Looking Glass narrows the haystack in steps, each one dropping the numbers, unti
 operator can act on today:
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 30, "rankSpacing": 34, "padding": 12}}}%%
+%%{init: {"themeVariables": {"fontSize": "13px"}, "flowchart": {"curve": "basis", "nodeSpacing": 24, "rankSpacing": 34, "padding": 10, "wrappingWidth": 240}}}%%
 flowchart TD
-    A["<b>tens of thousands of records</b><br/>well over ten thousand hosts · the day's services reports"]:::wide
-    B["<b>over a thousand hosts</b><br/>with a concrete issue"]:::step
-    C["<b>82 hosts</b><br/>an actively exploited vulnerability (CISA KEV)"]:::step
-    D["<b>46 hosts</b><br/>CVE-2025-22224 (VMware ESXi)"]:::step
-    E["<b>42 hosts</b><br/>seen by two different reports"]:::step
-    F["<b>21 hosts</b><br/>exactly the same five CVEs on end-of-life ESXi · code LG-C-1F7E2005"]:::step
-    G(["<b>14 hosts at one operator</b><br/>one advisory, one PDF, one CSV"]):::goal
+    A["<b>tens of thousands of records</b><br/>well over ten thousand hosts · the day's services reports"]:::people
+    B["<b>over a thousand hosts</b><br/>with a concrete issue"]:::pipe
+    C["<b>82 hosts</b><br/>an actively exploited vulnerability (CISA KEV)"]:::pipe
+    D["<b>46 hosts</b><br/>CVE-2025-22224 (VMware ESXi)"]:::pipe
+    E["<b>42 hosts</b><br/>seen by two different reports"]:::pipe
+    F["<b>21 hosts</b><br/>exactly the same five CVEs on end-of-life ESXi · code LG-C-1F7E2005"]:::pipe
+    G("<b>14 hosts at one operator</b><br/>one advisory, one PDF, one CSV"):::db
     A --> B --> C --> D --> E --> F --> G
-    classDef wide fill:#475569,stroke:#334155,color:#fff
-    classDef step fill:#4f46e5,stroke:#4338ca,color:#fff
-    classDef goal fill:#0f766e,stroke:#115e59,color:#fff
+    classDef src fill:#0369a1,stroke:#075985,color:#fff
+    classDef pipe fill:#4f46e5,stroke:#4338ca,color:#fff
+    classDef db fill:#0f766e,stroke:#115e59,color:#fff
+    classDef app fill:#6d28d9,stroke:#5b21b6,color:#fff
+    classDef people fill:#475569,stroke:#334155,color:#fff
+    classDef ext fill:#b45309,stroke:#92400e,color:#fff
     linkStyle default stroke:#94a3b8,stroke-width:2px
 ```
 
@@ -98,19 +101,19 @@ lives in one place.
 ### The codes, and where they go
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 28, "rankSpacing": 56, "padding": 12, "wrappingWidth": 260}}}%%
+%%{init: {"themeVariables": {"fontSize": "13px"}, "flowchart": {"curve": "basis", "nodeSpacing": 22, "rankSpacing": 38, "padding": 10, "wrappingWidth": 230}}}%%
 flowchart TD
     CC["<b>LG-C</b><br/>one exact combination<br/>in one report<br/><i>researcher · Intel gathered</i>"]:::research
     CX["<b>LG-X</b><br/>a pattern across<br/>several reports<br/><i>researcher · Intel gathered</i>"]:::research
     CB["<b>LG-B</b><br/>decoded beacons<br/>that share a part<br/><i>researcher or analyst</i>"]:::research
     CA["<b>LG-A</b><br/>exactly an analyst's<br/>selection, one day<br/><i>analyst · an analysis window</i>"]:::analyst
     N["<b>A note</b><br/>Track as a finding"]:::research
-    F(["<b>The finding</b><br/>carries the codes"]):::mgmt
+    F("<b>The finding</b><br/>carries the codes"):::mgmt
     E["<b>Show in Executive</b><br/>management · the figures behind a code"]:::mgmt
     S["<b>Search</b> on Combinations<br/>analyst · exactly the devices behind a code"]:::analyst
     R["<b>The review</b><br/>management decides the report's views"]:::mgmt
     P["<b>The advisory report</b><br/>PDF + CSV · one organisation's devices only"]:::advisor
-    O(["<b>The organisation</b><br/>where it ends"]):::ext
+    O("<b>The organisation</b><br/>where it ends"):::ext
     CC --> N
     CX --> N
     CB --> N
@@ -137,17 +140,17 @@ analyst's **Search** turns it into devices, and only the advisory report sends d
 ### The life of a finding
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 28, "rankSpacing": 56, "padding": 12, "wrappingWidth": 260}}}%%
+%%{init: {"themeVariables": {"fontSize": "13px"}, "flowchart": {"curve": "basis", "nodeSpacing": 22, "rankSpacing": 38, "padding": 10, "wrappingWidth": 230}}}%%
 flowchart TD
-    RN(["<b>Researcher</b><br/>Track as a finding"]):::research
-    AN(["<b>Analyst</b><br/>Make analyst code"]):::analyst
+    RN("<b>Researcher</b><br/>Track as a finding"):::research
+    AN("<b>Analyst</b><br/>Make analyst code"):::analyst
     M["<b>With management</b>"]:::mgmt
     R["<b>Back with the researcher</b>"]:::research
     A["<b>With the analyst</b>"]:::analyst
     V["<b>With the advisor</b>"]:::advisor
-    O(["<b>The organisation</b><br/>its advisory"]):::ext
+    O("<b>The organisation</b><br/>its advisory"):::ext
     C(["<b>Closed</b>"]):::closed
-    T(["time to act runs out<br/>30 days after its devices were last seen"]):::closed
+    T("time to act runs out<br/>30 days after its devices were last seen"):::closed
     RN -- "names a manager · LG-C, LG-X, LG-B" --> M
     AN -- "names a researcher · LG-A" --> R
     R -- "Reply to the analyst · LG-C, LG-X" --> A
@@ -174,15 +177,15 @@ or close it. An administrator can do every role's work; the history shows which 
 ### A researcher's view
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 38, "rankSpacing": 48, "padding": 14, "wrappingWidth": 280}}}%%
+%%{init: {"themeVariables": {"fontSize": "13px"}, "flowchart": {"curve": "basis", "nodeSpacing": 24, "rankSpacing": 34, "padding": 10, "wrappingWidth": 240}}}%%
 flowchart TD
-    S(["<b>Intel gathered</b> · Looking Glass asks<br/>names, definitions, indicators; never an address"]):::research
+    S("<b>Intel gathered</b> · Looking Glass asks<br/>names, definitions, indicators; never an address"):::research
     N["<b>A note</b> with combination codes<br/>LG-C · LG-X · LG-B"]:::research
     T["<b>Track as a finding</b><br/>names a manager"]:::research
     M(["<b>With management</b>"]):::mgmt
-    Q(["<b>An analyst's request</b><br/>Back with the researcher"]):::analyst
+    Q("<b>An analyst's request</b><br/>Back with the researcher"):::analyst
     O["<b>Open as researcher</b><br/>the intel of exactly those records"]:::research
-    A(["<b>With the analyst</b><br/>the reply and its codes"]):::analyst
+    A("<b>With the analyst</b><br/>the reply and its codes"):::analyst
     C(["<b>Closed</b>"]):::closed
     S --> N --> T --> M
     Q --> O
@@ -200,18 +203,18 @@ flowchart TD
 ### An analyst's view
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 38, "rankSpacing": 48, "padding": 14, "wrappingWidth": 280}}}%%
+%%{init: {"themeVariables": {"fontSize": "13px"}, "flowchart": {"curve": "basis", "nodeSpacing": 24, "rankSpacing": 34, "padding": 10, "wrappingWidth": 240}}}%%
 flowchart TD
-    W(["<b>The map or the services platform</b><br/>a selection of devices"]):::analyst
+    W("<b>The map or the services platform</b><br/>a selection of devices"):::analyst
     K["<b>Make analyst code</b> · LG-A<br/>names a researcher"]:::analyst
     R(["<b>Back with the researcher</b>"]):::research
-    D(["<b>With the analyst</b><br/>approved by management, with its directive"]):::mgmt
-    Y(["<b>With the analyst</b><br/>the researcher's reply · LG-C, LG-X"]):::research
+    D("<b>With the analyst</b><br/>approved by management, with its directive"):::mgmt
+    Y("<b>With the analyst</b><br/>the researcher's reply · LG-C, LG-X"):::research
     S["<b>Search</b> on Combinations<br/>exactly the devices behind the code"]:::analyst
     V["<b>Tick the views</b> across reports<br/>drill down to what matters"]:::analyst
     G["<b>Send the ticked views to management</b><br/>or, with nothing ticked, Send to management for the advisory<br/>one organisation: a review · several: a case"]:::analyst
     M(["<b>With management</b>"]):::mgmt
-    P(["<b>The advisory report</b><br/>exactly these devices, per organisation"]):::advisor
+    P("<b>The advisory report</b><br/>exactly these devices, per organisation"):::advisor
     W --> K --> R
     R -. "the researcher replies" .-> Y
     D -- "LG-C, LG-X or LG-B" --> S
@@ -233,16 +236,16 @@ manager they name.
 ### Management's view
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 38, "rankSpacing": 48, "padding": 14, "wrappingWidth": 280}}}%%
+%%{init: {"themeVariables": {"fontSize": "13px"}, "flowchart": {"curve": "basis", "nodeSpacing": 24, "rankSpacing": 34, "padding": 10, "wrappingWidth": 240}}}%%
 flowchart TD
-    I(["<b>With management</b><br/>a researcher's finding, or an analyst's request"]):::mgmt
+    I("<b>With management</b><br/>a researcher's finding, or an analyst's request"):::mgmt
     X["<b>Show in Executive</b><br/>the figures behind any of its codes, no addresses"]:::mgmt
     E{"<b>Decide</b>"}:::mgmt
-    A(["<b>With the analyst</b><br/>the directive, an analyst named"]):::analyst
-    C(["<b>Closed</b><br/>with the reason"]):::closed
-    Q(["<b>A review or a case</b><br/>the analyst's report for the advisory"]):::analyst
+    A("<b>With the analyst</b><br/>the directive, an analyst named"):::analyst
+    C("<b>Closed</b><br/>with the reason"):::closed
+    Q("<b>A review or a case</b><br/>the analyst's report for the advisory"):::analyst
     F{"<b>Decide the report's views</b><br/>each organisation of a case"}:::mgmt
-    V(["<b>With the advisor</b><br/>an advisor named"]):::advisor
+    V("<b>With the advisor</b><br/>an advisor named"):::advisor
     I --> X --> E
     E -- "approve" --> A
     E -- "reject" --> C
@@ -261,14 +264,14 @@ flowchart TD
 ### An advisor's view
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 38, "rankSpacing": 48, "padding": 14, "wrappingWidth": 280}}}%%
+%%{init: {"themeVariables": {"fontSize": "13px"}, "flowchart": {"curve": "basis", "nodeSpacing": 24, "rankSpacing": 34, "padding": 10, "wrappingWidth": 240}}}%%
 flowchart TD
-    I(["<b>With the advisor</b><br/>only after management approved"]):::advisor
+    I("<b>With the advisor</b><br/>only after management approved"):::advisor
     W["<b>Write the advisory</b><br/>one per organisation, with its TLP"]:::advisor
     G["<b>Generate</b> the PDF<br/>after confirming it's you"]:::advisor
     S["<b>Mark as sent</b><br/>to its recipients"]:::advisor
-    C(["<b>Closed</b><br/>once every organisation's advisory is sent"]):::closed
-    O(["<b>The organisation</b><br/>fixes its devices"]):::ext
+    C("<b>Closed</b><br/>once every organisation's advisory is sent"):::closed
+    O("<b>The organisation</b><br/>fixes its devices"):::ext
     I --> W --> G --> S --> C
     S -. "the advisory" .-> O
     classDef research fill:#0369a1,stroke:#075985,color:#fff
