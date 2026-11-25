@@ -833,7 +833,7 @@ the address resolved once and refused when it is loopback, link-local, a cloud m
 certificate and name checked, no redirects, a size cap), `connector_payload.py` (what is sent: STIX 2.1 for OpenCTI,
 a MISP event) and `connectors_worker.py` (the sender, run by its own systemd timer: `deploy/connectors_timer.sh`).
 
-Error words in answers: `user_words.py`. An answer shows an error's text only when Looking Glass wrote it for the
+Error words in answers (in the next release, in testing now): `user_words.py`. An answer shows an error's text only when Looking Glass wrote it for the
 reader (raised as `Said`, or registered, as the connectors' refusals are); any other error, a library's or Python's
 own, gets a fixed message, and its detail goes to the audit or the service's log. The connectors and the passkey
 checks answer this way (`tests/check_user_words.py`).

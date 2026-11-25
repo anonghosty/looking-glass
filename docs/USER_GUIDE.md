@@ -192,7 +192,7 @@ cannot use it: your browser offers it to the real site only.
   and a trusted certificate; the page says when that is not the case.
 
 Give each passkey a name you will recognise (**Rename**), and remove one you no longer have (**Remove**). Adding or
-removing a passkey asks you to confirm it's you first. Your bell tells you when a passkey is added to or removed from
+removing a passkey asks you to confirm it's you first. Your bell (in the next release, in testing now) tells you when a passkey is added to or removed from
 your account (except the first two you register), so you would notice one you did not add. Lost all your devices? An administrator uses **Reset
 passkeys** on your account (Admin → Users); at your next sign-in you register new ones.
 
@@ -1121,7 +1121,7 @@ Every role has a **bell** in its header. It counts what changed in the findings 
 you, a decision, a reply, an advisory sent. Open it to see each one, with what happened and when; click one to go
 straight to it. **Clear all** clears your own list only. With Peace of mind on, an administrator gets no findings
 notifications. Management, advisors and administrators also get one alert when a quarter's reports are ready
-([Quarterly reports](#quarterly-reports)). Everyone's bell also says when a passkey is added to or removed from their
+([Quarterly reports](#quarterly-reports)). Everyone's bell also says (in the next release, in testing now) when a passkey is added to or removed from their
 own account.
 
 ## Quarterly reports
