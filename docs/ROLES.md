@@ -52,15 +52,15 @@ SOC staff are commonly organised in tiers. This is industry practice, not a stan
 
 ## Looking Glass roles mapped to them
 
-| Looking Glass | At a CSIRT (ENISA) | At a SOC | NICE work role (NIST) |
-|---|---|---|---|
-| **Researcher/TI** | Researcher | Threat intelligence; Tier 3 threat hunter | Threat Analysis (PD-WRL-006) |
-| **Analyst** | Triage officer and incident handler | Tier 1 and Tier 2 analyst | Incident Response (PD-WRL-003) |
-| **Management** | Incident manager; team manager; team leads | SOC manager; team leads | Executive Cybersecurity Leadership (OG-WRL-007), for the head of the team |
-| **Advisor** | The incident handler's communication with constituents; the senior specialist who writes advisories | The responder who tells the IT team what to fix | Incident Response (its communication part) |
-| **Auditor** | Outside the core CSIRT roles | Outside the SOC | Security Control Assessment (OG-WRL-012) |
-| **Administrator** | Not a core role (often IT support) | SOC engineering | Defensive Cybersecurity (PD-WRL-001) |
-| **External viewer** | A constituent, or another CSIRT sharing information | Another team given a read-only view | none |
+| Looking Glass | At a CSIRT (ENISA) | ENISA skills profile (ECSF) | At a SOC | NICE work role (NIST) |
+|---|---|---|---|---|
+| **Researcher/TI** | Threat intelligence and research (optional roles) | Cyber Threat Intelligence Specialist | Threat intelligence; Tier 3 threat hunter | Threat Analysis (PD-WRL-006) |
+| **Analyst** | Triage officer and incident handler | Cyber Incident Responder | Tier 1 and Tier 2 analyst | Incident Response (PD-WRL-003) |
+| **Management** | Incident manager; team manager; team leads | Chief Information Security Officer (CISO), the closest profile | SOC manager; team leads | Executive Cybersecurity Leadership (OG-WRL-007), for the head of the team |
+| **Advisor** | The incident handler's communication with constituents; the senior specialist who writes advisories | Cyber Incident Responder (its communication part) | The responder who tells the IT team what to fix | Incident Response (its communication part) |
+| **Auditor** | Outside the core CSIRT roles | Cybersecurity Auditor | Outside the SOC | Security Control Assessment (OG-WRL-012) |
+| **Administrator** | Not a core role (often IT support) | Cybersecurity Implementer | SOC engineering | Defensive Cybersecurity (PD-WRL-001) |
+| **External viewer** | A constituent, or another CSIRT sharing information | none | Another team given a read-only view | none |
 
 **Why Researcher/TI.** The role studies threats, their patterns and their TTPs, which is threat intelligence work as
 much as research. ENISA's skills framework (ECSF) lists the Cyber Threat Intelligence Specialist (also titled Cyber
@@ -140,7 +140,7 @@ and Looking Glass gives each of them only what their job needs.
 - ENISA, [Recruitment of CSIRT staff (toolset)](https://enisa.europa.eu/topics/trainings-for-cybersecurity-specialists/online-training-material/documents/2016-resources/recruitment_of_csirt_staff-toolset).
 - FIRST, [CSIRT Services Framework v2.1](https://www.first.org/standards/frameworks/csirts/csirt_services_framework_v2.1): sections 1 and 5–9 (services, not roles).
 - NIST / CISA NICCS, [NICE Framework work roles](https://niccs.cisa.gov/workforce-development/nice-framework) (Protection and Defense; Oversight and Governance), among them [Cybersecurity Policy and Planning](https://niccs.cisa.gov/tools/nice-framework/work-role/cybersecurity-policy-and-planning) and [Executive Cybersecurity Leadership](https://niccs.cisa.gov/tools/nice-framework/work-role/executive-cybersecurity-leadership).
-- ENISA, [European Cybersecurity Skills Framework, role profiles](https://www.enisa.europa.eu/publications/european-cybersecurity-skills-framework-role-profiles) (September 2022): 2.4 Cyber Threat Intelligence Specialist; 2.9 Cybersecurity Researcher.
+- ENISA, [European Cybersecurity Skills Framework, role profiles](https://www.enisa.europa.eu/publications/european-cybersecurity-skills-framework-role-profiles) (September 2022): 2.4 Cyber Threat Intelligence Specialist; 2.9 Cybersecurity Researcher; also the Cyber Incident Responder, Chief Information Security Officer (CISO), Cybersecurity Auditor and Cybersecurity Implementer profiles.
 - National Cybersecurity Authority (Saudi Arabia), [Saudi Cybersecurity Workforce Framework (SCyWF)](https://nca.gov.sa/en/regulatory-documents/frameworks-and-standard-list/scywf/), Career Progression: Cybersecurity Researcher (pp. 47 to 50) and Threat Intelligence Analyst (pp. 136 to 138).
 - NIST / CISA NICCS, [Threat Analysis (PD-WRL-006)](https://niccs.cisa.gov/tools/nice-framework/work-role/threat-analysis).
 - SOC tiers (industry practice): [Palo Alto Networks, SOC roles and responsibilities](https://paloaltonetworks.com/cyberpedia/soc-roles-and-responsibilities).

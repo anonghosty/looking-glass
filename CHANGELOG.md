@@ -5,6 +5,13 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## Unreleased
+### Fixed
+- **Roles: every role names its ENISA skills profile.** The table in Roles has a new column for ENISA's European
+  Cybersecurity Skills Framework (ECSF): Researcher/TI is the Cyber Threat Intelligence Specialist, as the text below
+  the table already said (the table had said "Researcher"); Analyst the Cyber Incident Responder; Auditor the
+  Cybersecurity Auditor; Administrator the Cybersecurity Implementer; Management the closest, the CISO.
+
 ## 2026-11-26
 ### Added
 - **Settings → Update: update Looking Glass from the page.** Check for an update looks for a newer release; Update
