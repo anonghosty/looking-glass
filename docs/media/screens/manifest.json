@@ -1114,7 +1114,7 @@
    "page": "/review/"
   },
   "94-cve-tick.png": {
-   "confirmed": "2026-11-25",
+   "confirmed": "2026-11-26",
    "files_sha256": {
     "platform/static/css/acode.css": "e20743d0c626fb75105d36fdf429814db1e0574dbdba119a1b24c6107bc11adb",
     "platform/static/css/app.css": "0c8871d4d6e517d8ed4ab65631989885b15a4c4e3aa142466273660edcdad203",
@@ -1126,7 +1126,7 @@
     "platform/templates/_page_nav.html": "f38b3b2fdae31ec7c8a4343f25c1f6310556d630ed4896d876e4ee26c3cd8477",
     "platform/templates/acode.html": "e5a57605550bcd9cadb29da2be0caea7cd03bcd6910acf206665dc3f0a51ced8"
    },
-   "image_sha256": "ffe92f9162f2f315b28419e4428c309f4e1ef531344219c6c421ccc26fec91ed",
+   "image_sha256": "2cb71e08a21b674946a43eb69e877951bdd7010dd591d144cbff7a7ca2779b85",
    "page": "/intel/"
   },
   "95-guided-installer.png": {
