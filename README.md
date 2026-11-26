@@ -47,8 +47,8 @@ Free and open source (AGPL-3.0) · built in Africa, for CSIRTs in every country<
 ---
 
 > **Updated recently and something stopped working?** The service restarting after `git pull`, everyone asked for
-> passkeys on an internal network, or Caddy to put in front of a running installation: see
-> [the fixes in Updating](docs/INSTALLATION.md#updating).
+> passkeys on an internal network, Caddy to put in front of a running installation, pages slow or blank with Caddy
+> in front, or `caddy_front.sh adopt` answering with nothing: see [the fixes in Updating](docs/INSTALLATION.md#updating).
 
 ## Contents
 

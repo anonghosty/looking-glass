@@ -675,6 +675,24 @@ delete the report until it has been looked at.
 > - **The bell says "This internal installation has no Caddy in front":** nothing is broken. Put Caddy in front once,
 >   on the server, in the platform folder: `sudo deploy/caddy_front.sh adopt`
 >   ([Caddy in front of a running installation](#b4c-caddy-in-front-of-a-running-installation-security)).
+> - **With Caddy in front, pages load slowly, blank or half drawn, then work again a few minutes later:** Caddy opened
+>   as many connections to Looking Glass as a page's requests asked for, more than its threads, and new requests then
+>   waited for minutes. The next release limits them. Until you update, add the limit yourself (each line is added
+>   only once, so running it again changes nothing):
+>
+>   ```bash
+>   sudo cp -p /etc/caddy/Caddyfile /etc/caddy/Caddyfile.before-cap
+>   grep -q 'max_conns_per_host' /etc/caddy/Caddyfile || sudo sed -i '/tls_server_name /a\			max_conns_per_host 6' /etc/caddy/Caddyfile
+>   grep -q 'keepalive_idle_conns_per_host' /etc/caddy/Caddyfile || sudo sed -i '/max_conns_per_host 6/a\			keepalive_idle_conns_per_host 6' /etc/caddy/Caddyfile
+>   sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl restart caddy
+>   ```
+>
+>   Run `deploy/caddy_front.sh sync` (after renewing the certificate) or `setup` again before you update, and the
+>   limit is written out again: add it once more.
+> - **`sudo deploy/caddy_front.sh adopt` answers with nothing at all:** your platform's `.env` has no `LG_SERVICE` line
+>   (installations made before the installer wrote it), and adopt took a helper job for the web service. Add the line,
+>   as Looking Glass's user in the platform folder, then run adopt again:
+>   `grep -q '^LG_SERVICE=' .env || echo 'LG_SERVICE=looking-glass' >> .env` (your service's name, if you changed it).
 
 ### Updating from Settings
 
