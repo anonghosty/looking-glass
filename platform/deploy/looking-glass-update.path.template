@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
+[Unit]
+Description=Looking Glass update: start the update run when Settings asks for one
+
+# Template: deploy/update_helper.sh fills in @PROJECT@ and @NAME@. The run takes the request away, so it starts once.
+[Path]
+PathExists=@PROJECT@/data/update/request.json
+Unit=@NAME@.service
+
+[Install]
+WantedBy=multi-user.target

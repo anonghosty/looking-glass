@@ -57,11 +57,15 @@ try:
     ok("a finding without the manager it goes to is refused (and no note is saved)", st == 400 and "manager" in d.get("error", "")
        and not any(n["text"] == "No recipient." for n in A.NOTES.list("infections", "android.badbox2")), d.get("error", ""))
     st, d = call("/api/findings/people?kind=management", RESEARCHER)
-    ok("the managers to choose from are listed (names only)", st == 200 and d["people"] and set(d["people"][0]) == {"user", "name", "role"})
+    ok("the managers to choose from are listed (names only)", st == 200 and d["people"] and set(d["people"][0]) == {"code", "name", "role"})
+    pcode = (d.get("people") or [{}])[0].get("code", "")
+    ok("…each by an opaque code, never the sign-in name (person_code.py)", pcode.startswith("p-") and "lg-check" not in json.dumps(d), pcode)
     st, d = call("/api/notes", RESEARCHER, "POST", {"section": "infections", "name": "android.badbox2", "text": "Test: a new C2 cluster.",
-                                                     "codes": [code0] if code0 else [], "finding": {"title": "Test cluster", "to": "lg-check-management"}})
+                                                     "codes": [code0] if code0 else [], "finding": {"title": "Test cluster", "to": pcode}})
     ok("the note is saved", st == 200, f"HTTP {st} {d.get('error', '')}")
     mine = next((n for n in d.get("notes", []) if n["id"] == d.get("note", {}).get("id")), {})
+    ok("the author's note says it is theirs, without a sign-in name field (notes.py: mine)", mine.get("mine") is True
+       and "user" not in mine, f"mine={mine.get('mine')!r} keys={sorted(mine)}")
     ok("…and carries its finding number, with management", (mine.get("finding") or {}).get("number") == "#1" and mine["finding"]["status"] == "management", str(mine.get("finding")))
     print("Only the people in its channel see it")
     st, d = call("/api/findings", MGMT, role="management", user="lg-check-management")

@@ -85,7 +85,7 @@ try:
     print("4. The role an administrator played")
     n = F.create({"id": "n3", "text": "An admin's note", "codes": ["LG-C-00000002"]}, "infections", "z", "From a note", "adm", "admin", "man")
     ok("a finding an administrator made from a note: research", FM.acted_role(n) == "researcher"
-       and F.shown(F.get(n["id"]))["role"] == "Administrator acting as researcher")
+       and F.shown(F.get(n["id"]))["role"] == "Administrator acting as Researcher/TI")
     rv = F.create_review("LG-C-00000002", "infections", "z", "Review", "My comments", "adm", "admin", "man", {"source": "LG-C-00000002", "codes": []})
     ok("a request an administrator sent from the analyst's tools: analysis", F.shown(F.get(rv["id"]))["role"] == "Administrator acting as analyst")
     F.decide_review(rv["id"], "researcher", "Approved", "adm", "admin", "ana")
@@ -96,7 +96,7 @@ try:
     ok("an administrator's reply with an analyst code: analysis", F.shown(F.get(n["id"]))["history"][-1]["acted"] == "analyst")
     F.reply(n["id"], "Just a word", [], "adm", "admin")
     ok("a reply that does not tell: plainly Administrator", F.shown(F.get(n["id"]))["history"][-1]["role"] == "Administrator")
-    ok("everyone else keeps their role", F.shown(F.get(a["id"]))["role"] == "Researcher"
+    ok("everyone else keeps their role", F.shown(F.get(a["id"]))["role"] == "Researcher/TI"
        and F.shown(F.get(other["id"]))["history"][-1]["role"] == "Analyst")
 
     print("4b. Case → finding → sub-findings")

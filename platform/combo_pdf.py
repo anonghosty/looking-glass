@@ -372,13 +372,13 @@ class AnalystDoc(ex.Doc):
         body = ex.simpleSplit(self.s(n.get("text", "")), self.F["r"], 8.4, w - 28)
         codes = ", ".join(cc["code"] for cc in n.get("codes") or [])
         cl = ex.simpleSplit(self.s(f"Combinations: {codes}"), self.F["r"], 7.6, w - 28) if codes else []
-        who = ex.simpleSplit(self.s(f"Notes shared by {n.get('role') or 'Researcher'}: {n.get('by') or 'a researcher'}"), self.F["b"], 9.4, w - 28)
+        who = ex.simpleSplit(self.s(f"Notes shared by {n.get('role') or 'Researcher/TI'}: {n.get('by') or 'a researcher'}"), self.F["b"], 9.4, w - 28)
         h = 40 + 12 * len(who) + 11.5 * len(body) + 10 * len(cl)
         if y is None:
             return h
         on = any(cc["code"] == this_code for cc in n.get("codes") or [])
         self.card(x, y, w, h, tone=BLUE if on else AMBER)
-        tx = self.pill(x + 12, y - 17, f"Researcher's note on {n['name']}" if n.get("name") else "Researcher's note", AMBER)
+        tx = self.pill(x + 12, y - 17, f"Researcher/TI note on {n['name']}" if n.get("name") else "Researcher/TI note", AMBER)
         if on:
             self.pill(tx, y - 17, "On this combination", BLUE)
         self.text(x + w - 14, y - 17, n.get("date") or "", 7.6, MUTE, anchor="end")

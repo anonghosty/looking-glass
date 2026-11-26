@@ -240,6 +240,25 @@ class Sampler:
 SAMPLER = Sampler()
 
 
+CADDYFILE = "/etc/caddy/Caddyfile"
+
+
+def _front():
+    """Who answers the network: Caddy in front (set up by Looking Glass, for a domain or internal), or Looking Glass
+    itself, and the one command that puts Caddy in front of a running installation (deploy/caddy_front.sh adopt)."""
+    import security
+    mode = security.access_mode()
+    head = ""
+    try:
+        with open(CADDYFILE, encoding="utf-8") as fh:
+            head = fh.read(4096)
+    except OSError:
+        pass
+    ours = head.startswith("# Managed by Looking Glass")
+    return {"access_mode": mode, "caddy": ours, "internal": ours and "\n# internal: " in head,
+            "needed": mode != "local" and not ours, "command": "sudo deploy/caddy_front.sh adopt"}
+
+
 def snapshot(ctx):
     data_dir = os.path.join(ctx["base_dir"], "data")
     alive = {t.name for t in threading.enumerate() if t.is_alive()}
@@ -266,6 +285,7 @@ def snapshot(ctx):
         "at_rest": _at_rest(data_dir, pdir),
         "heavy_limits": (ctx["heavy_limits"] if ctx.get("heavy_limits") else None),
         "pipeline": {"found": bool(pdir), "last": pstat, "schedule": sched, "schedule_readable": sched_ok},
+        "front": _front(),
         "restarts": _restarts(data_dir),
         "locks": len(ctx["throttle"].lockouts()) if ctx.get("throttle") else 0,
         "processes": request_tracker.processes(),

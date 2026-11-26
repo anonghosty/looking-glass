@@ -262,7 +262,7 @@
       row.append(el("code", null, asBeacon ? f.beacon_code : x.code), what);
       const acts = el("div", "fd-code-acts");
       const link = (label, href, title) => { const a = el("a", "lg-btn sm", label); a.href = href; a.title = title; acts.append(a); };
-      if (isA && !asBeacon && data.can_research) link("Open as researcher", `/intel/${x.code}`, "The names, definitions and intel of exactly these records, never an address; pick codes for your reply");
+      if (isA && !asBeacon && data.can_research) link("Open as Researcher/TI", `/intel/${x.code}`, "The names, definitions and intel of exactly these records, never an address; pick codes for your reply");
       if (data.can_portal) link("Show in Executive", `/management?code=${x.code}${dayQ(f)}`, "Filter the Executive portal to exactly this, on the day it was reported (aggregated figures, no addresses)");
       const inA = !isA && within ? `&within=${encodeURIComponent(within)}` : "";
       if (data.can_search) link(isA ? "Report (PDF + CSV)" : inA ? "Search within the selection" : "Search", `/combinations?code=${x.code}${inA}${dayQ(f)}`,

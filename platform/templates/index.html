@@ -20,7 +20,7 @@
   <script src="{{ url_for('static', filename='js/lg-select.js') }}"></script>
   <script src="{{ url_for('static', filename='js/display.js') }}"></script>
 </head>
-<body data-user="{{ lg_user }}"{% if "unmasked" not in lg_perms %} data-masked="1"{% endif %}{% if "export" in lg_perms %} data-export="1"{% endif %}{% if "malpedia" in lg_perms %} data-lookups="1"{% endif %}>
+<body data-user="{{ lg_me }}"{% if "unmasked" not in lg_perms %} data-masked="1"{% endif %}{% if "export" in lg_perms %} data-export="1"{% endif %}{% if "malpedia" in lg_perms %} data-lookups="1"{% endif %}>
   <!-- ===================== Intro ===================== -->
   <section class="intro" id="intro" role="dialog" aria-modal="true" aria-labelledby="introTitle">
     <!-- Top left: display quality (small). Top right: the account button (Log out); under it, what both platforms are
@@ -37,9 +37,9 @@
     <div class="intro-gear-wrap">
       <div class="intro-gear-row">
       {#- no page buttons here (r90): the "Your pages" cards below offer each page once -#}
-      <form method="post" action="/logout" class="account-form"><button type="submit" class="intro-gear account-btn" title="Logged in as {{ lg_name }} ({{ lg_role }}). Click to log out." aria-label="Log out">
+      <form method="post" action="/logout" class="account-form"><button type="submit" class="intro-gear account-btn" title="Logged in as {{ lg_name }} ({{ lg_role_name }}). Click to log out." aria-label="Log out">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
-        <span class="acct-name">{{ lg_user }}</span><span class="acct-sep" aria-hidden="true">·</span><span>Log out</span></button></form>
+        <span class="acct-name">{{ lg_name }}</span><span class="acct-sep" aria-hidden="true">·</span><span>Log out</span></button></form>
       </div>
       <span class="intro-scope" id="introScope"></span>
     </div>
@@ -207,7 +207,7 @@
       {% if lg_findings_team(lg_perms) and not lg_peace %}<a class="demo-btn account-btn" href="/findings" title="Findings: researchers' notes the team follows up, from the first look to the advisory"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M5 21V4h11l-1.5 4L16 12H5M5 12"/></svg><span>Findings</span></a>{% endif %}
       {% if "management" in lg_perms %}<a class="demo-btn account-btn" href="/management" title="The management portal (Executive): aggregated dashboard and executive reports"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Executive</span></a>{% endif %}
       {% if "users" in lg_perms or "audit" in lg_perms %}<a class="demo-btn account-btn" href="/admin" title="Users, sessions, roles and audit log"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6zM9 12l2 2 4-4"/></svg><span>Admin</span></a>{% endif %}
-      <form method="post" action="/logout" class="account-form"><button type="submit" class="demo-btn account-btn" title="Logged in as {{ lg_name }} ({{ lg_role }}). Click to log out.">
+      <form method="post" action="/logout" class="account-form"><button type="submit" class="demo-btn account-btn" title="Logged in as {{ lg_name }} ({{ lg_role_name }}). Click to log out.">
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
         <span class="acct-name">Log out</span></button></form>
       <button class="demo-btn" id="btnDemo" aria-pressed="false" title="Demo mode: conceal network names, AS numbers and IP addresses for public presentations">

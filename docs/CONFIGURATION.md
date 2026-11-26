@@ -74,6 +74,7 @@ of …"), then replays the whole day from 00:00 to 24:00. Details: [TECHNICAL_RE
 | `VIEWER_NETWORKS` | empty | addresses and ranges allowed in `private` mode, comma separated (`10.20.0.0/24, 192.168.1.40`). `internal` = every private range (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7): any computer on the internal network, never the internet. `any` or `*` = public. Never `0.0.0.0` (that is one address no computer has: nobody gets in) |
 | `ALLOWED_HOSTS` | empty | extra host names people type to reach it (the computer's own names and addresses are always allowed). `*` = any |
 | `MFA_REQUIRED` | `1` | authenticator code at every sign-in. `0` only in a closed lab |
+| `SIGNIN_CHECK` | (empty) | how sign-in and high-value actions are checked: `passkey` or `code`. Empty: Settings → General → Sign-in check decides (by default `passkey` only for `public` with Caddy in front for a domain). Set here, it wins over the page: `code` and `deploy/reload.sh` is the way back when nobody can register a passkey |
 | `REGISTRATION` | `1` | **Create an account** on the sign-in page (accounts wait for an administrator's approval; the administrators are told in the bell). `0` = only people an administrator invites (Admin → Users → Add a person). The first administrator always signs up with the setup code, whatever this says |
 | `INVITE_HOURS` | `72` | how long a sign-up link from Add a person works (1 to 720 hours); it works once either way |
 | `SESSION_IDLE_MINUTES` | `60` | a normal session ends after this many minutes without use |

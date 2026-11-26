@@ -26,6 +26,11 @@
 # Run as root (sudo), from the platform folder or with --project:
 #   deploy/caddy_front.sh setup  --domain D --public-port P --backend-port B [--ca-bundle FILE] [--project DIR]
 #   deploy/caddy_front.sh setup  --internal --public-port P --backend-port B [--ca-bundle FILE] [--project DIR]
+#   deploy/caddy_front.sh adopt  [--yes] [--project DIR]
+#                       an installation that is already running, without Caddy (the user, 2026-11-25): reads it as it
+#                       is (.env, the service's address and port, its certificate), says what will change and asks once,
+#                       then moves Looking Glass to 127.0.0.1 behind Caddy on the same port people use. If a step
+#                       fails, everything is put back as it was. A copy of what it changes is kept in backups/.
 #   deploy/caddy_front.sh sync   [--project DIR]    copy a renewed certificate to Caddy and restart it
 #   deploy/caddy_front.sh render --domain D --public-port P --backend-port B [--ca-bundle FILE]   print the Caddyfile
 #   deploy/caddy_front.sh update                    Caddy's newest version (key checked; ours kept; checked through it)
@@ -131,9 +136,10 @@ EOF
 }
 
 cmd="${1:-}"; [ $# -gt 0 ] && shift
-project="$(cd "$(dirname "$0")/.." && pwd)"; domain=""; pport=""; bport=""; cab=""; limit=100; internal=0; name=""
+project="$(cd "$(dirname "$0")/.." && pwd)"; domain=""; pport=""; bport=""; cab=""; limit=100; internal=0; name=""; yes=0
 while [ $# -gt 0 ]; do
   case "$1" in
+    --yes) yes=1; shift ;;
     --conn-limit) limit="$2"; shift 2 ;;
     --domain) domain="${2,,}"; shift 2 ;;
     --internal) internal=1; shift ;;
@@ -321,12 +327,7 @@ read_site() {
   return 0
 }
 
-case "$cmd" in
-  render) valid; render ;;
-  hardening) hardening ;;
-  firewall) valid; firewall ;;
-  setup)
-    need_root; valid
+do_setup() {   # setup's steps, also adopt's (one place)
     install_caddy
     command -v nft >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nftables
     copy_certs
@@ -345,7 +346,147 @@ case "$cmd" in
     systemctl enable caddy >/dev/null 2>&1 || true
     systemctl restart caddy
     check_front
-    auto_updates || true ;;
+    auto_updates || true
+}
+
+# ---- adopt: Caddy in front of an installation that is already running (the user, 2026-11-25)
+env_get() {   # the last KEY= line of the platform's .env, without quotes
+  sed -n "s/^$1=//p" "$project/.env" 2>/dev/null | tail -1 | tr -d "\"'" | tr -d '\r'
+}
+env_set() {   # KEY=value in the platform's .env (changed in place, or added), as its owner: owner and mode kept
+  local f="$project/.env"
+  if grep -qE "^$1=" "$f"; then as_owner sed -i "s|^$1=.*|$1=$2|" "$f"; else printf '\n%s=%s\n' "$1" "$2" | as_owner tee -a "$f" >/dev/null; fi
+}
+port_free() { ! ss -Hltn "( sport = :$1 )" 2>/dev/null | grep -q .; }
+as_owner() { runuser -u "$owner" -- "$@"; }
+audit_note() {   # the change in the audit log, the chain the service writes, written as the service's own user
+  as_owner "$project/.venv/bin/python" - "$project" "$1" "$2" <<'PY' || echo "note: could not write the audit log entry"
+import os, sys, time
+sys.path.insert(0, sys.argv[1])
+import audit_chain
+audit_chain.Chain(os.path.join(sys.argv[1], "data", "audit.log")).append(
+    {"t": round(time.time(), 3), "event": sys.argv[2], "user": "caddy_front.sh adopt", "target": "", "detail": sys.argv[3]})
+PY
+}
+
+adopt() {
+  need_root
+  [ -f "$project/.env" ] || die "no .env in $project: is this the platform folder? (--project DIR)"
+  owner="$(stat -c %U "$project")"
+  [ "$owner" != root ] || die "$project belongs to root: Looking Glass runs as an ordinary user (docs/INSTALLATION.md)"
+  local svc unit bind mode spec iss subj
+  svc="$(env_get LG_SERVICE)"
+  if [ -z "$svc" ]; then
+    # no LG_SERVICE in .env (installations from before deploy/install.sh wrote it): the service that runs this folder
+    # (its WorkingDirectory), whatever its name; looking-glass when none says so
+    local u wd
+    for u in $(systemctl list-units --type=service --all --no-legend --plain 2>/dev/null | awk '{print $1}'); do
+      wd="$(systemctl show -p WorkingDirectory --value "$u" 2>/dev/null)"
+      [ -n "$wd" ] && [ "$(realpath -m "$wd")" = "$(realpath -m "$project")" ] && { svc="${u%.service}"; break; }
+    done
+    svc="${svc:-looking-glass}"
+  fi
+  unit="/etc/systemd/system/$svc.service"
+  [ -f "$unit" ] || die "the service $svc is not installed here ($unit): nothing to put Caddy in front of"
+  if head -1 "$CONF" 2>/dev/null | grep -qF "$MARK"; then
+    echo "Caddy is already in front of Looking Glass here:"; "$0" status --project "$project"; return 0
+  fi
+  if [ -s "$CONF" ] && ! package_default 2>/dev/null; then
+    die "$CONF exists and was not written by Looking Glass: not replaced. Put Looking Glass in it yourself (docs/INSTALLATION.md, B5) or move it aside."
+  fi
+  bind="$(systemctl show -p ExecStart --value "$svc" | grep -oE -- '--bind [^ ;]+' | cut -d' ' -f2)"
+  [ -n "$bind" ] || die "could not read the address the service listens on (ExecStart of $svc)"
+  pport="${bind##*:}"
+  mode="$(env_get ACCESS_MODE | tr 'A-Z' 'a-z')"; spec="$(env_get VIEWER_NETWORKS | tr 'A-Z' 'a-z')"
+  case "$spec" in any|'*'|all|0.0.0.0/0) mode=public ;; esac
+  [ -n "$mode" ] || { [ -n "$spec" ] && mode=private || mode=local; }
+  if [ "$mode" = local ]; then
+    die "ACCESS_MODE is local: only this computer reaches Looking Glass, so nothing faces the network and Caddy is not needed"
+  fi
+  # the certificate: an internal installation makes its own when it has none; a public one needs its domain's
+  if [ "$mode" = public ]; then
+    [ -f "$project/data/tls/cert.pem" ] || die "a public installation needs a certificate for its domain first: manage/install_cert.sh (docs/INSTALLATION.md, B4a)"
+    iss="$(openssl x509 -in "$project/data/tls/cert.pem" -noout -issuer 2>/dev/null | sed 's/^issuer= *//')"
+    subj="$(openssl x509 -in "$project/data/tls/cert.pem" -noout -subject 2>/dev/null | sed 's/^subject= *//')"
+    if [ -n "$iss" ] && [ "$iss" = "$subj" ]; then
+      die "a public installation needs a certificate for its domain, not a self-signed one: manage/install_cert.sh (docs/INSTALLATION.md, B4a)"
+    fi
+    domain="$(openssl x509 -in "$project/data/tls/cert.pem" -noout -ext subjectAltName 2>/dev/null | tail -n +2 | tr ',' '\n' | sed -n 's/^ *DNS://p' | head -1 | tr 'A-Z' 'a-z')"
+    [ -n "$domain" ] || die "no domain name in the certificate $project/data/tls/cert.pem"
+    internal=0
+  else
+    internal=1
+  fi
+  bport=""
+  for q in $(seq 5000 5099); do [ "$q" = "$pport" ] && continue; port_free "$q" && { bport="$q"; break; }; done
+  [ -n "$bport" ] || die "no free port between 5000 and 5099 for Looking Glass behind Caddy"
+  local site="the address people use now (port $pport)"
+  [ "$internal" = 0 ] && site="https://$domain:$pport"
+  cat <<EOF
+
+Caddy in front of this installation ($project, service $svc, ACCESS_MODE=$mode):
+  now:    Looking Glass itself answers the network on $bind
+  after:  Caddy answers on port $pport, for $site; Looking Glass listens on 127.0.0.1:$bport only
+          ($( [ "$internal" = 1 ] && echo "its own certificate$( [ -f "$project/data/tls/cert.pem" ] || echo ", made now (deploy/make_tls_cert.sh)")" || echo "the certificate for $domain"))
+  .env:   TRUST_PROXY=1 and LG_PORT=$bport; nothing else changes (accounts, settings and data stay)
+  kept:   a copy of the service file and .env in backups/; if a step fails, everything is put back
+  needs:  Caddy from its signed repository (the internet), and port $pport open in the firewall as today
+EOF
+  if [ "$yes" != 1 ]; then
+    [ -t 0 ] || die "not asked on a terminal: run it again with --yes to go ahead (nothing changed)"
+    read -r -p "Go ahead? Type yes: " ans; [ "$ans" = yes ] || { echo "Nothing changed."; return 1; }
+  fi
+  local keep grp; keep="$project/backups/caddy-adopt-$(date +%Y%m%d-%H%M%S)"; grp="$(id -gn "$owner")"
+  # backups/ belongs to the service's user, as manage/backup.sh and the updates expect (never made by root here)
+  [ -d "$project/backups" ] || install -d -m 700 -o "$owner" -g "$grp" "$project/backups"
+  install -d -m 700 -o "$owner" -g "$grp" "$keep"
+  cp -p "$unit" "$keep/$svc.service"; cp -p "$project/.env" "$keep/env"
+  echo "copies kept in $keep"
+  rollback() {
+    echo "== putting everything back as it was"
+    install -m 644 "$keep/$svc.service" "$unit"; cp -p "$keep/env" "$project/.env"
+    if head -1 "$CONF" 2>/dev/null | grep -qF "$MARK"; then "$0" remove --project "$project" >/dev/null 2>&1 || true; fi
+    systemctl daemon-reload; systemctl restart "$svc" || true
+    audit_note caddy_adopt_failed "Caddy in front: stopped at a step, everything put back ($1)"
+    die "stopped: $1. Everything is as before; nothing else was changed (copies in $keep)"
+  }
+  if [ "$internal" = 1 ] && [ ! -f "$project/data/tls/cert.pem" ]; then
+    echo "== making this installation's certificate"; (cd "$project" && as_owner deploy/make_tls_cert.sh) || rollback "the certificate could not be made"
+  fi
+  echo "== Looking Glass to 127.0.0.1:$bport (behind Caddy)"
+  local tmp; tmp="$(mktemp)"
+  python3 "$project/deploy/service_unit.py" render --user "$owner" --project "$project" --bind "127.0.0.1:$bport" --out "$tmp" \
+    || { rm -f "$tmp"; rollback "the service file could not be written"; }
+  install -m 644 "$tmp" "$unit"; rm -f "$tmp"
+  env_set TRUST_PROXY 1; env_set LG_PORT "$bport"
+  systemctl daemon-reload; systemctl restart "$svc" || rollback "the service did not restart"
+  local up=0
+  for _ in $(seq 1 90); do curl -sfk --max-time 5 "https://127.0.0.1:$bport/healthz" >/dev/null 2>&1 && { up=1; break; }; sleep 1; done
+  [ "$up" = 1 ] || rollback "Looking Glass did not answer on 127.0.0.1:$bport (journalctl -u $svc)"
+  echo "Looking Glass answers on 127.0.0.1:$bport"
+  echo "== Caddy in front on port $pport"
+  [ "$internal" = 1 ] && { name="$(cert_name)" || rollback "no usable name in the certificate"; }
+  valid
+  # the checks only (tests on lg-test): a failure at the Caddy step on purpose, to prove everything is put back.
+  # sudo clears the environment, so it is set only by someone who may run this as root anyway.
+  [ "${LG_ADOPT_FAIL_STEP:-}" = caddy ] && rollback "a failure at the Caddy step on purpose (LG_ADOPT_FAIL_STEP, the checks)"
+  ( do_setup ) || rollback "Caddy could not be set up (journalctl -u caddy)"
+  audit_note caddy_adopted "Caddy in front on port $pport; Looking Glass on 127.0.0.1:$bport (ACCESS_MODE=$mode)"
+  echo
+  echo "DONE: Caddy answers on port $pport; Looking Glass listens on 127.0.0.1:$bport only. People use the same address as before."
+  [ "$internal" = 1 ] && echo "The certificate is the same one, so screens that already trust it go on trusting it."
+  echo "The administrators' daily reminder stops. To undo: sudo install -m 644 $keep/$svc.service $unit, copy $keep/env back to .env,"
+  echo "  sudo deploy/caddy_front.sh remove, then sudo systemctl daemon-reload && sudo systemctl restart $svc"
+}
+
+case "$cmd" in
+  render) valid; render ;;
+  hardening) hardening ;;
+  firewall) valid; firewall ;;
+  setup)
+    need_root; valid
+    do_setup ;;
+  adopt) adopt ;;
   update)
     # Caddy only, from its signed repository, after checking the key; our Caddyfile, certificate copy, hardening and
     # firewall stay (--force-confold keeps the Caddyfile: Ubuntu's automatic updates skip a package whose shipped

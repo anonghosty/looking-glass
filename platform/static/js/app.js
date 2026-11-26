@@ -243,7 +243,7 @@
     mpAttack(card, x.attack);
     mpAlso(card, x);
     for (const n of x.notes || []) {
-      const p = el("p", "mp-note"); p.append(el("b", null, `Notes shared by ${n.role || "Researcher"}: ${n.by || "a researcher"}${n.date ? ` (${n.date})` : ""}: `), document.createTextNode(n.text));
+      const p = el("p", "mp-note"); p.append(el("b", null, `Notes shared by ${n.role || "Researcher/TI"}: ${n.by || "a researcher"}${n.date ? ` (${n.date})` : ""}: `), document.createTextNode(n.text));
       card.append(p);
       if (n.codes?.length) card.append(window.LGCodes ? window.LGCodes.line(n.codes) : el("p", "mp-note", `Combinations: ${n.codes.map((c) => c.code).join(", ")}`));
     }
@@ -459,7 +459,12 @@
   // out), and an account that only sees masked data stores none. The old shared key is removed.
   const PIN_KEY = "tm.pins:" + (document.body.dataset.user || "");
   const PIN_STORE = !document.body.dataset.masked;
-  try { localStorage.removeItem("tm.pins"); if (!PIN_STORE) localStorage.removeItem(PIN_KEY); } catch { /* private mode */ }
+  // the key is the account's code (person_code.py), never its sign-in name: keys an older release named by sign-in
+  // name are removed
+  try {
+    localStorage.removeItem("tm.pins"); if (!PIN_STORE) localStorage.removeItem(PIN_KEY);
+    for (const k of Object.keys(localStorage)) if (k.startsWith("tm.pins:") && !k.startsWith("tm.pins:p-")) localStorage.removeItem(k);
+  } catch { /* private mode */ }
 
   // ------------------------------------------------------------------ state
   const state = {

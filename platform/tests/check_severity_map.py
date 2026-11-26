@@ -7,7 +7,7 @@ Flask app; the installation's data/ is never read or written:
 2. the rows: not rated first, then by criticality; CVEs left out; names differing only in case are one;
 3. who: researchers and administrators only ('definitions', held by no other role); the CSRF token for a change;
 4. a researcher rates only a name no record rates: Shadowserver's ratings are never changed; every change audited;
-5. the PDFs' References section uses the rating, flagged "Researcher's rating"; once Shadowserver rates the name, its
+5. the PDFs' References section uses the rating, flagged "Researcher/TI rating"; once Shadowserver rates the name, its
    rating is used and the researcher's is shown as replaced;
 6. the page: the card only for researchers and administrators, its script sets text only.
 Run: .venv/bin/python tests/check_severity_map.py"""
@@ -123,7 +123,7 @@ ok("the same rating again: nothing written, nothing audited", len(audit) == n_au
 print("5. The PDFs")
 card = ("quietbot", {"curated": True, "curated_references": ["https://example.org/q"]})
 g_ = R.groups([card], {}, [])[0]
-ok("the References section uses the rating, flagged \"Researcher's rating\"", g_["level"] == "high" and g_["flags"] == ["Researcher's rating"], str(g_))
+ok("the References section uses the rating, flagged \"Researcher/TI rating\"", g_["level"] == "high" and g_["flags"] == ["Researcher/TI rating"], str(g_))
 R.remember({"quietbot": "medium"})                              # a later day: Shadowserver rates it
 g_ = R.groups([card], {}, [])[0]
 ok("once Shadowserver rates the name: its rating, no researcher's flag", g_["level"] == "medium" and g_["flags"] == [], str(g_))

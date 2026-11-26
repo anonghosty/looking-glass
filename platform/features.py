@@ -218,6 +218,32 @@ def install(app, core):
             "audit": A["audit"], "throttle": A["throttle"], "csrf_ok": A["csrf_ok"], "fresh": A["fresh"],
             "totp_check": _auth2.totp_check, "hook": _auth2.PASSKEYS,
             "people_name": _People(A["users"]).full_name})
+        # how sign-in is checked, passkey or authenticator code (signin_check.py, the user 2026-11-25): one setting
+        # for sign-in and the step-up gate; .env SIGNIN_CHECK wins, then Settings, then ACCESS_MODE's default
+        if "has_perm" in A:
+            import signin_check
+            out["signin_check"] = signin_check.install(app, {
+                "base_dir": os.path.dirname(os.path.abspath(__file__)), "has_perm": A["has_perm"], "csrf_ok": A["csrf_ok"],
+                "fresh": A["fresh"], "audit": A["audit"], "store": out["stepup"]["store"],
+                "min_passkeys": _auth2.PASSKEYS.get("min_public") or 2})
+
+    # the people codes' key (person_code.py): a key made again where one had been goes to the audit log (and the bell)
+    if "audit" in A:
+        import person_code
+
+        def _code_key_new(at):
+            A["audit"].add("person_code_key_new", user="Looking Glass", target="data/person_code.key",
+                           detail="a new key for the people codes was made: the old one was removed or replaced, or "
+                                  "data/ was restored from an older backup (map pins cleared once)")
+        person_code.on_new = _code_key_new
+
+    # Settings -> Update (platform_update.py, the user 2026-11-25): the page asks, the update helper (its own service,
+    # the installation's user) backs up, installs a signed release, restarts, and puts the previous one back if needed
+    if all(k in A for k in ("has_perm", "csrf_ok", "fresh", "audit")):
+        import platform_update
+        out["platform_update"] = platform_update.install(app, {
+            "base_dir": os.path.dirname(os.path.abspath(__file__)), "has_perm": A["has_perm"], "csrf_ok": A["csrf_ok"],
+            "fresh": A["fresh"], "audit": A["audit"], "people_name": people_name if "users" in A else None})
 
     # connectors (connectors.py, the user 2026-11-24): Looking Glass's own analysis pushed to the CSIRT's own OpenCTI
     # and MISP; Settings -> Connectors sets them up (administrators, tested before saving), connectors_worker.py sends

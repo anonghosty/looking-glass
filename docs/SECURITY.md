@@ -74,23 +74,51 @@ The sign-in card opens on a choice: **Sign in** or **Create an account**, plus *
 - Pending accounts are told they await approval; revoked accounts are told they have been revoked (only after the
   right password).
 
+### No sign-in names in the pages
+- A sign-in name is half of what signs someone in, so no page or answer carries one: page attributes, the Notes
+  window and the lists of people a finding can be sent to use an opaque code per account (a keyed hash with the
+  installation's own random key, `data/person_code.key`, so a guessed name gives nothing; different on every
+  installation, never turned back into a name outside the server), and headers
+  show full names. The exceptions are the person's own Account page, the auditor's audit trail and the administrators'
+  account management. `tests/check_no_signin_names.py` signs in as every role, opens every page and answer, and fails
+  on any sign-in name.
+- The key behind the codes (`data/person_code.key`, mode 600) is made once and never changed by Looking Glass. A key
+  made again where one had been (removed, replaced, or `data/` restored from an older backup) goes to the audit log
+  (`person_code_key_new`) and the administrators' bell; a damaged key is never used and is in the bell too. Keep it
+  with `data/` and never copy it elsewhere ([OPERATIONS.md](OPERATIONS.md#backups)); what this does and does
+  not protect against: [ARCHITECTURE.md](ARCHITECTURE.md).
+
+### Settings → Update
+- The web service cannot change its own code (its code folders are read-only for it), so the page only writes a
+  request. A separate helper does the update as the installation's own user, never as root, allowed to write only the
+  Looking Glass folder. Whatever a request says, it installs only a release tag signed with the maintainer's key (the
+  fingerprint is fixed in `deploy/verify_install.py`) and newer than the installed one: someone who can write the
+  request file can ask for a signed release, never choose other code. It refuses a folder whose shipped files were
+  changed, makes a backup first, and puts the previous release back when the new one does not answer. Installing
+  asks for the every-time confirmation; every request and how it ended are in the audit log.
+
 ### Passkeys and the fresh check
-- **Passkeys (WebAuthn / FIDO2)** on installations open to the internet (`ACCESS_MODE=public`): at sign-in they
-  replace the authenticator code, and each person registers two before anything else opens. A passkey is bound to
+- **Passkeys (WebAuthn / FIDO2)** where the sign-in check is Passkey (Settings → General → Sign-in check, one setting
+  for sign-in and the fresh check, `signin_check.py`; by default a public installation with Caddy in front for a
+  domain): at sign-in they replace the authenticator code, and each person registers two before anything else opens.
+  Changing the sign-in check asks for a confirmation every time, so with passkeys in force a stolen session cannot
+  switch back to codes without a passkey; passkeys can be chosen only by an administrator on the site's host name
+  over HTTPS who has their own two, so nobody is locked out. `SIGNIN_CHECK` in `.env` wins over the page (the way
+  back from the server). A passkey is bound to
   the site's real address by the browser, so a look-alike site that relays a password and a code in real time
   (adversary in the middle) cannot relay a passkey. Looking Glass keeps only public keys and counters
   (`data/passkeys.json`, mode 600): a stolen copy lets nobody sign in. User verification (a PIN or biometric on the
   device) is required.
 - **A fresh check before high-value actions**, on every installation, against malware riding a signed-in browser:
-  a passkey, or a fresh authenticator code on internal installations. One check covers 10 minutes; changes to
-  accounts, roles, sign-up links, connectors and passkeys ask every time, and that confirmation is used once, for
+  a passkey where passkeys are in force, otherwise a fresh authenticator code. One check covers 10 minutes; changes
+  to accounts, roles, sign-up links, connectors, passkeys, the sign-in check and updating Looking Glass ask every time, and that confirmation is used once, for
   that one request. The list of actions is one table on the server (`stepup.py`), checked before every request, so
   no page can forget it. Confirmations, failures and refusals are in the audit log, and wrong codes count towards
   the sign-in lock.
 - **An internal installation that is reached from outside.** When an installation set to `local` or `private` sees
   sign-ins from public internet addresses, the administrators' bell says so: it is reachable from outside (a port
-  forward, a proxy) but checks people with codes a look-alike site can relay. Close it off, or switch it to
-  `public`, which requires passkeys.
+  forward, a proxy) but checks people with codes a look-alike site can relay. Close it off, or make it a public
+  installation with Caddy in front for a domain and the sign-in check set to Passkey.
 - **Your bell when a passkey changes.** When a passkey is added to or removed from your account, other than the first
   two you register right after signing in, your own bell says so for 7 days, with its name and when. Only you see it;
   the audit log records it too.
@@ -127,7 +155,7 @@ Default roles (described on the admin page too):
   cannot be changed by anyone, so what an auditor may do never depends on the people being audited.
 - **admin** (all): everything, including Settings, accounts, roles and permissions, sessions and the audit log.
 
-Permanent roles (`auth.FIXED_ROLES`): management, researcher, advisor, auditor and external keep exactly their permissions and
+Permanent roles (`auth.FIXED_ROLES`): management, Researcher/TI (researcher or threat intelligence analyst), advisor, auditor and external keep exactly their permissions and
 cannot be removed; admin always has every permission. Exclusive permissions (`auth.EXCLUSIVE_PERMS`): *management*,
 *definitions*, *advisory* and *users* belong to their own role (and admin) only. Both are enforced on the server when
 roles are loaded and saved; the Roles page shows them locked.
@@ -245,8 +273,8 @@ every send is in the audit log and on the Audit portal's Data sent out tab. Deta
 TOTP is built in: it is free, works offline and no outside service sees your sign-ins. If your staff already have
 central accounts, single sign-on through OpenID Connect is the next step: Microsoft Entra ID or Google Workspace (MFA
 and leavers managed centrally), or a self-hosted Keycloak or Authentik. The login is a separate module (`auth.py`), so
-an OpenID Connect provider can be added later. On installations open to the internet, passkeys are required on top
-of it (above).
+an OpenID Connect provider can be added later. Where the sign-in check is Passkey (recommended on installations open
+to the internet), passkeys are required on top of it (above).
 
 ## 2. Session hijacking defences
 
@@ -272,6 +300,12 @@ of it (above).
 - **Password changes and removed accounts** end that account's sessions immediately.
 - **No plain-HTTP logins from other computers**, unless `ALLOW_INSECURE_REMOTE_LOGIN=1`, so passwords and cookies aren't sent in clear over the network.
 - **Script injection, the main way cookies are stolen, is contained:** strict CSP (nonce, no eval, no inline handlers), all report data inserted as text, and `HttpOnly` cookies.
+- **No WebAssembly either, on purpose.** The CSP has no `wasm-unsafe-eval`, so no page can compile WebAssembly: code
+  that someone managed to put on a page could not run hidden, fast binary code, and the browser's WebAssembly engine
+  (where exploited browser bugs have been found) stays out of reach. The map's library (deck.gl) tries WebAssembly for
+  optional extras the map does not use, so the browser's developer tools show a few *Content Security Policy* entries
+  in the Issues panel ("WebAssembly compilation ... blocked") on the map pages. They are expected; every map feature
+  works without it. Do not add `wasm-unsafe-eval` to make them go away.
 - **`Cache-Control: no-store`** on the API, the login page and Settings, so data doesn't stay in browser or proxy caches.
 
 ### Service hardening

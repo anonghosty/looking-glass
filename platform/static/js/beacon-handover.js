@@ -37,7 +37,7 @@
           const r = await fetch(`/api/findings/people?kind=${encodeURIComponent(kind.value)}`, { credentials: "same-origin" });
           const d = await r.json();
           who.replaceChildren();
-          for (const p of d.people || []) { const o = el("option", null, p.name); o.value = p.user; who.append(o); }
+          for (const p of d.people || []) { const o = el("option", null, p.name); o.value = p.code; who.append(o); }   // the person's code, never a sign-in name
           if (!who.options.length) who.append(el("option", null, kind.value === "analyst" ? "No analyst account" : "No manager account"));
           go.disabled = !(d.people || []).length;
         } catch { who.replaceChildren(el("option", null, "Could not load the people")); }

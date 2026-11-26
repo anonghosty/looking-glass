@@ -19,7 +19,7 @@
   <header class="hud">
     <div class="hud-left">
       <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
-      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Your account · signed in as {{ lg_name }} ({{ lg_role }})</span></div></div>
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Your account · signed in as {{ lg_name }} ({{ lg_role_name }})</span></div></div>
     </div>
     <div class="hud-right">
       {% set nav_here = "account" %}{% set nav_go = false %}{% include "_page_nav.html" %}
@@ -35,6 +35,12 @@
       {% endif %}
       <p class="st-access" id="pkEnrol" {% if not enrol %}hidden{% endif %} role="status">Register your passkeys to continue: Looking Glass opens once you have {{ minimum }}.</p>
       {% if not can %}<p class="st-access" id="pkWhy">{{ why }}</p>{% endif %}
+      {% if is_public and not can %}
+      <p class="st-hint" id="pkWayOut">Open Looking Glass by its host name over HTTPS to register your passkeys.{% if 'settings' in lg_perms %}
+        If people here reach it by IP address, the authenticator code suits this site better: on the server, set
+        <code>SIGNIN_CHECK=code</code> in the platform's <code>.env</code> and run <code>deploy/reload.sh</code>.{% else %} If people here reach it by IP address, ask an
+        administrator to switch the sign-in check to the authenticator code.{% endif %}</p>
+      {% endif %}
       <div id="pkList" class="st-loading">Loading your passkeys…</div>
       <div class="st-row">
         <label class="st-field">Name for a new passkey <input type="text" id="pkName" maxlength="40" placeholder="e.g. Office laptop"></label>

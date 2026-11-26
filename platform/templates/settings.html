@@ -18,11 +18,11 @@
   <link href="{{ url_for('static', filename='css/task-monitor.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/quarterly.css') }}" rel="stylesheet">
 </head>
-<body class="settings-page" data-user="{{ lg_user }}"{% if "users" in lg_perms %} data-admin="1"{% endif %}>
+<body class="settings-page" data-user="{{ lg_me }}"{% if "users" in lg_perms %} data-admin="1"{% endif %}>
   <header class="hud">
     <div class="hud-left">
       <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
-      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span id="stScope">Settings · both platforms</span><span> · signed in as {{ lg_name }} ({{ lg_role }})</span></div></div>
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span id="stScope">Settings · both platforms</span><span> · signed in as {{ lg_name }} ({{ lg_role_name }})</span></div></div>
     </div>
     <div class="hud-right">
       {% set nav_here = "settings" %}{% set nav_go = true %}{% include "_page_nav.html" %}
@@ -39,6 +39,7 @@
       <button type="button" role="tab" data-st-tab="config" aria-selected="false">Configuration</button>
       <button type="button" role="tab" data-st-tab="connectors" aria-selected="false">Connectors</button>
       <button type="button" role="tab" data-st-tab="monitor" aria-selected="false">Task monitor</button>
+      <button type="button" role="tab" data-st-tab="update" aria-selected="false">Update</button>
     </nav>
     {% endif %}
     <div class="st-banner" id="banner" role="status" hidden></div>
@@ -114,10 +115,24 @@
          2026-11-20: "it should be the choice of the advisor and not the admin") #}
       <p class="st-hint">The advisory's look (designed or plain white) and the name at the top of its pages are chosen by the
         advisor on each advisory.</p>
-      <div class="org-save"><button class="intro-cta" id="orgSave" type="button" disabled>Save the organisation</button><span class="muted" id="orgMsg" role="status"></span></div>
+      <div class="org-save"><button class="lg-btn primary" id="orgSave" type="button" disabled>Save the organisation</button><span class="muted" id="orgMsg" role="status"></span></div>
       {# no logo on the sign-in pages any more (the user, 2026-11-19): nothing for a scanner to recognise; the name stays #}
       <p class="st-hint">The sign-in pages show the organisation's name, never a logo: an image there is something internet
         scanners can recognise.</p>
+    </section>
+    {% endif %}
+
+    {# how sign-in and high-value actions are checked: a passkey or the authenticator code (signin_check.py,
+       password-policy.js; the user 2026-11-25) #}
+    {% if "settings" in lg_perms %}
+    <section class="st-card sc-card" id="cardSigninCheck">
+      <h2>Sign-in check <span class="st-for">every account</span></h2>
+      <p class="st-hint">How people sign in and confirm high-value actions, after their password. <b>Passkey</b>: everyone
+        registers 2 passkeys and uses one; a look-alike site cannot relay it. Recommended for a site on the internet.
+        Passkeys work only when Looking Glass is opened by its host name over HTTPS, never by an IP address.
+        <b>Authenticator code</b>: the code from the authenticator app; a passkey may be added and used instead.
+        Recommended for an internal network. Changing it asks you to confirm every time; every change is in the audit log.</p>
+      <div id="scBody"><div class="st-loading">Opening the sign-in check…</div></div>
     </section>
     {% endif %}
 
@@ -187,8 +202,8 @@
       <div class="cf-bar">
         <input type="search" class="search" id="cfSearch" placeholder="Find a setting, for example beacon, replay, session" autocomplete="off" aria-label="Find a setting">
         <span class="cf-bar-r">
-          <button class="pill-btn" id="cfUndo" type="button" disabled>Undo changes</button>
-          <button class="intro-cta" id="cfSave" type="button" disabled>Save</button>
+          <button class="lg-btn" id="cfUndo" type="button" disabled>Undo changes</button>
+          <button class="lg-btn primary" id="cfSave" type="button" disabled>Save</button>
           <button class="pill-btn" id="cfRestart" type="button" hidden>Restart now to apply</button></span></div>
       <p class="wk-msg muted" id="cfMsg" role="status"></p>
       <div id="cfBody"></div>
@@ -202,6 +217,16 @@
         Connectors work with every access mode, local included; the server needs to reach the platform over HTTPS
         (firewall, proxy, DNS, and for your own certificate authority CONNECTOR_CA_FILE in .env).</p>
       <div id="cnBody" class="st-loading">Loading the connectors…</div>
+    </section>
+
+    {# Update: a signed release, with a backup and a way back (platform_update.py, deploy/update_run.py, platform-update.js) #}
+    <section class="st-card up-pane" id="tabUpdate" hidden>
+      <h2>Update <span class="st-for">Looking Glass on this server</span></h2>
+      <p class="st-hint">Check for an update looks for a newer release on GitHub. Update makes a backup, fetches the release,
+        checks that the maintainer signed it, installs it with its libraries, restarts Looking Glass and checks that it
+        answers. If any step after that fails, the release you have now is put back. Every step shows below as it
+        happens, also while Looking Glass restarts.</p>
+      <div id="upBody" class="st-loading">Loading the update status…</div>
     </section>
 
     {# Task monitor: the service, its jobs, requests, cache, database, machine and pipeline (task_monitor.py, task-monitor.js) #}
@@ -242,8 +267,8 @@
   <!-- always visible: what will change, Apply, and the confirmation -->
   <div class="st-apply" id="applyBar">
     <div class="st-apply-text"><b id="applyState">No changes</b><span class="muted" id="applyDetail"></span></div>
-    <button class="pill-btn" id="revert" type="button" hidden>Undo changes</button>
-    <button class="intro-cta st-apply-btn" id="save" type="button" disabled>Apply settings</button>
+    <button class="lg-btn" id="revert" type="button" hidden>Undo changes</button>
+    <button class="lg-btn primary st-apply-btn" id="save" type="button" disabled>Apply settings</button>
   </div>
 
   <div class="tip" id="tip" role="tooltip" hidden></div>
@@ -280,6 +305,7 @@
   <script src="{{ url_for('static', filename='js/code-integrity.js') }}"></script>
   <script src="{{ url_for('static', filename='js/task-monitor.js') }}"></script>
   <script src="{{ url_for('static', filename='js/config-page.js') }}"></script>
-<script src="{{ url_for('static', filename='js/connectors-admin.js') }}"></script>{% endif %}
+<script src="{{ url_for('static', filename='js/connectors-admin.js') }}"></script>
+<script src="{{ url_for('static', filename='js/platform-update.js') }}"></script>{% endif %}
 </body>
 </html>

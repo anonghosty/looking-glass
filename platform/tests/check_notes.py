@@ -4,7 +4,7 @@
 # runs itself with the project's own Python (.venv), from wherever it is called
 ''''exec "$(dirname -- "$0")/../.venv/bin/python" "$0" "$@" # '''
 """Researchers' notes (notes.py) end to end, on a throwaway notes file (the real data/notes.json is never touched):
-a researcher adds a note, every card of that name carries it ("Notes shared by Researcher: <full name>"), the PDF
+a researcher adds a note, every card of that name carries it ("Notes shared by Researcher/TI: <full name>"), the PDF
 report prints it, only its author or an admin removes it, other roles cannot add or read.
 Usage: tests/check_notes.py      (the app in-process)"""
 import json, os, sys, tempfile
@@ -46,7 +46,7 @@ def call(path, perms, method="GET", body=None, user=me, role="researcher"):
 try:
     print("Researchers' notes")
     n = A.NOTES.add("infections", "android.badbox2", "Test finding: the C2 moved to example.invalid.", me, "researcher")
-    ok("a note is saved with its author's username, role and date", n["by"] == full and n["role"] == "Researcher" and n["date"])
+    ok("a note is saved with its author's username, role and date", n["by"] == full and n["role"] == "Researcher/TI" and n["date"])
     card, _ = A.mp_resolve("android.badbox2")
     shown = (card.get("notes") or [{}])[0]
     ok("the name's card carries the note (map, services, Executive use the same look-up)", shown.get("text", "").startswith("Test finding"), str(shown)[:80])
@@ -61,8 +61,8 @@ try:
     blocks = reports_pdf.enrichment_block("android.badbox2", card, {}, reports_pdf.styles(), A4[0] - 80)
     keep, rest = blocks                              # (the first lines kept together, the rest)
     texts = [getattr(f, "text", "") for f in list(getattr(keep, "_content", [])) + list(rest)]
-    want = f"Notes shared by Researcher: {full}"
-    ok("the PDF report prints 'Notes shared by Researcher: <full name> (date): text'", any(want in x and "Test finding" in x for x in texts),
+    want = f"Notes shared by Researcher/TI: {full}"
+    ok("the PDF report prints 'Notes shared by Researcher/TI: <full name> (date): text'", any(want in x and "Test finding" in x for x in texts),
        next((x[:90] for x in texts if "Notes shared" in x), "not found"))
     ex = open(os.path.join(A.BASE_DIR, "executive_pdf.py"), encoding="utf-8").read()
     ok("the Executive PDF prints the notes too", "Notes shared by" in ex)

@@ -104,7 +104,12 @@ PAGE_JS = """(sel) => {
     const seen = e.checkVisibility ? e.checkVisibility({checkOpacity: true, checkVisibilityCSS: true, contentVisibilityAuto: true}) : true;
     return seen && r.width > 1 && r.height > 1 && !e.closest('[hidden],[inert]') && !e.disabled && (!modal || modal.contains(e))
       && !e.closest('details:not([open]) > :not(summary)') && parseFloat(getComputedStyle(e).opacity) > .05; };
-  let n = 0; for (const e of document.querySelectorAll(sel)) { if (vis(e)) e.dataset.kb = String(++n); }
+  // a radio group is one Tab stop, as browsers make it: its chosen option (or its first, when none is chosen); the
+  // others are reached with the arrow keys (Settings → Sign-in check, 2026-11-25)
+  const otherRadio = (e) => { if (e.type !== 'radio' || !e.name) return false;
+    const g = [...document.querySelectorAll(`input[type=radio][name="${CSS.escape(e.name)}"]`)].filter(x => !x.disabled);
+    const stop = g.find(x => x.checked) || g[0]; return stop !== e; };
+  let n = 0; for (const e of document.querySelectorAll(sel)) { if (vis(e) && !otherRadio(e)) e.dataset.kb = String(++n); }
   const name = (e) => e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + ': ' + (e.getAttribute('aria-label') || e.textContent || '').trim().slice(0, 40);
   const pointer = [...document.querySelectorAll('body *')].filter(e => vis(e) && getComputedStyle(e).cursor === 'pointer'
       && !e.matches(sel) && !e.closest(sel) && !(e.tagName === 'LABEL' && e.control) && !e.closest('label')?.control && !(e.parentElement && getComputedStyle(e.parentElement).cursor === 'pointer')

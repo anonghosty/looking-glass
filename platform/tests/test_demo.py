@@ -154,7 +154,9 @@ with tm.app.test_request_context("/"):
         g.user = {"user": f"lg-selftest-{role}", "role": role, "perms": perms, "csrf": None}
         r = tm.app.view_functions[tm.app.url_map.bind("localhost").match("/")[0]]()
         pages[role] = (r if isinstance(r, str) else r.get_data(as_text=True))
-ok("the map page names its account (pins are stored per account)", 'data-user="lg-selftest-analyst"' in pages["analyst"])
+import person_code  # noqa: E402
+ok("the map page names its account by its code, never its sign-in name (pins are stored per account; person_code.py)",
+   f'data-user="{person_code.code("lg-selftest-analyst")}"' in pages["analyst"] and 'data-user="lg-selftest-analyst"' not in pages["analyst"])
 ok("a masked account's page is marked masked (it stores no pins)", 'data-masked="1"' in pages["external"] and 'data-masked="1"' not in pages["analyst"])
 js = open(os.path.join(tm.BASE_DIR, "static", "js", "app.js"), encoding="utf-8").read()
 auth_js = open(os.path.join(tm.BASE_DIR, "static", "js", "auth-card.js"), encoding="utf-8").read()

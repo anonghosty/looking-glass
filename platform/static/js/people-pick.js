@@ -20,7 +20,10 @@
     const note = el("small", "pp-note", "Only you and the person you choose see it and its trail (and whoever it is passed on to).");
     wrap.append(el("span", "pp-l", label), sel, note);
     load(kind).then((people) => {
-      for (const p of people) sel.append(new Option(`${p.name}${p.name !== p.user ? ` (${p.user})` : ""}${p.role && p.role !== kind ? ` · ${p.role}` : ""}`, p.user));
+      // names only: the value is the person's code (person_code.py), never a sign-in name; two people with one name
+      // are told apart by the code's last characters
+      const twice = (n) => people.filter((q) => q.name === n).length > 1;
+      for (const p of people) sel.append(new Option(`${p.name}${twice(p.name) ? ` (${p.code.slice(-4)})` : ""}${p.role && p.role !== kind ? ` · ${p.role}` : ""}`, p.code));
       if (!people.length) { sel.disabled = true; note.textContent = `No ${one.replace(/^an? /, "")} account yet: an admin adds one in Admin.`; note.classList.add("bad"); }
     });
     return {

@@ -121,7 +121,7 @@ def groups(explained, record_levels=None, reports=(), shown=REFS_SHOWN):
                 # a name no record rates: a researcher's rating from the severity map (severity_map.py), said as such
                 lv = researcher_level(name)
                 if lv:
-                    flags.append("Researcher's rating")
+                    flags.append("Researcher/TI rating")
         named.append(({"kind": "name", "title": str(name), "level": lv, "flags": flags, "refs": refs[:shown],
                        "more": max(0, len(refs) - shown),
                        # a CVE's are on NVD's page even when it is "found" (2026-11-18: read "on the Malpedia page")

@@ -183,6 +183,13 @@ d = json.load(open(path))
 ok("the file holds only page keys and the never flag, per person", set(d) == {"grace", "daniel"}
    and all(set(v) == {"pages", "never"} for v in d.values()), d.get("grace"))
 ok("…owner-only (0600)", (os.stat(path).st_mode & 0o777) == 0o600)
+# 2026-11-25: researchers, management, advisors and auditors got 403 on /api/tour (their portals' path lists did not
+# name it), so the tutorial could not remember their pages. It is each person's own memory: open to every role.
+_auth = open(os.path.join(HERE, "auth.py"), encoding="utf-8").read()
+_own = re.search(r"^OWN_PATHS = \((.*?)\)\s*(#.*)?$", _auth, re.M | re.S)
+ok("every role reaches its own tutorial memory (/api/tour in auth.OWN_PATHS)", bool(_own) and '"/api/tour"' in _own.group(1))
+_ext = open(os.path.join(HERE, "external_access.py"), encoding="utf-8").read()
+ok("…and the external role too (external_access.COMMON_API)", re.search(r"COMMON_API = frozenset\(\{[^}]*\"/api/tour\"", _ext) is not None)
 
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {fails}" if fails else ""))
 sys.exit(1 if fails else 0)

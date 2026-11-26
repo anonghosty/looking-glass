@@ -450,7 +450,7 @@
     if (x.seen_in?.length) facts.push(["Seen in", x.seen_in.join(", ")]);
     if (facts.length) { const dl = el("dl", "mg-ex-facts"); for (const [k, v] of facts) dl.append(el("dt", null, k), el("dd", null, v)); c.append(dl); }
     for (const n of x.notes || []) {               // researchers' notes on the name (notes.py)
-      const p = el("p", "mg-ex-desc mp-note"); p.append(el("b", null, `Notes shared by ${n.role || "Researcher"}: ${n.by || "a researcher"}${n.date ? ` (${n.date})` : ""}: `), document.createTextNode(n.text));
+      const p = el("p", "mg-ex-desc mp-note"); p.append(el("b", null, `Notes shared by ${n.role || "Researcher/TI"}: ${n.by || "a researcher"}${n.date ? ` (${n.date})` : ""}: `), document.createTextNode(n.text));
       c.append(p);
       if (n.codes?.length) c.append(window.LGCodes ? window.LGCodes.line(n.codes) : el("p", "mg-ex-desc mp-note", `Combinations: ${n.codes.map((x) => x.code).join(", ")}`));
     }

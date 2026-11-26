@@ -1,5 +1,5 @@
 # Looking Glass: every file this release ships in this folder (deploy/stale_files.py reads it on update)
-# files: 804
+# files: 815
 .env.example
 .gitignore
 README.md
@@ -61,6 +61,8 @@ deploy/looking-glass-connectors.service.template
 deploy/looking-glass-connectors.timer.template
 deploy/looking-glass-unusual.service.template
 deploy/looking-glass-unusual.timer.template
+deploy/looking-glass-update.path.template
+deploy/looking-glass-update.service.template
 deploy/looking-glass.service.template
 deploy/make_tls_cert.sh
 deploy/reload.sh
@@ -68,7 +70,9 @@ deploy/safe_libraries.py
 deploy/service_unit.py
 deploy/stale_files.py
 deploy/unusual_timer.sh
+deploy/update_helper.sh
 deploy/update_libraries.sh
+deploy/update_run.py
 deploy/verify_install.py
 device_note.py
 executive_pdf.py
@@ -135,8 +139,10 @@ password_policy.py
 pdf_refs.py
 peace.py
 people.py
+person_code.py
 pipeline_link.py
 pipeline_settings.py
+platform_update.py
 privacy.py
 proxy_guard.py
 quarterly.py
@@ -167,6 +173,7 @@ services_intel.py
 services_kb.py
 settings.py
 severity_map.py
+signin_check.py
 signin_welcome.py
 slow_log.py
 small_codes.py
@@ -512,6 +519,7 @@ static/js/pdf.js
 static/js/peace.js
 static/js/people-pick.js
 static/js/pipeline-settings.js
+static/js/platform-update.js
 static/js/portal-intel.js
 static/js/quarterly.js
 static/js/regions.js
@@ -677,6 +685,7 @@ tests/check_masked_ids.py
 tests/check_moved_modules.py
 tests/check_nav_once.py
 tests/check_networks_list.py
+tests/check_no_signin_names.py
 tests/check_notes.py
 tests/check_notifications.py
 tests/check_offline_names.py
@@ -689,6 +698,7 @@ tests/check_pdf_rows.py
 tests/check_peace.py
 tests/check_per_key_cache.py
 tests/check_pipeline_settings.py
+tests/check_platform_update.py
 tests/check_ports_impact_follow.py
 tests/check_proxy_chain.py
 tests/check_quarterly.py
@@ -713,6 +723,7 @@ tests/check_settings_access.py
 tests/check_severity_map.py
 tests/check_shadowserver_fields.py
 tests/check_signed_out.py
+tests/check_signin_check.py
 tests/check_signin_motion.py
 tests/check_single_worker.py
 tests/check_slow_log.py

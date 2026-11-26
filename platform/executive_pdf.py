@@ -673,7 +673,7 @@ class Doc:
         # three and the CISA box at three, mid-sentence: "…Bitdefender Labs found it on")
         dl = simpleSplit(self.s(desc), self.F["r"], 8.2, w - 24)
         # researchers' notes on this name (notes.py), the newest two
-        nt = " ".join(f"Notes shared by {n.get('role') or 'Researcher'}: {n.get('by') or 'a researcher'}"
+        nt = " ".join(f"Notes shared by {n.get('role') or 'Researcher/TI'}: {n.get('by') or 'a researcher'}"
                       f"{' (' + n['date'] + ')' if n.get('date') else ''}: {n.get('text', '')}"
                       + (f" Combinations: {', '.join(c['code'] for c in n['codes'])}." if n.get("codes") else "")
                       for n in (x_.get("notes") or [])[:2])

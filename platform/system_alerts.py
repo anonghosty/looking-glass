@@ -222,6 +222,7 @@ class Alerts:
         out += self._suspected_packages(now)
         out += self._code_check(now)
         out += self._caddy(now)
+        out += self._person_code(now)
         cert = self._certificate()
         if cert and cert["days_left"] <= 30:
             days = cert["days_left"]
@@ -354,12 +355,22 @@ class Alerts:
 
     CADDYFILE = "/etc/caddy/Caddyfile"
 
+    def _person_code(self, now):
+        """The people codes' key made again, or damaged (person_code.py, the user 2026-11-25): administrators."""
+        try:
+            import person_code
+            return person_code.bell(self.base_dir, now)
+        except Exception:                                # noqa: BLE001  never break the bell over this
+            return []
+
     def _no_caddy_internal(self, now):
         """An internal installation (ACCESS_MODE=private) with no Caddy in front (the user, 2026-11-24, decision C2a): its
         own server faces the office network, where a few deliberately slow connections from inside can hold it up. Said
-        again every day until Caddy is in front; nothing stops working meanwhile."""
+        again every day until Caddy is in front; nothing stops working meanwhile. 2026-11-25: also a public installation
+        without Caddy (older ones that chose "public" for an office network), and the one command that does it
+        (deploy/caddy_front.sh adopt), shown with its card on Settings -> Task monitor."""
         mode = str(self.env.get("ACCESS_MODE") or "").strip().lower()
-        if mode != "private":
+        if mode not in ("private", "public"):
             return []
         try:
             with open(self.CADDYFILE, encoding="utf-8") as f:
@@ -369,11 +380,14 @@ class Alerts:
             pass
         day = time.strftime("%Y-%m-%d", time.gmtime(now))
         return [{"key": f"no-caddy-internal:{day}", "problem": True,
-                 "title": "This internal installation has no Caddy in front",
-                 "text": ("Looking Glass's own server answers the network directly, so a few deliberately slow connections from "
-                          "inside can hold it up for everyone. Run the installer again with the same answers: it now puts Caddy "
-                          "in front and keeps your settings (docs: Installation, Caddy in front). Nothing stops working "
-                          "meanwhile; this reminder comes every day until then."),
+                 "title": ("This internal installation has no Caddy in front" if mode == "private"
+                           else "This installation has no Caddy in front"),
+                 "text": ("Looking Glass's own server answers the network directly, so a few deliberately slow connections "
+                          "can hold it up for everyone. Put Caddy in front once, on the server, in the platform folder: "
+                          "sudo deploy/caddy_front.sh adopt. It keeps your settings, the address people use and the "
+                          "certificate, and puts everything back if a step fails (Settings, Task monitor; docs: "
+                          "Installation, Caddy in front of a running installation). Nothing stops working meanwhile; this "
+                          "reminder comes every day until then."),
                  "at": now, "link": "/settings#monitor"}]
 
     def _small_traces(self, now):

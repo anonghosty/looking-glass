@@ -17,11 +17,11 @@
   <link href="{{ url_for('static', filename='css/findings.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/review.css') }}" rel="stylesheet">
 </head>
-<body class="settings-page fd-page rv-page" data-fid="{{ fid }}" data-user="{{ lg_user }}">
+<body class="settings-page fd-page rv-page" data-fid="{{ fid }}" data-user="{{ lg_me }}">
   <header class="hud">
     <div class="hud-left">
       <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
-      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Review · signed in as {{ lg_name }} ({{ lg_role }})</span></div></div>
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Review · signed in as {{ lg_name }} ({{ lg_role_name }})</span></div></div>
     </div>
     <div class="hud-right">
       {% set nav_here = "review" %}{% set nav_go = false %}{% include "_page_nav.html" %}

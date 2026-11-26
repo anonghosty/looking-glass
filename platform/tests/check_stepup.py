@@ -162,7 +162,8 @@ with A.app.test_request_context("/api/svc/events?all=1"):
 with A.app.test_request_context("/api/svc/stats"):
     ok("ordinary viewing never asks", stepup.rule_for("GET", "/api/svc/stats") is None)
 every = {k for _, _, _, k, e in stepup.RULES if e}
-ok("every time: accounts, roles, sign-up links, connectors, passkeys", every == {"accounts", "connector", "passkeys"}, every)
+ok("every time: accounts, roles, sign-up links, connectors, passkeys, the sign-in check, updating Looking Glass",
+   every == {"accounts", "connector", "passkeys", "signin", "update"}, every)
 
 # ---------------- 2. internal installation: authenticator codes
 print("== internal installation (ACCESS_MODE=local): authenticator codes")
@@ -213,6 +214,8 @@ ok("…nor another person's session", asked(r)[0] or r.status_code == 403, r.sta
 # ---------------- 4. public installation: passkeys
 print("== public installation (ACCESS_MODE=public): passkeys")
 os.environ["ACCESS_MODE"] = "public"
+# passkeys in force: by default only with Caddy in front for a domain (signin_check.py, 2026-11-25), so said outright
+os.environ["SIGNIN_CHECK"] = "passkey"
 ORIGIN, RP = "http://localhost", "localhost"
 
 
@@ -359,6 +362,7 @@ ok("a person without passkeys signs in with the authenticator code (then registe
 # ---------------- 5. the administrator's reset
 print("== an administrator's passkey reset")
 os.environ["ACCESS_MODE"] = "local"
+os.environ.pop("SIGNIN_CHECK", None)
 r = call(ad, ad_csrf, "POST", "/api/admin/users/lgsu-other/passkeys/reset", {})
 a, j = asked(r)
 ok("resetting someone's passkeys asks every time", a and j.get("every_time"), j)

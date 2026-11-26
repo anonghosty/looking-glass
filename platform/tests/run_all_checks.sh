@@ -12,6 +12,8 @@ pass=0; fail=0; skip=0; failed=()
 # actions (stepup.py) is off for them; tests/check_stepup.py switches it on for itself and tests it. The running
 # service never has this set (the security retest checks that a high-value request on it is refused without the check).
 export LG_STEPUP_TESTS_OFF=1
+# the per-account codes' key (person_code.py) for the tests: a temporary folder, never the installation's data/
+LG_PERSON_CODE_DIR="$(mktemp -d)"; export LG_PERSON_CODE_DIR
 # LG_NO_OUTSIDE=1: the outside-connection guard (tests/no_outside/sitecustomize.py) in every check, with a made-up map
 # key so the paths that reach outside are switched on: only this computer and the database may be reached, every other
 # attempt is refused and written down, and the last line below fails on any place not by design (2026-11-18)
@@ -224,6 +226,9 @@ run "Sign-in: the card turns, the dive after signing in, no logo before" tests/c
 run "Hover labels on the header and portal buttons" tests/check_hover_labels.py
 run "Settings: the logo's size and crop tool" tests/check_logo_tool.py
 run "The guided tour on every platform and portal" $PY tests/check_tour.py
+run "How sign-in is checked: a passkey or the authenticator code" $PY tests/check_signin_check.py
+run "No page or answer holds a sign-in name (every role, every page)" $PY tests/check_no_signin_names.py
+run "Settings -> Update: signed release, backup, roll back (made-up repositories)" $PY tests/check_platform_update.py
 run "Every PDF and CSV variation: the content checker" $PY tests/check_output_lint.py
 run "RULE: every page opens with the loading animation" $PY tests/check_loader_everywhere.py
 run "RULE: each destination offered once per page, per role" $PY tests/check_nav_once.py

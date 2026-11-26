@@ -2,7 +2,7 @@
    SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the researchers' Notes window (Definitions page and Settings), apart from the define window.
    New findings on a name ("the C2 moved to …", "seen with … since Monday"), dated and signed with the author's full
-   name (data/notes.json, notes.py), shown on every card and in the PDF reports as "Notes shared by Researcher: <name>".
+   name (data/notes.json, notes.py), shown on every card and in the PDF reports as "Notes shared by Researcher/TI: <name>".
    A note can carry combination codes (combos.py): the exact combinations it points at, picked from what Intel gathered
    saw, built from ticked indicators, or pasted. An analyst pastes a code on the Combinations page to get those devices.
    kb-settings.js puts a Notes button on every row: window.LGNotes.open(name, section). */
@@ -14,7 +14,6 @@
   const pl = (n, w) => `${fmt(n)} ${w}${n === 1 ? "" : "s"}`;
   const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content || "";
   const post = (url, body) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() }, body: JSON.stringify(body) });
-  const me = document.body.dataset.user || "";
   const admin = document.body.dataset.admin === "1";
   const CODE_RX = /^LG-[CXB]-[0-9A-F]{8}$/;   // combinations, and decoded beacons (LG-B)
   // the kinds a combination is made of (intel.py: COMMS_COMBO_KINDS, COMBO_KINDS)
@@ -35,7 +34,7 @@
   const head = el("header", "kbn-mhead");
   const titles = el("div"); const eyebrow = el("div", "kbn-eyebrow", "Notes"); const title = el("h2", "kbn-title"); title.id = "kbnTitle";
   const sub = el("p", "kbn-sub", "New findings on this name, for everyone who reads about it: they appear on the cards and in the PDF reports as " +
-    "“Notes shared by Researcher: your name”, with the date. Saved straight away, apart from the definition.");
+    "“Notes shared by Researcher/TI: your name”, with the date. Saved straight away, apart from the definition.");
   titles.append(eyebrow, title, sub);
   const close = el("button", "icon-btn kbn-close"); close.type = "button"; close.setAttribute("aria-label", "Close"); close.textContent = "✕";
   head.append(titles, close);
@@ -98,7 +97,7 @@
       }
       li.append(meta, el("p", null, n.text));
       if (n.codes?.length) { const cs = el("div", "kbn-codes"); for (const c of n.codes) cs.append(codeTag(c, false)); li.append(cs); }
-      if (n.user === me || admin) {
+      if (n.mine || admin) {                 // the server says whose it is (notes.py): no sign-in name on the page
         const del = el("button", "kbn-del", "Remove"); del.type = "button";
         del.addEventListener("click", async () => {
           if (!confirm("Remove this note? It disappears from the cards and future reports.")) return;

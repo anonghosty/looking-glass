@@ -75,6 +75,28 @@ FEATURES = {
                  ("docs/SECURITY.md", "### Passkeys and the fresh check"),
                  ("docs/TECHNICAL_REFERENCE.md", "stepup.py")],
     },
+    # 2026-11-25: how sign-in is checked, a passkey or the authenticator code (Settings -> General -> Sign-in check)
+    "signin_check": {
+        "tour": [("/settings", "#cardSigninCheck")],
+        "glossary": ["signin_check"],
+        "docs": [("docs/USER_GUIDE.md", "### Sign-in check"), ("docs/SECURITY.md", "Sign-in check"),
+                 ("docs/TECHNICAL_REFERENCE.md", "signin_check.py"), ("docs/CONFIGURATION.md", "SIGNIN_CHECK")],
+    },
+    # 2026-11-25: people codes instead of sign-in names in pages; a new key is said in the bell and the audit log
+    "person_code": {
+        "tour": [],
+        "glossary": ["person_code"],
+        "docs": [("docs/SECURITY.md", "No sign-in names in the pages"), ("docs/OPERATIONS.md", "data/person_code.key"),
+                 ("docs/TECHNICAL_REFERENCE.md", "person_code.py")],
+    },
+    # 2026-11-25: Settings -> Update (the page asks; the update helper backs up, installs a signed release, rolls back)
+    "platform_update": {
+        "tour": [("/settings", '[data-st-tab=\\"update\\"]')],
+        "glossary": ["platform_update", "update_helper"],
+        "docs": [("docs/INSTALLATION.md", "### Updating from Settings"), ("docs/USER_GUIDE.md", "### Update"),
+                 ("docs/TECHNICAL_REFERENCE.md", "platform_update.py"), ("docs/OPERATIONS.md", "update_helper.sh"),
+                 ("docs/SECURITY.md", "Settings → Update")],
+    },
     # 2026-11-24: unusual activity (renamed from "patterns", the researchers' word): each thread against its own normal
     "unusual": {
         "tour": [("/unusual", "#ptToday"), ("/unusual", "#ptMine"), ("/management", "#cUnusual"), ("/definitions", "#cardLeads")],

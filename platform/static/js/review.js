@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-only
    SPDX-FileCopyrightText: the Looking Glass contributors */
 /* Looking Glass · the review page (/review/<id>, combo_review.py): management's final look at an analyst's request.
-   What the researcher is saying (their notes and finding on the combination), then the views, each the Executive portal
+   What the Researcher/TI is saying (their notes and finding on the combination), then the views, each the Executive portal
    itself (embedded, counts only): the researcher's view (the combination), the analyst's view (the across-report
    patterns they ticked), and both together when they lie on one platform; then the decision, which goes back to the
    analyst who asked. */
@@ -65,10 +65,10 @@
     // role played ("Administrator acting as researcher"), so management knows whose view each one is.
     const said = el("div", "rv-said");
     const rs = el("section", "rv-card rv-researcher");
-    rs.append(el("h2", null, "What the researcher is saying"), el("p", "rv-what", d.researcher.what || rv.source));
+    rs.append(el("h2", null, "What the Researcher/TI is saying"), el("p", "rv-what", d.researcher.what || rv.source));
     if (d.researcher.finding) {
       const x = d.researcher.finding, q = el("blockquote", "rv-quote r");
-      q.append(el("b", null, `Their finding ${x.number}: ${x.title}`), el("p", null, x.text || ""), el("small", null, `${x.role || "Researcher"}: ${x.by}`));
+      q.append(el("b", null, `Their finding ${x.number}: ${x.title}`), el("p", null, x.text || ""), el("small", null, `${x.role || "Researcher/TI"}: ${x.by}`));
       rs.append(q);
     }
     for (const n of d.researcher.notes || []) {

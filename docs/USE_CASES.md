@@ -88,7 +88,7 @@ operator, so it gets done, and the next day's numbers show it.
 
 | Role | Sees | Does |
 |---|---|---|
-| **Researcher** | names, definitions, indicators, combinations; **never an address** | finds patterns, writes notes, makes combination codes (LG-C, LG-X), tracks a note as a finding, answers analysts |
+| **Researcher/TI** | names, definitions, indicators, combinations; **never an address** | finds patterns, writes notes, makes combination codes (LG-C, LG-X), tracks a note as a finding, answers analysts |
 | **Analyst** | everything, with addresses | makes analyst codes (LG-A), pulls exactly the devices behind a code, sends the report to management for the advisory |
 | **Management** | aggregated figures, trends, regions; **never an address** | weighs a finding against the trends, decides, names who takes it next |
 | **Advisor** | the findings management approved for them, and their organisations | writes each organisation's advisory, generates the PDF, marks it as sent |
@@ -103,9 +103,9 @@ lives in one place.
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "13px"}, "flowchart": {"curve": "basis", "nodeSpacing": 22, "rankSpacing": 38, "padding": 10, "wrappingWidth": 230}}}%%
 flowchart TD
-    CC["<b>LG-C</b><br/>one exact combination<br/>in one report<br/><i>researcher · Intel gathered</i>"]:::research
-    CX["<b>LG-X</b><br/>a pattern across<br/>several reports<br/><i>researcher · Intel gathered</i>"]:::research
-    CB["<b>LG-B</b><br/>decoded beacons<br/>that share a part<br/><i>researcher or analyst</i>"]:::research
+    CC["<b>LG-C</b><br/>one exact combination<br/>in one report<br/><i>Researcher/TI · Intel gathered</i>"]:::research
+    CX["<b>LG-X</b><br/>a pattern across<br/>several reports<br/><i>Researcher/TI · Intel gathered</i>"]:::research
+    CB["<b>LG-B</b><br/>decoded beacons<br/>that share a part<br/><i>Researcher/TI or analyst</i>"]:::research
     CA["<b>LG-A</b><br/>exactly an analyst's<br/>selection, one day<br/><i>analyst · an analysis window</i>"]:::analyst
     N["<b>A note</b><br/>Track as a finding"]:::research
     F("<b>The finding</b><br/>carries the codes"):::mgmt
@@ -142,7 +142,7 @@ analyst's **Search** turns it into devices, and only the advisory report sends d
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "13px"}, "flowchart": {"curve": "basis", "nodeSpacing": 22, "rankSpacing": 38, "padding": 10, "wrappingWidth": 230}}}%%
 flowchart TD
-    RN("<b>Researcher</b><br/>Track as a finding"):::research
+    RN("<b>Researcher/TI</b><br/>Track as a finding"):::research
     AN("<b>Analyst</b><br/>Make analyst code"):::analyst
     M["<b>With management</b>"]:::mgmt
     R["<b>Back with the researcher</b>"]:::research
@@ -184,7 +184,7 @@ flowchart TD
     T["<b>Track as a finding</b><br/>names a manager"]:::research
     M(["<b>With management</b>"]):::mgmt
     Q("<b>An analyst's request</b><br/>Back with the researcher"):::analyst
-    O["<b>Open as researcher</b><br/>the intel of exactly those records"]:::research
+    O["<b>Open as Researcher/TI</b><br/>the intel of exactly those records"]:::research
     A("<b>With the analyst</b><br/>the reply and its codes"):::analyst
     C(["<b>Closed</b>"]):::closed
     S --> N --> T --> M
@@ -285,16 +285,16 @@ flowchart TD
 
 ## 4. Scenario one: the researcher finds the needle
 
-**1. Researcher: spot it.** On the **Definitions** page, sort the issues by **Hosts** (click the heading: ▲ ▼).
+**1. Researcher/TI: spot it.** On the **Definitions** page, sort the issues by **Hosts** (click the heading: ▲ ▼).
 *Exposed admin panel* tops the list with thousands of records: real, but broad. Sort by **Across reports** instead:
 **CVE-2025-22224** carries the ⇄ flag (42 hosts in two reports) and the badges *Actively exploited · CISA KEV*.
 
-**2. Researcher: look closer.** **Intel gathered** on CVE-2025-22224 shows the combinations: 21 hosts carry exactly
+**2. Researcher/TI: look closer.** **Intel gathered** on CVE-2025-22224 shows the combinations: 21 hosts carry exactly
 *CVE-2024-22252 + CVE-2024-37085 + CVE-2025-41236 + CVE-2025-41237 + CVE-2025-41238 + end-of-life VMware ESXi*, 12 of
 them in more than one record; the *Across reports* view shows 19 hosts with the same set in both reports
 (`LG-X-C5CDB416`). Five flaws on unsupported hypervisors: one door to every server behind it.
 
-**3. Researcher: write it down.** Open **Notes** on the row. In *Combinations for this note*, pick the combination
+**3. Researcher/TI: write it down.** Open **Notes** on the row. In *Combinations for this note*, pick the combination
 from *Seen in the reports* (nothing to type, so no typos): `LG-C-1F7E2005`. Write what it means, tick **Track as a
 finding**, give it a title (*Exploited ESXi hypervisors, end of life*), and name the manager it goes to. It becomes
 **Finding #1**, *With management*.
@@ -326,7 +326,7 @@ view.
 **2. Analyst: ask with a code.** **Make analyst code** in the analysis window. Title and question (*Which of these
 call the same sinkholed C2 domains? Check before I send*). Looking Glass keeps exactly those records and makes `LG-A-…` and **Finding #2**.
 
-**3. Researcher: answer without seeing an address.** **Open as researcher** on the finding: the selection in words
+**3. Researcher/TI: answer without seeing an address.** **Open as Researcher/TI** on the finding: the selection in words
 (the host is "1 host, address held back"), the names in it, their definitions, combinations and cross-report patterns
 with their codes. Tick the codes that answer the question and **Send the reply**: it lands in the finding's history.
 
@@ -366,7 +366,7 @@ one organisation at a time:
 
 ## 8. Checklists
 
-**Researcher, every day**
+**Researcher/TI, every day**
 - [ ] Sort by *Across reports* and by *Hosts*; read the *Looking Glass asks* card
 - [ ] Open Intel gathered on the top names; note exact combinations that repeat
 - [ ] Write a note with the combination's code; track the strongest as a finding
@@ -385,8 +385,8 @@ one organisation at a time:
 
 | Code | Made by | Stands for | Carries an address? |
 |---|---|---|---|
-| `LG-C-…` | researcher (Intel gathered, Notes) | one exact combination in one report | no |
-| `LG-X-…` | researcher | one exact pattern across reports | no |
+| `LG-C-…` | Researcher/TI (Intel gathered, Notes) | one exact combination in one report | no |
+| `LG-X-…` | Researcher/TI | one exact pattern across reports | no |
 | `LG-A-…` | analyst (analysis window) | exactly the records of an analysis selection on one day | no |
 
 See also: [User guide](USER_GUIDE.md#combination-codes-the-combination-search-and-findings) ·

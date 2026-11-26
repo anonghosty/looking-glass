@@ -188,6 +188,24 @@
    "auditor"
   ]
  },
+ "GET /api/admin/signin-check": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "settings"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "GET /api/admin/update": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "settings"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
  "GET /api/admin/users": {
   "open_to_any_signed_in": false,
   "opened_by": [
@@ -1414,14 +1432,28 @@
   ]
  },
  "GET /api/tour": {
-  "open_to_any_signed_in": false,
+  "open_to_any_signed_in": true,
   "opened_by": [
+   "advisory",
+   "audit",
+   "definitions",
+   "export",
+   "malpedia",
+   "management",
+   "networks",
+   "settings",
+   "unmasked",
+   "users",
    "view"
   ],
   "roles": [
    "admin",
+   "advisor",
    "analyst",
-   "external"
+   "auditor",
+   "external",
+   "management",
+   "researcher"
   ]
  },
  "GET /api/unusual": {
@@ -1730,6 +1762,24 @@
   "open_to_any_signed_in": false,
   "opened_by": [
    "users"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/admin/signin-check": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "settings"
+  ],
+  "roles": [
+   "admin"
+  ]
+ },
+ "POST /api/admin/update": {
+  "open_to_any_signed_in": false,
+  "opened_by": [
+   "settings"
   ],
   "roles": [
    "admin"
@@ -2478,14 +2528,28 @@
   ]
  },
  "POST /api/tour": {
-  "open_to_any_signed_in": false,
+  "open_to_any_signed_in": true,
   "opened_by": [
+   "advisory",
+   "audit",
+   "definitions",
+   "export",
+   "malpedia",
+   "management",
+   "networks",
+   "settings",
+   "unmasked",
+   "users",
    "view"
   ],
   "roles": [
    "admin",
+   "advisor",
    "analyst",
-   "external"
+   "auditor",
+   "external",
+   "management",
+   "researcher"
   ]
  },
  "POST /api/unusual/<tid>/confirm": {

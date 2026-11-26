@@ -76,6 +76,24 @@ OPENER = urllib.request.build_opener(NoRedirect(), *([urllib.request.HTTPSHandle
 OPENER.addheaders = [("User-Agent", "LookingGlass-signed-out-check/1.0")]
 
 
+def _behind_proxy():
+    """TRUST_PROXY=1 in the environment or the installation's .env (Caddy in front): the app refuses a request from
+    this computer that does not say who the visitor is (proxy_guard.py), so this check says it, as a proxy does."""
+    if os.environ.get("TRUST_PROXY") is not None:
+        return os.environ["TRUST_PROXY"].strip() == "1"
+    try:
+        for line in open(os.path.join(ROOT, ".env"), encoding="utf-8"):
+            if line.strip().startswith("TRUST_PROXY="):
+                return line.split("=", 1)[1].strip().strip("'\"") == "1"
+    except OSError:
+        pass
+    return False
+
+
+if _behind_proxy():
+    OPENER.addheaders.append(("X-Forwarded-For", "127.0.0.1"))
+
+
 def ask(path, method="GET"):
     """(status, headers, body) signed out; -1 when the service did not answer."""
     data = b"" if method == "POST" else None

@@ -20,7 +20,7 @@
   <header class="hud">
     <div class="hud-left">
       <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
-      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Admin · users and roles · signed in as {{ lg_name }} ({{ lg_role }})</span></div></div>
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Admin · users and roles · signed in as {{ lg_name }} ({{ lg_role_name }})</span></div></div>
     </div>
     <div class="hud-right">
       {% set nav_here = "admin" %}{% set nav_go = false %}{% include "_page_nav.html" %}
@@ -64,7 +64,7 @@
         <div class="st-row st-tools">
           <input class="search" id="invName" placeholder="Their name (optional, for this list)" maxlength="100" autocomplete="off" aria-label="Their name">
           <label class="adm-inv-role"><span class="muted">Role</span> <select id="invRole" class="lg-enhance" aria-label="Their role"></select></label>
-          <button class="intro-cta" id="invMake" type="button">Make a sign-up link</button>
+          <button class="lg-btn primary" id="invMake" type="button">Make a sign-up link</button>
         </div>
         <div class="adm-inv-done" id="invDone" hidden>
           <p><b>The sign-up link</b> <span class="muted">(shown once: copy it now)</span></p>
@@ -83,7 +83,7 @@
       <div class="st-row st-tools">
         <input class="search adm-newrole" id="newRole" placeholder="New role name, e.g. partner-viewer" maxlength="30" autocomplete="off">
         <button class="pill-btn" id="addRole" type="button">Add role</button>
-        <button class="intro-cta" id="saveRoles" type="button">Save roles</button>
+        <button class="lg-btn primary" id="saveRoles" type="button">Save roles</button>
       </div>
     </section>
 

@@ -4,8 +4,9 @@
 
 Malware on a staff member's computer can use their open session from the same address and browser. Before a
 high-value action Looking Glass therefore asks for something malware does not have:
-- public installations (ACCESS_MODE=public): a passkey (passkeys.py), which a look-alike site cannot relay either;
-- internal installations (local, private): a fresh authenticator code (a passkey too, where the person added one).
+- with passkeys in force (Settings' sign-in check, signin_check.py; by default on ACCESS_MODE=public): a passkey
+  (passkeys.py), which a look-alike site cannot relay either;
+- otherwise (by default internal installations): a fresh authenticator code (a passkey too, where the person added one).
 A confirmation covers 10 minutes of high-value actions, except the most dangerous ones, which ask every time: changes
 to accounts, roles and sign-up links, and turning on or changing a connector target. The list is RULES below, one
 place, checked before every request on the server: no page can forget it. Every confirmation, failure and refusal is
@@ -24,7 +25,7 @@ import time
 from flask import g, jsonify, redirect, render_template, request
 
 import passkeys
-import security
+import signin_check
 import system_alerts
 from user_words import words
 
@@ -49,12 +50,17 @@ RULES = [
     # every change to a target (save, on, off, scope, TLP, key, delete); testing changes nothing and needs no check
     ({"POST"}, r"/api/connectors(?!/test\Z)(/.*)?", None, "connector", True),
     ({"POST"}, r"/api/passkeys(/[^/]+/remove)?", None, "passkeys", True),
+    # how sign-in is checked (signin_check.py): with passkeys in force, going back to codes needs a passkey
+    ({"POST"}, r"/api/admin/signin-check", None, "signin", True),
+    # Settings -> Update (platform_update.py): installing a release; looking for one changes nothing and needs no check
+    ({"POST"}, r"/api/admin/update", lambda: (request.get_json(silent=True) or {}).get("kind") == "update", "update", True),
 ]
 WORDS = {"export": "download a complete or unmasked list", "reveal": "show leaked accounts unmasked",
          "trace": "trace a leak", "accounts": "change accounts, roles or sign-up links",
          "settings": "change the constituency or the configuration", "purge": "run the quarterly purge",
          "advisory": "generate or send an advisory", "connector": "turn on or change a connector",
-         "passkeys": "add or remove a passkey"}
+         "passkeys": "add or remove a passkey", "signin": "change how sign-in is checked",
+         "update": "update Looking Glass"}
 _RULES = [(m, re.compile(p + r"\Z"), t, k, e) for m, p, t, k, e in RULES]
 # the pages and calls a person may use while they still have to register their passkeys (public installations)
 ENROL_OPEN = ("/account", "/api/passkeys", "/api/me", "/logout", "/static/", "/welcome")
@@ -95,7 +101,8 @@ def install(app, ctx):
         hook.update(store=store, challenges=challenges, min_public=passkeys.MIN_PUBLIC)
 
     def public():
-        return security.access_mode() == "public"
+        """Passkeys in force: Settings' sign-in check (signin_check.py), no longer ACCESS_MODE alone (2026-11-25)."""
+        return signin_check.passkeys_required()
 
     def me():
         return (getattr(g, "user", None) or {}).get("user", "")

@@ -1661,6 +1661,11 @@ if [ $WANT_PF = 1 ]; then
   if ! bg_wait sudo bash "$PF_DIR/deploy/unusual_timer.sh" install; then
     PF_WARN="${PF_WARN:+$PF_WARN }Unusual activity is not counted yet: run sudo platform/deploy/unusual_timer.sh install."
   fi
+  # Settings -> Update's helper (deploy/update_run.py as this installation's user, started when Settings asks)
+  log "\$ update helper (deploy/update_helper.sh install)"
+  if ! bg_wait sudo bash "$PF_DIR/deploy/update_helper.sh" install; then
+    PF_WARN="${PF_WARN:+$PF_WARN }Settings -> Update needs its helper: run platform/deploy/update_helper.sh install."
+  fi
   [ -z "$MAPBOX_TOKEN" ] && PF_WARN="No Mapbox token yet: add MAPBOX_TOKEN to platform/.env, then platform/deploy/reload.sh."
   [ -n "$SOURCES_WARN" ] && PF_WARN="${PF_WARN:+$PF_WARN }$SOURCES_WARN"
 fi

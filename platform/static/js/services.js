@@ -1658,7 +1658,7 @@
     }
     if (x.attack?.techniques?.length) issueAttack(card, x.attack, x.kind === "cve");
     for (const n of x.notes || []) {               // researchers' notes on the issue (notes.py), newest first
-      const p = el("p", "mp-note"); p.append(el("b", null, `Notes shared by ${n.role || "Researcher"}: ${n.by || "a researcher"}${n.date ? ` (${n.date})` : ""}: `), document.createTextNode(n.text));
+      const p = el("p", "mp-note"); p.append(el("b", null, `Notes shared by ${n.role || "Researcher/TI"}: ${n.by || "a researcher"}${n.date ? ` (${n.date})` : ""}: `), document.createTextNode(n.text));
       card.append(p);
       if (n.codes?.length) card.append(window.LGCodes ? window.LGCodes.line(n.codes) : el("p", "mp-note", `Combinations: ${n.codes.map((c) => c.code).join(", ")}`));
     }

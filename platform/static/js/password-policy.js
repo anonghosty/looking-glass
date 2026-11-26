@@ -78,3 +78,58 @@
 
   api("/api/password-policy").then((d) => { P = d; draw(); }).catch((e) => body.replaceChildren(el("p", "fd-empty", window.LGLoader.errorText(e))));
 })();
+
+/* Settings → Sign-in check (signin_check.py, the user 2026-11-25): a passkey or the authenticator code, for sign-in and
+   for high-value actions. The server refuses passkeys unless this administrator is on the host name over HTTPS with their
+   own passkeys, and asks every time for a confirmation (loader.js and lg-stepup.js show it). */
+(() => {
+  "use strict";
+  const body = document.getElementById("scBody");
+  if (!body) return;
+  const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
+  const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content || "";
+  async function api(payload) {
+    const r = await fetch("/api/admin/signin-check", payload === undefined ? { cache: "no-store" } : { method: "POST",
+      credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() }, body: JSON.stringify(payload) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    return d;
+  }
+  const FROM = { env: "set on the server (SIGNIN_CHECK in the platform's .env), which wins over this page",
+                 settings: "chosen here", default: "the default for this installation's access setting" };
+  let C = null;
+  const msg = el("p", "wk-msg muted"); msg.setAttribute("role", "status");
+  const say = (t, bad) => { msg.textContent = t || ""; msg.classList.toggle("bad", !!bad); };
+
+  function draw() {
+    body.replaceChildren();
+    const state = el("p", "pp-state", `In use: ${C.words[C.mode]} (${FROM[C.source] || C.source}).`);
+    const row = el("div", "sc-row");
+    row.setAttribute("role", "radiogroup"); row.setAttribute("aria-label", "Sign-in check");
+    const pick = {};
+    for (const m of ["passkey", "code"]) {
+      const lab = el("label", "check-row sc-opt"); const r = el("input"); r.type = "radio"; r.name = "scMode"; r.value = m;
+      r.checked = C.mode === m; r.disabled = C.source === "env";
+      lab.append(r, el("span", null, C.words[m] + (m === "passkey" ? " (for a site on the internet)" : " (for an internal network)")));
+      row.append(lab); pick[m] = r;
+    }
+    const save = el("button", "lg-btn primary", "Save the sign-in check"); save.type = "button"; save.disabled = C.source === "env";
+    const acts = el("div", "wk-acts"); acts.append(save);
+    const notes = [];
+    if (!C.may_passkey && C.mode !== "passkey") notes.push(el("p", "st-hint", `Passkeys cannot be chosen from here yet: ${C.why_not}`));
+    save.addEventListener("click", async () => {
+      const want = pick.passkey.checked ? "passkey" : "code";
+      if (want === C.mode) { say("Nothing to change."); return; }
+      const sure = want === "passkey"
+        ? `Ask everyone for a passkey?\n\nEach person registers ${C.minimum} passkeys at their next sign-in and cannot use Looking Glass until they have. Passkeys work only on the site's host name over HTTPS.`
+        : "Go back to the authenticator code?\n\nPeople sign in with the code from their authenticator app; passkeys they registered still work for high-value actions.";
+      if (!confirm(sure)) return;
+      save.disabled = true;
+      try { C = await api({ mode: want }); draw(); say(`Saved: ${C.words[C.mode]}.`); }
+      catch (e) { say(window.LGLoader.errorText(e, true), true); save.disabled = false; }
+    });
+    body.append(state, row, ...notes, acts, msg);
+  }
+
+  api().then((d) => { C = d; draw(); }).catch((e) => body.replaceChildren(el("p", "fd-empty", window.LGLoader.errorText(e))));
+})();

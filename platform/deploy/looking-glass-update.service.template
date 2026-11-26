@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: the Looking Glass contributors
+[Unit]
+Description=Looking Glass update: Settings -> Update, as the installation's own user (deploy/update_run.py)
+After=network-online.target
+Wants=network-online.target
+
+# Template: deploy/update_helper.sh fills in @USER@, @PROJECT@ and @ROOT@ (the Looking Glass folder: platform/ and
+# database/). Started by its path unit when Settings writes data/update/request.json; a run still busy makes the next
+# one wait. It runs as the installation's user, never root: it may change the code, the libraries and the backups of
+# this installation and nothing else on the computer.
+[Service]
+Type=oneshot
+User=@USER@
+WorkingDirectory=@PROJECT@
+ExecStart=/usr/bin/python3 @PROJECT@/deploy/update_run.py
+TimeoutStartSec=2h
+UMask=0022
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=@ROOT@
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictNamespaces=true
+SystemCallArchitectures=native
+# GitHub (the release and its signing key), the libraries' sources, MongoDB for the backup, and the local health check
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictRealtime=true
+ProtectClock=true
+ProtectKernelLogs=true
+ProtectHostname=true

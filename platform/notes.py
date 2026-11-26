@@ -25,7 +25,7 @@ from flask import g, jsonify, request
 import beacon_findings     # a note carrying an LG-B code becomes a finding about that exact selection
 import filesig  # noqa: E402
 
-ROLE_LABEL = {"researcher": "Researcher", "admin": "Administrator", "analyst": "Analyst", "management": "Management"}
+from findings import role_label   # one role label for notes and findings (findings.ROLE_LABEL)
 MAX_LEN = 2000
 MAX_CODES = 10                 # combination codes on one note (combos.py)
 CODE_RX = re.compile(r"^LG-[CXB]-[0-9A-F]{8}$")   # combinations, and decoded beacons (beacon_findings.py)
@@ -36,6 +36,14 @@ SECTIONS = ("infections", "issues", "services")       # services: the reports th
 
 def _section(v):
     return v if v in SECTIONS else "infections"
+
+
+def _viewer():
+    """The signed-in person's sign-in name, "" outside a request (PDF reports, tests)."""
+    try:
+        return (getattr(g, "user", None) or {}).get("user", "")
+    except RuntimeError:
+        return ""
 
 
 class Notes:
@@ -80,8 +88,9 @@ class Notes:
         out = {"id": n["id"], "text": n["text"], "date": n.get("date", ""), "by": who,
                # a note is research (the Definitions page's Notes window): an administrator's is labelled as the
                # role it played, so management reading it knows (the user, 2026-11-18)
-               "role": "Administrator acting as researcher" if n.get("role") == "admin" else ROLE_LABEL.get(n.get("role", ""), "Researcher"),
-               "acted": "researcher", "user": n.get("user", ""), "codes": codes}
+               "role": role_label(n.get("role", ""), "researcher" if n.get("role") == "admin" else ""),
+               # "mine" instead of the author's sign-in name: pages never hold another person's sign-in name
+               "acted": "researcher", "mine": bool(n.get("user")) and n.get("user") == _viewer(), "codes": codes}
         track = getattr(self, "findings", None)
         f = track.of_note(n["id"]) if track else None
         if f:                              # tracked as a finding: its number and where it stands (findings.py)
@@ -130,7 +139,7 @@ class Notes:
         if not notes and "notes" not in card:
             return card
         out = dict(card)
-        out["notes"] = [{k: v for k, v in n.items() if k not in ("user",)} for n in notes]
+        out["notes"] = [{k: v for k, v in n.items() if k not in ("user", "mine")} for n in notes]
         return out
 
 

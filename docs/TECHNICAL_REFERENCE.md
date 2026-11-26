@@ -27,11 +27,11 @@ Four layouts are normalized into one schema:
 | referer | `event4_sinkhole_http_referer` | `http_referer_*` → `dst_*` |
 | inbound | `spam_url` | `src_*` (spam sender) → `ip`/`geo` (local host) |
 
-Attack types come from the collection name: Botnet C2 (sinkholes), Brute force, Scanning (honeypots and darknet), DDoS, Initial access, IP spoofing and Spam. Any field outside the common schema is kept per event as `extras` and shown in the detail view under "… specific fields". For example, brute-force usernames and passwords, the SSH client version, DNS queries, DDoS attack type and duration, and raw honeypot requests.
+Attack types come from the collection name: Botnet C2 (sinkholes), Brute force, Scanning (honeypots and darknet), DDoS, Initial access, IP spoofing and Spam. Any field outside the common schema is kept per event as `extras` and shown in the detail view under "… specific fields" (for example brute-force usernames and passwords, the SSH client version, DNS queries, DDoS attack type and duration, raw honeypot requests).
 
 Which collections have rows depends on the day and the country. Typically the sinkhole reports (`event4_sinkhole`,
-`event4_sinkhole_http`, `event4_sinkhole_dns`) carry most of a day's events, and the honeypot reports far fewer.
-`outdated_dnssec_key` is excluded by default, because it reports a misconfiguration rather than an attack. `GET /api/sources` lists the live registry with today's row counts, and `tools/discover.py` repeats the full survey of all collections.
+`event4_sinkhole_http`, `event4_sinkhole_dns`) carry most of a day's events, the honeypot reports far fewer.
+`outdated_dnssec_key` is excluded by default: it reports a misconfiguration, not an attack. `GET /api/sources` lists the live registry with today's row counts; `tools/discover.py` repeats the full survey of all collections.
 
 ## Infection knowledge base
 
@@ -54,9 +54,9 @@ vendor or CERT research. `data/issues.json` does the same for the services issue
 **Shipped and site definitions never conflict.** `data/infections.json` and `data/issues.json` belong to Looking Glass
 and are replaced by updates (`git pull`). What researchers write on a site goes to `data/definitions.json`, which is
 not in the repository (`.gitignore` excludes `data/*` except the shipped files) and takes precedence over the shipped
-entry of the same name. A site's own definitions and notes are therefore never overwritten, and never block an update.
+entry of the same name. A site's own definitions and notes are therefore never overwritten and never block an update.
 
-The detail and analysis views show the description and recommended action. Entries with low confidence or `needs-review` status are marked **Unverified**, and infections with no entry say so. The server reloads the file whenever it changes, and open pages fetch it again every 10 minutes, so you never need a restart.
+The detail and analysis views show the description and recommended action. Entries with low confidence or `needs-review` status are marked **Unverified**; infections with no entry say so. The server reloads the file whenever it changes and open pages fetch it again every 10 minutes: no restart is needed.
 
 **Keeping it complete:**
 
@@ -64,9 +64,9 @@ The detail and analysis views show the description and recommended action. Entri
 .venv/bin/python manage/infections_missing.py 7      # check the last 7 days
 ```
 
-This lists every infection seen in those days that has no entry, plus entries still marked `needs-review`, with counts, reports, tags, families and sample C2 domains. It also writes `data/infections_missing.json`, which includes empty stub entries. Research and write the new entries (description, recommended action, confidence), then merge them into `data/infections.json`. While the service is running, `GET /api/infections/missing` gives the same check for the current replay day.
+This lists every infection seen in those days without an entry, plus entries still marked `needs-review`, with counts, reports, tags, families and sample C2 domains, and writes `data/infections_missing.json` with empty stub entries. Write the new entries (description, recommended action, confidence), then merge them into `data/infections.json`. While the service runs, `GET /api/infections/missing` gives the same check for the current replay day.
 
-The base covers the infections and categories that Shadowserver's event reports commonly use, including the honeypot, DDoS and access categories. Names with little public detail say so and carry `confidence: low` (for example `wd`, a family that looks up generated domains and is not publicly identified). Names seen only in the Sinkhole DNS report explain that the address is usually a DNS resolver, with the infected client behind it.
+The base covers the infections and categories Shadowserver's event reports commonly use, including the honeypot, DDoS and access categories. Names with little public detail say so and carry `confidence: low` (for example `wd`, a family that looks up generated domains and is not publicly identified). Names seen only in the Sinkhole DNS report explain that the address is usually a DNS resolver, with the infected client behind it.
 
 ## Researchers: intel, notes and where a name was seen
 
@@ -159,7 +159,7 @@ Its server side is in small modules called from `app.py`:
   level}`; level `""` takes a rating back; CSRF; audited `severity_rated`), *definitions* permission (researchers and
   administrators). Joins Shadowserver's levels (`pdf_refs.all_levels()`), every name (`pdf_refs.all_kinds()`) and the
   researchers' ratings (`data/name_ratings.json`); CVEs left out; a name Shadowserver rates is refused (409). PDFs use
-  a researcher's level (`pdf_refs.researcher_level()`, flagged "Researcher's rating") only where no record rates the
+  a researcher's level (`pdf_refs.researcher_level()`, flagged "Researcher/TI rating") only where no record rates the
   name. Page `static/js/severity-map.js`. Test: `tests/check_severity_map.py`.
 - **`acode_warm.py`, analyst code counts after a start.** `ANALYST_WARM_DELAY_S` seconds after start, one thread works
   out the device counts (`/api/intel/acode/<code>/devices`) of every analyst code on open findings, at both viewer
@@ -254,7 +254,7 @@ Its server side is in small modules called from `app.py`:
 
 ## Network names (ASN registry)
 
-`data/asns.json` maps every AS number seen in the data to its operating company. The map shows company names instead of numbers, for example "Example Telecom (AS64500)" in the detail view and "Example Telecom" in lists. ASNs of the same company are counted together: an operator's AS64500 and AS64501 appear as one network.
+`data/asns.json` maps every AS number seen in the data to its operating company. The map shows company names instead of numbers ("Example Telecom (AS64500)" in the detail view, "Example Telecom" in lists). ASNs of one company are counted together: AS64500 and AS64501 of one operator appear as one network.
 
 Each entry has:
 - `name`: what is displayed
@@ -290,11 +290,11 @@ The **Demo** button in the top bar conceals sensitive details while the data kee
 - Locations stay visible.
 - Pins and "Copy JSON" are hidden.
 
-**The masking happens on the server** (`privacy.py`, `?demo=1`), so concealed values are never sent to the browser. Drill-downs still work through opaque host references (`src_ref`). While a request is masked (Demo, or a role without *unmasked*), filters accept only what the masked view shows: host filters only the opaque references, network filters only the aliases (`AsnRegistry.strict`); a real address, company name or AS number matches nothing, so a viewer cannot find out whether something is in the data.
+**The masking happens on the server** (`privacy.py`, `?demo=1`), so concealed values never reach the browser. Drill-downs still work through opaque host references (`src_ref`). While a request is masked (Demo, or a role without *unmasked*), filters accept only what the masked view shows: host filters only the opaque references, network filters only the aliases (`AsnRegistry.strict`); a real address, company name or AS number matches nothing, so a viewer cannot find out whether something is in the data.
 
 Pinned events keep full details in the browser, so they are stored per account (`tm.pins:<username>`), never for masked accounts, and deleted on the sign-in page (log out, expired session). The aliases are fixed in `data/asns.json` (`demo_alias`), so "Telco 1" means the same network in every presentation.
 
-For a public deployment where nobody may switch demo off, set `PUBLIC_DEMO=1` in `.env`. Every request is then masked, the button is locked on, and `/api/asns` is refused.
+For a public deployment where nobody may switch demo off, set `PUBLIC_DEMO=1` in `.env`: every request is masked, the button is locked on, and `/api/asns` is refused.
 
 ## Requirements and installation
 
@@ -469,8 +469,8 @@ Every setting, with examples: [CONFIGURATION.md](CONFIGURATION.md). The main one
 
 ## How it works
 
-- **Data loading.** A collection can hold millions of documents with no index on `extracted_date`, so time-range queries would scan the whole collection. Instead, the app loads the replay day into memory using the existing `filename` index: report files are named `YYYY-MM-DD-…csv`. A typical national day loads in a few seconds. If no file names match, the day stays empty and is retried every minute. Set `FALLBACK_SCAN=1` to query `extracted_date` instead.
-- **Replay clock.** The browser keeps a clock running `REPLAY_OFFSET_HOURS` behind real time. Every 4 s it requests the next window from `/api/events` and launches each arc at the event's own time. The speed selector (1×, 5×, 15×, 60×) speeds this up, and choosing 1× snaps back to live. Each attack stays "active" on the map for 75 s of replay time. Its packet keeps re-firing along the arc during that time, so several attacks animate at once. On load, the stream is backfilled with the last 15 replay-minutes.
+- **Data loading.** A collection can hold millions of documents with no index on `extracted_date`, so time-range queries would scan it whole. Instead the app loads the replay day into memory through the existing `filename` index (report files are named `YYYY-MM-DD-…csv`); a typical national day loads in a few seconds. If no file names match, the day stays empty and is retried every minute. `FALLBACK_SCAN=1` queries `extracted_date` instead.
+- **Replay clock.** The browser keeps a clock running `REPLAY_OFFSET_HOURS` behind real time. Every 4 s it requests the next window from `/api/events` and launches each arc at the event's own time. The speed selector (1×, 5×, 15×, 60×) speeds this up; 1× snaps back to live. Each attack stays "active" for 75 s of replay time, its packet re-firing along the arc, so several attacks animate at once. On load, the stream is backfilled with the last 15 replay-minutes.
 - **Coordinates.** Sources and destinations are geocoded by city and region, falling back to the country centroid. Events with only one known location show a pulse there instead of an arc.
 
 ### API
@@ -492,26 +492,26 @@ Every setting, with examples: [CONFIGURATION.md](CONFIGURATION.md). The main one
 
 ## Intro page
 
-The welcome page opens on the first visit in each browser session. Refreshes go straight to the map. Click **Overview** in the top bar (or the logo) to return to it at any time. It shows:
+The welcome page opens on the first visit in each browser session; refreshes go straight to the map. **Overview** in the top bar (or the logo) returns to it. It shows:
 - the day being replayed;
 - live totals: events, reports with data out of all monitored reports, source hosts, infections / categories, affected cities and hosts seen in several reports;
 - the full-day activity strip and the attack-type mix;
-- **every monitored report**, with those that have data that day listed first.
+- **every monitored report**, those with data that day first.
 
 It has two buttons: **Explore the platform** and **Explore in demo mode**.
 
-All figures come from `GET /api/overview`, and the report list comes from the live collection registry. New collections with src/dst fields are discovered within `REGISTRY_REFRESH_SECONDS` (default 3600), so the count grows by itself beyond 30. The page refreshes every minute while it is open. The logo is animated: the arc draws in and then flows, and the impact ring pulses. Animations are off for users who prefer reduced motion.
+All figures come from `GET /api/overview`; the report list from the live collection registry. New collections with src/dst fields are discovered within `REGISTRY_REFRESH_SECONDS` (default 3600), so the count grows by itself beyond 30. The page refreshes every minute while open. The logo is animated (the arc draws in and flows, the impact ring pulses), except for users who prefer reduced motion.
 
 ### Animated logo: loading and page transitions (`static/js/loader.js`)
 
 Shared by the map, the services platform and Settings:
-- **While data loads**, the logo appears next to the loading message: the analysis and detail panels ("Analysing…", "Loading the details…"), the live stream while it waits for records, and Settings while it loads. Records scroll through the lens as if being searched, the arc draws, and the hit pulses. Any element with the class `i-loading`, `st-loading` or `lg-loading` gets it automatically.
+- **While data loads**, the logo appears next to the loading message: the analysis and detail panels ("Analysing…", "Loading the details…"), the live stream while it waits for records, and Settings while it loads. Records scroll through the lens, the arc draws, and the hit pulses. Any element with the class `i-loading`, `st-loading` or `lg-loading` gets it automatically.
 - **Between pages** (intro → services, services → overview, any page → Settings and back), the logo draws itself (rim, handle, then the arc) with "Opening …". The next page keeps it on screen until its first figures arrive (at least 0.7 s, at most 1.6 s), then it zooms and fades into the platform. **Explore the platform** on the intro shows the same logo over the intro before the map appears.
 - In **Lite** display mode and for users who prefer reduced motion, the logo is still and pages switch without delay.
 
 ## Settings (both platforms): country and constituency
 
-`/settings` is opened from the gear at the top left of the intro page, from the **Settings** button in both platforms' top bars, and from the constituency label. What it sets applies to both platforms at once. Which parts are shown depends on where you opened it:
+`/settings` opens from the gear at the top left of the intro page, the **Settings** button in both platforms' top bars, and the constituency label. What it sets applies to both platforms at once; the parts shown depend on where it was opened (what each setting does for users: [USER_GUIDE.md, Settings](USER_GUIDE.md#7-settings-administrators)):
 
 | Opened from | Address | Shows |
 |---|---|---|
@@ -519,21 +519,21 @@ Shared by the map, the services platform and Settings:
 | Publicly accessible / vulnerable services | `/settings?for=services` | Country and constituency |
 | Intro page | `/settings` | Both |
 
-**Applying.** A bar fixed at the bottom of the page always shows the state: **No changes** (with what is in force), **Unsaved changes** (with what Apply would set, plus Undo changes), or **Settings applied at HH:MM UTC**. **Apply settings** saves the settings, and the server immediately reloads both platforms' data (about 4 seconds). A green banner then confirms what is in force. Open pages check for new settings every 10 seconds and refresh completely: figures, stream, map, analysis and, on the services platform, the country, its regions map and the "<country> regions" button. They show "Settings updated: …". Leaving the page with unapplied changes asks for confirmation.
+**Applying.** A bar fixed at the bottom of the page shows the state: **No changes** (with what is in force), **Unsaved changes** (with what Apply would set, plus Undo changes), or **Settings applied at HH:MM UTC**. **Apply settings** saves, and the server reloads both platforms' data at once (about 4 seconds); a green banner confirms what is in force. Open pages check for new settings every 10 seconds and refresh completely (figures, stream, map, analysis and, on the services platform, the country, its regions map and the "<country> regions" button), showing "Settings updated: …". Leaving the page with unapplied changes asks for confirmation.
 
 **Wrong country.** If none of the regions in the reports are on the chosen country's map, the services platform still shows that country's map, with a note: "None of the N regions in these reports are on <country>'s map. Kindly select the right country in Settings to populate the regions", plus an **Open Settings** button. The settings page shows the same warning before applying.
 
-- **Country.** Choose the continent, then the country: every country and territory in the world (ISO 3166-1, plus Kosovo). The services platform draws that country's first-level regions on its regions map, and uses the country's name in labels; the view button reads "<country> regions", or "<country> map" for a country drawn as one area. Boundaries come from geoBoundaries (gbOpen ADM1, simplified; about 200 countries) and, for countries without first-level regions there, from geoBoundaries ADM0 or Natural Earth as one area. They live in `static/data/adm1/<ISO2>.json` with `index.json` listing continent, names, regions and licence per country; `manage/fetch_world_boundaries.py --out static/data/adm1` downloads them all again. Countries that cross the 180° line (Fiji, Russia, New Zealand, Kiribati) are drawn in one piece. The page previews the country's regions and checks yesterday's region names from the reports against the map, and says how many of them it could draw. If none match (a country chosen that is not the one the reports are for), it warns that the reports do not seem to be for that country.
-- **Region names and labels (every country).** The reports' region names come from IP geolocation, which follows ISO 3166-2. Those names are often in the local language ("Alger", "Al Qāhirah") or use newer subdivisions than the boundary files (Algeria's 58 provinces against 48 on the map; Kavango East / West in Namibia). `manage/region_aliases.py` adds to every region of every map:
+- **Country.** Choose the continent, then the country: every country and territory in the world (ISO 3166-1, plus Kosovo). The services platform draws its first-level regions on the regions map and uses its name in labels; the view button reads "<country> regions", or "<country> map" for a country drawn as one area. Boundaries come from geoBoundaries (gbOpen ADM1, simplified; about 200 countries) and, for countries without first-level regions there, from geoBoundaries ADM0 or Natural Earth as one area. They live in `static/data/adm1/<ISO2>.json` with `index.json` listing continent, names, regions and licence per country; `manage/fetch_world_boundaries.py --out static/data/adm1` downloads them all again. Countries that cross the 180° line (Fiji, Russia, New Zealand, Kiribati) are drawn in one piece. The page previews the country's regions, checks yesterday's region names from the reports against the map and says how many it could draw; if none match, it warns that the reports do not seem to be for that country.
+- **Region names and labels (every country).** The reports' region names come from IP geolocation, which follows ISO 3166-2. They are often in the local language ("Alger", "Al Qāhirah") or use newer subdivisions than the boundary files (Algeria's 58 provinces against 48 on the map; Kavango East / West in Namibia). `manage/region_aliases.py` adds to every region of every map:
   - its ISO 3166-2 codes;
   - aliases: the ISO name, sub-units whose ISO parent is that region (e.g. Burkina Faso's provinces), newer subdivisions mapped to the region they were carved from (Touggourt → Ouargla, In Salah → Tamanrasset), and English / local alternatives (Algiers ↔ Alger, Cairo ↔ Al Qāhirah, Brong-Ahafo → Bono);
   - repaired display names (Seychelles' truncated and garbled names, typos such as "Northen Red Sea");
   - a label point well inside the region.
 
-  The script uses the ISO 3166-2 list of Ubuntu's `iso-codes` package. For the 54 African countries every ISO first-level subdivision lands on a map region, apart from where ISO's top level is above the map's units: the island groups of Cabo Verde and Equatorial Guinea (their municipalities and provinces match), and the uninhabited Cargados Carajos Shoals of Mauritius. Elsewhere the same step runs, and a name it cannot place is left for the administrator: the Settings page lists yesterday's report region names with a "Match" column, suggests the closest map region ("doesn't match, but this is what we found"), and an administrator confirms it, picks another region, or marks the name as the whole country. Choices are stored per country in `data/region_matches.json`, apply to the map, the Executive report and the "unknown region" checks, need a fresh sign-in, and are audited (region match set / removed). Matching ignores accents, letter case and words such as "Region" or "Governorate". `static/js/regions.js` does it in the browser for the services regions map and the Settings preview.
+  The script uses the ISO 3166-2 list of Ubuntu's `iso-codes` package. For the 54 African countries every ISO first-level subdivision lands on a map region, except where ISO's top level is above the map's units: the island groups of Cabo Verde and Equatorial Guinea (their municipalities and provinces match), and the uninhabited Cargados Carajos Shoals of Mauritius. Elsewhere the same step runs, and a name it cannot place is left for the administrator: the Settings page lists yesterday's report region names with a "Match" column, suggests the closest map region ("doesn't match, but this is what we found"), and an administrator confirms it, picks another region, or marks the name as the whole country. Choices are stored per country in `data/region_matches.json`, apply to the map, the Executive report and the "unknown region" checks, need a fresh sign-in, and are audited (region match set / removed). Matching ignores accents, letter case and words such as "Region" or "Governorate". `static/js/regions.js` does it in the browser for the services regions map and the Settings preview.
 
-  Both maps label every region where the name fits without overlapping (regions with records first, then the largest), and hovering names any region with its ISO code and records. Several report names on one region (a newer province inside the old one) are added up, and the tooltip lists them. Report regions that are on no region of the map are listed under the map. `manage/fetch_world_boundaries.py` runs the alias step after downloading.
-- **Constituency.** Leave it on "Whole country", or choose the networks your CSIRT is responsible for. The card holds the mode and a live summary ("N networks, M address blocks, K other ranges"); the choice is made in the Constituent column of the network list (Network names & types, `net-editor.js`), one AS number at a time: **Not in**, **The whole network** (saved in the AS number list) or **Some address blocks** (an expansion row lists the network's /24 blocks with records, busiest first, from `GET /api/settings/address-blocks?asn=N` in `address_blocks.py`; a block belongs to the network most of its records are in; ticked blocks are saved as address ranges). **Other address ranges**, under the table, takes ranges that belong to no listed network, such as a government network without its own AS number. On load, `GET /api/settings/address-blocks?summary=1` gives each network's block count and which saved ranges are exactly one of those blocks; those show as that network's chosen blocks, any other saved range under Other address ranges. Saving is unchanged: `POST /api/settings` with `networks` (AS numbers) and `cidrs` (address ranges). Both platforms then keep only records whose host is in the constituency: on the map platform the source or destination side, on the services platform the host. Every figure, list, map, analysis and export follows. Saving reloads both platforms' data. Open pages refresh by themselves and show **Constituency: N networks** in their top bars; the intro page shows the same.
+  Both maps label every region where the name fits without overlapping (regions with records first, then the largest); hovering names any region with its ISO code and records. Several report names on one region (a newer province inside the old one) are added up, and the tooltip lists them. Report regions on no region of the map are listed under the map. `manage/fetch_world_boundaries.py` runs the alias step after downloading.
+- **Constituency.** Leave it on "Whole country", or choose the networks your CSIRT is responsible for. The card holds the mode and a live summary ("N networks, M address blocks, K other ranges"); the choice is made in the Constituent column of the network list (Network names & types, `net-editor.js`), one AS number at a time: **Not in**, **The whole network** (saved in the AS number list) or **Some address blocks** (an expansion row lists the network's /24 blocks with records, busiest first, from `GET /api/settings/address-blocks?asn=N` in `address_blocks.py`; a block belongs to the network most of its records are in; ticked blocks are saved as address ranges). **Other address ranges**, under the table, takes ranges of no listed network, such as a government network without its own AS number. On load, `GET /api/settings/address-blocks?summary=1` gives each network's block count and which saved ranges are exactly one of those blocks; those show as that network's chosen blocks, any other saved range under Other address ranges. Saving: `POST /api/settings` with `networks` (AS numbers) and `cidrs` (address ranges). Both platforms then keep only records whose host is in the constituency (the map platform: the source or destination side; the services platform: the host), and every figure, list, map, analysis and export follows. Saving reloads both platforms' data; open pages refresh by themselves and show **Constituency: N networks** in their top bars, as does the intro page.
 - **Deployment.** The same settings can be given in `.env` as `COUNTRY`, `CONSTITUENT_ASNS` and `CONSTITUENT_CIDRS`. The page shows the lines for your current choice. Settings saved on the page are stored in `data/settings.json` and take precedence.
 - **Who can change them.** Accounts with the Settings permission (administrators), from a recent sign-in. Accounts without the permission do not see Settings. (The old `SETTINGS_TOKEN` header was removed: settings have one rule.)
 - **The replay schedule is unaffected.** It still waits for the reports themselves, so a narrow constituency with no records on a day is not mistaken for a missing report.
@@ -551,19 +551,21 @@ Who and where, Threats, Numbers and measures, Using the platform, Accounts, role
 vulnerable services, and Security, audit and the pipeline, with a search box. Examples: what an event is, what
 "median" and "median repeat interval" mean, sinkhole, honeypot, C2, demo mode, a finding, an advisory and TLP, the
 audit log's hash chain, control checks, NIST SP 800-53, CIS Controls, the proof package, the sender check and
-confirmation on the server. `docs/GLOSSARY.md` is the same list for the documentation site; it is generated from
-`static/js/glossary.js` by `python3 tools/glossary_md.py`, so edit the JavaScript file and regenerate it rather than
-editing the Markdown (only its introduction and Related tools section are written by hand).
+confirmation on the server.
 
 The same definitions appear **on hover** across the platform. Labels with a dotted underline explain themselves: top-bar figures, the activity level, the replay clock, playback speed, filter headings, Intel chart titles, stream columns, and every number and chart title in the analysis view.
 
-All text lives in `static/js/glossary.js`. Edit a definition there and it changes in the Glossary tab and in the tooltips (and, once regenerated, in `docs/GLOSSARY.md`). To explain a new label, add a term to that file, then map the label's text to the term's key in `LABEL_TERMS` in `static/js/app.js`.
+All text lives in `static/js/glossary.js`: a definition edited there changes in the Glossary tab and the tooltips.
+`docs/GLOSSARY.md` is the same list for the documentation site, generated from it by `python3 tools/glossary_md.py`, so
+edit the JavaScript file and regenerate rather than editing the Markdown (only its introduction and Related tools
+section are written by hand). To explain a new label, add a term to `glossary.js`, then map the label's text to the
+term's key in `LABEL_TERMS` in `static/js/app.js`.
 
 ## Devices and performance (smart TVs, older computers)
 
 The look adapts to the device (phone, tablet, laptop, large screen). The top bar never squeezes its figures into each other: on wide screens (1440 px and up) they share one row and the least important ones (cross-report hosts, reports, source hosts) are hidden whole when they do not fit; from 701 to 1439 px they get their own row under the name and clocks; on phones the bar has three rows (name, replay time and buttons, figures) and the speed menu is hidden.
 
-**Smart TVs and other short screens.** TV browsers report a small screen size (often 960 × 540 or 1280 × 720), which used to leave the map about a fifth of the screen. On screens up to 820 px tall all six figures sit on a slim second row of the top bar (label and number side by side), and the event stream takes about a third of the height with compact rows (address and place; the network is in the details) and no column header. The stream also has **Hide list / Show list** (or press **L**): hidden, only its title bar stays and the map gets the screen. TVs start with the list hidden; the choice is remembered per device. The list can be focused with Tab or a TV remote: the arrow keys move between rows (scrolling the list) and Enter opens one. Map share at 960 × 540: 44 % with the list (3 rows visible), 72 % without; at 1280 × 720: 49 % (5 rows) and 79 %. Drawing cost is controlled by **Filters > Display**:
+**Smart TVs and other short screens.** TV browsers report a small screen size (often 960 × 540 or 1280 × 720). On screens up to 820 px tall all six figures sit on a slim second row of the top bar (label and number side by side), and the event stream takes about a third of the height with compact rows (address and place; the network is in the details) and no column header. The stream has **Hide list / Show list** (or **L**): hidden, only its title bar stays. TVs start with the list hidden; the choice is remembered per device. The list can be focused with Tab or a TV remote: the arrow keys move between rows (scrolling the list) and Enter opens one. Map share at 960 × 540: 44 % with the list (3 rows visible), 72 % without; at 1280 × 720: 49 % (5 rows) and 79 %. Drawing cost is controlled by **Filters > Display**:
 
 | Mode | What it does |
 |---|---|
@@ -577,7 +579,7 @@ The data, counts and analysis are identical in every mode. A screen can also be 
 
 ## Malpedia lookups
 
-With `MALPEDIA_TOKEN` set in `.env`, every infection description (in the event details and the analysis view) has a **Look up on Malpedia** button, and so does the report's tag when it names something else. Report fields holding a malware family or a sample hash (md5, sha1, sha256) get one too. The result shows the Malpedia family (linked), how it was matched (for example `modpack` matches win.misfox by its alternative name ModPack), the description, other names, attribution, YARA rule counts and references, with other possible matches to choose from.
+With `MALPEDIA_TOKEN` set in `.env`, every infection description (in the event details and the analysis view) has a **Look up on Malpedia** button, as do the report's tag when it names something else and report fields holding a malware family or a sample hash (md5, sha1, sha256). The result shows the Malpedia family (linked), how it was matched (for example `modpack` matches win.misfox by its alternative name ModPack), the description, other names, attribution, YARA rule counts and references, with other possible matches to choose from.
 
 - The token stays on the server (`/api/malpedia?field=&value=`) and never reaches a browser; `.env` is readable by its owner only.
 - Answers are cached for a week in `data/malpedia_cache.json`.
@@ -594,14 +596,14 @@ With `MALPEDIA_TOKEN` set in `.env`, every infection description (in the event d
 - Management portal: `management.py` (`/management`, `GET /api/mgmt/comms|services` with filters and `day`, `GET /api/mgmt/explain?kind=infection|issue&name=`, `GET /api/mgmt/report?platform=` executive PDF). Answers carry aggregates only (counts, shares, trends, facets) and never an address; other roles get 403. Permission `management` is exclusive (`auth.Roles` strips it from every role except `management` and `admin`; the `management` role is always exactly `["management"]`); management users are confined to `MANAGEMENT_PATHS`.
 - Look-up jobs: `POST /api/lookups` {kind: issues | malpedia, values} (permission `malpedia`, CSRF; at most 400 names, two running jobs per user) starts a background job; `GET /api/lookups/<id>?since=n` returns progress, the new log lines and, when done, the results. The page shows them in a progress window (`static/js/pdf.js`, `LGLookup.run`). Malpedia jobs wait and continue when Malpedia's 30-a-minute limit is reached.
 - Reports: `GET /api/insight/report` and `/api/svc/report` return a ZIP (PDF + complete list as CSV, formula-safe); `format=pdf` returns the PDF alone (then the list is printed).
-- Network names: `GET /api/networks`, `POST /api/networks/entry`, `POST /api/networks/types` (permission `networks` or settings; CSRF; fresh sign-in). Types: `netypes.py` (built-in sectors, PeeringDB categories) plus `data/network_types.json`; demo aliases use each type's word. The built-in researcher role has `definitions` and `networks` (added once to existing installs, marker `data/.roles_networks_added`). `GET /api/networks` gives each network's records on the replay day (`events`, null when that day is not loaded) and `events_day`.
+- Network names: `GET /api/networks`, `POST /api/networks/entry`, `POST /api/networks/types` (permission `networks` or settings; CSRF; fresh sign-in). Types: `netypes.py` (built-in sectors, PeeringDB categories) plus `data/network_types.json`; demo aliases use each type's word. The built-in Researcher/TI (researcher or threat intelligence analyst) role has `definitions` and `networks` (added once to existing installs, marker `data/.roles_networks_added`). `GET /api/networks` gives each network's records on the replay day (`events`, null when that day is not loaded) and `events_day`.
 - Administrator / researcher definitions (`data/infections.json`, written from Settings or `/definitions` via `POST /api/kb/entry`; permission `definitions`, or `settings`; the built-in `researcher` role has only `definitions` and is limited to `/definitions` and `/api/kb/*`): an optional `malpedia` family id is looked up directly instead of searching; otherwise `references` + `description` give a *Looking Glass definition* card. `GET /api/kb/unresolved` lists unmatched names, names not checked yet and defined names; `GET /api/kb/malpedia-search?q=` finds family ids; `POST /api/kb/check` checks new names now. The check state per name is in `data/malpedia_names.json` (run-time, not shipped); a background thread checks names new reports bring in every 30 minutes at most 20 per minute, one worker at a time (`data/.malpedia_check.lock`).
 - `tools/malpedia_check.py` looks up every infection of the replay day and lists what matched (typically most of them; the rest are Shadowserver activity names such as `ssh-brute-force` or proxy networks that Malpedia does not list).
 
 ## The map: all connections plus the live replay
 
 The map has two layers:
-- **All of the day's connections** (always drawn, from `/api/geo`): every source place, destination and source → destination connection of the whole replayed day with the active filters, sized by event count and coloured by the main attack type. Filtering narrows it to exactly the matching places, and if some are off screen the map zooms out to show them. It can be switched off under **Filters > Display**.
+- **All of the day's connections** (always drawn, from `/api/geo`): every source place, destination and source → destination connection of the whole replayed day with the active filters, sized by event count and coloured by the main attack type. Filtering narrows it to exactly the matching places, zooming out if some are off screen. It can be switched off under **Filters > Display**.
 - **The live replay** on top: bright animated arcs for the events playing at the current replay time (no popups).
 
 **Everything drawn on the map explains itself on hover and can be clicked**, like the Intel lists ("Click to analyse"):
@@ -629,11 +631,11 @@ Front-end libraries: Mapbox GL JS 3.8.0 (satellite style) and deck.gl 9.1.14 (3D
 - **Map:** raised 3D arcs colored by infection, with packets that re-fire along each arc, impact rings and source pulses. Up to 10 popups appear at once, each showing the infection, IP and target. Pinned attacks stay drawn as dashed purple arcs. The camera slowly sways; turn this off with the ⟳ button.
 - **Event stream (bottom):** a scrollable table with severity, infection / category with its report, source host (IP:port, city, ASN), destination (IP:port, city, ASN), protocol/port, and C2 domain plus request. Rows still animating on the map show a live dot.
   - If you scroll down, new rows wait behind a "↑ N new" button, so the list doesn't jump while you read.
-  - **Pause** freezes the whole replay: the replay clock, the arcs and popups on the map, and the stream. **Resume** continues from the same moment, so nothing is skipped. The replay then runs behind by the paused time, and a **Catch up** button jumps it forward to the normal replay time. Choosing a speed also catches up.
-  - When the browser tab is hidden or minimised, the replay **pauses itself** (browsers stop animations in background tabs) and resumes from the same moment when you return, so the stream has no gaps; use **Catch up** to jump ahead. Any event that still arrives late is listed in the stream without its map animation, never dropped.
+  - **Pause** freezes the whole replay (clock, arcs, popups and stream); **Resume** continues from the same moment, so nothing is skipped. The replay then runs behind by the paused time; **Catch up** (or choosing a speed) jumps it forward to the normal replay time.
+  - A hidden or minimised tab **pauses itself** (browsers stop animations in background tabs) and resumes from the same moment, so the stream has no gaps. An event that still arrives late is listed in the stream without its map animation, never dropped.
   - The map's zoom and compass buttons pause the slow cinema rotation while they animate, so they always work.
   - The 📌 button pins a row. Pinned rows sit above the live rows and are kept in the browser across reloads.
-  - Clicking a row, arc or popup opens the **communication detail**: the raw HTTP request, infected host, destination, threat, TLS/device, "this host today" and provenance (report file, line hash). It also has Pin, Show on map and Copy JSON buttons.
+  - Clicking a row, arc or popup opens the **communication detail**: the raw HTTP request, infected host, destination, threat, TLS/device, "this host today" and provenance (report file, line hash), with Pin, Show on map and Copy JSON buttons.
   - Drag the top edge of the panel to resize it.
 - **Filters (left):** attack type, source report, severity, infection / category (searchable, with severity dot and count), affected city, target country, tag, target port and protocol.
 - **Intel charts (all with hover tooltips):**
@@ -643,16 +645,16 @@ Front-end libraries: Mapbox GL JS 3.8.0 (satellite style) and deck.gl 9.1.14 (3D
   - **Source networks** and **destination networks**: company names, ASNs on hover.
 - **Everything in an analysis is clickable for a further analysis:** every breakdown (reports, attack types, infections, cities, source and destination networks, C2 domains, destination IPs, target countries, target ports, user agents, request paths, severity, tags), the donuts, the severity bar and legend, the figures, the drill-down rows and the host table. The **hourly and 15-minute charts** are clickable too: a bar opens a **Time window** analysis (for example "18:00 to 19:00 UTC · android.badbox2") within the same selection.
 - **Top-bar figures open the whole-day analysis** (with any active filters) at the matching list: Events yesterday → all events by infection and report; Replayed so far → the time window from 00:00 to the exact replay position (same count as the top bar); Source hosts → hosts ranked for follow-up; Reports → the reports; Cross-report hosts → hosts in several reports; Critical → critical events with their hosts.
-- **Tooltips on touch screens** close by themselves after a few seconds, and any new tap, scroll or opened panel closes them at once (there is no mouse to move away).
-- **Deep dive inside an analysis:** every click inside an analysis narrows it instead of jumping away: a breakdown entry, a donut slice, the severity bar, a chart bar, a row of a Details list or of the host table. For example an infection (10,000 events) → one network (7,500) → port 80 (6,000) → one user agent (500) → 00:00 to 01:00 (15). The parts of the selection are shown as chips under the title: click a part to open it on its own (for example a host with all of its reports), or × to remove it and widen again.
-- **Filter map works for every analysis:** it sets the map, the stream and Intel to exactly that analysis' selection, every part of it, including networks, destination IPs, destination cities, user agents and request paths (also in demo mode, through concealed references). A time window is the one part that is not applied, because the replay itself is the time axis.
+- **Tooltips on touch screens** close by themselves after a few seconds, or at once on any new tap, scroll or opened panel.
+- **Deep dive inside an analysis:** every click inside an analysis (a breakdown entry, a donut slice, the severity bar, a chart bar, a row of a Details list or of the host table) narrows it instead of jumping away. For example an infection (10,000 events) → one network (7,500) → port 80 (6,000) → one user agent (500) → 00:00 to 01:00 (15). The selection's parts show as chips under the title: click a part to open it on its own (for example a host with all of its reports), or × to remove it and widen again.
+- **Filter map works for every analysis:** it sets the map, the stream and Intel to exactly that analysis' selection, every part of it, including networks, destination IPs, destination cities, user agents and request paths (also in demo mode, through concealed references). Only a time window is not applied: the replay itself is the time axis.
 - **One filter model everywhere:** the map, stream, Intel, `/api/events`, `/api/stats`, `/api/geo` and the analyses all accept the same fields (`source, attack_class, infection, severity, protocol, tag, src_city, src_geo, src_asn, src_ip, dst_geo, dst_city, dst_asn, dst_ip, dst_port, http_host, http_agent, request`), so an analysis and the filtered map always show the same numbers.
-- **Deep dive with filters:** Intel always reflects the active filters, and so does everything you click in it. With several filters (for example Botnet C2 + one city), an Intel entry opens a **Filtered selection** analysis that combines them with what you clicked ("Attack type: Botnet C2 · Affected city: … · Source network: …", with the same number of events Intel shows), and an Intel hour or 15-minute bar opens that time window within all the filters. The figures, findings, charts and follow-up lists all work inside it, and its own bars go down to 15 minutes. In demo mode, concealed values (destination IPs, domains, user agents, paths) are sent as opaque references that only the server can resolve, so they stay hidden but still open their analysis.
-- **Accurate whole-day figures:** the top bar, Intel, the analysis view and its lists always count **every record of every report for the replayed day** (00:00 to 24:00 UTC). The replay only drives the map and the event stream and never changes these numbers; they change only if late rows arrive in MongoDB (picked up by the 10-minute day reload).
-- **Shared results, computed once per data change** (`respcache.py`): the statistics, filter lists, overview and whole-day map layer of the map platform and the services statistics are kept in memory under a key naming everything they depend on: the loaded day (its start, the moment it was loaded and its version, which changes whenever MongoDB has new or different rows), the filters, demo mode, the constituency and the network names. Every other viewer of the same selection gets the stored answer at once; when a report arrives the day is reloaded, the key changes and the next request recomputes from the fresh data. Simultaneous requests for the same key compute once (the others wait for that result). What depends on the replay moment (`as_of`, the current quarter and hour) is always worked out per request.
-- **Executive lookups:** network sector, company and region / city names are worked out once per distinct value per request (the sector lookup used to read the network-type list once per record).
+- **Deep dive with filters:** Intel always reflects the active filters, and so does everything you click in it. With several filters (for example Botnet C2 + one city), an Intel entry opens a **Filtered selection** analysis combining them with what you clicked ("Attack type: Botnet C2 · Affected city: … · Source network: …", with the same number of events Intel shows), and an Intel hour or 15-minute bar opens that time window within all the filters. The figures, findings, charts and follow-up lists all work inside it, and its own bars go down to 15 minutes. In demo mode, concealed values (destination IPs, domains, user agents, paths) are sent as opaque references only the server can resolve, so they stay hidden but still open their analysis.
+- **Accurate whole-day figures:** the top bar, Intel, the analysis view and its lists always count **every record of every report for the replayed day** (00:00 to 24:00 UTC). The replay drives only the map and the event stream; the numbers change only if late rows arrive in MongoDB (picked up by the 10-minute day reload).
+- **Shared results, computed once per data change** (`respcache.py`): the statistics, filter lists, overview and whole-day map layer of the map platform and the services statistics are kept in memory under a key naming everything they depend on: the loaded day (its start, the moment it was loaded and its version, which changes whenever MongoDB has new or different rows), the filters, demo mode, the constituency and the network names. Other viewers of the same selection get the stored answer at once; when a report arrives the day is reloaded, the key changes and the next request recomputes. Simultaneous requests for the same key compute once (the others wait for that result). What depends on the replay moment (`as_of`, the current quarter and hour) is worked out per request.
+- **Executive lookups:** network sector, company and region / city names are worked out once per distinct value per request.
 - **Executive 7-day baseline from compact past days:** each of the 7 days before the report day is loaded once and kept in a compact form (only the 13 fields the Executive figures read, repeated text stored once), so any filter or clicked combination gets its baseline from memory in about a second instead of 14 MongoDB day loads. A day is loaded again when its row counts in MongoDB change or the constituency changes. `MGMT_PAST_RECORDS` (default 3,000,000) caps the records kept; above it the oldest days are loaded as before. The compact days give exactly the same complete Executive answers as the full days.
-- **Intel (right):** 24-hour activity chart (hover any 15-minute bar for its count) (real counts per 15 minutes from `extracted_date` for the whole day; the white bar marks the replay position), attack types, source reports, top infections / categories, most affected cities, contacted C2 / sinkhole domains and target countries.
+- **Intel (right):** 24-hour activity chart (real counts per 15 minutes from `extracted_date` for the whole day; hover any bar for its count; the white bar marks the replay position), attack types, source reports, top infections / categories, most affected cities, contacted C2 / sinkhole domains and target countries.
   - Click any item to open the **analysis** view. Every chart in it has hover tooltips, and clicking a segment or row drills further:
     - KPIs and key findings
     - beside the findings, two donuts:
@@ -663,7 +665,7 @@ Front-end libraries: Mapbox GL JS 3.8.0 (satellite style) and deck.gl 9.1.14 (3D
     - **Severity mix**
     - breakdown lists and the most active source hosts
   - Every breakdown row and host row can be clicked to drill further (city → infection → C2 domain → host). **Back** returns to the previous view, and **Filter map** applies that entity as a filter.
-- **Design:** neutral grey surfaces with one blue accent. Severity colors are used only for severity, and infections use a separate palette with no red. Type is Inter for the UI (tabular numbers) and Geist Mono for IPs, hashes and timestamps.
+- **Design:** neutral grey surfaces with one blue accent. Severity colors are used only for severity; infections use a separate palette with no red. Type is Inter for the UI (tabular numbers) and Geist Mono for IPs, hashes and timestamps.
 - **Below 1440 px**, Intel moves into a tab in the left panel. **Below 1100 px**, the left panel becomes a ☰ drawer. **On phones**, the stream is a bottom sheet of cards (tap the grabber to expand), and the detail view opens full screen.
 
 ## The quarterly report and the purge (`quarterly.py`, `quarterly_pdf.py`)
@@ -789,7 +791,7 @@ afterwards leaves out files dated before the cutoff when loading. The platform c
 
 Every page needs a sign-in with a password and an authenticator code. People request accounts on the sign-in page
 (full name, organisation, email, country) and administrators approve them with a role: external (masked data
-only), analyst (all data, exports, Malpedia), researcher (the Definitions page), management (the Executive portal),
+only), analyst (all data, exports, Malpedia), Researcher/TI (the Definitions page), management (the Executive portal),
 advisor (the Advisory portal), auditor (the Audit portal only, read only) or admin. "Stay signed in" keeps a session
 for up to 5 days. Admins manage users, sessions, roles and permissions on the **Admin** page; the audit log is read in
 the **Audit portal** (`/audit`). An optional password expiry policy is set in Settings (`password_policy.py`).
@@ -827,6 +829,29 @@ every request, the 10-minute window, the single-use confirmation for the every-t
 (`/account`, `/api/passkeys`) and the administrators' passkey reset). The page asks through `static/js/lg-stepup.js`:
 a request answered 403 with `stepup` opens the dialog, and is sent again with the one-time confirmation.
 
+The sign-in check: `signin_check.py` answers one question for sign-in (`auth.py`) and the fresh check (`stepup.py`):
+passkey or code. `SIGNIN_CHECK` in `.env` wins; then the administrators' choice (`data/signin_check.json`, mode 600,
+read again when the file changes); then the default, passkey only for `ACCESS_MODE=public` with Caddy in front for a
+domain (`/etc/caddy/Caddyfile` written by `deploy/caddy_front.sh`, not `--internal`). `GET` and `POST
+/api/admin/signin-check` ('settings', CSRF, a recent sign-in, every-time confirmation) change it; passkeys are refused
+without HTTPS and a host name, or before the administrator has two. Tested by `tests/check_signin_check.py`.
+
+Settings → Update: `platform_update.py` (`GET` and `POST /api/admin/update`: 'settings', CSRF, a recent sign-in; an
+update, not a check, asks for the every-time confirmation) only writes `data/update/request.json` (mode 600) and shows
+`data/update/status.json` and `log.jsonl`. The work is `deploy/update_run.py`, started by the path unit
+`deploy/looking-glass-update.path.template` as the installation's user (`deploy/update_helper.sh`; the service
+template allows writing only the Looking Glass folder). It reuses `deploy/verify_install.py` for the release
+repository, the signing key's fingerprint and the allowed-signers file. Tested by `tests/check_platform_update.py`
+against a made-up repository with tags signed by a made-up key.
+
+No sign-in names in pages: `person_code.py` gives each account an opaque code (HMAC-SHA256 of the sign-in name with
+the installation's own random key, `data/person_code.key`: 32 bytes, mode 600, made once on first use and the same for
+every worker; `p-` and 20 hex characters). Removing the key file only changes the codes (map pins in browsers are
+cleared). Templates get it as `lg_me` (the `data-user` attribute: map pins per
+account); `/api/findings/people` lists people by code and `findings.recipient()` turns a code back into the account
+only among those offered; `notes.py` says `mine` instead of the author's sign-in name. Tested by
+`tests/check_no_signin_names.py`, which walks every GET route as every role but admin.
+
 Connectors (the guide: [CONNECTORS.md](CONNECTORS.md)): `connectors.py` (Settings → Connectors: targets, the
 encrypted key store, the test before saving, the API), `connector_net.py` (every outgoing connection: HTTPS only,
 the address resolved once and refused when it is loopback, link-local, a cloud metadata address or reserved, the
@@ -848,7 +873,7 @@ placeholder are left as they are.
 
 Security scripts:
 - `security_testing/security_retest.py`: about 120 checks of every protection against the running service.
-  On a public installation (`ACCESS_MODE=public`) its temporary accounts register two passkeys made by the test (in
+  Where passkeys are in force (the sign-in check, `signin_check.py`) its temporary accounts register two passkeys made by the test (in
   memory, removed with the accounts at the end) and sign in and confirm actions with them; it reaches the service as
   `localhost`, since passkeys need a host name.
 - `manage/manage_users.py`: accounts on the command line (recovery when no administrator can sign in).
@@ -969,5 +994,5 @@ Security scripts:
 - `tools/daysize.py [YYYY-MM-DD]` (default yesterday) shows one day's rows and files per report, its time range, top tags and countries.
 - `tools/list_infections.py [YYYY-MM-DD]` lists every infection of that day (any day, not only the replay day).
 - `tools/discover.py` surveys every collection: size, indexes, src/dst fields, latest document and yesterday's row count. It writes `tools/discovery.json`, and `tools/show_srcdst.py` prints the matching collections from it.
-- `deploy/reload.sh` restarts the systemd service without sudo. It kills the main process and systemd starts it again; `sudo systemctl restart looking-glass` does the same.
+- `deploy/reload.sh` restarts the systemd service without sudo: it kills the main process and systemd starts it again (`sudo systemctl restart looking-glass` does the same).
 - `manage/backup.sh [dest]` creates a timestamped archive of the project, including `.env` and everything in `data/` but not `.venv`, encrypted as it is written to the public key in `data/backup_public_key` (age or GnuPG; `manage/backup_crypt.sh`), saved as `~/backups/<project folder>-<UTC time>.tar.gz.age` (or `.gpg`) with a signed `.sha256` file and mode 600. Without a key it refuses; `--unencrypted` writes a plain `.tar.gz` on purpose.

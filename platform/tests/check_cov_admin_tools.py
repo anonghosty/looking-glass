@@ -171,7 +171,7 @@ try:
        r.status_code == 200 and [x["code"] for x in n.get("codes", [])] == ["LG-C-0000ABCD"] and notes.findings.made
        and notes.findings.made[0][3] == "cov-mgmt", str(r.json))
     listed = (notes.list("infections", "examplebot") or [{}])[0]
-    ok("…shown with the author's full name, its role, the finding's number", n.get("by") == "Ama Owusu" and n.get("role") == "Researcher"
+    ok("…shown with the author's full name, its role, the finding's number", n.get("by") == "Ama Owusu" and n.get("role") == "Researcher/TI"
        and listed.get("finding", {}).get("number") == "#7", str(listed))
     ok("…an unknown section is the infections", bool(notes.list("infections", "examplebot")))
     ok("…written down twice (note, finding)", [e for e, *_ in logged][-2:] == ["note_added", "finding_created"])
@@ -189,7 +189,7 @@ try:
     ok("an administrator removes it; the name's list is gone", r.status_code == 200 and notes.list("infections", "examplebot") == []
        and "examplebot" not in notes.data["infections"])
     adm = notes.add("issues", "openssl", "admin note", "cov-admin", "admin")
-    ok("an administrator's note is labelled as the role it played", adm["role"] == "Administrator acting as researcher")
+    ok("an administrator's note is labelled as the role it played", adm["role"] == "Administrator acting as Researcher/TI")
     with open(notes.path, "w") as fh:
         fh.write("{broken")
     os.utime(notes.path, (time.time() + 5, time.time() + 5))

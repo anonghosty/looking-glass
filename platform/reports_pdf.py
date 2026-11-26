@@ -345,7 +345,7 @@ def enrichment_block(name, x, stat, S, width):
     if desc:
         out.append(P(t(desc), S["body"]))
     for n in x.get("notes") or []:                 # researchers' notes on this name, newest first (notes.py)
-        out.append(P(f"<b>Notes shared by {t(n.get('role') or 'Researcher')}: {t(n.get('by') or 'a researcher')}</b>"
+        out.append(P(f"<b>Notes shared by {t(n.get('role') or 'Researcher/TI')}: {t(n.get('by') or 'a researcher')}</b>"
                      f"{' (' + t(n['date']) + ')' if n.get('date') else ''}: {t(n.get('text', ''))}", S["meta"]))
         if n.get("codes"):                         # the combinations the note points at (combos.py): an analyst pulls them
             out.append(P("<b>Combinations:</b> " + "; ".join(f"{t(c['code'])}" + (f" ({t(c['text'])})" if c.get("text") else "")

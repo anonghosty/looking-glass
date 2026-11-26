@@ -550,11 +550,16 @@ class AttackMap:
                            detail=("no ATT&CK technique fits" if nofit else ", ".join(ids)) + (f"; note: {note[:120]}" if note else ""))
         return m, ""
 
-    def review_bulk(self, items, user, name=""):
+    def review_bulk(self, items, user, name="", kind="suggested"):
         """"Confirm all": [{report, techniques}] as the researcher saw them. Every entry is checked first; a report whose
         suggestion is no longer exactly what was shown (changed, reviewed meanwhile, no longer "suggested") is skipped and
         named; only then is everything confirmed in ONE write (nothing half-applied). One audit entry per report, the same
-        event as a single confirm. Returns ({confirmed: [..], skipped: [{report, title, reason}]}, error)."""
+        event as a single confirm. Returns ({confirmed: [..], skipped: [{report, title, reason}]}, error).
+        kind "check" is "Use recommended for all" on the Please check tab (the user, 2026-11-25): each report takes the
+        replacement MITRE names for its retired technique (check_suggest), exactly as shown; one without a replacement
+        cannot be in the list (a person chooses)."""
+        if kind not in ("suggested", "check"):
+            return None, "Unknown kind of list."
         if not isinstance(items, list) or not items:
             return None, "Nothing to confirm."
         if len(items) > MAX_BULK:
@@ -581,25 +586,32 @@ class AttackMap:
             for key, tl in clean:                          # 1. check every one
                 m = d["reports"].get(key)
                 title = (rm.get(key) or {}).get("title") or key
-                if not m or m.get("status") != "suggested":
-                    skipped.append({"report": key, "title": title, "reason": "it is no longer a suggestion (reviewed or changed meanwhile)"})
-                elif sorted(m.get("techniques") or []) != tl:
-                    skipped.append({"report": key, "title": title, "reason": "its suggested techniques changed"})
+                offered = (m or {}).get("check_suggest" if kind == "check" else "techniques") or []
+                if not m or m.get("status") != kind:
+                    skipped.append({"report": key, "title": title, "reason": "it is no longer a suggestion (reviewed or changed meanwhile)"
+                                    if kind == "suggested" else "it no longer needs checking (reviewed or changed meanwhile)"})
+                elif sorted(offered) != tl:
+                    skipped.append({"report": key, "title": title, "reason": "its suggested techniques changed" if kind == "suggested"
+                                    else "MITRE's recommended replacement changed"})
                 elif any((techs.get(t) or {}).get("state") != "active" for t in tl):
                     skipped.append({"report": key, "title": title, "reason": "a technique is no longer current in ATT&CK"})
                 else:
                     ok_.append((key, m))
             now = _now()
             for key, m in ok_:                             # 2. then apply them all, in this one write
+                if kind == "check":                        # MITRE's replacement becomes the mapping
+                    m.update(techniques=sorted(m.get("check_suggest") or []), nofit=False)
                 # a "no technique fits" suggestion stays exactly that once confirmed
-                m.update(status="reviewed", nofit=bool(m.get("nofit")), note="", by=user, by_name=name or user, at=now, version=ver)
+                m.update(status="reviewed", nofit=bool(m.get("nofit")), by=user, by_name=name or user, at=now, version=ver,
+                         note="MITRE's recommended replacement (Use recommended for all)" if kind == "check" else "")
                 for k in ("previous", "check_reason", "check_suggest", "check_offer", "retired"):
                     m.pop(k, None)
             return [(k, list(m.get("techniques") or [])) for k, m in ok_], skipped
         done, skipped = self._locked(go)
         if self.audit:
             for key, tl in done:
-                self.audit.add("attack_mapping_reviewed", user=user, target=key, detail=", ".join(tl) + " (confirmed with Confirm all)")
+                self.audit.add("attack_mapping_reviewed", user=user, target=key, detail=", ".join(tl) + (
+                    " (MITRE's recommended replacement, Use recommended for all)" if kind == "check" else " (confirmed with Confirm all)"))
         return {"confirmed": [k for k, _ in done], "skipped": skipped}, ""
 
     def todo(self):
@@ -909,7 +921,7 @@ def install(app, ctx):
         if not isinstance(b, dict) or not isinstance(b.get("items"), list):
             return jsonify(error="JSON with items expected"), 400
         user, name = ctx["me"]()
-        res, err = am.review_bulk(b["items"], user, name)
+        res, err = am.review_bulk(b["items"], user, name, kind=str(b.get("kind") or "suggested"))
         if err:
             return jsonify(error=err), 400
         return jsonify(ok=True, **res, summary=am.summary())

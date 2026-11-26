@@ -107,7 +107,8 @@ cf = os.path.join(bd, "Caddyfile")
 system_alerts.Alerts.CADDYFILE = cf
 al = system_alerts.Alerts(bd, env={"ACCESS_MODE": "private"})._no_caddy_internal(time.time())
 ok("an internal installation with no Caddy in front: the administrators' bell says so", al and al[0]["problem"]
-   and "no Caddy in front" in al[0]["title"] and "installer again" in al[0]["text"], al)
+   and "no Caddy in front" in al[0]["title"] and "sudo deploy/caddy_front.sh adopt" in al[0]["text"]
+   and al[0]["link"] == "/settings#monitor", al)
 ok("…again every day (one alert per day)", al and al[0]["key"].startswith("no-caddy-internal:" + time.strftime("%Y-%m-%d", time.gmtime())))
 with open(cf, "w") as f:
     f.write("# Managed by Looking Glass (deploy/caddy_front.sh): changes here are replaced by the next setup or renewal.\n")
@@ -115,8 +116,36 @@ ok("…and not once Looking Glass's Caddy is in front", system_alerts.Alerts(bd,
 with open(cf, "w") as f:
     f.write("example.org {\n}\n")
 ok("…a Caddyfile someone else wrote does not count", system_alerts.Alerts(bd, env={"ACCESS_MODE": "private"})._no_caddy_internal(time.time()) != [])
-ok("…a local or public installation: no reminder", system_alerts.Alerts(bd, env={"ACCESS_MODE": "local"})._no_caddy_internal(time.time()) == []
-   and system_alerts.Alerts(bd, env={"ACCESS_MODE": "public"})._no_caddy_internal(time.time()) == [])
+ok("…a local installation (this computer only): no reminder",
+   system_alerts.Alerts(bd, env={"ACCESS_MODE": "local"})._no_caddy_internal(time.time()) == [])
+pub = system_alerts.Alerts(bd, env={"ACCESS_MODE": "public"})._no_caddy_internal(time.time())
+ok("…a public installation without Caddy (an office network from before the internal choice): reminded too, with the command",
+   pub and pub[0]["title"] == "This installation has no Caddy in front" and "caddy_front.sh adopt" in pub[0]["text"], pub)
+# adopt: an installation already running (the end-to-end proof is big_release/caddy_adopt_proof.sh on lg-test)
+src = open(os.path.join(ROOT, "deploy", "caddy_front.sh"), encoding="utf-8").read()
+ok("adopt: a command of its own, reusing setup's steps (one place)", "  adopt) adopt ;;" in src and "do_setup() {" in src
+   and "( do_setup ) || rollback" in src and "  setup)\n    need_root; valid\n    do_setup ;;" in src)
+ok("…root only; a Caddyfile someone else wrote, a local installation, a public one without its domain's certificate: refused",
+   all(w in src for w in ('need_root\n  [ -f "$project/.env" ]', "was not written by Looking Glass: not replaced",
+                          "ACCESS_MODE is local", "not a self-signed one")))
+ok("…says what will change and asks once (--yes only for the checks and scripts)", 'read -r -p "Go ahead? Type yes: "' in src
+   and "not asked on a terminal: run it again with --yes" in src)
+ok("…keeps copies first (backups/ owned by the service's user), puts everything back if a step fails",
+   'cp -p "$unit" "$keep/$svc.service"; cp -p "$project/.env" "$keep/env"' in src and "rollback() {" in src
+   and 'install -d -m 700 -o "$owner" -g "$grp" "$project/backups"' in src)
+ok("…Looking Glass to 127.0.0.1 through the one service-file writer; TRUST_PROXY=1 and LG_PORT in .env",
+   'service_unit.py" render --user "$owner" --project "$project" --bind "127.0.0.1:$bport"' in src
+   and "env_set TRUST_PROXY 1; env_set LG_PORT" in src)
+ok("…without LG_SERVICE in .env, the service that runs this folder is found by its WorkingDirectory (an older install's own name)",
+   'systemctl show -p WorkingDirectory --value "$u"' in src and 'svc="${u%.service}"' in src)
+ok("…the audit log written as the service's own user, never as root", 'runuser -u "$owner"' in src and "audit_chain.Chain" in src)
+import task_monitor  # noqa: E402
+task_monitor.CADDYFILE = cf
+os.environ["ACCESS_MODE"] = "private"
+fr = task_monitor._front()
+ok("Settings -> Task monitor knows whether Caddy is in front, and shows the command when not",
+   fr["needed"] is True and fr["caddy"] is False and fr["command"] == "sudo deploy/caddy_front.sh adopt", fr)
+os.environ.pop("ACCESS_MODE", None)
 rc, out, err = run("render", "--internal", "--project", tempfile.mkdtemp(), "--public-port", "8443", "--backend-port", "5001")
 ok("refused: an internal installation without its certificate", rc != 0 and not out and "make_tls_cert" in err, err)
 rc, out, _ = run("render", "--internal", "--domain", "x.example.org", "--project", proj, "--public-port", "8443", "--backend-port", "5001")
@@ -182,7 +211,8 @@ ok("…Caddy only, from its own repository list, keeping our Caddyfile",
 ok("…our Caddyfile and hardening checked afterwards, then the site through Caddy",
    'die "$CONF was replaced during the update' in upd and '[ -f "$DROPIN" ]' in upd and upd.rstrip().find("check_front") > upd.find("apt-get install"))
 ok("…restarted only when the version changed, and it says which", 'if [ "$before" != "$after" ]; then' in upd and "Caddy updated: $before -> $after" in upd)
-setup_part = src.split("  setup)", 1)[1].split(";;", 1)[0]
+# setup's steps are one function since 2026-11-25 (adopt uses them too): read its body
+setup_part = src.split("do_setup() {", 1)[1].split("\n}\n", 1)[0]
 ok("setup and update make sure Ubuntu's automatic updates are there", "auto_updates || true" in setup_part and "auto_updates || true" in upd
    and "apt-get install -y -qq unattended-upgrades" in src)
 ok("…an administrator who switched them off is not overruled: said plainly, with what to do",

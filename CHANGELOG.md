@@ -5,6 +5,94 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-26
+### Added
+- **Settings → Update: update Looking Glass from the page.** Check for an update looks for a newer release; Update
+  makes a backup, fetches the release, checks that the maintainer signed it, installs it with its libraries, restarts
+  Looking Glass and checks that it answers. If a step after the code moved fails, the release you had is put back
+  the same way. Every step shows on the page as it happens, also while Looking Glass restarts, and the run is in the
+  audit log. Installing asks for a confirmation every time. Only a signed release newer than the installed one is ever
+  installed. The web service still cannot change its own code: a small helper does the work as the installation's own
+  user, never as root. Install it once on the server, in the platform folder: `deploy/update_helper.sh install` (it
+  asks for sudo). Installations that are not from a release, such as a developer's working copy, are not updated from
+  the page.
+- **ATT&CK for nearly every report.** 175 of the 177 Shadowserver reports now have a suggested mapping checked against
+  Shadowserver's own page for that report (80 more than before); each IPv4 and IPv6 pair that shares a page gets the
+  same one. Researchers confirm them on the Definitions page as before; a mapping you have reviewed is never replaced.
+- **Definitions → ATT&CK map → Please check: Use recommended for all.** Where MITRE retired a technique and names its
+  replacement, one button takes the replacement for every such report, after a list of what will change. Reports
+  without a named replacement are left for a person to choose.
+- **Ten infections that arrived without a description now have one**: six named from published research
+  (avalanche-marcher, avalanche-smart-app, emissary-panda, prometei, red october, vextrio-help-tds) and four explained
+  with the family still unknown. Names that only match published research by spelling stay unknown.
+
+### Security
+- **No sign-in names in the pages.** A sign-in name is half of what signs someone in, so it now stays on the server.
+  The page attribute that keeps map pins per account, the Notes window (which said whose each note was by sending its
+  author's sign-in name to everyone who read it), and the lists of people a finding can be sent to now carry an
+  opaque code per account instead; the account menu on the map shows your full name. A test signs in as every role,
+  opens every page and answer, and fails on any sign-in name, your own or a colleague's (your own Account page and the
+  auditor's audit trail aside). Pins kept under the old names are cleared once. The codes use the installation's own
+  random key, `data/person_code.key`: keep it with `data/` and never copy it elsewhere. Nobody can change it from the
+  website; if it is made again (removed, replaced, or `data/` restored from an older backup), the administrators'
+  bell and the audit log say so, and a damaged key is in the bell too ([OPERATIONS.md](docs/OPERATIONS.md#backups)).
+- **Settings → General → Sign-in check: a passkey or the authenticator code.** An administrator chooses how people
+  sign in and confirm high-value actions. **Passkey** is recommended for a site on the internet; **Authenticator code**
+  for an internal network. Changing it asks for a confirmation every time, so with passkeys in force, going back to
+  codes needs a passkey. Passkeys can be chosen only by an administrator on the site's host name over HTTPS who has
+  registered their own 2 passkeys, so nobody is locked out. `SIGNIN_CHECK=passkey` or `SIGNIN_CHECK=code` in the
+  platform's `.env` wins over the page. Every change is in the audit log.
+- **No lock-out after updating.** Before, every installation set to `ACCESS_MODE=public` asked everyone for passkeys,
+  including ones that chose `public` for an office network before the installer offered "any computer on our internal
+  network", where people reach Looking Glass by an IP address and no passkey can be registered. Now passkeys are the
+  default only for a public installation with Caddy in front for a domain; every other installation keeps the
+  authenticator code until an administrator chooses otherwise.
+- **Caddy in front of a running installation, in one command.** `sudo deploy/caddy_front.sh adopt`, in the platform
+  folder, reads the installation as it is (its `.env`, port and certificate), says what will change and asks once.
+  Caddy then answers on the same port with the same certificate, so people keep the address they use and screens that
+  trust the certificate go on trusting it; Looking Glass moves to `127.0.0.1` behind it. The service file and `.env`
+  are copied first, and if a step fails everything is put back. Settings → Task monitor shows whether Caddy is in front
+  and the command when it is not. The bell's daily reminder points to it, and now also comes to a public installation
+  without Caddy.
+- **After updating:** to update from Settings next time, install the update helper once: `deploy/update_helper.sh
+  install` in the platform folder. An internal installation still set to `public` may also set
+  `ACCESS_MODE=private` and `VIEWER_NETWORKS=internal` in `.env`; an installation without Caddy in front: `sudo
+  deploy/caddy_front.sh adopt` ([Updating](docs/INSTALLATION.md#updating)).
+
+### Fixed
+- **Every form field has a name and a label.** The browser's Issues panel listed fields without an id or name, and
+  fields without a label (searches, filters, table checkboxes, the Settings and Admin lists, replies on Findings).
+  Each field now gets a name from what it is about and a label with the words shown beside it, also the fields pages
+  add as they change, so screen readers and password managers can tell them apart. Nothing on the pages moves.
+- **The unusual activity and connector timers run as the installation's user.** Installed with sudo, as the guided
+  installer and these docs do, their service files named root as the user. They now always take the owner of the
+  platform folder, and refuse a folder that belongs to root. If you installed either timer before this release, run
+  its install again once, in the platform folder: `sudo deploy/unusual_timer.sh install` and, if you use connectors,
+  `sudo deploy/connectors_timer.sh install`. `systemctl cat looking-glass-unusual.service` then shows your user.
+- **A notification that points to the page you are on no longer hangs on the loading screen.** For example the
+  bell's Caddy reminder while on Settings showed "Opening settings" for good; it now opens Settings again on the right
+  tab (Task monitor).
+- **Back no longer stops on the loading screen.** Going back to a page the browser kept showed the logo it had when
+  you left it; the logo is now taken down.
+- **The tutorial remembers its pages for every role.** For Researcher/TI, Executive, Advisor and Auditor accounts the
+  tutorial's memory of the pages already shown was refused, so it could offer itself again. It now works for every
+  role; it holds only each person's own seen pages.
+- **The administrator routes' test passes on its own.** It now switches off the step-up confirmation for itself, as
+  it tests what each route does with its input; the step-up confirmation is tested in its own test.
+
+### Changed
+- **Even buttons, fields and dropdowns on every page.** One height per size: 34 pixels for form buttons, text fields
+  and dropdowns, 28 for buttons in lists and toolbars, and a button beside a field takes the field's height. Settings,
+  Admin and Definitions no longer use the large welcome-page button for saving. On the Overview, each row of cards is
+  as tall as its own cards, so a card alone in its row (Findings, Your account) is no longer stretched.
+- **The researcher role is named Researcher/TI** (TI: threat intelligence), as the role studies threats and their
+  patterns, which is threat intelligence work as much as research. The name shows in the header, on notes and
+  findings, in the PDFs, on the severity map, in the glossary, on the Review page and on the Admin page (the role
+  boxes and the Roles & permissions headings). Accounts, permissions and the
+  audit log keep the role's key `researcher`, so nothing changes for existing accounts. The roles page maps it to
+  ENISA's Cyber Threat Intelligence Specialist and to Saudi Arabia's cybersecurity workforce framework.
+- **After updating:** nothing to do.
+
 ## 2026-11-25 (2)
 ### Security
 - **Error messages show only what Looking Glass wrote for you.** On Settings → Connectors and in the passkey checks,

@@ -55,7 +55,7 @@ body.settings-page .hud { position: sticky; top: 0; }
 .st-apply.dirty { border-top-color: rgba(245,181,74,.7); }
 .st-apply.dirty #applyState { color: #f5b54a; }
 .st-apply.done #applyState { color: #3dd68c; }
-.st-apply-btn { padding: 10px 22px; font-size: 14px; }
+.st-apply-btn { padding-inline: 20px; }   /* the standard primary button's height (app.css, even controls) */
 .st-apply-btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; transform: none; }
 .st-banner { padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(48,164,108,.55); background: rgba(48,164,108,.1); font-size: 13.5px; color: #c8f2dc; }
 .st-banner.err { border-color: rgba(229,72,77,.6); background: rgba(229,72,77,.1); color: #ffc9cb; }
@@ -361,3 +361,16 @@ body.settings-page .hud { position: sticky; top: 0; }
 .ci-card .st-hint.bad { color: #ff8a8f; }
 .ci-card .ci-list { margin: 4px 0 10px 18px; padding: 0; overflow-wrap: anywhere; }
 .ci-card pre.st-env { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Settings -> Update (platform-update.js): the buttons, where the run stands, and its steps (full text, wrapped) */
+.up-pane .up-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.up-pane .up-state { font-weight: 600; margin: 8px 0 2px; overflow-wrap: anywhere; }
+.up-pane .up-done { color: #7fd99a; }
+.up-pane .up-failed, .up-pane .up-rolled_back { color: #ff8a8f; }
+.up-pane .up-log { list-style: none; margin: 10px 0 0; padding: 8px 10px; max-height: 420px; overflow: auto; border: 1px solid var(--border-strong);
+  border-radius: 8px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.up-pane .up-l { display: grid; grid-template-columns: 64px 92px 1fr; gap: 8px; }
+.up-pane .up-l .up-m { white-space: pre-wrap; overflow-wrap: anywhere; }
+.up-pane .up-l .up-t, .up-pane .up-l .up-s { color: var(--muted); }
+.up-pane .up-l.up-bad .up-m { color: #ff8a8f; }
+.up-pane .up-l.up-ok .up-m { color: #7fd99a; }
+@media (max-width: 640px) { .up-pane .up-l { grid-template-columns: 1fr; gap: 0; } }

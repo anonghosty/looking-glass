@@ -17,7 +17,7 @@ changes, until the screenshot is taken again or confirmed (`platform/tools/scree
 | ![Services](screens/30-services.png) Publicly accessible / vulnerable services | ![Regions](screens/31-services-view-kenya-regions.png) Regions view |
 | ![Issues](screens/32-services-insight.png) Issues analysis | ![Host](screens/33-services-host.png) A host's records |
 | ![Host analysis](screens/33-services-host-analysis.png) A host's analysis | ![Executive](screens/40-executive-comms.png) Executive: infections and attacks |
-| ![Executive services](screens/41-executive-services.png) Executive: exposure and vulnerabilities | ![Definitions](screens/61-definitions.png) Definitions (researcher) |
+| ![Executive services](screens/41-executive-services.png) Executive: exposure and vulnerabilities | ![Definitions](screens/61-definitions.png) Definitions (Researcher/TI) |
 | ![7-day baseline](screens/40-executive-comms-baseline.png) Executive: 7-day baseline and grading | ![Top issues with trends](screens/41-executive-services-top.png) Executive: top issues with their 7-day trend |
 | ![Users](screens/50-admin-users.png) Admin: users | ![Sessions](screens/51-admin-sessions.png) Admin: sessions |
 | ![Audit](screens/52-admin-audit.png) Admin: audit log | ![Roles](screens/53-admin-roles.png) Admin: roles and permissions |

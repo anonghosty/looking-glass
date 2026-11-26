@@ -39,7 +39,9 @@ Administrators can watch the service without a terminal on **Settings → Task m
 while the tab is open: the web service's memory, CPU, threads and uptime; requests running now and per minute over
 the last hour; whether each background job is running; the slowest requests of the last day (every request slower
 than `SLOW_REQUEST_S`, by route only); the kept answers; MongoDB's memory; the computer's load, memory, swap and disk;
-the pipeline's last run and schedule; recent starts, sign-in locks and the admins' alerts.
+the pipeline's last run and schedule; recent starts, sign-in locks and the admins' alerts; and **In front of Looking
+Glass**: whether Caddy is in front, or, when Looking Glass answers the network itself, the one command that puts Caddy
+in front of it (`sudo deploy/caddy_front.sh adopt`, [INSTALLATION.md, B4c](INSTALLATION.md#b4c-caddy-in-front-of-a-running-installation-security)).
 
 Two actions are there, each needing a fresh sign-in and written to the audit log:
 
@@ -167,6 +169,17 @@ backups are made, and from time to time.
 4. Run `deploy/install.sh` (it recreates `.venv` and keeps `.env`) and start the service.
 5. Sign in, open **Audit portal → Integrity and evidence** and verify the log. The restored installation makes a new
    signing key on first use, recorded in the audit log: note its fingerprint.
+
+> **Caution: keep `data/person_code.key` with `data/`.** It is the installation's key for the per-account codes
+> that pages use instead of sign-in names (map pins in the browser, Notes, the people a finding can be sent to).
+> Never copy it to another installation, never put it in a ticket or a chat, and do not delete it: deleting it, or
+> restoring `data/` from a backup made before this key existed, makes a new key, clears everyone's map pins once and
+> puts a notice in the administrators' bell and the audit log ("A new key for the people codes was made"). If you
+> see that notice and nobody on your team removed the key or restored a backup, treat it as someone having had the
+> server's files: check who has access, the audit log and `deploy/verify_install.py --fetch`. A damaged key (an
+> empty or cut file) is also in the bell; pages that name people do not open until it is removed and Looking Glass
+> is restarted (`deploy/reload.sh`). Whoever can read the key can work out the code of a sign-in name they already
+> know, so it is a secret like `.env`: backups hold it encrypted.
 
 A restore brings the audit log back as it was when the backup was made: what was written after it is gone (the backup's
 own "Backup checksum signed" entry is written just after the archive, so it is always one of those). Checkpoints and
@@ -377,6 +390,25 @@ server unless it keeps happening (then check the service: [The service](#the-ser
 **Checking the pipeline's side:** `cat <pipeline DATA_DIR>/quarterly_purge_status.json` shows the last check (`outcome`
 done, refused or failed, with `why`) and every purge done, per collection.
 
+## Updating from Settings (`deploy/update_helper.sh`)
+
+Settings → Update writes a request, `data/update/request.json`; the update helper's path unit sees it and starts
+`deploy/update_run.py` as the installation's user (`deploy/update_helper.sh install`, once, with sudo; `status` and
+`remove` as for the other helpers). The run, in this order: the backup (`manage/backup.sh` into
+`backups/before-update-<time>/`), the release tag fetched from GitHub and its signature checked against the
+maintainer's key (the fingerprint in [Checking a release's signature](INSTALLATION.md#checking-a-releases-signature)),
+the code moved to it (a fast-forward on the branch, so a later `git pull` still works), `deploy/update_libraries.sh`,
+`deploy/reload.sh` and its health check. A failure before the code moved changes nothing; after it, the previous
+commit, its libraries and a restart are put back. It refuses an older release, a tag that is not signed by that key,
+a request older than 15 minutes, a folder not installed from a release (no `.release_fingerprints`), and shipped files
+changed here (`git status`). One run at a time.
+
+Every step and every line the commands print go to `data/update/log.jsonl` (the last 2,000 lines kept) and
+`data/update/status.json`, which the page shows. The audit log gets `update_requested` or `update_check_requested`
+from the page and `update_done`, `update_failed`, `update_rolled_back` or `update_checked` from the run. To look for
+a release from the server: `deploy/update_helper.sh check`; the helper's own journal: `journalctl -u
+<service>-update`.
+
 ## Updating the libraries on purpose
 
 Installations take their Python libraries from the lock files only (`requirements.lock` of the platform and of the
@@ -436,7 +468,7 @@ What each infection is and the recommended action, shown in the details and anal
 It writes stubs to `data/infections_missing.json`. Research and write the entries (title, type, description,
 action, confidence), then add them to `data/infections.json`; open pages pick them up within 10 minutes.
 
-Simpler: give a person the **researcher** role. The **Definitions** page lists the names Malpedia does not know (new
+Simpler: give a person the **Researcher/TI** (researcher or threat intelligence analyst) role. The **Definitions** page lists the names Malpedia does not know (new
 report names appear by themselves) and saves definitions with references to `data/definitions.json`. That file takes
 precedence over `data/infections.json`, is never part of a release (so upgrades keep it) and is in the backups.
 

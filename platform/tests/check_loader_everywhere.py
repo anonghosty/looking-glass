@@ -52,6 +52,14 @@ ok("…the API, files, the sign-in pages and downloads (PDF, CSV, ZIP, reports) 
    all(w in loader for w in ("api|static|login|logout|forgot|enrol|welcome", "pdf|csv|zip", "report|preview|export")))
 ok("…a place on the same page is not a page change", "u.pathname === location.pathname && u.search === location.search" in loader)
 ok("…a link a page handles itself first is left to it (defaultPrevented)", "e.defaultPrevented" in loader)
+# 2026-11-25: the bell's /settings#monitor while on Settings showed "Opening settings" for good (the browser only
+# scrolled, nothing arrived to take the logo down); Back to a page kept by the browser showed its leaving logo
+go = loader[loader.find("    go(url, label) {"):loader.find("    /** on arrival")]
+ok("LGLoader.go to a place on this page opens the page again there, never showing the logo",
+   "u.pathname === location.pathname && u.search === location.search" in go and "location.reload()" in go
+   and go.find("location.reload()") < go.find("show(text)"))
+ok("…Back to a page the browser kept: the leaving logo is taken down (pageshow, persisted)",
+   'addEventListener("pageshow"' in loader and "e.persisted" in loader and 'classList.remove("on", "leaving")' in loader)
 
 print("2. No page script switches pages without the loader")
 FALLBACK = re.compile(r"if \(window\.LGLoader\)")
@@ -95,6 +103,31 @@ for f in sorted(os.listdir(JDIR)):
                     "definitions", "combinations", "intelligence", "review", "acode", "overview"}:
             quiet.append(f)
 ok("each page's own script says when it is ready (the logo neither hangs nor leaves early)", not quiet, quiet)
+
+print("4. Even controls (the user, 2026-11-25)")
+# the welcome page's big button (intro-cta) stays out of every page and form: one height per size (app.css)
+big = []
+for d, ext in ((JDIR, ".js"), (TDIR, ".html")):
+    for f in sorted(os.listdir(d)):
+        if f.endswith(ext) and "intro-cta" in read(os.path.join(d, f)):
+            big.append(f)
+ok("no page or script uses the big welcome-page button (intro-cta): saving and confirming use the standard button", not big, big)
+app_css = read(os.path.join(HERE, "static", "css", "app.css"))
+ok("one height per size in app.css: 34 px standard, 28 px small, a small button beside a field takes its height",
+   "--ctl-h: 34px" in app_css and "--ctl-h-sm: 28px" in app_css and "tr:has(> td >" in app_css)
+
+print("5. Every form field has a name and a label (the user, 2026-11-25: Chrome's Issues panel)")
+forms = loader[loader.find("// every form field has a name and a label"):loader.find("// a scrolling table or list")]
+ok("loader.js (on every signed-in page) names and labels every field as it appears", bool(forms)
+   and "new MutationObserver" in forms and "window.LGForms" in forms)
+ok("…a field with neither id nor name gets a name from what it is about", "if (!e.id && !e.name) e.name = `lg-${slug(what)}`" in forms)
+ok("…a field with no label gets a real <label for> with the words beside it (aria-label, placeholder, title, column)",
+   "l.htmlFor = e.id" in forms and 'getAttribute("placeholder")' in forms and 'querySelector("thead tr")' in forms)
+ok("…the labels sit in one hidden holder at the end of the page: nothing is put beside a field",
+   "box().append(l)" in forms and "e.before(" not in forms and "document.body.append(holder)" in forms)
+ok("…a label whose field a page redrew away is removed (no label for nothing)", "const prune" in forms and "l.remove()" in forms)
+ok("…fields of a form the browser posts itself are left alone (their names are the server's)", 'e.closest("form[action]")' in forms)
+ok("…built with the DOM and the CSSOM only (no HTML strings)", "innerHTML" not in forms and "insertAdjacentHTML" not in forms)
 
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {fails}" if fails else ""))
 sys.exit(1 if fails else 0)

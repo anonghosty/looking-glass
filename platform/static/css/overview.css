@@ -71,7 +71,8 @@ html.lite .portal-card, html.lite .portal-card .pc-ic { transition: none; box-sh
 /* structured: titled groups, each laid out for its number of cards (no lone card), equal heights in a row */
 .pc-group { margin: 18px 0 10px; font: 600 12px Inter, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #8f9bb8; text-align: left; }
 .intro-yours > h2 + .pc-group, .ov-yours .pc-group:first-of-type { margin-top: 6px; }
-.portal-cards { grid-auto-rows: 1fr; align-items: stretch; }
+/* each row as tall as its own cards (2026-11-25: "1fr" made a lone last card, Findings, as tall as the tallest row) */
+.portal-cards { grid-auto-rows: auto; align-items: stretch; }
 .portal-cards.pc-n1 { grid-template-columns: minmax(0, 1fr); }
 .portal-cards.pc-n2, .portal-cards.pc-n4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .portal-cards.pc-n3, .portal-cards.pc-nm { grid-template-columns: repeat(3, minmax(0, 1fr)); }

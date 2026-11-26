@@ -30,6 +30,9 @@
 .tm-bad .tm-dot { background: #ef4444; }
 .tm-okline { color: #4ade80; }
 .tm-badline { color: #f87171; }
+.tm-front p { margin: 0 0 8px; }
+.tm-cmd { margin: 4px 0 0; padding: 8px 12px; border-radius: 8px; background: var(--surface-2, #16181d); border: 1px solid var(--border-strong, #2a2d36);
+  font: 13px/1.4 "Geist Mono", ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
 .tm-slow td, .tm-slow th { white-space: nowrap; }
 .tm-slow td.mono { white-space: normal; overflow-wrap: anywhere; }
 .tm-cache-row { align-items: flex-end; flex-wrap: wrap; gap: 10px; }

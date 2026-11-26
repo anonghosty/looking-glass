@@ -155,7 +155,7 @@ computer only; the firewall must let Caddy's port through (A6, A7, B6).
 **An internal site also has Caddy in front.** A few deliberately slow connections, from anyone on your network, could
 otherwise hold Looking Glass up for everyone. For `private`, the guided installer offers a self-signed certificate
 (B4b) or a certificate for a domain (B4a), both with Caddy in front. "No HTTPS" and a reverse proxy of your own are
-not offered there.
+not offered there. An installation made earlier gets Caddy with one command, without the installer (B4c).
 
 **An internet-facing site always uses HTTPS with Caddy in front.** For `public`, the guided installer offers one choice
 only: a certificate for your domain (a free one, for example from Let's Encrypt, or a bought one), with Caddy set up in
@@ -208,6 +208,18 @@ The settings are in [CONFIGURATION.md](CONFIGURATION.md) (`MONGO_HOST`, `MONGO_T
    Then restart WSL from PowerShell with `wsl --shutdown`, and open Ubuntu again.
 
 With mirrored networking your Windows browser opens Looking Glass at `http://localhost:<your port>`.
+
+**Opening it by this computer's own name or address, on this computer.** With mirrored networking, Windows reaches a
+service in WSL by `localhost` only: `https://<this computer's name>:<your port>` or its network address times out on
+this computer itself (other computers are not affected; they arrive over the network card). This happens with Caddy in
+front or without it. To use the name here too (for example to check the address colleagues use), add to the same
+`.wslconfig`, then `wsl --shutdown` (every WSL distribution stops for a moment and starts again when used):
+```ini
+[experimental]
+hostAddressLoopback=true
+```
+Only WSL needs this: Looking Glass on Ubuntu installed directly on a computer or server reaches its own name and
+address without it.
 
 ### A2. Get the code, then the database
 Clone the repository into your home folder; both parts are installed from it:
@@ -312,6 +324,10 @@ Get-NetFirewallHyperVRule | Where-Object { $_.LocalPorts -contains '<your port>'
 Disable any you find with `Disable-NetFirewallRule -DisplayName "<name>"` and
 `Get-NetFirewallHyperVRule | Where-Object DisplayName -eq "<name>" | Remove-NetFirewallHyperVRule`.
 Keep untrusted networks (hotel, mobile hotspot) on the **Public** profile.
+
+For other screens on WSL (A8), the Hyper-V firewall blocks every port by default: `<your port>` reaches WSL only with a
+Hyper-V rule for it, and with the Windows Defender Firewall allowing it on the profile of your network. On Ubuntu
+installed directly, only `ufw` (or your own firewall) decides.
 
 ### A8. Other screens (optional)
 To show Looking Glass on a TV, a wall screen or colleagues' computers:
@@ -458,6 +474,20 @@ repository, so the server needs to reach it, as it needs the internet for its lo
 
 Trust the certificate on each screen once, after checking its SHA-256 fingerprint (A8).
 
+**An address or a name.** Caddy answers on its port for whatever address or name people type; the browser trusts it
+only for what the certificate lists, so a server's address needs to stay the same:
+- **A fixed address** (a DHCP reservation or a static address from IT): people type it, for example
+  `https://10.20.0.15:8999`. `deploy/make_tls_cert.sh` puts the server's current addresses in the certificate itself.
+- **A name in your organisation's DNS** (better): ask IT, who run the DNS the screens use (a domain controller, the
+  office router or firewall, a DNS server), for a record such as `lookingglass.example.internal` pointing at the
+  server's fixed address, then make the certificate for that name too:
+  `deploy/make_tls_cert.sh lookingglass.example.internal`, and `sudo deploy/caddy_front.sh sync`. A name in the
+  server's own `/etc/hosts` does not help: only the screens' DNS does. Without IT's DNS, the same line in each screen's
+  hosts file works (`C:\Windows\System32\drivers\etc\hosts` on Windows). A name and a trusted certificate are also what
+  passkeys need (Settings → General → Sign-in check).
+- **A computer that moves between networks** (a laptop): its address changes, and an address the certificate does not
+  list gets a warning. Use its name, or make the certificate again on the new network (below).
+
 **A new address or name:** make the certificate again, then give it to Caddy (the first command says so):
 ```bash
 deploy/make_tls_cert.sh
@@ -465,6 +495,32 @@ sudo deploy/caddy_front.sh sync
 ```
 An organisation's own certificate authority works the same way: put its certificate in `data/tls/` and add
 `--ca-bundle` with the authority's certificate when you run setup.
+
+### B4c. Caddy in front of a running installation **(security)**
+An installation made before Caddy was part of the installer answers the network with Looking Glass's own server. The
+administrators' bell says so every day, and Settings → Task monitor shows it in **In front of Looking Glass**. Put Caddy
+in front once, without the installer, on the server, in the platform folder:
+```bash
+sudo deploy/caddy_front.sh adopt
+```
+It reads the installation as it is (`.env`, the address and port the service listens on, the certificate in
+`data/tls/`), says what will change and asks once:
+- **Caddy answers on the same port** people use now, so the address they type stays the same. Looking Glass moves to
+  `127.0.0.1` on a port of its own (5000 to 5099), behind Caddy.
+- **The same certificate:** an internal installation keeps its own, so screens that already trust it go on trusting
+  it; one without a certificate gets one made (`deploy/make_tls_cert.sh`). A public installation needs the certificate
+  for its domain first (`manage/install_cert.sh`, B4a); a self-signed one is refused.
+- **`.env`:** `TRUST_PROXY=1` and `LG_PORT` (the new port). Accounts, settings and data do not change.
+- **Copies first, and back if a step fails:** the service file and `.env` are copied to `backups/caddy-adopt-<time>/`.
+  If a step fails (Caddy not installed, the site not answering through it), everything is put back as it was and the
+  site goes on answering as before.
+- **Refused, with nothing changed:** a Caddyfile someone else wrote (`/etc/caddy/Caddyfile`), and an installation
+  set to `local` (only this computer reaches it, so Caddy is not needed).
+
+Caddy is installed from its signed repository (the server needs the internet for it) and set up exactly as in B4a and
+B4b. The port stays the one open in the firewall today. The change, or a failed attempt, is in the audit log. Run it
+again and it says Caddy is already in front. To undo it, copy the two files from the backup folder back, run
+`sudo deploy/caddy_front.sh remove`, then `sudo systemctl daemon-reload && sudo systemctl restart looking-glass`.
 
 ### B5. HTTPS with a reverse proxy **(security)**
 **Caddy** (simplest: it gets and renews certificates by itself when the name is reachable from the internet; on an
@@ -604,9 +660,10 @@ delete the report until it has been looked at.
 >   `activating (auto-restart)`, exit status 3): a `git pull` on its own is not an update. In the platform folder, as
 >   Looking Glass's user, run `deploy/update_libraries.sh`, then `deploy/reload.sh`.
 > - **Everyone is asked to register passkeys, and the page says "Passkeys need the site's host name, not an IP
->   address":** the installation is set to `ACCESS_MODE=public`, which since the release of 2026-11-25 asks everyone
->   for passkeys. If it serves your internal network, set these two lines in the platform's `.env`, then run
->   `deploy/reload.sh`; sign-in uses the authenticator code again:
+>   address":** the release of 2026-11-25 asked for passkeys on every installation set to `ACCESS_MODE=public`. This
+>   release asks for them only on a public installation with Caddy in front for a domain, so after updating such an
+>   installation signs in with the authenticator code again (Settings → General → Sign-in check). If it serves your
+>   internal network, also set these two lines in the platform's `.env`, then run `deploy/reload.sh`:
 >
 >   ```
 >   ACCESS_MODE=private
@@ -615,8 +672,27 @@ delete the report until it has been looked at.
 >
 >   `internal` means any computer on your internal network (private addresses only), never the internet. Before
 >   19 November the installer had no such choice, so `public` was the way to let a whole office network in.
-> - **The bell says "This internal installation has no Caddy in front":** nothing is broken. A guided step that puts
->   Caddy in front of an installation that is already running, keeping its settings, comes in the next release.
+> - **The bell says "This internal installation has no Caddy in front":** nothing is broken. Put Caddy in front once,
+>   on the server, in the platform folder: `sudo deploy/caddy_front.sh adopt`
+>   ([Caddy in front of a running installation](#b4c-caddy-in-front-of-a-running-installation-security)).
+
+### Updating from Settings
+
+From this release, an administrator can update from **Settings → Update**: a backup, the release checked against the
+maintainer's signature, its libraries, a restart and a health check, with the previous release put back if a step
+fails ([USER_GUIDE.md](USER_GUIDE.md#update)). It needs the update helper, installed once on the server, in the
+platform folder, as the installation's user:
+
+```bash
+deploy/update_helper.sh install       # asks for sudo; installs <service>-update.path and <service>-update.service
+deploy/update_helper.sh status        # whether it is installed, and the last run
+```
+
+The helper runs as that user, never as root, and may change only the Looking Glass folder. Backups need the backup key,
+as for `manage/backup.sh` ([OPERATIONS.md](OPERATIONS.md#backups)); without it the update stops before changing
+anything. To update by hand instead, follow the steps below.
+
+### Updating by hand
 
 ```bash
 manage/backup.sh
@@ -628,6 +704,11 @@ security_testing/security_retest.py && tests/run_all_checks.sh
 `deploy/update_libraries.sh` checks the computer, builds new environments beside the running ones from the locks, runs
 `tests/check_libraries.py`, and leaves an environment alone when its lock did not change. If it stops, nothing was
 changed: see [When a library file does not match](#when-a-library-file-does-not-match).
+
+**A `git pull` on its own is not an update.** The new code needs the libraries its locks name. Until
+`deploy/update_libraries.sh` and `deploy/reload.sh` have run, the service may not start: `systemctl status
+looking-glass` shows `activating (auto-restart)` with exit status 3, again every few seconds. Run the two commands, in
+the platform folder as Looking Glass's user, and it starts.
 
 **Old files are moved aside.** Each release lists the files it ships. When you update, any code file that an earlier
 Looking Glass release shipped and this one no longer does, for example a page script an older release used, is moved to
@@ -788,7 +869,8 @@ it. It shows what it will remove and what it keeps, and asks before it starts.
 | `install.sh`: Python too old | Ubuntu 24.04 or later (Desktop or Server), or install a newer `python3` |
 | Service does not start | `journalctl -u looking-glass -n 50`; usually `.env` (MongoDB address or account) or a path in the service file |
 | After `git pull`, the service restarts every few seconds (`activating (auto-restart)`, exit status 3) | The libraries were not updated: `deploy/update_libraries.sh`, then `deploy/reload.sh` ([Updating](#updating)) |
-| Everyone is asked for passkeys; "Passkeys need the site's host name, not an IP address" | `ACCESS_MODE=public` asks for passkeys. For an internal network set `ACCESS_MODE=private` and `VIEWER_NETWORKS=internal` in `.env`, then `deploy/reload.sh` ([Updating](#updating)) |
+| Everyone is asked for passkeys; "Passkeys need the site's host name, not an IP address" | Settings → General → Sign-in check: Authenticator code; when nobody can sign in, `SIGNIN_CHECK=code` in `.env`, then `deploy/reload.sh`. For an internal network also `ACCESS_MODE=private` and `VIEWER_NETWORKS=internal` ([Updating](#updating)) |
+| The bell: "no Caddy in front" | `sudo deploy/caddy_front.sh adopt` in the platform folder ([B4c](#b4c-caddy-in-front-of-a-running-installation-security)) |
 | `cannot schedule new futures after interpreter shutdown` in the log | Written while the service stops or restarts (an update, a reload); nothing is lost. Check that it started again: `systemctl status looking-glass` |
 | Pages load but show no data | The database has no reports for the replay day yet: check the pipeline (`shadowserver status`), and `tools/diagnose_reports.py` |
 | "Unknown host name" (400) | The name in the address bar is not allowed: add it to `ALLOWED_HOSTS` (or `*` for any name) |

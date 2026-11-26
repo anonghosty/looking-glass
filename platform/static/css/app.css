@@ -1165,7 +1165,7 @@ details.mp-mini.kev > summary { color: #ff9a9e; }
 /* the drop-downs that were the browser's own lists until 2026-11-20 keep the sizes they had (the wrapper carries each
    class as lgs-<class>; check_select_enhancer.py makes sure no select stays the browser's list) */
 .lgs-av-in { width: 100%; }
-.lgs-av-in .lgs-btn { padding: 9px 11px; border-radius: 9px; font-size: 14px; }
+.lgs-av-in .lgs-btn { padding: 7px 11px; border-radius: 9px; font-size: 14px; }   /* the standard 34 px (even controls) */
 .lgs-av-netsel { max-width: 640px; }
 .lgs-fd-sel, .lgs-fd-in { min-width: 0; }
 .fd-adv-send .lgs-fd-in { flex: 1 1 260px; }
@@ -1348,4 +1348,18 @@ html.lg-nocopy input, html.lg-nocopy textarea, html.lg-nocopy select, html.lg-no
 .lg-tour-offer p { margin: 4px 0 12px; color: #cfd3e1; }
 @keyframes lgTourIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .lg-tour-spot, .lg-tour-card { transition: none; } .lg-tour-offer { animation: none; } }
+
+/* ---- even controls on every page (the user, 2026-11-25): one height per size, measured on every page and role.
+   Standard (34px): form buttons, text fields and dropdowns; small (28px): buttons in lists, tables and toolbars.
+   A small button beside a field or a dropdown takes the field's height, so a row lines up. Dropdowns with a caption
+   over their value (the map's and the Executive portal's filters) stay as tall as their two lines need. */
+:root { --ctl-h: 34px; --ctl-h-sm: 28px; }
+.lg-btn { min-height: var(--ctl-h); box-sizing: border-box; justify-content: center; }
+.lg-btn.sm, .pill-btn { min-height: var(--ctl-h-sm); box-sizing: border-box; display: inline-flex; align-items: center;
+  justify-content: center; }
+.lgs-btn { min-height: var(--ctl-h); box-sizing: border-box; }
+:is(.dz-search, .dz-input, .wk-in, input.fd-in, .fd-q, .cb-in, input.kbn-in, .au-date input, .lgs-av-in .lgs-btn, input.search, .st-field input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"]), .st-field select):not(textarea) {
+  height: var(--ctl-h); box-sizing: border-box; }
+:where(div, form, label, span, p):has(> :is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="hidden"]), select, .lgs)) > :is(.lg-btn.sm, .pill-btn),
+tr:has(> td > :is(.dz-input, .dz-search, .lgs)) > td > :is(.lg-btn.sm, .pill-btn) { min-height: var(--ctl-h); }
 

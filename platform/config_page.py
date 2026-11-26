@@ -96,6 +96,9 @@ READ_ONLY = [
     ("VIEWER_NETWORKS", "Access and security", "Networks allowed in private mode", "", "Addresses and ranges, comma separated; internal = every private range."),
     ("ALLOWED_HOSTS", "Access and security", "Extra host names people type to reach it", "", "The computer's own names and addresses are always allowed."),
     ("MFA_REQUIRED", "Access and security", "Authenticator code at every sign-in", "1", "0 only in a closed lab."),
+    ("SIGNIN_CHECK", "Access and security", "How sign-in is checked", "",
+     "passkey or code. Empty: Settings → General → Sign-in check decides (by default passkey when public, code otherwise). "
+     "Set here, it wins over Settings."),
     ("REGISTRATION", "Access and security", "Create an account on the sign-in page", "1", "0: only administrators add people."),
     ("SESSION_IDLE_MINUTES", "Access and security", "Session ends after minutes without use", "60", ""),
     ("SESSION_MAX_HOURS", "Access and security", "Session ends after hours in any case", "12", ""),

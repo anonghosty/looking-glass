@@ -36,22 +36,32 @@ def _access_mode():
     """This installation's ACCESS_MODE, as security.py reads it (.env, then the environment)."""
     try:
         from dotenv import dotenv_values
-        v = dotenv_values(os.path.join(ROOT, ".env")).get("ACCESS_MODE")
+        env = dotenv_values(os.path.join(ROOT, ".env"))
     except Exception:  # noqa: BLE001  (no python-dotenv: the environment only)
-        v = None
-    if v is not None:
-        os.environ.setdefault("ACCESS_MODE", v)
+        env = {}
+    for k in ("ACCESS_MODE", "VIEWER_NETWORKS", "SIGNIN_CHECK"):
+        if env.get(k) is not None:
+            os.environ.setdefault(k, env[k])
     sys.path.insert(0, ROOT)
     import security as _s
     return _s.access_mode()
 
 
-# A public installation (ACCESS_MODE=public) requires two passkeys per account, at sign-in and before high-value actions
-# (passkeys.py, stepup.py). The temporary accounts then register two passkeys made by this test (SoftKey below: a key
+def _passkeys_in_force():
+    """Whether this installation asks for passkeys, as the service decides it (signin_check.py, 2026-11-25: .env's
+    SIGNIN_CHECK, then Settings' choice, then the default for ACCESS_MODE and Caddy), not ACCESS_MODE alone."""
+    _access_mode()
+    import signin_check as _sc
+    _sc.configure(ROOT)
+    return _sc.passkeys_required()
+
+
+# With passkeys in force (Settings' sign-in check, signin_check.py; by default a public installation with Caddy in front
+# for a domain) every account has two passkeys, used at sign-in and before high-value actions (passkeys.py, stepup.py). The temporary accounts then register two passkeys made by this test (SoftKey below: a key
 # pair kept in memory and thrown away at the end), through the same pages a browser uses. Passkeys need the site's name,
 # never a bare address, so every request to this installation presents itself as localhost (allowed by security.py's
 # host check, and by browsers for passkeys); it still connects to 127.0.0.1.
-PUBLIC = _access_mode() == "public"
+PUBLIC = _passkeys_in_force()
 NAME_HOST = f"localhost:{PORT}"
 ORIGIN = ("https" if TLS else "http") + "://" + NAME_HOST
 PK = {}     # account -> [SoftKey, ...] registered by this run

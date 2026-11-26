@@ -14,7 +14,9 @@ name="$(sed -n 's/^LG_SERVICE=//p' "$project/.env" 2>/dev/null | tail -1)"; name
 unit_dir=/etc/systemd/system
 case "${1:-}" in
   install)
-    user="$(id -un)"
+    # the installation's user: the folder's owner, also when this runs with sudo (never root: 2026-11-25)
+    user="$(stat -c %U "$project")"
+    [ "$user" != root ] || { echo "The platform folder belongs to root: install Looking Glass as its own user first."; exit 1; }
     for x in service timer; do
       sed -e "s|@USER@|$user|g" -e "s|@PROJECT@|$project|g" -e '/^# SPDX-/d' "$project/deploy/looking-glass-connectors.$x.template" \
         > "$project/deploy/$name.$x"

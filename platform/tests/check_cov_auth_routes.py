@@ -29,6 +29,9 @@ os.environ["TRUST_PROXY"] = "0"
 os.environ["ACCESS_MODE"] = "private"
 os.environ["VIEWER_NETWORKS"] = "192.0.2.0/24"
 os.environ.pop("ALLOW_INSECURE_REMOTE_LOGIN", None)
+# These checks test what each administrator route does with its input, not the step-up gate in front of it.
+# The gate (asking again with a passkey before high-value actions) is tested on its own in tests/check_stepup.py.
+os.environ["LG_STEPUP_TESTS_OFF"] = "1"
 import app as A  # noqa: E402
 import auth  # noqa: E402
 from werkzeug.security import generate_password_hash  # noqa: E402
@@ -361,6 +364,8 @@ try:
     r = cAd.get("/api/admin/users", headers=HD)
     me_row = next((x for x in r.json["users"] if x["name"] == "cov-admin"), {})
     ok("the account list: every account, 'you' marked, roles described", r.status_code == 200 and me_row.get("you") and "cov-viewer" in r.json["info"])
+    ok("…each role's display name beside its key (researcher: Researcher/TI; others their key)",
+       r.json.get("names", {}).get("researcher") == "Researcher/TI" and r.json["names"].get("admin") == "admin", r.json.get("names"))
     ok("…sessions of accounts no longer active are ended on the way", not any(v["user"] == "cov-revoked" for v in sessions.s.values()))
     act = lambda name, body, c=cAd, csrf=csrfAd: post_json(c, f"/api/admin/users/{name}", body, csrf)
     ok("a change without the CSRF token: 403", cAd.post("/api/admin/users/cov-analyst", json={"action": "kick"}, headers=HD).status_code == 403)
@@ -424,6 +429,8 @@ try:
     r = cAd.get("/api/admin/roles", headers=HD)
     ok("roles: the list, which are fixed, which permissions are exclusive", r.status_code == 200 and "auditor" in r.json["fixed"]
        and r.json["exclusive"]["users"] == "admin" and r.json["in_use"].get("admin", 0) >= 1)
+    ok("…the roles' display names for the column headings (researcher: Researcher/TI)", r.json.get("names", {}).get("researcher") == "Researcher/TI",
+       r.json.get("names"))
     rp = lambda body: post_json(cAd, "/api/admin/roles", body, csrfAd)
     ok("roles not as {roles: {...}}: 400", rp({"roles": ["analyst"]}).status_code == 400)
     ok("a role name with capitals: 400", rp({"roles": {"Analyst": ["view"]}}).status_code == 400)
@@ -440,5 +447,16 @@ finally:
     audit.add, setup.path, auth.profile_problem = saved["audit"], saved["setup"], saved["profile"]
     auth.PEACE["of"], pwp.expired = saved["peace"], saved["expired"]
     shutil.rmtree(tmp, ignore_errors=True)
+# the pages show the display name and keep saving the key (held copies with LG_HELD_DIR, else the platform's files)
+_held = os.environ.get("LG_HELD_DIR", "")
+def _page(name):
+    p = os.path.join(_held, name + ".new") if _held and os.path.exists(os.path.join(_held, name + ".new")) else \
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "js", name)
+    return open(p, encoding="utf-8").read()
+_adm, _rev = _page("admin.js"), _page("review.js")
+ok("Admin: the role boxes and legend show the display name, the value saved is the key",
+   'el("option", null, shown(r)); o.value = r' in _adm and 'el("dt", null, shown(r))' in _adm and "ROLE_SHOWN = d.names" in _adm)
+ok("…the Roles & permissions column headings show the display name", "(rolesState.names || {})[r] || r" in _adm)
+ok("Review: 'What the Researcher/TI is saying'", '"What the Researcher/TI is saying"' in _rev and "What the researcher is saying" not in _rev)
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))
 sys.exit(1 if fails else 0)

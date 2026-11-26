@@ -46,7 +46,9 @@ Free and open source (AGPL-3.0) · built in Africa, for CSIRTs in every country<
 
 ---
 
-> **Updated recently and something stopped working?** The service restarting after `git pull`, or everyone asked for passkeys on an internal network: see [the fixes in Updating](docs/INSTALLATION.md#updating).
+> **Updated recently and something stopped working?** The service restarting after `git pull`, everyone asked for
+> passkeys on an internal network, or Caddy to put in front of a running installation: see
+> [the fixes in Updating](docs/INSTALLATION.md#updating).
 
 ## Contents
 
@@ -220,7 +222,7 @@ flowchart TD
     L["<b>Looking Glass</b> · the platform"]:::app
     S --> P --> M
     M -- "read only" --> L
-    IN("<b>The CSIRT</b>, one role each<br/>researcher · analyst · management<br/>advisor · auditor · admin"):::people
+    IN("<b>The CSIRT</b>, one role each<br/>Researcher/TI · analyst · management<br/>advisor · auditor · admin"):::people
     E("<b>External viewer</b>, masked<br/>a constituent or another CSIRT<br/>3 pages, read only"):::ext
     O("<b>The organisation</b><br/>its advisory: its own devices only"):::ext
     L -- "HTTPS" --> IN
@@ -333,7 +335,7 @@ The complete guide, with every screen and button: [docs/USER_GUIDE.md](docs/USER
 |---|---|---|
 | **External** | three pages only: network communications, publicly accessible / vulnerable services and Abused or Compromised, always masked | view only |
 | **Analyst** | everything, unmasked | analyse, export CSV and PDF, Malpedia, Demo mode |
-| **Researcher** | only the Definitions page (no addresses) | define malware names and issues with references, study the intel gathered from the reports, share notes, correct network names |
+| **Researcher/TI** (researcher or threat intelligence analyst) | only the Definitions page (no addresses) | define malware names and issues with references, study the intel gathered from the reports, share notes, correct network names |
 | **Management** | the Executive portal (aggregates, never addresses) and the findings it decides | filter, explain, download executive reports; approve findings to a named advisor or reject them |
 | **Advisor** | the Advisory portal and the findings sent to them | write and send one advisory per organisation, signed by the CSIRT |
 | **Auditor** | only the Audit portal (never the platforms or host data) | read the audit log, control checks, access review and integrity; export evidence. Changes nothing |

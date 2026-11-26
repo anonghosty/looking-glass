@@ -67,7 +67,8 @@ INVITE = {"check": None, "use": None}
 # instead of the authenticator code, and a person with fewer than min_public registers them right after signing in
 PASSKEYS = {}
 # every signed-in account reaches its own details, passkeys and the fresh check (stepup.py), whatever its role's portal
-OWN_PATHS = ("/api/me", "/account", "/api/passkeys", "/api/stepup")
+OWN_PATHS = ("/api/me", "/account", "/api/passkeys", "/api/stepup",
+             "/api/tour")   # each person's own tutorial memory, every role (tour_prefs.py checks sign-in and CSRF)
 PUBLIC_PATHS = ("/login", "/register", "/forgot", "/logout", "/healthz", "/favicon.ico")
 # the only files served without signing in: what the sign-in, account and reset pages use (anti-fingerprinting,
 # 2026-11-19: every script and style was readable by anyone, which named the product and its libraries; neutral.py)
@@ -160,7 +161,7 @@ ROLE_INFO = {
                   "(infections, issues, regions, sectors, networks, trends), explanations of infections (Malpedia) and "
                   "vulnerabilities (CVE), and polished executive reports for the filters they choose. They never see individual "
                   "addresses or host lists, and no other role can be given this portal.",
-    "researcher": "Security researchers of the organisation. They work only on the Definitions page: the malware names "
+    "researcher": "Researcher/TI (TI: threat intelligence): the organisation's security researchers and threat intelligence analysts. They work only on the Definitions page: the malware names "
                   "Malpedia does not know and the issues that are not CVEs, which they research and define with references "
                   "(evidence); the CVEs found, with their NVD / CISA KEV / EPSS status; and the network names (AS-number "
                   "registry), which they correct. They do not see the platforms or the host addresses.",
@@ -1090,15 +1091,19 @@ def install(app, base_dir, logger):
         return bool(u.get("automation")) or not u.get("persist") or _now() - u.get("created", 0) < 12 * 3600
 
     def passkeys_public():
-        """Passkeys are required here: a public installation (ACCESS_MODE=public) with the passkey store in place."""
-        import security
-        return bool(PASSKEYS.get("store")) and security.access_mode() == "public"
+        """Passkeys are required here: Settings' sign-in check says passkey (signin_check.py; by default on
+        ACCESS_MODE=public), with the passkey store in place."""
+        import signin_check
+        return bool(PASSKEYS.get("store")) and signin_check.passkeys_required()
 
     @app.context_processor
     def _user():
         u = getattr(g, "user", None) or {}
-        return {"lg_user": u.get("user", ""), "lg_role": u.get("role", ""), "lg_csrf": u.get("csrf") or "",
-                "lg_perms": sorted(u.get("perms", ())), "lg_peace": bool(u.get("peace"))}
+        from findings import ACTED_NAME        # the role's display name (Researcher/TI); lg_role stays the key
+        role = u.get("role", "")
+        import person_code                     # lg_me: the account's opaque code for page attributes (never the name)
+        return {"lg_user": u.get("user", ""), "lg_me": person_code.code(u.get("user", "")), "lg_role": role, "lg_role_name": ACTED_NAME.get(role, role),
+                "lg_csrf": u.get("csrf") or "", "lg_perms": sorted(u.get("perms", ())), "lg_peace": bool(u.get("peace"))}
 
     def attempts_msg(base, ip, name):
         n = throttle.left(ip, name)
@@ -1680,7 +1685,9 @@ def install(app, base_dir, logger):
                         "reset_requested": u.get("reset_requested") or None, "profile": u.get("profile") or {},
                         "reset_allowed": u.get("reset_allowed_until", 0) > _now(),
                         "you": n == g.user.get("user")})
+        from findings import ACTED_NAME   # the roles' display names (one shared label); the key stays what is saved
         return jsonify(users=out, roles=sorted(roles.roles, key=lambda r: (r != LOWEST_ROLE, r == "admin", r)), me=g.user.get("user"),
+                       names={r: ACTED_NAME.get(r, r) for r in roles.roles},
                        info={r: ROLE_INFO.get(r) or ("Custom role: " + ", ".join(roles.roles.get(r, [])) if r in roles.roles else "") for r in roles.roles})
 
     @app.route("/api/admin/users/<name>", methods=["POST"])
@@ -1804,7 +1811,8 @@ def install(app, base_dir, logger):
     def admin_roles():
         need("users", change=request.method == "POST")
         if request.method == "GET":
-            return jsonify(roles=roles.roles, perms=PERMS, info=ROLE_INFO, in_use={r: sum(1 for u in users.all().values() if u.get("role") == r) for r in roles.roles},
+            from findings import ACTED_NAME   # the roles' display names (one shared label); the key stays what is saved
+            return jsonify(roles=roles.roles, perms=PERMS, info=ROLE_INFO, names={r: ACTED_NAME.get(r, r) for r in roles.roles}, in_use={r: sum(1 for u in users.all().values() if u.get("role") == r) for r in roles.roles},
                            fixed=sorted(["admin", *FIXED_ROLES]), exclusive=EXCLUSIVE_PERMS)
         body = request.get_json(silent=True)
         if not isinstance(body, dict) or not isinstance(body.get("roles"), dict) or len(body["roles"]) > 30:

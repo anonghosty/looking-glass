@@ -53,7 +53,7 @@ hidden value never reaches the browser.
 | Role | Sees |
 |---|---|
 | Analyst | Everything, with addresses |
-| Researcher | The threat data, with every constituent address and host name masked; patterns carried by fewer than 5 devices get no lasting code |
+| Researcher/TI (researcher or threat intelligence analyst) | The threat data, with every constituent address and host name masked; patterns carried by fewer than 5 devices get no lasting code |
 | Management | Aggregates and C2 / sinkhole domains, never a constituent address |
 | Advisor | The findings sent to them, to write advisories |
 | Auditor | Only the audit log and its evidence, never host data |

@@ -7,7 +7,7 @@
   <img class="auth-logo" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="52" height="52">
   <h1>Not allowed</h1>
   <p class="auth-sub">{{ message }}</p>
-  <p class="auth-sub">Signed in as <b>{{ lg_user }}</b> ({{ lg_role }}).</p>
+  <p class="auth-sub">Signed in as <b>{{ lg_name }}</b> ({{ lg_role_name }}).</p>
   {#- the role's own Overview, as the header's Overview button (_page_nav.html): the platforms' overview for the roles
       that see the platforms, /overview for every other role (r90; /?intro=1 sent those to their portal instead) -#}
   <a class="auth-btn" href="{{ '/?intro=1' if 'view' in lg_perms else '/overview' }}"><span>Back to the overview</span></a>

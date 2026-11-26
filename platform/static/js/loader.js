@@ -225,6 +225,15 @@
     svg,
     /** leave for another page with the logo animation */
     go(url, label) {
+      // a place on THIS page (only the #part differs, e.g. the bell's /settings#monitor while on Settings): the browser
+      // would only scroll, nothing would arrive to take the logo down (2026-11-25: stuck on "Opening settings"). Open
+      // the page again at that place instead, without the logo.
+      const u = new URL(url, location.href);
+      if (u.origin === location.origin && u.pathname === location.pathname && u.search === location.search) {
+        if (u.hash && u.hash !== location.hash) location.hash = u.hash;
+        location.reload();
+        return;
+      }
       const text = label || labelFor(url);
       try { sessionStorage.setItem("lg.arrive", text); } catch { /* private mode */ }
       show(text);
@@ -424,6 +433,14 @@
     },
   };
   if (document.body) window.LGLoader.arrive(); else document.addEventListener("DOMContentLoaded", () => window.LGLoader.arrive());
+  // Back (or Forward) to a page the browser kept as it was, the leaving logo still on it (2026-11-25: Back "hangs on
+  // the loading screen"): take it down, and forget the label the next page would have carried on
+  window.addEventListener("pageshow", (e) => {
+    if (!e.persisted) return;
+    try { sessionStorage.removeItem("lg.arrive"); } catch { /* private mode */ }
+    const o = document.getElementById("lgTransition");
+    if (o) o.classList.remove("on", "leaving");
+  });
 
   // every page opens with the logo animation: the header's page buttons (templates/_page_nav.html) and any other link
   // to a page of the platform
@@ -457,6 +474,79 @@
     s.defer = true;
     document.head.append(s);
   }
+})();
+
+// every form field has a name and a label (the user, 2026-11-25: Chrome's Issues panel, "A form field element should
+// have an id or name attribute" and "No label associated with a form field"). Page scripts build many fields; as each
+// appears, one without an id or a name gets a name from what it is about, and one without a label gets a real <label
+// for> holding the words a person sees beside it (its aria-label, placeholder, title, the table's column and row, or
+// the text right before it), visually hidden so nothing moves. Fields of a form posted by the browser itself are left
+// alone (their names are the server's). The DOM and the CSSOM only.
+(() => {
+  const FIELD = "input:not([type=hidden]):not([type=submit]):not([type=button]), select, textarea";
+  let n = 0;
+  const words = (s) => String(s || "").replace(/\s+/g, " ").trim().slice(0, 80);
+  const slug = (s) => words(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "field";
+  const labelled = (e) => (e.id && document.querySelector(`label[for="${CSS.escape(e.id)}"]`)) || e.closest("label");
+  function about(e) {
+    const own = e.getAttribute("aria-label") || e.getAttribute("placeholder") || e.getAttribute("title");
+    if (own) return words(own);
+    const by = (e.getAttribute("aria-labelledby") || "").split(/\s+/).map((id) => document.getElementById(id)?.textContent).filter(Boolean).join(" ");
+    if (by) return words(by);
+    const td = e.closest("td, th");
+    if (td) {                                   // a field in a table: its column's heading and its row's first cell
+      const tr = td.parentElement, table = td.closest("table");
+      const col = table?.querySelector("thead tr")?.children[[...tr.children].indexOf(td)]?.textContent;
+      const row = tr.children[0] !== td ? tr.children[0].textContent : "";
+      if (col || row) return words([col, row].filter(Boolean).join(": "));
+    }
+    let p = e.previousElementSibling;           // the text right before it (a heading, a <b>, a span)
+    while (p && !words(p.textContent)) p = p.previousElementSibling;
+    if (p) return words(p.textContent);
+    const box = e.closest("fieldset, section, article, [role=dialog]");
+    return words(box?.querySelector("legend, h2, h3, h4")?.textContent) || (e.type === "checkbox" ? "Choose" : "Field");
+  }
+  const fix = (e) => {
+    if (e.dataset.lgForm || e.closest("form[action]")) return;
+    e.dataset.lgForm = "1";
+    const what = about(e);
+    if (!e.id && !e.name) e.name = `lg-${slug(what)}`;
+    if (!labelled(e)) {
+      if (!e.id) e.id = `lg-field-${++n}`;
+      const l = document.createElement("label");
+      l.htmlFor = e.id; l.textContent = what;
+      box().append(l);             // a label works from anywhere in the page: none sits beside the field
+    }
+  };
+  let holder = null;
+  function box() {                 // one visually hidden holder at the end of the page for these labels
+    if (holder && holder.isConnected) return holder;
+    holder = document.createElement("div"); holder.className = "lg-sr-labels";
+    Object.assign(holder.style, { position: "absolute", width: "1px", height: "1px", padding: "0", margin: "-1px", overflow: "hidden",
+      clip: "rect(0 0 0 0)", clipPath: "inset(50%)", whiteSpace: "nowrap", border: "0" });
+    document.body.append(holder);
+    return holder;
+  }
+  const scan = (root) => {
+    if (!root || !root.querySelectorAll) return;
+    if (root.matches && root.matches(FIELD)) fix(root);
+    for (const e of root.querySelectorAll(FIELD)) fix(e);
+  };
+  window.LGForms = { scan, about };
+  // a field a page redraws goes away: its label goes too (a label for nothing is its own Issues entry)
+  const prune = () => { if (holder) for (const l of [...holder.children]) if (!document.getElementById(l.htmlFor)) l.remove(); };
+  const start = () => {
+    scan(document);
+    new MutationObserver((ms) => {
+      let gone = false;
+      for (const m of ms) {
+        if (m.removedNodes.length) gone = true;
+        for (const x of m.addedNodes) if (x.nodeType === 1 && !x.closest(".lg-sr-labels")) scan(x);
+      }
+      if (gone) prune();
+    }).observe(document.body, { childList: true, subtree: true });
+  };
+  if (document.body) start(); else document.addEventListener("DOMContentLoaded", start);
 })();
 
 // a scrolling table or list the keyboard can reach (WCAG: scrollable region focusable; sweep 2026-11-14): any

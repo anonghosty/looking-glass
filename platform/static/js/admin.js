@@ -39,7 +39,8 @@
   for (const b of tabs) b.addEventListener("click", () => show(b.dataset.tab));
 
   // ---------------- users
-  let roleNames = [], ROLE_INFO = {};
+  let roleNames = [], ROLE_INFO = {}, ROLE_SHOWN = {};   // ROLE_SHOWN: a role's display name (Researcher/TI); the key is what is saved
+  const shown = (r) => ROLE_SHOWN[r] || r;
   // the role picked for an account waiting for approval, kept across the 30-second refresh (external review,
   // 2026-11-12: the refresh put the box back to the stored role, so Approve could use a role nobody picked)
   const CHOSEN = {};
@@ -50,7 +51,7 @@
   async function loadUsers() {
     let d; try { d = await getJSON("/api/admin/users"); } catch (e) { banner(`Could not load users: ${window.LGLoader.errorText(e)}`, true); return; }
     finally { $("adLoading")?.remove(); if (usersWrap) usersWrap.hidden = false; window.LGLoader?.ready(); }
-    roleNames = d.roles; ROLE_INFO = d.info || {};
+    roleNames = d.roles; ROLE_INFO = d.info || {}; ROLE_SHOWN = d.names || {};
     drawRoleLegend();
     const pend = d.users.filter((u) => u.status === "pending").length;
     $("pendingBadge").hidden = !pend; $("pendingBadge").textContent = pend;
@@ -69,7 +70,7 @@
         r.title = `${u.reset_requested.ip} · ${u.reset_requested.location} · ${u.reset_requested.ua}`; st.append(r);
       }
       if (u.reset_allowed) st.append(el("div", "adm-flag ok", "Reset allowed (24 h)"));
-      const roleTd = el("td", "adm-role"); const sel = el("select", "adm-select lg-enhance"); for (const r of roleNames) { const o = el("option", null, r); o.value = r; sel.append(o); }
+      const roleTd = el("td", "adm-role"); const sel = el("select", "adm-select lg-enhance"); for (const r of roleNames) { const o = el("option", null, shown(r)); o.value = r; sel.append(o); }
       sel.value = u.status === "pending" && roleNames.includes(CHOSEN[u.name]) ? CHOSEN[u.name] : u.role;
       // active accounts: the new role applies at once; pending accounts: it is kept (CHOSEN) and applied by Approve
       sel.addEventListener("change", () => {
@@ -115,7 +116,7 @@
     let box = document.getElementById("roleLegend");
     if (!box) { box = el("dl", "adm-roles-legend"); box.id = "roleLegend"; document.getElementById("usersTable").closest(".table-wrap").after(box); }
     box.replaceChildren();
-    for (const r of roleNames) { box.append(el("dt", null, r), el("dd", null, ROLE_INFO[r] || "")); }
+    for (const r of roleNames) { box.append(el("dt", null, shown(r)), el("dd", null, ROLE_INFO[r] || "")); }
   }
   async function act(name, action, extra, ok) {
     if (!action) { loadUsers(); return; }           // pending: the role is applied on approval
@@ -138,7 +139,7 @@
     const names = Object.keys(roles).sort((a, b) => (a === "admin") - (b === "admin") || a.localeCompare(b));
     const th = el("tr"); th.append(el("th", null, "Permission"));
     for (const r of names) {
-      const h = el("th", "adm-rolehead"); h.append(el("div", null, r), el("div", "muted", `${used[r] || 0} account(s)`)); h.title = (rolesState.info || {})[r] || "";
+      const h = el("th", "adm-rolehead"); h.append(el("div", null, (rolesState.names || {})[r] || r), el("div", "muted", `${used[r] || 0} account(s)`)); h.title = (rolesState.info || {})[r] || "";
       // permanent roles (auth.FIXED_ROLES and admin): no Remove, permissions locked; the server enforces both
       const fixedRoles = new Set(rolesState.fixed || ["admin", "management", "auditor", "advisor", "researcher", "external"]);
       if (fixedRoles.has(r)) h.title = `${h.title} · A permanent role: no one can remove it or change its permissions.`;

@@ -100,7 +100,7 @@
       const card = (label, cls) => { const f = el("figure", `lt-card ${cls}`); const box = el("div", "lt-card-box"); const c = el("canvas"); c.width = 232; c.height = 116; box.append(c); f.append(box, el("figcaption", null, label)); pv.append(f); return c; };
       const cDesigned = card("On the advisory (designed, dark pages)", "lt-on-dark"), cPlain = card("On the advisory (plain, white pages)", "lt-on-light");
       const size = el("p", "lt-size"); size.setAttribute("role", "status");
-      const acts = el("div", "lt-acts"); const use = el("button", "intro-cta", "Use this logo"); use.type = "button";
+      const acts = el("div", "lt-acts"); const use = el("button", "lg-btn primary", "Use this logo"); use.type = "button";
       const cancel = el("button", "pill-btn", "Cancel"); cancel.type = "button"; acts.append(use, cancel);
       dlg.append(head, rec, stage, ctl, pv, size, acts); document.body.append(dlg);
       let timer = null;

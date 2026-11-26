@@ -19,11 +19,11 @@
   <link href="{{ url_for('static', filename='css/lg-detective.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/services-kb.css') }}" rel="stylesheet">
 </head>
-<body class="settings-page kb-only" data-user="{{ lg_user }}"{% if "users" in lg_perms %} data-admin="1"{% endif %}>
+<body class="settings-page kb-only" data-user="{{ lg_me }}"{% if "users" in lg_perms %} data-admin="1"{% endif %}>
   <header class="hud">
     <div class="hud-left">
       <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
-      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Definitions and network names · signed in as {{ lg_name }} ({{ lg_role }})</span></div></div>
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Definitions and network names · signed in as {{ lg_name }} ({{ lg_role_name }})</span></div></div>
     </div>
     <div class="hud-right">
       {% set nav_here = "definitions" %}{% set nav_go = false %}{% include "_page_nav.html" %}
@@ -97,7 +97,7 @@
         <button class="pill-btn" id="kbRefAdd" type="button">Add a reference</button>
       </fieldset>
       <p class="id-msg" id="kbMsg"></p>
-      <div class="kb-actions"><span class="muted" id="kbBy"></span><button class="intro-cta" id="kbSave" type="submit">Save definition</button></div>
+      <div class="kb-actions"><span class="muted" id="kbBy"></span><button class="lg-btn primary" id="kbSave" type="submit">Save definition</button></div>
     </form>
   </section>
   <script src="{{ url_for('static', filename='js/loader.js') }}"></script>

@@ -3,7 +3,7 @@
 /* Looking Glass · the severity map on the Definitions page (severity_map.py): every infection and issue the reports
    carried, with its criticality and where it comes from. Researchers and administrators only. Shadowserver's ratings are
    shown, never changed; a name no record rates can be rated by a researcher (audited), and the PDFs flag that rating
-   "Researcher's rating". Built from the page's own parts: st-card dz, dz-stats tabs, dz-toolbar search, dz-table,
+   "Researcher/TI rating". Built from the page's own parts: st-card dz, dz-stats tabs, dz-toolbar search, dz-table,
    dz-pill. Text from the server is always set as text. */
 (() => {
   "use strict";
@@ -49,7 +49,7 @@
       td.append(el("span", null, "Shadowserver"), el("span", "dz-by", "the highest severity of the records that carry it"));
       if (x.replaced) td.append(el("span", "dz-by", `Replaces ${x.rated_by || "a researcher"}'s rating (${WORD[x.rated_level]}, ${String(x.rated_at).slice(0, 10)})`));
     } else if (x.source === "researcher") {
-      td.append(el("span", null, `Researcher: ${x.rated_by || "unknown"}`), el("span", "dz-by", `rated on ${String(x.rated_at).slice(0, 10)}; no record rates it`));
+      td.append(el("span", null, `Researcher/TI: ${x.rated_by || "unknown"}`), el("span", "dz-by", `rated on ${String(x.rated_at).slice(0, 10)}; no record rates it`));
     } else {
       td.append(el("span", null, "No record rates it"), el("span", "dz-by", "a researcher can rate it"));
     }

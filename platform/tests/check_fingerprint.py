@@ -44,6 +44,8 @@ import app as A  # noqa: E402
 import auth  # noqa: E402
 c = A.app.test_client()
 ENV = {"REMOTE_ADDR": "127.0.0.1"}
+if os.environ.get("TRUST_PROXY") == "1":     # behind Caddy: say who the visitor is, as a check script must (proxy_guard.py)
+    ENV["HTTP_X_FORWARDED_FOR"] = "127.0.0.1"
 paths = ["/login", "/login?form=signin", "/forgot", "/nope", "/settings", "/definitions", "/api/stats", "/favicon.ico",
          "/static/js/app.js", "/static/js/loader.js", "/static/css/services.css", "/static/img/logo-mark.svg", "/static/../.env"] \
     + sorted(auth.PUBLIC_STATIC)

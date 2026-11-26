@@ -12,7 +12,7 @@ the platform: the **Glossary** tab on the overview page and the **Glossary** but
 - [Using the platform](#using-the-platform) (15 terms)
 - [Accounts, roles and permissions](#accounts-roles-and-permissions) (51 terms)
 - [Publicly accessible / vulnerable services](#publicly-accessible--vulnerable-services) (14 terms)
-- [Security, audit and the pipeline](#security-audit-and-the-pipeline) (34 terms)
+- [Security, audit and the pipeline](#security-audit-and-the-pipeline) (39 terms)
 - [Related tools](#related-tools)
 - [A–Z index](#az-index)
 
@@ -155,8 +155,8 @@ Made on the next quarter's 3rd day, once the quarter's last reports have arrived
 **Quarterly purge**  
 Off on every installation until an administrator turns it on in Settings → Quarterly, after reading what it deletes, with their own password; it can be turned off there the same way. Once it is on: on the working day after the 15th working day (Monday to Friday) after a quarter, the database pipeline deletes the raw report rows older than 31 days. Only when that quarter's report is VALID, once per quarter, and never findings, cases, advisories or the quarterly reports. Download your copy of the quarterly report before it.
 
-**Researcher's rating**  
-A level a researcher gave, on the severity map, to a name no Shadowserver record rates. The PDFs' References section uses it and flags it "Researcher's rating". When Shadowserver later rates the name, Shadowserver's level is used instead.
+**Researcher/TI rating**  
+A level a researcher gave, on the severity map, to a name no Shadowserver record rates. The PDFs' References section uses it and flags it "Researcher/TI rating". When Shadowserver later rates the name, Shadowserver's level is used instead.
 
 **Tag**  
 An extra label from the report, often a campaign name or an alternative family name.
@@ -281,8 +281,8 @@ People outside the security team, such as partners, visitors or a public screen.
 **Analyst (role)**  
 The security team's analysts. They see all data unmasked, analyse it, download lists, CSV files and reports (PDF + CSV), look up malware on Malpedia and vulnerabilities (CVEs), and switch Demo mode on for presentations. They cannot change Settings or manage accounts.
 
-**Researcher (role)**  
-The organisation's security researchers. They work on the Definitions page only: they research and define, with references, the malware names Malpedia does not know and the issues that are not CVEs, study the indicators the reports carry (Intel gathered) and the matches Looking Glass raises, share notes on new findings, and correct network names (AS numbers). Their definitions and notes are then shown to every user, signed with their full name. They do not see the platforms or host addresses.
+**Researcher/TI (role)**  
+TI stands for threat intelligence: the organisation's security researchers and threat intelligence analysts. They work on the Definitions page only: they research and define, with references, the malware names Malpedia does not know and the issues that are not CVEs, study the indicators the reports carry (Intel gathered) and the matches Looking Glass raises, share notes on new findings, and correct network names (AS numbers). Their definitions and notes are then shown to every user, signed with their full name. They do not see the platforms or host addresses.
 
 **Management (role)**  
 Managers, executives or team leads (so decisions need not wait on management). They use the management portal only: a polished dashboard of aggregated figures for both platforms (affected devices, infections, exposed services, actively exploited vulnerabilities, regions, sectors, networks and trends), with filters, explanations of infections and vulnerabilities, and executive PDF reports of what they filtered. They never see individual addresses or host lists. This portal cannot be given to any other role; admins can open it to preview it.
@@ -300,7 +300,7 @@ An internal or external auditor. They use the Audit portal (/audit) only, read o
 Administrators. Everything the other roles can do, plus Settings (country, constituency, the password policy, the pipeline's Workers settings), accounts, roles, sessions and the Audit portal. Peace of mind lets an administrator step out of the day-to-day findings.
 
 **Permission**  
-One thing a role allows: view (see the platforms), unmasked (real addresses and names), export (CSV files, complete lists and reports), malpedia (malware and vulnerability look-ups), settings, networks (correct network names), audit (the Audit portal), and four that belong to one role only: management (Executive portal), definitions (Researcher), advisory (Advisor) and users (Admin: accounts and roles).
+One thing a role allows: view (see the platforms), unmasked (real addresses and names), export (CSV files, complete lists and reports), malpedia (malware and vulnerability look-ups), settings, networks (correct network names), audit (the Audit portal), and four that belong to one role only: management (Executive portal), definitions (Researcher/TI), advisory (Advisor) and users (Admin: accounts and roles).
 
 **Looking Glass definition**  
 A description of a malware name or an issue that Malpedia or the vulnerability databases do not cover, with references (evidence). The definitions that come with Looking Glass are signed Looking Glass; those written by a security researcher of the organisation carry the researcher's full name. It is shown to every user in look-ups, lists, CSV files and reports.
@@ -324,7 +324,7 @@ In Intel gathered: how many distinct devices carry a value or a combination, and
 A match the platform found in the reports and asks a researcher to look into: the same indicator under two names (possibly one family under two names, or shared infrastructure), in two reports for one name (a probable indicator of that name, worth putting in its notes), or an infection's C2 domain that is also a certificate name on a service in the constituency. Values common to everything (stock browser user agents, usernames such as root) are never raised.
 
 **Note (researcher)**  
-A new finding a researcher records on a name (the C2 moved, seen together with another family…), dated and signed. It appears on every card of that name and in the PDF reports as Notes shared by Researcher: full name (date). Notes are kept apart from the definitions and are never replaced by an update.
+A new finding a researcher records on a name (the C2 moved, seen together with another family…), dated and signed. It appears on every card of that name and in the PDF reports as Notes shared by Researcher/TI: full name (date). Notes are kept apart from the definitions and are never replaced by an update.
 
 **Combination code (LG-C, LG-X)**  
 A short code for one exact combination Intel gathered shows: LG-C-… for one report (the records that carry exactly these indicators), LG-X-… for a cross-report pattern (what a device carried in each of several reports). The same combination always has the same code, and a code carries no address, so researchers and management can pass it on in notes and reports; an analyst pastes it on the Combinations page to get exactly those devices.
@@ -476,13 +476,28 @@ One bubble per report, sized by its records for the day. A dot flies into a bubb
 ## Security, audit and the pipeline
 
 **Passkey**  
-A sign-in key kept by your device (Windows Hello, Touch ID or Face ID, a phone, a security key), unlocked with your PIN or fingerprint. Looking Glass keeps only its public half. Your browser offers it to the real site only, so a look-alike site cannot use it. Required at sign-in on installations open to the internet, two per person.
+A sign-in key kept by your device (Windows Hello, Touch ID or Face ID, a phone, a security key), unlocked with your PIN or fingerprint. Looking Glass keeps only its public half. Your browser offers it to the real site only, so a look-alike site cannot use it. Works only on the site's host name over trusted HTTPS, never an IP address. Required at sign-in, two per person, where the sign-in check is Passkey.
+
+**Caddy in front**  
+Caddy, a web server, answers the network for Looking Glass: it reads every request in full, under strict time limits, before Looking Glass sees it, so a few deliberately slow connections cannot hold Looking Glass up for everyone. Settings → Task monitor shows whether it is in front; an installation without it gets it with one command on the server (sudo deploy/caddy_front.sh adopt), keeping its address and certificate.
+
+**Sign-in check**  
+Settings → General: how people sign in and confirm high-value actions after their password. Passkey (recommended for a site on the internet) or Authenticator code (recommended for an internal network). Changing it asks you to confirm every time, and it is in the audit log.
+
+**Update (Settings)**  
+Settings → Update: Check for an update looks for a newer release; Update makes a backup, checks that the maintainer signed the release, installs it with its libraries, restarts Looking Glass and checks that it answers, putting the previous release back if a step fails. Every step shows as it happens. Only a signed, newer release is ever installed, and each run is in the audit log.
+
+**People codes**  
+What pages carry instead of sign-in names: an opaque code per account, made with this installation's own key (data/person_code.key on the server). A saved page or a screenshot of the browser's developer tools then gives away no half of a sign-in. Nobody can change the key from the website; if it is made again, the administrators' bell and the audit log say so.
+
+**Update helper**  
+The small service that does Settings → Update on the server, as the installation's own user, never as root. Installed once, in the platform folder: deploy/update_helper.sh install (it asks for sudo). Until then Settings → Update shows that command.
 
 **Confirm it's you (fresh check)**  
-The question Looking Glass asks before a high-value action: a passkey, or a fresh code from your authenticator app on an internal installation. It stops malware that has taken over a signed-in browser. One confirmation covers 10 minutes of high-value actions.
+The question Looking Glass asks before a high-value action: a passkey where the sign-in check is Passkey, otherwise a fresh code from your authenticator app (or a passkey you added). It stops malware that has taken over a signed-in browser. One confirmation covers 10 minutes of high-value actions.
 
 **Every-time action**  
-A high-value action that asks you to confirm it's you each time, even within the 10 minutes: changing accounts, roles or sign-up links, turning on or changing a connector, adding or removing a passkey.
+A high-value action that asks you to confirm it's you each time, even within the 10 minutes: changing accounts, roles or sign-up links, turning on or changing a connector, adding or removing a passkey, changing the sign-in check, updating Looking Glass.
 
 **Reset passkeys**  
 An administrator's action on Admin → Users for someone who lost their devices: their passkeys are removed, and at their next sign-in they register new ones. It asks the administrator to confirm it's them, and it is in the audit log.
@@ -638,6 +653,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Brute force](#threats) · 
 [C2 (command and control)](#threats) · 
 [C2 / sinkhole domains](#threats) · 
+[Caddy in front](#security-audit-and-the-pipeline) · 
 [Certificate and TLS facts](#accounts-roles-and-permissions) · 
 [CIS Controls (safeguard)](#security-audit-and-the-pipeline) · 
 [CIS mapping (not a certification)](#security-audit-and-the-pipeline) · 
@@ -728,6 +744,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Pattern columns](#accounts-roles-and-permissions) · 
 [Paused target](#security-audit-and-the-pipeline) · 
 [Peak](#numbers-and-measures) · 
+[People codes](#security-audit-and-the-pipeline) · 
 [Permission](#accounts-roles-and-permissions) · 
 [Pin](#using-the-platform) · 
 [Playback speed](#using-the-platform) · 
@@ -751,8 +768,8 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Report source (e-mail or Shadowserver API)](#security-audit-and-the-pipeline) · 
 [Reports](#numbers-and-measures) · 
 [Request path](#who-and-where) · 
-[Researcher (role)](#accounts-roles-and-permissions) · 
-[Researcher's rating](#threats) · 
+[Researcher/TI (role)](#accounts-roles-and-permissions) · 
+[Researcher/TI rating](#threats) · 
 [Reset passkeys](#security-audit-and-the-pipeline) · 
 [Residential proxy](#threats) · 
 [Retention note and rotation entry](#security-audit-and-the-pipeline) · 
@@ -768,6 +785,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Shadowserver](#the-basics) · 
 [Shadowserver's mapping for an event](#accounts-roles-and-permissions) · 
 [Share of all events](#numbers-and-measures) · 
+[Sign-in check](#security-audit-and-the-pipeline) · 
 [Sign-up link](#threats) · 
 [Sinkhole](#threats) · 
 [Source host](#who-and-where) · 
@@ -782,6 +800,8 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [TLP (Traffic Light Protocol)](#accounts-roles-and-permissions) · 
 [Trace a leak](#threats) · 
 [Unusual activity](#using-the-platform) · 
+[Update (Settings)](#security-audit-and-the-pipeline) · 
+[Update helper](#security-audit-and-the-pipeline) · 
 [User agent](#who-and-where) · 
 [Watched thread](#using-the-platform) · 
 [Workers (Settings)](#security-audit-and-the-pipeline)

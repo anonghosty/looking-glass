@@ -116,7 +116,7 @@ From a finding to the organisation that can act on it, with a name on every hand
   their organisations inside. Each keeps its own state and channel. The Findings page folds at every level, with state
   pills that name who holds each one.
 - **Findings pages keep up on their own**, within about 15 seconds, and never redraw while you type.
-- **The role an administrator played** is named on each step (*Administrator acting as researcher*, and so on).
+- **The role an administrator played** is named on each step (*Administrator acting as Researcher/TI* (researcher or threat intelligence analyst), and so on).
 - **The advisor's dashboard**, **notifications** (a bell on every role's pages) and **loading animations** on every
   page and tab that loads data.
 - **An Overview for every role**: a greeting by first name and *Your pages* for that role. Log out is always last in
@@ -204,5 +204,5 @@ an analyst pulls exactly those devices and sends them to management for the advi
 
 ## 2026-11-07: definitions, the researcher role and PDF reports
 
-- **Definitions** with references for names Malpedia does not know, and the **researcher** role that writes them.
+- **Definitions** with references for names Malpedia does not know, and the **Researcher/TI** role that writes them.
 - **PDF reports** on every list behind an analysis figure.

@@ -20,7 +20,7 @@
   <header class="hud">
     <div class="hud-left">
       <img class="brand-mark" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" width="32" height="32">
-      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Overview · signed in as {{ lg_name }} ({{ lg_role }})</span></div></div>
+      <div class="brand"><div class="brand-title">Looking Glass</div><div class="brand-sub"><span>Overview · signed in as {{ lg_name }} ({{ lg_role_name }})</span></div></div>
     </div>
     <div class="hud-right">
       {% set nav_here = "overview" %}{% set nav_go = false %}{% include "_page_nav.html" %}
@@ -38,7 +38,7 @@
     <section class="ov-yours">
       <h2>Your pages</h2>
       {% if lg_peace %}<p class="ov-sub ov-peace">Peace of mind is on: Admin, the audit log and Settings only, and no findings notifications. Turn it off on the Admin page.</p>
-      {% else %}<p class="ov-sub">What your role ({{ lg_role }}) opens. The bell at the top tells you what changed in the findings you take part in.</p>{% endif %}
+      {% else %}<p class="ov-sub">What your role ({{ lg_role_name }}) opens. The bell at the top tells you what changed in the findings you take part in.</p>{% endif %}
       {% set portal_skip = [] %}{% include "_portal_cards.html" %}
     </section>
     <p class="ov-foot"><a href="https://looking-glass-gh.readthedocs.io/" target="_blank" rel="noopener noreferrer">Documentation ↗</a></p>

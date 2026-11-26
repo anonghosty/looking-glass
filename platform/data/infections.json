@@ -1360,6 +1360,171 @@
         "https://attack.mitre.org/techniques/T1568/002/"
       ],
       "updated": "2026-11-09"
+    },
+    "avalanche-marcher": {
+      "title": "Marcher (Android banking trojan, Avalanche network)",
+      "type": "Android banking trojan (via the Avalanche criminal network)",
+      "description": "Marcher is an Android banking trojan, also called ExoBot. It is one of the malware families whose servers the Avalanche criminal network hid until police took the network down in December 2016; Shadowserver took over its domains (a sinkhole). A phone still infected keeps calling those domains, which is how it is found.",
+      "action": "Find the Android phone or tablet behind the address, remove the unknown app (or reset the device to factory settings) and have its owner change their banking passwords.",
+      "confidence": "high",
+      "status": "reviewed",
+      "aliases": [],
+      "updated": "2026-11-25",
+      "malpedia": "apk.marcher",
+      "references": [
+        "https://www.shadowserver.org/news/avalanche/",
+        "https://malpedia.caad.fkie.fraunhofer.de/details/apk.marcher",
+        "https://www.shadowserver.org/what-we-do/network-reporting/sinkhole-http-events-report/"
+      ],
+      "curated_by": "Looking Glass"
+    },
+    "avalanche-smart-app": {
+      "title": "Smart App (Avalanche network family)",
+      "type": "Malware (via the Avalanche criminal network)",
+      "description": "Smart App is named by Shadowserver and by CISA as one of the malware families whose servers the Avalanche criminal network hid until police took it down in December 2016; Shadowserver took over its domains (a sinkhole). Neither source says what Smart App does or which devices it runs on, and no published write-up describes it. A device still infected keeps calling those domains. Shadowserver lists the name as avalanche-smartapp in its Sinkhole HTTP Events report.",
+      "action": "Find the device behind the address and scan it with up-to-date anti-malware; if anything is found, reinstall it.",
+      "confidence": "medium",
+      "status": "reviewed",
+      "aliases": [
+        "avalanche-smartapp"
+      ],
+      "updated": "2026-11-25",
+      "malpedia": "",
+      "references": [
+        "https://www.shadowserver.org/news/avalanche/",
+        "https://www.cisa.gov/news-events/alerts/2016/12/01/avalanche-crimeware-service-infrastructure",
+        "https://www.shadowserver.org/what-we-do/network-reporting/sinkhole-http-events-report/"
+      ],
+      "curated_by": "Looking Glass"
+    },
+    "citrix-cve-2023-3519-campaign": {
+      "title": "Compromised Citrix NetScaler (CVE-2023-3519 campaign)",
+      "type": "Exploited network appliance (backdoor or password theft)",
+      "description": "In 2023 attackers broke into Citrix NetScaler ADC and Gateway devices through the flaw CVE-2023-3519 and left web shells or injected script on them; Shadowserver described several such campaigns. This label means something here contacted a domain of one of those campaigns that Shadowserver now holds (a sinkhole). Shadowserver does not say which campaign or domains the label covers. In the Sinkhole DNS report the address may be a DNS resolver asking for a device behind it.",
+      "action": "Find the NetScaler device, patch it (Citrix CTX561482), look for web shells, unexpected PHP files and changes to the login page; if compromised, rebuild it and reset the passwords of everyone who signed in through it.",
+      "confidence": "medium",
+      "status": "reviewed",
+      "aliases": [],
+      "updated": "2026-11-25",
+      "malpedia": "",
+      "references": [
+        "https://shadowserver.org/news/technical-summary-of-observed-citrix-cve-2023-3519-incidents/"
+      ],
+      "curated_by": "Looking Glass"
+    },
+    "emissary-panda": {
+      "title": "Emissary Panda (APT27, China-linked espionage group)",
+      "type": "State-linked espionage group",
+      "description": "Emissary Panda is one of the names of Threat Group-3390 (also APT27, LuckyMouse, Iron Tiger), a China-linked group that spies on organisations, often by first compromising websites its targets visit. This label means something here contacted a domain of the group that Shadowserver now holds (a sinkhole): probably a computer carrying one of the group's backdoors.",
+      "action": "Treat it as a possible targeted intrusion: isolate the computer, investigate it with incident response, and check what data it could reach.",
+      "confidence": "high",
+      "status": "reviewed",
+      "aliases": [
+        "apt27",
+        "threat group-3390"
+      ],
+      "updated": "2026-11-25",
+      "malpedia": "",
+      "references": [
+        "https://attack.mitre.org/groups/G0027/",
+        "https://malpedia.caad.fkie.fraunhofer.de/actor/apt27",
+        "https://www.shadowserver.org/what-we-do/network-reporting/sinkhole-http-events-report/"
+      ],
+      "curated_by": "Looking Glass"
+    },
+    "prometei": {
+      "title": "Prometei (cryptomining botnet)",
+      "type": "Botnet (cryptocurrency mining, password theft)",
+      "description": "Prometei is a modular botnet for Windows and Linux, first described by Cybereason in 2020. It mines the Monero cryptocurrency, steals passwords and spreads to other computers by guessing administrator passwords and exploiting SMB flaws. An infected machine calls its control server over the web; this one reached a server Shadowserver now holds (a sinkhole).",
+      "action": "Isolate the server, remove the miner and anything that restarts it, reset administrator passwords, patch SMB and turn off SMBv1, and check other machines for the same infection.",
+      "confidence": "high",
+      "status": "reviewed",
+      "aliases": [],
+      "updated": "2026-11-25",
+      "malpedia": "win.prometei",
+      "references": [
+        "https://malpedia.caad.fkie.fraunhofer.de/details/win.prometei",
+        "https://unit42.paloaltonetworks.com/prometei-botnet-2025-activity/"
+      ],
+      "curated_by": "Looking Glass"
+    },
+    "red october": {
+      "title": "Red October (Rocra espionage campaign)",
+      "type": "Espionage malware",
+      "description": "Red October, also called Rocra, is an espionage campaign that Kaspersky reported in 2013. From about 2007 it stole documents from diplomatic, government and research organisations, mainly from Windows computers but also from phones, network devices and USB drives. Its control domains were taken over (sinkholed), so a device still calling them today most likely has an old infection that was never cleaned.",
+      "action": "Investigate the computer forensically, reinstall it, and review what data could have left the network.",
+      "confidence": "high",
+      "status": "reviewed",
+      "aliases": [
+        "rocra"
+      ],
+      "updated": "2026-11-25",
+      "malpedia": "",
+      "references": [
+        "https://securelist.com/the-red-october-campaign/57647/"
+      ],
+      "curated_by": "Looking Glass"
+    },
+    "vextrio-help-tds": {
+      "title": "Help TDS (VexTrio-linked traffic distribution system)",
+      "type": "Malicious traffic distribution system (scams, malware)",
+      "description": "Help TDS is a redirect service, active since at least 2017 and closely linked by Infoblox to VexTrio's traffic distribution. It takes visitors from hacked WordPress sites, malicious ads and spam and sends chosen ones to fake Microsoft support scams, where victims are talked into installing remote desktop tools. This label means something here looked up one of its domains that Shadowserver now holds (a sinkhole): a hacked website on the network, or a computer that was redirected.",
+      "action": "If the address is a web server, look for injected script or malicious plugins and clean them; if it is a user's computer, check for remote access tools installed after a fake support call.",
+      "confidence": "medium",
+      "status": "reviewed",
+      "aliases": [],
+      "updated": "2026-11-25",
+      "malpedia": "",
+      "references": [
+        "https://www.infoblox.com/blog/threat-intelligence/vexing-and-vicious-the-eerie-relationship-between-wordpress-hackers-and-an-adtech-cabal/",
+        "https://www.infoblox.com/blog/threat-intelligence/inside-help-tds-hotejka-cloudflare-pages-and-predictive-detection/"
+      ],
+      "curated_by": "Looking Glass"
+    },
+    "unknown-apt": {
+      "title": "Unattributed targeted-attack (APT) infrastructure",
+      "type": "Espionage malware (group not named)",
+      "description": "Shadowserver lists this label without a description. As its name says, the sinkholed domain belonged to targeted-attack (APT) infrastructure whose group or malware family is not named. Something here contacted one of those domains; which malware is involved is not known.",
+      "action": "Treat it as a possible targeted intrusion: find the device and have it investigated.",
+      "confidence": "low",
+      "status": "reviewed",
+      "aliases": [],
+      "updated": "2026-11-25",
+      "malpedia": "",
+      "references": [
+        "https://www.shadowserver.org/what-we-do/network-reporting/sinkhole-http-events-report/"
+      ],
+      "curated_by": "Looking Glass"
+    },
+    "likely-rat-at": {
+      "title": "Likely remote access trojan (family not confirmed)",
+      "type": "Remote access trojan (family not confirmed)",
+      "description": "Shadowserver's sinkhole reports use labels of the form likely-rat-<name> (its own example is likely-rat-netwire): the device's traffic probably comes from a remote access trojan, which lets an attacker control the computer. The family behind this label is not confirmed by any published source.",
+      "action": "Check the computer for a remote access trojan with up-to-date anti-malware; if found, reinstall it and change the passwords used on it.",
+      "confidence": "low",
+      "status": "reviewed",
+      "aliases": [],
+      "updated": "2026-11-25",
+      "malpedia": "",
+      "references": [
+        "https://www.shadowserver.org/what-we-do/network-reporting/sinkhole-events-report/"
+      ],
+      "curated_by": "Looking Glass"
+    },
+    "likely-rat-wsh": {
+      "title": "Likely remote access trojan (family not confirmed)",
+      "type": "Remote access trojan (family not confirmed)",
+      "description": "Shadowserver's sinkhole reports use labels of the form likely-rat-<name> (its own example is likely-rat-netwire): the device's traffic probably comes from a remote access trojan, which lets an attacker control the computer. The family behind this label is not confirmed by Shadowserver or any published source.",
+      "action": "Check the Windows computer for script-based remote access tools (for example ones started by wscript or cscript); if found, reinstall it and change the passwords used on it.",
+      "confidence": "low",
+      "status": "reviewed",
+      "aliases": [],
+      "updated": "2026-11-25",
+      "malpedia": "",
+      "references": [
+        "https://www.shadowserver.org/what-we-do/network-reporting/sinkhole-events-report/"
+      ],
+      "curated_by": "Looking Glass"
     }
   }
 }

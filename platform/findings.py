@@ -25,13 +25,14 @@ from flask import g, jsonify, render_template, request
 
 import finding_rules
 import filesig  # noqa: E402
+import person_code   # the people a finding can go to are sent to pages by code, never by sign-in name
 
 STATUSES = [("new", "New"), ("management", "With management"), ("approved", "Approved by management"),
             ("researcher", "Back with the researcher"), ("analyst", "With the analyst"), ("advisor", "With the advisor"),
             ("advisory", "Advisory sent"), ("closed", "Closed")]
 LABEL = dict(STATUSES)
 OPEN = {"new", "management", "approved", "researcher", "analyst", "advisor"}
-ROLE_LABEL = {"researcher": "Researcher", "admin": "Administrator", "analyst": "Analyst", "management": "Management"}
+ROLE_LABEL = {"researcher": "Researcher/TI", "admin": "Administrator", "analyst": "Analyst", "management": "Management"}
 MAX_TITLE, MAX_COMMENT = 140, 1000
 # a finding is a channel, like a ticket: whoever sends it on names the person it goes to (a manager, a researcher, an
 # analyst), and only the people who took part see it and its trail (admins too, for oversight). The status a hand-over
@@ -39,6 +40,8 @@ MAX_TITLE, MAX_COMMENT = 140, 1000
 TO_STATUS = {"management": "management", "researcher": "researcher", "analyst": "analyst", "advisor": "advisor"}
 KIND_LABEL = {"management": "a manager", "researcher": "a researcher", "analyst": "an analyst", "advisor": "an advisor"}
 ROLE_LABEL["advisor"] = "Advisor"
+# the researcher role is named "Researcher/TI" (research and threat intelligence: the user, 2026-11-25); its key stays
+ACTED_NAME = {"researcher": "Researcher/TI"}
 
 
 def acted_role(item, step=None):
@@ -68,10 +71,11 @@ def acted_role(item, step=None):
 
 
 def role_label(role, acted=""):
-    """"Researcher", or for an administrator doing a role's work "Administrator acting as researcher"."""
+    """"Researcher/TI", or for an administrator doing a role's work "Administrator acting as Researcher/TI" (a role's own name;
+    the other roles keep their key there, as before)."""
     if role == "admin" and acted:
-        return f"Administrator acting as {acted}"
-    return ROLE_LABEL.get(role, "Researcher")
+        return f"Administrator acting as {ACTED_NAME.get(acted, acted)}"
+    return ROLE_LABEL.get(role, "Researcher/TI")
 
 
 NONE_FOUND = "Looked into the selection: no combination of interest found. The request is closed."
@@ -95,9 +99,13 @@ class Findings:
             return None, "Unknown kind of recipient."
         if not to:
             return None, f"Choose {KIND_LABEL[kind]} to send it to."
-        if to not in {p["user"] for p in self.people_of(kind)}:
-            return None, f"{to} is not {KIND_LABEL[kind]} here."
-        return to, ""
+        users = [p["user"] for p in self.people_of(kind)]
+        # the pages send the person's code (person_code.py: no sign-in name on a page); a sign-in name still works
+        # for scripts and older pages
+        user = person_code.user_of(to, users) or (to if to in users else None)
+        if not user:
+            return None, f"That person is not {KIND_LABEL[kind]} here."
+        return user, ""
 
     @staticmethod
     def sees(x, user, admin, strict=False):
@@ -644,7 +652,7 @@ def install(app, ctx):
         if kind not in TO_STATUS:
             return jsonify(error="kind is management, researcher or analyst."), 400
         mine = me()[0]
-        return jsonify(kind=kind, people=[{"user": p["user"], "name": p["name"], "role": p.get("role", "")}
+        return jsonify(kind=kind, people=[{"code": person_code.code(p["user"]), "name": p["name"], "role": p.get("role", "")}
                                           for p in f.people_of(kind) if p["user"] != mine])
 
     @app.route("/findings")

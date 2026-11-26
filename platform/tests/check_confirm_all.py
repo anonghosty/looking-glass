@@ -121,6 +121,34 @@ try:
         st, j = call("/api/attack/mapping", RES, "POST", {"report": "event4_sinkhole_http", "techniques": ["T1071"]})
         ok("each mapping can still be changed one by one afterwards", st == 200 and am.mapping("event4_sinkhole_http")["techniques"] == ["T1071"])
 
+        print("Please check: Use recommended for all (MITRE's named replacement)")
+
+        def to_check(d):
+            d["reports"]["event4_sinkhole_dns"].update(status="check", check_suggest=["T1071.004"], previous={"techniques": ["T1071"]},
+                                                        check_reason="a technique was retired")
+            d["reports"]["scan_rdp"].update(status="check", check_suggest=[], check_reason="retired, no replacement")
+        am._locked(to_check)
+        audited.clear()
+        st, j = call("/api/attack/mapping/bulk", RES, "POST", {"kind": "check", "items": [{"report": "event4_sinkhole_dns", "techniques": ["T1110.001"]}]})
+        ok("a replacement other than MITRE's is skipped, nothing changed", st == 200 and not j["confirmed"] and status("event4_sinkhole_dns") == "check"
+           and "replacement changed" in j["skipped"][0]["reason"], j)
+        st, j = call("/api/attack/mapping/bulk", RES, "POST", {"kind": "check", "items": [{"report": "event4_sinkhole_dns", "techniques": ["T1071.004"]},
+                                                                                       {"report": "event4_honeypot_brute_force", "techniques": ["T1110.001"]}]},
+                     user="lg-t-res")
+        m = am.mapping("event4_sinkhole_dns")
+        ok("Use recommended: the report takes MITRE's replacement and is reviewed", st == 200 and j["confirmed"] == ["event4_sinkhole_dns"]
+           and m["status"] == "reviewed" and m["techniques"] == ["T1071.004"] and "recommended" in (m.get("note") or ""), (j, m))
+        ok("…a report that is not Please check is skipped", any(s["report"] == "event4_honeypot_brute_force" for s in j["skipped"]))
+        ok("…the audit names it", any(t == "event4_sinkhole_dns" and "Use recommended" in (d or "") for e, t, d in audited), audited)
+        ok("a Please check report without a replacement is left for a person", status("scan_rdp") == "check")
+        st, j = call("/api/attack/mapping/bulk", RES, "POST", {"kind": "anything", "items": [{"report": "scan_rdp", "techniques": ["T1133"]}]})
+        ok("an unknown kind of list is refused (400)", st == 400)
+
+        def back(d):
+            d["reports"]["scan_rdp"].update(status="suggested")
+            d["reports"]["event4_sinkhole_dns"].update(status="suggested")
+        am._locked(back)
+
         print("Advisory editor: Confirm all for this advisory")
         F = A.FINDINGS
         x1 = {"id": "1", "kind": "finding", "status": "advisor", "title": "Fixture finding", "review": {"decision": "researcher"},

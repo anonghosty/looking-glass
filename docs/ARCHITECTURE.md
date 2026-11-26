@@ -25,7 +25,7 @@ flowchart TD
     subgraph PF["platform/ · the web app · a sandboxed systemd service"]
         W["<b>Looking Glass</b><br/>data/: accounts, sessions, audit log, findings, advisories"]:::app
     end
-    B("<b>The CSIRT's staff</b>, one role each<br/>researcher · analyst · management · advisor · auditor · admin"):::people
+    B("<b>The CSIRT's staff</b>, one role each<br/>Researcher/TI · analyst · management · advisor · auditor · admin"):::people
     E("<b>External viewers</b>, masked<br/>a constituent or another CSIRT · 3 pages"):::ext
     C(["<b>Your OpenCTI or MISP</b>"]):::ext
     SS -- "e-mail to the mailbox, or the report API (HTTPS)" --> F1
@@ -141,7 +141,7 @@ Each row below names a threat and the control that stops it.
 | Become the first administrator | A one-time setup code readable only on the server; over HTTPS only from another computer; a wrongly set up reverse proxy can't make everyone look local |
 | Inject script through report values (banners come from scanned hosts) | Everything inserted as text; CSP with a per-request nonce, no eval, no inline handlers; CSV cells that look like formulas are neutralised |
 | Relay a password and a code through a look-alike site, in real time | On `public` installations everyone signs in with a passkey, which the browser binds to the real site; an internal installation that sees sign-ins from the internet says so in the administrators' bell |
-| Hold the service up with a few deliberately slow connections | Caddy in front of `private` and `public` installations reads each request in full under time limits, 100 connections per address at most; Looking Glass listens on this computer only |
+| Hold the service up with a few deliberately slow connections | Caddy in front of `private` and `public` installations reads each request in full under time limits, 100 connections per address at most; Looking Glass listens on this computer only. An installation made before that is reminded daily (also when set to `public`) and gets Caddy with one root command (`deploy/caddy_front.sh adopt`): it changes nothing without asking, keeps copies first and puts everything back if a step fails, refuses a Caddyfile someone else wrote, and writes the audit log as the service's own user |
 | Learn internal details from error messages | An answer shows only messages Looking Glass wrote for the reader (`user_words.py`); a library's or Python's own text gets a fixed message, and its detail goes to the service's log or the audit |
 
 ### A2. Someone who can send e-mail to the mailbox
@@ -225,12 +225,35 @@ These risks are known and accepted, or left to the operator. They are listed her
   addresses over a week. The Executive portal and its PDF say so beside the figures.
 - **One server.** There is no failover. Availability depends on the server, and recovery on the backups
   (`manage/backup.sh`) being taken and kept elsewhere.
-- **Internal installations check people with authenticator codes**, which a look-alike site can relay in real time.
-  Passkeys are required only on `public` installations; internal ones may add them. The administrators' bell says
-  when an internal installation sees sign-ins from the internet.
+- **Where the sign-in check is Authenticator code, people are checked with codes**, which a look-alike site can relay
+  in real time. Passkeys are required only where an administrator chose Passkey (the default only for a public
+  installation with Caddy in front for a domain); elsewhere people may add them. The administrators' bell says when an
+  internal installation sees sign-ins from the internet.
+- **The sign-in check is changed from the browser** (Settings → General → Sign-in check), with a confirmation every
+  time: with passkeys in force, switching back to codes needs a passkey, so a stolen session alone cannot weaken it.
+  Someone with the server can always change it (`SIGNIN_CHECK` in `.env`), as they can every other setting.
 - **A fresh check lasts 10 minutes.** Within that window a session can repeat the window's actions (downloads,
-  unmasking, settings) without asking again; changes to accounts, roles, sign-up links, connectors and passkeys always
-  ask.
+  unmasking, settings) without asking again; changes to accounts, roles, sign-up links, connectors, passkeys, the
+  sign-in check and updating Looking Glass always ask.
+- **Updating from Settings trusts the maintainer's signing key and GitHub's copy of it.** The update helper installs
+  only a release tag signed with the key whose fingerprint is fixed in the code, read from GitHub's list of the
+  maintainer's keys. If that key were stolen, a signed bad release could be installed from the page as from the
+  command line; the fingerprint check stops a key that GitHub serves but is not the one in the code. The helper writes
+  only the Looking Glass folder, as the installation's user, and the web service still cannot change its own code.
+- **Sign-in names stay on the server.** Pages carry an opaque code per account (a keyed hash with the installation's
+  own random key, `data/person_code.key`), so a saved page, a screenshot of the browser's developer tools or an
+  extension that reads pages does not hand over half of a sign-in. Whoever can read that key (the server, a backup)
+  can compute the codes of the names they already know, as with `REF_SECRET`.
+  - **Accounted for:** nobody can change the key from the website (no page, setting or API touches it), so only
+    someone with the server's files can. A key made where one had been before (removed, replaced, or `data/` restored
+    from an older backup) is recorded in the audit log and shown in the administrators' bell; a damaged key is shown
+    too and is never used (a weak key would make the codes guessable). Codes are compared in constant time and turned
+    back into an account only among the people the page was offered.
+  - **Not accounted for:** someone with the server's files who replaces the key *and* removes the record that the
+    installation had one (`data/person_code.made`) makes the change look like a first key: no notice. Restoring a
+    backup made before this release also brings no notice. That person could read the accounts and `.env` anyway,
+    so the notice is a tripwire for mistakes and careless access, not a defence against an intruder on the server.
+    The codes protect the pages; they do not protect the server.
 - **What a connector sends is then protected by the receiving platform.** It goes to the CSIRT's own OpenCTI or MISP
   with its TLP and, in MISP, shared with your organisation only and never published; who can read it there is that
   platform's to decide. Whoever can read `.env` (`CONNECTOR_KEY_SECRET`) can decrypt the stored connector keys.
@@ -251,7 +274,7 @@ section argues that secure design principles were applied and that common implem
 
 - **Least privilege.** The platform reads the database with a read-only account; the pipeline's account reaches its
   own database only; the web service runs in a systemd sandbox that can write only `data/`; each role gets only the
-  permissions it needs, and management, researcher, advisor and auditor are exclusive roles.
+  permissions it needs, and management, Researcher/TI (researcher or threat intelligence analyst), advisor and auditor are exclusive roles.
 - **Fail-safe defaults.** Every page needs a sign-in with a second factor; the service listens on this computer only
   until an administrator opens it to the network; roles without the *unmasked* permission see masked addresses;
   pipeline settings are locked; no backup is made without an encryption key; the quarterly purge stays off until an

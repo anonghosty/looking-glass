@@ -129,8 +129,20 @@
     for (const a of d.alerts || []) al.append(el("li", a.problem ? "tm-badline" : null, a.title));
     misc.append(el("small", "muted", (d.alerts || []).length ? "In the admins' bell:" : "Nothing in the admins' bell."), al);
 
+    // who answers the network: Caddy in front, or Looking Glass itself (task_monitor._front; the bell's reminder links here)
+    const fr = d.front || {}, front = el("div", "tm-front");
+    front.id = "tmFront";
+    if (fr.caddy) front.append(el("p", "tm-okline", `Caddy is in front${fr.internal ? " (internal: this installation's own certificate)" : " (for the domain)"}: `
+      + "it reads every request in full before Looking Glass sees it, so slow connections cannot hold Looking Glass up."));
+    else if (!fr.needed) front.append(el("p", "muted", "Only this computer reaches Looking Glass (ACCESS_MODE=local): no Caddy is needed."));
+    else {
+      front.append(el("p", "tm-badline", "Looking Glass answers the network itself: a few deliberately slow connections could hold it up for everyone."),
+        el("p", null, "Put Caddy in front once, on the server, in the platform folder. It reads this installation as it is, says what will "
+          + "change and asks once; people keep the same address, and the same certificate. If a step fails, everything is put back."));
+      const cmd = el("pre", "tm-cmd"); cmd.textContent = fr.command; front.append(cmd);
+    }
     const grid = el("div", "tm-grid");
-    grid.append(card("Background jobs", jobs), reqs, card("Report pipeline", pipe), card("Starts, locks and alerts", misc));
+    grid.append(card("Background jobs", jobs), reqs, card("Report pipeline", pipe), card("Starts, locks and alerts", misc), card("In front of Looking Glass", front));
     const extra = [];
     if ((ar.rows || []).length) {                       // where each part of what Looking Glass keeps is, and whether encrypted
       const ul = el("ul", "tm-jobs");
@@ -163,8 +175,8 @@
       const o = el("option", null, t); o.value = String(v); if (v === c.ttl_s) o.selected = true; sel.append(o);
     }
     if (![0, 30, 60, 180, 600, 1800].includes(c.ttl_s)) { const o = el("option", null, `${c.ttl_s} seconds`); o.value = String(c.ttl_s); o.selected = true; sel.append(o); }
-    const save = el("button", "intro-cta", "Save"); save.type = "button";
-    const clear = el("button", "pill-btn", "Clear kept answers now"); clear.type = "button";
+    const save = el("button", "lg-btn primary", "Save"); save.type = "button";   // the standard size (even controls)
+    const clear = el("button", "lg-btn", "Clear kept answers now"); clear.type = "button";   // beside Save: the same height
     save.addEventListener("click", async () => {
       save.disabled = true;
       try { const r = await api("/api/admin/monitor/cache", { ttl: Number(sel.value) }); say(r.ttl_s ? `Heavy answers are now kept ${r.ttl_s} seconds.` : "The cache is off: every answer is computed."); refresh(); }

@@ -138,6 +138,7 @@
     if (!bar) { bar = el("div", "am-bulk"); bar.id = "amBulk"; $("amList").before(bar); }
     bar.replaceChildren();
     const q = $("amSearch").value.trim();
+    if (tab === "check" && !q) { checkBar(bar, list); return; }
     const sug = list.filter((x) => x.status === "suggested" && (x.techniques || []).length);
     if (!sug.length || !(tab === "suggested" || q) || !window.LGConfirmList) { bar.hidden = true; return; }
     bar.hidden = false;
@@ -166,6 +167,42 @@
       } finally { window.LGLoader?.ready(); }
     });
     bar.append(b, el("p", "dz-by", q ? "Only the suggestions that match the search." : "Not mapped yet and Please check are not included: they need a person to look."));
+  }
+  // "Use recommended for all N" (Please check; the user, 2026-11-25): each report whose technique MITRE retired takes the
+  // replacement MITRE names (check_suggest), listed in a confirmation dialog first. Reports with no named replacement are
+  // left for a person to choose from the short list.
+  function checkBar(bar, list) {
+    bar.replaceChildren();
+    const rec = list.filter((x) => x.status === "check" && (x.check_suggest || []).length);
+    const left = list.filter((x) => x.status === "check" && !(x.check_suggest || []).length).length;
+    if (!rec.length || !window.LGConfirmList) { bar.hidden = true; return; }
+    bar.hidden = false;
+    const b = el("button", "lg-btn sm primary", `Use recommended for all ${fmt(rec.length)}`); b.type = "button";
+    b.title = `Use MITRE's recommended replacement for the ${rec.length} reports that have one`;
+    b.addEventListener("click", async () => {
+      const go = await window.LGConfirmList.open({
+        title: `Use MITRE's recommended replacement for ${fmt(rec.length)} report${rec.length === 1 ? "" : "s"}`,
+        intro: "Each of these reports is marked reviewed with the technique MITRE names in place of the one it retired, as shown. Reports whose replacement changes meanwhile are skipped and named. You can still change any of them one by one afterwards.",
+        rows: rec.map((x) => ({ title: x.title, sub: x.report, techs: (x.check_suggest || []).map((t) => ({ id: t.id, name: t.name })) })),
+        confirm: `Use recommended for ${fmt(rec.length)}`,
+      });
+      if (!go) return;
+      b.disabled = true; b.classList.add("is-busy"); window.LGLoader?.busy(`Updating ${rec.length} mappings`);
+      try {
+        const j = await post("/api/attack/mapping/bulk", { kind: "check", items: rec.map((x) => ({ report: x.report, techniques: (x.check_suggest || []).map((t) => t.id) })) });
+        data = await get("/api/attack");
+        render();
+        const sk = j.skipped || [];
+        $("amStatus").className = `dz-status ${sk.length ? "warn" : "ok"}`;
+        $("amStatus").textContent = `Updated ${fmt(j.confirmed.length)} to MITRE's recommended replacement` + (sk.length
+          ? `, skipped ${sk.length}: ${sk.map((s) => `${s.title} (${s.reason})`).join("; ")}. Please look at ${sk.length === 1 ? "it" : "them"} again.` : ".");
+      } catch (e) {
+        $("amStatus").className = "dz-status bad"; $("amStatus").textContent = `Nothing was changed: ${window.LGLoader.errorText(e, true)}`;
+        b.disabled = false; b.classList.remove("is-busy");
+      } finally { window.LGLoader?.ready(); }
+    });
+    bar.append(b, el("p", "dz-by", left ? `${fmt(left)} report${left === 1 ? " has" : "s have"} no replacement named by MITRE: choose from the short list on ${left === 1 ? "it" : "each"}.`
+      : "Every report here has a replacement named by MITRE."));
   }
   function item(x) {
     const card = el("article", `am-report am-${x.status}`);

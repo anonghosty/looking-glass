@@ -95,7 +95,7 @@ ENR = {
                      "licence_short": "CC BY-SA 4.0", "also": [{"source_label": "MISP Galaxy"}]},
     "examplebot": {"found": True, "name": "ExampleBot", "family": "win.examplebot", "matched_by": "name", "type": "Botnet", "description": LONG,
                    "alt_names": "EBot", "seen_in": "Sinkhole Events", "near": "examplebot2", "updated": "2026-11-01", "by": "Malpedia",
-                   "attack": ATTACK, "notes": [{"role": "Researcher", "by": "Grace", "date": "2026-11-16", "text": "Calls home hourly.",
+                   "attack": ATTACK, "notes": [{"role": "Researcher/TI", "by": "Grace", "date": "2026-11-16", "text": "Calls home hourly.",
                                                 "codes": [{"code": "LG-C-0001", "text": "the hourly pattern"}]}]},
     "samplerat": {"curated": True, "title": "Sample RAT", "description": "A remote access tool.", "updated": "2026-11-02", "by": "Daniel",
                   "type": "Remote access"},
@@ -156,7 +156,7 @@ ok("…a threat actor is no malware program", "is a threat actor (a group of att
 ok("…Malpedia family, the reference, aliases, origin, targets, sectors, weakness, update", all(s in txt for s in (
     "Malpedia family win.examplebot, matched by name", "Answered by MISP Galaxy (misp-1), matched by synonym", "Also known as", "Suspected origin",
     "Targets", "Sectors", "Malware it uses", "Weakness", "Updated", "Similar names in Malpedia", "Seen in reports")))
-ok("…the researchers' notes with their combinations", "Notes shared by Researcher: Grace" in txt and "LG-C-0001" in txt)
+ok("…the researchers' notes with their combinations", "Notes shared by Researcher/TI: Grace" in txt and "LG-C-0001" in txt)
 ok("…MITRE ATT&CK with the certainty in colour", "Observed" in txt and "T1071.001" in txt)
 ok("…only the first rows printed, the CSV has the rest", "the first 3 are printed here" in txt and "which sources know it" in txt)
 ok("…demo mode marked", "Demo mode (masked)" in txt)
@@ -312,7 +312,7 @@ def combo_d(**over):
          "kinds": [{"label": "MikroTik router", "count": 6}, {"label": CP.NOT_GIVEN, "count": 1}], "ports": [{"label": "80/tcp", "count": 9}],
          "explained": [(k, ENR[k]) for k in ("examplebot", "exampleactor", "demoloader", "mockminer", "CVE-2099-0001", "CVE-2099-0002")]
                       + [(f"extra{i}", ENR_BIG[f"extra{i}"]) for i in range(6)],
-         "notes": [{"name": "examplebot", "role": "Researcher", "by": "Grace", "date": "2026-11-16", "text": LONG, "codes": [{"code": "LG-C-0001"}]},
+         "notes": [{"name": "examplebot", "role": "Researcher/TI", "by": "Grace", "date": "2026-11-16", "text": LONG, "codes": [{"code": "LG-C-0001"}]},
                    {"role": "", "by": "", "text": "Another note.", "codes": [{"code": "LG-C-0999"}]}] * 3,
          "stats": {"examplebot": "60 devices"}, "ref_levels": {}, "ref_reports": ["event4_sinkhole", "scan_http"]}
     d.update(over)
@@ -324,7 +324,7 @@ CMETA = {"platform_label": "Network communications", "scope": "Ghana · whole co
 pdf, txt = drawn(lambda: CP.build(combo_d(), CMETA))
 ok("the analyst's report renders", pdf[:4] == b"%PDF")
 for part in ("COMBINATION LG-C-0001", "Geographic Location", "The IP addresses with the most records", "The IP addresses (continued)",
-             "Across reports, continued", "What the devices are", "WHAT THE NAME AND ITS VULNERABILITIES ARE", "Researcher's note on examplebot",
+             "Across reports, continued", "What the devices are", "WHAT THE NAME AND ITS VULNERABILITIES ARE", "Researcher/TI note on examplebot",
              "On this combination", "ANALYST · COMBINATION"):
     ok(f"…has '{part}'", part in txt)
 ok("…the cross-report patterns by their codes", "LG-C-0013" in txt and "LG-C-0000" in txt)
