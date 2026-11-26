@@ -8,16 +8,23 @@ On Windows, do [A1](#a1-wsl-with-systemd-and-mirrored-networking) first (systemd
 run these steps in the Ubuntu window. On Ubuntu, run them in a terminal, as the ordinary user who will run Looking Glass
 (not as root).
 
-1. **Install git**, if the computer does not have it yet:
+1. **Bring Ubuntu up to date first**, so Looking Glass starts on a computer with every security fix, and the
+   installer does not have to wait for Ubuntu's own updates:
    ```bash
-   sudo apt update && sudo apt install -y git
+   sudo apt update && sudo apt upgrade -y
+   [ -f /var/run/reboot-required ] && echo "Restart the computer now, then continue" || echo "Up to date"
    ```
-2. **Get the code:** clone the repository and go into it.
+   If it says to restart, do so first (on Windows with WSL: `wsl --shutdown` in PowerShell, then open Ubuntu again).
+2. **Install git**, if the computer does not have it yet:
+   ```bash
+   sudo apt install -y git
+   ```
+3. **Get the code:** clone the repository and go into it.
    ```bash
    git clone https://github.com/anonghosty/looking-glass.git
    cd looking-glass
    ```
-3. **Run the installer:**
+4. **Run the installer:**
    ```bash
    ./install.sh
    ```
@@ -41,7 +48,7 @@ run these steps in the Ubuntu window. On Ubuntu, run them in a terminal, as the 
      `platform/manage/asn_registry.py 7` or Settings → Identify networks.
    - **Sign-up on the sign-in page:** *No* means only people an administrator invites (Admin → Users → Add a
      person); the first administrator always signs up with the setup code either way.
-4. **Open the address it shows** and create the first administrator (see [A6](#a6-the-first-administrator-security)).
+5. **Open the address it shows** and create the first administrator (see [A6](#a6-the-first-administrator-security)).
 
 Later updates are a `git pull` in the same folder, then the libraries and a reload (see [Updating](#updating)): a
 `git pull` on its own is not enough.
