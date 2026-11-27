@@ -5,6 +5,12 @@ hide:
   - toc
 ---
 
+!!! warning "The releases published so far are test releases"
+    Use them to try Looking Glass and to give feedback, not to run it for your constituency. The first production
+    release is under strict testing; it will be published as **prod stable**, with **prod experimental** for new
+    features still being tried out. Until then, expect changes between releases and follow
+    [Updating](INSTALLATION.md#updating) for each one.
+
 <div class="lg-hero" markdown>
 
 <div class="lg-hero-mark" aria-hidden="true"><svg class="lgh-logo" viewBox="0 0 32 32" width="88" height="88">

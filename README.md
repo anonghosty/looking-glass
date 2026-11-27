@@ -13,6 +13,12 @@ Free and open source (AGPL-3.0) · built in Africa, for CSIRTs in every country<
 
 <p align="center"><a href="https://www.bestpractices.dev/projects/16699"><img src="https://www.bestpractices.dev/projects/16699/badge" alt="OpenSSF Best Practices"></a></p>
 
+> [!WARNING]
+> **The releases published so far are test releases.** Use them to try Looking Glass and to give feedback, not to run
+> it for your constituency. The first production release is under strict testing; it will be published as
+> **prod stable**, with **prod experimental** for new features still being tried out. Until then, expect changes
+> between releases and follow [Updating](docs/INSTALLATION.md#updating) for each one.
+
 > [!IMPORTANT]
 > **For reviewers: what this is, in one minute.** Looking Glass turns a national CSIRT's free daily
 > [Shadowserver](https://www.shadowserver.org/) reports into one place to see, follow up and act: a replayed map of
