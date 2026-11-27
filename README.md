@@ -14,10 +14,10 @@ Free and open source (AGPL-3.0) · built in Africa, for CSIRTs in every country<
 <p align="center"><a href="https://www.bestpractices.dev/projects/16699"><img src="https://www.bestpractices.dev/projects/16699/badge" alt="OpenSSF Best Practices"></a></p>
 
 > [!WARNING]
-> **The releases published so far are test releases.** Use them to try Looking Glass and to give feedback, not to run
-> it for your constituency. The first production release is under strict testing; it will be published as
-> **prod stable**, with **prod experimental** for new features still being tried out. Until then, expect changes
-> between releases and follow [Updating](docs/INSTALLATION.md#updating) for each one.
+> **The releases published so far are test releases.** You can use them for your constituency, but know that they
+> are test releases: expect changes between releases and follow [Updating](docs/INSTALLATION.md#updating) for each
+> one. The first production release, **prod stable**, is under strict testing and comes out before Sunday
+> 29 November 2026, with **prod experimental** for new features still being tried out.
 
 > [!IMPORTANT]
 > **For reviewers: what this is, in one minute.** Looking Glass turns a national CSIRT's free daily
