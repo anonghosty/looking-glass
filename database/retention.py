@@ -6,7 +6,8 @@ grew).
 Every report's rows are in MongoDB once loaded; the sorted CSV in sorting_backup/<report>/ is a second copy. With
 SORTED_KEEP_DAYS set (.env; 0 = keep everything, the default, so nobody's evidence goes away on an upgrade), after each
 load a sorted file older than that many days is removed, but only when:
-  - MongoDB already has rows from that file (by its name, as the loader itself checks), and
+  - MongoDB already has rows from that file (by its name, as the loader itself checks), or the loader read it and found
+    no row to store in it (the pipeline's journal), and
   - the file is not waiting in the journal of an interrupted load.
 Folders stay (they name the reports). Every removal is one line in data's retention log (retention_removed.jsonl: when,
 report, file, size), and the run's summary says how many files and MB went.
@@ -35,8 +36,9 @@ def min_free_gb(env):
 
 
 def prune_sorted(sorting_dir, base_dir, days, loaded_of, pending, log, now=None):
-    """Remove sorted files older than `days` whose rows are in MongoDB. loaded_of(report) -> set of loaded file names
-    (None when it cannot be read: nothing of that report is removed). pending: {(report, file)} of the journal.
+    """Remove sorted files older than `days` whose rows are in MongoDB. loaded_of(report) -> set of loaded file names,
+    those loaded with no row to store included (None when it cannot be read: nothing of that report is removed).
+    pending: {(report, file)} of the journal.
     Returns (files removed, bytes removed)."""
     if days <= 0 or not os.path.isdir(sorting_dir):
         return 0, 0
@@ -96,12 +98,39 @@ def free_gb(path):
         return -1.0
 
 
-def status(base_dir, ok, stats, min_gb, now=None):
-    """Write pipeline_status.json (read by the platform's bell). Returns the dict written."""
+ROW_COUNTS = ("rows_read", "rows_inserted", "rows_duplicates", "rows_same_in_file", "rows_same_hash",
+              "rows_bad_timestamp", "rows_failed", "rows_no_time",
+              "rows_bad_csv")       # rows that could not be read as CSV (audit 2026-11-27): part of read = ... too
+LISTED = 100           # file names kept per list ("not_matched"); the count beside it is always the full one
+
+
+def _int(stats, k):
+    try:
+        return int(stats.get(k, 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def status(base_dir, ok, stats, min_gb, now=None, problems=None):
+    """Write pipeline_status.json (read by the platform's bell and Settings → Task monitor). Returns the dict written.
+    problems: (errors, warnings) of shadowserver_pipeline.run_problems, each [{"key", "count", "text"}], shown as they
+    are (count audit 2026-11-26: a run that left whole reports out said "ok"). Also every row count, so that read =
+    inserted + already in the database + repeated in the file + same row hash + bad timestamp + unreadable CSV + failed,
+    and the CSV
+    files whose name is not a report file name (not loaded): their full count and up to LISTED names."""
     now = now or time.time()
     free = free_gb(base_dir)
+    errors, warnings = problems or ([], [])
+    names = [str(x)[:200] for x in (stats.get("not_matched_names") or [])]
     st = {"finished": round(now), "ok": bool(ok), "file_errors": int(stats.get("file_errors", 0)),
-          "email_failed": int(stats.get("email_failed", 0)), "rows_inserted": int(stats.get("rows_inserted", 0)),
+          **{k: _int(stats, k) for k in ROW_COUNTS},
+          "files_loaded": _int(stats, "files_loaded"), "files_reloaded": _int(stats, "files_reloaded"),
+          "errors": [dict(e) for e in errors], "warnings": [dict(w) for w in warnings],
+          "not_matched": {"count": _int(stats, "csv_not_matched"), "names": names[:LISTED]},
+          "email_failed": int(stats.get("email_failed", 0)),
+          # why, in a few words with no account or password (mail_sources.MailSourceError.reason): bell + Task monitor
+          "email_error": str(stats.get("email_error") or "")[:120] if stats.get("email_failed") else "",
+          "rows_inserted": int(stats.get("rows_inserted", 0)),
           "rows_failed": int(stats.get("rows_failed", 0)), "files_rows_failed": int(stats.get("files_rows_failed", 0)),
           "pruned_files": int(stats.get("retention_files", 0)), "pruned_mb": round(stats.get("retention_bytes", 0) / 1048576, 1),
           "free_gb": round(free, 1), "min_free_gb": min_gb, "disk_low": bool(min_gb and 0 <= free < min_gb)}

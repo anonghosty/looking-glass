@@ -16,6 +16,8 @@ import sys
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(HERE, "tests"))
+import test_tools  # noqa: E402
 os.environ.setdefault("LG_QUIET", "1")
 
 checks, fails = 0, []
@@ -30,14 +32,18 @@ def ok(label, cond, info=""):
 
 
 def pdf_text(data):
-    try:
-        import pypdfium2 as pdfium
-    except ImportError:
+    pdfium = test_tools.find_pypdfium2()
+    if pdfium is None:
         return None
     pdf = pdfium.PdfDocument(data)
     return "\n".join(pdf[i].get_textpage().get_text_range() for i in range(len(pdf)))
 
 
+if test_tools.find_pypdfium2() is None:   # the PDF text parts need pypdfium2: the maintainer's (a failure in LG_SUITE=all)
+    if os.environ.get("LG_SUITE") == "all":
+        ok("pypdfium2 is there to read the PDFs' own text", False)
+    else:
+        print("  (its PDF-text part needs pypdfium2: a maintainer's check, run by LG_SUITE=all; not part of an installation's checks)")
 print("1. References: every report the advisory names")
 import advisory_pdf as APDF  # noqa: E402
 MT = "https://www.shadowserver.org/what-we-do/network-reporting/accessible-mikrotik-report/"

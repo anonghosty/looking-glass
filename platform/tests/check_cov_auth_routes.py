@@ -352,6 +352,11 @@ try:
     ok("a link (GET) cannot sign out: only to the sign-in page", A.app.test_client().get("/logout", headers=HD).status_code == 302)
     cL, _, tokL = client("cov-external")
     r = cL.post("/logout", headers=HD)
+    ok("a sign-out without the page's CSRF token (another site's form) keeps the session", r.status_code == 302
+       and auth._h(tokL) in sessions.s and not any(e == "logout" for e, *_ in logged))
+    r = cL.post("/logout", headers=HD, data={"csrf_token": "not-the-token"})
+    ok("…and so does a wrong token", auth._h(tokL) in sessions.s)
+    r = cL.post("/logout", headers=HD, data={"csrf_token": sessions.s[auth._h(tokL)]["csrf"]})
     ok("signing out ends the session and is written down", r.status_code == 302 and auth._h(tokL) not in sessions.s and any(e == "logout" for e, *_ in logged))
 
     print("Admin pages")

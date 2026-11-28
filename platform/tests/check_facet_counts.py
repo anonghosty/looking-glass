@@ -85,7 +85,7 @@ ok("the map page asks with the filters, again whenever one changes, dropping slo
 ok("…a chosen value with nothing left is still listed (0), so it can be taken off", "function withChosen(rows, key)" in js
    and js.count("withChosen(") >= 12)
 ok("…the focused box or button keeps the keyboard focus when the lists are rebuilt (and move smoothly, 2026-11-20)",
-   'keepFocus(() => flipList($("drawer"), buildFilters))' in js
+   'keepFocus(() => flipList(drawerEl, buildFilters))' in js and 'const drawerEl = $("drawer")' in js
    and "cb.dataset.fk" in js and "b.dataset.fk = key" in js)
 
 print("3. The services platform: list filters (tags, issues) and its page")
@@ -111,7 +111,7 @@ ok("/api/svc/facets counts per choice of filters (cached per set)", "facet_count
    and "region_version(), cache_args(request.args))" in ssrc)
 ok("…several reports / multiple issues: the chosen hosts' records, following the filters added after",
    "def facet_scope(day, args)" in ssrc and "seed_flt, flt = split_cross(args)" in ssrc and "ips = seed_hosts(day, cross, multi, seed_flt)" in ssrc)
-ok("…each list the filter it sets (Network is asn)", '"network": "asn"' in ssrc and "breakdowns(pool.of(f), demo, 400)[name] if f in flt" in ssrc)
+ok("…each list the filter it sets (Network is asn)", '"network": "asn"' in ssrc and "breakdowns(pool.of(f), demo, 0)[name] if f in flt" in ssrc)    # 0: every value (was 400; behaviour: check_nothing_missing_api)
 sjs_path = os.path.join(S, "services.js.new") if S and os.path.exists(os.path.join(S, "services.js.new")) else os.path.join(HERE, "static", "js", "services.js")
 sjs = open(sjs_path, encoding="utf-8").read()
 ok("the services page asks with the filters when one changes, keeps chosen values and the focus",

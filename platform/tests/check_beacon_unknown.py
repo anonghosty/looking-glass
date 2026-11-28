@@ -20,6 +20,7 @@ import datetime
 import json
 import os
 import random
+import re
 import sys
 import tempfile
 import time
@@ -159,6 +160,32 @@ ok("refused to a researcher", call("rita", RES, "GET", "/api/beacon/unknown")[0]
 code, r = call("ana", ANA, "GET", "/api/beacon/unknown")
 lst = r.get_json()
 ok("an analyst gets the families (the sustat one among them)", code == 200 and lst["open"] == 3, str(lst["open"]))
+
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def page_rule(user, perms):
+    with app.test_request_context("/findings"):
+        g.user = {"user": user, "perms": perms, "tok": "T"}
+        return app.jinja_env.globals["lg_beacon_unknown"]()
+
+
+ok("the Findings page uses the API's own rule (one function): drawn for an analyst, never for a researcher",
+   page_rule("ana", ANA) is True and page_rule("rita", RES) is False)
+_held = os.environ.get("LG_HELD_DIR", "")
+_tpl = os.path.join(_held, "findings.html.new") if _held and os.path.isfile(os.path.join(_held, "findings.html.new")) \
+    else os.path.join(os.path.dirname(HERE), "templates", "findings.html")
+_src = open(_tpl, encoding="utf-8").read()
+_blk = re.search(r"\{% if lg_beacon_unknown is defined and lg_beacon_unknown\(\) %\}.*?\{% endif %\}", _src, re.S)
+ok("...the section is drawn only inside that rule, so no other role's browser asks the API and logs a refusal "
+   f"({os.path.basename(_tpl)})", bool(_blk) and _src.count('id="beaconUnknown"') == 1 and 'id="beaconUnknown"' in _blk.group(0))
+if _blk:
+    for who, perms, want in (("ana", ANA, True), ("rita", RES, False)):
+        with app.test_request_context("/findings"):
+            g.user = {"user": who, "perms": perms, "tok": "T"}
+            out = app.jinja_env.from_string(_blk.group(0)).render()
+        ok(f"...rendered for {'an analyst: there' if want else 'a researcher: not there'}", ('id="beaconUnknown"' in out) is want)
 ok("the send link opens a private report on the separate decoding repository, never a public issue, and names no host",
    all(f["issue_url"] == "https://github.com/anonghosty/http-requests-decoding/security/advisories/new" for f in lst["families"]))
 fid = dga[0]["id"]

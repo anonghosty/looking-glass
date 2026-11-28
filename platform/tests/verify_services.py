@@ -3,7 +3,7 @@
 """Check the publicly accessible / vulnerable services platform against MongoDB for one day:
 records per report (extracted_date on the day), total, hosts, and that demo mode hides IP addresses.
 
-Usage: .venv/bin/python tests/verify_services.py [YYYY-MM-DD]   (default: yesterday UTC). Read-only.
+Usage: .venv/bin/python tests/verify_services.py [YYYY-MM-DD]   (default: the day the service replays). Read-only.
 Exit code: 0 everything matches, 1 any mismatch or an address shown in demo mode (so tests/run_all_checks.sh reports
 it), 77 skipped (no services data for the day yet). Before 2026-11-11 it always exited 0, and its demo check still
 expected the old x.161.x.34 masking; masked views now show "Host <reference>" (host_label.py).
@@ -11,7 +11,15 @@ expected the old x.161.x.34 masking; masked views now show "Host <reference>" (h
 import ipaddress
 import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import lgauth  # noqa: E402,F401  local API login (automation key)
-lgauth.require_server()   # no running service (a fresh clone, CI): skipped, not crashed
+BASE = (_os.environ.get("LG_BASE") or lgauth.BASE).rstrip("/")     # LG_BASE when set, else this installation's own
+if BASE == lgauth.BASE:
+    lgauth.require_server()   # no running service (a fresh clone, CI): skipped, not crashed
+else:
+    try:
+        lgauth.urlopen(BASE + "/healthz", timeout=4).read()
+    except Exception as _exc:  # noqa: BLE001  any reason is "not running" here; the name says which
+        print(f"SKIPPED: needs the running Looking Glass service at {BASE}, which did not answer ({_exc.__class__.__name__})")
+        _sys.exit(77)
 import json
 import os
 import re
@@ -22,8 +30,10 @@ from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
+import mongo_derive  # the one rule's row key (counting_keys.row_key)
+
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
-day = sys.argv[1] if len(sys.argv) > 1 else (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+day = sys.argv[1] if len(sys.argv) > 1 else lgauth.replay_day(BASE)    # the day the service replays (lgauth.replay_day)
 start = datetime.fromisoformat(day).replace(tzinfo=timezone.utc)
 end = start + timedelta(days=1)
 at = (start + timedelta(hours=12)).isoformat().replace("+00:00", "Z")
@@ -31,7 +41,8 @@ client = MongoClient(host=os.environ["MONGO_HOST"], port=int(os.environ.get("MON
                      username=os.environ.get("MONGO_USER"), password=os.environ.get("MONGO_PASSWORD"),
                      authSource=os.environ.get("MONGO_AUTH_SOURCE", "admin"), serverSelectionTimeoutMS=8000)
 db = client[os.environ["MONGO_DB"]]
-get = lambda p: json.load(urllib.request.urlopen(f"http://127.0.0.1:5000{p}", timeout=180))
+get = lambda p: json.load(urllib.request.urlopen(f"{BASE}{p}", timeout=180))
+once = mongo_derive.Once()      # a row in two files of one report day counted once (counting_keys.row_key)
 
 facets = get(f"/api/svc/facets?at={at}")
 # Just after 00:00 UTC "yesterday" is a day the platform does not replay yet (it waits for that day's reports and
@@ -44,7 +55,8 @@ nxt = end.strftime("%Y-%m-%d")
 total_db, ips, bad = 0, set(), 0
 for name in sorted(app_rows):
     n = 0
-    for d in db[name].find({"$or": [{"filename": {"$regex": "^" + re.escape(p)}} for p in (day, nxt)]}, {"extracted_date": 1, "ip": 1}):
+    for d in db[name].find({"$or": [{"filename": {"$regex": "^" + re.escape(p)}} for p in (day, nxt)]},
+                           {"extracted_date": 1, "ip": 1, "filename": 1, "line_hash": 1}):
         ed = d.get("extracted_date")
         if isinstance(ed, str):
             try:
@@ -55,7 +67,7 @@ for name in sorted(app_rows):
             continue
         if ed.tzinfo is None:
             ed = ed.replace(tzinfo=timezone.utc)
-        if start <= ed < end:
+        if start <= ed < end and once.first(name, d):
             n += 1
             ips.add(str(d.get("ip") or ""))
     total_db += n

@@ -10,9 +10,19 @@ their indexes, keep the files_ and discovered_fields_ collections. With root it 
 other database on the server, create accounts and change the server's settings. This account cannot.
 
 The account `lookingglass_pipeline` (defined in the admin database, like the administrator) gets:
-  readWrite      on MONGO_DB   everything the pipeline does with its reports
+  lookingglass_pipeline_on_<MONGO_DB>   a role of its own on MONGO_DB: read, add, change and delete rows, create
+                               collections and indexes, list them. NOT MongoDB's readWrite, which also lets an account
+                               drop collections and indexes and rename them (audit 2026-11-27): code run through a
+                               hostile e-mail could then wipe every report at once. The pipeline never drops anything
+                               (the quarterly purge deletes rows).
   clusterMonitor               read-only server status, for the `shadowserver check` cache check (optional: without
                                it that one check shows a warning)
+
+Running installations (their account has readWrite): give it the new role, without changing its password:
+  sudo cat /etc/looking-glass/mongo-admin.env | ./create_pipeline_db_user.py --update-rights
+    the administrator account is read from standard input (never from the command line); the role is created (or set
+    again), the account gets it in place of readWrite, and its rights are checked with its own password from .env.
+  MongoDB run by someone else: ./create_pipeline_db_user.py --print shows the commands for its administrator.
 
 Local MongoDB, administrator account in .env (what deploy.sh sets up):
   ./create_pipeline_db_user.py
@@ -43,16 +53,20 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = os.path.join(HERE, ".env")
 NEW_USER = "lookingglass_pipeline"
 WRITE_ACTIONS = {"find", "insert", "update", "remove", "createIndex", "createCollection", "listCollections"}
+# what the pipeline's own role allows on MONGO_DB: WRITE_ACTIONS and read-only listings and statistics; nothing that
+# drops or renames (readWrite would also allow dropCollection, dropIndex and renameCollectionSameDB)
+ROLE_ACTIONS = sorted(WRITE_ACTIONS | {"listIndexes", "collStats", "dbStats", "killCursors"})
+NEVER = {"dropCollection", "dropDatabase", "dropIndex", "renameCollectionSameDB", "convertToCapped", "compact"}
 
 
-def read_env(path):
-    """KEY=VALUE lines, no shell expansion (the same rules as the pipeline's own loader)."""
+def role_name(db):
+    return f"lookingglass_pipeline_on_{db}"
+
+
+def parse_env(text):
+    """KEY=VALUE lines of a text, no shell expansion (the same rules as the pipeline's own loader)."""
     out = {}
-    try:
-        lines = open(path, encoding="utf-8").read().splitlines()
-    except OSError:
-        return out
-    for raw in lines:
+    for raw in text.splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -64,23 +78,57 @@ def read_env(path):
     return out
 
 
+def read_env(path):
+    """KEY=VALUE lines, no shell expansion (the same rules as the pipeline's own loader)."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return parse_env(fh.read())
+    except OSError:
+        return {}
+
+
+def privileges(db):
+    return [{"resource": {"db": db, "collection": ""}, "actions": ROLE_ACTIONS}]
+
+
 def roles(db):
-    return [{"role": "readWrite", "db": db}, {"role": "clusterMonitor", "db": "admin"}]
+    return [{"role": role_name(db), "db": "admin"}, {"role": "clusterMonitor", "db": "admin"}]
+
+
+def ensure_role(admin, db):
+    """Create the pipeline's role on db (in the admin database), or set its privileges again when it exists."""
+    try:
+        admin.admin.command("createRole", role_name(db), privileges=privileges(db), roles=[])
+    except OperationFailure as ex:
+        if "already exists" not in str(ex):
+            raise
+        admin.admin.command("updateRole", role_name(db), privileges=privileges(db), roles=[])
 
 
 def print_commands(db):
     r = json.dumps(roles(db))
-    print(f"""For the administrator of the MongoDB server. In mongosh, signed in as an account that may create users:
+    p = json.dumps(privileges(db))
+    print(f"""For the administrator of the MongoDB server. In mongosh, signed in as an account that may create users and roles:
 
   use admin
+  db.createRole({{
+    role: "{role_name(db)}",
+    privileges: {p},
+    roles: []
+  }})
   db.createUser({{
     user: "{NEW_USER}",
     pwd: passwordPrompt(),          // asks for the password; it never appears on the screen or in the history
     roles: {r}
   }})
 
-clusterMonitor only lets it read the server's status (for the cache check in `shadowserver check`); leave it out if
-your policy does not allow it: that one check then shows a warning, everything else works.
+An account made earlier with readWrite: run the createRole above, then (its password stays as it is)
+  db.updateUser("{NEW_USER}", {{ roles: {r} }})
+
+The role lets the pipeline read, add, change and delete report rows and create collections and indexes on {db}, but not
+drop or rename them (MongoDB's readWrite would). clusterMonitor only lets it read the server's status (for the cache
+check in `shadowserver check`); leave it out if your policy does not allow it: that one check then shows a warning,
+everything else works.
 
 Then, in this pipeline's .env:
   MONGO_USER={NEW_USER}
@@ -108,21 +156,77 @@ def rights(c):
     return per, cluster
 
 
+def check_rights(per, cluster, db):
+    """"" when the account has exactly the pipeline's rights (from MongoDB's own answer); else what is wrong."""
+    mine = per.get((db, ""), set())
+    if not WRITE_ACTIONS <= mine:
+        return f"missing rights on {db}: {', '.join(sorted(WRITE_ACTIONS - mine))}"
+    drops = set().union(*[acts & NEVER for (d, _c), acts in per.items() if d == db])
+    if drops:
+        return f"the account may still drop or rename on {db} ({', '.join(sorted(drops))})"
+    # anywhere else: no change of any kind (clusterMonitor may read some server collections, such as system.profile)
+    changes = {"insert", "update", "remove", "createCollection", "dropCollection", "createIndex", "dropIndex",
+               "dropDatabase", "renameCollectionSameDB", "createUser", "dropUser", "grantRole", "changePassword"}
+    elsewhere = sorted(f"{d or 'every database'}.{c or '*'}" for (d, c), acts in per.items() if d != db and acts & changes)
+    if elsewhere or {"createUser", "dropUser", "grantRole", "createRole", "shutdown", "setParameter"} & cluster:
+        return f"the account may change more than {db} ({', '.join(elsewhere) or 'server'})"
+    return ""
+
+
+def rights_line(db, cluster):
+    return (f"Rights check: read, add, change and delete rows on {db}; cannot drop or rename there; cannot change any "
+            "other database; cannot manage accounts" + ("; server status readable." if "serverStatus" in cluster else "."))
+
+
+def update_rights(e, db, admin_text):
+    """--update-rights: an installation made before 2026-11-27 (readWrite) gets the pipeline's own role, its password
+    unchanged. admin_text: the administrator account's KEY=VALUE lines (standard input)."""
+    a = parse_env(admin_text)
+    if not a.get("MONGO_USER") or not a.get("MONGO_PASSWORD"):
+        sys.exit("No administrator account on standard input (sudo cat /etc/looking-glass/mongo-admin.env | "
+                 "./create_pipeline_db_user.py --update-rights). Nothing was changed.")
+    if e.get("MONGO_USER") != NEW_USER or not e.get("MONGO_PASSWORD"):
+        sys.exit(f".env does not use {NEW_USER}: run ./create_pipeline_db_user.py without --update-rights. Nothing was changed.")
+    admin = client(e, a["MONGO_USER"], a["MONGO_PASSWORD"], a.get("MONGO_AUTH_SOURCE") or "admin")
+    try:
+        ensure_role(admin, db)
+        admin.admin.command("updateUser", NEW_USER, roles=roles(db))
+    except OperationFailure as ex:
+        sys.exit(f"Could not set the rights ({ex}). Is that account an administrator? Nothing else was changed.")
+    print(f"{NEW_USER}: now {role_name(db)} on {db} in place of readWrite (its password is unchanged).")
+    try:
+        per, cluster = rights(client(e, NEW_USER, e["MONGO_PASSWORD"], e.get("MONGO_AUTH_SOURCE") or "admin"))
+    except PyMongoError as ex:
+        sys.exit(f"PROBLEM: {NEW_USER} cannot sign in with the password in .env ({ex}).")
+    why = check_rights(per, cluster, db)
+    if why:
+        sys.exit(f"PROBLEM: {why}.")
+    print(rights_line(db, cluster))
+    return 0
+
+
 def main():
     e = read_env(ENV_PATH)
     db = e.get("MONGO_DB") or "shadowserver"
     if "--print" in sys.argv[1:]:
         print_commands(db)
         return 0
+    if "--update-rights" in sys.argv[1:]:
+        return update_rights(e, db, sys.stdin.read())
     if e.get("MONGO_USER") == NEW_USER:
-        sys.exit(f".env already uses {NEW_USER}.")
+        sys.exit(f".env already uses {NEW_USER}. To give it the rights of this version: "
+                 "sudo cat /etc/looking-glass/mongo-admin.env | ./create_pipeline_db_user.py --update-rights")
     if not e.get("MONGO_USER") or not e.get("MONGO_PASSWORD"):
         sys.exit("No administrator account in .env. For a MongoDB run by someone else, use --print.")
     admin = client(e, e["MONGO_USER"], e["MONGO_PASSWORD"], e.get("MONGO_AUTH_SOURCE") or "admin")
     pw = secrets.token_urlsafe(24)
     try:
+        ensure_role(admin, db)
+    except OperationFailure as ex:
+        sys.exit(f"Could not create the pipeline's role ({ex}). Is the account in .env an administrator? .env was not changed.")
+    try:
         admin.admin.command("createUser", NEW_USER, pwd=pw, roles=roles(db))
-        print(f"Created {NEW_USER}: read and write on {db}, server status (read only).")
+        print(f"Created {NEW_USER}: read and write rows on {db} (no drop), server status (read only).")
     except OperationFailure as ex:
         if "already exists" not in str(ex):
             sys.exit(f"Could not create the account ({ex}). Is the account in .env an administrator? .env was not changed.")
@@ -134,17 +238,10 @@ def main():
         per, cluster = rights(client(e, NEW_USER, pw, "admin"))
     except PyMongoError as ex:
         sys.exit(f"PROBLEM: the new account cannot sign in ({ex}). .env was not changed.")
-    mine = per.get((db, ""), set())
-    if not WRITE_ACTIONS <= mine:
-        sys.exit(f"PROBLEM: missing rights on {db}: {', '.join(sorted(WRITE_ACTIONS - mine))}. .env was not changed.")
-    # anywhere else: no change of any kind (clusterMonitor may read some server collections, such as system.profile)
-    changes = {"insert", "update", "remove", "createCollection", "dropCollection", "createIndex", "dropIndex",
-               "dropDatabase", "renameCollectionSameDB", "createUser", "dropUser", "grantRole", "changePassword"}
-    elsewhere = sorted(f"{d or 'every database'}.{c or '*'}" for (d, c), acts in per.items() if d != db and acts & changes)
-    if elsewhere or {"createUser", "dropUser", "grantRole", "shutdown", "setParameter"} & cluster:
-        sys.exit(f"PROBLEM: the account may change more than {db} ({', '.join(elsewhere) or 'server'}). .env was not changed.")
-    print(f"Rights check: read and write on {db}; cannot change any other database; cannot manage accounts"
-          + ("; server status readable." if "serverStatus" in cluster else "."))
+    why = check_rights(per, cluster, db)
+    if why:
+        sys.exit(f"PROBLEM: {why}. .env was not changed.")
+    print(rights_line(db, cluster))
 
     shutil.copy2(ENV_PATH, ENV_PATH + ".before-pipeline-account")
     os.chmod(ENV_PATH + ".before-pipeline-account", 0o600)

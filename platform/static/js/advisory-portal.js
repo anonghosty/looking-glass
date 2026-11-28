@@ -87,17 +87,21 @@
     main.append(w);
 
     const grid = el("div", "ap-grid");
+    // "Sent to" is the top 20, "Impacts" and "Reports" the top 10 (advisory.py): say so when there are more (d.totals; the
+    // Recipients tile for the recipients when the server does not say)
+    const T = d.totals || {};
+    const cutLine = (c, shown, all, noun) => { const t = window.LGShare.cut(shown, Math.max(shown, Number(all) || 0), noun); if (t) c.append(el("p", "hint", `${t}, the most first.`)); };
     const rc = card("Sent to", "Advisories per recipient, with the last one sent");
-    if (d.recipients.length) rc.append(bars(d.recipients, (x) => x.name, (x) => x.advisories, null, (x) => `last sent ${x.last}`));
+    if (d.recipients.length) { rc.append(bars(d.recipients, (x) => x.name, (x) => x.advisories, null, (x) => `last sent ${x.last}`)); cutLine(rc, d.recipients.length, T.recipients ?? k.recipients, "recipients"); }
     else rc.append(el("p", "fd-empty", "No advisory sent yet."));
     const mc = card("Sent per month", "The last 12 months with a sending");
     if (d.per_month.length) mc.append(bars(d.per_month, (x) => x.month, (x) => x.sent));
     else mc.append(el("p", "fd-empty", "No advisory sent yet."));
     const ic = card("Impacts in the advisories sent", "How many advisories carried each impact flag");
-    if (d.impacts.length) ic.append(bars(d.impacts, (x) => x.label, (x) => x.advisories, (x) => x.level));
+    if (d.impacts.length) { ic.append(bars(d.impacts, (x) => x.label, (x) => x.advisories, (x) => x.level)); cutLine(ic, d.impacts.length, T.impacts, "impacts"); }
     else ic.append(el("p", "fd-empty", "Appears once advisories are sent."));
     const pc = card("Reports in the advisories sent", "The Shadowserver reports named most");
-    if (d.reports.length) pc.append(bars(d.reports, (x) => x.title, (x) => x.advisories));
+    if (d.reports.length) { pc.append(bars(d.reports, (x) => x.title, (x) => x.advisories)); cutLine(pc, d.reports.length, T.reports, "reports"); }
     else pc.append(el("p", "fd-empty", "Appears once advisories are sent."));
     grid.append(rc, mc, ic, pc);
     main.append(grid);
@@ -123,6 +127,9 @@
         tr.append(td, el("td", null, x.title), el("td", null, x.status_label), el("td", null, x.assignee || "–"), el("td", null, x.since));
         return tr;
       })));
+      // the newest 30 (advisory.py): say so when there are more, and where the rest are
+      const allOpen = Math.max(d.open_findings.length, Number(T.open_findings ?? k.open_findings) || 0);
+      if (allOpen > d.open_findings.length) oc.append(el("p", "hint", `The newest ${fmt(d.open_findings.length)} of ${fmt(allOpen)} open findings; the Findings page lists every one.`));
     } else oc.append(el("p", "fd-empty", "No open finding in your channels."));
     main.append(oc);
   }

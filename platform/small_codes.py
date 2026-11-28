@@ -17,7 +17,8 @@ HELD = f"Fewer than {MIN_HOSTS} devices carry this pattern: no lasting code. An 
 
 def viewer_sees_hosts():
     """True for viewers who see the devices (the 'unmasked' permission, demo mode off); outside a request (tools,
-    tests calling the functions directly) True."""
+    tests calling the functions directly) True. Anything that fails while deciding inside a request: False, the codes
+    are held (it fails closed; audit 2026-11-27, 8-4: it failed open and gave every code to a researcher)."""
     try:
         import os
         from flask import g, has_request_context, request
@@ -28,8 +29,8 @@ def viewer_sees_hosts():
             return False
         u = getattr(g, "user", None)
         return bool(u) and "unmasked" in (u.get("perms") or ())
-    except Exception:                      # noqa: BLE001
-        return True
+    except Exception:                      # noqa: BLE001  (fails closed: no lasting code for a small pattern)
+        return False
 
 
 def code_for(code, hosts, full=None):

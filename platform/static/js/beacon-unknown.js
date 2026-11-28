@@ -33,7 +33,7 @@
   function reasonForm(label, placeholder, button, primary, onGo) {
     const box = el("div", "bu-reason");
     const ta = el("textarea", "fd-in"); ta.rows = 2; ta.maxLength = 300; ta.placeholder = placeholder; ta.setAttribute("aria-label", label);
-    const go = el("button", `lg-btn sm${primary ? " primary" : ""}`, button); go.type = "button";
+    const go = el("button", `lg-btn sm${primary ? " primary" : ""}`, button); go.type = "button"; go.dataset.fv = button;
     const msg = el("span", "fd-msg"); msg.setAttribute("role", "status");
     go.addEventListener("click", async () => {
       if (!ta.value.trim()) { msg.textContent = "Say why first."; ta.focus(); return; }
@@ -45,7 +45,7 @@
   }
 
   function family(f, redraw, canApprove) {
-    const c = el("article", `bu-fam s-${f.state}`);
+    const c = el("article", `bu-fam s-${f.state}`); c.dataset.fam = f.id;
     const h = el("div", "bu-h");
     h.append(el("code", "bu-label", f.label), el("span", "bu-n", `${plural(f.records, "record")} · ${plural(f.devices, "device")}`));
     if (f.state !== "open") h.append(el("span", `bu-state st-${f.state}`, STATE_LINE(f)));
@@ -77,7 +77,7 @@
     } else if (f.state === "asked") {
       if (canApprove) {
         const rv = el("div", "bu-review");
-        const ok = el("button", "lg-btn sm primary", "Approve sending"); ok.type = "button";
+        const ok = el("button", "lg-btn sm primary", "Approve sending"); ok.type = "button"; ok.dataset.fv = "approve";
         const msg = el("span", "fd-msg"); msg.setAttribute("role", "status");
         ok.addEventListener("click", async () => { ok.disabled = true; try { await state(f.id, "approved", "", f.requests_hash); redraw(); } catch (e) { msg.textContent = window.LGLoader.errorText(e, true); ok.disabled = false; } });
         const no = el("details", "bu-send"); no.append(el("summary", null, "Do not approve"));
@@ -105,7 +105,7 @@
           const link = el("a", "lg-btn sm primary", "Open a private report for the Looking Glass creator");
           link.href = f.issue_url; link.target = "_blank"; link.rel = "noopener noreferrer";
           msg.replaceChildren(document.createTextNode("Downloaded. Title the report \"Decoding request\", paste the file's contents into it, then mark it as sent. "), link);
-          const sent = el("button", "lg-btn sm", "Mark as sent"); sent.type = "button";
+          const sent = el("button", "lg-btn sm", "Mark as sent"); sent.type = "button"; sent.dataset.fv = "sent";
           sent.addEventListener("click", async () => { try { await state(f.id, "sent"); redraw(); } catch (e) { msg.textContent = window.LGLoader.errorText(e, true); } });
           act.append(sent);
         } finally { go.disabled = !cb.checked; }
@@ -115,7 +115,7 @@
     }
     if (f.state !== "sent" && f.state !== "approved") {
       const away = f.state === "dismissed";
-      const tog = el("button", "lg-btn sm", away ? "Reopen" : "Not a beacon"); tog.type = "button";
+      const tog = el("button", "lg-btn sm", away ? "Reopen" : "Not a beacon"); tog.type = "button"; tog.dataset.fv = "toggle";
       tog.title = away ? "Back to the open families" : "A session token, an ID or the like: put it away (it stays listed under Put away)";
       tog.addEventListener("click", async () => {
         try { await state(f.id, away ? "open" : "dismissed", away ? "" : "Not a beacon"); redraw(); }
@@ -144,7 +144,26 @@
       el("p", "bu-intro", open.length
         ? `${plural(open.length, "family")} of encoded requests in the days in memory that Looking Glass cannot decode yet: no known format and no generic layer reads them, or a known family is not decoded yet. Look at each and its request lines: ask to send the real ones to the Looking Glass creator for future automated decoding (an administrator approves first), and put away what is not a beacon.${waiting ? ` ${plural(waiting, "family")} ${waiting === 1 ? "waits" : "wait"} for an administrator's approval.` : ""}`
         : "Every encoded request in the days in memory is decoded or known. Nothing waits for the Looking Glass creator."));
-    const redraw = () => mount(holder);
+    // a redraw replaces every family: the control that had the keyboard focus gets it back (same family, same action),
+    // else that family's card (or the closed list it moved into), else the heading (the keepFocus pattern of app.js;
+    // audit 2026-11-27, 9-8). "Sent or put away" stays open if it was. A button disabled while its request ran may have
+    // lost the focus: the last one used counts then.
+    if (!holder._buFocus) { holder._buFocus = true; holder.addEventListener("focusin", (e) => { holder._buLast = e.target; }); }
+    const redraw = async () => {
+      const act = document.activeElement, a = act && act !== document.body ? act : holder._buLast;
+      const fam = a && holder.contains(a) ? a.closest("[data-fam]")?.dataset.fam : null, fv = a?.dataset?.fv;
+      const awayOpen = !!holder.querySelector(".bu-away")?.open;
+      await mount(holder);
+      const awayNow = holder.querySelector(".bu-away"); if (awayNow && awayOpen) awayNow.open = true;
+      if (fam == null) return;
+      const seen = (n) => !!n && n.getClientRects().length > 0;
+      const card = [...holder.querySelectorAll("[data-fam]")].find((n) => n.dataset.fam === fam);
+      const back = card && fv != null ? [...card.querySelectorAll("[data-fv]")].find((n) => n.dataset.fv === fv && !n.disabled) : null;
+      const to = seen(back) ? back : seen(card) ? card : card?.closest("details")?.querySelector("summary") || holder.querySelector("h2");
+      if (!to) return;
+      if (!to.matches("button, a[href], input, textarea, select, summary")) to.tabIndex = -1;
+      to.focus({ preventScroll: true });
+    };
     // waiting for approval first, so an administrator sees them at the top
     open.sort((a, b) => (b.state === "asked") - (a.state === "asked"));
     for (const f of open) holder.append(family(f, redraw, !!d.can_approve));

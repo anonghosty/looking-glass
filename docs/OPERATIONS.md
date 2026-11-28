@@ -22,7 +22,7 @@ project's Python (`.venv`); run the others with `.venv/bin/python <script>`.
 | Status, start, stop | `systemctl status looking-glass`, `sudo systemctl start|stop|restart looking-glass` |
 | Logs (live) | `journalctl -u looking-glass -f` |
 | Health | `curl -s localhost:<your port>/healthz` (or `curl -sk https://localhost:<your port>/healthz` with HTTPS; `<your port>` is the port you selected, `LG_PORT` in `.env`); on this computer only, others get "Not Found" |
-| HTTPS certificate for other screens | `deploy/make_tls_cert.sh [extra names or addresses]` ▶ (no sudo; renews by running it again) |
+| HTTPS certificate for other screens | `deploy/make_tls_cert.sh [extra names or addresses]` ▶ (run as the service's user; renews by running it again; with Caddy in front it asks for sudo to hand Caddy the new certificate, and exits with code 3, `NOT FINISHED`, when it could not) |
 | Caddy in front (public installations) | `sudo deploy/caddy_front.sh status`; to update now: `sudo deploy/caddy_front.sh update` |
 | MongoDB's own log | `/var/log/mongodb/mongod.log`, rotated daily (or past 100 MB), 14 kept, by `/etc/logrotate.d/looking-glass-mongod`. Installed with MongoDB from 2026-11-17; an older installation adds it once: `sudo database/mongo_log_rotation.sh --now` |
 
@@ -42,6 +42,8 @@ than `SLOW_REQUEST_S`, by route only); the kept answers; MongoDB's memory; the c
 the pipeline's last run and schedule; recent starts, sign-in locks and the admins' alerts; and **In front of Looking
 Glass**: whether Caddy is in front, or, when Looking Glass answers the network itself, the one command that puts Caddy
 in front of it (`sudo deploy/caddy_front.sh adopt`, [INSTALLATION.md, B4c](INSTALLATION.md#b4c-caddy-in-front-of-a-running-installation-security)).
+Where the tab names a person (a request running now, a sign-in lock, an alert), it shows their full name, else their
+person code (`p-` and 20 letters and digits), never their sign-in name.
 
 Two actions are there, each needing a fresh sign-in and written to the audit log:
 
@@ -57,6 +59,56 @@ memory against the budgets in `.env`).
 If Intel gathered or the services patterns could not be counted again (a record no rule expected, say), the earlier
 counts stay on screen, it is tried again after 30 s, and an alert shows on the administrators' bell and here until it
 works; the details are in the service log (`journalctl -u looking-glass`).
+
+### The report pipeline's runs
+
+Each run of the database pipeline writes how it went to `pipeline_status.json` in its data folder, which the Task
+monitor's **Report pipeline** card and the administrators' bell read. A run **fails** (exit code 1, "had problems")
+whenever a report, a file or rows were not loaded:
+
+- a file that could not be loaded, or rows that could not be written (both tried again next run);
+- the mailbox that could not be read, or the Shadowserver API that could not be used with no other way working;
+- a report that could not be downloaded from the API, a full API list (raise `REPORT_API_LIST_LIMIT` in the
+  pipeline's `.env`), an e-mail attachment that could not be saved, or a report link that could not be downloaded;
+- a zip file that could not be unpacked, one moved to quarantine (a limit, or a file that cannot be unpacked), or a
+  broken one that was deleted to be fetched again;
+- a report file or folder whose name cannot be a report name, moved to `quarantine/report-names/`;
+- a zip file encrypted with a password: it can never be unpacked, so it is moved to quarantine with its reason and
+  not tried again at every run;
+- a report that could not be read from the sorted folder;
+- a report file that stopped its loader process even when loaded on its own (out of memory, or a crash): the first
+  time it is a file error, and it is tried again on the next run (the system can end a loader process when the whole
+  computer is short of memory, whatever file it was loading). Only a file that does so on 2 runs is moved to
+  `quarantine/loader/<report>/` with a `.reason.txt` beside it; the other files load as usual. Some of its rows may
+  already be stored. To try it again, for example with more memory or fewer `WORKERS`, move it back to the path its
+  `.reason.txt` names, `sorting_backup/<report>/<its own name>`: the next run loads it again and skips the rows
+  already stored. A file kept in quarantine with a number in front of its name (one of the same name was there
+  already) must get its own name back, or it is loaded as another report file and its rows are stored twice.
+
+**One run at a time.** Every run takes the pipeline folder's run lock, `.pipeline.lock`, also when the pipeline is
+started by hand or from your own cron line rather than by `run.sh`. A run that starts while another holds it stops at
+once with "Another pipeline run is in progress - exiting." and exit code 1, and changes nothing.
+
+What loaded but needs a look is listed under **To check** and does not fail the run: among others, CSV files whose
+name is not a report file name, rows whose timestamp could not be read, rows with the same row hash as another row of
+their file, rows without a timestamp (stored, but no page shows them), and files sent again under a name already
+loaded. **A CSV file whose name is not a report file name is never loaded**, and every run names it again (in the log
+as `[NOT MATCHED]`, on the card and on the bell) until you rename it to a report file name or remove it once checked.
+**A file that changed under a name already loaded** (a report sent again with other content) is loaded again: the rows
+already stored are refused as copies and the new ones are added. A file only touched or copied again, with the same
+content, is not loaded again.
+
+**Rows read.** The card and the log account for every row read: new, already in the database, repeated in the same
+file (stored once), the same row hash as another row (not stored), a timestamp that could not be read (not stored)
+and not written (tried again next run). These parts add up to the rows read. A CSV that starts with a byte-order mark
+gets its dates, and a row is never cut in two at an unusual line break.
+
+- **A row that cannot be read as CSV** (a field larger than 16 MB, MongoDB's own limit for a row, or a broken line)
+  is counted as `rows_bad_csv`, is part of the rows read and is listed under **To check**; it is not stored, and the
+  rest of its file is loaded.
+- **A column named `_id`** in a report is stored as `csv_id`, so its values no longer collide with the database's
+  own row ids.
+- **A file with a header line and no rows** is noted once and not read again at every run, unless the file changes.
 
 ### Changing settings without a terminal: Settings → Configuration
 
@@ -93,6 +145,14 @@ administrators when a newer Caddy is available or when its updates do not instal
 `sudo deploy/caddy_front.sh update`. It checks the repository's key against the pinned fingerprint first and changes
 nothing if it differs, updates Caddy only, keeps Looking Glass's configuration, and checks the site through Caddy.
 
+**The report feed.** Once a day after 06:30 GMT, Looking Glass reads the report feed (Shadowserver's report types, their
+pages and how each one is mapped) from GitHub. If that read fails, or has not happened for two days, the bell tells
+administrators every day, with the error; the last good copy is used meanwhile, so a new Shadowserver report may show
+without its mapping until the read works again. Check that the server reaches `raw.githubusercontent.com`; Settings →
+Task monitor shows the last read. On the one computer that runs the feed builder, the bell also says when the builder
+has not run for three hours (it runs every hour): check its line in `crontab -l` and that `run_feed.sh` can still be run.
+The feed's own "built" time is not a warning sign: it only changes when Shadowserver's reports change.
+
 ### When the server's address changes
 
 Looking Glass follows its own addresses by itself (it reads them again every minute). Two settings do not, and the bell
@@ -103,7 +163,11 @@ warns administrators when they stop matching (the installation check, `tests/che
   ```bash
   deploy/make_tls_cert.sh <the name or address people use>
   ```
-  (A certificate made before 2026-11-19 also names the product; making it again replaces that too.)
+  (A certificate made before 2026-11-19 also names the product; making it again replaces that too.) With Caddy in
+  front of an internal installation, the script also hands the new certificate to Caddy itself
+  (`sudo deploy/caddy_front.sh sync`; sudo may ask for your password), and says when Caddy answers with it. When sudo
+  cannot be used or the hand-over fails, it says `NOT FINISHED` with the reason, exits with code 3 and prints that
+  command: run it at once, because until then visitors get an error (502).
 - **MongoDB on a network address** (the pipeline here, the platform on another computer: `MONGO_BIND` in the
   pipeline's `.env`) cannot start on an address the server no longer has. Give the server its address back, or set
   `MONGO_BIND` to the new one, run `database/deploy.sh`, and change `MONGO_HOST` in the platform's `.env`.
@@ -122,6 +186,11 @@ manage/restore_check.sh --identity KEY [archive] [key.pub]         # rehearse a 
 The archive holds the code, `.env` and all of `data/` (accounts, sessions, audit log, settings, certificates), not
 `.venv`. Those are secrets, so the archive is **encrypted to your own key** and copied to safe storage off the computer,
 with its `.sha256` and `.sha256.sig`.
+
+The service keeps running during a backup. When a file changes while it is being read (the service was writing it),
+the backup goes on and prints a note: "a file changed while it was being read (the service was writing it); the backup
+holds it as it was then". It is still checksummed and signed. Any other failure stops it with "NOT BACKED UP" (exit
+code 3) and leaves no half-made archive.
 
 > **Condition: no public key, no backup.** `manage/backup.sh` refuses to run until your public key is in
 > `data/backup_public_key` (or `BACKUP_PUBLIC_KEY` in `.env`): it exits with "NOT BACKED UP" (exit code 3) and
@@ -151,6 +220,8 @@ the audit log. Keep a copy of `signing_key.pub` with your backups, and give it t
 `restore_check.sh` when you check a backup on another computer. Both check that the signed checksum is for the very
 archive you give them (its name and its SHA-256), and both fail for a backup with no signature or no public key to
 check it; for a backup made before backups were signed, add `--allow-unsigned` (first) and they say it was accepted.
+Keep the `.sha256` file beside its archive: without it, both say "no checksum file" and fail (the archive cannot be
+checked), and `restore_check.sh` still ends with its RESULT line.
 
 The signature and checksum are over the encrypted file, so `verify_backup.sh` checks them without any private key;
 give it `--identity <your private key>` to also open the archive, compare `.env` with the live one and count the files.
@@ -429,7 +500,8 @@ changes only when someone makes the locks again, on purpose, with the one tool f
    after a change in `tools/lock_tools.in`.
 3. **Run the full release checklist**, `tests/run_all_checks.sh` among it (`tests/check_libraries.py` checks what the
    platform uses of each library; `tests/check_installer_supply.py` checks the locks against their ranges and every
-   install path).
+   install path; `tests/check_requirements_complete.py` checks that each `requirements.txt` names every library its
+   code imports, and only those, each with an upper bound).
 4. **Check the locked versions for known vulnerabilities:**
    ```bash
    pip-audit --require-hashes --disable-pip -r requirements.lock -r ../database/requirements.lock -r ../docs/requirements.lock
@@ -525,8 +597,9 @@ shipped `data/attack_rules.json`), one notice appears on the Definitions page an
 
 | Command | What it checks | Time |
 |---|---|---|
-| `security_testing/security_retest.py` ▶ | about 120 checks of every security protection against the running service; must end with ALL PASSED | 2 min |
+| `security_testing/security_retest.py` ▶ | about 120 checks of every security protection against the running service; must end with ALL PASSED. A check it could not run fails the run (exit code 1) and is named with what the installation needs for it | 2 min |
 | `tests/run_all_checks.sh` | replay schedule, new reports on both platforms, consistency of every figure, totals against MongoDB, every statistic and filter of both platforms and the Executive portal against MongoDB, report downloads, CSV formula safety, masking (fails on any leak), privacy and roles, Intel gathered, researchers' notes, cross-report filters | 4 min |
+| `tests/run_admin_db_tests.sh` | the checks that need a throwaway database (new collections, the quarterly report and purge, the pipeline's own database checks), with the MongoDB administrator account read once with sudo from `/etc/looking-glass/mongo-admin.env`. A part that is skipped, or no pipeline folder to run its checks in, fails it | a few min |
 
 The checks only read this installation's own database and service; checks that create reports use throwaway databases and drop them.
 They reach the API with the local automation key (`data/automation.key`), accepted from this computer only.
@@ -538,7 +611,7 @@ They reach the API with the local automation key (`data/automation.key`), accept
 | `tools/envcheck.sh` | Python, venv, and whether MongoDB is reachable |
 | `tools/quickcheck.py` | connection, indexes, collection size, a timed sample query |
 | `tools/diagnose_reports.py [collection...]` | which reports are used, and what the others lack |
-| `tools/discover.py`, `tools/show_srcdst.py` | a survey of every collection (written to `tools/discovery.json`) |
+| `tools/discover.py`, `tools/show_srcdst.py` | a survey of every collection (written to `data/discovery.json`, readable by the owner only; every value taken from a record is masked: no address, host name or e-mail) |
 | `tools/analyze_services.py` | the fields of the services reports |
 | `tools/daysize.py YYYY-MM-DD` | the size of one day |
 | `tools/report_arrivals.py [day]` | when each report of a day arrived in MongoDB |

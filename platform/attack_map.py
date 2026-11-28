@@ -121,19 +121,25 @@ class AttackMap:
     def techniques(self):
         return self.attack_doc().get("techniques") or {}
 
-    def tech(self, tid, techs=None, role=""):
+    def tech(self, tid, techs=None, role="", mits=None):
         """A technique for the page and documents: name, tactics, link, state, MITRE's short description (what it is),
-        its short detection text when MITRE gives one, and up to three mitigations ordered for the role (how to defend)."""
-        t = (techs or self.techniques()).get(tid) or {}
+        its short detection text when MITRE gives one, and up to three mitigations ordered for the role (how to defend).
+        techs / mits: the ATT&CK copy's techniques and mitigations when the caller read them already; else the copy is
+        read ONCE here for both (audit 2026-11-27: it was read twice per technique, and could change in between)."""
+        if techs is None or mits is None:
+            doc = self.attack_doc()
+            techs = (doc.get("techniques") or {}) if techs is None else techs
+            mits = (doc.get("mitigations") or {}) if mits is None else mits
+        t = techs.get(tid) or {}
         return {"id": tid, "name": t.get("name") or tid, "tactics": t.get("tactics") or [], "url": t.get("url") or
                 f"https://attack.mitre.org/techniques/{tid.replace('.', '/')}/", "state": t.get("state") or "unknown",
                 "revoked_by": t.get("revoked_by", ""), "desc": t.get("desc", ""), "detect": t.get("detect", ""),
-                "defend": self.defences(t, role)}
+                "defend": self.defences(t, role, mits)}
 
-    def defences(self, t, role=""):
+    def defences(self, t, role="", mits=None):
         """Up to DEFEND_MAX mitigations of a technique: [{id, name, text, url}], those that suit the role first, then
         MITRE's own order."""
-        mits = self.attack_doc().get("mitigations") or {}
+        mits = mits if mits is not None else (self.attack_doc().get("mitigations") or {})
         rows = [m for m in (t.get("mitigations") or []) if isinstance(m, list) and len(m) == 2]
         pref = MIT_PREF.get(role, [])
         rows.sort(key=lambda m: pref.index(m[0]) if m[0] in pref else len(pref) + 1)
@@ -309,10 +315,12 @@ class AttackMap:
 
     # ---------------------------------------------------------------------------------------------- display
     def _items(self, tids, certainty, role, status, why="", report="", techs=None, retired=None):
-        techs = techs if techs is not None else self.techniques()
+        doc = self.attack_doc()                           # once for the whole list
+        techs = techs if techs is not None else (doc.get("techniques") or {})
+        mits = doc.get("mitigations") or {}
         out = []
         for tid in tids or []:
-            t = self.tech(tid, techs, role)
+            t = self.tech(tid, techs, role, mits)
             keep = ("id", "name", "tactics", "url", "state", "desc") + (() if certainty == "known" else ("detect", "defend"))
             out.append({**{k: t[k] for k in keep}, "certainty": certainty,
                         "certainty_label": CERTAINTY.get(certainty, ""), "role": ROLE.get(role, ""), "status": status,
@@ -490,12 +498,14 @@ class AttackMap:
         if not q:
             return []
         out = []
-        for tid, t in sorted(self.techniques().items()):
+        doc = self.attack_doc()                           # once for the whole search
+        techs, mits = doc.get("techniques") or {}, doc.get("mitigations") or {}
+        for tid, t in sorted(techs.items()):
             if t.get("state") != "active":
                 continue                                  # retired or revoked techniques are hidden
             hay = f"{tid.lower()} {t['name'].lower()} {' '.join(t.get('tactics') or []).lower()}"
             if tid.lower().startswith(q) or all(w in hay for w in q.split()):
-                out.append(self.tech(tid))
+                out.append(self.tech(tid, techs, "", mits))
             if len(out) >= limit:
                 break
         return out
@@ -503,7 +513,8 @@ class AttackMap:
     def shortlist(self, key, limit=10):
         """5-10 fitting techniques: the rule's short list, the current and suggested ones, then others of the same
         tactics; active only."""
-        techs = self.techniques()
+        doc = self.attack_doc()
+        techs, mits = doc.get("techniques") or {}, doc.get("mitigations") or {}
         m = self.mapping(key) or {}
         r = self.suggest(key) or {}
         base = list(dict.fromkeys((m.get("check_offer") or []) + (m.get("check_suggest") or []) + (m.get("techniques") or [])
@@ -516,7 +527,7 @@ class AttackMap:
                     break
                 if t.get("state") == "active" and "." not in tid and tid not in out and tactics & set(t.get("tactics") or []):
                     out.append(tid)
-        return [self.tech(t, techs) for t in out[:limit]]
+        return [self.tech(t, techs, "", mits) for t in out[:limit]]
 
     def review(self, key, techniques, nofit, note, user, name=""):
         """A researcher's choice: one or more techniques, or "No ATT&CK technique fits". Never overwritten by a

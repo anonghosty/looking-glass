@@ -39,7 +39,9 @@ import time
 
 from flask import g, jsonify, request
 
+import people
 import pipeline_link
+import reqjson
 
 STATE = "code_integrity.json"            # data/: the last check, its findings, what was audited, the "not ours" decisions
 APPROVED = "code_approved.json"          # data/: {"platform/<path>": sha256} kept by an administrator
@@ -191,6 +193,16 @@ def check(base, audit, now=None):
             if (k, d.get("sha256")) in now_flagged:
                 decided[k] = d
             elif res["checked"] and not any(f["key"] == k for f in res["findings"]):
+                part, _, rel = str(k).partition("/")
+                pinfo = res["parts"].get(part) or {}
+                if not pinfo.get("checked") or not pinfo.get("folder"):
+                    decided[k] = d                  # that folder was not checked this time: nothing is known yet
+                    continue
+                if os.path.lexists(os.path.join(pinfo["folder"], *rel.split("/"))):
+                    # still in the folder, no longer flagged: kept as ours (audited by the approval) or back as the
+                    # release shipped it. The decision is dropped; it did NOT leave the folder (audit 2026-11-27: a
+                    # false code_integrity_removed was written here)
+                    continue
                 audit.add("code_integrity_removed", user=SYSTEM_USER, target=k,
                           detail=f"the file marked not ours (sha256 {d.get('sha256')}) is no longer in the code folder")
         st["decided"] = decided
@@ -317,7 +329,7 @@ def install(app, ctx):
         bad = guard(change=True)
         if bad:
             return bad
-        body = request.get_json(silent=True) or {}
+        body = reqjson.body()
         f, st = the_finding(body)
         if not f:
             return jsonify(error="That file is no longer flagged, or it changed since this page was opened: look again.",
@@ -328,7 +340,7 @@ def install(app, ctx):
         if bad:
             return bad
         u = me()
-        full = (ctx.get("people_name") or (lambda x: ""))(u) or u
+        full = (ctx.get("people_name") or (lambda x: ""))(u) or people.person_label(u)   # never the sign-in name
         with _LOCK:
             ap = approved(base)
             ap[f["key"]] = f["sha256"]
@@ -345,7 +357,7 @@ def install(app, ctx):
         bad = guard(change=True)
         if bad:
             return bad
-        body = request.get_json(silent=True) or {}
+        body = reqjson.body()
         f, st = the_finding(body)
         if not f:
             return jsonify(error="That file is no longer flagged, or it changed since this page was opened: look again.",
@@ -359,7 +371,7 @@ def install(app, ctx):
         if not folder:
             return jsonify(error="That file's folder is no longer found.", **view(st)), 409
         u = me()
-        full = (ctx.get("people_name") or (lambda x: ""))(u) or u
+        full = (ctx.get("people_name") or (lambda x: ""))(u) or people.person_label(u)   # never the sign-in name
         cmd = quarantine_command(base, f["part"], folder, f["rel"])
         with _LOCK:
             ap = approved(base)

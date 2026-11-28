@@ -43,9 +43,11 @@ from flask import g, jsonify, request
 
 import password_policy
 import pipeline_link
+import reqjson
 import report_files
 
 UNLOCK_SECONDS = 600
+RESULTS_SENT = 50              # the pipeline's newest done requests sent to the page (it shows 5, "Show all" the rest)
 API_URL = os.environ.get("SHADOWSERVER_API_URL", "https://transform.shadowserver.org/api2/")
 API_KEYS = ("SHADOWSERVER_API_KEY", "SHADOWSERVER_API_SECRET")
 NOT_HERE = "The database pipeline is not on this computer: its settings are in its own .env."
@@ -91,6 +93,16 @@ def ping(key, secret, url=None, timeout=15):
                   else "Shadowserver accepted the key, but no report list is subscribed to it")
 
 
+def _named(rows):
+    """Copies of the request rows for the page: "by_name" is who asked, by full name, else person code
+    (people.People.name), and "by" their person code: never the sign-in name in the answer (the request files and the
+    audit log keep the account)."""
+    import people
+    name = people._DEFAULT[-1].name if people._DEFAULT else people.person_label
+    return [dict(r, by=people.person_label(r["by"]) if r.get("by") else "", by_name=name(r["by"]) if r.get("by") else "")
+            if isinstance(r, dict) else r for r in rows or []]
+
+
 def install(app, ctx):
     """ctx: base_dir, data_dir, has_perm, csrf_ok, fresh, audit, users, throttle, client (-> (ip, ua))."""
     hp, audit = ctx["has_perm"], ctx["audit"]           # users, throttle, client: password_policy.check_own_password
@@ -98,6 +110,17 @@ def install(app, ctx):
 
     def ddir():                                             # the platform's own data folder, looked up on each use
         return ctx["data_dir"]
+
+    def results_total(ws):
+        """How many requests the pipeline has done in all (the files in its done folder), so the page says "5 of N"
+        and never passes the newest few as the whole history (2026-11-26)."""
+        try:
+            d = ws.req_dir(ddir()) / "done"
+            if d.is_symlink() or not d.exists():
+                return 0
+            return sum(1 for p in d.glob("*.json") if not p.is_symlink())
+        except (AttributeError, OSError):                  # an older pipeline without req_dir: what was sent
+            return None
 
     def api_state_file():
         return os.path.join(ddir(), "pipeline_api.json")
@@ -217,7 +240,8 @@ def install(app, ctx):
                                 "min": f[5] if f[3] == "int" else None, "max": f[6] if f[3] == "int" else None,
                                 "help": f[7], "value": env.get(f[0], f[4])}
                                for f in ws.FIELDS if not f[8] or f[8] == provider],
-                       pending=waiting, results=ws.results(ddir(), limit=8), pipeline_dir=str(d),
+                       pending=_named(waiting), results=_named(ws.results(ddir(), limit=RESULTS_SENT)), pipeline_dir=str(d),
+                       totals={"results": results_total(ws)},
                        api={"key_set": bool(env.get(API_KEYS[0]) and env.get(API_KEYS[1])), "key_waiting": key_waiting,
                             "checked_at": st.get("checked_at"), "ok": st.get("ok"), "message": st.get("message", "")})
 
@@ -253,7 +277,7 @@ def install(app, ctx):
             return jsonify(error=NOT_HERE), 404
         env = pipeline_link.read_env(d / ".env")
         provider = (env.get("MAIL_PROVIDER") or "imap").lower()
-        clean, errors = ws.validate((request.get_json(silent=True) or {}).get("values"), provider)
+        clean, errors = ws.validate(reqjson.body().get("values"), provider)
         if errors:
             return jsonify(error="; ".join(errors)), 400
         key_ok = (env.get(API_KEYS[0]) and env.get(API_KEYS[1])) or any(r.get("kind") == "apikey" for r in ws.pending(ddir()))
@@ -278,7 +302,7 @@ def install(app, ctx):
         d, ws = pipe()
         if not ws:
             return jsonify(error=NOT_HERE), 404
-        b = request.get_json(silent=True) or {}
+        b = reqjson.body()
         key, secret = str(b.get("key") or "").strip(), str(b.get("secret") or "").strip()
         if not ws.valid_api(key, secret):
             return jsonify(error="Paste the API key and the secret exactly as Shadowserver gave them."), 400
@@ -359,7 +383,7 @@ def install(app, ctx):
             return bad
         d, ws = pipe()
         ma = pipeline_link.mail_auth(d)
-        body = request.get_json(silent=True) or {}
+        body = reqjson.body()
         # one report ("id") or several chosen on the page ("ids", the user 2026-11-15: one by one, or all)
         raw = body.get("ids") if isinstance(body.get("ids"), list) else [body.get("id")]
         ids = list(dict.fromkeys(str(x or "") for x in raw))

@@ -18,6 +18,7 @@ Made by notes.py (POST /api/notes with finding: {title}). Installed from app.py:
 """
 import json
 import os
+import re
 import threading
 import time
 
@@ -34,6 +35,8 @@ LABEL = dict(STATUSES)
 OPEN = {"new", "management", "approved", "researcher", "analyst", "advisor"}
 ROLE_LABEL = {"researcher": "Researcher/TI", "admin": "Administrator", "analyst": "Analyst", "management": "Management"}
 MAX_TITLE, MAX_COMMENT = 140, 1000
+ACODE_RX = re.compile(r"^LG-A-[0-9A-F]{8}$")      # an analyst code (acodes.ACODE_RX)
+CODE_GONE = "An analyst selection (its code is no longer kept)"   # a finding's name when its analyst code is gone
 # a finding is a channel, like a ticket: whoever sends it on names the person it goes to (a manager, a researcher, an
 # analyst), and only the people who took part see it and its trail (admins too, for oversight). The status a hand-over
 # leads to, per kind of person:
@@ -90,6 +93,7 @@ class Findings:
         self.title_of = lambda n: n               # app.py: a services report's readable title
         self.advisories_of = lambda fid: []       # advisory.py: a finding's advisories (no address)
         self.asked_of = lambda code: ""           # acodes.py: what an analyst's code asks the researchers for
+        self.acode_name = lambda code: None       # acodes.py: an analyst code's label as served (None: not known here)
 
     # ---- the channel
     def recipient(self, kind, to):
@@ -515,14 +519,38 @@ class Findings:
             self._load()
             return next((x for x in self.data["items"].values() if x.get("note") == note_id), None)
 
+    def name_of(self, x, describe=None):
+        """A finding's name as it is served. A finding made from an analyst code (origin analyst, its first code LG-A-…)
+        carries the code's label as it was when it was made: a label stored before a masking fix could hold a host's
+        name, an address, a bot id. It is worked out again with today's rule (acodes' label for the code; for a review or
+        a case, what the code book says the code stands for); a code no longer in the code book gives a fixed text
+        (masking would leave a bot id or a machine name in a request path: the owner, 2026-11-28). The stored file is
+        never rewritten (re-review of r1-1, 2026-11-28). Every other finding: its name as stored."""
+        name = x.get("name") or ""
+        codes = x.get("codes") or []
+        code = str(codes[0]).upper() if codes else ""
+        if x.get("origin") != "analyst" or not ACODE_RX.match(code):
+            return name
+        try:
+            if x.get("kind") in ("review", "case"):           # made with book.describe(code)[:200]
+                t = (describe(code) if describe else "") or ""
+            else:                                             # made with the code's label (create_analyst)
+                t = self.acode_name(code)
+            if t:
+                return t[:200] if x.get("kind") in ("review", "case") else t
+        except Exception:                                     # noqa: BLE001, S110 (the fixed text below, never raw)
+            pass
+        return CODE_GONE
+
     def shown(self, x, describe=None):
         """As people see it: names in full, dates readable, codes with what they mean. No address in any field."""
+        name = self.name_of(x, describe)
         # an administrator's step names the role it played (acted_role): "Administrator acting as analyst"
         who = lambda u, r, step=None: ({"by": "Looking Glass", "role": "Looking Glass"} if r == "system" else       # noqa: E731
                                        {"by": self.people.name(u, ""), "role": role_label(r, acted_role(x, step)),
                                         "acted": acted_role(x, step) or (r if r in ROLE_LABEL and r != "admin" else "")})
         day = lambda t: time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(t)) if t else ""
-        return {"id": x["id"], "number": f"#{x['id']}", "section": x["section"], "name": x["name"], "title": x["title"], "text": x["text"],
+        return {"id": x["id"], "number": f"#{x['id']}", "section": x["section"], "name": name, "title": x["title"], "text": x["text"],
                 "codes": [{"code": c, "text": (describe(c) if describe else "") or "", "asked": self.asked_of(c) or ""}
                           for c in x.get("codes") or []],
                 "status": x["status"], "status_label": LABEL.get(x["status"], x["status"]), "open": x["status"] in OPEN,
@@ -534,7 +562,7 @@ class Findings:
                              "codes": [{"code": c, "text": (describe(c) if describe else "") or ""} for c in h.get("codes") or []],
                              **who(h["user"], h["role"], h)} for h in x["history"]],
                 "updated": day(x["history"][-1]["at"]),
-                "display_name": self.title_of(x["name"]) if x.get("section") == "services" else x["name"],
+                "display_name": self.title_of(name) if x.get("section") == "services" else name,
                 # the review without "sent" (the devices' addresses, kept for the analyst's report only: never on this page)
                 "review": ({k: v for k, v in x["review"].items() if k not in ("by", "sent", "sent_infections", "sent_issues")}
                            | {"by": self.people.name(x["review"]["by"]) if x["review"].get("by") else ""})
@@ -652,7 +680,13 @@ def install(app, ctx):
         if kind not in TO_STATUS:
             return jsonify(error="kind is management, researcher or analyst."), 400
         mine = me()[0]
-        return jsonify(kind=kind, people=[{"code": person_code.code(p["user"]), "name": p["name"], "role": p.get("role", "")}
+
+        def code_of(user):
+            try:
+                return person_code.code(user)
+            except RuntimeError:               # data/person_code.key damaged (the bell says so): no code, never the name
+                return ""
+        return jsonify(kind=kind, people=[{"code": code_of(p["user"]), "name": p["name"], "role": p.get("role", "")}
                                           for p in f.people_of(kind) if p["user"] != mine])
 
     @app.route("/findings")

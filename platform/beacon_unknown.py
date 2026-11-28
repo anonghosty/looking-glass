@@ -342,6 +342,10 @@ def install(app, ctx):
     def allowed():
         return bool((getattr(g, "user", None) or {}).get("user")) and ctx["sees_hosts"]()
 
+    # the Findings page draws the section only for those the API answers (one rule): nobody else's browser asks it,
+    # so no refused request is logged on every visit (the sweep, 2026-11-26)
+    app.jinja_env.globals["lg_beacon_unknown"] = allowed
+
     def me():
         return (getattr(g, "user", None) or {}).get("user", "")
 

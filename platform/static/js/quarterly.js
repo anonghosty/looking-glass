@@ -33,7 +33,7 @@
     const d = new Date(`${String(iso).slice(0, 10)}T00:00:00Z`);
     return isNaN(d) ? String(iso) : d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   };
-  let timer = null, confirmQ = null, drawnOnce = false;
+  let timer = null, drawnOnce = false;
 
   // ---------------- Looking Glass not reachable (a restart): plain words, a few tries with longer waits, then Retry
   // r90: the shared helpers in loader.js (LGLoader.ask, lost, errorText); a read is tried again after 2, 4, 8 and 15 s
@@ -137,6 +137,11 @@
     else if (d.error) { msg.textContent = d.error; msg.classList.add("bad"); }
     // no quarter to offer: no empty drop-down and no greyed button, only the sentence below (can_make_note)
     const none = !(d.can_make || []).length;
+    // the confirm click belongs to this button only: a redraw (every 5 s while a quarter is made, or after the purge's
+    // switch) draws a new button that asks again, and choosing another quarter asks again (audit 2026-11-27, 11-11:
+    // the armed quarter outlived the redraw, so one click on the new button made the report)
+    let confirmQ = null;
+    sel.addEventListener("change", () => { if (confirmQ) { confirmQ = null; btn.textContent = "Make it again"; } });
     btn.addEventListener("click", async () => {
       const q = sel.value;
       if (confirmQ !== q) { confirmQ = q; btn.textContent = `Make ${q} again: click to confirm`; return; }
@@ -253,7 +258,7 @@
     h.append(el("b", null, "The quarterly purge"), el("span", `q-tag ${p.enabled ? "on" : "off"}`, p.enabled ? "ON" : "OFF"));
     w.append(h);
     w.append(el("p", "q-state", p.enabled
-      ? `On since ${day(p.since)}, confirmed by ${p.by_name || p.by}.`
+      ? `On since ${day(p.since)}, confirmed by ${p.by_name || "an administrator"}.`
       : "The quarterly purge is off on this installation: no report rows are deleted."));
     w.append(el("p", "q-meta", whatItDeletes(pv, p.enabled)));
     w.append(el("p", "q-meta", "The purge works on all networks in the database, not only the constituency: it clears old stored rows. The quarterly reports themselves are counted for the constituency set in Settings."));

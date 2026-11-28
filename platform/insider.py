@@ -48,10 +48,12 @@ import zipfile
 from flask import g, jsonify, request
 
 import ip_find
+import reqjson
 
 SEAL_ITEMS_MAX = 50000          # lines + addresses kept per copy or file (the whole is always sealed)
 TEXT_MAX = 5_000_000            # characters a copy may carry to be recorded
 TRACE_MAX_BYTES = 25_000_000    # a file or text given to Trace a leak
+ZIP_UNPACK_MAX = TRACE_MAX_BYTES * 4   # bytes unpacked from one ZIP at most, all its files together (a zip bomb)
 TRACE_PER_MINUTE = 5
 # Watching small traces (external review of 1a7b016 + the user, 2026-11-20): a trace of one or two addresses still
 # answers yes or no, so someone with the audit permission could test about 100 guesses a day, slowly. Not closed (it
@@ -82,6 +84,15 @@ def normal(text):
     """The text as it is compared: line ends unified, spaces at line ends and around the whole removed."""
     t = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
     return "\n".join(ln.rstrip() for ln in t.split("\n")).strip()
+
+
+def _old(ln, cut):
+    """True only for a readable seal dated before cut."""
+    try:
+        s = json.loads(ln)
+        return isinstance(s, dict) and float(s.get("t") or 0) < cut
+    except (ValueError, TypeError):
+        return False
 
 
 class Sealer:
@@ -117,11 +128,20 @@ class Sealer:
             try:
                 with zipfile.ZipFile(io.BytesIO(data)) as z:
                     parts = []
+                    # a budget for everything unpacked, read at most that far (never trusting the sizes the ZIP states):
+                    # a small ZIP given to Trace a leak can unpack to gigabytes (audit 2026-11-27, 5-4)
+                    left = ZIP_UNPACK_MAX
                     for zi in z.infolist()[:200]:
-                        if zi.file_size <= TRACE_MAX_BYTES * 4:
-                            b = z.read(zi)
-                            out["files"].append({"name": zi.filename[:120], "sha256": hashlib.sha256(b).hexdigest()})
-                            parts.append((zi.filename, b))
+                        cap = min(TRACE_MAX_BYTES * 4, left)
+                        if zi.file_size > cap:
+                            continue
+                        with z.open(zi) as fh:
+                            b = fh.read(cap + 1)
+                        if len(b) > cap:
+                            continue                            # bigger than it said: left out
+                        left -= len(b)
+                        out["files"].append({"name": zi.filename[:120], "sha256": hashlib.sha256(b).hexdigest()})
+                        parts.append((zi.filename, b))
             except (zipfile.BadZipFile, OSError, RuntimeError):
                 parts = [(name, data)]
         for n, b in parts:
@@ -131,7 +151,7 @@ class Sealer:
                 txt = b.decode("utf-8-sig")
             except UnicodeDecodeError:
                 continue
-            s = self.seal_text(txt)
+            s = self.seal_text(_unstamp(txt))   # the who/when row left out: a copy with it deleted is still the exact file
             out["items"] += s["items"]; out["lines"] += s["lines"]; out["addresses"] += s["addresses"]
             out.setdefault("line_items", []).extend(s["line_items"]); out.setdefault("addr_items", []).extend(s["addr_items"])
             out.setdefault("wholes", []).append(s["whole"])
@@ -173,7 +193,9 @@ class Sealer:
                     lines = fh.readlines()
             except OSError:
                 return 0
-            keep = [ln for ln in lines if (json.loads(ln).get("t") or 0) >= cut] if lines else []
+            # a line that cannot be read (a write torn by a full disk or a crash) is kept as it is: it no longer stops
+            # every later prune (audit 2026-11-27, 5-5), and nothing is dropped without a date saying it is old
+            keep = [ln for ln in lines if not _old(ln, cut)] if lines else []
             if len(keep) == len(lines):
                 return 0
             tmp = self.path + ".tmp"
@@ -238,6 +260,124 @@ class Sealer:
         return out, len(common), one_by_one
 
 
+def stamp_who(user, full_name=""):
+    """Who downloaded it, as the stamp row says it: the full name and the person's code (person_code.py), never the
+    sign-in name, which is half of what signs someone in (check_no_signin_names, 2026-11-27). The code is the same
+    for the account every time, and the server turns it back into the account (person_code.user_of)."""
+    import person_code
+    try:
+        pc = person_code.code(user)
+    except RuntimeError:                       # data/person_code.key damaged (the bell says so): never the sign-in name
+        pc = "an account"
+    name = str(full_name or "").strip()
+    return f"{name} ({pc})" if name else pc
+
+
+STAMP_COLS = ("Downloaded by", "Downloaded at")
+
+
+def stamp_cells(who, when):
+    """The two stamp cells, spreadsheet-safe (a name is never taken for a formula)."""
+    import csvsafe
+    return [csvsafe.cell(who), csvsafe.cell(when)]
+
+
+def _rows(text):
+    """(BOM, rows, line ending) of a CSV text, read as csv.writer wrote it."""
+    import csv
+    bom = "﻿" if text.startswith("﻿") else ""
+    body = text[len(bom):]
+    nl = "\r\n" if "\r\n" in body[:4000] else "\n"
+    return bom, list(csv.reader(io.StringIO(body, newline=""))), nl
+
+
+def _text(bom, rows, nl):
+    # through csvsafe like every CSV the server writes (check_csv_safety): the cells came from csvsafe already, so it
+    # leaves them as they were, and a cell that would run as a formula never leaves here
+    import csvsafe
+    buf = io.StringIO()
+    csvsafe.writer(buf, lineterminator=nl).writerows(rows)
+    return bom + buf.getvalue()
+
+
+def _unstamp(text):
+    """The text without stamp_csv's two columns, for its fingerprints: the seal of a stamped download and a trace of a
+    leaked copy, with or without those columns, read the same lines. Text without them is returned as it is (a
+    quarterly CSV's own stamp under its first line was always part of the file and stays)."""
+    try:
+        bom, rows, nl = _rows(text)
+    except Exception:  # noqa: BLE001  (not CSV: as it is)
+        return text
+    if not rows or tuple(rows[0][-2:]) != STAMP_COLS:
+        return text
+    out = []
+    for r, head in _sections(rows):        # as stamp_csv wrote it: blank rows were left as they are
+        blank = not r or not any(c.strip() for c in r)
+        out.append(r if blank or (head and tuple(r[-2:]) != STAMP_COLS) else r[:-2])
+    return _text(bom, out, nl)
+
+
+def _sections(rows):
+    """Each row with whether it is a header: the first row, and the first row after a blank one (a file of several
+    tables, like the Executive's 7-day trend: its figures, a blank row, then its items under their own header)."""
+    out, after_blank = [], True
+    for r in rows:
+        empty = not any(c.strip() for c in r) if r else True
+        out.append((r, not empty and after_blank))
+        after_blank = empty
+    return out
+
+
+def stamp_csv(data, who, when):
+    """A downloaded CSV that says who downloaded it and when (the user, 2026-11-27: every CSV, as the quarterly ones):
+    two columns, "Downloaded by" and "Downloaded at", on every row (the user's choice, 2026-11-27: a last row of 3 cells
+    made the CSVs uneven, which imports refuse or read as a broken record; on every row the stamp also stays with rows
+    copied out of the file). Every other cell stays as it was. A file already stamped (these columns, or a quarterly
+    CSV: 'Downloaded,' under its first line) and anything not UTF-8 text stay as they are."""
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data
+    head = text[:800].lstrip("﻿")
+    if head.startswith("Downloaded,") or "\nDownloaded," in head:
+        return data
+    try:
+        bom, rows, nl = _rows(text)
+    except Exception:  # noqa: BLE001  (not CSV: as it is)
+        return data
+    if not rows or tuple(rows[0][-2:]) == STAMP_COLS:
+        return data
+    cells, out, width = stamp_cells(who, when), [], 0
+    # every table in the file: its header gets the two column names, its rows the stamp, at the header's width (review
+    # 2026-11-27: in a file of several tables the second header got a name and a time, and a shorter row put the stamp
+    # under another column); blank rows between tables stay blank
+    for r, head in _sections(rows):
+        if head:
+            width = len(r)
+            out.append(r + list(STAMP_COLS))
+        elif not r or not any(c.strip() for c in r):
+            out.append(r)
+        else:
+            out.append(r + [""] * max(0, width - len(r)) + cells)
+    return _text(bom, out, nl).encode("utf-8")
+
+
+def stamp_zip(data, who, when):
+    """The same stamp on every CSV inside a downloaded ZIP (a combination's PDF + CSVs); the other files as they are."""
+    try:
+        src = zipfile.ZipFile(io.BytesIO(data))
+        out = io.BytesIO()
+        with zipfile.ZipFile(out, "w") as dst:
+            for zi in src.infolist():
+                b = src.read(zi)
+                if zi.filename.lower().endswith(".csv"):
+                    b = stamp_csv(b, who, when)
+                dst.writestr(zi, b, compress_type=zi.compress_type)
+        return out.getvalue()
+    except (zipfile.BadZipFile, OSError, ValueError, RuntimeError):
+        return data
+
+
 def load_key(base_dir):
     """COPY_SEAL_KEY from .env, else data/copy_seal.key (made once, owner-only)."""
     k = os.environ.get("COPY_SEAL_KEY", "").strip()
@@ -270,7 +410,10 @@ def install(app, ctx):
         return (getattr(g, "user", None) or {}).get("user", "")
 
     def name_of(u):
-        return full(u) or u
+        # the full name, else the person code, never the sign-in name (the page header of every role; audit
+        # 2026-11-27). Trace a leak's "user" column is the Audit portal's, which names accounts on purpose
+        import people
+        return full(u) or people.person_label(u)
 
     def prune_now():
         try:
@@ -352,7 +495,7 @@ def install(app, ctx):
         if over(copied, u, COPY_PER_MINUTE, 60):
             return jsonify(error=f"At most {COPY_PER_MINUTE} copies a minute: wait a moment, or download the list instead."), 429
         prune_daily()
-        b = request.get_json(silent=True) or {}
+        b = reqjson.body()
         kind = str(b.get("kind") or "text")
         if kind not in KINDS:
             kind = "text"
@@ -383,6 +526,9 @@ def install(app, ctx):
     # ------------------------------------------------------------------ every downloaded file, sealed
     @app.after_request
     def _seal_download(resp):
+        # an internal mark (audit_proof: a file checked against its own SHA-256s is never changed): taken off first,
+        # so it never reaches a browser, whoever downloads
+        nostamp = resp.headers.pop("X-LG-No-Stamp", None) == "1"
         try:
             u = me()
             # people only: not the self-test's accounts, not the local check scripts' automation key (their downloads
@@ -397,7 +543,35 @@ def install(app, ctx):
                 return resp
             data = resp.get_data()
             name = (re.search(r'filename="?([^";]+)', disp) or [None, request.path])[1][:160]
+            who = stamp_who(u, full(u))
+            when = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
+            if is_list:
+                # a list the page saves as a CSV: the two stamp columns come with it (download_stamp: their names and
+                # cells, spreadsheet-safe), the page adds them to every row
+                try:
+                    obj = json.loads(data)
+                    if isinstance(obj, dict):
+                        obj["download_stamp"] = {"columns": list(STAMP_COLS), "cells": stamp_cells(who, when)}
+                        data = json.dumps(obj).encode("utf-8")
+                        resp.set_data(data)
+                except ValueError:
+                    pass
             if is_file:
+                # every CSV says who downloaded it and when, inside the file too (a ZIP: each CSV in it); then sealed
+                low = name.lower()
+                # a file whose contents are checked against its own SHA-256s (the audit proof package's MANIFEST.json)
+                # is never changed: sealed and logged as it is (audit 2026-11-27: the stamp broke its verifier)
+                if nostamp:
+                    stamped = data
+                elif low.endswith(".csv") or resp.mimetype == "text/csv":
+                    stamped = stamp_csv(data, who, when)
+                elif low.endswith(".zip") and data[:2] == b"PK":
+                    stamped = stamp_zip(data, who, when)
+                else:
+                    stamped = data
+                if stamped is not data:
+                    resp.set_data(stamped)
+                    data = stamped
                 f = sealer.seal_file(data, name)
                 entry = {"id": _hid(), "t": round(time.time(), 3), "user": u, "kind": "download", "what": name,
                          "page": request.path[:60], "sha256": f["sha256"], "files": f["files"], "wholes": f.get("wholes") or [],
@@ -433,7 +607,7 @@ def install(app, ctx):
                 return jsonify(error="The file is too large to trace here (25 MB at most)."), 413
             given = "a file"
         else:
-            b = request.get_json(silent=True) or {}
+            b = reqjson.body()
             text = b.get("text") if isinstance(b.get("text"), str) else ""
             if len(text) > TRACE_MAX_BYTES:
                 return jsonify(error="Too much text to trace at once."), 413

@@ -18,6 +18,12 @@ cryptography>=50.0,<51
 # pyOpenSSL (through webauthn) needs it on Python 3.12: named here so the lock carries it for every Python (a lock made
 # on Python 3.14 left it out, 2026-11-24)
 typing-extensions>=4.9,<5
+# the pictures in the combined PDFs (combo_pdf.py draws with Pillow): already in the lock through reportlab, named here
+# because Looking Glass uses it directly
+pillow>=13.0,<14
+# the passkey test in the security retest (security_testing/security_retest.py builds a passkey answer): already in the
+# lock through webauthn, named here because the shipped retest uses it directly
+cbor2>=5.9,<6
 # the IANA time-zone database for local times (timezones.py): Python's zoneinfo reads the server's own copy, which
 # minimal servers and containers can lack; versions are years (2025.2...), so the cap is far away on purpose
 tzdata>=2024.1,<2100

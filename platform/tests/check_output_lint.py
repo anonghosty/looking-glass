@@ -21,6 +21,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "tests"))
 os.environ.setdefault("LG_QUIET", "1")
 import output_lint as L  # noqa: E402
+import test_tools  # noqa: E402
 
 checks, fails = 0, []
 
@@ -63,12 +64,16 @@ ok("…a row narrower than its own table's header is still caught",
 
 print("2. Every advisory variation, rendered here")
 try:
-    import pypdfium2  # noqa: F401
+    if test_tools.find_pypdfium2() is None:
+        raise ImportError
     import advisory_pdf as APDF
     have = True
 except ImportError:
     have = False
-    print("  SKIPPED: pypdfium2 is not installed - the rendered variations are checked where it is")
+    if os.environ.get("LG_SUITE") == "all":
+        ok("pypdfium2 is there to render every advisory variation", False)
+    else:
+        print("  (rendering the variations needs pypdfium2: a maintainer's part, run by LG_SUITE=all; not part of an installation's checks)")
 if have:
     reps = ["Sinkhole Events", "Sinkhole HTTP Events", "IPv6 Sinkhole Events"]
     techs = [{"id": tid, "name": n, "tactics": ["Command and Control"], "certainty": "observed", "certainty_label": "Observed",

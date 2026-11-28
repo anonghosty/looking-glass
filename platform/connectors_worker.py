@@ -30,7 +30,6 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 DAYS = max(1, min(90, int(os.environ.get("CONNECTOR_BACKFILL_DAYS", "30") or 30)))   # the back-fill (the user: 30 days)
-SETTLE_MINUTES = 30            # a day is sent once no new records for it arrived for this long
 BATCH_OBJECTS = 400            # OpenCTI: objects per TAXII envelope
 VERIFY_AFTER = 600             # OpenCTI: seconds after a send before asking which objects it took (it imports later)
 RETRIES = 3                    # OpenCTI: sends again of objects it did not take, before reporting them as refused
@@ -86,6 +85,21 @@ def day_signature(db, cols, day):
     return sig
 
 
+def beacon_summary(v):
+    """One kept beacon answer (data/beacon_summaries.json, beacon_keep.py: a list of [field, value] pairs, the public
+    summary of one request's beacon) as a dict; {} for no beacon or anything unreadable (audit 2026-11-27: each pair
+    was read as a summary of its own, and dict() of a pair stopped the sender for every target)."""
+    if isinstance(v, dict):
+        return v
+    if not isinstance(v, (list, tuple)):
+        return {}
+    out = {}
+    for p in v:
+        if isinstance(p, (list, tuple)) and len(p) == 2 and isinstance(p[0], str):
+            out[p[0]] = p[1]
+    return out
+
+
 def devices_of(db, cols, day, keep, base_dir, beacons):
     """{ip: device} for that day, only the addresses keep(asn, ip) lets through; Looking Glass's analysis per report."""
     import beacon_keep
@@ -111,10 +125,10 @@ def devices_of(db, cols, day, keep, base_dir, beacons):
             e["cves"].update(m.upper() for x in tags for m in re.findall(r"cve-\d{4}-\d{4,}", x, re.I))
             # Looking Glass's combination codes never leave Looking Glass (the user, 2026-11-24): not collected here
             if r.get("http_url"):
-                for b in beacons.get(beacon_keep.key_of(r.get("http_url"), r.get("http_host")), []):
-                    b = dict(b)
-                    if b.get("format"):
-                        e["beacons"].add((str(b.get("id", "")), str(b["format"])))
+                # kept under the lower-cased host, as the decoder keeps it (beacon_decode.field; audit 2026-11-28, r1-6)
+                b = beacon_summary(beacons.get(beacon_keep.key_of(r.get("http_url"), str(r.get("http_host") or "").lower() or None)))
+                if b.get("format"):
+                    e["beacons"].add((str(b.get("id", "")), str(b["format"])))
     # how many days each device was seen in each report, and the first (what the database still holds)
     for c in cols:
         ips = [ip for ip, d in out.items() if c in d["reports"]]
@@ -197,15 +211,43 @@ def run(base_dir=HERE, now=None, log=print):
         start = max(today - dt.timedelta(days=DAYS), dt.datetime.fromtimestamp(t.get("turned_on") or time.time(), dt.timezone.utc).date()
                     - dt.timedelta(days=DAYS))
         scope = t.get("scope") or {}
+        # failed: a send or a revocation failed in this run. A run that failed counts ONCE toward the failures in a row
+        # that pause the target, whatever failed in it (audit 2026-11-28, r1-5: a failed revocation never counted, so a
+        # target that always refused was never paused; re-review: a revocation and a send failing in one run counted 2)
         failed = False
+
+        def gone(day, prev, t=t, key=key, tid=tid, st=st):
+            """The purge removed this day: revoke what was sent. Forgotten only once the revocation went through; a
+            failed one is tried again next run (audit 2026-11-27: it was forgotten either way, and the day's data
+            stayed on the target)."""
+            if revoke(net, C, data, t, key, tid, day, prev, write_log, audit):
+                st["days"].pop(day, None)
+                return True
+            return False
+        window = {(start + dt.timedelta(days=i)).isoformat() for i in range((today - start).days)}
+        # days sent earlier that are now older than the back-fill window: the quarterly purge removes exactly these
+        # (it keeps the last 31 days), so they are looked at too, or a purged day would never be revoked. Looked at
+        # once a day (the purge runs at most daily), not every 15 minutes: the day checked is kept in the target's
+        # state, and only once every revocation went through (a failed one is tried again next run; audit 2026-11-28, r1-4)
+        if st.get("old_checked") != today.isoformat():
+            old_ok = True
+            for day in sorted(d for d in list(st["days"]) if d not in window and re.match(r"\d{4}-\d{2}-\d{2}$", d)):
+                prev = st["days"].get(day) or {}
+                if prev.get("objects") and not day_signature(db, cols, day):
+                    gone_ok = gone(day, prev)
+                    failed |= not gone_ok
+                    old_ok &= gone_ok
+                    state.save()
+            if old_ok:
+                st["old_checked"] = today.isoformat()
+                state.save()
         for i in range((today - start).days):
             day = (start + dt.timedelta(days=i)).isoformat()
             sig = day_signature(db, cols, day)
             prev = st["days"].get(day) or {}
             if not sig:
                 if prev.get("objects"):                          # the purge removed this day: revoke what was sent
-                    failed |= not revoke(net, C, data, t, key, tid, day, prev, write_log, audit)
-                    st["days"].pop(day, None)
+                    failed |= not gone(day, prev)
                 continue
             full_sig = hashlib.sha256(json.dumps([sig, know_sig, scope, t["tlp"], cp.FORMAT], sort_keys=True).encode()).hexdigest()[:16]
             retrying = False
@@ -269,13 +311,14 @@ def run(base_dir=HERE, now=None, log=print):
                 st["fails"] = 0
             except (ValueError, net.Refused) as e:
                 failed = True
-                st["fails"] = st.get("fails", 0) + 1
                 write_log(target=tid, day=day, status="failed", detail=str(e)[:300])
                 audit.add("connector_failed", user="looking-glass", target=t["name"], detail=f"{day}: {str(e)[:200]}")
                 break
             state.save()
+        if failed:
+            st["fails"] = st.get("fails", 0) + 1           # once per run
         if failed and st.get("fails", 0) >= 3:
-            t["paused"] = "Three sends in a row failed; the last: " + (C.read_log(log_path, tid, 1) or [{}])[0].get("detail", "")
+            t["paused"] = "Three runs in a row failed; the last: " + (C.read_log(log_path, tid, 1) or [{}])[0].get("detail", "")
             targets.save(tid, t)
             audit.add("connector_paused", user="looking-glass", target=t["name"], detail=t["paused"][:200])
         t2 = targets.get(tid) or t

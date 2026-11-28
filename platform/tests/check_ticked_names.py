@@ -91,8 +91,9 @@ try:
             break
         jid = None
     if not jid:
-        print("SKIP: no researcher's code here whose devices carry another infection or CVE/issue")
-        sys.exit(0)
+        # nothing to search with: an honest skip (77), never a pass that tried nothing; LG_NO_SKIP=1 makes it a failure
+        print("SKIPPED: no researcher's code here whose devices carry another infection or CVE/issue")
+        sys.exit(77)
     pv = s["preview"]
     inf, iss = pv.get("infections") or [], pv.get("issues") or []
     print(f"  ({code}: {len(inf)} infection(s), {len(iss)} CVE/issue(s), {len(pv.get('cross') or [])} pattern(s))")

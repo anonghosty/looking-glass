@@ -132,7 +132,8 @@ def normalise(doc, src):
         if k in used or k in INTERNAL or v in (None, "") or k.startswith("http_referer_"):
             continue
         sv = v.isoformat() if isinstance(v, datetime) else str(v)
-        extras[k] = sv if len(sv) <= EXTRA_MAX else sv[:EXTRA_MAX] + "…"
+        # a cut value says so in words, with its full length (no "…": audit 2026-11-27, 8-5)
+        extras[k] = sv if len(sv) <= EXTRA_MAX else f"{sv[:EXTRA_MAX]} [cut: the first {EXTRA_MAX:,} of {len(sv):,} characters]"
     out["source"] = src["name"]
     out["source_label"] = src["label"]
     out["attack_class"] = src["class"]

@@ -73,7 +73,8 @@
     const top = el("div", "au-kpis");
     top.append(kpi("Mode now", mode, d.mode === "enforce" ? "reports that do not pass are held back" : d.mode === "log" ? "results recorded, nothing held back" : "not checked"),
       kpi("Reports checked", fmt(k.checked), `${d.period.from} to ${d.period.to}`),
-      kpi("Valid, expected signer", k.pass_rate == null ? "–" : `${(k.pass_rate * 100).toFixed(1)} %`, `${fmt(k.pass)} signed by ${d.domain}`, k.checked && k.pass < k.checked ? "warn" : "good"),
+      // LGShare (loader.js): never "100.0%" while some checks failed, never "0.0%" when some passed (2026-11-26)
+      kpi("Valid, expected signer", k.pass_rate == null ? "–" : window.LGShare.pct(k.pass_rate, 1), `${fmt(k.pass)} signed by ${d.domain}`, k.checked && k.pass < k.checked ? "warn" : "good"),
       kpi("Did not pass", fmt(k.checked - k.pass - k.temperror), `${fmt(k.fail)} fail · ${fmt(k.none)} unsigned · ${fmt(k.other)} other signer · ${fmt(k.permerror)} cannot be checked`, (k.fail || k.none || k.other) ? "warn" : ""),
       kpi("Held back", fmt(k.held_back), `${fmt(k.released)} released · ${fmt(k.held_now)} held now`, k.held_now ? "warn" : ""),
       kpi("DNS did not answer", fmt(k.temperror), "not held against the report"),
@@ -105,13 +106,19 @@
     }
     box.append(st);
 
-    box.append(el("h3", "au-sub-h", `Reports that did not pass (${fmt(d.odd.length)}${d.odd.length >= 300 ? ", newest 300" : ""})`),
+    // the server lists the newest 300: the heading gives every report that did not pass (the checks minus the passes),
+    // and says when the list holds fewer (2026-11-26: it read "300, newest 300" for 1,200)
+    const oddN = d.totals?.odd ?? Math.max(d.odd.length, (k.checked || 0) - (k.pass || 0));
+    box.append(el("h3", "au-sub-h", `Reports that did not pass (${fmt(oddN)}${oddN > d.odd.length ? `: the newest ${fmt(d.odd.length)} are listed` : ""})`),
       d.odd.length ? table(["Checked (UTC)", "Result", "What it means", "What happened", "From", "Signer", "Why", "Subject", "Files"],
         d.odd.map((x) => [x.at.replace("T", " ").slice(0, 16), x.result, x.meaning, x.action_label, x.from_domain || "?", x.signer || "–", x.reason, x.subject, x.files]))
         : el("p", "muted", "Every report in the period passed."));
 
-    box.append(el("h3", "au-sub-h", "Settings and releases in the period"),
-      d.changes.length ? table(["When (UTC)", "What", "By", "Detail"], d.changes.map((x) => [x.at, x.event.replace(/_/g, " "), x.user, x.detail]))
+    // the server sends the newest 100 changes; their full count when it gives one, else "the newest 100" at the cap
+    const chN = d.totals?.changes ?? d.changes.length;
+    box.append(el("h3", "au-sub-h", "Settings and releases in the period" + (chN > d.changes.length ? ` (${fmt(chN)}: the newest ${fmt(d.changes.length)} are listed)`
+      : d.changes.length >= 100 ? ` (the newest ${fmt(d.changes.length)}; choose a shorter period to see the earlier ones)` : "")),
+      d.changes.length ? table(["When (UTC)", "What", "By", "Detail"], d.changes.map((x) => [x.at, x.event.replace(/_/g, " "), x.by_name || "an administrator", x.detail]))
         : el("p", "muted", "No change to the sender check and no release in the period."));
   }
 

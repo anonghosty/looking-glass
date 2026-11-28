@@ -446,7 +446,7 @@
   const regionNames = (() => { try { return new Intl.DisplayNames(["en"], { type: "region" }); } catch { return null; } })();
   const countryName = (cc) => { if (!cc) return "Unknown"; if (cc === "EU") return "Europe"; try { return regionNames ? regionNames.of(cc.toUpperCase()) : cc; } catch { return cc; } };
   // "UK" is how some reports write the United Kingdom; its flag file is "gb" (r90: the UK flag never loaded)
-  const flagUrl = (cc) => (cc && /^[a-z]{2}$/i.test(cc) && cc !== "EU" ? `https://flagcdn.com/w40/${cc.toLowerCase() === "uk" ? "gb" : cc.toLowerCase()}.png` : "");
+  const flagUrl = (cc) => (cc && /^[a-z]{2}$/i.test(cc) && cc !== "EU" ? `/static/img/flags/${cc.toLowerCase() === "uk" ? "gb" : cc.toLowerCase()}.png` : "");
   const flagImg = (cc) => { const i = el("img", "flag"); i.alt = ""; const u = flagUrl(cc); if (u) { i.src = u; i.loading = "lazy"; } else i.style.visibility = "hidden"; return i; };
   const hexRgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
   const sevColor = (s) => SEV[s] || SEV.info;
@@ -773,11 +773,17 @@
     const maxS = Math.max(1, ...g.sources.map((s) => s.count));
     const maxD = Math.max(1, ...g.destinations.map((d) => d.count));
     const lw = (c, m) => 0.6 + 2.4 * (Math.log10(c + 1) / Math.log10(m + 1));
+    // only the arcs of the connections drawn now are kept (audit 2026-11-27, 9-14: every connection ever drawn stayed in
+    // the cache, so it grew all day with each filter and replay step)
+    const kept = new Map();
     for (const f of g.flows) {
       const k = `${f.src}>${f.dst}`;
-      if (!flowPaths.has(k)) flowPaths.set(k, arcPath(f.src, f.dst, Math.max(16, Math.round(ARC_POINTS / 2))));
-      f.path = flowPaths.get(k); f.rgb = hexRgb(classColor(f.class)); f.w = lw(f.count, maxF);
+      const p = kept.get(k) || flowPaths.get(k) || arcPath(f.src, f.dst, Math.max(16, Math.round(ARC_POINTS / 2)));
+      kept.set(k, p);
+      f.path = p; f.rgb = hexRgb(classColor(f.class)); f.w = lw(f.count, maxF);
     }
+    flowPaths.clear();
+    for (const [k, p] of kept) flowPaths.set(k, p);
     for (const s of g.sources) { s.rgb = hexRgb(classColor(s.class)); s.r = 3 + 9 * Math.sqrt(s.count / maxS); }
     for (const d of g.destinations) d.r = 2.5 + 8 * Math.sqrt(d.count / maxD);
     const a = state.lite ? 80 : 60;
@@ -1182,6 +1188,21 @@
   // the drop-downs' counts follow the other filters (the user, 2026-11-19): asked again whenever a filter changes;
   // a slower answer for an older choice of filters is dropped
   const facetsURL = () => { const p = filterParams(); p.set("at", new Date(replayNow()).toISOString()); return `/api/facets?${p}`; };
+  // the filter lists are rebuilt (new order, new counts) when the counts come back, but not while the pointer is over
+  // them: a row is never moved or replaced under a click (2026-11-27: a tick on a second filter right after the first
+  // could land on a row the rebuild had just thrown away). The rebuild follows as soon as the pointer leaves.
+  const drawerEl = $("drawer");
+  let drawerHold = false, drawerPending = false;
+  if (drawerEl) {
+    drawerEl.addEventListener("pointerenter", () => { drawerHold = true; });
+    drawerEl.addEventListener("pointerleave", () => { drawerHold = false; if (drawerPending) rebuildFilters(); });
+  }
+  function rebuildFilters() {
+    if (drawerHold) { drawerPending = true; return; }
+    drawerPending = false;
+    keepFocus(() => flipList(drawerEl, buildFilters));
+  }
+  let beaconTimer = 0;               // the one wait for the Beacon filter (loadBeaconFacet below)
   async function loadFacets() {
     const my = (loadFacets.seq = (loadFacets.seq || 0) + 1);
     try {
@@ -1190,17 +1211,22 @@
       state.facets = f;
       for (const r of state.facets.infection || []) infColor(r.value);
       // the lists move to their new order and their counts roll to the new figures (the user, 2026-11-20)
-      keepFocus(() => flipList($("drawer"), buildFilters));
+      rebuildFilters();
       renderPins();   // pinned rows can now show report labels
-      if (state.facets.beacon_pending) setTimeout(loadBeaconFacet, 20000);
+      if (state.facets.beacon_pending) beaconLater(20000); else clearTimeout(beaconTimer);
     } catch (err) { toast(`Could not load filters: ${window.LGLoader.errorText(err)}`); }
   }
   // the day's beacons are decoded in the background on the server (beacon_stats.ready): only the Beacon filter is
-  // filled in when they are done, so nothing else the analyst set changes
+  // filled in when they are done, so nothing else the analyst set changes. One wait at a time (audit 2026-11-27, 9-3:
+  // every filter change started another chain of asks, and they stacked up): a new one replaces the one waiting, and an
+  // answer that comes after the filters were asked for again is dropped (that newer load owns the wait)
+  function beaconLater(ms) { clearTimeout(beaconTimer); beaconTimer = setTimeout(loadBeaconFacet, ms); }
   async function loadBeaconFacet() {
+    const my = loadFacets.seq;
     try {
       const f = await getJSON(facetsURL());
-      if (f.beacon_pending) { setTimeout(loadBeaconFacet, 30000); return; }
+      if (my !== loadFacets.seq) return;
+      if (f.beacon_pending) { beaconLater(30000); return; }
       if (!f.beacon || !state.facets) return;
       state.facets.beacon = f.beacon; delete state.facets.beacon_pending;
       $("fBeaconLabel").hidden = false;
@@ -1601,8 +1627,11 @@
         if (state.modalEv !== ev) return;
         related.replaceWith(section("This host yesterday", [
           ["Events", fmt(r.count)], ["First seen", r.first && `${r.first.replace("T", " ").slice(0, 19)} UTC${LT().also(r.first)}`], ["Last seen", r.last && `${r.last.replace("T", " ").slice(0, 19)} UTC${LT().also(r.last)}`],
-          ["Seen in reports", (r.sources || []).map((s) => `${s.label} (${fmt(s.count)}, ${Math.round((s.count / Math.max(1, r.count)) * 100)}%)`).join(", ")],
-          ["Infections / categories", r.infections.join(", ")], ["Contacted hosts", r.hosts.join(", ")], ["Destinations", r.dst_ips.join(", ")],
+          ["Seen in reports", (r.sources || []).map((s) => `${s.label} (${fmt(s.count)}, ${window.LGShare.of(s.count, r.count)})`).join(", ")],
+          // each list may be cut by the server: "and N more" from its totals (2026-11-26)
+          ...[["Infections / categories", r.infections, "infections"], ["Contacted hosts", r.hosts, "hosts"], ["Destinations", r.dst_ips, "dst_ips"]].map(([k, xs, t]) => {
+            const more = (Number((r.totals || {})[t]) || 0) - (xs || []).length;
+            return [k, (xs || []).join(", ") + (more > 0 ? ` and ${fmt(more)} more` : "")]; }),
         ]));
       } catch (err) {   // say so instead of "Loading…" forever (review 2026-11-13)
         if (state.modalEv === ev) related.replaceWith(section("This host yesterday", [["Status", `Could not load: ${window.LGLoader.errorText(err)}`]]));
@@ -1645,7 +1674,15 @@
     s.append(el("h3", null, title));
     if (pre) { s.append(el("pre", null, pre)); return s; }
     const dl = el("dl");
-    for (const [k, v] of rows) { dl.append(el("dt", null, k)); dl.append(el("dd", v ? null : "empty", v || "Not recorded")); }
+    for (const [k, v] of rows) {
+      dl.append(el("dt", null, k));
+      // a long code (event4_sinkhole_http) wraps after its underscores, not in the middle of a word (docs screenshots
+      // 2026-11-27); text nodes and <wbr> only: a report's value never becomes markup
+      const dd = el("dd", v ? null : "empty");
+      if (v) String(v).split(/(?<=_)/).forEach((p, i) => { if (i) dd.append(document.createElement("wbr")); dd.append(document.createTextNode(p)); });
+      else dd.textContent = "Not recorded";
+      dl.append(dd);
+    }
     s.append(dl);
     return s;
   }
@@ -1674,7 +1711,16 @@
     const bounds = new mapboxgl.LngLatBounds(a, a).extend(b);
     map.fitBounds(bounds, { padding: 120, maxZoom: 5, pitch: 50, duration: 1800 });
   });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") { if (!$("insight").hidden) closeInsight(); else if (!$("modal").hidden) closeModal(); else setDrawer(false); } });
+  // one Escape closes one layer, the top-most (audit 2026-11-27, 9-5: it closed the Glossary and the drawer under it, or
+  // a list's drop-down and the drawer): the Glossary dialog, then the intro page (its own handler), the insight, the
+  // details, the drawer. An Escape a drop-down or dialog already used (defaultPrevented) closes nothing more.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || e.defaultPrevented) return;
+    if (!$("glossaryDlg").hidden) { e.preventDefault(); closeGlossaryDlg(); return; }
+    if ($("intro") && !$("intro").hidden) return;
+    if (!$("insight").hidden) closeInsight(); else if (!$("modal").hidden) closeModal(); else { setDrawer(false); return; }
+    e.preventDefault();
+  });
 
   // ------------------------------------------------------------------ filters
   // a rebuilt list replaces its buttons and boxes: the one that had the keyboard focus gets it back (same filter, same value)
@@ -1856,11 +1902,11 @@
   window.addEventListener("blur", hideTip);
   const isTouchLike = () => lastPointer === "touch" || lastPointer === "pen" || mq("(hover: none)");
   const tipLine = (b, rest) => { const d = el("div"); if (b) d.append(el("b", null, b)); if (rest) d.append(document.createTextNode(rest)); return d; };
+  // a share in words that never mislead (loader.js LGShare): a part with records is never "0%", a part never "100%";
+  // one decimal under a tenth ("<0.1%"), whole numbers above (">99%")
   const pct = (n, total) => {
     const f = n / Math.max(1, total);
-    if (f > 0 && f < 0.001) return "<0.1%";
-    if (f > 0.995 && f < 1) return `${(Math.floor(f * 1000) / 10).toFixed(1)}%`;
-    return `${(f * 100).toFixed(f < 0.1 ? 1 : 0)}%`;
+    return window.LGShare.pct(f, f < 0.1 ? 1 : 0);
   };
   function attachTip(node, fn) {
     node.addEventListener("mousemove", (e) => { const c = fn(e); if (c) showTip(e, c); else hideTip(); });
@@ -1874,22 +1920,43 @@
     drawHourClass(s.hours_by_class || {}, s.current_hour);
     drawSeverity(s.severity || [], total);
     const netLabel = (r) => { const sw = el("span", "swatch"); sw.style.background = "#7c7c85"; return [sw, el("span", null, r.label)]; };
-    top("topSrcNet", s.src_network || [], "src_asn", (v, r) => netLabel(r), null, total,
-      (r) => (state.demo || !r.asns?.length ? "" : `AS${r.asns.join(", AS")}`));
-    top("topDstNet", s.dst_network || [], "dst_asn", (v, r) => netLabel(r), null, total,
-      (r) => (state.demo || !r.asns?.length ? "" : `AS${r.asns.join(", AS")}`));
-    top("topSource", s.source || [], "source", (v) => { const sw = el("span", "swatch"); sw.style.background = classColor(state.facets?.source_class?.[v]); return [sw, el("span", null, srcLabel(v))]; }, (v) => classColor(state.facets?.source_class?.[v]));
-    top("topInfection", s.infection, "infection", (v) => { const sw = el("span", "swatch"); sw.style.background = infColor(v); const d = el("span", "sevdot"); d.style.background = sevColor(sevOf[v]); d.title = sevOf[v] || ""; return [sw, el("span", "mono", v), d]; }, (v) => infColor(v));
-    top("topCity", s.src_city, "src_city", (v) => [flagImg((s.src_geo[0] || {}).value), el("span", null, titleCase(v))]);
-    top("topHost", s.http_host, "http_host", (v, r) => [el("span", "mono", r.label || v)]);
-    top("topDst", s.dst_geo, "dst_geo", (v) => [flagImg(v), el("span", null, countryName(v))]);
+    // every list: shares of all events (s.total), and "Top 6 of N" with the full distinct count when the server sends it
+    // (s.totals), so none reads as complete when it is cut
+    const T = s.totals || {};
+    const asnText = (r) => (state.demo || !r.asns?.length ? "" : `AS${r.asns.join(", AS")}`);
+    top("topSrcNet", s.src_network || [], "src_asn", (v, r) => netLabel(r), null, total, asnText, T.src_network, "networks");
+    top("topDstNet", s.dst_network || [], "dst_asn", (v, r) => netLabel(r), null, total, asnText, T.dst_network, "networks");
+    top("topSource", s.source || [], "source", (v) => { const sw = el("span", "swatch"); sw.style.background = classColor(state.facets?.source_class?.[v]); return [sw, el("span", null, srcLabel(v))]; }, (v) => classColor(state.facets?.source_class?.[v]), total, null, T.source, "reports");
+    top("topInfection", s.infection || [], "infection", (v) => { const sw = el("span", "swatch"); sw.style.background = infColor(v); const d = el("span", "sevdot"); d.style.background = sevColor(sevOf[v]); d.title = sevOf[v] || ""; return [sw, el("span", "mono", v), d]; }, (v) => infColor(v), total, null, T.infection, "infections / categories");
+    top("topCity", s.src_city || [], "src_city", (v) => [flagImg(((s.src_geo || [])[0] || {}).value), el("span", null, titleCase(v))], null, total, null, T.src_city, "cities");
+    top("topHost", s.http_host || [], "http_host", (v, r) => [el("span", "mono", r.label || v)], null, total, null, T.http_host, "domains");
+    top("topDst", s.dst_geo || [], "dst_geo", (v) => [flagImg(v), el("span", null, countryName(v))], null, total, null, T.dst_geo, "countries");
     drawTimeline(s.timeline || []);
   }
-  function top(id, rows, kind, labelFn, colorFn, total, extraFn) {
+  // A "Top N" list of the Intel panel: the first 6 of the rows the server sent, a line under it saying how many there
+  // are in all ("Top 6 of 23 networks") and a button that shows every row the page has. `all` is the distinct count
+  // (s.totals), the number of rows sent when the server does not say.
+  const TOP_SHOWN = 6, topOpen = {};
+  function top(id, rows, kind, labelFn, colorFn, total, extraFn, all, noun = "") {
     const ol = $(id); ol.replaceChildren();
+    rows = rows || [];
     const max = Math.max(1, ...rows.map((r) => r.count));
     const sum = total || rows.reduce((a, r) => a + r.count, 0);
-    for (const r of rows.slice(0, 6)) {
+    const known = Math.max(rows.length, Number(all) || 0);
+    const shown = topOpen[id] ? rows : rows.slice(0, TOP_SHOWN);
+    let more = ol._more;
+    if (!more) { more = el("p", "hint top-more"); more.style.margin = "4px 0 0"; ol.after(more); ol._more = more; }
+    more.replaceChildren();
+    const cutText = window.LGShare.cut(shown.length, known, noun);
+    if (cutText) more.append(document.createTextNode(cutText + "."));
+    if (rows.length > TOP_SHOWN) {
+      const label = topOpen[id] ? `Show the top ${TOP_SHOWN}` : known > rows.length ? `Show the top ${rows.length}` : `Show all ${rows.length}`;
+      const b = el("button", "link-btn", label); b.type = "button";
+      b.addEventListener("click", () => { topOpen[id] = !topOpen[id]; top(id, rows, kind, labelFn, colorFn, total, extraFn, all, noun); });
+      more.append(b);
+    }
+    more.hidden = !more.childNodes.length;
+    for (const r of shown) {
       // a real button inside the list item (2026-11-18 sweep: the item made into a button left the list without
       // list items); Enter and Space are the button's own
       const li = el("li"), btn = el("button", "tl-btn"); btn.type = "button";
@@ -1973,12 +2040,20 @@
     canvas.addEventListener("blur", () => { say.hidden = true; });
   }
 
-  /* Donut with legend. rows: [{value, label?, count}]; opts: {color(v), describe(v), onClick(v), center, unit} */
+  /* Donut with legend. rows: [{value, label?, count}]; opts: {color(v), describe(v), onClick(v), center, unit, total}.
+     opts.total is the whole the rows are part of (the server sends only the top rows): the centre shows it, every share
+     is of it, and what the rows leave out is one more grey "Other" slice and legend entry, so the parts add up. */
+  const OTHER = "\u0000other";
   function donutChart(svg, legend, rows, opts = {}) {
     svg.replaceChildren(); svg.classList.remove("hovering"); legend.replaceChildren();
     const NS = "http://www.w3.org/2000/svg", cx = 60, cy = 60, R = 54, r0 = 36;
-    const sum = rows.reduce((a, r) => a + r.count, 0) || 1;
-    const color = opts.color || (() => ACCENT);
+    const parts = rows.reduce((a, r) => a + r.count, 0);
+    const rest = opts.total ? window.LGShare.other(rows, opts.total) : 0;
+    if (rows.length && rest > 0) rows = [...rows, { value: OTHER, label: "Other", count: rest }];
+    const sum = Math.max(parts + rest, 1);
+    const baseColor = opts.color || (() => ACCENT);
+    const color = (v) => (v === OTHER ? "#3a3f4d" : baseColor(v));
+    const describe = (v) => (v === OTHER ? "Everything not listed separately: the other values, or none recorded" : opts.describe && opts.describe(v));
     let a0 = -Math.PI / 2;
     const arc = (a1, a2) => {
       const large = a2 - a1 > Math.PI ? 1 : 0, p = (r, a) => `${cx + r * Math.cos(a)} ${cy + r * Math.sin(a)}`;
@@ -1995,22 +2070,23 @@
       const name = el("span", null, r.label || r.value); name.title = r.label || r.value;
       // clickable: a real button inside the list item (2026-11-18 sweep: the item made into a button left the list
       // without list items, and its row was under the 24 px touch target); the list stays a list
-      const box = opts.onClick ? el("button", "legend-btn") : li;
-      if (opts.onClick) { box.type = "button"; li.append(box); }
+      const click = opts.onClick && r.value !== OTHER;   // "Other" is not one value to analyse
+      const box = click ? el("button", "legend-btn") : li;
+      if (click) { box.type = "button"; li.append(box); }
       box.append(sw, name, el("span", "n", pct(r.count, sum)));
       legend.append(li);
       const on = () => { svg.classList.add("hovering"); path.classList.add("hot"); li.classList.add("hot"); };
       const off = () => { svg.classList.remove("hovering"); path.classList.remove("hot"); li.classList.remove("hot"); hideTip(); };
       const tip = () => [tipLine(r.label || r.value), tipLine(null, `${fmt(r.count)} ${opts.unit || "events"} · ${pct(r.count, sum)}`),
-        ...(opts.describe && opts.describe(r.value) ? [tipLine(null, opts.describe(r.value))] : []),
-        ...(opts.onClick ? [tipLine(null, "Click for analysis")] : [])];
+        ...(describe(r.value) ? [tipLine(null, describe(r.value))] : []),
+        ...(click ? [tipLine(null, "Click for analysis")] : [])];
       for (const n of [path, li]) {
         n.addEventListener("mouseenter", on); n.addEventListener("mouseleave", off);
         n.addEventListener("mousemove", (e) => showTip(e, tip()));
-        if (opts.onClick) { n.addEventListener("click", () => opts.onClick(r.value)); n.style.cursor = "pointer"; } else n.style.cursor = "default";
+        if (click) { n.addEventListener("click", () => opts.onClick(r.value)); n.style.cursor = "pointer"; } else n.style.cursor = "default";
       }
       path.setAttribute("aria-hidden", "true");          // the legend entry is the control; the slice repeats it
-      if (opts.onClick) {
+      if (click) {
         box.setAttribute("aria-label", `${r.label || r.value}, ${pct(r.count, sum)}: analyse`);
         box.addEventListener("focus", on); box.addEventListener("blur", off);
       }
@@ -2102,10 +2178,12 @@
     }
   }
 
-  /* Severity stacked bar + legend. */
+  /* Severity stacked bar + legend. opts.total: the whole (all events); shares are of it, and what the rows leave out
+     (a severity the server did not send) is one more "other" part, so the bar and the legend add up to it. */
   function severityMix(bar, leg, rows, opts = {}) {
     bar.replaceChildren(); leg.replaceChildren();
-    const sum = rows.reduce((a, r) => a + r.count, 0) || 1;
+    const rest = opts.total ? window.LGShare.other(rows, opts.total) : 0;
+    const sum = (rows.reduce((a, r) => a + r.count, 0) + rest) || 1;
     const order = [...rows].sort((a, b) => SEV_ORDER.indexOf(a.value) - SEV_ORDER.indexOf(b.value));
     for (const r of order) {
       const seg = el("i"); seg.style.width = `${(r.count / sum) * 100}%`; seg.style.background = sevColor(r.value);
@@ -2118,6 +2196,14 @@
       s.append(d, document.createTextNode(r.value), el("b", null, pct(r.count, sum))); leg.append(s);
       if (opts.onClick) { s.classList.add("click"); s.style.cursor = "pointer"; attachTip(s, tip); s.addEventListener("click", () => opts.onClick(r.value));
         keyable(s, () => opts.onClick(r.value), `${titleCase(r.value)}, ${pct(r.count, sum)}: analyse`); }
+    }
+    if (rows.length && rest > 0) {                     // after the named severities
+      const seg = el("i"); seg.style.width = `${(rest / sum) * 100}%`; seg.style.background = "#3a3f4d"; seg.style.cursor = "default";
+      seg.setAttribute("aria-hidden", "true");
+      attachTip(seg, () => [tipLine("Other severities"), tipLine(null, `${fmt(rest)} events · ${pct(rest, sum)}`)]);
+      bar.append(seg);
+      const s = el("span"); const d = el("span", "sevdot"); d.style.background = "#3a3f4d";
+      s.append(d, document.createTextNode("other"), el("b", null, pct(rest, sum))); leg.append(s);
     }
     if (!rows.length) leg.append(el("span", null, "No data yet"));
   }
@@ -2138,8 +2224,8 @@
   }
 
   // ---- Intel panel wrappers
-  function drawDonut(rows) {
-    donutChart($("donut"), $("topClass"), rows, { color: classColor, describe: (v) => CLASS_INFO[v], onClick: (v) => openScoped("attack_class", v) });
+  function drawDonut(rows, total) {
+    donutChart($("donut"), $("topClass"), rows, { color: classColor, describe: (v) => CLASS_INFO[v], onClick: (v) => openScoped("attack_class", v), total });
   }
   // "Attack type: Scanning · Affected city: Accra" for a filtered selection
   function filtersLabel(qs) {
@@ -2226,8 +2312,8 @@
   }
   const intelPick = (start, minutes) => openScoped("time", `${start}+${minutes}`);
   function drawHourClass(byClass, curHour) { stackedHours($("hourClass"), byClass, curHour, $("hbcInfo"), intelPick); }
-  function drawSeverity(rows) {
-    severityMix($("sevBar"), $("sevLegend"), rows, { onClick: (v) => openScoped("severity", v) });
+  function drawSeverity(rows, total) {
+    severityMix($("sevBar"), $("sevLegend"), rows, { onClick: (v) => openScoped("severity", v), total });
   }
   function drawTimeline(buckets) { quarterHours($("timeline"), buckets, $("tlInfo"), null, state.stats?.current_quarter, intelPick); }
 
@@ -2335,7 +2421,7 @@
       b.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
     };
     kpi(fmt(d.total), "Events", "events");
-    kpi(d.all_total ? pct(d.total, d.all_total) : `${(d.share * 100).toFixed(1)}%`, "Share of all events", "share");
+    kpi(d.all_total ? pct(d.total, d.all_total) : window.LGShare.pct(d.share || 0, 1), "Share of all events", "share");
     if (d.kind !== "src_ip") kpi(fmt(d.hosts), "Source hosts", "hosts");
     kpi(fmt(d.c2_hosts), "C2 domains", "c2");
     kpi(fmt(d.dst_ips), "Destination IPs", "dst_ips");
@@ -2387,21 +2473,25 @@
 
     // draw after layout so canvases have a size (setTimeout also runs when the tab is in the background)
     setTimeout(() => {
-      donutChart(mixCard.svg, mixCard.legend, mix.rows, { color: mix.color, describe: mix.describe, center: "events", onClick: mix.kind === d.kind ? null : (v) => drillTo(d, mix.kind, v) });
+      // the rows are the server's top 8 (12 reports): the ring is of the whole selection (d.total), the rest "Other"
+      donutChart(mixCard.svg, mixCard.legend, mix.rows, { color: mix.color, describe: mix.describe, center: "events", total: d.total, onClick: mix.kind === d.kind ? null : (v) => drillTo(d, mix.kind, v) });
       // clicking a bar analyses that time window within this same selection
       const scope = (start, minutes) => drillTo(d, "time", `${start}+${minutes}`);   // within this selection
       stackedHours(cHour.canvas, d.hours_by_class || {}, d.current_hour, null, scope);
       const q = d.as_of ? Math.floor((Date.parse(d.as_of) - Date.parse(d.as_of.slice(0, 10) + "T00:00:00Z")) / 900000) : null;
       quarterHours(cQuarter.canvas, d.timeline || [], null, d.kind === "infection" ? infColor(d.value) : ACCENT, q, scope);
-      severityMix(cSev.bar, cSev.legend, d.severity || [], d.kind === "severity" ? {} : { onClick: (v) => drillTo(d, "severity", v) });
+      severityMix(cSev.bar, cSev.legend, d.severity || [], d.kind === "severity" ? { total: d.total } : { onClick: (v) => drillTo(d, "severity", v), total: d.total });
       const palette = ["#5b8def", "#12a594", "#e2a336", "#8e7cf0", "#d6409f", "#46a758", "#00a2c7", "#c98a5e"];
       const netColor = (v) => palette[Math.max(0, netRows.findIndex((r) => r.value === v)) % palette.length];
-      donutChart(cNet.svg, cNet.legend, netRows, { color: netColor, center: "events", onClick: (v) => drillTo(d, netKind, v) });
+      donutChart(cNet.svg, cNet.legend, netRows, { color: netColor, center: "events", total: d.total, onClick: (v) => drillTo(d, netKind, v) });
     }, 0);
 
     const breaks = el("div", "i-breaks");
     for (const [key, rows] of Object.entries(d.breakdowns)) {
       const sec = el("section", "m-sec"); sec.append(el("h3", null, BREAK_TITLES[key] || key));
+      // the server sends the top 8 (12 reports, 6 tags or paths): say so when there are more (d.totals: distinct counts)
+      const cutText = window.LGShare.cut(rows.length, Math.max(rows.length, Number((d.totals || {})[key]) || 0));
+      if (cutText) sec.append(el("p", "hint brk-cut", `${cutText}, by events.`));
       const list = el("ul", "brk");
       for (const r of rows) {
         const li = el("li"); const bl = el("span", "bl");
@@ -2426,6 +2516,9 @@
 
     if (d.top_hosts.length && d.kind !== "src_ip") {
       const sec = el("section", "m-sec wide"); sec.append(el("h3", null, "Most active source hosts"));
+      // the 10 busiest of all the selection's source hosts (d.hosts): say how many there are
+      const hostCut = window.LGShare.cut(d.top_hosts.length, Math.max(d.top_hosts.length, Number((d.totals || {}).top_hosts ?? d.hosts) || 0), "hosts");
+      if (hostCut) sec.append(el("p", "hint brk-cut", `${hostCut}, by events.`));
       const wrap = el("div", "table-wrap"); const tbl = el("table", "hosts");
       const thead = el("thead"); const hr = el("tr");
       for (const h of ["Host IP", "Events", "Infections / categories", "City", "ASN", "First seen", "Last seen"]) hr.append(el("th", null, h));
@@ -2624,10 +2717,13 @@
     }
     // quoted, and spreadsheet-safe: a cell starting with = + - @ (not a plain number) would run as a formula
     const q = (s) => { s = String(s); if (/^[=+\-@\t\r\n＝＋－＠]/.test(s) && !/^([+-]?\d+([.,]\d+)*%?|-+)$/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; };
-    const lines = [[...r.columns.map(([, l]) => q(l)), ...(mp ? [q("What it is"), q("Description and references"), q("Source"), q("Also described by"), q("MITRE ATT&CK")] : [])].join(",")];
+    // who downloaded it and when: two columns on every row, the names and cells from the server (2026-11-27)
+    const st = r.download_stamp && Array.isArray(r.download_stamp.columns) && Array.isArray(r.download_stamp.cells) ? r.download_stamp : null;
+    const lines = [[...r.columns.map(([, l]) => q(l)), ...(mp ? [q("What it is"), q("Description and references"), q("Source"), q("Also described by"), q("MITRE ATT&CK")] : []), ...(st ? st.columns.map(q) : [])].join(",")];
     for (const row of r.rows) {
       const cells = r.columns.map(([k]) => q(k === "followup" ? (row[k] || []).join("; ") : drillCell(k, row[k])));
       if (mp) { const m = mpForRow(mp, row); cells.push(q(m.what), q(m.descriptions), q(m.sources), q(m.also), q(m.attack)); }
+      if (st) cells.push(...st.cells.map(q));
       lines.push(cells.join(","));
     }
     const blob = new Blob([lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
@@ -2777,6 +2873,16 @@
     requestAnimationFrame(step);
     setTimeout(() => { node.textContent = fmt(value) + suffix; }, dur + 300);   // in case animation frames are paused
   }
+  // count audit round 2 (2026-11-26): what the day's loader kept once (a row in two files) or could not place (dated
+  // outside the day, no time), in the server's words (load_notes.text), right under the figures of what was loaded
+  function showLoadNote(after, notes) {
+    if (!after) return null;
+    const text = String((notes && notes.text) || "").trim();
+    let p = after._loadNote;
+    if (!p) { p = el("p", "hint load-note"); after.after(p); after._loadNote = p; }
+    p.textContent = text; p.hidden = !text;
+    return p;
+  }
   async function loadIntro(first) {
     // the first time, the logo until every card of the overview has what it needs (its figures, then the services
     // reports, a second request): no card is shown empty and then grows (2026-11-15)
@@ -2814,6 +2920,7 @@
     } else {
       [...box.children].forEach((s, i) => { s.querySelector(".v").textContent = fmt(stats[i][0]); s.querySelector(".k").textContent = stats[i][1]; });
     }
+    showLoadNote(box, o.load_notes);
     // full-day activity + attack type mix
     setTimeout(() => {
       quarterHours($("introTimeline"), o.timeline, null, undefined, undefined, undefined, false);
@@ -3076,7 +3183,7 @@
   $("btnGlossaryClose").addEventListener("click", closeGlossaryDlg);
   $("gdSearch").addEventListener("input", renderGlossaryDlg);
   $("modalScrim").addEventListener("click", () => { if (!$("glossaryDlg").hidden) closeGlossaryDlg(); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("glossaryDlg").hidden) closeGlossaryDlg(); });
+  // Escape closes the Glossary dialog in the one Escape handler above (only the top-most layer closes)
 
   // ---- Settings: constituency label in the top bar and on the intro page (both platforms share the settings)
   async function loadScope() {
@@ -3135,7 +3242,7 @@
 
   // the labelled Overview button opens the overview; the logo beside it is branding only (r90: one way there)
   $("btnOverview")?.addEventListener("click", openIntro);
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("intro").hidden) closeIntro(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented && !$("intro").hidden) closeIntro(); });
   // shown once per browser session; refreshes go straight to the map (use Overview to come back)
   const introSeen = (() => { try { return sessionStorage.getItem("lg.introSeen") === "1"; } catch { return false; } })();
   // "/?intro=1" (the services platform's Overview button) always opens the intro page

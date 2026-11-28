@@ -397,14 +397,24 @@ try:
             # Compromised card read "148 devices in this combination" for 1 device)
             seen_c = []
             _cp.build = lambda d_, m_: (seen_c.append(d_), real_b(d_, m_))[1]
+            # the preview loads the kept search's days again: a day not in memory comes from MongoDB, and a load that
+            # fails (MongoDB busy) is a 409 "try again in a moment", by design. Its answer was not looked at, so on a busy
+            # machine (lg-demo's full suite, 2026-11-26) this check failed with no PDF built and nothing said why. Now:
+            # asked again after a moment on that 409, and any other answer is shown.
+            pst, perr = 0, ""
             try:
-                call(f"/advisory/1/preview?network={quote(NET)}", ADVISOR, raw=True, **ADV)   # builds it, keeps nothing
+                for _try in range(4):
+                    pst, perr = call(f"/advisory/1/preview?network={quote(NET)}", ADVISOR, raw=True, **ADV)
+                    if not (pst == 409 and "could not be loaded" in str((perr or {}).get("error", "") if isinstance(perr, dict) else "")):
+                        break
+                    time.sleep(2)
             finally:
                 _cp.build = real_b
             stc = (seen_c[-1].get("stats") or {}) if seen_c else {}
             ok("…its definition counts the devices that have it: 1 of the advisory's devices",
-               str(stc.get("Compromised", "")).startswith("1 of the ") and "in this advisory" in str(stc.get("Compromised", ""))
-               and str(stc.get("smb-scan", "")).startswith("1 of the "), json.dumps({k_: stc.get(k_) for k_ in ("Compromised", "smb-scan")}))
+               pst == 200 and str(stc.get("Compromised", "")).startswith("1 of the ") and "in this advisory" in str(stc.get("Compromised", ""))
+               and str(stc.get("smb-scan", "")).startswith("1 of the "),
+               json.dumps({k_: stc.get(k_) for k_ in ("Compromised", "smb-scan")}) + ("" if pst == 200 else f"; preview answered {pst}: {perr}"))
         finally:
             A.SVC_INTEL.host_flags = real_hf
             _cl(_recs, "_cache").clear()
@@ -720,6 +730,9 @@ try:
         st, d = call("/api/advisory/1/net", ADVISOR, **ADV)
         ok("…the overview's advisory does not fall back to every organisation", st in (404, 409, 400) and not (d.get("advisory") or {}).get("devices"),
            f"{st} {d.get('error', '')}")
+        st, d = call("/api/advisory/1", ADVISOR, **ADV)
+        ok("…and its page is offered no 'All networks' choice the server would refuse (the sweep, 2026-11-26: a 404)",
+           st != 200 or d.get("networks") == [], f"{st} {d.get('networks')}")
         st, d = call("/review/1/report", ADVISOR, **ADV)
         ok("…and its report is refused", st != 200, f"{st} {d.get('error', '') if isinstance(d, dict) else ''}")
     finally:

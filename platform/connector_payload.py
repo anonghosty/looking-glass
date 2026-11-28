@@ -93,6 +93,12 @@ def relation(report, infections, matched):
     return "services"
 
 
+def status_words(m):
+    """A mapping's status as people read it (attack_map.STATES): reviewed, suggested, or please check."""
+    s = str((m or {}).get("status") or "suggested")
+    return {"check": "please check"}.get(s, s)
+
+
 def _kb_line(ent):
     """The knowledge base's confidence and status under a recommended action (they were labels before)."""
     parts = [f"{k} {ent[k]}" for k in ("confidence", "status") if ent.get(k)]
@@ -132,7 +138,7 @@ def note_text(ip, day, title, rel, r, flags, know, report=None):
         lines.append("- **CVEs reported:** " + ", ".join(r["cves"]))
     m = (know.get("amap") or {}).get(report) or {} if report else {}
     if m.get("techniques"):
-        lines.append(f"- **ATT&CK ({m.get('status', 'suggested')}, {m.get('certainty', 'possible')}):**")
+        lines.append(f"- **ATT&CK ({status_words(m)}, {m.get('certainty', 'possible')}):**")
         lines += [f"    - {tid} {((know.get('attack') or {}).get('techniques') or {}).get(tid, {}).get('name', '')}".rstrip()
                   for tid in m["techniques"]]
         if m.get("why"):
@@ -253,7 +259,7 @@ def stix_bundle(devices, day, tlp, know, now):
                 grp.append(add(common({"type": "relationship", "id": _id("relationship", src, rtype, ap, report), "relationship_type": rtype,
                                        "source_ref": src, "target_ref": ap,
                                        "description": f"Looking Glass maps Shadowserver's {title} report to {tid} "
-                                                      f"({m.get('status', 'suggested')}, {certainty}): {m.get('why', '')}",
+                                                      f"({status_words(m)}, {certainty}): {m.get('why', '')}",
                                        "labels": ["looking-glass"],
                                        "confidence": CERTAINTY.get(certainty, 30)})))
         add(common({"type": "grouping", "id": _id("grouping", ip, day), "name": f"{ip}: {len(d['reports'])} report(s) on {day}",
@@ -322,8 +328,8 @@ def misp_event(devices, day, tlp, know, target_id):
                 t = (know["attack"].get("techniques") or {}).get(tid) or {}
                 name = t.get("name") or tid
                 techniques[tid] = name
-                dev_tids[f"{tid} {name}"] = 1
-                lines.append(f'- **ATT&CK ({m.get("status", "suggested")}, {m.get("certainty", "possible")}):** '
+                dev_tids[f"{tid} {name}"] = status_words(m)
+                lines.append(f'- **ATT&CK ({status_words(m)}, {m.get("certainty", "possible")}):** '
                              f'@[tag](misp-galaxy:mitre-attack-pattern="{name} - {tid}") {m.get("why", "")}')
             for inf in r.get("infections") or []:
                 ent = know["kb"].get(inf.lower()) or {}
@@ -334,7 +340,7 @@ def misp_event(devices, day, tlp, know, target_id):
         # MISP shows a table cell's line breaks as text: the summary is a bulleted list, one device per entry
         summary += [f"- @[attribute]({ip_uuid}) {net}, {len(d['reports'])} report(s)",
                     "    - **Impact:**"] + [f"        - {x}" for x in dev_impacts or ["None listed"]] + \
-                   ["    - **ATT&CK (suggested):**"] + [f"        - {x}" for x in dev_tids or ["None"]]
+                   ["    - **ATT&CK:**"] + ([f"        - {x} ({s})" for x, s in dev_tids.items()] or ["        - None"])
         sections += [f"### {ip}", "", f"- **Network:** {net}", f"- **First seen:** {_when(min(firsts))}",
                      f"- **Last seen:** {_when(max(lasts))}", "",
                      "| Report | Records | Relation | Days seen | First reported |", "|---|---:|---|---:|---|"] + rows + [""] + details

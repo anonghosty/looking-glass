@@ -33,6 +33,10 @@ def install(app, core):
     import external_access
     out["external"] = external_access.install(app)
 
+    # refusals under /api/ answer JSON with an error in words, never an HTML page (api_errors.py, 2026-11-26)
+    import api_errors
+    out["api_errors"] = api_errors.install(app)
+
     # the spike notice on the Overview's buttons: the latest report day against the day before, counted as each
     # platform shows a day (spike_notice.py)
     import spike_notice
@@ -216,7 +220,7 @@ def install(app, core):
         out["stepup"] = stepup.install(app, {
             "base_dir": os.path.dirname(os.path.abspath(__file__)), "users": A["users"], "sessions": A["sessions"],
             "audit": A["audit"], "throttle": A["throttle"], "csrf_ok": A["csrf_ok"], "fresh": A["fresh"],
-            "totp_check": _auth2.totp_check, "hook": _auth2.PASSKEYS,
+            "totp_check": _auth2.totp_check, "hook": _auth2.PASSKEYS, "has_perm": A.get("has_perm"),
             "people_name": _People(A["users"]).full_name})
         # how sign-in is checked, passkey or authenticator code (signin_check.py, the user 2026-11-25): one setting
         # for sign-in and the step-up gate; .env SIGNIN_CHECK wins, then Settings, then ACCESS_MODE's default

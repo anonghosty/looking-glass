@@ -44,10 +44,14 @@ else
 fi
 # the checksum file must be about THIS archive: its name, and the SHA-256 of the archive given here (sha256sum -c alone
 # would check whichever file the line names; security review of edd2d57)
-read -r want named < "$f.sha256" || true
+# (no checksum file: said, and a failure; it stopped on an unbound variable with no result, audit 2026-11-27)
+want=""; named=""
+[ -f "$f.sha256" ] && { read -r want named < "$f.sha256" || true; }
 named="${named#\*}"
 have="$(sha256sum "$f" | cut -d' ' -f1)"
-if [ "$(basename "$named")" != "$(basename "$f")" ]; then
+if [ ! -f "$f.sha256" ]; then
+  echo "checksum: NO CHECKSUM FILE ($(basename "$f").sha256 is missing: the archive cannot be checked)"; rc=1
+elif [ "$(basename "$named")" != "$(basename "$f")" ]; then
   echo "checksum: the checksum file is for $(basename "$named"), not for this archive"; rc=1
 elif [ "$have" != "$want" ]; then
   echo "checksum: DOES NOT MATCH (the archive changed or is damaged)"; rc=1
@@ -64,8 +68,31 @@ case "$f" in
       exit $rc
     fi ;;
 esac
-tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT; chmod 600 "$tmp"
-if ! bc_decrypt "$f" "$identity" > "$tmp"; then echo "contents: CANNOT BE OPENED with that key"; exit 1; fi
-if tar -xzOf "$tmp" "$name/.env" | cmp -s - "$project/.env"; then echo ".env: included and identical"; else echo ".env: MISSING OR DIFFERENT"; fi
-echo "files: $(tar -tzf "$tmp" | grep -vc '/$')"
+# read as it is decrypted, never written to disk: no readable copy of the backup (.env, the accounts) in /tmp, not even
+# for a moment, nor left there when the check is stopped (audit 2026-11-27)
+res="$(bc_decrypt "$f" "$identity" | "$py" -c '
+import sys, tarfile
+name, live = sys.argv[1], sys.argv[2]
+try:
+    want = open(live, "rb").read()
+except OSError:
+    want = None
+env, files = None, 0
+try:
+    with tarfile.open(fileobj=sys.stdin.buffer, mode="r|gz") as t:
+        for m in t:
+            if not m.isdir():
+                files += 1
+                if m.isfile() and m.name == name + "/.env":
+                    env = t.extractfile(m).read()
+except (tarfile.TarError, OSError, EOFError):
+    print("unreadable"); sys.exit(0)
+print(("same" if env is not None and env == want else "different"), files)
+' "$name" "$project/.env")" || res="unreadable"
+case "$res" in
+  same\ *|different\ *) ;;
+  *) echo "contents: CANNOT BE OPENED with that key"; exit 1 ;;
+esac
+if [ "${res%% *}" = same ]; then echo ".env: included and identical"; else echo ".env: MISSING OR DIFFERENT"; fi
+echo "files: ${res##* }"
 exit $rc

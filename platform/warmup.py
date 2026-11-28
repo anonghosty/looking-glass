@@ -20,11 +20,15 @@ CHECK_SECONDS = 30
 
 
 def days_key(stores):
-    """Which copies of the days are in memory: (start, serial, rows) of every loaded day of every store."""
+    """Which copies of the days are in memory: (start, serial, rows) of every loaded day of every store. A day with no
+    rows counts the same however often it is loaded again (its serial is left out): a day waiting for its reports is
+    reloaded every minute, and each new copy used to set off a whole warm-up over nothing (2026-11-26, every minute
+    on two installations whose mailbox could not be read)."""
     out = []
     for s in stores:
         for k, d in sorted(list(getattr(s, "days", {}).items())):
-            out.append((str(k), getattr(d, "serial", 0), len(getattr(d, "events", ()) or ())))
+            rows = len(getattr(d, "events", ()) or ())
+            out.append((str(k), getattr(d, "serial", 0) if rows else 0, rows))
     return tuple(out)
 
 

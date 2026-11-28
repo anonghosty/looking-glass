@@ -62,11 +62,7 @@
 }
 .cb-days { display: grid; gap: 10px; }
 .cb-geo { display: grid; gap: 6px; }
-.cb-geo-r { display: grid; grid-template-columns: minmax(110px, 220px) minmax(0, 1fr) 64px; align-items: center; gap: 12px; font-size: 13px; }
-.cb-geo-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
-.cb-geo-b { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .05); overflow: hidden; }
-.cb-geo-b i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #5b8def, #ffd38a); }
-.cb-geo-r b { text-align: right; font-variant-numeric: tabular-nums; }
+.cb-geo-n { min-width: 0; overflow-wrap: anywhere; color: var(--text-2); }
 .cb-x { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .cb-x li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px; border-radius: 12px;
   border: 1px solid rgba(177, 140, 245, .25); background: rgba(177, 140, 245, .05); }
@@ -75,10 +71,9 @@
 .cb-x-side b { font-size: 20px; color: #fff; } .cb-x-side span { font-size: 11.5px; color: var(--muted); }
 .cb-x-code { margin-top: 4px; font: 600 11.5px "Geist Mono", ui-monospace, monospace; color: #d2b8ff; text-decoration: none; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(177, 140, 245, .4); }
 .cb-x-code:hover { background: rgba(177, 140, 245, .15); }
-@media (max-width: 640px) { .cb-x li { grid-template-columns: 1fr; } .cb-x-side { justify-items: start; text-align: left; } .cb-geo-r { grid-template-columns: 1fr 1fr 48px; } }
+@media (max-width: 640px) { .cb-x li { grid-template-columns: 1fr; } .cb-x-side { justify-items: start; text-align: left; } }
 
 /* the results: key figures, the hover map with the regions and cities, the key breakdowns, the busiest devices */
-.cb-tiles { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .cb-tile small { font-size: 11.5px; color: var(--muted); }
 .cb-geo-card { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(240px, 1fr); gap: 16px; padding: 14px; border-radius: 16px;
   border: 1px solid var(--border); background: radial-gradient(circle at 30% 20%, rgba(91, 141, 239, .08), transparent 60%), rgba(255, 255, 255, .015); }
@@ -94,13 +89,13 @@
 .cb-tip b { font-size: 13.5px; color: #fff; } .cb-tip .big { margin: 4px 0 6px; color: #c9d6ff; font-weight: 600; } .cb-tip .muted { color: var(--muted); margin: 4px 0 0; }
 .cb-tip h5 { margin: 8px 0 3px; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .cb-tip ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.cb-tip li { display: flex; justify-content: space-between; gap: 10px; } .cb-tip li span, .cb-tip li code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cb-tip li { display: flex; justify-content: space-between; gap: 10px; } .cb-tip li span, .cb-tip li code { min-width: 0; overflow-wrap: anywhere; }
 .cb-tip li code { font: 11.5px "Geist Mono", ui-monospace, monospace; color: #e3e9ff; } .cb-tip li b { font-size: 12px; color: #c9d6ff; }
 .cb-tree { display: grid; gap: 6px; align-content: start; max-height: 460px; overflow: auto; }
 .cb-tree h3 { margin: 0 0 4px; }
 .cb-tree-reg { padding: 6px 0 8px; border-bottom: 1px solid rgba(255, 255, 255, .05); }
 .cb-tree-row { display: grid; grid-template-columns: minmax(90px, 1fr) minmax(60px, 1fr) 52px; align-items: center; gap: 10px; font-size: 13px; }
-.cb-tree-row .l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .cb-tree-row .v { text-align: right; font-variant-numeric: tabular-nums; }
+.cb-tree-row .l { min-width: 0; overflow-wrap: anywhere; } .cb-tree-row .v { text-align: right; font-variant-numeric: tabular-nums; }
 .cb-tree-row .t, .cb-bar-r .t { height: 7px; border-radius: 4px; background: rgba(255, 255, 255, .05); overflow: hidden; }
 .cb-tree-row .t i, .cb-bar-r .t i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #5b8def, #ffd38a); }
 .cb-tree-city { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0 0 14px; font-size: 12px; color: var(--text-2); position: relative; }
@@ -111,7 +106,7 @@
 .cb-mini.wide { grid-column: 1 / -1; }
 .cb-mini h3 { margin: 0; } .cb-mini > .cb-hint { margin-top: -4px; }
 .cb-bar-r { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(50px, 1fr) 54px; align-items: center; gap: 10px; font-size: 12.5px; }
-.cb-bar-r .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); } .cb-bar-r b { text-align: right; font-variant-numeric: tabular-nums; }
+.cb-bar-r .n { min-width: 0; overflow-wrap: anywhere; color: var(--text-2); } .cb-bar-r b { text-align: right; font-variant-numeric: tabular-nums; }
 .cb-hours { display: flex; align-items: flex-end; gap: 3px; height: 110px; padding-top: 6px; }
 .cb-hcol { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; position: relative; }
 .cb-hcol i { width: 100%; border-radius: 3px 3px 0 0; background: rgba(124, 156, 255, .55); } .cb-hcol.peak i { background: #ffd38a; }

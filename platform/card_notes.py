@@ -71,11 +71,17 @@ def api_malpedia_batch():
     lists cost no Malpedia calls). ?values=a,b,c (at most 80). For each: the matching Malpedia family, or why none."""
     if not _A.AUTH["has_perm"]("malpedia"):
         return _A.jsonify(error="Your role cannot use Malpedia lookups (permission 'malpedia')."), 403
-    names = []                                       # without a Malpedia token the researchers' definitions answer
+    # each name once (any case), in order; one past 80 is enough to refuse (audit 2026-11-27: the names seen were
+    # rebuilt for every value, quadratic in the length of the request). Without a Malpedia token the researchers'
+    # definitions answer
+    names, seen = [], set()
     for v in (_A.request.args.get("values") or "").split(","):
         v = v.strip()
-        if v and len(v) <= 100 and v.lower() not in {n.lower() for n in names}:
+        if v and len(v) <= 100 and v.lower() not in seen:
+            seen.add(v.lower())
             names.append(v)
+            if len(names) > 80:
+                break
     if len(names) > 80:
         return _A.jsonify(error="At most 80 names at a time."), 400
     out, pending = {}, 0

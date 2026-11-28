@@ -100,7 +100,7 @@ server, on the pipeline's own account ([Security, section 1](SECURITY.md#pipelin
 | # | Boundary | What crosses it | What is checked there |
 |---|---|---|---|
 | B1 | Internet → pipeline | e-mails and report files | DKIM signature by the expected signer; zip limits; safe file names; HTTPS to Shadowserver, with each API request signed with the secret (`HMAC2`) |
-| B2 | Pipeline → database | report rows | the pipeline's own account: its database only, no account management |
+| B2 | Pipeline → database | report rows | the pipeline's own account with a role of its own (`lookingglass_pipeline_on_<database>`): read, add, change and delete rows and create collections and indexes on its database only; no dropping or renaming (no `readWrite`), nothing on other databases, no account management |
 | B3 | Database → platform | report rows | a read-only account; every value is treated as untrusted text (it came from scanned hosts) |
 | B4 | Network → platform | HTTP requests | `ACCESS_MODE` and the allow list; the host-name check (against DNS rebinding); HTTPS for remote sign-in; a 64 KB request limit; Caddy in front on private and public installations (each request read in full under time limits); Looking Glass itself listens on 127.0.0.1 only |
 | B5 | Signed-in user → data | API calls | role permissions enforced on the server; masking done on the server; CSRF token and same-origin checks on changes |
@@ -137,7 +137,7 @@ Each row below names a threat and the control that stops it.
 | Replay an authenticator code, or reuse a recovery code | Each code works once, checked again when it is recorded; recovery codes are removed when used |
 | Guess passwords | 5 failures per account and address, then a lock of 15 minutes by default (`LOGIN_ACCOUNT_LOCK_MIN`, 5 to 240); 20 per address per hour; same answer and timing for wrong names |
 | Steal or plant a session | Server-side sessions (only a hash is stored); a new ID at sign-in; HttpOnly, SameSite=Strict, Secure, `__Host-`; bound to address and browser |
-| Make a signed-in user's browser change things (CSRF, DNS rebinding) | CSRF token, JSON only, `Origin` and `Sec-Fetch-Site` checks, host-name allow list |
+| Make a signed-in user's browser change things (CSRF, DNS rebinding) | CSRF token, JSON only, `Origin` and `Sec-Fetch-Site` checks, host-name allow list; signing out also needs the session's own CSRF token, so another site cannot sign someone out |
 | Become the first administrator | A one-time setup code readable only on the server; over HTTPS only from another computer; a wrongly set up reverse proxy can't make everyone look local |
 | Inject script through report values (banners come from scanned hosts) | Everything inserted as text; CSP with a per-request nonce, no eval, no inline handlers; CSV cells that look like formulas are neutralised |
 | Relay a password and a code through a look-alike site, in real time | On `public` installations everyone signs in with a passkey, which the browser binds to the real site; an internal installation that sees sign-ins from the internet says so in the administrators' bell |
@@ -150,15 +150,18 @@ Each row below names a threat and the control that stops it.
 |---|---|
 | Send a forged "Shadowserver" report | DKIM checked on the message as downloaded, with the From header bound to the signer's domain; a message the parser would read differently from the check is `permerror`; `MAIL_AUTH=enforce` holds back anything that does not pass |
 | Add a header above a genuine signed report (a Content-Type of their own, read first by the parser) | More From, Content-Type, Content-Transfer-Encoding or MIME-Version headers than the signature covers: not a pass |
-| A zip bomb, or names that climb out of the folder | Limits counted on the real bytes (unpacked size, ratio, files, free disk); a bomb is quarantined with its reason |
+| A zip bomb, or names that climb out of the folder | Limits counted on the real bytes (unpacked size, ratio, files, free disk); a bomb is quarantined with its reason; a zip encrypted with a password is refused and quarantined |
+| A report made to stop the loading for good (a huge field, a broken line, a file that exhausts the loader's memory) | A row that cannot be read as CSV is counted and the rest of the file loads; a file that stops its loader process even when loaded alone on 2 runs is moved to `quarantine/loader/` with its reason (a file error, tried again, the first time), and the other files load; one run at a time (`.pipeline.lock`, taken by the pipeline itself) |
+| Wipe every report at once through code run inside the pipeline | The pipeline's database account cannot drop or rename collections or indexes (its own role, not `readWrite`); installations made earlier get the role with `create_pipeline_db_user.py --update-rights` |
 | Links to somewhere other than Shadowserver, or huge downloads | Only `https://dl.shadowserver.org/` links are followed (`LINK_RE` in `shadowserver_pipeline.py`); a download is capped at the unzip size limit |
 | A report type made to skew the day's figures | One-off special reports are loaded apart, never replayed or counted in the totals and trends |
+| A report left out without a word (a file name the pipeline does not know, a refused or quarantined zip or report) | The run fails (exit code 1) when a report, file or rows were not loaded, and the administrators' bell and Settings → Task monitor say what; a CSV whose name is not a report file name is named again at every run until it is renamed or removed; every row read is accounted for |
 
 ### A3. A signed-in user stepping outside their role
 
 | Threat | Control |
 |---|---|
-| A researcher or external viewer reads constituent addresses | Masking on the server, with HMAC labels under `REF_SECRET`; network filters accept only aliases; report fields only from an allowlist; the one address finder every masker shares |
+| A researcher or external viewer reads constituent addresses | Masking on the server, with HMAC labels under `REF_SECRET`; network filters accept only aliases; a network missing from the network list gets its own alias, a keyed hash of its AS number under the same secret, never the number; report fields only from an allowlist; the one address finder every masker shares |
 | Follow one rare host over time | Patterns carried by fewer than 5 hosts get no lasting code |
 | Open a finding or advisory they are not part of | Findings are channels: only participants and admins |
 | Change Settings, roles or accounts | Permissions checked on the server; exclusive and fixed roles; the last administrator kept; on a 5-day session, changes need a fresh sign-in after 12 hours |
@@ -169,7 +172,7 @@ Each row below names a threat and the control that stops it.
 | A researcher reads a device's decoded beacon (its MAC address, hardware ID, CPU id) | Decoding is answered only with the *unmasked* permission; researchers get the threat-side parts (format, operator, version, OS) once 5 or more devices carry them; masked views read `<clogin beacon>` or `<encoded value>`; the devices of a hand-over open only for analysts and admins, and each opening is logged |
 | Send an organisation a report that no longer says what the advisory's record says (edited text or TLP) | The report keeps a fingerprint of its text; drafted and sent are refused until it is generated again |
 | Register a look-alike name ("Grace" beside "grace") | Names and e-mail addresses that differ only in letter case are one |
-| Use a session left signed in, or malware in a signed-in browser, for a high-value action | A fresh check (a passkey, or a fresh authenticator code) before complete or unmasked downloads, unmasking, tracing, settings, the purge and advisories, valid 10 minutes; changes to accounts, roles, sign-up links, connectors and passkeys ask every time, the confirmation used once for that one request. One table on the server (`stepup.py`), checked before every request |
+| Use a session left signed in, or malware in a signed-in browser, for a high-value action | A fresh check (a passkey, or a fresh authenticator code) before complete or unmasked downloads, unmasking, tracing, settings, the purge and advisories, valid 10 minutes; changes to accounts, roles, sign-up links, connectors and passkeys ask every time, the confirmation used once for that one request. One table on the server (`stepup.py`), checked before every request. A change the account may not make at all (Settings without the Settings permission) is refused at once, before any confirmation is asked |
 | Add their own passkey to someone's account from such a session, or remove theirs | Adding or removing a passkey asks every time (except the first two registered right after signing in); the person's own bell says so for 7 days; the audit log records it |
 | Send constituent data out through a connector | Only administrators, every change asks every time; only Looking Glass's own analysis goes, to a target that passed its test; every send is in the audit log, and the auditor sees every target and everything sent |
 | Read addresses through Unusual activity | Counts only; the devices and the Confirm and Dismiss buttons need the *unmasked* permission; researchers see the suggestions without devices |
@@ -242,8 +245,11 @@ These risks are known and accepted, or left to the operator. They are listed her
   only the Looking Glass folder, as the installation's user, and the web service still cannot change its own code.
 - **Sign-in names stay on the server.** Pages carry an opaque code per account (a keyed hash with the installation's
   own random key, `data/person_code.key`), so a saved page, a screenshot of the browser's developer tools or an
-  extension that reads pages does not hand over half of a sign-in. Whoever can read that key (the server, a backup)
-  can compute the codes of the names they already know, as with `REF_SECRET`.
+  extension that reads pages does not hand over half of a sign-in. Pages, answers, PDFs and downloads name people by
+  their full name, else by that code, also for an account removed since; a new passkey's user handle is the code too.
+  Only the Audit portal's audit trail, Trace a leak's user column and the Admin page's users table show sign-in names,
+  to the roles that manage or audit accounts. Whoever can read that key (the server, a backup) can compute the codes of
+  the names they already know, as with `REF_SECRET`.
   - **Accounted for:** nobody can change the key from the website (no page, setting or API touches it), so only
     someone with the server's files can. A key made where one had been before (removed, replaced, or `data/` restored
     from an older backup) is recorded in the audit log and shown in the administrators' bell; a damaged key is shown
@@ -273,7 +279,7 @@ section argues that secure design principles were applied and that common implem
 ### Secure design principles
 
 - **Least privilege.** The platform reads the database with a read-only account; the pipeline's account reaches its
-  own database only; the web service runs in a systemd sandbox that can write only `data/`; each role gets only the
+  own database only, and there can add, change and delete rows but never drop or rename a collection or index; the web service runs in a systemd sandbox that can write only `data/`; each role gets only the
   permissions it needs, and management, Researcher/TI (researcher or threat intelligence analyst), advisor and auditor are exclusive roles.
 - **Fail-safe defaults.** Every page needs a sign-in with a second factor; the service listens on this computer only
   until an administrator opens it to the network; roles without the *unmasked* permission see masked addresses;

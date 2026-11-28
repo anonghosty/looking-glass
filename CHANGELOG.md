@@ -5,6 +5,440 @@ Notable changes to Looking Glass, newest first. Releases are named by date: the 
 [Releases](https://github.com/anonghosty/looking-glass/releases) page. To update an installation, follow
 [Updating](docs/INSTALLATION.md#updating).
 
+## 2026-11-28
+### Security
+- **A password typed into the name box no longer reaches the Locked sign-ins list or the audit log.** A name that is
+  not an account (often a password typed in the wrong box) is counted under a keyed fingerprint, not as typed: Admin
+  → Locked sign-ins shows "an unknown name" and lifting such a lock logs the address only. Accounts are locked and
+  unlocked by name as before.
+- **`store_mongo_admin.sh --check` says how to store an older stored account again** when it is refused for a MongoDB on
+  another computer without TLS (stored before the TLS settings were kept with it).
+- **The pipeline's database account can no longer drop or rename collections.** It had MongoDB's `readWrite`, which
+  also allows dropping and renaming collections and indexes, so code run inside the pipeline could have wiped every
+  report at once. It now gets a role of its own on its database: read, add, change and delete rows, create
+  collections and indexes, nothing more. A running installation gives its account the role once, in the database
+  folder: `sudo cat /etc/looking-glass/mongo-admin.env | ./create_pipeline_db_user.py --update-rights`
+  ([Updating](docs/INSTALLATION.md#updating)).
+- **Signing out needs the page's own CSRF token.** Another site could sign someone out with a form of its own; every
+  Log out button now sends the session's CSRF token, and without it the session stays.
+- **No sign-in name on pages, in answers or in downloads.** The analysis, Executive and combination PDFs printed
+  "Generated ... by" with the sign-in name on the cover and every page; Trace a leak, findings history (for a removed
+  account), the bell, severity ratings, the name sources' refresh shown to researchers, the Task monitor, the
+  pipeline's e-mail checks, the quarterly purge switch, the password policy and the connectors' "created by" carried it
+  too. Each now names the person by their full name, else their person code. Only the Audit portal's audit trail, Trace
+  a leak's user column and the Admin page's users table show sign-in names. A new passkey's user handle is the person
+  code; passkeys added before keep working.
+- **A name typed at sign-in that is no account is not written to the audit log.** It is often a password typed into the
+  wrong box; the log now records the attempt without the text.
+- **Two people opening Intel gathered at the same moment get their own leads.** The list of leads was kept in one
+  place for every viewer, so a researcher could be given an administrator's list.
+- **A connector's saved key goes only to its own address.** Testing a connector with its saved key could send that key
+  to any address given in the request; it is now refused unless the address is the target's own.
+- **Researchers see no destination address.** An analyst code's selection label could print a destination IP address
+  ("Destination IP: ..."), which can be a constituent's; destination addresses and host names are held back like
+  source ones.
+- **Masked views hide more.** An encoded value longer than 8192 characters was shown to masked viewers whole; exact
+  beacon days were shown to them; dates written as "27 Nov 2026" or "27/11/2026" were not masked for researchers. All
+  three are masked now.
+- **The checks that decide who sees hosts fail closed.** When the check itself failed, a page treated the viewer as
+  allowed to see hosts; it now treats them as not allowed.
+- **The CVE and issue tick on an analyst code asks for a fresh sign-in after 12 hours,** like the other changes there.
+- **A combination review's ZIP of unmasked addresses asks you to confirm it's you,** like every other unmasked
+  download.
+- **Trace a leak cannot be made to run out of memory by a zip bomb.** What it unpacks is counted on the real bytes
+  against a budget; the sizes a zip states about itself are not trusted.
+- **The Malpedia token stays with Malpedia.** A redirect could have sent it on to another address, plain HTTP
+  included; Malpedia is now reached over HTTPS only, a redirect away from HTTPS is refused, and the token is never
+  sent on to another host.
+- **No raw address in the audit log from the Intelligence page,** only its host reference.
+- **Country flags come with Looking Glass.** Every flag was loaded from an outside site on every page view, also on
+  internal installations; the flags are now served by Looking Glass itself.
+- **Caddy's repository key is checked whole.** The check of the signing key read only the first key in the file, so a
+  second key there would have been trusted too; the file must now hold exactly the pinned key.
+- **The administrator account's sign-in check uses TLS.** `store_mongo_admin.sh` checked the MongoDB administrator
+  account without TLS; it now connects by the same rules as the pipeline (`db_connect.py`).
+- **`tools/discover.py` writes its survey to `data/discovery.json`, masked and readable by the owner only.** It wrote
+  raw values from the records into the code folder.
+
+### Fixed
+- **Passwords and keys the installer writes are read the same way everywhere.** Values were written into the two
+  `.env` files unquoted, so a password with " #" or "${" was read differently by the platform and the pipeline, and the
+  installation stopped half done. Values are now quoted where needed; a secret cannot contain `'` or a line break, and
+  no value can contain `${`. The installer says why as soon as one is typed, and checks every value the two `.env`
+  files will get before it installs anything, so a value it cannot write stops it at the start, with the reason,
+  before either `.env` is replaced. A stored MongoDB administrator password it cannot keep is asked for again, with the
+  reason. An existing MongoDB or mailbox password with one of these must be changed where it is set. A value that is
+  empty is written as `KEY=`, and characters that read as a line break (form feed, U+2028 and the like) are refused too.
+- **The installer accepts the pipeline's own role on a MongoDB run by someone else.** An account given
+  `lookingglass_pipeline_on_<database>` (as `create_pipeline_db_user.py --print` shows) was refused as unable to write;
+  the installer now checks the rights MongoDB reports for the account and names any that are missing.
+- **The uninstaller removes Looking Glass's timers, its update path unit and the installer's own firewall rule.** The
+  hourly and 15-minute timers and Settings → Update's path unit stayed enabled after an uninstall, starting services
+  that were gone, and the "Looking Glass HTTPS" ufw rule for Caddy's port stayed open. With `--remove-database` it also
+  removes the pipeline's own database role.
+- **The uninstaller leaves another installation's Caddy and firewall rule alone.** It removed Caddy's configuration and
+  the "Looking Glass HTTPS" rule whenever Caddy was set up by Looking Glass; it now does so only when Caddy hands
+  visitors to this folder's platform (its port), and says what it left and why.
+- **`deploy/make_tls_cert.sh` hands a new certificate to Caddy itself.** Behind Caddy on an internal installation,
+  visitors got an error (502) until someone ran `sudo deploy/caddy_front.sh sync`; the script now runs it (sudo may ask
+  for your password). When Caddy could not be given the certificate yet, it says `NOT FINISHED` with the reason and
+  exits with code 3.
+- **`manage/install_cert.sh` finishes when `.env` has no `LG_PORT` line,** and gives the certificate to Caddy; it
+  stopped without a word before that step.
+- **A backup goes on when a file changed while it was read.** The running service writes files during a backup; tar
+  then ends with exit code 1, and the backup was deleted or left unsigned. It is now kept, checksummed and signed, with
+  a note naming the files it may be incomplete for; any other failure still stops it with "NOT BACKED UP".
+- **`manage/verify_backup.sh` and `manage/restore_check.sh` say when the `.sha256` file is missing.** They stopped on
+  an unset variable with no result; they now fail with "no checksum file", and the rehearsal ends with its RESULT line.
+  `verify_backup.sh` also reads an encrypted archive as a stream, with no decrypted copy in `/tmp`.
+- **`tests/run_admin_db_tests.sh` fails on a skip,** like the rest of the suite: a skipped part, or no pipeline folder
+  to run the pipeline's database checks in, passed with exit code 0.
+- **`security_testing/security_retest.py` fails a run with a skipped check.** It said "ALL PASSED (N skipped)" and
+  exited 0; it now names each check it could not run and what the installation needs for it, and exits 1.
+- **The installer's summary keeps every warning.** The note about the map token replaced the warnings before it.
+- **`EMAIL_DAYS` is 7 when it is not set,** as Settings → Workers already showed; the pipeline used 1.
+- **The pipeline takes its own run lock.** Only `run.sh` took `.pipeline.lock`, so the pipeline started by hand or from
+  another cron line could run beside another run. The pipeline now takes it itself; a second run stops at once. The
+  lock file is 0644 and opened read-only, so a lock file left by a run as root no longer stops later runs.
+- **One unreadable row no longer stops a report.** A CSV field over 128 KB stopped the rest of the file at every run,
+  and the file was never set aside. Fields up to 16 MB (MongoDB's limit for a row) are read; a row that still cannot
+  be read is counted (`rows_bad_csv`, under To check) and the rest of the file loads.
+- **A report file that crashes its loader is set aside.** A worker process that ran out of memory stopped the whole
+  load, again at every run. The other files now load; the file is tried alone, and if it stops its loader even then
+  it is a file error and is tried again on the next run. Only a file that does so on 2 runs is moved to
+  `quarantine/loader/<report>/` with a `.reason.txt` (naming the exact path to move it back to) and named on the bell.
+  Moved back, it is loaded again and the rows it stored before are skipped.
+- **An e-mail deleted while the mailbox is read is a warning, not an error.** A message deleted or moved out of the
+  reports folder between the listing and the fetch was counted as "could not be fetched (tried again next run)" and
+  failed the run, though nothing was left to try again. It is now a warning (`emails_gone`); a batch the server
+  refuses stays an error.
+- **The IMAP message id is found wherever the server puts it.** A server that sends a message's UID after its content
+  had the message keyed by its Message-ID header; such a key is now never taken for a UID either.
+- **Files with nothing to load lose their old sorted copy too** under `SORTED_KEEP_DAYS`, like any loaded file.
+- **Block mode with the sender check down no longer stops the whole run.** No e-mail is read that run (nothing
+  unchecked is loaded), the bell gives the reason, the files on disk still load, and the report API is used when it is
+  set up.
+- **An encrypted zip is set aside.** A zip encrypted with a password was tried again at every run; it is now moved to
+  quarantine with its reason.
+- **A CSV column named `_id` is kept as `csv_id`.** It became the row's database id, so rows of other files with the
+  same value were dropped as "already in the database".
+- **A file with a header line and no rows is read once,** not at every run, unless it changes.
+- **An inline logo no longer stops a report's link being downloaded.** Any attachment counted as the report, so an
+  e-mail with a logo and a link lost its report; only a zip or CSV attachment counts now.
+- **The mailbox is read by message UID.** Sequence numbers shift when messages are removed meanwhile; a batch the
+  server refused was skipped without being counted. Each message is now fetched by its UID, and refused ones are
+  counted and tried again.
+- **A quarterly purge that fails part way does not put the rows back.** The quarter's cutoff is recorded before the
+  first delete, so the loader no longer re-inserts the deleted rows on the next run; the purge is tried again.
+- **The passkey sign-in view shows.** On installations where people sign in with passkeys, the passkey step of the
+  sign-in page was a blank card.
+- **The advisory editor keeps what you typed.** Confirming, removing or undoing a technique redrew the form, and unsaved
+  text in Description and Recommended Actions was replaced by the saved text; it is kept now.
+- **PDFs print text whole.** A table cell over 900 characters ended in "... (more in the CSV)", and a long word such as
+  a web address ran off an advisory's page; cells are printed whole, with rows continuing on the next page, and long
+  words break onto the next line. The quarterly reports' "Read me" notes continue on the next page instead of running
+  off it. The Executive PDF's two-line titles no longer overlap what is under them, and "Key findings (continued)"
+  starts a new page when needed.
+- **A PDF without its CSV says so.** A report download asked for as a PDF alone said the full list was in a CSV that was
+  not part of it.
+- **The quarterly PDFs print a network's label once** instead of on each of its rows.
+- **No text cut with "..." on pages.** Region names and tooltip lines on the combination page, Intel values, the Apply
+  bar's detail in Settings, record extras (now up to 2000 characters, said in words when longer), event extras, CVE
+  descriptions and references on the services page, Shadowserver's page text on the report map and a comment in the bell
+  were cut; they wrap or say how much is left out. Researcher notes say "12 of N" when there are more.
+- **Text is easier to read.** Some grey text on dark pages was about 2:1 against its background; every text now has a
+  contrast of at least 4.5:1.
+- **Keyboard: Log out is last in the Tab order,** as it is last in the header, and the Details hint shows on focus too.
+- **The focus stays where you are.** Pages that redraw themselves (the Executive portal while its baseline builds,
+  the services page, the Task monitor, Intel gathered, the definitions, the advisory and code check pages and others)
+  moved the keyboard focus to the top; it now stays on the same control.
+- **Findings keep a half-written reply.** A quiet refresh that lost the connection emptied the list and the reply being
+  written, and typing in the search box rebuilt the cards and lost it too.
+- **Lists answer in order.** On the Intelligence page, the combination search and other searches, an earlier answer that
+  arrived late could replace a newer one; the combination search also sent the ticks of an earlier search with the
+  next one and was stuck (400) until a reload.
+- **Choosing from a list with Enter picks what is shown.** In a list without an empty choice, Enter picked the second
+  match ("Niger" gave "Nigeria").
+- **Escape closes one layer,** not two at once.
+- **The Admin page's users table stays still while you use it.** Its 30-second refresh redrew it under the
+  administrator's pointer.
+- **Other page fixes.** The advisory page no longer goes blank when the connection drops while switching
+  organisation; the passkey list stops spinning when it cannot load; a PDF button keeps its label after a failed
+  download; a failed load of the list of people is not kept as "no accounts"; Settings → Workers' unlock countdown
+  stops; **Make it again** keeps its confirm click after a redraw; the Executive map is no longer drawn twice; a
+  hand-over list always belongs to the role that opened it; the beacon panel no longer stacks its refreshes; and links
+  are checked for their scheme before they are shown.
+- **The Audit portal counts what it should.** Resetting passkeys, changing the sign-in check and sign-up links count as
+  privileged actions; "lock lifted" no longer counts as an alert; the evidence PDF says "15 most recent of N" where it
+  shortens a list; and a line in the audit log that is valid JSON but not an entry no longer stops the verifier, the
+  portal, the start or sign-ins.
+- **Every proof package passes its own verifier.** The download stamp rewrote a CSV inside proof.zip after its hashes
+  were taken, so a downloaded package failed verification; hash-checked packages are no longer stamped (they stay
+  sealed).
+- **The audit log's counts survive retention, and one checkpoint is made per day.** Entries removed by retention were
+  not counted in the head, and two workers could each make the day's checkpoint.
+- **Connectors.** The sender stopped on any device with a kept beacon summary; a failed withdrawal of a purged day from
+  the target was never tried again; ATT&CK links were always labelled "suggested"; and a day was cut at the wrong hour
+  around a daylight-saving change. All four are fixed.
+- **The code check's "Keep" no longer writes a false entry.** Approving a file wrote "no longer in the folder" to the
+  audit log.
+- **Settings → Update puts the previous release back after any failure,** and a git step that hangs is stopped after
+  its time limit instead of holding the update for good.
+- **Saved data is not lost when two things write at once.** Identify networks and a network look-up wrote
+  `data/asns.json` at the same time and could lose each other's changes (hand edits are now kept); the PDF References
+  files had the same problem; a damaged local file of the services patterns wiped the other researchers' choices; and
+  one torn line in Trace a leak's seals file stopped its pruning for good.
+- **A day loads with an odd digit in it.** A Unicode digit (such as "²") in a network range stopped a whole day's load.
+- **Shares from the server read like every other share.** The services page's shares were rounded to four places on the
+  server, so a tiny share read "0%" and nearly all of it "100%"; they now follow the one rule.
+- **Explore works past the 60th lead** on Intel gathered (it answered "Not found").
+- **Faster with a lot of data.** The services definitions were recomputed on every request (their cache never hit);
+  the CVE cache was rewritten after every record; a record click scanned the whole day; the quarterly report's checks
+  took hours for a big constituency; the audit portal read the accounts file twice per entry; the replay counts kept
+  up to 64 full lists in memory; an analyst code's view kept every day of the code in memory at once. Each now does
+  the work once, one day at a time, or keeps a bounded cache.
+- **A slow or hung computation no longer holds every thread.** Waiting for a kept answer now gives up after 120 seconds,
+  and slow outside look-ups no longer run while the networks lock is held.
+- **Bad input gets an answer in words, not a server error,** in the analyst codes, the Unusual activity card and
+  other routes; a geocache that cannot be saved no longer fails the map.
+- **`tools/diagnose_reports.py` runs as documented.** It stopped at its first import.
+- **Accounts changed with `manage/manage_users.py` are in the audit log.** With the plain look (white pages, Settings →
+  Organisation), the diagonal "PREVIEW" watermark with the viewer's name was drawn in white and could not be seen; it
+  is now drawn in faint dark ink on white pages, as faint as on the designed look.
+- **Abused or Compromised: regions in one spelling.** The records view listed Shadowserver's raw region names
+  ("KIAMBU", "NAIROBI"); its Regions breakdown, filter and records now use the same spelling as every other page, and
+  a region spelled two ways counts once.
+- **Abused or Compromised: a network's full name.** A long network name in the records view's breakdowns ended in
+  "..."; it now wraps onto a second line.
+- **The definitions tables give their description room.** On Definitions, the "What it is" and "Definition" columns
+  could shrink to about 12 letters, so a CVE description ran down a narrow strip; they now keep a readable width.
+- **The record window wraps a long report code at its underscores.** "event4_sinkhole_http" broke in the middle of a
+  word; it now wraps after an underscore.
+- **One record, one host.** The services host analysis, the report download summaries and the Definitions page's
+  Issues table wrote "1 records on 1 hosts"; a count of one is now singular, and the verbs agree ("1 host has a
+  concrete issue").
+- **The bell says when the report feed goes stale.** Administrators get a daily notice when the daily read of the
+  report feed fails or has not happened for two days, and, on the computer that runs the feed builder, when the builder
+  has not run for three hours. The feed's own "built" time is not used: it only changes when Shadowserver's reports do.
+- **Every downloaded CSV says who downloaded it and when.** Two columns at the end of every row, "Downloaded by"
+  (the person's full name with their person code) and "Downloaded at" (UTC); in each CSV inside a downloaded ZIP and
+  each list the pages save as a CSV too. Every row stays as wide as the header, so imports keep working. Until now
+  only the quarterly CSVs carried it.
+- **The Executive portal recounts its 7-day baseline once after this update.** Regions are now counted by one
+  spelling, so the past days kept from before are counted again the same way (the portal says "baseline being built"
+  for a few minutes); until then a region figure could have been compared with a week counted the old way.
+- **The quarterly CSVs' stamp no longer holds the sign-in name.** It showed the full name with the sign-in name, which
+  is half of what signs someone in; it now shows the person code, as every other stamp does.
+- **Two more security headers.** Every answer now says Cross-Origin-Resource-Policy: same-origin (other sites may not
+  load Looking Glass's pages, data or files into theirs) and X-Permitted-Cross-Domain-Policies: none.
+- **The map's filters keep still under a click.** After a filter was ticked, the filter lists were rebuilt with their
+  new counts, sometimes just as the next filter was being clicked, so that click could be lost. The lists now wait
+  while the pointer is over them and update as soon as it leaves.
+- **The definitions tables' buttons stay in view.** With a wide description, a row's last button could sit past the
+  table's edge; the buttons now stack when there is no room for them side by side.
+- **Executive portal: a long infection name keeps its code readable.** In the top infections list, a long name such as
+  "Popcorn Time (Time4Popcorn) with an abandoned updater (not malware)" squeezed the family code beside it to one
+  letter per line. The code now moves under the name.
+- **PDF reports print a note or a required action once.** A researcher's note saved twice on the same name was printed
+  twice under its card, and CISA's required action was printed again for each CVE whose due date differed. Each is now
+  printed once; the other CVEs point to it and keep their own due date.
+- **Every refused library file reaches the audit log.** When the same file was refused twice from the same source in
+  the same second, both entries in suspected-packages.json got the same id, and the audit log took only one of them.
+  Each entry now gets its own id when it is written.
+- **The services and constituency checks run at any hour.** tests/verify_services.py,
+  tests/check_services_consistency.py and tests/verify_constituency.py checked "yesterday UTC" by default. From
+  00:00 UTC until that day's reports are in, the platform still replays the day before, so the three checks were
+  skipped for hours every night. They now check the day the platform replays (tests/lgauth.py, replay_day); a day
+  given on the command line is still used as it is.
+- **requirements.txt names every library the code uses.** The platform drew pictures with Pillow and the security
+  retest built passkey answers with cbor2, and the pipeline used urllib3 for its download retries, but none of them
+  was named: each came in only through another library (reportlab, webauthn, requests), which could drop it in any
+  version. All three are named now, with caps; the pipeline's cryptography has its cap (<51) like the platform's. The
+  locks were made again from them with no library version or file changed.
+- **A new check, `tests/check_requirements_complete.py`, keeps it so** for the platform, the pipeline and the docs
+  site: every imported library is named in its requirements.txt, every named library is used (or kept for a stated
+  reason), every entry has an upper bound, and the lock holds each at a version the entry allows. It runs in
+  `tests/run_all_checks.sh` and in the GitHub checks.
+- **`tests/run_all_checks.sh` tests the pipeline folder `LG_DB_DIR` names** when it is set, else the one beside the
+  platform as before.
+- **An installation runs its own checks, and they pass on a new installation.** On a freshly installed computer the
+  installer's check step reported failures and skipped checks that no installation could pass: checks that run the
+  pages' scripts under Node, open real browsers or render PDFs, and checks of the source tree, the docs and the release
+  files. Those are now the maintainer's checks, listed with their reasons in `tests/maintainer_rows.txt`: an
+  installation neither runs nor counts them. `tests/run_all_checks.sh` runs the installation's checks;
+  `tests/maintainer_checks.sh` (or `LG_SUITE=all`) runs everything, as the GitHub checks do. A check that mixes both
+  keeps its installation part and says in one line that its Node or PDF part is the maintainer's.
+- **No part of a check is skipped in silence.** Eleven checks printed "skipped" for a part and still passed. A part
+  that cannot run now either counts as skipped, or is the maintainer's part (a failure in the maintainer's run when its
+  tool is missing). `tests/check_suite_split.py` keeps it so.
+- **"Several reports + filters" checks a pair the day really has.** It was tied to one combination (Blocklisted with
+  Accessible HTTP), so an installation without those reports failed it.
+- **The constituency check runs on an installation without a constituency.** It skipped; it now compares every record
+  of the day with MongoDB, as both platforms show every network then.
+- **The installer's summary says "Malpedia token not given (add later)"**, like the map token, instead of "skipped".
+- **The installer's times are the measured ones.** On a clean computer the security protections take about 10
+  minutes, not 2; the checks against the database about 10, not 2; all the checks at the end about 20, not 5.
+- **A new installation's code check is clean on its first day.** Settings → Code check reported
+  `deploy/looking-glass-update.path` as "not in the release": the installation writes that unit file (and the timers'
+  `*.timer` files) into `deploy/` from the shipped templates, as it does the `*.service` files, which were already
+  accepted. The three kinds are accepted alike now.
+- **The uninstaller removes a MongoDB that came with Looking Glass.** `uninstall.sh --all` kept MongoDB on a computer
+  where Looking Glass had installed it: `deploy.sh` keeps the package's own default configuration as `mongod.conf.orig`,
+  which the uninstaller took for someone else's. `deploy.sh` now marks a MongoDB it installed itself ("Installed by
+  deploy.sh"), and only that mark lets `--remove-mongodb` remove it; without the mark the uninstaller keeps MongoDB
+  whenever it cannot tell, and a MongoDB taken over is never removed.
+- **The security retest checks a new installation's set-up page for open redirects.** Before the first administrator
+  exists, eight sign-in probes (a foreign `next=`) were skipped; they now check that the foreign address appears
+  nowhere on the set-up page, in any spelling.
+- **A check of MITRE's tactic links passes with MITRE's own copy.** With the ATT&CK copy the installer downloads, a
+  tactic's link is MITRE's own address (no trailing slash); the check expected the one Looking Glass builds without
+  that copy. Both open the same page.
+- **The maintainer's runs skip nothing.** With `LG_NO_SKIP=1` a check that cannot run fails and says what is missing;
+  the constituency, PDF, browser and database checks run on every release machine (`LG_TEST_SYSTEM`,
+  `LG_THROWAWAY_MONGO`, `LG_CONSTITUENCY_CHECK`).
+- **Roles: every role names its ENISA skills profile.** The table in Roles has a new column for ENISA's European
+  Cybersecurity Skills Framework (ECSF): Researcher/TI is the Cyber Threat Intelligence Specialist, as the text below
+  the table already said (the table had said "Researcher"); Analyst the Cyber Incident Responder; Auditor the
+  Cybersecurity Auditor; Administrator the Cybersecurity Implementer; Management the closest, the CISO.
+- **Caddy in front of a running installation: the last words match what happened.** When an internal installation
+  had no certificate, `deploy/caddy_front.sh adopt` makes one; it now says so (the address starts with https:// and
+  each browser asks once to trust the new certificate) instead of saying the certificate is the same one.
+- **The Executive charts name every part.** The Sectors card (and every ring chart there) folded the parts past the
+  7th into "Other": on a services day with 11 sectors, four were never named. Each legend now lists every part; the
+  ring still draws the smallest together, in the grey of "Other". A part that has records never reads "0%" (it reads
+  "<1%"), on the page and in the Executive PDF, and a part of the whole never reads "100%". The server now sends
+  every sector, not the first 15.
+- **The map frames every region with records.** The Executive and Services maps zoomed to the regions holding 98% of
+  the records, so the smallest left the frame while the map said "Zoomed to the regions with records" (Ghana: Upper
+  East with one device). The frame now holds every region with records; when that is most of the country, the map
+  shows the whole country.
+- **Certificate facts are readable in the record window.** The Services record window's Certificate and TLS card
+  drew the facts to act on (for example an expired certificate) in a box the size of a country flag, one letter per
+  line over the rows below.
+- **Caddy no longer overwhelms Looking Glass with a page's requests.** Behind Caddy, a browser sends a page's
+  requests all at once (HTTP/2), and Caddy opened as many connections to Looking Glass as it asked for. Those not used
+  at once each held one of Looking Glass's 8 threads: almost half of a page's requests failed and new connections went
+  unanswered for up to a few minutes, so pages loaded slowly, blank or half drawn. Caddy now opens at most 6
+  connections to Looking Glass (`max_conns_per_host`), as a browser did before Caddy; further requests wait in Caddy.
+  To fix an installation before you update, add `max_conns_per_host 6` and `keepalive_idle_conns_per_host 6` inside the
+  `transport http { }` block of `/etc/caddy/Caddyfile`, then `sudo systemctl restart caddy`.
+- **No warm-up every minute while a day waits for its reports.** A day with no reports yet is loaded again every
+  minute, and each time the background warm-up of the Definitions page's summaries ran again over nothing. It now runs
+  only when a day's reports change.
+- **While the mail server's certificate is not checked, the administrators are told every day.** The bell says so
+  once a day and Settings → Task monitor shows it on the Report pipeline card, until **Check the mail server's
+  certificate** (Settings → Workers) is on again. That switch's help now says when switching it off is acceptable.
+- **When the mailbox cannot be read, the bell says why.** The administrators' bell and Settings → Task monitor now
+  name the reason, for example "the mail server's certificate has expired", not only "the mailbox could not be read".
+  The pipeline's log gives the advice that fits each certificate problem: an expired certificate is renewed by whoever
+  runs the mail server (`IMAP_VERIFY_TLS=false` is no longer suggested for it: that setting is only for a server that
+  has always used its own certificate); a certificate for another name means `IMAP_SERVER` should be the name it is for.
+- **`deploy/caddy_front.sh adopt` finds the right service.** On an installation whose `.env` has no `LG_SERVICE` line
+  (one made before the installer wrote it), adopt looked for the service that runs the platform folder and could take
+  the unusual-activity job (`looking-glass-unusual`, same folder) for it, then stopped without a word. It now takes only
+  the web service (the one that runs gunicorn). Until you update: add `LG_SERVICE=looking-glass` to the platform's
+  `.env` (your service's name, if you changed it), then run adopt again.
+- **`deploy/caddy_front.sh` never stops without saying why.** A step that fails now names its line and what it was
+  doing. `adopt` reads the address Looking Glass listens on in every form gunicorn takes (`--bind A`, `--bind=A`,
+  `-b A`), and says so in words when the service names none. Run with no command, it shows its whole help, the list
+  of commands included.
+- **The tests now check the documentation against the code.** `tests/check_docs_vs_code.py`, in the full suite and
+  in CI: every finding status, code family, button and role the documents name must be one the code has.
+- **Shares never mislead, the same on a page and in its PDF.** One rule for every share on every page, PDF and CSV
+  (`shares.py`, and `LGShare` in the browser): a part that has records reads "<1%" (or "<0.1%"), never "0%"; a part
+  of the whole reads ">99%", never "100%"; both round half up, so a page and its PDF give the same words (Python and the
+  browser rounded halves differently before). Drill-downs, findings, KPI tiles, breakdown tables, EPSS, the audit
+  failure rate, the sender check, task monitor shares and the combination report all use it.
+- **No list is cut without saying so.** Every capped list on every role's pages, PDFs and CSVs says "Top 8 of 23" and
+  sends its full count; rings and bars are of the real total, with an "Other" part for what the rows leave out. Lists
+  short by nature are never cut: every region (a country with 47 counties lost the ones past the 30th, and the map
+  read "Nothing reported" there), sector, report family, severity and attack type. Files that say they are complete
+  hold every row: the advisor network issues CSV, the management summary CSV (every region, sector, recurring network,
+  KEV CVE and infection), the seven-day trend CSV, the complete-list CSVs (every domain, issue and service of a row)
+  and a new patterns CSV in the combination ZIP. Filter menus list every value (they stopped at 300 or 400).
+- **The 7-day comparison grades every infection and issue.** It graded only the top 15 or 25, so a Danger spike further
+  down was never flagged, and it named only the first 3 flagged ones; it now names every one.
+- **Each MITRE ATT&CK technique, CVE description and CISA required action is printed once.** The analysis and Executive
+  PDFs repeated the same technique under every infection card; they now list each technique once, with the names it is
+  mapped for. A description, a researcher's note or a CISA required action shared by several cards prints once.
+- **Sectors mean one thing everywhere: the network type.** The Executive portal counted sectors by network type, the
+  quarterly report and the services page by Shadowserver's own column, so the same devices could read "Telco / ISP" on
+  one and "Communications" on the other. Sectors are now the network type (Settings) on every page, PDF and CSV;
+  Shadowserver's column is shown beside them as "Industry (Shadowserver)", never mixed in.
+- **One counting rule on every page.** Regions are grouped and spelled one way (the map's name, the administrator's
+  region matches, the country alone as "Unknown region"): "Murang'a" no longer reads "Murang'A" or "Murang'a" on
+  different pages, and "NAIROBI" and "Nairobi" are one row. Networks are counted by company everywhere (AS0 is no
+  network; "Unknown network" is shown, counted apart). Names that differ only in spaces or case are one organisation.
+  In masked views each network missing from the registry has its own alias, and filtering on it works.
+- **A report row in two files is counted once.** A country file and a network file of the same day carry the same rows;
+  each was counted twice on every page and in the quarterly report. Rows dated outside the days a file can be shown on,
+  or without a time, are counted and stated beside the load figures instead of disappearing.
+- **The pipeline says when a report was not loaded.** A run that refused, failed or quarantined a report, could not use
+  the API, or met a file name it does not know, used to end "ok"; it now counts each one, and the bell and Settings,
+  Task monitor say what went wrong. A CSV that starts with a byte-order mark gets its dates; rows are no longer cut in
+  two at unusual line breaks; every row read is accounted for; a report sent again under the same name with other
+  content is loaded again; `.CSV`, a country part in capitals and `_as64500_2.csv` names are loaded.
+- **AS numbers and addresses match in every spelling.** "AS064500" is stored as "64500"; the constituency check matches
+  "AS64501" and "::ffff:a.b.c.d" forms.
+- **The services list's "exploited" count checks every issue.** It looked at each report's top 40 issues only, so a
+  report whose actively exploited CVE ranked lower read 0.
+- **A change you may not make is refused at once.** An account without the Settings permission was asked to confirm it
+  is them before being refused; it is now refused straight away.
+- **Caddy: the current option names.** `deploy/caddy_front.sh` writes `tls_trust_pool` (Caddy 2.8 and later) instead of
+  the deprecated `tls_trusted_ca_certs`, so Caddy no longer warns.
+- **Tests: 13 new behaviour checks and four new proven laws.** The suite and CI run them; the Bend laws prove that the
+  Executive's sectors add up (e), that shares never read 0% or 100% wrongly and the page equals the PDF (f), that a cut
+  list's rows and its Other row add up to the total (g), and that every page puts a record in the same sector, region
+  and network (h), each compared with the real code on 300 made-up datasets. The PDF check also reads what each PDF
+  says: no "0%" share, no "N of M" above M, no paragraph, definition or ATT&CK line printed twice.
+- **Caddy: setup, renewal and update put back what they changed when a step fails.** A failed setup could leave a
+  Caddyfile without its hardening and firewall, or a copy of the key; each step now runs on a snapshot of our files and
+  restores them on failure. A renewal (`deploy/caddy_front.sh sync`) and an update now write the Caddyfile again, so an
+  installation set up before this release gets the cap on Caddy's connections to Looking Glass; update adds Caddy's
+  automatic-updates file when it is missing, as status's advice says.
+- **`deploy/make_tls_cert.sh` keeps the certificate in use when making a new one fails,** finishes when .env has no
+  LG_PORT line, and reloads Looking Glass under its own service name (LG_SERVICE).
+- **The guided installer** accepts Looking Glass's own port under its own service name, also behind Caddy on 127.0.0.1,
+  keeps its backend port on a re-run, and no longer asks "Not a Looking Glass database" for ever when its answers come
+  from a file, --yes or no terminal.
+- **Settings, Constituency: every saved network is listed.** A saved network that is not in the network registry and
+  had no records the day before was saved but not shown, so it could not be unticked; it is now listed with 0 records.
+- **Settings, Configuration: a refused save says why.** The server's refusal was replaced at once by "1 change not saved
+  yet"; it now stays, and the changes stay in their boxes.
+- **Copy buttons copy nothing unless the server confirms the copy was recorded;** a page that answered but was not that
+  confirmation (a gateway or a sign-in page) used to let the text through without a record.
+- **Advisory page and PDF list a technique the same way:** the page now takes MITRE's name, link, text and tactics from
+  a later mapping when the first lacks them, as the PDF does.
+- **A combination review kept before 18 November shows each name's severity in its PDF References,** as a newly made
+  review does.
+- **Refusals under `/api/` answer in words.** A refused or unknown request under `/api/` came back as a framework's
+  HTML page (811 cases across the portals' gates); it now answers JSON with an error in plain words, which the pages
+  show, and no answer names the framework. A new check calls every route as every role with bad input (unknown and very
+  long values, odd characters, wrong types, no body): no server error, no traceback, no slow answer.
+- **The bell no longer shows a library's error text.** When counting a day again failed, an administrator's bell showed
+  the database driver's own message (which can name the database's address); it now says what happened in words, and
+  the full error stays in the log.
+- **The route checks never touch the platform's own data.** The in-process checks of every route (who may reach it,
+  and that no answer gives away a secret) ran the app on the installation's own data folder and could leave log lines
+  or unfinished temporary files there; they now run on a temporary copy and prove the data folder is untouched.
+- **No release check is skipped any more.** The checks that skipped without a database administrator, a constituency,
+  the PDF reader or a browser (both new-collection tests, the quarterly report and purge tests, the constituency check,
+  the PDF page check and the browser checks) now run in the release tests, and a skipped check that was not run and
+  passed elsewhere fails the run. The quarterly tests use the database named in the environment, and the constituency
+  check takes the service's address from LG_BASE or the installation's own port.
+- **The map's network lists follow the one counting rule.** A record with AS number 0 or "AS0" was listed as a network
+  called "AS0" in the map's source and destination networks; it is now no network, counted as not recorded.
+- **The checks against MongoDB count by the one counting rule.** The checks that compare the pages with the database
+  (services statistics, the Executive portal, communications, totals, replayed counts, services, the constituency)
+  count sectors by network type, the Industry (Shadowserver) list, regions in one spelling with an Unknown region row,
+  networks by company with an Unknown network row, and a row in two files of one day once; the test systems run the
+  page checks with Node, and the documentation check reads the documents a release ships, not an older layout's
+  leftovers.
+
+### Documentation
+- **SECURITY.md says what a passkey does not cover**: your own browser's extensions, malware with a synced passkey
+  manager, adding a passkey to an account that has none yet, and look-alike sites, with what to do about each.
+
 ## 2026-11-26
 ### Added
 - **Settings → Update: update Looking Glass from the page.** Check for an update looks for a newer release; Update

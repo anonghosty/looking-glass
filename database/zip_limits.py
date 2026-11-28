@@ -85,6 +85,12 @@ class Budget:
 def check_listing(infos, limits: Limits) -> None:
     """Before anything is written: the number of files, and the sizes the zip states (a cheap first check)."""
     files = [i for i in infos if not i.is_dir()]
+    # a file encrypted with a password can never be unpacked here: quarantined, not tried again on every run (audit
+    # 2026-11-27: it failed the same way every run, "will retry next run", for ever)
+    locked = [i for i in files if i.flag_bits & 0x1]
+    if locked:
+        raise ZipRefused(f"holds {len(locked)} file(s) encrypted with a password ({os.path.basename(locked[0].filename)[:80]}), "
+                         "which cannot be unpacked without it")
     if len(files) > limits.max_files:
         raise ZipRefused(f"holds {len(files)} files, more than {limits.max_files} (ZIP_MAX_FILES)")
     stated = sum(i.file_size for i in files)

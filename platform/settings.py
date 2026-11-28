@@ -30,6 +30,35 @@ def _csv(v):
     return [x.strip() for x in (v or "").split(",") if x.strip()]
 
 
+ASN_MAX = 4294967295          # AS numbers are 32 bits
+
+
+def asn_key(a):
+    """An AS number as the reports write it: "AS064500", "as 64500", " 64500", 64500 -> "64500"; anything that is not
+    a number comes back stripped, unchanged (count audit 2026-11-26: "064500" was stored and never matched "64500")."""
+    s = str(a).strip()
+    if s[:2].upper() == "AS":
+        s = s[2:].strip()
+    return str(int(s)) if s.isascii() and s.isdigit() else s
+
+
+def address_key(ip):
+    """An address as one form: stray spaces off, an IPv4 address written as IPv6 ("::ffff:192.0.2.1") as IPv4.
+    Returns an ipaddress object, or None when it is not an address."""
+    try:
+        a = ipaddress.ip_address(str(ip).strip())
+    except ValueError:
+        return None
+    return a.ipv4_mapped or a if a.version == 6 else a
+
+
+def _network_key(n):
+    """An IPv4 range written as IPv6 (::ffff:10.0.0.0/104) as the IPv4 range it is (10.0.0.0/8); others unchanged."""
+    if n.version == 6 and n.prefixlen >= 96 and n.network_address.ipv4_mapped is not None:
+        return ipaddress.ip_network(f"{n.network_address.ipv4_mapped}/{n.prefixlen - 96}", strict=False)
+    return n
+
+
 class Settings:
     def __init__(self, path):
         self.path = path
@@ -64,11 +93,12 @@ class Settings:
             self.data["timezone"] = timezones.default_zone(self.data["country"])
 
     def _compile(self):
-        self.asns = {str(a) for a in self.data["networks"]}
+        # one form on both sides (in_scope): a list saved before validate wrote str(int(a)) ("064500") still matches
+        self.asns = {asn_key(a) for a in self.data["networks"]} - {""}
         nets = []
         for c in self.data["cidrs"]:
             try:
-                nets.append(ipaddress.ip_network(c, strict=False))
+                nets.append(_network_key(ipaddress.ip_network(str(c).strip(), strict=False)))
             except ValueError:
                 pass
         self.nets = nets
@@ -103,19 +133,19 @@ class Settings:
         if errors:
             return base, errors
         networks = []
-        for a in d.get("networks") or []:
-            a = str(a).upper().replace("AS", "").strip()
-            if a.isdigit():
+        for raw in d.get("networks") or []:
+            a = asn_key(raw)                 # "AS064500" -> "64500", the form the reports write (count audit 2026-11-26)
+            if a.isascii() and a.isdigit() and int(a) <= ASN_MAX:
                 networks.append(a)
             elif a:
-                errors.append(f"not an AS number: {a}")
+                errors.append(f"not an AS number: {str(raw).strip()}")
         cidrs = []
         for c in d.get("cidrs") or []:
             c = str(c).strip()
             if not c:
                 continue
             try:
-                cidrs.append(str(ipaddress.ip_network(c, strict=False)))
+                cidrs.append(str(_network_key(ipaddress.ip_network(c, strict=False))))
             except ValueError:
                 errors.append(f"not an address range: {c}")
         return {"country": country, "timezone": zone, "networks": sorted(set(networks), key=int), "cidrs": cidrs}, errors
@@ -134,12 +164,16 @@ class Settings:
         """Is a host (AS number, address) in the constituency? Always true without a restriction."""
         if not self.restricted:
             return True
-        if asn and str(asn) in self.asns:
-            return True
+        if asn:
+            k = asn if type(asn) is str else str(asn)
+            if k in self.asns:                       # the usual case: "64500" as the reports write it
+                return True
+            k2 = asn_key(k)                          # "AS64501", " 64501", "064501": one form (count audit 2026-11-26)
+            if k2 != k and k2 in self.asns:
+                return True
         if ip and self.nets:
-            try:
-                a = ipaddress.ip_address(ip)
-            except ValueError:
+            a = address_key(ip)                      # "::ffff:192.0.2.1", " 192.0.2.1 "
+            if a is None:
                 return False
             return any(a in n for n in self.nets if n.version == a.version)
         return False

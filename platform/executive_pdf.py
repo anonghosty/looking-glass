@@ -27,9 +27,17 @@ def hard_lines(doc, lines, font, size, width):
     out = []
     for ln in lines:
         while ln and doc.c.stringWidth(ln, font, size) > width:
-            k = len(ln)
-            while k > 1 and doc.c.stringWidth(ln[:k], font, size) > width:
-                k -= 1
+            # the longest start that fits (at least one character), by halving: a prefix only grows wider, so this is
+            # the same break as shrinking one character at a time, without its quadratic cost on a 2,000-character
+            # word (audit 2026-11-28, r1-8)
+            lo, hi = 1, len(ln) - 1
+            while lo < hi:
+                mid = (lo + hi + 1) // 2
+                if doc.c.stringWidth(ln[:mid], font, size) > width:
+                    hi = mid - 1
+                else:
+                    lo = mid
+            k = lo
             soft = max((i + 1 for i in range(1, k) if ln[i] in "-./:_"), default=0)
             if soft > k // 3:                          # a sensible place to break, not a stub of one or two letters
                 k = soft
@@ -50,7 +58,7 @@ TXT, DIM, MUTE = HexColor("#eef2fb"), HexColor("#9aa6bf"), HexColor("#6b7690")
 BLUE, VIOLET, TEAL, AMBER, RED, SLATE = (HexColor(x) for x in ("#5b8def", "#8b5cf6", "#22c3a6", "#f5b54a", "#ef5d6c", "#7d8aa8"))
 PALETTE = [HexColor(x) for x in ("#5b8def", "#8b5cf6", "#22c3a6", "#f5b54a", "#ef6f8a", "#38bdf8", "#a3e635", "#f97316", "#c084fc", "#94a3b8")]
 fmt = lambda n: f"{int(round(n or 0)):,}"
-pct = lambda x, d=0: f"{100 * (x or 0):.{d}f}%"
+from shares import cut, other, pct  # noqa: E402,F401  (one rule for every share: a part is never "0%" or "100%"; 2026-11-26)
 
 
 class Doc:
@@ -88,8 +96,17 @@ class Doc:
         if isinstance(text, _Fit) and text.lines:
             for i, ln in enumerate(text.lines):
                 draw(x, y - i * size * 1.15, ln)
-            return
+            return self.extra_height(text)
         draw(x, y, self.s(text))
+        return 0
+
+    @staticmethod
+    def extra_height(text):
+        """How much lower than its first line a fit() text reaches: 0 on one line, the added lines otherwise. The
+        caller moves what is under it down by this (audit 2026-11-27: a title fitted on two lines was drawn over the
+        line below it). Named extra_height, not extra (2026-11-28): Bandit took extra() for Django's database call
+        (B610) by its name alone."""
+        return (len(text.lines) - 1) * text.size * 1.15 if isinstance(text, _Fit) and text.lines else 0
 
     def wrap(self, x, y, text, width, size=9.5, color=TXT, bold=False, leading=None, max_lines=None):
         """Draws wrapped text downward from y (baseline of the first line); returns the y below the last line.
@@ -124,7 +141,8 @@ class Doc:
         s = max(floor, round(size * width / w - .05, 2))
         out = _Fit(t)
         out.size = s
-        out.lines = None if self.c.stringWidth(t, font, s) <= width else simpleSplit(t, font, s, width)
+        # a word longer than the room (a family name with no space) broken too, never over what stands beside it
+        out.lines = None if self.c.stringWidth(t, font, s) <= width else hard_lines(self, simpleSplit(t, font, s, width), font, s, width)
         return out
 
     # ---------------- shapes
@@ -140,18 +158,29 @@ class Doc:
         if title:
             self.text(x + 14, top, title, 11.5, TXT, True); top -= 13
         if sub:
-            self.text(x + 14, top, self.fit(sub, w - 28, 8.2), 8.2, MUTE); top -= 12
+            top -= 12 + self.text(x + 14, top, self.fit(sub, w - 28, 8.2), 8.2, MUTE)
         return top - 4
 
     def bar(self, x, y, w, h, frac, colors=(BLUE, VIOLET)):
         c = self.c
         c.setFillColor(Color(1, 1, 1, .07)); c.roundRect(x, y, w, h, h / 2, stroke=0, fill=1)
         fw = max(h, w * max(0, min(1, frac)))
-        c.setFillColor(colors[0]); c.roundRect(x, y, fw, h, h / 2, stroke=0, fill=1)
-        if fw > 3 * h:                                  # a violet tip, like the dashboard's gradient
-            c.setFillColor(Color(colors[1].red, colors[1].green, colors[1].blue, .85)); c.roundRect(x + fw * .55, y, fw * .45, h, h / 2, stroke=0, fill=1)
-            c.setFillColor(Color((colors[0].red + colors[1].red) / 2, (colors[0].green + colors[1].green) / 2, (colors[0].blue + colors[1].blue) / 2, .9))
-            c.rect(x + fw * .5, y, fw * .12, h, stroke=0, fill=1)
+        if fw <= 3 * h:                                 # a short bar: one colour (no room for a fade)
+            c.setFillColor(colors[0]); c.roundRect(x, y, fw, h, h / 2, stroke=0, fill=1)
+            return
+        # blue fading into violet, like the dashboard's gradient, inside the bar's rounded shape (2026-11-28: three
+        # overlapping blocks drew hard-edged steps in the middle of every long bar). Thin strips of plain colour, not a
+        # PDF shading: a shading is not drawn by every viewer (pdfium showed an empty bar)
+        a, b = colors
+        c.saveState()
+        p = c.beginPath(); p.roundRect(x, y, fw, h, h / 2)
+        c.clipPath(p, stroke=0, fill=0)
+        n = max(8, min(80, int(fw / 2)))
+        for i in range(n):
+            t = max(0.0, (i / (n - 1) - .45) / .55)         # blue for the first 45 %, then into violet
+            c.setFillColor(Color(a.red + (b.red - a.red) * t, a.green + (b.green - a.green) * t, a.blue + (b.blue - a.blue) * t))
+            c.rect(x + fw * i / n, y, fw / n + .3, h, stroke=0, fill=1)     # a hair wider: no seam between strips
+        c.restoreState()
 
     def pill(self, x, y, text, color, size=7.2):
         t = self.s(text); w = self.c.stringWidth(t, self.F["b"], size) + 10
@@ -176,9 +205,9 @@ class Doc:
         self.pill(M + lw + 8, H - M - 5, "EXECUTIVE", VIOLET, 7)
         self.text(M, H - M - 20, f"{self.meta['platform_label']} · {self.meta['scope']}", 8.5, DIM)
         self.text(W - M, H - M - 6, section, 11, HexColor("#a9b8ff"), True, "end")
-        self.text(W - M, H - M - 20, self.fit(f"Report day {self.meta['day']} · {self.meta['selection']}", 380, 8.5), 8.5, DIM, anchor="end")
-        c.setStrokeColor(Color(1, 1, 1, .08)); c.setLineWidth(.6); c.line(M, H - M - 30, W - M, H - M - 30)
-        return H - M - 44
+        ex = self.text(W - M, H - M - 20, self.fit(f"Report day {self.meta['day']} · {self.meta['selection']}", 380, 8.5), 8.5, DIM, anchor="end")
+        c.setStrokeColor(Color(1, 1, 1, .08)); c.setLineWidth(.6); c.line(M, H - M - 30 - ex, W - M, H - M - 30 - ex)
+        return H - M - 44 - ex
 
     def footer(self):
         t = datetime.now(timezone.utc)
@@ -192,7 +221,8 @@ class Doc:
         # NAT, and one device can use several addresses in a day
         self.text(M, 22, "Devices are counted by IP address, as Shadowserver reports them: one address can stand for several "
                          "devices (shared mobile connections), and one device can use several addresses in a day.", 6.6, MUTE)
-        self.text(M, 12, f"{note}Aggregated figures only: no individual addresses. Generated {now}{who}. Data: Shadowserver Foundation.", 7.2, MUTE)
+        # who made it and when only (the user, 2026-11-28): no address notice, no "Data: Shadowserver Foundation" in a footer
+        self.text(M, 12, f"{note}Generated {now}{who}.", 7.2, MUTE)
         self.text(W - M, 14, f"Page {self.page}", 7.2, MUTE, anchor="end")
 
     def done(self):
@@ -282,32 +312,49 @@ class Doc:
         # the top infections / issues over the 7 days
         rows = (d["infections"] if comms else sorted(d["issues"], key=lambda r: -r["hosts"]))
         unit = "devices" if comms else "hosts"
-        top = self.card(M, y, W - 2 * M, y - 30, ("Top infections" if comms else "Top issues") + " over the 7 days",
-                        f"{unit.capitalize()} per day for each of the day's top {'infections' if comms else 'issues'} · new, rising or falling against its 7-day average")
+        noun = "infections" if comms else "issues"
+        n_all = max(((d.get("totals") or {}).get(noun) or 0), len(rows))
         cx = [M + 14, M + 330, M + 460, M + 530, M + 640]
-        for xx, h_, an in zip(cx, ("Name", "7 days and the report day", "7-day avg", "Report day", "Change"), ("start", "start", "end", "end", "start")):
-            if h_:
-                self.text(xx + (60 if an == "end" else 0), top - 2, h_, 7.6, MUTE, True, an)
-        yy = top - 18
-        for r in rows:
-            if yy < 44:
-                break
+
+        def table_card(y, cont=False):
+            top = self.card(M, y, W - 2 * M, y - 30, ("Top infections" if comms else "Top issues") + " over the 7 days" + (" (continued)" if cont else ""),
+                            f"Continued from the previous page: {unit} per day for each of the day's top {noun}" if cont else
+                            f"{unit.capitalize()} per day for each of the day's top {noun} · new, rising or falling against its 7-day average")
+            for xx, h_, an in zip(cx, ("Name", "7 days and the report day", "7-day avg", "Report day", "Change"), ("start", "start", "end", "end", "start")):
+                if h_:
+                    self.text(xx + (60 if an == "end" else 0), top - 2, h_, 7.6, MUTE, True, an)
+            return top - 18
+        yy = table_card(y)
+        for i_r, r in enumerate(rows):
+            g = ((b.get("assess") or {}).get("items") or {}).get(r["value"])
+            # the name and the note as drawn, measured first: one fitted on two lines makes its row taller
+            nm = self.fit((r.get("title") or r["value"]) if comms else r["value"], 300, 8.6, True)
+            gn = self.fit(g["note"], W - 2 * M - 40, 7.4) if enough and g and g["level"] in ("watch", "high") else None
+            need = 21 + self.extra_height(nm) + (11 + self.extra_height(gn) if gn is not None else 0)
+            last = i_r == len(rows) - 1
+            # a row that does not fit goes on the next page, never dropped (2026-11-26: the table stopped at the page end)
+            if yy - need + 21 < (44 + (12 if last and n_all > len(rows) else 0)):
+                yy = table_card(self.new_page("7-day trend: " + ("top infections" if comms else "top issues")), True)
             vals = b["items"].get(r["value"], [])
             today = r["hosts"]
             g = ((b.get("assess") or {}).get("items") or {}).get(r["value"])
             a, chg = self.change(today, vals, g)
-            name = (r.get("title") or r["value"]) if comms else r["value"]
-            self.text(cx[0], yy, self.fit(name, 300, 8.6, True), 8.6, TXT, True)
+            self.text(cx[0], yy, nm, 8.6, TXT, True)
             self.spark(cx[1], yy - 4, 120, 14, vals, today, a)
             self.text(cx[2] + 60, yy, fmt(a) if a is not None else "-", 8.4, DIM, anchor="end")
             self.text(cx[3] + 60, yy, fmt(today), 8.4, TXT, True, "end")
             if enough and chg:
                 self.pill(cx[4], yy, chg[0], chg[1], 6.6)
-            if enough and g and g["level"] in ("watch", "high"):        # what to do about it, under the row
+            yy -= self.extra_height(nm)                                        # a name on two lines: what follows below it
+            if gn is not None:                                          # what to do about it, under the row
                 yy -= 11
-                self.text(cx[0] + 8, yy, self.fit(g["note"], W - 2 * M - 40, 7.4), 7.4, HexColor("#ffd38a") if g["level"] == "watch" else HexColor("#ff9aa4"))
+                self.text(cx[0] + 8, yy, gn, 7.4, HexColor("#ffd38a") if g["level"] == "watch" else HexColor("#ff9aa4"))
+                yy -= self.extra_height(gn)
             self.c.setStrokeColor(Color(1, 1, 1, .05)); self.c.setLineWidth(.5); self.c.line(M + 14, yy - 7, W - M - 14, yy - 7)
             yy -= 21
+        note = cut(len(rows), n_all, noun)
+        if note:
+            self.text(M + 14, yy + 4, f"{note} shown · every one, with its 7 days, is in the seven-day-trend CSV delivered with this report", 7.6, MUTE)
 
     # ---------------- components
     def kpis(self, y, tiles, x0=M, total=None):
@@ -390,13 +437,26 @@ class Doc:
             self.text(x + w - 14, y - h + 8, f"{len(rest)} more on the next page", 7.4, MUTE, anchor="end")
         return rest
 
-    def bars(self, x, y, w, rows, metric="hosts", n=8, label=lambda r: r["label"], stack=False, row_h=None, bottom=None):
+    def bars(self, x, y, w, rows, metric="hosts", n=8, label=lambda r: r["label"], stack=False, row_h=None, bottom=None,
+             total=None, noun=""):
         """bottom: no row below it. A label too long for its room wraps and its row grows (2026-11-18: "Accessible GPRS
-        Tunneling Protocol (GTP)" was squeezed onto two lines over the next row)."""
-        rows = [r for r in rows if (r.get(metric) if r.get(metric) is not None else r.get("count"))][:n]
+        Tunneling Protocol (GTP)" was squeezed onto two lines over the next row). total: how many there are in all (the
+        server's totals, else the rows given): when fewer are drawn, a last line says "Top N of M <noun>" (2026-11-26:
+        the cards cut silently)."""
+        rows = [r for r in rows if (r.get(metric) if r.get(metric) is not None else r.get("count"))]
+        total = max(total or 0, len(rows))
+        rows = rows[:n]
         if not rows:
             self.text(x, y - 10, "Nothing for this selection.", 8.5, MUTE); return y - 20
         mx = max(r.get(metric) if r.get(metric) is not None else r["count"] for r in rows) or 1
+        if not stack and bottom is not None:
+            # the rows that fit; when not all of them do (or more exist than were sent), room for the "Top N of M" line
+            hs = [max(row_h or 17, 17 + 10 * (len(simpleSplit(self.s(label(r)), self.F["r"], 8.4, w * .44 - 6) or [""]) - 1)) for r in rows]
+            fit = lambda lim: next((k for k in range(len(hs)) if y - sum(hs[:k + 1]) < lim), len(hs))
+            k = fit(bottom)
+            if k < total:
+                k = fit(bottom + 12)
+            rows = rows[:k]
         yy = y
         for r in rows:
             v = r.get(metric) if r.get(metric) is not None else r["count"]
@@ -409,26 +469,34 @@ class Doc:
                 lw = w * .44
                 ll = simpleSplit(self.s(label(r)), self.F["r"], 8.4, lw - 6) or [""]
                 rh = max(row_h or 17, 17 + 10 * (len(ll) - 1))
-                if bottom is not None and yy - rh < bottom:
-                    break
                 for k, ln in enumerate(ll):
                     self.text(x, yy - 9 - 10 * k, ln, 8.4, HexColor("#d6ddee"))
                 self.bar(x + lw, yy - 10, w - lw - 46, 5.5, v / mx)
                 self.text(x + w, yy - 9, fmt(v), 8.6, TXT, True, "end")
                 yy -= rh
+        note = cut(len(rows), total, noun)
+        if note:
+            self.text(x, yy - 8, f"{note} shown", 7.4, MUTE)
+            yy -= 12
         return yy
 
-    def donut(self, x, y, size, rows, unit, w=300, severity=False):
+    def donut(self, x, y, size, rows, unit, w=300, severity=False, total=None, bottom=None, noun="parts"):
+        """total: the selection's real total (its events or records): the centre number and every share are of it, and
+        what the rows leave out of it is an "Other" part (2026-11-26: the centre and the shares were of the rows sent).
+        The legend names every row (the ring draws the 7 biggest apart, the rest in the grey of "Other"); one that does
+        not fit above bottom is counted in a last "Other" line, never dropped without saying so."""
         rows = [r for r in rows if r.get("count")]
         sevc = {"critical": HexColor("#ef4444"), "high": HexColor("#f97316"), "medium": HexColor("#f5b54a"), "low": HexColor("#38bdf8"),
                 "info": HexColor("#94a3b8"), "unrated": HexColor("#64748b")}
-        col = lambda i, p: (sevc.get(p.get("value"), HexColor("#64748b")) if severity else
-                            HexColor("#3a3f4d") if p.get("other") else PALETTE[i % len(PALETTE)])
+        grey = HexColor("#3a3f4d")
+        col = lambda i, p: (grey if p.get("other") else sevc.get(p.get("value"), HexColor("#64748b")) if severity else
+                            PALETTE[i % len(PALETTE)])
         if not rows:
             self.text(x, y - 10, "Nothing for this selection.", 8.5, MUTE); return
-        top, rest = rows[:7], sum(r["count"] for r in rows[7:])
+        tot = max(total or 0, sum(r["count"] for r in rows))
+        missing = other(rows, tot)                         # in the total, in none of the rows sent
+        top, rest = rows[:7], sum(r["count"] for r in rows[7:]) + missing
         parts = top + ([{"label": "Other", "count": rest, "other": True}] if rest else [])
-        tot = sum(p["count"] for p in parts)
         c = self.c
         cx, cy, R, r0 = x + size / 2, y - size / 2, size / 2, size / 2 * .64
         a0 = 90.0
@@ -440,13 +508,36 @@ class Doc:
         c.setFillColor(CARD); c.circle(cx, cy, r0, stroke=0, fill=1)
         self.text(cx, cy, fmt(tot), 12.5, TXT, True, "middle")
         self.text(cx, cy - 11, unit.upper(), 6.2, MUTE, True, "middle")
-        lx, ly = x + size + 16, y - 6
-        for i, p in enumerate(parts):
+        lx, ly, right = x + size + 16, y - 6, x + w
+        legend = [dict(r, other=i >= 7) for i, r in enumerate(rows)]
+        if missing:
+            legend.append({"label": "Other", "count": missing, "other": True})
+        step = 13.5
+        lab_w = right - lx - 52
+        lab = lambda p: self.fit(p.get("label") or p.get("value") or "Unknown", lab_w, 8.2)   # noqa: E731
+        if bottom is None:
+            room = len(legend)
+        else:
+            # the lines that fit, a label fitted on two lines taking its extra room (audit 2026-11-27)
+            room, yy_ = 0, ly
+            for p in legend:
+                if yy_ - 8 < bottom:
+                    break
+                room += 1
+                yy_ -= step + self.extra_height(lab(p))
+        if room < len(legend):
+            # no room for the rest: one last line counts them, never a silent cut
+            keep, left = legend[:max(0, room - 1)], legend[max(0, room - 1):]
+            n_ = len(left) - (1 if missing else 0)
+            keep.append({"label": f"Other: {n_:,} more {noun}" + (", and the rest" if missing else ""),
+                         "count": sum(q["count"] for q in left), "other": True})
+            legend = keep
+        for i, p in enumerate(legend):
             c.setFillColor(col(i, p)); c.roundRect(lx, ly - 7, 7, 7, 2, stroke=0, fill=1)
-            right = x + w
-            self.text(lx + 12, ly - 6.5, self.fit(p["label"], right - lx - 52, 8.2), 8.2, HexColor("#d6ddee"))
+            ex = self.text(lx + 12, ly - 6.5, lab(p), 8.2, HexColor("#d6ddee"))
             self.text(right, ly - 6.5, pct(p["count"] / tot), 8.2, TXT, True, "end")
-            ly -= 13.5
+            ly -= step + ex
+        return ly
 
     def region_map(self, x, y, w, h, shapes, rows, details, comms):
         """The country's first-level regions, coloured by activity, with their names."""
@@ -534,20 +625,29 @@ class Doc:
         yy, shown = y, 0
         regions = [r for r in regions if r["value"] != "Unknown region"]
         for r in regions:
-            cities = [c for c in (details.get(r["value"]) or {}).get("city_devices", []) if c[1]]
+            det = details.get(r["value"]) or {}
+            cities = [c for c in det.get("city_devices", []) if c[1]]
+            n_cities = max(det.get("city_devices_total") or 0, len(cities))
             cities = [c for c in cities if c[0].lower() != r["value"].lower() or len(cities) == 1][:4]
-            need = 17 + 12 * len(cities)
+            more_c = n_cities - len(cities)                  # the cities not listed under it, said (2026-11-26)
+            # the names as drawn, measured first: one fitted on two lines makes its line taller (audit 2026-11-27)
+            rl = self.fit(r["label"], w * .48, 9.2, True)
+            cl = [(self.fit(name, w * .6, 8), n) for name, n in cities]
+            need = 17 + self.extra_height(rl) + sum(12 + self.extra_height(t) for t, _ in cl) + (12 if more_c > 0 else 0)
             if yy - need < bottom:
                 break
             v = r.get("hosts") or r["count"]
-            self.text(x, yy - 9, self.fit(r["label"], w * .48, 9.2, True), 9.2, TXT, True)
+            self.text(x, yy - 9, rl, 9.2, TXT, True)
             self.bar(x + w * .5, yy - 10, w * .5 - 52, 5.5, v / mx)
             self.text(x + w, yy - 9, fmt(v), 9.4, TXT, True, "end")
-            yy -= 15
-            for name, n in cities:
+            yy -= 15 + self.extra_height(rl)
+            for t, n in cl:
                 self.c.setFillColor(HexColor("#ffd38a")); self.c.circle(x + 7, yy - 6.4, 1.8, stroke=0, fill=1)
-                self.text(x + 14, yy - 9, self.fit(name, w * .6, 8), 8, HexColor("#c3cbe0"))
+                ex = self.text(x + 14, yy - 9, t, 8, HexColor("#c3cbe0"))
                 self.text(x + w, yy - 9, f"{fmt(n)} {unit}", 7.8, DIM, anchor="end")
+                yy -= 12 + ex
+            if more_c > 0:
+                self.text(x + 14, yy - 9, f"+ {more_c:,} more cit{'ies' if more_c != 1 else 'y'}", 7.6, MUTE)
                 yy -= 12
             yy -= 4
             self.c.setStrokeColor(Color(1, 1, 1, .05)); self.c.setLineWidth(.5); self.c.line(x, yy + 2, x + w, yy + 2)
@@ -557,25 +657,45 @@ class Doc:
             self.text(x, yy - 9, f"+ {len(rest)} more region{'s' if len(rest) != 1 else ''} with {fmt(sum((r.get('hosts') or r['count']) for r in rest))} {unit}", 7.8, MUTE)
         return yy
 
-    def ranking(self, x, y, w, rows, comms, max_rows=10, bottom=None):
+    def ranking(self, x, y, w, rows, comms, max_rows=10, bottom=None, total=None, more="", described=None):
         """The top list. A row grows with its text (2026-11-18: a long name or a CVE's description was squeezed onto
         extra lines over the bar and the next row): the name wraps; the line beside it (the code, or the issue's
-        title) stays beside it when it fits, else goes on its own lines under the name. bottom: no row below it."""
+        title) stays beside it when it fits, else goes on its own lines under the name. bottom: no row below it.
+        total: how many there are in all (else the rows given): fewer drawn, a last line says "Top N of M" (2026-11-26)."""
         mx = max([r.get("hosts") or r["count"] for r in rows] or [1])
-        yy = y
-        for i, r in enumerate(rows[:max_rows], 1):
-            c = self.c
+        total = max(total or 0, len(rows))
+        c = self.c
+        described = described or {}
+
+        def layout(r):
             name = (r.get("title") or r["value"]) if comms else r["value"]
             sub = r["value"] if comms and r.get("title") and r["title"] != r["value"] else (r.get("title") if not comms else "")
+            ds = " ".join(str(described.get(r["value"]) or "").split())
+            if not comms and sub and ds and " ".join(sub.split()).rstrip(".") in ds:
+                # its title is its description's first sentence, printed in full under Explained: once only (2026-11-26)
+                sub = "Described under Explained."
             tw = w - 26 - 86                                     # the text's room: the count stands at the right
             nl = simpleSplit(self.s(name), self.F["b"], 9.6, tw) or [""]
             last_w = c.stringWidth(nl[-1], self.F["b"], 9.6)
             sf = self.F["m"] if comms else self.F["r"]
             inline = bool(sub) and c.stringWidth(self.s(sub), sf, 7.8) <= tw - last_w - 8
             sl = [] if inline or not sub else simpleSplit(self.s(sub), sf, 7.4, tw)
-            extra = 11.5 * (len(nl) - 1) + 9 * len(sl)
-            if bottom is not None and yy - 33 - extra < bottom:
-                break
+            return sub, nl, last_w, inline, sl, 11.5 * (len(nl) - 1) + 9 * len(sl)
+        lay = [layout(r) for r in rows[:max_rows]]
+        if bottom is not None:
+            def fit(lim):
+                yy_ = y
+                for k, L_ in enumerate(lay):
+                    if yy_ - 33 - L_[5] < lim:
+                        return k
+                    yy_ -= 33 + L_[5]
+                return len(lay)
+            k = fit(bottom)
+            if k < total:                                        # room for the "Top N of M" line
+                k = fit(bottom + 12)
+            lay = lay[:k]
+        yy = y
+        for i, (r, (sub, nl, last_w, inline, sl, extra)) in enumerate(zip(rows, lay), 1):
             c.setFillColor(Color(1, 1, 1, .05)); c.roundRect(x, yy - 18, 17, 17, 4, stroke=0, fill=1)
             self.text(x + 8.5, yy - 12, str(i), 8, DIM, True, "middle")
             for k, ln in enumerate(nl):
@@ -606,6 +726,9 @@ class Doc:
             self.text(x + w, row_top - 10, fmt(r.get("hosts") or r["count"]), 13, TXT, True, "end")
             self.text(x + w, row_top - 20, "devices" if comms else "hosts", 6.8, MUTE, anchor="end")
             yy -= 33
+        note = cut(len(lay), total, "infections" if comms else "issues and infections")
+        if note:
+            yy -= 12 + self.text(x, yy - 4, self.fit(f"{note} shown{' · ' + more if more else ''}", w, 7.4), 7.4, MUTE)
         return yy
 
     def hero(self, x, y, w, items):
@@ -632,7 +755,7 @@ class Doc:
             self.text(xx + gw / 2, y - h + 6, self.fit(r["label"], gw, 7.2), 7.2, MUTE, anchor="middle")
         return y - h - 6
 
-    def explanation(self, x, y, w, name, x_, stat, comms):
+    def explanation(self, x, y, w, name, x_, stat, comms, shared_actions=()):
         """One explanation card; returns its height (drawn only when y is given)."""
         kind = x_.get("kind")
         if kind == "cve":
@@ -656,19 +779,17 @@ class Doc:
             also = ", ".join(a.get("source_label", "") for a in x_.get("also") or [])
             if src or also:
                 desc = f"(Source: {src or 'the reports'}{'; also described by ' + also if also else ''}) {desc}"
-        att = x_.get("attack")
-        if att and att.get("techniques"):         # techniques by tactic, IDs only, first so they are never cut off
-            import attack_map
-            tac = "; ".join(f"{ta}: {', '.join(t['id'] for t in ts)}"
-                            for ta, ts in attack_map.by_tactic({"techniques": [t for t in att["techniques"] if t["certainty"] != "known"]}).items())
-            known = len({t["id"] for t in att["techniques"] if t["certainty"] == "known"})
-            line = f"ATT&CK v{att.get('version')}: " + (tac or "") + (f"{'; ' if tac else ''}{known} techniques known for this malware" if known else "")
-            desc = f"({line}) {desc}"
+        # MITRE ATT&CK: not on the card. Each technique is printed once, in the grouped block after the cards, naming
+        # every explained name it covers (the user's rule, 2026-11-26: the same line was printed once per card)
         alert = ""
         if kind == "cve" and x_.get("kev"):
             kv = x_["kev"]
+            act = kv.get("action") or ""
+            # an action several CVEs share is printed once, after the cards, naming them all
+            act_t = (f"CISA's required action for {name} is listed after the explanations." if act in shared_actions
+                     else f"Required action: {act}") if act else ""
             alert = (f"Actively exploited since {kv.get('date_added')}" + ("; used in ransomware" if kv.get("ransomware") == "Known" else "") + ". "
-                     + (f"Required action: {kv['action']}" if kv.get("action") else ""))
+                     + act_t)
         # every line kept, the card as tall as its text (2026-11-18: the description stopped at six lines, the notes at
         # three and the CISA box at three, mid-sentence: "…Bitdefender Labs found it on")
         dl = simpleSplit(self.s(desc), self.F["r"], 8.2, w - 24)
@@ -681,17 +802,22 @@ class Doc:
             dl += simpleSplit(self.s(nt), self.F["r"], 8.2, w - 24)
         al = simpleSplit(self.s(alert), self.F["r"], 7.8, w - 36) if alert else []
         tl = simpleSplit(self.s(title), self.F["b"], 8.6, w - 24) if title and title != name else []
-        h = 46 + 11 * len(dl) + (20 + 10 * len(al) if al else 0) + 12 * len(tl)
+        # the heading and the figure beside it as drawn: one fitted on two lines moves the card's content down and
+        # makes the card taller (audit 2026-11-27: a long name's second line was drawn over the pills)
+        hd = self.fit(name, w * .6, 10.5, True)
+        st = self.fit(stat, w * .38, 7.6) if stat else ""
+        ex = max(self.extra_height(hd), self.extra_height(st))
+        h = 46 + ex + 11 * len(dl) + (20 + 10 * len(al) if al else 0) + 12 * len(tl)
         if y is None:
             return h
         self.card(x, y, w, h)
         tx = x + 12                                 # the name as reported first, as the card's heading; the source after it
-        self.text(x + 12, y - 17, self.fit(name, w * .6, 10.5, True), 10.5, TXT, True)
+        self.text(x + 12, y - 17, hd, 10.5, TXT, True)
         if stat:
-            self.text(x + w - 12, y - 17, self.fit(stat, w * .38, 7.6), 7.6, HexColor("#a9c3ff"), anchor="end")
+            self.text(x + w - 12, y - 17, st, 7.6, HexColor("#a9c3ff"), anchor="end")
         for t, col in tags:
-            tx = self.pill(tx, y - 33, t, col)
-        yy = y - 45
+            tx = self.pill(tx, y - 33 - ex, t, col)
+        yy = y - 45 - ex
         for ln in tl:
             self.text(x + 12, yy, ln, 8.6, HexColor("#c9d6ff"), True); yy -= 12
         for ln in dl:
@@ -702,6 +828,23 @@ class Doc:
             self.c.roundRect(x + 10, yy - 10 * (len(al) - 1) - 5, w - 20, 10 * len(al) + 6, 6, stroke=1, fill=1)
             for ln in al:
                 self.text(x + 18, yy, ln, 7.8, HexColor("#f6c6cb")); yy -= 10
+        return h
+
+    def list_card(self, x, y, w, title, items, sub=""):
+        """A card of entries printed once each (the ATT&CK techniques, CISA's shared required actions): items =
+        [(heading, text)], every line kept. Returns its height (drawn only when y is given)."""
+        lay = [(simpleSplit(self.s(hd), self.F["b"], 8.4, w - 24), simpleSplit(self.s(tx), self.F["r"], 8.2, w - 36)) for hd, tx in items]
+        h = 46 + (12 if sub else 0) + sum(10.5 * len(a) + 11 * len(b) + 6 for a, b in lay)
+        if y is None:
+            return h
+        top = self.card(x, y, w, h, title, sub or None)
+        yy = top - 2
+        for a, b in lay:
+            for ln in a:
+                self.text(x + 12, yy, ln, 8.4, HexColor("#c9d6ff"), True); yy -= 10.5
+            for ln in b:
+                self.text(x + 24, yy, ln, 8.2, HexColor("#d6ddee")); yy -= 11
+            yy -= 6
         return h
 
 
@@ -730,6 +873,11 @@ def build(d, enr, meta):
         yy = doc.new_page("Key findings (continued)")
         n0 = len(d["findings"][1:]) - len(more)
         for i, t in enumerate(more, n0 + 1):
+            # a finding that does not fit above the footer starts the next page (audit 2026-11-27: the list ran on
+            # below the page's edge)
+            need = 9 + len(simpleSplit(doc.s(t), doc.F["r"], 9.6, W - 2 * M - 30) or [""]) * 9.6 * 1.38
+            if yy - need < 40:
+                yy = doc.new_page("Key findings (continued)")
             doc.text(M + 6, yy - 9, f"{i}.", 9, HexColor("#a9c3ff"), True)
             yy = doc.wrap(M + 26, yy - 9, t, W - 2 * M - 30, 9.6, HexColor("#d6ddee")) - 8
 
@@ -754,10 +902,14 @@ def build(d, enr, meta):
         doc.region_tree(M + mw * .56 + 22, top - 10, mw * .44 - 36, y - hh + 16, d["regions"], d.get("region_details", {}), comms)
     x2, w2 = M + mw + 12, W - 2 * M - mw - 12
     h2 = (hh - 12) / 2
-    top = doc.card(x2, y, w2, h2, "Sectors", "By the type of network")
-    doc.donut(x2 + 14, top - 2, min(110, h2 - 50), d["sectors"], unit, w2 - 28)
+    # every share and the centre number of the selection's real total (its events / records), "Other" for what the rows
+    # leave out (2026-11-26)
+    n_tot = k.get("events") if comms else k.get("records")
+    top = doc.card(x2, y, w2, h2, "Sectors (network type)", "By the type of network")
+    doc.donut(x2 + 14, top - 2, min(110, h2 - 50), d["sectors"], unit, w2 - 28, total=n_tot, bottom=y - h2 + 8, noun="sectors")
     top = doc.card(x2, y - h2 - 12, w2, h2, "Attack types" if comms else "Report families", f"Share of the {unit.lower()}")
-    doc.donut(x2 + 14, top - 2, min(110, h2 - 50), d["attack"] if comms else d["families"], unit, w2 - 28)
+    doc.donut(x2 + 14, top - 2, min(110, h2 - 50), d["attack"] if comms else d["families"], unit, w2 - 28, total=n_tot,
+              bottom=y - 2 * h2 - 12 + 8, noun="attack types" if comms else "report families")
 
     # ---------------- page 3: top threats
     y = doc.new_page("Top infections" if comms else "Top issues")
@@ -766,18 +918,25 @@ def build(d, enr, meta):
                                                 key=lambda r: (-r["hosts"], not r["exploited"], -(r["cvss"] or 0)))
     top = doc.card(M, y, rw, y - 30, "Top infections" if comms else "Top issues",
                    "Devices per infection" if comms else "Hosts per issue, most hosts first")
-    doc.ranking(M + 14, top, rw - 28, rows, comms, max_rows=int((top - 40) // 33), bottom=38)
+    tt = d.get("totals") or {}
+    n_rank = tt.get("infections") if comms else ((tt.get("issues") or len(d["issues"])) + (tt.get("infections_on") or len(d.get("infections_on") or [])))
+    trend_csv = "every one, with its 7 days, is in the seven-day-trend CSV" if comms else "every issue, with its 7 days, is in the seven-day-trend CSV"
+    doc.ranking(M + 14, top, rw - 28, rows, comms, max_rows=int((top - 40) // 33), bottom=38, total=n_rank,
+                more=trend_csv if (d.get("baseline") or {}).get("days") else "",
+                described={n: (x_ or {}).get("description") for n, x_ in (enr or {}).items()})
     x2, w2 = M + rw + 12, W - 2 * M - rw - 12
     h3 = (y - 30 - 12) / 2
     top = doc.card(x2, y, w2, h3, "Most affected networks", ("Devices" if comms else "Hosts") + " per network")
-    doc.bars(x2 + 14, top, w2 - 28, [r for r in d["networks"] if r["value"] != "Unknown network"], n=int((h3 - 50) // 17), bottom=y - h3 + 8)
+    doc.bars(x2 + 14, top, w2 - 28, [r for r in d["networks"] if r["value"] != "Unknown network"], n=int((h3 - 50) // 17), bottom=y - h3 + 8,
+             total=tt.get("networks"), noun="networks")
     if comms:
         top = doc.card(x2, y - h3 - 12, w2, h3, "Where infected devices connect to", "Events per country of the server contacted")
         doc.bars(x2 + 14, top, w2 - 28, d["destinations"], metric="count", n=int((h3 - 50) // 17), label=lambda r: _country(r["label"]),
-                 bottom=y - 2 * h3 - 12 + 8)
+                 bottom=y - 2 * h3 - 12 + 8, total=tt.get("destinations"), noun="countries")
     else:
         top = doc.card(x2, y - h3 - 12, w2, h3, "Exposed services", "Hosts per service")
-        doc.bars(x2 + 14, top, w2 - 28, d["services"], n=int((h3 - 50) // 17), bottom=y - 2 * h3 - 12 + 8)
+        doc.bars(x2 + 14, top, w2 - 28, d["services"], n=int((h3 - 50) // 17), bottom=y - 2 * h3 - 12 + 8,
+                 total=tt.get("services"), noun="services")
 
     # ---------------- page 4: deeper insight
     y = doc.new_page("Deeper insight")
@@ -790,7 +949,7 @@ def build(d, enr, meta):
                                           (pct(mlt["share"]), "of the affected devices" if comms else "of the hosts with an issue", TXT)])
     yy = doc.steps(M + 14, yy, cw3 - 28, 92, mlt["by_count"], "devices")
     doc.text(M + 14, yy - 4, f"Top findings · {fmt(mlt.get('combinations', len(mlt['combos'])))} combinations in all (CSV)", 8.4, DIM, True)
-    doc.bars(M + 14, yy - 10, cw3 - 28, mlt["combos"], metric="count", n=5, stack=True)
+    doc.bars(M + 14, yy - 10, cw3 - 28, mlt["combos"], metric="count", n=5, stack=True, total=mlt.get("combinations"), noun="combinations")
     x2 = M + cw3 + 12
     top = doc.card(x2, y, cw3, hh, "Cross-report analysis", "The same " + ("device seen by different sensors" if comms else "host in several reports"))
     cr = d["cross"]
@@ -800,7 +959,9 @@ def build(d, enr, meta):
     yy = doc.wrap(x2 + 14, yy - 2, DEVICE_IP_NOTE, cw3 - 28, 7.4, DIM) + 6
     yy = doc.steps(x2 + 14, yy, cw3 - 28, 92, cr["by_count"], "devices")
     doc.text(x2 + 14, yy - 4, f"Top findings · {fmt(cr.get('combinations', 0))} combinations in all (CSV)", 8.4, DIM, True)
-    doc.bars(x2 + 14, yy - 10, cw3 - 28, cr.get("combos") or (d["report_pairs"] if comms else cr["pairs"]), metric="count", n=5, stack=True)
+    doc.bars(x2 + 14, yy - 10, cw3 - 28, cr.get("combos") or (d["report_pairs"] if comms else cr["pairs"]), metric="count", n=5, stack=True,
+             total=cr.get("combinations") if cr.get("combos") else tt.get("report_pairs" if comms else "pairs"),
+             noun="combinations" if cr.get("combos") else "pairs")
     x3 = M + 2 * (cw3 + 12)
     h4 = (hh - 12) / 2
     if comms:
@@ -814,7 +975,8 @@ def build(d, enr, meta):
         yy = doc.hero(x3 + 14, top, cw3 - 28, [(fmt(k["cves"]), "different CVEs", HexColor("#cdb9ff")), (fmt(k["issues"] - k["cves"]), "other issues", TXT)])
         doc.bars(x3 + 14, yy, cw3 - 28, d["issue_kinds"], metric="count", n=2)
     top = doc.card(x3, y - h4 - 12, cw3, h4, "Severity", "As rated by Shadowserver")
-    doc.donut(x3 + 14, top - 2, min(96, h4 - 50), d["severity"], unit, cw3 - 28, severity=True)
+    doc.donut(x3 + 14, top - 2, min(96, h4 - 50), d["severity"], unit, cw3 - 28, severity=True, total=n_tot,
+              bottom=y - 2 * h4 - 12 + 8, noun="severities")
 
     # ---------------- every report of the selection (2026-11-13): none left out, names wrapped, never cut
     reps = [r for r in (d.get("reports") or []) if r.get("hosts") or r.get("count")]
@@ -856,16 +1018,43 @@ def build(d, enr, meta):
         cols = [y, y]
         stats = meta.get("stats", {})
         order = sorted(enr.items(), key=lambda kv: (not kv[1].get("exploited"),)) if not comms else list(enr.items())
-        for name, x_ in order:
-            h = doc.explanation(0, None, col_w, name, x_, stats.get(name), comms)
+        shared = shared_actions(order)
+
+        def place(h):
+            nonlocal y, cols
             ci = 0 if cols[0] >= cols[1] else 1
             if cols[ci] - h < 30:
                 if cols[1 - ci] - h >= 30:
                     ci = 1 - ci
                 else:
                     y = doc.new_page("Explained"); cols = [y, y]; ci = 0
-            doc.explanation(M + ci * (col_w + gap), cols[ci], col_w, name, x_, stats.get(name), comms)
+            return ci
+        for name, x_ in order:
+            h = doc.explanation(0, None, col_w, name, x_, stats.get(name), comms, shared)
+            ci = place(h)
+            doc.explanation(M + ci * (col_w + gap), cols[ci], col_w, name, x_, stats.get(name), comms, shared)
             cols[ci] -= h + 10
+        # printed once each, after the cards: CISA's required actions that several CVEs share, and every MITRE ATT&CK
+        # technique with the names it covers (the user's rule, 2026-11-26: no definition and no technique twice)
+        blocks = []
+        if shared:
+            blocks.append(("CISA's required actions", "Each action once, with the vulnerabilities it applies to",
+                           [(f"For {', '.join(cves)}", act) for act, cves in shared.items()]))
+        techs = attack_block(order)
+        if techs:
+            blocks.append((f"MITRE ATT&CK v{techs[0]} techniques", "Each technique once, with the explained names it is mapped to", techs[1]))
+        for title_, sub_, items_ in blocks:
+            # a long block is split into cards that fit a column, none of its entries dropped
+            while items_:
+                k = len(items_)
+                while k > 1 and doc.list_card(0, None, col_w, title_, items_[:k], sub_) > y - 30:
+                    k -= 1
+                h = doc.list_card(0, None, col_w, title_, items_[:k], sub_)
+                ci = place(h)
+                doc.list_card(M + ci * (col_w + gap), cols[ci], col_w, title_, items_[:k], sub_)
+                cols[ci] -= h + 10
+                items_ = items_[k:]
+                title_ = title_ + (" (continued)" if not title_.endswith("(continued)") else "")
     # ---------------- References (pdf_refs.py, the user 2026-11-18): each explained name's references, then every report
     # of the selection with its page on shadowserver.org, ordered by criticality and flagged with it
     import pdf_refs
@@ -874,6 +1063,38 @@ def build(d, enr, meta):
                   "The sources behind this report: each explained name with its references, then the Shadowserver "
                   "reports of this selection, the most critical first.")
     return doc.done()
+
+
+def shared_actions(order):
+    """{CISA required action: [CVE, ...]} for the actions two or more explained CVEs share (printed once)."""
+    by = {}
+    for name, x_ in order:
+        act = ((x_ or {}).get("kev") or {}).get("action") if (x_ or {}).get("kind") == "cve" else None
+        if act:
+            by.setdefault(act, []).append(name)
+    return {a: cves for a, cves in by.items() if len(cves) > 1}
+
+
+def attack_block(order):
+    """(version, [(heading, text)]): every MITRE ATT&CK technique of the explained names once, in code order, with the
+    names it is mapped to and its strongest certainty (attack_map.merge_by_id); None when there are none."""
+    import attack_map
+    items, versions = [], []
+    for name, x_ in order:
+        att = (x_ or {}).get("attack") or {}
+        if att.get("techniques"):
+            if att.get("version") and att["version"] not in versions:
+                versions.append(att["version"])
+            items += [dict(t, report=name) for t in att["techniques"]]
+    if not items:
+        return None
+    out = []
+    for g in attack_map.merge_by_id(items):
+        tac = (g.get("tactics") or [""])[0]
+        cert = (g.get("certainty_label") or g.get("certainty") or "").split(" (")[0]
+        out.append((f"{g.get('id')} {g.get('name') or ''}" + (f" ({tac})" if tac else ""),
+                    f"{cert + ' for ' if cert else 'For '}{', '.join(g.get('reports') or [])}."))
+    return ", ".join(str(v) for v in versions) or "?", out
 
 
 _COUNTRIES = {

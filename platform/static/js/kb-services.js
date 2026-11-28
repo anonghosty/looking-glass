@@ -54,6 +54,9 @@
       if (r) { const b = el("button", "lg-btn sm", "Open"); b.type = "button"; b.addEventListener("click", () => openDetail(r.name)); li.append(b); }
       ul.append(li);
     }
+    // the newest 8 are listed: when there are more, the line says so (2026-11-26: cut without a word)
+    const total = Math.max(ev.length, data.totals?.events ?? ev.length), shown = Math.min(8, ev.length);
+    if (total > shown) ul.append(el("li", "svc-ask svc-ask-more", `The newest ${fmt(shown)} of ${fmt(total)} changes to the services reports.`));
   }
 
   // sorting and the quick filters (kept per viewer while the page is open)
@@ -113,7 +116,7 @@
       td.colSpan = 6; tr.append(td); tb.append(tr); return;
     }
     for (const x of list) {
-      const tr = el("tr");
+      const tr = el("tr"); tr.dataset.report = x.name;
       const name = el("td", "svc-name");
       const t = el("b", null, x.title); name.append(t);
       const meta = el("small", "mono", x.names.join(" · "));
@@ -126,7 +129,9 @@
       const seen = el("td", "dz-seen");
       if (x.hosts) {
         seen.append(el("b", null, `${fmt(x.hosts)} hosts`), el("small", null, `${fmt(x.records)} records`));
-        if (x.products.length) seen.append(el("small", "muted svc-prod", x.products.join(" · ")));
+        // the three most common products; "Top 3 of 14 products" when the report has more (2026-11-26)
+        const pc = window.LGShare.cut(x.products.length, x.totals?.products ?? x.products.length, "products");
+        if (x.products.length) seen.append(el("small", "muted svc-prod", x.products.join(" · ") + (pc ? ` (${pc}; more in Intel gathered)` : "")));
       } else seen.append(el("span", "muted", x.received ? "Received, not in the days in memory" : "Not received here"));
       const sev = el("td"); sev.append(pill(x.severity ? x.severity[0].toUpperCase() + x.severity.slice(1) : "–", SEV[x.severity] ?? ""));
       // the issues (CVEs and named issues) and the infections (hosts also calling botnet sinkholes), each with its hosts;
@@ -138,7 +143,11 @@
       const more = (hidden) => {
         const b = el("button", "svc-more", all ? "show fewer" : `+${fmt(hidden)} more`); b.type = "button";
         b.title = all ? "Show the first four only" : "Show them all here";
-        b.addEventListener("click", () => { all ? open.delete(x.name) : open.add(x.name); render(); }); return b;
+        // the table is drawn again: the focus goes back to this row's button, not to the top of the page (2026-11-27 audit)
+        b.addEventListener("click", () => {
+          all ? open.delete(x.name) : open.add(x.name); render();
+          $("svcTable").querySelector(`tr[data-report="${CSS.escape(x.name)}"] .svc-more`)?.focus();
+        }); return b;
       };
       const iv = all ? x.issues : x.issues.slice(0, 4);
       for (const i of iv) {
@@ -194,9 +203,13 @@
   // "About this report" in that window is drawn here (overview), "Pattern fields" by kb-services-patterns.js
   const openDetail = (name) => window.LGIntel?.open(name, "services");
   const shut = () => document.querySelector(".ig-modal .ig-close")?.click();
-  function bars(title, items, unit) {
+  // a top list (the server sends the 12 most common): "Top 12 of 40 versions" under the heading when it holds more
+  // (services_kb.py totals; 2026-11-26: cut without a word)
+  function bars(title, items, unit, total, noun) {
     const s = el("section", "svc-block"); s.append(el("h4", null, title));
     if (!items?.length) { s.append(el("p", "muted", "Nothing in the reports.")); return s; }
+    const cut = window.LGShare.cut(items.length, total ?? items.length, noun || "");
+    if (cut) s.append(el("p", "muted svc-cut", `${cut}, the most common first.`));
     const max = Math.max(...items.map(([, n]) => n));
     const ul = el("ul", "svc-bars");
     for (const [k, n] of items) {
@@ -243,6 +256,7 @@
     // notes
     const nt = el("section", "svc-block"); nt.append(el("h4", null, `Researchers' notes${d.notes.length ? ` (${d.notes.length})` : ""}`));
     for (const n of d.notes.slice(0, 5)) { const q = el("blockquote", "svc-note"); q.append(el("p", null, n.text), el("small", null, `${n.role}: ${n.by} · ${n.date}`)); nt.append(q); }
+    if (d.notes.length > 5) nt.append(el("p", "muted svc-cut", `The newest 5 of ${fmt(d.notes.length)} notes: every one is under All notes.`));
     const nb = el("button", "lg-btn sm", d.notes.length ? "All notes / add one" : "Add a note"); nb.type = "button";
     nb.addEventListener("click", () => { shut(); window.LGNotes?.open(d.name, "services", d.title); }); nt.append(nb);
     left.append(nt);
@@ -262,14 +276,18 @@
         const fl = el("td", "dz-pills");
         if (i.exploited) fl.append(pill("Actively exploited", "bad"));
         if (i.cvss != null) fl.append(pill(`CVSS ${i.cvss}`, i.cvss >= 9 ? "bad" : i.cvss >= 7 ? "warn" : "info"));
-        if (i.epss != null) fl.append(pill(`EPSS ${(i.epss * 100).toFixed(1)}%`, i.epss >= 0.1 ? "warn" : ""));
+        if (i.epss != null) fl.append(pill(`EPSS ${window.LGShare.pct(i.epss, 1)}`, i.epss >= 0.1 ? "warn" : ""));   // never "0.0%" (LGShare)
         if (!i.cve) fl.append(pill(i.defined ? "Defined" : "Needs a definition", i.defined ? "ok" : "warn"));
         tr.append(n, el("td", "svc-num", `${fmt(i.hosts)} host${i.hosts === 1 ? "" : "s"}`), fl); tb.append(tr);
       }
       tbl.append(tb); issS.append(tbl);
+      // the first 25 (actively exploited and the highest CVSS first): "25 of N" when there are more (2026-11-26)
+      const iN = Math.max(d.issues.length, d.issues_total || 0), iShown = Math.min(25, d.issues.length);
+      if (iN > iShown) issS.append(el("p", "muted svc-cut", `${iShown} of ${fmt(iN)} issues, actively exploited and the highest CVSS first: search the Issues card for any other.`));
     }
-    right.append(issS, bars("Products", d.products), bars("Devices (vendor and type)", d.devices), bars("Versions", d.versions),
-      bars("Ports", d.ports), bars("Tags (not CVEs)", d.tags));
+    const tt = d.totals || {};
+    right.append(issS, bars("Products", d.products, "", tt.products, "products"), bars("Devices (vendor and type)", d.devices, "", tt.devices, "devices"),
+      bars("Versions", d.versions, "", tt.versions, "versions"), bars("Ports", d.ports, "", tt.ports, "ports"), bars("Tags (not CVEs)", d.tags, "", tt.tags, "tags"));
     body.append(left, right);
     box.append(t, body);
   }

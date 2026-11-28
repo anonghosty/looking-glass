@@ -15,17 +15,34 @@
 import hashlib
 import hmac
 import ipaddress
+import itertools
 import json
 import os
 import re
 import threading
 import time
 import filesig  # noqa: E402
+import counting_keys as _ck  # noqa: E402  (one network rule: numbers, 0 as unknown, names folded)
 
 IPV4 = re.compile(r"\b(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}\b")
 IPV4_FULL = re.compile(r"\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b")
 IPV6 = re.compile(r"\b([0-9a-fA-F]{1,4}):([0-9a-fA-F]{1,4}):[0-9a-fA-F:]{2,}\b")
 HIDE_FIELDS = ("src_hostname", "dst_hostname", "machine_name")
+REFS_MAX = 500000             # host references kept for resolving (HostRefs.to_ip)
+UNLISTED_MAX = 200000         # aliases of AS numbers missing from data/asns.json kept for resolving
+
+
+def _keep(table, key, value, cap, lock):
+    """Remember key -> value in a bounded table: a key used again moves to the newest end, and at the cap only the
+    oldest tenth is dropped (audit 2026-11-27, 6-13: the whole table was cleared, so every reference or alias a page
+    had just been given stopped resolving at once; a drill-down from an open page then found nothing)."""
+    with lock:
+        if key in table:
+            del table[key]                     # dicts keep insertion order: re-inserted = the newest
+        table[key] = value
+        if len(table) > cap:
+            for k in list(itertools.islice(iter(table), max(1, cap // 10))):
+                del table[k]
 
 
 class AsnRegistry:
@@ -37,6 +54,9 @@ class AsnRegistry:
         self.asns = {}
         self.company_alias = {}   # name -> alias shared by all ASNs of that company
         self.alias_asns = {}      # alias -> set of ASNs
+        self.spelling = {}        # folded company name -> its one spelling
+        self.unlisted = {}        # "Unlisted network 3f9a2c" -> the AS number it was given for (masked filters)
+        self._un_lock = threading.Lock()
         # set by the app: True when the current request is masked (demo mode, or a role without 'unmasked'). Then a
         # network filter accepts only the demo aliases, never a real company name or AS number, so a viewer cannot test
         # whether a given network is in the data (as HostRefs.strict does for addresses)
@@ -62,59 +82,92 @@ class AsnRegistry:
                 if self.log:
                     self.log.warning("ASN registry not loaded: %s", exc)
                 return
-            # one alias per company: the alias of its busiest ASN
-            by_name = {}
-            for a, v in sorted(asns.items(), key=lambda kv: -kv[1].get("events_last_check", 0)):
-                by_name.setdefault(v.get("name") or f"AS{a}", v.get("demo_alias") or f"Network {a}")
+            # one alias per company: the alias of its busiest ASN. A company is its name trimmed and case-folded
+            # (counting_keys.fold: "Example Telecom " is "Example Telecom"), shown in the spelling of its busiest ASN
+            # (count audit round 2, 2026-11-26: the two spellings were two networks with two aliases)
+            by_name, spelling = {}, {}
+            for a, v in sorted(asns.items(), key=lambda kv: (-kv[1].get("events_last_check", 0), kv[0])):
+                k = _ck.fold(v.get("name")) or f"as{a}"
+                by_name.setdefault(k, v.get("demo_alias") or f"Network {a}")
+                if _ck.clean_name(v.get("name")):
+                    spelling.setdefault(k, _ck.clean_name(v.get("name")))
             alias_asns = {}
             for a, v in asns.items():
-                alias = by_name[v.get("name") or f"AS{a}"]
+                alias = by_name[_ck.fold(v.get("name")) or f"as{a}"]
                 alias_asns.setdefault(alias, set()).add(a)
             self.asns, self.company_alias, self.alias_asns, self.mtime = asns, by_name, alias_asns, m
+            self.spelling = spelling
+
+    def _entry(self, asn):
+        a = _ck.norm_asn(asn)
+        return a, (self.asns.get(a) or self.asns.get(str(asn)) if a else None)
 
     def name(self, asn):
+        """The company's name in its one spelling (the busiest ASN's, trimmed), or None."""
         self._load()
-        v = self.asns.get(str(asn))
-        return v.get("name") if v else None
+        a, v = self._entry(asn)
+        if not v:
+            return None
+        k = _ck.fold(v.get("name"))
+        return getattr(self, "spelling", {}).get(k) or _ck.clean_name(v.get("name")) or None
 
     def alias(self, asn):
         self._load()
-        v = self.asns.get(str(asn))
+        a, v = self._entry(asn)
+        if not a:
+            return ""                     # no network, 0, AS0: unknown, never a network (count audit round 2)
         if not v:
-            return "Unlisted network" if asn else ""
-        return self.company_alias.get(v.get("name") or f"AS{asn}", v.get("demo_alias", "Network"))
+            # each AS number missing from data/asns.json gets its own stable alias (not one "Unlisted network" for
+            # all of them, which a filter could not take back: count audit round 2, item 7). The alias is a keyed hash
+            # of the number (the masked ids' secret), so it says nothing about the number.
+            tag = hmac.new(_ID_SECRET, f"asn:{a}".encode(), hashlib.sha256).hexdigest()[:6]
+            al = f"Unlisted network {tag}"
+            _keep(self.unlisted, al, a, UNLISTED_MAX, self._un_lock)
+            return al
+        return self.company_alias.get(_ck.fold(v.get("name")) or f"as{a}", v.get("demo_alias", "Network"))
 
     def label(self, asn, demo):
         """What to display for an ASN: 'Example Telecom (AS64500)' or 'Telco 1' in demo mode."""
-        if not asn:
+        a = _ck.norm_asn(asn)
+        if not a:
             return ""
         if demo:
-            return self.alias(asn)
-        n = self.name(asn)
-        return f"{n} (AS{asn})" if n else f"AS{asn}"
+            return self.alias(a)
+        n = self.name(a)
+        return f"{n} (AS{a})" if n else f"AS{a}"
 
     def resolve(self, value):
         """Turn a displayed value (alias, company name or AS number) back into the set of AS numbers it covers.
         Masked requests (strict): aliases only; anything else matches no network."""
         self._load()
+        if value == _ck.UNKNOWN_NET:
+            # the "Unknown network" row of a list: the records without a network, masked or not (the filters compare
+            # through counting_keys.norm_asn, so 0, "AS0", "-" and the like match it too: review 2026-11-27)
+            return {"", "0", None}
         if value in self.alias_asns:
             return set(self.alias_asns[value])
+        un = getattr(self, "unlisted", {})
+        if value in un:
+            return {un[value]}
         try:
             strict = self.strict()
         except Exception:      # outside a request
             strict = False
         if strict:
             return {"\x00unknown-alias"}
-        by_name = {a for a, v in self.asns.items() if v.get("name") == value}
+        k = _ck.fold(value)
+        by_name = {a for a, v in self.asns.items() if k and _ck.fold(v.get("name")) == k}
         if by_name:
             return by_name
-        return {str(value).replace("AS", "")}
+        a = _ck.norm_asn(value)
+        return {a} if a else {str(value).replace("AS", "")}
 
     def company(self, asn, demo):
-        """Grouping key for an ASN: company name (or alias in demo mode)."""
-        if not asn:
+        """Grouping key for an ASN: company name (or alias in demo mode); "" for no network (none, 0, AS0)."""
+        a = _ck.norm_asn(asn)
+        if not a:
             return ""
-        return self.alias(asn) if demo else (self.name(asn) or f"AS{asn}")
+        return self.alias(a) if demo else (self.name(a) or f"AS{a}")
 
     def all(self):
         self._load()
@@ -129,6 +182,7 @@ class HostRefs:
         global _ID_SECRET
         _ID_SECRET = self.secret                # masked_id: the record ids of masked views, under the same secret
         self.to_ip = {}
+        self._lock = threading.Lock()
         # set by the app: True when the current request is in demo mode. Then only references this server issued are
         # accepted, never a raw address, so a viewer cannot test whether a given IP is in the data (security report #6)
         self.strict = lambda: False
@@ -139,16 +193,17 @@ class HostRefs:
         if not ip:
             return ""
         r = hmac.new(self.secret, ip.encode(), hashlib.sha256).hexdigest()[:12]
-        if len(self.to_ip) > 500000:
-            self.to_ip.clear()
-        self.to_ip[r] = ip
+        _keep(self.to_ip, r, ip, REFS_MAX, self._lock)
         return r
 
     def resolve(self, value):
-        if isinstance(value, str) and value.startswith("Host ") and value[5:] in self.to_ip:
-            value = value[5:]              # a label copied from a masked view (host_label.py)
-        if value in self.to_ip:
-            return self.to_ip[value]
+        # read under the lock that ref() writes under: a reference evicted between "in" and the look-up raised KeyError
+        with self._lock:
+            if isinstance(value, str) and value.startswith("Host ") and value[5:] in self.to_ip:
+                value = value[5:]          # a label copied from a masked view (host_label.py)
+            ip = self.to_ip.get(value) if isinstance(value, str) else None
+        if ip is not None:
+            return ip
         try:
             strict = self.strict()
         except Exception:      # outside a request

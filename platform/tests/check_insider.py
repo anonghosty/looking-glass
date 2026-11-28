@@ -146,7 +146,7 @@ S = os.environ.get("LG_HELD_DIR", "")
 if S and os.path.exists(os.path.join(S, "lg-copy.js.new")):
     js = open(os.path.join(S, "lg-copy.js.new"), encoding="utf-8").read()
 i_rec, i_write = js.find("/api/copy/record"), js.find("await write(text)")
-ok("the page copies only after the record answers (fail closed)", 0 < i_rec < i_write and "if (!r.ok) return { ok: false" in js)
+ok("the page copies only after the record answers (fail closed)", 0 < i_rec < i_write and "if (!r.ok || !d || d.ok !== true) return { ok: false" in js)   # behaviour: check_copy_fail_closed.py
 
 print("3. Request sizes")
 big = "\n".join(f"198.51.{i // 250}.{i % 250}" for i in range(9000))     # about 120 KB
@@ -270,7 +270,8 @@ json.dump({"mallory": [round(now) - i for i in range(I.SMALL_TRACE_ALERT)], "old
            "few": [round(now)] * (I.SMALL_TRACE_ALERT - 1)}, open(watch, "w"))
 alerts = SA.Alerts(base)._small_traces(now)
 ok(f"{I.SMALL_TRACE_ALERT} small traces by one person in 24 hours: an alert in the bell, linking to Audit",
-   len(alerts) == 1 and alerts[0]["title"].startswith("mallory ran ") and alerts[0]["link"] == "/audit" and alerts[0]["problem"], str(alerts))
+   len(alerts) == 1 and alerts[0]["title"].startswith(__import__("people").person_label("mallory") + " ran ")
+   and "mallory" not in alerts[0]["title"] and alerts[0]["link"] == "/audit" and alerts[0]["problem"], str(alerts))
 ok("…older than 24 hours or fewer than the limit: no alert", not any(a["title"].startswith(("old ", "few ")) for a in alerts))
 ok("…the alert says nothing of what was traced", "203.0.113" not in json.dumps(alerts))
 json.dump({"mallory": [round(now) - i for i in range(2 * I.SMALL_TRACE_ALERT)]}, open(watch, "w"))

@@ -413,9 +413,11 @@ class Intel:
                 single = combos[0] if combos else None   # one combination only: its code, for the analyst
                 combos = []                           # the counts above already say it all
             reports.append({"report": rep, "records": slot["records"], "indicators": kinds, "combinations": combos, "single": single,
-                            "combinations_total": len(slot["combos"]),
+                            "combinations_total": len(slot["combos"]), "totals": {"combinations": len(slot["combos"])},
                             "combo_of": "C2 domain, DNS lookup, TLS name, user agent and tags" if section == "infections" else "associated tags and CVEs"})
-        leads = [x for x in self.leads()["leads"] if any(p == section and n == key[1] for p, n in x["names_key"])]
+        # the name's leads out of every lead (not only the first 60 the Leads card lists)
+        d_ = self.leads_all()
+        leads = [x for x in d_["all_leads"] if any(p == section and n == key[1] for p, n in x["names_key"])]
         across = self._across(data, key, me)
         carried = self.ctx.get("carried")
         for x in across["cross_combos"]:
@@ -428,8 +430,9 @@ class Intel:
                 except Exception:                        # noqa: BLE001  (the card shows without its summary line)
                     pass
         self._shown(section, key[1], None, [[(p["report"], p["items"]) for p in x["parts"]] for x in across["cross_combos"]])
+        # the top 20 leads of the name, with how many there are ("20 of N" on the page)
         return {"name": name, "section": section, "days": data["days"], "reports": reports, "leads": leads[:20],
-                "across": across}
+                "leads_total": len(leads), "totals": {"leads": len(leads)}, "across": across}
 
     def _shown(self, section, name, report, combos):
         """Tell combos.py which codes a researcher was shown, so an analyst can resolve them later (even from history)."""
@@ -472,7 +475,9 @@ class Intel:
                         for pattern, n in xc.most_common(12)]
         return {"cross_combos": cross_combos, "cross_combos_total": len(xc),
                 "devices": sum(sets.values()), "multi_devices": sum(n for rs, n in sets.items() if len(rs) > 1),
-                "report_sets": report_sets, "report_sets_total": len(sets), "shared": shared[:40], "shared_total": len(shared)}
+                "report_sets": report_sets, "report_sets_total": len(sets), "shared": shared[:40], "shared_total": len(shared),
+                # each top list's full count beside it, in one place ("12 of N" on the page)
+                "totals": {"cross_combos": len(xc), "report_sets": len(sets), "shared": len(shared)}}
 
     def summary(self):
         """For the Definitions tables: per name, per report, how many kinds of indicator it carries (0 = the name only)."""
@@ -495,6 +500,13 @@ class Intel:
         return {"days": data["days"], **out, "across": across}
 
     def leads(self):
+        """The leads as the Leads card gets them (the first 60, with the totals)."""
+        d = self.leads_all()
+        d.pop("all_leads", None)
+        return d
+
+    def leads_all(self):
+        """leads() and "all_leads": every lead of THIS viewer (for gathered() and the match view; never sent)."""
         data = self.index()
         defined = self.ctx["defined"]()           # {("infections"|"issues", name): title}
         full = small_codes.viewer_sees_hosts()
@@ -549,6 +561,11 @@ class Intel:
                 if per[tuple(x["names_key"])] > 3:
                     continue
             kept.append(x)
+        for x in kept:                            # each kept one-report lead says how many its name has ("3 of 11")
+            if x["priority"] == 4:
+                x["same_name_total"] = per[tuple(x["names_key"])]
+        one_report_held = sum(max(0, n - 3) for n in per.values())
+        one_report_total = sum(per.values())
         # a decoded beacon whose contents contradict the name it is filed under (beacon_decode.py), first in the list
         kept = beacon_decode.contradiction_leads(data["by"], full, MIN_HOSTS) + kept
         for x in kept:
@@ -567,7 +584,12 @@ class Intel:
         for d in svc:
             per[d.start.date().isoformat()]["records"] += len(d.events)
         compared = [{"day": k, **v} for k, v in sorted(per.items())]
-        return {"days": data["days"], "leads": kept[:60], "compared": compared}
+        # the first 60 leads, with how many there are, and how many one-report leads were held back (3 kept per name);
+        # "all_leads": every lead of THIS viewer (gathered() and the match view read it from the answer); never sent.
+        # Never kept on self: a shared attribute let one viewer read another's list (audit 2026-11-27, 5-3)
+        return {"days": data["days"], "leads": kept[:60], "all_leads": kept, "compared": compared,
+                "leads_total": len(kept), "one_report_held": one_report_held,
+                "totals": {"leads": len(kept), "one_report_leads": one_report_total}}
 
 
 def _refresh_inbound(ctx):
@@ -620,6 +642,9 @@ def install(app, ctx):
             return jsonify(error="Intel gathered is for researchers and admins."), 403
         d = intel.leads()
         return jsonify(days=d["days"], compared=d.get("compared", []),
-                       leads=[{k: v for k, v in x.items() if k not in ("names_key", "_seen")} for x in d["leads"]])
+                       leads=[{k: v for k, v in x.items() if k not in ("names_key", "_seen")} for x in d["leads"]],
+                       # the first 60, with how many there are ("60 of N leads") and the one-report leads held back
+                       leads_total=d.get("leads_total", len(d["leads"])), one_report_held=d.get("one_report_held", 0),
+                       totals=d.get("totals") or {"leads": len(d["leads"])})
 
     return intel

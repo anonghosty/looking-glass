@@ -218,7 +218,10 @@ os.environ["PIPELINE_DIR"] = pipe
 import _throwaway_mongo  # noqa: E402  (the platform's way to an account that may create a throwaway database)
 from dotenv import dotenv_values  # noqa: E402
 _env = dotenv_values(os.path.join(PLATFORM, ".env"))
-client = _throwaway_mongo.client(_env.get("MONGO_HOST") or "127.0.0.1", _env.get("MONGO_PORT") or 27017)
+# the environment first, as load_dotenv gives the other database tests: a throwaway MongoDB on its own port (the CI
+# rehearsal, the local suite) is named there, and the .env's database is never tried with its administrator
+client = _throwaway_mongo.client(os.environ.get("MONGO_HOST") or _env.get("MONGO_HOST") or "127.0.0.1",
+                                 os.environ.get("MONGO_PORT") or _env.get("MONGO_PORT") or 27017)
 if client is None:
     shutil.rmtree(base, ignore_errors=True)
     print("\nSKIPPED the database part: no account here may create a throwaway database "
@@ -301,7 +304,7 @@ try:
         return next((r["value"] for r in mg if r["section"] == sec and r["name"] == name and r["metric"] == metric and r["period"] == period), None)
     ok("management: quarter totals (records, unique addresses, networks)",
        (val("Totals", "All reports", "records"), val("Totals", "All reports", "unique addresses"), val("Totals", "All reports", "networks"))
-       == (str(sum(E["rec"].values())), str(len(E["all"])), str(len(E["net_rec"]))))
+       == (str(sum(E["rec"].values())), str(len(E["all"])), str(len([k for k in E["net_rec"] if k not in ("", "0", None)]))))
     D1 = "Decisions (one per organisation of a case)"
     ok("management: decisions approved 1, rejected 1, waiting 1 (a decision of last quarter left out)",
        (val("Management decisions", D1, "approved"), val("Management decisions", D1, "rejected"), val("Management decisions", D1, "waiting")) == ("1", "1", "1"))

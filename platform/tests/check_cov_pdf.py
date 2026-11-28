@@ -19,6 +19,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("LG_QUIET", "1")
 os.environ.setdefault("THREATMAP_SCHEDULE", "0")
+import advisory_pdf as AP  # noqa: E402
 import combo_pdf as CP  # noqa: E402
 import executive_pdf as EXP  # noqa: E402
 import reports_pdf as RP  # noqa: E402
@@ -34,10 +35,15 @@ def ok(label, cond, info=""):
     print(f"  {'ok  ' if cond else 'FAIL'} {label}" + (f"  [{info}]" if info and not cond else ""), flush=True)
 
 
-try:
-    import pypdfium2 as pdfium
-except ImportError:
-    pdfium = None
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import test_tools  # noqa: E402
+
+pdfium = test_tools.find_pypdfium2()
+if pdfium is None:          # reading the PDFs' own text is the maintainer's part (a failure in LG_SUITE=all)
+    if os.environ.get("LG_SUITE") == "all":
+        ok("pypdfium2 is there to read the PDFs' own text", False)
+    else:
+        print("  (its PDF-text part needs pypdfium2: a maintainer's check, run by LG_SUITE=all; not part of an installation's checks)")
 
 
 def pdf_cut(data):
@@ -113,12 +119,9 @@ RP._FONT["unicode"] = False
 ok("…without a Unicode font: arrows and quotes in plain letters", RP.t("a → b “c” …") == "a -&gt; b \"c\" ...")
 RP._FONT["unicode"] = uni
 ok("a link that is no web address is printed as text, not linked", "href" not in RP.link("ftp://x", S["link"]).text and "href" in RP.link("https://www.example.org/", S["link"]).text)
-ok("a cell longer than the limit ends with 'more in the CSV'", RP._cell("word " * 400).endswith("… (more in the CSV)") and RP._cell(["a", "b"]) == "a, b" and RP._cell(None) == "")
-ok("key-figure tiles: nothing to show is a spacer; 7 figures make two rows", isinstance(RP.kpi_grid([(None, "x")], S, 500), RP.Spacer)
-   and len(RP.kpi_grid([(i, f"f{i}") for i in range(7)], S, 500)._cellvalues) == 2)
-ok("hour bars: none without hours; drawn with the peak", RP.bar_hours([0] * 24, S, 500, "t") is None and RP.bar_hours(list(range(24)), S, 500, "t", peak=23) is not None)
-ok("top bars: none under two rows; drawn with names", RP.bar_top([{"label": "a", "count": 1}], 500, "t") is None
-   and RP.bar_top([{"label": "a → b", "count": 3}, {"value": "c", "count": 2}], 500, "t") is not None)
+ok("a long cell is printed whole (a tall row continues on the next page)", RP._cell("word " * 400) == "word " * 400
+   and RP._cell(["a", "b"]) == "a, b" and RP._cell(None) == "")
+ok("the unused building blocks are gone (kpi_grid, bar_hours, bar_top)", not any(hasattr(RP, n) for n in ("kpi_grid", "bar_hours", "bar_top")))
 ok("explanation badges, one per kind", [RP._kind(ENR[k])[0] for k in ("CVE-2099-0001", "CVE-2099-0002", "CVE-2099-0004", "exampleactor", "examplebot",
                                                                      "samplerat", "demoloader", "testworm", "mockminer")]
    == ["kev", "cve", "none", "actor", "found", "curated", "reference", "none", "none"])
@@ -242,7 +245,10 @@ ok("…the regions: a region named differently on the map (Ashanti Region) found
 ok("…countries by name: the short table, then the world list, else the code", "United States" in txt and "Kazakhstan" in txt and "ZZ" in txt)
 ok("…pills: a threat actor, a Malpedia family, a Looking Glass definition", "Threat actor" in txt and "Malpedia" in txt and "Looking Glass definition" in txt)
 ok("…the actively exploited CVE's alert box with CISA's action", "Actively exploited since 2026-01-05; used in ransomware" in txt and "Required action" in txt)
-ok("…ATT&CK on the card: techniques by tactic, the known ones counted", "ATT&CK v18.1" in txt and "1 techniques known for this malware" in txt)
+# 2026-11-26 (the user: no MITRE ATT&CK technique printed twice): the techniques left the cards for one grouped block
+_tids = __import__("re").findall(r"\bT\d{4}(?:\.\d{3})?\b", txt)
+ok("…ATT&CK once, in one grouped block after the cards: each technique named once",
+   "MITRE ATT&CK v18.1 techniques" in txt and _tids and all(_tids.count(t) == 1 for t in set(_tids)), str(sorted(_tids)))
 ok("…what changed in 7 days, with the advice under a rising item", "Check the new devices." in txt and "How changes are graded" in txt)
 ok("…no '…' in place of text", "…" not in txt and not pdf_cut(pdf))
 m2 = dict(META, platform_label="Publicly accessible services", nomap=True, demo=False)
@@ -370,7 +376,23 @@ ok("…no '…' in place of text", "…" not in txt and not pdf_cut(pdf))
 adv2 = dict(ADV, insights=False, look="designed", brand="", preview=None, tlp="")
 pdf, txt = drawn(lambda: CP.build(combo_d(), dict(CMETA, advisory=adv2)))
 ok("without insights, no name, no TLP: the advisory, its definitions and references only", pdf[:4] == b"%PDF" and "Geographic Location" not in txt
-   and "TLP:" not in txt and "Contains the addresses of affected devices" in txt)
+   and "TLP:" not in txt)
+ok("footers say who and when only: no address notice, no 'Data: Shadowserver Foundation' (the user, 2026-11-28)",
+   "Generated " in txt and "Data: Shadowserver Foundation" not in txt and "Contains the addresses of affected devices. Generated" not in txt
+   and "information-sharing policy. Generated" not in txt)
+# handed what combos.py never hands an advisory (2026-11-28, found by looking at the pages): the team's notes, and
+# Other days as one text instead of a list. The page itself keeps the rules, whatever it is given.
+ok("an advisory handed the team's notes draws none of them, nor who wrote them",
+   "Notes shared by" not in txt and "Researcher/TI note" not in txt and "On this combination" not in txt)
+ok("…Other days given as one text: shown as the text, never letter by letter",
+   "2026-11-15:" in txt and "2; 0; 2; 6" not in txt and "c; a; r; r" not in txt)
+adv3 = dict(adv2, devices=[dict(x, earlier=["2026-11-15: carried this same combination", "2026-11-16: changed to Honeypot Events"])
+                           for x in devs(3)])
+pdf, txt = drawn(lambda: CP.build(combo_d(notes=[]), dict(CMETA, advisory=adv3)))
+ok("…Other days as a list (what combos.py hands it): each note, joined with '; '",
+   "2026-11-16: changed to" in txt and "2; 0; 2; 6" not in txt)
+ok("…the Other days cell itself: a list joined, a text kept, nothing as a dash",
+   AP._other_days(["a", "b"]) == "a; b" and AP._other_days("x; y; ") == "x; y" and AP._other_days(None) == "–" and AP._other_days("") == "–")
 ok("the plain look keeps a value that is no colour as it is", CP._light("not a colour") == "not a colour")
 ok("labels: references, insights", CP.AnalystDoc.label_of("References") == "REFERENCES" and CP.AnalystDoc.label_of("Overview") == "INSIGHTS")
 d0 = CP.AnalystDoc(dict(CMETA))

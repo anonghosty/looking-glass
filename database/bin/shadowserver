@@ -161,7 +161,11 @@ PY
   local csvs
   csvs=$(find "$PROJECT_DIR/sorting_backup" -type f -name '*.csv' 2>/dev/null | wc -l)
   printf '%-14s %s report CSV files in sorting_backup/\n' "Files:" "$csvs"
-  if exec 9>"$PROJECT_DIR/.pipeline.lock" && ! flock -n 9; then
+  # the run lock, as run.sh takes it: read-only (flock needs no write access), the file 0644 when it has to be made,
+  # never through a symbolic link; a lock file owned by root (left by sudo ./run.sh) is still read
+  local lock="$PROJECT_DIR/.pipeline.lock"
+  [[ -e $lock || -L $lock ]] || (umask 022; : > "$lock") 2>/dev/null || true
+  if [[ ! -L $lock ]] && exec 9<"$lock" && ! flock -n 9; then
     printf '%-14s %s\n' "Running:" "YES - a run is in progress (shadowserver logs -f)"
   else
     printf '%-14s %s\n' "Running:" "no"

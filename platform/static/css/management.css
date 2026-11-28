@@ -430,3 +430,17 @@ body.is-loading .mg-grid, body.is-loading .mg-kpis { opacity: 1; }
 .mg-pt-days li.on { color: #ffd38a; border-color: rgba(255, 211, 138, .35); }
 .mg-pt-top { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13.4px; line-height: 1.5; color: #d6ddee; }
 .mg-unusual .mg-empty { text-align: left; padding: 4px 0; }
+
+/* "Top 8 of 23 networks shown.": a capped list says so under itself; a region's cities and the map's lists say
+   "and N more" (2026-11-26: every cut list read as complete) */
+.mg-cut { margin: 8px 2px 0; font-size: 11.5px; line-height: 1.45; color: var(--mg-mute, #9aa0ab); }
+.mg-tree-city.mg-tree-more { color: var(--mg-mute, #9aa0ab); font-size: 11.5px; }
+.mg-tree-city.mg-tree-more::before { background: transparent; }
+.mg-maptip li.muted { margin: 0; font-size: 11.5px; }
+.mg-ex-refs a { overflow-wrap: anywhere; }
+
+/* a long name keeps its code readable (sweep 2026-11-27: "Popcorn Time ... (not malware)" left its code 0px wide,
+   one letter per line): the code moves under the name instead of being squeezed beside it */
+.mg-rank-row .nm { flex-wrap: wrap; row-gap: 2px; }
+.mg-rank-row .nm b { flex: 0 1 auto; }
+.mg-rank-row .nm small { flex: 0 1 auto; min-width: 0; }

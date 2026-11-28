@@ -16,14 +16,21 @@
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
   const sv = (t, a = {}) => { const e = document.createElementNS(NS, t); for (const [k, v] of Object.entries(a)) e.setAttribute(k, v); return e; };
   const fmt = (n) => Number(n || 0).toLocaleString("en-US");
-  const pct = (x, d = 0) => `${(100 * (x || 0)).toFixed(d)}%`;
+  // every share in words that never mislead: something is never "0%" (or "0.0%"), and part of the whole is never
+  // "100%" (2026-11-26: Government with 4 events read "0%"); the platform's one rule, window.LGShare (loader.js)
+  const pct = (x, d = 0) => window.LGShare.pct(x, d);
+  // "Top 8 of 23 networks" under a list that shows fewer than there are, nothing when every one is shown
+  const cutNote = (box, shown, total, noun) => {
+    const t = window.LGShare.cut(shown, Number(total) || 0, noun);
+    if (t) box.append(el("p", "mg-cut", `${t} shown.`));
+  };
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const SEV_COLOURS = { critical: "#ef4444", high: "#f97316", medium: "#f5b54a", low: "#38bdf8", info: "#94a3b8", unrated: "#64748b" };
   const PALETTE = ["#5b8def", "#8b5cf6", "#22c3a6", "#f5b54a", "#ef6f8a", "#38bdf8", "#a3e635", "#f97316", "#c084fc", "#94a3b8"];
   const FILTERS = {
-    comms: [["attack", "Attack type"], ["infection", "Infection"], ["report", "Report"], ["region", "Region"], ["sector", "Sector"], ["network", "Network"], ["severity", "Severity"],
+    comms: [["attack", "Attack type"], ["infection", "Infection"], ["report", "Report"], ["region", "Region"], ["sector", "Sector (network type)"], ["network", "Network"], ["severity", "Severity"],
             ["icombo", "Infections on the same device"], ["rcombo", "Reports seeing the same device"], ["code", "Combination code"]],
-    services: [["family", "Report family"], ["service", "Service"], ["issue", "Issue"], ["region", "Region"], ["sector", "Sector"], ["network", "Network"], ["severity", "Severity"],
+    services: [["family", "Report family"], ["service", "Service"], ["issue", "Issue"], ["region", "Region"], ["sector", "Sector (network type)"], ["network", "Network"], ["severity", "Severity"],
                ["icombo", "Issues on the same host"], ["scombo", "Services on the same host"], ["code", "Combination code"]],
   };
   const state = { plat: "comms", day: "", demo: false, filters: { comms: {}, services: {} }, data: null, shapes: null, shapesFor: "",
@@ -61,6 +68,25 @@
   }
   // only the newest load draws and clears the loaders; what an older one turned on is cleared by the newest (review 2026-11-13)
   let loadSeq = 0, fullOn = false, cardsOn = false;
+  // a redraw in the background (the 7-day baseline finishing more days, every 6 s) keeps the keyboard focus where it
+  // was: the focused element is found again by its id, else by its place among the focusable elements of the nearest
+  // part with an id (audit 2026-11-27, 11-3: the focus fell back to the page every 6 s)
+  const FOCUSABLE = 'a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])';
+  function focusSpot() {
+    const a = document.activeElement;
+    if (!a || a === document.body || !a.matches?.(FOCUSABLE)) return null;
+    if (a.id) return { id: a.id };
+    const host = a.parentElement?.closest("[id]");
+    const i = host ? [...host.querySelectorAll(FOCUSABLE)].indexOf(a) : -1;
+    return i < 0 ? null : { host: host.id, i };
+  }
+  function refocus(spot) {
+    if (!spot) return;
+    const a = document.activeElement;
+    if (a && a !== document.body && a.isConnected) return;        // the focus is still on something on the page
+    const n = spot.id ? document.getElementById(spot.id) : [...(document.getElementById(spot.host)?.querySelectorAll(FOCUSABLE) || [])][spot.i];
+    n?.focus({ preventScroll: true });
+  }
   async function load(big, quiet = false) {
     const seq = ++loadSeq;
     // quiet: the 7-day baseline finished more days in the background; refresh the figures without the loaders
@@ -75,7 +101,9 @@
       if (seq !== loadSeq) return;        // a newer load started: it draws
       if (!r.ok) throw new Error(d.error || r.statusText);
       state.data = d;
+      const spot = quiet ? focusSpot() : null;
       render();
+      refocus(spot);
     } catch (e) { if (seq === loadSeq) toast(`Could not load: ${window.LGLoader.errorText(e)}`, "bad"); }
     finally {
       if (seq === loadSeq) {
@@ -142,17 +170,23 @@
     if (!reduced) { const len = stroke.getTotalLength(); stroke.style.strokeDasharray = len; stroke.style.strokeDashoffset = len; requestAnimationFrame(() => { stroke.style.transition = "stroke-dashoffset 1.1s ease"; stroke.style.strokeDashoffset = 0; }); }
   }
 
-  function donut(box, rows, filterKey, unit) {
+  // total: the selection's real total (its events / records): the centre number and every share are of it, and what
+  // the rows leave out of it is an "Other" part (2026-11-26: the centre and the shares were the sum of the rows sent)
+  function donut(box, rows, filterKey, unit, total) {
     box.replaceChildren();
     rows = rows.filter((r) => r.count);
     if (!rows.length) return empty(box);
     if (filterKey === "severity") rows = rows.slice().sort((a, b) => ["critical", "high", "medium", "low", "info"].indexOf(a.value) - ["critical", "high", "medium", "low", "info"].indexOf(b.value));
-    const top = rows.slice(0, 7), rest = rows.slice(7).reduce((a, r) => a + r.count, 0);
+    const tot = Math.max(Number(total) || 0, rows.reduce((a, r) => a + r.count, 0)), missing = window.LGShare.other(rows, tot);
+    const top = rows.slice(0, 7), rest = rows.slice(7).reduce((a, r) => a + r.count, 0) + missing;
     const parts = rest ? [...top, { label: "Other", value: "", count: rest }] : top;
-    const tot = parts.reduce((a, r) => a + r.count, 0), R = 64, r0 = 42, C = 80;
-    // the chart's name for screen readers: every part with its share (sweep 2026-11-14: an image without a name)
+    const R = 64, r0 = 42, C = 80;
+    // the legend's rows: every one sent, then what none of them holds as "Other"
+    const named = missing ? [...rows, { label: "Other", value: "", count: missing, other: true }] : rows;
+    // the chart's name for screen readers: EVERY part with its share (sweep 2026-11-14: an image without a name;
+    // 2026-11-26: it named 7 and "Other", rounded to "0%")
     const svg = sv("svg", { viewBox: "0 0 160 160", class: "mg-donut-svg", role: "img",
-      "aria-label": parts.map((p) => `${p.label || p.value || "Unknown"} ${Math.round((100 * p.count) / tot)}%`).join(", ") });
+      "aria-label": `${fmt(tot)} ${unit || "events"}: ` + named.map((p) => `${p.label || p.value || "Unknown"} ${pct(p.count / tot)}`).join(", ") });
     let a0 = -Math.PI / 2;
     parts.forEach((p, i) => {
       const a1 = a0 + (2 * Math.PI * p.count) / tot, large = a1 - a0 > Math.PI ? 1 : 0;
@@ -168,11 +202,14 @@
     const big = sv("text", { x: C, y: C - 2, class: "dc-big", "text-anchor": "middle" }); big.textContent = fmt(tot);
     const small = sv("text", { x: C, y: C + 15, class: "dc-small", "text-anchor": "middle" }); small.textContent = unit || "events";
     svg.append(big, small);
+    // the legend names EVERY part, not only the 7 the ring draws apart (2026-11-26: the services platform's 11 sectors
+    // showed 7 and "Other"): those past the 7th keep the grey of the "Other" slice they are drawn in
     const legend = el("ul", "mg-legend");
-    parts.forEach((p, i) => {
+    named.forEach((p, i) => {
       const li = el("li"); const b = el("button"); b.type = "button";
-      b.append(el("i", null, ""), el("span", null, p.label), el("b", null, pct(p.count / tot)));
-      b.querySelector("i").style.background = p.colour || (p.label === "Other" && !p.value ? "#3a3f4d" : PALETTE[i % PALETTE.length]);
+      b.append(el("i", null, ""), el("span", null, p.label || p.value || "Unknown"), el("b", null, pct(p.count / tot)));
+      b.querySelector("i").style.background = i < 7 && !p.other ? (top[i].colour || PALETTE[i % PALETTE.length]) : "#3a3f4d";
+      b.title = `${p.label || p.value || "Unknown"}: ${fmt(p.count)} ${unit || "events"} (${pct(p.count / tot, 1)})`;
       if (filterKey && p.value) b.addEventListener("click", () => setFilter(filterKey, p.value)); else b.disabled = true;
       if (state.filters[state.plat][filterKey] === p.value) b.classList.add("on");
       li.append(b); legend.append(li);
@@ -180,9 +217,13 @@
     box.append(svg, legend);
   }
 
-  function bars(box, rows, { key, metric = "hosts", unit = "devices", n = 8, labelOf, stack } = {}) {
+  // total / noun: how many there are in all (the server's totals): fewer shown, "Top 8 of 23 networks shown." under
+  // the bars (2026-11-26: every capped card read as complete)
+  function bars(box, rows, { key, metric = "hosts", unit = "devices", n = 8, labelOf, stack, total, noun = "" } = {}) {
     box.replaceChildren(); box.classList.toggle("stack", !!stack);   // stack: long names on their own line
-    rows = rows.filter((r) => r[metric] ?? r.count).slice(0, n);
+    rows = rows.filter((r) => r[metric] ?? r.count);
+    const all = Math.max(Number(total) || 0, rows.length);
+    rows = rows.slice(0, n);
     if (!rows.length) return empty(box);
     const max = Math.max(...rows.map((r) => r[metric] ?? r.count), 1);
     for (const r of rows) {
@@ -196,14 +237,22 @@
       box.append(b);
       requestAnimationFrame(() => { fill.style.width = `${(100 * v) / max}%`; });
     }
+    cutNote(box, rows.length, all, noun);
   }
 
   // the ranked list of infections / issues, with explanations
-  function ranking(box, rows, plat) {
+  // the list shows the first RANK_N; total: how many there are in all (d.totals), said under the list when more
+  const RANK_N = 12;
+  const rankRows = (d) => (d.platform === "comms" ? d.infections : d.issues.concat(d.infections_on || [])
+    .sort((a, b) => b.hosts - a.hosts || Number(b.exploited) - Number(a.exploited) || (b.cvss || 0) - (a.cvss || 0)));
+  const rankTotal = (d) => { const t = d.totals || {};
+    return d.platform === "comms" ? t.infections : (t.issues ?? d.issues.length) + (t.infections_on ?? (d.infections_on || []).length); };
+  function ranking(box, rows, plat, total) {
     box.replaceChildren();
     if (!rows.length) return empty(box);
     const max = Math.max(...rows.map((r) => r.hosts || r.count), 1);
-    rows.slice(0, 12).forEach((r, i) => {
+    const shown = rows.slice(0, RANK_N);
+    shown.forEach((r, i) => {
       const item = el("div", "mg-rank-item"), row = el("div", "mg-rank-row"), inline = el("div", "mg-inline");
       const kind = plat === "comms" || r.infection ? "infection" : "issue";      // a services host's infection explains as one
       const n = el("span", "n", String(i + 1));
@@ -269,6 +318,8 @@
       show(openSet.has(r.value));
       requestAnimationFrame(() => { fill.style.width = `${(100 * (r.hosts || r.count)) / max}%`; });
     });
+    const t = window.LGShare.cut(shown.length, Math.max(Number(total) || 0, rows.length), plat === "comms" ? "infections" : "issues and infections");
+    if (t) box.append(el("p", "mg-cut", `${t} shown. The executive report's seven-day-trend CSV lists every ${plat === "comms" ? "infection" : "issue"} with its 7 days.`));
   }
 
   // each region's total, with its cities beneath (click a region to focus every chart on it)
@@ -287,10 +338,14 @@
       head.append(el("b", "l", r.label), track, el("b", "v", fmt(v)));
       head.addEventListener("click", () => setFilter("region", r.value));
       g.append(head);
-      const cities = (det.city_devices || []).filter(([n, c]) => c && (n.toLowerCase() !== r.value.toLowerCase() || (det.city_devices || []).length === 1)).slice(0, 4);
+      const withDev = (det.city_devices || []).filter(([, c]) => c);
+      const cities = withDev.filter(([n]) => n.toLowerCase() !== r.value.toLowerCase() || withDev.length === 1).slice(0, 4);
       for (const [n, c] of cities) {
         const li = el("div", "mg-tree-city"); li.append(el("span", null, n), el("small", null, `${fmt(c)} ${unit}`)); g.append(li);
       }
+      // the cities not listed under it, said (2026-11-26: 4 of up to 6 sent, of any number, with no word)
+      const moreC = Math.max(Number(det.city_devices_total) || 0, withDev.length) - cities.length;
+      if (moreC > 0) g.append(el("div", "mg-tree-city mg-tree-more", `and ${fmt(moreC)} more cit${moreC === 1 ? "y" : "ies"}`));
       box.append(g);
       requestAnimationFrame(() => { fill.style.width = `${(100 * v) / max}%`; });
     }
@@ -298,7 +353,9 @@
 
   // regions on the country's map (shapes from geoBoundaries, the same as Settings)
   async function regionMap(svg, rows, country) {
-    state.drawN = (state.drawN || 0) + 1; svg.dataset.draw = String(state.drawN);
+    // this drawing's own number: a drawing that waited for the shapes stops when a newer one started on this map
+    // (audit 2026-11-27, 11-2: it compared the map's number with the newest, always equal, so both drew: a doubled map)
+    const mine = String((state.drawN = (state.drawN || 0) + 1)); svg.dataset.draw = mine;
     svg.replaceChildren();
     state.mapMismatch = null;
     if (!country) { if ($("mgMapNote")) $("mgMapNote").hidden = true; return; }
@@ -307,7 +364,7 @@
       state.shapesP = fetch(`/static/data/adm1/${country}.json`).then((r) => r.json()).catch(() => null);
     }
     const shapes = state.shapes = await state.shapesP;
-    if (svg.dataset.draw && svg.dataset.draw !== String(state.drawN)) return;     // a newer selection is being drawn
+    if (svg.dataset.draw !== mine) return;     // a newer selection is being drawn on this map
     const note = $("mgMapNote");
     if (!shapes || !window.LGRegions) { svg.closest(".mg-mapwrap").classList.add("nomap"); if (note) note.hidden = true; return; }
     svg.closest(".mg-mapwrap").classList.remove("nomap");
@@ -346,8 +403,18 @@
       if (!r) tip.append(el("p", "muted", "Nothing reported in this region."));
       else {
         tip.append(el("p", "big", `${fmt(d.devices ?? r.hosts)} ${comms ? "devices" : "hosts"} · ${fmt(d.events ?? r.count)} ${comms ? "events" : "records"} · ${pct(r.share, 1)}`));
-        const list = (label, rows, unit) => { if (!rows?.length) return; tip.append(el("h5", null, label)); const ul = el("ul"); for (const [n, c] of rows) { const li = el("li"); li.append(el("span", null, n), el("b", null, fmt(c))); ul.append(li); } tip.append(ul); };
-        list("Cities", d.cities); list(comms ? "Top infections" : "Top issues", d.top); if (!comms) list("Services", d.services); list("Networks", d.networks);
+        // each short list with "and N more" when the region has more than it names (2026-11-26)
+        const list = (label, rows, total, noun) => {
+          if (!rows?.length) return;
+          tip.append(el("h5", null, label)); const ul = el("ul");
+          for (const [n, c] of rows) { const li = el("li"); li.append(el("span", null, n), el("b", null, fmt(c))); ul.append(li); }
+          const more = (Number(total) || 0) - rows.length;
+          if (more > 0) ul.append(el("li", "muted", `and ${fmt(more)} more ${more === 1 ? (noun === "cities" ? "city" : noun.replace(/s$/, "")) : noun}`));
+          tip.append(ul);
+        };
+        list("Cities", d.cities, d.cities_total, "cities"); list(comms ? "Top infections" : "Top issues", d.top, d.top_total, comms ? "infections" : "issues");
+        if (!comms) list("Services", d.services, d.services_total, "services");
+        list("Networks", d.networks, d.networks_total, "networks");
         tip.append(el("p", "muted", "Click to focus every chart on this region"));
       }
       tip.hidden = false;
@@ -399,18 +466,9 @@
     }
   }
 
-  // ---------------- explain an infection or an issue
-  async function explain(kind, name, row) {
-    $("mgDrawerKind").textContent = kind === "issue" ? (/^CVE-/i.test(name) ? "Vulnerability" : "Issue") : "Infection / category";
-    $("mgDrawerTitle").textContent = name;
-    const body = $("mgDrawerBody"); body.replaceChildren(el("div", "mg-skel"), el("div", "mg-skel short"), el("div", "mg-skel"));
-    $("mgDrawer").classList.add("open"); $("mgDrawer").setAttribute("aria-hidden", "false"); $("mgScrim").hidden = false;
-    let x;
-    try { const r = await fetch(`/api/mgmt/explain?kind=${kind}&name=${encodeURIComponent(name)}`, { credentials: "same-origin" }); x = await r.json(); if (!r.ok) throw new Error(x.error || r.statusText); }
-    catch (e) { body.replaceChildren(el("p", "mg-empty", `Could not explain it: ${window.LGLoader.errorText(e)}`)); return; }
-    body.replaceChildren(card(x, name, row));
-  }
-  const link = (u) => { let ok = false; try { ok = ["http:", "https:"].includes(new URL(u).protocol); } catch { ok = false; } if (!ok) return el("span", null, u); const a = el("a", null, u.replace(/^https?:\/\//, "").slice(0, 70)); a.href = u; a.target = "_blank"; a.rel = "noopener noreferrer"; return a; };
+  // ---------------- explain an infection or an issue: card() draws the explanation under its row (the list's own
+  // "explain" buttons and Explain all); the drawer version was never called and is gone (audit 2026-11-27, 11-14)
+  const link = (u) => { let ok = false; try { ok = ["http:", "https:"].includes(new URL(u).protocol); } catch { ok = false; } if (!ok) return el("span", null, u); const a = el("a", null, u.replace(/^https?:\/\//, "")); a.href = u; a.target = "_blank"; a.rel = "noopener noreferrer"; return a; };
   function card(x, name, row) {
     const c = el("div", "mg-explain");
     const badge = (t, k) => el("span", `mg-tag ${k || ""}`, t);
@@ -441,10 +499,12 @@
     }
     const facts = [];
     if (x.type) facts.push(["Type", x.type]);
-    if (x.alt_names?.length) facts.push(["Also known as", x.alt_names.slice(0, 6).join(", ")]);
+    // a long list names its first ones and says how many more (never a silent cut)
+    const some = (list, n, noun) => list.slice(0, n).join(", ") + (list.length > n ? `, and ${fmt(list.length - n)} more ${noun}` : "");
+    if (x.alt_names?.length) facts.push(["Also known as", some(x.alt_names, 6, "names")]);
     if (x.attribution?.length) facts.push(["Attributed to", x.attribution.join(", ")]);
     if (x.country) facts.push(["Suspected origin", x.country]);
-    if (x.families?.length && x.kind === "actor") facts.push(["Malware it uses", x.families.slice(0, 8).join(", ")]);
+    if (x.families?.length && x.kind === "actor") facts.push(["Malware it uses", some(x.families, 8, "families")]);
     if (x.published) facts.push(["Published", x.published]);
     if (x.cwes?.length) facts.push(["Weakness", x.cwes.join(", ")]);
     if (x.seen_in?.length) facts.push(["Seen in", x.seen_in.join(", ")]);
@@ -455,7 +515,8 @@
       if (n.codes?.length) c.append(window.LGCodes ? window.LGCodes.line(n.codes) : el("p", "mg-ex-desc mp-note", `Combinations: ${n.codes.map((x) => x.code).join(", ")}`));
     }
     const refs = [x.url, x.kev_url, ...(x.references || []), ...(x.curated_references || [])].filter(Boolean);
-    if (refs.length) { const ul = el("ul", "mg-ex-refs"); for (const u of [...new Set(refs)].slice(0, 8)) { const li = el("li"); li.append(link(u)); ul.append(li); } c.append(el("h4", null, "References"), ul); }
+    // every reference (2026-11-26: it showed the first 8 and said nothing of the rest)
+    if (refs.length) { const ul = el("ul", "mg-ex-refs"); for (const u of [...new Set(refs)]) { const li = el("li"); li.append(link(u)); ul.append(li); } c.append(el("h4", null, "References"), ul); }
     if (x.attack?.techniques?.length) {             // MITRE ATT&CK techniques by tactic (attack_map.py)
       const at = el("div", "mg-ex-attack");
       at.append(el("h4", null, `MITRE ATT&CK techniques by tactic (v${x.attack.version || "?"})`));
@@ -490,7 +551,7 @@
         if (a.description) det.append(el("p", "mg-ex-desc", a.description));
         if (a.alt_names?.length) det.append(el("p", "mg-ex-desc", `Also known as: ${a.alt_names.join(", ")}`));
         const ar = [a.url, ...(a.references || [])].filter(Boolean);
-        if (ar.length) { const ul = el("ul", "mg-ex-refs"); for (const u of [...new Set(ar)].slice(0, 6)) { const li = el("li"); li.append(link(u)); ul.append(li); } det.append(ul); }
+        if (ar.length) { const ul = el("ul", "mg-ex-refs"); for (const u of [...new Set(ar)]) { const li = el("li"); li.append(link(u)); ul.append(li); } det.append(ul); }
         if (a.licence) det.append(el("p", "mg-ex-desc mg-ex-src", `Source: ${a.licence}`));
         else if (a.by) det.append(el("p", "mg-ex-desc mg-ex-src", `Written by ${a.by}.`));
         c.append(det);
@@ -671,12 +732,36 @@
       for (const t of p.top) top.append(el("li", null, t));
       if (!p.top.length) top.append(el("li", null, "Nothing unusual on the latest report day."));
       box.append(el("h3", null, `Latest report day (${p.day})`), top);
+      // the strongest few: how many there are in all (unusual.py sends totals.top; top_total kept as a fallback)
+      const tt = window.LGShare.cut(p.top.length, Number((p.totals || {}).top ?? p.top_total) || 0, "unusual threads");
+      if (tt) box.append(el("p", "mg-cut", `${tt} shown. The Unusual activity page lists every one.`));
       if (p.confirmed) box.append(el("p", "mg-empty", `${p.confirmed} thread(s) your team watches are followed on the Unusual activity page.`));
     } catch (e) {
       box.replaceChildren(el("p", "mg-empty", window.LGLoader.errorText(e)));
     }
   }
 
+  // count audit round 2 (2026-11-26): the Sectors card is the network type; Shadowserver's own sector column is the
+  // Industry (Shadowserver) card. What has no region or network is said beside those charts, never counted as one, and
+  // a device in two regions (or in networks of two types) counts in each, so the parts can add up to more than the whole.
+  const SECTOR_LABEL = "Sectors (network type)", INDUSTRY_LABEL = "Industry (Shadowserver)";
+  function countNotes(d) {
+    const comms = d.platform === "comms", u = d.unknowns || {};
+    const unit = (n) => (comms ? (n === 1 ? "event" : "events") : (n === 1 ? "record" : "records")), who = comms ? "devices" : "hosts";
+    const line = (x, what) => { const n = Number((x || {}).events) || 0; return n ? `${fmt(n)} ${unit(n)} from ${who} without ${what}.` : ""; };
+    const both = `A ${comms ? "device" : "host"} seen in two regions (or networks of two types) counts in each.`;
+    const note = (card, cls, text) => {
+      if (!card || !card.querySelector) return;
+      let p = card.querySelector(`p.${cls}`);
+      if (!p) { p = el("p", `mg-cut ${cls}`); card.append(p); }
+      p.textContent = text; p.hidden = !text;
+    };
+    const h = $("cSectors") && $("cSectors").querySelector("h2"); if (h) h.textContent = SECTOR_LABEL;
+    if (!comms) { $("tX2Title").textContent = INDUSTRY_LABEL; $("tX2").textContent = "Shadowserver's own sector column for the organisations, apart from the network type"; }
+    note($("cMap"), "mg-unknown", [line(u.regions, "a region"), both].filter(Boolean).join(" "));
+    note($("cSectors"), "mg-unknown", both);
+    note($("cNets"), "mg-unknown", line(u.networks, "a network"));
+  }
   function render() {
     const d = state.data, comms = d.platform === "comms";
     unusualCard();
@@ -699,13 +784,14 @@
     $("tTrend").textContent = `${comms ? "Events" : "Records"} per hour (UTC)${d.peak_hour != null ? ` · peak ${String(d.peak_hour).padStart(2, "0")}:00 UTC${window.LGTime ? window.LGTime.also(pk, false) : ""}` : ""}`;
     regionMap($("chMap"), d.regions, d.country);
     regionTree($("chRegions"), d);
-    donut($("chSectors"), d.sectors, "sector", comms ? "events" : "records");
+    const T = d.totals || {}, whole = comms ? d.kpis.events : d.kpis.records;     // every donut's share is of the whole
+    donut($("chSectors"), d.sectors, "sector", comms ? "events" : "records", whole);
     $("tTopTitle").textContent = comms ? "Top infections" : "Top issues";
     $("tTop").textContent = comms ? "Devices per infection · Explain shows what each one is, right under it" : "Hosts per issue, most hosts first · Explain shows what each one is";
-    ranking($("chTop"), comms ? d.infections : d.issues.concat(d.infections_on || []).sort((a, b) => b.hosts - a.hosts || Number(b.exploited) - Number(a.exploited) || (b.cvss || 0) - (a.cvss || 0)), d.platform);
+    ranking($("chTop"), rankRows(d), d.platform, rankTotal(d));
     $("tMixTitle").textContent = comms ? "Attack types" : "Report families";
-    donut($("chMix"), comms ? d.attack : d.families, comms ? "attack" : "family", comms ? "events" : "records");
-    bars($("chNets"), d.networks.filter((r) => r.value !== "Unknown network"), { key: "network", unit: comms ? "devices" : "hosts" });
+    donut($("chMix"), comms ? d.attack : d.families, comms ? "attack" : "family", comms ? "events" : "records", whole);
+    bars($("chNets"), d.networks.filter((r) => r.value !== "Unknown network"), { key: "network", unit: comms ? "devices" : "hosts", total: T.networks, noun: "networks" });
     // every report of the selection, ranked by devices (hosts), none left out; a click focuses the page on it
     const reps = d.reports || [];
     bars($("chReports"), reps, { key: comms ? "report" : "service", unit: comms ? "devices" : "hosts", n: Infinity });
@@ -713,15 +799,16 @@
     devNote("tX1", comms);                                 // only this card links reports by device on comms
     if (comms) {
       $("tX1Title").textContent = "Devices in two reports"; $("tX1").textContent = "The same device seen by different sensors";
-      bars($("chX1"), d.report_pairs, { metric: "count", unit: "devices", stack: true });
+      bars($("chX1"), d.report_pairs, { metric: "count", unit: "devices", stack: true, total: T.report_pairs, noun: "pairs of reports" });
       $("tX2Title").textContent = "Where infected devices connect to"; $("tX2").textContent = "Countries of the servers contacted";
-      bars($("chX2"), d.destinations, { metric: "count", unit: "events", labelOf: (r) => countryName(r.label) });
+      bars($("chX2"), d.destinations, { metric: "count", unit: "events", labelOf: (r) => countryName(r.label), total: T.destinations, noun: "countries" });
     } else {
       $("tX1Title").textContent = "Exposed services"; $("tX1").textContent = "Hosts per service · click to focus";
-      bars($("chX1"), d.services, { key: "service", unit: "hosts" });
-      $("tX2Title").textContent = "Industries"; $("tX2").textContent = "Sector of the organisations (Shadowserver)";
-      bars($("chX2"), d.industries, { metric: "count", unit: "records" });
+      bars($("chX1"), d.services, { key: "service", unit: "hosts", total: T.services, noun: "services" });
+      // its title and line: countNotes, below
+      bars($("chX2"), d.industries, { metric: "count", unit: "records", total: T.industries, noun: "industries" });
     }
+    countNotes(d);
     insight(d);
     level();
     $("mgTook").textContent = `Data of ${d.day} · prepared in ${d.took} s.`;
@@ -729,7 +816,9 @@
   }
   // ---------------- deeper insight: the analyst figures, aggregated
   function hero(box, items) {
-    box.replaceChildren(...items.map(([v, l, tone]) => { const d = el("div", `mg-hero-stat ${tone || ""}`); const b = el("b", null, "0"); d.append(b, el("span", null, l)); countUp(b, v); return d; }));
+    // a figure counts up; a share (text, LGShare.pct) is shown as it is, never "0%" for a part that has some
+    box.replaceChildren(...items.map(([v, l, tone]) => { const d = el("div", `mg-hero-stat ${tone || ""}`); const b = el("b", null, typeof v === "string" ? v : "0");
+      d.append(b, el("span", null, l)); if (typeof v !== "string") countUp(b, v); return d; }));
   }
   function steps(box, rows, unit) {
     box.replaceChildren();
@@ -782,12 +871,12 @@
     const comms = d.platform === "comms";
     if (comms) {
       $("tMultiTitle").textContent = "Devices with several infections"; $("tMulti").textContent = "The clean-up priority: one device, more than one infection";
-      hero($("sMulti"), [[d.multi.devices, "devices", "amber"], [Math.round(100 * d.multi.share), "% of the affected devices", ""]]);
+      hero($("sMulti"), [[d.multi.devices, "devices", "amber"], [pct(d.multi.share), "of the affected devices", ""]]);
       steps($("chMultiCount"), d.multi.by_count, "devices");
       $("tCombos").textContent = "Top findings: infections on the same device";
       comboList($("chCombos"), d.multi.combos, d.multi.combinations, "devices", "icombo");
       $("tCross").textContent = "The same device seen by different sensors"; devNote("tCross", true);
-      hero($("sCross"), [[d.cross.devices, "devices in several reports", "blue"], [Math.round(100 * d.cross.share), "% of the devices", ""]]);
+      hero($("sCross"), [[d.cross.devices, "devices in several reports", "blue"], [pct(d.cross.share), "of the devices", ""]]);
       steps($("chCrossCount"), d.cross.by_count, "devices");
       $("tPairs").textContent = "Top findings: reports seeing the same device";
       comboList($("chPairs"), d.cross.combos, d.cross.combinations, "devices", "rcombo");
@@ -795,15 +884,15 @@
       hero($("sX3"), [[d.beacon.repeating, "seen three times or more", "violet"], [d.beacon.regular, "at a regular rhythm", "amber"]]);
       $("chX3").replaceChildren(el("p", "mg-note", d.beacon.typical ? `Typical repeat interval: ${d.beacon.typical}. A regular rhythm points to automated malware check-ins.` : "Not enough repeated contacts to measure a rhythm."));
       $("tX4Title").textContent = "C2 / sinkhole domains"; $("tX4").textContent = `${fmt(d.c2.domains)} domains and ${fmt(d.c2.destinations)} destination servers contacted · devices per domain`;
-      bars($("chX4"), d.c2.top, { metric: "hosts", unit: "devices", n: 8 });
+      bars($("chX4"), d.c2.top, { metric: "hosts", unit: "devices", n: 8, total: d.c2.domains, noun: "domains" });
     } else {
       $("tMultiTitle").textContent = "Hosts with several issues"; $("tMulti").textContent = "The largest attack surface: one host, more than one issue";
-      hero($("sMulti"), [[d.multi.hosts, "hosts", "amber"], [Math.round(100 * d.multi.share), "% of the hosts with an issue", ""]]);
+      hero($("sMulti"), [[d.multi.hosts, "hosts", "amber"], [pct(d.multi.share), "of the hosts with an issue", ""]]);
       steps($("chMultiCount"), d.multi.by_count, "hosts");
       $("tCombos").textContent = "Top findings: issues on the same host";
       comboList($("chCombos"), d.multi.combos, d.multi.combinations, "hosts", "icombo");
       $("tCross").textContent = "The same host in several reports"; devNote("tCross", true);
-      hero($("sCross"), [[d.cross.hosts, "hosts in several reports", "blue"], [Math.round(100 * d.cross.share), "% of the hosts", ""]]);
+      hero($("sCross"), [[d.cross.hosts, "hosts in several reports", "blue"], [pct(d.cross.share), "of the hosts", ""]]);
       steps($("chCrossCount"), d.cross.by_count, "hosts");
       $("tPairs").textContent = "Top findings: services (reports) on the same host";
       comboList($("chPairs"), d.cross.combos, d.cross.combinations, "hosts", "scombo");
@@ -811,9 +900,9 @@
       hero($("sX3"), [[d.kpis.cves, "different CVEs", "violet"], [d.kpis.issues - d.kpis.cves, "other issues", ""]]);
       bars($("chX3"), d.issue_kinds, { metric: "count", unit: "records" });
       $("tX4Title").textContent = "Devices"; $("tX4").textContent = "Vendor and type of the internet-facing devices identified";
-      bars($("chX4"), d.devices, { metric: "count", unit: "hosts", n: 8 });
+      bars($("chX4"), d.devices, { metric: "count", unit: "hosts", n: 8, total: (d.totals || {}).devices, noun: "kinds of device" });
     }
-    donut($("chSev"), d.severity, "severity", comms ? "events" : "records");
+    donut($("chSev"), d.severity, "severity", comms ? "events" : "records", comms ? d.kpis.events : d.kpis.records);
   }
   const countryName = (c) => { try { return new Intl.DisplayNames(["en"], { type: "region" }).of(c) || c; } catch { return c; } };
 
@@ -874,7 +963,10 @@
   $("mgExplainAll").addEventListener("click", async () => {
     if (!state.data) return;      // clicked before the first load: nothing to explain yet (review 2026-11-13)
     const d = state.data, comms = d.platform === "comms", b = $("mgExplainAll");
-    const names = (comms ? d.infections : d.issues).slice(0, 25).map((r) => r.value);
+    // exactly the rows the list shows (2026-11-26: it explained 25 and opened 12); on the services platform the hosts'
+    // infections in that list are explained one by one under their row, as infections
+    const shownRows = rankRows(d).slice(0, RANK_N);
+    const names = shownRows.filter((r) => comms || !r.infection).map((r) => r.value);
     b.disabled = true;
     try {
       const res = await window.LGLookup.run({ kind: comms ? "malpedia" : "issues", values: names, title: comms ? "Explaining the top infections" : "Explaining the top issues",
@@ -882,8 +974,8 @@
           : "CVEs: CISA's Known Exploited Vulnerabilities catalog, EPSS and the official CVE records; other issues: their definitions.",
         doneText: "Each explanation is now shown under its name in the list on the dashboard. You can close this window." });
       Object.assign(state.explained[d.platform], res);
-      for (const n of names.slice(0, 12)) state.open[d.platform].add(n);
-      ranking($("chTop"), comms ? d.infections : d.issues.concat(d.infections_on || []).sort((a, c) => c.hosts - a.hosts || Number(c.exploited) - Number(a.exploited) || (c.cvss || 0) - (a.cvss || 0)), d.platform);
+      for (const n of names) state.open[d.platform].add(n);
+      ranking($("chTop"), rankRows(d), d.platform, rankTotal(d));
       $("cTop").scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
       toast(`${Object.keys(res).length} explained: shown under each name`, "ok");
     } catch (e) { toast(e.stopped ? "Stopped: you closed the window." : window.LGLoader.errorText(e), e.stopped ? "" : "bad"); }

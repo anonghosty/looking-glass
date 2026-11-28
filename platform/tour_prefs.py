@@ -68,7 +68,8 @@ def install(app, ctx):
             return jsonify(prefs.get(u))
         if not ctx["csrf_ok"]():
             return jsonify(error="Refused (the request did not come from this page)."), 403
-        b = request.get_json(silent=True) or {}
+        b = request.get_json(silent=True)
+        b = b if isinstance(b, dict) else {}               # a list as the body: nothing marked, not an error 500
         page = b.get("page")
         if page is not None and not (isinstance(page, str) and PAGE_RE.match(page)):
             return jsonify(error="Not a page."), 400

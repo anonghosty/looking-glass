@@ -211,6 +211,19 @@ with tempfile.TemporaryDirectory() as d:
         ok("…the mailbox cannot be read and an API key is saved: this run uses the API", u == ["email", "api"] and st["fallback_used"] == 1, str(u))
         u, st = run(dict(MAIL, REPORT_SOURCE="email"))
         ok("…no API key: the run carries on with what is on disk", u == ["email"] and st["email_failed"] == 1, str(u))
+
+        def cert_expired(s, stats, refetch=False):
+            used.append("email")
+            raise sp.mail_sources.MailSourceError("the certificate of mail.csirt.example has expired (...)",
+                                                  "the mail server's certificate has expired")
+        sp.pull_emails = cert_expired
+        u, st = run(dict(MAIL, REPORT_SOURCE="email"))
+        ok("…its reason is kept for the bell and the Task monitor (2026-11-26: only the log had it)",
+           st["email_failed"] == 1 and st["email_error"] == "the mail server's certificate has expired", str(dict(st)))
+        sp.pull_emails = mail_down
+        u, st = run(dict(MAIL, REPORT_SOURCE="email"))
+        ok("…a failure without a reason still says the mailbox could not be read", st["email_error"] == "the mailbox could not be read",
+           str(dict(st)))
         u, st = run({"REPORT_SOURCE": "email", "IMAP_SERVER": "mail.example.org", "IMAP_USER": "user@example.org", "IMAP_PASSWORD": "change-me"})
         ok("the placeholders of .env.example do not count as a mailbox", not RA.mail_configured({"IMAP_SERVER": "mail.example.org", "IMAP_USER": "user@example.org", "IMAP_PASSWORD": "change-me"}))
     finally:

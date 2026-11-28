@@ -28,6 +28,7 @@ BIN_LINK="${LG_UNINSTALL_BIN:-/usr/local/bin/shadowserver}"
 MAN_PAGE="${LG_UNINSTALL_MAN:-/usr/local/share/man/man1/shadowserver.1}"
 COMPLETION="${LG_UNINSTALL_COMPLETION:-/etc/bash_completion.d/shadowserver}"
 MONGOD_CONF="${LG_UNINSTALL_MONGOD_CONF:-/etc/mongod.conf}"
+CADDYFILE="${LG_UNINSTALL_CADDYFILE:-/etc/caddy/Caddyfile}"
 CRON_MARK="# shadowserver-pipeline"
 
 RM_DB=0; RM_MONGO=0; RM_FILES=0; DRY=0; YES=0; FORCE_DATA=0
@@ -66,7 +67,7 @@ env_get() {  # FILE KEY [DEFAULT]: the value as written (never executed)
 
 # ------------------------------------------------------------------------------------------------ what is here
 # platform services: unit files whose WorkingDirectory is this platform folder (whatever name was chosen)
-UNITS=()
+UNITS=(); TRIGGERS=()
 if [ -d "$SYSTEMD_DIR" ]; then
   # compared as real paths: a unit installed through a symlink or with a trailing slash is this folder's too (review
   # 2026-11-13: it was missed, and kept restarting against a deleted folder)
@@ -77,6 +78,30 @@ if [ -d "$SYSTEMD_DIR" ]; then
     [ -n "$wd" ] || continue
     [ "$(readlink -f "$wd" 2>/dev/null || printf '%s' "${wd%/}")" = "$PF_REAL" ] && UNITS+=("$(basename "$f")")
   done
+  # what starts those services: the hourly and 15-minute timers (deploy/unusual_timer.sh, connectors_timer.sh) and the
+  # path unit of Settings -> Update (deploy/update_helper.sh) have the service's own name. They are stopped and removed
+  # first, or they stay enabled after the uninstall, starting a service that is gone (audit 2026-11-27)
+  for u in "${UNITS[@]}"; do
+    for x in timer path; do [ -f "$SYSTEMD_DIR/${u%.service}.$x" ] && TRIGGERS+=("${u%.service}.$x"); done
+  done
+fi
+# the firewall rule the installer opened for Caddy's port (sudo ufw allow PORT/tcp comment "Looking Glass HTTPS"): only
+# that port's rule, only when Caddy in front is Looking Glass's (the port read from its Caddyfile before it goes) AND
+# this folder's: Caddy hands visitors to https://127.0.0.1:<this platform's LG_PORT> (review 2026-11-28: another
+# installation's Caddy and its firewall rule were removed too). Caddy's configuration is removed only then, too.
+UFW_PORT=""; CADDY_OURS=0; CADDY_NOTE=""
+if head -1 "$CADDYFILE" 2>/dev/null | grep -q 'Managed by Looking Glass'; then
+  CADDY_BACK="$(sed -n 's#.*reverse_proxy https://127\.0\.0\.1:\([0-9][0-9]*\) {.*#\1#p' "$CADDYFILE" 2>/dev/null | head -1)"
+  CADDY_MINE="$(env_get "$PF_DIR/.env" LG_PORT)"
+  if [ -n "$CADDY_BACK" ] && [ "$CADDY_BACK" = "$CADDY_MINE" ]; then
+    CADDY_OURS=1
+    UFW_PORT="$(sed -n 's#^https://[^ ]*:\([0-9][0-9]*\) {$#\1#p' "$CADDYFILE" 2>/dev/null | head -1)"
+  elif [ -z "$CADDY_MINE" ] || [ -z "$CADDY_BACK" ]; then
+    # nothing to compare: kept (the safe choice), and said how to remove it when it is this installation's
+    CADDY_NOTE="Caddy in front ($CADDYFILE): cannot tell whose Caddy it is ($([ -z "$CADDY_MINE" ] && echo "no LG_PORT in platform/.env" || echo "no reverse_proxy port in it")), so its configuration and its firewall rule are left as they are: run sudo platform/deploy/caddy_front.sh remove if it belongs to this installation"
+  else
+    CADDY_NOTE="Caddy in front ($CADDYFILE) hands visitors to port $CADDY_BACK, this folder's platform listens on $CADDY_MINE: it is another installation's, so its configuration and its firewall rule are left as they are"
+  fi
 fi
 # the schedule: only this folder's cron line (another installation's line stays)
 # the schedule writes the folder shell-quoted (printf %q: "my lg" becomes my\ lg): both spellings are this folder's
@@ -96,7 +121,12 @@ grep -qF "Managed by $DB_DIR/deploy.sh" "$MONGOD_CONF" 2>/dev/null && MONGO_OURS
 # an older one kept the original configuration, not written by it, as mongod.conf.orig (review 2026-11-13: --remove-mongodb
 # would have purged it, every database in it)
 MONGO_TAKEN=0
-if [ $MONGO_OURS = 1 ]; then
+# deploy.sh marks a MongoDB it installed itself (2026-11-26): then it is ours, whatever mongod.conf.orig holds (that file is
+# the package's own default when deploy.sh installed it). Without the mark, the older rules below decide, and keep it
+# whenever they cannot tell.
+if [ $MONGO_OURS = 1 ] && grep -q '^# Installed by deploy.sh' "$MONGOD_CONF" 2>/dev/null && ! grep -q '^# Taken over by' "$MONGOD_CONF" 2>/dev/null; then
+  :
+elif [ $MONGO_OURS = 1 ]; then
   if grep -q '^# Taken over by' "$MONGOD_CONF" 2>/dev/null \
      || { [ -f "$MONGOD_CONF.orig" ] && ! grep -q 'Managed by .*deploy.sh' "$MONGOD_CONF.orig" 2>/dev/null; }; then
     MONGO_OURS=0; MONGO_TAKEN=1
@@ -121,10 +151,12 @@ say "Folder: $ROOT"
 say ""
 say "${B}Will be removed${R}"
 if [ ${#UNITS[@]} -gt 0 ]; then say "  • platform service(s): ${UNITS[*]} (stopped, disabled, unit file deleted)"; else say "  • platform service: none found for this folder"; fi
+[ ${#TRIGGERS[@]} -gt 0 ] && say "  • what starts them: ${TRIGGERS[*]} (stopped, disabled, unit file deleted)"
+[ -n "$UFW_PORT" ] && say "  • the firewall rule the installer opened for port $UFW_PORT/tcp (\"Looking Glass HTTPS\"), if it is there"
 if [ -n "$CRON_HERE" ]; then say "  • the pipeline schedule (cron line of this folder)"; else say "  • pipeline schedule: none found for this folder"; fi
 if [ -n "$NAMES_CRON" ]; then say "  • the weekly refresh of MISP Galaxy and MITRE ATT&CK (cron line of this folder)"; fi
 if [ $CMD_HERE = 1 ]; then say "  • the global 'shadowserver' command, its man page and tab completion"; else say "  • global 'shadowserver' command: not this folder's (left alone)"; fi
-[ $RM_DB = 1 ] && say "  • ${RED}the reports database '$MONGO_DB' on $MONGO_HOST:$MONGO_PORT and the accounts lookingglass_pipeline, lookingglass_ro${R}"
+[ $RM_DB = 1 ] && say "  • ${RED}the reports database '$MONGO_DB' on $MONGO_HOST:$MONGO_PORT, the accounts lookingglass_pipeline, lookingglass_ro and the role lookingglass_pipeline_on_$MONGO_DB${R}"
 [ $RM_DB = 1 ] && [ -d "$ETC_LG" ] && say "  • $ETC_LG (the MongoDB administrator account kept by the installer)"
 if [ $RM_MONGO = 1 ]; then
   if [ $MONGO_OURS = 1 ]; then say "  • ${RED}MongoDB itself (packages, /etc/mongod.conf, /var/lib/mongodb: ALL its databases)${R}"
@@ -139,7 +171,8 @@ say "${B}Kept${R}"
 [ $RM_MONGO = 0 ] && [ $MONGO_OURS = 1 ] && say "  • MongoDB (add --remove-mongodb to remove it)"
 [ $RM_FILES = 0 ] && say "  • this folder with its settings and data (add --remove-files to delete it)"
 say "  • system packages (python3, cron, curl...): other programs may use them"
-say "  • firewall rules you added for the platform's port: remove them yourself if you made any"
+say "  • firewall rules you added yourself for the platform's port: remove them yourself if you made any"
+[ -n "$CADDY_NOTE" ] && say "  • $CADDY_NOTE"
 say ""
 
 if [ $DRY = 0 ] && [ $YES = 0 ]; then
@@ -164,6 +197,12 @@ fi
 
 # ------------------------------------------------------------------------------------------------ 1. services
 say "${B}1. Platform service${R}"
+# the timers and the path unit first: stopped, they cannot start a service while it is being removed
+for u in "${TRIGGERS[@]}"; do
+  do_ sudo systemctl disable --now "$u" || true
+  do_ sudo rm -f "$SYSTEMD_DIR/$u"
+  done_ "$u stopped, disabled and removed"
+done
 for u in "${UNITS[@]}"; do
   do_ sudo systemctl disable --now "$u" || true
   do_ sudo rm -f "$SYSTEMD_DIR/$u"
@@ -171,9 +210,17 @@ for u in "${UNITS[@]}"; do
 done
 [ ${#UNITS[@]} -gt 0 ] && { do_ sudo systemctl daemon-reload || true; } || skip "none for this folder"
 # Caddy in front (deploy/caddy_front.sh): only the configuration and certificate copy Looking Glass wrote
-if head -1 /etc/caddy/Caddyfile 2>/dev/null | grep -q 'Managed by Looking Glass' && [ -f "$ROOT/platform/deploy/caddy_front.sh" ]; then
+if [ $CADDY_OURS = 1 ] && [ -f "$ROOT/platform/deploy/caddy_front.sh" ]; then
   do_ sudo bash "$ROOT/platform/deploy/caddy_front.sh" remove || true
   done_ "Caddy in front: its Looking Glass configuration and certificate copy removed (the caddy package stays)"
+elif [ -n "$CADDY_NOTE" ]; then skip "$CADDY_NOTE"; fi
+# the installer's own firewall rule for Caddy's port (audit 2026-11-27: it was left open); ufw matches the rule itself
+if [ -n "$UFW_PORT" ] && command -v ufw >/dev/null 2>&1; then
+  if [ $DRY = 1 ]; then say "  would remove the firewall rule for port $UFW_PORT/tcp (\"Looking Glass HTTPS\"), if it is there"
+  elif sudo ufw status 2>/dev/null | grep -E "^$UFW_PORT/tcp( \(v6\))? .*# Looking Glass HTTPS\$" >/dev/null; then
+    do_ sudo ufw delete allow "$UFW_PORT/tcp" || true
+    done_ "firewall: the rule for port $UFW_PORT/tcp (\"Looking Glass HTTPS\") removed"
+  else skip "firewall: no \"Looking Glass HTTPS\" rule for port $UFW_PORT/tcp"; fi
 fi
 
 # ------------------------------------------------------------------------------------------------ 2. schedule
@@ -238,7 +285,7 @@ if [ $RM_DB = 1 ]; then
   if [ $DRY = 0 ] && sudo -n test -f "$ETC_LG/mongo-admin.env" 2>/dev/null; then sudo -n cat "$ETC_LG/mongo-admin.env" > "$ADMIN_ENV"
   elif [ -f "$DB_DIR/.env" ] && ! [[ $(env_get "$DB_DIR/.env" MONGO_USER) =~ ^(lookingglass_pipeline|lookingglass_ro)?$ ]]; then cp "$DB_DIR/.env" "$ADMIN_ENV"
   fi
-  if [ $DRY = 1 ]; then say "  would delete the database '$MONGO_DB' and the accounts lookingglass_pipeline (admin) and lookingglass_ro ($MONGO_DB)"
+  if [ $DRY = 1 ]; then say "  would delete the database '$MONGO_DB', the accounts lookingglass_pipeline (admin) and lookingglass_ro ($MONGO_DB) and the role lookingglass_pipeline_on_$MONGO_DB (admin)"
   else
     [ -s "$ADMIN_ENV" ] || die "no MongoDB administrator account found ($ETC_LG/mongo-admin.env or database/.env): the database was NOT deleted."
     LGU_ENV="$ADMIN_ENV" LGU_DB="$MONGO_DB" LGU_HOST="$MONGO_HOST" LGU_PORT="$MONGO_PORT" "$PY" -I - <<'EOF' || die "deleting the database failed (see above); nothing else was removed after this point."
@@ -266,12 +313,19 @@ for where, user in (("admin", "lookingglass_pipeline"), (db, "lookingglass_ro"),
     except OperationFailure as e:
         if e.code != 11:          # 11 = no such user
             raise
+# the pipeline's own role on the database (create_pipeline_db_user.py: lookingglass_pipeline_on_<db>, in admin)
+try:
+    c["admin"].command("dropRole", f"lookingglass_pipeline_on_{db}")
+    print(f"  role lookingglass_pipeline_on_{db} removed")
+except OperationFailure as e:
+    if e.code != 31:              # 31 = no such role (an installation made before the role, or made without it)
+        raise
 existed = db in c.list_database_names()
 c.drop_database(db)
 print(f"  database '{db}' {'deleted' if existed else 'was not there'}")
 EOF
     do_ sudo rm -rf "$ETC_LG"
-    done_ "reports database and Looking Glass accounts deleted; $ETC_LG removed"
+    done_ "reports database, Looking Glass accounts and role deleted; $ETC_LG removed"
   fi
 else skip "kept ('$MONGO_DB')"; fi
 

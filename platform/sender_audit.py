@@ -20,12 +20,22 @@ from datetime import datetime, timedelta, timezone
 from flask import jsonify, request
 
 import pipeline_link
+import shares
 
 RESULTS = ("pass", "other", "fail", "none", "temperror", "permerror")
 MEANING = {"pass": "signed by the expected domain, signature valid", "other": "valid signature, but by another domain",
            "fail": "signature does not verify: changed on the way, or forged", "none": "not signed",
            "temperror": "DNS did not answer: not held against the report", "permerror": "signature cannot be checked"}
 ACTIONS = {"kept": "processed", "quarantined": "held back", "released": "released by an administrator", "retry": "tried again next run"}
+
+
+def _shown(user):
+    """Who made a change, as the page shows it: the full name, else the person code (people.People.name); never the
+    sign-in name (the audit log keeps that). "" when nobody is named."""
+    import people
+    if not user:
+        return ""
+    return (people._DEFAULT[-1].name if people._DEFAULT else people.person_label)(user)
 
 
 def _period():
@@ -55,7 +65,7 @@ def standards(rows, mode_now):
                   (r["from_domain"] == r["signer"] or r["from_domain"].endswith("." + r["signer"])))
     fails = [r for r in rows if r["result"] in ("fail", "none", "other", "permerror")]
     handled = Counter(ACTIONS.get(r["action"] or "kept", r["action"]) for r in fails)
-    pct = lambda a, b: f"{a / b:.0%}" if b else "–"
+    pct = lambda a, b: shares.of(a, b) if b else "–"     # "<1%" / ">99%" for a part, never "0%" or "100%" (shares.py)
     return [
         {"ref": "RFC 6376 §6", "title": "DKIM: verifying a signature",
          "asks": "The verifier checks the signature with the public key the signing domain publishes in DNS, over the signed "
@@ -146,11 +156,13 @@ def install(app, ctx):
         held = ma.held(pipeline_link.data_dir(d)) if ma else []
         odd = [{k: r[k] for k in ("at", "result", "action", "from_domain", "signer", "reason", "subject", "files")}
                | {"meaning": MEANING.get(r["result"], ""), "action_label": ACTIONS.get(r["action"], r["action"])}
-               for r in rows if r["result"] != "pass"][-300:][::-1]
+               for r in rows if r["result"] != "pass"]
+        odd_total = len(odd)                     # the page lists the newest 300 and says "300 of N"
+        odd = odd[-300:][::-1]
         t0 = datetime(fr.year, fr.month, fr.day, tzinfo=timezone.utc).timestamp()
         t1 = datetime(to.year, to.month, to.day, tzinfo=timezone.utc).timestamp() + 86400
         changes = [{"at": datetime.fromtimestamp(e.get("t") or 0, timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-                    "event": e.get("event"), "user": e.get("user", ""), "detail": e.get("detail", "")}
+                    "event": e.get("event"), "by_name": _shown(e.get("user", "")), "detail": e.get("detail", "")}
                    for e in audit.records() if t0 <= (e.get("t") or 0) < t1 and (
                        e.get("event") in ("sender_release", "pipeline_apikey_saved", "pipeline_unlock_failed", "pipeline_request_refused")
                        or (e.get("event") in ("pipeline_settings_saved", "pipeline_change_requested", "pipeline_request_applied")
@@ -180,6 +192,8 @@ def install(app, ctx):
                              "held_now": len(held)},
                        meaning=MEANING, per_day=days,
                        keys=[{"signer": s, "selector": sel, "alg": a, "bits": b, "reports": k} for (s, sel, a, b), k in keys.most_common()],
-                       odd=odd, changes=changes[-100:][::-1], standards=standards(rows, mode_now))
+                       odd=odd, changes=changes[-100:][::-1], standards=standards(rows, mode_now),
+                       # the newest 300 reports that did not pass and the newest 100 changes, with how many there are
+                       totals={"odd": odd_total, "changes": len(changes)})
 
     return {}

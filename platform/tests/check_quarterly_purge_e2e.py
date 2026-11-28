@@ -258,7 +258,10 @@ import _throwaway_mongo  # noqa: E402  (the platform's way to an account that ma
 from dotenv import dotenv_values  # noqa: E402
 
 _env = dotenv_values(os.path.join(PLATFORM, ".env"))
-client = _throwaway_mongo.client(_env.get("MONGO_HOST") or "127.0.0.1", _env.get("MONGO_PORT") or 27017)
+# the environment first, as load_dotenv gives the other database tests: a throwaway MongoDB on its own port (the CI
+# rehearsal, the local suite) is named there, and the .env's database is never tried with its administrator
+client = _throwaway_mongo.client(os.environ.get("MONGO_HOST") or _env.get("MONGO_HOST") or "127.0.0.1",
+                                 os.environ.get("MONGO_PORT") or _env.get("MONGO_PORT") or 27017)
 if client is None:
     print("\nSKIPPED: no account here may create a throwaway database (run tests/run_admin_db_tests.sh, or set LG_MONGO_ADMIN_FILE)")
     done(1 if fails else 77)            # 77: skipped (run_all_checks.sh); the CI database job counts it as a failure

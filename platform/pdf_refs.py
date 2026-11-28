@@ -11,9 +11,18 @@ Criticality, each from where it is known; nothing is given a level it does not h
 * an infection or an issue: the highest severity Shadowserver gave the records that carry it in this report;
 * a Shadowserver report: the severity Shadowserver gives that report type (its report definitions).
 """
+import contextlib
 import json
 import os
+import tempfile
+import threading
+
 import filesig  # noqa: E402
+
+try:
+    import fcntl
+except ImportError:                                      # not on Linux: the thread lock alone
+    fcntl = None
 
 # Shadowserver's own scale, "info" its lowest (an inventory report): shown as Shadowserver says it, never as "not rated"
 LEVELS = ("critical", "high", "medium", "low", "info")
@@ -333,24 +342,69 @@ def _known():
     return KNOWN["levels"]
 
 
+_WRITE = threading.Lock()     # one writer at a time in this process (a day load and the catch-up thread: audit 6-4)
+
+
+@contextlib.contextmanager
+def _writing(path):
+    """Read-merge-write of one of the names files, one writer at a time: this process's threads (a lock) and the other
+    worker processes (an flock on <file>.lock), so no writer's names are lost (audit 2026-11-27, 6-4)."""
+    with _WRITE:
+        lf = None
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            lf = open(path + ".lock", "a")
+            if fcntl is not None:
+                fcntl.flock(lf, fcntl.LOCK_EX)
+        except OSError:
+            if lf is not None:
+                lf.close()
+            lf = None                                    # a read-only folder: the thread lock still holds
+        try:
+            yield
+        finally:
+            if lf is not None:
+                lf.close()                               # closing releases the flock
+
+
+def _write_json(path, d):
+    """The whole file written to a temporary file of its own (never a .tmp another writer shares), then moved into place:
+    a reader sees the old file or the new one, never a cut one."""
+    fd, tmp = tempfile.mkstemp(prefix=os.path.basename(path) + ".", suffix=".tmp", dir=os.path.dirname(path))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(d, fh, sort_keys=True)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def remember(levels):
-    """Keep these names' levels (the most severe ever seen) in data/name_levels.json; written only when one changes."""
-    cur = dict(_known())
-    changed = False
-    for n, lv in (levels or {}).items():
-        before = cur.get(n)
-        lift(cur, n, lv)
-        changed = changed or cur.get(n) != before
-    if not changed or len(cur) > KNOWN_MAX:
+    """Keep these names' levels (the most severe ever seen) in data/name_levels.json; written only when one changes.
+    At KNOWN_MAX names no new name is added, but a known name's level still rises (audit 2026-11-27, 6-11: once the file
+    was full, nothing was ever written again)."""
+    if not levels:
         return
     p = KNOWN["path"]
     try:
-        os.makedirs(os.path.dirname(p), exist_ok=True)
-        tmp = p + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(cur, fh, sort_keys=True)
-        os.replace(tmp, p)
-        KNOWN["levels"], KNOWN["mtime"] = cur, filesig.sig(p)
+        with _writing(p):
+            cur = dict(_known())                         # read again under the lock: another writer's names are kept
+            changed = False
+            for n, lv in levels.items():
+                if n not in cur and len(cur) >= KNOWN_MAX:
+                    continue
+                before = cur.get(n)
+                lift(cur, n, lv)
+                changed = changed or cur.get(n) != before
+            if not changed:
+                return
+            _write_json(p, cur)
+            KNOWN["levels"], KNOWN["mtime"] = cur, filesig.sig(p)
     except OSError:
         pass                                             # a read-only folder: the levels in memory still work
 
@@ -382,19 +436,21 @@ def all_kinds():
 
 def remember_kinds(kinds):
     """Keep the names not seen before in data/name_kinds.json (a name's first kind stays); written only when one is new."""
-    cur = dict(all_kinds())
-    new = {str(n): k for n, k in (kinds or {}).items() if n and n not in cur and k in ("Infection", "Issue")}
-    if not new or len(cur) + len(new) > KNOWN_MAX:
+    if not kinds:
         return
-    cur.update(new)
     p = SEEN["path"]
     try:
-        os.makedirs(os.path.dirname(p), exist_ok=True)
-        tmp = p + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(cur, fh, sort_keys=True)
-        os.replace(tmp, p)
-        SEEN["kinds"], SEEN["mtime"] = cur, filesig.sig(p)
+        with _writing(p):                                # one writer at a time, read again under the lock (audit 6-4)
+            cur = dict(all_kinds())
+            new = {}
+            for n, k in kinds.items():
+                if n and str(n) not in cur and k in ("Infection", "Issue") and len(cur) + len(new) < KNOWN_MAX:
+                    new.setdefault(str(n), k)
+            if not new:
+                return
+            cur.update(new)
+            _write_json(p, cur)
+            SEEN["kinds"], SEEN["mtime"] = cur, filesig.sig(p)
     except OSError:
         pass
 

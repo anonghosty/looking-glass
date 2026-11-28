@@ -346,7 +346,8 @@ def install(app, ctx):
         return bool(x.get("review") and hasattr(book, "review_kept") and book.review_kept(x["id"]))
 
     # ---------------- the kept search, per organisation (network)
-    _cache = {}
+    _cache, _cache_lock = {}, threading.Lock()
+    CACHE_MAX = 16
 
     def records(x):
         """{entry, found, host(e), net(e), plat} of a finding's kept search, cached a minute; None without one."""
@@ -369,7 +370,15 @@ def install(app, ctx):
                 names[a] = (ctx["network"](a) if a else "") or "Unknown"
             return names[a]
         out = dict(k, host=host, net=net, asn=asn, comms=comms)
-        _cache[x["id"]] = (time.time(), out)
+        now = time.time()
+        # each entry holds a whole kept search: the expired ones go, and at most CACHE_MAX are kept, the oldest dropped
+        # first (audit 2026-11-27, 1-4: it only grew)
+        with _cache_lock:
+            for fid in [f for f, c in _cache.items() if now - c[0] >= 60]:
+                _cache.pop(fid, None)
+            while len(_cache) >= CACHE_MAX:
+                _cache.pop(min(_cache, key=lambda f: _cache[f][0]), None)
+            _cache[x["id"]] = (now, out)
         return out
 
     def networks_of(x):
@@ -701,16 +710,28 @@ def install(app, ctx):
             return "Sign in again to make changes (your session is older than 12 hours)."
         return ""
 
-    def open_finding(fid, write=False):
+    def closed_by_advisories(x):
+        """True when the finding was closed by its last advisory being sent (findings.advisory_sent), not by anyone
+        closing it: the earliest entry of the history's closing run is an advisory send."""
+        run = None
+        for h in reversed(x.get("history") or []):
+            if h.get("status") != "closed":
+                break
+            run = h
+        return bool(run) and run.get("kind") == "advisory_sent"
+
+    def open_finding(fid, write=False, resend=False):
         """(finding, None) when this advisor may write its advisories; else (None, (response, status)). write: the
         request changes or sends an advisory, which a closed finding no longer allows (external review, 2026-11-12:
-        advisories could still be saved and sent after management closed or withdrew the finding)."""
+        advisories could still be saved and sent after management closed or withdrew the finding). resend: a sent
+        advisory sent on to more people, with the same file, which a finding closed by its own advisories still allows
+        (audit 2026-11-27, 1-3: the last advisory sent closed the finding, and sending it on was then refused)."""
         x = finding(fid)
         if not x:
             return None, (jsonify(error="No such finding."), 404)
         if not ready(x):
             return None, (jsonify(error="Management has not approved this finding for an advisory."), 409)
-        if write and x.get("status") == "closed":
+        if write and x.get("status") == "closed" and not (resend and closed_by_advisories(x)):
             return None, (jsonify(error="This finding is closed: its advisories can be opened and downloaded, not changed or "
                                         "sent."), 409)
         if x.get("network") and kept(x) and not networks_of(x):
@@ -825,6 +846,8 @@ def install(app, ctx):
             impacts=[{"label": l, "level": lv, "advisories": n} for (l, lv), n in flags.most_common(10)],
             reports=[{"title": t, "advisories": n} for t, n in reports.most_common(10)],
             open_findings=[fin(x) for x in sorted(open_, key=lambda x: -x["history"][-1]["at"])][:30],
+            # the full count beside every capped list, so the page says "Top 20 of N" (2026-11-26: nothing missing)
+            totals={"recipients": len(to_count), "impacts": len(flags), "reports": len(reports), "open_findings": len(open_)},
             admin=bool(admin), can_write=bool(hp("advisory")))
 
     @app.route("/api/advisory/<fid>")
@@ -841,7 +864,9 @@ def install(app, ctx):
             return bad
         o = ctx["org"].get()
         advs = {a.get("network", ALL): a for a in store.of_finding(x["id"])}
-        nets = networks_of(x) or [{"network": ALL, "devices": 0, "records": 0, "asns": []}]
+        # ALL only where network_arg accepts it (no kept search): a kept search whose devices all left the reports offers
+        # nothing to open, so the page says so instead of listing a choice the server refuses (the sweep, 2026-11-26)
+        nets = networks_of(x) or ([] if kept(x) else [{"network": ALL, "devices": 0, "records": 0, "asns": []}])
         for p in nets:
             a = advs.get(p["network"])
             p.update(ref=(a or {}).get("ref"), status=(a or {}).get("status") or "", reports=len((a or {}).get("reports") or []),
@@ -989,7 +1014,8 @@ def install(app, ctx):
             return (zname, zbytes, pname, pbytes), ""
         import advisory_pdf
         pbytes = advisory_pdf.alone(a, {"platform_label": "Advisory", "scope": ctx["scope_text"](), "header": a["header"],
-                                        "selection": v["subject"], "day": v["updated"], "generated_by": me()[0]})
+                                        "selection": v["subject"], "day": v["updated"],
+                                        "generated_by": v.get("organisation") or __import__("people").signed_by(me()[0])})
         return (None, None, f"{base}.pdf", pbytes), ""
 
     def export_of(adv, x):
@@ -1160,7 +1186,7 @@ def install(app, ctx):
         err = guard_write()
         if err:
             return jsonify(error=err), 403
-        x, bad = open_finding(fid, write=True)
+        x, bad = open_finding(fid, write=True, resend=True)
         if bad:
             return bad
         b = request.get_json(silent=True) or {}
@@ -1168,6 +1194,9 @@ def install(app, ctx):
         adv = store.of(x["id"], network) if network is not None else None
         if not adv:
             return jsonify(error="Save the advisory first."), 404
+        if x.get("status") == "closed" and adv["status"] != "sent":     # a closed finding: only sending on a sent one
+            return jsonify(error="This finding is closed: its advisories can be opened and downloaded, not changed or "
+                                 "sent."), 409
         rec, rerr = clean_recipients(b.get("recipients") if b.get("recipients") is not None else adv["recipients"])
         if rec is None:
             return jsonify(error=rerr), 400

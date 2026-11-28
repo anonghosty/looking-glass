@@ -11,7 +11,7 @@
 (() => {
   "use strict";
   const EVERY = 15000;
-  let base = null, timer = null, asking = false, opts = null, bar = null;
+  let base = null, timer = null, asking = false, again = false, opts = null, bar = null;
 
   function notice() {
     if (bar && document.body.contains(bar)) return;
@@ -39,7 +39,12 @@
       base = s;
       if (opts.refresh && !(opts.busy && opts.busy())) opts.refresh(); else notice();
     } catch { /* the connection dropped: the next turn asks again */ }
-    finally { asking = false; }
+    finally {
+      asking = false;
+      // the person's own change came while a check was on its way: that check may have read the fingerprint from
+      // before it, so take the fingerprint again (2026-11-27 audit: their own change could come back as a notice)
+      if (again) { again = false; base = null; check(); }
+    }
   }
 
   window.LGFindingsLive = {
@@ -50,6 +55,6 @@
       document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); });
     },
     // after this person's own change: take the new fingerprint as known, so their own action does not ask them to reload
-    mine() { base = null; check(); },
+    mine() { base = null; if (asking) again = true; else check(); },
   };
 })();

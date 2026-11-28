@@ -19,9 +19,11 @@ from datetime import timedelta
 
 from flask import Response, jsonify, render_template, request
 
+import counting_keys as _ck      # one rule for sectors, regions and networks on every page (count audit round 2)
 import intel as _intel           # INBOUND: the reports whose URL host is the constituent's own
 from security import public_error
 import timezones
+from shares import pct as share_text
 
 
 # How a day compares with its 7-day average, in levels that mean something: a few percent is day-to-day noise
@@ -165,11 +167,30 @@ def register(app, ctx):
     title = lambda s: " ".join(w.capitalize() if not w.isupper() or len(w) > 3 else w for w in str(s or "").lower().split()) if s else ""
 
     def net_of(asn, d):
-        return ctx["asn_registry"].company(asn, d) if asn else ""
+        # the one network rule (counting_keys.network_of): a company; "" for none, 0 or AS0 (Unknown network)
+        return _ck.network_of(asn, ctx["asn_registry"], d)
 
     def sector_of(asn):
-        v = (ctx["asn_registry"].all().get(str(asn)) or {}) if asn else {}
-        return ctx["type_labels"]().get(v.get("type") or "unknown", "Unknown")
+        # the one sector function (counting_keys.sector_of): the network type of data/asns.json
+        return _ck.sector_of(asn, ctx["asn_registry"].all(), ctx["type_labels"]())
+
+    region_of = ctx.get("region_key") or _ck.region_key      # the one region rule (counting_keys.region_key)
+
+    # destination-only reports (sources.py layout "target": dst_* but no src_*): the constituent's host is the
+    # destination. Counted by it, as the quarterly report counts them (count audit round 2, item 8: they were all
+    # "Unknown" with 0 devices here)
+    def constituent_side(events):
+        targets = {s["name"] for s in ctx["registry"].get() if s.get("layout") == "target"}
+        if not targets:
+            return events
+        out = []
+        for e in events:
+            if e.get("source") in targets and not e.get("src_ip"):
+                e = dict(e, src_ip=e.get("dst_ip") or "", src_asn=e.get("dst_asn"), src_region=e.get("dst_region") or "",
+                         src_city=e.get("dst_city") or "", src_geo=e.get("dst_geo") or "", src_coords=e.get("dst_coords"),
+                         dst_ip="", dst_geo="")
+            out.append(e)
+        return out
 
     def combo_scope(ev, ip_key, wanted, skip_empty=True):
         """Keep the devices / hosts whose items in the selection form exactly the combination clicked in a "Top findings"
@@ -190,20 +211,13 @@ def register(app, ctx):
         """title / sector_of / net_of for one request, each worked out once per distinct value. The same functions as
         above, but a day has hundreds of thousands of records and only a few hundred networks, regions and cities:
         sector_of alone used to read the network-type list (a file check) once per record."""
-        tl, reg = ctx["type_labels"](), ctx["asn_registry"].all()
-        t_c, s_c, n_c = {}, {}, {}
+        sec = _ck.Sectors(ctx["asn_registry"].all(), ctx["type_labels"]())
+        t_c, n_c = {}, {}
 
         def t(s):
             r = t_c.get(s)
             if r is None:
                 r = t_c[s] = title(s)
-            return r
-
-        def sec(asn):
-            r = s_c.get(asn)
-            if r is None:
-                v = (reg.get(str(asn)) or {}) if asn else {}
-                r = s_c[asn] = tl.get(v.get("type") or "unknown", "Unknown")
             return r
 
         def net(asn, d):
@@ -291,10 +305,11 @@ def register(app, ctx):
         f = {k: args.get(k, "") for k in COMMS_FILTERS}
         def keep(e):
             return ((not f["attack"] or e["attack_class"] == f["attack"]) and (not f["infection"] or (e["infection"] or "unknown") == f["infection"])
-                    and (not f["report"] or e["source"] == f["report"]) and (not f["region"] or title(e["src_region"]) == f["region"])
+                    and (not f["report"] or e["source"] == f["report"]) and (not f["region"] or region_of(e["src_region"]) == f["region"])
                     and (not f["severity"] or (e["severity"] or "") == f["severity"])
-                    and (not f["sector"] or sector_of(e["src_asn"]) == f["sector"]) and (not f["network"] or net_of(e["src_asn"], d_mask) == f["network"]))
-        all_ev = day.events
+                    and (not f["sector"] or sector_of(e["src_asn"]) == f["sector"])
+                    and (not f["network"] or (net_of(e["src_asn"], d_mask) or _ck.UNKNOWN_NET) == f["network"]))
+        all_ev = constituent_side(day.events)
         if f["code"]:                     # the records of a combination code, with the same rule as the analysts' search
             all_ev = ctx["combo_filter"](f["code"], "infections", all_ev, day) or []
         ev = [e for e in all_ev if keep(e)]
@@ -313,7 +328,7 @@ def register(app, ctx):
             ip = e["src_ip"]
             i = e["infection"] or "unknown"
             inf[i] += 1; att[e["attack_class"]] += 1; rep[e["source"]] += 1; sev[e["severity"] or "unrated"] += 1
-            r = title(e["src_region"]) or "Unknown region"; reg[r] += 1
+            r = region_of(e["src_region"]); reg[r] += 1
             if e["src_city"]:
                 city[title(e["src_city"])] += 1
                 rd_city[r][title(e["src_city"])] += 1
@@ -384,10 +399,10 @@ def register(app, ctx):
             if infections:
                 t = infections[0]
                 findings.append(f"The most common infection is {t['title'] or t['value']} ({t['hosts']:,} devices, "
-                                f"{t['hosts'] / max(1, n_hosts):.0%} of the affected devices).")
+                                f"{share_text(t['hosts'] / max(1, n_hosts))} of the affected devices).")
             if reg:
                 r0, c0 = reg.most_common(1)[0]
-                findings.append(f"{r0} accounts for {c0 / n_ev:.0%} of the activity.")
+                findings.append(f"{r0} accounts for {share_text(c0 / n_ev)} of the activity.")
             if net:
                 n0 = top(net, net_h, 1, n_ev)[0]
                 findings.append(f"Most affected network: {n0['label']} ({n0['hosts']:,} devices).")
@@ -401,9 +416,10 @@ def register(app, ctx):
             # every value of the day in the filter menus (they used to stop at 80 infections and 40 networks)
             "infection": [k for k, _ in Counter((e["infection"] or "unknown") for e in all_ev).most_common()],
             "report": [{"value": k, "label": labels.get(k, k)} for k, _ in Counter(e["source"] for e in all_ev).most_common()],
-            "region": [k for k, _ in Counter(title(e["src_region"]) for e in all_ev if e["src_region"]).most_common()],
+            # the same buckets as the lists (counting_keys): Unknown region / Unknown network can be chosen too
+            "region": [k for k, _ in Counter(region_of(e["src_region"]) for e in all_ev).most_common()],
             "sector": [k for k, _ in Counter(sector_of(e["src_asn"]) for e in all_ev).most_common()],
-            "network": [k for k, _ in Counter(net_of(e["src_asn"], d_mask) for e in all_ev if e["src_asn"]).most_common()],
+            "network": [k for k, _ in Counter(net_of(e["src_asn"], d_mask) or _ck.UNKNOWN_NET for e in all_ev).most_common()],
             "severity": sorted({e["severity"] or "" for e in all_ev} - {""}, key=lambda s: SEV_ORDER.get(s, 9)),
         }
         return {
@@ -412,20 +428,32 @@ def register(app, ctx):
                      # "Unknown network" is not a network (review 2026-11-13), as "Unknown region" is not a region
                      "networks": len([n for n in net if n != "Unknown network"]), "multi_infected": multi_inf, "cross_report": cross,
                      "critical": sev.get("critical", 0), "share_of_day": n_ev / max(1, len(all_ev)), "day_events": len(all_ev)},
+            # the records and devices of "Unknown network" / "Unknown region": not a network or region, but counted and
+            # shown (count audit round 2, item 16: the charts hid them without a word)
+            "unknowns": {"networks": {"events": net.get(_ck.UNKNOWN_NET, 0), "devices": len(net_h.get(_ck.UNKNOWN_NET, ()))},
+                         "regions": {"events": reg.get(_ck.UNKNOWN_REGION, 0), "devices": len(reg_h.get(_ck.UNKNOWN_REGION, ()))}},
             "hours": hours, "peak_hour": peak, "findings": findings, "tz": tz_of(day),
+            # networks: "Unknown network" is not one (as in kpis), so "Top 8 of N networks" counts the ones a card can show
+            "totals": {"infections": len(inf), "networks": len([n for n in net if n != "Unknown network"]), "cities": len(city),
+                       "destinations": len(dst), "report_pairs": len(pairs), "regions": len(reg), "sectors": len(sec), "c2": len(c2),
+                       "cities_map": len(cpts)},
             "item_counts": {k: len(v) for k, v in inf_h.items()},       # devices per infection (all of them: the baseline)
-            "infections": infections, "attack": top(att, None, 10, n_ev),
+            "infections": infections, "attack": top(att, None, None, n_ev),
             # every report of the selection, ranked by devices (the Reports card and the PDF list them all: 2026-11-13)
             "reports": top(rep, rep_h, None, n_ev, label=lambda k: labels.get(k, k)),
-            "regions": top(reg, reg_h, 30, n_ev), "cities": top(city, None, 10, n_ev),
-            "networks": top(net, net_h, 12, n_ev), "sectors": top(sec, sec_h, 15, n_ev),
-            "severity": sorted(top(sev, None, 10, n_ev), key=lambda r: SEV_ORDER.get(r["value"], 9)),
+            "regions": top(reg, reg_h, None, n_ev), "cities": top(city, None, 10, n_ev),
+            # every sector (a short list; 2026-11-26: the page lost the ones past the 7th, then past the 15th)
+            "networks": top(net, net_h, 12, n_ev), "sectors": top(sec, sec_h, None, n_ev),
+            "severity": sorted(top(sev, None, None, n_ev), key=lambda r: SEV_ORDER.get(r["value"], 9)),
             "destinations": top(dst, None, 10, n_ev), "report_pairs": top(pairs, None, 8, cross or 1),
             "cities_map": [{"name": n, "region": v["region"], "events": v["events"], "devices": len(v["hosts"]), "lon": v["at"][0], "lat": v["at"][1]}
                            for n, v in sorted(cpts.items(), key=lambda kv: -len(kv[1]["hosts"]))[:40]],
+            # each short list with its full count beside it, so the page and the PDF say "+ N more" (2026-11-26)
             "region_details": {r: {"cities": rd_city[r].most_common(3), "top": [(friendly(k)["title"] or k, v) for k, v in rd_top[r].most_common(3)],
                                    "networks": rd_net[r].most_common(2), "devices": len(reg_h[r]), "events": reg[r],
-                                   "city_devices": sorted(((n, len(h)) for n, h in rd_ch[r].items()), key=lambda x: -x[1])[:6]} for r in reg},
+                                   "city_devices": sorted(((n, len(h)) for n, h in rd_ch[r].items()), key=lambda x: -x[1])[:6],
+                                   "cities_total": len(rd_city[r]), "top_total": len(rd_top[r]), "networks_total": len(rd_net[r]),
+                                   "city_devices_total": sum(1 for h in rd_ch[r].values() if h)} for r in reg},
             "multi": {"devices": multi_inf, "share": multi_inf / max(1, n_hosts),
                       "by_count": [{"value": str(c), "label": f"{c}{'+' if c == 5 else ''} infections", "count": n_inf.get(c, 0)} for c in range(2, 6)],
                       "combos": top(combos, None, combos_n, multi_inf or 1), "combinations": len(combos)},
@@ -451,15 +479,16 @@ def register(app, ctx):
         f = {k: args.get(k, "") for k in SVC_FILTERS}
         def keep(e):
             return ((not f["family"] or e["family"] == f["family"]) and (not f["service"] or e["service"] == f["service"])
-                    and (not f["issue"] or f["issue"] in e["issues"]) and (not f["region"] or (title(e["region"]) or "Unknown region") == f["region"])
+                    and (not f["issue"] or f["issue"] in e["issues"]) and (not f["region"] or region_of(e["region"]) == f["region"])
                     and (not f["severity"] or (e["severity"] or "") == f["severity"])
-                    and (not f["sector"] or sector_of(e["asn"]) == f["sector"]) and (not f["network"] or net_of(e["asn"], d_mask) == f["network"]))
+                    and (not f["sector"] or sector_of(e["asn"]) == f["sector"])
+                    and (not f["network"] or (net_of(e["asn"], d_mask) or _ck.UNKNOWN_NET) == f["network"]))
         all_ev = day.events
         if f["code"]:
             all_ev = ctx["combo_filter"](f["code"], "issues", all_ev, day) or []
         ev = [e for e in all_ev if keep(e)]
-        # services hosts are counted by address as written (an empty address too), so the combination rule is the same
-        ev = combo_scope(ev, "ip", [(lambda e: e["issues"], f["icombo"]), (lambda e: (e["service"],), f["scombo"])], skip_empty=False)
+        # a record without an address is no host (count audit round 2), so the combination rule skips it as the lists do
+        ev = combo_scope(ev, "ip", [(lambda e: e["issues"], f["icombo"]), (lambda e: (e["service"],), f["scombo"])], skip_empty=True)
         kev = ctx["cve_intel"].kev()
         hosts = {}
         svc, fam, iss, reg, net, sec, sev, ind, vend = (Counter() for _ in range(9))
@@ -472,7 +501,7 @@ def register(app, ctx):
         for e in ev:
             ip = e["ip"]
             svc[e["service"]] += 1; fam[e["family"]] += 1; sev[e["severity"] or "unrated"] += 1
-            r = title(e["region"]) or "Unknown region"; reg[r] += 1
+            r = region_of(e["region"]); reg[r] += 1
             n = net_of(e["asn"], d_mask) or "Unknown network"; net[n] += 1
             if e.get("city"):
                 rd_city[r][title(e["city"])] += 1
@@ -483,8 +512,8 @@ def register(app, ctx):
             for i in e["issues"]:
                 rd_top[r][i] += 1
             s = sector_of(e["asn"]); sec[s] += 1
-            if e.get("sector"):
-                ind[e["sector"]] += 1
+            if _ck.industry_of(e.get("sector")):           # Shadowserver's own column: "Industry (Shadowserver)"
+                ind[_ck.industry_of(e.get("sector"))] += 1
             if e.get("vendor"):
                 vend[e["vendor"]] += 1
             hours[int((e["_t"] - t0) // 3600) % 24] += 1
@@ -496,6 +525,18 @@ def register(app, ctx):
                 iss[i] += 1; iss_h[i].add(ip); h["iss"].add(i)
                 if i.upper() in kev:
                     h["kev"] = True
+        # a record without an address is no host (count audit round 2, item 16; the services page counts the same way):
+        # its record stays in every record count, it adds no host anywhere
+        no_addr = sum(1 for e in ev if not e["ip"])
+        hosts.pop("", None)
+        for hs in (iss_h, reg_h, net_h, sec_h, svc_h):
+            for s_ in hs.values():
+                s_.discard("")
+        for cs in rd_ch.values():
+            for s_ in cs.values():
+                s_.discard("")
+        for cp in cpts.values():
+            cp["hosts"].discard("")
         n_ev, n_hosts = len(ev), len(hosts)
         n_iss = Counter(min(len(h["iss"]), 5) for h in hosts.values() if len(h["iss"]) > 1)
         icombos = Counter(" + ".join(sorted(h["iss"])) for h in hosts.values() if len(h["iss"]) > 1)          # every exact combination
@@ -542,7 +583,7 @@ def register(app, ctx):
         findings = []
         if n_ev:
             findings.append(f"{n_hosts:,} internet-facing hosts in the constituency were reported on {day.start.date()}; "
-                            f"{vuln:,} of them ({vuln / max(1, n_hosts):.0%}) have a concrete issue.")
+                            f"{vuln:,} of them ({share_text(vuln / max(1, n_hosts))}) have a concrete issue.")
             if kev_hosts:
                 findings.append(f"{kev_hosts:,} hosts run software with vulnerabilities that attackers are actively exploiting "
                                 f"(CISA KEV: {len(kev_list)} CVE{'s' if len(kev_list) != 1 else ''}). These come first.")
@@ -555,14 +596,14 @@ def register(app, ctx):
                 findings.append(f"Most visible: {s0} ({len(svc_h[s0]):,} hosts).")
             if reg:
                 r0, c0 = reg.most_common(1)[0]
-                findings.append(f"{r0} accounts for {c0 / n_ev:.0%} of the records.")
+                findings.append(f"{r0} accounts for {share_text(c0 / n_ev)} of the records.")
         facets = {
             "family": sorted({e["family"] for e in all_ev}),
             "service": [k for k, _ in Counter(e["service"] for e in all_ev).most_common()],
             "issue": [k for k, _ in Counter(i for e in all_ev for i in e["issues"]).most_common()],
-            "region": [k for k, _ in Counter(title(e["region"]) for e in all_ev if e["region"]).most_common()],
+            "region": [k for k, _ in Counter(region_of(e["region"]) for e in all_ev).most_common()],
             "sector": [k for k, _ in Counter(sector_of(e["asn"]) for e in all_ev).most_common()],
-            "network": [k for k, _ in Counter(net_of(e["asn"], d_mask) for e in all_ev if e["asn"]).most_common()],
+            "network": [k for k, _ in Counter(net_of(e["asn"], d_mask) or _ck.UNKNOWN_NET for e in all_ev).most_common()],
             "severity": sorted({e["severity"] or "" for e in all_ev} - {""}, key=lambda s: SEV_ORDER.get(s, 9)),
         }
         return {
@@ -570,21 +611,29 @@ def register(app, ctx):
             "kpis": {"records": n_ev, "hosts": n_hosts, "vulnerable_hosts": vuln, "multi_issue": multi, "cross_report": cross,
                      "kev_hosts": kev_hosts, "kev_cves": len(kev_list), "critical_cves": len(crit), "cves": len(cve_ids),
                      "issues": len(iss), "services": len(svc), "regions": len([r for r in reg if r != "Unknown region"]),
-                     "critical": sev.get("critical", 0), "share_of_day": n_ev / max(1, len(all_ev)), "day_records": len(all_ev)},
+                     "critical": sev.get("critical", 0), "share_of_day": n_ev / max(1, len(all_ev)), "day_records": len(all_ev),
+                     "no_address": no_addr},
+            "unknowns": {"networks": {"events": net.get(_ck.UNKNOWN_NET, 0), "devices": len(net_h.get(_ck.UNKNOWN_NET, ()))},
+                         "regions": {"events": reg.get(_ck.UNKNOWN_REGION, 0), "devices": len(reg_h.get(_ck.UNKNOWN_REGION, ()))}},
             "hours": hours, "peak_hour": peak, "findings": findings, "tz": tz_of(day), "issues": issues, "infections_on": infections_on,
+            "totals": {"issues": len(iss), "services": len(svc), "networks": len([n for n in net if n != "Unknown network"]),
+                       "industries": len(ind), "vendors": len(vend), "regions": len(reg), "sectors": len(sec),
+                       "infections_on": len(infections_on), "pairs": len(spairs), "devices": len(devices), "cities_map": len(cpts)},
             "item_counts": {k: len(v) for k, v in iss_h.items()},       # hosts per issue (all of them: the baseline)
-            "services": top(svc, svc_h, 12, n_ev), "families": top(fam, None, 8, n_ev),
+            "services": top(svc, svc_h, 12, n_ev), "families": top(fam, None, None, n_ev),
             # every report of the selection (on this platform a record's service is its report), ranked by hosts
             "reports": top(svc, svc_h, None, n_ev),
-            "regions": top(reg, reg_h, 30, n_ev), "networks": top(net, net_h, 12, n_ev), "sectors": top(sec, sec_h, 15, n_ev),
+            "regions": top(reg, reg_h, None, n_ev), "networks": top(net, net_h, 12, n_ev), "sectors": top(sec, sec_h, None, n_ev),
             "industries": top(ind, None, 10, n_ev), "vendors": top(vend, None, 10, n_ev),
-            "severity": sorted(top(sev, None, 10, n_ev), key=lambda r: SEV_ORDER.get(r["value"], 9)),
+            "severity": sorted(top(sev, None, None, n_ev), key=lambda r: SEV_ORDER.get(r["value"], 9)),
             "cities_map": [p for p in ({"name": n, "region": v["region"], "events": v["events"], "devices": len(v["hosts"]),
                                         **dict(zip(("lon", "lat"), ctx["geocode"](*v["key"]) or (None, None)))}
                                        for n, v in sorted(cpts.items(), key=lambda kv: -len(kv[1]["hosts"]))[:40]) if p["lon"] is not None],
             "region_details": {r: {"cities": rd_city[r].most_common(3), "top": rd_top[r].most_common(3), "services": rd_svc[r].most_common(2),
                                    "networks": rd_net[r].most_common(2), "devices": len(reg_h[r]), "events": reg[r],
-                                   "city_devices": sorted(((n, len(h)) for n, h in rd_ch[r].items()), key=lambda x: -x[1])[:6]} for r in reg},
+                                   "city_devices": sorted(((n, len(h)) for n, h in rd_ch[r].items()), key=lambda x: -x[1])[:6],
+                                   "cities_total": len(rd_city[r]), "top_total": len(rd_top[r]), "services_total": len(rd_svc[r]),
+                                   "networks_total": len(rd_net[r]), "city_devices_total": sum(1 for h in rd_ch[r].values() if h)} for r in reg},
             "multi": {"hosts": multi, "share": multi / max(1, vuln),
                       "by_count": [{"value": str(c), "label": f"{c}{'+' if c == 5 else ''} issues", "count": n_iss.get(c, 0)} for c in range(2, 6)],
                       "combos": top(icombos, None, combos_n, multi or 1), "combinations": len(icombos)},
@@ -624,8 +673,9 @@ def register(app, ctx):
     BASE_MAX = _env_int("EXEC_BASELINE_MAX", 5000) or 5000
 
     # raised whenever a day's summary is counted differently, so summaries made the old way are not compared with new
-    # ones (2: "Unknown network" no longer counts as a network, review 2026-11-13)
-    BASE_VERSION = 2
+    # ones (2: "Unknown network" no longer counts as a network, review 2026-11-13; 3: regions by the one spelling rule,
+    # counting_keys.region_key, 2026-11-27: live's days counted before it held one region more, and were compared as equal)
+    BASE_VERSION = 3
 
     def _base_load():
         try:
@@ -694,8 +744,10 @@ def register(app, ctx):
     # Any selection is then worked out from memory in seconds, with exactly the same functions. A day is loaded again when
     # MongoDB has other rows for it (its signature changes) or the constituency changes; above MGMT_PAST_RECORDS records
     # in all, days are not kept and are loaded as before.
+    # dst_asn / dst_region / dst_city / dst_coords: a destination-only report's host is its destination (constituent_side;
+    # review 2026-11-27: past days had none of them, so those devices were Unknown on past days and new today)
     PAST_FIELDS = {"comms": ("src_ip", "infection", "attack_class", "source", "severity", "src_region", "src_city", "src_coords",
-                             "src_asn", "dst_geo", "http_host", "dst_ip", "_t"),
+                             "src_asn", "dst_geo", "http_host", "dst_ip", "dst_asn", "dst_region", "dst_city", "dst_coords", "_t"),
                    "services": ("ip", "service", "family", "severity", "region", "city", "geo", "asn", "issues", "sector",
                                 "vendor", "device_type", "_t")}
     PAST_LIMIT = int(os.environ.get("MGMT_PAST_RECORDS", "3000000"))
@@ -716,6 +768,9 @@ def register(app, ctx):
             def get(self, k, default=None):
                 i = idx.get(k)
                 return default if i is None else self._v[i]
+
+            def keys(self):             # dict(rec, ...) works (constituent_side; review 2026-11-27: it raised KeyError 0)
+                return fields
         return Rec
     REC = {p: _rec_class(f) for p, f in PAST_FIELDS.items()}
 
@@ -788,9 +843,15 @@ def register(app, ctx):
                         bl["mem"][key] = result
                     _base_save()
                 job["done"] += 1
-        except Exception:                                 # noqa: BLE001  (logged by Flask's logger below)
+        except Exception as ex:                           # noqa: BLE001  (logged by Flask's logger below)
             import logging
-            logging.getLogger(__name__).exception("Executive baseline build failed")
+            import sys
+            # Looking Glass is stopping (a restart while the baseline is being built, 2026-11-27: right after an update
+            # recounts it): not a failure; the days not built yet are built after the start
+            if sys.is_finalizing() or (isinstance(ex, RuntimeError) and "interpreter shutdown" in str(ex)):
+                logging.getLogger(__name__).info("Executive baseline build stopped: Looking Glass is stopping")
+            else:
+                logging.getLogger(__name__).exception("Executive baseline build failed")
         finally:
             with base_lock:
                 bl["jobs"].pop(f"{platform}|{fk}", None)
@@ -833,12 +894,21 @@ def register(app, ctx):
         items = {n: [item_of(e, n) for e in entries] for n in names}
         job = bl["jobs"].get(jk)
         unit = "devices" if platform == "comms" else "hosts"
-        rows = {r["value"]: r for r in ((d.get("infections") if platform == "comms" else d.get("issues")) or [])}
+        # every infection / issue of the day is graded, not only the top ones shown (2026-11-26: a Danger spike in the
+        # 16th infection was never flagged); the page still gets the 7 days of the shown ones only
+        today = dict(d.get("item_counts") or {})
+        for r in (d.get("infections") if platform == "comms" else d.get("issues")) or []:
+            today.setdefault(r["value"], r["hosts"])
         grade = {"kpis": {k: assess(d["kpis"].get(k, 0), v, unit) for k, v in kpis.items()},
-                 "items": {n: assess(rows[n]["hosts"], v, unit) for n, v in items.items()}}
-        return {"days": [s.date().isoformat() for s in starts], "kpis": kpis, "items": items, "assess": grade, "scale": SCALE,
-                "available": sum(1 for e in entries if e and not e.get("none")),
-                "building": bool(todo), "progress": {"done": job["done"], "total": job["total"]} if job else None}
+                 "items": {n: assess(c, items[n] if n in items else [item_of(e, n) for e in entries], unit) for n, c in today.items()}}
+        out = {"days": [s.date().isoformat() for s in starts], "kpis": kpis, "items": items, "assess": grade, "scale": SCALE,
+               "available": sum(1 for e in entries if e and not e.get("none")),
+               "building": bool(todo), "progress": {"done": job["done"], "total": job["total"]} if job else None}
+        if wait:
+            # the report's seven-day-trend CSV: the 7 days of EVERY infection / issue of the day, not only the top ones
+            # shown (2026-11-26: the CSV held the top 15 / 25); the page's answer stays small
+            out["items_all"] = {n: items[n] if n in items else [item_of(e, n) for e in entries] for n in today}
+        return out
 
     def avg(vals):
         v = [x for x in vals if x is not None]
@@ -877,16 +947,23 @@ def register(app, ctx):
             Label = label[0].upper() + label[1:]
             what = g["note"][0].lower() + g["note"][1:].rstrip(".")
             out.append(f"{Label}: {compare(k[key], g)}. That is {BAND[g['level']]} ({g['label']}): {what}.")
-        rows = d.get("infections") if platform == "comms" else d.get("issues")
+        rows = list((d.get("infections") if platform == "comms" else d.get("issues")) or [])
+        shown = {r["value"] for r in rows}
+        counts = d.get("item_counts") or {}
+        rows += [{"value": n, "hosts": c} for n, c in counts.items() if n not in shown]     # every one is graded
         name = lambda r: (r.get("title") or r["value"]) if platform == "comms" else r["value"]
         order = {"high": 0, "watch": 1}
-        flagged = sorted([(r, A["items"][r["value"]]) for r in rows or [] if (A["items"].get(r["value"]) or {}).get("level") in order],
+        flagged = sorted([(r, A["items"][r["value"]]) for r in rows if (A["items"].get(r["value"]) or {}).get("level") in order],
                          key=lambda x: (order[x[1]["level"]], -x[0]["hosts"]))
         for r, g in flagged[:3]:
             out.append(f"{name(r)}: {compare(r['hosts'], g, unit)}. That is {BAND[g['level']]} ({g['label']}): "
                        f"{g['note'][0].lower() + g['note'][1:]}")
+        if len(flagged) > 3:                       # never a silent cut: every other flagged one by name
+            more = flagged[3:]
+            out.append(f"Also in Caution or Danger ({len(more):,} more): "
+                       + "; ".join(f"{name(r)} ({r['hosts']:,} {unit}, {g['label']})" for r, g in more) + ".")
         if not flagged:
-            out.append(f"None of the top {'infections' if platform == 'comms' else 'issues'} changed by more than usual compared "
+            out.append(f"None of the {'infections' if platform == 'comms' else 'issues'} changed by more than usual compared "
                        f"with the last 7 days (no Caution or Danger).")
         return out
 
@@ -970,12 +1047,12 @@ def register(app, ctx):
                        "rcombo": "Reports seeing the same device", "scombo": "Services on the same host"}
         fl = [f"{combo_names.get(n, n)}: {v}" for n, v in d["filters"].items() if v]
         sel = ", ".join(fl) if fl else "Everything in the constituency"
-        pct = lambda r: f"{r['share']:.1%}"
+        pct = lambda r: share_text(r["share"], 1)
         if platform == "comms":
             kpis = [(f"{k['devices']:,}", "affected devices"), (f"{k['events']:,}", "events"), (f"{k['infections']:,}", "infections / categories"),
                     (f"{k['multi_infected']:,}", "devices with several infections"), (f"{k['cross_report']:,}", "devices in several reports"),
                     (f"{k['regions']:,}", "regions affected"), (f"{k['networks']:,}", "networks affected"),
-                    (f"{k['critical']:,}", "critical events"), (f"{k['share_of_day']:.1%}", "of the day's events")]
+                    (f"{k['critical']:,}", "critical events"), (share_text(k["share_of_day"], 1), "of the day's events")]
             names = [r["value"] for r in d["infections"][:15]]
             enr = {}
             for n in names:
@@ -983,11 +1060,11 @@ def register(app, ctx):
                     enr[n] = ctx["mp_resolve"](n)[0]
                 except (ValueError, RuntimeError):
                     pass
-            stats = {r["value"]: f"{r['hosts']:,} devices, {r['count']:,} events ({r['share']:.1%})" for r in d["infections"][:15]}
+            stats = {r["value"]: f"{r['hosts']:,} devices, {r['count']:,} events ({share_text(r['share'], 1)})" for r in d["infections"][:15]}
             bds = [("Infections / categories", ["Infection / category", "Devices", "Events", "Share"],
                     [[(r["title"] + f" ({r['value']})") if r["title"] else r["value"], f"{r['hosts']:,}", f"{r['count']:,}", pct(r)] for r in d["infections"]]),
                    ("Regions", ["Region", "Devices", "Events", "Share"], [[r["label"], f"{r['hosts']:,}", f"{r['count']:,}", pct(r)] for r in d["regions"]]),
-                   ("Sectors", ["Sector", "Devices", "Events", "Share"], [[r["label"], f"{r['hosts']:,}", f"{r['count']:,}", pct(r)] for r in d["sectors"]]),
+                   ("Sectors (network type)", ["Sector", "Devices", "Events", "Share"], [[r["label"], f"{r['hosts']:,}", f"{r['count']:,}", pct(r)] for r in d["sectors"]]),
                    ("Networks", ["Network", "Devices", "Events", "Share"], [[r["label"], f"{r['hosts']:,}", f"{r['count']:,}", pct(r)] for r in d["networks"]]),
                    ("Reports", ["Report", "Devices", "Events", "Share"], [[r["label"], f"{r['hosts']:,}", f"{r['count']:,}", pct(r)] for r in d["reports"]]),
                    ("Devices seen in two reports", ["Reports", "Devices"], [[r["label"], f"{r['count']:,}"] for r in d["report_pairs"]]),
@@ -1000,7 +1077,7 @@ def register(app, ctx):
                    ("Attack types", ["Attack type", "Events", "Share"], [[r["label"], f"{r['count']:,}", pct(r)] for r in d["attack"]]),
                    ("Where infected devices connect to", ["Country", "Events", "Share"], [[r["label"], f"{r['count']:,}", pct(r)] for r in d["destinations"]])]
             charts = [("Infections / categories", [{**r, "label": r["title"] or r["value"]} for r in d["infections"]]), ("Regions", d["regions"]),
-                      ("Sectors", d["sectors"]), ("Attack types", d["attack"])]
+                      ("Sectors (network type)", d["sectors"]), ("Attack types", d["attack"])]
             et, plat = "Infections and categories explained", "Network communications"
         else:
             kpis = [(f"{k['hosts']:,}", "internet-facing hosts"), (f"{k['vulnerable_hosts']:,}", "hosts with an issue"), (f"{k['kev_hosts']:,}", "hosts with actively exploited CVEs"),
@@ -1021,13 +1098,15 @@ def register(app, ctx):
                    ("Regions", ["Region", "Hosts", "Records", "Share"], [[r["label"], f"{r['hosts']:,}", f"{r['count']:,}", pct(r)] for r in d["regions"]]),
                    ("Sectors (network type)", ["Sector", "Hosts", "Records", "Share"], [[r["label"], f"{r['hosts']:,}", f"{r['count']:,}", pct(r)] for r in d["sectors"]]),
                    ("Networks", ["Network", "Hosts", "Records", "Share"], [[r["label"], f"{r['hosts']:,}", f"{r['count']:,}", pct(r)] for r in d["networks"]]),
-                   ("Industries (Shadowserver)", ["Industry", "Records", "Share"], [[r["label"], f"{r['count']:,}", pct(r)] for r in d["industries"]]),
+                   (_ck.INDUSTRY_LABEL, ["Industry", "Records", "Share"], [[r["label"], f"{r['count']:,}", pct(r)] for r in d["industries"]]),
                    ("Report families", ["Family", "Records", "Share"], [[r["label"], f"{r['count']:,}", pct(r)] for r in d["families"]])]
-            charts = [("Exposed services", d["services"]), ("Regions", d["regions"]), ("Sectors", d["sectors"]),
+            charts = [("Exposed services", d["services"]), ("Regions", d["regions"]), ("Sectors (network type)", d["sectors"]),
                       ("Issues", [{**r, "label": r["value"]} for r in d["issues"]])]
             et, plat = "Issues explained", "Publicly accessible / vulnerable services"
         who = (ctx["user"]() or {}).get("user", "")
-        spec = {"platform_label": plat, "title": f"Executive report · {plat}", "selection": sel, "day": d["day"], "generated_by": who,
+        import people as _people                       # the full name and person code, never the sign-in name (audit 2026-11-27)
+        by = _people.signed_by(who)
+        spec = {"platform_label": plat, "title": f"Executive report · {plat}", "selection": sel, "day": d["day"], "generated_by": by,
                 "scope": ctx["scope_text"](), "demo": demo(), "executive": True,
                 "intro": "Aggregated figures for the constituency, as filtered in the management portal. No individual addresses are included.",
                 "summary_points": d["findings"], "kpis": kpis, "hours": d["hours"], "peak_hour": d["peak_hour"],
@@ -1047,7 +1126,7 @@ def register(app, ctx):
             if not nomap and _os.path.exists(sp):
                 with open(sp, encoding="utf-8") as f:
                     shapes = _json.load(f)
-            pdf = executive_pdf.build(d, enr, {"platform_label": plat, "scope": ctx["scope_text"](), "selection": sel, "generated_by": who,
+            pdf = executive_pdf.build(d, enr, {"platform_label": plat, "scope": ctx["scope_text"](), "selection": sel, "generated_by": by,
                                                "demo": demo(), "shapes": shapes, "nomap": nomap, "stats": stats})
         except Exception as exc:                       # never leave the manager without a report
             app.logger.warning("Executive PDF (dashboard design) failed, plain layout used: %s", exc)
@@ -1069,7 +1148,7 @@ def register(app, ctx):
             w.writerow([what, f"Number of {what.split()[0].lower()}", f"{unit} with exactly this combination", f"Share of the {unit.lower()} concerned"])
             for r in rows:
                 lbl = r["label"]
-                w.writerow([lbl, len(lbl.split(" + ")), r["count"], f"{100 * r['share']:.1f}%"])
+                w.writerow([lbl, len(lbl.split(" + ")), r["count"], share_text(r["share"], 1)])     # never "0.0%" / "100.0%"
             return "\ufeff" + buf.getvalue()
         files = ({"infection-combinations": table(d["multi"]["combos"], "Infections on the same device", d["multi"]["devices"]),
                   "report-combinations": table(d["cross"]["combos"], "Reports seeing the same device", d["cross"]["devices"])} if platform == "comms" else
@@ -1086,9 +1165,18 @@ def register(app, ctx):
             w.writerow([d["day"] + " (report day)"] + [d["kpis"].get(k, "") for k in keys])
             w.writerow([])
             w.writerow(["Infection / category" if platform == "comms" else "Issue"] + b["days"] + [d["day"]])
-            for r in (d["infections"] if platform == "comms" else d["issues"]):
-                lbl = r.get("title") or r["value"]
-                w.writerow([lbl] +["" if v is None else v for v in b["items"].get(r["value"], [])] + [r["hosts"]])
+            # EVERY infection / issue of the day (item_counts), the most devices / hosts first; the top ones by their
+            # friendly name as on the page, the rest by the name the reports give
+            shown = {r["value"]: r for r in (d["infections"] if platform == "comms" else d["issues"])}
+            every = dict(d.get("item_counts") or {})
+            for n, r in shown.items():
+                every.setdefault(n, r["hosts"])
+            all_items = b.get("items_all") or {}
+            for n, today_n in sorted(every.items(), key=lambda kv: (-kv[1], str(kv[0]))):
+                t_ = (shown.get(n) or {}).get("title")
+                lbl = (t_ or n) if platform == "comms" else (f"{n}: {t_}" if t_ else n)
+                vals = all_items.get(n) or b["items"].get(n) or [None] * len(b["days"])
+                w.writerow([lbl] + ["" if v is None else v for v in vals] + [today_n])
             files["seven-day-trend"] = "﻿" + buf.getvalue()
         z = _io.BytesIO()
         with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as zf:

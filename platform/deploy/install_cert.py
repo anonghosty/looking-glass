@@ -252,8 +252,8 @@ def _audit(project, by, info):
         chain = audit_chain.Chain(os.path.join(project, "data", "audit.log"))
         chain.append({"t": round(time.time(), 3), "event": "tls_certificate_installed", "user": by, "target": info["domain"],
                       "detail": f"certificate for {info['domain']} installed · expires "
-                                f"{time.strftime('%Y-%m-%d', time.gmtime(info['not_after']))} · {info['fingerprint'][:23]}…"
-                                f" · issuer {info['issuer'][:80]}", "ip": "", "location": "", "ua": ""})
+                                f"{time.strftime('%Y-%m-%d', time.gmtime(info['not_after']))} · fingerprint {info['fingerprint']}"
+                                f" · issuer {info['issuer']}", "ip": "", "location": "", "ua": ""})   # in full: no "…" (audit 2026-11-27)
     except Exception as e:  # noqa: BLE001  the certificate is installed either way; say so
         print(f"note: the audit log could not record it ({type(e).__name__})", file=sys.stderr)
 

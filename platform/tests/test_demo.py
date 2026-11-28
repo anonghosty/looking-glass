@@ -134,8 +134,11 @@ ok("normal mode: the real network name works", isinstance(n_real, int) and n_rea
 if alias:
     ok("demo: its alias works", isinstance(n_alias, int) and n_alias > 0, f"total={n_alias}")
 else:
-    print("    SKIPPED: demo: an alias works (no network has a name yet, so demo mode shows every one as \"Unlisted network\": "
-          "run manage/asn_registry.py 7 to look the names up; only AS numbers are sent)")
+    # no network has a name yet (a new installation; manage/asn_registry.py 7 looks them up, only AS numbers are sent):
+    # then there is no alias to try, and what is checked instead is that demo mode names every network the same way
+    vals = [x.get("value") for x in std.get("src_network") or []]
+    ok("no network has a name yet: demo mode shows every one as \"Unlisted network\" (no alias to try)",
+       bool(vals) and all(v == "Unlisted network" for v in vals), str(sorted(set(vals))[:5]))
 for label, v in (("real network name", name), ("real AS number", f"AS{asn}"), ("bare AS number", str(asn))):
     n = total(f"/api/insight?kind=src_asn&value={v}&at={AT}&demo=1")
     ok(f"demo: the {label} gives nothing", n == 0, f"total={n}")
@@ -148,6 +151,21 @@ ok("services, demo: a real network name as filter gives nothing", code == 200 an
    f"HTTP {code}, total={sv.get('total')}, hosts={sv.get('hosts')}")
 
 print("\n6. Pinned events (full detail, kept in the browser) never outlive the account")
+# the page files that ship: the held copies in $LG_HELD_DIR when there are (the templates through the app's own
+# renderer, the scripts run by node)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import jinja2  # noqa: E402
+import page_harness as PH  # noqa: E402
+
+
+def _held_tpl(name):
+    p = os.path.join(PH.HELD, name + ".new") if PH.HELD else ""
+    return (open(p, encoding="utf-8").read(), p, lambda: True) if p and os.path.isfile(p) else None
+
+
+tm.app.jinja_env.loader = jinja2.ChoiceLoader([jinja2.FunctionLoader(_held_tpl), tm.app.jinja_env.loader])
+if getattr(tm.app.jinja_env, "cache", None) is not None:
+    tm.app.jinja_env.cache.clear()
 with tm.app.test_request_context("/"):
     pages = {}
     for role, perms in (("analyst", {"view", "unmasked", "export", "malpedia"}), ("external", {"view"})):
@@ -158,13 +176,46 @@ import person_code  # noqa: E402
 ok("the map page names its account by its code, never its sign-in name (pins are stored per account; person_code.py)",
    f'data-user="{person_code.code("lg-selftest-analyst")}"' in pages["analyst"] and 'data-user="lg-selftest-analyst"' not in pages["analyst"])
 ok("a masked account's page is marked masked (it stores no pins)", 'data-masked="1"' in pages["external"] and 'data-masked="1"' not in pages["analyst"])
-js = open(os.path.join(tm.BASE_DIR, "static", "js", "app.js"), encoding="utf-8").read()
-auth_js = open(os.path.join(tm.BASE_DIR, "static", "js", "auth-card.js"), encoding="utf-8").read()
-ok("app.js: pins under the account's own key, only when unmasked; the old shared key removed",
-   'const PIN_KEY = "tm.pins:" + (document.body.dataset.user' in js and "const PIN_STORE = !document.body.dataset.masked" in js
-   and 'store.set("tm.pins"' not in js and 'store.get("tm.pins"' not in js and 'localStorage.removeItem("tm.pins")' in js)
-ok("the login page (log out, expired session) removes every stored pin",
-   'location.pathname.startsWith("/login")' in auth_js and 'k.startsWith("tm.pins:")' in auth_js)
+js = PH.page_src("app.js")
+auth_js = PH.page_src("auth-card.js")
+LS_JS = r"""
+const LS = {}; Object.defineProperties(LS, { getItem: { value: (k) => (k in LS ? LS[k] : null) },
+  setItem: { value: (k, v) => { LS[k] = String(v); } }, removeItem: { value: (k) => { delete LS[k]; } } });
+globalThis.localStorage = LS;
+const SEEDED = { "tm.pins": "[{\"id\":\"old-shared\"}]", "tm.pins:lg-selftest-analyst": "[{\"id\":\"by-sign-in-name\"}]",
+  "tm.pins:p-mine": "[{\"id\":\"e1\"},{\"id\":\"e2\"}]", "tm.pins:p-other": "[{\"id\":\"e9\"}]", "tm.theme": "\"dark\"" };
+const seed = () => { for (const k of Object.keys(LS)) delete LS[k]; Object.assign(LS, SEEDED); };
+"""
+pins = re.search(r"^  const store = \{.*?^  \} catch \{[^\n]*\n", js, re.M | re.S)
+signout = re.search(r'^  if \(location\.pathname\.startsWith\("/login"\)\) \{.*?^  \}\n', auth_js, re.M | re.S)
+R = None
+if PH.NODE and pins and signout:
+    R, raw = PH.run(LS_JS + r"""
+const run = (user, masked) => { seed(); document.body.dataset.user = user; if (masked) document.body.dataset.masked = "1"; else delete document.body.dataset.masked;
+  return new Function("localStorage", "document", """ + json.dumps(pins.group(0) + "\nreturn { PIN_KEY, PIN_STORE, mine: PIN_STORE ? store.get(PIN_KEY, []).map((e) => e.id) : [], store };") + r""")(LS, document); };
+const a = run("p-mine", false); a.store.set(a.PIN_KEY, [{ id: "e3" }]);
+const A = { key: a.PIN_KEY, store: a.PIN_STORE, mine: a.mine, keys: Object.keys(LS).sort(), saved: LS["tm.pins:p-mine"] };
+const m = run("p-mine", true); const M = { store: m.PIN_STORE, mine: m.mine, keys: Object.keys(LS).sort() };
+const out = (path) => { seed(); location.pathname = path; new Function("localStorage", "location", """ + json.dumps(signout.group(0)) + r""")(LS, location); return Object.keys(LS).sort(); };
+console.log(JSON.stringify({ A, M, login: out("/login"), elsewhere: out("/overview") }));
+""")
+ok("the pin code is found in app.js and auth-card.js (the Node part below runs exactly that code)", bool(pins and signout))
+if not PH.NODE:
+    PH.no_node(ok, "node runs the pin code of app.js and auth-card.js")
+else:
+    R = R or {}
+    A, M = R.get("A") or {}, R.get("M") or {}
+    ok("app.js: an unmasked account's pins are under its own code, and read back", A.get("key") == "tm.pins:p-mine" and A.get("store") is True
+       and A.get("mine") == ["e1", "e2"], str(A) if A else "the pin code was not found or did not run")
+    ok("...the old shared key and keys named by sign-in name are removed; another account's are not touched",
+       A.get("keys") == ["tm.pins:p-mine", "tm.pins:p-other", "tm.theme"], str(A.get("keys")))
+    ok("...a pin is saved under the account's own key", A.get("saved") == '[{"id":"e3"}]', str(A.get("saved")))
+    ok("a masked account stores no pins, and its old ones are removed", M.get("store") is False and M.get("mine") == []
+       and "tm.pins:p-mine" not in (M.get("keys") or ["tm.pins:p-mine"]), str(M))
+    ok("the login page (log out, expired session) removes every stored pin, and nothing else",
+       R.get("login") == ["tm.theme"], str(R.get("login")))
+    ok("...and no other page removes them", R.get("elsewhere") == sorted(["tm.pins", "tm.pins:lg-selftest-analyst", "tm.pins:p-mine", "tm.pins:p-other", "tm.theme"]),
+       str(R.get("elsewhere")))
 
 print(f"\n{checks - len(fails)} of {checks} masking checks passed" + (f"; FAILED: {fails}" if fails else ""))
 sys.exit(1 if fails else 0)

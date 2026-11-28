@@ -72,4 +72,4 @@
 .bu-review { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
 .bu-state.st-asked { color: #e2a336; }
 .bu-state.st-approved { color: #46a758; }
-.bu-state.st-rejected { color: #e5484d; }.bh-handover { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; margin: 10px 0; font-size: 12px; }
+.bu-state.st-rejected { color: #e5484d; }

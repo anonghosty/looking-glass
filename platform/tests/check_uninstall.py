@@ -275,6 +275,25 @@ def main():
         (tmp / "sys/mongod.conf.orig").write_text("# Managed by /old/database/deploy.sh\n")
         r = run(root, env, "--dry-run", "--remove-mongodb")
         check("…while one Looking Glass installed itself is still removed when asked", "apt-get purge" in r.stdout, r.stdout[-300:])
+    # 2026-11-26 (a fresh installation kept its MongoDB after uninstall.sh --all): deploy.sh copies the package's own
+    # default mongod.conf to mongod.conf.orig when it installs MongoDB; its "Installed by deploy.sh" mark makes it ours
+    pkg_default = "# mongod.conf\n\n# for documentation of all options, see:\n#   http://docs.mongodb.org/manual/reference/configuration-options/\n"
+    with tempfile.TemporaryDirectory() as t:
+        tmp = Path(t)
+        root, env, cron, log = setup(tmp, mongo_conf="# Managed by @DB@/deploy.sh - edit .env\n"
+                                                     "# Installed by deploy.sh: MongoDB came with Looking Glass on this computer\n")
+        (tmp / "sys/mongod.conf.orig").write_text(pkg_default)
+        r = run(root, env, "--dry-run", "--remove-mongodb")
+        check("a MongoDB deploy.sh installed (marked so): removed when asked, though the package's default is kept as .orig",
+              r.returncode == 0 and "apt-get purge" in r.stdout and "taken over" not in r.stdout, (r.stdout + r.stderr)[-300:])
+    with tempfile.TemporaryDirectory() as t:
+        tmp = Path(t)
+        root, env, cron, log = setup(tmp, mongo_conf="# Managed by @DB@/deploy.sh - edit .env\n"
+                                                     "# Taken over by deploy.sh (MONGO_TAKE_OVER): MongoDB was installed before Looking Glass\n"
+                                                     "# Installed by deploy.sh: MongoDB came with Looking Glass on this computer\n")
+        r = run(root, env, "--dry-run", "--remove-mongodb")
+        check("…but 'taken over' always wins over 'installed by': never removed", r.returncode == 0 and "apt-get purge" not in r.stdout
+              and "taken over" in r.stdout, (r.stdout + r.stderr)[-300:])
     with tempfile.TemporaryDirectory() as t:
         tmp = Path(t); root, env, cron, log = setup(tmp)
         lock = root / "database/.pipeline.lock"; lock.write_text("")

@@ -40,13 +40,36 @@ def _by_masked_id(day):
             _MASKED.pop(next(iter(_MASKED)), None)
         _MASKED[id(day)] = (key, table)
     return table
+
+
+def _detail_index(day):
+    """({record id: record}, {host: [records, services]}) of one loaded copy of a day, built on the first record opened and kept on
+    the day itself (it goes with the day). A record click no longer reads the whole day twice (audit 2026-11-27: a
+    scan for the id and one for the host's other records, per click, on a day of a million records)."""
+    key = (len(day.events), id(day.events))
+    hit = getattr(day, "_detail_idx", None)
+    if hit is not None and hit[0] == key:
+        return hit[1], hit[2]
+    by_id, per_host = {}, {}
+    for x in day.events:
+        if x.get("id"):
+            by_id.setdefault(x["id"], x)          # the first record with the id, as the scan found it
+        h = per_host.get(x["ip"])
+        if h is None:
+            h = per_host[x["ip"]] = [0, set()]
+        h[0] += 1
+        h[1].add(x["service"])
+    day._detail_idx = (key, by_id, per_host)
+    return by_id, per_host
 from respcache import ResultCache, day_key
 from replay_counts import ReplayCounts
 from services import (BANNER, banner_mask, EMPTY,FAMILIES, FILTER_KEYS, SEV_ORDER, ServiceRegistry, ServiceStore, matches, parse_filters,
                        parse_time, report_info)
 
 import facets as _facets  # noqa: E402  (drop-down counts that follow the other filters)
+import counting_keys as _ck  # noqa: E402  (one rule for regions and networks on every page: count audit round 2)
 import filesig  # noqa: E402
+from shares import pct  # noqa: E402  (shares that never read "0%" for a part with records, nor "100%" for a part)
 
 DRILL_LIMIT = 300
 # the request parameters that can change an answer: the filters and the view's own. Cache keys are built from these
@@ -65,6 +88,7 @@ def register(app, ctx):
     store = ServiceStore(db, registry, refs, log, reload_seconds=ctx["reload_seconds"], fallback_scan=ctx["fallback"],
                          settings=ctx.get("settings"))
     svc_cache = ResultCache()       # whole-day statistics shared by every viewer, keyed on the loaded day
+    _ck.default_registry(asns)      # the sectors (network types) of this registry, when app.py configured none
     replay_counts = ReplayCounts()  # the replayed counter of a selection, polled every few seconds (replay_counts.py)
 
     # ------------------------------------------------------------------ helpers
@@ -88,10 +112,16 @@ def register(app, ctx):
             names -= {_fold(n) for n in (ctx.get("map_region_names") or (lambda: ()))()}
             names |= {_fold(n) for n in (ctx.get("country_chosen_names") or (lambda: ()))()}
             country_upper.update(t=now, v=names - {""})
+        if _ck.configured():
+            return _ck.is_unknown_region(_ck.region_key(v))
         return not v or _fold(v) in country_upper["v"]
 
     def region_label(v):
-        return "Region unknown" if region_unknown(v) else v.title()
+        """The one region rule (counting_keys.region_key: the administrator's matches, the map, the country's name);
+        a standalone run without the platform's configuration keeps the country-name rule above."""
+        if _ck.configured():
+            return _ck.region_key(v)
+        return _ck.UNKNOWN_REGION if region_unknown(v) else _ck.region_key(v)
 
     # network (company) names, looked up once per AS number: the registry check per record made lists slow
     net_cache = {"stamp": None, "checked": 0.0, "map": {}}
@@ -164,7 +194,7 @@ def register(app, ctx):
 
     # host attributes: they describe the host, not one record, so they stay when a selection is widened to the
     # hosts' other reports
-    HOST_KEYS = {"region", "city", "asn", "sector", "geo", "ip", "hostname"}
+    HOST_KEYS = {"region", "city", "asn", "sector", "industry", "geo", "ip", "hostname"}
     scope_cache = {}
 
     def split_cross(args):
@@ -259,38 +289,99 @@ def register(app, ctx):
             evs = [e for e in evs if t0 + tw[0] <= e["_t"] < t0 + tw[1]]
         return day, evs, tw
 
-    def top(evs, key, demo, n=10, label=None):
+    def top(evs, key, demo, n=10, label=None, drop_empty=False, meta=None, unknown=None):
+        """The n most common values (n=0: every one). drop_empty: an empty value is no row. meta (a dict): filled with
+        what the rows leave out: distinct (every different value), other / other_hosts (records and hosts with a value
+        outside the rows: an "Other" row), none / none_hosts (records and hosts without a value). 2026-11-26.
+        unknown: the value that stands for "not known" (Unknown network, Unknown region): a row like the others, but not
+        one of the distinct values (an unknown network is not a network), its records and hosts in meta apart."""
         c = Counter()
         hosts = {}
         for e in evs:
             vals = key(e)
             for v in (vals if isinstance(vals, list) else [vals]):
+                if drop_empty and not v:
+                    continue
                 c[v] += 1
-                hosts.setdefault(v, set()).add(e["ip"])
+                hs = hosts.setdefault(v, set())
+                if e["ip"]:                          # a record without an address is no host (count audit round 2)
+                    hs.add(e["ip"])
         rows = []
         for v, k in c.most_common(n if n else None):
             rows.append({"value": v if v != "" else "", "label": (label(v) if label else v) or "", "count": k, "hosts": len(hosts[v])})
+        if meta is not None:
+            shown = {r["value"] for r in rows}
+            other, none, oh, nh = 0, 0, set(), set()
+            if len(c) > len(rows):                  # a record counts once in Other, however many of its values are cut
+                for e in evs:
+                    vals = key(e)
+                    vals = [v for v in (vals if isinstance(vals, list) else [vals]) if not (drop_empty and not v)]
+                    if any(v not in shown for v in vals):
+                        other += 1
+                        if e["ip"]:
+                            oh.add(e["ip"])
+            for e in evs:
+                vals = key(e)
+                vals = [v for v in (vals if isinstance(vals, list) else [vals]) if not (drop_empty and not v)]
+                if not vals:
+                    none += 1
+                    if e["ip"]:
+                        nh.add(e["ip"])
+            meta.update(distinct=len(c), other=other, other_hosts=len(oh), none=none, none_hosts=len(nh))
+            if unknown is not None:
+                meta.update(distinct=len(c) - (unknown in c), unknown=c.get(unknown, 0), unknown_hosts=len(hosts.get(unknown, ())))
         return rows
 
-    def breakdowns(evs, demo, n=10):
+    # lists short by nature: never cut (report families, severities, sectors, protocols, regions)
+    UNCUT = ("family", "severity", "sector", "industry", "protocol", "region")
+
+    def breakdowns(evs, demo, n=10, meta=None):
+        """Every list of the analysis and the drop-downs; n=0: every value. meta (a dict): {list: what it leaves out}."""
         empty = lambda k: (lambda v: v or EMPTY.get(k, "unknown"))
         b = banner_mask if demo else (lambda v: v)
-        return {
-            "service": top(evs, lambda e: e["service"], demo, n),
-            "family": top(evs, lambda e: e["family"], demo, n),
-            "severity": sorted(top(evs, lambda e: e["severity"], demo, 0, empty("severity")), key=lambda r: SEV_ORDER.get(r["value"], 9)),
-            "issue": top(evs, lambda e: e["issues"], demo, n),
-            "tag": top(evs, lambda e: e["tags"], demo, n),
-            "port": top(evs, lambda e: e["port"], demo, n),
-            "network": [r for r in top(evs, lambda e: network(e, demo), demo, n) if r["value"]],
-            "city": top(evs, lambda e: e["city"], demo, n, lambda v: (v or "unknown city").title()),
-            "vendor": [r for r in top(evs, lambda e: b(e["vendor"]), demo, n) if r["value"]],
-            "device_type": [r for r in top(evs, lambda e: b(e["device_type"]), demo, n) if r["value"]],
-            "product": [r for r in top(evs, lambda e: b(e["product"]), demo, n) if r["value"]],
-            "sector": [r for r in top(evs, lambda e: e["sector"], demo, n) if r["value"]],
-            "protocol": [r for r in top(evs, lambda e: e["protocol"], demo, n) if r["value"]],
-            "region": [r for r in top(evs, lambda e: e["region"], demo, n, region_label) if r["value"]],
+        spec = {   # list: (value of a record, label, drop an empty value)
+            "service": (lambda e: e["service"], None, False),
+            "family": (lambda e: e["family"], None, False),
+            "severity": (lambda e: e["severity"], empty("severity"), False),
+            "issue": (lambda e: e["issues"], None, False),
+            "tag": (lambda e: e["tags"], None, False),
+            "port": (lambda e: e["port"], None, False),
+            # records without a network: an "Unknown network" row (count audit round 2: they were dropped), never
+            # counted as a network (meta["network"]["unknown"])
+            "network": (lambda e: network(e, demo) or _ck.UNKNOWN_NET, None, False),
+            "city": (lambda e: e["city"], lambda v: (v or "unknown city").title(), False),
+            "vendor": (lambda e: b(e["vendor"]), None, True),
+            "device_type": (lambda e: b(e["device_type"]), None, True),
+            "product": (lambda e: b(e["product"]), None, True),
+            # Sectors: the network type of the host's network, as on the Executive portal and in the quarterly report;
+            # Shadowserver's own sector column is the Industry (Shadowserver) list (the user, 2026-11-26)
+            "sector": (lambda e: _ck.sector_now(e["asn"]), None, False),
+            "industry": (lambda e: _ck.industry_of(e["sector"]), None, True),
+            "protocol": (lambda e: e["protocol"], None, True),
+            # one spelling per region (NAIROBI and Nairobi one row), an "Unknown region" row for none or the country
+            # itself (count audit round 2: grouped by the raw value, empty regions dropped)
+            "region": (lambda e: region_label(e["region"]), None, False),
         }
+        unknowns = {"network": _ck.UNKNOWN_NET, "region": _ck.UNKNOWN_REGION}
+        out = {}
+        for name, (key, label, drop) in spec.items():
+            m = {} if meta is not None else None
+            out[name] = top(evs, key, demo, 0 if name in UNCUT else n, label, drop, m, unknown=unknowns.get(name))
+            if m is not None:
+                meta[name] = m
+        out["severity"] = sorted(out["severity"], key=lambda r: SEV_ORDER.get(r["value"], 9))
+        return out
+
+    def with_totals(d, meta):
+        """An answer with what each list leaves out, beside the lists: totals (different values), others / other_hosts
+        (records and hosts outside the rows: an "Other" row), unrecorded / unrecorded_hosts (without a value)."""
+        d.update(totals={k: m["distinct"] for k, m in meta.items()}, others={k: m["other"] for k, m in meta.items()},
+                 other_hosts={k: m["other_hosts"] for k, m in meta.items()},
+                 unrecorded={k: m["none"] for k, m in meta.items()},
+                 unrecorded_hosts={k: m["none_hosts"] for k, m in meta.items()},
+                 # records and hosts of the "Unknown network" / "Unknown region" rows, not counted as one (count audit)
+                 unknowns={k: {"records": m["unknown"], "hosts": m["unknown_hosts"]} for k, m in meta.items() if "unknown" in m})
+        return d
 
     def hours_by_family(evs, day):
         out = {}
@@ -325,14 +416,18 @@ def register(app, ctx):
         return q
 
     def kpis(evs):
-        hosts = {e["ip"] for e in evs}
-        return {"total": len(evs), "hosts": len(hosts),
+        # count audit round 2: a record without an address is no host (counted apart), networks are companies (as on
+        # the Executive portal and in the quarterly report: two AS numbers of one company are one network), records
+        # without a network are counted apart, never as a network
+        hosts = {e["ip"] for e in evs if e["ip"]}
+        nets = {network(e, False) for e in evs}
+        return {"total": len(evs), "hosts": len(hosts), "no_address": sum(1 for e in evs if not e["ip"]),
                 "critical": sum(1 for e in evs if e["severity"] == "critical"),
                 "high": sum(1 for e in evs if e["severity"] == "high"),
                 "vulnerable": sum(1 for e in evs if e["vulnerable"]),
-                "vulnerable_hosts": len({e["ip"] for e in evs if e["vulnerable"]}),
+                "vulnerable_hosts": len({e["ip"] for e in evs if e["vulnerable"] and e["ip"]}),
                 "services": len({e["report"] for e in evs}),
-                "networks": len({e["asn"] for e in evs if e["asn"]}),
+                "networks": len(nets - {""}), "unknown_network": sum(1 for e in evs if not network(e, False)),
                 "cities": len({e["city"] for e in evs if e["city"]})}
 
     def host_rows(evs, demo, limit=DRILL_LIMIT):
@@ -439,12 +534,12 @@ def register(app, ctx):
         # a masked viewer holds the masked id (privacy.masked_id), never the record's own: looked up in the day's own
         # table, built once (security review, 2026-11-17: working out every record's masked id on each click took up to
         # ~2 s on a day of a million records, on a request thread)
-        e = _by_masked_id(day).get(eid) if demo else next((x for x in day.events if x["id"] == eid), None)
+        by_id, per_host = _detail_index(day)
+        e = _by_masked_id(day).get(eid) if demo else by_id.get(eid)
         if not e:
             return jsonify(error="not found"), 404
-        same = [x for x in day.events if x["ip"] == e["ip"]]
-        return jsonify(event=public(e, demo, full=True), host_records=len(same),
-                       host_services=sorted({x["service"] for x in same}))
+        n, services_ = per_host.get(e["ip"], (0, ()))
+        return jsonify(event=public(e, demo, full=True), host_records=n, host_services=sorted(services_))
 
     @app.route("/api/svc/replayed")
     def svc_replayed():
@@ -481,12 +576,17 @@ def register(app, ctx):
     def svc_stats_core(args, demo, n):
         day, evs, _ = selection(args)
         sel, day_reports = host_profile(evs, day.events)
-        return dict(day=day.start.date().isoformat(), **kpis(evs), reports_with_data=len(day.per_source),
-                    reports_monitored=len(registry.items), quarters=quarters(evs, day),
-                    hours_by_family=hours_by_family(evs, day), severity=severity_rows(evs),
-                    cross_report_hosts=sum(1 for ip in sel if len(day_reports.get(ip, ())) > 1),
-                    multi_issue_hosts=sum(1 for ip in sel if len(day_host_issues(day).get(ip, ())) > 1),
-                    breakdowns=breakdowns(evs, demo, n))
+        meta = {}
+        b = breakdowns(evs, demo, n, meta)
+        notes = dict(getattr(day, "load_notes", None) or {"dups": 0, "outside": 0, "undated": 0})
+        notes["text"] = _ck.load_note(notes["dups"], notes["outside"], notes["undated"], day.start.date().isoformat())
+        return with_totals(dict(day=day.start.date().isoformat(), **kpis(evs), reports_with_data=len(day.per_source),
+                                load_notes=notes,
+                                reports_monitored=len(registry.items), quarters=quarters(evs, day),
+                                hours_by_family=hours_by_family(evs, day), severity=severity_rows(evs),
+                                cross_report_hosts=sum(1 for ip in sel if len(day_reports.get(ip, ())) > 1),
+                                multi_issue_hosts=sum(1 for ip in sel if len(day_host_issues(day).get(ip, ())) > 1),
+                                breakdowns=b), meta)
 
     # masked and unmasked viewers each keep their own lists (review 2026-11-13); worked out once for everyone asking at
     # the same moment (ResultCache; review of d82a436: simultaneous requests computed it twice)
@@ -494,20 +594,22 @@ def register(app, ctx):
     # a drop-down's list -> the filter it sets
     FACET_FILTER = {"service": "service", "family": "family", "severity": "severity", "issue": "issue", "tag": "tag",
                     "port": "port", "network": "asn", "city": "city", "vendor": "vendor", "device_type": "device_type",
-                    "product": "product", "sector": "sector", "protocol": "protocol", "region": "region"}
+                    "product": "product", "sector": "sector", "industry": "industry", "protocol": "protocol", "region": "region"}
 
     def facet_counts(day, args, demo):
         """(the drop-downs' lists, whether filters shaped them): each list counted over the records matching every
         other filter (facets.py), from one pass over the records in scope."""
         evs, flt = facet_scope(day, args)
+        # every value of every list (n=0): a value past a cut of 400 could not be chosen, and nothing said so
+        # (2026-11-26). They are names with two counts, so even a large country's networks stay small.
         if not flt and evs is day.events:
-            return breakdowns(evs, demo, 400), False
+            return breakdowns(evs, demo, 0), False
         pool = _facets.pools(evs, flt, test=lambda e, f, vals: matches(e, {f: vals}))
-        whole = breakdowns(pool.passed, demo, 400)
+        whole = breakdowns(pool.passed, demo, 0)
         out = {}
         for name, rows in whole.items():
             f = FACET_FILTER.get(name)
-            out[name] = breakdowns(pool.of(f), demo, 400)[name] if f in flt else rows
+            out[name] = breakdowns(pool.of(f), demo, 0)[name] if f in flt else rows
         return out, True
 
     @app.route("/api/svc/facets")
@@ -552,44 +654,52 @@ def register(app, ctx):
         day_issues = day_host_issues(day)
         multi_issue = sum(1 for ip in sel if len(day_issues.get(ip, ())) > 1)
         cross = sum(1 for ip in sel if len(day_reports.get(ip, ())) > 1)
-        b = breakdowns(evs, demo, 10)
+        meta = {}
+        b = breakdowns(evs, demo, 10, meta)
         tot = max(1, len(evs))
         for rows in b.values():
             for r in rows:
                 r["share"] = r["count"] / tot
-        # key findings, in plain words
+        # key findings, in plain words; one of a thing is singular ("1 records on 1 hosts", the docs screenshots 2026-11-27)
+        def n_(c, word):
+            return f"{c:,} {word}" + ("" if c == 1 else "s")
         f = []
         if evs:
-            f.append(f"{k['total']:,} records on {k['hosts']:,} hosts, {len(evs) / max(1, len(day.events)):.1%} of the day's records.")
+            f.append(f"{n_(k['total'], 'record')} on {n_(k['hosts'], 'host')}, {pct(len(evs) / max(1, len(day.events)), 1)} of the day's records.")
             if k["vulnerable_hosts"]:
                 ti = b["issue"][0] if b["issue"] else None
-                f.append(f"{k['vulnerable_hosts']:,} hosts ({k['vulnerable_hosts'] / max(1, k['hosts']):.0%}) have a concrete issue"
-                         + (f"; the most common is {ti['label']} ({ti['hosts']:,} hosts)." if ti else "."))
+                f.append(f"{n_(k['vulnerable_hosts'], 'host')} ({pct(k['vulnerable_hosts'] / max(1, k['hosts']))}) "
+                         + ("has" if k["vulnerable_hosts"] == 1 else "have") + " a concrete issue"
+                         + (f"; the most common is {ti['label']} ({n_(ti['hosts'], 'host')})." if ti else "."))
             if multi_issue:
-                f.append(f"{multi_issue:,} hosts carry more than one issue across their reports of the day: follow these up first.")
+                f.append(f"{n_(multi_issue, 'host')} " + ("carries" if multi_issue == 1 else "carry")
+                         + " more than one issue across their reports of the day: follow these up first.")
             if cross:
-                f.append(f"{cross:,} hosts appear in more than one report on the same day (several exposed services or findings).")
+                f.append(f"{n_(cross, 'host')} " + ("appears" if cross == 1 else "appear")
+                         + " in more than one report on the same day (several exposed services or findings).")
             if b["service"]:
                 s0 = b["service"][0]
-                f.append(f"Largest service: {s0['label']} with {s0['count']:,} records ({s0['share']:.0%}).")
+                f.append(f"Largest service: {s0['label']} with {n_(s0['count'], 'record')} ({pct(s0['share'])}).")
             if b["network"]:
                 n0 = b["network"][0]
-                f.append(f"Most affected network: {n0['label']} with {n0['hosts']:,} hosts.")
+                f.append(f"Most affected network: {n0['label']} with {n_(n0['hosts'], 'host')}.")
             if b["region"]:
                 r0 = b["region"][0]
-                f.append(f"Most affected region: {r0['label']} ({r0['share']:.0%} of records).")
+                f.append(f"Most affected region: {r0['label']} ({pct(r0['share'])} of records).")
             if k["critical"]:
-                f.append(f"{k['critical']:,} critical records.")
+                f.append(f"{n_(k['critical'], 'critical record')}.")
         rows, nhosts = host_rows(evs, demo, 15)
         hours = hours_by_family(evs, day)
         totals = [sum(v[i] for v in hours.values()) for i in range(24)]
-        return dict(day=day.start.date().isoformat(),
+        return with_totals(dict(day=day.start.date().isoformat(),
                     **k, day_total=len(day.events), share=(len(evs) / len(day.events)) if day.events else 0,
                     multi_issue_hosts=multi_issue, cross_report_hosts=cross, issues=len({i for e in evs for i in e["issues"]}),
-                    regions=len({e["region"] for e in evs if not region_unknown(e["region"])}),
+                    regions=len({region_label(e["region"]) for e in evs} - {_ck.UNKNOWN_REGION}),
                     quarters=quarters(evs, day), hours_by_family=hours, peak_hour=(totals.index(max(totals)) if evs else None),
                     severity=severity_rows(evs), breakdowns=b, findings=f,
-                    host_rows=rows, hosts_total=nhosts, time=args.get("time") or "")
+                    # every service (report) of the selection, by records: the PDF explains each one
+                    report_names=[v for v, _ in Counter(e["service"] for e in evs).most_common()],
+                    host_rows=rows, hosts_total=nhosts, time=args.get("time") or ""), meta)
 
     @app.route("/api/svc/drill")
     def svc_drill():
@@ -628,7 +738,7 @@ def register(app, ctx):
                 if len(day_reports.get(ip, ())) > 1: reasons.append(f"{len(day_reports[ip])} reports")
                 rows.append({"ref": e["ip_ref"], "ip": mask_ip(ip) if demo else ip, "followup": reasons,
                              "issues": sorted(iss), "services": sorted(day_reports.get(ip, h["services"])),
-                             "events": h["events"], "city": (e["city"] or "").title(), "region": (e["region"] or "").title(),
+                             "events": h["events"], "city": (e["city"] or "").title(), "region": region_label(e["region"]),
                              "network": asns.label(e["asn"], demo) if e["asn"] else "", "device": " · ".join((banner_mask(x) if demo else x) for x in (e["vendor"], e["product"]) if x),
                              "first": iso_t(h["t0"]), "last": iso_t(h["t1"]),
                              "_s": (len(iss) * 3 + h["crit"] * 2 + len(day_reports.get(ip, ())))})
@@ -647,11 +757,14 @@ def register(app, ctx):
                     if v in ("", None):
                         continue
                     x = g.setdefault(v, {"events": 0, "hosts": set(), "crit": 0, "issues": set(), "services": set()})
-                    x["events"] += 1; x["hosts"].add(e["ip"]); x["crit"] += e["severity"] == "critical"
+                    x["events"] += 1; x["crit"] += e["severity"] == "critical"
+                    if e["ip"]:
+                        x["hosts"].add(e["ip"])
                     x["issues"].update(e["issues"]); x["services"].add(e["service"])
             rows = [{"value": v, "name": label_fn(v), "events": x["events"], "hosts": len(x["hosts"]), "critical": x["crit"],
-                     "share": f"{x['events'] / max(1, len(evs)):.1%}", "issues": ", ".join(sorted(x["issues"])[:6]),
-                     "services": ", ".join(sorted(x["services"])[:6])} for v, x in g.items()]
+                     # every issue and service (the CSV is the complete list; 2026-11-26: six, and no word of the rest)
+                     "share": pct(x["events"] / max(1, len(evs)), 1), "issues": ", ".join(sorted(x["issues"])),
+                     "services": ", ".join(sorted(x["services"]))} for v, x in g.items()]
             rows.sort(key=lambda r: -r["events"])
             out.update(title=title, intro=intro, row_kind=row_kind, total=len(rows), rows=rows if lim is None else rows[:lim],
                        columns=cols(("name", title.split(" ")[0] if not extra else extra), ("events", "Records"), ("hosts", "Hosts"),
@@ -680,9 +793,12 @@ def register(app, ctx):
         elif metric == "services":
             group_list(lambda e: e["service"], lambda v: v, "Services (reports)", "Every report in this selection; click one to analyse it.", "service", "Service")
         elif metric == "networks":
-            group_list(lambda e: network(e, demo), lambda v: v, "Networks", "Networks (companies) of the hosts; click one to analyse it.", "asn", "Network")
+            group_list(lambda e: network(e, demo) or _ck.UNKNOWN_NET, lambda v: v, "Networks",
+                       "Networks (companies) of the hosts, and the records without a network as Unknown network; click one "
+                       "to analyse it.", "asn", "Network")
         elif metric == "regions":
-            group_list(lambda e: e["region"], region_label, "Regions", "Regions of the country; click one to analyse it.", "region", "Region")
+            group_list(lambda e: region_label(e["region"]), lambda v: v, "Regions", "Regions of the country, and the records "
+                       "whose region is not known as Unknown region; click one to analyse it.", "region", "Region")
         elif metric == "share":
             group_list(lambda e: e["family"], lambda v: v, "Report families", f"{len(evs):,} of the day's {len(day.events):,} records, by report family.", "family", "Family")
         return out
@@ -698,16 +814,26 @@ def register(app, ctx):
         day, evs, _ = selection(args)
         g = {}
         for e in evs:
-            r = "" if region_unknown(e["region"]) else e["region"]
+            # the region in its one spelling (counting_keys.region_key: the map's own name, which the map finds), ""
+            # for an unknown one (the map's "Region unknown" area)
+            lab = region_label(e["region"])
+            r = "" if _ck.is_unknown_region(lab) else lab
             x = g.setdefault(r, {"events": 0, "hosts": set(), "vuln": set(), "crit": 0, "svc": Counter(), "iss": Counter(), "city": Counter(), "net": Counter()})
-            x["events"] += 1; x["hosts"].add(e["ip"]); x["crit"] += e["severity"] == "critical"
-            if e["issues"]: x["vuln"].add(e["ip"])
+            x["events"] += 1; x["crit"] += e["severity"] == "critical"
+            if e["ip"]:
+                x["hosts"].add(e["ip"])
+                if e["issues"]:
+                    x["vuln"].add(e["ip"])
             x["svc"][e["service"]] += 1; x["city"][(e["city"] or "").title()] += 1
             for i in e["issues"]: x["iss"][i] += 1
-            if e["asn"]: x["net"][network(e, demo)] += 1
+            nn = network(e, demo)
+            if nn: x["net"][nn] += 1
+        # each short list with its full count beside it (totals), so the map's hover says "Top 4 of 9" (2026-11-26)
         out = {r: {"events": x["events"], "hosts": len(x["hosts"]), "vulnerable_hosts": len(x["vuln"]), "critical": x["crit"],
-                   "services": x["svc"].most_common(4), "issues": x["iss"].most_common(4), "cities": [c for c in x["city"].most_common(4) if c[0]],
-                   "networks": x["net"].most_common(3)} for r, x in g.items()}
+                   "services": x["svc"].most_common(4), "issues": x["iss"].most_common(4), "cities": [c for c in x["city"].most_common(5) if c[0]][:4],
+                   "networks": x["net"].most_common(3),
+                   "totals": {"services": len(x["svc"]), "issues": len(x["iss"]), "cities": len([c for c in x["city"] if c]),
+                              "networks": len(x["net"])}} for r, x in g.items()}
         return dict(day=day.start.date().isoformat(), total=len(evs), regions=out)
 
     @app.route("/api/svc/hosts.csv")

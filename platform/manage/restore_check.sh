@@ -39,10 +39,13 @@ else
   [ "$state" = valid ] && row OK signature "valid (key $fp)" || row FAIL signature "$state"
 fi
 # the checksum file must be about THIS archive: its name, and the SHA-256 of the archive given here (security review of edd2d57)
-read -r want named < "$f.sha256" 2>/dev/null || true
+# (no checksum file: a FAIL row, and the rehearsal goes on to its RESULT; it stopped on an unbound variable, audit 2026-11-27)
+want=""; named=""
+[ -f "$f.sha256" ] && { read -r want named < "$f.sha256" 2>/dev/null || true; }
 named="${named#\*}"
 have="$(sha256sum "$f" | cut -d' ' -f1)"
-if [ "$(basename "${named:-?}")" != "$(basename "$f")" ]; then row FAIL checksum "the checksum file is for $(basename "${named:-nothing}"), not for this archive"
+if [ ! -f "$f.sha256" ]; then row FAIL checksum "no checksum file ($(basename "$f").sha256 is missing): the archive cannot be checked"
+elif [ "$(basename "${named:-?}")" != "$(basename "$f")" ]; then row FAIL checksum "the checksum file is for $(basename "${named:-nothing}"), not for this archive"
 elif [ "$have" != "${want:-}" ]; then row FAIL checksum "does not match: the archive changed or is damaged"
 else row OK checksum "matches"; fi
 # the newest signed backup? (a warning: restoring an older one on purpose is allowed; security review of a40f17a)
@@ -58,7 +61,9 @@ case "$f" in
     row OK encryption "encrypted (${f##*.}), opened with the key given" ;;
   *) row WARN encryption "NOT encrypted: anyone with this file can read .env and the accounts (manage/backup.sh encrypts by default)" ;;
 esac
-tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+# the unpacked backup (.env, the accounts) is removed on every way out, also when the rehearsal is stopped (Ctrl-C, a
+# kill): the EXIT trap alone did not run then (audit 2026-11-27)
+tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT; trap 'exit 130' INT TERM HUP
 chmod 700 "$tmp"
 if bc_decrypt "$f" "$identity" | tar -xzf - -C "$tmp" 2>/dev/null; then row OK unpack "$(find "$tmp" -type f | wc -l) files"; else row FAIL unpack "the archive cannot be opened or unpacked (wrong key?)"; echo "RESULT: NOT restorable"; exit 1; fi
 r="$tmp/$name"

@@ -29,8 +29,10 @@ for directive in ("script-src", "connect-src", "img-src", "style-src", "font-src
     ok(f"{directive}: no whole public CDN", not whole, " ".join(whole))
 ok("connect-src: jsdelivr is gone", not any("jsdelivr" in s for s in policy.get("connect-src", [])))
 
-print("The sign-in globe's land map")
-js = open(os.path.join(ROOT, "static", "js", "auth-bg.js"), encoding="utf-8").read()
+print("The sign-in globe's land map (the page file that ships: the held copy in $LG_HELD_DIR when there is one)")
+sys.path.insert(0, os.path.join(ROOT, "tests"))
+import page_harness as PH  # noqa: E402
+js = PH.page_src("auth-bg.js")
 url = re.search(r'LAND_URL\s*=\s*"([^"]+)"', js)
 sri = re.search(r'LAND_SRI\s*=\s*"sha384-([^"]+)"', js)
 ok("auth-bg.js reads it from Looking Glass itself", url and url.group(1).startswith("/static/"), url and url.group(1))
@@ -42,7 +44,30 @@ if path and os.path.isfile(path) and sri:
 
 print("The sign-in globe marks countries all over the world (the user, 2026-11-20: a global tool, not one country)")
 ok("no single fixed country to aim at", "const HUB =" not in js and "ll(7.9, -1.0)" not in js)
-ok("three countries marked at a time, picked at random", bool(re.search(r"const HUB_COUNT = 3\b", js)) and "pickHub" in js)
+# node runs the globe's own hub picking on its own cities, turned through a whole day, twenty times
+bare = re.sub(r";[ \t]+//[^\n]*$", ";", js, flags=re.M)           # a one-line const with a comment after it, as one line
+R, raw = PH.run(PH.extract(bare, ["TAU", "ll", "yaw", "rot", "SOURCES", "HUB_COUNT", "hubs", "near", "pickHub", "keepHubs", "liveHubs", "facing"]) + r"""
+const reduce = false; const seen = new Set(); let counts = [], apart = true, twice = false;
+for (let run = 0; run < 20; run++) {
+  hubs.length = 0;
+  for (let step = 0; step < 48; step++) {
+    yaw = step * TAU / 48; keepHubs(step * 7000);
+    const live = liveHubs(); counts.push(live.length);
+    if (new Set(live).size !== live.length) twice = true;
+    for (let a = 0; a < live.length; a++) for (let b = a + 1; b < live.length; b++) if (near(live[a], live[b])) apart = false;
+    for (const v of live) seen.add(SOURCES.indexOf(v));
+  }
+}
+console.log(JSON.stringify({ max: Math.max(...counts), three: counts.filter((n) => n === 3).length, steps: counts.length, apart, twice, seen: seen.size, all: SOURCES.length }));
+""") if PH.NODE else (None, "no node")
+if PH.NODE:
+    R = R or {}
+    ok("three countries marked at a time (never more), most of the time all three", R.get("max") == 3 and R.get("three", 0) > R.get("steps", 1) // 2,
+       str(R) if R else raw[-300:])
+    ok("...never the same city twice, never two close together", R.get("apart") is True and R.get("twice") is False, str(R))
+    ok("...picked at random: over a day's turn the marks move round most of the cities", R.get("seen", 0) >= R.get("all", 99) * 3 // 4, str(R))
+else:
+    PH.no_node(ok, "node runs the sign-in globe's own hub picking")
 cities = [(float(a), float(b)) for a, b in re.findall(r"\[(-?\d+(?:\.\d+)?), (-?\d+(?:\.\d+)?)\]", js.split("const SOURCES", 1)[1].split(".map(", 1)[0])]
 regions = {"the Americas": any(lon < -30 for _lat, lon in cities), "Europe": any(lat > 35 and -30 < lon < 45 for lat, lon in cities),
            "Africa": any(-35 < lat < 35 and -20 < lon < 52 for lat, lon in cities), "Asia": any(lat > 0 and lon > 60 for lat, lon in cities),

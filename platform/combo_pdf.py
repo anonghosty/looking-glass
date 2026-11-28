@@ -19,21 +19,25 @@ import attack_map
 import executive_pdf as ex
 import name_sources
 import pdf_refs
+import shares
 from executive_pdf import AMBER, BLUE, DIM, H, M, MUTE, RED, SLATE, TEAL, TXT, VIOLET, W, fmt, pct
 
-def _share(n, total):
-    """A share people read correctly: "<0.1%" rather than "0%" when there is at least one."""
-    s = (n or 0) / max(1, total or 0)
-    return "0%" if not n else "<0.1%" if s < .001 else f"{100 * s:.1f}%" if s < .1 else pct(s)
+_share = shares.part                # one rule for every share in tables and PDFs (shares.part; combos uses it too)
 
 
 DEVICE_ROWS = 28                   # devices per page on "The devices" (two pages at most; the CSV has all of them)
 _WATERMARKS = {}
 
 
-def _watermark(text):
-    """A page-sized transparent picture with the text across it, faint and on a slant (an advisory's preview)."""
-    if text not in _WATERMARKS:
+WM_ON_DARK = (255, 255, 255, 20)      # the designed (dark) pages: faint white
+WM_ON_WHITE = (15, 23, 42, 22)       # the plain look's white paper: faint near-black (white on white vanished, 2026-11-27)
+
+
+def _watermark(text, ink=WM_ON_DARK):
+    """A page-sized transparent picture with the text across it, faint and on a slant (an advisory's preview). ink:
+    the text's RGBA colour, chosen for the page's background (a picture is not recoloured by the plain look)."""
+    key = (text, tuple(ink))
+    if key not in _WATERMARKS:
         import io
         from PIL import Image, ImageDraw, ImageFont
         from reportlab.lib.utils import ImageReader
@@ -54,12 +58,12 @@ def _watermark(text):
         band = Image.new("RGBA", img.size, (0, 0, 0, 0))
         d = ImageDraw.Draw(band)
         for i, yy in enumerate(range(int(H * scale * .18), int(H * scale), int(H * scale * .34))):     # repeated, so a crop still has it
-            d.text((W * scale * (.08 if i % 2 else .22), yy), text, font=font, fill=(255, 255, 255, 20))
+            d.text((W * scale * (.08 if i % 2 else .22), yy), text, font=font, fill=tuple(ink))
         img = band.rotate(24, resample=Image.BICUBIC, center=(W * scale / 2, H * scale / 2))
         buf = io.BytesIO(); img.save(buf, "PNG"); buf.seek(0)
         _WATERMARKS.clear()
-        _WATERMARKS[text] = ImageReader(buf)
-    return _WATERMARKS[text]
+        _WATERMARKS[key] = ImageReader(buf)
+    return _WATERMARKS[key]
 NOT_GIVEN = "Not given by the report"
 
 
@@ -186,7 +190,8 @@ class AnalystDoc(ex.Doc):
         if not t:
             return
         p = self.meta["advisory"]["preview"]
-        self.c.drawImage(_watermark(f"PREVIEW · {p.get('who') or ''}"), 0, 0, W, H, mask="auto")
+        ink = WM_ON_WHITE if getattr(self, "_plain", False) else WM_ON_DARK     # dark words on the plain look's white paper
+        self.c.drawImage(_watermark(f"PREVIEW · {p.get('who') or ''}", ink), 0, 0, W, H, mask="auto")
         self.text(W / 2, H - 11, t, 7.4, HexColor("#f5b54a"), True, "middle")
 
     def footer(self):
@@ -202,10 +207,14 @@ class AnalystDoc(ex.Doc):
                 self.text(M, 14, self.preview_text(), 7.2, HexColor("#f5b54a"), True)
                 return
             # short, so it never runs into the TLP label: the label itself says how far it may go
-            self.text(M, 14, f"Contains the addresses of affected devices. Generated {now}{who}.", 7.2, MUTE)
+            self.text(M, 14, f"Generated {now}{who}.", 7.2, MUTE)
             return
-        self.text(M, 14, f"Contains the addresses of affected devices: share only according to your organisation's information-sharing policy. "
-                         f"Generated {now}{who}. Data: Shadowserver Foundation.", 7.2, MUTE)
+        # the footer says only who made it and when (the user, 2026-11-28): no address notice, no "Data: Shadowserver
+        # Foundation" (both are in the report itself: its Sources and References); wrapped left of the page number, never cut
+        line = f"Generated {now}{who}."
+        room = W - 2 * M - self.c.stringWidth(page, self.F["r"], 7.2) - 16
+        n = len(ex.simpleSplit(self.s(line), self.F["r"], 7.2, room))
+        self.wrap(M, 14 if n == 1 else 12 + 9 * (n - 1), line, room, 7.2, MUTE, leading=9)
 
     # ---------------- parts of this report
     def chips(self, x, y, w, items, size=8.2):
@@ -423,7 +432,7 @@ def build(d, meta):
         k = d["kpis"]
         tiles = [(fmt(k["devices"]), "Devices", "with exactly this", BLUE),
                  (fmt(k["records"]), unit, f"{k['records'] / max(1, k['devices']):.1f} per device", VIOLET),
-                 (fmt(k["repeat"]), "Repeating it", f"{_share(k['repeat'], k['devices'])} of the devices", AMBER),
+                 (fmt(k["repeat"]), "Repeating it", (f"{_share(k['repeat'], k['devices'])} of the devices" if k["repeat"] else "none of the devices"), AMBER),
                  (fmt(k["also"]), "In other reports", "of the same name", RED),
                  (fmt(k["regions"]), "Regions", f"{fmt(k['cities'])} cit{'y' if k['cities'] == 1 else 'ies'}", TEAL),
                  (fmt(k["networks"]), "Networks", "operators", SLATE)]
@@ -508,7 +517,19 @@ def build(d, meta):
         # ---------------- across reports and what the devices are: only the parts that have something to show (an empty
         # chart is left out, and the page with it when nothing is left; the key findings already say "none")
         across_on = bool(d["across"]["multi"] or d["across"]["patterns"])
-        side = []                                          # (title, subtitle, rows, bars options, row height)
+        p_total = d["across"].get("patterns_total") or len(d["across"]["patterns"])
+
+        def where_all():
+            """Where every pattern is: an advisory mails the devices CSV only (each device with the reports it was in)."""
+            if adv:
+                return f"every device is in {d['csv_devices']}, with the reports it was seen in"
+            return f"every one, with its devices, is in {d['csv_patterns']}" if d.get("csv_patterns") else "every one is in the devices CSV"
+
+        def pats_note(shown):
+            """ "8 of 23 exact patterns are drawn here ...", or "" when every pattern is drawn."""
+            return (f"{shown:,} of {p_total:,} exact patterns are drawn here, the most devices first; {where_all()}."
+                    if p_total > shown else "")
+        side = []                                         # (title, subtitle, rows, bars options, row height)
         if d["report_sets"]:
             side.append(("Reports these devices were seen in", "Devices per set of reports", d["report_sets"], {"stack": True}, 47))
         if any(r["label"] != NOT_GIVEN for r in d["kinds"]):
@@ -536,16 +557,21 @@ def build(d, meta):
                     spots = [(M + i * (w3 + 12), y, w3, alone_h) for i in range(len(side))]
                     after = y - alone_h - 18 if shared else None
                 for (title, sub, rows, opt, rh), (sx, sy, sw, sh) in zip(side, spots):
-                    top = doc.card(sx, sy, sw, sh, title, sub)
-                    doc.bars(sx + 14, top, sw - 28, rows, n=max(1, int((sh - 56) // rh)), **opt)
+                    n_ = max(1, int((sh - 56) // rh))
+                    has = [r for r in rows if r.get(opt.get("metric", "hosts"))]       # the rows the bars draw
+                    cut_ = shares.cut(min(n_, len(has)), len(has))                    # "Top 6 of 23" when cut
+                    top = doc.card(sx, sy, sw, sh, title, sub + (f" · {cut_}" if cut_ else ""))
+                    doc.bars(sx + 14, top, sw - 28, rows, n=n_, **opt)
         if across_on:
             top = doc.card(M, y, lw, hh, "Across reports", ("What these devices carried in the name's other reports: each exact pattern, with its devices by IP address" if adv else
                                                   "What these devices carried in the name's other reports: each exact pattern, with its code to search next"))
             yy = doc.hero(M + 14, top, lw - 28, [(fmt(d["across"]["multi"]), "devices also in other reports", HexColor("#a9c3ff")),
                                                  (fmt(d["across"]["patterns_total"]), "exact patterns", TXT),
-                                                 (_share(d["across"]["multi"], k["devices"]), "of the devices", HexColor("#ffd38a"))])
+                                                 (_share(d["across"]["multi"], k["devices"]) if d["across"]["multi"] else "none",
+                                                  "of the devices", HexColor("#ffd38a"))])
             from device_note import DEVICE_IP_NOTE          # devices are matched by IP address (review follow-up)
             yy = doc.wrap(M + 14, yy - 4, DEVICE_IP_NOTE, lw - 28, 8, DIM)
+            yy = doc.wrap(M + 14, yy - 4, pats_note(len(d["across"]["patterns"])), lw - 28, 8, DIM) if pats_note(len(d["across"]["patterns"])) else yy
             if not d["across"]["patterns"] and is_a:
                 doc.wrap(M + 14, yy - 6, "An analyst code covers the whole selection, with several names: the researchers' view of the code gives each "
                                          "name's cross-report patterns and their codes.", lw - 28, 8.8, DIM)
@@ -578,7 +604,10 @@ def build(d, meta):
                 yy = doc.card(M, y, lw, hh, "Across reports, continued", ("Each exact pattern, with its devices by IP address" if adv else "Each exact pattern, with its code to search next"))
                 bottom = y - hh
                 if yy - est(p, lw) < bottom + 14:
-                    continue                               # taller than a whole page: it is in the CSV
+                    # taller than a whole page: said so in its place, never skipped silently
+                    yy = doc.wrap(M + 14, yy - 6, f"A pattern of {fmt(p['devices'])} device{'s' if p['devices'] != 1 else ''} across "
+                                  f"{len(p['parts'])} reports is too long to draw on a page; {where_all()}.", lw - 28, 8.6, DIM) - 4
+                    continue
             yy -= 6
             head = f"{fmt(p['devices'])} device{'s' if p['devices'] != 1 else ''}"
             doc.text(M + 14, yy - 10, head, 9.6, TXT, True)
@@ -592,9 +621,14 @@ def build(d, meta):
             else:
                 doc.pill(M + 14 + doc.c.stringWidth(doc.s(head), doc.F["b"], 9.6) + 10, yy - 9.5, p["code"], VIOLET, 7.4)
                 yy -= 22
-            for part in p["parts"]:
+            for pi_, part in enumerate(p["parts"]):
                 if yy < bottom + 24:
-                    break                                  # never past the card (the CSV has every pattern in full)
+                    # never past the card: the reports left are named as a count, and where they are in full
+                    left = len(p["parts"]) - pi_
+                    doc.text(M + 22, yy - 2, doc.fit(f"and {left} more report{'s' if left != 1 else ''} of this pattern; {where_all()}",
+                                                    lw - 36, 8), 8, DIM)
+                    yy -= 12
+                    break
                 name = part.get("title") or part["report"]
                 from reportlab.lib.utils import simpleSplit
                 name_lines = simpleSplit(doc.s(name), doc.F["b"], 8, 100) or [name]       # wrapped, never cut
@@ -647,7 +681,9 @@ def build(d, meta):
                 card = {kk: v for kk, v in card.items() if kk not in ("note", "note_by", "note_updated", "by")}
             hgt = doc.explanation(0, None, col_w, name, card, d["stats"].get(name), comms)
             place(hgt, lambda x, yy, n=name, c=card: doc.explanation(x, yy, col_w, n, c, d["stats"].get(n), comms))
-        for n in d["notes"]:
+        # an advisory never carries the team's notes or their authors, whatever it is handed (2026-11-28: combos.py
+        # empties them for an advisory, but this page drew any it was given)
+        for n in ([] if adv else d["notes"]):
             hgt = doc.note_card(0, None, col_w, n, d["code"])
             place(hgt, lambda x, yy, n=n: doc.note_card(x, yy, col_w, n, d["code"]))
     # the References section (pdf_refs.py, the user 2026-11-18): every explained name's references, then the Shadowserver

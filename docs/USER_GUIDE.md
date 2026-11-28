@@ -21,7 +21,7 @@ country's situation at a glance on a wall screen.
 - [2. The intro page](#2-the-intro-page)
 - [3. Reported network communications (the map)](#3-reported-network-communications-the-map)
 - [4. Publicly accessible / vulnerable services](#4-publicly-accessible--vulnerable-services)
-- [5. Analysis and follow-up](#5-analysis-and-follow-up) · [Findings and cases](#findings-cases-and-who-holds-them)
+- [5. Analysis and follow-up](#5-analysis-and-follow-up) · [How lists, shares and counts read](#how-lists-shares-and-counts-read) · [Findings and cases](#findings-cases-and-who-holds-them)
 - [Abused or Compromised (analysts)](#abused-or-compromised-analysts)
 - [Management portal (Executive)](#management-portal-executive)
 - [Advisories (the advisor)](#advisories-the-advisor) · [TLP](#tlp-how-far-an-advisory-may-travel)
@@ -168,6 +168,9 @@ computer or screen only you use (up to 5 days); otherwise the session ends when 
 without use, or after 12 hours. After 5 failed attempts the account waits 15 minutes; the page says how many attempts
 are left.
 
+**Log out** (right-most in every header) ends your session. It works only from Looking Glass's own pages, so a link
+or another site cannot sign you out.
+
 **Looking Glass never sends you a link to sign in.** Open it only from your own bookmark or the address your
 administrator gave you; any message with a sign-in link is phishing, so report it.
 
@@ -188,6 +191,9 @@ cannot use it: your browser offers it to the real site only.
   one device does not lock you out. You cannot remove a passkey if that would leave you with fewer than two.
 - **Where it is Authenticator code** (recommended for an internal network) you sign in with your authenticator code,
   and may add a passkey to use instead of the code when Looking Glass asks you to confirm.
+
+A new passkey carries your person code as its user handle (what the passkey says about the account it is for), never
+your sign-in name. Passkeys you added before keep working as they are.
 
 Browsers allow passkeys only on a site opened by its **host name** (for example `lookingglass.example.org`, not
 `10.0.0.20`) over **HTTPS with a certificate they trust**; a page marked "Not secure" cannot make one. Your account
@@ -263,8 +269,19 @@ you view, copy or export on Looking Glass is recorded under your name.*
 - **Every copy and every downloaded file is sealed:** keyed fingerprints of the whole, of each line and of each
   address (a download also its SHA-256, and each file inside a ZIP), never the text itself. If a list turns up
   outside, an auditor can trace it back to its copy or download (*Trace a leak*, in the Audit portal).
+- **Every downloaded CSV says who downloaded it and when:** two columns at the end of every row, **Downloaded by**
+  (your full name with your person code: `p-` and 20 letters and digits, the same for you every time; never your
+  sign-in name) and **Downloaded at** (the time in UTC); so does each CSV inside a downloaded ZIP. Every row stays as
+  wide as the header, so the file opens as a table and imports into other tools as before, and rows copied out of it
+  keep the stamp. A quarterly CSV, which carries its stamp under its first line already, is left as it is.
 - Your own recovery codes are shown once when you set up your authenticator; that page comes before you are signed
   in, so its copy button is not recorded.
+- **How people are named.** Pages, the bell, PDFs and downloads name a person by their full name, or by their person
+  code when they registered none (also for an account removed since); never by their sign-in name, which is half of
+  what signs someone in. That holds for the findings history, the Task monitor, the pipeline's e-mail checks, the
+  quarterly purge switch, the password policy, severity ratings and every "Generated ... by" line of a PDF. Only three
+  places show sign-in names, because they are there to identify accounts: the Audit portal's audit trail, the user
+  column of *Trace a leak* and the users table on the Admin page.
 
 Blocking selection in a browser deters; it does not make copying impossible (the browser's developer tools, a photo
 of the screen). What it guarantees is that every copy made the normal way is on record.
@@ -424,9 +441,15 @@ The same layout, without a map:
   Executive portal and its PDF use the same frame; on the portal, the link under the map switches to the whole country.
 - **Filters:** only hosts with issues, report family (exposed, population, identified device, compromised,
   blocklisted), report, severity, issue (CVE, POODLE, expired certificate, exposed admin panel...), region, city,
-  network, port, vendor, device type, **Hosts in several reports** and **Hosts with multiple issues**. Their counts
-  follow the other filters, as on the map; with *Hosts in several reports* or *Hosts with multiple issues* on, they
-  count those hosts' records.
+  network, port, vendor, device type, **Industry (Shadowserver)**, **Hosts in several reports** and **Hosts with
+  multiple issues**. Their counts follow the other filters, as on the map; with *Hosts in several reports* or *Hosts
+  with multiple issues* on, they count those hosts' records.
+- **Sectors and industries:** a record's sector is the type of its network, as set for each network in Settings
+  (**Sectors (network type)**). Shadowserver's own sector column is shown beside it as **Industry (Shadowserver)**,
+  never mixed in: it has its own list in an analysis, its own filter menu (right after Device type) and its own line
+  in a record's details. Rows that do not give it read "Not given".
+- **Actively exploited:** the services list counts a report as having an actively exploited CVE (CISA KEV) when any
+  of its issues is one, however low that issue ranks.
 - **Intel and stream** as on the map, with the report's definition in every record's details.
 - **Certificate and TLS** (a record's details): when the scan carries them, the certificate's expiry (and whether it
   had expired when the host was scanned), whether it is self-signed, passed Shadowserver's validity check and is
@@ -448,6 +471,36 @@ whole platform.
 
 **Hosts in several reports** and **Hosts with multiple issues** compare each host across all its reports of the
 day, so a blocklisted host that also runs an outdated web server shows up in both.
+
+### How lists, shares and counts read
+
+The same rules hold on every page, PDF and CSV, for every role:
+
+- **A cut list says so.** A list that shows only its busiest rows says how many there are, for example "Top 8 of 23
+  networks", and its PDF and CSV say the same. Rings and bars are drawn of the real total: what the rows leave out is
+  their **Other** part, and every legend names every part (the ring draws the smallest parts together, in the grey of
+  Other). Lists that are short by nature are never cut: every region, sector, report family, severity and attack type
+  is listed. A CSV that says it is complete holds every row, and the filter menus list every value.
+- **A PDF prints text whole.** A long table cell is printed in full, and a row too long for the page continues on the
+  next one; a long word such as a web address breaks onto the next line instead of running off the page; a quarterly
+  report's **Read me** notes continue on the next page. Nothing ends in "..." or points to the CSV for the rest.
+- **Shares never mislead.** A part that has records never reads "0%": it reads "<1%" (or "<0.1%" where one decimal is
+  shown). A part of the whole never reads "100%": it reads ">99%" (or ">99.9%"). Shares are rounded half up, so a page
+  and its PDF give the same words for the same share.
+- **What is not counted is said beside the figures.** The **Unknown network** and **Unknown region** rows are records
+  without a network or a region. They are listed, never counted as a network or a region, and a line under the list
+  says how many, for example "12 records without a network (not counted as a network)." On the services page a record
+  without an address is not a host: "5 records without an address (not counted as hosts)."
+- **A row is counted once.** A country file and a network file of the same report day carry the same rows; each row is
+  counted once. Rows of a day's report files dated outside the days the file can be shown on, or without a time, are
+  not shown on any day, and the page says how many beside the day's figures (on the intro page under its figures; on
+  the services page at the top of the Intel panel and on the Records figure's tooltip), for example "120 rows also in
+  another file that day (counted once)."
+- **One spelling for each region and network.** Regions are grouped and spelled the way the map names them, with the
+  administrator's region matches applied, so "NAIROBI" and "Nairobi" are one row; a region name that is the country
+  itself is "Unknown region". Networks are counted by company, and names that differ only in spaces or letter case are
+  one organisation. In masked views each network missing from the network list has its own alias ("Unlisted network"
+  and a short tag), and filtering on it works.
 
 **Decoded beacons** (analysts and admins): how many records of the selection carry a beacon Looking Glass decoded.
 Its **Details ›** lists each kind of beacon with the system it reports and its **Status**: *Decoded*; *Encoded,
@@ -972,6 +1025,13 @@ Accounts with the **management** role open straight into the **Executive** porta
 - **Exposure & vulnerabilities** (publicly accessible services): internet-facing hosts, hosts with an issue, hosts with
   **actively exploited** vulnerabilities (CISA KEV), critical CVEs, exposed services, regions, sectors and industries.
 
+**Sectors (network type)** are the types of the devices' networks, as set for each network in Settings (Network names
+& types), the same on every page, PDF and CSV. A network without a type counts as Unknown. On the exposure view,
+Shadowserver's own sector column has its own card, **Industry (Shadowserver)**, and is never mixed into the sectors.
+The Sectors card lists every sector. A device seen in two regions, or in networks of two types, counts in each, so the
+parts can add up to more than the whole; the cards say so. What has no region or network is said under the map and
+the networks card, for example "40 events from devices without a region."
+
 Under **Deeper insight** the analyst figures appear as aggregates: devices with several infections (by number, and the
 infections most often found together), hosts with several issues (and the issues most often found together),
 cross-report analysis (devices or hosts in 2, 3, 4+ reports, which reports or services overlap, devices both infected
@@ -1011,7 +1071,8 @@ infections** / **Top issues** show a trend line (the 7 days and the report day),
 **key findings** explain it in plain words ("1,700 hosts today; over the last 7 days the average was 1,850 a day, so
 today is 8% lower. That is a normal day-to-day change"). The baseline is built in the background and is ready when the
 portal opens; any filter or clicked combination gets its own baseline in about a second (the past days are kept in
-memory). The executive report has a **7-day baseline** page and a `seven-day-trend` CSV.
+memory). The executive report has a **7-day baseline** page and a `seven-day-trend` CSV. Every infection and every
+issue of the day is graded, not only the top ones, and the key findings name every one that is flagged.
 
 **How changes are graded:** change = (today − 7-day average) ÷ 7-day average:
 
@@ -1077,7 +1138,8 @@ report brings the rest by itself:
 2. Write the **heading**: the advisory's title on the first page. Left empty, it reads *"<your CSIRT> Security
    Advisory"*.
 3. Write the **Description** (what was found and what it means) and the **Recommended Actions**, with the **B**, **•
-   List** and **1. List** buttons. A preview shows the result.
+   List** and **1. List** buttons. A preview shows the result. Confirming, removing or undoing a MITRE ATT&CK
+   technique keeps what you have typed and not yet saved in these two boxes.
 4. **Generate the report.** Generating again replaces it: there is only ever one download.
 5. **Mark as drafted** when it is ready to go out.
 
@@ -1087,7 +1149,8 @@ receives what the record shows. Putting the text back as it was makes it current
 
 **The report** opens with the **ADVISORY** pages (the organisation's devices, the impact, the description and the
 actions), then **INSIGHTS**, **TECHNICAL DETAILS** and **REFERENCES**, each with its label. It is signed by your CSIRT
-(its name and logo from Settings), never by a person; who wrote it is kept in the audit log. It carries no internal code
+(its name and logo from Settings), never by a person; who wrote it is kept in the audit log, and the advisory page's
+list of generated reports and its history name each person by their full name (or person code). It carries no internal code
 and no researcher's note, and every page shows the TLP at the bottom right and in the header line.
 
 **How the PDF looks** is the advisor's choice, for each advisory, beside **Add insights** on the advisory page:
@@ -1140,6 +1203,15 @@ notifications. Management, advisors and administrators also get one alert when a
 ([Quarterly reports](#quarterly-reports)). Everyone's bell also says when a passkey is added to or removed from their
 own account.
 
+Administrators' bells also carry the platform's own alerts, among them: a report run that had problems, in the
+pipeline's own words for each one (a report that was refused, failed, quarantined or could not be downloaded, and the
+reason when the mailbox could not be read, for example *the mail server's certificate has expired*: whoever runs the
+mail server renews it, and the next run reads the waiting reports); **The last report run has something to check**,
+when a run loaded its reports but met something to look at (for example CSV files whose name is not a report file
+name, or a file sent again under the same name and loaded again); once cleared, it stays cleared while the runs say the
+same thing, and comes back when what they say changes; and, every day while it lasts, that the mail server's certificate is not
+checked (Settings → Workers → **Check the mail server's certificate**).
+
 ## Quarterly reports
 
 Once a quarter has ended (on the next quarter's 3rd day, a little after midnight UTC, when the quarter's last day's
@@ -1147,6 +1219,12 @@ reports have arrived), Looking Glass counts the quarter: records and unique addr
 region and sector; infections and actively exploited CVEs; findings, cases and management's decisions; advisories and
 their follow-up. Counts only: no report names an address. Every report says **VALID** (every accuracy check passed) or
 **NOT VALID** at the top.
+
+The quarter's sectors are the network types, as on the Executive portal and the services page; Shadowserver's own
+sector column has its own table, **Industry (Shadowserver)**. Networks are counted by company; the records without a
+network are the last row, **Unknown network**, never counted as a network, and the records without an address are
+counted apart. A row that a country file and a network file of the same day both carry is counted once. A report
+made before an update keeps what it said then; **Make it again** counts it with the current rules.
 
 | Who | Where | What they download |
 |---|---|---|
@@ -1284,7 +1362,8 @@ audit log.
 and **Save the policy** (with your own password). **Every account then chooses a new password at its next sign-in**,
 and again whenever its password is older than that. **Require every account to change its password at next sign-in**
 does the same at any moment, for example after a suspected leak (also with your password). The card shows how many
-accounts must choose a new password; every change is in the audit log.
+accounts must choose a new password, and when every account was last asked to change it and by whom (their full name,
+or person code); every change is in the audit log.
 
 If a password has expired, a box asks for a new one at sign-in, before the platform opens. It follows the usual rules
 and cannot be the expired one. Once it is saved the person goes straight in, and their other open sessions end.
@@ -1321,13 +1400,17 @@ folders and performance need no confirmation.
 
 - **Getting the reports:** *By e-mail* (the mailbox the reports are sent to) or *Shadowserver report API* (with the API
   key below; save the key first). Every scheduled run fetches only what is new; if your choice cannot be used on a run
-  and the other way is set up, that run uses the other way and its log says why. *Days back per run* applies to both.
+  and the other way is set up, that run uses the other way and its log says why. *Days back per run* applies to both
+  (7 when it was never set).
 - **Sender check (DKIM)**, for reports by e-mail: *Check the sender of every report* verifies each report e-mail's
   signature with the sender's public key from DNS and records the result (Audit portal → Sender check). *Block reports
   that do not pass* also holds back a report not validly signed by the *Expected signer* (`shadowserver.org`) until an
   administrator releases it. A report passes only when the signature covers its sender (the From line), the sender is
   in the signer's domain, and its headers can be read only one way; a message with lines added above its headers is
-  held back. Start with blocking off: a footer or forwarding rule on the way breaks a genuine signature too.
+  held back. Start with blocking off: a footer or forwarding rule on the way breaks a genuine signature too. With
+  blocking on, a run on which the check itself cannot work reads no e-mail (they wait in the mailbox for the next
+  run), says why on the bell and the Task monitor, still loads the report files already on the server, and uses the
+  Shadowserver report API that run if it is set up.
 - **Sender check, last 7 days:** per day, how many report e-mails passed, did not pass or could not be checked, and
   each kind of failure with what it usually means (for example *the body was changed after it was signed*: a gateway
   or forwarding rule on the way, so deliver Shadowserver's mail unmodified). When every e-mail passed on each of the 7
@@ -1339,7 +1422,12 @@ folders and performance need no confirmation.
   answer TXT look-ups, or let it reach those resolvers over HTTPS
   ([how the look-up works](CONFIGURATION.md#the-database-pipeline-from-the-platform)).
 - **E-mail settings:** mailbox folder (or Gmail label), messages per fetch, the mail server's certificate check, the
-  timeout.
+  timeout. Keep **Check the mail server's certificate** on. Switch it off only for a mail server that has always used
+  its own (self-signed) certificate, or for a short while when its certificate has expired and is being renewed: while
+  it is off, someone on the network path could pretend to be the mail server, read the mailbox password and hand over
+  forged reports, so keep **Block reports that do not pass** on meanwhile. While it is off, the administrators' bell
+  says so every day and Settings → Task monitor shows it on the Report pipeline card. Switching it back on needs no
+  confirmation and applies on the next run.
 - **Loading performance:** loader processes, records per insert, download threads.
 - **Unzip limits:** the largest unpacked size, compression ratio and file count, and the disk space kept free.
 - **Shadowserver report API:** paste the API key and secret. **Check with Shadowserver and save** asks Shadowserver
@@ -1353,6 +1441,17 @@ folders and performance need no confirmation.
   through at its next run. Process only reports you know are genuine. Processed reports stay on record, each in the
   audit log.
 
+**How the last run went: Settings → Task monitor, Report pipeline.** The card says when the last run finished and
+whether it went well or had problems. **Rows read** accounts for every row the run read, and the parts add up to it:
+new, already stored, repeated in the same file (stored once), not stored because they give the same row hash as
+another row, not stored because the timestamp could not be read, and not written (tried again next run); it also says
+how many stored rows have no timestamp, which no page shows. **What went wrong** lists each problem that made the run
+fail, for example a report refused, quarantined or not downloaded, or a report file set aside because it stopped
+the loader even on its own; **To check** lists what loaded but needs a look, for example the CSV files whose name is
+not a report file name (each named, until it is renamed or removed), rows that could not be read as CSV (the rest of
+their file was loaded) or a file sent again under the same name with other content and loaded again. Each is in the pipeline's own words, the same as
+on the bell ([Notifications](#notifications-the-bell)) and in its log.
+
 When the pipeline runs on another computer, the tab says so and its settings stay in its own `.env`.
 
 ### Quarterly (reports and the purge)
@@ -1362,7 +1461,7 @@ says "The quarterly purge is off on this installation: no report rows are delete
 the purge day, the cutoff and the rows it would delete (counted by the newest VALID quarterly report; before the
 first, it says there is no count yet and gives the next purge day). **Turn on the quarterly purge** shows exactly what
 will be deleted and when, and asks for your sign-in password; once on, the card says "On since <day>, confirmed by
-<full name>." with the next purge's day and rows. **Turn off the quarterly purge** is always there while it is on.
+<full name>." (the person code for an account without a full name) with the next purge's day and rows. **Turn off the quarterly purge** is always there while it is on.
 While it is off and a VALID report exists, administrators get one bell alert per quarter. What is deleted, what is
 kept, the checks and the alerts: [OPERATIONS.md](OPERATIONS.md#the-quarterly-report-and-the-purge).
 

@@ -26,7 +26,8 @@ never writes here, and this module never trusts the permit on its own:
     A refusal names the next quarter and its purge day; when the latest quarter whose purge day has passed had no
     report row before its cutoff at all, the record says "nothing to purge" instead of a refusal.
   * Files dated before the cutoff are not loaded again afterwards (the sorted copies, a mailbox fetched again): the
-    loader asks purged_before() and leaves them out.
+    loader asks purged_before() and leaves them out. That date is recorded before the first row is deleted, so a purge
+    that fails part way does not have its deleted rows loaded back in; the quarter is tried again on the next run.
 
   * Never beside a quarterly report being made (r91, the platform's job_schedule.py): the deletes run with the
     platform's data/quarterly/.lock held shared (opened read only), so while Looking Glass makes a report the purge
@@ -346,6 +347,7 @@ def run(db, platform_data_dir, base_dir, log, today=None, now=None, run_lock=Non
     flt = purge_filter(d["cutoff"].isoformat())
     colls, skipped, total = {}, {}, 0
     failed = []
+    marked = False
     try:
         with quiet(platform_data_dir, run_lock):
             for name, no in report_collections(db).items():
@@ -357,6 +359,13 @@ def run(db, platform_data_dir, base_dir, log, today=None, now=None, run_lock=Non
                     before = db[name].count_documents(flt)
                     if not before:
                         continue
+                    if not marked:
+                        # recorded BEFORE the first delete (audit 2026-11-27): a purge that then fails part way, or is
+                        # stopped, must not have the loader put the deleted rows back on the next run (files dated
+                        # before the cutoff are left out from now on); the quarter stays not done, so it is tried again
+                        st["purged_before"] = max(str(st.get("purged_before") or ""), d["cutoff"].isoformat())
+                        _write_status(base_dir, st)
+                        marked = True
                     n = db[name].delete_many(flt).deleted_count
                     colls[name] = {"matched": before, "deleted": n}
                     total += n

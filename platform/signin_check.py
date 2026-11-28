@@ -157,7 +157,8 @@ def install(app, ctx):
             return jsonify(error="Refused (the request did not come from this page)."), 403
         if not fresh():
             return jsonify(error="Sign in again first (sessions older than 12 hours can only view).", reauth=True), 403
-        want = str((request.get_json(silent=True) or {}).get("mode") or "").strip().lower()
+        b = request.get_json(silent=True)
+        want = str((b if isinstance(b, dict) else {}).get("mode") or "").strip().lower()   # a list: the 400 below
         if want not in MODES:
             return jsonify(error="Choose a passkey or the authenticator code."), 400
         if source() == "env":

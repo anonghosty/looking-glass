@@ -109,8 +109,28 @@ class EquivalenceTest(unittest.TestCase):
             fh.write(text)
         return path
 
+    # Two deliberate differences from the original (count audit, 2026-11-26; tests/test_count_gaps.py): a byte-order mark
+    # is not part of the first column's name (it hid the timestamp, so no row had its date), and only \n, \r\n and \r end
+    # a line (str.splitlines() also cut a row at \x0c, \x1c-\x1e, NEL, U+2028...).
+    INTENDED = {"bom", "weird_line_breaks"}
+
+    def test_intended_differences(self):
+        path = self._write("2025-08-01-bom-ghana-geo.csv", CSV_CASES["bom"])
+        info = {}
+        docs = list(sp.iter_csv_docs(path, "b.csv", "svc", info=info))
+        self.assertEqual(info["headers"], ["timestamp", "ip"])
+        self.assertEqual(docs[0]["extracted_date"], datetime.datetime(2025, 8, 1, 10, 0, 0))
+        _, old = old_csv_docs(path, "b.csv", "svc")
+        self.assertNotIn("extracted_date", old[0], "the original lost the date of every row of such a file")
+        path = self._write("2025-08-01-weird-ghana-geo.csv", CSV_CASES["weird_line_breaks"])
+        docs = list(sp.iter_csv_docs(path, "w.csv", "svc"))
+        self.assertEqual(len(docs), 1, "\\x0c is a character of the value, not a line end")
+        self.assertEqual(docs[0]["ip"], "1.1.1.1\x0c2025-08-01 10:00:00")
+
     def test_csv_documents_identical(self):
         for case, text in CSV_CASES.items():
+            if case in self.INTENDED:
+                continue
             with self.subTest(case=case):
                 fn = f"2025-08-01-{case}-ghana-geo.csv"
                 path = self._write(fn, text)
@@ -163,7 +183,12 @@ class EquivalenceTest(unittest.TestCase):
             "2026-11-05-scan6_http_vulnerable-7654321-ghana-geo_as64500.csv": "scan6_http_vulnerable",
             "2026-11-05-scan_ssh-77-kenya-geo.csv": "scan_ssh",
             "2026-11-05-event4_sinkhole_dns-1204-south-africa-geo.csv": "event4_sinkhole_dns",
+            # 2026-11-26: ".CSV", a country part in capitals, a numeric part after the AS number
+            "2026-11-05-scan_ssh-77-kenya-geo.CSV": "scan_ssh",
+            "2026-11-05-scan_ssh-Kenya-geo.csv": "scan_ssh",
+            "2026-11-05-scan_ssh-kenya-geo_as64500_2.csv": "scan_ssh",
             "2026-11-05-scan_ssh-nigeria.csv": None,
+            "2026-11-05-scan_ssh-ke-cidr.csv": None,
             "readme.txt": None,
         }
         for name, svc in cases.items():

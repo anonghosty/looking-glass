@@ -209,7 +209,9 @@ def install(app, audit, allowed, deny, who, to_csv=None):
         stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
         return Response(data, mimetype="application/zip", headers={
             "Content-Disposition": f'attachment; filename="audit_proof_{stamp}.zip"', "Cache-Control": "no-store",
-            "X-Audit-Head": f"{info['head']}@{info['head_entry']}"})
+            "X-Audit-Head": f"{info['head']}@{info['head_entry']}",
+            # never stamped (insider._seal_download): every file in it is checked against MANIFEST.json
+            "X-LG-No-Stamp": "1"})
 
     @app.route("/api/audit/continuity")
     def api_audit_continuity():

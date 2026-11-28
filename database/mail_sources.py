@@ -37,7 +37,31 @@ _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
 
 
 class MailSourceError(OSError):
-    """A clear, user-facing reason why the mailbox cannot be read (wrong password, missing permission...)."""
+    """A clear, user-facing reason why the mailbox cannot be read (wrong password, missing permission...).
+    reason: the same in a few words, with no account name or password in it, for the administrators' bell
+    (pipeline_status.json, 2026-11-26: the bell said only "the mailbox could not be read")."""
+
+    def __init__(self, message, reason=""):
+        super().__init__(message)
+        self.reason = reason
+
+
+# the certificate problems an administrator can act on, by OpenSSL's verify code: what it means and what to do
+CERT_PROBLEMS = {
+    10: ("the mail server's certificate has expired",
+         "has expired ({msg}): ask whoever runs that mail server to renew it. Reports are read again on the first run "
+         "after that. Do not set IMAP_VERIFY_TLS=false for this: it is meant only for a server that has always used a "
+         "self-signed certificate, and would send the mailbox password over a connection that cannot be trusted"),
+    9: ("the mail server's certificate is not valid yet",
+        "is not valid yet ({msg}): check the clock of this computer and of the mail server"),
+    18: ("the mail server's certificate is self-signed",
+         "is self-signed ({msg}): set IMAP_VERIFY_TLS=false only if that server has always used its own certificate"),
+    19: ("the mail server's certificate is signed by an authority this computer does not know",
+         "is signed by an authority this computer does not know ({msg}): install the organisation's root certificate "
+         "on this computer, or set IMAP_VERIFY_TLS=false only if that server has always used its own certificate"),
+    62: ("the mail server's certificate is for another name",
+         "is for another name ({msg}): type the mail server's name as its certificate gives it (IMAP_SERVER)"),
+}
 
 
 def _truthy(v: str) -> bool:
@@ -51,6 +75,16 @@ def since_date(days: int) -> dt.date:
 def _batched(seq, n):
     for i in range(0, len(seq), n):
         yield seq[i:i + n]
+
+
+def _uid_in(data, i):
+    """The UID (bytes) the server sent with the FETCH answer data[i] (a (prefix, literal) tuple), or None. RFC 3501 does
+    not fix the order of a FETCH answer's items: the UID may come before the literal (in the prefix) or after it, and then
+    imaplib puts it in the next element, plain bytes such as b' UID 102)' (review r2). The literal itself is never read."""
+    m = re.search(rb"\bUID (\d+)", data[i][0])
+    if not m and i + 1 < len(data) and isinstance(data[i + 1], bytes):
+        m = re.search(rb"\bUID (\d+)", data[i + 1])
+    return m.group(1) if m else None
 
 
 # --------------------------------------------------------------------------------------------------------- IMAP
@@ -76,6 +110,9 @@ class ImapSource:
         self.batch = int(env.get("IMAP_FETCH_BATCH", "25") or 25)
         self.timeout = int(env.get("MAIL_TIMEOUT", "120") or 120)
         self.imap = None
+        self.failed = 0             # messages listed or asked for that the server did not hand over (counted by the run)
+        self.gone = 0               # messages deleted from the mailbox between the listing and the fetch (a warning)
+        self.uids = {}              # key -> UID, as list() found it
         missing = [k for k, v in (("IMAP_SERVER", self.server), ("IMAP_USER", self.user), ("IMAP_PASSWORD", self.password)) if not v]
         if missing:
             raise MailSourceError(", ".join(missing) + " missing in .env")
@@ -94,12 +131,18 @@ class ImapSource:
             self.imap = imaplib.IMAP4_SSL(self.server, ssl_context=ctx, timeout=self.timeout)
         except socket.gaierror as exc:
             raise MailSourceError(f"the mail server name '{self.server}' does not exist (check the spelling; "
-                                  "type only the name, e.g. mail.example.org)") from exc
+                                  "type only the name, e.g. mail.example.org)", "the mail server's name does not exist") from exc
         except ssl.SSLCertVerificationError as exc:
-            raise MailSourceError(f"the certificate of {self.server} is not trusted ({exc.verify_message}); "
-                                  "set IMAP_VERIFY_TLS=false only if the server uses a self-signed certificate") from exc
+            # the advice follows the problem (2026-11-26: an EXPIRED certificate was told to switch checking off)
+            known = CERT_PROBLEMS.get(getattr(exc, "verify_code", None))
+            if known:
+                raise MailSourceError(f"the certificate of {self.server} " + known[1].format(msg=exc.verify_message),
+                                      known[0]) from exc
+            raise MailSourceError(f"the certificate of {self.server} is not trusted ({exc.verify_message}): ask whoever "
+                                  "runs that mail server; set IMAP_VERIFY_TLS=false only if it has always used its own "
+                                  "certificate", "the mail server's certificate is not trusted") from exc
         except OSError as exc:
-            raise MailSourceError(f"cannot reach {self.server} on port 993 ({exc})") from exc
+            raise MailSourceError(f"cannot reach {self.server} on port 993 ({exc})", "the mail server could not be reached") from exc
         try:
             self.imap.login(self.user, self.password)
         except imaplib.IMAP4.error as exc:
@@ -109,18 +152,19 @@ class ImapSource:
                 hint = " (Gmail needs an app password, not the account password: docs/MAIL_SETUP.md)"
             elif "outlook" in self.server.lower() or "office365" in self.server.lower():
                 hint = " (Microsoft 365 no longer accepts passwords over IMAP: use MAIL_PROVIDER=microsoft_graph)"
-            raise MailSourceError(f"login refused for {self.user}: {text}{hint}") from exc
+            raise MailSourceError(f"login refused for {self.user}: {text}{hint}", "the mailbox refused the sign-in") from exc
         try:
             typ, _ = self.imap.select(imap_quote(self.folder), readonly=True)
         except imaplib.IMAP4.error as exc:
-            raise MailSourceError(f"the mail server refused the folder '{self.folder}' ({exc})") from exc
+            raise MailSourceError(f"the mail server refused the folder '{self.folder}' ({exc})",
+                                  "the mail server refused the reports folder") from exc
         try:                                          # the server's own numbering of this folder (with UID: the message key)
             _, dat = self.imap.response("UIDVALIDITY")
             self.uidvalidity = (dat[0].decode() if dat and dat[0] else "0").strip()
         except Exception:  # noqa: BLE001
             self.uidvalidity = "0"
         if typ != "OK":
-            raise MailSourceError(f"folder '{self.folder}' not found in {self.user}")
+            raise MailSourceError(f"folder '{self.folder}' not found in {self.user}", "the reports folder was not found")
 
     def list(self, days: int):
         """[(key, seq id)] for messages since the date, newest last. The key is the SERVER's identity of the message
@@ -133,36 +177,75 @@ class ImapSource:
         typ, data = self.imap.search(None, f'SINCE "{d.day:02d}-{_MONTHS[d.month - 1]}-{d.year}"')
         ids = data[0].split() if typ == "OK" and data and data[0] else []
         out, self.legacy = [], {}
+        # the keys that hold the server's UID, as list() found it: fetch() fetches those by UID. A flag, never read back
+        # from the key's text: a forged Message-ID such as "7:102" gives the old-form key "imap:7:102" (review r2)
+        self.uids = {}
         for chunk in _batched(ids, 200):
             typ, data = self.imap.fetch(b",".join(chunk).decode(),
                                         "(UID BODY.PEEK[HEADER.FIELDS (MESSAGE-ID DATE SUBJECT FROM)])")
             if typ != "OK":
+                self.failed += len(chunk)     # not listed this run: counted (audit 2026-11-27), listed again next run
                 continue
-            for item in data:
+            for i, item in enumerate(data):
                 if not (isinstance(item, tuple) and len(item) > 1):
                     continue
                 seq = item[0].split()[0]
                 hdr = email.message_from_bytes(item[1])
                 mid = (hdr.get("Message-ID") or "").strip()
                 old = "imap:" + (mid or hashlib.sha1(item[1], usedforsecurity=False).hexdigest())
-                m = re.search(rb"\bUID (\d+)", item[0])
-                key = f"imap:{getattr(self, 'uidvalidity', '0')}:{m.group(1).decode()}" if m else old
+                uid = _uid_in(data, i)
+                key = f"imap:{getattr(self, 'uidvalidity', '0')}:{uid.decode()}" if uid else old
+                if uid:
+                    self.uids[key] = uid
                 self.legacy[key] = old
                 out.append((key, seq))
         return out
 
     def fetch(self, items):
-        """yield (key, raw bytes) for [(key, seq id)]."""
+        """yield (key, raw bytes) for [(key, seq id)]. A message is fetched by its UID, which its key holds
+        (imap:<UIDVALIDITY>:<UID>), and its content is matched to its key by the UID the server sends back: a sequence
+        number shifts when another client expunges a message, which handed one message's content over under another
+        one's key (audit 2026-11-27). A key of an older form, without a UID, is fetched by its sequence number as before.
+        Every message asked for and not handed over in a refused batch is counted in self.failed: it is not marked
+        done, so it is tried again next run. One missing from a UID FETCH the server answered OK was deleted from the
+        mailbox after the listing: there is nothing to try again, so it is counted in self.gone (a warning of the run,
+        review r2), not in self.failed."""
         self._connect()
+        uids = getattr(self, "uids", None) or {}
         for chunk in _batched(list(items), self.batch):
-            keys = {seq: key for key, seq in chunk}
-            typ, data = self.imap.fetch(b",".join(s for _, s in chunk).decode(), "(BODY.PEEK[])")
-            if typ != "OK":
-                continue
-            for item in data:
-                if isinstance(item, tuple) and len(item) > 1:
-                    seq = item[0].split()[0]
-                    yield keys.get(seq, "imap:" + hashlib.sha1(item[1], usedforsecurity=False).hexdigest()), item[1]
+            by_uid, by_seq = {}, []
+            for key, seq in chunk:
+                uid = uids.get(key)                    # listed with its UID by list(): never parsed from the key's text
+                if uid:
+                    by_uid[uid] = key
+                else:
+                    by_seq.append((key, seq))
+            if by_uid:
+                typ, data = self.imap.uid("FETCH", b",".join(by_uid).decode(), "(UID BODY.PEEK[])")
+                got = set()
+                for i, item in enumerate((data or []) if typ == "OK" else []):
+                    if not (isinstance(item, tuple) and len(item) > 1):
+                        continue
+                    uid = _uid_in(data, i)
+                    key = by_uid.get(uid) if uid else None
+                    if key is None or key in got:      # not one this batch asked for
+                        continue
+                    got.add(key)
+                    yield key, item[1]
+                if typ == "OK":
+                    self.gone += len(by_uid) - len(got)
+                else:
+                    self.failed += len(by_uid) - len(got)
+            if by_seq:
+                keys = {seq: key for key, seq in by_seq}
+                typ, data = self.imap.fetch(b",".join(s for _, s in by_seq).decode(), "(BODY.PEEK[])")
+                n = 0
+                for item in (data or []) if typ == "OK" else []:
+                    if isinstance(item, tuple) and len(item) > 1:
+                        seq = item[0].split()[0]
+                        n += 1
+                        yield keys.get(seq, "imap:" + hashlib.sha1(item[1], usedforsecurity=False).hexdigest()), item[1]
+                self.failed += max(0, len(by_seq) - n)
 
     def close(self):
         if self.imap:

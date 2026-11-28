@@ -40,6 +40,13 @@ ACODE_RX = re.compile(r"^LG-A-[0-9A-F]{8}$")
 ASKED = {"everything": "Everything: every category (infections, CVEs and issues, services, across reports)",
          "across": "Just across-report combinations: what these hosts carry in each report, with the LG-X codes"}
 HOST_FIELDS = {"src_ip", "ip", "src_ref", "ip_ref", "hostname", "src_hostname"}       # never shown to researchers
+# a destination can be a constituent's host too (a Spam URL link into the constituency, a constituent server a device
+# talks to): its address or name is held back like a host's (audit 2026-11-27, 1-2)
+DST_HOST_FIELDS = {"dst_ip", "dst_ref", "dst_hostname"}
+# a request path and a user agent can carry a bot id or a machine name ("GET /gate.php?id=4F2A9C&pc=FINANCE-PC07"); a
+# masked viewer only ever gets opaque references for them (app.REF_KINDS): held back too, as a count (re-review of
+# r1-1, 2026-11-28). The C2 domain (http_host) stays: researchers see it in Intel gathered as it is (intel.KEEP_AS_IS).
+HELD_FIELDS = {"request": ("request", "requests"), "http_agent": ("user agent", "user agents")}
 LABELS = {"src_asn": "Source network", "asn": "Network", "dst_asn": "Destination network", "infection": "Infection",
           "source": "Report", "service": "Service", "family": "Report family", "issue": "Issue", "attack_class": "Attack type",
           "src_region": "Region", "region": "Region", "src_city": "City", "city": "City", "src_geo": "Country", "geo": "Country",
@@ -139,16 +146,28 @@ def install(app, ctx):
         return [tuple(p) for p in sel["query"]]
 
     def label(platform, pairs, labels):
-        """The selection in words, with every host address replaced by a count."""
-        parts, hosts = [], 0
+        """The selection in words, with every host address replaced by a count. A banner filter (vendor, device type,
+        product, version) comes from the hosts' own banners and can carry a host's name or address ("Apache on
+        mail.example.org"): researchers read the label, so it is masked as the services page masks banners for masked
+        viewers (services.banner_mask; audit 2026-11-28, r1-1)."""
+        from services import BANNER, banner_mask
+        parts, hosts, dsts, held = [], 0, 0, collections.Counter()
         for k, v in pairs:
             if k in HOST_FIELDS:
                 hosts += 1
+                continue
+            if k in DST_HOST_FIELDS:
+                dsts += 1
+                continue
+            if k in HELD_FIELDS:
+                held[k] += 1
                 continue
             if k in ("at", "demo", "n", "metric", "all"):
                 continue
             if k in ("src_asn", "asn", "dst_asn"):
                 v = f"{ctx['network'](v) or 'AS' + str(v)} (AS{v})"
+            elif k in BANNER:
+                v = banner_mask(v)
             elif k == "source":
                 v = labels.get(v, v)
             elif k == "time":
@@ -160,7 +179,24 @@ def install(app, ctx):
             parts.append(f"{LABELS.get(k, k.replace('_', ' ').capitalize())}: {v}")
         if hosts:
             parts.append(f"{hosts} host{'s' if hosts != 1 else ''} (address{'es' if hosts != 1 else ''} held back)")
+        if dsts:
+            parts.append(f"{dsts} destination{'s' if dsts != 1 else ''} (address{'es' if dsts != 1 else ''} held back)")
+        for k, n in held.items():
+            parts.append(f"{n} {HELD_FIELDS[k][0 if n == 1 else 1]} (held back)")
         return " · ".join(parts) or ("Whole day, all reports" if platform == "comms" else "Whole day, all services")
+
+    def label_of(entry, labels=None):
+        """The label of a code as it is served: for a code made from a selection (no from_code), worked out again from
+        its selection with today's rule, so a label stored before a masking fix never shows what the rule now holds
+        back (re-review of r1-1, 2026-11-28); the stored file is left as it is. Other codes: their stored label."""
+        sel = entry.get("sel") or {}
+        if entry.get("kind") != "a" or sel.get("from_code") or not ("query" in sel or "kind" in sel):
+            return entry.get("label", "")
+        try:
+            return label(entry["platform"], pairs_of(entry), ctx["labels"]() if labels is None else labels)
+        except Exception:                              # noqa: BLE001 (a selection that cannot be read: masked, never raw)
+            import hostmask
+            return hostmask.mask(entry.get("label", "") or "")
 
     paths = {"ids": os.path.join(ctx["base_dir"], "data", "acodes")}       # data/acodes/<code>.json (tests point it elsewhere)
 
@@ -227,6 +263,8 @@ def install(app, ctx):
                         _rec_cache.pop(min(_rec_cache, key=lambda k: _rec_cache[k][0]))
                     _rec_cache[key] = (time.time(), out)
                     return list(out)
+            if (entry.get("sel") or {}).get("from_code"):
+                return []                         # made from a search, its kept records gone: no day is loaded for nothing
         days = [day] if day is not None else days if days is not None else days_of(entry)
         if not days:
             return []
@@ -275,6 +313,8 @@ def install(app, ctx):
             kind, value = str(b.get("kind") or "")[:40], str(b.get("value") or "")[:2000]
             if not kind:
                 return jsonify(error="No selection to make a code of."), 400
+            if ctx.get("kinds") is not None and kind not in ctx["kinds"]:      # audit 2026-11-27, 1-8: was a 500
+                return jsonify(error="This kind of selection is not known here."), 400
             sel = {"kind": kind, "value": value}
         else:
             q = [(k, v) for k, v in parse_qsl(str(b.get("query") or "")[:4000]) if k not in ("at", "demo", "n", "metric", "all")]
@@ -364,9 +404,28 @@ def install(app, ctx):
         entry = book.get(code)
         if not entry or entry.get("kind") != "a":
             return None
-        days = days_of(entry)
-        # its records from the days just loaded (2026-11-18: records() loaded the same day a second time)
-        evs = records(entry, days=days) if days else []
+        isos = entry.get("days") or [entry["day"]]
+        if len(isos) == 1:
+            # one day: loaded once, its records and the across loop share it (2026-11-18: records() loaded it twice)
+            days = days_of(entry)
+            evs = records(entry, days=days) if days else []
+        else:
+            # a code made from a search can span up to 31 days: never all of them in memory at once (audit 2026-11-27,
+            # 1-1). Its records are read one day at a time (records() keeps only the code's own); the days are read
+            # again, one at a time, for the across loop below.
+            days = None
+            evs = records(entry)
+
+        def each_day():
+            """The code's days, one at a time: the day kept (one day), or each loaded and let go before the next."""
+            if days is not None:
+                yield from days
+                return
+            for iso in isos:
+                d = ctx["day"](entry["platform"], iso)
+                if d is not None:
+                    yield d
+                d = None
         section = "infections" if entry["platform"] == "comms" else "issues"
         labels = ctx["labels"]()
         host = (lambda e: e.get("src_ip") or "") if section == "infections" else (lambda e: e.get("ip") or "")
@@ -391,13 +450,17 @@ def install(app, ctx):
         # across reports: the same devices in the name's other reports that day, beyond the selection (a selection is
         # often one report): what each device carried there, as the cross-report patterns Intel gathered shows
         mine = {n: p["hosts"] for n, p in per.items()}
-        for e in (e for d in days for e in d.events):
-            h = host(e)
-            if not h:
-                continue
-            for n in names_of(e):
-                if n in mine and h in mine[n]:
-                    per[n]["dev"][h][rep(e)].update(I.record_items(section, e, I._norm(n)))
+        # no device to match (a code made from a search whose kept records are gone: records() gave none): no day is
+        # read for nothing (audit 2026-11-28, r1-3)
+        for d in (each_day() if any(mine.values()) else ()):
+            for e in d.events:
+                h = host(e)
+                if not h:
+                    continue
+                for n in names_of(e):
+                    if n in mine and h in mine[n]:
+                        per[n]["dev"][h][rep(e)].update(I.record_items(section, e, I._norm(n)))
+            d = None                                       # let go of this day before the next is read
         out = []
         # every code stays here, small patterns too: this is a selection an analyst handed to this researcher in the
         # finding's channel, and the researcher answers with these codes (Intel gathered holds small ones back: small_codes.py)
@@ -434,7 +497,7 @@ def install(app, ctx):
                 cross = None
         f = ctx["findings"].of_code(code)
         span = entry.get("days") or [entry["day"]]
-        return {"code": code, "platform": entry["platform"], "section": section, "label": entry.get("label", ""),
+        return {"code": code, "platform": entry["platform"], "section": section, "label": label_of(entry, labels),
                 "day": span[0] if len(span) == 1 else f"{span[0]} to {span[-1]}", "days": span,
                 "records": len(evs), "devices": len(hosts), "reports": len({rep(e) for e in evs}), "names": out,
                 "finding": {"id": f["id"], "number": f"#{f['id']}", "title": f["title"], "text": f["text"], "status": f["status"]} if f else None,
@@ -466,7 +529,7 @@ def install(app, ctx):
                 cur = parent
                 continue
             out.append({"code": parent, "kind": "analyst" if parent.startswith("LG-A-") else "combination",
-                        "label": pe.get("label") or (book.describe(parent) if hasattr(book, "describe") else ""),
+                        "label": (label_of(pe) if pe else "") or (book.describe(parent) if hasattr(book, "describe") else ""),
                         "day": day_span(pe) if pe.get("kind") == "a" and pe.get("day") else str(pe.get("day") or ""),
                         "note": (f or {}).get("text", ""), "title": (f or {}).get("title", ""),
                         "by": ctx["people_name"]((f or {}).get("user", "")) if f and ctx.get("people_name") else "",
@@ -573,14 +636,14 @@ def install(app, ctx):
         with book.lock:
             book._load()
             items = [(c, dict(e)) for c, e in book.data.items() if e.get("kind") == "a"]
-        out = []
+        out, labels = [], ctx["labels"]()
         for c, e in items:
             f = owner(c)
             if not in_channel(c, f):
                 continue
             if f is CLOSED:                                # an admin: listed, with no finding to name
                 f = None
-            out.append({"code": c, "day": e["day"], "platform": e["platform"], "label": e.get("label", ""), "records": e.get("records"),
+            out.append({"code": c, "day": e["day"], "platform": e["platform"], "label": label_of(e, labels), "records": e.get("records"),
                         "hosts": e.get("hosts"), "names": e.get("names", [])[:6], "first": e.get("first", ""),
                         "finding": {"number": f"#{f['id']}", "title": f["title"], "status": f["status"], "by": ctx["people_name"](f["user"])} if f else None})
         out.sort(key=lambda x: (x["first"], x["day"]), reverse=True)
@@ -595,6 +658,8 @@ def install(app, ctx):
             return jsonify(error="Analyst codes are for researchers, management, analysts and admins."), 403
         if not ctx["csrf_ok"]():
             return jsonify(error="Refused (the request did not come from this page)."), 403
+        if not ctx["fresh"]():                             # it makes a code: a change (audit 2026-11-27, 1-9)
+            return jsonify(error="Sign in again to make changes (your session is older than 12 hours)."), 403
         # no Demo-mode refusal here: researchers are masked viewers (is_demo() is true for them) and they are the ones
         # who tick; the answer is a code and counts only, never an address (2026-11-14: the first version refused them)
         code = (code or "").strip().upper()
@@ -666,9 +731,21 @@ def install(app, ctx):
         return code
 
     api.records = records
+    api.label_of = label_of                                 # the label as served (re-review of r1-1)
+    # the code book (combos.py) and the findings (findings.py) serve an analyst code's label too: with the same rule
+    def finding_name(code):
+        """The label of an analyst code as served, for a finding made from it; None for a code not known here."""
+        code = str(code or "").upper()
+        e = book.get(code) if ACODE_RX.match(code) else None
+        return label_of(e) if e and e.get("kind") == "a" else None
+    for obj, name, fn in ((book, "acode_label", label_of), (ctx["findings"], "acode_name", finding_name)):
+        try:
+            setattr(obj, name, fn)
+        except AttributeError:                           # a stand-in that takes no attribute: its stored labels as before
+            pass
     api.make_selection = make_selection
     api.paths = paths
-    api.describe = lambda entry: f"Analyst selection on {day_span(entry)} ({'network communications' if entry['platform'] == 'comms' else 'services'}): {entry.get('label', '')}"
+    api.describe = lambda entry: f"Analyst selection on {day_span(entry)} ({'network communications' if entry['platform'] == 'comms' else 'services'}): {label_of(entry)}"
     api.days_of = days_of
     api.allowed = lambda code: in_channel(code)            # combos.py, the Executive filter: the channel rule
     api.chain = chain_of                                    # how a selection came about (tests/check_acode_chain.py)

@@ -190,6 +190,9 @@
       tr.append(el("td", "mono dz-name", x.name), seen, status, def, acrossCell("infections", x.name), act);
       tb.append(tr);
     }
+    // the table draws the first 400: it says so, as the networks editor does (2026-11-26: the All tab stopped at 400
+    // without a word)
+    if (rows.length > 400) { const tr = el("tr", "dz-empty"), td = el("td", null, `Showing 400 of ${fmt(rows.length)}: search to narrow the list.`); td.colSpan = 6; tr.append(td); tb.append(tr); }
     window.LGIntel?.decorate(tb);
   }
   for (const b of document.querySelectorAll("[data-inf]")) b.addEventListener("click", () => { infTab = b.dataset.inf; renderInf(); });
@@ -233,13 +236,14 @@
         : issTab === "kev" ? "None of the CVEs in the data is in CISA's catalog of exploited vulnerabilities." : "Nothing here yet.";
       const tr = el("tr", "dz-empty"), td = el("td", null, msg); td.colSpan = 6; tr.append(td); tb.append(tr); return;
     }
-    for (const x of rows) {
+    // the first 400, as the infections table (2026-11-27 audit: every issue was drawn, thousands of rows at once)
+    for (const x of rows.slice(0, 400)) {
       const tr = el("tr");
       const status = el("td", "dz-pills");
       if (x.cve) {
         if (x.exploited) status.append(pill("Actively exploited", "bad"));
         if (x.cvss != null) status.append(pill(`CVSS ${x.cvss}${x.severity ? ` ${x.severity.toLowerCase()}` : ""}`, x.cvss >= 9 ? "bad" : x.cvss >= 7 ? "warn" : "info"));
-        if (x.epss != null) status.append(pill(`EPSS ${(x.epss * 100).toFixed(1)}%`, x.epss >= 0.1 ? "warn" : ""));
+        if (x.epss != null) status.append(pill(`EPSS ${window.LGShare.pct(x.epss, 1)}`, x.epss >= 0.1 ? "warn" : ""));   // never "0.0%" (LGShare)
         if (x.pending) status.append(pill("Not looked up yet", ""));
         else if (!x.found) status.append(pill("No public record", ""));
         if (x.defined) status.append(pill("Note", "ok"));
@@ -253,11 +257,13 @@
       const act = el("td", "dz-act"), b = el("button", `lg-btn sm${!x.cve && !x.defined ? " primary" : ""}`, x.cve ? (x.defined ? "Edit context" : "Add context") : x.defined ? "Edit" : "Define"); b.type = "button";
       b.addEventListener("click", () => openEditor(x.name, "issues"));
       act.append(intelBtn(x.name, "issues"), notesBtn(x.name, "issues"), b);
-      const seenIss = el("td", "dz-seen", `${fmt(x.hosts)} hosts · ${fmt(x.records)} records`);
+      // one of a thing is singular ("1 hosts", docs screenshots 2026-11-27)
+      const seenIss = el("td", "dz-seen", `${fmt(x.hosts)} host${x.hosts === 1 ? "" : "s"} · ${fmt(x.records)} record${x.records === 1 ? "" : "s"}`);
       Object.assign(seenIss.dataset, { intelName: x.name, intelSection: "issues", intelMode: "append" });   // + report cards (intel.js)
       tr.append(el("td", "mono dz-name", x.name), seenIss, status, what, acrossCell("issues", x.name), act);
       tb.append(tr);
     }
+    if (rows.length > 400) { const tr = el("tr", "dz-empty"), td = el("td", null, `Showing 400 of ${fmt(rows.length)}: search to narrow the list.`); td.colSpan = 6; tr.append(td); tb.append(tr); }
     window.LGIntel?.decorate(tb);
   }
   for (const b of document.querySelectorAll("[data-iss]")) b.addEventListener("click", () => { issTab = b.dataset.iss; renderIss(); });
@@ -319,7 +325,7 @@
       if (row && row.reports?.length) $("kbSeen").textContent = `Seen in: ${row.reports.join(", ")}${row.kinds?.length ? ` (${row.kinds.join(", ")})` : ""}.`;
       else if (row && row.last_seen?.length) $("kbSeen").textContent = `Last seen in ${row.last_seen.map((s) => `${s.report} on ${s.date}`).join("; ")}.`;
       const iss = isIssue && (data.issues || []).find((x) => x.name === name);
-      if (iss) $("kbSeen").textContent = `Seen on ${fmt(iss.hosts)} hosts (${fmt(iss.records)} records) of the publicly accessible / vulnerable services.`
+      if (iss) $("kbSeen").textContent = `Seen on ${fmt(iss.hosts)} host${iss.hosts === 1 ? "" : "s"} (${fmt(iss.records)} record${iss.records === 1 ? "" : "s"}) of the publicly accessible / vulnerable services.`
         + (iss.cve && iss.exploited ? " CISA confirms it is being actively exploited." : "");
     }
     $("kbTitle").textContent = name ? (cve ? `Context for ${name}` : `Define “${name}”`) : (isIssue ? "Define an issue" : "Define a name");
@@ -344,11 +350,15 @@
       if (a.matched_by) det.append(el("p", "st-hint", `Matched by ${a.matched_by}.`));
       if (a.description) det.append(el("p", "kb-other-desc", a.description));
       if (a.alt_names?.length) det.append(el("p", "st-hint", `Also known as: ${a.alt_names.join(", ")}`));
-      const links = [a.url, ...(a.references || [])].filter((u, i, arr) => u && httpUrl(u) && arr.indexOf(u) === i).slice(0, 8);
+      // every link the source gives, each in full (2026-11-26: the first 8 only, each cut at 80 characters, without a
+      // word); the list is inside its own closed section, so a long one does not crowd the editor
+      const links = [a.url, ...(a.references || [])].filter((u, i, arr) => u && httpUrl(u) && arr.indexOf(u) === i);
       if (links.length) {
         const ul = el("ul", "kb-other-refs");
+        if (links.length > 8) det.append(el("p", "st-hint", `${fmt(links.length)} links:`));
         for (const u of links) {
-          const li = el("li"), ln = el("a", null, u.replace(/^https?:\/\//, "").slice(0, 80)); ln.href = u; ln.target = "_blank"; ln.rel = "noopener noreferrer";
+          const li = el("li"), ln = el("a", null, u.replace(/^https?:\/\//, "")); ln.href = u; ln.target = "_blank"; ln.rel = "noopener noreferrer";
+          ln.style.overflowWrap = "anywhere";
           const add = el("button", "lg-btn sm ghost", "Add as reference"); add.type = "button";
           add.addEventListener("click", () => {
             const have = [...$("kbRefs").querySelectorAll("input")];

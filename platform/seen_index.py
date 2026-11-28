@@ -15,6 +15,7 @@ ago looked "never seen". This keeps a small record, data/seen_names.json:
 
 Reports are stored by their readable name (the report list's label). Nothing here identifies a host.
 """
+import fcntl
 import json
 import os
 import threading
@@ -114,14 +115,23 @@ class SeenIndex:
         done = self.path + ".done"
         if os.path.exists(done):
             return
+        # one worker at a time: a lock the system holds for this worker while it runs and lets go of when it ends or
+        # dies (flock), so there is no stale lock to take over. After getting it, the marker is checked again: a worker
+        # that finished in between has already done it (audit 2026-11-27: two workers could both run the backfill,
+        # one after the other's lock was removed, or both taking over a stale lock)
         lock = self.path + ".backfill"
         try:
-            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            fd = os.open(lock, os.O_CREAT | os.O_WRONLY, 0o600)
+        except OSError:
+            return
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
             os.close(fd)
-        except FileExistsError:
-            if time.time() - os.path.getmtime(lock) < 3600:
-                return                                   # another worker is on it
-            os.utime(lock)                               # a stale lock (crashed worker): take it over
+            return                                       # another worker is on it
+        if os.path.exists(done):
+            os.close(fd)
+            return
 
         def run():
             try:
@@ -141,8 +151,5 @@ class SeenIndex:
                 with open(done, "w") as f:
                     f.write(f"backfilled {BACKFILL_DAYS} days\n")
             finally:
-                try:
-                    os.remove(lock)
-                except OSError:
-                    pass
+                os.close(fd)                             # lets go of the lock (the file stays: removing it races)
         threading.Thread(target=run, name="seen-index-backfill", daemon=True).start()

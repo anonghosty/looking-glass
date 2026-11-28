@@ -49,7 +49,10 @@ src = open(os.path.join(HERE, "services_intel.py"), encoding="utf-8").read()
 ok("the index records every record's port and protocol", 'host_ports[ip][f"{port}/{proto}" if proto else str(port)].add(base)' in src)
 csrc = open(os.path.join(HERE, "combos.py"), encoding="utf-8").read()
 ok("the devices CSV has the column, beside the selection's own ports", '"ports", "all_ports_and_services"' in csrc and 'd["flags"].get("ports") or ""' in csrc)
-ok("a review kept before the ports were kept gets them worked out", 'no_ports = {h for h, v in kept_here.items() if "ports" not in v}' in csrc)
+# 2026-11-26: the same step now also fills in a review's severities (levels, kept since 18 Nov); what it does is RUN by
+# tests/check_ports_index_old_review.py on a made-up old review
+ok("a review kept before the ports were kept gets them worked out",
+   'missing = {h for h, v in kept_here.items() if "ports" not in v or "levels" not in v}' in csrc)
 ok("the advisory's text names the column's content", "it was seen open on with the service running there" in open(os.path.join(HERE, "advisory_pdf.py"), encoding="utf-8").read())
 
 print("2. a researcher who answered follows it")

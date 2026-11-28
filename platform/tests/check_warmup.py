@@ -69,6 +69,18 @@ b.days["2026-11-14"] = Day(3, 5)
 ok("the other platform's day changes: the jobs run again", W.run_once(ctx, state) is True and ran)
 ok("the key names every loaded day of both platforms", len(W.days_key([a, b])) == 2)
 ok("the time it took is kept (Task monitor)", "took" in state and state["runs"] == 3)
+# a day waiting for its reports is reloaded every minute, empty each time (2026-11-26: a warm-up every minute)
+a.days["2026-11-15"] = Day(10, 0)
+W.run_once(ctx, state); ran.clear(); runs0 = state["runs"]
+for s_ in (11, 12, 13):
+    a.days["2026-11-15"] = Day(s_, 0)
+    W.run_once(ctx, state)
+ok("an EMPTY day loaded again and again: no warm-up for it (nothing changed)", state["runs"] == runs0 and not ran, str(ran))
+a.days["2026-11-15"] = Day(14, 7)
+ok("…its reports arrive (rows): the jobs run", W.run_once(ctx, state) is True and ran)
+ran.clear()
+a.days["2026-11-15"] = Day(15, 7)
+ok("…a day WITH rows reloaded (the hourly refresh) still warms, as before", W.run_once(ctx, state) is True and ran)
 
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))
 sys.exit(1 if fails else 0)

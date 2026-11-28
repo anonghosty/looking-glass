@@ -98,7 +98,7 @@ flowchart TD
     linkStyle default stroke:#94a3b8,stroke-width:2px
 ```
 
-**Step 1, e-mail.** The pipeline reads the mailbox **read-only** (messages stay unread) over IMAP, the Gmail API (Google Workspace) or Microsoft Graph (Microsoft 365): `MAIL_PROVIDER`, set up as described in [docs/MAIL_SETUP.md](../docs/MAIL_SETUP.md). E-mails and links already handled on an earlier run are skipped (`.mail_state.sqlite`), so a run with nothing new takes a second or two. It fetches all messages received in the last `N` days (default 1 = since yesterday), 25 per round trip. New attachments are saved to `attachments_backup/`; attachments that are already there are skipped. If an e-mail brought no new attachment, its `https://dl.shadowserver.org/...` links are downloaded instead, 4 at a time. This is the same rule as the original script.
+**Step 1, e-mail.** The pipeline reads the mailbox **read-only** (messages stay unread) over IMAP, the Gmail API (Google Workspace) or Microsoft Graph (Microsoft 365): `MAIL_PROVIDER`, set up as described in [docs/MAIL_SETUP.md](../docs/MAIL_SETUP.md). E-mails and links already handled on an earlier run are skipped (`.mail_state.sqlite`), so a run with nothing new takes a second or two. It fetches all messages received in the last `N` days (`EMAIL_DAYS`, default 7), 25 per round trip. New attachments are saved to `attachments_backup/`; attachments that are already there are skipped. If an e-mail brought no new attachment, its `https://dl.shadowserver.org/...` links are downloaded instead, 4 at a time. This is the same rule as the original script, with one difference: only a report attachment (a zip or CSV) counts, so an e-mail with an inline logo still has its report links downloaded.
 
 **Step 2, unzip and sort.** Each zip is extracted once; a zip already extracted on an earlier run is skipped. Files whose name matches the report pattern
 
@@ -159,7 +159,7 @@ After `./deploy.sh`, the `shadowserver` command works from any folder and has ta
 | `--stage all` | e-mail → unzip/sort → load | ✔ |
 | `--stage email` | only e-mail and unzip/sort, no database | |
 | `--stage load` | only load `sorting_backup/` into MongoDB, no e-mail | |
-| `--days N` | pull e-mails from the last `N` days | `EMAIL_DAYS` = 1 |
+| `--days N` | pull e-mails from the last `N` days | `EMAIL_DAYS`, else 7 |
 | `--workers N` | parallel loader processes (~100–200 MB RAM each) | `WORKERS` = 6 |
 | `-q`, `--quiet` | summary lines only (used by the daily schedule) | |
 | `-v`, `--verbose` | also list attachments that were already saved, plus debug info | |
@@ -289,7 +289,12 @@ shadowserver schedule off       # remove it
 All settings live in `.env` in the project folder. Its permissions are `600`, so only your user can read it, because it holds the passwords. `.env.example` is the documented template.
 
 - Values are read **literally**, with no shell expansion, so `$`, `#` and `@` in passwords are fine.
-- Quotes around values are optional.
+- Quotes around values are optional. The Looking Glass installer writes a value with a space, `#`, `$`, `"` or a
+  backtick in single quotes.
+- **No value may contain `${` or a line break, and a password or key may not contain a single quote (`'`).** The
+  platform reads its own `.env` with python-dotenv, which expands `${` even in quotes, so a shared value would be read
+  differently there. The installer refuses such a value as it is typed and says why; if an existing MongoDB or mailbox
+  password has one, change it where it is set and give the installer the new one.
 - Changes apply on the next run. MongoDB settings apply after `shadowserver deploy`.
 
 | Setting | Meaning | Default |
@@ -308,7 +313,7 @@ All settings live in `.env` in the project folder. Its permissions are `600`, so
 | `REPORT_API_LIST_LIMIT` | how many reports one day's list may return; the API is asked one day at a time, and a day that reaches the limit is warned about in the run log, so no report is missed in silence (100 to 100000) | `5000` |
 | `PLATFORM_DIR` | where the platform is, when not beside the pipeline (`../platform` or `../threatmap`): each run applies the changes requested in its Settings → Workers (`worker_settings.py`) | – |
 | `MAIL_AUTH_DOMAIN` | the domain that must have signed a genuine report | `shadowserver.org` |
-| `EMAIL_DAYS` | default for `--days`: how many days back every run (also the scheduled ones) looks | `7` in `.env.example` (asked by the installer); `1` when unset |
+| `EMAIL_DAYS` | default for `--days`: how many days back every run (also the scheduled ones) looks | `7` (also when unset; asked by the installer) |
 | `MONGO_HOST` / `MONGO_PORT` | MongoDB address | `127.0.0.1` / `27017` |
 | `MONGO_USER` / `MONGO_PASSWORD` | MongoDB login (created by `deploy` as a root user) | – |
 | `MONGO_AUTH_SOURCE` | authentication database | `admin` |
@@ -337,7 +342,8 @@ itself can be forged), and unpacking stops the moment a limit is passed. Everyth
 folder first and only moved into `sorting_backup/` once the whole zip is done, so a refused zip leaves nothing behind.
 A refused zip is moved to `quarantine/` in the data folder with a `.reason.txt` saying which limit it broke; it is
 not deleted and not retried. If it is a genuine report, raise that limit in `.env` and move the zip back into
-`attachments_backup/`. The defaults are generous on purpose: a large country's report can unpack to hundreds of MB.
+`attachments_backup/`. A zip whose files are encrypted with a password can never be unpacked here: it is moved to
+`quarantine/` the same way, with that reason, and not tried again at every run. The defaults are generous on purpose: a large country's report can unpack to hundreds of MB.
 File names inside a zip can never place a file outside its folder.
 
 ---
@@ -451,10 +457,12 @@ database/
 ├── attachments_backup/           saved attachments and downloaded link files
 ├── unzipped_backup/<zip>/        non-report files from each zip (a zip is extracted only once)
 ├── sorting_backup/<service>/     report CSVs by service - the input of the load step
+├── quarantine/                   refused zips, mail held back by the sender check, odd report names, and
+│   └── loader/<service>/         report files that stopped the loader when loaded alone, on 2 runs (each with a .reason.txt)
 ├── logs/pipeline-YYYY-MM-DD.log  run logs (appended per day)
 ├── backups/                      database exports made by deploy
 ├── .pipeline_state.sqlite        files whose load was interrupted (resumed next run)
-└── .pipeline.lock                prevents two runs at once
+└── .pipeline.lock                prevents two runs at once (taken by run.sh and by the pipeline itself; mode 0644)
 ```
 
 Installed outside the project by `deploy`:
@@ -537,7 +545,11 @@ Everything together stays under about 5 GB.
 
 ## 11. Reliability
 
-- **No overlapping runs:** `run.sh` takes a lock (`.pipeline.lock`). The lock is released automatically when the process ends, even after a crash, so it never needs cleaning up.
+- **No overlapping runs:** `run.sh` takes a lock (`.pipeline.lock`), and the pipeline takes the same lock itself, so a run started by hand or from your own cron line (`shadowserver_pipeline.py` directly) cannot run beside another either: the second one stops with "Another pipeline run is in progress - exiting." and exit code 1. The lock is released automatically when the process ends, even after a crash, so it never needs cleaning up. The lock file is made with mode 0644 and opened read-only (a lock needs no write access): the platform, running as another Linux user, can open it to see that a run is in progress, and a lock file left by a run as root (`sudo ./run.sh`) does not stop later runs. A lock file of its own that an older version left with mode 0600 is set back to 0644 by `run.sh`. `run.sh` tells the pipeline which open file holds its lock (`LG_RUN_LOCK_FD=9`), so the pipeline uses that lock instead of taking it a second time. A symbolic link in the lock file's place is refused.
+- **One bad row or file does not stop a report:** a row that cannot be read as CSV (a field larger than 16 MB, MongoDB's own limit for a row, or a broken line) is counted (`rows_bad_csv`, under "To check" on the platform) and the rest of its file is loaded. A report file whose loader process stops (out of memory, or a crash) is tried again on its own once the others are loaded. If it stops its loader even then, it is a file error of that run and is tried again on the next run: the system can end a loader process because the whole computer is short of memory, whatever file it was loading. Only a file that stops its loader when loaded alone on 2 runs is moved to `quarantine/loader/<service>/` with a `.reason.txt` and named on the platform's bell; the next runs do not try it again. Some of its rows may already be stored (those written before the loader stopped). To try it once more, for example with fewer `WORKERS`, move it back to the path its `.reason.txt` names, `sorting_backup/<service>/<its own name>`: the next run loads it again, and the rows already stored are skipped. When a file of the same name was quarantined before, it is kept in quarantine with a number in front of its name; give it back its own name when you move it back, or it is loaded as another report file and its rows are stored twice. Until it is loaded whole, `SORTED_KEEP_DAYS` keeps its sorted copy.
+- **Files with nothing to load are read once:** a report file with a header line and no rows is noted in `.pipeline_state.sqlite` and not read again at every run, unless it changes. `SORTED_KEEP_DAYS` removes its sorted copy like that of any loaded file.
+- **A message deleted while the mailbox is read:** an e-mail deleted or moved out of the reports folder after the mailbox was listed and before it was fetched cannot be read any more. It is counted as a warning (`emails_gone`), not as an error of the run, since there is nothing left to try again. A batch of messages the mail server refuses to hand over stays an error (`emails_not_fetched`) and is tried again next run.
+- **A column named `_id`** in a report is stored as `csv_id`, so its values never take the place of MongoDB's own row id.
 - **Resume after interruption:** files whose load started are recorded in `.pipeline_state.sqlite` until they finish. After Ctrl-C, a crash or a WSL shutdown, the next run completes them. The unique index prevents duplicate rows.
 - **Retries:** a link download is retried 3 times. A dropped MongoDB connection is retried with back-off.
 - **Partial work is invisible:** downloads and attachments are written to `.part` files, and zips are extracted into `.partial` folders, then renamed. An interrupted run never leaves a half-written file under its final name.
@@ -651,16 +663,30 @@ For details on any run: `shadowserver logs 200`, or open `logs/pipeline-YYYY-MM-
   (`temperror`) is simply tried again at the next run. An administrator releases a genuine one in Settings → Workers
   (after their password), or here: `python3 mail_auth.py held` lists them, `python3 mail_auth.py release <id>` releases
   one; the next run then loads it like any other. Released folders stay under `quarantine/mail_auth/released/` as the record.
+  When blocking is on and the check itself cannot run (its record cannot be opened, for example), no e-mail is read
+  that run, so nothing unchecked is loaded: the messages stay in the mailbox for the next run, the reason is on the
+  platform's bell and Task monitor, the files already on disk are still loaded, and the report API is used for that
+  run when a key is saved.
   **Recommended for production:** switch to blocking once the record shows, for a few days, that every genuine report
   passes; or use the report API (`REPORT_SOURCE=api`), which does not depend on e-mail at all.
-- **The pipeline has its own MongoDB account**, `lookingglass_pipeline`: read and write on its database (`MONGO_DB`) and
-  read-only server status, nothing else. It cannot change any other database, create accounts or change the server.
+- **The pipeline has its own MongoDB account**, `lookingglass_pipeline`, with a role of its own on its database
+  (`lookingglass_pipeline_on_<MONGO_DB>`: read, add, change and delete rows, create collections and indexes, list them)
+  and read-only server status, nothing else. It cannot drop or rename a collection or an index (MongoDB's `readWrite`
+  could, so code run through a hostile e-mail could have wiped every report at once; the pipeline never drops
+  anything, and the quarterly purge deletes rows), change any other database, create accounts or change the server.
   `deploy.sh` creates the administrator (`root`) account the first time; `./create_pipeline_db_user.py` then makes the
   pipeline's account, checks its rights from MongoDB's own answer, and switches `.env` to it (the installer does this
   for you).
+- **An account made by an earlier version has `readWrite`.** Give it the new role once, without changing its
+  password, in this folder: `sudo cat /etc/looking-glass/mongo-admin.env | ./create_pipeline_db_user.py --update-rights`.
+  The administrator account is read from standard input, never from the command line; the script then signs in as
+  the pipeline's account and checks its rights. It is needed only when `.env` uses `MONGO_USER=lookingglass_pipeline`;
+  the pipeline keeps working until then. For a MongoDB run by someone else, `--print` shows the commands (a
+  `db.createRole`, then a `db.updateUser` that keeps the password).
 - **The administrator account is kept where only root can read it:** `/etc/looking-glass/mongo-admin.env` (owner
   root, mode 600). `create_pipeline_db_user.py` moves it there with `./store_mongo_admin.sh` (it asks for your sudo
-  password), checks that it signs in, removes the copy from this folder and blanks the password in older `.env`
+  password), checks that it signs in (over TLS when `MONGO_TLS=1`, by the same rules as the pipeline: a MongoDB on
+  another computer without TLS is refused unless `MONGO_ALLOW_PLAINTEXT=1`), removes the copy from this folder and blanks the password in older `.env`
   backups. The pipeline's and the platform's own Linux user cannot read it, so code run through a hostile e-mail
   could not take it. See it again (the way back, backups, restores): `sudo cat /etc/looking-glass/mongo-admin.env`.
   This protects against a break-in to the programs, not against root: if the user running Looking Glass has

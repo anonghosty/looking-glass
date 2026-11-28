@@ -293,6 +293,8 @@ def parse_page(page):
     end = page.find('<div class="fields-list">', start)
     if start < 0:
         return None
+    # every line and field description is kept whole; only the part of the page read is bounded (60,000 characters of
+    # content, 200,000 of the fields list) (audit 2026-11-27: lines were cut silently at 400 and 2,000, fields at 600)
     block = page[start:end if end > start else start + 60000]
     out = {"title": re.sub(r"^(CRITICAL|HIGH|MEDIUM|LOW|INFO):\s*", "", _text(h1.group(1))) if h1 else "",
            "blocks": [], "description": [], "notes": [], "last_updated": "", "severity": "", "filenames": [], "fields": {}}
@@ -315,13 +317,13 @@ def parse_page(page):
                                             and len(t) < 60 and not t.endswith(".")) else ("li" if tag == "li" else "p")
         if kind != "h" and PAGE_NOTES.match(t):
             if t not in out["notes"]:
-                out["notes"].append(t[:400])
+                out["notes"].append(t)
             continue
         if out["blocks"] and out["blocks"][-1]["text"] == t:
             continue                                                      # the same line twice in a row on the page
-        out["blocks"].append({"kind": kind, "text": t[:2000]})
+        out["blocks"].append({"kind": kind, "text": t})
         if kind != "h":
-            out["description"].append(("• " if kind == "li" else "") + t[:2000])
+            out["description"].append(("• " if kind == "li" else "") + t)
     # a heading left with nothing under it (its only line was a standard note) goes
     out["blocks"] = [b for i, b in enumerate(out["blocks"])
                      if b["kind"] != "h" or (i + 1 < len(out["blocks"]) and out["blocks"][i + 1]["kind"] != "h")]
@@ -332,7 +334,7 @@ def parse_page(page):
         for name, desc in re.findall(r'<div class="name">(.*?)</div>\s*<div class="description">(.*?)</div>', flist, re.S):
             n = _text(name)
             if n and re.match(r"^[A-Za-z0-9_.\-]+$", n):
-                out["fields"][n] = _text(desc)[:600]
+                out["fields"][n] = _text(desc)
     return out if (out["description"] or out["fields"]) else None
 
 

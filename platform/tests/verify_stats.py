@@ -18,11 +18,23 @@ their own (not with the platform's code), then compared with the running service
 Skipped (exit 77) when a constituency is set in Settings (tests/verify_constituency.py covers that) or when the replay
 day has no records yet. With demo masking forced for the automation login, the host-level filters are left out.
 
+A row in two files of one report day is counted once (counting_keys.row_key, in the pipelines); networks are companies
+with none, 0 and AS0 apart (counting_keys.network_of, through tests/mongo_derive.Keys).
+
 Usage: tests/verify_stats.py [YYYY-MM-DD] [-v]   (default: the day being replayed; -v prints every comparison)
+The service asked: LG_BASE (for example http://127.0.0.1:5088) when set, else this installation's own address.
 """
 import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import lgauth  # noqa: E402,F401  local API login (automation key)
-lgauth.require_server()   # no running service (a fresh clone, CI): skipped, not crashed
+BASE = (_os.environ.get("LG_BASE") or lgauth.BASE).rstrip("/")
+if BASE == lgauth.BASE:
+    lgauth.require_server()   # no running service (a fresh clone, CI): skipped, not crashed
+else:
+    try:
+        lgauth.urlopen(BASE + "/healthz", timeout=4).read()
+    except Exception as _exc:  # noqa: BLE001  any reason is "not running" here; the name says which
+        print(f"SKIPPED: needs the running Looking Glass service at {BASE}, which did not answer ({_exc.__class__.__name__})")
+        _sys.exit(77)
 import concurrent.futures as cf
 import json
 import os
@@ -37,9 +49,11 @@ from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
+import mongo_derive  # noqa: E402  the one rule's keys (counting_keys), configured from this installation's files
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(HERE, "..", ".env"))
-BASE = "http://127.0.0.1:5000"
+K = mongo_derive.Keys()
 ARGS = [a for a in sys.argv[1:] if not a.startswith("-")]
 VERBOSE = "-v" in sys.argv[1:]
 EMPTY = {"infection": "unknown", "tag": "untagged", "severity": "unrated"}
@@ -117,10 +131,15 @@ def stage(name):
         "infection": first(*infection), "t": "$_ed",
     }
     prefixes = (START.strftime("%Y-%m-%d"), END.strftime("%Y-%m-%d"))
+    # one row per (report, report day, line hash), however many files of that day carry it (counting_keys.row_key):
+    # the report is this stage's collection, the day the file name's date; a row without a line hash stays on its own
+    row = mongo_derive.ROW_EXPR
     return [{"$match": {"$or": [{"filename": {"$regex": "^" + p}} for p in prefixes]}},
             {"$addFields": {"_ed": {"$convert": {"input": "$extracted_date", "to": "date", "onError": None, "onNull": None}}}},
             {"$match": {"_ed": {"$gte": START, "$lt": END}}},
-            {"$project": {"_id": 0, **f}}]
+            {"$project": {"_id": 0, "_row": row, **f}},
+            {"$group": {"_id": "$_row", "doc": {"$first": "$$ROOT"}}},
+            {"$replaceRoot": {"newRoot": "$doc"}}]
 
 
 def mongo(tail):
@@ -266,8 +285,7 @@ P2 = mongo([{"$facet": {
     **{f"top_{field}": [{"$group": {"_id": f"${field}", "n": {"$sum": 1}}}, {"$sort": {"n": -1}}] for field, _n in fields},
     "timeline": [{"$group": {"_id": {"$floor": {"$divide": [{"$subtract": [{"$toLong": "$t"}, day_ms]}, 900000]}}, "n": {"$sum": 1}}}],
     "hours": [{"$group": {"_id": {"c": "$attack_class", "h": {"$hour": "$t"}}, "n": {"$sum": 1}}}],
-    **{f"asn_{side}": [{"$match": {f"{side}_asn": {"$ne": ""}}}, {"$group": {"_id": f"${side}_asn", "n": {"$sum": 1}}}]
-       for side in ("src", "dst")}}}])[0]
+    **{f"asn_{side}": [{"$group": {"_id": f"${side}_asn", "n": {"$sum": 1}}}] for side in ("src", "dst")}}}])[0]
 for field, n in fields:
     rows = P2[f"top_{field}"]
     mc = {(r["_id"] or EMPTY.get(field, "unknown")): r["n"] for r in rows}
@@ -290,6 +308,17 @@ if not DEMO:
         bad = [f"{r['value']}: {r['count']:,} vs {sum(by_asn.get(str(a), 0) for a in r['asns']):,}" for r in st[f"{side}_network"]
                if sum(by_asn.get(str(a), 0) for a in r["asns"]) != r["count"]]
         ok(f"top {side} networks per company ({len(st[f'{side}_network'])})", not bad, "; ".join(bad[:3]))
+        # the one network rule (counting_keys.network_of): companies; none, 0 and AS0 are "Unknown network", no network
+        comp, unknown = set(), 0
+        for a, n in by_asn.items():
+            c = K.network(a)
+            if c == K.UNKNOWN_NET:
+                unknown += n
+            else:
+                comp.add(c)
+        got_t, got_u = st["totals"].get(f"{side}_network"), (st.get("unrecorded") or {}).get(f"{side}_network")
+        ok(f"{side} networks: {len(comp):,} companies, {unknown:,} events without a network", got_t == len(comp) and got_u == unknown,
+           f"platform {got_t} networks, {got_u} without", show=True)
 
 # 3 -------------------------------------------------------------------------------------------------------------
 print("3. Every filter on its own (stats, map and replayed count)")

@@ -61,7 +61,11 @@ try:
     ok("demo label: the alias only", R.label("64500", True) == "Telco 1")
     ok("one company, one alias (the busiest ASN's)", R.alias("64501") == "Telco 1", R.alias("64501"))
     ok("an ASN without a name: alias in demo, AS number otherwise", R.label("64503", True) == "Provider 2" and R.label("64503", False) == "AS64503")
-    ok("an unlisted ASN: 'Unlisted network' in demo, never its number", R.label("64999", True) == "Unlisted network")
+    # each unlisted ASN its own alias, a keyed hash (count audit round 2, 2026-11-26: one "Unlisted network" for all of
+    # them could not be filtered on)
+    ok("an unlisted ASN: 'Unlisted network <tag>' in demo, never its number",
+       R.label("64999", True).startswith("Unlisted network ") and "64999" not in R.label("64999", True)
+       and R.label("64999", True) != R.label("64998", True), R.label("64999", True))
     ok("no ASN: empty label", R.label("", True) == "" and R.label(None, False) == "")
     ok("company grouping: alias in demo, name otherwise", R.company("64501", True) == "Telco 1" and R.company("64501", False) == "Example Telecom")
     ok("resolve an alias: every ASN of the company", R.resolve("Telco 1") == {"64500", "64501"}, str(R.resolve("Telco 1")))
@@ -131,15 +135,21 @@ try:
     ok("load: the researcher role is added when missing", roles.perms("researcher") >= set(DEFAULT_ROLES["researcher"]) - {"networks"})
     print("\n6. People's names (definitions and reports: full name; audit: Full Name (username))")
     from people import People
+    import person_code
+    import tempfile as _tf
+    person_code.configure(_tf.mkdtemp(prefix="lg-privacy-pc-"))     # the person codes' key: temporary, never data/
 
     class FakeUsers:
         data = {"a.mensah": {"profile": {"full_name": "Ama Mensah"}}, "kofi": {"profile": {}}, "same": {"profile": {"full_name": "same"}}}
         def get(self, n): return self.data.get(n)
     pp = People(FakeUsers())
     ok("a researcher's definition shows their registered full name", pp.name("a.mensah") == "Ama Mensah")
-    ok("an account without a full name shows its username", pp.name("kofi") == "kofi")
+    # never the sign-in name (half of what signs someone in; whole-codebase audit 2026-11-27): the person code instead
+    ok("an account without a full name shows its person code, not its sign-in name",
+       pp.name("kofi") == person_code.code("kofi") and pp.name("kofi") != "kofi")
     ok("a removed account shows the name saved with the record", pp.name("gone.user", "Former Researcher") == "Former Researcher")
-    ok("a removed account without a saved name shows the username", pp.name("gone.user") == "gone.user")
+    ok("a removed account without a saved name shows its person code, not its sign-in name",
+       pp.name("gone.user") == person_code.code("gone.user"))
     ok("non-account values stay as they are", pp.name("Looking Glass") == "Looking Glass" and pp.name("") == "")
     ok("audit: Full Name (username)", pp.audit("a.mensah") == "Ama Mensah (a.mensah)")
     ok("audit: the username alone when there is no full name (or it is the same)", pp.audit("kofi") == "kofi" and pp.audit("same") == "same")
@@ -148,7 +158,8 @@ try:
 
     class BrokenUsers:
         def get(self, n): raise OSError("being rewritten")
-    ok("accounts file unreadable for a moment: the username, no crash", People(BrokenUsers()).name("a.mensah") == "a.mensah")
+    ok("accounts file unreadable for a moment: the person code (never the sign-in name), no crash",
+       People(BrokenUsers()).name("a.mensah") == person_code.code("a.mensah"))
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
 

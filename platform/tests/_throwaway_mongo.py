@@ -51,6 +51,12 @@ def _candidates():
 
 
 def client(host, port):
+    # LG_THROWAWAY_MONGO=host:port: a throwaway MongoDB started for these tests alone (its own port and folder, with its
+    # administrator in LG_MONGO_ADMIN_FILE), so the tests run where no account of the installation's own server may
+    # create a database, and that server is never asked (the local release suite, 2026-11-26: "we do not skip")
+    given = os.environ.get("LG_THROWAWAY_MONGO", "")
+    if given:
+        host, _, port = given.rpartition(":")
     for creds in _candidates():
         if not creds:
             continue

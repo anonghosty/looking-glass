@@ -56,7 +56,9 @@ def _stats(store, load_day=None):
             return _STATS["data"], _STATS["days"]
         acc = {}
         days = []
-        for key, d in sorted(list(store.days.items())):
+        # the day's own name is `day`, never `key`: the loop once reused `key` and the cache kept the last day's name
+        # instead of the days' key, so it never hit (audit 2026-11-27, 8-1)
+        for day, d in sorted(list(store.days.items())):
             n = 0
             for e in d.events:
                 r = e.get("report") or ""
@@ -68,7 +70,7 @@ def _stats(store, load_day=None):
                 ip = e.get("ip")
                 x["records"] += 1
                 x["hosts"].add(ip)
-                x["per_day"][str(key)] += 1
+                x["per_day"][str(day)] += 1
                 # researchers never see a host: banners can carry the host's own name or address (review 2026-11-13)
                 prod, vend, dtype, ver = (banner_mask(e.get(k) or "") for k in ("product", "vendor", "device_type", "version"))
                 if prod:
@@ -87,13 +89,15 @@ def _stats(store, load_day=None):
                     if not re.match(r"(?i)^cve-", t):
                         x["tags"][t] += 1
                 n += 1
-            days.append({"day": str(key), "records": n})
+            days.append({"day": str(day), "records": n})
         out = {}
         for r, x in acc.items():
+            # every value with its count (the cut to the top TOP is made by _merge, after a report and its IPv6 twin are
+            # added up, so the full count of distinct values can be said beside the list: "Top 12 of 40", 2026-11-26)
             out[r] = {"records": x["records"], "hosts": len(x["hosts"]),
-                      "products": x["products"].most_common(TOP), "devices": x["devices"].most_common(TOP),
-                      "versions": x["versions"].most_common(TOP), "ports": x["ports"].most_common(TOP),
-                      "severity": dict(x["severity"]), "tags": x["tags"].most_common(TOP),
+                      "products": x["products"].most_common(), "devices": x["devices"].most_common(),
+                      "versions": x["versions"].most_common(), "ports": x["ports"].most_common(),
+                      "severity": dict(x["severity"]), "tags": x["tags"].most_common(),
                       "issues": sorted(((i, len(h)) for i, h in x["issues"].items()), key=lambda t: -t[1]),
                       "per_day": dict(x["per_day"])}
         if out:                                            # an empty answer is never kept: the day may still be loading
@@ -102,8 +106,9 @@ def _stats(store, load_day=None):
 
 
 def _merge(parts):
-    """The aggregates of a report and its IPv6 twin, added up (hosts are counted per report: a host on both counts twice)."""
-    out = {"records": 0, "hosts": 0, "severity": collections.Counter(), "per_day": collections.Counter()}
+    """The aggregates of a report and its IPv6 twin, added up (hosts are counted per report: a host on both counts twice).
+    Each list is cut to its top TOP (issues 200); totals holds how many distinct values each list has in all."""
+    out = {"records": 0, "hosts": 0, "severity": collections.Counter(), "per_day": collections.Counter(), "totals": {}}
     lists = {k: collections.Counter() for k in ("products", "devices", "versions", "ports", "tags", "issues")}
     for p in parts:
         if not p:
@@ -114,6 +119,8 @@ def _merge(parts):
             lists[k].update(dict(p[k]))
     for k, c in lists.items():
         out[k] = c.most_common(TOP if k != "issues" else 200)
+        out["totals"][k] = len(c)
+    out["issue_names"] = list(lists["issues"])      # every issue, for counts that must not stop at the top 200 (exploited)
     out["severity"], out["per_day"] = dict(out["severity"]), dict(out["per_day"])
     return out
 
@@ -191,6 +198,21 @@ def install(app, ctx):
             row["defined"] = bool((ctx["issues_kb"]().get(name.lower()) or {}).get("description"))
         return row
 
+    _expl = {}
+
+    def is_exploited(name):
+        """An actively exploited CVE (CISA KEV), from the local CVE card; remembered for ONE answer only (cleared at the
+        start of each request), so a CVE CISA adds later counts at once."""
+        if name not in _expl:
+            ok = False
+            if re.match(r"(?i)^cve-\d{4}-\d{4,7}$", name):
+                try:
+                    ok = bool((ctx["cve_card"](name) or {}).get("exploited"))
+                except Exception:                          # noqa: BLE001  (no card: not counted as exploited)
+                    ok = False
+            _expl[name] = ok
+        return _expl[name]
+
     def page_facts(names):
         for n in names:
             p = rmap.description(n)
@@ -203,16 +225,19 @@ def install(app, ctx):
         return {}
 
     def events_for(groups):
+        """The services report changes, the newest 30, and how many there are in all."""
         names = {n for g in groups.values() for n in g["names"]}
         urls = {(g["entry"] or {}).get("url") for g in groups.values()}
-        return [e for e in (rmap.get().get("events") or [])
-                if e.get("report") in names or (e.get("kind") == "description_changed" and e.get("url") in urls)][:30]
+        ev = [e for e in (rmap.get().get("events") or [])
+              if e.get("report") in names or (e.get("kind") == "description_changed" and e.get("url") in urls)]
+        return ev[:30], len(ev)
 
     @app.route("/api/kb/services")
     def api_kb_services():
         if not ctx["allowed"]():
             return jsonify(error="Definitions are for researchers and admins."), 403
         groups = services_reports()
+        _expl.clear()                                      # this answer's look-ups only
         stats, days = _stats(ctx["svc_store"], ctx.get("load_day"))
         try:
             in_db = set(ctx["collections"]())
@@ -238,10 +263,14 @@ def install(app, ctx):
                 "received": any(n in in_db for n in g["names"]), "hosts": agg["hosts"], "records": agg["records"],
                 "ipv6": [n for n in g["names"] if n != base],
                 "products": [p for p, _ in agg["products"][:3]], "ports": [p for p, _ in agg["ports"][:3]],
-                "issues": top_issues[:20], "issues_total": len(agg["issues"]),
+                "issues": top_issues[:20], "issues_total": agg["totals"]["issues"],
+                # every distinct product and port, beside the three named in the list ("3 of 14 products", 2026-11-26)
+                "totals": {"products": agg["totals"]["products"], "ports": agg["totals"]["ports"]},
                 "infections": ([{"name": n["name"], "hosts": n["hosts"]} for n in sintel.sinkholes_of(base, sdata)["names"]]
                                if sdata else []),
-                "exploited": sum(1 for r in top_issues if r.get("exploited")),
+                # every CVE of the report, not only its top 40 issues (2026-11-26, the user: "check every issue"):
+                # a look-up in the local CVE cards (fetch=False), no network
+                "exploited": sum(1 for n in agg.get("issue_names", ()) if is_exploited(n)),
                 "def": info.get("def", ""), "why": info.get("why", ""),
                 "notes": len(notes), "last_note": notes[0]["date"] if notes else "",
                 "page": {k: pf.get(k) for k in ("last_updated", "fetched") if pf.get(k)} | {"fields": len(pf.get("field_names") or [])},
@@ -251,7 +280,8 @@ def install(app, ctx):
         order = (ctx["report_map"].rules().get("group_order") or {}).get("Services") or []
         rows.sort(key=lambda r: (order.index(r["group"]) if r["group"] in order else 99, -r["hosts"], r["title"]))
         st = rmap.get().get("status") or {}
-        return jsonify(groups=order, reports=rows, days=days, events=events_for(groups),
+        events, events_n = events_for(groups)
+        return jsonify(groups=order, reports=rows, days=days, events=events, totals={"events": events_n},
                        status={"source": st.get("source"), "schema_commit": str(st.get("schema_commit", ""))[:7],
                                "feed_checked": st.get("feed_checked", ""), "feed_error": st.get("feed_error", ""),
                                "text_included": bool(rmap.descriptions().get("text_included"))})
@@ -279,7 +309,10 @@ def install(app, ctx):
             definition={"def": info.get("def", ""), "why": info.get("why", ""), "by": "Looking Glass"},
             shadowserver=page_facts(g["names"]), hosts=agg["hosts"], records=agg["records"], days=days, per_day=agg["per_day"],
             products=agg["products"], devices=agg["devices"], versions=agg["versions"], ports=agg["ports"],
-            severity_counts=agg["severity"], tags=agg["tags"], issues=issues[:60], issues_total=len(issues),
+            severity_counts=agg["severity"], tags=agg["tags"], issues=issues[:60], issues_total=agg["totals"]["issues"],
+            # the full count of each top list (products, devices, versions, ports, tags, issues): the window says
+            # "Top 12 of 40" beside a cut list (2026-11-26: no word that it was cut)
+            totals=dict(agg["totals"]),
             notes=ctx["notes"].list("services", base), pattern_asks=pattern_asks(base, g["names"], agg["hosts"]))
 
     # ---------------- phase 2b: patterns, across reports, sinkholes; the pattern fields and product rules
@@ -315,13 +348,17 @@ def install(app, ctx):
             return jsonify(error="Only researchers and admins can choose pattern fields."), 403
         if ctx.get("fresh") and not ctx["fresh"]():
             return jsonify(error="Sign in again to make changes (your session is older than 12 hours)."), 403
-        b = request.get_json(silent=True) or {}
+        b = request.get_json(silent=True)
+        b = b if isinstance(b, dict) else {}               # a list or a number as the body: a 400 below, not an error 500
         base = _base_or_404(str(b.get("name") or "").strip()[:80])
         if not base or not pat:
             return jsonify(error="No such services report."), 404
         user = (ctx["user"]() or {}).get("user", "") if ctx.get("user") else ""
         if b.get("reset"):
-            pat.reset(base)
+            try:
+                pat.reset(base)
+            except ValueError as e:                        # the local file is damaged: left as it is (svc_patterns)
+                return jsonify(error=str(e)), 409
             ctx["audit"].add("pattern_fields_reset", user=user, target=f"service:{base}", detail="back to the shipped pattern fields")
             return jsonify(saved=True, fields=pat.fields_for(base))
         recs = sintel.records_of(base) if sintel else []
@@ -330,9 +367,11 @@ def install(app, ctx):
         if not isinstance(fields, list) or len(fields) > 12:
             return jsonify(error="Choose up to 12 pattern fields."), 400
         for f in fields:
-            s = allowed.get(str((f or {}).get("field") or ""))
+            if not isinstance(f, dict):
+                return jsonify(error="Each pattern field is {field, kind}."), 400
+            s = allowed.get(str(f.get("field") or ""))
             if s is None:
-                return jsonify(error=f"{(f or {}).get('field')}: not a field of this report's records."), 400
+                return jsonify(error=f"{f.get('field')}: not a field of this report's records."), 400
             if not s["may"]:
                 return jsonify(error=f"{s['field']}: {s['why']}."), 400
         reviewed = set(allowed)                            # the fields known now: new ones are asked about later
@@ -358,7 +397,8 @@ def install(app, ctx):
             return jsonify(error="Only researchers and admins can add product rules."), 403
         if ctx.get("fresh") and not ctx["fresh"]():
             return jsonify(error="Sign in again to make changes (your session is older than 12 hours)."), 403
-        b = request.get_json(silent=True) or {}
+        b = request.get_json(silent=True)
+        b = b if isinstance(b, dict) else {}
         user = (ctx["user"]() or {}).get("user", "") if ctx.get("user") else ""
         try:
             pat.add_rule(b.get("contains"), b.get("product"), b.get("version"), user)

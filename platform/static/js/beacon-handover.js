@@ -31,16 +31,26 @@
       note.placeholder = "What to look into (optional): Looking Glass writes what it decoded";
       const go = el("button", "lg-btn sm primary", "Send"); go.type = "button";
       const msg = el("span", "fd-msg"); msg.setAttribute("role", "status");
+      // the list belongs to the role picked last: an answer for a role changed meanwhile is dropped, and a refused answer
+      // is said as such, never read as an empty list (audit 2026-11-27, 9-7)
+      let pseq = 0;
       const people = async () => {
+        const my = ++pseq, want = kind.value;
         who.replaceChildren(el("option", null, "Loading…")); go.disabled = true;
         try {
-          const r = await fetch(`/api/findings/people?kind=${encodeURIComponent(kind.value)}`, { credentials: "same-origin" });
-          const d = await r.json();
-          who.replaceChildren();
+          const r = await fetch(`/api/findings/people?kind=${encodeURIComponent(want)}`, { credentials: "same-origin" });
+          const d = await r.json().catch(() => ({}));
+          if (my !== pseq) return;
+          if (!r.ok) throw new Error(d.error || `Looking Glass answered ${r.status}`);
+          who.replaceChildren(); msg.textContent = "";
           for (const p of d.people || []) { const o = el("option", null, p.name); o.value = p.code; who.append(o); }   // the person's code, never a sign-in name
-          if (!who.options.length) who.append(el("option", null, kind.value === "analyst" ? "No analyst account" : "No manager account"));
+          if (!who.options.length) who.append(el("option", null, want === "analyst" ? "No analyst account" : "No manager account"));
           go.disabled = !(d.people || []).length;
-        } catch { who.replaceChildren(el("option", null, "Could not load the people")); }
+        } catch (e) {
+          if (my !== pseq) return;
+          who.replaceChildren(el("option", null, "Could not load the people")); go.disabled = true;
+          msg.textContent = window.LGLoader?.errorText ? window.LGLoader.errorText(e) : "";
+        }
       };
       kind.addEventListener("change", people); people();
       go.addEventListener("click", async () => {
@@ -78,8 +88,10 @@
         for (const x of d.selection) { const c = el("span", "bh-chip"); c.append(el("small", null, x.label), el("b", null, x.value)); chips.append(c); }
         s.append(chips);
       }
+      // the exact days only for viewers who see hosts; everyone else gets how many (beacon_findings.py: day_count)
+      const when = (d.days || []).length ? ` (${d.days.join(", ")})` : d.day_count ? `, on ${plural(d.day_count, "day")}` : "";
       const facts = el("p", "bh-facts",
-        `${plural(d.records, "record")} from ${plural(d.devices, "device")} in ${d.reports.join(", ") || "no report"}${d.days.length ? ` (${d.days.join(", ")})` : ""}, in the days in memory.`);
+        `${plural(d.records, "record")} from ${plural(d.devices, "device")} in ${d.reports.join(", ") || "no report"}${when}, in the days in memory.`);
       s.append(facts);
       if (d.held) s.append(el("p", "bh-note", "Fewer than 5 devices carry these beacons: what they say is held back here. An analyst sees every record."));
       if (d.contradicts) s.append(el("p", "bh-note", "The beacons name a different operating system than the infection they are filed under."));

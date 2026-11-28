@@ -88,10 +88,11 @@
     const rows = Object.entries(counts || {}).filter(([k, n]) => n > 0 && file.regions[k]).sort((a, b) => b[1] - a[1]);
     const tot = rows.reduce((s, [, n]) => s + n, 0);
     if (!tot) return { bbox: full, zoomed: false };
-    let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity, cum = 0;
-    for (const [k, c] of rows) {
+    // EVERY region with records, the smallest too (2026-11-26: the regions holding 98% of the records were taken, so
+    // Ghana's Upper East with 1 device fell outside a map that said "Zoomed to the regions with records")
+    let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
+    for (const [k] of rows) {
       for (const poly of file.regions[k].polys || []) for (const [x, y] of poly[0] || []) { if (x < w) w = x; if (x > e) e = x; if (y < s) s = y; if (y > n) n = y; }
-      cum += c; if (cum >= 0.98 * tot) break;
     }
     if (!(e > w && n > s)) return { bbox: full, zoomed: false };
     const FW = full[2] - full[0], FH = full[3] - full[1];

@@ -178,7 +178,13 @@ def build(d):
                      _p(f"{a['last_login'] or 'never'} {a['last_login_location']}".strip(), st["small"]),
                      _p(f"{a['approved_by']} {a['approved_at']}".strip() or "–", st["small"]), _p("; ".join(a["flags"]) or "–", st["small"])])
     out.append(_table(rows, [46 * mm, 24 * mm, 56 * mm, 16 * mm, 20 * mm, 40 * mm, 34 * mm, W - 236 * mm]))
+    # cut lists are never silent (audit 2026-11-27): how many are shown of how many, and where the rest are
+    tot = d.get("totals") or {}
     out.append(_p("Privileged changes (most recent first)", st["h"]))
+    n_priv = int(tot.get("privileged_recent") or len(d["privileged"]))
+    if n_priv > len(d["privileged"]):
+        out.append(_p(f"The {len(d['privileged'])} most recent of {n_priv} in the period. The audit log's CSV export of the "
+                      "period holds every one.", st["small"]))
     if d["privileged"]:
         rows = [[_p(h, st["cellb"]) for h in ("Time", "Change", "By", "Account", "Detail")]]
         for r in d["privileged"]:
@@ -187,9 +193,13 @@ def build(d):
         out.append(_table(rows, [34 * mm, 40 * mm, 46 * mm, 46 * mm, W - 166 * mm]))
     else:
         out.append(_p("None in the period.", st["b"]))
-    out.append(KeepTogether([_p("Failed sign-ins by address", st["h"]),
+    n_src = int(tot.get("fail_sources") or len(d["fail_sources"]))
+    cut = ([_p(f"The {len(d['fail_sources'])} addresses with the most of {n_src} in the period. The audit log's CSV export "
+                "of the period holds every failed sign-in.", st["small"])] if n_src > len(d["fail_sources"]) else [])
+    # the header, then the rows or "None" (the "None" row was never shown: `+` comes before `or`; audit 2026-11-27)
+    out.append(KeepTogether([_p("Failed sign-ins by address", st["h"])] + cut + [
                              _table([[_p(h, st["cellb"]) for h in ("Address", "Location", "Failed sign-ins and lockouts")]] +
-                                    [[_p(s["ip"], st["mono"]), _p(s["location"], st["b"]), _p(s["n"], st["b"])] for s in d["fail_sources"]]
-                                    or [[_p("None", st["b"]), _p("", st["b"]), _p("", st["b"])]], [50 * mm, 80 * mm, W - 130 * mm])]))
+                                    ([[_p(s["ip"], st["mono"]), _p(s["location"], st["b"]), _p(s["n"], st["b"])] for s in d["fail_sources"]]
+                                     or [[_p("None", st["b"]), _p("", st["b"]), _p("", st["b"])]]), [50 * mm, 80 * mm, W - 130 * mm])]))
     doc.build(out, onFirstPage=foot, onLaterPages=foot)
     return buf.getvalue()

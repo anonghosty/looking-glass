@@ -70,10 +70,22 @@ print("The admin's routes")
 import app as A  # noqa: E402
 users, sessions, audit = A.AUTH["users"], A.AUTH["sessions"], A.AUTH["audit"]
 throttle = A.AUTH["throttle"]
+# the installation's own counters (data/login_counters.json) and sessions are never touched: both stores point at a
+# temporary folder for the whole check and are put back after (helpers never touch live data, 2026-11-28)
+import shutil, tempfile  # noqa: E401,E402
+TMP = tempfile.mkdtemp(prefix="lg-check-lockouts-")
+saved = dict(sessions=(sessions.path, dict(sessions.s)), throttle=(throttle.path, dict(throttle.fail)))
+sessions.path, throttle.path = os.path.join(TMP, "sessions.json"), os.path.join(TMP, "login_counters.json")
+sessions.s.clear(); throttle.fail.clear()
+ok("the counters and sessions of this check are kept in a temporary folder",
+   throttle.path.startswith(TMP) and sessions.path.startswith(TMP))
 ADMIN, ANALYST, UA = auth.TEST_PREFIX + "locks-admin", auth.TEST_PREFIX + "locks-analyst", "lg-check-lockouts"
 real_get, real_add, logged = users.get, audit.add, []
+# "carol" is an account here: a typed name that is no account is counted under a keyed fingerprint and listed as
+# "an unknown name" (check_fix_r4 covers that); this check locks and unlocks a real account by its name
 users.get = lambda n: ({"status": "active", "role": "admin", "changed": 0} if n == ADMIN else
-                       {"status": "active", "role": "analyst", "changed": 0} if n == ANALYST else real_get(n))
+                       {"status": "active", "role": "analyst", "changed": 0} if n == ANALYST else
+                       {"status": "active", "role": "analyst", "changed": 0} if (n or "").lower() == "carol" else real_get(n))
 audit.add = lambda ev, **k: logged.append((ev, k))
 tok_a = sessions.create(ADMIN, "127.0.0.1", UA)
 csrf = max((s for s in sessions.s.values() if s["user"] == ADMIN and s.get("csrf")), key=lambda s: s["created"])["csrf"]
@@ -118,5 +130,8 @@ finally:
     users.get, audit.add = real_get, real_add
     for tok in (tok_a, tok_n):
         sessions.end(key=auth._h(tok))
+    sessions.path = saved["sessions"][0]; sessions.s.clear(); sessions.s.update(saved["sessions"][1])
+    throttle.path = saved["throttle"][0]; throttle.fail.clear(); throttle.fail.update(saved["throttle"][1])
+    shutil.rmtree(TMP, ignore_errors=True)
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {', '.join(fails)}" if fails else ""))
 sys.exit(1 if fails else 0)

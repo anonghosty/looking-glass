@@ -27,6 +27,7 @@ GET /api/beacon/finding/<id>, GET /api/beacon/code?name=&format=&operator=&versi
 Installed from app.py: beacon_findings.install(app, ctx).
 """
 import hashlib
+import threading
 import time
 
 from flask import g, jsonify, request
@@ -36,6 +37,7 @@ import finding_rules
 
 MIN_HOSTS = 5
 MAX_RECORDS = 500                      # records listed for an analyst (the counts cover all of them)
+VISIBLE_SECONDS = 300                  # how long a code's "5 or more devices" answer is reused while the days stay the same
 PARTS = ("format", "operator", "version", "os_family")
 PART_LABEL = {"format": "Format", "operator": "Operator", "version": "Version", "os_family": "OS"}
 
@@ -207,7 +209,10 @@ class BeaconFindings:
         held = not full and max(devices, (at_create or {}).get("devices", 0)) < MIN_HOSTS
         shown = {p: sel[p] for p in PARTS if p in sel and not held}
         out = {"name": sel["name"], "selection": [{"label": PART_LABEL[p], "value": shown_value(p, v)} for p, v in shown.items()],
-               "held": held, "records": n, "devices": devices, "reports": reps, "days": days,
+               # the exact days only for viewers who see hosts; everyone else gets how many (researchers never see
+               # dates: audit 2026-11-27)
+               "held": held, "records": n, "devices": devices, "reports": reps, "days": days if full else [],
+               "day_count": len(days),
                "said": describe(sel, held)[0].upper() + describe(sel, held)[1:],
                "contradicts": bool(sel.get("os_family") and beacon_decode.contradicts(sel["name"], sel["os_family"]) and not held)}
         if records:
@@ -220,6 +225,8 @@ def install(app, ctx):
     """ctx: store, labels(), findings (findings.Findings), people_of(kind), has_perm(p), sees_hosts(), csrf_ok(), fresh(),
     audit."""
     bf = BeaconFindings(ctx)
+    _VISIBLE = {}                                  # code -> (days-in-memory mark, when, visible)
+    _VLOCK = threading.Lock()
     hp = ctx["has_perm"]
     f = ctx["findings"]
 
@@ -278,7 +285,23 @@ def install(app, ctx):
         if ctx["sees_hosts"]():
             return True
         sel = selection_of(ctx.get("book"), code) if ctx.get("book") else None
-        return bool(sel) and len(bf.scan(sel, False)[1]) >= MIN_HOSTS
+        if not sel:
+            return False
+        # one scan per code while the days in memory stay the same (audit 2026-11-27: every describe of an LG-B code
+        # scanned every record again), at most VISIBLE_SECONDS old
+        days = ctx["store"].days
+        mark = tuple((k, id(d), len(getattr(d, "events", None) or ())) for k, d in sorted(days.items(), key=lambda x: str(x[0])))
+        now = time.time()
+        with _VLOCK:
+            hit = _VISIBLE.get(code)
+            if hit and hit[0] == mark and now - hit[1] < VISIBLE_SECONDS:
+                return hit[2]
+        seen = len(bf.scan(sel, False)[1]) >= MIN_HOSTS
+        with _VLOCK:
+            if len(_VISIBLE) >= 5000:
+                _VISIBLE.clear()
+            _VISIBLE[code] = (mark, now, seen)
+        return seen
 
     if ctx.get("book") is not None:
         ctx["book"].beacon_visible = visible

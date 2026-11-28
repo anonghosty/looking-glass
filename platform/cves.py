@@ -81,6 +81,9 @@ class CveIntel:
         # raised TypeError when another process wrote the cache first, and a same-tick smaller file counted as older)
         self._mtime, self._checked = (filesig.sig(cache_path) if os.path.exists(cache_path) else None), time.time()
         self.cache.setdefault("kev", {"t": 0, "items": {}})
+        # records fetched in a batch are written to the file once at its end (flush), not the whole cache per record
+        # (audit 2026-11-27: a look-up of N CVEs rewrote the whole file N times, under the lock)
+        self._dirty, self._batching = False, 0
 
     # ------------------------------------------------------------------ plumbing
     def _refresh(self):
@@ -113,6 +116,7 @@ class CveIntel:
                 json.dump(self.cache, f)
             os.replace(tmp, self.path)
             self._mtime = filesig.sig(self.path)
+            self._dirty = False
         except OSError:
             pass
 
@@ -188,8 +192,9 @@ class CveIntel:
                 self._save()
         return {i: self.cache["epss"].get(i) for i in ids}
 
-    def nvd(self, cve, fetch=True, wait=False):
-        """NVD's record (cached a week). fetch=False: only what is cached (None if nothing yet)."""
+    def nvd(self, cve, fetch=True, wait=False, save=True):
+        """NVD's record (cached a week). fetch=False: only what is cached (None if nothing yet). save=False: kept in
+        memory only, the caller writes the cache once for its whole batch (flush)."""
         cve = cve.upper()
         hit = self.cache["nvd"].get(cve)
         if hit and time.time() - hit["t"] < TTL:
@@ -219,7 +224,9 @@ class CveIntel:
                     "references": list(dict.fromkeys(tagged + refs))[:10], "reference_count": len(refs)}
         with self.lock:
             self.cache["nvd"][cve] = {"t": time.time(), "data": data}
-            self._save()
+            self._dirty = True
+            if save:
+                self._save()
         return data
 
     @staticmethod
@@ -232,9 +239,10 @@ class CveIntel:
                             "severity": c.get("baseSeverity", ""), "vector": c.get("vectorString", "")}
         return None
 
-    def cveorg(self, cve, fetch=True):
+    def cveorg(self, cve, fetch=True, save=True):
         """The official CVE record (CVE.org): the CNA's description, CVSS, weakness and references; CISA's ADP scores
-        when the CNA gave none. Cached a week."""
+        when the CNA gave none. Cached a week. save=False: kept in memory only, the caller writes the cache once for its
+        whole batch (flush)."""
         cve = cve.upper()
         hit = self.cache["cveorg"].get(cve)
         if hit and time.time() - hit["t"] < TTL:
@@ -266,8 +274,16 @@ class CveIntel:
                     "references": refs[:10], "reference_count": len(refs)}
         with self.lock:
             self.cache["cveorg"][cve] = {"t": time.time(), "data": data}
-            self._save()
+            self._dirty = True
+            if save and not self._batching:
+                self._save()
         return data
+
+    def flush(self):
+        """The records kept in memory by a batch (save=False) written to the cache file, once."""
+        with self.lock:
+            if self._dirty:
+                self._save()
 
     def lookup_many(self, ids, progress=None, budget=None, stop=None):
         """Explain several CVEs as one batch, reporting each step to progress(kind, text, done=None):
@@ -311,8 +327,15 @@ class CveIntel:
             done[0] += 1
             say("item", msg, done=done[0])
 
-        with ThreadPoolExecutor(max_workers=4) as ex:
-            list(ex.map(one, todo))
+        with self.lock:
+            self._batching += 1                          # cveorg() keeps its records in memory meanwhile
+        try:
+            with ThreadPoolExecutor(max_workers=4) as ex:
+                list(ex.map(one, todo))
+        finally:
+            with self.lock:
+                self._batching -= 1
+            self.flush()                                 # the batch's records in the file, once
         nvd_have = sum(1 for i in ids if self.cache["nvd"].get(i))
         if nvd_have < len(ids):
             say("step", f"NVD analysis: {nvd_have} of {len(ids)} already added; the rest are added by the background "
@@ -411,26 +434,34 @@ class CveIntel:
         """Several CVEs as one batch (see lookup_many); fetch=False: only what is cached."""
         ids = [i.strip().upper() for i in ids if is_cve(i)]
         if fetch:
-            return self.lookup_many(ids)
+            # its time budget passed on (audit 2026-11-27: cards() took a budget and never used it)
+            return self.lookup_many(ids, budget=budget)
         return {i: self.card(i, fetch=False) for i in ids}
 
     def prefetch(self, ids, stop=None):
-        """Background: fill the cache for every CVE in the data, at NVD's pace."""
+        """Background: fill the cache for every CVE in the data, at NVD's pace. stop: () -> True ends it, also during
+        the CVE.org batch (audit 2026-11-27: the stop was not passed on to it)."""
         ids = [i.strip().upper() for i in ids if is_cve(i)]
-        self.lookup_many(ids)                    # KEV, EPSS and CVE.org first: everything is explained at once
+        self.lookup_many(ids, stop=stop)         # KEV, EPSS and CVE.org first: everything is explained at once
         n = 0
-        for i in ids:
-            if stop and stop():
-                break
-            hit = self.cache["nvd"].get(i)
-            if hit and time.time() - hit["t"] < TTL:
-                continue
-            try:
-                self.nvd(i, fetch=True, wait=True); n += 1
-            except RuntimeError as exc:
-                if self.log:
-                    self.log.warning("NVD look-up of %s failed: %s", i, exc)
-                time.sleep(30)
+        try:
+            for i in ids:
+                if stop and stop():
+                    break
+                hit = self.cache["nvd"].get(i)
+                if hit and time.time() - hit["t"] < TTL:
+                    continue
+                try:
+                    # written every 10 records and at the end, not the whole cache per record
+                    self.nvd(i, fetch=True, wait=True, save=False); n += 1
+                    if n % 10 == 0:
+                        self.flush()
+                except RuntimeError as exc:
+                    if self.log:
+                        self.log.warning("NVD look-up of %s failed: %s", i, exc)
+                    time.sleep(30)
+        finally:
+            self.flush()
         return n
 
     def status(self):

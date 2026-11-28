@@ -21,7 +21,9 @@
     return j;
   }
 
+  let last = {};          // the last answer about the passkeys (public, minimum): a new passkey's answer is drawn with it
   function draw(d) {
+    last = d;
     const box = $("pkList");
     box.classList.remove("st-loading", "lg-has-logo");
     box.replaceChildren();
@@ -67,7 +69,10 @@
   }
 
   async function load() {
-    try { draw(await call("/api/passkeys")); } catch (e) { $("pkList").textContent = window.LGLoader.errorText(e); }
+    // a list that could not be read says so and stops turning (audit 2026-11-27, 9-9: the loading animation stayed)
+    try { draw(await call("/api/passkeys")); } catch (e) {
+      const box = $("pkList"); box.classList.remove("st-loading", "lg-has-logo"); box.textContent = window.LGLoader.errorText(e);
+    }
   }
 
   $("pkAdd")?.addEventListener("click", async () => {
@@ -77,7 +82,10 @@
       if (!window.LGPasskey?.supported()) throw new Error("This browser or address cannot use passkeys here.");
       const opts = await call("/api/passkeys/options", {});
       const credential = await window.LGPasskey.create(opts);
-      draw({ ...(await call("/api/passkeys")), ...(await call("/api/passkeys", { credential, name: $("pkName").value })) });
+      // the answer holds the new list; the rest (public, minimum) is the page's last answer: no extra read (audit
+      // 2026-11-27, 9-15), unless the page never had one
+      const added = await call("/api/passkeys", { credential, name: $("pkName").value });
+      draw({ ...(last.passkeys ? last : await call("/api/passkeys")), ...added });
       $("pkName").value = "";
     } catch (e) {
       err(e && e.name && e.name !== "Error" ? window.LGPasskey.words(e) : window.LGLoader.errorText(e, true));

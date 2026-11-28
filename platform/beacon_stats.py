@@ -138,9 +138,11 @@ def drill(events, mt=lambda s: s):
                      "status": beacon_decode.status_text(x["state"], long=True)
                      + (". Ask to send it for decoding on the Findings page (Requests Looking Glass could not decode)"
                         if x["state"] in beacon_decode.SENDABLE_STATES else ""),
-                     "operators": [k for k, _ in x["ops"].most_common(5)], "versions": [k for k, _ in x["vers"].most_common(5)],
+                     # every operator, version and C2 domain (the complete-list CSV is made from these rows), the most
+                     # records first; no cut
+                     "operators": [k for k, _ in x["ops"].most_common()], "versions": [k for k, _ in x["vers"].most_common()],
                      "events": x["events"], "hosts": len(x["hosts"]), "infections": sorted(x["inf"]),
-                     "domains": sorted(x["dom"])[:5], "first": _when(x["t0"]), "last": _when(x["t1"])})
+                     "domains": sorted(x["dom"]), "first": _when(x["t0"]), "last": _when(x["t1"])})
     n_dec = sum(r["events"] for r in rows if r["decoded"] == "Yes")
     devs = len({e["src_ip"] for e in events if e.get("src_ip") and decoded(e)})
     return dict(

@@ -75,6 +75,14 @@ def urlopen(url, *a, **kw):
 urllib.request.urlopen = urlopen
 
 
+def replay_day(base=None, path="/api/svc/clock", timeout=60):
+    """The day the running service replays (its clock's replay_day), the default day of the checks that compare it
+    with MongoDB. Not "yesterday UTC": from 00:00 UTC until that day's reports are in, the service still replays the
+    day before by design, and those checks could not run for hours every night (2026-11-27)."""
+    import json
+    return json.load(urlopen((base or BASE).rstrip("/") + path, timeout=timeout))["replay_day"]
+
+
 def require_server(timeout=4):
     """For checks that call the running service: without one (a fresh clone, CI) they are SKIPPED (exit 77), not
     crashed with a connection error (review 2026-11-13). With the service up, nothing changes."""

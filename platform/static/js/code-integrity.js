@@ -42,6 +42,17 @@
   const msg = el("p", "wk-msg muted"); msg.setAttribute("role", "status");
   const say = (t, bad) => { msg.textContent = t || ""; msg.classList.toggle("bad", !!bad); };
 
+  // a redraw replaces every button: the one used gets the focus back (same file, same action), else the status line that
+  // says what happened (the keepFocus pattern of app.js; audit 2026-11-27, 9-8: the focus fell to the page's top)
+  function keepFocus(build, from) {
+    const k = from?.dataset?.fk, v = from?.dataset?.fv;
+    build();
+    if (k == null) return;
+    const back = [...body.querySelectorAll("[data-fk]")].find((n) => n.dataset.fk === k && n.dataset.fv === v && !n.disabled);
+    if (back) { back.focus({ preventScroll: true }); return; }
+    msg.tabIndex = -1; msg.focus({ preventScroll: true });
+  }
+
   async function act(f, kind, btn) {
     const keep = kind === "approve";
     const title = keep ? "Keep this file as yours" : "Not ours: move it to quarantine";
@@ -55,13 +66,13 @@
     btn.disabled = true;
     try {
       const d = await api(keep ? "/api/admin/code-check/approve" : "/api/admin/code-check/quarantine", { key: f.key, sha256: f.sha256, password: pw });
-      V = d; draw();
       say(keep ? `Kept: ${f.key} is accepted as yours (recorded in the audit log).`
         : `Recorded in the audit log. Now run the command shown under ${f.key} on the server; the next check sees the file gone.`);
+      V = d; keepFocus(draw, btn);
     } catch (e) {
-      if (e.view) { V = e.view; draw(); }
       say(window.LGLoader.errorText(e, true), true);
       btn.disabled = false;
+      if (e.view) { V = e.view; keepFocus(draw, btn); }
     }
   }
 
@@ -87,7 +98,7 @@
         if (f.expected) what.append(el("small", "muted mono ci-sha", ` The release lists ${f.expected}.`));
         tr.append(what, el("td", "mono ci-sha", f.sha256), el("td", null, f.first_seen));
         const acts = el("td", "ci-acts");
-        const keep = el("button", "pill-btn", "This is ours, keep it"); keep.type = "button";
+        const keep = el("button", "pill-btn", "This is ours, keep it"); keep.type = "button"; keep.dataset.fk = f.key; keep.dataset.fv = "approve";
         keep.addEventListener("click", () => act(f, "approve", keep));
         if (f.decided) {
           // decided "not ours": the service cannot move its own code; the administrator runs this on the server
@@ -96,7 +107,7 @@
             el("pre", "st-env mono", f.decided.command));
           acts.append(box, keep);
         } else {
-          const out = el("button", "lg-btn", "Not ours, move to quarantine"); out.type = "button";
+          const out = el("button", "lg-btn", "Not ours, move to quarantine"); out.type = "button"; out.dataset.fk = f.key; out.dataset.fv = "quarantine";
           out.addEventListener("click", () => act(f, "quarantine", out));
           acts.append(keep, out);
         }

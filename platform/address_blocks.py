@@ -90,7 +90,8 @@ def block_of(ip):
         return ""
     if ip.count(".") == 3 and ":" not in ip:          # the common case, without building an address object
         a, b, c, d = ip.split(".")
-        if all(x.isdigit() and int(x) < 256 for x in (a, b, c, d)):
+        # ASCII digits only: "²" is a digit to isdigit() but not to int(), and broke a whole day's load (audit 2026-11-27, 1-10)
+        if all(x.isascii() and x.isdigit() and int(x) < 256 for x in (a, b, c, d)):
             return f"{int(a)}.{int(b)}.{int(c)}.0/24"
         return ""
     try:

@@ -3,24 +3,17 @@
 /* Looking Glass · the researchers' Notes window (Definitions page and Settings), apart from the define window.
    New findings on a name ("the C2 moved to …", "seen with … since Monday"), dated and signed with the author's full
    name (data/notes.json, notes.py), shown on every card and in the PDF reports as "Notes shared by Researcher/TI: <name>".
-   A note can carry combination codes (combos.py): the exact combinations it points at, picked from what Intel gathered
-   saw, built from ticked indicators, or pasted. An analyst pastes a code on the Combinations page to get those devices.
+   A note can carry combination codes (combos.py): the exact combinations it points at, moved here from Intel gathered
+   ("Move to notes") or pasted. An analyst pastes a code on the Combinations page to get those devices.
    kb-settings.js puts a Notes button on every row: window.LGNotes.open(name, section). */
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
-  const fmt = (n) => Number(n || 0).toLocaleString("en-US");
-  const pl = (n, w) => `${fmt(n)} ${w}${n === 1 ? "" : "s"}`;
   const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content || "";
   const post = (url, body) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() }, body: JSON.stringify(body) });
   const admin = document.body.dataset.admin === "1";
   const CODE_RX = /^LG-[CXB]-[0-9A-F]{8}$/;   // combinations, and decoded beacons (LG-B)
-  // the kinds a combination is made of (intel.py: COMMS_COMBO_KINDS, COMBO_KINDS)
-  const KINDS = { infections: ["C2 domain", "DNS lookup", "TLS server name (SNI)", "User agent", "Associated tags"],
-                  issues: ["Associated tags", "Other CVEs on the same hosts"], services: null };   // services: every pattern field
-  const ofKinds = (k) => !KINDS[cur.section] || KINDS[cur.section].includes(k.kind);
-  const rn = (x) => (intel?.labels || {})[x] || x;                    // a services report's title
   // recorded before it is copied, under the person's name (lg-copy.js, insider.py); not recorded = not copied
   async function clip(text) {
     const r = await window.LGCopy.copy({ text, kind: "code", what: "a combination code (notes)", page: "Definitions" });
@@ -70,7 +63,7 @@
   box.append(head, bodyEl);
   document.body.append(back, box);
 
-  let cur = { name: "", section: "infections" }, codes = [], intel = null, tab = "seen", groupSel = "";
+  let cur = { name: "", section: "infections" }, codes = [];
 
   // ---------------- notes
   function codeTag(c, removable) {
@@ -126,7 +119,7 @@
     } catch { if (mine === loadSeq) render([]); }
   }
 
-  // ---------------- combinations: picked, and three ways to pick
+  // ---------------- combinations: picked, moved here from Intel gathered or pasted
   function renderPicked() {
     picked.replaceChildren();
     if (!codes.length) { picked.append(el("span", "kbn-none", "No combination attached.")); return; }
@@ -137,141 +130,11 @@
     if (codes.length >= 10) { msg.textContent = "At most 10 combinations on one note."; msg.className = "kbn-msg bad"; return; }
     codes.push({ code: c.code, text: c.text }); renderPicked(); renderPane();
   }
-  const TABS = [["seen", "Seen in the reports"], ["build", "Build one"], ["paste", "Paste a code"]];
-  for (const [k, l] of TABS) {
-    const b = el("button", null, l); b.type = "button"; b.setAttribute("role", "tab"); b.dataset.k = k;
-    b.addEventListener("click", () => { tab = k; renderPane(); }); tabs.append(b);
-  }
-  function stat(t, cls) { return el("span", `kbn-stat ${cls || ""}`, t); }
-  function choice(code, text, figures, show) {
-    const li = el("li", "kbn-choice");
-    const on = codes.some((x) => x.code === code);
-    const b = el("button", `kbn-pick${on ? " on" : ""}`, on ? "Attached" : "Attach"); b.type = "button"; b.disabled = on;
-    b.addEventListener("click", () => pick({ code, text }));
-    const what = el("div", "kbn-what"); what.append(el("code", "kbn-c", code), el("span", null, show || text));
-    const figs = el("div", "kbn-figs"); for (const f of figures) figs.append(f);
-    li.append(what, figs, b); return li;
-  }
-  async function ensureIntel() {
-    if (intel) return intel;
-    pane.replaceChildren(el("p", "kbn-loading", "Reading what Intel gathered saw for this name…"));
-    try {
-      const r = await fetch(`/api/intel?section=${cur.section}&name=${encodeURIComponent(cur.name)}`, { cache: "no-store" });
-      intel = r.ok ? await r.json() : { reports: [], across: {} };
-    } catch { intel = { reports: [], across: {} }; }
-    return intel;
-  }
-  async function renderPane() {
-    // no list of every combination (noise): a code comes from "Move to notes" in Intel gathered, or is pasted
-    tab = "paste";
-    for (const b of tabs.children) { b.hidden = b.dataset.k !== "paste"; b.setAttribute("aria-selected", String(b.dataset.k === tab)); }
-    if (tab === "paste") return pastePane();
-    const d = await ensureIntel();
-    if (tab === "seen") return seenPane(d);
-    return buildPane(d);
-  }
-  // every combination of this name, grouped by report like a detailed drop-down list, with a filter: nothing to type
-  function seenPane(d) {
-    pane.replaceChildren();
-    const groups = [];
-    for (const r of d.reports || []) {
-      const all = (r.combinations?.length ? r.combinations : r.single ? [r.single] : []).filter((c) => c.code);
-      const svc = cur.section === "services";
-      if (all.length) groups.push({ label: svc ? "Combinations" : r.report, sub: `${fmt(r.records)} records`, rows: all.map((c) => ({ code: c.code,
-        text: `${rn(r.report)}: ${c.items.join(" + ") || "the name only"}`, show: c.items.join(" + ") || "the name only", figs: () =>
-          [stat(pl(c.count, "record")), stat(pl(c.hosts, "device")), c.repeat_hosts ? stat(`${fmt(c.repeat_hosts)} repeating`, "rep") : stat("")] })) });
-    }
-    const xs = (d.across?.cross_combos || []).filter((x) => x.code);
-    // a name seen in two or more reports always gets its Across reports tab, even when no device is shared (it says why)
-    if (xs.length || (d.reports || []).length > 1 || d.across_always) groups.push({ label: "Across reports", sub: "devices seen in several reports", empty: !xs.length, rows: xs.map((x) => ({ code: x.code,
-      text: `Across ${x.parts.map((p) => `${rn(p.report)}: ${p.items.join(" + ") || "the name only"}`).join(" | ")}`,
-      show: x.parts.map((p) => `${rn(p.report)}: ${p.items.join(" + ") || "the report only"}`).join("  |  "), figs: () => [stat(pl(x.devices, "device")), stat("across reports", "x")] })) });
-    // services: the hosts also calling botnet sinkholes, per infection
-    const sk = (d.sinkholes?.names || []).filter((x) => x.code);
-    if (sk.length) groups.push({ label: "Calling sinkholes", sub: "hosts also in the network communications reports", rows: sk.map((x) => ({ code: x.code,
-      text: `${d.title || cur.name}: hosts also calling botnet sinkholes as ${x.name}`, show: `Also calling botnet sinkholes as ${x.name}`,
-      figs: () => [stat(pl(x.hosts, "device")), stat("sinkholes", "x")] })) });
-    if (!groups.length) { pane.append(el("p", "kbn-empty", "Intel gathered saw no combination for this name on the report day. Build one, or paste a code.")); return; }
-    // one tab per report, and "Across reports" as a tab of its own; the list shows the chosen one
-    if (!groups.some((g) => g.label === groupSel)) groupSel = groups[0].label;
-    const tabsG = el("div", "kbn-gtabs"); tabsG.setAttribute("role", "tablist"); tabsG.setAttribute("aria-label", "Combinations of which report");
-    const head = el("div", "kbn-ghead");
-    const filt = el("input", "kbn-in kbn-filter"); filt.type = "text"; filt.spellcheck = false; filt.setAttribute("aria-label", "Filter the combinations");
-    const lists = el("div", "kbn-groups");
-    const draw = () => {
-      for (const b of tabsG.children) b.setAttribute("aria-selected", String(b.dataset.g === groupSel));
-      const g = groups.find((x) => x.label === groupSel);
-      head.replaceChildren(el("b", null, g.label), el("span", null, `${g.sub} · ${g.rows.length} combination${g.rows.length === 1 ? "" : "s"}`));
-      filt.placeholder = `Filter the ${g.rows.length} combination${g.rows.length === 1 ? "" : "s"} of ${g.label} (a domain, a tag, a user agent…)`;
-      const q = filt.value.trim().toLowerCase(); lists.replaceChildren();
-      const rows = g.rows.filter((x) => !q || x.text.toLowerCase().includes(q) || x.code.toLowerCase().includes(q));
-      const ul = el("ul", "kbn-choices");
-      for (const x of rows) ul.append(choice(x.code, x.text, x.figs(), x.show));
-      if (g.empty) {
-        const reps = (d.reports || []).map((r) => r.report), v6 = reps.filter((r) => /ipv6/i.test(r));
-        const why = [cur.section === "services"
-          ? `No exact pattern across reports is shared by ${d.min_hosts || 5} or more of this report's devices on the report day, so there is none to attach.`
-          : `No device of ${cur.name} was seen in more than one report on the report day, so there is no cross-report combination to attach.`];
-        if (v6.length && v6.length < reps.length) why.push(`${v6.join(", ")} records a different IP address for a machine than the other reports, so their devices never match.`);
-        if (reps.some((r) => /dns/i.test(r)) && reps.some((r) => !/dns/i.test(r))) why.push("A DNS report often sees the resolver that looked the name up, not the infected machine, so it rarely shares a device with the other reports.");
-        const box = el("div", "kbn-empty kbn-why"); for (const t of why) box.append(el("p", null, t)); lists.append(box);
-      } else lists.append(rows.length ? ul : el("p", "kbn-empty", "Nothing matches the filter."));
-    };
-    for (const g of groups) {
-      const b = el("button", `kbn-gtab${g.label === "Across reports" ? " x" : ""}`); b.type = "button"; b.setAttribute("role", "tab"); b.dataset.g = g.label;
-      b.append(el("span", null, g.label), el("small", null, String(g.rows.length)));
-      b.addEventListener("click", () => { groupSel = g.label; filt.value = ""; draw(); }); tabsG.append(b);
-    }
-    filt.addEventListener("input", draw);
-    pane.append(tabsG, head, filt, lists, el("p", "kbn-foot", `Every combination Intel gathered saw for ${cur.name} on the report day (${(d.days || []).join(", ")}), the most frequent first.`));
-    draw();
-  }
-  function buildPane(d) {
-    pane.replaceChildren();
-    const reps = (d.reports || []).filter((r) => r.indicators.some(ofKinds));
-    if (!reps.length) { pane.append(el("p", "kbn-empty", cur.section === "services"
-      ? "There is nothing to build from yet: no pattern value of this report is shared by 5 or more hosts on the report day."
-      : "There is nothing to build from: the reports in memory carry no C2 domain, lookup, user agent or tag for this name.")); return; }
-    const form = el("div", "kbn-build");
-    const sel = el("select", "kbn-sel lg-enhance"); sel.setAttribute("aria-label", "Report");
-    for (const r of reps) { const o = el("option", null, `${rn(r.report)} (${fmt(r.records)} records)`); o.value = r.report; sel.append(o); }
-    const vals = el("div", "kbn-vals");
-    const res = el("div", "kbn-res");
-    const go = el("button", "lg-btn sm", "Make the code"); go.type = "button";
-    const draw = () => {
-      vals.replaceChildren(); res.replaceChildren();
-      const r = reps.find((x) => x.report === sel.value);
-      for (const k of r.indicators.filter(ofKinds)) {
-        const g = el("fieldset", "kbn-kind"); g.append(el("legend", null, k.kind));
-        for (const v of k.values) {
-          // services: an item is "Label: value" (svc_patterns / services_intel), the value shown as it is
-          const l = el("label", "kbn-tick"); const cb = el("input"); cb.type = "checkbox"; cb.value = cur.section === "services" ? `${k.kind}: ${v.value}` : v.value;
-          l.append(cb, el("span", null, v.value), el("small", null, `${fmt(v.count)}`)); l.title = `${fmt(v.count)} records carry it`; g.append(l);
-        }
-        vals.append(g);
-      }
-    };
-    sel.addEventListener("change", draw);
-    go.addEventListener("click", async () => {
-      const items = [...vals.querySelectorAll("input:checked")].map((x) => x.value);
-      go.disabled = true; res.replaceChildren(el("span", "kbn-loading", "Making the code…"));
-      try {
-        const r = await post("/api/combo-codes/new", { section: cur.section, name: cur.name, report: sel.value, items });
-        const x = await r.json().catch(() => ({}));
-        res.replaceChildren();
-        if (!r.ok) { res.append(el("span", "kbn-msg bad", x.error || `Failed (HTTP ${r.status})`)); return; }
-        const line = el("div", "kbn-made");
-        line.append(el("code", "kbn-c", x.code), el("span", null, x.text),
-          el("span", `kbn-stat${x.records ? "" : " warn"}`, x.records ? `${pl(x.records, "record")} · ${pl(x.devices, "device")} carry exactly this now`
-            : "No record carries exactly this set on the report day: an analyst may still find it in other days"));
-        const a = el("button", "lg-btn sm primary", "Attach"); a.type = "button"; a.addEventListener("click", () => pick({ code: x.code, text: x.text }));
-        line.append(a); res.append(line);
-      } finally { go.disabled = false; }
-    });
-    form.append(el("p", "kbn-foot", "Pick a report and tick the indicators that must come together. “Exactly” means: a record with these and no other indicator of these kinds. Tick nothing for records that carry only the name."),
-      sel, vals, go, res);
-    pane.append(form); draw();
-  }
+  // one way to attach a code here: paste it (a combination comes from "Move to notes" in Intel gathered); the tabs
+  // "Seen in the reports" and "Build one" were always hidden and are gone (2026-11-27 audit)
+  const pasteTab = el("button", null, "Paste a code"); pasteTab.type = "button"; pasteTab.setAttribute("role", "tab");
+  pasteTab.dataset.k = "paste"; pasteTab.setAttribute("aria-selected", "true"); tabs.append(pasteTab);
+  function renderPane() { pastePane(); }
   function pastePane() {
     pane.replaceChildren();
     const f = el("div", "kbn-paste"), inp = el("input", "kbn-in"); inp.placeholder = "LG-C-1A2B3C4D"; inp.maxLength = 13; inp.spellcheck = false;
@@ -330,7 +193,7 @@
   // attach: [{code, text}] already on the new note ("Move to notes" in Intel gathered)
   function open(name, section, label, attach) {
     opener = document.activeElement;
-    cur = { name: name || "", section: section || "infections" }; codes = (attach || []).slice(0, 10); intel = null; tab = "seen"; groupSel = "";
+    cur = { name: name || "", section: section || "infections" }; codes = (attach || []).slice(0, 10);
     const svc = cur.section === "services";              // a services report: its pattern combinations, as for any name
     title.textContent = label || cur.name; eyebrow.textContent = `Notes · ${svc ? "services report" : cur.section === "issues" ? "issue" : "infection / category"}`;
     title.classList.toggle("kbn-title-text", !!label);

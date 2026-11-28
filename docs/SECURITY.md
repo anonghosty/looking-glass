@@ -79,8 +79,10 @@ The sign-in card opens on a choice: **Sign in** or **Create an account**, plus *
   window and the lists of people a finding can be sent to use an opaque code per account (a keyed hash with the
   installation's own random key, `data/person_code.key`, so a guessed name gives nothing; different on every
   installation, never turned back into a name outside the server), and headers
-  show full names. The exceptions are the person's own Account page, the auditor's audit trail and the administrators'
-  account management. `tests/check_no_signin_names.py` signs in as every role, opens every page and answer, and fails
+  show full names. Wherever a page, answer, PDF or download names a person, it uses their full name, else their
+  person code, never the sign-in name, also for an account removed since; a new passkey's user handle is the person
+  code too (passkeys made earlier keep working). The exceptions are the person's own Account page, the Audit portal's
+  audit trail, Trace a leak's user column and the users table on the Admin page. `tests/check_no_signin_names.py` signs in as every role, opens every page and answer, and fails
   on any sign-in name.
 - The key behind the codes (`data/person_code.key`, mode 600) is made once and never changed by Looking Glass. A key
   made again where one had been (removed, replaced, or `data/` restored from an older backup) goes to the audit log
@@ -114,7 +116,9 @@ The sign-in card opens on a choice: **Sign in** or **Create an account**, plus *
   to accounts, roles, sign-up links, connectors, passkeys, the sign-in check and updating Looking Glass ask every time, and that confirmation is used once, for
   that one request. The list of actions is one table on the server (`stepup.py`), checked before every request, so
   no page can forget it. Confirmations, failures and refusals are in the audit log, and wrong codes count towards
-  the sign-in lock.
+  the sign-in lock. A change the account may not make at all (a Settings change without the Settings permission) is
+  refused straight away, without asking it to confirm first. This is done only where the permission a change needs is
+  certain, so a permitted change is never let through without the check.
 - **An internal installation that is reached from outside.** When an installation set to `local` or `private` sees
   sign-ins from public internet addresses, the administrators' bell says so: it is reachable from outside (a port
   forward, a proxy) but checks people with codes a look-alike site can relay. Close it off, or make it a public
@@ -122,6 +126,21 @@ The sign-in card opens on a choice: **Sign in** or **Create an account**, plus *
 - **Your bell when a passkey changes.** When a passkey is added to or removed from your account, other than the first
   two you register right after signing in, your own bell says so for 7 days, with its name and when. Only you see it;
   the audit log records it too.
+- **What a passkey does not cover, and what to do about it.**
+  - *Your own browser.* A malicious browser extension, or a script running inside your own browser, can intercept a
+    passkey request. No website can stop that. Looking Glass's Content-Security-Policy blocks scripts injected into
+    its pages from elsewhere, but not an extension. Use a browser profile with no extensions for administering
+    Looking Glass.
+  - *Your own computer.* Malware on the computer can misuse a passkey manager that syncs passkeys to the cloud. Prefer
+    a hardware security key, or a passkey kept on one device only. Where the sign-in check is Passkey, every account
+    registers two, so one of them can be a hardware key.
+  - *Adding a passkey to someone else's account.* Once an account has its first two passkeys, adding or removing one
+    asks for the fresh check every time. The owner's bell says so, and the change is in the audit log. There is no SMS
+    or other weaker way back in. The remaining gap: whoever holds an account's password and its authenticator code
+    can register passkeys on an account that has none yet. So new accounts should register theirs straight away.
+  - *Look-alike sites.* A passkey works only for the host name it was made on. Looking Glass checks the exact host
+    name and origin of every passkey sign-in and registration. There is no sign-in by device code, so a message asking
+    you to "update your passkey" on another site cannot be used to sign in here.
 
 ### Forgot password
 - **Use my authenticator:** user name + a code from the app + **one recovery code** + a new password. Both are needed,
@@ -168,7 +187,10 @@ same address always gets the same label on one server, so a viewer can follow on
 "analyse this host" still works, but the address cannot be read or computed back from the label without the
 server's secret. (Earlier versions kept two of the four parts, `x.161.x.34`; in a constituency of a few address
 blocks, with the network alias, region and port next to it, that left too few candidates.) Network names become
-aliases (Telco 1, Bank 2...) and host names are removed. Set `REF_SECRET` in `.env` (the installer does) so labels
+aliases (Telco 1, Bank 2...) and host names are removed. A network missing from the network list gets its own alias,
+"Unlisted network" and a tag that is a keyed hash of its AS number under the same secret, so a masked viewer can tell
+two such networks apart and filter on one, but cannot read the AS number from the alias. A record without a network is
+"Unknown network", never an alias. Set `REF_SECRET` in `.env` (the installer does) so labels
 stay the same across restarts.
 A report's own fields (the "specific fields" in a details window) are shown to masked viewers only when they are on an
 allowlist of technical details (protocol, software, versions, ciphers, capability flags; `masked_fields.py`), and even
@@ -296,7 +318,9 @@ to the internet), passkeys are required on top of it (above).
   and adds two: the session ID is **replaced every 12 hours**, so a copied cookie stops working on its own; and once
   the sign-in is **older than 12 hours, changes need a fresh sign-in** (admin actions and Settings answer "sign in
   again"), while viewing continues. Admin → Sessions shows each session's type and expiry, and can end any of them.
-- **Logout** is a button (`POST /logout`) and ends the session on the server. A link can't log you out.
+- **Logout** is a button (`POST /logout`) and ends the session on the server. A link can't log you out, and neither
+  can another site: the form must carry the session's own CSRF token, or the session stays and the browser goes back to
+  the home page.
 - **Password changes and removed accounts** end that account's sessions immediately.
 - **No plain-HTTP logins from other computers**, unless `ALLOW_INSECURE_REMOTE_LOGIN=1`, so passwords and cookies aren't sent in clear over the network.
 - **Script injection, the main way cookies are stolen, is contained:** strict CSP (nonce, no eval, no inline handlers), all report data inserted as text, and `HttpOnly` cookies.
@@ -319,9 +343,20 @@ to the internet), passkeys are required on top of it (above).
 - **Error answers:** an answer shows an error's words only when Looking Glass wrote them for the reader; a library's
   or Python's own text gets a fixed message, and the detail goes to the service's log or the audit.
 - **Separate database accounts:** the platform reads with a read-only MongoDB account; the pipeline has its own
-  account limited to its database; the administrator account is kept root-only in `/etc/looking-glass/`.
-- **Report intake:** unpacking limits against oversized or malicious archives, report names checked before they become
-  collections, and an optional DKIM check of every report e-mail, with blocking and quarantine.
+  account limited to its database, with a role of its own (`lookingglass_pipeline_on_<database>`) that can read,
+  add, change and delete rows and create collections and indexes, but not drop or rename them (MongoDB's `readWrite`
+  could), so code run inside the pipeline cannot wipe every report at once. An installation made earlier gives its
+  account that role once, in the database folder: `sudo cat /etc/looking-glass/mongo-admin.env |
+  ./create_pipeline_db_user.py --update-rights`. The administrator account is kept root-only in
+  `/etc/looking-glass/`, and its sign-in check (`store_mongo_admin.sh --check`) uses TLS and the same rules as the
+  pipeline.
+- **Report intake:** unpacking limits against oversized or malicious archives (a zip encrypted with a password is
+  refused and quarantined), report names checked before they become collections, one run at a time
+  (`.pipeline.lock`), and an optional DKIM check of every report e-mail, with blocking and quarantine. With blocking on
+  and the check unable to run, no e-mail is read that run. A row that cannot be read as CSV is counted and the rest of
+  its file loads; a file that stops the loader even on its own is moved to `quarantine/loader/` with its reason. A run that leaves a
+  report, a file or rows out fails (exit code 1), and the administrators' bell and Settings → Task monitor say what was
+  not loaded, so no report goes missing without a word.
 
 ## 3. Operator checklist
 

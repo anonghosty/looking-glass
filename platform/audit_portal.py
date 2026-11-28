@@ -33,6 +33,7 @@ from flask import Response, g, jsonify, render_template, request
 import control_map
 import csvsafe
 import data_access
+import shares
 
 TABS = [("auth", "Authentication"), ("accounts", "Accounts and access"), ("sessions", "Sessions"),
         ("config", "Configuration changes"), ("data", "Data access and exports"), ("copies", "Copies"), ("workflow", "Workflow"),
@@ -159,12 +160,22 @@ NIST = {"AC-2": "Account Management", "AC-2(3)": "Disable Accounts", "AC-2(7)": 
         "IA-2(1)": "Multi-factor Authentication to Privileged Accounts",
         "IA-2(2)": "Multi-factor Authentication to Non-privileged Accounts", "SC-8": "Transmission Confidentiality and Integrity",
         "SC-8(1)": "Cryptographic Protection", "SC-23": "Session Authenticity"}
-ALERT = re.compile(r"failed|locked|misuse|refused|revoke|delete|limited|wrong")
+# an administrator's account and sign-in changes made in their own modules (stepup.py, signin_check.py, invites.py):
+# named, on their tab, and counted as privileged (audit 2026-11-27: they were "System" and not counted)
+for _e, _l, _t in (("passkeys_reset", "Passkeys reset by an admin", "accounts"),
+                   ("signin_check_changed", "Sign-in check changed", "config"),
+                   ("invite_made", "Sign-up link made", "accounts"),
+                   ("invite_revoked", "Sign-up link revoked", "accounts"),
+                   ("invite_used", "Sign-up link used", "accounts")):
+    LABEL[_e], TAB_OF[_e] = _l, _t
+# "locked", not "unlocked": an admin lifting a lock is not an alert (audit 2026-11-27)
+ALERT = re.compile(r"failed|(?<!un)locked|misuse|refused|revoke|delete|limited|wrong")
 PRIVILEGED = {"user_role", "roles_changed", "user_approve", "user_revoke", "user_restore", "user_delete", "user_reset_mfa",
               "user_allow_reset", "settings_changed", "peace_of_mind", "kicked", "user_kick",
               "pipeline_unlock", "pipeline_settings_saved", "pipeline_apikey_saved", "sender_release",
               "pipeline_change_requested", "pipeline_request_applied", "password_policy_changed", "password_change_forced",
-              "login_unlocked", "cache_time_changed"}
+              "login_unlocked", "cache_time_changed",
+              "passkeys_reset", "signin_check_changed", "invite_made", "invite_revoked"}
 MAX_DAYS = 800
 
 
@@ -305,20 +316,30 @@ def install(app, ctx):
         t1 = datetime(to.year, to.month, to.day, tzinfo=timezone.utc).timestamp() + 86400
         return t0, t1, fr.isoformat(), to.isoformat()
 
-    def shaped(r):
-        """One entry as the portal shows it: its tab, readable event, people by name, self-test and alert marks."""
+    def shaped(r, names=None):
+        """One entry as the portal shows it: its tab, readable event, people by name, self-test and alert marks.
+        names: a dict kept for one list, so each account is looked up once per list, not twice per entry (each look-up
+        reads the accounts; audit 2026-11-27)."""
+        names = {} if names is None else names
+
+        def label(v):
+            v = v or ""
+            if v not in names:
+                names[v] = people.audit(v)
+            return names[v]
         e = r.get("event", "")
         st = audit.is_selftest(r) or r.get("user") == "automation"
         out = {"t": r.get("t"), "when": _when(r.get("t")), "event": e, "label": LABEL.get(e, e.replace("_", " ").capitalize()),
                "tab": "system" if st else TAB_OF.get(e, "system"), "user": r.get("user", ""), "target": r.get("target", ""),
-               "user_label": people.audit(r.get("user", "")), "target_label": people.audit(r.get("target", "")),
+               "user_label": label(r.get("user", "")), "target_label": label(r.get("target", "")),
                "ip": r.get("ip", ""), "location": r.get("location", ""), "ua": r.get("ua", ""), "detail": pretty(e, r.get("detail", "")),
                "detail_logged": r.get("detail", ""),
                "selftest": st, "alert": bool(ALERT.search(e)), "privileged": e in PRIVILEGED, "chained": "prev" in r}
         return out
 
     def rows_in(t0, t1):
-        return [shaped(r) for r in audit.records() if t0 <= (r.get("t") or 0) < t1]
+        names = {}
+        return [shaped(r, names) for r in audit.records() if t0 <= (r.get("t") or 0) < t1]
 
     # ------------------------------------------------------------------ the page
     @app.route("/audit")
@@ -454,7 +475,10 @@ def install(app, ctx):
         ok_n, fail_n = by["login"], by["login_failed"] + by["login_refused"]
         tabs = collections.Counter(r["tab"] for r in rows)
         priv = [r for r in rows if r["privileged"]][-15:][::-1]
-        return {"kpis": {"events": len(rows), "signins": ok_n, "failed": fail_n, "failure_rate": round(100 * fail_n / max(1, ok_n + fail_n), 1),
+        # the failure rate as people read it, before its " %" (audit.js, audit_report.py, IA-1): "<0.1" for one failure in
+        # thousands rather than "0.0", ">99.9" rather than "100.0" while one sign-in succeeded (shares.py)
+        rate = shares.pct(fail_n / max(1, ok_n + fail_n), 1)[:-1]
+        return {"kpis": {"events": len(rows), "signins": ok_n, "failed": fail_n, "failure_rate": rate,
                          "lockouts": by["login_locked"], "privileged": sum(by[e] for e in PRIVILEGED),
                          "exports": tabs["data"] - by["data_viewed"], "views": by["data_viewed"],
                          "people": len(active_users), "after_hours": len(after_hours), "misuse": by["session_misuse"],
@@ -463,6 +487,9 @@ def install(app, ctx):
                 "tabs": [{"key": k, "label": v, "n": tabs[k]} for k, v in TABS if k != "system"],
                 "fail_sources": [{"ip": ip, "location": loc, "n": n} for (ip, loc), n in fail_ip.most_common(8)],
                 "exports_by": [{"who": w, "n": n} for w, n in export_by.most_common(8)],
+                # the top 8 of each, with how many there are ("Top 8 of 23" on the page): nobody hides in a cut list
+                "totals": {"fail_sources": len(fail_ip), "exports_by": len(export_by),
+                           "after_hours_recent": len(after_hours), "privileged_recent": sum(1 for r in rows if r["privileged"])},
                 "worst_day": (lambda m: {"ip": m[0][0][0], "day": m[0][0][1], "n": m[0][1]} if m else None)(fail_ip_day.most_common(1)),
                 "privileged_recent": priv, "after_hours_recent": after_hours[-8:][::-1]}
 
@@ -654,6 +681,7 @@ def install(app, ctx):
                                   "by": people.audit((g.user or {}).get("user", "")), "kpis": ov["kpis"], "checks": checks(t0, t1, ov),
                                   "integrity": dict(integrity()), "accounts": access_rows(), "privileged": ov["privileged_recent"],
                                   "fail_sources": ov["fail_sources"], "exports_by": ov["exports_by"], "per_day": ov["per_day"],
+                                  "totals": ov["totals"],                # "N of M" beside each cut list (audit 2026-11-27)
                                   "first": _when(integrity()["first"]), "last": _when(integrity()["last"]), "nist_release": NIST_RELEASE,
                                   "cis_release": control_map.CIS_RELEASE, "cis_source": control_map.CIS_SOURCE,
                                   "cis_attribution": control_map.CIS_ATTRIBUTION, "cis_note": control_map.CERTIFICATION_NOTE,
@@ -668,4 +696,4 @@ def install(app, ctx):
     import audit_proof
     audit_proof.install(app, audit, allowed, deny,
                         lambda: ((g.user or {}).get("user", ""), people.audit((g.user or {}).get("user", ""))),
-                        to_csv=lambda records, first: csv_bytes([shaped(r) for r in records], first=first))
+                        to_csv=lambda records, first: (lambda names: csv_bytes([shaped(r, names) for r in records], first=first))({}))

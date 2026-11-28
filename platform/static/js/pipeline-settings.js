@@ -104,6 +104,9 @@
   }
 
   function draw() {
+    // the unlock countdown belongs to the drawing it counts on: stopped at every redraw, and once it reaches zero it
+    // asks again only once (audit 2026-11-27, 11-10: drawn locked, the old countdown went on calling load() every second)
+    clearInterval(timer); timer = null;
     body.replaceChildren();
     if (!S.found) { body.append(el("p", "fd-empty", S.message)); return; }
     const locked = !S.unlocked;
@@ -114,7 +117,8 @@
       const ed = el("button", "lg-btn primary", "Edit"); ed.type = "button"; ed.addEventListener("click", askPassword); lockBar.append(ed);
     } else {
       const left = el("span", null, ""); lockBar.append(left);
-      const tick = () => { const s = Math.max(0, S._until - Date.now() / 1000); left.textContent = `Unlocked for ${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}. Saving locks it again.`; if (s <= 0) load(); };
+      const tick = () => { const s = Math.max(0, S._until - Date.now() / 1000); left.textContent = `Unlocked for ${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}. Saving locks it again.`;
+        if (s <= 0) { clearInterval(timer); timer = null; setTimeout(() => load(), 1500); } };
       S._until = S._until || Date.now() / 1000 + S.unlocked_for; clearInterval(timer); timer = setInterval(tick, 1000); tick();
       const lk = el("button", "pill-btn", "Lock now"); lk.type = "button";
       lk.addEventListener("click", async () => { await api("/api/pipeline/lock", {}).catch(() => {}); S._until = 0; clearInterval(timer); load(); });
@@ -140,7 +144,7 @@
         box.append(el("h4", null, `Waiting for the pipeline's next run (${pend.length})`));
         const ul = el("ul");
         pend.forEach((r) => {
-          const li = el("li", null, `${r.at.replace("T", " ").slice(0, 16)} UTC · ${r.by} · ${r.kind === "settings" ? Object.entries(r.values || {}).map(([k, v]) => `${k} → ${v}`).join(", ") : r.kind === "release" ? `release ${r.qid}` : r.values}`);
+          const li = el("li", null, `${r.at.replace("T", " ").slice(0, 16)} UTC · ${r.by_name || "an administrator"} · ${r.kind === "settings" ? Object.entries(r.values || {}).map(([k, v]) => `${k} → ${v}`).join(", ") : r.kind === "release" ? `release ${r.qid}` : r.values}`);
           // a change that makes the pipeline less strict waits for someone on the server (worker_settings.weakens)
           if ((r.weakens || []).length) {
             const w = el("div", "wk-confirm");
@@ -168,11 +172,27 @@
         box.append(ul);
       }
       if (res.length) {
-        box.append(el("h4", null, "Done by the pipeline"));
-        const ul = el("ul");
-        res.slice(0, 5).forEach((r) => ul.append(el("li", r.status === "applied" ? null : "bad",
-          `${(r.applied_at || "").replace("T", " ").slice(0, 16)} UTC · ${r.status === "applied" ? "applied" : "REFUSED"} · ${r.by} · ${(r.changed || []).join("; ") || r.reason || "nothing changed"}`)));
-        box.append(ul);
+        // the newest 5, and when there are more, "5 of N" with a button for the rest the server sent (2026-11-26: the
+        // list stopped at 5 without a word)
+        const total = Math.max(res.length, S.totals?.results ?? res.length);
+        box.append(el("h4", null, `Done by the pipeline${total > 5 ? ` (${total.toLocaleString()})` : ""}`));
+        const ul = el("ul"), note = el("p", "st-hint wk-more");
+        const draw = (n) => {
+          ul.replaceChildren(...res.slice(0, n).map((r) => el("li", r.status === "applied" ? null : "bad",
+            `${(r.applied_at || "").replace("T", " ").slice(0, 16)} UTC · ${r.status === "applied" ? "applied" : "REFUSED"} · ${r.by_name || "an administrator"} · ${(r.changed || []).join("; ") || r.reason || "nothing changed"}`)));
+          const shown = Math.min(n, res.length);
+          note.replaceChildren();
+          if (total > shown) {
+            note.append(`The newest ${shown.toLocaleString()} of ${total.toLocaleString()}.`);
+            if (res.length > shown) {
+              const b = el("button", "pill-btn", res.length < total ? `Show the newest ${res.length.toLocaleString()}` : `Show all ${total.toLocaleString()}`);
+              b.type = "button"; b.addEventListener("click", () => draw(res.length)); note.append(" ", b);
+            }
+          }
+          note.hidden = !note.childNodes.length;
+        };
+        draw(5);
+        box.append(ul, note);
       }
       body.append(box);
     }

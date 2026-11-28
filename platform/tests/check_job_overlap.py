@@ -175,8 +175,10 @@ FLOCK = shutil.which("flock")
 
 
 def runsh_starts(lock):
-    """Would a pipeline run start now? Exactly run.sh's two lines (exec 9>.pipeline.lock; flock -n 9)."""
-    r = subprocess.run(["bash", "-c", 'exec 9>"$1"; flock -n 9', "_", lock], capture_output=True, timeout=30)
+    """Would a pipeline run start now? Exactly run.sh's lines: a symbolic link refused, the lock file made 0644 when
+    missing, opened read-only (exec 9<.pipeline.lock; flock -n 9)."""
+    r = subprocess.run(["bash", "-c", '[ -L "$1" ] && exit 1; [ -e "$1" ] || (umask 022; : > "$1"); exec 9<"$1"; flock -n 9',
+                        "_", lock], capture_output=True, timeout=30)
     return r.returncode == 0
 
 
@@ -351,8 +353,9 @@ else:
        and 'RUN_LOCK = os.path.join(HERE, ".pipeline.lock")' in qpsrc, where)
     ok("...and a purge that meets a report being made waits, and says so", "except Busy:" in rb and "outcome=\"waiting\"" in rb)
 if runsh is not None:
-    ok("the pipeline's run.sh: one run at a time, on .pipeline.lock (flock -n)",
-       "exec 9>.pipeline.lock" in runsh and "flock -n 9" in runsh and js.PIPELINE_LOCK == ".pipeline.lock")
+    ok("the pipeline's run.sh: one run at a time, on .pipeline.lock opened read-only (flock -n), handed to the pipeline",
+       "exec 9<.pipeline.lock" in runsh and "flock -n 9" in runsh and "export LG_RUN_LOCK_FD=9" in runsh
+       and js.PIPELINE_LOCK == ".pipeline.lock")
 if pipesrc is not None:
     mi = re.search(r"\ndef main\(.*?\n(?=def )", pipesrc, re.S)
     mb = mi.group(0) if mi else ""

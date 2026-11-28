@@ -54,8 +54,10 @@ try:
     print("Processes, users, performance")
     import request_tracker as RT, time as _t
     ok("the new sections are there", all(k in j for k in ("processes", "users", "performance", "users_window_min")), str(sorted(j)))
-    ok("the monitor's own request is a running process, named by account", any(p["user"] == ADMIN and p["route"] == "/api/admin/monitor"
-       for p in j["processes"]), str(j["processes"][:3]))
+    import people as _people
+    ok("the monitor's own request is a running process, named by the account's person code, never its sign-in name",
+       any(p["user"] == _people.person_label(ADMIN) and p.get("user_label") and p["route"] == "/api/admin/monitor"
+           for p in j["processes"]) and ADMIN not in json.dumps(j["processes"]), str(j["processes"][:3]))
     for _ in range(3):
         n.get("/api/admin/monitor", headers=H)                 # the analyst: three refused requests, still theirs
     us = {u["user"]: u for u in RT.users()}

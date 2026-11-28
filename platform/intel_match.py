@@ -47,7 +47,8 @@ class MatchView:
         self.cache = {}                              # (days key, kind, value) -> answer; a few, an hour at most
 
     def lead(self, kind, value):
-        for x in self.intel.leads()["leads"]:
+        d = self.intel.leads_all() if hasattr(self.intel, "leads_all") else self.intel.leads()
+        for x in d.get("all_leads", d["leads"]):      # every lead, not only the first 60 the card lists
             if x["kind"] == kind and x["value"] == value:
                 return x
         return None

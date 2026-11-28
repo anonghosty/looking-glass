@@ -3,8 +3,10 @@
 """Locked sign-ins, for admins (2026-11-14): one office or partner behind a single public address can lock itself out
 (20 failures from one address in an hour lock the address), and the locks were invisible until they ran out.
 
-  GET  /api/admin/lockouts          what is locked now: account (one name from one address) or address, failures, until
-  POST /api/admin/lockouts/unlock   {ip, name?}: lift one account's lock from that address, or the whole address
+  GET  /api/admin/lockouts          what is locked now: account (one name from one address) or address, failures, until;
+                                    a typed name that is no account is "an unknown name", with its key ("?" + 12 hex)
+  POST /api/admin/lockouts/unlock   {ip, name?}: lift one account's lock from that address (name: the account's name,
+                                    or the key of an unknown name), or the whole address
 
 Needs the 'users' permission; lifting also the CSRF token and a fresh sign-in, and is written to the audit log
 (login_unlocked: who lifted which lock). The limits themselves are in .env (auth.Throttle).
@@ -13,6 +15,8 @@ import ipaddress
 import time
 
 from flask import abort, g, jsonify, make_response, request
+
+import reqjson
 
 
 def install(app, ctx):
@@ -39,7 +43,7 @@ def install(app, ctx):
             abort(403)
         if not ctx["fresh"]():
             abort(make_response(jsonify(error="For your security, sign out and sign in again to make changes.", reauth=True), 403))
-        d = request.get_json(silent=True) or {}
+        d = reqjson.body()
         ip, name = d.get("ip"), d.get("name") or None
         try:
             ip = str(ipaddress.ip_address(ip if isinstance(ip, str) else ""))
@@ -49,7 +53,11 @@ def install(app, ctx):
             return jsonify(error="Not an account name."), 400
         n = throttle.unlock(ip, name)
         who = (getattr(g, "user", None) or {}).get("user", "")
-        audit.add("login_unlocked", user=who, target=name or ip,
-                  detail=(f"account {name} from {ip}" if name else f"address {ip} (every account tried from it)")
+        # a typed name that is no account (often a password typed into the name box) never goes into the audit log, as
+        # typed or as its key: "an unknown name" (audit 2026-11-27)
+        unknown = bool(name) and throttle.is_unknown(name)
+        audit.add("login_unlocked", user=who, target=ip if (unknown or not name) else name,
+                  detail=(f"{throttle.UNKNOWN} from {ip}" if unknown else f"account {name} from {ip}" if name
+                          else f"address {ip} (every account tried from it)")
                   + f" · {n} counter(s) cleared")
         return jsonify(ok=True, cleared=n, locked=throttle.lockouts())

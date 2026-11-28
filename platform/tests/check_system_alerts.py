@@ -50,6 +50,60 @@ try:
     A.clear("ann", ["sys:" + r[0]["key"]])
     SA.note_start(os.path.join(plat, "data"), now=now - 60)
     ok("…cleared, a new start shows it again", any(i["id"] == f"sys:restart:{round(now - 60)}" for i in A.for_user("ann", now)))
+    print("The mail server's certificate not checked (IMAP_VERIFY_TLS off in the pipeline's .env, 2026-11-26)")
+    penv_path = os.path.join(pipe, ".env")
+    base_env = open(penv_path).read()
+
+    def with_pipe_env(extra):
+        open(penv_path, "w").write(base_env + extra)
+        return [a for a in A.current(now) if a["key"].startswith("mail-tls-off")]
+    ok("unset (the default): checked, no reminder", with_pipe_env("") == [] and A.mail_tls_off() is False)
+    for v in ("true", "1", "yes", "on", "TRUE"):
+        ok(f"IMAP_VERIFY_TLS={v}: checked, no reminder", with_pipe_env(f"IMAP_VERIFY_TLS={v}\n") == [])
+    for v in ("false", "0", "no", "off", "False"):
+        f = with_pipe_env(f"IMAP_VERIFY_TLS={v}\n")
+        ok(f"IMAP_VERIFY_TLS={v}: a problem in the bell, pointing at Settings → Workers",
+           len(f) == 1 and f[0]["problem"] and f[0]["link"] == "/settings#workers" and "Check the mail server's certificate" in f[0]["text"], str(f))
+    f = with_pipe_env("IMAP_VERIFY_TLS=false\n")
+    nxt = [a for a in A.current(now + 86400) if a["key"].startswith("mail-tls-off")]
+    ok("…said again every day (a new key each day), so a cleared reminder comes back tomorrow",
+       f and nxt and f[0]["key"] != nxt[0]["key"], str((f, nxt)))
+    A.clear("ann", ["sys:" + f[0]["key"]])
+    ok("…cleared for the day by the person who read it", not any(i["id"] == "sys:" + f[0]["key"] for i in A.for_user("ann", now)))
+    ok("Gmail API and Microsoft Graph always check: never this reminder",
+       with_pipe_env("IMAP_VERIFY_TLS=false\nMAIL_PROVIDER=gmail_api\n") == [] and with_pipe_env("IMAP_VERIFY_TLS=false\nMAIL_PROVIDER=microsoft_graph\n") == [])
+    # the platform's reading is the pipeline's own (mail_sources._truthy), where the pipeline is beside the platform
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    pdir_ = next((d for d in (os.path.join(os.path.dirname(here), "database"), os.path.expanduser("~/shadowserver"))
+                  if os.path.isfile(os.path.join(d, "mail_sources.py"))), None)
+    if pdir_:
+        import importlib.util
+        spec_ = importlib.util.spec_from_file_location("lg_pipe_mail_sources", os.path.join(pdir_, "mail_sources.py"))
+        ms_ = importlib.util.module_from_spec(spec_)
+        try:
+            spec_.loader.exec_module(ms_)
+        except Exception as ex:  # noqa: BLE001
+            ms_ = None
+            print(f"  (the pipeline's mail_sources.py could not be loaded here: {ex})")
+        if ms_ is not None:
+            vals_ = ("true", "1", "yes", "on", "TRUE", " true ", "false", "0", "no", "off", "False", "", "maybe")
+            mism = []
+            for v in vals_:
+                with_pipe_env(f"IMAP_VERIFY_TLS={v}\n")
+                if A.mail_tls_off() != (not ms_._truthy(v)):
+                    mism.append(v)
+            ok("…'off' means exactly what it means to the pipeline (mail_sources._truthy), for every spelling", not mism, str(mism))
+            open(penv_path, "w").write(base_env)
+    else:
+        print("  (the pipeline is not beside this platform: its own reading of IMAP_VERIFY_TLS not compared)")
+    import task_monitor  # noqa: E402
+    with_pipe_env("IMAP_VERIFY_TLS=false\n")
+    tm_off = task_monitor.snapshot({"alerts": A, "base_dir": plat}) if hasattr(task_monitor, "snapshot") else None
+    open(penv_path, "w").write(base_env)
+    tm_on = task_monitor.snapshot({"alerts": A, "base_dir": plat}) if hasattr(task_monitor, "snapshot") else None
+    ok("Settings → Task monitor is told the same (one function): off, then on",
+       tm_off is not None and tm_off["pipeline"]["mail_tls_off"] is True and tm_on["pipeline"]["mail_tls_off"] is False,
+       "task_monitor.snapshot not found" if tm_off is None else str(tm_off["pipeline"]))
     print("The pipeline's run (its status file, found beside the platform)")
     stp = os.path.join(pipe, "reports", "pipeline_status.json")
     json.dump({"finished": round(now - 600), "ok": True, "free_gb": 900, "min_free_gb": 5, "disk_low": False}, open(stp, "w"))
@@ -57,6 +111,16 @@ try:
     json.dump({"finished": round(now - 600), "ok": False, "file_errors": 2, "email_failed": 0, "disk_low": False}, open(stp, "w"))
     f = [a for a in A.current(now) if a["key"].startswith("pipeline-failed")]
     ok("a failed run is a problem, with what failed", f and f[0]["problem"] and "2 file error" in f[0]["text"], str(f))
+    # the mailbox: the reason the pipeline gives is in the bell (2026-11-26: an expired mail-server certificate was
+    # only in the pipeline's log; the bell said "the mailbox could not be read")
+    json.dump({"finished": round(now - 600), "ok": False, "email_failed": 1, "disk_low": False,
+               "email_error": "the mail server's certificate has expired"}, open(stp, "w"))
+    f = [a for a in A.current(now) if a["key"].startswith("pipeline-failed")]
+    ok("a mailbox that could not be read: the bell says why", f and "the mail server's certificate has expired" in f[0]["text"], str(f))
+    json.dump({"finished": round(now - 600), "ok": False, "email_failed": 1, "disk_low": False}, open(stp, "w"))
+    f = [a for a in A.current(now) if a["key"].startswith("pipeline-failed")]
+    ok("...an older pipeline without a reason: the bell still says the mailbox could not be read",
+       f and "the mailbox could not be read" in f[0]["text"] and "(" not in f[0]["text"].split("could not be read")[1][:3], str(f))
     json.dump({"finished": round(now - 30 * 3600), "ok": True, "disk_low": True, "free_gb": 2.1, "min_free_gb": 5}, open(stp, "w"))
     ok("no run for over 26 h, and a low disk: both", {"pipeline-stale", "disk-low"} <= keys(), str(keys()))
     ok("PIPELINE_STALE_HOURS is used", "pipeline-stale" not in {a["key"].split(":")[0] for a in SA.Alerts(plat, env={"PIPELINE_STALE_HOURS": "48"}).current(now)})

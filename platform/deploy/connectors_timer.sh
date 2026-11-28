@@ -10,7 +10,8 @@
 #   deploy/connectors_timer.sh run        send now, as the timer would (for a first look; prints what was sent)
 set -euo pipefail
 project="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
-name="$(sed -n 's/^LG_SERVICE=//p' "$project/.env" 2>/dev/null | tail -1)"; name="${name:-looking-glass}-connectors"
+# (quotes and spaces taken off, as deploy/reload.sh and update_helper.sh read it: LG_SERVICE='lg' is the service lg)
+name="$(sed -n 's/^LG_SERVICE=//p' "$project/.env" 2>/dev/null | tail -1 | tr -d '"'"'"' \r')"; name="${name:-looking-glass}-connectors"
 unit_dir=/etc/systemd/system
 case "${1:-}" in
   install)
@@ -22,6 +23,9 @@ case "${1:-}" in
         > "$project/deploy/$name.$x"
       chmod 644 "$project/deploy/$name.$x"
     done
+    # run with sudo, the two files were written as root into the installation's folder: they belong to its user, so its
+    # updates can replace them (audit 2026-11-27; as update_helper.sh does)
+    chown "$user:" "$project/deploy/$name.service" "$project/deploy/$name.timer" 2>/dev/null || true
     grep -q '^CONNECTOR_KEY_SECRET=.\{64\}' "$project/.env" || echo "Note: CONNECTOR_KEY_SECRET is not set in .env: keys cannot be stored until it is (openssl rand -hex 32)."
     sudo install -m 644 "$project/deploy/$name.service" "$unit_dir/$name.service"
     sudo install -m 644 "$project/deploy/$name.timer" "$unit_dir/$name.timer"

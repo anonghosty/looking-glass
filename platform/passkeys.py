@@ -168,9 +168,23 @@ class Challenges:
         return v[0]
 
 
+def user_handle(user):
+    """The WebAuthn user handle of a NEW passkey: the account's person code (person_code.py, an opaque keyed hash), never
+    the sign-in name (audit 2026-11-27, 6-12; WebAuthn says the handle must carry no personal information). Passkeys
+    registered before kept the sign-in name as their handle: they still sign in, because authenticate() finds a passkey
+    by its credential id among the account's own and never reads the handle."""
+    import person_code
+    try:
+        return person_code.code(user).encode("ascii")
+    except RuntimeError:
+        # data/person_code.key damaged (the bell says so): a random handle, still no personal information (the handle is
+        # never read back: see above)
+        return ("p-" + secrets.token_hex(10)).encode("ascii")
+
+
 def registration_options(store, challenges, bound, user, display, rp_id):
     opts = generate_registration_options(
-        rp_id=rp_id, rp_name="Looking Glass", user_name=user, user_id=user.encode("utf-8"), user_display_name=display or user,
+        rp_id=rp_id, rp_name="Looking Glass", user_name=user, user_id=user_handle(user), user_display_name=display or user,
         challenge=challenges.new(bound, "register"),
         authenticator_selection=AuthenticatorSelectionCriteria(resident_key=ResidentKeyRequirement.PREFERRED,
                                                                user_verification=UserVerificationRequirement.REQUIRED),

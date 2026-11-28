@@ -208,7 +208,7 @@ def install(app, ctx):
                     {"key": "mitre-attack", "label": "MITRE ATT&CK", "installed": st["mitre-attack"]["installed"],
                      "entries": st["mitre-attack"]["entries"], "fetched": st["mitre-attack"]["fetched"],
                      "versions": st["mitre-attack"]["versions"]}],
-                "last": {k: lr.get(k) for k in ("at", "by", "ok", "message")} if lr else {},
+                "last": _last_shown(lr),
                 "running": running(), "can_refresh": bool(ctx["can_refresh"]())}
 
     @app.route("/api/name-sources")
@@ -243,6 +243,18 @@ def install(app, ctx):
         return jsonify(started=True, **status())
 
     return {"status": status}
+
+
+def _last_shown(lr):
+    """The last refresh as the Definitions page shows it (researchers too): who started it by their full name and person
+    code (people.signed_by), never the sign-in name the status file keeps (audit 2026-11-27, 6-1)."""
+    if not lr:
+        return {}
+    out = {k: lr.get(k) for k in ("at", "by", "ok", "message")}
+    if out.get("by"):
+        import people
+        out["by"] = people.signed_by(out["by"])
+    return out
 
 
 def _ts(iso):

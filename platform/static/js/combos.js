@@ -91,12 +91,20 @@
       + (d.kind === "x" ? " Across reports: the device carried, in each of these reports, exactly what is listed." : "")
       + (d.first ? ` First shown to a researcher on ${d.first}.` : "")));
     if (d.notes?.length) {
-      const n = el("div", "cb-notes"); n.append(el("h3", null, `Researchers' notes on ${d.name}`));
-      for (const x of d.notes.slice(0, 6)) {
+      // the first 6, then how many more and a button for every one (2026-11-26: the rest went unsaid)
+      const n = el("div", "cb-notes"); n.append(el("h3", null, `Researchers' notes on ${d.name} (${fmt(d.notes.length)})`));
+      const note = (x) => {
         const li = el("div", `cb-note${x.codes?.some((c) => c.code === d.code) ? " this" : ""}`);
         li.append(el("b", null, `${x.role}: ${x.by}${x.date ? ` (${x.date})` : ""}`), el("p", null, x.text));
         if (x.codes?.some((c) => c.code === d.code)) li.append(el("span", "cb-tag", "points at this combination"));
-        n.append(li);
+        return li;
+      };
+      for (const x of d.notes.slice(0, 6)) n.append(note(x));
+      if (d.notes.length > 6) {
+        const more = el("button", "lg-btn ghost", `Show the other ${fmt(d.notes.length - 6)} note${d.notes.length - 6 === 1 ? "" : "s"}`); more.type = "button";
+        const hint = el("p", "cb-hint", `The first 6 of ${fmt(d.notes.length)} notes are shown.`);
+        more.addEventListener("click", () => { for (const x of d.notes.slice(6)) hint.before(note(x)); hint.remove(); more.remove(); });
+        n.append(hint, more);
       }
       box.append(n);
     }
@@ -207,7 +215,7 @@
     const tiles = $("cbTiles"); tiles.replaceChildren();
     const known = (s.regions || []).filter((r) => r.value !== "Unknown region");
     for (const [v, l, sub] of [[s.devices, "devices", "carry exactly this"], [s.records, "records", s.devices ? `${(s.records / s.devices).toFixed(1)} per device` : ""],
-      [s.repeat, "repeating it", s.devices ? `${Math.round((100 * s.repeat) / s.devices)}% of the devices` : ""], [s.multi_day, "on several days", ""],
+      [s.repeat, "repeating it", s.devices ? `${window.LGShare.of(s.repeat || 0, s.devices)} of the devices` : ""], [s.multi_day, "on several days", ""],
       [(s.across || {}).multi, "also in other reports", "see Across reports"], [s.networks, "networks", ""], [known.length, "regions", `${fmt(s.cities)} cities`],
       [s.peak_hour == null ? "–" : `${String(s.peak_hour).padStart(2, "0")}:00`, "peak hour (UTC)", ""]]) {
       const t = el("div", "cb-tile"); t.append(el("b", null, typeof v === "number" ? fmt(v) : v ?? "–"), el("span", null, l));
@@ -270,7 +278,11 @@
     for (const r of s.regions || []) {
       const g = el("div", "cb-tree-reg"); const head = el("div", "cb-tree-row"); const tr = el("span", "t"), f = el("i"); tr.append(f);
       f.style.width = `${(100 * r.devices) / mx}%`; head.append(el("b", "l", r.label), tr, el("b", "v", fmt(r.devices))); g.append(head);
-      for (const [n, c] of ((det[r.value] || {}).cities || []).slice(0, 4)) { const li = el("div", "cb-tree-city"); li.append(el("span", null, n), el("small", null, `${fmt(c)} device${c === 1 ? "" : "s"}`)); g.append(li); }
+      const rc = (det[r.value] || {}).cities || [];
+      for (const [n, c] of rc.slice(0, 4)) { const li = el("div", "cb-tree-city"); li.append(el("span", null, n), el("small", null, `${fmt(c)} device${c === 1 ? "" : "s"}`)); g.append(li); }
+      // the 4 biggest cities of the region; how many more (the server's count of the region's cities, else what it sent)
+      const rcAll = Math.max(rc.length, Number(((det[r.value] || {}).totals || {}).cities) || 0);
+      if (rcAll > 4) g.append(el("div", "cb-tree-city muted", `and ${fmt(rcAll - 4)} more ${rcAll - 4 === 1 ? "city" : "cities"}`));
       tree.append(g);
     }
     // the map (only the latest draw: one that waited for the shapes while a network was picked stops, or both would
@@ -301,9 +313,12 @@
       tip.replaceChildren(el("b", null, window.LGRegions.shortName(reg.name)));
       if (!r) tip.append(el("p", "muted", "No device with this combination here."));
       else {
-        tip.append(el("p", "big", `${fmt(d.devices)} device${d.devices === 1 ? "" : "s"} · ${fmt(d.records)} records · ${Math.round(r.share * 1000) / 10}%`));
-        const list = (label, items, mono) => { if (!items?.length) return; tip.append(el("h5", null, label)); const ul = el("ul"); for (const [n, c] of items) { const li = el("li"); li.append(el(mono ? "code" : "span", null, n), el("b", null, fmt(c))); ul.append(li); } tip.append(ul); };
-        list("Cities", d.cities); list("Networks", d.networks);
+        tip.append(el("p", "big", `${fmt(d.devices)} device${d.devices === 1 ? "" : "s"} · ${fmt(d.records)} records · ${window.LGShare.pct(r.share || 0, 1)}`));
+        // each list is the region's top few: "and N more" when the server says there are more (region_details totals)
+        const list = (label, items, mono, all) => { if (!items?.length) return; tip.append(el("h5", null, label)); const ul = el("ul"); for (const [n, c] of items) { const li = el("li"); li.append(el(mono ? "code" : "span", null, n), el("b", null, fmt(c))); ul.append(li); }
+          const more = (Number(all) || 0) - items.length; if (more > 0) ul.append(el("li", "muted", `and ${fmt(more)} more`)); tip.append(ul); };
+        const dt = d.totals || {};
+        list("Cities", d.cities, false, dt.cities); list("Networks", d.networks, false, dt.networks);
         list(`IP addresses${d.devices > (d.ips || []).length ? ` (the first ${d.ips.length} of ${fmt(d.devices)})` : ""}`, d.ips, true);
       }
       tip.hidden = false;
@@ -339,6 +354,10 @@
     const g = $("cbGrid"); g.replaceChildren();
     if (!s.devices) return;
     const card = (title, sub) => { const c = el("article", "cb-mini"); c.append(el("h3", null, title)); if (sub) c.append(el("p", "cb-hint", sub)); g.append(c); return c; };
+    // every card is the top few of the search (combos.py): "Top 8 of 23 networks" when there are more (s.totals; for
+    // networks and cities the tiles' own counts when the server does not say)
+    const T = s.totals || {};
+    const cutLine = (c, shown, all, noun) => { const t = window.LGShare.cut(shown, Math.max(shown, Number(all) || 0), noun); if (t) c.append(el("p", "cb-hint", `${t}.`)); };
     const bars = (c, items, val, lab, extra) => {
       const mx = Math.max(1, ...items.map(val));
       for (const it of items) {
@@ -356,8 +375,13 @@
         const go = () => { $("cbNet").value = n.label; $("cbNet").dispatchEvent(new Event("change")); $("cbDownload").scrollIntoView({ behavior: "smooth", block: "center" }); $("cbDownload").classList.add("pulse"); setTimeout(() => $("cbDownload").classList.remove("pulse"), 1400); };
         row.addEventListener("click", go); row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
       });
+      cutLine(c, s.top_networks.length, T.networks ?? (s.networks_all ? s.networks_all.length : s.networks), "networks");
     }
-    if (s.top_cities?.length) bars(card("Cities", "devices per city"), s.top_cities, (x) => x.devices, (x) => `${x.label}${x.region ? ` · ${x.region}` : ""}`);
+    if (s.top_cities?.length) {
+      const c = card("Cities", "devices per city");
+      bars(c, s.top_cities, (x) => x.devices, (x) => `${x.label}${x.region ? ` · ${x.region}` : ""}`);
+      cutLine(c, s.top_cities.length, T.cities ?? s.cities, "cities");
+    }
     if (s.hours?.some((n) => n)) {
       const c = card("Activity by hour (UTC)", s.peak_hour == null ? "" : `busiest at ${String(s.peak_hour).padStart(2, "0")}:00`);
       const ch = el("div", "cb-hours"), mx = Math.max(1, ...s.hours);
@@ -365,8 +389,8 @@
         const b = el("i"); b.style.height = `${Math.max(n ? 4 : 1, (100 * n) / mx)}%`; col.append(b); if (h % 6 === 0) col.append(el("small", null, String(h).padStart(2, "0"))); ch.append(col); });
       c.append(ch);
     }
-    if (s.kinds?.length) bars(card("What the devices are", "as the reports name them, per record"), s.kinds, (x) => x.records, (x) => x.label);
-    if (s.ports?.length) bars(card("Ports", "port / protocol, per record"), s.ports, (x) => x.records, (x) => x.label);
+    if (s.kinds?.length) { const c = card("What the devices are", "as the reports name them, per record"); bars(c, s.kinds, (x) => x.records, (x) => x.label); cutLine(c, s.kinds.length, T.kinds, "kinds"); }
+    if (s.ports?.length) { const c = card("Ports", "port / protocol, per record"); bars(c, s.ports, (x) => x.records, (x) => x.label); cutLine(c, s.ports.length, T.ports, "ports"); }
     if (s.top_devices?.length) {
       const c = card("The busiest devices", `the ${s.top_devices.length} with the most records; all ${fmt(s.devices)} are in the CSV`); c.classList.add("wide");
       const t = el("table", "cb-table"); const hd = el("tr");
@@ -450,7 +474,8 @@
   function acList(show) {
     const ul = $("cbAcList"), q = $("cbAcQ").value.trim().toLowerCase();
     ul.replaceChildren();
-    const hits = acodes.filter((x) => !q || [x.code, x.day, x.label, x.platform, ...(x.names || []), x.finding?.title, x.finding?.number, x.finding?.by].join(" ").toLowerCase().includes(q)).slice(0, 40);
+    const found = acodes.filter((x) => !q || [x.code, x.day, x.label, x.platform, ...(x.names || []), x.finding?.title, x.finding?.number, x.finding?.by].join(" ").toLowerCase().includes(q));
+    const hits = found.slice(0, 40);
     for (const x of hits) {
       const li = el("li", "cb-ac-item"); li.setAttribute("role", "option"); li.tabIndex = -1;
       const top = el("div", "cb-ac-top");
@@ -465,6 +490,8 @@
       ul.append(li);
     }
     if (!hits.length) ul.append(el("li", "cb-ac-none", "No analyst code matches."));
+    // the first 40 are listed: when more match, the list says so (cut lists are never silent)
+    else if (found.length > hits.length) ul.append(el("li", "cb-ac-none", `The first ${fmt(hits.length)} of ${fmt(found.length)}: type to narrow the list.`));
     ul.hidden = !show; $("cbAcQ").setAttribute("aria-expanded", String(!!show));
   }
   $("cbAcQ").addEventListener("focus", () => acList(true));

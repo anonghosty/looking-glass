@@ -46,7 +46,9 @@ def _world():
     """{ISO2: [zones]} from the IANA database's zone.tab (the system's, else the tzdata package's), read once."""
     global _WORLD
     if _WORLD is None:
-        _WORLD = {}
+        # filled in a dictionary of its own and published whole: a request arriving while another thread was still
+        # reading the file found an empty or half-filled table and offered UTC only (audit 2026-11-27, 8-13)
+        world = {}
         paths = ["/usr/share/zoneinfo/zone.tab"]
         try:
             import tzdata
@@ -61,10 +63,12 @@ def _world():
                             continue
                         parts = line.split("\t")
                         if len(parts) >= 3:
-                            _WORLD.setdefault(parts[0].strip().upper(), []).append(parts[2].strip())
+                            world.setdefault(parts[0].strip().upper(), []).append(parts[2].strip())
                 break
             except OSError:
+                world = {}                             # a file that failed half-way: start again with the next one
                 continue
+        _WORLD = world
     return _WORLD
 
 

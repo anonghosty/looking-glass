@@ -38,6 +38,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -432,7 +433,10 @@ def write_report(report_dir, events, outcome):
         old = []
     for e in events:
         e["outcome"] = outcome
-        e["id"] = hashlib.sha256(json.dumps([e["time"], e["library"], e["version"], e["source"], e["received"]]).encode()).hexdigest()[:16]
+        # random, made once here and kept in the report: two refusals of the same file from the same source in the
+        # same second are two events (2026-11-27: a hash of time, library, version, source and file gave them one id,
+        # and the audit log got one of the two)
+        e.setdefault("id", secrets.token_hex(8))
     allev = (old + events)[-500:]
     tmp = jp + ".tmp"
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o640)

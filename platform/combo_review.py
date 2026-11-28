@@ -253,8 +253,11 @@ def install(app, ctx):
             days_[str(e.get("extracted_date") or e.get("timestamp") or "")[:10]] += 1
         figs = {"devices": len({host(e) for e in evs}), "records": len(evs), "networks": len(nets),
                 "top_networks": [{"label": n, "devices": len(h)} for n, h in sorted(nets.items(), key=lambda kv: -len(kv[1]))[:8]],
-                "regions": [{"label": r, "devices": len(h)} for r, h in sorted(regs.items(), key=lambda kv: -len(kv[1]))[:8]],
-                "per_day": sorted([d_, n] for d_, n in days_.items() if d_)}
+                # every region (a short list by nature: no cap), the most devices first
+                "regions": [{"label": r, "devices": len(h)} for r, h in sorted(regs.items(), key=lambda kv: (-len(kv[1]), kv[0]))],
+                "per_day": sorted([d_, n] for d_, n in days_.items() if d_),
+                # the top 8 networks, with how many there are ("Top 8 of 23 networks" on the page), and the regions' count
+                "regions_total": len(regs), "totals": {"top_networks": len(nets), "regions": len(regs)}}
         code_ = ctx["acodes"].make_selection("comms" if comms else "services", evs, source, label) if ctx.get("acodes") else None
         return figs, code_
 
@@ -434,10 +437,12 @@ def install(app, ctx):
             same = lambda n: bool(r0) and n.get("user") == r0.get("user") and " ".join(str(n.get("text") or "").split()) == \
                 " ".join(str(r0.get("text") or "").split())                                       # noqa: E731
             notes = [{k: v for k, v in n.items() if k != "user"} for n in ctx["notes"].list(src["section"], src["name"])
-                     if not same(n)][:12]
+                     if not same(n)]
+        notes_total = len(notes)                       # all sent: the page shows the first 12, "The first 12 of N", and "Show all"
         plat_r = plat_of(rv["source"])
         plat_a = plat_of(rv["codes"][0]) if rv.get("codes") else plat_r
-        return jsonify(finding=F.shown(x, ctx.get("describe")), researcher={"notes": notes, "finding": rf,
+        return jsonify(finding=F.shown(x, ctx.get("describe")), researcher={"notes": notes, "notes_total": notes_total,
+                       "totals": {"notes": notes_total}, "finding": rf,
                        "what": book.describe(rv["source"]) if hasattr(book, "describe") else rv["source"]},
                        plat_researcher=plat_r, plat_analyst=plat_a, can_decide=bool(hp("management") or hp("settings")),
                        can_search=bool(hp("unmasked") and hp("export")))
@@ -492,17 +497,27 @@ def install(app, ctx):
                       "devices": s.get("devices", 0), "records": s.get("records", 0), "repeat": s.get("repeat", 0),
                       "multi_day": s.get("multi_day", 0), "networks": s.get("networks", 0),
                       "top_networks": [{"label": n["label"], "devices": n["devices"]} for n in (s.get("top_networks") or [])[:8]],
-                      "regions": [{"label": r["label"], "devices": r["devices"]} for r in (s.get("regions") or [])[:8]],
+                      # every region (a short list by nature: no cap)
+                      "regions": [{"label": r["label"], "devices": r["devices"]} for r in (s.get("regions") or [])],
                       "cities": [{"label": c["label"], "devices": c["devices"]} for c in (s.get("top_cities") or [])[:6]],
-                      "per_day": s.get("per_day") or [], "kinds": s.get("kinds") or [], "ports": s.get("ports") or []}
+                      "per_day": s.get("per_day") or [], "kinds": s.get("kinds") or [], "ports": s.get("ports") or [],
+                      # how many there are beside each top list ("Top 8 of 23 regions"): management reads them as complete
+                      "regions_total": len(s.get("regions") or []),
+                      "totals": {"top_networks": s.get("networks", 0) or len(s.get("networks_all") or []),
+                                 "regions": len(s.get("regions") or []),
+                                 "cities": s.get("cities", 0) or len(s.get("top_cities") or []),
+                                 "kinds": (s.get("totals") or {}).get("kinds", len(s.get("kinds") or [])),
+                                 "ports": (s.get("totals") or {}).get("ports", len(s.get("ports") or []))}}
         # the analyst's view: each ticked pattern, how many hosts share exactly that infrastructure, in which reports
         analyst = {"patterns": [{"code": c, "hosts": avail[c]["hosts"], "parts": [{"title": p["title"], "items": p["items"]} for p in avail[c]["parts"]]}
                                 for c in codes],
                    "multi_hosts": prev.get("multi_hosts", 0), "patterns_total": prev.get("cross_total", 0),
                    "sources": prev.get("sources") or [], "days": prev.get("days") or [],
                    # the ticked infections and CVEs/issues, in words and counts (management never sees an address)
-                   "infections": [{"name": n, "hosts": av_inf[n]["hosts"], "reports": [r["title"] for r in av_inf[n].get("reports") or []][:6]} for n in t_inf],
-                   "issues": [{"name": n, "hosts": av_iss[n]["hosts"], "reports": [r["title"] for r in av_iss[n].get("reports") or []][:6]} for n in t_iss]}
+                   "infections": [{"name": n, "hosts": av_inf[n]["hosts"], "reports": [r["title"] for r in av_inf[n].get("reports") or []][:6],
+                                   "reports_total": len(av_inf[n].get("reports") or [])} for n in t_inf],
+                   "issues": [{"name": n, "hosts": av_iss[n]["hosts"], "reports": [r["title"] for r in av_iss[n].get("reports") or []][:6],
+                               "reports_total": len(av_iss[n].get("reports") or [])} for n in t_iss]}
         me, role = user()
         section = entry.get("section") or "infections"
         # exactly what was sent, with the devices' addresses: for the analyst's report later (never shown to management)

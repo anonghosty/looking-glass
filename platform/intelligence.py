@@ -41,6 +41,7 @@ from datetime import datetime, timedelta, timezone
 
 from flask import Response, g, jsonify, render_template, request
 
+import counting_keys as _ck
 import csvsafe
 import field_labels
 
@@ -83,7 +84,7 @@ NAMES = {"url": "URL", "application": "Application", "tag": "Tag", "detail": "De
 MEANING = {
     "compromised_website": "A website in the constituency that has been broken into: defaced, serving malware or phishing, or carrying a backdoor.",
     "compromised_website6": "The same, for websites reached over IPv6.",
-    "compromised_iot": "A device (router, camera, DVR…) that shows signs of being taken over, such as an implant or a known backdoor.",
+    "compromised_iot": "A device (a router, camera, DVR or similar) that shows signs of being taken over, such as an implant or a known backdoor.",
     "compromised_iot6": "The same, for devices reached over IPv6.",
     "blocklist": "An address in the constituency that appears on a public block list, with the list and the reason it gives.",
     "malware_url": "A web address on a host in the constituency that serves malware.",
@@ -202,12 +203,35 @@ def install(app, ctx):
             return rows
         return [r for r in rows if not r.get("ip") or st.in_scope(r.get("asn"), r.get("ip"))]
 
-    def read(name, day, cap=ROW_CAP):
-        """The rows of a report sent on that day (file name date), in the constituency."""
+    def count_scoped(name, q):
+        """How many rows of the query are in the constituency: every row counted (never only the first ROW_CAP)."""
+        st = ctx["settings"]
+        if not getattr(st, "restricted", False):
+            return db[name].count_documents(q)
+        return sum(1 for r in db[name].find(q, {"ip": 1, "asn": 1, "_id": 0})
+                   if not r.get("ip") or st.in_scope(r.get("asn"), r.get("ip")))
+
+    def read_info(name, day, cap=ROW_CAP):
+        """{"rows", "total", "capped"}: the rows of a report sent on that day (file name date) in the constituency, the
+        constituency FIRST and then the cap (2026-11-26: the cap was applied before the scope, so a constituency's rows
+        past the first ROW_CAP of the whole country went missing without a word); total: every row in the constituency."""
         if name not in names():
-            return []
-        rows = list(db[name].find({"filename": {"$regex": "^" + re.escape(day)}}, {k: 0 for k in ("_id", "line_hash")}).limit(cap))
-        return scoped(rows)
+            return {"rows": [], "total": 0, "capped": False}
+        q = {"filename": {"$regex": "^" + re.escape(day)}}
+        st = ctx["settings"]
+        restricted = getattr(st, "restricted", False)
+        rows = []
+        for r in db[name].find(q, {k: 0 for k in ("_id", "line_hash")}):
+            if restricted and r.get("ip") and not st.in_scope(r.get("asn"), r.get("ip")):
+                continue
+            if len(rows) >= cap:                         # one more in the constituency than read: count them all
+                return {"rows": rows, "total": count_scoped(name, q), "capped": True}
+            rows.append(r)
+        return {"rows": rows, "total": len(rows), "capped": False}
+
+    def read(name, day, cap=ROW_CAP):
+        """The rows of a report sent on that day (file name date), in the constituency (at most cap of them)."""
+        return read_info(name, day, cap)["rows"]
 
     def names():
         try:
@@ -232,10 +256,8 @@ def install(app, ctx):
             restricted = getattr(ctx["settings"], "restricted", False)
             for d in days():
                 q = {"filename": {"$regex": "^" + re.escape(d)}}
-                if restricted:
-                    per[d] = len(scoped(list(db[n].find(q, {"ip": 1, "asn": 1, "_id": 0}).limit(ROW_CAP))))
-                else:
-                    per[d] = db[n].count_documents(q)
+                # every row in the constituency (the scope first: never the scoped part of the first ROW_CAP rows)
+                per[d] = count_scoped(n, q) if restricted else db[n].count_documents(q)
             out[n] = per
         with lock:
             cache["counts"] = (key, time.time(), out)
@@ -327,11 +349,15 @@ def install(app, ctx):
     def entry_of(name):
         return next((e for e in entries() if e["name"] == name), None)
 
-    def view_rows(name, day, args, reveal, masked=False):
+    def view_rows(name, day, args, reveal, masked=False, info=None):
         """The rows of one report on one day, filtered on its own fields (exact values) and a free text. masked: the
         external accounts' view; the rows are masked FIRST, so filters and the search see only what is shown (a real
-        address, network or name typed into the request cannot tell whether it is in the data)."""
-        rows = read(name, day)
+        address, network or name typed into the request cannot tell whether it is in the data). info: a dict that gets
+        the read's "capped" and "total" (every row of the report and day in the constituency)."""
+        got = read_info(name, day)
+        rows = got["rows"]
+        if info is not None:
+            info.update(capped=got["capped"], total=got["total"], read=len(rows))
         fields = FIELDS.get(name, []) + ["ip", "asn", "region"]
         if masked:
             rows = masked_rows(name, rows)
@@ -344,8 +370,13 @@ def install(app, ctx):
         flt = {f: args.getlist(f) for f in fields if args.getlist(f)}
         text = (args.get("q") or "").strip().lower()[:120]
         out = []
+        # a region filter matches by the one region rule (counting_keys.region_key: KIAMBU and Kiambu are one region,
+        # as every page counts them, 2026-11-27); every other field by its exact value
+        want_region = {_ck.region_key(x) for x in flt["region"]} if "region" in flt else None
         for r in rows:
-            if any(_s(r.get(f)) not in set(v) for f, v in flt.items()):
+            if any(_s(r.get(f)) not in set(v) for f, v in flt.items() if f != "region"):
+                continue
+            if want_region is not None and _ck.region_key(r.get("region"), r.get("geo")) not in want_region:
                 continue
             if text and not any(text in _s(v).lower() for k, v in r.items() if k not in SKIP and not (masked and k in MASKED_HIDDEN)
                                 and not (name == "compromised_account" and not reveal and k in ACCOUNT_FIELDS)):
@@ -359,6 +390,8 @@ def install(app, ctx):
         """A field as the page shows it: a network by its name and number, never a bare number (masked rows: as they
         are, the network already its alias)."""
         v = _s(x.get(k))
+        if k == "region" and v:                             # its one spelling, as every page shows it (2026-11-27)
+            return _ck.region_key(v, x.get("geo"))
         if k == "asn" and v and not masked:
             try:
                 nm = ctx["network"](v)
@@ -404,7 +437,8 @@ def install(app, ctx):
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) or day not in days():
             return jsonify(error=f"Choose one of the last {DAYS} days."), 400
         reveal = args.get("reveal") == "1" and name == "compromised_account" and not masked
-        rows, flt, text = view_rows(name, day, args, reveal, masked=masked)
+        cap = {}
+        rows, flt, text = view_rows(name, day, args, reveal, masked=masked, info=cap)
         rows.sort(key=lambda x: _s(x.get("timestamp")), reverse=True)        # the newest first
         if reveal:
             ctx["audit"].add("intelligence_reveal", user=me(), target=name, detail=f"{day} · {len(rows)} leaked account(s) shown unmasked")
@@ -422,7 +456,11 @@ def install(app, ctx):
         # masked: by its alias, which is also the filter, as on both platforms)
         if rows and any(x.get("ip") for x in rows[:50]):
             for f, lab in (("asn", "Networks"), ("region", "Regions")):
-                c = Counter(_s(x.get(f)) for x in rows if _s(x.get(f)))
+                if f == "region":                          # grouped by the one region rule; the value is that spelling
+                    c = Counter(k for k in (_ck.region_key(x.get("region"), x.get("geo")) for x in rows if _s(x.get("region")))
+                                if not _ck.is_unknown_region(k))
+                else:
+                    c = Counter(_s(x.get(f)) for x in rows if _s(x.get(f)))
                 if c:
                     facets.append({"key": f, "label": lab, "values": [{"value": v, "label": val(f, {f: v}, masked), "rows": k} for v, k in c.most_common(12)],
                                    "more": max(0, len(c) - 12)})
@@ -430,13 +468,29 @@ def install(app, ctx):
             hosts = sorted({_s(x.get("ip")) for x in rows if _s(x.get("ip"))})
         else:
             hosts = sorted({_s(x.get("ip")) for x in rows if _ip_ok(x.get("ip"))})
+        # networks by company and regions in their one spelling, as every page counts them (counting_keys; count audit
+        # round 2): unknown ones are not counted
+        netn = ctx.get("network") or (lambda a: f"AS{a}")
+        # masked rows carry the network's alias ("Telco 3"), not a number: counted by alias (review 2026-11-27: the
+        # company rule read every alias as no network, so the external view said 0 networks)
+        nets = ({_s(x.get("asn")) for x in rows if _s(x.get("asn"))} - {_ck.UNKNOWN_NET} if masked else
+                {netn(_ck.norm_asn(x.get("asn"))) for x in rows if _ck.norm_asn(x.get("asn"))} - {""})
         stats = {"records": len(rows), "hosts": len(hosts),
-                 "networks": len({_s(x.get("asn")) for x in rows if _s(x.get("asn"))}),
-                 "regions": len({_s(x.get("region")) for x in rows if _s(x.get("region"))}),
+                 "networks": len(nets),
+                 "regions": len({_ck.region_key(x.get("region"), x.get("geo")) for x in rows} - {_ck.UNKNOWN_REGION}),
                  "fields": [{"label": NAMES.get(f, f), "values": len({_s(x.get(f)) for x in rows if _s(x.get(f))})}
                             for f in FIELDS.get(name, [])[:3] if f not in hidden]}
         # the records' own days (their time stamps): an analyst code is made on the day most of them were seen
         rec_days = Counter(_s(x.get("extracted_date") or x.get("timestamp"))[:10] for x in rows if x.get("extracted_date") or x.get("timestamp"))
+        # this page holds the report sent on `day` (its file date); the services page and the Executive portal count by
+        # the records' own day. Said, with the days its records are dated (count audit round 2, item 12)
+        undated = len(rows) - sum(rec_days.values())
+        dated = {"basis": "file", "first": min(rec_days) if rec_days else None, "last": max(rec_days) if rec_days else None,
+                 "undated": undated,
+                 "text": (f"The report sent on {day} (its file date)"
+                          + (f"; its records are dated {min(rec_days)}" + (f" to {max(rec_days)}" if max(rec_days) != min(rec_days) else "")
+                             if rec_days else "")
+                          + (f"; {undated:,} record{'s have' if undated != 1 else ' has'} no time" if undated else "") + ".")}
         code = None
         # only a report the services platform holds: an analyst code stands for that platform's records (acodes.py);
         # never in the masked view (a code is made of the devices' addresses)
@@ -450,7 +504,12 @@ def install(app, ctx):
                        facets=facets, filters={k: v for k, v in flt.items()}, q=text,
                        masked=name == "compromised_account" and not reveal and not masked,
                        can_reveal=name == "compromised_account" and not masked, masked_view=masked,
-                       code=code, no_ip=e.get("has_ip") is False, meaning=MEANING.get(name, ""))
+                       code=code, no_ip=e.get("has_ip") is False, meaning=MEANING.get(name, ""),
+                       # a report and day larger than Looking Glass reads at once says so: the figures, filters and the
+                       # export cover the first `read` rows of `total` in the constituency ("total" above: the rows shown
+                       # after the filters)
+                       cap={"capped": cap["capped"], "total": cap["total"], "read": cap["read"], "limit": ROW_CAP},
+                       totals={"rows": cap["total"]}, dated=dated)
 
     @app.route("/api/intelligence/export.csv", methods=["GET", "POST"])
     def api_intelligence_export():
@@ -462,18 +521,27 @@ def install(app, ctx):
         if not entry_of(name) or day not in days():
             return jsonify(error="Not an Intelligence report on one of the last days."), 400
         reveal = args.get("reveal") == "1" and name == "compromised_account"
-        rows, flt, text = view_rows(name, day, args, reveal)
+        cap = {}
+        rows, flt, text = view_rows(name, day, args, reveal, info=cap)
         cols, extra = columns(name, rows)
         buf = io.StringIO()
         w = csvsafe.writer(buf)          # a value starting with = + - @ never runs as a spreadsheet formula
         w.writerow([NAMES.get(k) or field_labels.label(k) for k in cols + extra])   # readable headers, as on the page
         for x in rows:
             w.writerow([val(k, x) for k in cols + extra])
+        cut_note = ""
+        if cap["capped"]:                # the file says it is not the whole report and day, in its last row
+            cut_note = (f"Not every row: this file comes from the first {cap['read']:,} of the {cap['total']:,} rows of this report on "
+                        f"{day} in the constituency (Looking Glass reads at most {ROW_CAP:,} rows of a report and day at once).")
+            w.writerow([cut_note] + [""] * max(0, len(cols + extra) - 1))
         ctx["audit"].add("intelligence_export", user=me(), target=name,
-                         detail=f"{day} · {len(rows)} row(s)" + (" · filtered" if flt or text else "") + (" · accounts unmasked" if reveal else ""))
+                         detail=f"{day} · {len(rows)} row(s)" + (" · filtered" if flt or text else "") + (" · accounts unmasked" if reveal else "")
+                         + (f" · capped: first {cap['read']:,} of {cap['total']:,} rows read" if cap["capped"] else ""))
         fn = f"looking-glass_{name}_{day.replace('-', '')}.csv"
-        return Response("﻿" + buf.getvalue(), mimetype="text/csv",
-                        headers={"Content-Disposition": f'attachment; filename="{fn}"', "Cache-Control": "no-store"})
+        hdr = {"Content-Disposition": f'attachment; filename="{fn}"', "Cache-Control": "no-store"}
+        if cap["capped"]:
+            hdr["X-LG-Capped"] = f"{cap['read']} of {cap['total']}"
+        return Response("﻿" + buf.getvalue(), mimetype="text/csv", headers=hdr)
 
     @app.route("/api/intelligence/host", methods=["POST"])
     def api_intelligence_host():
@@ -507,7 +575,10 @@ def install(app, ctx):
             cross = ctx["cross"]([ip]) or {}
         except Exception:                                   # noqa: BLE001 (the services days are being loaded)
             cross = {}
-        ctx["audit"].add("intelligence_host", user=me(), target=ip, detail=f"{len(seen)} Intelligence report(s)")
+        # the host's opaque label (host_label.py: resolvable on this server only), never the address itself: the audit
+        # log is read by the auditor and exported (audit 2026-11-27, 5-9)
+        import host_label
+        ctx["audit"].add("intelligence_host", user=me(), target=host_label.label(ip), detail=f"{len(seen)} Intelligence report(s)")
         return jsonify(ip=ip, intelligence=seen, services=cross.get("services") or [], issues=cross.get("issues") or [],
                        infections=cross.get("infections") or [])
 

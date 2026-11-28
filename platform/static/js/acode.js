@@ -37,13 +37,14 @@
     // a focus opens the hidden rows, so every row with the value is in view
     if (focus) for (const li of main.querySelectorAll(".ax-list > li[hidden]")) li.hidden = false;
     if (focus) main.querySelectorAll(".ax-more").forEach((b) => b.remove());
-    for (const li of main.querySelectorAll(".ax-list > li, .ax-issues > .ax-f")) {
-      const has = !focus || (li.classList.contains("ax-f") ? li.dataset.v === focus : !!li.querySelector(`.ax-f[data-v="${CSS.escape(focus)}"]`));
+    // the rows of the lists (a second selector here named an issues box the page never draws: audit 2026-11-27, 9-15)
+    for (const li of main.querySelectorAll(".ax-list > li")) {
+      const has = !focus || !!li.querySelector(`.ax-f[data-v="${CSS.escape(focus)}"]`);
       li.classList.toggle("ax-dim", !has);
       if (focus && has) hits++;
     }
     for (const sec of main.querySelectorAll(".ax-sec")) {
-      const n = focus ? sec.querySelectorAll(".ax-list > li:not(.ax-dim), .ax-issues > .ax-f:not(.ax-dim)").length : null;
+      const n = focus ? sec.querySelectorAll(".ax-list > li:not(.ax-dim)").length : null;
       const t = sec.querySelector(".ax-sec-hits"); if (t) t.textContent = n == null ? "" : n ? `${fmt(n)} with it` : "not here";
     }
     focusBar.hidden = !focus;

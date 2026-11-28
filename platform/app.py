@@ -299,6 +299,7 @@ _DAY_SERIAL = _itertools.count(1)
 DAY_MAX_AGE_SECONDS = int(os.environ.get("DAY_MAX_AGE_SECONDS", "3600"))
 from respcache import settled  # noqa: E402  (the settle rule for new rows, shared with the services store)
 import load_stamps  # noqa: E402  (the pipeline's marks: count rows only when one moved)
+import counting_keys as _ck  # noqa: E402  (one rule for regions, networks, sectors and duplicate rows: count audit)
 _STAMPS = load_stamps.Stamps(db)
 
 
@@ -345,6 +346,12 @@ class DayStore:
             if not seen[0] and os.environ.get("FALLBACK_SCAN") == "1":
                 yield from c.find({"extracted_date": {"$gte": start, "$lt": end}}, skip)
 
+        # count audit round 2 (2026-11-26): a row sent in two files of one report day (a country file and an ASN file)
+        # is kept once (counting_keys.Dedup, O(1) a row); the rows of this day's own report file (file date = day + 1)
+        # dated outside the two days it can be shown on, or without a time, are counted and stated (never on a page)
+        dd = _ck.Dedup()
+        own = end.strftime("%Y-%m-%d")
+        late = {"outside": 0, "undated": 0}
         for d in rows():
             ed = d.get("extracted_date")
             if isinstance(ed, str):
@@ -353,10 +360,19 @@ class DayStore:
                 except ValueError:
                     ed = None
             if not isinstance(ed, datetime):
-                continue
-            if ed.tzinfo is None:
+                ed = None
+            elif ed.tzinfo is None:
                 ed = ed.replace(tzinfo=timezone.utc)
+            fn = str(d.get("filename") or "")
+            if fn.startswith(own):
+                w = _ck.window(ed, start, end + timedelta(days=1))
+                if w != "in" and dd.first(src["name"], fn, d.get("line_hash")):
+                    late[w] += 1
+            if ed is None:
+                continue
             if start <= ed < end:
+                if not dd.first(src["name"], fn, d.get("line_hash")):
+                    continue
                 n = normalise(d, src)
                 n["id"] = f"{src['name']}:{d['_id']}"
                 n["_t"] = ed.timestamp()
@@ -366,6 +382,7 @@ class DayStore:
                 if isinstance(oid, ObjectId):
                     out_at = oid.generation_time
                     last = out_at if last is None or out_at > last else last
+        out = _ck.Rows(out, dups=dd.dups, **late)
         return out, last
 
     def signature(self, start):
@@ -413,13 +430,15 @@ class DayStore:
                     if e[f"{side}_asn"]:
                         asn[str(e[f"{side}_asn"])] += 1
             raw = len(rows)
+            # what the loader left out of the report files (before the constituency, like raw): counting_keys.Rows
+            notes = {k: getattr(rows, k, 0) for k in ("dups", "outside", "undated")}
             # the address blocks, both sides like the networks above, for Settings → Network names & types
             # (address_blocks.py), before the constituency
             blocks = _address_blocks.tally(rows, (("src_ip", "src_asn"), ("dst_ip", "dst_asn")))
             # constituency (Settings): keep events whose source or destination host is in it
             if settings.restricted:
                 rows = [e for e in rows if settings.in_scope(e["src_asn"], e["src_ip"]) or settings.in_scope(e["dst_asn"], e["dst_ip"])]
-            by_src[s["name"]] = {"raw": raw, "asn": asn, "blocks": blocks, "rows": rows, "last": last}
+            by_src[s["name"]] = {"raw": raw, "asn": asn, "blocks": blocks, "rows": rows, "last": last, **notes}
             fresh += rows
         names = {s["name"] for s in srcs}
         for n, b in keep.items():               # taken over: already prepared, geocoded and referenced
@@ -462,6 +481,7 @@ class DayStore:
         if sig is not None:
             load_stamps.counted(day, stamp, t0)
         day.raw_total, day.asn_raw, day.block_raw = raw_total, asn_raw, block_raw
+        day.load_notes = _ck.notes_of(by_src)          # rows kept once / dated outside / without a time (count audit)
         day.version = hashlib.md5(json.dumps([sorted(per.items()), settings.version]).encode(), usedforsecurity=False).hexdigest()[:10]
         return day
 
@@ -662,6 +682,13 @@ def index():
                            enrich_enabled=AUTH["has_perm"]("malpedia"))
 
 
+def _load_notes(day):
+    """What the day's loader kept once or could not place (counting_keys): {dups, outside, undated, text}."""
+    n = dict(getattr(day, "load_notes", None) or {"dups": 0, "outside": 0, "undated": 0}) if day else {"dups": 0, "outside": 0, "undated": 0}
+    n["text"] = _ck.load_note(n["dups"], n["outside"], n["undated"], day.start.date().isoformat() if day else "")
+    return n
+
+
 @app.route("/api/clock")
 def api_clock():
     srcs = registry.get()
@@ -674,6 +701,7 @@ def api_clock():
     return jsonify(server_now=iso(utcnow()), offset_hours=OFFSET_HOURS, sources=len(srcs), demo_forced=PUBLIC_DEMO or "unmasked" not in (getattr(g, "user", None) or {}).get("perms", ()),
                    settle_seconds=SETTLE_SECONDS, data_version=day.version if day else "0",
                    day_total=len(day.events) if day else 0, reports=reports,
+                   load_notes=_load_notes(day),
                    report_changes=store.changes.get(start, [])[-20:],
                    sources_version=registry.version, new_sources=registry.added[-10:],
                    unsupported=len(registry.unsupported), tz=settings.tz(start + timedelta(hours=12)), **st)
@@ -683,8 +711,10 @@ def api_clock():
 def api_sources():
     """The collections the map integrates, with the replay day's row counts and when each report arrived."""
     day = store.get(parse_iso(request.args.get("at"), replay_now()))
-    return jsonify(day=day.start.date().isoformat(), sources=[
-        {**s, "rows_today": day.per_source.get(s["name"], 0), "arrived_at": day.arrived.get(s["name"])}
+    by = getattr(day, "by_src", None) or {}
+    return jsonify(day=day.start.date().isoformat(), load_notes=_load_notes(day), sources=[
+        {**s, "rows_today": day.per_source.get(s["name"], 0), "arrived_at": day.arrived.get(s["name"]),
+         **{k: (by.get(s["name"]) or {}).get(k, 0) for k in ("dups", "outside", "undated")}}
         for s in registry.get()
     ])
 
@@ -733,9 +763,11 @@ def api_facets():
 def _facets_core(day, demo, beacons=False, flt=None):
     result = {}
     pool = _facets.pools(day.events, flt or {}, field_value)
+    # every value of every list: past a cut of 300 a network or city could not be chosen, and nothing said so
+    # (2026-11-26). They are names with a count, so even a large country's lists stay small.
     for field in FACET_FIELDS:
         c = Counter(e[field] for e in pool.of(field))
-        rows = [{"value": v or EMPTY_LABEL.get(field, ""), "count": n} for v, n in c.most_common(300)]
+        rows = [{"value": v or EMPTY_LABEL.get(field, ""), "count": n} for v, n in c.most_common()]
         result[field] = [r for r in rows if r["value"]]
     if (flt or {}).get("infection"):          # infections ticked: what else their devices carry (facets.overlap)
         result["infection"] = _facets.overlap(pool, lambda e: e.get("infection") or EMPTY_LABEL.get("infection", ""),
@@ -750,7 +782,7 @@ def _facets_core(day, demo, beacons=False, flt=None):
     # aliases in demo mode. The value is what the src_asn / dst_asn filters take (asn_registry.resolve).
     for side in ("src", "dst"):
         c = Counter(asn_registry.company(e[f"{side}_asn"], demo) for e in pool.of(f"{side}_asn") if e[f"{side}_asn"])
-        result[f"{side}_asn"] = [{"value": v, "count": n} for v, n in c.most_common(300) if v]
+        result[f"{side}_asn"] = [{"value": v, "count": n} for v, n in c.most_common() if v]
     if beacons:                           # analysts and admins: the beacons Looking Glass decoded (beacon_stats.py)
         result["beacon"] = beacon_stats.facet_rows(pool.of("beacon"))
     elif not demo:
@@ -801,10 +833,15 @@ def _stats_core(day, flt, demo):
         if e["src_ip"]:
             seen.setdefault(e["src_ip"], set()).add(e["source"])
     out["multi_source_hosts"] = sum(1 for s in seen.values() if len(s) > 1)
-    for field, n in (("source", 12), ("attack_class", 8), ("infection", 8), ("tag", 8), ("src_city", 8), ("src_geo", 8),
-                     ("dst_geo", 8), ("http_host", 8), ("dst_port", 6), ("severity", 5)):
+    # beside each top list: totals = how many different values it has, others = the events outside its rows (an
+    # "Other" row), so the side panel can say "Top 8 of 23" and its shares are of the real total (2026-11-26).
+    # Attack types and severities are short by nature: every one is sent (severity was cut at 5 of up to 6).
+    totals, others = {}, {}
+    for field, n in (("source", 12), ("attack_class", None), ("infection", 8), ("tag", 8), ("src_city", 8), ("src_geo", 8),
+                     ("dst_geo", 8), ("http_host", 8), ("dst_port", 6), ("severity", None)):
         c = Counter(e[field] for e in sofar)
         out[field] = [{"value": v or EMPTY_LABEL.get(field, "unknown"), "count": k} for v, k in c.most_common(n)]
+        totals[field], others[field] = len(c), len(sofar) - sum(r["count"] for r in out[field])
     if demo:
         # concealed label, but an opaque reference as value so the entry can still be analysed
         for r in out["http_host"]:
@@ -814,14 +851,20 @@ def _stats_core(day, flt, demo):
     for side in ("src", "dst"):
         by_company = Counter()
         for e in sofar:
-            if e[f"{side}_asn"]:
-                key = asn_registry.alias(e[f"{side}_asn"]) if demo else (asn_registry.name(e[f"{side}_asn"]) or f"AS{e[f'{side}_asn']}")
+            # the one counting rule (counting_keys): no AS number, 0 or AS0 is no network (it was counted as "AS0")
+            key = _ck.network_of(e[f"{side}_asn"], asn_registry, demo)
+            if key:
                 by_company[key] += 1
         rows = []
         for name, k in by_company.most_common(8):
             asns = [] if demo else sorted(asn_registry.resolve(name))
             rows.append({"value": name, "label": name, "count": k, "asns": asns})
         out[f"{side}_network"] = rows
+        # others: events with a network outside the rows; unrecorded: events without a network
+        valued = sum(by_company.values())
+        totals[f"{side}_network"], others[f"{side}_network"] = len(by_company), valued - sum(r["count"] for r in rows)
+        out.setdefault("unrecorded", {})[f"{side}_network"] = len(sofar) - valued
+    out["totals"], out["others"] = totals, others
     # 15-minute activity buckets for the whole replay day; current_quarter marks where the replay is
     buckets = [0] * 96
     for e in sofar:
@@ -856,7 +899,8 @@ def _geo_core(day, flt):
     flows, srcs, dsts = {}, {}, {}
 
     def place(e, side):
-        return {"city": (e[f"{side}_city"] or "").title(), "region": (e[f"{side}_region"] or "").title(), "cc": e[f"{side}_geo"] or "",
+        reg = e[f"{side}_region"]
+        return {"city": (e[f"{side}_city"] or "").title(), "region": _ck.region_key(reg, e[f"{side}_geo"]) if reg else "", "cc": e[f"{side}_geo"] or "",
                 "key": e[f"{side}_city"] or ""}
 
     for e in ev:
@@ -961,7 +1005,7 @@ def api_overview():
     srcs = registry.get()
     # the counting over every event is shared (cached per loaded day); names, definitions and the schedule are fresh
     return jsonify(**RCACHE.get(("overview", day_key(day)), lambda: _overview_counts(day)),
-        day=day.start.date().isoformat(), total=len(day.events),
+        day=day.start.date().isoformat(), total=len(day.events), load_notes=_load_notes(day),
         reports_total=len(srcs), reports_active=len(day.per_source),
         reports=[{"name": s["name"], "label": s["label"], "class": s["class"], "rows": day.per_source.get(s["name"], 0),
                   "warnings": s["diagnostic"]["warnings"], **_report_def(s["name"])}
@@ -1010,13 +1054,18 @@ def api_related():
     day = store.get(rn)
     mine = [e for e in day.events if e["src_ip"] == ip] if ip else []
     m = mask_text if demo else (lambda s: s)
+    inf = Counter(e["infection"] or "unknown" for e in mine)
+    doms = Counter(e["http_host"] for e in mine if e["http_host"])
+    dsts = Counter(e["dst_ip"] for e in mine if e["dst_ip"])
     return jsonify(
         src_ip=mask_ip(ip) if demo else ip, count=len(mine),
         first=mine[0]["extracted_date"] if mine else None,
         last=mine[-1]["extracted_date"] if mine else None,
-        infections=[v for v, _ in Counter(e["infection"] or "unknown" for e in mine).most_common(10)],
-        hosts=[m(v) for v, _ in Counter(e["http_host"] for e in mine if e["http_host"]).most_common(10)],
-        dst_ips=[(mask_ip(v) if demo else v) for v, _ in Counter(e["dst_ip"] for e in mine if e["dst_ip"]).most_common(10)],
+        infections=[v for v, _ in inf.most_common(10)],
+        hosts=[m(v) for v, _ in doms.most_common(10)],
+        dst_ips=[(mask_ip(v) if demo else v) for v, _ in dsts.most_common(10)],
+        # how many there are in all, beside the 10 listed: the popup says "10 of 37" (2026-11-26)
+        totals={"infections": len(inf), "hosts": len(doms), "dst_ips": len(dsts)},
         sources=[{"source": v, "label": next((e["source_label"] for e in mine if e["source"] == v), v), "count": k}
                  for v, k in Counter(e["source"] for e in mine).most_common()],
     )
@@ -1059,12 +1108,14 @@ from analytics_api import _hhmmss  # noqa: E402,F401  (analytics_api.py)
 DRILL_METRICS = ("events", "share", "hosts", "c2", "dst_ips", "interval", "multi", "reports", "cross", "beacons")
 DRILL_LIMIT = 300
 from analytics_api import api_insight_drill  # noqa: E402,F401  (analytics_api.py)
+from analytics_api import _breakdown  # noqa: E402,F401  (analytics_api.py: a breakdown with its full counts, 2026-11-26)
 
 
 # The PDF and ZIP reports of an analysis figure, on both platforms (report_downloads.py, moved out of app.py unchanged, 2026-11-24)
 import report_downloads as _mod_report_downloads  # noqa: E402
 _mod_report_downloads.install(app, sys.modules[__name__])
 from report_downloads import SOURCES_TEXT, _bd_rows, _enrich_names, _file_base, _pdf_label, _pdf_rows, _report_response, _scope_text, _short, _value_label, _view_json, api_insight, api_insight_report_pdf, api_svc_report_pdf  # noqa: E402,F401
+from report_downloads import _bd_title, _rest, _with_rest  # noqa: E402,F401  (report_downloads.py: Top N of M, Other rows, 2026-11-26)
 # ---------------------------------------------------------------- infection knowledge base
 KB_PATH = os.path.join(BASE_DIR, "data", "infections.json")
 _kb = {"mtime": None, "data": {}}
@@ -1360,6 +1411,7 @@ from intel_match_api import _day_for  # noqa: E402,F401  (intel_match_api.py)
 ACODES = _acodes.install(app, {
     "book": COMBOS, "findings": FINDINGS, "has_perm": AUTH["has_perm"], "csrf_ok": AUTH["csrf_ok"], "fresh": AUTH["fresh"],
     "is_demo": is_demo, "audit": AUTH["audit"], "day": _day_for, "slice": _slice_on, "svc_scope": svc["scope_events"],
+    "kinds": INSIGHT_KINDS,                       # the selection kinds _slice_on reads (an unknown one: 400, not 500)
     "labels": lambda: {**{x["name"]: x["label"] for x in registry.get()}, **{x["name"]: x["label"] for x in svc["registry"].get()}},
     "network": lambda asn: asn_registry.company(asn, False) if asn else "", "defined": _defined_titles,
     "people_name": lambda u: people.name(u, ""), "base_dir": BASE_DIR,
@@ -1455,7 +1507,10 @@ ADVISORIES = _advisory.install(app, {"base_dir": BASE_DIR, "findings": FINDINGS,
 
 
 import netypes  # noqa: E402  (network types: built-in sectors and the ones this site added)
-_NET_LOCK = threading.Lock()
+import asn_lookup as _asn_lookup  # noqa: E402
+# one lock for every change to data/asns.json in this process: the look-ups merge their answers under it too (audit
+# 2026-11-27, 1-6: Identify networks and a look-up wrote over each other)
+_NET_LOCK = _asn_lookup.FILE_LOCK
 DATA_DIR = os.path.join(BASE_DIR, "data")
 
 
@@ -1530,8 +1585,9 @@ def api_networks_lookup():
     if len(recent) >= 12:
         return jsonify(error="Many look-ups in the last minute: wait a moment."), 429
     _LOOKUP_SEEN[who] = recent + [now]
-    with _NET_LOCK:
-        st = asn_lookup.identify(asn_registry.path, {a: counts[a] for a in asns}, meta)
+    # not under _NET_LOCK: the outside look-ups take seconds, and a name corrected meanwhile would wait on them (audit
+    # 2026-11-27, 1-7); identify() merges its answers into the file under that lock itself
+    st = asn_lookup.identify(asn_registry.path, {a: counts[a] for a in asns}, meta)
     reg = asn_lookup.load(asn_registry.path)["asns"]
     names = {a: (reg.get(a) or {}).get("name", "") for a in asns}
     AUTH["audit"].add("networks_lookup", user=who, target=", ".join(f"AS{a}" for a in asns),
@@ -1692,6 +1748,12 @@ def api_settings():
     for asn, n in counts.items():   # networks seen in the data but not (yet) in the registry
         if asn not in asn_registry.all() and asn != "0":
             companies.setdefault(f"AS{asn}", {"name": f"AS{asn}", "type": "unknown", "asns": [asn], "records": n, "demo_alias": ""})
+    # a saved network that is neither in the registry nor in yesterday's records: listed too, with no records, so the
+    # page shows (and can untick) every network of the constituency (2026-11-26: it was saved but not on the page)
+    listed = {str(a) for c in companies.values() for a in c["asns"]}
+    for asn in sorted(settings.asns - listed, key=lambda a: (len(a), a)):
+        c = companies.setdefault(f"AS{asn}", {"name": f"AS{asn}", "type": "unknown", "asns": [], "records": 0, "demo_alias": ""})
+        c["asns"].append(asn)
     nets = sorted(companies.values(), key=lambda c: (-c["records"], c["name"]))
     return jsonify(settings=settings.public(), writable=_settings_writable(),
                    type_labels=netypes.labels(DATA_DIR),
@@ -1816,6 +1878,11 @@ _RM_CTX = {"data_dir": DATA_DIR, "adm1_dir": ADM1_DIR, "country_index": lambda: 
            "region_raw": lambda: getattr(svc["store"].days.get(day_start(replay_now())), "region_raw", {}) or {}}
 _region_matches.install(app, _RM_CTX)
 REGION_MATCHES = _RM_CTX["region_matches"]
+# the one region rule of every page and report (counting_keys.region_key): this country's map, the administrator's
+# matches above and the country's own names
+_ck.configure(country=lambda: settings.data["country"], adm1_dir=ADM1_DIR, data_dir=DATA_DIR,
+              country_names=lambda cc: [_country_index().get(cc, {}).get("country", "")] + list(_country_index().get(cc, {}).get("names") or []),
+              registry=asn_registry, type_labels=lambda: netypes.labels(DATA_DIR))
 
 
 @app.route("/api/settings/public")

@@ -6,7 +6,9 @@
   "use strict";
   async function download(btn, url) {
     if (btn.disabled) return;
-    const label = btn.textContent;
+    // the button's own words, kept from its first click: after a failure it reads "<why> (retry)", and the next click
+    // must not take that as its label (audit 2026-11-27, 11-8)
+    const label = btn.dataset.lgLabel || (btn.dataset.lgLabel = btn.textContent);
     const res = await window.LGLoader.download(url, { button: btn, busy: "Preparing the report…", name: "looking-glass-report.zip" });
     if (res.ok) {
       btn.textContent = "Report downloaded ✓"; btn.disabled = true;

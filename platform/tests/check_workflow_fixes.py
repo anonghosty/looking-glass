@@ -27,6 +27,94 @@ import auth  # noqa: E402
 checks, fails = 0, []
 
 
+def advisory_switching(PH, src):
+    """advisory.js, whole, on two made-up organisations: B picked after A, B answers first; a save on B, the menu tried
+    while it runs; then A picked and B's (now hidden) Save clicked."""
+    def adv(net, rev):
+        return {"advisory": {"network": net, "rev": rev, "ref": "", "locked": False, "subject": f"About {net}", "description": "", "recommended_actions": "",
+                             "recipients": [], "tlp": "TLP:AMBER", "heading": "", "heading_default": "Security Advisory", "kinds_line": "",
+                             "affected": {"devices": 1, "records": 2, "cves": [], "issues": [], "categories": [], "labels": []},
+                             "data_title": "made-up reports", "reports": [], "devices": [], "impact": [], "attack": None,
+                             "generated": [], "sends": [], "history": []},
+                "devices_total": 1, "has_report": False}
+    data = {"idx": {"networks": [{"network": "Org A", "devices": 1, "records": 2}, {"network": "Org B", "devices": 1, "records": 2}],
+                    "can_edit": True, "limits": {"subject": 200, "text": 5000}, "tlp_levels": [], "finding": {"number": "F-001", "title": "Made-up"},
+                    "organisation": "Made-up CSIRT", "org_set": True},
+            "A": adv("Org A", 3), "B": adv("Org B", 7)}
+    js = r"""
+const X = JSON.parse(process.argv[1]); document.body.dataset.fid = "F1";
+const gates = {}, sent = [];
+const gate = (k) => new Promise((r) => { gates[k] = r; });
+const open = (k) => { const g = gates[k]; delete gates[k]; if (g) g(); };
+const ok = (b) => ({ ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(b)) });
+const myFetch = async (url, o) => { url = String(url); const m = (o && o.method) || "GET"; sent.push({ url, m, body: o && o.body ? JSON.parse(o.body) : null });
+  if (url === "/api/advisory/F1") return ok(X.idx);
+  if (m === "GET" && url.includes("/net?network=Org%20A")) { await gate("A"); return ok(X.A); }
+  if (m === "GET" && url.includes("/net?network=Org%20B")) { await gate("B"); return ok(X.B); }
+  if (m === "POST" && url === "/api/advisory/F1/net") { await gate("save"); const b = JSON.parse(o.body); const a = (b.network === "Org A" ? X.A : X.B).advisory;
+    return ok({ advisory: { ...a, rev: a.rev + 1, ref: "ADV-2026-001" } }); }
+  return { ok: false, status: 404, json: async () => ({ error: "not in the test" }) }; };
+((fetch) => {""" + src + r"""})(myFetch);
+const tick = () => new Promise((r) => setTimeout(r, 10));
+const M = () => IDS.avMain;
+const menu = () => M().querySelector("select.av-netsel");
+const pick = (v) => { const s = menu(); s.value = v; s.fire("change"); };
+const shown = () => lines(M()).filter((t) => / its data$/.test(t)).map((t) => t.replace(/^2 · /, "").replace(/: its data$/, ""));
+const saveBtn = () => M().querySelectorAll("button").find((b) => b.textContent === "Save the advisory");
+(async () => {
+  const R = {};
+  await tick();
+  pick("Org A"); await tick(); pick("Org B"); await tick();
+  open("B"); await tick(); open("A"); await tick();
+  R.shown = shown();
+  const sv = saveBtn(); sv.fire("click"); await tick();
+  const reads = sent.length; pick("Org A"); await tick();
+  R.busyMenu = menu().value; R.busyReads = sent.filter((s, i) => i >= reads && s.url.includes("/net?")).length;
+  open("save"); await tick(); await tick();
+  R.save1 = (sent.filter((s) => s.m === "POST")[0] || {}).body;
+  const sv2 = saveBtn(); pick("Org A"); await tick();
+  R.netNow = (sent.filter((s) => s.url.includes("/net?")).pop() || {}).url.includes("Org%20A") ? "Org A" : "?";
+  sv2.fire("click"); await tick(); open("save"); await tick();
+  R.posts = sent.filter((s) => s.m === "POST").map((s) => s.body.network);
+  open("A"); await tick(); R.finally = shown();
+  R.errs = ERRS; console.log(JSON.stringify(R));
+})().catch((e) => console.log(JSON.stringify({ fatal: String(e && e.stack) })));
+"""
+    out, raw = PH.run(js, data)
+    return out or {"fatal": raw[-400:]}
+
+
+def admin_chosen(PH, src, re):
+    """admin.js's loadUsers on a made-up list: a waiting account's picked role, the refresh, Approve; an active account"""
+    bare = re.sub(r";[ \t]+//[^\n]*$", ";", src, flags=re.M)
+    js = r"""
+const csrf = "t"; const acts = []; const act = async (name, action, extra) => { acts.push([name, action, extra]); return true; };
+const drawRoleLegend = () => {}; const usersWrap = null; const confirm = () => true;
+document.getElementById("usersTable").append(document.createElement("tbody"));
+const D = { roles: ["researcher", "analyst"], names: { researcher: "Researcher/TI", analyst: "Analyst" }, info: {}, users: [
+  { name: "wait1", status: "pending", role: "researcher", profile: {}, registered: {}, last_login: {}, sessions: 0, mfa: false },
+  { name: "act1", status: "active", role: "researcher", profile: {}, registered: {}, last_login: {}, sessions: 0, mfa: false, you: true } ] };
+const myFetch = async (url) => ({ ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(D)) });
+((fetch) => {
+""" + PH.extract(bare, ["$", "el", "fmtT", "shortUA", "banner", "getJSON", "roleNames", "shown", "CHOSEN", "loadUsers"]) + r"""
+const sel = (name) => IDS.usersTable.querySelectorAll("tr").find((tr) => tr.querySelector("b").textContent === name).querySelector("select");
+(async () => {
+  const R = {};
+  await loadUsers(); R.before = sel("wait1").value;
+  sel("wait1").value = "analyst"; sel("wait1").fire("change");
+  await loadUsers(); R.after = sel("wait1").value;
+  const tr = IDS.usersTable.querySelectorAll("tr").find((t) => t.querySelector("b").textContent === "wait1");
+  tr.querySelectorAll("button").find((b) => b.textContent === "Approve").fire("click"); await new Promise((r) => setTimeout(r, 10));
+  R.approve = acts[0];
+  sel("act1").value = "analyst"; sel("act1").fire("change"); R.active = acts[1];
+  R.errs = ERRS; console.log(JSON.stringify(R));
+})().catch((e) => console.log(JSON.stringify({ fatal: String(e && e.stack) })));
+})(myFetch);
+"""
+    out, raw = PH.run(js)
+    return out or {"fatal": raw[-400:]}
+
+
 def ok(label, cond, info=""):
     global checks
     checks += 1
@@ -128,18 +216,31 @@ try:
     ok("…another address is not held back by it", r.status_code == 400 and len(looked) == auth.REGISTER_DNS_PER_HOUR + 1, str(r.status_code))
 
     print("5. The advisory page: quick switching between organisations")
-    root = os.path.dirname(A.__file__)
-    js = open(os.environ.get("LG_ADVISORY_JS") or os.path.join(root, "static/js/advisory.js"), encoding="utf-8").read()
-    ok("an organisation's data that arrives after another was picked is dropped", "const my = ++SEQ;" in js and "if (my !== SEQ) return;" in js)
-    ok("every button sends the organisation its form was drawn for", "const net = NET, seq = SEQ, here = D;" in js
-       and "{ network: net }" in js and "network: NET" not in js)
-    ok("the organisation cannot be switched while a save or generation is under way", "if (BUSY) return;" in js and "if (BUSY) { sel.value" in js)
-    ok("a save sends the revision its form opened (a tab left open cannot write over a newer save)", "rev: here.advisory.rev" in js)
+    # node runs the page files that ship (the held copies in $LG_HELD_DIR when there are, or the file the variable names)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import re
+    import page_harness as PH
+    page = lambda env, name: open(os.environ[env], encoding="utf-8").read() if os.environ.get(env) else PH.page_src(name)   # noqa: E731
+    if not PH.NODE:
+        # sections 5 and 6 run the pages' own scripts under Node: a maintainer's part (tests/page_harness.py)
+        PH.no_node(ok, "node runs the advisory and Users pages")
+    else:
+        R = advisory_switching(PH, page("LG_ADVISORY_JS", "advisory.js"))
+        ok("the advisory page runs (node, made-up organisations)", bool(R) and not R.get("errs") and not R.get("fatal"), str(R)[:400])
+        ok("an organisation's data that arrives after another was picked is dropped", R.get("shown") == ["Org B"], str(R.get("shown")))
+        ok("the organisation cannot be switched while a save is under way (the menu goes back, nothing is read)",
+           R.get("busyMenu") == "Org B" and R.get("busyReads") == 0, f"{R.get('busyMenu')} {R.get('busyReads')}")
+        ok("a save sends the revision its form opened (a tab left open cannot write over a newer save)",
+           (R.get("save1") or {}).get("rev") == 7 and (R.get("save1") or {}).get("network") == "Org B", str(R.get("save1")))
+        ok("a button of a form whose organisation was switched away never sends for the new one (every save names Org B)",
+           R.get("netNow") == "Org A" and R.get("posts") and set(R.get("posts")) == {"Org B"}, f"{R.get('posts')} {R.get('netNow')}")
+        ok("...and the organisation picked last is the one shown", R.get("finally") == ["Org A"], str(R.get("finally")))
 
-    print("6. Admin → Users: the role picked for a waiting account survives the 30-second refresh")
-    adm = open(os.environ.get("LG_ADMIN_JS") or os.path.join(root, "static/js/admin.js"), encoding="utf-8").read()
-    ok("the picked role is kept and drawn again after the refresh", "const CHOSEN = {};" in adm and "CHOSEN[u.name] = sel.value" in adm
-       and "roleNames.includes(CHOSEN[u.name]) ? CHOSEN[u.name] : u.role" in adm)
+        print("6. Admin → Users: the role picked for a waiting account survives the 30-second refresh")
+        R = admin_chosen(PH, page("LG_ADMIN_JS", "admin.js"), re)
+        ok("the picked role is kept and drawn again after the refresh", R.get("after") == "analyst" and R.get("before") == "researcher", str(R)[:400])
+        ok("...Approve uses the role picked, not the stored one", R.get("approve") == ["wait1", "approve", {"role": "analyst"}], str(R.get("approve")))
+        ok("...an active account's new role applies at once", R.get("active") == ["act1", "role", {"role": "analyst"}], str(R.get("active")))
 
     print("7. Executive baselines: a fixed number built at once, a bounded waiting list")
     import threading, time

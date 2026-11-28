@@ -176,17 +176,105 @@ try:
 finally:
     C._gunicorn_master, C.os.kill = _master, _kill
 
-print("6. The page")
-tpl = open(os.path.join(HERE, "templates", "settings.html"), encoding="utf-8").read()
-js_path = os.path.join(HERE, "static", "js", "config-page.js")
-if "tabConfig" in tpl or os.path.exists(js_path):
-    js = open(js_path, encoding="utf-8").read()
-    ok("the Settings page has the tab, the pane and its script", 'data-st-tab="config"' in tpl and 'id="tabConfig"' in tpl
-       and "js/config-page.js" in tpl)
-    ok("the page is built as text, never as HTML", "innerHTML" not in js and "insertAdjacentHTML" not in js)
-    ok("it sends the CSRF token and JSON", "X-CSRF-Token" in js and "application/json" in js)
+print("6. The page (the files that ship: the held copies in $LG_HELD_DIR when there are)")
+sys.path.insert(0, os.path.join(HERE, "tests"))
+import html.parser  # noqa: E402
+
+import jinja2  # noqa: E402
+import page_harness as PH  # noqa: E402
+
+
+def _held_tpl(name):
+    p = os.path.join(PH.HELD, name + ".new") if PH.HELD else ""
+    src = p if p and os.path.isfile(p) else os.path.join(HERE, "templates", name)
+    return (open(src, encoding="utf-8").read(), src, lambda: True) if os.path.isfile(src) else None
+
+
+class _Blank(jinja2.ChainableUndefined):          # what the app would fill in: empty, and callable like its helpers
+    def __call__(self, *a, **k):
+        return self
+
+
+class _Tags(html.parser.HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.tags = []
+
+    def handle_starttag(self, tag, attrs):
+        self.tags.append((tag, dict(attrs)))
+
+
+_env = jinja2.Environment(loader=jinja2.FunctionLoader(_held_tpl), undefined=_Blank, autoescape=True)
+_env.globals.update(url_for=lambda ep, filename="", **k: f"/{ep}/{filename}", csrf_token=lambda: "t")
+def _render(perms):
+    try:
+        p = _Tags()
+        p.feed(_env.get_template("settings.html").render(lg_perms=perms, lg_me="p-made-up"))
+        return p.tags, ""
+    except Exception as e:      # noqa: BLE001 - a page that does not render is the failure itself
+        return [], f"{type(e).__name__}: {e}"
+
+
+def _parts(tags):
+    return (any(t == "button" and a.get("data-st-tab") == "config" for t, a in tags),
+            any(a.get("id") == "tabConfig" and "hidden" in a for _t, a in tags),
+            any(t == "script" and (a.get("src") or "").endswith("js/config-page.js") for t, a in tags))
+
+
+tags, why = _render({"view", "settings", "users"})
+tab, pane, script = _parts(tags)
+ok("the Settings page (rendered for the Settings permission) has the Configuration tab", tab, why)
+ok("...its pane, hidden until the tab is chosen", pane, why)
+ok("...and loads its script", script, why)
+tags, why = _render({"view"})
+ok("without the Settings permission: no tab, no pane, no script", tags and not any(_parts(tags)), why or str(_parts(tags)))
+if PH.NODE:
+    R, raw = PH.run(r"""
+let html = 0; Object.defineProperty(N.prototype, "innerHTML", { set() { html++; }, get() { return ""; } });
+N.prototype.insertAdjacentHTML = () => { html++; };
+const meta = document.createElement("meta"); meta.setAttribute("name", "csrf-token"); meta.content = "tok-made-up"; document.body.append(meta);
+const docOn = {}; document.addEventListener = (e, f) => { (docOn[e] = docOn[e] || []).push(f); };
+window.LGLoader.pane = async (p, t, w) => w(); window.LGLoader.errorText = (e) => String(e.message || e);
+const sent = []; let refuse = false;
+const SNAP = { groups: ["Limits", "Secrets"], pending_restart: false, items: [
+  { key: "HEAVY_WAIT_S", label: "Wait for a heavy request", group: "Limits", editable: true, kind: "int", min: 1, max: 600, default: 30, value: 30, source: "default" },
+  { key: "MONGO_PASSWORD", label: "Database password", group: "Secrets", secret: true, set: true } ] };
+const myFetch = async (url, o) => { sent.push({ url, method: (o && o.method) || "GET", headers: (o && o.headers) || {}, body: (o && o.body) || null });
+  if (refuse && o && o.method === "POST") return { ok: false, status: 403, json: async () => ({ error: "Sign in again to change settings." }) };
+  return { ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(SNAP)) }; };
+((fetch) => {""" + PH.page_src("config-page.js") + r"""})(myFetch);
+const tick = () => new Promise((r) => setTimeout(r, 10));
+(async () => {
+  const before = sent.length;
+  for (const f of docOn["lg:settings-tab"] || []) f({ detail: "config" });
+  await tick();
+  const R = { onlyOnTab: before === 0, rows: lines(IDS.cfBody) };
+  const inp = IDS.cfBody.querySelector(".cf-input");
+  inp.value = "45"; inp.fire("input");
+  R.saveOn = IDS.cfSave.disabled === false;
+  inp.value = "9999"; inp.fire("input"); R.outOfRange = IDS.cfSave.disabled === true; R.rangeMsg = IDS.cfMsg.textContent;
+  inp.value = "45"; inp.fire("input"); IDS.cfSave.fire("click"); await tick();
+  R.post = sent.filter((s) => s.method === "POST").map((s) => ({ url: s.url, ct: s.headers["Content-Type"], tok: s.headers["X-CSRF-Token"], body: s.body }));
+  R.saved = IDS.cfMsg.textContent;
+  refuse = true; inp.value = "46"; inp.fire("input"); IDS.cfSave.fire("click"); await tick();
+  R.refused = IDS.cfMsg.textContent; R.html = html; R.errs = ERRS;
+  console.log(JSON.stringify(R));
+})().catch((e) => console.log(JSON.stringify({ fatal: String(e && e.stack) })));
+""")
+    R = R or {}
+    ok("config-page.js reads the settings only when its tab is opened", R.get("onlyOnTab") is True and "Wait for a heavy request" in (R.get("rows") or []),
+       str(R) if R else raw[-300:])
+    ok("...a secret says only that it is set", "Set (not shown)" in (R.get("rows") or []), str(R.get("rows")))
+    ok("...a value outside its range cannot be saved, and it says so", R.get("saveOn") is True and R.get("outOfRange") is True
+       and "outside its range" in (R.get("rangeMsg") or ""), str(R))
+    post = (R.get("post") or [{}])[0]
+    ok("it sends JSON with the CSRF token, to the configuration API", post.get("url") == "/api/admin/config" and post.get("ct") == "application/json"
+       and post.get("tok") == "tok-made-up" and json.loads(post.get("body") or "{}") == {"values": {"HEAVY_WAIT_S": "45"}}, str(post))
+    ok("...says Saved, and a refusal in the server's own words", R.get("saved") == "Saved." and R.get("refused") == "Sign in again to change settings.",
+       f"{R.get('saved')} / {R.get('refused')}")
+    ok("the page is built as text, never as HTML", R.get("html") == 0 and not R.get("errs"), f"{R.get('html')} {R.get('errs')}")
 else:
-    print("  (the page's files are held for the release: checked on the staged copy)")
+    PH.no_node(ok, "node is there to run the page")
 
 for fn in os.listdir(os.path.join(tmp, "data")):
     os.remove(os.path.join(tmp, "data", fn))

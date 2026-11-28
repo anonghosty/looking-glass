@@ -37,8 +37,9 @@ def ok(label, cond, info=""):
 
 
 if not SRC:
+    # an honest skip (77), never a pass that tried nothing; LG_NO_SKIP=1 (every release run) makes it a failure
     print("SKIPPED: install.sh is not next to this platform (an installation without the installer)")
-    sys.exit(0)
+    sys.exit(77)
 src = open(SRC, encoding="utf-8").read()
 
 
@@ -110,7 +111,9 @@ print("4. What the questions say")
 ok("sign-up No: invited people only; the first administrator always uses the setup code",
    "only people an administrator invites" in src and "first administrator signs up with the one-time setup code" in src)
 ok("network names: asked, No by default, saying what No means for the checks",
-   'ask_yesno NAMES_LOOKUP' in src and "is SKIPPED until the names are looked up" in src
+   # what No means for the checks (2026-11-26: the demo masking check is no longer skipped without names, it checks
+   # that every network reads "Unlisted network"), and never a claim that a check is skipped
+   'ask_yesno NAMES_LOOKUP' in src and "the demo masking check checks exactly that" in src and "is SKIPPED until" not in src
    and src[src.index("ask_yesno NAMES_LOOKUP"):].split("\n  NAMES_LOOKUP")[0].rstrip().endswith('" no'))
 ok("…the final screen repeats it when No was chosen", "network names were not looked up" in src)
 ok("fixed addresses advised: a split installation, and the self-signed certificate", "Keep this address fixed" in src
@@ -126,7 +129,7 @@ if APT:
     r = subprocess.run(["bash", "-c", f". '{APT}'; apt_lock_holder >/dev/null || wait_for_apt; echo rc=$?"], capture_output=True, text=True, timeout=30)
     ok("…when nothing holds the package manager, it goes on at once", "rc=0" in r.stdout, r.stdout + r.stderr)
 else:
-    print("    SKIPPED: database/apt_wait.sh is not next to this platform")
+    ok("database/apt_wait.sh is next to this platform (the installer sources it)", False)
 
 print(f"\n{checks - len(fails)}/{checks} checks passed" + (f"; FAILED: {fails}" if fails else ""))
 sys.exit(1 if fails else 0)

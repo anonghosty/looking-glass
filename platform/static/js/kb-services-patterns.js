@@ -8,7 +8,8 @@
   "use strict";
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
   const fmt = (n) => Number(n || 0).toLocaleString("en-US");
-  const pct = (x) => `${(x * 100).toFixed(x < 0.1 ? 1 : 0)}%`;
+  // a field on some hosts is never "0.0%", one missing on a few never "100%" (LGShare, loader.js; 2026-11-26)
+  const pct = (x) => window.LGShare.pct(x, x < 0.1 ? 1 : 0);
   const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content || "";
   const post = (url, body) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf() }, body: JSON.stringify(body) });
   // how a field's value is read; every kind shows a value only when 5 or more hosts share it

@@ -69,6 +69,12 @@ try:
             + [("services", [("service", v)]) for v in fac(s, "service")[:4]]
             + [("services", [("region", v)]) for v in fac(s, "region")[:2]])
     urls = [f"/api/mgmt/{p}?" + urllib.parse.urlencode(q) for p, q in sels]
+    if not urls:
+        # the newest day has nothing to select (2026-11-26: the mail fetch had failed for a day, so the day was
+        # empty): say so, never a crash
+        print(f"FAILED: the newest day ({d.get('day')}) has no records (communications {d['kpis']['events']:,}, services "
+              f"{s['kpis']['records']:,}): the pipeline loaded nothing for it; look at its log (e-mail / API failed?)")
+        sys.exit(1)
     results = {}
 
     def run(u):

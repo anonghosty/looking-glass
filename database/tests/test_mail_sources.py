@@ -271,5 +271,58 @@ class AttachmentTest(unittest.TestCase):
             self.assertEqual(names, [name])
 
 
+class ImapCertificateTest(unittest.TestCase):
+    """The mail server's certificate cannot be trusted: the advice follows the problem, and a short reason (no account,
+    no password) goes to the bell (2026-11-26: an EXPIRED certificate was told to switch the checking off)."""
+    ENV = {"MAIL_PROVIDER": "imap", "IMAP_SERVER": "mail.example.org", "IMAP_USER": "reports@example.org",
+           "IMAP_PASSWORD": "not-a-real-password", "IMAP_FOLDER": "Shadowserver"}
+
+    def _fail(self, code, message):
+        import ssl
+
+        def refuse(*a, **k):
+            e = ssl.SSLCertVerificationError(1, f"certificate verify failed: {message}")
+            e.verify_code, e.verify_message = code, message
+            raise e
+        with mock.patch("imaplib.IMAP4_SSL", refuse):
+            with self.assertRaises(ms.MailSourceError) as cm:
+                ms.make_source(self.ENV).list(1)
+        return str(cm.exception), cm.exception.reason
+
+    def test_expired_is_renewed_never_unchecked(self):
+        text, reason = self._fail(10, "certificate has expired")
+        self.assertIn("has expired", text)
+        self.assertIn("renew it", text)
+        self.assertIn("Do not set IMAP_VERIFY_TLS=false for this", text)       # never offered as the fix
+        self.assertEqual(reason, "the mail server's certificate has expired")
+
+    def test_each_problem_its_own_advice(self):
+        for code, msg, want, said in ((18, "self-signed certificate", "only if that server has always used", "is self-signed"),
+                                      (19, "self-signed certificate in certificate chain", "root certificate", "authority"),
+                                      (62, "Hostname mismatch", "IMAP_SERVER", "another name"),
+                                      (9, "certificate is not yet valid", "clock", "not valid yet"),
+                                      (99, "something else", "ask whoever runs that mail server", "not trusted")):
+            text, reason = self._fail(code, msg)
+            self.assertIn(want, text, code)
+            self.assertIn(said, reason, code)
+
+    def test_reason_holds_no_account_or_password(self):
+        for code in (10, 18, 19, 62, 9, 99):
+            _, reason = self._fail(code, "x")
+            self.assertNotIn("reports@example.org", reason)
+            self.assertNotIn("not-a-real-password", reason)
+
+    def test_unreachable_and_unknown_name_have_reasons(self):
+        import socket
+        with mock.patch("imaplib.IMAP4_SSL", mock.Mock(side_effect=socket.gaierror("no such name"))):
+            with self.assertRaises(ms.MailSourceError) as cm:
+                ms.make_source(self.ENV).list(1)
+        self.assertEqual(cm.exception.reason, "the mail server's name does not exist")
+        with mock.patch("imaplib.IMAP4_SSL", mock.Mock(side_effect=ConnectionRefusedError("refused"))):
+            with self.assertRaises(ms.MailSourceError) as cm:
+                ms.make_source(self.ENV).list(1)
+        self.assertEqual(cm.exception.reason, "the mail server could not be reached")
+
+
 if __name__ == "__main__":
     unittest.main()

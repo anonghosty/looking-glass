@@ -214,7 +214,8 @@ says what changed and takes you there. Administrators can tick <b>Peace of mind<
 </table>
 
 **Also:** every country in the world, chosen by continent, with its regions map · your constituency only (networks and address ranges) ·
-network names and sectors identified automatically · works on TVs, tablets and phones · PDF reports on every list ·
+network names and sectors (network types) identified automatically · one counting rule on every page, PDF and CSV,
+with every cut list and share said plainly ("Top 8 of 23", "<1%") · works on TVs, tablets and phones · PDF reports on every list ·
 a tamper-evident audit log with control checks mapped to NIST SP 800-53 and CIS Controls.
 
 ## How it works

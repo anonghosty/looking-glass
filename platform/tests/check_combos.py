@@ -158,9 +158,12 @@ try:
        and oct(os.stat(os.path.join(EXPORTS, d["id"] + ".zip")).st_mode & 0o777) == "0o600")
     zf = zipfile.ZipFile(io.BytesIO(z))
     names = zf.namelist()
-    ok("the ZIP holds a PDF, the devices CSV and the records CSV (no all-fields CSV: removed 2026-11-24)",
-       len(names) == 3 and any(n.endswith(".pdf") for n in names)
+    # 2026-11-26: a patterns CSV joins them when the devices show cross-report patterns (every pattern, with its devices)
+    extra = [n for n in names if not (n.endswith(".pdf") or n.endswith("_devices.csv") or n.endswith("_records.csv"))]
+    ok("the ZIP holds a PDF, the devices CSV and the records CSV, and a patterns CSV only beside them (no all-fields CSV: removed 2026-11-24)",
+       len(names) in (3, 4) and any(n.endswith(".pdf") for n in names)
        and any(n.endswith("_devices.csv") for n in names) and any(n.endswith("_records.csv") for n in names)
+       and all(n.endswith("_patterns.csv") for n in extra)
        and not any(n.endswith("_all_fields.csv") for n in names), ", ".join(names))
     pdf = zf.read(next(n for n in names if n.endswith(".pdf")))
     ok("the PDF is a PDF", pdf[:5] == b"%PDF-", f"{len(pdf):,} bytes")

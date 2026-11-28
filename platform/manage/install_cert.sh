@@ -26,7 +26,9 @@ args=("$mode" --domain "$1" --cert "$2" --key "$3" --by "$(id -un)")
 "$py" deploy/install_cert.py "${args[@]}"
 [ "$mode" = check ] && exit 0
 bash deploy/reload.sh
-port="$(grep -E '^LG_PORT=' .env 2>/dev/null | cut -d= -f2-)"; port="${port:-443}"
+# (|| true: without LG_PORT in .env, grep's "no match" stopped the script here under pipefail, silently, after the
+# reload and before Caddy got the renewed certificate; audit 2026-11-27, as deploy/make_tls_cert.sh found 2026-11-26)
+port="$(grep -E '^LG_PORT=' .env 2>/dev/null | cut -d= -f2- | tr -d "\"' \r" || true)"; port="${port:-443}"
 # Caddy in front (deploy/caddy_front.sh): it serves its own copy of the certificate, so the renewed one is copied
 # there too (needs sudo once), and the site is checked on Caddy's public port
 if head -1 /etc/caddy/Caddyfile 2>/dev/null | grep -q 'Managed by Looking Glass'; then

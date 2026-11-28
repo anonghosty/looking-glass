@@ -71,8 +71,10 @@ from datetime import date, datetime, timedelta, timezone
 
 from flask import Response, g, jsonify, request
 
+import counting_keys as _ck
 import csvsafe
 import job_schedule
+import netypes
 import services
 import sources
 import special_reports
@@ -81,8 +83,8 @@ from privacy import IPV4_FULL, IPV6, AsnRegistry
 KEEP_DAYS = 31                       # the purge always keeps the last 31 days
 MAKE_ON_DAY = 3                      # made automatically on the next quarter's 3rd day (its last day's reports are in by then)
 WORKING_DAYS = 15                    # working days (Monday to Friday) to download the reports before the purge
-UNKNOWN_NET = "Unknown network"
-UNKNOWN_REGION = "Region unknown"    # as the services platform says it (services_api.region_label)
+UNKNOWN_NET = _ck.UNKNOWN_NET              # the one wording of every page (counting_keys.py)
+UNKNOWN_REGION = _ck.UNKNOWN_REGION
 ADDR_RE = re.compile(IPV4_FULL.pattern + "|" + IPV6.pattern)
 Q_RE = re.compile(r"\A\d{4}Q[1-4]\Z")      # \Z: "$" would also accept a trailing newline
 SYSTEM_USER = "looking-glass"
@@ -242,12 +244,8 @@ def hkey(v):
 
 
 def norm_asn(v):
-    if v in (None, ""):
-        return ""
-    if isinstance(v, float):
-        v = int(v)
-    s = str(v).strip().upper().replace("AS", "")
-    return s if s.isdigit() and s != "0" else ""
+    """The one network-number rule of every page (counting_keys.norm_asn): 0, AS0 and anything not a number: none."""
+    return _ck.norm_asn(v)
 
 
 def no_addresses(text):
@@ -255,9 +253,9 @@ def no_addresses(text):
 
 
 def region_label(v):
-    """A region as the platform shows it ("Nairobi", not "NAIROBI"; services_api.region_label, combos.py)."""
-    s = str(v or "").strip()
-    return s.title() if s else UNKNOWN_REGION
+    """A region as every page shows and groups it (counting_keys.region_key: the administrator's matches, the map, the
+    country's name; "Nairobi", not "NAIROBI")."""
+    return _ck.region_key(v)
 
 
 def readable(name, kind):
@@ -325,19 +323,32 @@ def classify(db, exclude):
     out, other = {}, {}
     comm = sources.Registry(db, exclude=exclude)
     comm.get(force=True)
+    on_portal = {e["name"] for e in comm.items}
     for e in comm.items + comm.unsupported:
         lay = e.get("layout")
         sp = "dst_" if lay == "target" else sources.PREFIXES.get(lay or "standard", ("src_", ""))[0]
         # the other side, for the constituency: the map keeps an event when its source OR destination host is in it
-        dp = "" if lay in ("target", "inbound") else sources.PREFIXES.get(lay or "standard", ("src_", "dst_"))[1]
+        # (inbound, Spam URL: the local host is the report's own ip/asn, as sources.normalise reads it into dst_*; count
+        # audit round 2, item 8: it was the source only here)
+        # its own name, not "other" (review 2026-11-27: "other" is this function's list of collections left out; the
+        # loop overwrote it, so a None crashed the report and "ip"/"asn" were listed as left-out collections)
+        if lay == "inbound":
+            side = {"ip": "ip", "asn": "asn"}
+        else:
+            dp = "" if lay == "target" else sources.PREFIXES.get(lay or "standard", ("src_", "dst_"))[1]
+            side = {k: dp + k for k in ("ip", "asn")} if dp and dp != sp else None
         out[e["name"]] = {"kind": "communication", "layout": lay or "unrecognised",
                           "fields": {k: sp + k for k in ("ip", "asn", "region", "sector")},
-                          "other": {k: dp + k for k in ("ip", "asn")} if dp and dp != sp else None}
+                          "other": side, "portal": e["name"] in on_portal}
     svc = services.ServiceRegistry(db, exclude=exclude)
     svc.get(force=True)
+    on_portal |= {e["name"] for e in svc.items}
     for e in svc.items + svc.unsupported:
         out.setdefault(e["name"], {"kind": "service", "layout": "single-host",
                                    "fields": {k: k for k in ("ip", "asn", "region", "sector")}})
+        out[e["name"]]["portal"] = e["name"] in on_portal
+    # a report the platforms' registries could not read in full (unsupported): counted here, never loaded by a page;
+    # the report says which (X["not_on_portal"], count audit round 2, item 8)
     for n in db.list_collection_names():
         if n in out or n.startswith(("files_", "discovered_fields_", "system.")):
             continue
@@ -411,19 +422,49 @@ def collect_db(db, y, q, today, exclude=(), kev=None, light=False, scope=None):
             key.update(t="$tag", p="$ssl_poodle", fr="$freak_vulnerable", ce="$cert_expired", dt="$device_type")
         if restricted and e.get("other"):              # the other side's host, only to decide the constituency
             key.update(oa="$" + e["other"]["asn"], oh="$" + e["other"]["ip"])
-        pipe = [{"$match": match},
-                {"$group": {"_id": key, "n": {"$sum": 1}, "d": {"$max": {"$substrCP": ["$filename", 0, 10]}},
-                            "r": {"$first": "$" + f["region"]}, "s": {"$first": "$" + f["sector"]}}}]
+        # stage 0 (count audit round 2, item 2): one row per (report day, line hash), as the day loaders keep it
+        # (counting_keys.row_key): a row sent in two files of one day (a country file and an ASN file) counts once; a
+        # row without a line hash is its own. Only the fields the next stage reads are carried.
+        fields = sorted({v[1:] for v in key.values() if isinstance(v, str) and v.startswith("$")} - {"filename"}
+                        | {f["region"], f["sector"]})
+        first = {"_id": {"d": {"$substrCP": ["$filename", 0, 10]}, "l": {"$ifNull": ["$line_hash", "$_id"]}},
+                 "c": {"$sum": 1}, "fn": {"$first": "$filename"}}
+        for i, fld in enumerate(fields):
+            first[f"f{i}"] = {"$first": "$" + fld}
+        alias = {fld: f"$f{i}" for i, fld in enumerate(fields)}
+        key2 = {k: ({"$substrCP": ["$fn", 0, 7]} if k == "m" else alias.get(v[1:], v) if isinstance(v, str) else v)
+                for k, v in key.items()}
+        pipe = [{"$match": match}, {"$group": first},
+                {"$group": {"_id": key2, "n": {"$sum": 1}, "x": {"$sum": {"$subtract": ["$c", 1]}},
+                            "d": {"$max": {"$substrCP": ["$fn", 0, 10]}},
+                            "r": {"$first": alias[f["region"]]}, "s": {"$first": alias[f["sector"]]}}}]
         try:
-            days = collections.Counter({d["_id"]: d["n"] for d in db[name].aggregate(
-                [{"$match": match}, {"$group": {"_id": {"$substrCP": ["$filename", 0, 10]}, "n": {"$sum": 1}}}], allowDiskUse=True)})
+            days, lo_t, hi_t, undated = collections.Counter(), None, None, 0
+            for d in db[name].aggregate([{"$match": match}, {"$group": {
+                    "_id": {"$substrCP": ["$filename", 0, 10]}, "n": {"$sum": 1},
+                    "lo": {"$min": "$extracted_date"}, "hi": {"$max": "$extracted_date"},
+                    "u": {"$sum": {"$cond": [{"$ifNull": ["$extracted_date", False]}, 0, 1]}}}}], allowDiskUse=True):
+                days[d["_id"]] = d["n"]
+                undated += d.get("u") or 0
+                for k_, v_ in (("lo", d.get("lo")), ("hi", d.get("hi"))):
+                    s_ = v_.strftime("%Y-%m-%d") if isinstance(v_, datetime) else str(v_ or "")[:10]
+                    if s_:
+                        if k_ == "lo" and (lo_t is None or s_ < lo_t):
+                            lo_t = s_
+                        if k_ == "hi" and (hi_t is None or s_ > hi_t):
+                            hi_t = s_
             groups = list(db[name].aggregate(pipe, allowDiskUse=True, batchSize=5000))   # stage 1: (month, network, host)
         except Exception as exc:       # noqa: BLE001  unreadable: reported, never skipped silently
             R["failed"][name] = no_addresses(f"{type(exc).__name__}: {exc}")[:300]
             continue
         R["rep_day"][name] = days
         R["rep_total"][name] += 0
+        sp = R.setdefault("event_span", {})
+        if lo_t:
+            sp[name] = (lo_t, hi_t)
+        R.setdefault("undated", collections.Counter())[name] += undated
         for g_ in groups:               # stage 2: counted here, in the constituency only (rows outside it counted apart)
+            R.setdefault("rep_dups", collections.Counter())[name] += g_.get("x") or 0
             if not keep_host(scope, g_["_id"]):
                 R["rep_out"][name] += g_["n"]
                 continue
@@ -449,9 +490,13 @@ def _add(R, name, e, k, n, day, region, sector, mi, kev, infection, light):
     if light:
         return
     rg = region_label(region)
-    sc = str(sector or "").strip() or "Not given"
+    # Shadowserver's own sector column: "Industry (Shadowserver)" (the user, 2026-11-26). The report's Sectors are the
+    # network types of the hosts' networks, worked out in figures() from net_hosts (counting_keys.sector_of), as on
+    # every page
+    sc = _ck.industry_of(sector) or "Not given"
     R["region"][rg].add(h); R["region_recs"][rg] += n
-    R["sector"][sc].add(h); R["sector_recs"][sc] += n
+    R.setdefault("industry", collections.defaultdict(set))[sc].add(h)
+    R.setdefault("industry_recs", collections.Counter())[sc] += n
     if infection:
         inf = infection_key(k, name, e["kind"])        # named readably when the report is put together (infection_name)
         R["inf_hosts"][inf].add(h); R["inf_recs"][inf] += n
@@ -552,11 +597,13 @@ def workflow(base, y, q, last_seen, title_of=lambda k: k, F=None):
     imp = advisory.Impact(base)
     A = {"sends": 0, "advisories": [], "per_month": collections.Counter(), "to": collections.Counter(),
          "impact": collections.Counter(), "orgs": collections.defaultdict(collections.Counter)}
+    org_of = _org_namer(base)
     for a in sorted(store.all(), key=lambda a: a.get("ref", "")):
         sq = [s for s in a.get("sends") or [] if inq(s.get("at"))]
         if not sq:
             continue
-        org = a.get("network") or "All networks"
+        dv = _advisory_devices(base, a, with_asns=True)
+        org = org_of(a.get("network"), dv[2])
         A["advisories"].append({"ref": a["ref"], "organisation": org, "sent": day(min(s["at"] for s in sq)),
                                 "subject": no_addresses(a.get("subject"))})
         A["orgs"][org]["advisories"] += 1
@@ -567,7 +614,7 @@ def workflow(base, y, q, last_seen, title_of=lambda k: k, F=None):
                 A["to"][r] += 1
         # the devices it named: the report's own device list (read in memory; only counts leave)
         first_send = day(min(s["at"] for s in sq))
-        names, devs = _advisory_devices(base, a)
+        names, devs, _asns = dv
         for fl in imp.of_names(names, title_of):
             A["impact"][(fl.get("label") or fl.get("flag"), fl.get("level") or "")] += 1
         A["orgs"][org]["devices"] += len(devs)
@@ -578,16 +625,37 @@ def workflow(base, y, q, last_seen, title_of=lambda k: k, F=None):
         opened = x.get("at")
         if (x.get("kind") != "case" and x["status"] in findings.OPEN and x.get("network")
                 and opened is not None and opened < t_hi):
-            A["orgs"][x["network"]]["cases_open"] += 1
+            A["orgs"][org_of(x["network"], ())]["cases_open"] += 1
     return W, A
 
 
-def _advisory_devices(base, a):
+def _org_namer(base):
+    """An organisation of the advisor's follow-up, named as the network registry names it when the report is made
+    (count audit round 2, item 17: keyed by the name stored when the advisory or finding was made, so a renamed or
+    re-spelt network was two organisations): by the AS numbers of its devices when known, else by its stored name
+    (folded) when the registry knows that name, else that name trimmed."""
+    reg = AsnRegistry(os.path.join(base, "data", "asns.json"))
+    by_fold = {}
+    for a, v in reg.all().items():
+        by_fold.setdefault(_ck.fold(v.get("name")), a)
+
+    def name(stored, asns):
+        if not stored or stored == "All networks":
+            return "All networks"
+        names = sorted({reg.company(a, False) for a in asns if _ck.norm_asn(a)} - {""})
+        if names:
+            return " / ".join(names)
+        a = by_fold.get(_ck.fold(stored))
+        return reg.company(a, False) if a else _ck.clean_name(stored)
+    return name
+
+
+def _advisory_devices(base, a, with_asns=False):
     folder = os.path.join(base, "data", "advisories", "files", a["ref"])
     reps = a.get("reports") or []
-    names, devs = set(), set()
+    names, devs, asns = set(), set(), set()
     if not reps:
-        return names, devs
+        return (names, devs, asns) if with_asns else (names, devs)
     p = os.path.join(folder, f"{reps[-1].get('n', len(reps))}.zip")
     try:
         with zipfile.ZipFile(p) as zf:
@@ -598,12 +666,14 @@ def _advisory_devices(base, a):
                     h = hkey(r.get("ip"))
                     if h:
                         devs.add(h)
+                    if _ck.norm_asn(r.get("asn")):
+                        asns.add(_ck.norm_asn(r.get("asn")))
                     for part in re.split(r"[;|]", r.get("reports") or ""):
                         if part.strip():
                             names.add(part.strip())
     except (OSError, zipfile.BadZipFile, KeyError):
         pass
-    return names, devs
+    return (names, devs, asns) if with_asns else (names, devs)
 
 
 # ------------------------------------------------------------------ summaries (what survives the purge)
@@ -619,17 +689,18 @@ def summary_of(R, netname):
     per_net = {asn: {"network": netname(asn), "records": v, "unique": len(R["net_hosts"].get(asn, {}))}
                for asn, v in R["net_total"].items() if v}
     per_rep = {}
+    hosts_of = collections.defaultdict(set)     # every report's addresses, in one pass (audit 2026-11-27, 6-3)
+    for (r, _a), hs in R["rep_hosts"].items():
+        hosts_of[r].update(hs)
     for name, v in R["rep_total"].items():
         if v:
-            hosts = set()
-            for (r, _a), hs in R["rep_hosts"].items():
-                if r == name:
-                    hosts.update(hs)
+            hosts = hosts_of.get(name, set())
             per_rep[name] = {"label": R["reports"][name]["label"], "family": R["reports"][name]["family"], "records": v,
                              "unique": len(hosts)}
     return {"quarter": R["quarter"], "constituency": R.get("constituency") or constituency(None),
             "totals": {"records": sum(R["rep_total"].values()), "unique": len(R["all_hosts"]),
-                                                "networks": sum(1 for v in R["net_total"].values() if v),
+                                                # companies, unknown left out (as figures(): count audit round 2)
+                                                "networks": len({netname(a) for a, v in R["net_total"].items() if v and a}),
                                                 "reports": sum(1 for v in R["rep_total"].values() if v)},
             "per_network": per_net, "per_report": per_rep, "per_report_network": per_rn}
 
@@ -690,26 +761,29 @@ def figures(R, PS, base, today, cv=None):
     tot = {}
     for i, m in enumerate(months + ["quarter"]):
         recs = sum(v for (r, mm, a), v in R["rep_recs"].items() if m == "quarter" or mm == m)
+        # networks: companies, "Unknown network" left out (counted apart: X["unknown_network"]), as on every page
+        # (count audit round 2, item 5: AS numbers with unknown here, companies in the list, companies without it on
+        # the Executive portal)
         if m == "quarter":
             uniq = len(R["all_hosts"])
-            nets = sum(1 for a, v in R["net_total"].items() if v)
+            nets = len({netname(a) for a, v in R["net_total"].items() if v and a})
             repn = sum(1 for r, v in R["rep_total"].items() if v)
         else:
             b = 1 << i
             uniq = sum(1 for v in R["all_hosts"].values() if v & b)
-            nets = len({a for (a, mm), v in R["net_month"].items() if mm == m and v})
+            nets = len({netname(a) for (a, mm), v in R["net_month"].items() if mm == m and v and a})
             repn = len({r for (r, mm, a), v in R["rep_recs"].items() if mm == m and v})
         tot[m] = {"records": recs, "unique": uniq, "networks": nets, "reports": repn}
     X["totals"] = tot
     X["noaddr"] = sum(R["rep_noaddr"].values())
     fam_recs, fam_hosts = collections.Counter(), collections.defaultdict(set)
     rep_rows = []
+    hosts_of = collections.defaultdict(set)     # every report's addresses, in one pass (audit 2026-11-27, 6-3)
+    for (r, a), hs in R["rep_hosts"].items():
+        hosts_of[r].update(hs)
     for name, v in R["rep_total"].items():
         e = R["reports"][name]
-        hosts = set()
-        for (r, a), hs in R["rep_hosts"].items():
-            if r == name:
-                hosts.update(hs)
+        hosts = hosts_of.get(name, set())
         fam_recs[e["family"]] += v
         fam_hosts[e["family"]].update(hosts)
         rep_rows.append({"name": name, "label": e["label"], "family": e["family"], "records": v, "unique": len(hosts)})
@@ -720,11 +794,19 @@ def figures(R, PS, base, today, cv=None):
         by_name_hosts[netname(a)].update(hs)
     for a, v in R["net_total"].items():
         by_name_recs[netname(a)] += v
-    X["networks"] = sorted(({"label": n, "records": by_name_recs[n], "unique": len(by_name_hosts[n])} for n in by_name_recs),
-                           key=lambda r: (-r["unique"], r["label"]))
+    # every network by company; the records without a network are the last row, "Unknown network", marked: shown, never
+    # counted as a network
+    X["networks"] = sorted(({"label": n, "records": by_name_recs[n], "unique": len(by_name_hosts[n]), "unknown": n == UNKNOWN_NET}
+                            for n in by_name_recs), key=lambda r: (r["unknown"], -r["unique"], r["label"]))
+    X["unknown_network"] = {"records": by_name_recs.get(UNKNOWN_NET, 0), "unique": len(by_name_hosts.get(UNKNOWN_NET, ()))}
     rec = []
+    asns_of = collections.defaultdict(list)     # every company's AS numbers, each named once (audit 2026-11-27, 6-3)
+    for a in R["net_total"]:
+        asns_of[netname(a)].append(a)
     for n in by_name_recs:
-        asns = [a for a in R["net_total"] if netname(a) == n]
+        if n == UNKNOWN_NET:
+            continue
+        asns = asns_of.get(n, [])
         if elapsed and all(sum(R["net_month"][(a, m)] for a in asns) for m in elapsed):
             rec.append({"label": n, "unique": len(by_name_hosts[n]), "records": by_name_recs[n]})
     X["recurring"] = sorted(rec, key=lambda r: (-r["unique"], r["label"]))
@@ -732,8 +814,11 @@ def figures(R, PS, base, today, cv=None):
     X["prev"] = PS
     X["prev_has_data"] = bool(PS and (PS.get("totals") or {}).get("records"))
     if X["prev_has_data"]:
-        now_n = {a for a, v in R["net_total"].items() if v and a}       # "unknown network" is not a network that came or went
-        was_n = {a for a, v in (PS.get("per_network") or {}).items() if a and (v or {}).get("records")}
+        # by company (names folded: counting_keys.fold), as every network count; "unknown network" is not a network
+        # that came or went
+        now_n = {_ck.fold(netname(a)) for a, v in R["net_total"].items() if v and a}
+        was_n = {_ck.fold((v or {}).get("network") or netname(a)) for a, v in (PS.get("per_network") or {}).items()
+                 if a and (v or {}).get("records")}
         pt = PS["totals"]
         X["better_worse"] = {"networks appeared": len(now_n - was_n), "networks gone": len(was_n - now_n),
                              "unique addresses previous quarter": pt.get("unique", 0),
@@ -746,8 +831,28 @@ def figures(R, PS, base, today, cv=None):
         X["better_worse"] = None
     X["regions"] = sorted(({"label": k, "unique": len(v), "records": R["region_recs"][k]} for k, v in R["region"].items()),
                           key=lambda r: (-r["unique"], r["label"]))
-    X["sectors"] = sorted(({"label": k, "unique": len(v), "records": R["sector_recs"][k]} for k, v in R["sector"].items()),
+    # Sectors: the network type of each host's network (data/asns.json, counting_keys.sector_of), the same buckets as
+    # the Executive portal and the services page; Industry (Shadowserver): the reports' own sector column (the user,
+    # 2026-11-26). An address seen in two networks of different types counts in each.
+    sec_of = _ck.Sectors(reg.all(), netypes.labels(os.path.join(base, "data")))
+    sec_h, sec_r = collections.defaultdict(set), collections.Counter()
+    for a, hs in R["net_hosts"].items():
+        sec_h[sec_of(a)].update(hs)
+    for a, v in R["net_total"].items():
+        if v:
+            sec_r[sec_of(a)] += v
+    X["sectors"] = sorted(({"label": k, "unique": len(sec_h[k]), "records": sec_r[k]} for k in sec_r),
                           key=lambda r: (-r["unique"], r["label"]))
+    X["industries"] = sorted(({"label": k, "unique": len(v), "records": (R.get("industry_recs") or {}).get(k, 0)}
+                              for k, v in (R.get("industry") or {}).items()), key=lambda r: (-r["unique"], r["label"]))
+    # what the counts leave out or say about the rows (count audit round 2): copies of a row in another file of the
+    # same day (counted once), rows without a time, the dates the events span, reports the portal does not show
+    X["duplicates"] = sum((R.get("rep_dups") or {}).values())
+    X["undated"] = sum((R.get("undated") or {}).values())
+    spans = list((R.get("event_span") or {}).values())
+    X["event_span"] = (min(s[0] for s in spans), max(s[1] for s in spans)) if spans else None
+    X["not_on_portal"] = sorted(({"label": R["reports"][n]["label"], "records": v} for n, v in R["rep_total"].items()
+                                 if v and R["reports"].get(n, {}).get("portal") is False), key=lambda r: (-r["records"], r["label"]))
     titles = _infection_titles(base)
     by_name = {}                      # two raw names with one readable name (an alias in the knowledge base) are one row
     for k, v in R["inf_hosts"].items():
@@ -775,7 +880,8 @@ def figures(R, PS, base, today, cv=None):
     kev = R.get("kev_set") or set()
     for (a, iss), hs in R["issue_hosts"].items():
         per_net[a].append({"issue": iss, "unique": len(hs), "records": R["issue_recs"][(a, iss)], "kev": iss in kev})
-    X["net_issues"] = {a: sorted(v, key=lambda r: (-r["unique"], r["issue"]))[:10] for a, v in per_net.items()}
+    # every issue of every network: the advisor_network_issues CSV says it holds every one; the PDF draws the top 5 and says so
+    X["net_issues"] = {a: sorted(v, key=lambda r: (-r["unique"], r["issue"])) for a, v in per_net.items()}
     return X
 
 
@@ -853,18 +959,27 @@ def guards(db, R, X, W, A, rows):
         G.append((name, bool(cond), detail))
     lo_s, hi_s = R["lo"].isoformat(), R["hi"].isoformat()
     months = R["months"]
-    bad = [r for r in R["rep_total"] if sum(v for (n, m, a), v in R["rep_recs"].items() if n == r) != R["rep_total"][r]]
+    # the records per report and per (report, network), summed once: each guard below looks them up instead of summing
+    # every row again per report / network (audit 2026-11-27, 6-2: O(n^2), hours for a big constituency, lock held)
+    rec_rep, rec_rn = collections.Counter(), collections.Counter()
+    for (n, m, a), v in R["rep_recs"].items():
+        rec_rep[n] += v
+        rec_rn[(n, a)] += v
+    hosts_per_net = collections.defaultdict(list)
+    for (n, a), h in R["rep_hosts"].items():
+        hosts_per_net[a].append(len(h))
+    bad = [r for r in R["rep_total"] if rec_rep.get(r, 0) != R["rep_total"][r]]
     bad += [f"network {a or '-'}" for a in R["net_total"] if sum(R["net_month"][(a, m)] for m in months) != R["net_total"][a]]
     ok("1 months add up to the quarter (every report and network)", not bad, ", ".join(map(str, bad[:5])))
     bad = []
     for (n, a), hs in R["rep_hosts"].items():
-        if len(hs) > sum(v for (nn, m, aa), v in R["rep_recs"].items() if nn == n and aa == a):
+        if len(hs) > rec_rn.get((n, a), 0):
             bad.append(f"{n}/{a}")
         for i, m in enumerate(months):
             if sum(1 for v in hs.values() if v & (1 << i)) > R["rep_recs"].get((n, m, a), 0):
                 bad.append(f"{n}/{a}/{m}")
     for a, hs in R["net_hosts"].items():
-        per = [len(h) for (n, aa), h in R["rep_hosts"].items() if aa == a]
+        per = hosts_per_net.get(a, [])
         if per and not (max(per) <= len(hs) <= sum(per)):
             bad.append(f"network {a}: all reports {len(hs)} outside {max(per)}..{sum(per)}")
         if len(hs) > R["net_total"][a]:
@@ -874,9 +989,12 @@ def guards(db, R, X, W, A, rows):
     for n in R["rep_total"]:
         try:
             k = db[n].count_documents({"filename": {"$gte": lo_s, "$lt": hi_s}})
-            # every stored row is either counted (in the constituency) or set apart (outside it): none lost, none twice
-            if k != R["rep_total"][n] + R["rep_out"][n] or k != sum(R["rep_day"][n].values()):
-                bad.append(f"{n}: {k} counted, {R['rep_total'][n]} in the report + {R['rep_out'][n]} outside the constituency")
+            # every stored row is either counted (in the constituency), set apart (outside it) or a copy of a row in
+            # another file of the same day (counted once): none lost, none twice
+            dup = (R.get("rep_dups") or {}).get(n, 0)
+            if k != R["rep_total"][n] + R["rep_out"][n] + dup or k != sum(R["rep_day"][n].values()):
+                bad.append(f"{n}: {k} counted, {R['rep_total'][n]} in the report + {R['rep_out'][n]} outside the constituency"
+                           f" + {dup} copies in another file of the same day")
             for i, m in enumerate(months):
                 m_hi = months[i + 1] + "-01" if i + 1 < len(months) else hi_s
                 km = db[n].count_documents({"filename": {"$gte": m + "-01", "$lt": m_hi}})
@@ -1011,19 +1129,35 @@ def csv_rows(R, X, W, A, PS):
         for k, lab in (("records", "records"), ("unique", "unique addresses"), ("networks", "networks"), ("reports", "reports with data")):
             add("Totals", "All reports", Q if m == "quarter" else m, lab, t[k])
     add("Totals", "All reports", Q, "records without an address", X["noaddr"])
+    # count audit round 2: what the counts leave out or say about the rows, stated (X from figures())
+    un = X.get("unknown_network") or {}
+    add("Totals", "All reports", Q, "records without a network (Unknown network, not counted as a network)",
+        un.get("records", 0), f"{un.get('unique', 0)} unique addresses")
+    add("Totals", "All reports", Q, "rows also in another file of the same day (counted once)", X.get("duplicates", 0))
+    add("Totals", "All reports", Q, "rows without a time (counted, by their file's date)", X.get("undated", 0))
+    if X.get("event_span"):
+        add("Totals", "All reports", Q, "event dates of the rows", f"{X['event_span'][0]} to {X['event_span'][1]}",
+            "the quarter holds the reports sent in it (by file date); their events can start a day earlier")
+    for r in X.get("not_on_portal") or []:
+        add("Totals", r["label"], Q, "records counted here, not shown on the portal", r["records"],
+            "a report the portal's pages cannot read in full")
     for r in X["families"]:
         add("Report families", r["label"], Q, "unique addresses", r["unique"], f"{r['records']} records")
     for r in X["reports"][:15]:
         add("Top reports", r["label"], Q, "unique addresses", r["unique"], f"{r['records']} records; {r['family']}")
     for r in X["networks"][:15]:
         add("Top networks", r["label"], Q, "unique addresses", r["unique"], f"{r['records']} records")
-    for r in X["regions"][:20]:
+    # regions, sectors, recurring networks, KEV CVEs and infections: every row (the PDF's cards show the top ones and
+    # say "all in the management_summary CSV")
+    for r in X["regions"]:
         add("Regions", r["label"], Q, "unique addresses", r["unique"], f"{r['records']} records")
-    for r in X["sectors"][:20]:
-        add("Sectors", r["label"], Q, "unique addresses", r["unique"], f"{r['records']} records")
+    for r in X["sectors"]:
+        add(_ck.SECTOR_LABEL, r["label"], Q, "unique addresses", r["unique"], f"{r['records']} records")
+    for r in X.get("industries") or []:
+        add(_ck.INDUSTRY_LABEL, r["label"], Q, "unique addresses", r["unique"], f"{r['records']} records")
     add("Recurring networks", "Networks with records in every month so far", Q, "networks", len(X["recurring"]),
         "months so far: " + ", ".join(X["elapsed"]))
-    for r in X["recurring"][:15]:
+    for r in X["recurring"]:
         add("Recurring networks", r["label"], Q, "unique addresses", r["unique"], f"{r['records']} records")
     pq = qname(*prev_quarter(*parse_quarter(Q)))
     if X["better_worse"]:
@@ -1032,9 +1166,9 @@ def csv_rows(R, X, W, A, PS):
     else:
         add("Better or worse", "Previous quarter", pq, "records", 0, "no data for the previous quarter: nothing to compare")
     add("Actively exploited (CISA KEV)", "Addresses with a KEV CVE", Q, "unique addresses", X["kev"]["hosts"], f"{X['kev']['records']} records")
-    for r in X["kev"]["top"][:10]:
+    for r in X["kev"]["top"]:
         add("Actively exploited (CISA KEV)", r["label"], Q, "unique addresses", r["unique"])
-    for r in X["infections"][:15]:
+    for r in X["infections"]:
         add("Infections", r["label"], Q, "unique addresses", r["unique"], f"{r['records']} records")
     add("Advisories", "Advisories sent", Q, "sends", A["sends"], f"{len(A['advisories'])} advisories")
     for a in A["advisories"]:
@@ -1139,6 +1273,7 @@ def make(db, quarter, base, today=None, exclude=(), F=None, scope=None):
     today = today or datetime.now(timezone.utc).date()
     cv = cve_intel(base)
     kev = kev_ids(cv)
+    _ck.configure_from_base(base)                      # outside the platform: its region rule from the same files
     R = collect_db(db, y, q, today, exclude, kev, scope=scope)
     R["kev_set"] = kev
     R["purge_on"] = purge_on(base)                     # what the reports say about the purge (and the permit's rule)
@@ -1453,6 +1588,26 @@ def sync_permits(base, on, today):
     return done
 
 
+def shown_name(full_name_of, user, saved=""):
+    """How Settings → Quarterly names who switched the purge: the full name now (full_name_of(user)), else the name saved
+    with the switch when it is not the sign-in name itself (before 2026-11-27 the sign-in name was saved there when an
+    account had no full name), else the person code (people.person_label). Never the sign-in name."""
+    user = str(user or "").strip()
+    full = ""
+    if user and full_name_of:
+        try:
+            full = str(full_name_of(user) or "").strip()
+        except Exception:                  # noqa: BLE001  (the accounts file is being rewritten: the saved name or code)
+            full = ""
+    if full:
+        return full
+    saved = str(saved or "").strip()
+    if saved and saved != user:
+        return saved
+    import people
+    return people.person_label(user)
+
+
 def set_purge(base, enabled, user, full_name, shown, now=None):
     """Turn the quarterly purge on or off (Settings → Quarterly; the route checked the permission, CSRF and the password).
     The switch is written first (the pipeline then refuses at once when it is off), then the permits follow it.
@@ -1460,7 +1615,9 @@ def set_purge(base, enabled, user, full_name, shown, now=None):
     now = now or time.time()
     today = datetime.fromtimestamp(now, timezone.utc).date()
     os.makedirs(os.path.join(base, "data", "quarterly"), mode=0o700, exist_ok=True)
-    rec = {"enabled": bool(enabled), "by": user, "by_name": full_name or user,
+    # by: the sign-in name (kept in the file, as in the audit log); by_name: how the pages name the person, the full name
+    # else the person code, never the sign-in name (audit 2026-11-27, 6-6)
+    rec = {"enabled": bool(enabled), "by": user, "by_name": shown_name(None, user, full_name),
            "at": datetime.fromtimestamp(now, timezone.utc).isoformat(timespec="seconds"), "at_ts": round(now),
            "shown": shown}
     _write_json(confirm_path(base), rec)
@@ -1836,11 +1993,12 @@ def install(app, ctx):
         u = me()
         when = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         if f["name"].endswith(".csv"):                # stamped: who downloaded it, and when (under the status line)
-            who = (ctx.get("people_name") or (lambda x: ""))(u) or u
+            import insider                            # the full name and the person's code, never the sign-in name
+            who = insider.stamp_who(u, (ctx.get("people_name") or (lambda x: ""))(u))
             text = data.decode("utf-8")
             first, _, rest = text.partition("\n")
             buf = io.StringIO()
-            csvsafe.writer(buf).writerow(["Downloaded", f"{who} ({u})" if who != u else u, when])
+            csvsafe.writer(buf).writerow(["Downloaded", who, when])
             data = (first + "\n" + buf.getvalue() + rest).encode("utf-8")
         audit.add("quarterly_download", user=u, target=quarter, detail=f"{FILES[kind][1]} · {f['name']}")
         mime = "application/pdf" if f["name"].endswith(".pdf") else "text/csv"
@@ -1897,9 +2055,11 @@ def install(app, ctx):
     def purge_view(today=None):
         """The switch as Settings → Quarterly shows it: on or off, since when, by whom, and what the purge would delete."""
         c = confirmation(base)
+        # never the sign-in name (audit 2026-11-27, 6-6): "by" and "by_name" both carry the full name or the person code
+        who = shown_name(ctx.get("people_name"), c.get("by", ""), c.get("by_name", "")) if (c.get("by") or c.get("by_name")) else ""
         return {"enabled": c["enabled"], "since": c.get("at", "") if c["enabled"] else "",
-                "by": c.get("by", "") if c["enabled"] else "", "by_name": c.get("by_name", "") if c["enabled"] else "",
-                "changed_at": c.get("at", ""), "changed_by_name": c.get("by_name", ""),
+                "by": who if c["enabled"] else "", "by_name": who if c["enabled"] else "",
+                "changed_at": c.get("at", ""), "changed_by_name": who,
                 "preview": purge_preview(base, today or datetime.now(timezone.utc).date())}
 
     @app.route("/api/admin/quarterly/purge", methods=["POST"])

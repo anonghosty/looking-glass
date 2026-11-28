@@ -30,7 +30,7 @@
     misp: ["In MISP, add a role for Looking Glass (Administration -> Add Role): Add, Tagger and Tag Editor rights only; no publishing, no sync, no admin. (MISP's built-in roles that can create tags can also publish or sync.)",
       "Create a user only for Looking Glass in your organisation, with that role, and an auth key for it (Administration -> Auth keys) restricted to this Looking Glass server's address.",
       "Enable the tlp taxonomy (Event Actions -> Taxonomies), and update the galaxies (Galaxies -> Update Galaxies) so the ATT&CK techniques show as galaxy entries.",
-      "Copy MISP's address (https://...) and the auth key."] };
+      "Copy MISP's address (it starts with https://) and the auth key."] };
   let D = null;
 
   async function load() {
@@ -77,15 +77,25 @@
       const k = prompt("The new key (tested before it replaces the old one):"); if (!k) return;
       act(`/api/connectors/${t.id}/key`, { key: k }, "The new key passed and replaced the old one.");
     }));
-    row.append(btn("Sends", "", async () => {
+    // the send log: the newest 30, and when there are more, "30 of N" with a button for all of them (2026-11-26: it
+    // stopped at 30 without a word)
+    const sends = async (all) => {
       try {
-        const j = await api(`/api/connectors/${t.id}/log`);
+        const j = await api(`/api/connectors/${t.id}/log${all ? `?n=${all}` : ""}`);
+        const total = j.totals?.log ?? j.log.length, shown = all ? j.log : j.log.slice(0, 30);
         const ul = el("ul", "cn-log");
-        for (const e of j.log.slice(0, 30)) ul.append(el("li", null, `${when(e.at)} · ${e.day || ""} · ${e.status}${e.devices != null ? ` · ${e.devices} device(s)` : ""}${e.detail ? ` · ${e.detail}` : ""}`));
+        for (const e of shown) ul.append(el("li", null, `${when(e.at)} · ${e.day || ""} · ${e.status}${e.devices != null ? ` · ${e.devices} device(s)` : ""}${e.detail ? ` · ${e.detail}` : ""}`));
         if (!j.log.length) ul.append(el("li", null, "Nothing sent yet."));
+        if (total > shown.length) {
+          const li = el("li", "cn-log-more", `The newest ${shown.length.toLocaleString()} of ${total.toLocaleString()} entries.`);
+          // all of them in one answer up to the server's most (5,000, connectors.LOG_MAX); beyond it the line says so
+          if (!all) li.append(" ", btn(`Show all ${total.toLocaleString()}`, "", () => sends(Math.min(total, 5000))));
+          ul.append(li);
+        }
         c.querySelector(".cn-log")?.remove(); c.append(ul);
       } catch (e) { say(window.LGLoader.errorText(e), true); }
-    }));
+    };
+    row.append(btn("Sends", "", () => sends(0)));
     row.append(btn("Delete", "warn", () => { if (confirm(`Delete ${t.name}? Its stored key is deleted too. What was already sent stays on the platform.`)) act(`/api/connectors/${t.id}/delete`, {}, "Deleted."); }));
     const sc = t.scope || {}; const n = Object.keys(sc.networks || {}).length + (sc.cidrs || []).length;
     c.append(el("p", "st-meta", n ? `Receives: ${Object.entries(sc.networks || {}).map(([a, v]) => `AS${a} ${v === "whole" ? "(whole network)" : `(${v.length} block(s))`}`).join(", ")}${(sc.cidrs || []).length ? `; ${(sc.cidrs || []).length} other range(s)` : ""}` : "Receives: nothing ticked yet"), row, msg);
@@ -155,7 +165,7 @@
     const form = el("div", "cn-form"); form.hidden = true;
     done.addEventListener("change", () => { form.hidden = !done.checked; });
     const inp = (label, type, ph) => { const l = el("label", "st-field", label); const i = el("input"); i.type = type; i.placeholder = ph || ""; i.autocomplete = "off"; l.append(i); form.append(l); return i; };
-    const name = inp("Name", "text", "e.g. CSIRT OpenCTI"), addr = inp("Address", "url", "https://..."), key = inp("Key (never shown again)", "password", "");
+    const name = inp("Name", "text", "e.g. CSIRT OpenCTI"), addr = inp("Address", "url", "e.g. https://platform.example.org"), key = inp("Key (never shown again)", "password", "");
     const tlpL = el("label", "st-field", "TLP"); const tlp = el("select", "adm-select lg-enhance");
     for (const x of D.tlps) { const o = el("option", null, `TLP:${x.toUpperCase()}`); o.value = x; tlp.append(o); }
     tlp.value = "amber"; tlpL.append(tlp); form.append(tlpL);

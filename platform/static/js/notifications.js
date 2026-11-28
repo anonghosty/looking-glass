@@ -34,7 +34,10 @@
       if (host.querySelector(".lg-bell")) continue;
       const b = makeBell(host);
       // Settings then Log out close the header: the bell goes before Settings (or before Log out where there is none)
-      const settings = host.querySelector('#introSettings, a.nav-ic[href="/settings"], button.nav-ic[data-go="/settings"]');
+      // the map and Services headers' Settings is #btnSettings (in its own block: the bell goes before that block, so
+      // the keyboard reaches the bell, then Settings, then Log out, as on screen; audit 2026-11-27, 13-10)
+      let settings = host.querySelector('#introSettings, #btnSettings, a.nav-ic[href="/settings"], button.nav-ic[data-go="/settings"]');
+      while (settings && settings.parentElement && settings.parentElement !== host) settings = settings.parentElement;
       const logout = host.querySelector(":scope > .account-form, :scope > .mg-logout");
       settings ? settings.before(b) : logout ? logout.before(b) : host.append(b);
       bells.push(b);

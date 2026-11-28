@@ -44,6 +44,7 @@ from datetime import datetime, timedelta, timezone
 
 from flask import Response, g, jsonify, render_template, request, has_request_context
 
+import counting_keys as _ck
 import csvsafe
 import export_fields
 import tls_facts
@@ -51,7 +52,8 @@ import issue_tags
 import intel as I
 import pdf_refs
 import report_day
-from services_intel import ISSUE, SINK         # a services code's part "the host calls a sinkhole as …" / "carries CVE / issue …"
+import shares
+from services_intel import ISSUE, SINK        # a services code's part "the host calls a sinkhole as …" / "carries CVE / issue …"
 
 CODE_RX = re.compile(r"^LG-[CX]-[0-9A-F]{8}$")          # the researchers' codes (this module)
 ANY_RX = re.compile(r"^LG-[CXAB]-[0-9A-F]{8}$")         # and the analysts' (acodes.py) and decoded beacons (beacon_findings.py)
@@ -215,11 +217,24 @@ def described(book, code, entry):
     if entry and entry.get("kind") == "b" and has_request_context() and hasattr(book, "beacon_visible") \
             and not book.beacon_visible(code):
         return ""
-    return describe(entry)
+    return describe(entry, getattr(book, "acode_label", None))
 
 
-def describe(entry):
-    """One line for people: what the code stands for."""
+def acode_label(entry, label_of=None):
+    """An analyst code's label as it is served: label_of is acodes' rule (set by acodes.install as book.acode_label),
+    which works a label stored before a masking fix out again from its selection (re-review of r1-1, 2026-11-28). Without
+    the analyst codes installed: the stored label."""
+    if label_of is not None:
+        try:
+            return label_of(entry)
+        except Exception:                                 # noqa: BLE001 (masked, never raw)
+            import hostmask
+            return hostmask.mask(entry.get("label", "") or "")
+    return entry.get("label", "")
+
+
+def describe(entry, label_of=None):
+    """One line for people: what the code stands for. label_of: acodes' label rule (acode_label)."""
     if not entry:
         return ""
     if entry["kind"] == "b":                              # decoded beacons under a name (beacon_findings.py)
@@ -227,7 +242,7 @@ def describe(entry):
     if entry["kind"] == "a":
         days = entry.get("days") or [entry["day"]]
         on = days[0] if len(days) == 1 else f"{days[0]} to {days[-1]}"
-        return f"Analyst selection on {on} ({'network communications' if entry['platform'] == 'comms' else 'services'}): {entry.get('label', '')}"
+        return f"Analyst selection on {on} ({'network communications' if entry['platform'] == 'comms' else 'services'}): {acode_label(entry, label_of)}"
     if entry.get("section") == "services":                # a services report: its title, never the collection name
         t = _TITLE["of"]
         if entry["kind"] == "r":
@@ -309,10 +324,7 @@ SVC_COLS = [("time", "extracted_date"), ("ip", "ip"), ("port", "port"), ("protoc
             ("product", "product"), ("version", "version"), ("severity", "severity"), ("combination_code", "_code")]
 
 
-def _share(n, total):
-    """A share people read correctly: "<0.1%" rather than "0%" when there is at least one."""
-    s = (n or 0) / max(1, total or 0)
-    return "0%" if not n else "<0.1%" if s < .001 else f"{100 * s:.1f}%" if s < .1 else f"{round(100 * s)}%"
+_share = shares.part                # one rule for every share in tables and PDFs (shares.part; combo_pdf uses it too)
 
 
 def enrich_points(enr):
@@ -332,7 +344,9 @@ def enrich_points(enr):
                    + (f", and {enr.get('issues_total', len(iss)) - 10} more" if enr.get("issues_total", len(iss)) > 10 else "") + ".")
     inf = enr.get("infections") or []
     if inf:
-        out.append(f"{enr.get('infections_hosts', 0):,} of them also call botnet sinkholes as " + ", ".join(f"{i['name']} ({i['hosts']:,})" for i in inf[:8]) + ".")
+        inf_n = enr.get("infections_total", len(inf))
+        out.append(f"{enr.get('infections_hosts', 0):,} of them also call botnet sinkholes as " + ", ".join(f"{i['name']} ({i['hosts']:,})" for i in inf[:8])
+                   + (f", and {inf_n - 8:,} more" if inf_n > 8 else "") + ".")
     if not out:
         out.append("Across every category: these devices show nothing more in the other categories in the days in memory.")
     return out
@@ -362,6 +376,13 @@ def enrich_rows(enr):
     return rows
 
 
+def region_of(value, country=None):
+    """A device's region in its one spelling (counting_keys.region_key, as every page groups it), "" when it is not
+    known (none, or the country itself): the lists show that as "Unknown region"."""
+    r = _ck.region_key(value, country)
+    return "" if _ck.is_unknown_region(r) else r
+
+
 def _cell(e, key):
     v = (e.get("extras") or {}).get(key[2:]) if key.startswith("x:") else e.get(key)
     if isinstance(v, (list, tuple, set)):
@@ -379,6 +400,10 @@ def install(app, ctx):
         _TITLE["of"] = ctx["title_of"]
     ctx["intel"].on_codes = book.record
     jobs, jobs_lock = {}, threading.Lock()
+
+    def describe(entry):
+        """The module's describe with acodes' label rule, once the analyst codes are installed (book.acode_label)."""
+        return globals()["describe"](entry, getattr(book, "acode_label", None))
 
     def user():
         return (getattr(g, "user", None) or {}).get("user", "")
@@ -436,7 +461,7 @@ def install(app, ctx):
             return jsonify(error=f"{code} is not known here: it was never shown in Intel gathered on this platform."), 404
         if entry.get("kind") == "a":              # an analyst's selection: what it stands for, without an address
             return jsonify({"code": code, "kind": "a", "section": "issues" if entry["platform"] == "services" else "infections",
-                            "platform": entry["platform"], "day": entry["day"], "text": describe(entry), "label": entry.get("label", ""),
+                            "platform": entry["platform"], "day": entry["day"], "text": describe(entry), "label": acode_label(entry, getattr(book, "acode_label", None)),
                             "records": entry.get("records"), "hosts": entry.get("hosts"), "names": entry.get("names", []), "notes": []})
         out = public_entry(entry)
         out["notes"] = [{k: v for k, v in n.items() if k != "user"} for n in ctx["notes"].list(entry["section"], entry["name"])]
@@ -603,12 +628,14 @@ def install(app, ctx):
             by_last[last_day if last_day in mem_isos else "memory"].add(h)
         flags = {}
         for dd, hs in by_last.items():
-            kept_here = {h: kept_flags[h] for h in hs if h in (kept_flags or {})}
-            # a review kept before the ports were kept (2026-11-19) has none: they are worked out, the rest used as kept
-            no_ports = {h for h, v in kept_here.items() if "ports" not in v}
-            if no_ports:
-                got = flags_of(no_ports, dd, load)
-                kept_here.update({h: dict(kept_here[h], ports=(got.get(h) or {}).get("ports", "")) for h in no_ports})
+            kept_here = {h: kept_flags[h] for h in hs if h in (kept_flags or {}) and isinstance(kept_flags[h], dict)}
+            # a review kept before the levels (2026-11-18) or the ports (2026-11-19) were kept has none: they are worked
+            # out, the rest used as kept (2026-11-26: one kept before the levels lost every severity in its References)
+            missing = {h for h, v in kept_here.items() if "ports" not in v or "levels" not in v}
+            if missing:
+                got = flags_of(missing, dd, load)
+                kept_here.update({h: dict({k: (got.get(h) or {}).get(k, "" if k == "ports" else {}) for k in ("ports", "levels")},
+                                          **kept_here[h]) for h in missing})
             flags.update(kept_here)
             rest = hs - set(kept_here)                   # none kept for these: worked out, never left empty
             if rest:
@@ -697,35 +724,41 @@ def install(app, ctx):
             per[m.host(e)][m.report(e)].update(items_of(m, entry["section"], e))
         sets = collections.Counter(tuple(sorted(r)) for r in per.values())
         pats = collections.Counter(tuple(sorted((r, tuple(sorted(i))) for r, i in reps.items())) for reps in per.values() if len(reps) > 1)
-        top = pats.most_common(15)
+        # every pattern, the most devices first (ties by the pattern itself, so the order is the same every time): the
+        # page shows the top 15, the PDF the first ones it has room for, the ZIP's patterns CSV every one
+        every = sorted(pats.items(), key=lambda kv: (-kv[1], kv[0]))
         hosts_of = collections.defaultdict(list)          # each pattern's devices (analysts' report: an advisory names them)
         for h, reps in per.items():
             if len(reps) > 1:
                 hosts_of[tuple(sorted((r, tuple(sorted(i))) for r, i in reps.items()))].append(h)
-        if top:
-            book.record(entry["section"], entry["name"], None, [p for p, _ in top])     # so the analyst can pass the codes on
+        if every:                                          # every code, so each one in the patterns CSV resolves
+            book.record(entry["section"], entry["name"], None, [p for p, _ in every])     # so the analyst can pass the codes on
+        all_p = [{"code": I.cross_code(entry["section"], entry["name"], p), "devices": n, "ips": sorted(hosts_of[p]),
+                  "parts": [{"report": r, "items": list(i)} for r, i in p]} for p, n in every]
+        # every set of reports (they add up to every device: the PDF's shares are of the whole)
+        all_sets = [{"reports": list(r), "devices": n} for r, n in sorted(sets.items(), key=lambda kv: (-kv[1], kv[0]))]
         return {"devices": len(per), "multi": sum(n for r, n in sets.items() if len(r) > 1),
-                "sets": [{"reports": list(r), "devices": n} for r, n in sets.most_common(10)],
-                "patterns": [{"code": I.cross_code(entry["section"], entry["name"], p), "devices": n, "ips": sorted(hosts_of[p]),
-                              "parts": [{"report": r, "items": list(i)} for r, i in p]} for p, n in top],
-                "patterns_total": len(pats)}
+                "sets": all_sets, "patterns": all_p[:15], "all_patterns": all_p,
+                "patterns_total": len(pats), "totals": {"patterns": len(pats), "sets": len(sets)}}
 
     def geography(devs, section):
         """Devices per country, region and city (the region map and its cities, as in the Executive report)."""
         title = lambda s: " ".join(w.capitalize() for w in str(s or "").split()) or ""
         countries = collections.Counter(d["country"] or "Unknown" for d in devs)
+        # d["region"]: the region in its one spelling already (region_of, counting_keys.region_key), "" when unknown
         regions = collections.Counter(d["region"] or "Unknown region" for d in devs)
         cities = collections.defaultdict(collections.Counter)
         for d in devs:
             cities[d["region"] or "Unknown region"][title(d["city"]) or "Unknown city"] += 1
         tot = max(1, len(devs))
-        rows = [{"value": r, "label": title(r) if r != "Unknown region" else r, "count": n, "hosts": n, "share": n / tot}
+        rows = [{"value": r, "label": r, "count": n, "hosts": n, "share": n / tot}
                 for r, n in regions.most_common()]
-        details = {r: {"city_devices": [(c, n) for c, n in cs.most_common(6)]} for r, cs in cities.items()}
+        details = {r: {"city_devices": [(c, n) for c, n in cs.most_common(6)], "totals": {"cities": len(cs)}}
+                   for r, cs in cities.items()}
         city_rows = collections.Counter()
         for r, cs in cities.items():
             for c, n in cs.items():
-                city_rows[(c, title(r) if r != "Unknown region" else "")] += n
+                city_rows[(c, r if r != "Unknown region" else "")] += n
         return countries, rows, details, city_rows
 
     def package(job, entry, found, per_day, days, around=(), m=None, network=None, summary_only=False, asns=None):
@@ -765,7 +798,8 @@ def install(app, ctx):
             d = devices.setdefault(h, {"ip": h, "asn": asn or "", "network": extra["_network"], "records": 0, "first": None, "last": None,
                                        "reports": set(), "days": set(), "ports": set(), "hostname": "", "pattern": collections.defaultdict(set),
                                        "country": e.get("src_geo") if section == "infections" else e.get("geo"),
-                                       "region": e.get("src_region") if section == "infections" else e.get("region"),
+                                       "region": region_of(e.get("src_region") if section == "infections" else e.get("region"),
+                                                           e.get("src_geo") if section == "infections" else e.get("geo")),
                                        "city": e.get("src_city") if section == "infections" else e.get("city")})
             t = str(e.get("timestamp") or e.get("extracted_date") or "")
             d["records"] += 1
@@ -800,7 +834,8 @@ def install(app, ctx):
             job["dev_flags"] = {d["ip"]: d["flags"] for d in devs}      # kept with a review (combo_review.keep_search)
         earlier_text = lambda d: "; ".join(n["text"] for n in d["earlier"])     # noqa: E731
         # an analyst's selection has several names: no cross-report codes of one name for it
-        x = ({"devices": 0, "multi": 0, "sets": [], "patterns": [], "patterns_total": 0} if is_a else across(entry, m, around))
+        x = ({"devices": 0, "multi": 0, "sets": [], "patterns": [], "all_patterns": [], "patterns_total": 0,
+              "totals": {"patterns": 0, "sets": 0}} if is_a else across(entry, m, around))
         # per device: the other reports of the name it was seen in, and its cross-report pattern code
         per_dev = collections.defaultdict(lambda: collections.defaultdict(set))
         for e in ([] if is_a else around):
@@ -818,7 +853,7 @@ def install(app, ctx):
         dev_cols = ["ip", "host_name", "ports", "all_ports_and_services", "asn", "network", "country", "region", "city", "records", "days", "first_seen", "last_seen", "reports",
                     "also_seen_in", "infections", "issues", "cves", "other_days", *pat_cols, "combination_code", "cross_report_code"]
         dev_rows = [[d["ip"], d["hostname"], ", ".join(sorted(d["ports"], key=lambda p: (len(p), p))), d["flags"].get("ports") or "",
-                     d["asn"], d["network"], d["country"] or "", (d["region"] or "").title(), (d["city"] or "").title(), d["records"],
+                     d["asn"], d["network"], d["country"] or "", d["region"], (d["city"] or "").title(), d["records"],
                      len(d["days"]), d["first"] or "", d["last"] or "", ", ".join(sorted(d["reports"])),
                      ", ".join(sorted(set(per_dev.get(d["ip"], {})) - d["reports"])), ", ".join(d["flags"]["infections"]),
                      ", ".join(d["flags"]["issues"]), ", ".join(d["flags"]["cves"]), earlier_text(d),
@@ -850,7 +885,8 @@ def install(app, ctx):
             base += "_" + (re.sub(r"[^\w.-]+", "-", network).strip("-")[:40] or "network")
         if job.get("file_base"):                  # an advisory names its files itself (advisory.py: CSIRT_network_title_date)
             base = job["file_base"]
-        nets = collections.Counter(d["network"] or "Unknown" for d in devs)
+        nets = collections.Counter(d["network"] or _ck.UNKNOWN_NET for d in devs)
+        n_nets = len(set(nets) - {_ck.UNKNOWN_NET})      # Unknown network is not a network (count audit round 2)
         repeat = sum(1 for d in devs if d["records"] > 1)
         multi_day = sum(1 for d in devs if len(d["days"]) > 1)
         n_dev, n_rec = len(devs), len(rows)
@@ -866,7 +902,7 @@ def install(app, ctx):
         if is_a:
             pts = [f"Analyst code {entry['code']}: {describe(entry)}.", first.replace("carried it more than once", "appear in more than one record"),
                    "The records are the analyst's selection on that day, exactly as the analysis window showed it"
-                   + (f"; the names in it: {', '.join(entry.get('names', [])[:8])}." if entry.get("names") else ".")]
+                   + (f"; the names in it: {', '.join(entry.get('names', []))}." if entry.get("names") else ".")]
         else:
             pts = [f"Combination {entry['code']}: {describe(entry)}.", first,
                    "Exactly means that each record carries these indicators and no other indicator of the kinds compared ("
@@ -895,7 +931,7 @@ def install(app, ctx):
                                                                           if details.get(top_r[0]["value"], {}).get("city_devices") else "."))
             else:
                 pts.append("Most are in " + ", ".join(f"{r['label']} ({dv(r['count'])})" for r in top_r)
-                           + (f"; {len(regions) - len(top_r)} more region{'s' if len(regions) - len(top_r) != 1 else ''} have the rest." if len(regions) > len(top_r) else "."))
+                           + (f"; {len(regions) - len(top_r)} more region{'s have' if len(regions) - len(top_r) != 1 else ' has'} the rest." if len(regions) > len(top_r) else "."))
         if x["multi"]:
             other = sorted({r for s_ in x["sets"] for r in s_["reports"]} - set(m.reports))
             who = ("All of these devices were" if x["multi"] == n_dev and n_dev > 1 else "This device was" if x["multi"] == n_dev
@@ -906,7 +942,7 @@ def install(app, ctx):
         elif entry["kind"] == "r":
             pts.append(f"None of these devices was seen in another report of {T(entry['name'])} in this period.")
         # the researchers' notes on the name (an analyst code: on each of its names), the ones that point at this code first
-        note_names = entry.get("names", [])[:8] if is_a else [entry["name"]]
+        note_names = entry.get("names", []) if is_a else [entry["name"]]
         notes = sorted(({**n, "name": nm} for nm in note_names for n in ctx["notes"].list(section, nm)),
                        key=lambda n: not any(c["code"] == entry["code"] for c in n.get("codes") or []))
         if job.get("advisory"):                   # an advisory goes to an organisation: definitions and references only,
@@ -953,8 +989,11 @@ def install(app, ctx):
                 dv_ = [d for d in p_.get("devices") or [] if d.get("ip") in hs_net]
                 if dv_:
                     cross_net.append(dict(p_, devices=dv_, hosts=len(dv_)))
+            inf_own, iss_own = own(enr.get("infections")), own(enr.get("issues"))
             enr = dict(enr, cross=cross_net, cross_total=len(cross_net), multi_hosts=sum(p_["hosts"] for p_ in cross_net),
-                       infections=own(enr.get("infections")), issues=own(enr.get("issues")))
+                       infections=inf_own, issues=iss_own,
+                       # the counts beside them are this network's too ("and N more" counts its own, not the whole search's)
+                       infections_total=len(inf_own), issues_total=len(iss_own))
         if enr:
             pts.extend([no_codes(p_) for p_ in enrich_points(enr)] if job.get("advisory") else enrich_points(enr))
         # activity by hour of the day (network communications carry the event time)
@@ -969,11 +1008,11 @@ def install(app, ctx):
         # per network: AS number, devices and records
         per_net = collections.defaultdict(lambda: {"asn": "", "devices": 0, "records": 0})
         for d in devs:
-            k = d["network"] or "Unknown"
+            k = d["network"] or _ck.UNKNOWN_NET
             per_net[k]["asn"] = per_net[k]["asn"] or str(d["asn"] or "")
             per_net[k]["devices"] += 1
             per_net[k]["records"] += d["records"]
-        net_rows = [[k, v["asn"], f"{v['devices']:,}", f"{v['records']:,}", f"{v['devices'] / max(1, len(devs)):.1%}"]
+        net_rows = [[k, v["asn"], f"{v['devices']:,}", f"{v['records']:,}", _share(v["devices"], len(devs))]
                     for k, v in sorted(per_net.items(), key=lambda kv: -kv[1]["devices"])[:20]]
         # what the devices are, and where they listen / call
         kind = collections.Counter()
@@ -985,12 +1024,14 @@ def install(app, ctx):
             else:
                 kind[" ".join(x for x in (e.get("vendor"), e.get("product"), e.get("version")) if x) or "Not given by the report"] += 1
                 ports[f"{e.get('port') or '?'}/{(e.get('protocol') or '').lower() or '?'}"] += 1
-        kind_rows = [[k, f"{n:,}", f"{n / max(1, len(rows)):.1%}"] for k, n in kind.most_common(12)]
-        port_rows = [[k, f"{n:,}", f"{n / max(1, len(rows)):.1%}"] for k, n in ports.most_common(10)]
-        geo_rows = [[r["label"], f"{r['count']:,}", f"{r['share']:.1%}"] for r in regions[:15]]
-        city_tab = [[c, r, f"{n:,}", f"{n / max(1, len(devs)):.1%}"] for (c, r), n in city_rows.most_common(15)]
+        kind_rows = [[k, f"{n:,}", _share(n, len(rows))] for k, n in kind.most_common(12)]
+        port_rows = [[k, f"{n:,}", _share(n, len(rows))] for k, n in ports.most_common(10)]
+        geo_rows = [[r["label"], f"{r['count']:,}", _share(r["count"], len(devs))] for r in regions[:15]]
+        city_tab = [[c, r, f"{n:,}", _share(n, len(devs))] for (c, r), n in city_rows.most_common(15)]
         x_rows = [[" | ".join(f"{T(p['report'])}: {' + '.join(p['items']) or 'the name only'}" for p in pt["parts"]), f"{pt['devices']:,}", pt["code"]]
-                  for pt in x["patterns"]]
+                  for pt in x["all_patterns"]]                   # every pattern (the plain layout has no room limit)
+        # a fallback table cut to its top rows says so in its title ("Top 20 of 31 networks")
+        cut_of = lambda title, shown, total, noun: title + (f" ({shares.cut(shown, total, noun)})" if total > shown else "")  # noqa: E731
         # Shadowserver's own ATT&CK and CVE tags on these records, and the certificate facts the scans give
         # (export_fields.py): counted for the PDF, each record once per value
         ss_n, tls_n = collections.Counter(), collections.Counter()
@@ -1009,22 +1050,22 @@ def install(app, ctx):
                     if fct["key"] in ("expires", "self_signed", "valid", "trusted", "sslv3", "tlsv13"):
                         val = "Expired before the scan" if fct["key"] == "expires" and fct["flag"] else "Not expired when scanned" if fct["key"] == "expires" else fct["value"]
                         tls_n[f"{fct['label'] if fct['key'] != 'expires' else 'Certificate'}: {val}"] += 1
-        ss_rows = [[k, f"{n:,}", f"{n / max(1, len(rows)):.1%}"] for k, n in ss_n.most_common(15)]
-        tls_rows = [[k, f"{n:,}", f"{n / max(1, len(rows)):.1%}"] for k, n in sorted(tls_n.items())]
+        ss_rows = [[k, f"{n:,}", _share(n, len(rows))] for k, n in ss_n.most_common(15)]
+        tls_rows = [[k, f"{n:,}", _share(n, len(rows))] for k, n in sorted(tls_n.items())]
         spec = {"platform_label": "Network communications" if section == "infections" else "Publicly accessible services",
                 "title": f"Combination {entry['code']}", "selection": describe(entry)[:150], "day": span,
-                "generated_by": job["user"], "scope": ctx["scope_text"](), "demo": False,
+                "generated_by": __import__("people").signed_by(job["user"]), "scope": ctx["scope_text"](), "demo": False,
                 "intro": (f"Every device that carried exactly the combination {entry['code']} of {T(entry['name'])}, found by the analyst's "
                           f"combination search over {span}. The researcher's code and this list use the same matching rule as Intel gathered."
                           + (f" Only the devices of the analyst's selection {job['within']} are included: the researcher drilled down to "
                              f"this combination within it." if job.get("within") else "")),
                 "summary_points": pts,
                 "kpis": [(f"{len(devs):,}", "devices"), (f"{len(rows):,}", "records"), (f"{repeat:,}", "devices repeating it"),
-                         (f"{multi_day:,}", "devices on several days"), (f"{len(nets):,}", "networks"),
+                         (f"{multi_day:,}", "devices on several days"), (f"{n_nets:,}", "networks"),
                          (f"{sum(1 for _, n in per_day if n):,}", "days with a record")],
                 "hours": hours, "peak_hour": (max(range(24), key=lambda h: hours[h]) if hours else None),
                 "priorities": (["IP address", "Network", "Region", "City", "Records", "Days", "First seen", "Last seen"],
-                               [[d["ip"], d["network"], (d["region"] or "").title(), (d["city"] or "").title(), f"{d['records']:,}",
+                               [[d["ip"], d["network"], d["region"], (d["city"] or "").title(), f"{d['records']:,}",
                                  str(len(d["days"])), (d["first"] or "")[:16].replace("T", " "), (d["last"] or "")[:16].replace("T", " ")]
                                 for d in devs[:PDF_DEVICES]],
                                [0.13, 0.22, 0.11, 0.1, 0.07, 0.05, 0.16, 0.16]) if devs else None,
@@ -1042,22 +1083,27 @@ def install(app, ctx):
                     ("Across reports: what these devices carried in the name's other reports",
                      ["Exact pattern, report by report", "Devices", "Code"], x_rows, [0.7, 0.1, 0.2]),
                     ("Reports these devices were seen in", ["Reports", "Devices", "Share"],
-                     [[" + ".join(T(r) for r in s["reports"]), f"{s['devices']:,}", f"{s['devices'] / max(1, x['devices']):.1%}"] for s in x["sets"]]),
-                    ("Devices per network", ["Network", "AS number", "Devices", "Records", "Share of devices"], net_rows, [0.4, 0.14, 0.14, 0.14, 0.18]),
-                    ("Devices per region", ["Region", "Devices", "Share"], geo_rows),
-                    ("Devices per city", ["City", "Region", "Devices", "Share"], city_tab, [0.3, 0.3, 0.2, 0.2]),
-                    ("What the devices are (as the reports name them)", ["Vendor, type / product", "Records", "Share"], kind_rows),
-                    ("Shadowserver's own ATT&CK and CVE tags on these records", ["Technique, tactic or CVE", "Records", "Share"], ss_rows, [0.7, 0.15, 0.15]),
+                     [[" + ".join(T(r) for r in s["reports"]), f"{s['devices']:,}", _share(s["devices"], x["devices"])] for s in x["sets"]]),
+                    (cut_of("Devices per network", len(net_rows), len(per_net), "networks"),
+                     ["Network", "AS number", "Devices", "Records", "Share of devices"], net_rows, [0.4, 0.14, 0.14, 0.14, 0.18]),
+                    (cut_of("Devices per region", len(geo_rows), len(regions), "regions"), ["Region", "Devices", "Share"], geo_rows),
+                    (cut_of("Devices per city", len(city_tab), len(city_rows), "cities"), ["City", "Region", "Devices", "Share"], city_tab, [0.3, 0.3, 0.2, 0.2]),
+                    (cut_of("What the devices are (as the reports name them)", len(kind_rows), len(kind), "kinds"),
+                     ["Vendor, type / product", "Records", "Share"], kind_rows),
+                    (cut_of("Shadowserver's own ATT&CK and CVE tags on these records", len(ss_rows), len(ss_n), "tags"),
+                     ["Technique, tactic or CVE", "Records", "Share"], ss_rows, [0.7, 0.15, 0.15]),
                     ("Certificate and TLS facts, as scanned", ["Fact", "Records", "Share"], tls_rows, [0.7, 0.15, 0.15]),
-                    (("Destination ports" if section == "infections" else "Ports the services listen on"), ["Port / protocol", "Records", "Share"], port_rows),
-                    ("Records per day", ["Day", "Records", "Share"], [[d, f"{n:,}", f"{n / max(1, len(rows)):.1%}"] for d, n in per_day])] if b[2]],
+                    (cut_of("Destination ports" if section == "infections" else "Ports the services listen on", len(port_rows), len(ports), "ports"),
+                     ["Port / protocol", "Records", "Share"], port_rows),
+                    ("Records per day", ["Day", "Records", "Share"], [[d, f"{n:,}", _share(n, len(rows))] for d, n in per_day])] if b[2]],
                 "columns": [[c, c] for c in dev_cols], "rows": [], "total": len(devs), "csv_name": f"{base}_devices.csv",
                 "sources": ["Data: the Shadowserver Foundation's daily reports for the constituency, as stored by Looking Glass.",
-                            f"Two CSV files come with this PDF: {base}_devices.csv (one row per device) and {base}_records.csv "
-                            "(every record).",
+                            f"The CSV files that come with this PDF: {base}_devices.csv (one row per device) and {base}_records.csv "
+                            "(every record)" + (f", and {base}_patterns.csv (every exact pattern across reports, with its devices)."
+                                                if x["all_patterns"] else "."),
                             "Contains the addresses of affected devices: share only according to your organisation's information-sharing policy."]}
         # the report, drawn like the Executive report (combo_pdf.py); the plain layout only if that fails
-        parts = ([("Selection", [entry.get("label", "")])] if is_a else
+        parts = ([("Selection", [acode_label(entry, getattr(book, "acode_label", None))])] if is_a else
                  [(entry["report"], entry["items"])] if entry["kind"] == "r" else [(r, i) for r, i in entry["parts"]])
         cves = [] if is_a else sorted({i.upper() for _, items in parts for i in items if re.match(r"^CVE-\d{4}-\d{4,7}$", i, re.I)})
         explained, stats = [], {}
@@ -1066,7 +1112,7 @@ def install(app, ctx):
         # issues counted too (2026-11-18: "Compromised", on 1 device, read "148 devices in this combination")
         av_n = collections.Counter(str(n_) for dv_ in (job.get("advisory") or {}).get("devices") or []
                                    for n_ in set((dv_.get("infections") or []) + (dv_.get("cves") or []) + (dv_.get("issues") or [])))
-        heads =[(nm, section) for nm in entry.get("names", [])[:8]] if is_a else [(entry["name"], section)]
+        heads = [(nm, section) for nm in entry.get("names", [])] if is_a else [(entry["name"], section)]     # every name
         if section == "services":
             # a services name is a report, not malware (Malpedia would call it "probably malware"): its issues (tags) and
             # the infections its devices call are defined instead, with the across-report views' when the report has them
@@ -1107,8 +1153,9 @@ def install(app, ctx):
                 if issue_tags.issue_of(str(nm_)) or not str(nm_).lower().startswith("tag:"):
                     ticked.append((str(nm_), "issues"))
             av_cves = [str(c_).upper() for c_ in av_.get("cves") or [] if re.match(r"^CVE-\d{4}-\d{4,7}$", str(c_), re.I)]
-            heads = list(dict.fromkeys(ticked + heads))[:16]
-            cves = sorted(set(cves)) + [c_ for c_ in sorted(set(av_cves)) if c_ not in set(cves)][:max(0, 20 - len(set(cves)))]
+            # every name and every CVE is explained (no cap: a recipient finds each one it was sent defined)
+            heads = list(dict.fromkeys(ticked + heads))
+            cves = sorted(set(cves)) + [c_ for c_ in sorted(set(av_cves)) if c_ not in set(cves)]
         for nm, sec in heads + [(c, "issues") for c in cves if c.lower() != entry["name"].lower()]:
             card = ctx["explain"](sec, nm)
             if card:
@@ -1129,23 +1176,26 @@ def install(app, ctx):
                             + (f" on {network}" if network else ""),
                 "kpis": {"devices": len(devs), "records": len(rows), "repeat": repeat, "also": x["multi"],
                          "regions": len([r for r in regions if r["value"] != "Unknown region"]), "cities": sum(len(v) for v in details.values()),
-                         "networks": len(nets)},
+                         "networks": n_nets},
                 "top_network": (nets.most_common(1)[0][0] if nets else ""), "hours": hours, "peak_hour": spec["peak_hour"],
                 "findings": pts[1:] or pts, "shapes": shapes, "regions": regions,
                 "region_details": {r: {"city_devices": v["city_devices"]} for r, v in details.items()},
                 "networks": [{"label": k_, "hosts": v["devices"]} for k_, v in sorted(per_net.items(), key=lambda kv: -kv[1]["devices"])],
                 "cities": [{"label": f"{c} · {r}" if r else c, "hosts": n} for (c, r), n in city_rows.most_common(20)],
-                "devices": [{"ip": d["ip"], "network": d["network"], "asn": str(d["asn"] or ""), "region": (d["region"] or "").title(),
+                "devices": [{"ip": d["ip"], "network": d["network"], "asn": str(d["asn"] or ""), "region": d["region"],
                              "city": (d["city"] or "").title(), "records": d["records"], "days": len(d["days"]),
                              "last": (d["last"] or "")[:16].replace("T", " "), "also": ", ".join(also_of(d)),
                              "flags": d["flags"], "earlier": earlier_text(d)}
                             for d in devs[:60]],
                 "csv_devices": f"{base}_devices.csv", "csv_records": f"{base}_records.csv",
+                "csv_patterns": f"{base}_patterns.csv" if x["all_patterns"] else "",
+                # the PDF draws the first 8 patterns it has room for and says "8 of N"; every one is in the patterns CSV
                 "across": {"multi": x["multi"], "patterns_total": x["patterns_total"],     # reports by their titles
                            "patterns": [dict(p, parts=[dict(q, title=T(q["report"])) for q in p["parts"]]) for p in x["patterns"][:8]]},
+                # every set of reports, kind and port: the PDF's cards draw the top ones and say "Top n of N"
                 "report_sets": [{"label": " + ".join(T(r) for r in s_["reports"]), "hosts": s_["devices"]} for s_ in x["sets"]],
-                "kinds": [{"label": k_, "count": n} for k_, n in kind.most_common(10)],
-                "ports": [{"label": k_, "count": n} for k_, n in ports.most_common(10)],
+                "kinds": [{"label": k_, "count": n} for k_, n in kind.most_common()],
+                "ports": [{"label": k_, "count": n} for k_, n in ports.most_common()],
                 "explained": explained, "stats": stats, "notes": notes,
                 # the References section (pdf_refs.py): each name's criticality, and the Shadowserver reports this PDF
                 # names (the combination's own, then those its devices were also seen in), each once
@@ -1167,7 +1217,8 @@ def install(app, ctx):
                                                                  f"{'Analyst code' if is_a else 'Combination'} {entry['code']} · {span}"
                                                                  + (f" · {network}" if network else "")),
                                          # an advisory is signed by the CSIRT (the person is in the audit log)
-                                         "generated_by": (job.get("advisory") or {}).get("org") or job["user"], "advisory": job.get("advisory")})
+                                         "generated_by": (job.get("advisory") or {}).get("org") or __import__("people").signed_by(job["user"]),
+                                         "advisory": job.get("advisory")})
         except _SummaryOnly:
             pdf = b""
         except Exception as exc:                              # noqa: BLE001  (never leave the analyst without a report)
@@ -1188,6 +1239,12 @@ def install(app, ctx):
             zf.writestr(f"{base}.pdf", pdf)
             zf.writestr(f"{base}_devices.csv", csv_text(*without(dev_cols, dev_rows, CODES)))
             zf.writestr(f"{base}_records.csv", csv_text(*without([c for c, _ in cols], rows, CODES)))
+            if x["all_patterns"]:                     # every exact pattern across reports (the PDF draws the first ones)
+                zf.writestr(f"{base}_patterns.csv", csv_text(*without(
+                    ["cross_report_code", "devices", "reports", "pattern", "ip_addresses"],
+                    [[p_["code"], p_["devices"], len(p_["parts"]),
+                      " | ".join(f"{T(q['report'])}: {' + '.join(q['items']) or 'the report only'}" for q in p_["parts"]),
+                      " ".join(p_["ips"])] for p_ in x["all_patterns"]], CODES)))
             if enr:                                   # the analysis across every category, one row per finding
                 zf.writestr(f"{base}_other_categories.csv",
                             csv_text(*without(["category", "report", "value", "hosts", "records", "code"], enrich_rows(enr), CODES)))
@@ -1199,7 +1256,7 @@ def install(app, ctx):
             x_ = reg_det.setdefault(r, {"devices": 0, "records": 0, "cities": collections.Counter(), "networks": collections.Counter(), "ips": []})
             x_["devices"] += 1; x_["records"] += d["records"]
             x_["cities"][(d["city"] or "").title() or "Unknown city"] += 1
-            x_["networks"][d["network"] or "Unknown"] += 1
+            x_["networks"][d["network"] or _ck.UNKNOWN_NET] += 1
             if len(x_["ips"]) < 12:
                 x_["ips"].append([d["ip"], d["records"]])
         tot = max(1, len(devs))
@@ -1210,22 +1267,28 @@ def install(app, ctx):
         summ = {"devices": len(devs), "records": len(rows), "repeat": repeat, "multi_day": multi_day,
                           "networks_all": [{"label": k, "asn": v["asn"], "devices": v["devices"], "records": v["records"]}
                                            for k, v in sorted(per_net.items(), key=lambda kv: -kv[1]["devices"])],
-                          "per_day": per_day, "networks": len(nets), "country": ctx["country"](),
+                          "per_day": per_day, "networks": n_nets, "country": ctx["country"](),
                           "cities": sum(len(v["cities"]) for v in reg_det.values()), "peak_hour": spec["peak_hour"], "hours": hours,
                           "regions": [{"value": r["value"], "label": r["label"], "devices": r["count"], "share": r["share"]} for r in regions],
+                          # each short list with its full count beside it (the map's hover says "Top 5 of 9": 2026-11-26)
                           "region_details": {k: {"devices": v["devices"], "records": v["records"], "cities": v["cities"].most_common(5),
-                                                 "networks": v["networks"].most_common(4), "ips": v["ips"]} for k, v in reg_det.items()},
+                                                 "networks": v["networks"].most_common(4), "ips": v["ips"],
+                                                 "totals": {"cities": len(v["cities"]), "networks": len(v["networks"])}}
+                                             for k, v in reg_det.items()},
                           "top_networks": [{"label": k, "asn": v["asn"], "devices": v["devices"], "records": v["records"], "share": v["devices"] / tot}
                                            for k, v in sorted(per_net.items(), key=lambda kv: -kv[1]["devices"])[:8]],
                           "top_cities": [{"label": c, "region": r, "devices": n} for (c, r), n in city_rows.most_common(8)],
                           "kinds": [{"label": k, "records": n} for k, n in kind.most_common(6)],
                           "ports": [{"label": k, "records": n} for k, n in ports.most_common(6)],
-                          "top_devices": [{"ip": d["ip"], "network": d["network"], "region": (d["region"] or "").title(), "city": (d["city"] or "").title(),
+                          "top_devices": [{"ip": d["ip"], "network": d["network"], "region": d["region"], "city": (d["city"] or "").title(),
                                            "records": d["records"], "days": len(d["days"]), "last": (d["last"] or "")[:16].replace("T", " "),
                                            "also": also_of(d), "infections": d["flags"]["infections"], "issues": d["flags"]["issues"],
                                            "cves": d["flags"]["cves"], "earlier": d["earlier"]} for d in devs[:15]],
                           "report_day": job.get("flags_day") or None,
-                          "across": {"multi": x["multi"], "patterns": x["patterns"][:10], "patterns_total": x["patterns_total"], "sets": x["sets"][:6]},
+                          "across": {"multi": x["multi"], "patterns": x["patterns"][:10], "patterns_total": x["patterns_total"], "sets": x["sets"][:6],
+                                     "totals": {"patterns": x["patterns_total"], "sets": len(x["sets"])}},
+                          "totals": {"networks": len(per_net), "cities": len(city_rows), "kinds": len(kind), "ports": len(ports),
+                                     "top_devices": len(devs), "regions": len(regions)},
                           "enrich": enr or None}
         if summary_only:                          # the figures only (the page filtered to one network)
             return {"summary": summ}

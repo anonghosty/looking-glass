@@ -26,6 +26,7 @@
       d = await r.json().catch(() => ({}));
     } catch {
       if (seq !== loadSeq) return;
+      if (quiet) return;                      // a lost connection in a background read keeps what is on the page (and a reply being written)
       $("fdList").replaceChildren(el("p", "fd-empty", "The connection was interrupted. Try again.")); window.LGLoader?.ready(); return;
     }
     if (seq !== loadSeq) return;
@@ -77,6 +78,19 @@
     for (const f of top) list.append(card(f));
   }
   let byId = {}, matchIds = null;
+  // what is being written in a card (a reply, its codes, a comment), kept by finding and field: a redraw (typing in the
+  // search, someone else's change) rebuilds the cards and puts it back (2026-11-27 audit: a half-written reply was lost)
+  const drafts = new Map();
+  const keep = (f, key, node) => {
+    node.dataset.draft = `${f.id}|${key}`;
+    const v = drafts.get(node.dataset.draft);
+    if (v != null) node.value = v;
+    return !!(v && v.trim());
+  };
+  const forget = (f) => { for (const k of [...drafts.keys()]) if (k.startsWith(`${f.id}|`)) drafts.delete(k); };
+  // this person's own action went through: what they wrote is sent, and the change is theirs, so the live watch takes
+  // it as known (2026-11-27 audit: their own reply came back as "A finding here has changed")
+  const done = (f) => { forget(f); window.LGFindingsLive?.mine(); };
   // a finding's advisories (advisory.py): written and drafted on the advisory page, marked as sent here by the advisor;
   // once none waits, the finding closes, and its case once all its sub-findings have
   const TLPC = (k) => (k === "TLP:RED" ? "tlp-red" : String(k).startsWith("TLP:AMBER") ? "tlp-amber" : k === "TLP:GREEN" ? "tlp-green" : "tlp-clear");
@@ -103,6 +117,7 @@
       if (a.status === "drafted" && data.can_advise) {
         const row = el("div", "fd-adv-send");
         const rec = el("input", "fd-in"); rec.value = a.recipients.join(", "); rec.placeholder = "Sent to: the organisation, teams or people";
+        keep(f, `sent:${a.network || ""}`, rec);
         const go = el("button", "lg-btn sm primary", "Mark as sent"); go.type = "button";
         const m = el("span", "fd-msg");
         go.title = "Record that the advisory went out: this finding closes when none of its advisories waits, and its case when all its sub-findings are closed";
@@ -114,7 +129,7 @@
               body: JSON.stringify({ network: a.network, recipients: rec.value }) });
             const d = await rr.json().catch(() => ({}));
             if (!rr.ok) { m.textContent = d.error || `Not saved (HTTP ${rr.status})`; m.className = "fd-msg bad"; return; }
-            load();
+            drafts.delete(rec.dataset.draft); window.LGFindingsLive?.mine(); load();
           } catch { m.textContent = "The connection was interrupted. Try again."; m.className = "fd-msg bad"; }
           finally { go.disabled = false; }
         });
@@ -286,6 +301,14 @@
     const rv = f.review, R = rv.researcher || {}, A = rv.analyst || {};
     const p = el("section", "fd-review");
     p.append(el("h3", null, "Which views does the report carry?"));
+    // "Devices per network / region" are the top 8 (combo_review.py): a heading with "Top 8 of 23 networks" when there are
+    // more (the view's totals; for networks the view's own network count when the server does not say)
+    const perList = (box, title, rows, all, noun) => {
+      box.append(el("h4", null, title));
+      const t = window.LGShare.cut(rows.length, Math.max(rows.length, Number(all) || 0), noun);
+      if (t) box.append(el("p", "hint", `${t}.`));
+      box.append(bars(rows, "devices"));
+    };
     const cols = el("div", "fd-views");
     // the drill-down first (2026-11-14): the figures of exactly the devices the analyst selected, which the report covers
     if (rv.drill) {
@@ -296,8 +319,8 @@
         const t = el("div"); t.append(el("b", null, Number(v || 0).toLocaleString("en-US")), el("span", null, l)); kd.append(t);
       }
       dc.append(kd);
-      if ((D.top_networks || []).length) dc.append(el("h4", null, "Devices per network"), bars(D.top_networks, "devices"));
-      if ((D.regions || []).length) dc.append(el("h4", null, "Devices per region"), bars(D.regions, "devices"));
+      if ((D.top_networks || []).length) perList(dc, "Devices per network", D.top_networks, (D.totals || {}).top_networks ?? (D.totals || {}).networks ?? D.networks, "networks");
+      if ((D.regions || []).length) perList(dc, "Devices per region", D.regions, (D.totals || {}).regions, "regions");
       if ((D.per_day || []).length) dc.append(el("h4", null, "Records per day"), bars(D.per_day.map(([d, n]) => ({ label: d, n })), "n"));
       p.append(dc);
     }
@@ -309,8 +332,8 @@
       const t = el("div"); t.append(el("b", null, Number(v || 0).toLocaleString("en-US")), el("span", null, l)); k.append(t);
     }
     rc.append(k);
-    if ((R.top_networks || []).length) rc.append(el("h4", null, "Devices per network"), bars(R.top_networks, "devices"));
-    if ((R.regions || []).length) rc.append(el("h4", null, "Devices per region"), bars(R.regions, "devices"));
+    if ((R.top_networks || []).length) perList(rc, "Devices per network", R.top_networks, (R.totals || {}).top_networks ?? (R.totals || {}).networks ?? R.networks, "networks");
+    if ((R.regions || []).length) perList(rc, "Devices per region", R.regions, (R.totals || {}).regions, "regions");
     if ((R.per_day || []).length) rc.append(el("h4", null, "Records per day"), bars(R.per_day.map(([d, n]) => ({ label: d, n })), "n"));
     // the analyst's view
     const ac = el("article", "fd-view a");
@@ -337,6 +360,7 @@
       if (data.can_search) { const a = el("a", "lg-btn sm primary", "Generate the report"); a.href = `/combinations?code=${encodeURIComponent(rv.source)}${dayQ(f)}`; a.title = "Open the code again, on the day it was reported: the report follows management's decision"; p.append(a); }
     } else if (data.can_decide && f.open) {
       const ta = el("textarea", "fd-in"); ta.rows = 2; ta.maxLength = 1000; ta.placeholder = "Your comment: the directive for the report";
+      keep(f, "review", ta);
       const both = el("button", "lg-btn sm primary", "Add the analyst's views"); both.type = "button";
       const only = el("button", "lg-btn sm", "Use the researcher's view only"); only.type = "button";
       const m = el("span", "fd-msg");
@@ -348,7 +372,7 @@
             body: JSON.stringify({ choice, text: ta.value.trim() }) });
           const d = await r.json().catch(() => ({}));
           if (!r.ok) { m.textContent = d.error || `Not saved (HTTP ${r.status})`; m.className = "fd-msg bad"; return; }
-          Object.assign(f, d.finding); const n = card(f); c.replaceWith(n); n.classList.add("flash");
+          done(f); Object.assign(f, d.finding); const n = card(f); c.replaceWith(n); n.classList.add("flash");
         } catch { m.textContent = "The connection was interrupted. Try again."; m.className = "fd-msg bad"; }
         finally { both.disabled = only.disabled = false; }
       };
@@ -415,6 +439,8 @@
     const rp = el("details", "fd-replybox"); rp.append(el("summary", null, f.origin === "analyst" && data.can_research ? "Reply to the analyst" : "Reply"));
     const rta = el("textarea", "fd-in"); rta.rows = 3; rta.maxLength = 1000; rta.placeholder = "Your reply";
     const rcodes = el("input", "fd-in"); rcodes.placeholder = "Codes to send with it (LG-C-…, LG-X-…, LG-A-…), separated by commas"; rcodes.spellcheck = false;
+    const kept = [keep(f, "reply", rta), keep(f, "codes", rcodes)];
+    if (kept.some(Boolean)) rp.open = true;      // a reply being written stays open
     const rgo = el("button", "lg-btn sm primary", "Send the reply"); rgo.type = "button"; const rmsg = el("span", "fd-msg");
     if (f.origin === "analyst" && data.can_research) {
       const a = el("a", "lg-btn sm", "Open the selection's intel to pick codes"); a.href = `/intel/${f.codes[0]?.code || ""}`; rp.append(a);
@@ -428,7 +454,7 @@
           body: JSON.stringify({ text: rta.value.trim(), codes }) });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) { rmsg.textContent = d.error || `Not sent (HTTP ${r.status})`; rmsg.className = "fd-msg bad"; return; }
-        Object.assign(f, d.finding); const n = card(f); c.replaceWith(n); n.classList.add("flash"); n.querySelector(".fd-more").open = true;
+        done(f); Object.assign(f, d.finding); const n = card(f); c.replaceWith(n); n.classList.add("flash"); n.querySelector(".fd-more").open = true;
       } catch { rmsg.textContent = "The connection was interrupted. Try again."; rmsg.className = "fd-msg bad"; }
       finally { rgo.disabled = false; }
     });
@@ -461,6 +487,7 @@
         el("small", null, "Approve with your comment (the directive) and it goes straight to the analyst you name; or reject with the reason (it is closed)."));
       const dta = el("textarea", "fd-in"); dta.rows = 2; dta.maxLength = 1000;
       dta.placeholder = "Comment: the directive (e.g. generate the advisory for the three operators), or the reason for rejecting";
+      keep(f, "decide", dta);
       const acc = el("button", "lg-btn sm primary", "Approve with this comment"); acc.type = "button";
       const rej = el("button", "lg-btn sm fd-reject", "Reject and close"); rej.type = "button";
       const dmsg = el("span", "fd-msg");
@@ -472,7 +499,7 @@
             body: JSON.stringify({ decision, text: dta.value.trim(), to: to || "" }) });
           const d = await r.json().catch(() => ({}));
           if (!r.ok) { dmsg.textContent = d.error || `Not saved (HTTP ${r.status})`; dmsg.className = "fd-msg bad"; return; }
-          Object.assign(f, d.finding); const n = card(f); c.replaceWith(n); n.classList.add("flash");
+          done(f); Object.assign(f, d.finding); const n = card(f); c.replaceWith(n); n.classList.add("flash");
         } catch { dmsg.textContent = "The connection was interrupted. Try again."; dmsg.className = "fd-msg bad"; }
         finally { acc.disabled = rej.disabled = false; if (ok) ok.disabled = false; }
       };
@@ -506,6 +533,7 @@
     const sel = el("select", "fd-sel lg-enhance"); sel.setAttribute("aria-label", "New status");
     for (const s of data.statuses) { const o = el("option", null, s.label); o.value = s.key; if (s.key === f.status) o.selected = true; sel.append(o); }
     const com = el("input", "fd-in"); com.maxLength = 1000; com.placeholder = "Comment (for example: look at the rising trend in the Northern region)"; com.setAttribute("aria-label", "Comment");
+    keep(f, "move", com);
     const go = el("button", "lg-btn sm primary", "Move it on"); go.type = "button";
     const msg = el("span", "fd-msg");
     // a hand-over (to management, a researcher, an analyst) names the person it goes to (people-pick.js)
@@ -519,7 +547,7 @@
           body: JSON.stringify({ status: sel.value, comment: com.value.trim(), to: to || "" }) });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) { msg.textContent = d.error || `Not saved (HTTP ${r.status})`; msg.className = "fd-msg bad"; return; }
-        Object.assign(f, d.finding); const n = card(f); c.replaceWith(n); n.classList.add("flash");
+        done(f); Object.assign(f, d.finding); const n = card(f); c.replaceWith(n); n.classList.add("flash");
       } catch { msg.textContent = "The connection was interrupted. Try again."; msg.className = "fd-msg bad"; }
       finally { go.disabled = false; if (ok) ok.disabled = false; }
     };
@@ -556,7 +584,10 @@
   // someone else moves a finding on (sends it to this person, decides, replies): the list keeps up on its own
   // (findings-live.js). Never under someone's hands: while they type a comment or choose a person, a notice waits.
   const typed = new Set();
-  $("fdList").addEventListener("input", (e) => { if (e.target.matches("textarea, input")) typed.add(e.target); });
+  $("fdList").addEventListener("input", (e) => {
+    if (e.target.matches("textarea, input")) typed.add(e.target);
+    if (e.target.dataset?.draft) drafts.set(e.target.dataset.draft, e.target.value);
+  });
   const busy = () => {
     const a = document.activeElement;
     if (a && $("fdList").contains(a) && a.matches("textarea, input, select")) return true;

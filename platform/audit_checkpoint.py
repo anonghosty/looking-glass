@@ -56,6 +56,13 @@ def _env_num(name, default):
         return float(default)
 
 
+def _num(x):
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def ssh_keygen():
     return shutil.which("ssh-keygen")
 
@@ -144,10 +151,12 @@ class Signer:
                 continue
         return None, None
 
-    def make(self, audit, force=False):
+    def make(self, audit, force=False, every_hours=None):
         """One checkpoint of the log as it is now: written, signed, copied, and recorded in the chain. Skipped (None)
-        when nothing was written since the last one but that one's own chain entry, unless force. Returns the
-        checkpoint (a dict, with "file", "signed", "copied")."""
+        when nothing was written since the last one but that one's own chain entry, unless force; with every_hours
+        (the daily loop sets it as self.loop_hours), also when the last one is younger than that, judged under the folder's lock (audit
+        2026-11-27: two workers that both saw an old checkpoint each made one). Returns the checkpoint (a dict, with
+        "file", "signed", "copied")."""
         import audit_verifier
         os.makedirs(self.dir, mode=0o700, exist_ok=True)
         lock = os.open(os.path.join(self.dir, ".lock"), os.O_WRONLY | os.O_CREAT, 0o600)
@@ -163,6 +172,9 @@ class Signer:
             _, prev = self.last()
             if prev and not force and int(r["head_entry"]) <= int(prev.get("entry", 0)) + 1:
                 return None
+            every_hours = every_hours if every_hours is not None else getattr(self, "loop_hours", None)   # set by loop()
+            if prev and not force and every_hours and time.time() - _num(prev.get("made")) < every_hours * 3600 - 60:
+                return None                            # another worker made it a moment ago
             line, fp = self.ensure_key(audit)
             now = time.time()
             ck = {"format": 1, "what": "Looking Glass audit log checkpoint", "head": r["head"], "entry": r["head_entry"],
@@ -272,6 +284,7 @@ def loop(signer, audit, logger=None):
             try:
                 _, last = signer.last()
                 if not last or time.time() - float(last.get("made", 0)) >= hours * 3600 - 60:
+                    signer.loop_hours = hours                  # make() judges the age again under the lock
                     signer.make(audit)
             except Exception:                          # noqa: BLE001  never stop the service over a checkpoint
                 if logger:
@@ -294,7 +307,7 @@ def backup_freshness(data_dir, archive_name, sha256=None):
             rec = json.loads(ln)
         except ValueError:
             continue
-        if rec.get("event") == "backup_signed":
+        if isinstance(rec, dict) and rec.get("event") == "backup_signed":
             rows.append(rec)
     mine = [r for r in rows if r.get("target") == archive_name and (not sha256 or sha256 in str(r.get("detail") or ""))]
     newest = rows[-1] if rows else None

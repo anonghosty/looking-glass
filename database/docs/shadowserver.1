@@ -148,8 +148,27 @@ Every CSV/JSON file in
 that is not yet in MongoDB is loaded by parallel worker processes. Files
 already in the database are skipped, so repeated runs only load new reports.
 .PP
-Only one run can be active at a time (a lock file); a second run exits
-immediately. All output is also appended to
+Only one run can be active at a time: run.sh and the pipeline itself take
+the lock file
+.IR .pipeline.lock ,
+so a second run, also one started by hand or from another cron line, exits
+at once with exit code 1. The lock file has mode 0644 (run.sh sets a lock
+file of its own left 0600 by an older version back to 0644) and is opened
+read-only; run.sh passes its lock to the pipeline as LG_RUN_LOCK_FD=9. A
+symbolic link in its place is refused. A row that cannot be read as CSV (a
+field larger than 16 MB, or a broken line) is counted (rows_bad_csv) and the
+rest of its file is loaded. A file that stops its loader process even when
+loaded alone is a file error of that run and is tried again on the next run;
+only a file that does so on 2 runs is moved to
+.I quarantine/loader/<report>/
+with a .reason.txt. Some of its rows may already be stored. Move it back to
+the path the .reason.txt names, sorting_backup/<report>/<its own name>, to try
+it again: the next run loads it again and skips the rows already stored. A
+file kept in quarantine with a number in front of its name (one of the same
+name was there already) must get its own name back when it is moved back. An e-mail deleted between the listing of the
+mailbox and its fetch is a warning (emails_gone), not an error. A column
+named _id is stored as csv_id. A file with a header line and no rows is not
+read again until it changes. All output is also appended to
 .IR logs/pipeline\-YYYY\-MM\-DD.log .
 .SH OPTIONS
 .TP
@@ -169,7 +188,7 @@ days. Default:
 .B EMAIL_DAYS
 from
 .IR .env ,
-normally 1 (since yesterday, like the original script). Use a larger value to
+or 7 when it is not set. Use a larger value to
 catch up after a gap, e.g.
 .BR "\-\-days 8" .
 .TP
@@ -310,10 +329,16 @@ skips it, only for a server with a self-signed certificate.
 .TP
 .B EMAIL_DAYS
 Default for
-.BR \-\-days .
+.BR \-\-days :
+7 when it is not set.
 .TP
 .BR MONGO_HOST ", " MONGO_PORT ", " MONGO_USER ", " MONGO_PASSWORD ", " MONGO_AUTH_SOURCE ", " MONGO_DB
 MongoDB connection (default 127.0.0.1:27017, auth source admin, database shadowserver).
+The pipeline's own account, lookingglass_pipeline, has a role of its own on
+that database: it can read, add, change and delete rows but not drop or rename
+collections or indexes. An account made by an earlier version (readWrite) gets
+it once with
+.BR "sudo cat /etc/looking\-glass/mongo\-admin.env | ./create_pipeline_db_user.py \-\-update\-rights" .
 .TP
 .BR MONGO_SERIES ", " MONGO_CACHE_GB ", " MONGO_MEMORY_LIMIT
 Used by
@@ -333,7 +358,8 @@ downloads (4), e\-mails per IMAP round trip (25).
 Unpacking limits against zip bombs: unpacked size of one zip (2048 MB),
 compression ratio of one file (200), files per zip (100), disk space kept
 free (1024 MB). Real bytes are counted while unpacking; a zip that breaks a
-limit is moved to quarantine/ with a .reason.txt and is not retried. Low disk
+limit is moved to quarantine/ with a .reason.txt and is not retried; so is a
+zip whose files are encrypted with a password. Low disk
 space is not the zip's fault: that zip is tried again next run.
 .SH FILES
 .TP

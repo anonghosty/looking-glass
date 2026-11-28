@@ -17,6 +17,7 @@ exactly those values; there is no "save anyway"). Turning on, changing or deleti
 every time (stepup.py). The connectors worker (connectors_worker.py) does the sending.
 """
 import base64
+import calendar
 import hashlib
 import hmac
 import ipaddress
@@ -263,7 +264,12 @@ def install(app, ctx):
     paths = {"log": os.path.join(data, "connectors_log.jsonl")}     # a dict: a check points it at a temporary file
     audit, has_perm, csrf_ok, fresh = ctx["audit"], ctx["has_perm"], ctx["csrf_ok"], ctx["fresh"]
     settings = ctx.get("settings")
-    people_name = ctx.get("people_name") or (lambda n: n)     # full names for the Audit portal, never account ids
+    full_name = ctx.get("people_name") or (lambda n: "")
+
+    def people_name(u):
+        """The full name, else the person code: never the sign-in name (pages and the Audit portal's target list)."""
+        import people
+        return (full_name(u) or "").strip() or people.person_label(u)
     passes, plock = {}, threading.Lock()
     secret = secrets.token_bytes(32)
 
@@ -302,7 +308,7 @@ def install(app, ctx):
         k, where = key_of(vault, tid)
         return {"id": tid, "name": t["name"], "kind": t["kind"], "kind_name": KINDS[t["kind"]], "address": t["address"],
                 "tlp": t["tlp"], "on": bool(t.get("on")), "paused": t.get("paused") or "", "scope": t.get("scope") or {},
-                "created": t.get("created"), "created_by": t.get("created_by"), "last": t.get("last") or {},
+                "created": t.get("created"), "created_by": people_name(t.get("created_by") or ""), "last": t.get("last") or {},
                 "key": where, "env_name": env_name(tid)}
 
     @app.route("/api/connectors")
@@ -330,7 +336,15 @@ def install(app, ctx):
         key = str(b.get("key") or "").strip()
         tid = str(b.get("id") or "")
         if not key and ID_RX.match(tid):
-            key = key_of(vault, tid)[0] or ""          # testing a saved target again: its own key
+            # testing a saved target again: its own key, and only to its own platform at its own address (audit
+            # 2026-11-27: a saved key must never be sent to an address typed in the request); another address or
+            # platform needs the key entered again
+            saved = targets.get(tid) or {}
+            if not saved or saved.get("kind") != kind or \
+                    str(saved.get("address") or "").strip().rstrip("/") != address.rstrip("/"):
+                return jsonify(error="The saved key is only sent to this target's own address: to test another address "
+                                     "or platform, enter the key."), 400
+            key = key_of(vault, tid)[0] or ""
         if not key or len(key) > 400:
             return jsonify(error="Enter the key (OpenCTI: the user's API token; MISP: the auth key)."), 400
         ok, checks = probe(kind, address, key, tlp)
@@ -451,7 +465,13 @@ def install(app, ctx):
         r = guard(change=False)
         if r:
             return r
-        return jsonify(log=read_log(paths["log"], tid))
+        # the newest 200 by default, up to LOG_MAX with ?n= ("Show all" on the page); the full count beside them, so the
+        # page says "30 of N" and never passes a cut list as the whole log (2026-11-26)
+        try:
+            n = max(1, min(LOG_MAX, int(request.args.get("n") or 200)))
+        except ValueError:
+            n = 200
+        return jsonify(log=read_log(paths["log"], tid, n), totals={"log": log_total(paths["log"], tid)})
 
     @app.route("/api/audit/connectors")
     def api_audit_connectors():
@@ -463,7 +483,8 @@ def install(app, ctx):
 
         def day_ts(v, end):
             try:
-                t = time.mktime(time.strptime(str(v), "%Y-%m-%d")) - time.timezone
+                # the day in UTC whatever the server's time zone (time.mktime - time.timezone was an hour off in summer)
+                t = calendar.timegm(time.strptime(str(v), "%Y-%m-%d"))
                 return t + 86400 if end else t
             except (TypeError, ValueError, OverflowError):
                 return None
@@ -476,7 +497,9 @@ def install(app, ctx):
                          "paused": t.get("paused") or "", "added_by": people_name(t.get("created_by") or ""),
                          "added": t.get("created")})
         events = [dict(e, target_name=(all_t.get(e.get("target")) or {}).get("name", e.get("target")))
-                  for e in read_log(paths["log"], None, 5000)
+                  # every entry of the log (the file is read whole either way): the period's figures count every send,
+                  # not only those among the newest 5,000 entries (2026-11-26)
+                  for e in read_log(paths["log"], None, None)
                   if (lo is None or e.get("at", 0) >= lo) and (hi is None or e.get("at", 0) < hi)]
         sends = [e for e in events if e.get("status") == "sent"]
         return jsonify(targets=rows, events=events[:1000], more=max(0, len(events) - 1000),
@@ -561,4 +584,24 @@ def read_log(path, tid=None, n=200):
                     out.append(e)
     except OSError:
         return []
-    return out[-n:][::-1]
+    return (out if n is None else out[-n:])[::-1]          # n None: every entry, newest first
+
+
+LOG_MAX = 5000                 # the most send-log entries one answer holds (the page's "Show all")
+
+
+def log_total(path, tid=None):
+    """How many send-log entries there are for a target (every one, not only those sent back)."""
+    n = 0
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    e = json.loads(line)
+                except ValueError:
+                    continue
+                if tid is None or e.get("target") == tid:
+                    n += 1
+    except OSError:
+        return 0
+    return n

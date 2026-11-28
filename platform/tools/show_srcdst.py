@@ -6,7 +6,13 @@ import os
 import sys
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-data = json.load(open(os.path.join(BASE, "tools", "discovery.json"), encoding="utf-8"))
+# discover.py writes data/discovery.json (masked, owner-only), no longer tools/discovery.json in the code folder
+PATH = os.path.join(BASE, "data", "discovery.json")
+try:
+    with open(PATH, encoding="utf-8") as fh:
+        data = json.load(fh)
+except OSError:
+    sys.exit(f"{PATH} is not there: run tools/discover.py first.")
 only = set(sys.argv[1:])
 for e in data["collections"]:
     if not e.get("srcdst") or (only and e["name"] not in only):

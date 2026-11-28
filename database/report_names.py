@@ -54,7 +54,8 @@ def learn_tails(sorting_dir, limit: int = 400) -> set:
     return out
 
 
-_CORE = re.compile(r"^\d{4}-\d{2}-\d{2}-(.+?)(?:_as\d+)?\.csv$")
+# the same file name variants as the pipeline's SERVICE_RE (2026-11-26): ".CSV" in any case, "_as64500_2.csv"
+_CORE = re.compile(r"^\d{4}-\d{2}-\d{2}-(.+?)(?:_as\d+)?(?:_\d+)?\.(?i:csv)$")
 
 
 def country_tail(filename: str, service: str):

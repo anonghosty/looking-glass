@@ -61,6 +61,7 @@ jobs:
         working-directory: platform
         env:
           LG_NO_OUTSIDE: ${{ env.GUARD_LOG }}
+          LG_SUITE: all
           PYTHONPATH: ${{ env.GUARD_PATH }}
           MAPBOX_TOKEN: dummy-map-key-for-checks
         run: |
@@ -76,6 +77,7 @@ jobs:
         env:
           LG_CI_SEED: "1"
           LG_NO_OUTSIDE: ${{ env.GUARD_LOG }}
+          LG_SUITE: all
           PYTHONPATH: ${{ env.GUARD_PATH }}
           MAPBOX_TOKEN: dummy-map-key-for-checks
         run: |
@@ -184,20 +186,24 @@ jobs:
         working-directory: platform
         env:
           LG_NO_OUTSIDE: ${{ env.GUARD_LOG }}
+          LG_SUITE: all
           PYTHONPATH: ${{ env.GUARD_PATH }}
           MAPBOX_TOKEN: dummy-map-key-for-checks
         run: |
           set -e
           for t in test_privacy_roles test_schedule check_ip_find check_host_label_text check_masked_fields check_banner_inbound check_data_access \
-                   check_auth_offline check_login_throttle check_single_worker check_audit_write_failure check_csp_sources check_proxy_chain check_https_only check_password_policy check_csrf_routes check_settings_access \
+                   check_auth_offline check_login_throttle check_single_worker check_audit_write_failure check_feed_alerts check_csv_stamp check_review_fixes check_csp_sources check_proxy_chain check_https_only check_password_policy check_csrf_routes check_settings_access \
                    check_first_admin_proxy check_retest_reset check_workflow_fixes check_calc_offline \
-                   check_audit_portal check_device_note check_cve_titles check_ci_pins check_sbom check_audit_checkpoint check_backup_scripts check_auditor_portal check_pipeline_settings check_scope_reload check_libraries \
+                   check_audit_portal check_device_note check_cve_titles check_ci_pins check_sbom check_audit_checkpoint check_backup_scripts check_auditor_portal check_pipeline_settings check_scope_reload check_libraries check_requirements_complete check_suite_split \
                    check_cve_backoff check_uninstall check_timezones check_world_maps check_region_matches check_day_keep check_warmup check_hsts check_request_limits check_at_rest check_file_modes check_special_reports check_report_map \
                    check_findings_ui check_notifications check_overview check_greetings check_peace check_networks_list check_wrong_types check_kb_report_names check_slow_log check_lockouts check_system_alerts check_response_cache check_task_monitor check_acode_chain check_intelligence check_code_collisions check_finding_watch check_acode_issue check_db_connect check_install_db check_install_cert check_installer_anim check_offline_names check_attack_map check_advisory_attack check_confirm_all check_cve_attack \
                    check_beacon_decode check_beacon_findings check_beacon_unknown check_spike_notice check_glossary_sync check_ai_framework check_masked_ids \
                    check_index_refresh check_beacon_keep check_day_skip check_config_page check_findings_live check_pdf_rows check_pdf_refs pdf_pages_check check_per_key_cache check_recent_days \
                    check_select_enhancer check_invite_limit check_quarterly_access check_job_overlap check_feature_coverage check_installer_supply check_stale_files check_code_readonly check_code_integrity check_downloads check_error_text check_screenshots check_nav_once check_external_masking check_spdx_headers \
-                   check_cov_app check_cov_auth_units check_cov_auth_routes check_cov_security check_cov_admin_tools check_cov_acodes check_cov_mgmt check_cov_lookups check_cov_audit check_cov_audit_portal check_cov_services_kb check_cov_finding_watch check_cov_report_map check_cov_pdf check_cov_combos check_api_no_secrets check_role_refusals check_caddy_front check_attack_audit check_shadowserver_fields check_moved_modules check_stepup check_connectors check_unusual check_signin_check check_no_signin_names check_platform_update; do
+                   check_cov_app check_cov_auth_units check_cov_auth_routes check_cov_security check_cov_admin_tools check_cov_acodes check_cov_mgmt check_cov_lookups check_cov_audit check_cov_audit_portal check_cov_services_kb check_cov_finding_watch check_cov_report_map check_cov_pdf check_cov_combos check_api_no_secrets check_role_refusals check_caddy_front check_attack_audit check_shadowserver_fields check_moved_modules check_stepup check_connectors check_unusual check_signin_check check_no_signin_names check_platform_update check_docs_vs_code check_caddy_adopt_run check_mgmt_charts \
+                   check_share_words check_nothing_missing_api check_exec_complete check_mgmt_lists check_cut_lists_data check_page_cut_lists check_cut_totals_server check_page_cuts_maps check_page_cuts_portals check_page_count_notes check_count_keys check_scope_normalise check_pipeline_problems_shown \
+                   check_caddy_paths_run check_installer_caddy_db check_masked_detail_intel_signout check_invite_signup_approve check_facets_bruteforce check_advisory_look_research_scope check_ports_index_old_review check_attack_mergeout_parity check_copy_fail_closed check_welcome_next check_loader_retry check_services_withchosen check_every_route \
+                   check_fix_b01 check_fix_b02 check_fix_b03 check_fix_b04 check_fix_b05 check_fix_b06 check_fix_b07 check_fix_b08 check_fix_b09 check_fix_b10 check_fix_b11 check_fix_b13 check_fix_b14 check_fix_b15 check_fix_lead check_fix_r1 check_fix_r3 check_fix_r4; do
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
           done
           # the module part only: the filter and who sees it need the platform (run_all_checks.sh on the server)
@@ -206,12 +212,13 @@ jobs:
         working-directory: database
         env:
           LG_NO_OUTSIDE: ${{ env.GUARD_LOG }}
+          LG_SUITE: all
           PYTHONPATH: ${{ env.GUARD_PATH }}
         run: |
           set -e
           for t in test_mail_auth test_dns_https test_mail_auth_pipeline test_sender_readiness test_worker_settings_effective test_link_downloads test_zip_limits test_line_hash test_report_api \
                    test_report_types test_report_names test_equivalence test_refetch_and_rows test_retention test_no_ip_reports test_load_stamps \
-                   test_quarterly_purge; do
+                   test_quarterly_purge test_count_gaps test_fix_b12 test_fix_r2; do
             echo "::group::$t"; python tests/$t.py; echo "::endgroup::"
           done
           python -m unittest tests.test_mail_sources

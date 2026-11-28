@@ -34,6 +34,16 @@ def sha(line):
     return hashlib.sha256(line.encode("utf-8")).hexdigest()
 
 
+def _rec(line):
+    """A line as an entry: the dict, or {} for a line that is not one (not JSON, or JSON that is not an object such as
+    5, "x" or [1]: audit 2026-11-27, those crashed the start, every sign-in and the rotation). The check reports them."""
+    try:
+        r = json.loads(line)
+    except ValueError:
+        return {}
+    return r if isinstance(r, dict) else {}
+
+
 REMOVAL_EVENTS = ("audit_archive_removed", "audit_archive_deleted_early")
 
 
@@ -50,12 +60,7 @@ def archived_record(name, lines):
     archive's name, entry count, first and last times and last link. It stays in the kept log after the archive is
     deleted, so a removal note cannot lie about the archive afterwards: the note must agree with it, and the age of the
     entries is judged by it. Removals go oldest first, so the newest removed archive's rotation entry is always kept."""
-    ts = []
-    for ln in (lines[0], lines[-1]):
-        try:
-            ts.append(json.loads(ln).get("t"))
-        except ValueError:
-            ts.append(None)
+    ts = [_rec(ln).get("t") for ln in (lines[0], lines[-1])]
     return {"t": round(time.time(), 3), "event": ARCHIVED_EVENT, "user": "Looking Glass", "target": name,
             "detail": f"{len(lines)} entries ({_utc(ts[0])} to {_utc(ts[1])}) archived · last link {sha(lines[-1])}",
             "archived": {"entries": len(lines), "oldest": ts[0], "newest": ts[1], "last_hash": sha(lines[-1])},
@@ -68,10 +73,7 @@ def rotations_in(lines):
     for ln in lines:
         if f'"{ARCHIVED_EVENT}"' not in ln:
             continue
-        try:
-            rec = json.loads(ln)
-        except ValueError:
-            continue
+        rec = _rec(ln)
         if rec.get("event") == ARCHIVED_EVENT:
             out[rec.get("target")] = rec.get("archived") or {}
     return out
@@ -131,8 +133,8 @@ def retention_history(lines):
     for ln in lines:
         if f'"{RETENTION_EVENT}"' not in ln:
             continue
+        rec = _rec(ln)
         try:
-            rec = json.loads(ln)
             out.append((_f(rec.get("t")), int(rec.get("target"))))
         except (ValueError, TypeError):
             continue
@@ -182,9 +184,8 @@ def removal_findings(notes, lines, configured_days, gap_days, now=None):
     for ln in lines:
         if first_kept_t is not None and '"audit_archive_' not in ln:
             continue
-        try:
-            rec = json.loads(ln)
-        except ValueError:
+        rec = _rec(ln)
+        if not rec:
             continue
         first_kept_t = rec.get("t") if first_kept_t is None else first_kept_t
         if rec.get("event") in REMOVAL_EVENTS:
@@ -229,9 +230,8 @@ def removals_unrecorded(lines, notes, recorded):
     for ln in lines:
         if '"audit_archive_' not in ln and oldest is not None:
             continue
-        try:
-            rec = json.loads(ln)
-        except ValueError:
+        rec = _rec(ln)
+        if not rec:
             continue
         if oldest is None:
             oldest = rec.get("t")
@@ -338,7 +338,18 @@ class Chain:
     def _load_head(self):
         """The newest link: the hash of the last line kept and how many lines there are."""
         lines = self.lines()
-        return (sha(lines[-1]) if lines else ZERO), len(lines)
+        return (sha(lines[-1]) if lines else ZERO), len(lines) + self._gone()
+
+    def _gone(self):
+        """Entries in the archives the retention removed: they still count in the head's entry number (audit.head and
+        the verifier number entries from the very first one; audit 2026-11-27)."""
+        total = 0
+        for n in self.removed():
+            try:
+                total += int(n.get("entries") or 0)
+            except (TypeError, ValueError):
+                pass
+        return total
 
     # ------------------------------------------------------------------ writing
     def _tail(self):
@@ -425,8 +436,8 @@ class Chain:
         try:
             with open(self.head_path) as f:
                 count = int(json.load(f).get("entries", 0)) + 1
-        except (OSError, ValueError):
-            count = len(self.lines())
+        except (OSError, ValueError, TypeError, AttributeError):
+            count = len(self.lines()) + self._gone()     # the entries removed by the retention count too
         self.last, self.count = sha(line), count
         self._write_head()
         return line
@@ -476,15 +487,9 @@ class Chain:
                 lines = self._lines_of(p)
             except (OSError, EOFError, ValueError, gzip.zlib.error):
                 continue          # a damaged archive is kept: evidence is never deleted unread (review 2026-11-13)
-            try:
-                newest = json.loads(lines[-1]).get("t", 0) if lines else 0
-            except ValueError:
-                newest = 0
-            if newest and newest < cut:
-                try:
-                    oldest = json.loads(lines[0]).get("t") if lines else None
-                except ValueError:
-                    oldest = None
+            newest = _rec(lines[-1]).get("t", 0) if lines else 0
+            if newest and _f(newest) < cut:
+                oldest = _rec(lines[0]).get("t") if lines else None
                 note = {"archive": os.path.basename(p), "entries": len(lines), "last_hash": sha(lines[-1]) if lines else ZERO,
                         "oldest": oldest, "newest": newest, "removed_at": round(now, 3), "retention_days": self.retention_days}
                 fd = os.open(os.path.join(self.dir, "removed.jsonl"), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
@@ -508,12 +513,8 @@ class Chain:
         """The entries written before the chain started (older versions wrote no link): every line before the first
         chained one."""
         for i, ln in enumerate(lines):
-            if '"prev"' in ln:
-                try:
-                    if "prev" in json.loads(ln):
-                        return lines[:i]
-                except ValueError:
-                    pass
+            if '"prev"' in ln and "prev" in _rec(ln):
+                return lines[:i]
         return []
 
     def seal(self):
@@ -530,12 +531,7 @@ class Chain:
             pre = self._pre_chain(self.lines())
             if not pre:
                 return None
-            ts = []
-            for ln in (pre[0], pre[-1]):
-                try:
-                    ts.append(json.loads(ln).get("t"))
-                except ValueError:
-                    ts.append(None)
+            ts = [_rec(ln).get("t") for ln in (pre[0], pre[-1])]
             s = {"entries": len(pre), "sha256": sha("\n".join(pre)), "first": ts[0], "last": ts[1], "sealed_at": round(time.time(), 3)}
             fd = os.open(self.seal_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(fd, "w") as f:

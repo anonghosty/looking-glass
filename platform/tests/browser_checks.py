@@ -22,8 +22,10 @@ test account on a RUNNING install and opens every page the role's Overview links
    map shows shows its figures.
 Needs Playwright with Chromium, a test system and its test accounts (never production, never real accounts):
     LG_BROWSER_BASE=http://127.0.0.1:5088 LG_BROWSER_ACCOUNTS=accounts.json python tests/browser_checks.py [role ...]
-accounts.json: {"analyst": {"name": "...", "pw": "...", "secret": "<TOTP secret>"}, ...}. Without these the check is
-skipped (exit 77, SKIPPED), so the suite runs anywhere. Exit 1 when a page has a problem."""
+accounts.json: {"analyst": {"name": "...", "pw": "...", "secret": "<TOTP secret>"}, ...}. Without Playwright in .venv
+the file runs itself again with the test tools' Python (~/lg-shots/venv) when that is there. Without these the check
+is skipped (exit 77, SKIPPED), so the suite runs anywhere; a release run (LG_NO_SKIP=1) counts that as a failure.
+Exit 1 when a page has a problem."""
 import base64
 import hashlib
 import hmac
@@ -40,6 +42,18 @@ try:
     from playwright.sync_api import sync_playwright
 except ImportError:
     sync_playwright = None
+    # not in .venv: run again with the test tools' Python (~/lg-shots/venv: Playwright + Chromium, test-only, never the
+    # platform's), with the system libraries Chromium needs when they were unpacked beside it without sudo
+    # (~/lg-shots/libs), as tests/pdf_pages_check.py does, so the suite runs the check instead of skipping it (2026-11-26)
+    _tools = os.path.expanduser("~/lg-shots")
+    _shots = os.path.join(_tools, "venv", "bin", "python")
+    if BASE and ACC and os.path.exists(_shots) and not os.environ.get("LG_BROWSER_REEXEC"):
+        import glob
+        _env = dict(os.environ, LG_BROWSER_REEXEC="1")
+        _libs = glob.glob(os.path.join(_tools, "libs", "usr", "lib", "*-linux-gnu"))
+        if _libs:
+            _env["LD_LIBRARY_PATH"] = os.pathsep.join(_libs + [p for p in [os.environ.get("LD_LIBRARY_PATH", "")] if p])
+        os.execve(_shots, [_shots, os.path.abspath(__file__)] + sys.argv[1:], _env)
 if not (BASE and ACC and os.path.exists(ACC) and sync_playwright):
     print("SKIPPED: set LG_BROWSER_BASE and LG_BROWSER_ACCOUNTS (a test system's test accounts) and install Playwright "
           "with Chromium to run the browser checks")

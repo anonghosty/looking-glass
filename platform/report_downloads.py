@@ -8,6 +8,9 @@ app.py reaches this code too. app.py calls install() where this code was, which 
 same order, and keeps every name defined here under its old name.
 """
 _A = None          # the app module (app.py), set by install()
+from shares import cut, pct  # noqa: E402  (shares that never mislead; "Top 8 of 23" when a list is cut)
+from analytics_api import _breakdown  # noqa: E402  (a top list with what it leaves out)
+import people as _people  # noqa: E402  (who made a download: full name and person code, never the sign-in name)
 
 
 class _Recorder:
@@ -87,7 +90,7 @@ def _short(x):
         if x.get("exploited"):
             bits.append("ACTIVELY EXPLOITED (CISA KEV)")
         if x.get("epss") is not None:
-            bits.append(f"EPSS {x['epss']:.1%}")
+            bits.append(f"EPSS {pct(x['epss'], 1)}")
         if x.get("pending"):
             bits.append("not looked up yet")
         elif not x.get("found"):
@@ -137,16 +140,47 @@ def _enrich_names(ordered):
     return out, stats, note
 
 
-def _bd_rows(rows, total, hosts=False):
+def _bd_rows(rows, total, hosts=False, rest=None):
+    """A breakdown's table rows; rest (the list's meta: distinct, other, none, other_hosts, none_hosts) adds an "Other"
+    row for the values past the cut and a "Not recorded" row for events without a value, so the rows add up to the
+    selection (2026-11-26: the top 8 stood alone, under a heading that read as complete)."""
     out = []
-    for r in rows:
+    for r in _with_rest(rows, rest):
         share = r.get("share")
         share = share if isinstance(share, (int, float)) else (r.get("count", 0) / max(1, total))
         row = [r.get("label") or r.get("value") or "(none)", f"{r.get('count', 0):,}"]
         if hosts:
             row.append(f"{r.get('hosts', 0):,}")
-        out.append(row + [f"{share:.1%}"])
+        out.append(row + [pct(share, 1)])
     return out
+
+
+def _with_rest(rows, rest, unrecorded=True):
+    """The rows plus an "Other (N more)" row and, with unrecorded, a "Not recorded" row (rest: _breakdown's meta)."""
+    rows = list(rows or [])
+    if not rest:
+        return rows
+    more = (rest.get("distinct") or 0) - len(rows)
+    if rest.get("other", 0) > 0:
+        rows.append({"label": f"Other ({more:,} more)" if more > 0 else "Other", "count": rest["other"],
+                     "hosts": rest.get("other_hosts", 0)})
+    if unrecorded and rest.get("none", 0) > 0:
+        rows.append({"label": "Not recorded", "count": rest["none"], "hosts": rest.get("none_hosts", 0)})
+    return rows
+
+
+def _rest(I):
+    """{list key: meta} from an analysis's totals / others / unrecorded (and other_hosts / unrecorded_hosts)."""
+    t, o, u = I.get("totals") or {}, I.get("others") or {}, I.get("unrecorded") or {}
+    oh, uh = I.get("other_hosts") or {}, I.get("unrecorded_hosts") or {}
+    return {k: {"distinct": t[k], "other": o.get(k, 0), "none": u.get(k, 0), "other_hosts": oh.get(k, 0),
+                "none_hosts": uh.get(k, 0)} for k in t}
+
+
+def _bd_title(lbl, rows, rest):
+    """'Source networks: Top 8 of 23' when the list is cut, the plain name when every value is listed."""
+    c = cut(len(rows or []), (rest or {}).get("distinct") or 0)
+    return f"{lbl}: {c}" if c else lbl
 
 
 def _pdf_rows(columns, rows, enr, issues=False, row_name=False):
@@ -221,7 +255,7 @@ def api_insight_report_pdf():
     rows = D.get("rows") or []
     # what to explain: the selection's infections by events, then any other name in the list
     inf_b = (I.get("breakdowns") or {}).get("infection") or []
-    ordered = [(r["value"], f"{r['count']:,} events ({r['share']:.1%} of the selection)") for r in inf_b if r.get("value")]
+    ordered = [(r["value"], f"{r['count']:,} events ({pct(r['share'], 1)} of the selection)") for r in inf_b if r.get("value")]
     if I.get("kind") == "infection":
         ordered.insert(0, (I["value"], f"{I['total']:,} events"))
     seen = _A.Counter(n for r in rows for n in ([r.get("infection")] if r.get("infection") else (r.get("infections") or [])) if n)
@@ -250,7 +284,7 @@ def api_insight_report_pdf():
                    + (f" and {rest} {'is' if rest == 1 else 'are'} known to no source (explained from the report evidence)"
                       if rest else "") + ".")
     peak = I.get("peak_hour")
-    kpis = [(f"{I.get('total', 0):,}", "events in this selection"), (f"{I.get('share', 0):.1%}", f"of the day's {I.get('all_total', 0):,} events"),
+    kpis = [(f"{I.get('total', 0):,}", "events in this selection"), (pct(I.get("share", 0), 1), f"of the day's {I.get('all_total', 0):,} events"),
             (f"{I.get('hosts', 0):,}", "source hosts"), (f"{I.get('reports', 0):,}", "reports"),
             (f"{I.get('cross_report_hosts', 0):,}", "hosts in several reports"), (f"{I.get('multi_infected', 0):,}", "hosts with several infections"),
             (f"{I.get('regular_beacons', 0):,}", "hosts beaconing regularly"), (I.get("beacon_median_label") or "", "typical repeat interval"),
@@ -266,25 +300,37 @@ def api_insight_report_pdf():
               ("dst_asn", "Destination networks"), ("dst_ip", "Destination IPs"), ("dst_port", "Destination ports"), ("tag", "Tags"),
               ("request", "Requested paths"), ("http_agent", "User agents")]
     total = I.get("total", 0)
-    bds = [(lbl, [lbl, "Events", "Share"], _A._bd_rows(B[k], total)) for k, lbl in titles if B.get(k)]
-    charts = [(lbl, B[k]) for k, lbl in (("source", "Reports"), ("infection", "Infections / categories"), ("src_asn", "Source networks"),
-                                          ("src_city", "Cities"), ("attack_class", "Attack types"), ("dst_geo", "Destination countries")) if B.get(k)]
+    rest = _rest(I)
+    # each table names its cut ("Top 8 of 23") and ends with Other and Not recorded, so its rows add up to the selection
+    bds = [(_bd_title(lbl, B[k], rest.get(k)), [lbl, "Events", "Share"], _A._bd_rows(B[k], total, rest=rest.get(k)))
+           for k, lbl in titles if B.get(k)]
+    charts = [(_bd_title(lbl, B[k], rest.get(k)), _with_rest(B[k], rest.get(k), unrecorded=False))
+              for k, lbl in (("source", "Reports"), ("infection", "Infections / categories"), ("src_asn", "Source networks"),
+                             ("src_city", "Cities"), ("attack_class", "Attack types"), ("dst_geo", "Destination countries")) if B.get(k)]
     gl = []
     labels = {x["name"]: x["label"] for x in _A.registry.get()}
-    for r in B.get("source") or ([{"value": I["value"]}] if I.get("kind") == "source" else []):
-        d = _A._report_def(r["value"])
-        item = (d.get("title") or labels.get(r["value"], r["value"]), " ".join(v for v in (d.get("def"), d.get("why")) if v), d.get("url"))
+    # every report of the selection (report_names), not only the 12 of the breakdown (2026-11-26)
+    names = I.get("report_names") or [r["value"] for r in B.get("source") or []]
+    for name in names or ([I["value"]] if I.get("kind") == "source" else []):
+        d = _A._report_def(name)
+        item = (d.get("title") or labels.get(name, name), " ".join(v for v in (d.get("def"), d.get("why")) if v), d.get("url"))
         if item[0] not in {x[0] for x in gl}:
             gl.append(item)
     cols, prow = _A._pdf_rows(D.get("columns") or [], rows, enr)
     sel = _A._pdf_label() or f"{I.get('kind_label', '')}: {I.get('value_label') or I.get('value', '')}"
     base = _A._file_base([(I.get("as_of") or "")[:10], sel, D.get("metric")])
-    spec = {"platform_label": "Network communications", "csv_name": f"{base}.csv", "title": D.get("title"), "selection": sel, "day": (I.get("as_of") or "")[:10],
-            "generated_by": (getattr(_A.g, "user", None) or {}).get("user", ""), "scope": _A._scope_text(), "demo": _A.is_demo(),
+    # a PDF delivered alone (format=pdf) prints the list itself and never points to a CSV that does not come with it
+    # (audit 2026-11-27: it named a CSV file "delivered with this report")
+    alone = _A.request.args.get("format") == "pdf"
+    sources = _A.SOURCES_TEXT if not alone else _A.SOURCES_TEXT[:-1] + [
+        "Figures describe the replay day up to the time of the analysis. The complete list is printed in this report; "
+        "download the report as a ZIP for it as a CSV file too."]
+    spec = {"platform_label": "Network communications", "csv_name": None if alone else f"{base}.csv", "title": D.get("title"), "selection": sel, "day": (I.get("as_of") or "")[:10],
+            "generated_by": _people.signed_by((getattr(_A.g, "user", None) or {}).get("user", "")), "scope": _A._scope_text(), "demo": _A.is_demo(),
             "intro": D.get("intro"), "summary_points": pts, "kpis": kpis, "hours": I.get("hours"), "peak_hour": peak,
             "priorities": priorities, "enrichment": enr, "enrichment_stats": stats, "enrichment_note": note,
             "columns": cols, "rows": prow, "total": D.get("total", len(rows)), "breakdowns": bds, "charts": charts,
-            "glossary": gl, "sources": _A.SOURCES_TEXT}
+            "glossary": gl, "sources": sources}
     pdf = reports_pdf.build(spec)
     _A.AUTH["audit"].add("report_pdf", user=(getattr(_A.g, "user", None) or {}).get("user", ""), target=f"comms:{D.get('metric')}",
                       detail=f"{sel[:80]} · {len(rows)} rows")
@@ -320,7 +366,7 @@ def api_svc_report_pdf():
     if hb:
         hours = [sum(v[i] for v in hb.values()) for i in range(24)]
     peak = I.get("peak_hour")
-    kpis = [(f"{I.get('total', 0):,}", "records in this selection"), (f"{I.get('share', 0):.1%}", f"of the day's {I.get('day_total', 0):,} records"),
+    kpis = [(f"{I.get('total', 0):,}", "records in this selection"), (pct(I.get("share", 0), 1), f"of the day's {I.get('day_total', 0):,} records"),
             (f"{I.get('hosts', 0):,}", "hosts"), (f"{I.get('vulnerable_hosts', 0):,}", "hosts with a concrete issue"),
             (f"{I.get('multi_issue_hosts', 0):,}", "hosts with several issues"), (f"{I.get('cross_report_hosts', 0):,}", "hosts in several reports"),
             (f"{I.get('critical', 0):,}", "critical records"), (f"{I.get('high', 0):,}", "high-severity records"),
@@ -330,13 +376,18 @@ def api_svc_report_pdf():
     total = I.get("total", 0)
     titles = [("service", "Services (reports)"), ("family", "Report families"), ("issue", "Issues"), ("severity", "Severity"),
               ("network", "Networks"), ("region", "Regions"), ("city", "Cities"), ("port", "Ports"), ("tag", "Tags"),
-              ("vendor", "Vendors"), ("product", "Products"), ("device_type", "Device types"), ("sector", "Sectors")]
-    bds = [(lbl, [lbl, "Records", "Hosts", "Share"], _A._bd_rows(B[k], total, hosts=True)) for k, lbl in titles if B.get(k)]
-    charts = [(lbl, B[k]) for k, lbl in (("service", "Services (reports)"), ("issue", "Issues"), ("network", "Networks"),
-                                          ("region", "Regions"), ("port", "Ports"), ("vendor", "Vendors")) if B.get(k)]
+              ("vendor", "Vendors"), ("product", "Products"), ("device_type", "Device types"), ("sector", "Sectors (network type)"),
+              ("industry", "Industry (Shadowserver)")]   # the network type, then Shadowserver's own column (2026-11-26)
+    rest = _rest(I)
+    bds = [(_bd_title(lbl, B[k], rest.get(k)), [lbl, "Records", "Hosts", "Share"], _A._bd_rows(B[k], total, hosts=True, rest=rest.get(k)))
+           for k, lbl in titles if B.get(k)]
+    charts = [(_bd_title(lbl, B[k], rest.get(k)), _with_rest(B[k], rest.get(k), unrecorded=False))
+              for k, lbl in (("service", "Services (reports)"), ("issue", "Issues"), ("network", "Networks"),
+                             ("region", "Regions"), ("port", "Ports"), ("vendor", "Vendors")) if B.get(k)]
     G, _ = _A._view_json("svc_glossary")
     gl = []
-    names = {str(r.get("value")) for r in B.get("service") or []} | {str(r.get("label")) for r in B.get("service") or []}
+    names = {str(r.get("value")) for r in B.get("service") or []} | {str(r.get("label")) for r in B.get("service") or []} \
+        | {str(v) for v in I.get("report_names") or []}       # every report of the selection, not only the top 10
     for x in (G or {}).get("reports", []):
         if x["name"] in names or x["label"] in names:
             if (x.get("title") or x["label"]) not in {y[0] for y in gl}:
@@ -352,7 +403,7 @@ def api_svc_report_pdf():
         enr = _A.issues_resolve(order, budget=20)
         for i in order:
             c = counts.get(i)
-            stats[i] = f"{c[0]:,} records on {c[1]:,} hosts" if c else f"on {listed.get(i, 0):,} listed entr{'y' if listed.get(i, 0) == 1 else 'ies'}"
+            stats[i] = (f"{c[0]:,} record{'' if c[0] == 1 else 's'} on {c[1]:,} host{'' if c[1] == 1 else 's'}") if c else f"on {listed.get(i, 0):,} listed entr{'y' if listed.get(i, 0) == 1 else 'ies'}"
         kev = [i for i, x in enr.items() if x.get("exploited")]
         if kev:
             pts.insert(0, f"{len(kev)} of the issues in this selection {'is a vulnerability' if len(kev) == 1 else 'are vulnerabilities'} "
@@ -373,12 +424,13 @@ def api_svc_report_pdf():
     sel = _A._pdf_label() or "Selection"
     base = _A._file_base([I.get("day"), sel, D.get("metric")])
     spec = {"platform_label": "Publicly accessible / vulnerable services", "title": D.get("title"), "selection": sel,
-            "csv_name": f"{base}.csv", "enrichment": enr, "enrichment_stats": stats, "enrichment_note": note,
+            # format=pdf: the PDF alone prints the list and names no CSV (audit 2026-11-27)
+            "csv_name": None if _A.request.args.get("format") == "pdf" else f"{base}.csv", "enrichment": enr, "enrichment_stats": stats, "enrichment_note": note,
             "enrichment_title": "Issues explained",
-            "day": I.get("day"), "generated_by": (getattr(_A.g, "user", None) or {}).get("user", ""), "scope": _A._scope_text(),
+            "day": I.get("day"), "generated_by": _people.signed_by((getattr(_A.g, "user", None) or {}).get("user", "")), "scope": _A._scope_text(),
             "demo": _A.is_demo(), "intro": D.get("intro"), "summary_points": pts, "kpis": kpis, "hours": hours, "peak_hour": peak,
             "priorities": priorities, "columns": cols, "rows": prow, "total": D.get("total", len(rows)), "breakdowns": bds,
-            "charts": charts, "glossary": gl[:40], "sources": [_A.SOURCES_TEXT[0], _A.SOURCES_TEXT[2], _A.SOURCES_TEXT[3], _A.SOURCES_TEXT[4]]}
+            "charts": charts, "glossary": gl, "sources": [_A.SOURCES_TEXT[0], _A.SOURCES_TEXT[2], _A.SOURCES_TEXT[3], _A.SOURCES_TEXT[4]]}
     pdf = reports_pdf.build(spec)
     _A.AUTH["audit"].add("report_pdf", user=(getattr(_A.g, "user", None) or {}).get("user", ""), target=f"services:{D.get('metric')}",
                       detail=f"{sel[:80]} · {len(rows)} rows")
@@ -456,24 +508,30 @@ def api_insight():
 
     labels = {s["name"]: s["label"] for s in _A.registry.get()}
     mt = _A.mask_text if demo else (lambda s: s)
-    breakdowns = {
-        "source": _A._top(ev, "source", 12, label=lambda v: labels.get(v, v)),
-        "attack_class": _A._top(ev, "attack_class"),
-        "infection": _A._top(ev, "infection"),
-        "src_city": _A._top(ev, "src_city"),
-        "src_asn": _A._top(ev, "src_asn", key=company),          # grouped by company (or alias)
-        # grouped by the real value, shown masked in demo mode (the value becomes an opaque reference below)
-        "http_host": _A._top(ev, "http_host", label=mt),
-        "dst_ip": _A._top(ev, "dst_ip", label=mip),
-        "dst_geo": _A._top(ev, "dst_geo"),
-        "dst_asn": _A._top(ev, "dst_asn", key=company),
-        "dst_port": _A._top(ev, "dst_port"),
-        "http_agent": _A._top(ev, "http_agent", 5, label=mt),
-        "severity": _A._top(ev, "severity"),
-        "tag": _A._top(ev, "tag", 6),
-    }
+    # each list with what it leaves out (analytics_api._breakdown): totals = every different value, others = events with
+    # a value outside the rows (the "Other" row), unrecorded = events without one. Short lists (attack types,
+    # severities) are never cut. Nothing goes missing without saying so (2026-11-26).
     paths = _A.Counter(_A._request_path(e["http_url"]) for e in ev if e["http_url"])
-    breakdowns["request"] = [{"value": v, "label": mt(v), "count": k, "share": round(k / (len(ev) or 1), 4)} for v, k in paths.most_common(6)]
+    plan = {
+        "source": (12, lambda v: labels.get(v, v), None),
+        "attack_class": (None, None, None),
+        "infection": (8, None, None),
+        "src_city": (8, None, None),
+        "src_asn": (8, None, company),          # grouped by company (or alias)
+        # grouped by the real value, shown masked in demo mode (the value becomes an opaque reference below)
+        "http_host": (8, mt, None),
+        "dst_ip": (8, mip, None),
+        "dst_geo": (8, None, None),
+        "dst_asn": (8, None, company),
+        "dst_port": (8, None, None),
+        "http_agent": (5, mt, None),
+        "severity": (None, None, None),
+        "tag": (6, None, None),
+    }
+    breakdowns, meta = {}, {}
+    for k, (top_n, lbl_fn, key_fn) in plan.items():
+        breakdowns[k], meta[k] = _breakdown(ev, k, top_n, lbl_fn, key_fn)
+    breakdowns["request"], meta["request"] = _breakdown(ev, "request", 6, mt, count=paths)
     if demo:
         for key in _A.REF_KINDS:
             for r in breakdowns.get(key, []):
@@ -481,6 +539,9 @@ def api_insight():
     for r in breakdowns["dst_port"]:
         r["value"] = str(r["value"])
     breakdowns = {k: v for k, v in breakdowns.items() if v and not (k == kind)}
+    meta = {k: m for k, m in meta.items() if k in breakdowns}
+    # every report of the selection, by events (the PDF's References name each one, not only the top 12)
+    report_names = [v for v, _ in _A.Counter(e["source"] for e in ev).most_common()]
 
     # cross-report correlation: the same hosts seen in other collections today
     slice_hosts = set(by_host)
@@ -497,14 +558,18 @@ def api_insight():
     if n:
         day_txt = rn.strftime("%Y-%m-%d")
         share = n / max(1, len(sofar))
-        share_txt = "less than 0.1%" if 0 < share < 0.001 else f"{share:.1%}"
+        share_txt = "less than 0.1%" if 0 < share < 0.001 else pct(share, 1)
         insights.append(f"Shadowserver reported {n:,} event{'' if n == 1 else 's'} for {day_txt}. "
                         f"That is {share_txt} of all {len(sofar):,} events across {n_reports} reports.")
         src_b = breakdowns.get("source")
         if src_b and kind != "source":
-            parts = ", ".join(f"{r['label']} {r['share']:.0%}" for r in src_b[:4])
-            insights.append(f"Found in {len(src_b)} report{'s' if len(src_b) > 1 else ''}: {parts}.")
-        insights.append(f"{len(by_host):,} different source hosts were involved. The 10 most active hosts account for {top10_share:.0%} of these events.")
+            n_src = meta["source"]["distinct"]          # every report, not the 12 listed (2026-11-26)
+            parts = ", ".join(f"{r['label']} {pct(r['share'])}" for r in src_b[:4])
+            rest = n_src - len(src_b[:4])
+            insights.append(f"Found in {n_src:,} report{'s' if n_src > 1 else ''}: {parts}"
+                            + (f", and {rest:,} more report{'s' if rest > 1 else ''}" if rest > 0 else "") + ".")
+        insights.append(f"{len(by_host):,} different source hosts were involved. The {min(10, len(by_host)):,} most active hosts "
+                        f"account for {pct(top10_share)} of these events.")
         if cross_hosts and kind != "src_ip":
             top_other = ", ".join(f"{labels.get(s, s)} ({k:,})" for s, k in other_src.most_common(3))
             cls = {s["name"]: s["class"] for s in _A.registry.get()}
@@ -532,14 +597,15 @@ def api_insight():
             b = breakdowns.get(key)
             if b and b[0]["share"] >= 0.5 and len(b) > 1:
                 lbl = b[0]["label"].title() if key == "src_city" else b[0]["label"]
-                insights.append(f"By {what}, {lbl} accounts for most of these events ({b[0]['share']:.0%}).")
+                insights.append(f"By {what}, {lbl} accounts for most of these events ({pct(b[0]['share'])}).")
         hosts_n = len({e["http_host"] for e in ev if e["http_host"]})
         if kind != "http_host" and hosts_n > 1:
             insights.append(f"{hosts_n:,} different C2 / sinkhole domains were contacted.")
 
     return _A.jsonify(
         kind=kind, kind_label=_A.INSIGHT_KINDS[kind], value=value, as_of=_A.iso(rn),
-        total=n, share=round(n / max(1, len(sofar)), 4), all_total=len(sofar),
+        # not rounded: a share rounded to 4 places read "0%" for 1 of 43,281 (2026-11-26)
+        total=n, share=n / max(1, len(sofar)), all_total=len(sofar),
         # an empty value is not a network or an address (review 2026-11-13: both counts included it)
         hosts=len(by_host), asns=len({e["src_asn"] for e in ev if e["src_asn"]}), c2_hosts=len({e["http_host"] for e in ev if e["http_host"]}),
         dst_ips=len({e["dst_ip"] for e in ev if e["dst_ip"]}),
@@ -549,6 +615,10 @@ def api_insight():
         # decoded_beacons, beacon_devices: analysts and admins, once the day is labelled (beacon_stats.ready)
         **({} if _A.is_demo() or not _A.beacon_stats.ready(day) else _A.beacon_stats.counts(ev)),
         hours_by_class=hours_by_class, current_hour=cur_hour, timeline=timeline, severity=severity,        insights=insights, breakdowns=breakdowns, top_hosts=top_hosts,
+        # beside each breakdown: how many different values it has (totals), the events with a value outside its rows
+        # (others: an "Other" row) and the events without a value (unrecorded); rows + others + unrecorded = total
+        totals={k: m["distinct"] for k, m in meta.items()}, others={k: m["other"] for k, m in meta.items()},
+        unrecorded={k: m["none"] for k, m in meta.items()}, report_names=report_names,
         cross_report_hosts=len(cross_hosts), reports=len({e["source"] for e in ev}),
         value_label=_A._value_label(kind, value, demo, labels),
         scope=dict(zip(("kind", "value"), _A._parse_time_value(value)[2:])) if kind == "time" else None,

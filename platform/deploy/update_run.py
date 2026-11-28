@@ -24,9 +24,11 @@ import fcntl
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -52,6 +54,7 @@ class Run:
         self.kind, self.tag, self.by = kind, tag, by
         self.status = {"state": "running", "kind": kind, "tag": tag, "by": by, "started": round(time.time(), 3),
                        "ended": None, "step": "", "installed": "", "result": ""}
+        self.killed = False
         os.makedirs(STATE, mode=0o700, exist_ok=True)
 
     # ---- what the page shows
@@ -78,19 +81,47 @@ class Run:
 
     # ---- running commands, every line of their output in the log
     def cmd(self, args, cwd=PROJECT, timeout=300, quiet=False):
+        """(exit code, output). A step that runs longer than `timeout` is stopped, with everything it started, by a
+        timer, also when it prints nothing (audit 2026-11-27: a silent hung git step was only checked when a line came,
+        so it was never stopped, the lock stayed held and the page said "running" for good): 124."""
         env = dict(os.environ, GIT_TERMINAL_PROMPT="0", GIT_ASKPASS="true", LC_ALL="C", PYTHONUNBUFFERED="1")
-        p = subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
-        out, t0 = [], time.time()
-        for line in p.stdout:
-            line = line.rstrip()
-            out.append(line)
-            if not quiet and line:
-                self.say(line)
-            if time.time() - t0 > timeout:
-                p.kill()
-                self.say(f"stopped: {' '.join(args[:2])} took longer than {timeout // 60} minutes", level="bad")
-                return 124, "\n".join(out)
-        return p.wait(), "\n".join(out)
+        # its own process group, so the timer stops its children too (a child holding the output open would keep the
+        # read below waiting after the step itself was stopped)
+        p = subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env,
+                             start_new_session=True)
+        stopped = threading.Event()
+
+        def stop():
+            stopped.set()
+            self.killed = True              # a process this run started was killed (back() may then clear its git lock)
+            try:
+                os.killpg(p.pid, signal.SIGKILL)
+            except OSError:
+                try:
+                    p.kill()
+                except OSError:
+                    pass
+        timer = threading.Timer(timeout, stop)
+        timer.daemon = True
+        timer.start()
+        out = []
+        try:
+            for line in p.stdout:
+                line = line.rstrip()
+                out.append(line)
+                if not quiet and line:
+                    self.say(line)
+            rc = p.wait()
+        finally:
+            timer.cancel()
+            if p.poll() is None:            # stopped by an error here (the log could not be written): never left running
+                stop()
+                p.wait()
+        if stopped.is_set():
+            took = f"{timeout // 60} minutes" if timeout >= 60 else f"{timeout} seconds"
+            self.say(f"stopped: {' '.join(args[:2])} took longer than {took}", level="bad")
+            return 124, "\n".join(out)
+        return rc, "\n".join(out)
 
 
 def audit(event, by, tag, detail):
@@ -109,6 +140,31 @@ def audit(event, by, tag, detail):
 def git_top():
     r = VI.git(["-C", PROJECT, "rev-parse", "--show-toplevel"], timeout=30)
     return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def dirty(top):
+    """True when tracked files differ from HEAD (git status, untracked files left out), or git status could not tell."""
+    r = VI.git(["-C", top, "status", "--porcelain", "--untracked-files=no"], timeout=TIMEOUTS["git"])
+    return bool(r.returncode or r.stdout.strip())
+
+
+def remove_added_untracked(top, prev, new):
+    """After a roll back: the files `new` ADDS to `prev` that lie in the tree untracked (a stopped checkout had already
+    written them) are removed: only paths in both lists, inside the folder, files and links only. Returns how many."""
+    r = VI.git(["-C", top, "diff", "-z", "--name-only", "--diff-filter=A", prev, new], timeout=TIMEOUTS["git"])
+    u = VI.git(["-C", top, "ls-files", "-z", "--others"], timeout=TIMEOUTS["git"])
+    if r.returncode or u.returncode:
+        return 0
+    base = os.path.realpath(top)
+    n = 0
+    for rel in sorted(set(r.stdout.split("\0")) & set(u.stdout.split("\0")) - {""}):
+        p = os.path.join(base, rel)
+        if not os.path.realpath(os.path.dirname(p)).startswith(base + os.sep) and os.path.realpath(os.path.dirname(p)) != base:
+            continue
+        if os.path.islink(p) or os.path.isfile(p):
+            os.remove(p)
+            n += 1
+    return n
 
 
 def preflight(run):
@@ -212,36 +268,104 @@ def update(run):
             return 1
     run.say(f"signature: good, made with the key {VI.KEY_FINGERPRINT}")
 
+    # the tree checked clean again just before the code moves: the backup can take up to 30 minutes, and an edit made
+    # meanwhile must never be thrown away by a roll back's reset --hard (re-review of r1-2, 2026-11-28)
+    if dirty(top):
+        run.finish("failed", "Not updated: shipped files were changed here while the backup ran (git status). Nothing "
+                             "was changed; Settings → Code check shows which.")
+        return 1
     prev = VI.git(["-C", top, "rev-parse", "HEAD"]).stdout.strip()
     branch = VI.git(["-C", top, "symbolic-ref", "-q", "--short", "HEAD"]).stdout.strip()
-    run.say(f"moving the code to {tag}", step="code")
-    rc = 1
-    if branch:
-        rc, _ = run.cmd(["git", "-C", top, "merge", "-q", "--ff-only", f"refs/tags/{tag}"], timeout=TIMEOUTS["git"])
-    if rc:
-        rc, _ = run.cmd(["git", "-C", top, "checkout", "-q", "--detach", f"refs/tags/{tag}"], timeout=TIMEOUTS["git"])
+    def back(why, interrupted=False, killed=False):
+        """The previous release back: code, libraries, restart. Each step is tried even when one before it fails or
+        stops with an error, and the run always ends "rolled_back" with what happened. interrupted: moving the code was
+        stopped part way (killed by its time limit, or failed with the tree changed): the tracked files are put back by
+        force (the tree was checked clean just before the move; audit 2026-11-28, r1-2), and files the release ADDS
+        that the stopped step already wrote, untracked now, are removed (only those: never git clean), or every later
+        update would refuse to overwrite them. killed: a git step this run started was killed, so the
+        .git/index.lock it left is stale (its process group is gone) and removed; a lock not ours is never touched."""
+        def step(args, timeout):
+            try:
+                return run.cmd(args, timeout=timeout)[0]
+            except Exception as e:              # noqa: BLE001 (said in the log; the next step is still tried)
+                try:
+                    run.say(f"{' '.join(os.path.basename(a) for a in args[:1])} stopped by an error: {type(e).__name__}",
+                            level="bad")
+                except Exception:               # noqa: BLE001, S110 (the log itself could not be written)
+                    pass
+                return 1
+        try:
+            run.say(f"{why}: putting {installed or prev[:12]} back", step="roll back", level="bad")
+        except Exception:                       # noqa: BLE001, S110 (the roll back matters more than its log line)
+            pass
+        if killed:
+            try:
+                gd = VI.git(["-C", top, "rev-parse", "--absolute-git-dir"], timeout=30).stdout.strip() or os.path.join(top, ".git")
+                lock = os.path.join(gd, "index.lock")
+                if os.path.exists(lock):
+                    os.remove(lock)
+                    run.say("removed the lock the stopped git step left (.git/index.lock)")
+            except Exception:                   # noqa: BLE001, S110 (the reset below says what it could not do)
+                pass
+        if branch:
+            step(["git", "-C", top, "reset", "-q", "--hard" if interrupted else "--keep", prev], TIMEOUTS["git"])
+            if interrupted:                     # the checkout fallback may have left HEAD detached: the branch again
+                step(["git", "-C", top, "checkout", "-q", branch], TIMEOUTS["git"])
+        else:
+            step(["git", "-C", top, "checkout", "-q", *(["-f"] if interrupted else []), "--detach", prev], TIMEOUTS["git"])
+        if interrupted:
+            try:
+                n = remove_added_untracked(top, prev, f"refs/tags/{tag}")
+                if n:
+                    run.say(f"removed {n} file(s) of {tag} the stopped step had already written")
+            except Exception:                   # noqa: BLE001, S110 (the next update's git status says what is left)
+                pass
+        step([os.path.join(PROJECT, "deploy", "update_libraries.sh")], TIMEOUTS["libraries"])
+        rc2 = step([os.path.join(PROJECT, "deploy", "reload.sh")], TIMEOUTS["reload"])
+        result = (f"Not updated ({why}). The previous release is back"
+                  + (" and answering." if rc2 == 0 else ": it did NOT answer, look at the log and journalctl."))
+        try:
+            run.finish("rolled_back", result)
+        except Exception:                       # noqa: BLE001 (the page must never stay "running": audit 2026-11-28, r1-7)
+            try:
+                run.status.update(state="rolled_back", result=result, ended=round(time.time(), 3))
+                run.save()
+            except Exception:                   # noqa: BLE001, S110 (nothing more can be written)
+                pass
+        return 1
+
+    # from here on the code may have moved: an error (not only a failed step) puts the previous release back too
+    # (audit 2026-11-27: an exception after the checkout left the new code with the old libraries, said "failed")
+    run.killed = False
+    try:
+        run.say(f"moving the code to {tag}", step="code")
+        rc = 1
+        if branch:
+            rc, _ = run.cmd(["git", "-C", top, "merge", "-q", "--ff-only", f"refs/tags/{tag}"], timeout=TIMEOUTS["git"])
+        if rc and rc != 124:                    # a merge stopped by its time limit: no checkout over its half-moved tree
+            rc, _ = run.cmd(["git", "-C", top, "checkout", "-q", "--detach", f"refs/tags/{tag}"], timeout=TIMEOUTS["git"])
+        # a step stopped by its time limit (124) leaves a half-moved tree and .git/index.lock; a failed step that moved
+        # HEAD, or left tracked files changed (128, a full disk), moved the code: all put the previous release back
+        # (audit 2026-11-28, r1-2: it said "failed, nothing else was changed" and never rolled back)
+        moved = rc and (rc == 124 or VI.git(["-C", top, "rev-parse", "HEAD"], timeout=30).stdout.strip() != prev or dirty(top))
+    except Exception as e:                      # noqa: BLE001
+        return back(f"moving the code stopped with an error: {type(e).__name__}", interrupted=True, killed=run.killed)
+    if moved:
+        return back("moving the code was stopped before it finished" if rc == 124 else "the code moved only part of the way",
+                    interrupted=True, killed=run.killed)
     if rc:
         run.finish("failed", "Not updated: the code could not be moved to the release. Nothing else was changed.")
         return 1
 
-    def back(why):
-        run.say(f"{why}: putting {installed or prev[:12]} back", step="roll back", level="bad")
-        if branch:
-            run.cmd(["git", "-C", top, "reset", "-q", "--keep", prev], timeout=TIMEOUTS["git"])
-        else:
-            run.cmd(["git", "-C", top, "checkout", "-q", "--detach", prev], timeout=TIMEOUTS["git"])
-        run.cmd([os.path.join(PROJECT, "deploy", "update_libraries.sh")], timeout=TIMEOUTS["libraries"])
-        rc2, _ = run.cmd([os.path.join(PROJECT, "deploy", "reload.sh")], timeout=TIMEOUTS["reload"])
-        run.finish("rolled_back", f"Not updated ({why}). The previous release is back"
-                                  + (" and answering." if rc2 == 0 else ": it did NOT answer, look at the log and journalctl."))
-        return 1
-
-    run.say("the libraries from the release's locks (deploy/update_libraries.sh)", step="libraries")
-    rc, _ = run.cmd([os.path.join(PROJECT, "deploy", "update_libraries.sh")], timeout=TIMEOUTS["libraries"])
-    if rc:
-        return back("the libraries could not be installed")
-    run.say("restarting Looking Glass (deploy/reload.sh)", step="restart")
-    rc, _ = run.cmd([os.path.join(PROJECT, "deploy", "reload.sh")], timeout=TIMEOUTS["reload"])
+    try:
+        run.say("the libraries from the release's locks (deploy/update_libraries.sh)", step="libraries")
+        rc, _ = run.cmd([os.path.join(PROJECT, "deploy", "update_libraries.sh")], timeout=TIMEOUTS["libraries"])
+        if rc:
+            return back("the libraries could not be installed")
+        run.say("restarting Looking Glass (deploy/reload.sh)", step="restart")
+        rc, _ = run.cmd([os.path.join(PROJECT, "deploy", "reload.sh")], timeout=TIMEOUTS["reload"])
+    except Exception as e:                      # noqa: BLE001
+        return back(f"stopped by an error: {type(e).__name__}: {str(e)[:200]}")
     if rc:
         return back("the new release did not answer")
     now = VI.installed_tag(PROJECT)

@@ -1,13 +1,23 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # SPDX-FileCopyrightText: the Looking Glass contributors
 """Check "Replayed so far" against MongoDB: count records with extracted_date from 00:00 up to a moment of the
-replayed day directly in every reported collection, and compare with /api/replayed at the same moment.
+replayed day directly in every reported collection, and compare with /api/replayed at the same moment. A row sent in
+two files of one report day is counted once (counting_keys.row_key), as the platform counts it.
 
 Usage: .venv/bin/python tests/verify_replayed.py [ISO time]   (default: now minus 24 hours)
 """
 import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import lgauth  # noqa: E402,F401  local API login (automation key)
-lgauth.require_server()   # no running service (a fresh clone, CI): skipped, not crashed
+BASE = (_os.environ.get("LG_BASE") or lgauth.BASE).rstrip("/")     # LG_BASE when set, else this installation's own
+if BASE == lgauth.BASE:
+    lgauth.require_server()   # no running service (a fresh clone, CI): skipped, not crashed
+else:
+    try:
+        lgauth.urlopen(BASE + "/healthz", timeout=4).read()
+    except Exception as _exc:  # noqa: BLE001  any reason is "not running" here; the name says which
+        print(f"SKIPPED: needs the running Looking Glass service at {BASE}, which did not answer ({_exc.__class__.__name__})")
+        _sys.exit(77)
+import mongo_derive  # noqa: E402  the one rule's row key (counting_keys.row_key)
 import os, sys  # noqa: E401
 # These totals are for the whole country. With a constituency set in Settings the platform shows only that part, which
 # tests/verify_constituency.py checks against MongoDB: skip (exit 77) instead of reporting a false difference.
@@ -31,7 +41,7 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
-get = lambda p: json.load(urllib.request.urlopen(f"http://127.0.0.1:5000{p}", timeout=180))
+get = lambda p: json.load(urllib.request.urlopen(f"{BASE}{p}", timeout=180))
 # default: the platform's own replay position (it waits on the previous day until the new reports arrive)
 _rn = None if len(sys.argv) > 1 else get("/api/clock").get("replay_now")
 at = (datetime.fromisoformat((sys.argv[1] if len(sys.argv) > 1 else _rn).replace("Z", "+00:00")) if (len(sys.argv) > 1 or _rn)
@@ -52,8 +62,8 @@ mongo = 0
 files = {"$or": [{"filename": {"$regex": "^" + d.strftime("%Y-%m-%d")}} for d in (start, start + timedelta(days=1))]}
 for s in sources:
     c = db[s["name"]]
-    mongo += c.count_documents({"$and": [files, {"extracted_date": {"$gte": start, "$lte": at}}]})
-    mongo += c.count_documents({"$and": [files, {"extracted_date": {"$gte": start.strftime("%Y-%m-%dT"), "$lte": at_s}}]})
+    mongo += mongo_derive.count_rows(c, {"$and": [files, {"extracted_date": {"$gte": start, "$lte": at}}]})
+    mongo += mongo_derive.count_rows(c, {"$and": [files, {"extracted_date": {"$gte": start.strftime("%Y-%m-%dT"), "$lte": at_s}}]})
 print(f"Replay position {at_s}")
 print(f"MongoDB records 00:00 to then: {mongo:,}")
 print(f"Platform 'Replayed so far':    {app['replayed']:,} of {app['total']:,}")

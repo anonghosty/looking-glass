@@ -3,13 +3,23 @@
 """Check that the platform's totals match MongoDB exactly for the replayed day.
 
 For every report (collection) it counts records with extracted_date on the day directly in MongoDB and
-compares them with what the running app reports (/api/sources and /api/stats).
+compares them with what the running app reports (/api/sources and /api/stats). A row sent in two files of one
+report day is counted once (counting_keys.row_key), as the platform counts it.
 
 Usage: .venv/bin/python tests/verify_totals.py [YYYY-MM-DD]   (default: yesterday UTC)
 """
 import os as _os, sys as _sys; _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import lgauth  # noqa: E402,F401  local API login (automation key)
-lgauth.require_server()   # no running service (a fresh clone, CI): skipped, not crashed
+BASE = (_os.environ.get("LG_BASE") or lgauth.BASE).rstrip("/")     # LG_BASE when set, else this installation's own
+if BASE == lgauth.BASE:
+    lgauth.require_server()   # no running service (a fresh clone, CI): skipped, not crashed
+else:
+    try:
+        lgauth.urlopen(BASE + "/healthz", timeout=4).read()
+    except Exception as _exc:  # noqa: BLE001  any reason is "not running" here; the name says which
+        print(f"SKIPPED: needs the running Looking Glass service at {BASE}, which did not answer ({_exc.__class__.__name__})")
+        _sys.exit(77)
+import mongo_derive  # noqa: E402  the one rule's row key (counting_keys.row_key)
 import os, sys  # noqa: E401
 # These totals are for the whole country. With a constituency set in Settings the platform shows only that part, which
 # tests/verify_constituency.py checks against MongoDB: skip (exit 77) instead of reporting a false difference.
@@ -33,7 +43,7 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
-get = lambda p: json.load(urllib.request.urlopen(f"http://127.0.0.1:5000{p}", timeout=180))
+get = lambda p: json.load(urllib.request.urlopen(f"{BASE}{p}", timeout=180))
 # default: the day the platform is replaying (after midnight it keeps the previous day until the new reports arrive)
 day = sys.argv[1] if len(sys.argv) > 1 else (get("/api/clock").get("replay_day")
                                              or (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d"))[:10]
@@ -68,9 +78,9 @@ def on_the_day(times):
 for s in app_sources["sources"]:
     name = s["name"]
     c = db[name]
-    # extracted_date may be stored as a date or as an ISO string; count both forms
-    n = c.count_documents(on_the_day({"$gte": start, "$lt": end}))
-    n += c.count_documents(on_the_day({"$gte": start.strftime("%Y-%m-%dT"), "$lt": end.strftime("%Y-%m-%dT")}))
+    # extracted_date may be stored as a date or as an ISO string; count both forms (each row once, see the docstring)
+    n = mongo_derive.count_rows(c, on_the_day({"$gte": start, "$lt": end}))
+    n += mongo_derive.count_rows(c, on_the_day({"$gte": start.strftime("%Y-%m-%dT"), "$lt": end.strftime("%Y-%m-%dT")}))
     a = s["rows_today"]
     total_mongo += n; total_app += a
     ok = n == a

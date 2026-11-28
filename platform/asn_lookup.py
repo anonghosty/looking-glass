@@ -128,10 +128,35 @@ def save(path, reg):
                      "reviewed=true to lock it. 'demo_alias' replaces name and number in demo mode. Filled by "
                      "Settings > Identify networks, or manage/asn_registry.py (PeeringDB and RIPEstat).")
     reg["_updated"] = time.strftime("%Y-%m-%d")
-    tmp = path + ".tmp"
+    # a temporary file of its own: two writers never share one (audit 2026-11-27, 1-6)
+    tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(reg, f, indent=2, ensure_ascii=False)
     os.replace(tmp, path)
+
+
+# Every change to the registry file in this process is read, changed and written under this lock, and a look-up's
+# answers are merged into the file as it is THEN (never a copy read minutes before): Identify networks, a look-up of a
+# few networks and a name corrected by hand no longer write over each other (audit 2026-11-27, 1-6). The slow outside
+# look-ups run outside it, so nothing waits on them (1-7). app.py's _NET_LOCK is this lock.
+FILE_LOCK = threading.RLock()
+
+
+def _merge(path, counts, found, aliases=True):
+    """Write the look-up's answers into the registry file as it is now: the events counts, and each network looked
+    up unless it was named meanwhile (by hand, reviewed, or by another look-up)."""
+    with FILE_LOCK:
+        reg = load(path)
+        asns = reg["asns"]
+        for a, n in counts.items():
+            if a in asns:
+                asns[a]["events_last_check"] = n
+        for a, e in found.items():
+            if needs_lookup(asns.get(a)):
+                asns[a] = dict(e)
+        if aliases:
+            assign_aliases(asns, os.path.dirname(path))
+        save(path, reg)
 
 
 def assign_aliases(asns, data_dir=None):
@@ -168,18 +193,15 @@ def identify(path, counts, meta=None, progress=None, stop=None):
         if progress:
             progress(dict(st))
 
-    reg = load(path)
-    asns = reg["asns"]
-    for a, n in counts.items():
-        if a in asns:
-            asns[a]["events_last_check"] = n
+    asns = load(path)["asns"]                         # read only to see what needs a look-up: written by _merge
+    found = {}                                        # the answers of this look-up, merged into the file as it is then
     todo = [a for a, _ in sorted(counts.items(), key=lambda kv: -kv[1]) if a != "0" and needs_lookup(asns.get(a))]
     st["known"] = sum(1 for a in counts if a != "0") - len(todo)
     st["total"] = len(todo)
     tell(f"{st['known']} network(s) already identified: skipped. {len(todo)} to look up.")
     if not todo:
         st.update(state="done", message="Every network is already identified.")
-        save(path, reg); tell(); return st
+        _merge(path, counts, found, aliases=False); tell(); return st
     st["current"] = "PeeringDB (names and types, 50 at a time)"; tell("Asking PeeringDB for names and types...")
     try:
         pdb = peeringdb(todo)
@@ -200,7 +222,7 @@ def identify(path, counts, meta=None, progress=None, stop=None):
         name = p.get("name") or clean(holder) or f"AS{a}"
         kind = p.get("type") or classify(a, f"{p.get('name', '')} {holder}")
         m = meta.get(a, {})
-        asns[a] = {"name": name, "holder": holder, "type": kind, "country": m.get("country", ""), "role": m.get("role", ""),
+        found[a] = {"name": name, "holder": holder, "type": kind, "country": m.get("country", ""), "role": m.get("role", ""),
                    "reviewed": False, "source": ("peeringdb+ripestat" if p else "ripestat") if ok else "failed",
                    "events_last_check": counts.get(a, 0)}
         st["done"] += 1
@@ -211,10 +233,9 @@ def identify(path, counts, meta=None, progress=None, stop=None):
             st["failed"] += 1
             tell(f"AS{a}: look-up failed ({holder[15:]}); tried again next time")
         if st["done"] % 10 == 0:                      # save as it goes: the lists show the names straight away
-            assign_aliases(asns, os.path.dirname(path)); save(path, reg)
+            _merge(path, counts, found)
         time.sleep(0.25)                              # RIPEstat fair use
-    assign_aliases(asns, os.path.dirname(path))
-    save(path, reg)
+    _merge(path, counts, found)
     st["current"] = ""
     st["state"] = "done" if not st["message"] else "stopped"
     st["message"] = st["message"] or f"Identified {st['added']} network(s); {st['known']} already known" + \

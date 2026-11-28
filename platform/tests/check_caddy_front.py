@@ -13,6 +13,7 @@
 Run: .venv/bin/python tests/check_caddy_front.py"""
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -65,11 +66,11 @@ ok("only the caddy package's untouched sample Caddyfile may be replaced (kept as
 ok("Looking Glass reached on this computer only, over HTTPS", "reverse_proxy https://127.0.0.1:5000 {" in conf)
 ok("…its certificate checked for the domain, never skipped", "tls_server_name lookingglass.example.org" in conf
    and "insecure" not in conf.lower())
-ok("…no private CA unless one is given", "tls_trusted_ca_certs" not in conf)
+ok("…no private CA unless one is given", "tls_trust_pool" not in conf and "tls_trusted_ca_certs" not in conf)
 rc, conf2, _ = run("render", "--domain", "lg.example.org", "--public-port", "8443", "--backend-port", "5001",
                    "--ca-bundle", __file__)
 ok("a private CA (test installations) is trusted from Caddy's own copy", rc == 0
-   and "tls_trusted_ca_certs /etc/caddy/looking-glass/ca-bundle.pem" in conf2)
+   and "tls_trust_pool file /etc/caddy/looking-glass/ca-bundle.pem" in conf2)
 for args, why in ((["--domain", "bad domain", "--public-port", "443", "--backend-port", "5000"], "a name that is not a domain"),
                   (["--domain", "x.example.org", "--public-port", "443", "--backend-port", "443"], "the same port twice"),
                   (["--domain", "x.example.org", "--public-port", "99999", "--backend-port", "5000"], "a port out of range"),
@@ -95,7 +96,7 @@ for san, first in (("IP:10.20.0.5,DNS:lg-ops", "lg-ops"), ("IP:10.20.0.5", "10.2
     ok(f"…the certificate's first name offered to visitors that send none, and remembered ({first})",
        re.search(rf"^\s*default_sni {re.escape(first)}$", ci, re.M) and f"# internal: {first}" in ci)
     ok("…Looking Glass behind it checked under that name, against that certificate only, never skipped",
-       f"tls_server_name {first}" in ci and "tls_trusted_ca_certs /etc/caddy/looking-glass/cert.pem" in ci and "insecure" not in ci.lower())
+       f"tls_server_name {first}" in ci and "tls_trust_pool file /etc/caddy/looking-glass/cert.pem" in ci and "insecure" not in ci.lower())
     ok("…the same strict time limits and no fingerprint", "read_header 10s" in ci and "-Server" in ci and "admin off" in ci)
 import time  # noqa: E402
 
@@ -123,8 +124,10 @@ ok("…a public installation without Caddy (an office network from before the in
    pub and pub[0]["title"] == "This installation has no Caddy in front" and "caddy_front.sh adopt" in pub[0]["text"], pub)
 # adopt: an installation already running (the end-to-end proof is big_release/caddy_adopt_proof.sh on lg-test)
 src = open(os.path.join(ROOT, "deploy", "caddy_front.sh"), encoding="utf-8").read()
-ok("adopt: a command of its own, reusing setup's steps (one place)", "  adopt) adopt ;;" in src and "do_setup() {" in src
-   and "( do_setup ) || rollback" in src and "  setup)\n    need_root; valid\n    do_setup ;;" in src)
+# 2026-11-26: setup, sync, update and adopt's Caddy step run in in_step (a snapshot of our files, put back on failure);
+# what they do is RUN by tests/check_caddy_paths_run.py and tests/check_caddy_adopt_run.py
+ok("adopt: a command of its own, reusing setup's steps (one place); RUN end to end by tests/check_caddy_adopt_run.py",
+   "  adopt) adopt ;;" in src and "do_setup() {" in src and "in_step() {" in src and "in_step do_setup" in src)
 ok("…root only; a Caddyfile someone else wrote, a local installation, a public one without its domain's certificate: refused",
    all(w in src for w in ('need_root\n  [ -f "$project/.env" ]', "was not written by Looking Glass: not replaced",
                           "ACCESS_MODE is local", "not a self-signed one")))
@@ -135,10 +138,72 @@ ok("…keeps copies first (backups/ owned by the service's user), puts everythin
    and 'install -d -m 700 -o "$owner" -g "$grp" "$project/backups"' in src)
 ok("…Looking Glass to 127.0.0.1 through the one service-file writer; TRUST_PROXY=1 and LG_PORT in .env",
    'service_unit.py" render --user "$owner" --project "$project" --bind "127.0.0.1:$bport"' in src
-   and "env_set TRUST_PROXY 1; env_set LG_PORT" in src)
+   and "env_set TRUST_PROXY 1 && env_set LG_PORT" in src)
 ok("…without LG_SERVICE in .env, the service that runs this folder is found by its WorkingDirectory (an older install's own name)",
    'systemctl show -p WorkingDirectory --value "$u"' in src and 'svc="${u%.service}"' in src)
+_loop = re.search(r'\n(    for u in \$\(systemctl list-units.*?\n    done)\n', src, re.S)
+_found = ""
+if _loop and shutil.which("bash"):
+    # a server without LG_SERVICE (2026-11-26): the unusual-activity job, in the same folder, is listed before the web
+    # service; a fake systemctl answers as that server's did
+    _fake = r'''systemctl() {
+  case "$*" in
+    *list-units*) printf 'looking-glass-unusual.service loaded inactive dead x\nlooking-glass.service loaded active running y\n' ;;
+    *"ExecStart --value looking-glass-unusual.service"*) echo '{ path=/p/.venv/bin/python ; argv[]=/p/.venv/bin/python manage/unusual_run.py ; }' ;;
+    *"ExecStart --value looking-glass.service"*) echo '{ path=/p/.venv/bin/gunicorn ; argv[]=/p/.venv/bin/gunicorn --bind 0.0.0.0:443 app:app ; }' ;;
+    *WorkingDirectory*) echo /srv/lg/platform ;;
+  esac
+}
+project=/srv/lg/platform; svc=""
+'''
+    _found = subprocess.run(["bash", "-c", _fake + _loop.group(1) + '\nprintf "%s" "$svc"'], capture_output=True,
+                            text=True, timeout=20).stdout.strip()
+ok("…without LG_SERVICE, the WEB service (the one running gunicorn) is found, never a helper job in the same folder "
+   "(2026-11-26: looking-glass-unusual was taken, and adopt stopped)", _found == "looking-glass", repr(_found))
 ok("…the audit log written as the service's own user, never as root", 'runuser -u "$owner"' in src and "audit_chain.Chain" in src)
+# Caddy never opens more connections to Looking Glass than its threads (2026-11-26: a page's HTTP/2 burst opened
+# about 25; those not used at once each held a thread and new connections went unanswered for 3.5 minutes). The
+# thread count is read from the service file the installer writes, so a change to either is compared, not assumed.
+_tpl = open(os.path.join(ROOT, "deploy", "looking-glass.service.template"), encoding="utf-8").read()
+_threads = int((re.search(r"--threads (\d+)", _tpl) or [0, "0"])[1]) * int((re.search(r"--workers (\d+)", _tpl) or [0, "1"])[1])
+_cap = int((re.search(r"^UPSTREAM_CONNS=(\d+)", src, re.M) or [0, "0"])[1])
+_site = subprocess.run(["bash", os.path.join(ROOT, "deploy", "caddy_front.sh"), "render", "--domain", "lg.example.org",
+                        "--public-port", "443", "--backend-port", "5000"], capture_output=True, text=True, timeout=20).stdout \
+    if shutil.which("bash") else ""
+ok(f"Caddy's site caps its connections to Looking Glass ({_cap}) below the service's threads ({_threads}): "
+   "max_conns_per_host and keepalive_idle_conns_per_host, in the site it really writes",
+   0 < _cap < _threads and f"max_conns_per_host {_cap}" in _site and f"keepalive_idle_conns_per_host {_cap}" in _site,
+   (_cap, _threads, _site[-400:]))
+# never a silent stop (2026-11-26: adopt answered a server's administrator with nothing at all)
+ok("…any step that fails says where and what (an ERR trap, inherited by every function: set -E), said once",
+   "set -Eeuo pipefail" in src and "trap 'on_err $? $LINENO \"$BASH_COMMAND\"' ERR" in src
+   and '[ "$BASHPID" = "$$" ] || [ -n "${LG_IN_STEP:-}" ] || return 0' in src)
+_fn = re.search(r"^  (bind_of\(\) \{.*\})$", src, re.M)
+_bind = {}
+if _fn and shutil.which("bash"):
+    for s_ in ("argv[]=/x/gunicorn --workers 1 --bind 0.0.0.0:8000 app:app ; }", "/x/gunicorn --bind=0.0.0.0:443 app:app",
+               "/x/gunicorn -b 10.0.0.5:5000 app:app", "/x/gunicorn -b[::]:443 app:app", "/x/gunicorn -c gunicorn.conf.py app:app",
+               # a "-b" or "--bind" inside a path is not the option (2026-11-26: /tmp/lg-adopt-b... was read as one)
+               "argv[]=/srv/lg-backup/.venv/bin/gunicorn --bind 0.0.0.0:8443 app:app ; }",
+               "argv[]=/home/x/a-bind-test/gunicorn -c conf.py app:app ; }"):
+        _bind[s_] = subprocess.run(["bash", "-c", _fn.group(1) + '; printf "%s" "$1" | bind_of || true', "_", s_],
+                                   capture_output=True, text=True, timeout=20).stdout.strip()
+ok("…the address the service listens on, in every form gunicorn takes (--bind A, --bind=A, -b A, -bA); none: said in words",
+   list(_bind.values()) == ["0.0.0.0:8000", "0.0.0.0:443", "10.0.0.5:5000", "[::]:443", "", "0.0.0.0:8443", ""]
+   and "names no --bind or -b" in src and "not HOST:PORT" in src, _bind)
+_help = subprocess.run(["bash", os.path.join(ROOT, "deploy", "caddy_front.sh")], capture_output=True, text=True, timeout=20) \
+    if shutil.which("bash") else None
+ok("…with no command: the whole help, its commands included (it stopped mid-sentence before them)",
+   _help is not None and _help.returncode == 2 and "deploy/caddy_front.sh adopt" in _help.stdout
+   and "deploy/caddy_front.sh remove" in _help.stdout and "set -" not in _help.stdout,
+   (_help.returncode, _help.stdout[-200:]) if _help else "no bash")
+_done = src[src.index('echo "DONE: Caddy answers on port'):src.index("The administrators' daily reminder stops")]
+_trust = _done.index("go on trusting it")
+ok("…the last words match what happened: a certificate made now means https:// and one 'trust it' question per "
+   "browser; 'the same certificate' is said only when there was one before",
+   "made_cert=1" in src and 'if [ "$made_cert" = 1 ]; then' in _done and "now with https://" in _done
+   and "asks once to trust the new certificate" in _done
+   and _done.index('if [ "$made_cert" = 1 ]') < _done.index('elif [ "$internal" = 1 ]') < _trust)
 import task_monitor  # noqa: E402
 task_monitor.CADDYFILE = cf
 os.environ["ACCESS_MODE"] = "private"
@@ -210,7 +275,8 @@ ok("…Caddy only, from its own repository list, keeping our Caddyfile",
    "--only-upgrade -o Dpkg::Options::=--force-confold caddy" in upd and '-o Dir::Etc::sourcelist="$LIST"' in upd)
 ok("…our Caddyfile and hardening checked afterwards, then the site through Caddy",
    'die "$CONF was replaced during the update' in upd and '[ -f "$DROPIN" ]' in upd and upd.rstrip().find("check_front") > upd.find("apt-get install"))
-ok("…restarted only when the version changed, and it says which", 'if [ "$before" != "$after" ]; then' in upd and "Caddy updated: $before -> $after" in upd)
+ok("…restarted only when the version or our Caddyfile changed, and it says which",
+   'if [ "$before" != "$after" ] || [ "$old" != "$(cat "$CONF")" ]; then' in upd and "Caddy updated: $before -> $after" in upd)
 # setup's steps are one function since 2026-11-25 (adopt uses them too): read its body
 setup_part = src.split("do_setup() {", 1)[1].split("\n}\n", 1)[0]
 ok("setup and update make sure Ubuntu's automatic updates are there", "auto_updates || true" in setup_part and "auto_updates || true" in upd

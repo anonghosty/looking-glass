@@ -109,10 +109,11 @@ def region_names(file):
 
 
 def focus_bbox(file, counts):
-    """The default frame of a map: the regions holding 98% of the records, when that is clearly smaller than the
-    whole country (islands far apart: Seychelles, Kiribati, the Bahamas), so a printed map is readable. counts:
-    {map key: records}. Returns (bbox [west, south, east, north], zoomed). The same rule as focusBox() in
-    static/js/regions.js."""
+    """The default frame of a map: EVERY region with records, when that is clearly smaller than the whole country
+    (islands far apart: Seychelles, Kiribati, the Bahamas), so a printed map is readable. counts: {map key: records}.
+    Returns (bbox [west, south, east, north], zoomed). The same rule as focusBox() in static/js/regions.js.
+    2026-11-26: it took the regions holding 98% of the records, so the smallest left the frame while the map said
+    "Zoomed to the regions with records" (Ghana: Upper East with 1 device was cut off)."""
     full = (file or {}).get("bbox")
     if not full or file.get("whole"):
         return full, False
@@ -122,14 +123,10 @@ def focus_bbox(file, counts):
         return full, False
     w = s = float("inf")
     e = n = float("-inf")
-    cum = 0
-    for k, c in rows:
+    for k, _ in rows:                                   # every region with records, the smallest too
         for poly in file["regions"][k].get("polys") or []:
             for x, y in (poly[0] if poly else []):
                 w, e, s, n = min(w, x), max(e, x), min(s, y), max(n, y)
-        cum += c
-        if cum >= 0.98 * tot:
-            break
     if not (e > w and n > s):
         return full, False
     fw, fh = full[2] - full[0], full[3] - full[1]

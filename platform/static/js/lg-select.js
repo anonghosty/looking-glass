@@ -88,7 +88,13 @@
       else if (e.key === "End") { e.preventDefault(); items[items.length - 1]?.focus(); }
       else if (e.key === "Escape") { e.preventDefault(); close(true); }
       else if (e.key === "Tab") { close(false); }
-      else if (e.key === "Enter" && document.activeElement === search && items[0]) { e.preventDefault(); choose(sel, (items[1] && search.value ? items[1] : items[0]).dataset.value); }
+      // Enter in the search: the first match. The empty option ("All", "Any") always stays in the list, so it is passed
+      // over; a list without one starts with the first match (2026-11-27 audit: "Niger" chose Nigeria, the second)
+      else if (e.key === "Enter" && document.activeElement === search && items[0]) {
+        e.preventDefault();
+        const hit = search.value.trim() ? items.find((b) => b.dataset.value !== "") || items[0] : items[0];
+        choose(sel, hit.dataset.value);
+      }
     });
     search?.addEventListener("input", () => draw(search.value.trim().toLowerCase()));
   }

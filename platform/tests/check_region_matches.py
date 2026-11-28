@@ -64,8 +64,89 @@ print("The default frame: where the records are (islands far apart)")
 sq = lambda x, y, d=0.1: [[[[x, y], [x + d, y], [x + d, y + d], [x, y + d], [x, y]]]]  # noqa: E731
 SC = {"bbox": [46.0, -10.5, 56.5, -3.5], "regions": {"MAHE N": {"name": "Mahe North", "polys": sq(55.4, -4.65)},
       "MAHE S": {"name": "Mahe South", "polys": sq(55.45, -4.8)}, "OUTER": {"name": "Outer Islands", "polys": sq(46.2, -9.5, 0.4)}}}
-box, z = RM.focus_bbox(SC, {"MAHE N": 300, "MAHE S": 200, "OUTER": 2})
+box, z = RM.focus_bbox(SC, {"MAHE N": 300, "MAHE S": 200})
 ok("records on Mahé: the frame is Mahé, not the whole ocean", z and box[0] > 55 and box[2] < 56.5, str(box))
+# every region with records is inside the frame, the smallest too (2026-11-26: Ghana's Upper East with 1 device was
+# cut off while the map said "Zoomed to the regions with records"; the frame took the regions with 98% of them)
+box, z = RM.focus_bbox(SC, {"MAHE N": 300, "MAHE S": 200, "OUTER": 2})
+ok("…2 records on the Outer Islands too: they are inside the frame (here: the whole country)",
+   box[0] <= 46.2 and box[2] >= 46.6, str(box))
+GH = {"bbox": [-3.3, 4.7, 1.2, 11.2], "regions": {"ACCRA": {"name": "Greater Accra", "polys": sq(-0.3, 5.5, 0.6)},
+      "ASHANTI": {"name": "Ashanti", "polys": sq(-2.3, 6.2, 1.2)}, "UPPER EAST": {"name": "Upper East", "polys": sq(-1.2, 10.4, 0.7)}}}
+box, z = RM.focus_bbox(GH, {"ACCRA": 13996, "ASHANTI": 5405, "UPPER EAST": 1})
+ok("…one device in the far north: its region is inside the frame",
+   box[1] <= 10.4 and box[3] >= 11.1 and box[0] <= -2.3, str(box))
+for k_ in GH["regions"]:
+    w_, s_ = GH["regions"][k_]["polys"][0][0][0]
+    ok(f"…{GH['regions'][k_]['name']} inside the frame", box[0] <= w_ and box[1] <= s_, str(box))
+# on EVERY shipped country map (static/data/adm1): whatever has records, every one of those regions is inside the
+# frame; a very small country (smaller than the frame's minimum) is never zoomed; Ghana with the records of
+# 2026-11-26 (NCA CERT: Greater Accra to Upper East) shows the whole country
+import json as _json0  # noqa: E402
+_adm = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "data", "adm1")
+
+
+def _rb(f, k):
+    pts = [p for poly in f["regions"][k]["polys"] for p in poly[0]]
+    return min(x for x, _ in pts), min(y for _, y in pts), max(x for x, _ in pts), max(y for _, y in pts)
+
+
+def _inside(box, f, keys):
+    return all(box[0] <= _rb(f, k)[0] + 1e-9 and box[1] <= _rb(f, k)[1] + 1e-9 and box[2] >= _rb(f, k)[2] - 1e-9
+               and box[3] >= _rb(f, k)[3] - 1e-9 for k in keys)
+
+
+maps_, outside_, tiny_zoomed_ = 0, [], []
+for p_ in sorted(_glob_ for _glob_ in (os.path.join(_adm, n) for n in os.listdir(_adm)) if _glob_.endswith(".json")) if os.path.isdir(_adm) else []:
+    f_ = _json0.load(open(p_, encoding="utf-8"))
+    if f_.get("whole") or len(f_.get("regions") or {}) < 2:
+        continue
+    maps_ += 1
+    keys_ = sorted(f_["regions"], key=lambda k: (_rb(f_, k)[2] - _rb(f_, k)[0]) * (_rb(f_, k)[3] - _rb(f_, k)[1]))
+    for counts_ in ({k: 1 for k in keys_}, {keys_[-1]: 500, keys_[0]: 1}, {keys_[0]: 3}):
+        b_, z_ = RM.focus_bbox(f_, counts_)
+        if not _inside(b_, f_, counts_):
+            outside_.append(os.path.basename(p_))
+    fw_, fh_ = f_["bbox"][2] - f_["bbox"][0], f_["bbox"][3] - f_["bbox"][1]
+    if fw_ < 0.25 and fh_ < 0.25 and RM.focus_bbox(f_, {keys_[0]: 3})[1]:
+        tiny_zoomed_.append(os.path.basename(p_))
+if maps_:
+    ok(f"on all {maps_} shipped country maps, every region with records is inside the frame (also the smallest beside "
+       "the biggest)", not outside_, sorted(set(outside_))[:8])
+    ok("…a very small country (smaller than the frame's minimum, e.g. Nauru, San Marino) is never zoomed", not tiny_zoomed_, tiny_zoomed_)
+    gh_ = os.path.join(_adm, "GH.json")
+    if os.path.isfile(gh_):
+        g_ = _json0.load(open(gh_, encoding="utf-8"))
+        by_ = {v["name"].lower().replace(" region", "").strip(): k for k, v in g_["regions"].items()}
+        nca_ = {by_[n]: c for n, c in {"greater accra": 13996, "ashanti": 5405, "eastern": 84, "bono": 69, "western": 13,
+                                       "central": 3, "oti": 2, "bono east": 1, "upper east": 1}.items() if n in by_}
+        b_, z_ = RM.focus_bbox(g_, nca_)
+        ok("…Ghana with its records of 26 November (Greater Accra to Upper East): the whole country, every region in it",
+           len(nca_) == 9 and not z_ and _inside(b_, g_, nca_), (len(nca_), z_, b_))
+else:
+    print("  (no country maps here: the real-map checks skipped)")
+# the pages' twin (static/js/regions.js focusBox, the held copy when there is one) gives the SAME frame: run under node
+import glob as _glob, json as _json, shutil as _sh, subprocess as _sp  # noqa: E402
+_node = os.environ.get("LG_NODE") or _sh.which("node") or next(iter(sorted(_glob.glob(os.path.expanduser("~/lg-node/*/bin/node")))), None)
+_held = os.environ.get("LG_HELD_DIR", "")
+_js = os.path.join(_held, "regions.js.new") if _held and os.path.isfile(os.path.join(_held, "regions.js.new")) \
+    else os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "js", "regions.js")
+if _node and os.path.isfile(_js):
+    cases = [(SC, {"MAHE N": 300, "MAHE S": 200}), (SC, {"MAHE N": 300, "MAHE S": 200, "OUTER": 2}),
+             (GH, {"ACCRA": 13996, "ASHANTI": 5405, "UPPER EAST": 1}), (SC, {"MAHE N": 5}), (SC, {})]
+    prog = ("global.window = {}; require(process.argv[1]); const cs = JSON.parse(process.argv[2]);"
+            "console.log(JSON.stringify(cs.map(([f, c]) => { const r = window.LGRegions.focusBox(f, c); return [r.bbox, r.zoomed]; })));")
+    r_ = _sp.run([_node, "-e", prog, _js, _json.dumps(cases)], capture_output=True, text=True, timeout=30)
+    try:
+        js_ = _json.loads(r_.stdout)
+        py_ = [list(RM.focus_bbox(f, c)) for f, c in cases]
+        same = all(a[1] == b[1] and all(abs(x - y) < 1e-9 for x, y in zip(a[0], b[0])) for a, b in zip(js_, py_))
+        ok(f"the map pages' focusBox ({os.path.basename(_js)}) gives the same frame as the PDF's focus_bbox", same,
+           f"js {js_} py {py_}")
+    except ValueError:
+        ok("the map pages' focusBox runs under node", False, (r_.stdout + r_.stderr)[:300])
+else:
+    print("  (node not found: the map pages' focusBox not compared with focus_bbox here; CI compares them)")
 box, z = RM.focus_bbox(SC, {"MAHE N": 300, "OUTER": 300})
 ok("records far apart: the whole country", not z and box == SC["bbox"])
 ok("no records: the whole country", RM.focus_bbox(SC, {}) == (SC["bbox"], False))

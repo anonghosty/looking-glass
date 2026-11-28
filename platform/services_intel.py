@@ -264,7 +264,9 @@ class ServicesIntel:
             for r, ns in (data["sink_rep"].get(h) or {}).items():
                 for n in ns:
                     where[n][r] += 1
-        return {"hosts": len(inf_hosts), "share": round(len(inf_hosts) / max(1, len(hs)), 4),
+        # every share here is the raw fraction (0..1): the page words it with LGShare.pct, so 1 host of 30,000 never
+        # reads "0%" and 29,999 never "100%" (audit 2026-11-27, 8-2: rounded to 4 places it was 0 and 1)
+        return {"hosts": len(inf_hosts), "share": len(inf_hosts) / max(1, len(hs)),
                 "reports": [{"report": r, "hosts": c} for r, c in collections.Counter(
                     r for h in inf_hosts for r in (data["sink_rep"].get(h) or {})).most_common()],
                 "names": [{"name": n, "hosts": c, "code": small_codes.code_for(self.sink_code(base, n), c, full),
@@ -287,7 +289,7 @@ class ServicesIntel:
         for (lbl, v), h in data["vals"].get(base, {}).items():
             if (lbl, v) in show:
                 by[lbl].append({"value": v, "hosts": len(h), "records": sum(h.values()), "repeat_hosts": _repeat(h),
-                                "share": round(len(h) / max(1, len(hs)), 4)})
+                                "share": len(h) / max(1, len(hs))})
             else:
                 hidden[lbl] += 1
         patterns = []
@@ -312,7 +314,7 @@ class ServicesIntel:
                 continue
             labels = [_label(i) for i in items]
             combos.append({"items": labels, "records": n, "hosts": len(ch), "repeat_hosts": _repeat(ch),
-                           "share": round(len(ch) / max(1, len(hs)), 4), "code": combo_code(SECTION, base, base, labels)})
+                           "share": len(ch) / max(1, len(hs)), "code": combo_code(SECTION, base, base, labels)})
             if len(combos) >= 12:
                 break
         small = sum(1 for items, ch in proj_h.items() if items and len(ch) < MIN_HOSTS)
@@ -361,9 +363,9 @@ class ServicesIntel:
             if not p["values"] and not p["hidden"]:
                 continue
             kinds.append({"kind": p["label"], "distinct": p["shown"], "hidden": p["hidden"], "field": p["field"], "how": p["kind"],
-                          "values": [{"value": v["value"], "count": v["records"], "share": round(v["records"] / recs, 4),
+                          "values": [{"value": v["value"], "count": v["records"], "share": v["records"] / recs,
                                       "hosts": v["hosts"], "repeat_hosts": v["repeat_hosts"]} for v in p["values"]]})
-        combos = [{"items": c["items"], "count": c["records"], "share": round(c["records"] / recs, 4), "hosts": c["hosts"],
+        combos = [{"items": c["items"], "count": c["records"], "share": c["records"] / recs, "hosts": c["hosts"],
                    "repeat_hosts": c["repeat_hosts"], "code": c["code"]} for c in g["combinations"]]
         a = g["across"]
         multi = max(1, a["hosts_in_other_reports"])
@@ -376,11 +378,11 @@ class ServicesIntel:
                          "combinations_small": g["combinations_small"], "combo_of": "pattern items",
                          "single": None}],
             "across": {"devices": g["hosts"], "multi_devices": a["hosts_in_other_reports"],
-                       "cross_combos": [{"parts": x["parts"], "devices": x["hosts"], "share": round(x["hosts"] / multi, 4), "code": x["code"],
+                       "cross_combos": [{"parts": x["parts"], "devices": x["hosts"], "share": x["hosts"] / multi, "code": x["code"],
                                          "carries": x.get("carries")}
                                         for x in a["cross_patterns"]],
                        "cross_combos_total": len(a["cross_patterns"]),
-                       "report_sets": [{"reports": s["reports"], "devices": s["hosts"], "share": round(s["hosts"] / max(1, g["hosts"]), 4)}
+                       "report_sets": [{"reports": s["reports"], "devices": s["hosts"], "share": s["hosts"] / max(1, g["hosts"])}
                                        for s in a["report_sets"]],
                        "report_sets_total": len(a["report_sets"]), "shared": [], "shared_total": 0},
             "sinkholes": g["sinkholes"],
@@ -461,8 +463,9 @@ class ServicesIntel:
             # infection name should be moved to notes", not one code per report)
             all_reps = [r["report"] for r in reps]
             code = small_codes.code_for(self.sink_code(all_reps[0], n, all_reps), len(hs), full) if all_reps else None
+            # every services report of the name (the other-categories CSV writes one row per report), the most hosts first
             infections.append({"name": n, "hosts": len(hs), "code": code, "all_reports": all_reps,
-                               "reports": sorted(reps, key=lambda r: -r["hosts"])[:6]})
+                               "reports": sorted(reps, key=lambda r: (-r["hosts"], r["title"])), "reports_total": len(reps)})
             if with_hosts:                                 # only for the analysts (combo_review.py): ticked into a report
                 infections[-1]["ips"] = sorted(hs)
         # across reports: the exact pattern of each host over every report it is in (services reports with their pattern
@@ -539,7 +542,10 @@ class ServicesIntel:
                             # only for the analysts (combo_review.py): the hosts, for an issue ticked into a report
                             **({"ips": sorted(h)} if with_hosts else {})}
                            for i, h in sorted(issues.items(), key=lambda kv: -len(kv[1]))][:40],
-                "issues_total": len(issues), "infections": infections[:20], "infections_hosts": len({h for hs in names.values() for h in hs})}
+                # every infection name (a short list by nature: a family per name), with its count beside it
+                "issues_total": len(issues), "infections": infections, "infections_total": len(infections),
+                "infections_hosts": len({h for hs in names.values() for h in hs}),
+                "totals": {"services": len(services), "issues": len(issues), "infections": len(infections), "cross": len(xp)}}
 
     def host_flags(self, hosts, scope=None, load=True):
         """{host: {"infections", "issues", "cves"}} on a day (report_day.py scope): the infections each device calls a
@@ -575,7 +581,8 @@ class ServicesIntel:
         return Matcher(self, entry, scope)
 
     def infections_of(self, hosts, n=10):
-        """[(infection / category, hosts)] these hosts call botnet sinkholes as (network communications, days in memory)."""
+        """[(infection / category, hosts)] these hosts call botnet sinkholes as (network communications, days in memory),
+        the most hosts first. n: the top n; n=None: every one (Counter.most_common(None))."""
         inf = self.index()["infected"]
         c = collections.Counter(name for h in hosts for name in inf.get(h, ()))
         return c.most_common(n)
@@ -583,10 +590,14 @@ class ServicesIntel:
     def patterns_of(self, events, m):
         """(records with a host, {host: its exact cross-report pattern}) for a list of events, computed once and shared by
         every cross-report code matched against the same list (the Executive portal filters by several at a time)."""
-        key = (id(events), len(events), id(events[0]) if events else 0, id(events[-1]) if events else 0, id(m.data))
+        # the list and the counts themselves are kept with the result and compared by identity: an id() alone can be
+        # given again to a new list once the old one is freed, and the old result was then served for it (audit
+        # 2026-11-27, 8-9); holding them keeps them alive while they are the key
         with self.lock:
             hit = self.cache.get("patterns_of")
-            if not (hit and hit["key"] == key):
+            ends = (events[0], events[-1]) if events else ()
+            if not (hit and hit["events"] is events and hit["data"] is m.data and hit["n"] == len(events)
+                    and len(hit["ends"]) == len(ends) and all(a is b for a, b in zip(hit["ends"], ends))):
                 hit = None
         if hit is None:
             # once per list: each host's records and set of reports (cheap); patterns are worked out only when asked
@@ -597,7 +608,7 @@ class ServicesIntel:
                     mine.append(e); evs[h].append(e); reps[h].add(m.report(e))
             for h in reps:                                 # the sinkhole reports each host calls (the days in memory)
                 reps[h] |= set(m.sink_rep.get(h) or {})
-            hit = {"key": key, "mine": mine, "evs": evs, "reps": {h: frozenset(r) for h, r in reps.items()}, "pat": {}}
+            hit = {"events": events, "data": m.data, "n": len(events), "ends": ends, "mine": mine, "evs": evs, "reps": {h: frozenset(r) for h, r in reps.items()}, "pat": {}}
             with self.lock:
                 self.cache["patterns_of"] = hit
         want_reps = frozenset(r for r, _ in m.e.get("parts") or [])

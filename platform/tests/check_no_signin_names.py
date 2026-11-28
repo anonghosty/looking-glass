@@ -6,7 +6,8 @@
 Every GET route of the app is called in-process as each built-in role (administrators aside: they manage the accounts
 by sign-in name), with a colleague account in every role. No answer may contain the viewer's own sign-in name or any
 colleague's: not in the page source, a data- attribute, a script or a JSON answer. Allowed: the person's own Account
-page, and the audit portal for the auditor (the audit trail names accounts by sign-in name on purpose). Pages are the
+page, and the audit portal for the auditor (the audit trail and the access review name accounts by sign-in name on
+purpose: audit evidence, the owner 2026-11-27). Pages are the
 held copies in LG_HELD_DIR when there are any (the release that ships next), then templates/.
 
 Nothing is written: the account, session, counter and role stores are temporary files, the audit log is a list, and
@@ -40,6 +41,46 @@ if HELD:                                      # the templates that ship next (<n
     A.app.jinja_env.loader = ChoiceLoader([FunctionLoader(_held), A.app.jinja_env.loader])
 
 checks, fails = 0, []
+
+
+import io, zipfile  # noqa: E401,E402
+import test_tools  # noqa: E402
+PDFIUM = test_tools.find_pypdfium2()     # the PDFs' own text (this Python's, else the maintainer's)
+# the PDFs' text is read in the maintainer's suite (LG_SUITE=all: pypdfium2 is there, and missing it is a FAIL); an
+# installation's own run has no pypdfium2 (not one of its libraries) and checks the pages, the JSON answers and the text
+# files inside the ZIPs (2026-11-28: the fresh install's check stopped on the missing library)
+MAINT = os.environ.get("LG_SUITE") == "all"
+READ = {"pdf": 0, "zip": 0}
+
+
+def _pdf_text(data):
+    if PDFIUM is None:
+        if MAINT:
+            raise RuntimeError("pypdfium2 is needed to read the PDF answers")
+        return ""
+    doc = PDFIUM.PdfDocument(data)
+    meta = " ".join(str(v) for v in (doc.get_metadata_dict() or {}).values())
+    return meta + "\n" + "\n".join(doc[i].get_textpage().get_text_range() for i in range(len(doc)))
+
+
+def answer_text(r):
+    """An answer as text: pages, JSON and scripts as they are; a PDF's own text and properties; every file of a ZIP
+    (a PDF in it read as a PDF)."""
+    mt, data = r.mimetype or "", r.get_data()
+    if mt == "application/pdf" or data[:5] == b"%PDF-":
+        READ["pdf"] += 1
+        return _pdf_text(data)
+    if mt == "application/zip" or data[:4] == b"PK\x03\x04":
+        READ["zip"] += 1
+        out = []
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            for n in z.namelist():
+                b = z.read(n)
+                out += [n, _pdf_text(b) if b[:5] == b"%PDF-" else b.decode("utf-8", "replace")]
+        return "\n".join(out)
+    if mt.startswith("text/") or "json" in mt or "javascript" in mt or "csv" in mt:
+        return r.get_data(as_text=True)
+    return ""
 
 
 def ok(label, cond, info=""):
@@ -237,8 +278,7 @@ for role, (c, me) in CL.items():
         if r.status_code in (401, 403) or r.status_code >= 500:
             continue
         seen += 1
-        body = r.get_data(as_text=True) if r.mimetype and (r.mimetype.startswith("text/") or "json" in r.mimetype
-                                                           or "javascript" in r.mimetype) else ""
+        body = answer_text(r)
         names = set(NAME_RX.findall(body))
         if path.startswith(OWN):
             names.discard(me)
@@ -253,7 +293,9 @@ with real_open(notes_file, "w", encoding="utf-8") as fh:
                                                     "role": "researcher", "name": "Person AB", "at": 1.0, "date": "2026-11-25"}]}}, fh)
 A.NOTES.path, A.NOTES.mtime = notes_file, None
 extra = [f"/api/findings/people?kind={k}" for k in ("management", "researcher", "analyst", "advisor")] + \
-        ["/api/notes?section=infections&name=lg-check-family"]
+        ["/api/notes?section=infections&name=lg-check-family"] + \
+        [p + q for p in ("/api/insight/report?all=1&kind=infection&value=lg-check-family&metric=hosts", "/api/svc/report?all=1&metric=hosts")
+         for q in ("", "&format=pdf")]       # the analysis reports, as a ZIP (PDF and CSV) and as a PDF alone
 got_note = got_people = False
 for role, (c, me) in CL.items():
     for path in extra:
@@ -261,9 +303,10 @@ for role, (c, me) in CL.items():
         if r.status_code != 200:
             continue
         seen += 1
-        got_note = got_note or "A colleague's note." in r.get_data(as_text=True)
+        text = answer_text(r)                  # a PDF or ZIP as its own text
+        got_note = got_note or "A colleague's note." in text
         got_people = got_people or (path.startswith("/api/findings/people") and bool((r.get_json(silent=True) or {}).get("people")))
-        names = set(NAME_RX.findall(r.get_data(as_text=True)))
+        names = set(NAME_RX.findall(text))
         if names:
             hits.append(f"{role} GET {path}: {sorted(names)}")
 print(f"   {seen} answers read in {time.time() - t0:.0f}s ({len(paths)} GET routes x {len(CL)} roles; errors past the check: {len(errors)})")
@@ -273,6 +316,9 @@ ok("the walk read pages for every role", seen >= len(CL) * 5, seen)
 ok("…including a colleague's note and the people a finding can go to (so those checks are not empty)", got_note and got_people,
    (got_note, got_people))
 print(f"   not read (an error without the reports database or a refused write): {sorted(broken)}")
+ok("...including PDF and ZIP answers, read as their own text (so the downloads are checked too)" if MAINT else
+   "...including the ZIP answers' text files (the PDFs' own text: in the maintainer's suite)",
+   READ["pdf"] > 0 and READ["zip"] > 0 and (PDFIUM is not None or not MAINT), READ)
 
 print("3. The page sources")
 tdir = os.path.join(os.path.dirname(HERE), "templates")

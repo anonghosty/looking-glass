@@ -71,7 +71,10 @@ ok("…tlsInsecure / tlsAllowInvalid* never appear", "tlsInsecure" not in src an
 print("Both programs use it")
 here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ok("the platform connects through it", "db_connect.kwargs" in open(os.path.join(here, "app.py"), encoding="utf-8").read())
-db = next((d for d in ("../database", "../shadowserver") if os.path.isfile(os.path.join(here, d, "db_connect.py"))), None)
+# the pipeline that ships with this platform: LG_DB_DIR / LG_PIPELINE_DIR when the suite names it (the release run's held
+# pipeline), else the release layout's ../database, else ../shadowserver
+db = next((d for d in (os.environ.get("LG_DB_DIR", ""), os.environ.get("LG_PIPELINE_DIR", ""), "../database", "../shadowserver")
+           if d and os.path.isfile(os.path.join(here, d, "db_connect.py"))), None)
 if db:
     same = open(os.path.join(here, db, "db_connect.py"), encoding="utf-8").read() == src
     ok("the pipeline ships the same db_connect.py", same)

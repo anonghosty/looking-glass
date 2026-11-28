@@ -39,5 +39,8 @@ def install(app, ctx):
     d = delay()
     if index_refresh.SERVING and d > 0 and hasattr(api, "warm"):
         state["started"] = True
-        threading.Timer(d, run).start()
+        timer = threading.Timer(d, run)
+        timer.daemon = True                                # never holds the service up at a stop (audit 2026-11-27, 1-11)
+        timer.name = "acode-warm"
+        timer.start()
     return state

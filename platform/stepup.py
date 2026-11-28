@@ -25,6 +25,7 @@ import time
 from flask import g, jsonify, redirect, render_template, request
 
 import passkeys
+import reqjson
 import signin_check
 import system_alerts
 from user_words import words
@@ -45,6 +46,14 @@ RULES = [
     ({"POST"}, r"/api/admin/invites(/[^/]+/revoke)?", None, "accounts", True),
     ({"POST"}, r"/api/settings", None, "settings", False),
     ({"POST"}, r"/api/admin/config", None, "settings", False),
+    # the whole-codebase audit (2026-11-27, the user: "add to all"): the pipeline's API key, settings and held release,
+    # the organisation printed on advisories, the password policy (forcing every account: every time), and a decided
+    # review's ZIP of unmasked addresses (its in-browser PDF preview opens in the browser's viewer and stays a view)
+    ({"POST"}, r"/api/pipeline/(apikey|settings|release)", None, "settings", False),
+    ({"POST"}, r"/api/organisation", None, "settings", False),
+    ({"POST"}, r"/api/password-policy", None, "accounts", False),
+    ({"POST"}, r"/api/password-policy/force", None, "accounts", True),
+    ({"GET"}, r"/review/[^/]+/report", lambda: request.args.get("as") != "pdf", "export", False),
     ({"POST"}, r"/api/admin/quarterly/purge", None, "purge", False),
     ({"POST"}, r"/api/advisory/[^/]+/(generate|send)", None, "advisory", False),
     # every change to a target (save, on, off, scope, TLP, key, delete); testing changes nothing and needs no check
@@ -53,7 +62,7 @@ RULES = [
     # how sign-in is checked (signin_check.py): with passkeys in force, going back to codes needs a passkey
     ({"POST"}, r"/api/admin/signin-check", None, "signin", True),
     # Settings -> Update (platform_update.py): installing a release; looking for one changes nothing and needs no check
-    ({"POST"}, r"/api/admin/update", lambda: (request.get_json(silent=True) or {}).get("kind") == "update", "update", True),
+    ({"POST"}, r"/api/admin/update", lambda: _json().get("kind") == "update", "update", True),
 ]
 WORDS = {"export": "download a complete or unmasked list", "reveal": "show leaked accounts unmasked",
          "trace": "trace a leak", "accounts": "change accounts, roles or sign-up links",
@@ -62,8 +71,18 @@ WORDS = {"export": "download a complete or unmasked list", "reveal": "show leake
          "passkeys": "add or remove a passkey", "signin": "change how sign-in is checked",
          "update": "update Looking Glass"}
 _RULES = [(m, re.compile(p + r"\Z"), t, k, e) for m, p, t, k, e in RULES]
+# the permission a path's change needs, where it is certain (the route refuses without it: app.py api_settings)
+NEEDS_PERM = {"/api/settings": "settings", "/api/pipeline/apikey": "settings", "/api/pipeline/settings": "settings",
+              "/api/pipeline/release": "settings", "/api/organisation": "settings", "/api/password-policy": "settings",
+              "/api/password-policy/force": "settings"}
 # the pages and calls a person may use while they still have to register their passkeys (public installations)
 ENROL_OPEN = ("/account", "/api/passkeys", "/api/me", "/logout", "/static/", "/welcome")
+
+
+def _json():
+    """The request's JSON body when it is an object, else {}: a list or a number as the body must not turn the gate or
+    a route into an error 500 (audit 2026-11-27, 8-8). The one shared helper (reqjson.py), used by the other routes too."""
+    return reqjson.body()
 
 
 def _arg(name):
@@ -71,7 +90,7 @@ def _arg(name):
     if v is None and request.method == "POST":
         v = request.form.get(name)
         if v is None and request.is_json:
-            v = (request.get_json(silent=True) or {}).get(name)
+            v = _json().get(name)
     return None if v is None else str(v)
 
 
@@ -93,6 +112,7 @@ def install(app, ctx):
     users, sessions, audit, throttle = ctx["users"], ctx["sessions"], ctx["audit"], ctx["throttle"]
     csrf_ok, totp_check = ctx["csrf_ok"], ctx["totp_check"]
     people_name = ctx.get("people_name") or (lambda n: n)
+    has_perm = ctx.get("has_perm")
     store = passkeys.Store(os.path.join(ctx["base_dir"], "data", "passkeys.json"))
     challenges = passkeys.Challenges()
     grants, glock = {}, threading.Lock()
@@ -153,6 +173,11 @@ def install(app, ctx):
         if not hit:
             return None
         kind, every = hit
+        # a change the person may not make at all: no "confirm it is you" first, the route refuses it with its own words
+        # (2026-11-26: an account without the Settings permission was asked to confirm, then refused). Only where the
+        # permission is certain: a wrong one would let a permitted change through without the check.
+        if has_perm and p in NEEDS_PERM and not has_perm(NEEDS_PERM[p]):
+            return None
         if kind == "passkeys" and public() and session_field("needs_passkeys") and store.count(u["user"]) < passkeys.MIN_PUBLIC:
             return None                      # registering the first passkeys right after signing in
         if every:
@@ -188,7 +213,7 @@ def install(app, ctx):
         return out
 
     def target():
-        b = request.get_json(silent=True) or {}
+        b = _json()
         m, p = str(b.get("method") or "").upper()[:8], str(b.get("path") or "")[:300]
         return (m, p if p.startswith("/") else "")
 
@@ -209,7 +234,7 @@ def install(app, ctx):
         ip, _ = client()
         if throttle.locked(ip, name):
             return jsonify(error="Too many wrong codes. Wait a few minutes."), 429
-        code = re.sub(r"\s+", "", str((request.get_json(silent=True) or {}).get("code") or ""))[:12]
+        code = re.sub(r"\s+", "", str(_json().get("code") or ""))[:12]
         if not code:                                   # nothing typed: not an attempt, nothing counted
             return jsonify(error="Type the code from your authenticator app."), 400
         with users.lock:
@@ -251,7 +276,7 @@ def install(app, ctx):
         rp, origin = passkeys.rp_of(request.host, request.is_secure)
         if not rp:
             return jsonify(error=origin), 400
-        b = request.get_json(silent=True) or {}
+        b = _json()
         if not isinstance(b.get("credential"), dict) or not b["credential"].get("id"):
             return jsonify(error="No passkey answer was sent."), 400       # not an attempt, nothing counted
         try:
@@ -301,7 +326,7 @@ def install(app, ctx):
         rp, origin = passkeys.rp_of(request.host, request.is_secure)
         if not rp:
             return jsonify(error=origin), 400
-        b = request.get_json(silent=True) or {}
+        b = _json()
         enrolling = bool(public() and session_field("needs_passkeys"))     # the first two, right after signing in
         try:
             passkeys.register(store, challenges, "reg:" + skey(), name, b.get("credential") or {}, b.get("name"), rp, origin)
@@ -322,7 +347,7 @@ def install(app, ctx):
         name = me()
         if not name or not csrf_ok():
             return jsonify(error="Refused (sign in again)."), 403
-        if not store.rename(name, pid[:16], (request.get_json(silent=True) or {}).get("name")):
+        if not store.rename(name, pid[:16], _json().get("name")):
             return jsonify(error="No such passkey."), 404
         return jsonify(ok=True, passkeys=store.public_list(name))
 

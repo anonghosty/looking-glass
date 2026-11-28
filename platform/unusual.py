@@ -76,7 +76,12 @@ def install(app, ctx):
     decisions = Decisions(os.path.join(data, "decisions.json"))
     network = ctx.get("network") or (lambda asn: f"AS{asn}")
     svc_label = ctx.get("svc_label") or (lambda name: name)
-    people_name = ctx.get("people_name") or (lambda n: n)
+    full_name = ctx.get("people_name") or (lambda n: "")
+
+    def people_name(n):
+        """The full name, else the person code, never the sign-in name (audit 2026-11-27, the rule of 8-3)."""
+        import people
+        return full_name(n) or people.person_label(n)
 
     def titles():
         facts = (_read(os.path.join(base, "data", "report_map.json")) or {}).get("facts") or {}
@@ -130,7 +135,10 @@ def install(app, ctx):
         c["asn"] = s.get("asn")
         c["network"] = "the whole constituency" if s.get("asn") in ("*", None) else net_name(s["asn"])
         c["report_names"] = [title(r) for r in s.get("reports") or []]
-        c["words"] = pd.words(s, title, net_name)
+        # a watched thread with fewer than 3 days of history has no normal yet: pd.words would format None and turn the
+        # whole page into an error 500 (found by tests/check_fix_b08.py, 2026-11-27)
+        c["words"] = (pd.words(s, title, net_name) if s.get("new") or s.get("normal") is not None
+                      else "Not enough days yet to know its normal.")
         c["history"] = [{"day": d, "value": v} for d, v in s.get("history") or []]
         c["links"] = links(s, plat_of(s["reports"][0]) if s.get("reports") else "comms")
         c["learned"] = pd.learned_words(s, learned, title) if learned and s.get("asked_from") is not None else ""
@@ -241,7 +249,8 @@ def install(app, ctx):
             return None, (jsonify(error="Refused (sign in again)."), 403)
         if not TID_RX.match(tid):
             abort(404)
-        return (request.get_json(silent=True) or {}), None
+        b = request.get_json(silent=True)
+        return (b if isinstance(b, dict) else {}), None    # a list as the body: "Give it a name", not an error 500
 
     @app.route("/api/unusual/<tid>/confirm", methods=["POST"])
     def api_unusual_confirm(tid):
@@ -314,8 +323,10 @@ def install(app, ctx):
         for day, lst in sorted((st.get("week") or {}).items()):
             keep = [s for s in lst if not quiet(s, dec["dismissed"], now)]
             days.append({"day": day, "unusual": len(keep)})
-        top = [pd.words(s, title, net_name) for s in (st.get("suggestions") or [])
-               if not quiet(s, dec["dismissed"], now) and s["id"] not in dec["confirmed"]][:5]
-        return jsonify(ready=bool(st), day=st.get("day"), days=days, top=top, confirmed=len(dec["confirmed"]))
+        open_ = [s for s in (st.get("suggestions") or []) if not quiet(s, dec["dismissed"], now) and s["id"] not in dec["confirmed"]]
+        top = [pd.words(s, title, net_name) for s in open_[:5]]
+        # the strongest 5 of the latest day, with how many there are ("5 of 23 unusual threads" on the card)
+        return jsonify(ready=bool(st), day=st.get("day"), days=days, top=top, confirmed=len(dec["confirmed"]),
+                       more=max(0, len(open_) - len(top)), totals={"top": len(open_)})
 
     return {"decisions": decisions, "quiet": quiet}

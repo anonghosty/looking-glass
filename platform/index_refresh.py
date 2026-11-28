@@ -25,8 +25,11 @@ import sys
 import threading
 import time
 
+from security import public_error
+
 SERVING = "gunicorn" in os.path.basename(sys.argv[0] if sys.argv else "")
 RETRY_SECONDS = 30
+WAIT_SECONDS = 600                               # how long a request waits for a count another request is running
 log = logging.getLogger("looking-glass")
 GATES = []                                       # every gate (the task monitor)
 
@@ -61,7 +64,12 @@ class Gate:
                 threading.Thread(target=self._quiet, args=(sk, ev, build), daemon=True, name=f"{self.name}-{sk}").start()
             return stale
         if not mine:                             # a count is running: wait for it rather than count twice
-            ev.wait(600)
+            if not ev.wait(WAIT_SECONDS):
+                # still counting after the wait: the earlier counts, else say so; never a second count beside the first
+                # (audit 2026-11-27, 5-10: a long count was started again by every request that waited)
+                if stale is not None:
+                    return stale
+                raise RuntimeError(f"{self.name}: the counts are still being worked out; try again in a moment")
             got = build(cached_only=True)
             if got is not None:
                 return got
@@ -96,7 +104,9 @@ class Gate:
             self.failures += 1
             with self.lock:
                 self.failed_at[sk] = time.time()
-            self.last_error = (time.time(), sk, f"{type(e).__name__}: {e}"[:300])
+            # the bell shows it: words only, never a library's exception text (it can name the database's address);
+            # the full error is in the log just below (2026-11-26)
+            self.last_error = (time.time(), sk, public_error(e, "the database could not be reached or answered with an error"))
             log.exception("%s: counting %s failed; the earlier counts are kept", self.name, sk)
             raise
         finally:

@@ -30,6 +30,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import address_blocks
+import counting_keys as _ck
 import issue_tags
 import load_stamps
 from respcache import settled
@@ -41,10 +42,23 @@ CORE = ("ip", "port", "protocol", "asn", "geo", "region", "city", "hostname", "n
         "category")
 USED = set(CORE) | {"_id", "timestamp", "extracted_date", "logged_date", "filename", "line_hash", "hostname_source",
                     "device_vendor", "device_type", "device_model", "device_version", "version"}
-EXTRA_MAX = 300
+# the longest text kept per field of a record in memory (a day can hold a million records; a banner or a page body a
+# host sends can be any size). Longer text is shortened and says so in words, never cut silently (audit 2026-11-27:
+# extras were cut at 300 characters with "…", product at 80 and version at 60 without a word)
+EXTRA_MAX = 2000
+
+
+def fit_text(s, limit=EXTRA_MAX):
+    """s whole when it fits; otherwise its first `limit` characters and a sentence saying how much was left out."""
+    if len(s) <= limit:
+        return s
+    return s[:limit] + f" [shortened: the first {limit:,} of {len(s):,} characters are kept]"
 # Read but never used nor kept by normalise_service (in USED, not read by it): left out of the day load. extracted_date
 # and _id stay (the event time and the row id); the filename is only the query.
 SKIP = {"timestamp": 0, "logged_date": 0, "filename": 0, "line_hash": 0, "hostname_source": 0}
+# the day loader reads the file name and line hash too (one row per report day and line: counting_keys.Dedup), and
+# takes them off each row before it is prepared (never kept, never sent)
+FETCH_SKIP = {k: v for k, v in SKIP.items() if k not in ("filename", "line_hash")}
 SEV_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4, "": 5}
 
 # readable service names (from the collection name)
@@ -246,12 +260,11 @@ def normalise_service(doc, src):
     for k, v in doc.items():
         if k in USED or v in (None, ""):
             continue
-        sv = _s(v)
-        extras[k] = sv if len(sv) <= EXTRA_MAX else sv[:EXTRA_MAX] + "…"
+        extras[k] = fit_text(_s(v))
     return {
         **out, "tags": tags, "issues": issues, "vulnerable": bool(issues),
-        "vendor": _s(g("device_vendor")), "device_type": _s(g("device_type")), "product": product[:80],
-        "version": _s(g("version") or g("device_version") or g("serverid_version"))[:60],
+        "vendor": _s(g("device_vendor")), "device_type": _s(g("device_type")), "product": fit_text(product),
+        "version": fit_text(_s(g("version") or g("device_version") or g("serverid_version"))),
         "report": src["name"], "report_label": src["label"], "family": src["family"], "service": src["label"],
         "extras": extras,
     }
@@ -309,14 +322,22 @@ class ServiceStore:
         def rows():
             # streamed, without the fields normalise_service() throws away (see app.DayStore._fetch_collection)
             if src["filename_index"]:
-                for d in c.find({"$or": [{"filename": {"$regex": "^" + re.escape(p)}} for p in self._prefixes(start)]}, SKIP):
+                for d in c.find({"$or": [{"filename": {"$regex": "^" + re.escape(p)}} for p in self._prefixes(start)]}, FETCH_SKIP):
                     seen[0] = True
                     yield d
             if not seen[0] and self.fallback_scan:
-                yield from c.find({"extracted_date": {"$gte": start, "$lt": end}}, SKIP)
+                yield from c.find({"extracted_date": {"$gte": start, "$lt": end}}, FETCH_SKIP)
 
         out, last = [], None
+        # count audit round 2 (2026-11-26), as app.DayStore._fetch_collection: a row in two files of one report day is
+        # kept once; the rows of the day's own report file dated outside the days it can be shown on, or without a
+        # time, are counted (counting_keys.Rows) and stated
+        dd = _ck.Dedup()
+        own = end.strftime("%Y-%m-%d")
+        late = {"outside": 0, "undated": 0}
         for d in rows():
+            fn = str(d.pop("filename", "") or "")
+            lh = d.pop("line_hash", None)
             ed = d.get("extracted_date")
             if isinstance(ed, str):
                 try:
@@ -324,10 +345,18 @@ class ServiceStore:
                 except ValueError:
                     ed = None
             if not isinstance(ed, datetime):
-                continue
-            if ed.tzinfo is None:
+                ed = None
+            elif ed.tzinfo is None:
                 ed = ed.replace(tzinfo=timezone.utc)
+            if fn.startswith(own):
+                w = _ck.window(ed, start, end + timedelta(days=1))
+                if w != "in" and dd.first(src["name"], fn, lh):
+                    late[w] += 1
+            if ed is None:
+                continue
             if start <= ed < end:
+                if not dd.first(src["name"], fn, lh):
+                    continue
                 n = normalise_service(d, src)
                 n["id"] = f"{src['name']}:{d['_id']}"
                 n["_t"] = ed.timestamp()
@@ -337,7 +366,7 @@ class ServiceStore:
                 gt = getattr(d.get("_id"), "generation_time", None)
                 if gt and (last is None or gt > last):
                     last = gt
-        return out, last
+        return _ck.Rows(out, dups=dd.dups, **late), last
 
     def _load(self, start, old=None):
         """Load a day; with `old` (the copy in memory, same constituency) the reports whose row count has not changed
@@ -367,11 +396,12 @@ class ServiceStore:
                     asn[str(e["asn"])] += 1
                 region[e["region"]] += 1
             raw = len(rows)
+            notes = {k: getattr(rows, k, 0) for k in ("dups", "outside", "undated")}   # counting_keys.Rows
             # the address blocks, for Settings → Constituency (address_blocks.py), before the constituency
             blocks = address_blocks.tally(rows, (("ip", "asn"),))
             if st is not None and st.restricted:
                 rows = [e for e in rows if st.in_scope(e["asn"], e["ip"])]
-            by_src[s["name"]] = {"raw": raw, "asn": asn, "region": region, "blocks": blocks, "rows": rows, "last": last}
+            by_src[s["name"]] = {"raw": raw, "asn": asn, "region": region, "blocks": blocks, "rows": rows, "last": last, **notes}
         names = {s["name"] for s in srcs}
         for n, b in keep.items():
             if n in names:
@@ -395,6 +425,7 @@ class ServiceStore:
         if sig is not None:
             load_stamps.counted(day, stamp, t0)
         day.raw_total, day.asn_raw, day.region_raw, day.block_raw = raw_total, asn_raw, region_raw, block_raw
+        day.load_notes = _ck.notes_of(by_src)        # rows kept once / dated outside / without a time (count audit)
         day.version = hashlib.md5(json.dumps([sorted(per.items()), sv]).encode(), usedforsecurity=False).hexdigest()[:10]
         if self.log:
             self.log.warning("Services: loaded %s: %d records from %d reports in %.1fs%s", start.date(), len(events), len(per), time.time() - t0,
@@ -465,7 +496,11 @@ class ServiceStore:
                     for k in [k for k in self.days if k < start - timedelta(days=2)]:
                         del self.days[k]
                 return new
-            return new
+            # the constituency changed during each of three loads: the last one is of an older constituency, so it is
+            # neither kept nor shown (audit 2026-11-27: it was returned); an empty day now, the next request loads again
+            if self.log:
+                self.log.warning("Services: the constituency changed during three loads of %s; loading again at the next request", start.date())
+            return Day(start, [])
         except Exception:
             if self.log:
                 self.log.exception("Services: day load failed for %s", start.date())
@@ -515,12 +550,14 @@ class ServiceStore:
 
 
 # ---------------------------------------------------------------------------------------------- filtering
-SCALAR = ("family", "report", "severity", "service", "port", "protocol", "city", "region", "asn", "sector",
+# sector: the network type of the host's AS number (data/asns.json, counting_keys.sector_now), as on every page;
+# industry: Shadowserver's own `sector` column, shown as "Industry (Shadowserver)" (the user, 2026-11-26)
+SCALAR = ("family", "report", "severity", "service", "port", "protocol", "city", "region", "asn", "sector", "industry",
           "vendor", "device_type", "product", "version", "ip", "hostname", "geo")
 LISTS = ("tag", "issue")
 FILTER_KEYS = SCALAR + LISTS + ("vulnerable",)
 EMPTY = {"vendor": "unknown vendor", "device_type": "unknown type", "product": "unknown product", "severity": "unrated",
-         "city": "unknown city", "sector": "unknown sector"}
+         "city": "unknown city", "industry": "not given"}
 
 
 # product, vendor, device type and version come from the hosts' own banners, so they can carry the host's name or
@@ -582,6 +619,19 @@ def matches(e, flt):
         elif type(vals) is MaskedValues:
             if banner_mask(e.get(k) or "") not in vals:
                 return False
+        elif k == "sector":
+            if _ck.sector_now(e.get("asn")) not in vals:
+                return False
+        elif k == "industry":
+            if _ck.industry_of(e.get("sector")) not in vals:
+                return False
+        elif k == "region":
+            # the lists offer a region in its one spelling (counting_keys.region_key: "Nairobi" for NAIROBI and Nairobi,
+            # "Unknown region" for none or the country itself); a value as stored still matches
+            if e.get(k) not in vals and _ck.region_key(e.get(k)) not in vals:
+                return False
+        elif k == "asn" and "" in vals and not _ck.norm_asn(e.get(k)):
+            continue        # "Unknown network": every record the counting rule reads as none (0, "AS0", "-"; review 2026-11-27)
         elif e.get(k) not in vals:
             return False
     return True

@@ -11,7 +11,8 @@ import json
 import urllib.parse
 import urllib.request
 
-get = lambda p: json.load(urllib.request.urlopen("http://127.0.0.1:5000" + p, timeout=120))  # nosec B310  # this computer's own service
+# this installation's own address and port (lgauth.BASE: LG_PORT in .env, https when HTTPS is on), not a fixed :5000
+get = lambda p: json.load(urllib.request.urlopen(lgauth.BASE + p, timeout=120))  # nosec B310  # this computer's own service
 facets = get("/api/facets")
 names = [r["value"] for r in facets["infection"]]
 print(f"{len(names)} infections on {facets['day']}\n")

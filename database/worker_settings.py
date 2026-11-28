@@ -78,9 +78,12 @@ FIELDS = [
     ("MS_FOLDER", "email", "Mailbox folder", "folder", "inbox", None, None, "The folder holding the reports.", "microsoft_graph"),
     ("IMAP_FETCH_BATCH", "email", "Messages per fetch", "int", "25", 1, 500, "E-mails downloaded per request.", "imap"),
     ("IMAP_VERIFY_TLS", "email", "Check the mail server's certificate", "bool", "true", None, None,
-     "Off only for a self-signed certificate: with it off, someone on the network path could read the mailbox.", "imap"),
+     "Keep it on. Off only for a mail server that has always used its own (self-signed) certificate, or for a short "
+     "while when its certificate expired and is being renewed: with it off, someone on the network path could read the "
+     "mailbox password and hand over forged reports. Switching it off is confirmed on the server (confirm_request.sh); "
+     "while it is off, the administrators' bell says so every day.", "imap"),
     ("MAIL_TIMEOUT", "email", "Mail server timeout (seconds)", "int", "120", 5, 600, "How long to wait for the mail server.", None),
-    ("WORKERS", "load", "Loader processes", "int", "6", 1, 64, "Parallel processes loading reports into MongoDB (each 100-200 MB of memory).", None),
+    ("WORKERS", "load", "Loader processes", "int", "6", 1, 64, "Parallel processes loading reports into MongoDB (each 100-200 MB of memory). When not set: 6, or the number of processor cores on a computer with fewer.", None),
     ("INSERT_CHUNK", "load", "Records per insert", "int", "2000", 100, 100000, "Records written to MongoDB at a time.", None),
     ("DOWNLOAD_THREADS", "load", "Download threads", "int", "4", 1, 32, "Reports downloaded from Shadowserver links at the same time.", None),
     ("ZIP_MAX_UNPACKED_MB", "unzip", "Largest unpacked size (MB)", "int", "2048", 16, 1048576,

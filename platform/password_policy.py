@@ -26,6 +26,8 @@ import time
 from flask import g, jsonify, request
 from werkzeug.security import check_password_hash
 
+import reqjson
+
 PASSWORD_DAYS_MIN, PASSWORD_DAYS_MAX, PASSWORD_DAYS_DEFAULT = 1, 3650, 90
 
 
@@ -97,12 +99,27 @@ def check_own_password(ctx, failed_event, failed_detail, need="This needs a sign
     throttle = ctx["throttle"]
     if throttle.locked(ip, name):
         return jsonify(error=f"Too many wrong passwords. Try again in {throttle.wait_minutes(ip, name)} minutes."), 429
-    pw = str((request.get_json(silent=True) or {}).get("password") or "")
+    pw = str(reqjson.body().get("password") or "")
     if not (u.get("hash") and check_password_hash(u["hash"], pw)):
         throttle.failed(ip, name)
         ctx["audit"].add(failed_event, user=name, detail=failed_detail)
         return jsonify(error="That password is not right."), 403
     return None
+
+
+def shown_name(users, username):
+    """Who changed the policy, as the Settings card shows it: the full name, else the person code; never the sign-in name
+    (data/password_policy.json and the audit log keep that; audit 2026-11-27, 6-6)."""
+    if not username:
+        return ""
+    try:
+        full = str((((users.get(username) or {}).get("profile") or {}).get("full_name")) or "").strip()
+    except Exception:                    # noqa: BLE001  (the accounts file is being rewritten: the code this once)
+        full = ""
+    if full:
+        return full
+    import people
+    return people.person_label(username)
 
 
 def install(app, ctx):
@@ -129,7 +146,7 @@ def install(app, ctx):
         accounts = [u for n, u in users.all().items() if u.get("status") == "active" and not n.startswith("lg-selftest-")]
         due = sum(1 for u in accounts if policy.expired(u)[0])
         return {"enabled": p["enabled"], "days": p["days"], "since": when(p["enforced_at"]), "forced": when(p["forced_at"]),
-                "by": p["by"], "accounts": len(accounts), "due": due,
+                "by": shown_name(users, p["by"]), "accounts": len(accounts), "due": due,
                 "min": PASSWORD_DAYS_MIN, "max": PASSWORD_DAYS_MAX}
 
     @app.route("/api/password-policy")
@@ -142,7 +159,7 @@ def install(app, ctx):
         bad = guard(change=True) or own_password()
         if bad:
             return bad
-        b = request.get_json(silent=True) or {}
+        b = reqjson.body()
         enabled = bool(b.get("enabled"))
         try:
             days = int(b.get("days"))

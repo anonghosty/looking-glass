@@ -27,6 +27,7 @@ import time
 from flask import g, jsonify, request
 
 import pdf_refs
+import people
 import filesig  # noqa: E402
 
 CVE_RX = re.compile(r"^CVE-\d{4}-\d{4,7}$", re.I)
@@ -95,7 +96,8 @@ def build_rows(auto, kinds, rated, people_name=None):
                "source": "shadowserver" if sev else ("researcher" if rl else "")}
         if rl:
             by = r.get("by") or ""
-            row.update(rated_by=(people_name(by) if people_name else "") or by, rated_at=str(r.get("at") or ""),
+            # the full name, else the person code (people.person_label), never the sign-in name (audit 2026-11-27, 8-3)
+            row.update(rated_by=(people_name(by) if people_name else "") or people.person_label(by), rated_at=str(r.get("at") or ""),
                        rated_level=rl, replaced=bool(sev))
         out.append(row)
     order = {lv: i for i, lv in enumerate(pdf_refs.LEVELS)}
@@ -139,7 +141,8 @@ def install(app, ctx):
             return jsonify(error="Only researchers and administrators rate names."), 403
         if not ctx["csrf_ok"]():
             return jsonify(error="Refused (the request did not come from this page)."), 403
-        b = request.get_json(silent=True) or {}
+        b = request.get_json(silent=True)
+        b = b if isinstance(b, dict) else {}               # a list as the body: a 400 below, not an error 500
         name, level = str(b.get("name") or "").strip(), str(b.get("level") or "").strip().lower()
         if not NAME_RX.match(name) or CVE_RX.match(name):
             return jsonify(error="Not a name this map rates."), 400

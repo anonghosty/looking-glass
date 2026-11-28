@@ -65,18 +65,20 @@ bc_encrypt() {
   rm -f "$clean"
   return $rc
 }
-bc_decrypt() {
-  local f="$1" id="$2"
+# in a subshell of its own: the temporary copy of the PRIVATE key (age) or the keyring it is imported into (GnuPG) goes
+# on every way out, also when the check is stopped while it decrypts (Ctrl-C, a kill; audit 2026-11-27: left in /tmp)
+bc_decrypt() (
+  f="$1"; id="$2"; tk=""
+  trap 'rm -rf "$tk"' EXIT; trap 'exit 130' INT TERM HUP
   case "$f" in
     *.age)
-      command -v age >/dev/null || { echo "age is not installed (sudo apt install age)" >&2; return 2; }
-      local cid rc; cid="$(bc_clean "$id")"                 # a private key saved on Windows too
-      age -d -i "$cid" "$f"; rc=$?; rm -f "$cid"; return $rc ;;
+      command -v age >/dev/null || { echo "age is not installed (sudo apt install age)" >&2; exit 2; }
+      tk="$(bc_clean "$id")"                                # a private key saved on Windows too
+      age -d -i "$tk" "$f" ;;
     *.gpg)
-      local home; home="$(mktemp -d)"; chmod 700 "$home"
-      gpg --homedir "$home" --batch --quiet --no-tty --import "$id" 2>/dev/null
-      gpg --homedir "$home" --quiet --pinentry-mode loopback --output - --decrypt "$f"
-      local rc=$?; rm -rf "$home"; return $rc ;;
+      tk="$(mktemp -d)"; chmod 700 "$tk"
+      gpg --homedir "$tk" --batch --quiet --no-tty --import "$id" 2>/dev/null
+      gpg --homedir "$tk" --quiet --pinentry-mode loopback --output - --decrypt "$f" ;;
     *) cat "$f" ;;     # an unencrypted backup (made with --unencrypted, or before backups were encrypted)
   esac
-}
+)

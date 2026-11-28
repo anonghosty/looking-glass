@@ -71,12 +71,26 @@
       q.append(el("b", null, `Their finding ${x.number}: ${x.title}`), el("p", null, x.text || ""), el("small", null, `${x.role || "Researcher/TI"}: ${x.by}`));
       rs.append(q);
     }
-    for (const n of d.researcher.notes || []) {
+    // the first 12 notes, never cut without a word (audit 2026-11-27, 11-7): "12 of N", with a button for the rest
+    // when the server sent them (it sends 12 today: combo_review.py)
+    const notes = d.researcher.notes || [];
+    const notesTotal = Math.max(notes.length, Number(d.researcher.notes_total ?? d.researcher.totals?.notes) || 0);
+    const quote = (x) => {
       const q = el("blockquote", "rv-quote r");
-      q.append(el("b", null, `${n.role}: ${n.by} · ${n.date || ""}`), el("p", null, n.text));
-      rs.append(q);
+      q.append(el("b", null, `${x.role}: ${x.by}${x.date ? ` · ${x.date}` : ""}`), el("p", null, x.text));
+      return q;
+    };
+    for (const x of notes.slice(0, 12)) rs.append(quote(x));
+    if (notesTotal > Math.min(12, notes.length)) {
+      const more = el("p", "rv-what rv-notes-more", `The first ${Math.min(12, notes.length)} of ${notesTotal} notes on this combination. `);
+      if (notes.length > 12) {
+        const b = el("button", "pill-btn", `Show all ${notes.length}`); b.type = "button";
+        b.addEventListener("click", () => { more.before(...notes.slice(12).map(quote)); more.remove(); });
+        more.append(b);
+      }
+      rs.append(more);
     }
-    if (!d.researcher.finding && !(d.researcher.notes || []).length) rs.append(el("p", "fd-empty", "No note from the researchers on this combination yet."));
+    if (!d.researcher.finding && !notes.length) rs.append(el("p", "fd-empty", "No note from the researchers on this combination yet."));
     const as = el("section", "rv-card rv-analyst");
     as.append(el("h2", null, "What the analyst is saying"), el("p", "rv-what", rv.drill_code ? `The devices drilled down to (${rv.drill_code}), from ${rv.source}` : `The request on ${rv.source}`));
     if (f.text) {

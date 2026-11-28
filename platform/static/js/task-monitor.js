@@ -104,9 +104,35 @@
     else {
       pipe.append(last ? el("p", last.ok ? "tm-okline" : "tm-badline",
         `Last run ${new Date(last.finished * 1000).toISOString().replace("T", " ").slice(0, 16)} UTC: ${last.ok ? "went well" : "had problems"}`
-        + ` · ${fmt(last.rows_inserted)} new rows${last.file_errors ? ` · ${last.file_errors} file errors` : ""}${last.email_failed ? " · mailbox not read" : ""}`
+        + ` · ${fmt(last.rows_inserted)} new rows${last.file_errors ? ` · ${last.file_errors} file errors` : ""}${last.email_failed ? ` · mailbox not read${last.email_error ? `: ${last.email_error}` : ""}` : ""}`
         + (last.pruned_files ? ` · ${last.pruned_files} old copies removed (${last.pruned_mb} MB)` : ""))
         : el("p", "muted", "No run recorded yet (written after the next run)."));
+      if (last && last.rows_read != null) {
+        // every row read and where it went (the pipeline's run_problems, count audit 2026-11-26): the parts add up to the
+        // rows read
+        const parts = [[last.rows_inserted, "new"], [last.rows_duplicates, "already stored"],
+          [last.rows_same_in_file, "repeated in the same file (stored once)"],
+          [last.rows_same_hash, "not stored (same row hash as another row)"],
+          [last.rows_bad_timestamp, "not stored (timestamp unreadable)"], [last.rows_bad_csv, "not stored (could not be read as CSV)"],
+          [last.rows_failed, "not written (tried again next run)"]]
+          .filter(([n]) => n).map(([n, w]) => `${fmt(n)} ${w}`);
+        pipe.append(el("p", "muted", `Rows read: ${fmt(last.rows_read)}${parts.length ? `: ${parts.join(", ")}` : ""}.`
+          + (last.rows_no_time ? ` ${fmt(last.rows_no_time)} of the stored rows have no timestamp, so no page shows them.` : "")));
+      }
+      // what went wrong (errors) and what to look at (warnings), in the pipeline's own words, every one of them
+      for (const [list, cls, head] of [[(last && last.errors) || [], "tm-badline", "What went wrong:"],
+        [(last && last.warnings) || [], null, "To check:"]]) {
+        if (!list.length) continue;
+        const ul = el("ul", "tm-plain");
+        for (const x of list) ul.append(el("li", cls, String(x.text || "")));
+        pipe.append(el("small", "muted", head), ul);
+      }
+      // certificate checking off for the mailbox (system_alerts.mail_tls_off, the bell's daily reminder too)
+      if (p.mail_tls_off) {
+        const w = el("p", "tm-badline", "Mail certificate checking is OFF (IMAP_VERIFY_TLS=false): someone on the network path could pretend to be the mail server. Switch it on again as soon as the mail server has a valid certificate: ");
+        const a = el("a", null, "Settings → Workers"); a.href = "/settings#workers"; w.append(a, document.createTextNode("."));
+        pipe.append(w);                                  // no role=alert: the page refreshes itself and would say it again
+      }
       const sch = el("ul", "tm-plain");
       for (const x of p.schedule || []) sch.append(el("li", null, `${x.what}: ${x.when}`));
       if (p.schedule_readable === false) {
@@ -226,7 +252,7 @@
     const wrap = el("div", "table-wrap"), t = el("table", "hosts tm-tm"), tr = el("tr");
     for (const c of cols) {
       const th = el("th", c.cls || null); const b = el("button", "tm-sort", c.label + (st.key === c.key ? (st.desc ? " ▾" : " ▴") : ""));
-      b.type = "button"; b.addEventListener("click", () => { if (st.key === c.key) st.desc = !st.desc; else { st.key = c.key; st.desc = true; } drawTab(D); });
+      b.type = "button"; b.addEventListener("click", () => { if (st.key === c.key) st.desc = !st.desc; else { st.key = c.key; st.desc = true; } const spot = focusSpot(); drawTab(D); refocus(spot); });
       th.append(b); tr.append(th);
     }
     const thead = el("thead"); thead.append(tr); const tb = el("tbody");
@@ -239,9 +265,13 @@
     t.append(thead, tb); wrap.append(t); return wrap;
   }
 
+
   // ---------------- Processes: what the server is doing now (requests being answered, background jobs)
   function drawProcesses(d) {
-    const rows = (d.processes || []).map((p) => ({ name: `${p.method} ${p.route}`, kind: "Request", user: p.user, role: p.role || "–", seconds: p.seconds,
+    // who a request is for: the name the server words (user_label: the full name, else the person code), never the
+    // sign-in name (audit 2026-11-27, 11-1); a request still signing in has none yet
+    const who = (x) => x.user_label || (x.user && x.user !== "(signing in)" ? "a signed-in person" : "(signing in)");
+    const rows = (d.processes || []).map((p) => ({ name: `${p.method} ${p.route}`, kind: "Request", user: who(p), role: p.role || "–", seconds: p.seconds,
       status: p.seconds > 10 ? "Slow" : "Running", _cls: p.seconds > 10 ? "tm-row-warn" : null }));
     for (const j of d.jobs || []) rows.push({ name: j.name, kind: "Background job", user: "Looking Glass", role: "–", seconds: -1,
       status: j.running ? "Running" : j.once ? "Finished" : "Stopped", _cls: !j.running && !j.once ? "tm-row-bad" : null });
@@ -260,14 +290,18 @@
 
   // ---------------- Users: who is using the service, and how much of it
   function drawUsers(d) {
-    const rows = (d.users || []).map((u) => ({ ...u, last: u.last_ago == null ? "" : `${u.last_route} · ${dur(u.last_ago)} ago`,
-      _cls: u.share >= 50 && (d.users || []).length > 1 ? "tm-row-warn" : null }));
-    const top = rows[0];
+    // each person by the name the server words (user_label), never the sign-in name (audit 2026-11-27, 11-1)
+    const who = (x) => x.user_label || (x.user && x.user !== "(signing in)" ? "a signed-in person" : "(signing in)");
+    const rows = (d.users || []).map((u) => ({ ...u, user: who(u), last: u.last_ago == null ? "" : `${u.last_route} · ${dur(u.last_ago)} ago`,
+      _cls: u.share >= 0.5 && (d.users || []).length > 1 ? "tm-row-warn" : null }));
+    // the share is the raw fraction of the server's time (request_tracker.py), worded by LGShare.pct: a little time is
+    // never "0%", nearly all of it never "100%" (2026-11-26)
+    const top = rows[0], sh = (x) => window.LGShare.pct(x);
     const lead = el("p", "tm-note");
     lead.textContent = !rows.length ? "Nobody has used the service in the last " + d.users_window_min + " minutes."
-      : top && top.share >= 50 && rows.length > 1 ? `${top.user} used ${top.share}% of the server's time in the last ${d.users_window_min} minutes, mostly on ${top.slowest_route || top.last_route}.`
+      : top && top.share >= 0.5 && rows.length > 1 ? `${top.user} used ${sh(top.share)} of the server's time in the last ${d.users_window_min} minutes, mostly on ${top.slowest_route || top.last_route}.`
       : `Server time in the last ${d.users_window_min} minutes, heaviest first.`;
-    const bar = (r) => { const w = el("span", "tm-share"); const i = el("i"); i.style.width = `${r.share}%`; w.append(i, el("small", null, `${r.share}%`)); return w; };
+    const bar = (r) => { const w = el("span", "tm-share"); const i = el("i"); i.style.width = `${Math.min(100, Math.max(0, 100 * (r.share || 0)))}%`; w.append(i, el("small", null, sh(r.share))); return w; };
     $("tmUsers").replaceChildren(lead, table("users", rows, [
       { key: "user", label: "User" }, { key: "role", label: "Role" }, { key: "running", label: "Running now" },
       { key: "requests", label: "Requests" }, { key: "seconds", label: "Server time", fmt: (r) => `${r.seconds} s` },
@@ -275,7 +309,7 @@
       { key: "slowest", label: "Slowest", fmt: (r) => (r.slowest ? `${r.slowest} s · ${r.slowest_route}` : "–"), cls: "tm-wrap" },
       { key: "last_ago", label: "Last", fmt: (r) => r.last || "–", cls: "tm-wrap" }], "seconds", "Nobody yet."),
       el("p", "muted tm-note", "Server time is how long the server spent answering that person's requests; CPU time is the computing part of it. "
-        + "Account names as on the Admin page; no address is shown."));
+        + "Each person by their full name (else their person code); no sign-in name and no address is shown."));
   }
 
   // ---------------- Performance: graphs like Task Manager's (the last two minutes, a reading every two seconds)
@@ -314,7 +348,7 @@
       const b = el("button", `tm-perf-item${key === PERF_SEL ? " on" : ""}`); b.type = "button";
       const txt = el("span", "tm-perf-txt"); txt.append(el("b", null, def.name), el("small", "muted", hist.length ? def.val(last) : "…"));
       b.append(chart(hist, def, false), txt);
-      b.addEventListener("click", () => { PERF_SEL = key; drawPerformance(D); });
+      b.addEventListener("click", () => { PERF_SEL = key; const spot = focusSpot(); drawPerformance(D); refocus(spot); });
       list.append(b);
     }
     const def = PERF[PERF_SEL], mc = d.machine || {}, s = d.service || {}, mg = d.mongodb || {};
@@ -335,8 +369,27 @@
   }
 
   // ---------------- refreshing while the tab shows (Performance more often, like Task Manager)
+  // every refresh redraws the cards and the tables: the keyboard focus goes back to the same control (found by its
+  // id, else by its place among the focusable elements of the nearest part with an id), so a sort button or a
+  // Performance item being used keeps the focus (audit 2026-11-27, 11-4: it fell back to the page every 2 to 5 s)
+  const FOCUSABLE = 'a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])';
+  function focusSpot() {
+    const a = document.activeElement;
+    if (!a || a === document.body || !pane.contains(a) || !a.matches(FOCUSABLE)) return null;
+    if (a.id) return { id: a.id };
+    const host = a.parentElement?.closest("[id]");
+    const i = host ? [...host.querySelectorAll(FOCUSABLE)].indexOf(a) : -1;
+    return i < 0 ? null : { host: host.id, i };
+  }
+  function refocus(spot) {
+    if (!spot) return;
+    const a = document.activeElement;
+    if (a && a !== document.body && a.isConnected) return;
+    const n = spot.id ? document.getElementById(spot.id) : [...(document.getElementById(spot.host)?.querySelectorAll(FOCUSABLE) || [])][spot.i];
+    n?.focus({ preventScroll: true });
+  }
   async function refresh() {
-    try { D = await api("/api/admin/monitor"); draw(D); drawTab(D); }
+    try { D = await api("/api/admin/monitor"); const spot = focusSpot(); draw(D); drawTab(D); refocus(spot); }
     catch (e) { if (first) $("tmBody").replaceChildren(el("p", "fd-empty", window.LGLoader.errorText(e))); else say(`Could not read the figures: ${window.LGLoader.errorText(e)}`, true); }
     finally { if (first) { first = false; window.LGLoader?.ready(); } }
   }

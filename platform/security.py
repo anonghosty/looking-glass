@@ -95,7 +95,8 @@ CSP = ("default-src 'self'; "
        "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js; "
        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.mapbox.com; "
        "font-src 'self' data: https://fonts.gstatic.com; "
-       "img-src 'self' data: blob: https://flagcdn.com https://api.mapbox.com https://*.tiles.mapbox.com; "
+       # flags come with Looking Glass (static/img/flags, 2026-11-27: they were fetched from flagcdn.com on every page)
+       "img-src 'self' data: blob: https://api.mapbox.com https://*.tiles.mapbox.com; "
        "connect-src 'self' https://api.mapbox.com https://events.mapbox.com https://*.tiles.mapbox.com; "
        "worker-src 'self' blob:; child-src blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'")
 
@@ -191,8 +192,10 @@ def install(app, logger=None):
             # inside a route with a 500 (external review, 2026-11-12)
             # every JSON body, a chunked one too (it has no Content-Length: review 2026-11-13, a chunked array reached a
             # route and failed with a 500); the 64 KB limit still applies while it is read
-            if request.mimetype == "application/json" and (request.content_length
-                                                           or "chunked" in (request.headers.get("Transfer-Encoding") or "").lower()):
+            # every JSON type, application/<x>+json too: get_json parses those as well, and a [1] sent as
+            # application/merge-patch+json reached the routes and failed with a 500 (review 2026-11-28)
+            if request.is_json and (request.content_length
+                                    or "chunked" in (request.headers.get("Transfer-Encoding") or "").lower()):
                 body = request.get_json(silent=True)
                 if body is not None and not isinstance(body, dict):
                     abort(400, description="Send the data as a JSON object.")
@@ -230,6 +233,10 @@ def install(app, logger=None):
         h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")   # Mapbox URL-restricted tokens need the origin
         h.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         h.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+        # other sites may not load this platform's pages, data or files into theirs, and no old plug-in cross-domain
+        # policy is honoured (the 2026-11-17 pentest's two optional headers, added 2026-11-27)
+        h.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+        h.setdefault("X-Permitted-Cross-Domain-Policies", "none")
         hsts = hsts_value()
         if hsts and request.is_secure:
             h.setdefault("Strict-Transport-Security", hsts)

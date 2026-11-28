@@ -259,16 +259,33 @@ def _front():
             "needed": mode != "local" and not ours, "command": "sudo deploy/caddy_front.sh adopt"}
 
 
+def _named(rows):
+    """The monitor's rows without the sign-in name (audit 2026-11-27, 8-12 and 11-1): "user" becomes the account's
+    person code and "user_label" its full name, else the person code (people.People.name), which the page shows
+    (task-monitor.js who()). "(signing in)" and the code's own names stay as they are."""
+    import people
+    named = people._DEFAULT[-1].name if people._DEFAULT else people.person_label    # the app's People (as signed_by)
+    out = []
+    for r in rows:
+        u = r.get("user")
+        out.append(dict(r, user=people.person_label(u), user_label=named(u)) if u and u != "(signing in)" else r)
+    return out
+
+
 def snapshot(ctx):
     data_dir = os.path.join(ctx["base_dir"], "data")
     alive = {t.name for t in threading.enumerate() if t.is_alive()}
     rc = ctx.get("cache")
-    pstat = None
+    pstat, tls_off = None, False
     if ctx.get("alerts"):
         try:
             pstat = ctx["alerts"]._pipeline_status()
         except Exception:  # noqa: BLE001
             pstat = None
+        try:                                              # the same test as the bell's daily reminder (one function)
+            tls_off = bool(ctx["alerts"].mail_tls_off())
+        except Exception:  # noqa: BLE001
+            tls_off = False
     pdir = pipeline_link.find_dir(ctx["base_dir"])
     sched, sched_ok = _cron()
     return {
@@ -284,12 +301,13 @@ def snapshot(ctx):
         "machine": _machine(data_dir),
         "at_rest": _at_rest(data_dir, pdir),
         "heavy_limits": (ctx["heavy_limits"] if ctx.get("heavy_limits") else None),
-        "pipeline": {"found": bool(pdir), "last": pstat, "schedule": sched, "schedule_readable": sched_ok},
+        "pipeline": {"found": bool(pdir), "last": pstat, "schedule": sched, "schedule_readable": sched_ok,
+                     "mail_tls_off": tls_off},
         "front": _front(),
         "restarts": _restarts(data_dir),
         "locks": len(ctx["throttle"].lockouts()) if ctx.get("throttle") else 0,
-        "processes": request_tracker.processes(),
-        "users": request_tracker.users(),
+        "processes": _named(request_tracker.processes()),
+        "users": _named(request_tracker.users()),
         "users_window_min": request_tracker.WINDOW_S // 60,
         "performance": SAMPLER.touch(),
         "sample_s": Sampler.STEP_S,
@@ -317,7 +335,8 @@ def install(app, ctx):
             abort(403)
         if not ctx["fresh"]():
             abort(make_response(jsonify(error="For your security, sign out and sign in again to make changes.", reauth=True), 403))
-        d = request.get_json(silent=True) or {}
+        d = request.get_json(silent=True)
+        d = d if isinstance(d, dict) else {}               # a list as the body: the 400 below, not an error 500
         who = (getattr(g, "user", None) or {}).get("user", "")
         rc = ctx.get("cache")
         if d.get("action") == "clear":

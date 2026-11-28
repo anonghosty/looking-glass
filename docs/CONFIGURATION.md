@@ -20,6 +20,12 @@ Looking Glass is configured in two places:
 
 The database pipeline has its own `.env` in `../database` ([../../database/README.md](../database/README.md)).
 
+**What a value in `.env` may hold.** No value in either `.env` may contain `${` or a line break, and a password or
+key may not contain a single quote (`'`): the platform reads `.env` with python-dotenv, which expands `${` even in
+quotes, and the pipeline reads it with its own loader, so the two would see different values. A value with a space,
+`#`, `$`, `"` or a backtick is written in single quotes. The guided installer writes every value this way and refuses
+the others with the reason. When you edit `.env` by hand, follow the same rules.
+
 ## Database
 
 | Setting | Default | Meaning |
@@ -62,8 +68,8 @@ of …"), then replays the whole day from 00:00 to 24:00. Details: [TECHNICAL_RE
 |---|---|---|
 | `COUNTRY` | `GH` | the country your CSIRT covers: ISO 3166-1 two-letter code of any country or territory in the world (`GH`, `KE`, `NG`, `BR`, `DE`, `IN`, `JM`...). Sets the regions map and labels of the services platform; a country without first-level regions in the open map data is drawn as one area |
 | `TIMEZONE` | the country's usual zone | the time zone times are also shown in (IANA name, one of the country's own or `UTC`: `Africa/Nairobi`, `Africa/Lagos`, `Africa/Kinshasa` or `Africa/Lubumbashi` for DR Congo, `America/Sao_Paulo`, `Europe/Berlin`...). Display only: days and stored times stay UTC, as Shadowserver's. Settings > Country changes it and takes precedence |
-| `CONSTITUENT_ASNS` | empty | AS numbers your CSIRT is responsible for, comma separated. Empty = the whole country. Every part of Looking Glass follows the constituency (both platforms, the Executive portal, findings and advisories, combinations, the research pages, every export and the quarterly reports); only the quarterly purge works on the whole database, since it clears old stored rows |
-| `CONSTITUENT_CIDRS` | empty | address ranges you are responsible for (for example a government network without its own AS number). On the Settings page these are the address blocks ticked under **Some address blocks** in the network list's Constituent column, plus the **Other address ranges** box; a network chosen as **The whole network** goes in `CONSTITUENT_ASNS` |
+| `CONSTITUENT_ASNS` | empty | AS numbers your CSIRT is responsible for, comma separated. Each is stored as the reports write it, without "AS" and without leading zeros ("AS064500" is kept as "64500"), so every spelling matches. Empty = the whole country. Every part of Looking Glass follows the constituency (both platforms, the Executive portal, findings and advisories, combinations, the research pages, every export and the quarterly reports); only the quarterly purge works on the whole database, since it clears old stored rows |
+| `CONSTITUENT_CIDRS` | empty | address ranges you are responsible for (for example a government network without its own AS number). On the Settings page these are the address blocks ticked under **Some address blocks** in the network list's Constituent column, plus the **Other address ranges** box; a network chosen as **The whole network** goes in `CONSTITUENT_ASNS`. An IPv4 address written as IPv6 (`::ffff:192.0.2.1`) matches as the IPv4 address it is |
 | `SETTINGS_TOKEN` | (removed) | no longer used: it never let a script in without a signed-in session. Settings are changed by an account with the Settings permission; an old line in `.env` does nothing and can be deleted |
 
 ## Access and security
@@ -126,7 +132,14 @@ by `PLATFORM_DIR` in the pipeline's `.env`.
 
 The pipeline's sender check is set in the pipeline's `.env` (or Settings → Workers): `MAIL_AUTH` = `log` (record each
 report e-mail's DKIM result, hold nothing back), `enforce` (hold back reports that do not pass until an administrator
-releases them) or `off`; `MAIL_AUTH_DOMAIN` = the expected signer (`shadowserver.org`).
+releases them) or `off`; `MAIL_AUTH_DOMAIN` = the expected signer (`shadowserver.org`). With `enforce`, when the
+check itself cannot run on a run (its log cannot be opened, for example), no e-mail is read that run, so nothing
+unchecked is loaded: the messages stay in the mailbox for the next run, the bell and Settings → Task monitor give the
+reason, the report files already on disk are still loaded, and the Shadowserver report API is used for that run when
+it is set up.
+
+How far back each run looks is `EMAIL_DAYS` in the pipeline's `.env` (Settings → Workers → *Days back per run*):
+**7** days when it is not set. Messages and reports already handled are never loaded twice.
 
 The check looks up the signer's public key in DNS (a TXT record, for example `mail._domainkey.shadowserver.org`). It
 asks this server's own resolver first. Some networks drop DNS TXT look-ups (a rule against DNS tunnelling); when the
@@ -142,6 +155,16 @@ forwarding rule breaks the signatures on the way), the card and the bell say blo
 button ticks it for you. With `log`, a forged report e-mail would be loaded
 and only flagged. `REPORT_SOURCE=api` (Shadowserver's report API) does not use e-mail at all, so the question does not
 arise; the e-mail path stays as a fallback.
+
+**Report file names.** The pipeline loads a CSV only when its name is a report file name:
+`YYYY-MM-DD-<report>[-<number>]-<country>-geo[_asNNNN][_N].csv`, where the last part may also be `-asn`, `-netblock`
+or `-domain` instead of `-geo`. The extension may be written in any case (`.CSV` too), the country part may be in
+capitals (`-Kenya-geo`), and a number may follow the AS number (`_as64500_2.csv`); the file is sorted and loaded under
+the same name ending in `.csv`. The report name itself is used as it is written, and one that cannot be a report name
+is moved to quarantine and counted. When your reports are named differently, set `REPORT_SUFFIX` in the pipeline's
+`.env`: a regular expression for the part after the report name, used exactly as you write it (it is not made
+case-insensitive for you). A CSV whose name still does not match is not loaded, and every run lists it
+([OPERATIONS.md](OPERATIONS.md#the-report-pipelines-runs)).
 
 ## Quarterly report and purge
 

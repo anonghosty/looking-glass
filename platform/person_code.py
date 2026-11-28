@@ -152,4 +152,6 @@ def user_of(value, users):
     value = str(value or "").strip()
     if not value.startswith(PREFIX):
         return None
-    return next((u for u in users if hmac.compare_digest(code(u), value)), None)
+    # bytes: a value from the request that is not ASCII ("p-é") made compare_digest on text raise TypeError (a 500)
+    want = value.encode("utf-8", "replace")
+    return next((u for u in users if hmac.compare_digest(code(u).encode("ascii"), want)), None)

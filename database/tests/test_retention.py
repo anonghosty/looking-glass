@@ -67,6 +67,11 @@ try:
     ok("plenty of disk: no warning", not got["disk_low"])
     st = retention.status(base, False, {"file_errors": 1}, 10 ** 9)
     ok("a failed run and low disk are both said", not st["ok"] and st["file_errors"] == 1 and st["disk_low"])
+    st = retention.status(base, False, {"email_failed": 1, "email_error": "the mail server's certificate has expired"}, 0.001)
+    ok("a mailbox that could not be read: the reason travels to the bell (2026-11-26)",
+       st["email_failed"] == 1 and st["email_error"] == "the mail server's certificate has expired")
+    st = retention.status(base, True, {"email_error": "left over"}, 0.001)
+    ok("...and no reason when the mailbox was read", st["email_error"] == "")
     ok("DISK_MIN_FREE_GB defaults to 5", retention.min_free_gb(lambda k, d="": d) == 5.0)
     ok("the status file is private (600)", oct(os.stat(os.path.join(base, "pipeline_status.json")).st_mode & 0o777) == "0o600")
 finally:

@@ -47,8 +47,11 @@
       <input class="fd-q" id="fdQ" type="text" spellcheck="false" placeholder="Search findings (name, title, code)" aria-label="Search findings">
     </div>
     <div class="fd-list" id="fdList"><div class="st-loading">Opening the findings and their trails…</div></div>
-    {# encoded requests nothing decodes, to send to the Looking Glass creator (analysts and admins; beacon-unknown.js) #}
+    {# encoded requests nothing decodes, to send to the Looking Glass creator (analysts and admins; beacon-unknown.js).
+       Drawn only for those its API answers (beacon_unknown.allowed), so no other browser asks it and gets a refusal #}
+    {% if lg_beacon_unknown is defined and lg_beacon_unknown() %}
     <section class="bu-section" id="beaconUnknown" hidden aria-label="Requests Looking Glass could not decode"></section>
+    {% endif %}
   </main>
   <script src="{{ url_for('static', filename='js/loader.js') }}"></script>
   <script src="{{ url_for('static', filename='js/lg-select.js') }}"></script>

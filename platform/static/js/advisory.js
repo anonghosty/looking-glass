@@ -18,6 +18,13 @@
   // was picked is dropped (SEQ), every button works on the organisation its form was drawn for, and the organisation
   // cannot be switched while a save, generation or marking is under way (BUSY)
   let SEQ = 0, BUSY = false;
+  // asked once per page, not at every redraw (audit 2026-11-27, 9-13): the logo's address, and the finding's "reported
+  // again" answer (the same for every organisation); an answer not ready yet or failed is asked again at the next redraw
+  const LOGO_T = Date.now();
+  let AGAIN = null;
+  const againOnce = () => (AGAIN ||= fetch(`/api/findings/${encodeURIComponent(fid)}/again`, { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((x) => { if (!x || x.state !== "ready") AGAIN = null; return x; }, () => { AGAIN = null; return null; }));
 
   const card = (title, sub, cls) => {
     const s = el("section", `av-card ${cls || ""}`);
@@ -87,6 +94,11 @@
       if (t.why_here && !g.whys.includes(t.why_here)) g.whys.push(t.why_here);
       if (t.comment && !g.comments.some(([c, x]) => c === t.cve && x === t.comment)) g.comments.push([t.cve, t.comment]);
       if (t.note && !g.notes.includes(t.note)) g.notes.push(t.note);
+      // MITRE's name, link, text and tactics from a later mapping when the first lacks them (as the PDF does)
+      for (const k of ["desc", "url", "tactics", "name"]) {
+        const empty = (x) => !x || (Array.isArray(x) && !x.length);
+        if (empty(g[k]) && !empty(t[k])) g[k] = t[k];
+      }
       g.parts.push(t);
     }
     for (const g of out) { g.whys = mergeWhys(g.whys); g.defend.sort((a, b) => codeCmp(a.id, b.id)); }
@@ -109,6 +121,7 @@
     if (t.desc) {
       const p = el("p", "av-tech-line"); p.append(el("b", null, "What it is (MITRE): "), document.createTextNode(t.desc));
       const more = el("button", "pill-btn av-tech-more", "MITRE's full description"); more.type = "button"; more.setAttribute("aria-expanded", "false");
+      more.dataset.fk = `more|${kind}|${t.key || t.id}`;
       const full = el("div", "av-tech-full"); full.hidden = true;
       more.addEventListener("click", async () => {
         const open = full.hidden; full.hidden = !open; more.setAttribute("aria-expanded", String(open));
@@ -141,7 +154,7 @@
     if (!a.locked && kind !== "out") {
       const acts = el("div", "av-tech-acts");
       const act = (label, action, primary) => {
-        const b = el("button", primary ? "pill-btn primary" : "pill-btn", label); b.type = "button";
+        const b = el("button", primary ? "pill-btn primary" : "pill-btn", label); b.type = "button"; b.dataset.fk = `tech|${t.key}|${action}`;
         b.addEventListener("click", async () => {
           if (BUSY) return; BUSY = true; b.disabled = true; window.LGLoader?.busy("Saving");
           try { const d = await post(`/api/advisory/${fid}/attack`, { network: tnet, key: t.key, action }); if (tseq !== SEQ) return; there.advisory = d.advisory; draw(); }
@@ -158,7 +171,7 @@
       const acts = el("div", "av-tech-acts"), parts = (t.parts || [t]).filter((p) => p.status === "confirmed for this advisory");
       for (const p of parts) {
         const src = p.report || p.cve || p.category || "";
-        const b = el("button", "pill-btn", parts.length > 1 || (t.parts || []).length > 1 ? `Undo (${src || p.key})` : "Undo"); b.type = "button";
+        const b = el("button", "pill-btn", parts.length > 1 || (t.parts || []).length > 1 ? `Undo (${src || p.key})` : "Undo"); b.type = "button"; b.dataset.fk = `undo|${p.key}`;
         b.addEventListener("click", async () => {
           if (BUSY) return; BUSY = true; b.disabled = true;
           try { const d = await post(`/api/advisory/${fid}/attack`, { network: tnet, key: p.key, action: "restore" }); if (tseq !== SEQ) return; there.advisory = d.advisory; draw(); }
@@ -182,7 +195,7 @@
         // "Confirm all": the techniques shown, for this advisory only (the researchers' mappings stay as they are).
         // The organisation, the page state and the request are the ones this form was drawn for (check_workflow_fixes).
         const anet = NET, aseq = SEQ, ahere = D, keys = A.pending.map((t) => t.key);
-        const all = el("button", "pill-btn primary av-tech-all", `Confirm all ${A.pending.length} for this advisory`); all.type = "button";
+        const all = el("button", "pill-btn primary av-tech-all", `Confirm all ${A.pending.length} for this advisory`); all.type = "button"; all.dataset.fk = "confirm_all";
         all.addEventListener("click", async () => {
           if (BUSY) return;
           const go = await window.LGConfirmList.open({
@@ -235,6 +248,7 @@
      ["1. List", "Numbered list", () => { let i = 0; lines((l) => (l.trim() ? `${++i}. ${strip(l)}` : l)); }],
      ["Plain", "Remove list marks and bold", () => lines((l) => strip(l).replace(/\*\*/g, ""))]].forEach(([t, title, fn, cls]) => {
       const b = el("button", `av-tool ${cls || ""}`, t); b.type = "button"; b.title = title; b.addEventListener("click", fn); bar.append(b);
+      if (ta.dataset.fk) b.dataset.fk = `tool|${ta.dataset.fk}|${t}`;
     });
     const draw = () => {
       preview.replaceChildren();
@@ -257,17 +271,26 @@
   // ---------------- step 1: the organisation
   function picker() {
     const c = card("1 · The organisation it goes to", "Pick the network (organisation) the advisory is for: its data and its advisory open below. Each organisation gets its own advisory and report.");
+    // a kept search whose devices all left the reports in memory: nothing to open (advisory.py offers no choice then)
+    if (!IDX.networks.length) {
+      c.append(el("p", "fd-empty", "None of this finding's devices are in the reports Looking Glass holds now, so there is no organisation to write an advisory to."));
+      return c;
+    }
     const row = el("div", "av-netrow");
     const sel = el("select", "av-in av-netsel lg-enhance"); sel.setAttribute("aria-label", "Organisation");
+    // "All networks" (network "") has a value of its own, so it never shares the empty value with the "Choose" line
+    // (audit 2026-11-27, 9-15: picking the "Choose" line opened All networks); every other option is its network
+    const ALL = "\u0000all";
+    const optVal = (n) => (n == null ? "" : n === "" ? ALL : n);
     sel.append(new Option("Choose the organisation (network)…", ""));
     for (const n of IDX.networks) {
       const st = n.status === "sent" ? " · sent" : n.status === "drafted" ? " · drafted" : n.ref ? " · draft" : "";
-      sel.append(new Option(`${n.network || "All networks"} · ${fmt(n.devices)} IP address${n.devices === 1 ? "" : "es"}, ${fmt(n.records)} records${st}`, n.network));
+      sel.append(new Option(`${n.network || "All networks"} · ${fmt(n.devices)} IP address${n.devices === 1 ? "" : "es"}, ${fmt(n.records)} records${st}`, optVal(n.network)));
     }
-    sel.value = NET ?? "";
+    sel.value = optVal(NET);
     sel.addEventListener("change", () => {
-      if (BUSY) { sel.value = NET ?? ""; return; }
-      if (sel.value || IDX.networks.some((n) => n.network === "")) openNet(sel.value);
+      if (BUSY || sel.value === "") { sel.value = optVal(NET); return; }
+      openNet(sel.value === ALL ? "" : sel.value);
     });
     const done = IDX.networks.filter((n) => n.status === "sent").length;
     row.append(sel, el("span", "muted", `${done} of ${IDX.networks.length} sent`));
@@ -275,7 +298,7 @@
     // every organisation at a glance, to move through them
     const list = el("div", "av-nets");
     for (const n of IDX.networks) {
-      const b = el("button", `av-net ${n.status || "todo"}${n.network === NET ? " on" : ""}`); b.type = "button";
+      const b = el("button", `av-net ${n.status || "todo"}${n.network === NET ? " on" : ""}`); b.type = "button"; b.dataset.fk = `net|${n.network}`;
       b.append(el("b", null, n.network || "All networks"), el("small", null, `${fmt(n.devices)} IP · ${n.status === "sent" ? `sent ${n.sent}` : n.status === "drafted" ? `drafted ${n.ref}` : n.ref ? `draft ${n.ref}` : "not started"}`));
       b.addEventListener("click", () => openNet(n.network)); list.append(b);
     }
@@ -286,7 +309,8 @@
   function hero() {
     const h = el("section", "av-hero");
     const logo = el("div", "av-logo");
-    if (IDX.has_logo) { const i = el("img"); i.src = `/organisation/logo?t=${Date.now()}`; i.alt = `${IDX.organisation} logo`; logo.append(i); }
+    // one address per page load: a redraw shows the same logo again instead of fetching it anew (audit 2026-11-27, 9-13)
+    if (IDX.has_logo) { const i = el("img"); i.src = `/organisation/logo?t=${LOGO_T}`; i.alt = `${IDX.organisation} logo`; logo.append(i); }
     else logo.append(el("span", null, (IDX.organisation || "?").slice(0, 1).toUpperCase()));
     const ht = el("div", "av-head");
     ht.append(el("div", "fd-eyebrow", `Advisories · finding ${IDX.finding.number}`), el("h1", null, `${IDX.organisation} Security Advisory`));
@@ -297,9 +321,63 @@
     return h;
   }
 
+  // a redraw replaces every button and field: the one that had the keyboard focus gets it back (same organisation, same
+  // technique, same action), else the heading of the card it was in (the keepFocus pattern of app.js; audit 2026-11-27,
+  // 9-8). A button that is disabled while its request runs may already have lost the focus: the last one used counts then.
+  let lastFocus = null;
+  main.addEventListener("focusin", (e) => { lastFocus = e.target; });
+  // what was typed and not saved yet (title, Description, Recommended Actions, recipients, Add insights, the TLP level)
+  // stays across a redraw of the same advisory: Confirm, Remove or Undo on a technique draws the form again from the
+  // saved advisory, which wiped the words being written (found 2026-11-27). Another network's form starts from its own.
+  const TYPED = ["subject", "description", "actions", "recipients", "insights", "look", "brand"];
+  function typedNow() {
+    if (main.dataset.formFor == null || main.dataset.formFor !== String(NET)) return null;
+    const keep = {};
+    for (const k of TYPED) {
+      const n = main.querySelector(`[data-fk="${k}"]`);
+      if (n && !n.disabled) keep[k] = n.type === "checkbox" ? n.checked : n.value;
+    }
+    const tlp = main.querySelector(".av-tlp-opt.on");
+    if (tlp && !tlp.disabled) keep.tlp = tlp.dataset.fk;
+    return keep;
+  }
+  function typedBack(keep) {
+    if (!keep || main.dataset.formFor !== String(NET)) return;
+    for (const [k, v] of Object.entries(keep)) {
+      if (k === "tlp") {
+        const b = main.querySelector(`.av-tlp-opt[data-fk="${CSS.escape(v)}"]`);
+        if (b && !b.disabled && !b.classList.contains("on")) b.click();
+        continue;
+      }
+      const n = main.querySelector(`[data-fk="${k}"]`);
+      if (!n || n.disabled) continue;
+      if (n.type === "checkbox") { if (n.checked !== v) { n.checked = v; n.dispatchEvent(new Event("change", { bubbles: true })); } }
+      else if (n.value !== v) {
+        n.value = v; n.dispatchEvent(new Event("input", { bubbles: true }));
+        if (n.tagName === "SELECT") n.dispatchEvent(new Event("change", { bubbles: true }));   // the PDF look and name
+      }
+    }
+  }
   function draw() {
+    const keep = typedNow();
+    try { drawFocus(); } finally { typedBack(keep); }
+  }
+  function drawFocus() {
+    const act = document.activeElement;
+    const a = act && act !== document.body ? act : lastFocus;
+    if (!a || !a.isConnected || !main.contains(a)) { drawNow(); return; }   // the focus is elsewhere: never taken from there
+    const k = a.dataset?.fk, cards = [...main.querySelectorAll(".av-card")], ci = cards.indexOf(a.closest(".av-card"));
+    drawNow();
+    const back = k != null && [...main.querySelectorAll("[data-fk]")].find((n) => n.dataset.fk === k && !n.disabled && !n.closest("[hidden]"));
+    if (back) { back.focus({ preventScroll: true }); return; }
+    const h = main.querySelectorAll(".av-card")[ci]?.querySelector("h2");
+    if (h) { h.tabIndex = -1; h.focus({ preventScroll: true }); }
+  }
+  function drawNow() {
     main.replaceChildren(hero(), picker());
+    delete main.dataset.formFor;
     if (NET == null || !D) return;
+    main.dataset.formFor = String(NET);         // whose form this is (typedNow / typedBack: unsaved words kept on a redraw)
     const a = D.advisory, edit = IDX.can_edit && !a.locked;     // sent: read-only, the record of what went out
     // step 2: the organisation's data, as the PDF carries it
     const dc = card(`2 · ${a.network || "All networks"}: its data`, `${fmt(a.affected.devices)} IP address${a.affected.devices === 1 ? "" : "es"} and ${fmt(a.affected.records)} records in ${a.data_title}. This is what the advisory and its report carry.`);
@@ -358,7 +436,7 @@
       // a banner over the list and a tag on each of them
       // its place held with the loading line from the start, so the table never moves down when it comes (2026-11-15)
       const again = el("div", "av-again lg-loading", "Checking the latest report…"); dc.append(again);
-      fetch(`/api/findings/${encodeURIComponent(fid)}/again`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((x) => {
+      againOnce().then((x) => {
         if (!x || x.state !== "ready" || x.again == null) { again.hidden = true; return; }
         const set = new Set(x.again_ips || []);
         let n = 0;
@@ -369,7 +447,13 @@
         const day = new Date(`${x.latest}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
         again.hidden = false;
         again.className = `av-again ${n ? "hot" : "calm"}`;
-        again.textContent = n ? `${fmt(n)} of these ${fmt(a.devices.length)} devices were reported again in the latest report (${day}) for the same combination: marked "again" below.`
+        // the list holds the first devices only (500): the sentence counts all of them (devices_total, the server's again
+        // count), then says how many of the listed ones are marked
+        const all = Math.max(a.devices.length, Number((D || {}).devices_total) || 0);
+        const hits = Math.max(n, typeof x.again === "number" ? x.again : set.size);
+        const cut = all > a.devices.length;
+        again.textContent = hits ? `${fmt(hits)} of these ${fmt(all)} devices were reported again in the latest report (${day}) for the same combination` +
+            (cut ? `; ${fmt(n)} of them ${n === 1 ? "is" : "are"} among the ${fmt(a.devices.length)} listed below, marked "again".` : `: marked "again" below.`)
           : `None of these devices was reported again in the latest report (${day}) for the same combination.`;
       }).catch(() => { again.hidden = true; });
       const w = el("div", "table-wrap av-ipwrap"); w.append(t); dc.append(w);
@@ -401,6 +485,7 @@
     const desc = mk(a.description, "Describe the impact: what is exposed or happening on these IP addresses, and why it matters.");
     const act = mk(a.recommended_actions, "- Patch to a supported version\n- Close the management ports to the internet\n- Check the hosts for signs of compromise");
     const rec = el("input", "av-in"); rec.type = "text"; rec.value = a.recipients.join(", ");
+    subj.dataset.fk = "subject"; desc.dataset.fk = "description"; act.dataset.fk = "actions"; rec.dataset.fk = "recipients";
     rec.placeholder = "To whom it goes: the organisation, its teams or people, separated by commas";
     // the TLP level (TLP 2.0): how far the recipients may pass it on; printed at the top and bottom of every page
     let tlpVal = a.tlp;
@@ -408,7 +493,7 @@
     const tlpNote = el("p", "av-sub");
     const tlpPick = el("div", "av-tlp-pick"); tlpPick.setAttribute("role", "radiogroup"); tlpPick.setAttribute("aria-label", "TLP level");
     for (const lv of IDX.tlp_levels || []) {
-      const b = el("button", `av-tlp-opt${lv.key === tlpVal ? " on" : ""}`); b.type = "button"; b.setAttribute("role", "radio");
+      const b = el("button", `av-tlp-opt${lv.key === tlpVal ? " on" : ""}`); b.type = "button"; b.setAttribute("role", "radio"); b.dataset.fk = `tlp|${lv.key}`;
       b.setAttribute("aria-checked", String(lv.key === tlpVal)); b.disabled = !edit;
       b.append(el("span", `tlp-badge ${lv.cls}`, lv.key), el("b", null, lv.short), el("small", null, lv.text));
       b.title = `When: ${lv.when}`;
@@ -426,7 +511,7 @@
     const pv1 = el("div", "av-preview"), pv2 = el("div", "av-preview");
     // Add insights (the user, 2026-11-19): the analysis pages after the advisory (Overview, Geographic location, the IP
     // addresses, Across reports), or the advisory alone; Technical Details and References always stay
-    const ins = el("input"); ins.type = "checkbox"; ins.id = "advInsights"; ins.checked = !!a.insights;
+    const ins = el("input"); ins.type = "checkbox"; ins.id = "advInsights"; ins.checked = !!a.insights; ins.dataset.fk = "insights";
     const insBox = el("label", "av-insights"); insBox.htmlFor = "advInsights";
     insBox.append(ins, el("b", null, "Add insights"),
       el("small", "muted", "The analysis pages after the advisory: Overview, Geographic location, the IP address tables and Across reports. "
@@ -442,6 +527,7 @@
       [["designed", "Designed (dark pages)"], ["plain", "Plain (white pages, prints well)"]]);
     const [brandBox, brand] = pick("advBrand", "The name at the top of its pages", a.brand || "looking-glass",
       [["looking-glass", "Looking Glass"], ["organisation", `The organisation's name (${a.organisation || "from Settings"})`], ["none", "No name"]]);
+    look.dataset.fk = "look"; brand.dataset.fk = "brand";      // kept across a redraw when not saved yet (typedNow/typedBack)
     const pdfOpts = el("div", "av-pdfopts"); pdfOpts.append(lookBox, brandBox,
       el("small", "muted", "For this advisory's PDF. The TLP label keeps its black box on both looks. Save, then generate the report again."));
     w.append(tlpBox, lab("Title", subj, `Large at the top of the first page, with "${heading || a.heading_default}" in small letters above it.`),
@@ -465,20 +551,31 @@
     const run = async (button, work) => {
       if (BUSY) return;
       BUSY = true; button.disabled = true;
-      try { const done = await work(); if (seq === SEQ) { await reloadIndex(); draw(); if (done) sayLater(done); } }
-      catch (e) { if (seq === SEQ) { say(window.LGLoader.errorText(e, true), true); button.disabled = false; } }
+      let done;
+      try { done = await work(); }
+      catch (e) { if (seq === SEQ) { say(window.LGLoader.errorText(e, true), true); button.disabled = false; } BUSY = false; return; }
+      // the work is done: a list of organisations that cannot be read again afterwards does not make it a failure
+      // (audit 2026-11-27, 9-12: a save that had worked was reported as not saved)
+      let stale = false;
+      try { if (seq === SEQ) await reloadIndex(); } catch { stale = true; }
       finally { BUSY = false; }
+      if (seq !== SEQ) return;
+      // the work went through: the form is drawn from what the server saved (recipients cleaned, text trimmed), never
+      // from the words typed before it (typedNow/typedBack keep only what is NOT saved yet)
+      delete main.dataset.formFor;
+      draw();
+      if (done) sayLater(stale ? `${done} The list of organisations could not be read again: reload the page to see their states.` : done);
     };
     if (edit) {
-      const sv = el("button", "lg-btn primary", "Save the advisory"); sv.type = "button";
+      const sv = el("button", "lg-btn primary", "Save the advisory"); sv.type = "button"; sv.dataset.fk = "save";
       sv.addEventListener("click", () => { say("Saving…"); run(sv, async () => { await save(); return `Saved as ${here.advisory.ref}.`; }); });
       bar.append(sv);
     }
-    const prev = el("a", "pill-btn", "Preview the PDF"); prev.href = `/advisory/${fid}/preview?${q(NET)}`; prev.target = "_blank"; prev.rel = "noopener";
+    const prev = el("a", "pill-btn", "Preview the PDF"); prev.dataset.fk = "preview"; prev.href = `/advisory/${fid}/preview?${q(NET)}`; prev.target = "_blank"; prev.rel = "noopener";
     prev.title = "The PDF as it stands, in the browser (save first to include your latest text); not recorded";
     bar.append(prev);
     if (edit) {
-      const gen = el("button", "lg-btn", "Generate the report"); gen.type = "button";
+      const gen = el("button", "lg-btn", "Generate the report"); gen.type = "button"; gen.dataset.fk = "generate";
       gen.title = `Saves, then makes ${D.file_base}${D.has_report ? ".zip: the PDF and the devices CSV, what goes to the organisation" : ".pdf"} and keeps it with this advisory`;
       gen.addEventListener("click", () => {
         say("Saving and generating the report…");
@@ -492,7 +589,7 @@
     }
     if (D.saved) {
       // a button through the platform's one download helper (LGLoader.download, r89), never a plain link
-      const js = el("button", "pill-btn", "Export JSON"); js.type = "button"; js.title = "The advisory as a JSON file (no address in it), for other tools";
+      const js = el("button", "pill-btn", "Export JSON"); js.type = "button"; js.dataset.fk = "export"; js.title = "The advisory as a JSON file (no address in it), for other tools";
       js.addEventListener("click", async () => {
         const res = await window.LGLoader.download(`/api/advisory/${fid}/export?${q(NET)}`, { button: js, name: "advisory.json" });
         if (!res.ok && res.message) say(res.message, true);
@@ -511,12 +608,12 @@
       const ul = el("ul", "av-files");
       a.generated.slice().reverse().forEach((x) => {
         // the file through the one download helper: the "Opening the advisory" logo never stays up over a download
-        const li = el("li"), l = el("button", "av-file-link", x.name); l.type = "button";
+        const li = el("li"), l = el("button", "av-file-link", x.name); l.type = "button"; l.dataset.fk = `file|${x.n}`;
         l.addEventListener("click", async () => {
           const res = await window.LGLoader.download(`/advisory/${fid}/file/${a.ref}/${x.n}`, { button: l, name: x.name });
           if (!res.ok && res.message) say(res.message, true);
         });
-        li.append(l, el("small", "muted", ` · ${x.at} · ${x.by} · ${fmt(Math.round(x.size / 1024))} KB`)); ul.append(li);
+        li.append(l, el("small", "muted", ` · ${x.at} · ${x.by} · ${x.size < 1024 ? `${fmt(x.size || 0)} bytes` : `${fmt(Math.round(x.size / 1024))} KB`}`)); ul.append(li);
       });
       r.append(ul);
       // changed after it was generated (review 2026-11-13): the file no longer says what the advisory says
@@ -533,7 +630,7 @@
         document.createTextNode(" (changing it here makes it a draft again)."));
       sb.append(p);
     } else if (edit && D.saved) {
-      const dr = el("button", "lg-btn av-send", "Mark as drafted"); dr.type = "button";
+      const dr = el("button", "lg-btn av-send", "Mark as drafted"); dr.type = "button"; dr.dataset.fk = "drafted";
       dr.disabled = !a.generated.length || a.report_stale;
       dr.title = !a.generated.length ? "Generate the report first: it is what goes out"
         : a.report_stale ? "Generate the report again first: the advisory was changed after it was generated"
@@ -577,6 +674,11 @@
     try {
       r = await fetch(`/api/advisory/${encodeURIComponent(fid)}/net?${q(n)}`, { cache: "no-store" });
       d = await r.json().catch(() => ({}));
+    } catch (e) {
+      // a dropped connection: the page stays, with the picker and what went wrong (audit 2026-11-27, 9-4: it went blank)
+      wait.remove();
+      if (my === SEQ) { draw(); main.append(el("p", "fd-empty", `Could not open ${n || "all networks"}. ${window.LGLoader.errorText(e)} Click it again above to retry.`)); }
+      return;
     } finally { wait.remove(); }
     if (my !== SEQ) return;                      // another organisation was picked meanwhile: this one is not shown
     if (!r.ok) { D = null; draw(); main.append(el("p", "fd-empty", d.error || `Could not open it (HTTP ${r.status})`)); return; }

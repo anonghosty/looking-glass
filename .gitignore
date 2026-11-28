@@ -17,6 +17,8 @@ __pycache__/
 logs/
 *.txt
 !requirements.txt
+# the list of the maintainer's checks: the suite needs it (tests/run_all_checks.sh, tests/check_suite_split.py)
+!platform/tests/maintainer_rows.txt
 *.output
 *.tmp
 # created by install.sh: its log (no secrets, but local details) and the checker's Python environment

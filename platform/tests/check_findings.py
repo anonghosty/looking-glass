@@ -69,7 +69,10 @@ try:
     ok("…and carries its finding number, with management", (mine.get("finding") or {}).get("number") == "#1" and mine["finding"]["status"] == "management", str(mine.get("finding")))
     print("Only the people in its channel see it")
     st, d = call("/api/findings", MGMT, role="management", user="lg-check-management")
-    ok("the manager it was sent to sees it, held by them", st == 200 and d["findings"] and d["findings"][0]["assignee"] == "lg-check-management")
+    # answers name people by full name, else person code, never the sign-in name (2026-11-27); the store keeps the account
+    ok("the manager it was sent to sees it, held by them (named by person code: no full name here)", st == 200 and d["findings"]
+       and d["findings"][0]["assignee"] == __import__("people").person_label("lg-check-management")
+       and A.FINDINGS.get(d["findings"][0]["id"]).get("assignee") == "lg-check-management")
     st, d = call("/api/findings", MGMT, role="management", user="lg-other-manager")
     ok("another manager does not", st == 200 and not d["findings"])
     st, d = call("/api/findings/1/status", MGMT, "POST", {"status": "closed", "comment": "x"}, role="management", user="lg-other-manager")
@@ -107,7 +110,8 @@ try:
     st, d = call("/api/findings/1/status", MGMT, "POST", {"status": "analyst", "comment": "Rising in the north: pull the devices.", "to": "lg-check-analyst"},
                  role="management", user="lg-check-management")
     ok("management moves it to the analyst they name, with a comment", st == 200 and d["finding"]["status"] == "analyst"
-       and d["finding"]["history"][-1]["comment"].startswith("Rising") and d["finding"]["history"][-1]["to"] == "lg-check-analyst")
+       and d["finding"]["history"][-1]["comment"].startswith("Rising")
+       and d["finding"]["history"][-1]["to"] == __import__("people").person_label("lg-check-analyst"))
     st, d = call("/api/findings", ANALYST, role="analyst", user="lg-check-analyst")
     ok("…who now sees it, with its whole trail", st == 200 and d["findings"] and len(d["findings"][0]["history"]) == 2 and len(d["findings"][0]["channel"]) == 3)
     # moving by hand is management's (finding_rules.py, external review 2026-11-11)

@@ -252,11 +252,74 @@ ask_input() {  # KEY TITLE TEXT DEFAULT [validator]
     return 0
   done
 }
+# How a value is written into the two .env files (env_set), one rule for everything that reads them: python-dotenv (the
+# platform), the pipeline's own loader (shadowserver_pipeline.py load_env_file), database/deploy.sh, uninstall.sh and
+# env_get here. A plain value is written as it is; one with a space, #, $, a double quote or a backtick (or starting with
+# a quote) in single quotes (unquoted, python-dotenv cut " #..." off, the pipeline did not: audit 2026-11-27). What no
+# form keeps whole is refused with the reason, never written half-read: a line break; "${" (python-dotenv expands it even
+# in single quotes); and in single quotes a single quote, two backslashes in a row or one at the end (python-dotenv reads
+# those as escapes). Secrets never hold a single quote at all (one simple rule to tell people). The value travels in the
+# environment (V), never argv.
+#   _env_py check|check-secret            -> prints the reason and exits 1 when V cannot be written; nothing otherwise
+#   _env_py write FILE                    -> K=V written into FILE (the first copy of K replaced, later copies removed)
+_env_py() {
+  python3 - "$@" <<'EOF'
+import os, re, sys
+mode, v, k = sys.argv[1], os.environ["V"], os.environ.get("K", "")
+# quoted when it holds a space, #, $, " or `, or starts with a quote; an empty value is written K= (v[:1] of "" is "",
+# and "" in "'\"" was True: K='' then, and a person typing after the = got K=''pk.xxx; review 2026-11-28)
+quote = re.search(r"[\s#$\"`]", v) is not None or v.startswith(("'", '"'))
+why = ""
+# every line break str.splitlines() knows (the readers split .env with it): \n \r \v \f \x1c \x1d \x1e \x85 U+2028 U+2029
+if any(ch in v for ch in "\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029"):
+    why = "a line break (or a character that reads as one: vertical tab, form feed, \\x1c-\\x1e, \\x85, U+2028, U+2029)"
+elif "${" in v:
+    why = "${ (python-dotenv expands it, quoted or not; the pipeline does not)"
+elif "'" in v and (mode == "check-secret" or quote):
+    why = "a single quote (')" + ("" if mode == "check-secret" else " at its start or together with a space, #, $, \" or `")
+elif quote and (v.endswith("\\") or "\\\\" in v):
+    why = "two backslashes in a row, or one at the end, together with a space, #, $, \" or `"
+if why:
+    print(f"{k + ': ' if k else ''}it cannot contain {why}: the platform and the pipeline would read it differently. "
+          "Please use another one (change it where it is set, if it is an existing password).")
+    sys.exit(1)
+if mode != "write":
+    sys.exit(0)
+p = sys.argv[2]
+line = f"{k}='{v}'" if quote else f"{k}={v}"
+text = open(p, encoding="utf-8").read() if os.path.exists(p) else ""
+# the first copy of the key gets the value; later copies are removed, so every reader sees the one value (review
+# 2026-11-13); line by line, so another key that only ends in the same name is never touched. Split at \n only: the
+# other lines are written back exactly as they were (splitlines() also split at \x85, U+2028..., and joined them with \n)
+out, done = [], False
+lines = text.split("\n")
+if lines and lines[-1] == "":
+    lines.pop()                       # the file's last line break (splitlines() gave no empty last line either)
+for ln in lines:
+    if re.match(rf"^{re.escape(k)}=", ln):
+        if not done:
+            out.append(line); done = True
+        continue
+    out.append(ln)
+if not done:
+    out.append(line)
+text = "\n".join(out).rstrip("\n") + "\n"
+fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+with os.fdopen(fd, "w", encoding="utf-8") as f:
+    f.write(text)
+os.chmod(p, 0o600)
+EOF
+}
+v_env_secret() { V="$1" _env_py check-secret; }   # a validator: the reason a secret cannot be written, exit 1
 ask_secret() {  # KEY TITLE TEXT [allow-empty]  -> REPLY (never logged)
   [ "$UI" = dialog ] && fit_windows
-  local k="$1" t="$2" x="$3" empty="${4:-no}" a b
+  local k="$1" t="$2" x="$3" empty="${4:-no}" a b err
   if step "$k"; then record "$k" "$REPLY"; return 0; fi
-  if [ -n "${ANS[$k]+x}" ]; then REPLY="${ANS[$k]}"; log "answer $k (secret, from file)"; record "$k" "$REPLY"; return 0; fi
+  if [ -n "${ANS[$k]+x}" ]; then
+    REPLY="${ANS[$k]}"
+    if ! err=$(v_env_secret "$REPLY"); then echo "Answer for $k is not valid: $err" >&2; exit 1; fi
+    log "answer $k (secret, from file)"; record "$k" "$REPLY"; return 0
+  fi
   if [ "$INTERACTIVE" = 0 ] || [ "$ASSUME_YES" = 1 ]; then
     [ "$empty" = yes ] && { REPLY=""; return 0; }
     echo "No answer for $k (a secret must be given in the answers file or typed)." >&2; exit 1
@@ -272,6 +335,8 @@ ask_secret() {  # KEY TITLE TEXT [allow-empty]  -> REPLY (never logged)
       if [ "$a" = "<" ]; then go_back || true; continue; fi
     fi
     if [ -z "$a" ]; then [ "$empty" = yes ] && { REPLY=""; log "answer $k (secret, empty)"; record "$k" ""; return 0; }; msg "Please check" "This cannot be empty."; continue; fi
+    # asked again here, before anything is installed: never refused half way through the installation (audit 2026-11-27)
+    if ! err=$(v_env_secret "$a"); then msg "Please check" "$err"; continue; fi
     if [ "$UI" = dialog ]; then
       rc=0
       b=$(whiptail --title " $t " --backtitle "$TITLE" --cancel-button Back --passwordbox "Type it again to confirm." 9 $W 3>&1 1>&2 2>&3) || rc=$?
@@ -399,31 +464,17 @@ trap 'gauge_close; [ -n "${SUDO_KEEPALIVE:-}" ] && kill "$SUDO_KEEPALIVE" 2>/dev
 trap 'rc=$?; log "unexpected error (exit $rc) at line $LINENO: $BASH_COMMAND"; gauge_close; fail "Unexpected error at line $LINENO of install.sh (exit code $rc). Please report it with the log."' ERR
 
 # ---------------------------------------------------------------------------------------------------------- helpers
-env_set() {  # FILE KEY VALUE   (value passed through the environment, never on a command line)
-  K="$2" V="$3" python3 - "$1" <<'EOF'
-import os, re, sys
-p, k, v = sys.argv[1], os.environ["K"], os.environ["V"]
-text = open(p, encoding="utf-8").read() if os.path.exists(p) else ""
-line = f"{k}={v}"
-# the first copy of the key gets the value; later copies are removed, so every reader sees the one value (review
-# 2026-11-13); line by line, so another key that only ends in the same name is never touched
-out, done = [], False
-for ln in text.splitlines():
-    if re.match(rf"^{re.escape(k)}=", ln):
-        if not done:
-            out.append(line); done = True
-        continue
-    out.append(ln)
-if not done:
-    out.append(line)
-text = "\n".join(out).rstrip("\n") + "\n"
-fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-with os.fdopen(fd, "w", encoding="utf-8") as f:
-    f.write(text)
-os.chmod(p, 0o600)
-EOF
+env_set() {  # FILE KEY VALUE   (value passed through the environment, never on a command line; the rule: _env_py)
+  local why
+  if ! why="$(K="$2" V="$3" _env_py write "$1")"; then
+    # said plainly and stopped, never an "unexpected error" (secrets are checked as they are typed, so this is rare)
+    if declare -F fail >/dev/null; then declare -F gauge_close >/dev/null && gauge_close; fail "Not written to $1: ${why:-could not write $2}"; fi
+    echo "Not written to $1: ${why:-could not write $2}" >&2; return 1
+  fi
 }
-env_get() { grep -E "^$2=" "$1" 2>/dev/null | head -n1 | cut -d= -f2- || true; }
+# env_get FILE KEY: the value as written, without the quotes env_set may have put around it. Read as database/deploy.sh,
+# uninstall.sh and the pipeline read it: spaces around the = and around the value trimmed (review 2026-11-28). One line.
+env_get() { local v; v="$(grep -E "^[[:space:]]*$2[[:space:]]*=" "$1" 2>/dev/null | head -n1 | cut -d= -f2- || true)"; v="${v%$'\r'}"; v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]]}"}"; if [[ ${#v} -ge 2 && ( $v == \'*\' || $v == \"*\" ) ]]; then v="${v:1:${#v}-2}"; fi; printf '%s\n' "$v"; }
 gen_password() { python3 -c 'import secrets; print(secrets.token_urlsafe(24))'; }
 v_port() { [[ $1 =~ ^[0-9]+$ ]] && [ "$1" -ge 1 ] && [ "$1" -le 65535 ] || { echo "A port is a number from 1 to 65535."; return 1; }; }
 v_nonempty() { [ -n "$1" ] || { echo "This cannot be empty."; return 1; }; }
@@ -438,15 +489,34 @@ v_mongo_port() {  # free, or already our own MongoDB (a re-run)
 # ports that Chrome, Edge and Firefox refuse to open ("ERR_UNSAFE_PORT"; their shared list, 2026)
 BROWSER_BLOCKED=" 1 7 9 11 13 15 17 19 20 21 22 23 25 37 42 43 53 69 77 79 87 95 101 102 103 104 109 110 111 113 115 117 119 123 135 137 139 143 161 179 389 427 465 512 513 514 515 526 530 531 532 540 548 554 556 563 587 601 636 989 990 993 995 1719 1720 1723 2049 3659 4045 4190 5060 5061 6000 6566 6665 6666 6667 6668 6669 6679 6697 10080 "
 safe_free_port() { local q; for q in 8443 5000 5088 8080 8888 9443; do in_use "$q" || { echo "$q"; return; }; done; echo 8443; }
+# the Looking Glass service already installed from this folder (a re-run), found as deploy/caddy_front.sh finds it: the
+# name deploy/install.sh wrote into .env (LG_SERVICE), else the service that runs gunicorn in this folder, else
+# looking-glass (2026-11-26 production check: "looking-glass" was hard-coded, so a service named otherwise had its own
+# port refused as "used by another program", and behind Caddy its backend port given up for a new one)
+lg_service() {
+  local s u wd
+  s="$(env_get "$PF_DIR/.env" LG_SERVICE | tr -d "\"' \r")"
+  if [ -z "$s" ]; then
+    for u in $(systemctl list-units --type=service --all --no-legend --plain 2>/dev/null | awk '{print $1}' || true); do
+      case "$(systemctl show -p ExecStart --value "$u" 2>/dev/null || true)" in *gunicorn*) ;; *) continue ;; esac
+      wd="$(systemctl show -p WorkingDirectory --value "$u" 2>/dev/null || true)"
+      [ -n "$wd" ] && [ "$(realpath -m "$wd")" = "$(realpath -m "$PF_DIR")" ] && { s="${u%.service}"; break; }
+    done
+  fi
+  printf '%s\n' "${s:-looking-glass}"
+}
+lg_binds() {  # PORT [ADDRESS-PATTERN]: that service listens on it (--bind A:P, --bind=A:P, as deploy/service_unit.py writes it)
+  local a="${2:-[^ ;]*}"
+  systemctl show -p ExecStart --value "$(lg_service)" 2>/dev/null | grep -qE -- "--bind[= ]$a:$1( |;|$)"
+}
 v_lg_port() {  # free, or already a Looking Glass service (a re-run); never one browsers refuse to open
   v_port "$1" || return 1
   [[ $BROWSER_BLOCKED == *" $1 "* ]] && { echo "Browsers refuse to open port $1 (Chrome, Edge and Firefox show ERR_UNSAFE_PORT). Choose another, for example $(safe_free_port)."; return 1; }
   in_use "$1" || return 0
   # Caddy in front of an earlier installation (deploy/caddy_front.sh) listens on the public port: a re-run keeps it
   head -1 /etc/caddy/Caddyfile 2>/dev/null | grep -q 'Managed by Looking Glass' && grep -qE "^https://[^ ]*:$1 \{|^https://:$1 \{" /etc/caddy/Caddyfile && return 0
-  local s; for s in looking-glass threatmap; do
-    systemctl show -p ExecStart --value "$s" 2>/dev/null | grep -qE -- "--bind [^ ]*:$1( |;|$)" && [ "$(stat -c %U "$PF_DIR")" = "$(id -un)" ] && [ "$s" = looking-glass ] && return 0
-  done
+  # Looking Glass itself on that port (any address: behind Caddy it listens on 127.0.0.1), under its own service name
+  [ "$(stat -c %U "$PF_DIR" 2>/dev/null)" = "$(id -un)" ] && lg_binds "$1" && return 0
   echo "Port $1 is already used by another program$([ $IS_WSL = 1 ] && echo ' (on WSL this can be another Linux distribution or Windows)'). Choose a free port, for example 5088."
   return 1
 }
@@ -676,14 +746,19 @@ Folder: $ROOT"
 chk_py() { "$CHK" - "$@"; }
 check_mail() {  # uses the M_* variables; writes a temporary env file (mode 600) for the pipeline's own test
   local tmp rc out; tmp="$(mktemp "$ROOT/install-logs/.mailtest.XXXXXX")"; chmod 600 "$tmp"
-  { echo "MAIL_PROVIDER=$M_PROVIDER"; echo "MAIL_TIMEOUT=20"
-    case "$M_PROVIDER" in
-      imap) printf 'IMAP_SERVER=%s\nIMAP_USER=%s\nIMAP_PASSWORD=%s\nIMAP_FOLDER=%s\nIMAP_VERIFY_TLS=%s\n' \
-              "$IMAP_SERVER" "$IMAP_USER" "$IMAP_PASSWORD" "$IMAP_FOLDER" "$IMAP_VERIFY_TLS" ;;
-      gmail_api) printf 'GMAIL_SERVICE_ACCOUNT_FILE=%s\nGMAIL_USER=%s\nGMAIL_LABEL=%s\n' "$GMAIL_KEY_SRC" "$GMAIL_USER" "$GMAIL_LABEL" ;;
-      microsoft_graph) printf 'MS_TENANT_ID=%s\nMS_CLIENT_ID=%s\nMS_CLIENT_SECRET=%s\nMS_MAILBOX=%s\nMS_FOLDER=%s\n' \
-              "$MS_TENANT_ID" "$MS_CLIENT_ID" "$MS_CLIENT_SECRET" "$MS_MAILBOX" "$MS_FOLDER" ;;
-    esac; } > "$tmp"
+  # written as database/.env will be (env_set), so the test reads the values the pipeline will read
+  local kv kvs=("MAIL_PROVIDER=$M_PROVIDER" "MAIL_TIMEOUT=20")
+  case "$M_PROVIDER" in
+    imap) kvs+=("IMAP_SERVER=$IMAP_SERVER" "IMAP_USER=$IMAP_USER" "IMAP_PASSWORD=$IMAP_PASSWORD" "IMAP_FOLDER=$IMAP_FOLDER"
+                "IMAP_VERIFY_TLS=$IMAP_VERIFY_TLS") ;;
+    gmail_api) kvs+=("GMAIL_SERVICE_ACCOUNT_FILE=$GMAIL_KEY_SRC" "GMAIL_USER=$GMAIL_USER" "GMAIL_LABEL=$GMAIL_LABEL") ;;
+    microsoft_graph) kvs+=("MS_TENANT_ID=$MS_TENANT_ID" "MS_CLIENT_ID=$MS_CLIENT_ID" "MS_CLIENT_SECRET=$MS_CLIENT_SECRET"
+                           "MS_MAILBOX=$MS_MAILBOX" "MS_FOLDER=$MS_FOLDER") ;;
+  esac
+  # (in $(...): a value that cannot be written is the reason printed, as any other failed check; never fail() here)
+  for kv in "${kvs[@]}"; do
+    out="$(K="${kv%%=*}" V="${kv#*=}" _env_py write "$tmp")" || { rm -f "$tmp"; echo "$out"; return 1; }
+  done
   out="$(cd "$DB_DIR" && env -u MAIL_PROVIDER "$CHK" shadowserver_pipeline.py --env-file "$tmp" --test-mail --days 1 2>&1 | tail -n1)" || true
   rm -f "$tmp"
   log "mail check: ${out:0:200}"
@@ -800,10 +875,42 @@ pairs = {(r["role"], r["db"]) for r in roles}
 names = {r for r, _ in pairs}
 if user:
     can_write = bool(names & {"root", "readWriteAnyDatabase"}) or bool(pairs & {("readWrite", db), ("dbOwner", db)})
+    missing = []
+    if need_write and not can_write:
+        # a role of its own (create_pipeline_db_user.py --print has an external MongoDB's administrator make
+        # lookingglass_pipeline_on_<db>@admin, without readWrite's drop and rename): what MongoDB says the account may
+        # do decides, not the role's name: every right the pipeline uses, on the database itself (review 2026-11-28)
+        try:
+            privs = c.admin.command("connectionStatus", showPrivileges=True)["authInfo"].get("authenticatedUserPrivileges", [])
+        except PyMongoError:
+            privs = []
+        acts = set()
+        for p in privs:
+            res = p.get("resource") or {}
+            if res.get("anyResource") or (res.get("db") in (db, "") and res.get("collection", "") == ""):
+                acts |= set(p.get("actions") or [])
+        # the rights the pipeline uses: WRITE_ACTIONS of database/create_pipeline_db_user.py (read from it when it is
+        # here; else the same list, kept in step with it)
+        need = {"find", "insert", "update", "remove", "createIndex", "createCollection", "listCollections"}
+        for d in [p for p in os.environ.get("MDBPATH", "").split(":") if p]:
+            try:
+                import ast
+                with open(os.path.join(d, "create_pipeline_db_user.py"), encoding="utf-8") as fh:
+                    tree = ast.parse(fh.read())
+                need = next(set(ast.literal_eval(n.value)) for n in tree.body if isinstance(n, ast.Assign)
+                            and [getattr(t, "id", "") for t in n.targets] == ["WRITE_ACTIONS"])
+                break
+            except (OSError, SyntaxError, ValueError, StopIteration):
+                continue
+        missing = sorted(need - acts)
+        can_write = not missing
     can_users = bool(names & {"root", "userAdminAnyDatabase"}) or bool(pairs & {("userAdmin", db), ("dbOwner", db), ("userAdmin", "admin")})
     if need_write and not can_write:
-        print(f"{user} can log in but cannot write to the database '{db}' (roles: {', '.join(sorted(r + '@' + d for r, d in pairs)) or 'none'}). "
-              "The pipeline stores the reports, so it needs readWrite on that database (or root)."); sys.exit(1)
+        print(f"{user} can log in but cannot write to the database '{db}' (roles: {', '.join(sorted(r + '@' + d for r, d in pairs)) or 'none'}"
+              + (f"; missing: {', '.join(missing)}" if missing else "") + "). "
+              f"The pipeline stores the reports, so it needs to read, add, change and delete rows and create collections "
+              f"and indexes on that database: the role "
+              f"lookingglass_pipeline_on_{db} (create_pipeline_db_user.py --print shows how to make it), readWrite, or root."); sys.exit(1)
     if need_useradmin and not can_users:
         print(f"{user} can log in but cannot create accounts (roles: {', '.join(sorted(r + '@' + d for r, d in pairs)) or 'none'}). "
               "Use an administrator account, or answer No to 'is this an administrator account'."); sys.exit(1)
@@ -958,6 +1065,16 @@ mongo_local_questions() {
     ask_input MONGO_ADMIN_USER "MongoDB administrator" "Name of the MongoDB administrator account (as created the first time):" "${OLD_MUSER:-shadowserver_admin}" v_user; MONGO_ADMIN_USER="$REPLY"
     # use the stored password, unless another one is given (an empty answer = use it) or another account was named
     [ "$MONGO_ADMIN_USER" = "$OLD_MUSER" ] || OLD_MPW=""
+    # a stored password this release's .env rule cannot write (a ', a line break or ${): asked for, with the reason,
+    # instead of stopping later (Ponytail review, 2026-11-28)
+    if [ -n "$OLD_MPW" ] && ! why_old="$(v_env_secret "$OLD_MPW")"; then
+      log "the stored MongoDB password cannot be kept as it is"
+      # in the dialog interface a window of its own (a line on stderr is hidden by the password box that follows)
+      if [ "$UI" = dialog ]; then msg "MongoDB administrator password" "The stored MongoDB password cannot be kept as it is: $why_old"
+      else printf '%s\n' "The stored MongoDB password cannot be kept as it is: $why_old" >&2; fi
+      OLD_MPW=""
+    fi
+    unset why_old
     if [ -n "${ANS[MONGO_ADMIN_PASSWORD]:-}" ] || [ -z "$OLD_MPW" ]; then
       ask_secret MONGO_ADMIN_PASSWORD "MongoDB administrator password" "Password of '$MONGO_ADMIN_USER' (the first installation kept it in /etc/looking-glass/mongo-admin.env: sudo cat it; or in database/.env.before-pipeline-account or database/.env):"
       MONGO_ADMIN_PASSWORD="$REPLY"
@@ -1056,7 +1173,17 @@ No: the platform uses '$MONGO_ADMIN_USER' as it is (it should be read-only)." ye
                  "$([ $WANT_PF = 1 ] && echo "$READONLY" || echo no)" "$([ $WANT_DB = 1 ] && echo yes || echo no)")"; then rc=0; else rc=$?; fi
     if [ $rc = 0 ]; then passed "MongoDB login succeeded.\n\n$reason"; break; fi
     if [ $rc = 3 ]; then
-      # it answers, but '$MONGO_DB' holds something else: a database of its own for Looking Glass there, or this computer
+      # it answers, but '$MONGO_DB' holds something else: a database of its own for Looking Glass there, or this computer.
+      # Without a person to answer (an answers file, --yes, no terminal) the same answers come back every time: the same
+      # database refused twice stops the installer, never a loop that runs for ever (2026-11-26 production check)
+      seen="$MONGO_HOST:$MONGO_PORT/$MONGO_DB"; DB_REFUSED="${DB_REFUSED:- }"
+      if [ "$INTERACTIVE" = 0 ] || [ "$ASSUME_YES" = 1 ] || [ -n "${ANS[DB_MISMATCH]+x}" ]; then
+        [[ $DB_REFUSED == *" $seen "* ]] && fail "The database $MONGO_DB on $MONGO_HOST:$MONGO_PORT is not a Looking Glass database, and the answers (answers file, --yes or no terminal) name it again. Give another database name (MONGO_DB) in the answers file, or run the installer at a terminal."
+      else
+        # a person answers: the next database name is theirs to type, not the answers file's again
+        unset "ANS[MONGO_DB]"
+      fi
+      DB_REFUSED+="$seen "
       opts=(newdb "Create a new database for Looking Glass on $MONGO_HOST (recommended)")
       [ "$MONGO_MODE" = remote ] && opts+=(local "Install MongoDB on this computer instead (the reports stay on this server)")
       opts+=(retry "Give another server, account or database name")
@@ -1389,7 +1516,7 @@ Leave empty if none." "" ""; ALLOWED_HOSTS="$REPLY"
     LG_PORT=""
     for q in $(seq 5000 5099); do
       [ "$q" = "$PUBLIC_PORT" ] && continue
-      if ! in_use "$q" || systemctl show -p ExecStart --value looking-glass 2>/dev/null | grep -qE -- "--bind 127\.0\.0\.1:$q( |;|$)"; then LG_PORT="$q"; break; fi
+      if ! in_use "$q" || lg_binds "$q" '127\.0\.0\.1'; then LG_PORT="$q"; break; fi
     done
     [ -n "$LG_PORT" ] || fail "No free port between 5000 and 5099 for Looking Glass behind Caddy."
     passed "Caddy will answer on port $PUBLIC_PORT; Looking Glass listens on this computer only, port $LG_PORT."
@@ -1405,13 +1532,13 @@ Only AS numbers are sent, to PeeringDB and RIPEstat (public registries); nothing
 
 If you choose No:
   • demo mode and masked views show every network as \"Unlisted network\";
-  • one check (the demo masking check's alias test) is SKIPPED until the names are looked up.
+  • the demo masking check checks exactly that, instead of a network's alias.
 You can do it later: platform/manage/asn_registry.py 7, or Settings > Identify networks." no
   NAMES_LOOKUP="$REPLY"
   [ "$MONGO_MODE" = local ] && READONLY=yes   # (remote: asked with the MongoDB login above)
   ask_input SERVICE_NAME "Service name" "Name of the systemd service:" looking-glass v_user; SERVICE_NAME="$REPLY"
 fi
-ask_yesno RUN_CHECKS "Checks" "Check the installation at the end: settings, data and every security protection? (about 5 minutes)" yes; RUN_CHECKS="$REPLY"
+ask_yesno RUN_CHECKS "Checks" "Check the installation at the end: settings, data and every security protection? (about 20 minutes)" yes; RUN_CHECKS="$REPLY"
 
 # ---- existing configuration
 KEEP_DB_ENV=no; KEEP_PF_ENV=no
@@ -1444,6 +1571,61 @@ case "${SCHEDULE:-off}" in
   *) SCHED_DESC="every day at $SCHEDULE" ;;
 esac
 yesno() { [ "$1" = yes ] && echo yes || echo no; }
+# every value the two .env files will get is checked here, BEFORE anything is installed or replaced: a value the rule
+# refuses (_env_py) stops the installation now, with the reason, instead of half way through after database/.env was
+# already replaced by the example (Ponytail review, 2026-11-28)
+# The values are listed ONCE (env_lists) and the same lists are what is written below, so the check and the writing can
+# never drift apart. *_PLAIN: written as they are; *_SECRET: passwords, keys and tokens (never a single quote).
+DB_PLAIN=(); DB_SECRET=(); PF_PLAIN=(); PF_SECRET=()
+env_lists() {
+  DB_PLAIN=(); DB_SECRET=(); PF_PLAIN=(); PF_SECRET=()
+  if [ $WANT_DB = 1 ]; then
+    if [ "$KEEP_DB_ENV" = no ]; then
+      # GMAIL_SERVICE_ACCOUNT_FILE: where the installation copies the key (database/secrets/, private), always this name
+      DB_PLAIN=("MAIL_PROVIDER=$M_PROVIDER" "IMAP_SERVER=$IMAP_SERVER" "IMAP_USER=$IMAP_USER" "IMAP_FOLDER=$IMAP_FOLDER"
+                "IMAP_VERIFY_TLS=$IMAP_VERIFY_TLS" "GMAIL_SERVICE_ACCOUNT_FILE=secrets/gmail-service-account.json"
+                "GMAIL_USER=$GMAIL_USER" "GMAIL_LABEL=$GMAIL_LABEL" "MS_TENANT_ID=$MS_TENANT_ID" "MS_CLIENT_ID=$MS_CLIENT_ID"
+                "MS_MAILBOX=$MS_MAILBOX" "MS_FOLDER=$MS_FOLDER" "EMAIL_DAYS=$EMAIL_DAYS" "MAIL_AUTH=${MAIL_AUTH:-log}"
+                "REPORT_SOURCE=${REPORT_SOURCE:-email}" "MONGO_HOST=$MONGO_HOST" "MONGO_PORT=$MONGO_PORT"
+                "MONGO_USER=$MONGO_ADMIN_USER" "MONGO_AUTH_SOURCE=$MONGO_AUTH_SOURCE" "MONGO_DB=$MONGO_DB"
+                "MONGO_LOCAL=$([ "$MONGO_MODE" = local ] && echo true || echo false)" "MONGO_BIND=$MONGO_BIND"
+                "MONGO_TLS=$MONGO_TLS" "MONGO_TLS_CA_FILE=$MONGO_TLS_CA_FILE" "MONGO_ALLOW_PLAINTEXT=$MONGO_ALLOW_PLAINTEXT")
+      DB_SECRET=("IMAP_PASSWORD=$IMAP_PASSWORD" "MS_CLIENT_SECRET=$MS_CLIENT_SECRET" "MONGO_PASSWORD=$MONGO_ADMIN_PASSWORD")
+    else
+      # database/.env kept: only what is asked either way (the schedule's look-back, the sender check, e-mail or the API)
+      DB_PLAIN=("EMAIL_DAYS=$EMAIL_DAYS" "MAIL_AUTH=${MAIL_AUTH:-log}" "REPORT_SOURCE=${REPORT_SOURCE:-email}")
+    fi
+    if [ -n "$SS_API_KEY" ]; then DB_SECRET+=("SHADOWSERVER_API_KEY=$SS_API_KEY" "SHADOWSERVER_API_SECRET=$SS_API_SECRET"); fi
+  fi
+  if [ $WANT_PF = 1 ] && [ "$KEEP_PF_ENV" = no ]; then
+    PF_PLAIN=("MONGO_HOST=$MONGO_HOST" "MONGO_PORT=$MONGO_PORT" "MONGO_USER=$MONGO_ADMIN_USER" "MONGO_AUTH_SOURCE=$MONGO_AUTH_SOURCE"
+              "MONGO_TLS=$MONGO_TLS" "MONGO_TLS_CA_FILE=$MONGO_TLS_CA_FILE" "MONGO_ALLOW_PLAINTEXT=$MONGO_ALLOW_PLAINTEXT"
+              "MONGO_DB=$MONGO_DB" "COUNTRY=$COUNTRY" "ACCESS_MODE=$ACCESS_MODE" "VIEWER_NETWORKS=$VIEWER_NETWORKS"
+              "ALLOWED_HOSTS=$ALLOWED_HOSTS" "TRUST_PROXY=$TRUST_PROXY" "ALLOW_INSECURE_REMOTE_LOGIN=$INSECURE"
+              "REGISTRATION=$REGISTRATION" "LG_PORT=$LG_PORT")
+    PF_SECRET=("MONGO_PASSWORD=$MONGO_ADMIN_PASSWORD" "MAPBOX_TOKEN=$MAPBOX_TOKEN" "MALPEDIA_TOKEN=$MALPEDIA_TOKEN")
+  fi
+  return 0
+}
+env_precheck() {
+  local bad="" why kv
+  env_lists
+  for kv in "${DB_PLAIN[@]}" "${PF_PLAIN[@]}"; do
+    why="$(K="${kv%%=*}" V="${kv#*=}" _env_py check)" || bad+="  ${why}"$'\n'
+  done
+  for kv in "${DB_SECRET[@]}" "${PF_SECRET[@]}"; do
+    [ -n "${kv#*=}" ] || continue
+    why="$(K="${kv%%=*}" V="${kv#*=}" _env_py check-secret)" || bad+="  ${why}"$'\n'
+  done
+  # a value that goes into both files (MONGO_HOST, MONGO_PASSWORD...) is named once
+  bad="$(printf '%s' "$bad" | awk '!seen[$0]++')"; [ -z "$bad" ] || bad+=$'\n'
+  if [ -n "$bad" ]; then
+    log "values refused before installing: $(printf '%s' "$bad" | cut -d: -f1 | tr '\n' ' ')"
+    fail "These values cannot be written to .env as they are, so nothing was installed or changed:
+${bad}Change them and run the installer again."
+  fi
+}
+env_precheck
 S="Install:          $([ $WANT_DB = 1 ] && echo -n 'database pipeline ')$([ $WANT_PF = 1 ] && echo -n 'platform')
 MongoDB:          $(case "$MONGO_MODE" in local) [ "$MDB_MANAGED" = 1 ] && echo "keep the one set up before, port $MONGO_PORT" || echo "install here, port $MONGO_PORT$([ "$MONGO_BIND" != 127.0.0.1 ] && echo ", also on ${MONGO_BIND#127.0.0.1,}")" ;; existing) echo "the one already on this computer, port $MONGO_PORT (not reconfigured)" ;; *) echo "internal, $MONGO_HOST:$MONGO_PORT, $([ "$MONGO_TLS" = 1 ] && echo 'TLS' || echo 'NOT encrypted (trusted link)')" ;; esac) · database $MONGO_DB · account ${MONGO_ADMIN_USER:-(none)}"
 if [ $WANT_DB = 1 ]; then S+="
@@ -1452,7 +1634,7 @@ Mailbox:          $MAIL_DESC
 Fetching:         $SCHED_DESC, each run looks back $EMAIL_DAYS day(s) · first run: $([ "$RUN_PIPELINE_NOW" = yes ] && echo "now, $FIRST_DAYS days" || echo later)
 Sender check:     DKIM signature of every report checked; $([ "${MAIL_AUTH:-log}" = enforce ] && echo "reports that do not pass are HELD BACK" || echo "recorded only, nothing held back")"; fi
 if [ $WANT_PF = 1 ]; then S+="
-Country:          $COUNTRY · map token $([ -n "$MAPBOX_TOKEN" ] && echo given || echo 'NOT given (add later)') · Malpedia $([ -n "$MALPEDIA_TOKEN" ] && echo given || echo skipped)
+Country:          $COUNTRY · map token $([ -n "$MAPBOX_TOKEN" ] && echo given || echo 'NOT given (add later)') · Malpedia token $([ -n "$MALPEDIA_TOKEN" ] && echo given || echo 'not given (add later)')
 Access:           $ACCESS_MODE$([ -n "$VIEWER_NETWORKS" ] && echo " ($VIEWER_NETWORKS)") · HTTPS: $HTTPS$([ -n "$TLS_DOMAIN" ] && echo " ($TLS_DOMAIN, certificate checked)")$([ -n "${PUBLIC_PORT:-}" ] && echo " · Caddy in front on port $PUBLIC_PORT, Looking Glass on 127.0.0.1:$LG_PORT" || echo " · port $LG_PORT") · service $SERVICE_NAME
 Accounts:         sign-up on the sign-in page: $([ "$REGISTRATION" = 1 ] && echo on || echo off) · MFA for everyone
 Database account: $([ "$READONLY" = yes ] && echo "a read-only account for the platform$([ $WANT_DB = 1 ] && echo ", and the pipeline's own (its database only)")" || echo "'$MONGO_ADMIN_USER' used as it is")"; fi
@@ -1495,31 +1677,15 @@ if [ $WANT_DB = 1 ]; then
   if [ "$KEEP_DB_ENV" = no ]; then
     [ -f "$DB_DIR/.env" ] && cp -p "$DB_DIR/.env" "$DB_DIR/.env.before-install-$(date +%Y%m%d-%H%M%S)"
     install -m 600 "$DB_DIR/.env.example" "$DB_DIR/.env"
-    GMAIL_KEY_DST=""
-    if [ "$M_PROVIDER" = gmail_api ]; then   # the key goes next to the pipeline, private
+    if [ "$M_PROVIDER" = gmail_api ]; then   # the key goes next to the pipeline, private (GMAIL_SERVICE_ACCOUNT_FILE)
       install -d -m 700 "$DB_DIR/secrets"
       install -m 600 "$GMAIL_KEY_SRC" "$DB_DIR/secrets/gmail-service-account.json"
-      GMAIL_KEY_DST="secrets/gmail-service-account.json"
     fi
-    for kv in "MAIL_PROVIDER=$M_PROVIDER" "IMAP_SERVER=$IMAP_SERVER" "IMAP_USER=$IMAP_USER" "IMAP_FOLDER=$IMAP_FOLDER" "IMAP_VERIFY_TLS=$IMAP_VERIFY_TLS" \
-              "GMAIL_SERVICE_ACCOUNT_FILE=${GMAIL_KEY_DST:-secrets/gmail-service-account.json}" "GMAIL_USER=$GMAIL_USER" "GMAIL_LABEL=$GMAIL_LABEL" \
-              "MS_TENANT_ID=$MS_TENANT_ID" "MS_CLIENT_ID=$MS_CLIENT_ID" "MS_MAILBOX=$MS_MAILBOX" "MS_FOLDER=$MS_FOLDER" "EMAIL_DAYS=$EMAIL_DAYS" \
-              "MAIL_AUTH=${MAIL_AUTH:-log}" "REPORT_SOURCE=${REPORT_SOURCE:-email}" \
-              "MONGO_HOST=$MONGO_HOST" "MONGO_PORT=$MONGO_PORT" "MONGO_USER=$MONGO_ADMIN_USER" "MONGO_AUTH_SOURCE=$MONGO_AUTH_SOURCE" \
-              "MONGO_DB=$MONGO_DB" "MONGO_LOCAL=$([ "$MONGO_MODE" = local ] && echo true || echo false)" "MONGO_BIND=$MONGO_BIND" \
-              "MONGO_TLS=$MONGO_TLS" "MONGO_TLS_CA_FILE=$MONGO_TLS_CA_FILE" "MONGO_ALLOW_PLAINTEXT=$MONGO_ALLOW_PLAINTEXT"; do
-      env_set "$DB_DIR/.env" "${kv%%=*}" "${kv#*=}"
-    done
-    env_set "$DB_DIR/.env" IMAP_PASSWORD "$IMAP_PASSWORD"
-    env_set "$DB_DIR/.env" MS_CLIENT_SECRET "$MS_CLIENT_SECRET"
-    env_set "$DB_DIR/.env" MONGO_PASSWORD "$MONGO_ADMIN_PASSWORD"
-    if [ -n "$SS_API_KEY" ]; then env_set "$DB_DIR/.env" SHADOWSERVER_API_KEY "$SS_API_KEY"; env_set "$DB_DIR/.env" SHADOWSERVER_API_SECRET "$SS_API_SECRET"; fi
-  else
-    env_set "$DB_DIR/.env" EMAIL_DAYS "$EMAIL_DAYS"    # goes with the schedule, which is applied either way
-    env_set "$DB_DIR/.env" MAIL_AUTH "${MAIL_AUTH:-log}"   # the sender check: asked either way
-    env_set "$DB_DIR/.env" REPORT_SOURCE "${REPORT_SOURCE:-email}"   # e-mail or the API: asked either way
-    if [ -n "$SS_API_KEY" ]; then env_set "$DB_DIR/.env" SHADOWSERVER_API_KEY "$SS_API_KEY"; env_set "$DB_DIR/.env" SHADOWSERVER_API_SECRET "$SS_API_SECRET"; fi
   fi
+  # exactly the values env_precheck checked (env_lists): all of them, or with database/.env kept only what is asked either way
+  for kv in "${DB_PLAIN[@]}" "${DB_SECRET[@]}"; do
+    env_set "$DB_DIR/.env" "${kv%%=*}" "${kv#*=}"
+  done
   if declare -F wait_for_apt >/dev/null && apt_lock_holder >/dev/null; then
     # shown in the progress window; after 10 minutes without progress the person chooses (gauge_ask)
     APT_ASK=gauge_ask wait_for_apt gauge_wait || { gauge_close; fail "Stopped while waiting for the package manager (nothing was installed after that point)."; }
@@ -1557,16 +1723,11 @@ if [ $WANT_PF = 1 ]; then
   if [ "$KEEP_PF_ENV" = no ]; then
     [ -f "$PF_DIR/.env" ] && cp -p "$PF_DIR/.env" "$PF_DIR/.env.before-install-$(date +%Y%m%d-%H%M%S)"
     install -m 600 "$PF_DIR/.env.example" "$PF_DIR/.env"
-    for kv in "MONGO_HOST=$MONGO_HOST" "MONGO_PORT=$MONGO_PORT" "MONGO_USER=$MONGO_ADMIN_USER" "MONGO_AUTH_SOURCE=$MONGO_AUTH_SOURCE" \
-              "MONGO_TLS=$MONGO_TLS" "MONGO_TLS_CA_FILE=$MONGO_TLS_CA_FILE" "MONGO_ALLOW_PLAINTEXT=$MONGO_ALLOW_PLAINTEXT" \
-              "MONGO_DB=$MONGO_DB" "COUNTRY=$COUNTRY" "ACCESS_MODE=$ACCESS_MODE" "VIEWER_NETWORKS=$VIEWER_NETWORKS" \
-              "ALLOWED_HOSTS=$ALLOWED_HOSTS" "TRUST_PROXY=$TRUST_PROXY" "ALLOW_INSECURE_REMOTE_LOGIN=$INSECURE" \
-              "REGISTRATION=$REGISTRATION" "LG_PORT=$LG_PORT"; do
+    # exactly the values env_precheck checked (env_lists)
+    for kv in "${PF_PLAIN[@]}" "${PF_SECRET[@]}"; do
       env_set "$PF_DIR/.env" "${kv%%=*}" "${kv#*=}"
     done
-    env_set "$PF_DIR/.env" MONGO_PASSWORD "$MONGO_ADMIN_PASSWORD"
-    env_set "$PF_DIR/.env" MAPBOX_TOKEN "$MAPBOX_TOKEN"
-    env_set "$PF_DIR/.env" MALPEDIA_TOKEN "$MALPEDIA_TOKEN"
+    # made here, never typed: hexadecimal, always written as they are
     env_set "$PF_DIR/.env" REF_SECRET "$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
     # the connectors' stored keys are encrypted under this (connectors.py); the service can read .env, never change it
     env_set "$PF_DIR/.env" CONNECTOR_KEY_SECRET "$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
@@ -1575,12 +1736,13 @@ if [ $WANT_PF = 1 ]; then
   # --no-sources: the name sources are downloaded below as a step of their own, which never stops the installation
   # Looking Glass never listens on the network itself: locally it serves this computer, otherwise Caddy is in front
   iargs=(--port "$LG_PORT" --name "$SERVICE_NAME" --no-sources)
-  run "platform install (deploy/install.sh)" bash -c "cd '$PF_DIR' && deploy/install.sh ${iargs[*]}"
+  # the folder and the arguments as arguments, never pasted into the command (a folder name with a quote; audit 2026-11-27)
+  run "platform install (deploy/install.sh)" bash -c 'cd "$1" && shift && deploy/install.sh "$@"' _ "$PF_DIR" "${iargs[@]}"
   # MISP Galaxy and MITRE ATT&CK (public files from GitHub): what explains malware names Malpedia and the researchers do
   # not, and the ATT&CK techniques of reports, advisories and CVEs. Refreshed weekly by cron (deploy/install.sh step 5).
   gauge 66 "Downloading MISP Galaxy and MITRE ATT&CK (public lists that explain malware names; about a minute)..."
   SOURCES_WARN=""
-  if bg_wait bash -c "cd '$PF_DIR' && manage/fetch_offline_names.py --by installer"; then
+  if bg_wait bash -c 'cd "$1" && manage/fetch_offline_names.py --by installer' _ "$PF_DIR"; then
     log "name sources downloaded"
   else
     SOURCES_WARN="MISP Galaxy / MITRE ATT&CK not (all) downloaded (no internet?): the weekly refresh tries again, or run platform/manage/fetch_offline_names.py."
@@ -1588,14 +1750,20 @@ if [ $WANT_PF = 1 ]; then
   fi
   if [ "$KEEP_PF_ENV" = no ] && [ "$READONLY" = yes ]; then
     gauge 70 "Creating a read-only database account for the platform..."
-    run "read-only MongoDB account" bash -c "cd '$PF_DIR' && .venv/bin/python deploy/create_readonly_db_user.py"
+    run "read-only MongoDB account" bash -c 'cd "$1" && .venv/bin/python deploy/create_readonly_db_user.py' _ "$PF_DIR"
     # the administrator password stays only in /etc/looking-glass/mongo-admin.env (root only), or in database/.env if the
     # pipeline kept it; nowhere on this computer for a remote MongoDB
     if [ -f "$PF_DIR/.env.before-readonly" ]; then shred -u "$PF_DIR/.env.before-readonly" 2>/dev/null || rm -f "$PF_DIR/.env.before-readonly"; fi
   fi
   if [ "$HTTPS" = selfsigned ]; then
     gauge 74 "Making the HTTPS certificate..."
-    run "HTTPS certificate" bash -c "cd '$PF_DIR' && deploy/make_tls_cert.sh"
+    if [ -n "$PUBLIC_PORT" ]; then
+      # Caddy is set up below (caddy_front.sh setup) and given this certificate then: make_tls_cert.sh's exit 3 (made,
+      # an earlier Caddy in front not given it yet) is not a failure here
+      run "HTTPS certificate" bash -c 'cd "$1" && { deploy/make_tls_cert.sh || [ $? = 3 ]; }' _ "$PF_DIR"
+    else
+      run "HTTPS certificate" bash -c 'cd "$1" && deploy/make_tls_cert.sh' _ "$PF_DIR"
+    fi
   fi
   if [ "$HTTPS" = domain ]; then
     # checked again as it is installed (the files may have changed since the questions); recorded in the audit log
@@ -1666,7 +1834,8 @@ if [ $WANT_PF = 1 ]; then
   if ! bg_wait sudo bash "$PF_DIR/deploy/update_helper.sh" install; then
     PF_WARN="${PF_WARN:+$PF_WARN }Settings -> Update needs its helper: run platform/deploy/update_helper.sh install."
   fi
-  [ -z "$MAPBOX_TOKEN" ] && PF_WARN="No Mapbox token yet: add MAPBOX_TOKEN to platform/.env, then platform/deploy/reload.sh."
+  # added to the notes before it, never in their place (audit 2026-11-27: it replaced the timer and update-helper notes)
+  [ -z "$MAPBOX_TOKEN" ] && PF_WARN="${PF_WARN:+$PF_WARN }No Mapbox token yet: add MAPBOX_TOKEN to platform/.env, then platform/deploy/reload.sh."
   [ -n "$SOURCES_WARN" ] && PF_WARN="${PF_WARN:+$PF_WARN }$SOURCES_WARN"
 fi
 
@@ -1684,14 +1853,14 @@ if [ $WANT_PF = 1 ] && [ "${NAMES_LOOKUP:-no}" = yes ]; then
     || PF_WARN="${PF_WARN:+$PF_WARN }The network names could not be looked up now (see the log): run platform/manage/asn_registry.py 7 later."
 fi
 if [ "$RUN_CHECKS" = yes ]; then
-  if [ $WANT_DB = 1 ]; then gauge 84 "Checking the database pipeline..."; check "database pipeline setup (shadowserver check)" bash -c "cd '$DB_DIR' && ./check.sh"; fi
+  if [ $WANT_DB = 1 ]; then gauge 84 "Checking the database pipeline..."; check "database pipeline setup (shadowserver check)" bash -c 'cd "$1" && ./check.sh' _ "$DB_DIR"; fi
   if [ $WANT_PF = 1 ]; then
     gauge 86 "Checking the platform's libraries..."
-    check "platform libraries (tests/check_libraries.py)" bash -c "cd '$PF_DIR' && .venv/bin/python tests/check_libraries.py"
-    gauge 88 "Checking the platform's security protections (about 2 minutes)..."
-    check "platform security protections (security_testing/security_retest.py)" bash -c "cd '$PF_DIR' && security_testing/security_retest.py"
-    gauge 94 "Checking both platforms against the database (about 2 minutes)..."
-    check "platform checks (tests/run_all_checks.sh)" bash -c "cd '$PF_DIR' && tests/run_all_checks.sh"
+    check "platform libraries (tests/check_libraries.py)" bash -c 'cd "$1" && .venv/bin/python tests/check_libraries.py' _ "$PF_DIR"
+    gauge 88 "Checking the platform's security protections (about 10 minutes)..."
+    check "platform security protections (security_testing/security_retest.py)" bash -c 'cd "$1" && security_testing/security_retest.py' _ "$PF_DIR"
+    gauge 94 "Checking both platforms against the database (about 10 minutes)..."
+    check "platform checks (tests/run_all_checks.sh)" bash -c 'cd "$1" && tests/run_all_checks.sh' _ "$PF_DIR"
   fi
 fi
 gauge 100 "Done."
@@ -1732,8 +1901,8 @@ Note: a library the platform uses is missing, outside the versions it supports, 
       differently. This does not depend on reports. See the log, or run: platform/.venv/bin/python
       platform/tests/check_libraries.py"; fi
 [ $WANT_PF = 1 ] && [ "${NAMES_LOOKUP:-no}" != yes ] && OUT+="
-Note: network names were not looked up, so demo mode shows \"Unlisted network\" and the demo masking check
-      skips its alias test. Later: platform/manage/asn_registry.py 7 (only AS numbers are sent)."
+Note: network names were not looked up, so demo mode shows \"Unlisted network\" for every network (the demo
+      masking check checks that). Later: platform/manage/asn_registry.py 7 (only AS numbers are sent)."
 [ $WANT_PF = 1 ] && OUT+="
 
 Next: open $PF_URL on this computer and choose \"Let's get started\" to create the

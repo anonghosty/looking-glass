@@ -86,12 +86,21 @@ class Geocoder:
                 self.flush()
 
     def flush(self):
+        """The cache written to its file. Never raises (audit 2026-11-27: a full disk or a read-only folder made the
+        map's request fail through lookup()): False when it could not be written, the places stay in memory and are
+        written with the next flush."""
         with self.lock:
             tmp = self.cache_path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(self.cache, f)
-            os.replace(tmp, self.cache_path)
+            try:
+                with open(tmp, "w", encoding="utf-8") as f:
+                    json.dump(self.cache, f)
+                os.replace(tmp, self.cache_path)
+            except (OSError, TypeError, ValueError):
+                # a half-written .tmp is left as it is: the next flush writes it whole again
+                self._dirty = 1                 # still to write; the next try after 24 more places (or app.py's flush)
+                return False
             self._dirty = 0
+            return True
 
     def lookup(self, cc, region, city):
         """Return [lon, lat] or None. Never raises."""

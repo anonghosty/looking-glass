@@ -102,6 +102,7 @@ def users(now=None):
     and when; heaviest (seconds answering) first."""
     now = now or time.time()
     out = []
+    raw = {}                                               # unrounded seconds answering, per account
     with _LOCK:
         running = defaultdict(int)
         for r in RUNNING.values():
@@ -113,6 +114,7 @@ def users(now=None):
                 continue
             last = rows[-1] if rows else None
             slow = max(rows, key=lambda x: x[1]) if rows else None
+            raw[user] = sum(x[1] for x in rows)
             out.append({"user": user, "role": META.get(user, {}).get("role", ""), "requests": len(rows),
                         "seconds": round(sum(x[1] for x in rows), 1), "cpu_seconds": round(sum(x[2] for x in rows), 1),
                         "slowest": round(slow[1], 1) if slow else 0, "slowest_route": slow[3] if slow else "",
@@ -123,7 +125,10 @@ def users(now=None):
             if user not in DONE:
                 out.append({"user": user, "role": "", "requests": 0, "seconds": 0, "cpu_seconds": 0, "slowest": 0,
                             "slowest_route": "", "running": n, "last_route": "", "last_ago": None, "errors": 0})
-    total = sum(x["seconds"] for x in out) or 1
+    # the share is the raw fraction (0..1) of the server time: the page words it with LGShare.pct, so an account with
+    # a little time never reads "0%" and one with nearly all of it never "100%" (2026-11-26: rounded to a whole
+    # number here); worked out from the unrounded seconds
+    total = sum(raw.values())
     for x in out:
-        x["share"] = round(100 * x["seconds"] / total)
+        x["share"] = (raw.get(x["user"], 0) / total) if total > 0 else 0.0
     return sorted(out, key=lambda x: (-x["seconds"], -x["running"]))

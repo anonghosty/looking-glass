@@ -14,6 +14,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+import https_only
+
 BASE = "https://malpedia.caad.fkie.fraunhofer.de/api/"
 SITE = "https://malpedia.caad.fkie.fraunhofer.de/details/"
 HASH = re.compile(r"^(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$")
@@ -58,8 +60,11 @@ class Malpedia:
         req = urllib.request.Request(BASE + path, headers={"Authorization": "apitoken " + self.token,
                                                            "User-Agent": "LookingGlass/1.0", "Accept": "application/json"})
         try:
-            with urllib.request.urlopen(req, timeout=20) as r:  # nosec B310  # fixed https BASE (Malpedia)
+            # https only, redirects included, and the token never follows a redirect to another host (audit 2026-11-27)
+            with https_only.open(req, timeout=20) as r:
                 data = json.load(r)
+        except https_only.NotHttps:
+            raise RuntimeError("Malpedia redirected away from https; nothing was sent there") from None
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 data = None

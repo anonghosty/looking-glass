@@ -8,11 +8,12 @@ Usage: .venv/bin/python tools/diagnose_reports.py [collection ...]   (no names =
 import os
 import sys
 
-from dotenv import load_dotenv
-from pymongo import MongoClient
+# the platform folder first: db_connect and sources live there, not in tools/ (audit 2026-11-27, 8-6: it was added
+# after `import db_connect`, so the tool stopped with ModuleNotFoundError as documented)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from dotenv import load_dotenv  # noqa: E402
+from pymongo import MongoClient  # noqa: E402
 import db_connect  # noqa: E402  (where the database is; TLS for one on another computer)
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from sources import Registry  # noqa: E402
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))

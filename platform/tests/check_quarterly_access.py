@@ -85,6 +85,8 @@ ok("a purge day is never a weekend, and always keeps 31 days",
 
 # ------------------------------------------------------------------ a kept quarter, made up
 base = tempfile.mkdtemp(prefix="lgqa_")
+import person_code  # noqa: E402  the stamp's person codes: a key in the temporary folder, never in data/
+person_code.configure(os.path.join(base, "person_code"))
 os.environ["PIPELINE_DIR"] = os.path.join(base, "pipeline")
 os.makedirs(os.environ["PIPELINE_DIR"])
 open(os.path.join(os.environ["PIPELINE_DIR"], "shadowserver_pipeline.py"), "w").write("# made-up\n")
@@ -257,9 +259,12 @@ r = get(f"/api/mgmt/quarterly/{Q}/management", "management")
 ok("the management CSV downloads as an attachment", r.status_code == 200 and "attachment" in r.headers.get("Content-Disposition", ""))
 text = r.data.decode()
 ok("...still says VALID on its first line, then who downloaded it and when (stamped)",
-   text.startswith("Report status,VALID") and text.splitlines()[1].startswith("Downloaded,mo.manager,"), text.splitlines()[:2])
+   text.startswith("Report status,VALID") and text.splitlines()[1].startswith(f"Downloaded,{person_code.code('mo.manager')},"), text.splitlines()[:2])
+ok("...never the sign-in name (half of what signs someone in)", "mo.manager" not in text.splitlines()[1], text.splitlines()[1])
 r = get(f"/api/admin/quarterly/{Q}/admin", "admin")
-ok("an admin's stamp carries the full name", r.data.decode().splitlines()[1].startswith("Downloaded,Ada Admin (ada.admin),"))
+ok("an admin's stamp carries the full name and the person's code, not the sign-in name",
+   r.data.decode().splitlines()[1].startswith(f"Downloaded,Ada Admin ({person_code.code('ada.admin')}),")
+   and "ada.admin" not in r.data.decode().splitlines()[1], r.data.decode().splitlines()[1])
 pdf = get(f"/api/advisory/quarterly/{Q}/pdf_advisor", "advisor")
 ok("the advisor PDF downloads unchanged", pdf.status_code == 200 and pdf.data.startswith(b"%PDF") and pdf.mimetype == "application/pdf")
 seals = [json.loads(x) for x in open(seals_path).read().splitlines()[before:]]

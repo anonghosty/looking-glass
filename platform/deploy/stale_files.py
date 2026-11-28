@@ -60,7 +60,11 @@ CODE = {
 KEEP_NAMES = ("*.pyc", "*.log", ".env", ".env.*", "suspected-packages.*", "*.pem", "*.key", "*.crt", LIST_NAME,
               HISTORY_NAME, FINGERPRINTS_NAME)
 OWN_LISTS = (LIST_NAME, HISTORY_NAME, FINGERPRINTS_NAME)
-KEEP_PATHS = ("deploy/*.service", "tools/discovery.json", "tools/services_fields.json", "security_testing/SECURITY_REPORT.md")
+# the unit files this installation writes into deploy/ from the shipped *.template (service_unit.py, update_helper.sh:
+# <name>.path for Settings -> Update, unusual_timer.sh / connectors_timer.sh: *.timer); a fresh installation's code check
+# reported deploy/looking-glass-update.path as "not in the release" (2026-11-26)
+KEEP_PATHS = ("deploy/*.service", "deploy/*.path", "deploy/*.timer", "tools/discovery.json", "tools/services_fields.json",
+              "security_testing/SECURITY_REPORT.md")
 SKIP_DIRS = {"__pycache__", "node_modules", "data", "logs", "backups", "site", ".venv", ".venvs"}
 REFUSED = 2
 

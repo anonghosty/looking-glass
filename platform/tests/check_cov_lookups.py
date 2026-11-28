@@ -73,6 +73,11 @@ def fake_urlopen(req, *a, **kw):
 
 real_urlopen, real_sleep = urllib.request.urlopen, time.sleep
 urllib.request.urlopen = fake_urlopen
+# Malpedia (and anything else) fetches through https_only.open since the audit (2026-11-27): faked too, so this
+# check never reaches another computer (it reached the real Malpedia once, with its made-up token)
+import https_only  # noqa: E402
+real_https_open = https_only.open
+https_only.open = lambda req, timeout=None, **kw: fake_urlopen(req)
 SLEPT = []
 time.sleep = lambda s: SLEPT.append(s)
 TMP = tempfile.mkdtemp(prefix="lg-cov-lookups-")
@@ -559,6 +564,7 @@ try:
     ok("an unreadable cache: starts empty", geo.Geocoder("k", gpath).cache == {})
 finally:
     urllib.request.urlopen, time.sleep = real_urlopen, real_sleep
+    https_only.open = real_https_open
     import shutil
     shutil.rmtree(TMP, ignore_errors=True)
 

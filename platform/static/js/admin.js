@@ -203,7 +203,7 @@
         const what = r.kind === "address" ? `every sign-in from ${r.ip}` : `${r.name} from ${r.ip}`;
         if (!window.confirm(`Lift the lock on ${what}? It is written to the audit log.`)) return;
         b.disabled = true;
-        try { const x = await post("/api/admin/lockouts/unlock", r.kind === "address" ? { ip: r.ip } : { ip: r.ip, name: r.name });
+        try { const x = await post("/api/admin/lockouts/unlock", r.kind === "address" ? { ip: r.ip } : { ip: r.ip, name: r.key || r.name });   // an unknown name: its key
           banner(`Unlocked: ${what}.`); drawLocks(x.locked || [], lim); }
         catch (e) { b.disabled = false; banner(window.LGLoader.errorText(e, true), true); }
       });
@@ -217,7 +217,15 @@
   const avail = tabs.map((b) => b.dataset.tab);
   show(avail.includes(first) ? first : avail[0]);
   if ($("locksBadge")) loadLocks(true);                   // the badge shows locks from any tab
-  setInterval(() => { const t = tabs.find((b) => b.getAttribute("aria-selected") === "true")?.dataset.tab; if (t === "users") loadUsers();
+  // the 30-second refresh never redraws the users table under the admin (audit 2026-11-27, 9-6: a role box, a button or
+  // the table's place was replaced while they used it): not while the keyboard focus or the pointer is in the table, a
+  // request of theirs runs, or the page is out of sight; it follows at the next refresh
+  const usersBusy = () => {
+    const t = $("usersTable"); if (!t) return false;
+    return document.hidden || t.contains(document.activeElement) || t.matches(":hover") || !!t.querySelector("button:disabled")
+      || !!document.querySelector(".lgs-pop");          // a role list open (lg-select.js puts it under the page's body)
+  };
+  setInterval(() => { const t = tabs.find((b) => b.getAttribute("aria-selected") === "true")?.dataset.tab; if (t === "users" && !usersBusy()) loadUsers();
     if ($("locksBadge")) loadLocks(true); }, 30000);
   void PERMS;
 })();

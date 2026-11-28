@@ -27,6 +27,14 @@ PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "u
 users = Users(PATH)
 
 
+def audit(event, name, detail):
+    """Account changes made here go in the audit log like the Admin page's (audit 2026-11-27, 5-12): the same events,
+    made by the "manage script" on the server, never a password or a key."""
+    import auth
+    auth.Audit(os.path.join(os.path.dirname(PATH), "audit.log")).add(event, user="manage script", target=name,
+                                                                     detail=detail, ip="", ua="manage_users")
+
+
 def ask_password(name):
     """The same rules as the web pages (auth.password_problem)."""
     print(PASSWORD_RULES)
@@ -116,10 +124,13 @@ def main(a):
             # (external review, 2026-11-12)
             users._load(); users.data["users"].pop(name, None); users.save()
             sys.exit(f"Authenticator not confirmed: account {name} was not kept. Run add again.")
+        audit("registered", name, f"created on the server (manage_users.py), role {role}")
     elif cmd == "passwd":
         need(name); users.set_password(name, ask_password(name)); print("Password changed; the account's sessions have ended.")
+        audit("password_reset", name, "password set on the server (manage_users.py)")
     elif cmd == "mfa":
         need(name); setup_mfa(name); print("Authenticator set up; the account's sessions have ended.")
+        audit("user_reset_mfa", name, "authenticator set up again on the server (manage_users.py)")
     elif cmd == "role":
         need(name)
         import json as _json
@@ -127,10 +138,13 @@ def main(a):
         known = set(_json.load(open(rp))) if os.path.exists(rp) else {"external", "analyst", "researcher", "management", "admin"}
         if len(a) < 3 or a[2] not in known:
             sys.exit("role NAME " + "|".join(sorted(known)))
-        users._load(); users.data["users"][name]["role"] = a[2]; users.save(); print(f"{name} is now {a[2]}.")
+        users._load(); old = users.data["users"][name].get("role", LOWEST_ROLE)
+        users.data["users"][name]["role"] = a[2]; users.save(); print(f"{name} is now {a[2]}.")
+        audit("user_role", name, f"{old} -> {a[2]}")
     elif cmd == "remove":
         need(name); users._load(); users.data["users"].pop(name, None); reserve(name); users.save()
         print(f"Account {name} removed; its sessions have ended. The name stays reserved.")
+        audit("user_delete", name, "removed on the server (manage_users.py)")
     else:
         print(HELP)
 

@@ -16,6 +16,7 @@ every download is logged, the same list downloaded twice included.
 The built-in self-test's accounts are not logged. DATA_ACCESS_LOG=0 in .env turns the views off (the Audit portal then
 says so, and CIS 3.14 is no longer backed by LG-15); downloads (data_exported) are always logged.
 """
+import collections
 import os
 import re
 import threading
@@ -53,14 +54,21 @@ IGNORE = frozenset(("at", "demo", "from", "to", "limit", "latest", "since", "tim
 BODY_VIEWS = frozenset(("/api/intelligence/report",))
 # the lists the pages save as CSV files (download=1): an export, every time
 DOWNLOADS = {"/api/insight/drill": "host list download (map CSV)", "/api/svc/drill": "host list download (services CSV)"}
-RAW_MAX = 120          # each value is cut to this BEFORE the address finder reads it (a long value costs nothing)
-SHOWN_MAX = 60
+SHOWN_MAX = 60         # each value is cut to this BEFORE the address finder reads it (a long value costs nothing)
 _TAIL = re.compile(r"[0-9A-Fa-f:.]+$")
 
 
+SEEN_MAX = 20000       # the views remembered for REPEAT_WINDOW; past it the oldest are forgotten first
+
+
 def _cut(v, n):
-    """v cut to n characters; when something was cut, a half address left at the end goes too."""
-    return v if len(v) <= n else _TAIL.sub("", v[:n]) + "…"
+    """v cut to n characters (the audit log keeps one short line per view); when something was cut, a half address
+    left at the end goes too, and the text says in words how much is kept: "(the first 58 of 300 characters)", never
+    "…" (the owner's rule, audit 2026-11-27)."""
+    if len(v) <= n:
+        return v
+    kept = _TAIL.sub("", v[:n])
+    return f"{kept} (the first {len(kept):,} of {len(v):,} characters)"
 
 
 def enabled():
@@ -70,7 +78,8 @@ def enabled():
 class DataAccessLog:
     def __init__(self, audit_add, user_of, host_ref):
         self.add, self.user_of, self.host_ref = audit_add, user_of, host_ref
-        self.seen, self.lock = {}, threading.Lock()
+        # (person, path, selection) -> when last logged, oldest first: forgetting the old ones costs only them
+        self.seen, self.lock = collections.OrderedDict(), threading.Lock()
 
     def selection(self, args):
         """What was looked at, from the request's parameters: addresses replaced by their host reference."""
@@ -78,9 +87,11 @@ class DataAccessLog:
         for k in sorted(set(args.keys()) - IGNORE)[:20]:
             vals = args.getlist(k) if hasattr(args, "getlist") else [args.get(k)]
             for v in [str(x) for x in vals if x][:10]:
-                v = ip_find.sub(_cut(v, RAW_MAX), lambda ip: f"host {self.host_ref(ip)}")
-                name = ip_find.sub(_cut(k, 40), lambda ip: "host")
-                parts.append(f"{_cut(name, 30)}={_cut(v, SHOWN_MAX)}")
+                # cut once, BEFORE the address finder reads it (a long value costs nothing), so the count of kept
+                # characters is of what was sent; the addresses in what is kept become host references
+                v = ip_find.sub(_cut(v, SHOWN_MAX), lambda ip: f"host {self.host_ref(ip)}")
+                name = ip_find.sub(_cut(k, 30), lambda ip: "host")
+                parts.append(f"{name}={v}")
         sel = ", ".join(parts)
         return (_cut(sel, 400) if sel else "") or "the whole selection"
 
@@ -105,12 +116,19 @@ class DataAccessLog:
         with self.lock:
             # every download is its own audit line: each copy of host data leaving the platform counts, even the same
             # list twice (review 2026-11-13); only VIEWS are written once per person and selection per window
-            if event != "data_exported" and now - self.seen.get(key, 0) < REPEAT_WINDOW:
-                return False
-            self.seen[key] = now
-            if len(self.seen) > 20000:                    # forget old keys, never grow without bound
-                cut = now - REPEAT_WINDOW
-                self.seen = {k: t for k, t in self.seen.items() if t > cut}
+            if event != "data_exported":
+                # a download is never looked up here, so it leaves no key (audit 2026-11-27: each one was stored)
+                if now - self.seen.get(key, 0) < REPEAT_WINDOW:
+                    return False
+                self.seen[key] = now
+                self.seen.move_to_end(key)
+                # forget the expired keys and, past SEEN_MAX, the oldest: only what goes is touched (audit
+                # 2026-11-27: past 20,000 views in the window every request rebuilt the whole dict, and it kept growing)
+                while self.seen:
+                    k0, t0 = next(iter(self.seen.items()))
+                    if now - t0 < REPEAT_WINDOW and len(self.seen) <= SEEN_MAX:
+                        break
+                    del self.seen[k0]
         self.add(event, user=user, target=what, detail=sel)
         return True
 

@@ -19,10 +19,11 @@ Stages:
 
 E-mail:
   --days N               pull e-mails received in the last N days
-                         (default: EMAIL_DAYS in .env, 1 = since yesterday)
+                         (default: EMAIL_DAYS in .env; 7 when it is not set)
 
 Performance:
-  --workers N            parallel loader processes (default: WORKERS in .env, 6)
+  --workers N            parallel loader processes (default: WORKERS in .env; 6, or
+                         fewer on a computer with fewer processor cores)
                          each uses ~100-200 MB RAM
 
 Output:
@@ -66,6 +67,13 @@ for arg in "$@"; do
 done
 
 mkdir -p logs
-exec 9>.pipeline.lock
+# the run lock, opened read-only (flock needs no write access) and readable by others (0644): the platform, another
+# Linux user, opens it to see that a run is busy, and a lock file left by a run as root (sudo ./run.sh) does not stop
+# the next runs. The pipeline uses this descriptor (LG_RUN_LOCK_FD) instead of taking the lock a second time.
+[ -L .pipeline.lock ] && { echo ".pipeline.lock is a symbolic link: refused (remove it; the next run makes it again)."; exit 1; }
+[ -e .pipeline.lock ] || (umask 022; : > .pipeline.lock)
+if [ -O .pipeline.lock ]; then chmod 644 .pipeline.lock; fi   # one left 0600 by an older version: readable again
+exec 9<.pipeline.lock
 flock -n 9 || { echo "Another pipeline run is in progress - exiting."; exit 1; }
+export LG_RUN_LOCK_FD=9
 .venv/bin/python -u shadowserver_pipeline.py "$@" 2>&1 | tee -a "logs/pipeline-$(date +%F).log"

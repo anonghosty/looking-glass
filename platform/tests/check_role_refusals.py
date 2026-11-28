@@ -10,23 +10,27 @@ single permissions, and which built-in roles get through. It is compared with th
 tests/role_access_map.json: a route that opens for a permission or role it did not open for before, or a new route, fails
 until the map is reviewed and updated (LG_UPDATE_ROLE_MAP=1 writes the current map, for review in its diff).
 
-Nothing is written: the account, session, counter, role and first-run stores are temporary files, the audit log is a
+The app runs on a temporary linked copy of the platform with its own copy of data/ (tests/lg_inproc.py), and the live
+data/ is compared before and after. Nothing is written: the account, session, counter, role and first-run stores are temporary files, the audit log is a
 list, and while the routes run every file write outside the temporary folder, every database write, every new process
 and every connection to another computer is refused. Answers that need the reports database are skipped where there is
 none (as on GitHub): such a route counts by its refusal, which comes first.
 Run: .venv/bin/python tests/check_role_refusals.py"""
 import base64, builtins, json, os, re, shutil, socket, subprocess, sys, tempfile, time
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("LG_QUIET", "1")
 os.environ.setdefault("THREATMAP_SCHEDULE", "0")
 os.environ["TRUST_PROXY"] = "0"
 HERE = os.path.dirname(os.path.abspath(__file__))
 MAP_FILE = os.path.join(HERE, "role_access_map.json")
+sys.path.insert(0, HERE)
+import lg_inproc  # noqa: E402
+
+lg_inproc.platform_copy("lg-role-refusals")        # the app runs on a copy of data/, never the live one
+DATA_BEFORE = lg_inproc.data_snapshot()
 import app as A  # noqa: E402
 import auth  # noqa: E402
 from werkzeug.security import generate_password_hash  # noqa: E402
 
-sys.path.insert(0, HERE)
 import lg_no_db_fast  # noqa: E402
 
 if lg_no_db_fast.apply(os.path.dirname(HERE)):
@@ -198,6 +202,11 @@ elif os.path.exists(MAP_FILE):
     ok(f"no route opens wider than the reviewed map ({len(ref)} entries)", not wider, wider[:15])
 else:
     ok("the reviewed map exists (tests/role_access_map.json)", False, "run with LG_UPDATE_ROLE_MAP=1 and review it")
+
+changed, notes = lg_inproc.data_changes(DATA_BEFORE, lg_inproc.data_snapshot())
+for n in notes:
+    print(n)
+ok("the live data/ folder is untouched (the routes ran on a copy of it)", not changed, changed[:10])
 
 print(f"\n{checks - len(fails)} of {checks} role refusal checks passed" + (f"; FAILED: {fails}" if fails else ""))
 sys.stdout.flush(); sys.stderr.flush()

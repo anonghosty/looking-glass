@@ -1,0 +1,82 @@
+# The maintainer's checks (2026-11-26): rows of tests/run_all_checks.sh that are NOT part of an installation's checks.
+# An installation (the installer, and tests/run_all_checks.sh run there) neither runs nor counts them; the release
+# checklist and the GitHub checks run them with the rest (LG_SUITE=all, tests/maintainer_checks.sh). A row belongs here
+# when it needs what an installation does not have, or checks the source and the release rather than an installation.
+# One test file per line (its name under tests/); text after # is the reason.
+
+# the pages' own scripts, run under Node (an installation has no Node)
+check_mgmt_charts.py            # Executive ring charts
+check_mgmt_lists.py             # Executive page lists
+check_page_cut_lists.py         # admin pages' cut lists
+check_page_cuts_maps.py         # map and services pages' cuts
+check_page_cuts_portals.py      # portal pages' cuts
+check_page_count_notes.py       # the counts kept apart, on the pages
+check_attack_mergeout_parity.py # advisory page = PDF, ATT&CK boxes
+check_copy_fail_closed.py       # copy buttons fail closed
+check_welcome_next.py           # welcome page's next path
+check_loader_retry.py           # loader.js retries
+check_services_withchosen.py    # services filter menus
+check_device_note.py            # the device note on pages and PDFs
+check_findings_ui.py            # Findings page wording
+
+# real browsers and rendered PDFs (Playwright with Chromium, pypdfium2)
+browser_checks.py               # every page, every role, in Chromium
+check_logo_tool.py              # the logo tool, in Chromium
+pdf_pages_check.py              # every PDF page rendered
+
+# the source tree, the docs and the release (what ships, not an installation)
+check_requirements_complete.py  # requirements.txt = what the code imports
+check_suite_split.py            # this list, the two suites, no silent skip
+check_spdx_headers.py           # licence lines in every source file
+check_glossary_sync.py          # docs glossary = in-app glossary
+check_feature_coverage.py       # every feature: tutorial, glossary, docs
+check_docs_vs_code.py           # the docs name only what the code has
+check_screenshots.py            # docs screenshots = the page files
+check_ci_pins.py                # GitHub workflows pinned
+check_sbom.py                   # the SBOM made from the locks
+check_moved_modules.py          # modules moved out of app.py
+check_nav_once.py               # each destination once per page (templates)
+check_loader_everywhere.py      # every page opens with the loading animation (templates)
+check_select_enhancer.py        # pages asking for lg-select load it (templates)
+check_downloads.py              # every download logged (static analysis)
+check_error_text.py             # no browser error text (static analysis)
+check_https_only.py             # .env addresses fetched over https (static analysis)
+check_code_readonly.py          # the unit file and every write site (static analysis)
+
+# the installer, Caddy, update and uninstall scripts, run in scratch folders with stand-ins
+check_caddy_front.py
+check_caddy_adopt_run.py
+check_caddy_paths_run.py
+check_installer_caddy_db.py
+check_installer_questions.py
+check_installer_anim.py
+check_installer_supply.py
+check_install_db.py
+check_install_cert.py
+check_uninstall.py
+check_stale_files.py
+check_platform_update.py
+check_code_integrity.py
+
+# every route with bad input, on a copy of the platform and its data (heavy; a copy of the platform's folder)
+check_every_route.py
+
+# the whole-codebase audit's fixes (2026-11-27): proofs against the source, the held page files and rendered PDFs
+check_fix_b01.py                # acodes, advisory, ASN registry
+check_fix_b02.py                # audit log, sign-in, beacon decoder
+check_fix_b03.py                # connectors, combinations
+check_fix_b04.py                # counting keys .. greetings
+check_fix_b05.py                # insider, intel, management
+check_fix_b06.py                # quarterly, privacy, passkeys
+check_fix_b07.py                # reports PDF, services, caches (pypdfium2)
+check_fix_b08.py                # services intel .. warmup, tools
+check_fix_b09.py                # page scripts account .. code-integrity (source)
+check_fix_b10.py                # page scripts combos .. logo-tool (source)
+check_fix_b11.py                # page scripts management .. welcome (source)
+check_fix_b13.py                # stylesheets and templates (source, Jinja)
+check_fix_b14.py                # installer, uninstaller, deploy and manage scripts (stand-ins)
+check_fix_b15.py                # shares, beacon handover days (held page), both db_connect.py copies
+check_fix_r1.py                 # the review's platform fixes (temporary git repos, stand-in targets)
+check_fix_r3.py                 # the review's installer fixes (installer functions with stand-ins)
+check_fix_r4.py                 # the review's sign-in and audit fixes
+check_fix_lead.py               # the follow-ups: names, notes, sign-out, preview watermark (pypdfium2)

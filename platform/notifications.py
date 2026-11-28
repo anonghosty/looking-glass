@@ -25,10 +25,11 @@ import os
 import threading
 import time
 
-from flask import g, jsonify, request
+from flask import g, jsonify
+
+import reqjson
 
 MAX_ITEMS = 40
-TEXT_MAX = 160
 
 
 class Seen:
@@ -86,7 +87,7 @@ def install(app, ctx):
         return (getattr(g, "user", None) or {}).get("user", "")
 
     def what(h):
-        """One history entry in a few words (the entry's own words, cut at a word)."""
+        """One history entry: what happened, then the entry's own words in full."""
         kind = h.get("kind") or "status"
         if kind == "reply":
             head = "replied" + (" (no combination of interest: closed)" if h.get("none_found") else "")
@@ -98,9 +99,8 @@ def install(app, ctx):
             head = "case " + ("closed" if h.get("status") == "closed" else "updated")
         else:
             head = "moved it to " + label(h.get("status", ""))
+        # the whole comment, never cut with "…" (the owner's rule; audit 2026-11-27, 6-7): the bell wraps it
         c = " ".join(str(h.get("comment") or "").split())
-        if len(c) > TEXT_MAX:
-            c = c[:TEXT_MAX].rsplit(" ", 1)[0] + "…"
         return head + (f": {c}" if c else "")
 
     def link(x, user):
@@ -152,7 +152,7 @@ def install(app, ctx):
             return jsonify(error="Sign in."), 401
         if not ctx["csrf_ok"]():
             return jsonify(error="Refused (the request did not come from this page)."), 403
-        b = request.get_json(silent=True) or {}
+        b = reqjson.body()
         current = {n["id"]: n["at"] for n in items_for(user)}
         sys_now = [n["id"] for n in system_for(user)]
         if b.get("all"):

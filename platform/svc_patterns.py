@@ -44,6 +44,23 @@ def _read(path, default):
         return default
 
 
+def _read_to_change(path, default):
+    """A local file read to be changed and written back: missing is `default`; damaged (not JSON, or not an object)
+    raises ValueError and nothing is written, so one person's change never replaces every other researcher's choices
+    with an empty file (audit 2026-11-27, 8-7)."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            d = json.load(f)
+    except FileNotFoundError:
+        return default
+    except (OSError, ValueError):
+        d = None
+    if not isinstance(d, dict):
+        raise ValueError(f"{os.path.basename(path)} cannot be read (damaged?): nothing was changed. An administrator "
+                         "restores it from a backup or removes it.")
+    return d
+
+
 def field_value(e, field):
     """A raw report field from a services record (some are normalised, the rest are kept in extras)."""
     if field == "device_model":
@@ -220,7 +237,7 @@ class Patterns:
                 raise ValueError(f"{fld} names or locates a host: it cannot be a pattern field")
             clean.append({"field": fld, "kind": kind, "label": str(f.get("label") or fld.replace("_", " ").capitalize())[:60]})
         with self.lock:
-            d = _read(self.paths["local"], {"reports": {}})
+            d = _read_to_change(self.paths["local"], {"reports": {}})
             d.setdefault("reports", {})[sibling(report)] = {"fields": clean, "by": user, "date": time.strftime("%Y-%m-%d", time.gmtime()),
                                                             "reviewed": sorted(set(reviewed))}
             tmp = self.paths["local"] + ".tmp"
@@ -232,7 +249,7 @@ class Patterns:
 
     def reset(self, report):
         with self.lock:
-            d = _read(self.paths["local"], {"reports": {}})
+            d = _read_to_change(self.paths["local"], {"reports": {}})
             (d.get("reports") or {}).pop(sibling(report), None)
             tmp = self.paths["local"] + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
@@ -247,7 +264,7 @@ class Patterns:
         if hostmask.mask(contains) != contains:
             raise ValueError("The text to look for must not be a host name, address or e-mail.")
         with self.lock:
-            d = _read(self.paths["rules_local"], {"rules": []})
+            d = _read_to_change(self.paths["rules_local"], {"rules": []})
             d.setdefault("rules", []).insert(0, {"contains": contains, "product": product, "version": bool(version),
                                                 "by": user, "date": time.strftime("%Y-%m-%d", time.gmtime())})
             tmp = self.paths["rules_local"] + ".tmp"

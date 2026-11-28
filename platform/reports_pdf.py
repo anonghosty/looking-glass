@@ -16,9 +16,8 @@ from xml.sax.saxutils import escape
 import attack_map
 import name_sources
 import pdf_refs
+from shares import pct
 
-from reportlab.graphics.charts.barcharts import HorizontalBarChart, VerticalBarChart
-from reportlab.graphics.shapes import Drawing, String
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import A4, landscape
@@ -125,29 +124,13 @@ def link(url, st):
 
 
 # ------------------------------------------------------------------ building blocks
-def kpi_grid(items, S, width):
-    """Key figures as tiles: [(value, label), ...]."""
-    items = [x for x in items if x and x[0] not in (None, "")]
-    if not items:
-        return Spacer(1, 1)
-    per = 5
-    rows = []
-    for i in range(0, len(items), per):
-        chunk = items[i:i + per] + [("", "")] * (per - len(items[i:i + per]))
-        rows.append([[P(t(v), S["kpiv"]), P(t(l), S["kpil"])] if (v != "" or l) else "" for v, l in chunk])
-    tb = Table(rows, colWidths=[width / per] * per)
-    tb.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), SOFT), ("BOX", (0, 0), (-1, -1), 0.4, LINE),
-                            ("INNERGRID", (0, 0), (-1, -1), 2.5, colors.white), ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                            ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
-    return tb
-
-
-MAX_CELL = 900                      # characters in one table cell (a row must fit on a page)
-
-
+# (the older tiles and bar charts, kpi_grid, bar_hours and bar_top, were removed: nothing used them since the
+# dashboard's own parts below took their place; audit 2026-11-27)
 def _cell(c):
-    s = ", ".join(str(v) for v in c) if isinstance(c, (list, tuple, set)) else ("" if c is None else str(c))
-    return s if len(s) <= MAX_CELL else s[:MAX_CELL].rsplit(" ", 1)[0] + " … (more in the CSV)"
+    """A cell's text, whole: a row taller than a page continues on the next one (splitInRow, reportlab 4 and later,
+    which requirements.txt asks for). Audit 2026-11-27: cells over 900 characters were cut with "… (more in the CSV)",
+    also in a PDF downloaded without its CSV."""
+    return ", ".join(str(v) for v in c) if isinstance(c, (list, tuple, set)) else ("" if c is None else str(c))
 
 
 def data_table(head, rows, S, widths, zebra=True, repeat=1):
@@ -166,49 +149,6 @@ def data_table(head, rows, S, widths, zebra=True, repeat=1):
             style.append(("BACKGROUND", (0, i), (-1, i), SOFT))
     tb.setStyle(TableStyle(style))
     return tb
-
-
-def bar_hours(hours, S, width, title, peak=None):
-    if not hours or not any(hours):
-        return None
-    d = Drawing(width, 150)
-    c = VerticalBarChart()
-    c.x, c.y, c.width, c.height = 34, 26, width - 50, 100
-    c.data = [list(hours)]
-    c.categoryAxis.categoryNames = [f"{h:02d}" for h in range(len(hours))]
-    c.categoryAxis.labels.fontName = _FONT["r"]; c.categoryAxis.labels.fontSize = 6.5
-    c.valueAxis.labels.fontName = _FONT["r"]; c.valueAxis.labels.fontSize = 6.5
-    c.valueAxis.valueMin = 0
-    c.bars[0].fillColor = ACCENT; c.bars[0].strokeColor = None
-    if peak is not None and 0 <= peak < len(hours):
-        c.bars[(0, peak)].fillColor = NAVY
-    c.barSpacing = 1
-    d.add(c)
-    d.add(String(34, 136, title, fontName=_FONT["b"], fontSize=8.5, fillColor=NAVY))
-    d.add(String(width - 16, 8, "hour (UTC)", fontName=_FONT["r"], fontSize=6.5, fillColor=MUTED, textAnchor="end"))
-    return d
-
-
-def bar_top(rows, width, title):
-    """Horizontal bars of a breakdown ([{label, count}])."""
-    rows = [r for r in rows if r.get("count")][:10]
-    if len(rows) < 2:
-        return None
-    h = 28 + 15 * len(rows)
-    d = Drawing(width, h)
-    c = HorizontalBarChart()
-    c.x, c.y, c.width, c.height = 170, 8, width - 200, h - 30
-    c.data = [[r["count"] for r in reversed(rows)]]
-    names = [str(r.get("label") or r.get("value") or "")[:34] for r in reversed(rows)]
-    if not _FONT.get("unicode"):
-        names = [n.translate(_ASCII).encode("latin-1", "replace").decode("latin-1") for n in names]
-    c.categoryAxis.categoryNames = names
-    c.categoryAxis.labels.fontName = _FONT["r"]; c.categoryAxis.labels.fontSize = 7; c.categoryAxis.labels.dx = -4
-    c.valueAxis.labels.fontName = _FONT["r"]; c.valueAxis.labels.fontSize = 6.5; c.valueAxis.valueMin = 0
-    c.bars[0].fillColor = ACCENT; c.bars[0].strokeColor = None
-    d.add(c)
-    d.add(String(0, h - 12, title, fontName=_FONT["b"], fontSize=8.5, fillColor=NAVY))
-    return d
 
 
 from reportlab.platypus import Flowable  # noqa: E402
@@ -270,14 +210,15 @@ def dash_activity(hours, peak, width, unit="Events"):
 
 def dash_chart_pair(pair, width):
     """Two breakdowns side by side as dashboard cards with bars."""
-    n = max(min(10, len([r for r in rows if r.get("count")])) for _, rows in pair)
+    # every row given is drawn (up to 14: a top 12 and its Other row), so an "Other" row is never cut off (2026-11-26)
+    n = max(min(14, len([r for r in rows if r.get("count")])) for _, rows in pair)
     h = 56 + 17 * n
     def draw(p, w, hh):
         cw = (w - 12) / 2
         for i, (title, rows) in enumerate(pair):
             x = i * (cw + 12)
             top = p.card(x, hh, cw, hh, title, "Events / records")
-            p.bars(x + 14, top, cw - 28, rows, metric="count", n=10, label=lambda r: str(r.get("label") or r.get("value") or ""))
+            p.bars(x + 14, top, cw - 28, rows, metric="count", n=14, label=lambda r: str(r.get("label") or r.get("value") or ""))
     return Painted(width, h, draw)
 
 
@@ -302,9 +243,66 @@ def _kind(x):
     return "none", "No source knows this name"
 
 
-def enrichment_block(name, x, stat, S, width):
-    """One infection / category: what it is, from Malpedia or the researchers' definitions, with references."""
+def _shared_lines(name, x):
+    """(label, text) of the lines a card prints that another card can print word for word: the description, Also
+    described by, each researcher's note and its combinations, CISA's required action (2026-11-26: the same note was
+    printed under three names, the same required action under several CVEs)."""
+    out = []
+    desc = x.get("description") or x.get("text") or x.get("reason") or ""
+    if desc:
+        out.append(("Description", desc))
+    if x.get("kind") != "cve":
+        also = name_sources.also_text(x)
+        if also:
+            out.append(("Also described by", also))
+    for n in x.get("notes") or []:
+        out.append(("Note", f"{n.get('role')}|{n.get('by')}|{n.get('date')}|{n.get('text', '')}"))
+        if n.get("codes"):
+            out.append(("Combinations", "; ".join(f"{c.get('code')}|{c.get('text')}" for c in n["codes"])))
+    kv = x.get("kev") if x.get("kind") == "cve" else None
+    if kv and kv.get("action"):
+        # the action alone: CVEs with one action and different due dates print it once, each with its own due date
+        # (2026-11-27)
+        out.append(("CISA's required action", kv["action"]))
+    return out
+
+
+class Once:
+    """Lines several cards share are printed once, under the first card, with the names they apply to; the other cards
+    point to it (the user, 2026-11-26: no definition, note or required action printed twice in a PDF)."""
+
+    def __init__(self, cards):
+        self.owners = {}
+        for name, x in cards:
+            for key in _shared_lines(name, x):
+                names = self.owners.setdefault(key, [])
+                if name not in names:
+                    names.append(name)
+
+    def lines(self, name, label, text, para, S, extra=""):
+        """The paragraphs to print for this card's line: the line itself (with the names it applies to), or a pointer.
+        extra: what the pointer adds that is this card's own (a CVE's due date)."""
+        names = self.owners.get((label, text)) or [name]
+        if len(names) < 2:
+            return [para()]
+        if names[0] == name:
+            return [para(), P(f"<i>{t(label)}: the same for {t(', '.join(names[1:]))}.</i>", S["meta"])]
+        return [P(f"<i>{t(label)}: the same as for {t(names[0])}, above{t(extra)}.</i>", S["meta"])]
+
+
+def enrichment_block(name, x, stat, S, width, attack=True, once=None):
+    """One infection / category: what it is, from Malpedia or the researchers' definitions, with references.
+    attack=False: no ATT&CK lines (the PDF lists each technique once, in its own section: attack_section).
+    once (Once): lines shared with other cards printed once."""
     k, badge = _kind(x)
+    # para: a function making the paragraph, called only when it is printed
+    printed = set()      # a line this card already printed (the same note saved twice, 2026-11-27): not again
+
+    def share(label, text, para, extra=""):
+        if (label, text) in printed:
+            return []
+        printed.add((label, text))
+        return once.lines(name, label, text, para, S, extra) if once else [para()]
     shown = (x.get("kev") or {}).get("name", "") if x.get("kind") == "cve" else (x.get("name") or x.get("title") or "")
     # the name as reported is the card's heading, then the source's badge with what that source calls it
     title = P(f"<b>{t(name)}</b>", S["h2"])
@@ -335,7 +333,7 @@ def enrichment_block(name, x, stat, S, width):
             facts.append("Sources: " + ", ".join(x["sources"] + ["CISA KEV", "EPSS"])
                          + ("" if x.get("nvd") else " (NVD's own analysis is added within minutes by the background check)") + ".")
         if x.get("epss") is not None:
-            facts.append(f"EPSS: {x['epss']:.1%} probability of exploitation in the next 30 days"
+            facts.append(f"EPSS: {pct(x['epss'], 1)} probability of exploitation in the next 30 days"
                          + (f" (more likely than {int(x['epss_percentile'] * 1000) / 10:.1f}% of all CVEs)" if x.get("epss_percentile") is not None else "") + ".")
         if x.get("published"):
             facts.append(f"Published {x['published']}.")
@@ -343,24 +341,29 @@ def enrichment_block(name, x, stat, S, width):
         out.append(P(t(" ".join(facts)), S["meta"]))
     desc = x.get("description") or x.get("text") or x.get("reason") or ""
     if desc:
-        out.append(P(t(desc), S["body"]))
+        out += share("Description", desc, lambda: P(t(desc), S["body"]))
     for n in x.get("notes") or []:                 # researchers' notes on this name, newest first (notes.py)
-        out.append(P(f"<b>Notes shared by {t(n.get('role') or 'Researcher/TI')}: {t(n.get('by') or 'a researcher')}</b>"
-                     f"{' (' + t(n['date']) + ')' if n.get('date') else ''}: {t(n.get('text', ''))}", S["meta"]))
+        out += share("Note", f"{n.get('role')}|{n.get('by')}|{n.get('date')}|{n.get('text', '')}",
+                     lambda n=n: P(f"<b>Notes shared by {t(n.get('role') or 'Researcher/TI')}: {t(n.get('by') or 'a researcher')}</b>"
+                                   f"{' (' + t(n['date']) + ')' if n.get('date') else ''}: {t(n.get('text', ''))}", S["meta"]))
         if n.get("codes"):                         # the combinations the note points at (combos.py): an analyst pulls them
-            out.append(P("<b>Combinations:</b> " + "; ".join(f"{t(c['code'])}" + (f" ({t(c['text'])})" if c.get("text") else "")
-                                                             for c in n["codes"]), S["meta"]))
+            out += share("Combinations", "; ".join(f"{c.get('code')}|{c.get('text')}" for c in n["codes"]),
+                         lambda n=n: P("<b>Combinations:</b> " + "; ".join(f"{t(c['code'])}" + (f" ({t(c['text'])})" if c.get("text") else "")
+                                                                           for c in n["codes"]), S["meta"]))
     if x.get("kind") == "cve":
         kv = x.get("kev")
         if kv:
             rw = {"Known": "Yes, used in ransomware campaigns", "Unknown": "Not known"}.get(kv.get("ransomware"), kv.get("ransomware") or "Not known")
-            out.append(P(t(f"Actively exploited: CISA added it to the Known Exploited Vulnerabilities catalog on {kv.get('date_added')}"
+            # the CVE named: two CVEs of one product added on one day read alike otherwise (2026-11-26)
+            out.append(P(t(f"Actively exploited: CISA added {name} to the Known Exploited Vulnerabilities catalog on {kv.get('date_added')}"
                            f" ({kv.get('vendor')} {kv.get('product')}). Ransomware use: {rw}."), S["body"]))
             if kv.get("action"):
-                out.append(P(f"<b>CISA's required action:</b> {t(kv['action'])}" + (f" (due {t(kv['due'])} for US federal agencies)" if kv.get("due") else ""), S["meta"]))
+                due = f" (due {kv['due']} for US federal agencies)" if kv.get("due") else ""
+                out += share("CISA's required action", kv["action"],
+                             lambda: P(f"<b>CISA's required action:</b> {t(kv['action'])}{t(due)}", S["meta"]), extra=due)
         elif x.get("found"):
-            out.append(P(t("Not in CISA's Known Exploited Vulnerabilities catalog: no confirmed active exploitation reported to CISA "
-                           "(this does not mean it is safe)."), S["meta"]))
+            out.append(P(t(f"Not in CISA's Known Exploited Vulnerabilities catalog: no confirmed active exploitation of {name} reported "
+                           "to CISA (this does not mean it is safe)."), S["meta"]))
         if x.get("note"):
             out.append(P(f"<b>Note by {t(x.get('note_by') or 'a researcher')}:</b> {t(x['note'])}", S["meta"]))
     extra = []
@@ -393,14 +396,78 @@ def enrichment_block(name, x, stat, S, width):
             out.append(P(f"<b>Source:</b> {t(src[len('Source: '):])}", S["meta"]))
         also = name_sources.also_text(x)
         if also:
-            out.append(P(f"<b>Also described by:</b> {t(also[len('Also described by: '):])}", S["meta"]))
+            out += share("Also described by", also, lambda: P(f"<b>Also described by:</b> {t(also[len('Also described by: '):])}", S["meta"]))
+    if not attack and (x.get("attack") or {}).get("techniques"):
+        out.append(P("<b>MITRE ATT&amp;CK:</b> see MITRE ATT&amp;CK techniques, after these cards.", S["meta"]))
     for ln in attack_map.attack_lines(x.get("attack")):   # MITRE ATT&CK, with the version this PDF was made with
+        if not attack and not ln.startswith("Groups MITRE"):   # the techniques: once, in the ATT&CK section
+            continue
         head_, _, rest_ = ln.partition(": ")
         # Observed / Possible in the cards' colours (app.css .mp-cert, the user's choice 2026-11-18)
         rest_ = re.sub(r"· (Observed|Possible)\b", lambda m: f'· <font color="{CERT_HEX[m.group(1)]}"><b>{m.group(1)}</b></font>', t(rest_))
         out.append(P(f"<b>{t(head_)}:</b> {rest_}", S["meta"]))
     out.append(Spacer(1, 7))
     return KeepTogether(out[:5]), out[5:]
+
+
+_CERT = {"observed": 0, "possible": 1, "known": 2}
+
+
+def attack_groups(cards):
+    """Each ATT&CK technique of the cards once, in code order: [(id, text, [names])], the version, and the source lines
+    (CTID licence) once each. The text is the technique's line as attack_lines writes it, from the card where its
+    certainty is strongest (Observed before Possible before Known for the malware)."""
+    by, version, sources_ = {}, None, []
+    for name, x in cards:
+        att = x.get("attack") or {}
+        techs = att.get("techniques") or []
+        version = version or att.get("version")
+        for tid in dict.fromkeys(tt.get("id") for tt in techs):
+            sub = [tt for tt in techs if tt.get("id") == tid]
+            lines = attack_map.attack_lines(dict(att, techniques=sub, cves=False, groups=None, source=None))
+            bits = []
+            for ln in lines:
+                head_, _, rest_ = ln.partition(": ")
+                rest_ = rest_.rstrip(".")
+                if head_.startswith("Known for this malware"):
+                    ta, _, what = rest_.partition(": ")
+                    bits.append(f"{what} · {ta} · Known for this malware")
+                else:
+                    bits.append(rest_)
+            rank = min(_CERT.get(tt.get("certainty"), 3) for tt in sub)
+            g = by.get(tid)
+            if g is None:
+                by[tid] = {"text": "; ".join(bits), "rank": rank, "names": [name]}
+            else:
+                if rank < g["rank"]:
+                    g["text"], g["rank"] = "; ".join(bits), rank
+                if name not in g["names"]:
+                    g["names"].append(name)
+        if att.get("source"):
+            s = f"Source: {att.get('licence') or att['source']}" + (f" Mapped with ATT&CK v{att['mapped_with']}." if att.get("mapped_with") else "")
+            if s not in sources_:
+                sources_.append(s)
+    key = getattr(attack_map, "_code_key", lambda c: str(c))
+    return [(tid, g["text"], g["names"]) for tid, g in sorted(by.items(), key=lambda kv: key(kv[0]))], version, sources_
+
+
+def attack_section(cards, S, issues=False):
+    """The PDF's one MITRE ATT&CK part: each technique once, with the infections / categories (or issues) it is mapped
+    to (the user, 2026-11-26: the same technique was printed under each of seven cards)."""
+    groups, version, sources_ = attack_groups(cards)
+    if not groups:
+        return []
+    what = "issues" if issues else "infections / categories"
+    out = [CondPageBreak(40 * mm), P("MITRE ATT&amp;CK techniques", S["h1"]),
+           P(t(f"Each technique once (MITRE ATT&CK v{version}), in code order, with the {what} explained above that it is "
+               "mapped to."), S["body"])]
+    for tid, text, names in groups:
+        text = re.sub(r"· (Observed|Possible)\b", lambda m: f'· <font color="{CERT_HEX[m.group(1)]}"><b>{m.group(1)}</b></font>', t(text))
+        out.append(P(f"{text}. <b>Mapped for:</b> {t(', '.join(names))}.", S["meta"]))
+    for s in sources_:
+        out.append(P(t(s), S["meta"]))
+    out.append(Spacer(1, 6))
+    return out
 
 
 # ------------------------------------------------------------------ the document
@@ -430,9 +497,8 @@ def build(spec):
         p.text(page[0] - 15 * mm, page[1] - 46, p.fit(f"Report day {spec.get('day', '')} · {spec.get('selection', '')}", 380, 8.5), 8.5, ex.DIM, anchor="end")
         canv.setStrokeColor(colors.Color(1, 1, 1, .08)); canv.setLineWidth(.6); canv.line(15 * mm, page[1] - 56, page[0] - 15 * mm, page[1] - 56)
         canv.setFillColor(colors.HexColor("#6b7690")); canv.setFont(_FONT["r"], 7.5)
-        canv.drawString(15 * mm, 8 * mm, ("Demo mode: addresses, networks and names are concealed. " if spec.get("demo") else
-                                          "Aggregated figures only: no individual addresses. " if spec.get("executive") else
-                                          "Contains information about affected hosts: share only according to your organisation's information-sharing policy. ")
+        # who made it and when only (the user, 2026-11-28): no address notice in a footer; the cover table says the data
+        canv.drawString(15 * mm, 8 * mm, ("Demo mode (masked). " if spec.get("demo") else "")
                         + f"Generated {now}" + (f" by {spec['generated_by']}" if spec.get("generated_by") else ""))
         canv.drawRightString(page[0] - 15 * mm, 8 * mm, f"Page {doc.page}")
         canv.restoreState()
@@ -500,9 +566,12 @@ def build(spec):
         st.append(P(t(" · ".join(f"{v} {k}" for k, v in sorted(counts.items(), key=lambda kv: -kv[1]))), S["meta"]))
         st.append(Spacer(1, 6))
         stats = spec.get("enrichment_stats") or {}
-        for name, x in sorted(enr.items(), key=lambda kv: not kv[1].get("exploited")):
-            first, rest = enrichment_block(name, x, stats.get(name), S, W)
+        cards = sorted(enr.items(), key=lambda kv: not kv[1].get("exploited"))
+        once = Once(cards)                 # a note, definition or required action shared by several cards: printed once
+        for name, x in cards:
+            first, rest = enrichment_block(name, x, stats.get(name), S, W, attack=False, once=once)
             st.append(first); st += rest
+        st += attack_section(cards, S, issues=spec.get("enrichment_title") == "Issues explained")
 
     # ---- breakdowns
     charts = [(title, rows) for title, rows in (spec.get("charts") or []) if len([r for r in rows if r.get("count")]) >= 2]
@@ -539,7 +608,8 @@ def build(spec):
         st.append(P(t(f"The complete list: {spec.get('title', '')}"), S["h1"]))
         total = spec.get("total", len(rows))
         st.append(P(t(f"{total:,} entr{'y' if total == 1 else 'ies'}"
-                      + (f"; the first {MAX_ROWS:,} are printed here (the CSV download has all of them)" if total > MAX_ROWS else "")
+                      + (f"; the first {MAX_ROWS:,} are printed here. Download the report as a ZIP (this PDF with a CSV "
+                         f"file) for all {total:,}" if total > MAX_ROWS else "")
                       + (". The last columns give what each infection / category is and which sources know it."
                          if any(k == "_source" for k, _ in cols) else
                          ". The last column gives what each infection / category is." if any(k == "_explained" for k, _ in cols) else ".")),

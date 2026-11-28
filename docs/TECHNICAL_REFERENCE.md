@@ -137,6 +137,75 @@ Its server side is in small modules called from `app.py`:
   self-signed `data/tls/cert.pem` (not for a CA's certificate or `ACCESS_MODE=local`) and `MONGO_BIND` in the
   pipeline's `.env`, each mismatch with its fix, for `system_alerts.py` (the bell, at most every 5 minutes; it also
   announces people waiting for approval) and `tests/check_addresses.py` (a warning).
+- **The mail server's certificate not checked (`system_alerts.Alerts.mail_tls_off`).** True when the pipeline's
+  `.env` has an IMAP mailbox with `IMAP_VERIFY_TLS` off, read by the pipeline's own rule (`mail_sources._truthy`; Gmail
+  API and Microsoft Graph always check). The administrators' bell says so every day (key `mail-tls-off:<day>`) and
+  Settings → Task monitor shows it on the Report pipeline card (`pipeline.mail_tls_off`). When the mailbox cannot be
+  read, the pipeline's status carries the reason (`email_error`, from `mail_sources.MailSourceError.reason`: no account
+  or password), shown in the bell and on that card. Test: `tests/check_system_alerts.py`.
+- **The pipeline's run problems (`run_problems` in `shadowserver_pipeline.py`).** Returns the run's errors and
+  warnings, each `{"key", "count", "text"}`. Errors (a file, rows, a report, an attachment, a link, a zip or the API
+  not loaded or not usable, a report name quarantined, a file that stopped its loader process even when loaded alone
+  on 2 runs (`files_crashed`, moved to `quarantine/loader/<report>/` with a `.reason.txt`; the first time it is a
+  `file_errors` and tried again; the load journal counts the runs in its `crashes` table and gives a quarantined file
+  a fingerprint no file has, so that moved back it is loaded again, the rows already stored skipped), the mailbox not read) make the run
+  fail: `run_errors` sums their counts and the run exits with 1. Warnings (CSV files not matched, an API fallback,
+  unusable API list items, unreadable timestamps, rows that cannot be read as CSV, same row hash, rows without a
+  timestamp, extra columns, bytes that are not UTF-8, files loaded again, and `emails_gone`: e-mails deleted or moved
+  out of the reports folder between the listing and the fetch, missing from a UID FETCH the server answered OK) do not;
+  a batch the server refuses stays an error (`emails_not_fetched`). `retention.status` writes them to
+  `pipeline_status.json` beside `ok` and `finished`: `errors`, `warnings`, `not_matched` (the full `count` and up to 100
+  `names`), `files_loaded`, `files_reloaded` and every row count (`rows_read`, `rows_inserted`, `rows_duplicates`,
+  `rows_same_in_file`, `rows_same_hash`, `rows_bad_timestamp`, `rows_bad_csv`, `rows_failed`, `rows_no_time`), where
+  `rows_read` is the sum of the stored, refused and failed parts. `rows_bad_csv` counts rows the CSV reader cannot read
+  (a field over `CSV_FIELD_MAX`, 16 MB, or a broken line); the rows after one are loaded. A CSV column named `_id`
+  (`RESERVED_COLUMNS`) is stored as `csv_id`. A file with no row to store is noted in the load journal (its size, time
+  and SHA-256) and not read again until it changes. A zip encrypted with a password is refused by `zip_limits.py` and
+  quarantined.
+- **The pipeline's run lock (`hold_run_lock`).** `main()` takes `.pipeline.lock` (the lock `run.sh` and
+  `bin/shadowserver` take with flock) itself, so a run started by cron or by hand cannot run beside another. The lock
+  file is mode 0644 and opened read-only (flock needs no write access), so the platform, another Linux user, can open
+  it, and a lock file owned by root does not stop later runs; a symbolic link is refused (`O_NOFOLLOW`). A run started
+  by `run.sh` uses the descriptor it inherited: `run.sh` exports `LG_RUN_LOCK_FD=9`, and `/proc/self/fd` is looked
+  through only when that is missing. A second run exits 1 with "Another pipeline run is in progress".
+- **Block mode with the sender check down (`SenderCheckUnavailable`).** With `MAIL_AUTH=enforce` and a sender check
+  that cannot start, no e-mail is read that run: a mail-source failure with its reason in `email_error`, not a stop of
+  the whole run; the files on disk load, and the report API is used when it is set up.
+  `system_alerts.py` shows the errors as "The last report run had problems" and the warnings as "The last report run
+  has something to check" (keyed by each warning's key and count, so a cleared alert stays cleared until they change);
+  an older pipeline's status without these fields still gets the counts-based alert. Settings → Task monitor shows
+  "Rows read", "What went wrong" and "To check". A file already loaded is loaded again when its size or time changed
+  and its content hash differs (`changed_since_load`, fingerprints in the load journal). Test:
+  `tests/check_pipeline_problems_shown.py`.
+- **`shares.py` and `LGShare`, shares in words.** One rule for every share on every page, PDF and CSV, the same in
+  Python (`shares.py`) and in the browser (`window.LGShare` in `static/js/loader.js`). `pct(x, d=0)` takes a fraction,
+  `of(part, total, d=0)` a count of a total (a total of 0 reads "0%"): a part that has records never reads "0%" but
+  "<1%" (with `d=1`, "<0.1%"), a part of the whole never reads "100%" but ">99%" (">99.9%"). Both round half up
+  (`of` exactly, in integers), so a page and its PDF give the same text. `part(n, total)` is the combinations' share
+  of devices (one decimal under 10%, whole percents from 10%), used by both the combination pages and their PDF.
+  `cut(shown, total, noun)` gives "Top 8 of 23
+  networks" when a list is cut and "" when every row is shown; `other(rows, total)` is what the rows leave out of the
+  total (an Other part), never below 0. Test: `tests/check_share_words.py`.
+- **`api_errors.py`, refusals under `/api/` in words.** Any 4xx answer under `/api/` is JSON `{"error": ...}`: the
+  message the route gave (`abort(403, "...")`) when it gave one, otherwise a plain sentence per status (403 "Your
+  account does not have access to this.", 404 "Not found.", and so on). Pages keep their HTML answers. Test:
+  `tests/check_every_route.py` calls every route as every role with bad input and fails on any server error,
+  traceback, slow answer or HTML refusal under `/api/`.
+- **`counting_keys.py`, one counting rule.** Every page, PDF and CSV buckets records with it (both platforms, the
+  Executive portal, the quarterly report, combinations, Abused or Compromised and the masking in `privacy.py`).
+  `sector_of(asn, reg_all, labels)` is the network type of the record's AS number in `data/asns.json` by its label, or
+  Unknown (`Sectors` keeps it per AS number; `sector_now` for one record at a time); `industry_of` is Shadowserver's
+  own `sector` column, shown as "Industry (Shadowserver)". `network_of(asn, registry, masked)` is the company (or its
+  alias), "" for no network (none, 0, AS0), shown as "Unknown network" by `network_label` and counted apart.
+  `norm_asn` writes "AS064500" as "64500"; `fold` is the grouping form of a name (trimmed, inner spaces collapsed,
+  case-folded). `region_key(value, country)` is the region as every page spells it: the administrator's region matches,
+  then the country's map, the country's own name as "Unknown region", else the value in title case.
+  `row_key(collection, filename, line_hash)` is one row however many files of the same report day carry it (`Dedup`
+  keeps the first copy and counts the others); `window(ed, start, end)` says whether a row is in the day, outside it or
+  undated, and `load_note` is the sentence a page shows about them. `configure(...)` is called once by `app.py`.
+- **`totals` beside capped lists.** An answer that sends only the top rows of a list also sends `totals`: for each
+  list, how many values it has in all (on the map's statistics also `others`, the events outside the rows). The pages,
+  PDFs and CSVs use it for "Top N of M" and for the Other part; a list that is not cut needs no `totals`.
 - **`neutral.py`, what a signed-out visitor learns (anti-fingerprinting).** Standard status phrases, plain error and
   redirect bodies, hashed static ETags and, signed out, a short Content-Security-Policy. `/healthz` answers loopback
   only; `security.py` sends no `Server` header. `auth.PUBLIC_STATIC` lists the only files served signed out. The
@@ -148,7 +217,7 @@ Its server side is in small modules called from `app.py`:
   `POST /api/copy/record` (CSRF, at most `COPY_PER_MINUTE` (30) a minute per person) seals the text (HMAC-SHA-256 with
   `COPY_SEAL_KEY` or `data/copy_seal.key`: the whole text, each line, each IP address) into `data/copy_seals.jsonl`
   (owner-only), then audits `copied`; a seal that cannot be written answers 503 and nothing is audited, and
-  `static/js/lg-copy.js` copies only after a 200. Every download is sealed too (people only). `POST /api/audit/trace` (permission *audit*, CSRF, 5 a minute and `TRACE_PER_DAY` (100) a day per
+  `static/js/lg-copy.js` copies only after a 200. Every download is sealed too (people only), after a CSV (or each CSV inside a ZIP) gets two columns on every row, `Downloaded by` (`stamp_who`: the full name and `person_code.code`, never the sign-in name; the quarterly CSVs name the person the same way) and `Downloaded at` (UTC) (`stamp_csv`, `stamp_zip`: read with `csv.reader`, written back through `csvsafe`, every other cell unchanged, every row as wide as the header; files stamped already and text that is not UTF-8 are left as they are; the seal's line fingerprints are taken without the two columns, `_unstamp`, so a copy with them deleted is still the exact file), and a list asked for with `download=1` gets `download_stamp` (`columns`, `cells`), which the page adds to every row. `POST /api/audit/trace` (permission *audit*, CSRF, 5 a minute and `TRACE_PER_DAY` (100) a day per
   person; text or a file) returns matching seals: exact, else, up to `TRACE_MAX_ITEMS` (1,000) items, seals holding
   at least `TRACE_MIN_SHARE` (half) of the lines or addresses; items held by more than 20 % of the people with seals
   are not counted, so one person's repeated copies cannot hide rows. Audited `leak_traced` (match count only). These
@@ -300,17 +369,19 @@ For a public deployment where nobody may switch demo off, set `PUBLIC_DEMO=1` in
 
 See [INSTALLATION.md](INSTALLATION.md). In short: Ubuntu 24.04 or later (Desktop, Server or Ubuntu on WSL 2), Python
 3.12, 3.13 or 3.14 on x86_64 or aarch64, MongoDB filled by the Shadowserver pipeline (`../database`), a Mapbox token,
-and optionally a Malpedia token. Python packages: Flask, Werkzeug, pymongo, python-dotenv, gunicorn, ReportLab and
-tzdata. `requirements.txt` gives each a range below its next major version (for example `flask>=3.0,<4`);
-`requirements.lock` fixes every version, dependencies included, with each file's sha256. `tests/check_libraries.py`
-(no data needed; the installer runs it) checks the installed versions against the ranges and tries the parts the
-platform uses. To allow a new major version, raise its range, make the lock again
+and optionally a Malpedia token. Python packages: Flask, Werkzeug, pymongo, python-dotenv, gunicorn, ReportLab,
+Pillow, webauthn, cbor2, cryptography, typing-extensions and tzdata. `requirements.txt` gives each a range below its
+next major version (for example `flask>=3.0,<4`); `requirements.lock` fixes every version, dependencies included,
+with each file's sha256. `tests/check_libraries.py` (no data needed; the installer runs it) checks the installed
+versions against the ranges and tries the parts the platform uses. `tests/check_requirements_complete.py` checks that
+each `requirements.txt` (platform, pipeline, docs site) names every library its code imports, and only those. To allow a new major version, raise its range, make the lock again
 ([OPERATIONS.md](OPERATIONS.md#updating-the-libraries-on-purpose)), and keep it only if `tests/run_all_checks.sh` and
 `security_testing/security_retest.py` pass.
 
 External services: **MongoDB** (database `shadowserver` by default; read only, never written); **Mapbox** (a public
 `pk.` token for map tiles in the browser and the Geocoding v6 API on the server, each place looked up once and cached
-in `data/geocache.json`); flag images from `flagcdn.com` and fonts from Google Fonts.
+in `data/geocache.json`); fonts from Google Fonts. Country flags come with Looking Glass (`static/img/flags/`, 252
+public-domain flags, 40 pixels wide), so no flag is fetched from anywhere else.
 
 For development, `.venv/bin/python app.py` runs it on `http://localhost:<PORT>` (`PORT` in `.env`). As a service, use
 gunicorn with **one worker** (the day cache is in memory) and threads for viewers:
@@ -453,7 +524,7 @@ Every setting, with examples: [CONFIGURATION.md](CONFIGURATION.md). The main one
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `MONGO_HOST`, `MONGO_PORT` | `localhost`, `27017` | Mongo server |
+| `MONGO_HOST`, `MONGO_PORT` | `localhost`, `27017` | Mongo server; the port is a number from 1 to 65535, else the service refuses to start and says why |
 | `MONGO_USER`, `MONGO_PASSWORD`, `MONGO_AUTH_SOURCE` | none, none, `admin` | credentials |
 | `MONGO_DB` | `shadowserver` | source database |
 | `MONGO_COLLECTIONS` | empty | empty means auto-discover every src/dst collection; otherwise a comma-separated list to use |
@@ -852,6 +923,18 @@ account); `/api/findings/people` lists people by code and `findings.recipient()`
 only among those offered; `notes.py` says `mine` instead of the author's sign-in name. Tested by
 `tests/check_no_signin_names.py`, which walks every GET route as every role but admin.
 
+Naming people (`people.py`): pages, answers, PDFs and downloads name a person by their registered full name, else by
+the name saved with the record, else by their person code; never by the sign-in name, also for an account removed
+since. `People.name()` does it for lists (findings history, the bell, severity ratings, the Task monitor, the Pipeline
+e-mail checks, the quarterly purge switch, the password policy), and `people.signed_by()` gives
+"Full Name (p-...)" or the code alone for every "Generated ... by" line of a PDF, the advisory's `generated_by` (when
+no organisation name is set) and every CSV stamp. Only three places show sign-in names, because they identify accounts: the Audit portal's audit
+trail, Trace a leak's user column and the Admin page's users table. A new passkey's WebAuthn user handle is the
+person code (`passkeys.user_handle`); passkeys registered earlier keep the sign-in name as their handle and still sign
+in, since a passkey is found by its credential id. Signing out (`POST /logout`) needs the session's own CSRF token
+(every Log out form sends it); without it the session stays and the browser goes back to the home page, so another
+site cannot sign someone out.
+
 Connectors (the guide: [CONNECTORS.md](CONNECTORS.md)): `connectors.py` (Settings → Connectors: targets, the
 encrypted key store, the test before saving, the API), `connector_net.py` (every outgoing connection: HTTPS only,
 the address resolved once and refused when it is loopback, link-local, a cloud metadata address or reserved, the
@@ -927,6 +1010,9 @@ Security scripts:
 - Executive PDF (`executive_pdf.py`): text is never cut. `fit()` keeps the whole text, smaller (to 80 %, never under
   6 pt) or on two lines; `wrap(max_lines=)` sets it smaller rather than cutting; Key findings take the largest size at
   which all of them fit, and continue on a page of their own if needed.
+- The other PDFs cut no text either: `reports_pdf._cell` prints a table cell whole and lets a row split across pages
+  (the report downloads' PDFs); `advisory_pdf.py` breaks a long word (a URL) onto the next line;
+  `quarterly_pdf.py` continues the Read me notes on the next page.
 - Special Reports (`special_reports.py`): Shadowserver's one-off datasets (`YYYY-MM-DD-special[-<name>]-...`, often a
   placeholder 00:00 time on every row). The pipeline loads each into its own `special_<name>` (`special` when it has
   no name): `report_names.special_name` cuts the name where the country part begins, learnt from the ordinary reports
@@ -958,7 +1044,24 @@ Security scripts:
 
 ### Checking everything
 
-- **`bash tests/run_all_checks.sh`** runs the whole installation check in one go and prints one line per check (about 2 minutes). The checks are read-only against this installation's own database and service; the collection checks use throwaway databases that they drop. The checks are:
+- **`bash tests/run_all_checks.sh`** runs the whole installation check in one go and prints one line per check. The checks are read-only against this installation's own database and service; the collection checks use throwaway databases that they drop. It runs the **installation's checks**: those that tell whether this installation works and is safe, and need nothing an installation does not have. The **maintainer's checks** (listed with their reasons in `tests/maintainer_rows.txt`: the pages' scripts run under Node, real browsers, rendered PDFs, the source tree, docs and release files, the installer and Caddy scripts in scratch folders, every route with bad input) are not part of an installation's checks: they are not run there and not counted. The release checklist and the GitHub checks run both: `bash tests/maintainer_checks.sh` (the same as `LG_SUITE=all bash tests/run_all_checks.sh`), which needs Node, Playwright with Chromium and pypdfium2, and fails rather than skips when one is missing (`LG_NO_SKIP=1`). Settings for those runs:
+  - `LG_SUITE`: `installation` (the default) or `all`;
+  - `LG_NO_SKIP=1`: a check that cannot run here fails, with what is missing, instead of being skipped;
+  - `LG_TEST_SYSTEM=1` with `LG_TEST_SYSTEM_DB` (default `lg_demo`): on a test system with made-up data only, the
+    constituency check sets a temporary constituency, checks it and restores `data/settings.json` byte for byte; it
+    refuses anywhere else;
+  - `LG_THROWAWAY_MONGO=host:port`: the checks that need a database account that may write ask only that throwaway
+    server, never the installation's;
+  - `LG_CONSTITUENCY_CHECK=<script>`: the constituency row runs that script instead (a development machine runs it on
+    a test system);
+  - `LG_DB_DIR`: the pipeline folder to test, instead of the one beside the platform;
+  - `LG_ROWS_ELSEWHERE=<file>` and `LG_ROWS_ONLY=<file>` (one test file per line): a release run split over two
+    machines. A development machine whose own service is not the new build leaves the rows that check the running
+    service to a test system (`ELSEWHERE`, counted), and the test system runs exactly those (`ONLY`);
+  - `LG_SCREENSHOTS_AT_END=1`: the docs screenshot check runs at the release's screenshot stage, on the final build,
+    because the screenshots are retaken last.
+
+  The checks are:
   - replay schedule;
   - new communications and services collections;
   - services consistency (28 filter combinations);
@@ -988,11 +1091,18 @@ Security scripts:
   - `check_sbom.py`: the SBOM matches the locks;
   - `check_spdx_headers.py`: every shipped source file carries the SPDX licence and copyright lines within its first 10 lines; third-party files are listed with their own licences;
   - `check_cov_*.py`: tests that reach the branches the other checks do not. Statement and branch coverage is measured with `coverage.py`.
+- **Proven count laws.** Before each release the maintainers also prove a set of counting laws, written in the Bend
+  language, and compare each with the real code on 300 made-up datasets. The first four (a to d) are about the
+  report-day rule for sinkholed devices: a device is counted only when its record and its call to a sinkhole fall on
+  the same report day, a device that made no call counts as none, and each device counts once. Laws e to h prove that
+  the Executive portal's sectors add up (e); that shares never read "0%" or "100%" wrongly and a page gives the same
+  words as its PDF (f); that a cut list's rows and its Other part add up to the total (g); and that every page puts a
+  record in the same sector, region and network (h). This lab is not part of the release.
 
 - `tools/envcheck.sh` checks Python, venv and whether MongoDB (`MONGO_HOST`/`MONGO_PORT` from `.env`) is reachable.
 - `tools/quickcheck.py` checks the connection, lists every report collection with its size and filename index, and times the replay day's count.
 - `tools/daysize.py [YYYY-MM-DD]` (default yesterday) shows one day's rows and files per report, its time range, top tags and countries.
 - `tools/list_infections.py [YYYY-MM-DD]` lists every infection of that day (any day, not only the replay day).
-- `tools/discover.py` surveys every collection: size, indexes, src/dst fields, latest document and yesterday's row count. It writes `tools/discovery.json`, and `tools/show_srcdst.py` prints the matching collections from it.
+- `tools/discover.py` surveys every collection: size, indexes, src/dst fields, latest document and yesterday's row count. It writes `data/discovery.json` (mode 600, never into the code folder), every value taken from a record masked first (`hostmask.py`), and `tools/show_srcdst.py` prints the matching collections from it.
 - `deploy/reload.sh` restarts the systemd service without sudo: it kills the main process and systemd starts it again (`sudo systemctl restart looking-glass` does the same).
 - `manage/backup.sh [dest]` creates a timestamped archive of the project, including `.env` and everything in `data/` but not `.venv`, encrypted as it is written to the public key in `data/backup_public_key` (age or GnuPG; `manage/backup_crypt.sh`), saved as `~/backups/<project folder>-<UTC time>.tar.gz.age` (or `.gpg`) with a signed `.sha256` file and mode 600. Without a key it refuses; `--unencrypted` writes a plain `.tar.gz` on purpose.

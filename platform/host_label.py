@@ -12,15 +12,9 @@ but nothing of the address can be read or computed back from it without the serv
 label(ip) -> "Host 3f9a2c41b07e"      label_text(text) -> every IPv4/IPv6 address inside the text replaced by its label
 use(refs) is called by privacy.HostRefs, so labels are the app's own references (resolvable on the server only).
 """
-import ipaddress
-import re
-
 PREFIX = "Host "
-# An address stands on its own: no letter or digit glued to it (v10.1.2.3, 1.2.3.4a), and no dotted number it is only
-# part of (1.2.3.4.5). An underscore is a separator (ip_41.66.1.2), and a full stop after it ends a sentence unless a
-# digit follows ("from 41.66.1.2." is masked). Before 2026-11-11 both of those were left unmasked (external review).
-_V4 = re.compile(r"(?<![0-9A-Za-z.])(?:\d{1,3}\.){3}\d{1,3}(?![0-9A-Za-z]|\.\d)")
-_V6 = re.compile(r"(?<![0-9A-Za-z:.])(?=[0-9a-fA-F:]*::|(?:[0-9a-fA-F]{1,4}:){2})[0-9a-fA-F:]{3,}[0-9a-fA-F](?![0-9A-Za-z:]|\.\d)")
+# (addresses inside text are found by ip_find.py, the one finder every masker shares: the patterns kept here were no
+# longer used; removed in the audit of 2026-11-27)
 _refs = None
 
 
@@ -41,15 +35,6 @@ def label(ip):
     if not ip:
         return ""
     return PREFIX + _ref(str(ip).strip())
-
-
-def _sub(m):
-    s = m.group(0)
-    try:
-        ipaddress.ip_address(s)            # a real address only: not a time (10:22:31), a version or a ratio
-    except ValueError:
-        return s
-    return label(s)
 
 
 def label_text(s):

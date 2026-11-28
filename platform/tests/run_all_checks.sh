@@ -36,19 +36,70 @@ MongoClient(host=e.get("MONGO_HOST", "localhost"), port=int(e.get("MONGO_PORT") 
             serverSelectionTimeoutMS=3000).admin.command("ping")
 PY
 [ $DB_UP = 1 ] || echo "MongoDB is not reachable: checks that need the data are reported as skipped."
+# LG_NO_SKIP=1 (every release run: the development machine, the test systems; 2026-11-26, "we do not skip"): a check
+# that would be skipped because something it needs is missing FAILS instead, with what is missing
+[ "${LG_NO_SKIP:-}" = 1 ] && echo "No skipping: a check that cannot run here fails (LG_NO_SKIP=1)."
+# Two suites (2026-11-26): an INSTALLATION runs the installation checks, the ones that tell whether this installation
+# works and is safe, and need nothing it does not have. The MAINTAINER checks (tests/maintainer_rows.txt: the page
+# scripts under Node, real browsers, rendered PDFs, the source tree, docs and release tooling, the installer and Caddy
+# scripts in scratch folders, test systems and throwaway databases) are not part of an installation's suite: they are
+# not run there and not counted. The maintainer's release checklist and the GitHub checks run both: LG_SUITE=all
+# (or tests/maintainer_checks.sh).
+LG_SUITE="${LG_SUITE:-installation}"
+case "$LG_SUITE" in installation|all) ;; *) echo "LG_SUITE must be installation or all, not '$LG_SUITE'"; exit 2 ;; esac
+MAINT=$(sed -e 's/#.*//' -e 's/[[:space:]]*$//' tests/maintainer_rows.txt 2>/dev/null | grep -v '^$')
+[ -n "$MAINT" ] || { echo "tests/maintainer_rows.txt is missing or empty"; exit 2; }
+if [ "$LG_SUITE" = all ]; then
+  for f in $MAINT; do [ -f "tests/$f" ] || { echo "tests/maintainer_rows.txt names tests/$f, which does not exist"; exit 2; }; done
+  echo "Suite: all (installation and maintainer checks)."
+else
+  echo "Suite: the installation's checks (the maintainer's checks run with LG_SUITE=all)."
+fi
+# The maintainer's release run splits the suite over two machines (2026-11-26): LG_ROWS_ELSEWHERE names a file of test
+# files that run on the test system instead (the rows that check the running service, whose code must be the new
+# build); LG_ROWS_ONLY names a file of test files and runs only those (that other machine's part). Both list one test
+# file per line; the release checklist checks that the two parts together ran every row. LG_SCREENSHOTS_AT_END=1:
+# the docs screenshot check runs at the screenshot stage, on the final build (the screenshots are retaken last).
+list_of() { [ -n "${1:-}" ] && [ -f "$1" ] && sed -e 's/#.*//' -e 's/[[:space:]]*$//' "$1" | grep -v '^$'; }
+ELSEWHERE=$(list_of "${LG_ROWS_ELSEWHERE:-}"); ONLY=$(list_of "${LG_ROWS_ONLY:-}")
+[ -n "${LG_ROWS_ELSEWHERE:-}" ] && [ -z "$ELSEWHERE" ] && { echo "LG_ROWS_ELSEWHERE names an empty or missing file"; exit 2; }
+[ -n "${LG_ROWS_ONLY:-}" ] && [ -z "$ONLY" ] && { echo "LG_ROWS_ONLY names an empty or missing file"; exit 2; }
+elsewhere=0; at_end=0
+row_file() { local a; for a in "$@"; do case "$a" in tests/*.py|tests/*.sh) echo "${a#tests/}"; return;; esac; done; }
+maint=0
+is_maint() {  # is this row's test file a maintainer check?
+  local a f
+  for a in "$@"; do
+    case "$a" in tests/*.py|tests/*.sh) f=${a#tests/}; printf '%s\n' "$MAINT" | grep -qxF "$f" && return 0 ;; esac
+  done
+  return 1
+}
 run() {
   local name="$1"; shift
+  if [ "$LG_SUITE" != all ] && is_maint "$@"; then maint=$((maint + 1)); return; fi
+  local rf; rf=$(row_file "$@")
+  if [ -n "$ONLY" ] && ! printf '%s\n' "$ONLY" | grep -qxF "$rf"; then return; fi
+  if [ -n "$ELSEWHERE" ] && [ -n "$rf" ] && printf '%s\n' "$ELSEWHERE" | grep -qxF "$rf"; then elsewhere=$((elsewhere + 1)); return; fi
+  if [ "${LG_SCREENSHOTS_AT_END:-}" = 1 ] && [ "$rf" = check_screenshots.py ]; then at_end=1; return; fi
   printf '%-34s ' "$name"
   out=$("$@" 2>&1); rc=$?
   if [ $rc != 0 ] && [ $rc != 77 ] && [ $DB_UP = 0 ] \
      && echo "$out" | grep -qE 'ServerSelectionTimeoutError|pymongo\.errors|Connection refused|No servers found'; then
+    if [ "${LG_NO_SKIP:-}" = 1 ]; then
+      echo "FAILED"; fail=$((fail + 1)); failed+=("$name"); echo "    NOT RUN (LG_NO_SKIP=1): needs MongoDB, which is not reachable"; return
+    fi
     echo "skipped"; skip=$((skip + 1)); echo "    SKIPPED: needs MongoDB, which is not reachable"; return
   fi
-  if [ $rc = 0 ]; then echo "passed"; pass=$((pass + 1))
+  if [ $rc = 77 ] && [ "${LG_NO_SKIP:-}" = 1 ]; then
+    echo "FAILED"; fail=$((fail + 1)); failed+=("$name")
+    echo "    NOT RUN (LG_NO_SKIP=1): $(echo "$out" | grep -m1 SKIPPED | sed 's/^ *SKIPPED[^:]*: *//')"
+  elif [ $rc = 0 ]; then echo "passed"; pass=$((pass + 1))
   elif [ $rc = 77 ]; then echo "skipped"; skip=$((skip + 1)); echo "$out" | grep -m1 SKIPPED | sed 's/^/    /'
   else echo "FAILED"; fail=$((fail + 1)); failed+=("$name"); echo "$out" | tail -15 | sed 's/^/    /'; fi
 }
 run "libraries (versions + behaviour)" $PY tests/check_libraries.py
+run "requirements.txt names exactly what the code imports (platform, pipeline, docs site)" $PY tests/check_requirements_complete.py
+run "Two suites: the installation's checks, the maintainer's apart; no part skipped in silence" $PY tests/check_suite_split.py
 run "replay schedule"                 $PY tests/test_schedule.py
 run "new communications collections"  $PY tests/test_new_collections.py
 run "new services collections"        $PY tests/test_new_service_collections.py
@@ -62,7 +113,11 @@ run "Abused or Compromised vs MongoDB" $PY tests/verify_intelligence.py
 run "reports (PDF, ZIP, CSV)"         $PY tests/check_reports.py
 run "CSV formula safety"              $PY tests/check_csv_safety.py
 run "replayed counts"                 $PY tests/verify_replayed.py
-run "constituency"                    $PY tests/verify_constituency.py
+# a machine whose own constituency must never be changed for a check (a development server) names a script that runs
+# this check on a test system instead (LG_CONSTITUENCY_CHECK); a test system sets LG_TEST_SYSTEM=1 so the check sets a
+# temporary constituency itself and restores the original byte for byte (tests/verify_constituency.py)
+if [ -n "${LG_CONSTITUENCY_CHECK:-}" ]; then run "constituency" bash "$LG_CONSTITUENCY_CHECK"
+else run "constituency"                    $PY tests/verify_constituency.py; fi
 run "demo masking"                    $PY tests/test_demo.py
 # the database pipeline beside the platform (database/ in a release install)
 run "one address finder for every masker" $PY tests/check_ip_find.py
@@ -109,9 +164,13 @@ run "findings over time: rules, retries, loop (offline)" $PY tests/check_cov_fin
 run "report map: downloads, feed builder, command line (faked answers)" $PY tests/check_cov_report_map.py
 run "PDF builders: analysis, Executive, combination, advisory front" $PY tests/check_cov_pdf.py
 run "combination search: refusals, downloads kept, sweep (offline)" $PY tests/check_cov_combos.py
-DBDIR=""; for d in ../database ../shadowserver; do [ -f "$d/zip_limits.py" ] && [ -x "$d/.venv/bin/python" ] && DBDIR=$d && break; done
+# LG_DB_DIR names the pipeline folder to test (the maintainer's run of the held pipeline before a release); else the
+# one beside the platform
+DBDIR=""; for d in ${LG_DB_DIR:+"$LG_DB_DIR"} ../database ../shadowserver; do [ -f "$d/zip_limits.py" ] && [ -x "$d/.venv/bin/python" ] && DBDIR=$d && break; done
 if [ -n "$DBDIR" ]; then run "pipeline: unzip limits (zip bombs)" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_zip_limits.py"
 if [ -n "$DBDIR" ]; then run "pipeline: row hash limits and failed rows" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_line_hash.py"; fi
+if [ -n "$DBDIR" ] && [ -f "$DBDIR/tests/test_fix_b12.py" ]; then run "pipeline: the audit's batch 12 fixes stay fixed" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_fix_b12.py"; fi
+if [ -n "$DBDIR" ] && [ -f "$DBDIR/tests/test_fix_r2.py" ]; then run "pipeline: the review's fixes stay fixed (crashed files, the lock, UID keys)" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_fix_r2.py"; fi
 else run "pipeline: unzip limits (zip bombs)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
 if [ -n "$DBDIR" ] && [ -f "$DBDIR/report_names.py" ]; then run "pipeline: report names (quarantine)" bash -c "cd '$DBDIR' && .venv/bin/python tests/test_report_names.py"
 else run "pipeline: report names (quarantine)" bash -c 'echo "SKIPPED: database pipeline folder not found beside the platform"; exit 77'; fi
@@ -171,6 +230,29 @@ run "ATT&CK on CVE and issue cards, CTID trust" $PY tests/check_cve_attack.py
 run "failed-login counter (locks, clean-up)" $PY tests/check_login_throttle.py
 run "one worker process (gunicorn refuses more)" $PY tests/check_single_worker.py
 run "audit write failures: bell, then the gap in the log" $PY tests/check_audit_write_failure.py
+run "the report feed's bell notices: a failed read, a stopped builder" $PY tests/check_feed_alerts.py
+run "every downloaded CSV says who downloaded it and when" $PY tests/check_csv_stamp.py
+run "the code review's bugs stay fixed (quarterly, Unknown network, breakdowns)" $PY tests/check_review_fixes.py
+# the whole-codebase audit (2026-11-27): one check per batch, each failing on the code as audited
+run "the audit's fixes stay fixed: acodes, advisory, ASN registry (01)" $PY tests/check_fix_b01.py
+run "the audit's fixes stay fixed: audit log, sign-in, beacon decoder (02)" $PY tests/check_fix_b02.py
+run "the audit's fixes stay fixed: connectors, combinations (03)" $PY tests/check_fix_b03.py
+run "the audit's fixes stay fixed: counting keys to greetings (04)" $PY tests/check_fix_b04.py
+run "the audit's fixes stay fixed: insider, intel, management (05)" $PY tests/check_fix_b05.py
+run "the audit's fixes stay fixed: quarterly, privacy, passkeys (06)" $PY tests/check_fix_b06.py
+run "the audit's fixes stay fixed: reports PDF, services, caches (07)" $PY tests/check_fix_b07.py
+run "the audit's fixes stay fixed: services intel to warmup, tools (08)" $PY tests/check_fix_b08.py
+run "the audit's fixes stay fixed: page scripts account to code-integrity (09)" $PY tests/check_fix_b09.py
+run "the audit's fixes stay fixed: page scripts combos to logo-tool (10)" $PY tests/check_fix_b10.py
+run "the audit's fixes stay fixed: page scripts management to welcome (11)" $PY tests/check_fix_b11.py
+run "the audit's fixes stay fixed: stylesheets and templates (13)" $PY tests/check_fix_b13.py
+run "the audit's fixes stay fixed: installer and scripts (14)" $PY tests/check_fix_b14.py
+run "the audit's fixes stay fixed: shares, beacon handover days, the database port (15)" $PY tests/check_fix_b15.py
+# the Ponytail review of the fixes (2026-11-28): one check per area, each failing on the code before its fixes
+run "the review's fixes stay fixed: analyst-code labels masked, update rollback, connectors (r1)" $PY tests/check_fix_r1.py
+run "the review's fixes stay fixed: installer values, rights, uninstall ownership (r3)" $PY tests/check_fix_r3.py
+run "the review's fixes stay fixed: typed names never stored, dates in host names, JSON bodies (r4)" $PY tests/check_fix_r4.py
+run "the audit's follow-ups stay fixed (names, notes, sign-out, the preview watermark)" $PY tests/check_fix_lead.py
 run "CSP: exact outside files, no whole CDN; local globe map" $PY tests/check_csp_sources.py
 run "reverse proxy: the right-most address, never a visitor's 127.0.0.1" $PY tests/check_proxy_chain.py
 run "addresses from .env: https only (feed, report API)" $PY tests/check_https_only.py
@@ -228,6 +310,35 @@ run "Settings: the logo's size and crop tool" tests/check_logo_tool.py
 run "The guided tour on every platform and portal" $PY tests/check_tour.py
 run "How sign-in is checked: a passkey or the authenticator code" $PY tests/check_signin_check.py
 run "No page or answer holds a sign-in name (every role, every page)" $PY tests/check_no_signin_names.py
+run "The documentation names only what the code has (statuses, codes, buttons, roles)" $PY tests/check_docs_vs_code.py
+run "Caddy adopt run end to end on a made-up machine (rollback, checks first)" $PY tests/check_caddy_adopt_run.py
+run "Executive ring charts: every part named, no 0% for something (node)" $PY tests/check_mgmt_charts.py
+run "Shares in words: never 0% for a part, never 100% for a part; page = PDF; no share worked out alone" $PY tests/check_share_words.py
+run "Analysis and services answers: Top N of M, Other and Not recorded rows, full CSVs, every facet" $PY tests/check_nothing_missing_api.py
+run "Executive PDF and ZIP: real totals, Top N of M, the trend table goes on, ATT&CK and CISA actions once" $PY tests/check_exec_complete.py
+run "Executive page lists: Top N of M, Explain all = the rows shown, more cities (node)" $PY tests/check_mgmt_lists.py
+run "Quarterly, combination, intel, audit, beacon and unusual files hold every row; PDFs say N of M" $PY tests/check_cut_lists_data.py
+run "Admin pages say when a list is cut (audit, definitions, services reports, sender, connectors, workers) (node)" $PY tests/check_page_cut_lists.py
+run "Admin answers send the full count beside every cut list" $PY tests/check_cut_totals_server.py
+run "Map and services pages: Top N of M, rings and bars of the real total, Other parts (node)" $PY tests/check_page_cuts_maps.py
+run "Intel, Abused or Compromised, combinations, findings and advisory pages: Top N of M, shares (node)" $PY tests/check_page_cuts_portals.py
+run "Pages show the counts kept apart: no network, no region, no address, rows counted once (node)" $PY tests/check_page_count_notes.py
+run "One counting rule: the same host lands in the same sector, region and network on every page" $PY tests/check_count_keys.py
+run "AS numbers and addresses match the constituency in every spelling (AS064500, ::ffff:)" $PY tests/check_scope_normalise.py
+run "A report run's problems reach the bell and the Task monitor, each in words" $PY tests/check_pipeline_problems_shown.py
+run "Caddy setup, sync, update, status, remove and make_tls_cert run offline: files written, rolled back on failure" $PY tests/check_caddy_paths_run.py
+run "Installer: its own port behind Caddy, its service name, no endless 'not a Looking Glass database' loop" $PY tests/check_installer_caddy_db.py
+run "Masking: an external account's services detail, a researcher's Intel gathered, pins cleared at sign-out" $PY tests/check_masked_detail_intel_signout.py
+run "Accounts: an invite used once through the real sign-up, its role kept; Approve keeps the picked role" $PY tests/check_invite_signup_approve.py
+run "Filter menus' counts equal a brute-force count of the records matching the other filters (both platforms)" $PY tests/check_facets_bruteforce.py
+run "Advisory look refuses bad values and keeps its history; who researches; every saved network listed" $PY tests/check_advisory_look_research_scope.py
+run "A host's ports named in full and in order; a review kept before 18 Nov opens with every figure" $PY tests/check_ports_index_old_review.py
+run "The advisory page's ATT&CK boxes equal the PDF's for the same mappings (node vs Python)" $PY tests/check_attack_mergeout_parity.py
+run "Copy buttons copy nothing unless the server confirms the copy was recorded (node)" $PY tests/check_copy_fail_closed.py
+run "The welcome page goes on only to a path of this site; reduced motion goes straight there (node)" $PY tests/check_welcome_next.py
+run "A failed read is tried again with plain words; an action is never sent twice (node)" $PY tests/check_loader_retry.py
+run "A chosen filter value stays in its menu even when the new counts lack it (node)" $PY tests/check_services_withchosen.py
+run "Every route, every role, bad input: no server error, no traceback, no hang; API refusals in words" $PY tests/check_every_route.py
 run "Settings -> Update: signed release, backup, roll back (made-up repositories)" $PY tests/check_platform_update.py
 run "Every PDF and CSV variation: the content checker" $PY tests/check_output_lint.py
 run "RULE: every page opens with the loading animation" $PY tests/check_loader_everywhere.py
@@ -266,5 +377,9 @@ run "services for researchers (no hosts)" $PY tests/check_services_kb.py
 run "Intel gathered privacy (no hosts)" $PY tests/check_intel_privacy.py
 run "services patterns (no hosts)"     $PY tests/check_svc_patterns.py
 [ -n "${LG_NO_OUTSIDE:-}" ] && run "nothing reached outside (guard)" $PY tests/no_outside/report.py "$LG_NO_OUTSIDE"
+[ "$maint" -gt 0 ] && echo && echo "$maint maintainer checks are not part of an installation's checks (LG_SUITE=all runs them)."
+[ "$elsewhere" -gt 0 ] && echo && echo "$elsewhere rows run on the test system instead (LG_ROWS_ELSEWHERE): the release checklist runs them there."
+[ "$at_end" = 1 ] && echo && echo "The docs screenshot check runs at the screenshot stage, on the final build (LG_SCREENSHOTS_AT_END=1)."
+[ -n "$ONLY" ] && echo && echo "Only the rows of LG_ROWS_ONLY ran here: $(printf '%s\n' "$ONLY" | wc -l) listed."
 echo; echo "$pass passed, $fail failed${skip:+, $skip skipped}${failed:+: ${failed[*]}}"
 [ "$fail" = 0 ]

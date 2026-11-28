@@ -158,14 +158,17 @@ users = {"admin1": {"status": "active", "role": "admin"},
 json.dump({"users": users}, open(os.path.join(b2, "data", "users.json"), "w"))
 al = SA.Alerts(b2)
 one = al._signups()
-ok("one person waiting: named, leading to the Admin page", len(one) == 1 and one[0]["title"] == "Grace Mensah (grace) asks for an account"
+import people as _people  # noqa: E402
+ok("one person waiting: named by full name (never the sign-in name), leading to the Admin page", len(one) == 1
+   and one[0]["title"] == "Grace Mensah asks for an account" and "grace" not in json.dumps(one).replace("Grace", "")
    and one[0]["link"] == "/admin", one)
 ok("…the self-test's temporary accounts are not announced", "lg-selftest" not in json.dumps(one))
 users["kofi"] = {"status": "pending", "registered": {"at": now}}
 json.dump({"users": users}, open(os.path.join(b2, "data", "users.json"), "w"))
 two = al._signups()
 ok("two waiting: one notice, \"2 people are waiting for your approval\", naming them", len(two) == 1
-   and two[0]["title"] == "2 people are waiting for your approval" and "kofi" in two[0]["text"] and "Grace Mensah" in two[0]["text"], two)
+   and two[0]["title"] == "2 people are waiting for your approval" and _people.person_label("kofi") in two[0]["text"]
+   and "Grace Mensah" in two[0]["text"] and "kofi" not in two[0]["text"], two)
 ok("…a new person changes the notice (cleared ones come back)", two[0]["key"] != one[0]["key"])
 users["grace"]["status"] = "active"
 json.dump({"users": users}, open(os.path.join(b2, "data", "users.json"), "w"))

@@ -37,6 +37,13 @@ FEATURES = {
         "docs": [("docs/USER_GUIDE.md", "Some address blocks"), ("docs/USER_GUIDE.md", "Other address ranges"),
                  ("docs/CONFIGURATION.md", "Some address blocks"), ("docs/TECHNICAL_REFERENCE.md", "?asn=")],
     },
+    # 2026-11-26: refusals under /api/ answer JSON in words (no page of its own: no tour step; no new term)
+    "api_errors": {
+        "no_ui": "the words of a refusal the pages already show (an error line); no page or control of its own",
+        "tour": [],
+        "glossary": [],
+        "docs": [("docs/TECHNICAL_REFERENCE.md", "api_errors.py")],
+    },
     # r90: external accounts open the two platforms and Abused or Compromised only, masked (the sign-in gate's allow-list)
     "external_access": {
         "tour": [("/intelligence", "#itMain .it-hero")],

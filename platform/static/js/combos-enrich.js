@@ -89,6 +89,10 @@
 
   // ---------------- across-report data: tick the patterns, send them to a manager, the report follows the decision
   const ticked = new Set(), tickedInf = new Set(), tickedIss = new Set();
+  // the ticks belong to one search: a new search starts with none (2026-11-27 audit: an earlier search's ticks went
+  // out with the next one, which the server refused, stuck until the page was reloaded)
+  let tickJob = null;
+  const ticksFor = (job) => { if (tickJob !== job) { ticked.clear(); tickedInf.clear(); tickedIss.clear(); tickJob = job; } };
   const tickCount = () => {
     const parts = [ticked.size && pl(ticked.size, "pattern"), tickedInf.size && pl(tickedInf.size, "infection"), tickedIss.size && `${fmt(tickedIss.size)} CVE${tickedIss.size === 1 ? "" : "s"}/issue${tickedIss.size === 1 ? "" : "s"}`].filter(Boolean);
     return parts.length ? `${parts.join(", ")} ticked.` : "Nothing ticked yet.";
@@ -371,12 +375,21 @@
 
   function box(job, s, entry) {
     const c = el("section", "ce-box");
+    ticksFor(job);
     // the search's own state: across-report data (needs management's decision) or not
     const dl0 = document.querySelector(".cb-dl"); if (dl0) dl0.hidden = false;
-    const stP = fetch(`/api/combos/search/${job}`, { cache: "no-store" }).then((r) => r.json()).then((st) => {
+    // a refusal (the search expired, no access) is said, never read as a search with nothing to review (2026-11-27 audit)
+    const stP = fetch(`/api/combos/search/${job}`, { cache: "no-store" }).then(async (r) => {
+      const st = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(st.error || `HTTP ${r.status}`);
+      return st;
+    }).then((st) => {
       if (st.needs_review) { c.replaceChildren(); reviewBox(job, st, entry, c); }
       else if (!entry || !String(entry.code || "").startsWith("LG-A-")) plainSend(job, st, entry, c);
-    }).catch(() => { c.append(el("p", "cb-hint", "Could not read this search's state: reload the page to send it to management.")); });   // (review 2026-11-13)
+    }).catch((e) => {
+      const why = window.LGLoader?.errorText ? window.LGLoader.errorText(e) : "";
+      c.append(el("p", "cb-hint", `Could not read this search's state${why ? ` (${why.replace(/\.$/, "")})` : ""}: reload the page to send it to management.`));
+    });   // (review 2026-11-13)
     // the box under its loading line until the search's state is known: it used to be drawn, then replaced (2026-11-15)
     window.LGLoader?.pane?.(c, "Reading this search's state…", () => stP);
     c.append(el("h3", null, "Across every category"),

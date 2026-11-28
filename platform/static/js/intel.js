@@ -34,8 +34,23 @@
     "Brute-force password", "Other CVEs on the same hosts", "Associated tags", "Product", "Certificate name", "Server software", "SSH software",
     "TLS fingerprint (JARM)", "SSH fingerprint (HASSH)", "Certificate SHA-256", "Web page hash", "Certificate issuer", "Family named by the report", "Application"];
   const SHOW = 6, MATRIX_MAX = 14;
-  const pct = (s) => (s == null ? "" : s >= 0.995 ? "100%" : s >= 0.1 ? `${Math.round(s * 100)}%` : s >= 0.001 ? `${(s * 100).toFixed(1)}%` : "<0.1%");
-  const plural = (n, w) => `${fmt(n)} ${w}${n === 1 ? "" : /(s|ch|sh|x)$/.test(w) ? "es" : "s"}`;
+  // a share in words that never mislead (loader.js LGShare): a part is never "100%", a part with records never "0%"
+  const pct = (s) => (s == null ? "" : window.LGShare.pct(s, s < 0.1 ? 1 : 0));
+  // A decoded beacon's LG-B code on its row (beacon_findings.py /api/beacon/code). A code that cannot be had is said on
+  // the row with the server's reason, never dropped without a word (2026-11-26: the row was removed silently).
+  function beaconCode(row, url, done) {
+    const fail = (why) => row.append(el("span", "ig-held", `No code for this one: ${why}`));
+    return fetch(url, { credentials: "same-origin" })
+      .then(async (x) => {
+        if (x.ok) return x.json();
+        let why = "";
+        try { why = ((await x.json()) || {}).error || ""; } catch { /* not JSON */ }
+        return { failed: why || `the server answered ${x.status}.` };
+      })
+      .then((c) => { if (!c || c.failed || !c.code) fail((c && c.failed) || "the server sent none."); else done(c); })
+      .catch(() => fail("it could not be loaded (network). Reload the page to try again."));
+  }
+  const plural = (n, w) =>`${fmt(n)} ${w}${n === 1 ? "" : /(s|ch|sh|x)$/.test(w) ? "es" : "s"}`;
   // what people read for a report: its title (services reports), never the collection name
   const rn = (x) => (st?.d?.labels || {})[x] || x;
   const SEC = { issues: "issue", services: "services report", infections: "infection / category" };
@@ -236,14 +251,9 @@
     if (x.priority === 5)
       for (const n of x.names || []) {
         const row = el("div", "ig-code-row ig-beacon-code"); say.append(row);
-        fetch(`/api/beacon/code?name=${encodeURIComponent(n.name)}&os_family=${encodeURIComponent(x.value)}`, { credentials: "same-origin" })
-          .then((r) => (r.ok ? r.json() : null))
-          .then((d) => {
-            if (!d) { row.remove(); return; }
-            if (x.names.length > 1) row.append(el("span", "ig-every-in", n.name));
-            row.append(beaconChip(d.code, `${d.text}`), noteBtnFor(n.name, "infections", n.name, d.code, d.text));
-          })
-          .catch(() => row.remove());
+        if (x.names.length > 1) row.append(el("span", "ig-every-in", n.name));
+        beaconCode(row, `/api/beacon/code?name=${encodeURIComponent(n.name)}&os_family=${encodeURIComponent(x.value)}`,
+          (d) => row.append(beaconChip(d.code, `${d.text}`), noteBtnFor(n.name, "infections", n.name, d.code, d.text)));
       }
     // Explore (the user, 2026-11-15): exactly what Looking Glass stated. Every name and report of the match, side by
     // side, each with the tags and patterns of only the records that carry the indicator (intel_match.py)
@@ -500,7 +510,10 @@
       ulx.append(li);
     }
     void maxx;
-    c0.append(ulx, el("p", "ig-foot", "Each row is one exact pattern: the reports a device was seen in and, for each, everything it carried there. Devices counted, never shown."));
+    // the server sends the 12 most frequent (intel.py): say so when there are more
+    const xTotal = Math.max((a.cross_combos || []).length, Number(a.cross_combos_total ?? (a.totals || {}).cross_combos) || 0);
+    c0.append(ulx, el("p", "ig-foot", "Each row is one exact pattern: the reports a device was seen in and, for each, everything it carried there. Devices counted, never shown." +
+      (xTotal > (a.cross_combos || []).length ? ` The ${(a.cross_combos || []).length} most frequent of ${fmt(xTotal)} are shown.` : "")));
     pane.append(c0);
     // 1. the sets of reports the devices were seen in
     const c1 = el("article", "ig-card ig-combos");
@@ -522,7 +535,9 @@
     }
     if (!(a.report_sets || []).length) c1.append(el("p", "ig-empty", d.section === "services"
       ? `No set of reports is shared by ${d.min_hosts || 5} or more devices.` : "No set of reports to show."));
-    c1.append(ul1, el("p", "ig-foot", "Each row is one exact set of reports a device was seen in for this name, in the days held in memory."));
+    const sTotal = Math.max((a.report_sets || []).length, Number(a.report_sets_total ?? (a.totals || {}).report_sets) || 0);
+    c1.append(ul1, el("p", "ig-foot", "Each row is one exact set of reports a device was seen in for this name, in the days held in memory." +
+      (sTotal > (a.report_sets || []).length ? ` The ${(a.report_sets || []).length} most frequent of ${fmt(sTotal)} are shown.` : "")));
     pane.append(c1);
     if (d.section === "services") return;             // services: the sinkhole card is at the top
     // 2. indicators seen in more than one report
@@ -698,7 +713,11 @@
       if (kind !== lastKind) { lastKind = kind; const kh = el("div", "ig-every-kh", `${kind} · ${svc.filter((x) => (x.kind || "Services reports") === kind).length}`); if (n >= 6 && !open_) kh.hidden = true; bs.append(kh); }
       const r = el("div", "ig-every-s"); if (n >= 6 && !open_) r.hidden = true;
       const hh = el("div", "ig-every-r"); hh.append(el("b", null, s.title), el("span", "ig-every-n", plural(s.hosts, "host"))); r.append(hh);
-      for (const k of s.combinations.filter((k) => k.items.length).slice(0, 3)) {
+      // the first 3 sets of each report, then how many more and a button for every one (2026-11-26: the rest went unsaid)
+      const sets = (s.combinations || []).filter((k) => k.items.length);
+      const setsOpen = !!(st.open?.sets || {})[s.title];
+      const setsAll = Math.max(sets.length, Number(s.combinations_total ?? (s.totals || {}).combinations) || 0);
+      for (const k of setsOpen ? sets : sets.slice(0, 3)) {
         const row = el("div", `ig-every-k${st.focus && !k.items.includes(st.focus) ? " dim" : ""}`);
         const set = el("div", "ig-set"); k.items.forEach((v, j) => { if (j) set.append(el("span", "ig-plus", " + ")); set.append(chipOf(v)); });
         const cr = el("div", "ig-code-row"); cr.append(el("span", "ig-every-n", plural(k.hosts, "host")));
@@ -706,6 +725,17 @@
         if (k.code) cr.append(codeChip(k.code, `${s.title}: ${k.items.join(" + ")}`), noteBtn(k.code, `${s.title}: ${k.items.join(" + ")}`));
         else cr.append(el("span", "ig-held", `Fewer than 5 devices: no lasting code. An analyst can drill into it.`));
         row.append(set, cr); r.append(row);
+      }
+      const shownSets = setsOpen ? sets.length : Math.min(3, sets.length);
+      if (setsAll > shownSets) {
+        const mr = el("div", "ig-every-more");
+        mr.append(el("span", "ig-every-n", `and ${plural(setsAll - shownSets, "more set")}`));
+        if (sets.length > 3) {
+          const b = el("button", "ig-more", setsOpen ? "Show the first 3" : `Show all ${sets.length}`); b.type = "button";
+          b.addEventListener("click", () => { const o = { ...(st.open?.sets || {}) }; o[s.title] = !setsOpen; st.open = { ...(st.open || {}), sets: o }; paint(); });
+          mr.append(b);
+        }
+        r.append(mr);
       }
       bs.append(r);
     });
@@ -746,7 +776,18 @@
   function pick(i) { if (!st || i === st.i || i < st.min || i >= st.d.reports.length) return; st.i = i; st.focus = null; st.open = {}; paint(true); }
   // services: the extra rail entries (-2 pattern fields, -3 about this report) are not in the [ ] cycle
   function pickExtra(i) { if (!st) return; st.i = i; st.focus = null; paint(true); }
+  // the pane is drawn again on every click in it (a focus, "more", a view): the keyboard's place stays, on the same
+  // control when it is drawn again, else on the report's tab in the rail (2026-11-27 audit: it fell to the page)
   function paint(scrollTop) {
+    const focusKey = (n) => `${n.tagName}|${n.className}|${n.textContent.trim()}`;
+    const a = document.activeElement, inside = !!(a && a !== st.pane && st.pane.contains(a));
+    const k = inside ? focusKey(a) : "";
+    paintNow(scrollTop);
+    if (!inside || st.pane.contains(document.activeElement)) return;
+    const same = [...st.pane.querySelectorAll(a.tagName)].find((n) => focusKey(n) === k);
+    (same || st.rail.querySelector('.ig-rep-btn[aria-selected="true"]'))?.focus({ preventScroll: true });
+    // the drawing itself, inside paint() so paint stays one function (tests/check_page_cuts_portals.py runs it alone)
+    function paintNow(scrollTop) {
     const d = st.d;
     st.rail.querySelectorAll(".ig-rep-btn").forEach((b) => { const on = +b.dataset.i === st.i; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; });
     if (st.i === -1) { st.pane.replaceChildren(); (st.match ? compareView : acrossView)(st.pane); if (scrollTop) keepPlace(); return; }
@@ -784,22 +825,23 @@
     pane.append(grid);
     // decoded beacons here (5 or more devices per value): each operator's code and "Move to notes", like every other
     // pattern; a note sent on as a finding takes exactly those records to the Findings page (beacon_findings.py)
-    const ops = (r.indicators.find((k) => k.kind === "Beacon operator") || {}).values || [];
+    const ops = [...((r.indicators.find((k) => k.kind === "Beacon operator") || {}).values || [])].sort((a, b) => (b.count || 0) - (a.count || 0));
     if (ops.length && (r.section || d.section) !== "services" && (r.section || d.section) !== "issues") {
       const nm = r.name || d.name;
       const bar = el("div", "ig-sec-block ig-beacon-ops"); bar.append(el("div", "ig-cmp-k", "Decoded beacons here need a serious look"));
       for (const v of ops.slice(0, 6)) {
         const row = el("div", "ig-code-row ig-beacon-code"); row.append(el("span", "ig-every-in", `Operator ${v.value}`)); bar.append(row);
-        fetch(`/api/beacon/code?name=${encodeURIComponent(nm)}&operator=${encodeURIComponent(v.value)}`, { credentials: "same-origin" })
-          .then((x) => (x.ok ? x.json() : null))
-          .then((c) => { if (!c) { row.remove(); return; } row.append(beaconChip(c.code, c.text), noteBtnFor(nm, "infections", d.title || nm, c.code, c.text)); })
-          .catch(() => row.remove());
+        beaconCode(row, `/api/beacon/code?name=${encodeURIComponent(nm)}&operator=${encodeURIComponent(v.value)}`,
+          (c) => row.append(beaconChip(c.code, c.text), noteBtnFor(nm, "infections", d.title || nm, c.code, c.text)));
       }
+      // the first 6 operators get a code here; say how many more there are (they are in the Beacon operator card above)
+      if (ops.length > 6) bar.append(el("p", "ig-foot", `The 6 operators with the most records are here; ${plural(ops.length - 6, "more operator")} ${ops.length - 6 === 1 ? "is" : "are"} listed in the Beacon operator card above.`));
       pane.append(bar);
     }
     if (st.q &&!pane.querySelector(".ig-card:not(.empty) li.ig-v:not(.out), .ig-mrow:not(.dim):not(.ig-mhead), .ig-sets li:not(.dim)"))
       pane.append(el("p", "ig-empty", `Nothing in ${rn(r.report)} matches “${st.q}”.`));
     if (scrollTop) keepPlace();
+    }
   }
   // switching report: stay where the reader is; only when they are below the start of the report content, bring that
   // start into view (never back up to "Looking Glass asks" above it)

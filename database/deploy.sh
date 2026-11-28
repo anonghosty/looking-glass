@@ -84,6 +84,8 @@ _local=$(env_get MONGO_LOCAL true)
 # was a MongoDB installed before this script ever ran? (then it may belong to someone else: see step 4)
 MONGO_PREEXISTING=0
 if command -v mongod >/dev/null && ! grep -q 'Managed by .*deploy.sh' /etc/mongod.conf 2>/dev/null; then MONGO_PREEXISTING=1; fi
+# set below only when THIS run installs MongoDB on a computer that had no mongod at all: then it came with Looking Glass
+MONGO_INSTALLED_NOW=0
 MONGO_DB=$(env_get MONGO_DB shadowserver)
 AUTH_DB=$(env_get MONGO_AUTH_SOURCE admin)
 PORT=$(env_get MONGO_PORT 27017)
@@ -130,6 +132,8 @@ fi
 if [[ $LOCAL == false ]]; then
   info "MongoDB is on an internal server ($(env_get MONGO_HOST):$PORT): nothing to install for it here"
 elif ! command -v mongod >/dev/null || ! command -v mongosh >/dev/null || ! command -v mongorestore >/dev/null; then
+  # no mongod at all before this run (only missing tools next to one already there do not count)
+  [[ $MONGO_PREEXISTING == 0 ]] && ! command -v mongod >/dev/null && MONGO_INSTALLED_NOW=1
   CODENAME=$(. /etc/os-release && echo "${VERSION_CODENAME:-noble}")
   ARCH=$(dpkg --print-architecture)
   has_pkg() {  # the repo answers 200 even for missing releases, so look inside the package index
@@ -221,9 +225,17 @@ TAKEN=""
 if [[ $MONGO_PREEXISTING == 1 ]] || grep -q '^# Taken over by' /etc/mongod.conf 2>/dev/null; then
   TAKEN="# Taken over by deploy.sh (MONGO_TAKE_OVER): MongoDB was installed before Looking Glass; uninstall.sh never removes it."
 fi
+# a MongoDB this deploy.sh installed (this run, or a run that marked it so): uninstall.sh --remove-mongodb may remove it.
+# Without this mark the uninstaller keeps MongoDB whenever it cannot tell (an older installation's mongod.conf.orig is
+# the package's default here, but on a taken-over computer someone's own configuration; 2026-11-26)
+INSTALLED=""
+if [[ -z $TAKEN ]] && { [[ $MONGO_INSTALLED_NOW == 1 ]] || grep -q '^# Installed by deploy.sh' /etc/mongod.conf 2>/dev/null; }; then
+  INSTALLED="# Installed by deploy.sh: MongoDB came with Looking Glass on this computer; uninstall.sh --remove-mongodb removes it."
+fi
 conf=$(cat <<EOF
 # Managed by $PROJECT_DIR/deploy.sh - edit .env and re-run deploy instead of editing here.
 $TAKEN
+$INSTALLED
 storage:
   dbPath: /var/lib/mongodb
   wiredTiger:

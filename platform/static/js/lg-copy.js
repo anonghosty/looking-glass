@@ -53,7 +53,8 @@
           text: (o.kind === "recovery" || o.kind === "invite") ? undefined : text }) });
       d = await r.json().catch(() => ({}));
     } catch { return { ok: false, message: "Not copied: the copy could not be recorded (no connection)." }; }
-    if (!r.ok) return { ok: false, message: `Not copied: ${d.error || "the copy could not be recorded"}` };
+    // only the server's own confirmation counts: a page that says 200 without it (a gateway or sign-in page) copies nothing
+    if (!r.ok || !d || d.ok !== true) return { ok: false, message: `Not copied: ${(d && d.error) || "the copy could not be recorded"}` };
     const ok = await write(text);
     return ok ? { ok: true, message: "Copied (recorded under your name)" } : { ok: false, message: "Recorded, but the browser refused to copy." };
   }

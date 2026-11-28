@@ -103,7 +103,12 @@
         const b = el("button", "pill-btn", "Show the devices");
         b.type = "button"; b.addEventListener("click", () => showDevices(c, devBox, b)); act.append(b);
       }
-      for (const l of c.links || []) { const x = el("a", "pill-btn", l.text); x.href = l.href; act.append(x); }
+      // a link only to a page of this site or an http(s) address; never javascript: or data: (audit 2026-11-27, 11-13)
+      for (const l of c.links || []) {
+        let to = null; try { to = new URL(l.href, location.origin); } catch { to = null; }
+        if (!to || !["http:", "https:"].includes(to.protocol)) { act.append(el("span", "pt-by", l.text)); continue; }
+        const x = el("a", "pill-btn", l.text); x.href = l.href; act.append(x);
+      }
       const msg = el("span", "cb-msg"); msg.setAttribute("role", "status");
       if (confirmed) {
         const u = el("button", "pill-btn", "Stop watching");

@@ -78,6 +78,8 @@
 .av-net b { font-size: 13px; color: var(--text); } .av-net small { font-size: 11.5px; color: var(--muted); }
 .av-net.sent { border-color: rgba(43, 176, 127, .5); } .av-net.draft { border-color: rgba(177, 140, 245, .5); }
 .av-net.on { background: rgba(124, 156, 255, .14); border-color: rgba(124, 156, 255, .7); }
+/* the chosen organisation's tinted background: --muted measured 4.43:1 there (WCAG AA needs 4.5:1; the sweep, 2026-11-26) */
+.av-net.on small { color: var(--text-2); }
 .av-ipwrap { max-height: 420px; overflow: auto; }
 .av-ips td { overflow-wrap: anywhere; font-size: 12.5px; vertical-align: top; } .av-ips td.num { text-align: right; }
 /* every value shows in full (2026-11-14: infections were cut with "…" by the shared .hosts style): lists wrap between

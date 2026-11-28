@@ -6,7 +6,7 @@ the platform: the **Glossary** tab on the overview page and the **Glossary** but
 ## Contents
 
 - [The basics](#the-basics) (8 terms)
-- [Who and where](#who-and-where) (14 terms)
+- [Who and where](#who-and-where) (16 terms)
 - [Threats](#threats) (27 terms)
 - [Numbers and measures](#numbers-and-measures) (14 terms)
 - [Using the platform](#using-the-platform) (15 terms)
@@ -62,7 +62,13 @@ The city of the source host, according to Shadowserver's geolocation of its IP a
 The country of the destination. For botnet reports this is where the sinkhole runs, not a victim country.
 
 **Network (ASN)**  
-The company that operates the internet connection, such as an ISP, a university or a hosting provider. Each operator has an Autonomous System Number (ASN); Looking Glass shows the company name instead of the number.
+The company that operates the internet connection, such as an ISP, a university or a hosting provider. Each operator has an Autonomous System Number (ASN); Looking Glass shows the company name instead of the number. Networks are counted by company (two numbers of one company are one network); a record without a network number is shown as Unknown network and not counted as a network.
+
+**Sectors (network type)**  
+What kind of organisation a network belongs to, as you set it per network in Settings (Telco / ISP, Government, Bank, University / research, Health care and the others, or a type you add). Every page, PDF and CSV counts sectors this one way: a record's sector is its network's type, and a network without a type is Unknown. A device seen on networks of two types counts in each.
+
+**Industry (Shadowserver)**  
+The sector Shadowserver writes into its own report rows (for example Communications or Government): its view of the address owner's industry, which you cannot change. Shown beside Sectors (network type) so nothing is lost, never mixed with it; rows without it read Not given.
 
 **Constituent (column)**  
 In Settings, the column of Network names & types where the constituency is chosen, one network at a time: Not in, The whole network (all its addresses), or Some address blocks (only the blocks you tick). Apply settings saves the choice for everyone.
@@ -430,7 +436,7 @@ The Download report button on every list behind an analysis figure gives a ZIP f
 ## Publicly accessible / vulnerable services
 
 **Publicly accessible / vulnerable services**  
-The second Looking Glass platform (/services). It replays the single-host Shadowserver reports: services in your constituency that anyone on the internet can reach (scans), devices Shadowserver fingerprinted, compromised hosts and blocklisted addresses. Same replay, filters, analysis and demo mode as the map; instead of a map it shows a services constellation or a Ghana regions heatmap.
+The second Looking Glass platform (/services). It replays the single-host Shadowserver reports: services in your constituency that anyone on the internet can reach (scans), devices Shadowserver fingerprinted, compromised hosts and blocklisted addresses. Same replay, filters, analysis and demo mode as the map; instead of a map it shows a services constellation or a heatmap of the regions of the country chosen in Settings.
 
 **Record**  
 One host and service seen in a single-host report, for example one open RDP server or one fingerprinted router. Records yesterday is the whole day's total.
@@ -509,7 +515,7 @@ Looking Glass sending its own analysis of the reports to the CSIRT's own OpenCTI
 One OpenCTI or MISP that receives: its address, its key (stored encrypted, never shown again), its TLP (AMBER unless chosen) and what it receives (networks, address blocks, ranges; nothing until something is ticked). It is saved only after its test passed, and saved off.
 
 **Paused target**  
-A target that stopped sending because its checks before a send failed, or three sends in a row failed. Settings → Connectors says why; once the cause is fixed on the platform, an administrator turns it on again.
+A target that stopped sending because its checks before a send failed, or three runs in a row failed (a send or a withdrawal the target refused). Settings → Connectors says why; once the cause is fixed on the platform, an administrator turns it on again.
 
 **OpenCTI and MISP**  
 Two free, open-source threat intelligence platforms many CSIRTs run: OpenCTI (by Filigran) and MISP (the MISP Project). Looking Glass sends to OpenCTI in STIX 2.1 over TAXII, the OASIS standards for threat information and for sending it, and to MISP through its own API.
@@ -711,6 +717,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Hosts with multiple issues](#publicly-accessible--vulnerable-services) · 
 [Hosts with multiple threats](#numbers-and-measures) · 
 [Indicator](#accounts-roles-and-permissions) · 
+[Industry (Shadowserver)](#who-and-where) · 
 [Infection / category](#threats) · 
 [Intel](#using-the-platform) · 
 [Intel gathered](#accounts-roles-and-permissions) · 
@@ -777,6 +784,7 @@ Open (CC BY 4.0) boundaries of every country's first-level regions, used for the
 [Role](#accounts-roles-and-permissions) · 
 [Scanning](#threats) · 
 [Seal](#threats) · 
+[Sectors (network type)](#who-and-where) · 
 [Seen in / Last seen](#accounts-roles-and-permissions) · 
 [Sender check (DKIM)](#security-audit-and-the-pipeline) · 
 [Services constellation](#publicly-accessible--vulnerable-services) · 

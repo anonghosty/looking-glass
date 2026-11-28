@@ -2,7 +2,7 @@
   "SPDXID": "SPDXRef-DOCUMENT",
   "creationInfo": {
     "comment": "Made from the lock files only (tools/make_sbom.py): the date is the release's, the same lock files always give the same file.",
-    "created": "2026-11-26T00:00:00Z",
+    "created": "2026-11-28T00:00:00Z",
     "creators": [
       "Tool: looking-glass-make_sbom"
     ]
@@ -11,8 +11,8 @@
   "documentDescribes": [
     "SPDXRef-Package-looking-glass"
   ],
-  "documentNamespace": "https://github.com/anonghosty/looking-glass/sbom/v2026.11.26-b12dfbfa20f49a39",
-  "name": "looking-glass 2026.11.26",
+  "documentNamespace": "https://github.com/anonghosty/looking-glass/sbom/v2026.11.28-4aece53bef246a1d",
+  "name": "looking-glass 2026.11.28",
   "packages": [
     {
       "SPDXID": "SPDXRef-Action-actions-checkout-3d3c42e5aac5",
@@ -65,7 +65,7 @@
       "name": "looking-glass-docs-site",
       "primaryPackagePurpose": "OTHER",
       "supplier": "Organization: Looking Glass project",
-      "versionInfo": "2026.11.26"
+      "versionInfo": "2026.11.28"
     },
     {
       "SPDXID": "SPDXRef-Component-pipeline",
@@ -78,7 +78,7 @@
       "name": "looking-glass-pipeline",
       "primaryPackagePurpose": "APPLICATION",
       "supplier": "Organization: Looking Glass project",
-      "versionInfo": "2026.11.26"
+      "versionInfo": "2026.11.28"
     },
     {
       "SPDXID": "SPDXRef-Component-platform",
@@ -91,7 +91,7 @@
       "name": "looking-glass-platform",
       "primaryPackagePurpose": "APPLICATION",
       "supplier": "Organization: Looking Glass project",
-      "versionInfo": "2026.11.26"
+      "versionInfo": "2026.11.28"
     },
     {
       "SPDXID": "SPDXRef-Package-docs-site-babel-2.18.0",
@@ -2722,7 +2722,7 @@
       "name": "looking-glass",
       "primaryPackagePurpose": "APPLICATION",
       "supplier": "Organization: Looking Glass project",
-      "versionInfo": "2026.11.26"
+      "versionInfo": "2026.11.28"
     },
     {
       "SPDXID": "SPDXRef-Package-pipeline-certifi-2026.10.23",
@@ -4582,7 +4582,7 @@
           "checksumValue": "63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63"
         }
       ],
-      "comment": "indirect: needed by requests. Locked in the pipeline requirements.lock; the checksums are the sha256 of every file the lock accepts for this version (one per platform and Python version).",
+      "comment": "direct: pipeline/requirements.txt asks for it. Locked in the pipeline requirements.lock; the checksums are the sha256 of every file the lock accepts for this version (one per platform and Python version).",
       "copyrightText": "NOASSERTION",
       "downloadLocation": "NOASSERTION",
       "externalRefs": [
@@ -4810,7 +4810,7 @@
           "checksumValue": "fbdcf4d74acbeb7672e6413e81cd2c1ced1a4a8cf949484ac54e9af5265c3c72"
         }
       ],
-      "comment": "indirect: needed by webauthn. Locked in the platform requirements.lock; the checksums are the sha256 of every file the lock accepts for this version (one per platform and Python version).",
+      "comment": "direct: platform/requirements.txt asks for it. Locked in the platform requirements.lock; the checksums are the sha256 of every file the lock accepts for this version (one per platform and Python version).",
       "copyrightText": "NOASSERTION",
       "downloadLocation": "NOASSERTION",
       "externalRefs": [
@@ -7360,7 +7360,7 @@
           "checksumValue": "ffea6b2986a797c84b6d1d27d4f43e0b83c73fc16281a930891cd237cf0d08fe"
         }
       ],
-      "comment": "indirect: needed by reportlab. Locked in the platform requirements.lock; the checksums are the sha256 of every file the lock accepts for this version (one per platform and Python version).",
+      "comment": "direct: platform/requirements.txt asks for it. Locked in the platform requirements.lock; the checksums are the sha256 of every file the lock accepts for this version (one per platform and Python version).",
       "copyrightText": "NOASSERTION",
       "downloadLocation": "NOASSERTION",
       "externalRefs": [
@@ -8225,7 +8225,7 @@
       "spdxElementId": "SPDXRef-Component-pipeline"
     },
     {
-      "comment": "indirect",
+      "comment": "direct",
       "relatedSpdxElement": "SPDXRef-Package-pipeline-urllib3-2.8.0",
       "relationshipType": "DEPENDS_ON",
       "spdxElementId": "SPDXRef-Component-pipeline"
@@ -8237,7 +8237,7 @@
       "spdxElementId": "SPDXRef-Component-platform"
     },
     {
-      "comment": "indirect",
+      "comment": "direct",
       "relatedSpdxElement": "SPDXRef-Package-platform-cbor2-5.9.0",
       "relationshipType": "DEPENDS_ON",
       "spdxElementId": "SPDXRef-Component-platform"
@@ -8303,7 +8303,7 @@
       "spdxElementId": "SPDXRef-Component-platform"
     },
     {
-      "comment": "indirect",
+      "comment": "direct",
       "relatedSpdxElement": "SPDXRef-Package-platform-pillow-13.0.0",
       "relationshipType": "DEPENDS_ON",
       "spdxElementId": "SPDXRef-Component-platform"

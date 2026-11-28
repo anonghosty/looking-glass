@@ -102,6 +102,9 @@ try:
        "nonce-" in h.get("Content-Security-Policy", "") and "frame-ancestors 'none'" in h["Content-Security-Policy"]
        and h.get("X-Frame-Options") == "DENY" and h.get("X-Content-Type-Options") == "nosniff" and "Server" not in h)
     ok("no HSTS over plain HTTP", "Strict-Transport-Security" not in h)
+    ok("other sites may not load its pages or files (CORP same-origin); no plug-in cross-domain policy",
+       h.get("Cross-Origin-Resource-Policy") == "same-origin" and h.get("X-Permitted-Cross-Domain-Policies") == "none",
+       {k: h.get(k) for k in ("Cross-Origin-Resource-Policy", "X-Permitted-Cross-Domain-Policies")})
     h = c.get("/management?embed=1").headers
     ok("/management?embed=1: framed by this site only", "frame-ancestors 'self'" in h["Content-Security-Policy"] and h["X-Frame-Options"] == "SAMEORIGIN")
     ok("the review pages may frame this site", "frame-src 'self'" in c.get("/review/1").headers["Content-Security-Policy"])

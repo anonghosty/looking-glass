@@ -87,12 +87,27 @@ def check_internal(host, port=27017):
     return None
 
 
+def port_of(value):
+    """MONGO_PORT as a number (empty: 27017). Refused, saying why, when it is not a port from 1 to 65535: a reason,
+    not a traceback (audit 4-11)."""
+    s = str(value if value is not None else "").strip()
+    if not s:
+        return 27017
+    if not (s.isascii() and s.isdigit()):
+        raise Refused(f"MONGO_PORT {s[:40]!r} is not a number: set the database's port, from 1 to 65535 "
+                      "(MongoDB's own is 27017).")
+    port = int(s)
+    if not 1 <= port <= 65535:
+        raise Refused(f"MONGO_PORT {port} is not a port: set one from 1 to 65535 (MongoDB's own is 27017).")
+    return port
+
+
 def kwargs(get=None):
     """MongoClient keyword arguments for where the database is and how it is reached (no account: the caller adds it).
     get: a settings getter (os.environ.get, a dotenv dict's get). Raises Refused for an unsafe or broken setting."""
     get = get or os.environ.get
     host = (get("MONGO_HOST") or "127.0.0.1").strip()
-    port = int(get("MONGO_PORT") or 27017)
+    port = port_of(get("MONGO_PORT"))
     kw = {"host": host, "port": port}
     why = check_internal(host, port)
     if why:
@@ -120,7 +135,11 @@ def describe(get=None):
     """One line for checks and logs: where the database is and how it is reached (never a password)."""
     get = get or os.environ.get
     host, port = (get("MONGO_HOST") or "127.0.0.1").strip(), get("MONGO_PORT") or "27017"
-    if check_internal(host, int(port)):
+    try:
+        port_n = port_of(port)
+    except Refused as why:
+        return f"{host} (REFUSED: {why})"
+    if check_internal(host, port_n):
         how = "REFUSED: not loopback or an internal network address"
     elif is_local(host):
         how = "this computer"

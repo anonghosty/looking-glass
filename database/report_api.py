@@ -223,6 +223,7 @@ def pull(base_dir: Path, attach_dir: Path, days: int, threads: int, stats, log, 
                 continue
             todo.append(dict(it, file=f, id=i))
         if bad:
+            stats["api_bad_items"] += bad            # in the run's status too (count audit 2026-11-26)
             log.warning("Shadowserver API: %d listed item(s) without a usable file name or id were skipped", bad)
         log.info("Shadowserver API: %d report(s) listed for %s to %s, %d new, %d downloaded on earlier runs",
                  len(items), start, today, len(todo), stats["api_known"])

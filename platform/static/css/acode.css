@@ -71,12 +71,7 @@
 .ax-xnone { margin: 0; padding: 10px 12px; border-radius: 10px; border: 1px dashed rgba(255, 255, 255, .1); font-style: normal; line-height: 1.5; }
 .ax-xsum { margin: 0 0 6px; font-size: 12.5px; color: var(--text-2); }
 /* the same hosts in every other category */
-.ax-xhead { margin: 10px 0 2px; } .ax-xhead h2 { margin: 0 0 4px; font-size: 17px; color: var(--text); }
 .ax-catname { font-size: 15px; color: var(--text); margin-right: 8px; }
-.ax-cat-inf { border-color: rgba(229, 72, 77, .35); background: linear-gradient(180deg, rgba(229, 72, 77, .06), transparent 160px); }
-.ax-cat-cve { border-color: rgba(240, 97, 109, .3); }
-.ax-cat-svc { border-color: rgba(34, 195, 166, .3); }
-.ax-issues { display: flex; flex-wrap: wrap; gap: 6px; }
 .ax-issue { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; font: 500 12px "Geist Mono", ui-monospace, monospace;
   background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1); color: var(--text-2); }
 .ax-issue.cve { background: rgba(240, 97, 109, .1); border-color: rgba(240, 97, 109, .35); color: #ffb3b9; }

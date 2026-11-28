@@ -44,10 +44,15 @@ run these steps in the Ubuntu window. On Ubuntu, run them in a terminal, as the 
      it asks: keep waiting, stop the update for now (it runs again later by itself), or stop the installation.
    - **Network names** (optional, No by default): looks up the names of the networks in your reports once they are
      loaded (only AS numbers are sent, to PeeringDB and RIPEstat). Without them, demo mode shows every network as
-     "Unlisted network" and one check (the demo masking alias test) is skipped; do it later with
-     `platform/manage/asn_registry.py 7` or Settings → Identify networks.
+     "Unlisted network" (the demo masking check then checks exactly that, instead of a network's alias); do it later
+     with `platform/manage/asn_registry.py 7` or Settings → Identify networks.
    - **Sign-up on the sign-in page:** *No* means only people an administrator invites (Admin → Users → Add a
      person); the first administrator always signs up with the setup code either way.
+   - **Passwords and keys you type** (the mailbox, MongoDB, tokens) cannot contain a single quote (`'`) or a line
+     break, and no answer written to `.env` can contain `${`: the platform and the pipeline would read such a value
+     differently. The installer says why as soon as you type one, before anything is installed, and asks again. If an
+     existing MongoDB or mailbox password has one of these, change it where it is set (in MongoDB, or with your mail
+     provider) and give the installer the new one.
 5. **Open the address it shows** and create the first administrator (see [A6](#a6-the-first-administrator-security)).
 
 Later updates are a `git pull` in the same folder, then the libraries and a reload (see [Updating](#updating)): a
@@ -291,10 +296,13 @@ when the database pipeline is next to the platform, the script moves that accoun
 `/etc/looking-glass/mongo-admin.env` (readable only by root; it asks for your sudo password) and removes the copy.
 Otherwise, move the copy off the computer.
 
-The pipeline gets its own account too, with read and write on its database only (in the database folder):
+The pipeline gets its own account too, with a role of its own on its database only (in the database folder):
 ```bash
 ./create_pipeline_db_user.py
 ```
+The role (`lookingglass_pipeline_on_<database>`) lets the pipeline read, add, change and delete report rows and create
+collections and indexes, but not drop or rename them, and nothing on any other database; MongoDB's own `readWrite`
+would also allow dropping. The script checks those rights with the new account before it changes `.env`.
 It keeps the administrator account in `/etc/looking-glass/mongo-admin.env` too, never in the project folders, where
 the programs' own Linux user could read it (`sudo cat` it when you need it). The installer does all of this. When
 MongoDB runs on another server, run by someone else, add `--print` to either script:
@@ -488,18 +496,21 @@ only for what the certificate lists, so a server's address needs to stay the sam
 - **A name in your organisation's DNS** (better): ask IT, who run the DNS the screens use (a domain controller, the
   office router or firewall, a DNS server), for a record such as `lookingglass.example.internal` pointing at the
   server's fixed address, then make the certificate for that name too:
-  `deploy/make_tls_cert.sh lookingglass.example.internal`, and `sudo deploy/caddy_front.sh sync`. A name in the
+  `deploy/make_tls_cert.sh lookingglass.example.internal` (it runs `sudo deploy/caddy_front.sh sync` for you). A name in the
   server's own `/etc/hosts` does not help: only the screens' DNS does. Without IT's DNS, the same line in each screen's
   hosts file works (`C:\Windows\System32\drivers\etc\hosts` on Windows). A name and a trusted certificate are also what
   passkeys need (Settings → General → Sign-in check).
 - **A computer that moves between networks** (a laptop): its address changes, and an address the certificate does not
   list gets a warning. Use its name, or make the certificate again on the new network (below).
 
-**A new address or name:** make the certificate again, then give it to Caddy (the first command says so):
+**A new address or name:** make the certificate again. The script gives it to Caddy itself (it runs
+`sudo deploy/caddy_front.sh sync`, so sudo may ask for your password) and says when Caddy answers with it:
 ```bash
 deploy/make_tls_cert.sh
-sudo deploy/caddy_front.sh sync
 ```
+When sudo cannot be used there (no terminal and no password-free sudo), or the hand-over fails, it says
+`NOT FINISHED` with the reason and stops with exit code 3: run `sudo deploy/caddy_front.sh sync` at once, because until
+then visitors get an error (502).
 An organisation's own certificate authority works the same way: put its certificate in `data/tls/` and add
 `--ca-bundle` with the authority's certificate when you run setup.
 
@@ -586,7 +597,7 @@ sudo ufw enable
 
 ## After installing (both setups)
 
-1. Check the security protections (about 2 minutes); it must end with **ALL PASSED**:
+1. Check the security protections (about 10 minutes); it must end with **ALL PASSED**:
    ```bash
    security_testing/security_retest.py
    ```
@@ -749,6 +760,65 @@ shipped can be moved. To keep former Looking Glass files where they are as well,
 it lists what would move and leaves everything in place. If the release's list is missing or looks wrong, nothing is
 moved and the update says why.
 
+> **Sectors, report runs and Caddy (from the release after 2026-11-26).** Three things to know after updating:
+>
+> - **Sectors now come from the network types.** Every page, PDF and CSV counts a record's sector by the type of its
+>   network, as set for each network in Settings (**Network names & types**); Shadowserver's own sector column is
+>   shown apart as *Industry (Shadowserver)*. An installation that never set the types sees its sectors as Unknown.
+>   Set them once: **Identify networks** at the top of that list in Settings looks up each unidentified network's
+>   type, and **Edit on the Definitions page** corrects any type by hand. The sectors follow at once. Quarterly reports
+>   made before the update are not changed; **Make it again** (Settings → Quarterly) counts one with the new rule.
+> - **A report run may now end with problems where it used to say ok.** A run that refused, failed or quarantined a
+>   report, could not use the API, or met a CSV whose name is not a report file name now says so on the bell and on
+>   Settings → Task monitor. Nothing was lost by the update: read what the card lists under **What went wrong** and
+>   **To check**, then rename or remove the files it names, or fix what it says, and the next run loads what it can
+>   ([OPERATIONS.md](OPERATIONS.md#the-report-pipelines-runs)).
+> - **Caddy: the current option name.** `deploy/caddy_front.sh` now writes `tls_trust_pool` (Caddy 2.8 and later)
+>   instead of the deprecated `tls_trusted_ca_certs`. An existing Caddyfile keeps working: Caddy only warns about the
+>   old name until the script writes the Caddyfile again. On an internal installation, `sudo deploy/caddy_front.sh
+>   sync` does that; on any installation, so does running `setup` again with the same answers (or the guided installer
+>   with the same answers). To change only that line instead:
+>
+>   ```bash
+>   sudo cp -p /etc/caddy/Caddyfile /etc/caddy/Caddyfile.before-trust-pool
+>   sudo sed -i 's/tls_trusted_ca_certs /tls_trust_pool file /' /etc/caddy/Caddyfile
+>   sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl restart caddy
+>   ```
+
+> **The pipeline's database account, `.env` values and the uninstaller (from the release after 2026-11-26).**
+>
+> - **Give the pipeline's database account its new role (once).** The pipeline's account, `lookingglass_pipeline`,
+>   now gets a role of its own that cannot drop or rename collections or indexes; accounts made earlier have MongoDB's
+>   `readWrite`, which can. The pipeline keeps working either way, but do this once after updating. **When:** the
+>   pipeline's `.env` uses `MONGO_USER=lookingglass_pipeline` (the guided installer and `create_pipeline_db_user.py`
+>   set it up so) and the administrator account is in `/etc/looking-glass/mongo-admin.env`. As the installation's
+>   user, in the database folder:
+>
+>   ```bash
+>   sudo cat /etc/looking-glass/mongo-admin.env | ./create_pipeline_db_user.py --update-rights
+>   ```
+>
+>   The administrator account is read from standard input, never from the command line. The account keeps its
+>   password; the script then signs in with it and checks its rights ("Rights check: ... cannot drop or rename
+>   there"). Running it again changes nothing. **Not needed** when the pipeline's `.env` uses another account (then run
+>   `./create_pipeline_db_user.py` without `--update-rights` to give it its own account). **MongoDB run by someone
+>   else:** `./create_pipeline_db_user.py --print` shows the commands for that server's administrator (a
+>   `db.createRole`, then a `db.updateUser` that keeps the password).
+> - **`.env` values with `${`, and secrets with `'` or a line break.** The installer now refuses them, because the
+>   platform and the pipeline would read them differently. An installation that already holds such a value keeps
+>   running as before; before you run the guided installer again, change that password where it is set (in MongoDB,
+>   or with your mail provider) and give the installer the new one.
+> - **Behind Caddy, `deploy/make_tls_cert.sh` hands the new certificate to Caddy itself.** It may ask for your sudo
+>   password. When Caddy could not be given it yet, it says `NOT FINISHED` and exits with code 3 (a script that runs it
+>   sees the failure): then run `sudo deploy/caddy_front.sh sync`. Nothing to do when updating.
+> - **The guided installer checks every value before it installs anything.** A value that cannot be written to
+>   `.env` as typed stops it at the start, with the reason, before either `.env` is replaced. A stored MongoDB
+>   administrator password it cannot keep is asked for again, with the reason. Nothing to do when updating.
+> - **The uninstaller removes more of what Looking Glass set up:** the timers and the update path unit with the
+>   service's name, the installer's own firewall rule for Caddy's port ("Looking Glass HTTPS"), and with
+>   `--remove-database` the pipeline's own database role. It leaves another installation's Caddy and firewall rule
+>   alone. Nothing to do when updating ([Uninstalling](#uninstalling)).
+
 > **Public installations with a bought certificate (from this release).** The guided installer now puts Caddy in
 > front of them. An installation made earlier keeps serving the internet directly until you run the guided installer
 > again with the same answers: it moves Looking Glass to `127.0.0.1` and sets up Caddy on the same public port.
@@ -867,8 +937,8 @@ it. It shows what it will remove and what it keeps, and asks before it starts.
 
 | Command | Removes | Keeps |
 |---|---|---|
-| `./uninstall.sh` | the platform service, the pipeline's schedule, the global `shadowserver` command (man page, completion) | the reports database, MongoDB, this folder (settings, accounts, findings, audit log) |
-| `./uninstall.sh --remove-database` | also the reports database and the accounts `lookingglass_pipeline` and `lookingglass_ro`, and `/etc/looking-glass` | other databases and accounts in the same MongoDB |
+| `./uninstall.sh` | the platform service and its helper services, with the timers and the update path unit that start them (stopped and removed first), the pipeline's schedule, the installer's own firewall rule for Caddy's port ("Looking Glass HTTPS"), the global `shadowserver` command (man page, completion) | the reports database, MongoDB, this folder (settings, accounts, findings, audit log) |
+| `./uninstall.sh --remove-database` | also the reports database, the accounts `lookingglass_pipeline` and `lookingglass_ro`, the pipeline's role `lookingglass_pipeline_on_<database>`, and `/etc/looking-glass` | other databases, accounts and roles in the same MongoDB |
 | `./uninstall.sh --remove-mongodb` | also MongoDB itself and **all** its data, only if Looking Glass installed it | a MongoDB that was there before Looking Glass (never touched) |
 | `./uninstall.sh --remove-files` | also this folder | nothing |
 | `./uninstall.sh --all` | everything above | system packages (python3, cron, curl…) |
@@ -881,7 +951,14 @@ it. It shows what it will remove and what it keeps, and asks before it starts.
 - **Back up first** if you may want the data again: `platform/manage/backup.sh` for the platform (it needs your public
   key in `platform/data/backup_public_key` and refuses without one: [OPERATIONS.md, Backups](OPERATIONS.md#backups)),
   and `mongodump` for the reports.
-- Firewall rules you added for the platform's port (A7 / B6) are not removed: remove them yourself.
+- Firewall rules you added for the platform's port (A7 / B6) are not removed: remove them yourself. Only the rule the
+  installer opened for Caddy's port, with the comment "Looking Glass HTTPS", is removed, and only when Caddy in front
+  is this folder's own.
+- Caddy in front (its configuration and certificate copy) and that firewall rule are removed only when Caddy hands
+  visitors to this folder's platform: the port after `reverse_proxy https://127.0.0.1:` in `/etc/caddy/Caddyfile` is
+  `LG_PORT` in `platform/.env`. Another installation's Caddy is left as it is, and the uninstaller says so. When it
+  cannot tell (no `LG_PORT` in `platform/.env`), it leaves Caddy alone too and says how to remove it if it is this
+  installation's: `sudo platform/deploy/caddy_front.sh remove`.
 - The local copy of the library files, `~/looking-glass/libraries`, goes with `--remove-files` only when it is inside
   this folder. Elsewhere it stays (it is read-only): `chmod -R u+w ~/looking-glass/libraries && rm -r ~/looking-glass/libraries`.
 - After `./uninstall.sh` without options, `./install.sh` in the same folder installs again with the kept settings

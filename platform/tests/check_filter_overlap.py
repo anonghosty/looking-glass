@@ -87,7 +87,10 @@ css = read(os.path.join(HERE, "static", "css", "app.css"))
 ok("…faded by colour, not opacity (contrast kept)", ".checklist li.f-zero .name { color: var(--muted); }" in css and ".checklist li.f-zero { opacity" not in css)
 
 print("3. Smooth filtering")
-ok("rows slide to their new places, new ones fade in (FLIP)", "function flipList(" in js and "translateY(${dy}px)" in js and "flipList($(\"drawer\"), buildFilters)" in js)
+ok("rows slide to their new places, new ones fade in (FLIP)", "function flipList(" in js and "translateY(${dy}px)" in js and "flipList(drawerEl, buildFilters)" in js)
+# 2026-11-27: not rebuilt under the pointer (a tick right after another landed on a row the rebuild had thrown away)
+ok("…the lists wait while the pointer is over them, and follow when it leaves",
+   "if (drawerHold) { drawerPending = true; return; }" in js and 'addEventListener("pointerleave", () => { drawerHold = false; if (drawerPending) rebuildFilters(); })' in js)
 ok("counts roll from the last figure shown, exact at the end even in a background tab", "function countEl(" in js and "shownCounts" in js
    and js.count("countEl(") >= 4)
 ok("arcs the filters leave out fade out; the others stay drawn and are not launched twice",

@@ -12,22 +12,26 @@ and every answer (pages, JSON, downloads) is searched for:
 - anything shaped like a password hash (pbkdf2:/scrypt:) or a private key.
 A finding names the route, the role and the kind of secret, never its value.
 
-Nothing is written: the account, session, counter and role stores are temporary files, the audit log is a list, and while
+The app runs on a temporary linked copy of the platform with its own copy of data/ (tests/lg_inproc.py), and the live
+data/ is compared before and after. Nothing is written: the account, session, counter and role stores are temporary files, the audit log is a list, and while
 the routes run every file write outside the temporary folder, every database write and every new process is refused
 (and counted). Answers that need the reports database are skipped where there is none (as on GitHub).
 Run: .venv/bin/python tests/check_api_no_secrets.py"""
 import base64, builtins, json, os, re, secrets, shutil, subprocess, sys, tempfile, time
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("LG_QUIET", "1")
 os.environ.setdefault("THREATMAP_SCHEDULE", "0")
 os.environ["TRUST_PROXY"] = "0"                    # called in-process (proxy_guard.py)
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import lg_inproc  # noqa: E402
+
+lg_inproc.platform_copy("lg-api-secrets")          # the app runs on a copy of data/, never the live one
+DATA_BEFORE = lg_inproc.data_snapshot()
 import app as A  # noqa: E402
 import auth  # noqa: E402
 import pipeline_link  # noqa: E402
 from werkzeug.security import generate_password_hash  # noqa: E402
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lg_no_db_fast  # noqa: E402
 
 if lg_no_db_fast.apply(BASE):
@@ -178,6 +182,11 @@ ok(f"{len(paths)} GET routes x {len(CLIENTS)} (each role and signed out): no ans
 ok("…the routes really answered (not refused everywhere)", answered.get("admin", 0) >= 40 and answered.get("analyst", 0) >= 20, answered)
 if refused:      # refused safely; a GET that writes (a cache, a log) is not a leak, so it is shown, not failed
     print(f"writes refused while the routes ran: {len(refused)} ({', '.join(sorted(set(refused))[:6])})")
+
+changed, notes = lg_inproc.data_changes(DATA_BEFORE, lg_inproc.data_snapshot())
+for n in notes:
+    print(n)
+ok("the live data/ folder is untouched (the routes ran on a copy of it)", not changed, changed[:10])
 
 print(f"\n{checks - len(fails)} of {checks} API secret checks passed" + (f"; FAILED: {fails}" if fails else ""))
 sys.stdout.flush(); sys.stderr.flush()

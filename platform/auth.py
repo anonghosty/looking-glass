@@ -218,7 +218,8 @@ def totp_check(secret, code, last_counter=None, now=None):
         return None
     c = int((now or time.time()) // 30)
     for step in (c, c - 1, c + 1):
-        if hmac.compare_digest(totp_at(secret, step), code) and (last_counter is None or step > last_counter):
+        # bytes: \d also takes other scripts' digits, and compare_digest on non-ASCII text raises TypeError (a 500)
+        if hmac.compare_digest(totp_at(secret, step).encode(), code.encode("utf-8", "replace")) and (last_counter is None or step > last_counter):
             return step
     return None
 
@@ -569,9 +570,11 @@ class Audit:
         rows = []
         for line in self.chain.lines():
             try:
-                rows.append(json.loads(line))
+                rec = json.loads(line)
             except ValueError:
-                pass
+                continue
+            if isinstance(rec, dict):           # JSON that is not an entry (5, "x", [1]) is left out; the check reports it
+                rows.append(rec)
         return rows
 
     @staticmethod
@@ -733,9 +736,18 @@ class Throttle:
     With a path (data/login_counters.json, 0600) the counters are kept on disk and read back at start, so a restart
     does not wipe them (review of d82a436); the security retest clears this computer's own (retest_reset.py)."""
 
-    def __init__(self, path=None):
+    UNKNOWN = "an unknown name"                 # how a typed name that is no account is shown (lockouts, audit)
+    _KEY_RE = re.compile(r"^\?[0-9a-f]{12}$")   # the counter key of such a name (never a sign-in name: NAME_RE has no "?")
+
+    def __init__(self, path=None, known=None):
         self.fail, self.lock = {}, threading.Lock()
         self.path = path
+        # known(name) -> is it an account? (install: the accounts file). A typed name that is no account is often a
+        # password typed into the name box (audit 2026-11-27): it is counted under a keyed hash, never kept as typed.
+        # None (scripts, checks): every name is counted as typed, lower-cased, as before.
+        self.known = known
+        self._spare_key = None
+        self._rekeyed = False                   # counters read back under the key: the file is rewritten at the next sign-in
         self.account_fails = _env_int("LOGIN_ACCOUNT_FAILS", 5, 3, 20)
         self.account_window = 60 * _env_int("LOGIN_ACCOUNT_LOCK_MIN", 15, 5, 240)
         self.address_fails = _env_int("LOGIN_ADDRESS_FAILS", 20, 10, 500)
@@ -747,6 +759,42 @@ class Throttle:
     def _longest(self):
         return max(throttle_prune.LONGEST_WINDOW, self.account_window, self.address_window)
 
+    def _hash_key(self):
+        """The key for typed names that are no account: the people codes' own key (data/person_code.key, an HMAC key
+        kept for exactly this: names that must not be stored as they are). If that key is damaged, a random key for
+        this process (the counters still work; a restart forgets them), never a plain hash."""
+        try:
+            import person_code
+            return person_code._key()
+        except (RuntimeError, OSError):
+            if self._spare_key is None:
+                self._spare_key = secrets.token_bytes(32)
+            return self._spare_key
+
+    def _nk(self, name):
+        """The counter's name: an account's name lower-cased; a typed name that is no account as "?" + 12 hex of an
+        HMAC (the same value always gets the same key, so 5 wrong tries still lock it; the value itself is never kept)."""
+        n = str(name or "")
+        if not n or self.known is None:
+            return n.lower()
+        try:
+            real = bool(self.known(n))
+        except Exception:                       # noqa: BLE001  (the accounts file is being rewritten: hashed this once)
+            real = False
+        if real:
+            return n.lower()
+        return "?" + hmac.new(self._hash_key(), b"lg-typed-name:" + n.lower().encode("utf-8", "replace"),
+                              hashlib.sha256).hexdigest()[:12]
+
+    def _unlock_key(self, name):
+        """What an unlock names: a counter key from lockouts() ("?" + 12 hex) as it is, else the name as counted."""
+        n = str(name or "")
+        return n if self._KEY_RE.match(n) else self._nk(n)
+
+    def is_unknown(self, name):
+        """True when this name (or a counter key from lockouts()) is no account: shown as UNKNOWN, never as typed."""
+        return bool(name) and self._unlock_key(name).startswith("?")
+
     def _read(self):
         """The counters kept before a restart, without the failures older than the longest window."""
         if not self.path:
@@ -756,7 +804,7 @@ class Throttle:
                 rows = json.load(f).get("fail") or []
         except (OSError, ValueError, AttributeError):
             return
-        now, longest = _now(), self._longest()
+        now, longest, rekeyed = _now(), self._longest(), False
         for row in rows:
             try:
                 a, b, times = row
@@ -764,7 +812,18 @@ class Throttle:
             except (TypeError, ValueError):
                 continue
             if kept:
-                self.fail[(a, b)] = kept
+                # a typed name kept by an older version as it was typed: from now on only as its keyed hash
+                if self.known is not None and isinstance(b, str) and b and _is_ip(a) and not self._KEY_RE.match(b):
+                    nb = self._nk(b)
+                    rekeyed = rekeyed or nb != b
+                    b = nb
+                try:
+                    self.fail.setdefault((a, b), []).extend(kept)
+                except TypeError:               # not a counter this version wrote (a list as a name): left out
+                    continue
+        # (rekeyed: the file is rewritten without the typed value at the next change of a counter, never while reading:
+        # a check that only imports the app must not write the installation's file)
+        self._rekeyed = rekeyed
 
     def _save(self):
         """Write the counters (called with the lock held; best effort: a failed write only means a restart forgets)."""
@@ -793,17 +852,21 @@ class Throttle:
         return kept
 
     def locked(self, ip, name):
+        k = self._nk(name)
         with self.lock:
-            return (len(self._recent((ip, (name or "").lower()), self.account_window)) >= self.account_fails
+            if self._rekeyed:                   # the first sign-in after an update: the file without the typed values
+                self._rekeyed = False
+                self._save()
+            return (len(self._recent((ip, k), self.account_window)) >= self.account_fails
                     or len(self._recent((ip, None), self.address_window)) >= self.address_fails)
 
     def wait_minutes(self, ip, name=None):
         """Whole minutes until this name from this address may try again (the longer lock if both the account and the
         address are locked); the configured lock when nothing is locked yet (review 2026-11-15: the messages said "15
         minutes" whatever LOGIN_ACCOUNT_LOCK_MIN was)."""
-        now, waits = _now(), []
+        now, waits, k = _now(), [], self._nk(name)
         with self.lock:
-            for key, need, win in (((ip, (name or "").lower()), self.account_fails, self.account_window) if name else (None, 0, 0),
+            for key, need, win in (((ip, k), self.account_fails, self.account_window) if name else (None, 0, 0),
                                    ((ip, None), self.address_fails, self.address_window)):
                 if key is None:
                     continue
@@ -816,13 +879,15 @@ class Throttle:
 
     def left(self, ip, name):
         """Attempts left before the lock for this name from this address."""
+        k = self._nk(name)
         with self.lock:
-            return max(0, min(self.account_fails - len(self._recent((ip, (name or "").lower()), self.account_window)),
+            return max(0, min(self.account_fails - len(self._recent((ip, k), self.account_window)),
                               self.address_fails - len(self._recent((ip, None), self.address_window))))
 
     def lockouts(self):
-        """What is locked right now: [{kind: account|address, ip, name, failures, until}] (only real sign-in counters,
-        never the registration or reset ones, which share this table under a label)."""
+        """What is locked right now: [{kind: account|address, ip, name, key, failures, until}] (only real sign-in
+        counters, never the registration or reset ones, which share this table under a label). A typed name that is no
+        account is named UNKNOWN; its key ("?" + 12 hex) is what unlock() takes for it."""
         out = []
         with self.lock:
             for key in list(self.fail):
@@ -834,16 +899,19 @@ class Throttle:
                 else:
                     r, need, win, kind = self._recent(key, self.account_window), self.account_fails, self.account_window, "account"
                 if len(r) >= need:
-                    out.append({"kind": kind, "ip": ip, "name": name or "", "failures": len(r),
+                    shown = self.UNKNOWN if (name or "").startswith("?") else (name or "")
+                    out.append({"kind": kind, "ip": ip, "name": shown, "key": name or "", "failures": len(r),
                                 "until": round(sorted(r)[len(r) - need] + win)})
         return sorted(out, key=lambda x: (x["kind"], x["ip"], x["name"]))
 
     def unlock(self, ip, name=None):
         """Lift a lock: one account from one address (name), or the whole address (every account tried from it).
-        Returns how many counters were cleared. Registration and reset counters stay."""
+        Returns how many counters were cleared. Registration and reset counters stay. name: an account's name, or the
+        key lockouts() gave for a typed name that is no account."""
+        k = self._unlock_key(name) if name else None
         with self.lock:
             if name:
-                n = 1 if self.fail.pop((ip, name.lower()), None) is not None else 0
+                n = 1 if self.fail.pop((ip, k), None) is not None else 0
                 self._save()
                 return n
             gone = [k for k in self.fail if isinstance(k, tuple) and len(k) == 2 and k[0] == ip]
@@ -853,16 +921,18 @@ class Throttle:
             return len(gone)
 
     def failed(self, ip, name):
+        k = self._nk(name)
         with self.lock:
             now = _now()
-            self.fail.setdefault((ip, (name or "").lower()), []).append(now)
+            self.fail.setdefault((ip, k), []).append(now)
             self.fail.setdefault((ip, None), []).append(now)
             self.sweeper.maybe(self.fail, now)
             self._save()
 
     def ok(self, ip, name):
+        k = self._nk(name)
         with self.lock:
-            if self.fail.pop((ip, (name or "").lower()), None) is not None:
+            if self.fail.pop((ip, k), None) is not None:
                 self._save()
 
     def clear_address(self, ip):
@@ -928,7 +998,15 @@ def install(app, base_dir, logger):
     sessions = Sessions(os.path.join(data_dir, "sessions.json"),
                         idle=int(os.environ.get("SESSION_IDLE_MINUTES", "60")) * 60,
                         maximum=int(os.environ.get("SESSION_MAX_HOURS", "12")) * 3600)
-    throttle = Throttle(os.path.join(data_dir, "login_counters.json"))     # kept across restarts (review of d82a436)
+    def is_account(n):
+        """For the throttle: is this typed name an account? (names are unique whatever the letter case)"""
+        if not NAME_RE.match(n or ""):
+            return False
+        low = n.lower()
+        return bool(users.get(n)) or any(k.lower() == low for k in users.all())
+
+    # kept across restarts (review of d82a436); a typed name that is no account only as a keyed hash (audit 2026-11-27)
+    throttle = Throttle(os.path.join(data_dir, "login_counters.json"), known=is_account)
     pw_policy = password_policy.Policy(data_dir)        # password expiry (Settings → Password policy)
     insecure_remote = os.environ.get("ALLOW_INSECURE_REMOTE_LOGIN") == "1"
     mfa_required = os.environ.get("MFA_REQUIRED", "1") != "0"
@@ -988,7 +1066,7 @@ def install(app, base_dir, logger):
             return None
         ip, ua = client()
         key = request.headers.get("X-LG-Automation")
-        if key and _is_loopback(ip) and hmac.compare_digest(key, automation_key):
+        if key and _is_loopback(ip) and hmac.compare_digest(key.encode("utf-8", "replace"), automation_key.encode("utf-8", "replace")):
             g.user = {"user": "automation", "role": "admin", "perms": set(PERMS), "csrf": None, "automation": True}
             return None
         s, ended = sessions.check(request.cookies.get(cookie_name()) or request.cookies.get("lg_session"), ip, ua)
@@ -1102,7 +1180,11 @@ def install(app, base_dir, logger):
         from findings import ACTED_NAME        # the role's display name (Researcher/TI); lg_role stays the key
         role = u.get("role", "")
         import person_code                     # lg_me: the account's opaque code for page attributes (never the name)
-        return {"lg_user": u.get("user", ""), "lg_me": person_code.code(u.get("user", "")), "lg_role": role, "lg_role_name": ACTED_NAME.get(role, role),
+        try:
+            me_code = person_code.code(u.get("user", ""))
+        except RuntimeError:                   # data/person_code.key damaged (the bell says so): pages still open
+            me_code = ""
+        return {"lg_user": u.get("user", ""), "lg_me": me_code, "lg_role": role, "lg_role_name": ACTED_NAME.get(role, role),
                 "lg_csrf": u.get("csrf") or "", "lg_perms": sorted(u.get("perms", ())), "lg_peace": bool(u.get("peace"))}
 
     def attempts_msg(base, ip, name):
@@ -1280,14 +1362,20 @@ def install(app, base_dir, logger):
         pw = request.form.get("password") or ""
         remember = request.form.get("remember") == "1"      # stay signed in for 5 days
         if throttle.locked(ip, name):
-            audit.add("login_locked", user=name)
+            # a name that is no account is never written down: it is often a password typed in the wrong box (audit
+            # 2026-11-27); the throttle still counts it
+            known = bool(NAME_RE.match(name) and users.get(name))
+            audit.add("login_locked", user=name if known else "", detail="" if known else "unknown name")
             return page("login.html", 429, next=nxt, view="signin", error=locked_msg(ip, name))
         u = users.get(name) if NAME_RE.match(name) else None
         ok = check_password_hash(u["hash"], pw) if u and u.get("hash") else (check_password_hash(_DUMMY_HASH, pw) and False)
         if not ok:
             throttle.failed(ip, name)
-            audit.add("login_failed", user=name if u else "", detail="wrong name or password" + ("" if u else f" (unknown name {name[:40]!r})"))
-            return page("login.html", 401, next=nxt, view="signin", error=attempts_msg("Wrong name or password.", ip, name), username=name)
+            audit.add("login_failed", user=name if u else "", detail="wrong name or password" + ("" if u else " (unknown name)"))
+            # the name is filled in again only when it is an account: a password typed into the name box is never sent
+            # back into the page (review 2026-11-28)
+            return page("login.html", 401, next=nxt, view="signin", error=attempts_msg("Wrong name or password.", ip, name),
+                        username=name if is_account(name) else "")
         status = u.get("status", "active")
         if status == "disabled":
             audit.add("login_refused", user=name, detail="account revoked")
@@ -1497,7 +1585,8 @@ def install(app, base_dir, logger):
         name = f["username"]
         pw, pw2 = request.form.get("password") or "", request.form.get("password2") or ""
         is_test = name.lower().startswith(TEST_PREFIX)
-        test_key_ok = _is_loopback(ip) and hmac.compare_digest(request.headers.get("X-LG-Automation", ""), automation_key)
+        test_key_ok = _is_loopback(ip) and hmac.compare_digest(request.headers.get("X-LG-Automation", "").encode("utf-8", "replace"),
+                                                                automation_key.encode("utf-8", "replace"))
         if not NAME_RE.match(name) or (is_test and not test_key_ok):
             return fail(400, "User name: 2-40 letters, digits, dot, dash or underscore.")
         # the first administrator: "this computer" is not proof enough (a reverse proxy set up wrongly makes every
@@ -1570,7 +1659,8 @@ def install(app, base_dir, logger):
                     users.save()
                 audit.add("reset_requested", user=name)
             else:
-                audit.add("reset_requested", detail=f"unknown or revoked name {name!r}")
+                # never the value typed: an unknown name may be a password (audit 2026-11-27)
+                audit.add("reset_requested", user=name if u else "", detail="revoked account" if u else "unknown name")
             return page("forgot.html", mode="done", notice="If the account exists, the administrators have been notified. "
                                                            "Once they allow it, come back here and use your authenticator.")
         # ---- reset with the authenticator
@@ -1595,8 +1685,10 @@ def install(app, base_dir, logger):
             check_password_hash(_DUMMY_HASH, pw)
         if not ok:
             throttle.failed(ip, name)
-            audit.add("reset_failed", user=name if u else "", detail="" if u else f"unknown name {name!r}")
-            return page("forgot.html", 401, mode=mode, username=name,
+            audit.add("reset_failed", user=name if u else "", detail="" if u else "unknown name")
+            # the typed name is filled back in only when it is an account: a password typed into the name box is never
+            # sent back in the page (as the sign-in page, review 2026-11-28)
+            return page("forgot.html", 401, mode=mode, username=name if is_account(name) else "",
                         error=attempts_msg("The name, authenticator code or recovery code is not right.", ip, name))
         # the new password's rules only AFTER the person proved who they are: checked first, they told anyone whether an
         # account exists and let its owner's name be guessed, without counting a failed try (external review, 2026-11-12)
@@ -1632,6 +1724,14 @@ def install(app, base_dir, logger):
             return redirect("/login")
         tok = request.cookies.get(cookie_name())
         if tok:
+            # the session's own CSRF token must come with the form (every Log out form sends it): another site cannot
+            # sign someone out (audit 2026-11-27, 13-8); a wrong or missing token keeps the session and goes back home
+            live = sessions.s.get(_h(tok))
+            sent = request.form.get("csrf_token", "")
+            # bytes: compare_digest on text refuses anything but ASCII with an error 500 (a token "é")
+            if live and not (live.get("csrf") and hmac.compare_digest(str(sent).encode("utf-8", "replace"),
+                                                                     str(live["csrf"]).encode("utf-8", "replace"))):
+                return redirect("/")
             s = sessions.end(tok)
             if s:
                 audit.add("logout", user=s["user"])
@@ -1650,7 +1750,8 @@ def install(app, base_dir, logger):
         if u.get("automation"):
             return True
         t = request.headers.get("X-CSRF-Token", "")
-        return bool(u.get("csrf")) and hmac.compare_digest(t, u["csrf"])
+        # bytes: compare_digest on text raises TypeError (an error 500) for a token that is not ASCII
+        return bool(u.get("csrf")) and hmac.compare_digest(t.encode("utf-8", "replace"), str(u["csrf"]).encode("utf-8", "replace"))
 
     def need(perm, change=False):
         if not has_perm(perm):
@@ -1781,7 +1882,18 @@ def install(app, base_dir, logger):
             abort(403)
         drop_orphans()
         mine = g.user.get("key", "")[:16]
-        return jsonify(sessions=sorted([dict(s, current=s["id"] == mine) for s in sessions.list()], key=lambda s: -s["seen"]),
+        import people
+        # user_label / person_code: what the Audit portal shows ("Signed in now"), never the sign-in name; "user" stays for
+        # the Admin page, where administrators manage accounts by name: only for accounts with the 'users' permission
+        # (an account with only 'audit' reads user_label / person_code; review 2026-11-28)
+        names = has_perm("users")
+        rows = []
+        for s in sessions.list():
+            r = dict(s, current=s["id"] == mine, user_label=people.signed_by(s["user"]), person_code=people.person_label(s["user"]))
+            if not names:
+                r.pop("user", None)
+            rows.append(r)
+        return jsonify(sessions=sorted(rows, key=lambda s: -s["seen"]),
                        can_end=has_perm("users"))
 
     @app.route("/api/admin/sessions/<sid>/end", methods=["POST"])

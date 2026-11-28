@@ -64,7 +64,29 @@
     if (q) r = all.filter((x) => [x.title, x.report, x.why, ...(x.techniques || []).flatMap((t) => [t.id, t.name, ...(t.tactics || [])])].join(" ").toLowerCase().includes(q));
     return r;
   }
+  // after a change that worked the list is read again; when only that read fails, the change still worked and is not
+  // reported as a failure (audit 2026-11-27, 9-12)
+  const STALE = " The list could not be read again: reload the page to see it.";
+  async function reread() { try { data = await get("/api/attack"); render(); return true; } catch { return false; } }
+  // a redraw replaces every button: the one that had the keyboard focus gets it back (same report, same action), else
+  // the first button of the report now in its place, else the status line (the keepFocus pattern of app.js; audit
+  // 2026-11-27, 9-8). A button disabled while its request ran may have lost the focus: the last one used counts then.
+  const card0 = $("cardAttack");
+  let lastFocus = null;
+  card0.addEventListener("focusin", (e) => { lastFocus = e.target; });
   function render() {
+    const act = document.activeElement, a = act && act !== document.body ? act : lastFocus;
+    if (!a || !a.isConnected || !card0.contains(a)) { renderNow(); return; }
+    const k = a.dataset?.fk, cards = [...$("amList").querySelectorAll("[data-report]")], ci = cards.indexOf(a.closest("[data-report]"));
+    renderNow();
+    if (a.isConnected && card0.contains(a)) return;            // not replaced (the search box): it keeps the focus
+    const back = k != null && [...card0.querySelectorAll("[data-fk]")].find((n) => n.dataset.fk === k && !n.disabled);
+    const near = ci >= 0 && $("amList").querySelectorAll("[data-report]")[Math.min(ci, $("amList").querySelectorAll("[data-report]").length - 1)];
+    const to = back || near?.querySelector("button:not([disabled])") || $("amStatus");
+    if (to === $("amStatus")) to.tabIndex = -1;
+    to.focus({ preventScroll: true });
+  }
+  function renderNow() {
     const s = data.summary, c = s.counts || {};
     $("amN1").textContent = fmt(c.check); $("amN2").textContent = fmt(c.suggested); $("amN3").textContent = fmt(c.none); $("amN4").textContent = fmt(c.reviewed);
     for (const b of document.querySelectorAll("[data-am]")) b.setAttribute("aria-selected", String(!onlyNotice && !$("amSearch").value.trim() && b.dataset.am === tab));
@@ -77,7 +99,7 @@
       const txt = el("p", "am-notice-text"); txt.append(el("b", null, n.text), el("span", "dz-by", `Noticed on ${String(n.at).slice(0, 10)}${left ? ` · ${left} still to check` : n.to_check ? " · all checked" : ""}`));
       row.append(txt);
       if (left) {
-        const b = el("button", `lg-btn sm${onlyNotice ? " active" : ""}`, onlyNotice ? "Show every report" : `Show the ${left} to check`); b.type = "button";
+        const b = el("button", `lg-btn sm${onlyNotice ? " active" : ""}`, onlyNotice ? "Show every report" : `Show the ${left} to check`); b.type = "button"; b.dataset.fk = "notice";
         b.addEventListener("click", () => { onlyNotice = !onlyNotice; shown = PAGE; render(); });
         row.append(b);
       }
@@ -96,7 +118,7 @@
     }
     for (const x of list.slice(0, shown)) box.append(item(x));
     if (list.length > shown) {
-      const more = el("button", "lg-btn sm ghost am-more", `Show ${Math.min(PAGE, list.length - shown)} more of ${fmt(list.length - shown)}`); more.type = "button";
+      const more = el("button", "lg-btn sm ghost am-more", `Show ${Math.min(PAGE, list.length - shown)} more of ${fmt(list.length - shown)}`); more.type = "button"; more.dataset.fk = "more";
       more.addEventListener("click", () => { shown += PAGE; render(); });
       box.append(more);
     }
@@ -114,7 +136,7 @@
       : "not trusted: in advisories each one is a suggestion the advisor confirms";
     row.append(el("span", "dz-by", `CVE techniques (MITRE CTID's KEV mappings, ${fmt(s.kev.count)} CVEs): ${state}.`));
     if (!data.can_admin || !window.LGConfirmList) return;
-    const b = el("button", "lg-btn sm", tr.on ? "Stop trusting CTID" : "Trust CTID's mappings"); b.type = "button";
+    const b = el("button", "lg-btn sm", tr.on ? "Stop trusting CTID" : "Trust CTID's mappings"); b.type = "button"; b.dataset.fk = "ctid";
     b.addEventListener("click", async () => {
       const go = await window.LGConfirmList.open({
         title: tr.on ? "Stop trusting CTID's CVE mappings?" : "Trust CTID's CVE mappings in advisories?",
@@ -125,9 +147,10 @@
       });
       if (!go) return;
       b.disabled = true; window.LGLoader?.busy("Saving the setting");
-      try { await post("/api/attack/ctid-trust", { trust: !tr.on }); data = await get("/api/attack"); render(); }
-      catch (e) { $("amStatus").className = "dz-status bad"; $("amStatus").textContent = `Not changed: ${window.LGLoader.errorText(e, true)}`; b.disabled = false; }
-      finally { window.LGLoader?.ready(); }
+      try { await post("/api/attack/ctid-trust", { trust: !tr.on }); }
+      catch (e) { $("amStatus").className = "dz-status bad"; $("amStatus").textContent = `Not changed: ${window.LGLoader.errorText(e, true)}`; b.disabled = false; window.LGLoader?.ready(); return; }
+      const fresh = await reread(); window.LGLoader?.ready();
+      if (!fresh) { $("amStatus").className = "dz-status warn"; $("amStatus").textContent = `Changed: CTID's mappings are ${tr.on ? "no longer trusted" : "trusted"}.${STALE}`; }
     });
     row.append(b);
   }
@@ -142,7 +165,7 @@
     const sug = list.filter((x) => x.status === "suggested" && (x.techniques || []).length);
     if (!sug.length || !(tab === "suggested" || q) || !window.LGConfirmList) { bar.hidden = true; return; }
     bar.hidden = false;
-    const b = el("button", "lg-btn sm primary", `Confirm all ${fmt(sug.length)}${q ? " shown" : ""}`); b.type = "button";
+    const b = el("button", "lg-btn sm primary", `Confirm all ${fmt(sug.length)}${q ? " shown" : ""}`); b.type = "button"; b.dataset.fk = "bulk";
     b.title = q ? `Confirm the ${sug.length} suggested mappings that match "${q}"` : `Confirm all ${sug.length} suggested mappings`;
     b.addEventListener("click", async () => {
       const go = await window.LGConfirmList.open({
@@ -153,18 +176,18 @@
       });
       if (!go) return;
       b.disabled = true; b.classList.add("is-busy"); window.LGLoader?.busy(`Confirming ${sug.length} mappings`);
+      let j;
       try {
-        const j = await post("/api/attack/mapping/bulk", { items: sug.map((x) => ({ report: x.report, techniques: (x.techniques || []).map((t) => t.id) })) });
-        data = await get("/api/attack");
-        render();
-        const sk = j.skipped || [];
-        $("amStatus").className = `dz-status ${sk.length ? "warn" : "ok"}`;
-        $("amStatus").textContent = `Confirmed ${fmt(j.confirmed.length)}` + (sk.length
-          ? `, skipped ${sk.length}: ${sk.map((s) => `${s.title} (${s.reason})`).join("; ")}. Please look at ${sk.length === 1 ? "it" : "them"} again.` : ".");
+        j = await post("/api/attack/mapping/bulk", { items: sug.map((x) => ({ report: x.report, techniques: (x.techniques || []).map((t) => t.id) })) });
       } catch (e) {
         $("amStatus").className = "dz-status bad"; $("amStatus").textContent = `Nothing was confirmed: ${window.LGLoader.errorText(e, true)}`;
-        b.disabled = false; b.classList.remove("is-busy");
-      } finally { window.LGLoader?.ready(); }
+        b.disabled = false; b.classList.remove("is-busy"); window.LGLoader?.ready(); return;
+      }
+      const fresh = await reread(); window.LGLoader?.ready();
+      const sk = j.skipped || [];
+      $("amStatus").className = `dz-status ${sk.length || !fresh ? "warn" : "ok"}`;
+      $("amStatus").textContent = `Confirmed ${fmt(j.confirmed.length)}` + (sk.length
+        ? `, skipped ${sk.length}: ${sk.map((s) => `${s.title} (${s.reason})`).join("; ")}. Please look at ${sk.length === 1 ? "it" : "them"} again.` : ".") + (fresh ? "" : STALE);
     });
     bar.append(b, el("p", "dz-by", q ? "Only the suggestions that match the search." : "Not mapped yet and Please check are not included: they need a person to look."));
   }
@@ -177,7 +200,7 @@
     const left = list.filter((x) => x.status === "check" && !(x.check_suggest || []).length).length;
     if (!rec.length || !window.LGConfirmList) { bar.hidden = true; return; }
     bar.hidden = false;
-    const b = el("button", "lg-btn sm primary", `Use recommended for all ${fmt(rec.length)}`); b.type = "button";
+    const b = el("button", "lg-btn sm primary", `Use recommended for all ${fmt(rec.length)}`); b.type = "button"; b.dataset.fk = "bulk-check";
     b.title = `Use MITRE's recommended replacement for the ${rec.length} reports that have one`;
     b.addEventListener("click", async () => {
       const go = await window.LGConfirmList.open({
@@ -188,25 +211,25 @@
       });
       if (!go) return;
       b.disabled = true; b.classList.add("is-busy"); window.LGLoader?.busy(`Updating ${rec.length} mappings`);
+      let j;
       try {
-        const j = await post("/api/attack/mapping/bulk", { kind: "check", items: rec.map((x) => ({ report: x.report, techniques: (x.check_suggest || []).map((t) => t.id) })) });
-        data = await get("/api/attack");
-        render();
-        const sk = j.skipped || [];
-        $("amStatus").className = `dz-status ${sk.length ? "warn" : "ok"}`;
-        $("amStatus").textContent = `Updated ${fmt(j.confirmed.length)} to MITRE's recommended replacement` + (sk.length
-          ? `, skipped ${sk.length}: ${sk.map((s) => `${s.title} (${s.reason})`).join("; ")}. Please look at ${sk.length === 1 ? "it" : "them"} again.` : ".");
+        j = await post("/api/attack/mapping/bulk", { kind: "check", items: rec.map((x) => ({ report: x.report, techniques: (x.check_suggest || []).map((t) => t.id) })) });
       } catch (e) {
         $("amStatus").className = "dz-status bad"; $("amStatus").textContent = `Nothing was changed: ${window.LGLoader.errorText(e, true)}`;
-        b.disabled = false; b.classList.remove("is-busy");
-      } finally { window.LGLoader?.ready(); }
+        b.disabled = false; b.classList.remove("is-busy"); window.LGLoader?.ready(); return;
+      }
+      const fresh = await reread(); window.LGLoader?.ready();
+      const sk = j.skipped || [];
+      $("amStatus").className = `dz-status ${sk.length || !fresh ? "warn" : "ok"}`;
+      $("amStatus").textContent = `Updated ${fmt(j.confirmed.length)} to MITRE's recommended replacement` + (sk.length
+        ? `, skipped ${sk.length}: ${sk.map((s) => `${s.title} (${s.reason})`).join("; ")}. Please look at ${sk.length === 1 ? "it" : "them"} again.` : ".") + (fresh ? "" : STALE);
     });
     bar.append(b, el("p", "dz-by", left ? `${fmt(left)} report${left === 1 ? " has" : "s have"} no replacement named by MITRE: choose from the short list on ${left === 1 ? "it" : "each"}.`
       : "Every report here has a replacement named by MITRE."));
   }
   function item(x) {
     const card = el("article", `am-report am-${x.status}`);
-    card.setAttribute("aria-label", x.title);
+    card.setAttribute("aria-label", x.title); card.dataset.report = x.report;
     const head = el("div", "am-report-head");
     const h = el("h3", "am-report-title", x.title); h.title = `Report: ${x.report}`;
     const [lbl, kind] = x.status === "reviewed" && x.nofit ? ["No technique fits", ""] : STATUS[x.status] || ["", ""];
@@ -246,12 +269,12 @@
     const sug = x.status === "check" ? (x.check_suggest || []) : x.status === "suggested" ? (x.techniques || []) : [];
     const acts = el("div", "am-acts");
     if (sug.length) {
-      const ok = el("button", "lg-btn sm primary", "Confirm"); ok.type = "button";
+      const ok = el("button", "lg-btn sm primary", "Confirm"); ok.type = "button"; ok.dataset.fk = `confirm|${x.report}`;
       ok.title = `Confirm ${sug.map((t) => t.id).join(", ")} for ${x.title}`;
       ok.addEventListener("click", () => save(x, sug.map((t) => t.id), false, "", ok));
       acts.append(ok);
     }
-    const ch = el("button", "lg-btn sm", sug.length || x.status === "reviewed" ? "Change" : "Choose techniques"); ch.type = "button";
+    const ch = el("button", "lg-btn sm", sug.length || x.status === "reviewed" ? "Change" : "Choose techniques"); ch.type = "button"; ch.dataset.fk = `change|${x.report}`;
     ch.setAttribute("aria-expanded", "false");
     ch.addEventListener("click", () => picker(card, x, ch));
     acts.append(ch);
@@ -263,13 +286,13 @@
     window.LGLoader?.busy("Saving the mapping");
     try {
       await post("/api/attack/mapping", { report: x.report, techniques: ids, nofit, note });
-      data = await get("/api/attack");
-      render();
-      $("amStatus").textContent = `Saved: ${x.title} is reviewed.`; $("amStatus").className = "dz-status ok";
     } catch (e) {
       $("amStatus").textContent = `Not saved: ${window.LGLoader.errorText(e, true)}`; $("amStatus").className = "dz-status bad";
       if (btn) { btn.disabled = false; btn.classList.remove("is-busy"); }
-    } finally { window.LGLoader?.ready(); }
+      window.LGLoader?.ready(); return;
+    }
+    const fresh = await reread(); window.LGLoader?.ready();
+    $("amStatus").textContent = `Saved: ${x.title} is reviewed.${fresh ? "" : STALE}`; $("amStatus").className = `dz-status ${fresh ? "ok" : "warn"}`;
   }
 
   // the picker: a dz-panel inside the report's card. Short list first, then a search; both grouped by tactic.
@@ -302,7 +325,8 @@
       sel.replaceChildren(el("span", "am-ba-label", "Chosen"));
       if (nofit) sel.append(el("span", "dz-pill", "No ATT&CK technique fits"));
       else if (!chosen.size) sel.append(el("span", "dz-by", "nothing yet: tick techniques below, or say that none fits"));
-      else for (const t of chosen.values()) sel.append(chip(t, { remove: () => toggle(t, false) }));
+      // a removed chip's button is gone: the focus goes to the next chip's, else the search box (audit 2026-11-27, 9-8)
+      else for (const t of chosen.values()) sel.append(chip(t, { remove: () => { toggle(t, false); (sel.querySelector(".am-chip-x") || q).focus(); } }));
       panel.querySelectorAll("input[data-tid]").forEach((c) => { c.checked = !nofit && chosen.has(c.dataset.tid); });
       nfc.checked = nofit;
     };
@@ -328,18 +352,20 @@
       const list = [...j.results, ...[...chosen.values()].filter((t) => !j.results.some((y) => y.id === t.id))];
       grouped(list, short, (id) => chosen.has(id), toggle);
     } catch (e) { short.replaceChildren(el("p", "dz-status bad", `Could not load: ${window.LGLoader.errorText(e)}`)); }
-    let timer = 0;
+    // only the newest search draws its answer: a slower answer for an older word is dropped (audit 2026-11-27, 9-10)
+    let timer = 0, qseq = 0;
     q.addEventListener("input", () => {
       clearTimeout(timer);
       timer = setTimeout(async () => {
-        const v = q.value.trim();
+        const v = q.value.trim(), my = ++qseq;
         if (v.length < 2) { found.replaceChildren(); return; }
         found.replaceChildren(el("div", "st-loading", "Searching…"));
         try {
           const j = await get(`/api/attack/search?q=${encodeURIComponent(v)}`);
+          if (my !== qseq) return;
           if (!j.results.length) found.replaceChildren(el("p", "dz-by", "No current technique matches (retired ones are hidden)."));
           else grouped(j.results, found, (id) => chosen.has(id), toggle);
-        } catch (e) { found.replaceChildren(el("p", "dz-status bad", window.LGLoader.errorText(e))); }
+        } catch (e) { if (my === qseq) found.replaceChildren(el("p", "dz-status bad", window.LGLoader.errorText(e))); }
       }, 250);
     });
     sync(); q.focus();

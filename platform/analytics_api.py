@@ -8,6 +8,8 @@ app.py reaches this code too. app.py calls install() where this code was, which 
 same order, and keeps every name defined here under its old name.
 """
 _A = None          # the app module (app.py), set by install()
+from shares import pct  # noqa: E402  (shares that never read "0%" for a part with records, nor "100%" for a part)
+import counting_keys as _ck  # noqa: E402  (the one counting rule: what reads as no network)
 
 
 class _Recorder:
@@ -71,11 +73,27 @@ def _median(xs):
 
 
 def _top(events, field, n=8, label=None, key=None):
-    c = _A.Counter((key(e[field]) if key else e[field]) for e in events if e[field])
+    return _breakdown(events, field, n, label, key)[0]
+
+
+def _breakdown(events, field, n=8, label=None, key=None, count=None):
+    """(the top n rows, what they leave out): {"distinct": every different value, "valued": events with a value,
+    "other": events with a value outside the rows (an "Other" row), "none": events without a value}. n=None: every
+    value. count: a Counter already made (the request paths). Nothing goes missing without saying so (2026-11-26)."""
+    # the key first, then only a non-empty one counts (review 2026-11-27: "0" passed the filter, its key was "", and
+    # it became a "(none)" row counted as a network instead of "Not recorded")
+    if count is not None:
+        c = count
+    else:
+        c = _A.Counter(k for k in ((key(e[field]) if key else e[field]) for e in events if e[field]) if k)
     # a share is of the whole selection, events without a value included (review 2026-11-13: it was of the events
     # that had one, so a field filled in on a tenth of the events read as 100 %)
     total = len(events) or 1
-    return [{"value": v, "label": label(v) if label else v, "count": k, "share": round(k / total, 4)} for v, k in c.most_common(n)]
+    # not rounded: 1 of 43,281 rounded to 4 places was 0.0, which read "0%" (2026-11-26)
+    rows = [{"value": v, "label": label(v) if label else v, "count": k, "share": k / total} for v, k in c.most_common(n)]
+    valued = sum(c.values())
+    return rows, {"distinct": len(c), "valued": valued, "other": valued - sum(r["count"] for r in rows),
+                  "none": len(events) - valued}
 
 
 def _request_path(url):
@@ -131,7 +149,9 @@ def _slice_on(day, kind, value):
         ev = [e for e in sofar if str(e["dst_port"] or "") == str(match_value)]
     elif kind in ("src_asn", "dst_asn"):
         wanted = _A.asn_registry.resolve(value)            # company name, demo alias or AS number
-        ev = [e for e in sofar if e[kind] in wanted]
+        # "Unknown network": every record the counting rule reads as none (0, "AS0", "-"; review 2026-11-27)
+        unknown = "" in wanted
+        ev = [e for e in sofar if e[kind] in wanted or (unknown and not _ck.norm_asn(e[kind]))]
     elif kind == "src_ip":
         real_ip = _A.host_refs.resolve(value)              # opaque host reference or IP
         ev = [e for e in sofar if e["src_ip"] == real_ip]
@@ -299,7 +319,7 @@ def api_insight_drill():
                 x["events"] += 1; x["crit"] += e["severity"] == "critical"
                 if e["src_ip"]: x["hosts"].add(e["src_ip"])
             rows = [{"value": inf, "infection": inf, "report": labels.get(src, src), "events": x["events"],
-                     "hosts": len(x["hosts"]), "critical": x["crit"], "share": f"{x['events'] / max(1, n):.1%}"}
+                     "hosts": len(x["hosts"]), "critical": x["crit"], "share": pct(x["events"] / max(1, n), 1)}
                     for (inf, src), x in sorted(g.items(), key=lambda kv: -kv[1]["events"])]
             out.update(title="Events by infection / category and report", row_kind="infection",
                        intro=f"{n:,} events, split by what Shadowserver reported and in which report.",
@@ -309,7 +329,7 @@ def api_insight_drill():
         else:
             rows = [{"value": src, "report": labels.get(src, src), "kind": classes.get(src, ""), "events": x["events"],
                      "hosts": len(x["hosts"]), "critical": x["crit"], "infections": len(x["inf"]),
-                     "share": f"{x['events'] / max(1, n):.1%}"} for src, x in group("source")]
+                     "share": pct(x["events"] / max(1, n), 1)} for src, x in group("source")]
             out.update(title="Reports in this selection", row_kind="source",
                        intro=f"{len(rows):,} Shadowserver report{'s' if len(rows) != 1 else ''} contain these events.",
                        columns=[["report", "Report"], ["kind", "Attack type"], ["events", "Events"], ["hosts", "Source hosts"],
@@ -320,10 +340,10 @@ def api_insight_drill():
         allc = _A.Counter(e["source"] for e in sofar)
         tot = max(1, len(sofar))
         rows = [{"value": src, "report": labels.get(src, src), "kind": classes.get(src, ""), "all": k,
-                 "share_all": f"{k / tot:.1%}", "mine": mine.get(src, 0),
-                 "mine_share": f"{mine.get(src, 0) / k:.1%}" if k else ""} for src, k in allc.most_common()]
+                 "share_all": pct(k / tot, 1), "mine": mine.get(src, 0),
+                 "mine_share": pct(mine.get(src, 0) / k, 1) if k else ""} for src, k in allc.most_common()]
         out.update(title="How this selection compares with all events", row_kind="source",
-                   intro=f"This selection has {n:,} of the {len(sofar):,} events Shadowserver reported for the day ({n / tot:.1%}). "
+                   intro=f"This selection has {n:,} of the {len(sofar):,} events Shadowserver reported for the day ({pct(n / tot, 1)}). "
                          "Each report below shows its size and how much of it belongs to this selection.",
                    columns=[["report", "Report"], ["kind", "Attack type"], ["all", "All events"], ["share_all", "Share of all events"],
                             ["mine", "In this selection"], ["mine_share", "Selection's part of the report"]],
@@ -343,7 +363,7 @@ def api_insight_drill():
         for d, x in group("dst_ip"):
             rows.append({"value": d, "dst": mip(d), "country": next(iter(x["geo"]), ""),
                          "network": _A.asn_registry.label(next(iter(x["asn"])), demo) if x["asn"] else "",
-                         "ports": sorted(x["ports"], key=lambda p: int(p) if p.isdigit() else 0), "domains": sorted(x["dom"])[:3],
+                         "ports": sorted(x["ports"], key=lambda p: int(p) if p.isdigit() else 0), "domains": sorted(x["dom"]),   # every one (the CSV is the complete list)
                          "events": x["events"], "hosts": len(x["hosts"]), "infections": sorted(x["inf"])})
         out.update(title="Destination IPs contacted", row_kind="dst_ip",
                    intro=f"{len(rows):,} destination addresses (sinkholes, honeypot sensors or targets), most contacted first.",

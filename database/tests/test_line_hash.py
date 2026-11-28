@@ -9,6 +9,7 @@ tried again. Made-up data only. Run: python3 tests/test_line_hash.py"""
 import hashlib
 import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -67,7 +68,7 @@ class FailedRows(unittest.TestCase):
     def test_a_file_with_failed_rows_is_not_marked_done(self):
         with open(sp.__file__, encoding="utf-8") as fh:
             src = fh.read()
-        i = src.index('if res["failed"]:\n                            stats["files_rows_failed"] += 1')
+        i = re.search(r'if res\["failed"\]:\n\s+stats\["files_rows_failed"\] \+= 1', src).start()   # any indentation
         self.assertIn("journal.done(category, fn)", src[i:i + 200].split("record_fields")[0].split("else:")[1])
 
 

@@ -135,21 +135,36 @@ for sel in [[("service", "Block List")], [("service", "DNS Open Resolvers")]]:
     ok(f"{sel[0][1]}: table {table['total']:,} hosts = view {st['hosts']:,}; records {st['total']:,} = heatmap {sum(v['events'] for v in rg['regions'].values()):,}",
        table["total"] == st["hosts"] and st["total"] == sum(v["events"] for v in rg["regions"].values()))
 
-print("\nThe case reported: Blocklisted + several reports + Accessible HTTP (insight dialog)")
-sp = [("family", "Blocklisted")]
-ins = get("/api/svc/insight", sp + [seed(sp), ("service", "Accessible HTTP")])
-st = get("/api/svc/stats", sp + [seed(sp), ("n", "200")])
-http = next((r["count"] for r in st["breakdowns"]["service"] if r["value"] == "Accessible HTTP"), 0)
-ok(f"analysis shows {ins.get('total', 0):,} records, the bubble counted {http:,}", ins.get("total", 0) == http and http > 0)
+# the case reported was Blocklisted + several reports + Accessible HTTP; an installation whose day has no such pair is
+# checked on a pair its own day has (a family whose hosts carry several reports, and one of those reports), so the
+# check means something on every installation (2026-11-26: a fresh install with other reports failed it for nothing)
+pair = None
+for fam in ["Blocklisted"] + [f for f in families if f != "Blocklisted"]:
+    sp = [("family", fam)]
+    st = get("/api/svc/stats", sp + [seed(sp), ("n", "200")])
+    svcs = {r["value"]: r["count"] for r in st["breakdowns"]["service"] if r["count"] > 0}
+    if svcs:
+        pair = (fam, "Accessible HTTP" if fam == "Blocklisted" and "Accessible HTTP" in svcs else max(svcs, key=svcs.get), svcs)
+        break
+any_multi = any(len(v) > 1 for v in per_host.values())
+if pair is None:
+    ok("no host of the day carries several reports, so no widened view has anything (the independent count agrees)", not any_multi)
+else:
+    fam, svc, svcs = pair
+    print(f"\nThe case reported: {fam} + several reports + {svc} (insight dialog)")
+    sp = [("family", fam)]
+    ins = get("/api/svc/insight", sp + [seed(sp), ("service", svc)])
+    ok(f"analysis shows {ins.get('total', 0):,} records, the bubble counted {svcs[svc]:,}", ins.get("total", 0) == svcs[svc] > 0)
 
 print("\nService seed: DNS Open Resolvers + several reports, then another report")
 sp = [("service", "DNS Open Resolvers")]
 st = get("/api/svc/stats", sp + [seed(sp), ("n", "200")])
 others = [r for r in st["breakdowns"]["service"] if r["value"] != "DNS Open Resolvers"]
 if not st.get("hosts"):
-    # early in the day the DNS Open Resolvers report may not have arrived yet (reports land about 00:30-10:00 UTC):
-    # nothing to widen is not a failure; the other sections still run (2026-11-16: it stopped a release at 08:06 UTC)
-    print("  SKIP no DNS Open Resolvers in the day in memory yet: the widened view has nothing to show")
+    # early in the day the DNS Open Resolvers report may not have arrived yet (reports land about 00:30-10:00 UTC), and
+    # some installations never get one: then the widened view must be empty too, which is checked, never skipped
+    ok("no DNS Open Resolvers in the day: the widened view is empty as well", not others and not st.get("total"),
+       f"{len(others)} other reports, {st.get('total')} records")
 else:
     ok("the widened view includes the resolvers' other reports", len(others) > 0, f"{len(others)} other reports")
 if others:

@@ -56,6 +56,7 @@ class ReplaySchedule:
         self.seen_rows = None             # rows of the awaited day at the last check (growth restarts the settle)
         self.on_start = None              # callback(day) when a day starts (used to reload it fully)
         self._started_day = None          # a day that just started; on_start runs for it once the lock is released
+        self._memo = None                 # has_data answers of the tick running now (_rows)
         self._load()
 
     # ------------------------------------------------------------------ state
@@ -139,13 +140,31 @@ class ReplaySchedule:
                 except Exception as e:
                     self._warn("on_start failed: %s", e)
 
+    def _rows(self, day):
+        """has_data(day), asked once per day per tick (audit 2026-11-27: up to three MongoDB counts of one day per
+        tick); outside a tick it asks every time."""
+        memo = self._memo
+        if memo is None:
+            return self.has_data(day)
+        if day not in memo:
+            memo[day] = self.has_data(day)
+        return memo[day]
+
     def _tick(self, now=None):
+        with self.lock:                   # (re-entrant: the tick itself runs under the same lock)
+            self._memo = {}
+            try:
+                self._tick_once(now)
+            finally:
+                self._memo = None
+
+    def _tick_once(self, now=None):
         now = now or self._now()
         with self.lock:
             T = self.target(now)
             if self.day is None:
                 # first start: if yesterday's report is in, play it on the normal 24-hour schedule
-                if self.has_data(T):
+                if self._rows(T):
                     self._begin(T, T + self.offset, now, "first start")
                 else:
                     self._await(T, now)
@@ -157,9 +176,9 @@ class ReplaySchedule:
                 return
             # the day has been replayed completely: move on
             nxt = self.day + DAY
-            if nxt < T and self.has_data(T):
+            if nxt < T and self._rows(T):
                 nxt = T          # more than a day behind: skip to the newest day
-            if self.has_data(nxt):
+            if self._rows(nxt):
                 # the report was already in before the previous day ended: continue without a gap
                 cont = self.started + DAY if nxt == self.day + DAY else now
                 self._begin(nxt, cont, now, "previous day finished, report already in")
@@ -167,14 +186,14 @@ class ReplaySchedule:
                 self._await(nxt, now)
 
     def _check_waiting(self, now, T):
-        if self.day < T and self.has_data(T) and not self.has_data(self.day):
+        if self.day < T and self._rows(T) and not self._rows(self.day):
             self._await(T, now)             # the awaited day never came; move on to the newest one
             return
-        if not self.has_data(self.day):
+        if not self._rows(self.day):
             # nothing loaded (yet): keep any settle time already running. A failed or not-yet-finished load
             # (for example right after a restart) must not make the schedule forget that the report arrived.
             return
-        rows = self.has_data(self.day)
+        rows = self._rows(self.day)
         if self.seen_at is not None and self.seen_rows is not None and rows > self.seen_rows:
             # another report arrived while settling: wait the settle time again from now
             self.seen_at, self.seen_rows = now, rows
@@ -204,5 +223,5 @@ class ReplaySchedule:
             self._warn("Waiting for the %s report", day.date())
         self.day, self.started, self.seen_at, self.seen_rows = day, None, None, None
         self._save()
-        if self.has_data(day):
+        if self._rows(day):
             self._check_waiting(now, self.target(now))

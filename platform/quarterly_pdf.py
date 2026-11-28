@@ -26,6 +26,14 @@ fmt = xp.fmt
 GOOD, BAD = HexColor("#22c3a6"), HexColor("#ef5d6c")
 
 
+def _shown(rows, n, csv="management_summary", metric="unique"):
+    """A card's subtitle tail for a list cut to n: " · 7 of 47; all in the management_summary CSV", or "" when every
+    one is drawn (the bars skip rows with 0, so those are not counted as drawn)."""
+    total = len(rows or [])
+    drawn = min(n, sum(1 for r in rows or [] if r.get(metric)))
+    return f" · {drawn:,} of {total:,}; all in the {csv} CSV" if total > drawn else ""
+
+
 def month_name(m):
     return datetime.strptime(m, "%Y-%m").strftime("%B %Y")
 
@@ -74,12 +82,14 @@ class QDoc(xp.Doc):
     def footer(self):
         self.text(M, 22, "Addresses are counted by IP address, as Shadowserver reports them: one address can stand for several "
                          "devices (shared connections), and one device can use several addresses.", 6.6, xp.MUTE)
-        self.text(M, 12, f"Aggregated figures only: no individual addresses. {self.meta['made'][:1].upper()}{self.meta['made'][1:]}, "
-                         f"{self.meta['generated']}. Data: Shadowserver Foundation.", 7.2, xp.MUTE)
+        # who made it and when only (the user, 2026-11-28): no address notice, no "Data: Shadowserver Foundation" in a footer
+        self.text(M, 12, f"{self.meta['made'][:1].upper()}{self.meta['made'][1:]}, {self.meta['generated']}.", 7.2, xp.MUTE)
         self.text(Wd - M, 14, f"Page {self.page}", 7.2, xp.MUTE, anchor="end")
 
-    def table(self, y, section, title, sub, cols, rows, bottom=44, size=8.2):
-        """A card with a table; rows grow when a cell wraps; it carries on over pages, never cuts text."""
+    def table(self, y, section, title, sub, cols, rows, bottom=44, size=8.2, group=None):
+        """A card with a table; rows grow when a cell wraps; it carries on over pages, never cuts text.
+        group: a column whose value is drawn once for rows that follow each other with the same value (the network of
+        its five issues: audit 2026-11-27, 6-9), and again at the top of every continued card, so no card starts blank."""
         lead = size * 1.32
         gap = 10
         inner = Wd - 2 * M - 28
@@ -91,24 +101,28 @@ class QDoc(xp.Doc):
             font = self.F["b"] if bold else self.F["r"]
             return xp.hard_lines(self, simpleSplit(self.s(v), font, size, w), font, size, w) or [""]
         measured = [[cell(v, w) for v, w in zip(r, widths)] for r in rows]
+        same = [group is not None and k > 0 and rows[k][group] == rows[k - 1][group] for k in range(len(rows))]
+        blank = [[[""] if j == group else c for j, c in enumerate(m)] if s else m for m, s in zip(measured, same)]
         hdr = [cell(lab, w, True) for (lab, _, _), w in zip(cols, widths)]
         hh = max(len(c) for c in hdr) * lead + 6
         i, first = 0, True
         while True:
-            head_h = 18 + (13 if title else 0) + (12 if sub else 0) + 4
+            sub_now = sub if first else None             # a continued table: its title "(continued)", the subtitle once
+            head_h = 18 + (13 if title else 0) + (12 if sub_now else 0) + 4
             room = y - bottom - head_h - hh - 10
             chunk, used = [], 0
             fresh = y > H - M - 140                  # at the top of a page: a row taller than the page is drawn anyway
             while i < len(measured):
-                rh = max(len(c) for c in measured[i]) * lead + 6
+                row = blank[i] if chunk else measured[i]     # the first row of a card always names its group
+                rh = max(len(c) for c in row) * lead + 6
                 if used + rh > room and (chunk or not fresh):
                     break
-                chunk.append(measured[i]); used += rh; i += 1
+                chunk.append(row); used += rh; i += 1
             if not chunk and i < len(measured):          # not even one row here: the whole table starts on the next page
                 y = self.new_page(section)
                 continue
             h = head_h + hh + used + 10
-            top = self.card(M, y, Wd - 2 * M, h, (title + ("" if first else " (continued)")) if title else None, sub)
+            top = self.card(M, y, Wd - 2 * M, h, (title + ("" if first else " (continued)")) if title else None, sub_now)
             yy, x = top - 2, M + 14
             for lines, w, (_, _, al) in zip(hdr, widths, cols):
                 for k, ln in enumerate(lines):
@@ -131,15 +145,39 @@ class QDoc(xp.Doc):
                 return y
             y = self.new_page(section)
 
-    def notes(self, y, title, lines):
-        """A card of plain sentences, each wrapped whole; its height is measured first."""
+    def notes(self, y, title, lines, section=None, bottom=44):
+        """A card of plain sentences, each wrapped whole (a long word broken, never cut); its height is measured first.
+        What does not fit above the footer carries on in a "(continued)" card on the next page (audit 2026-11-27, 6-8:
+        a long "Read me" ran off the page)."""
         w = Wd - 2 * M - 28
-        need = sum(len(simpleSplit(self.s(t), self.F["r"], 8.4, w)) * 11 + 2 for t in lines)
-        top = self.card(M, y, Wd - 2 * M, 30 + need + 8, title)
-        yy = top
-        for t in lines:
-            yy = self.wrap(M + 14, yy, t, w, 8.4, HexColor("#cfd6e6"), leading=11) - 2
-        return y - (30 + need + 8) - 10
+        size, lead = 8.4, 11
+        measured = [xp.hard_lines(self, simpleSplit(self.s(t), self.F["r"], size, w), self.F["r"], size, w) or [""]
+                    for t in lines]
+        i, first = 0, True
+        while i < len(measured):
+            room = y - bottom - 38
+            chunk, used = [], 0
+            fresh = y > H - M - 140                  # at the top of a page: a sentence taller than the page is drawn anyway
+            while i < len(measured):
+                h = len(measured[i]) * lead + 2
+                if used + h > room and (chunk or not fresh):
+                    break
+                chunk.append(measured[i]); used += h; i += 1
+            if not chunk:
+                y = self.new_page(section or title)
+                continue
+            top = self.card(M, y, Wd - 2 * M, 30 + used + 8, title if first else f"{title} (continued)")
+            yy = top
+            for ls in chunk:
+                for ln in ls:
+                    self.text(M + 14, yy, ln, size, HexColor("#cfd6e6"))
+                    yy -= lead
+                yy -= 2
+            y = y - (30 + used + 8) - 10
+            first = False
+            if i < len(measured):
+                y = self.new_page(section or title)
+        return y
 
 
 def _doc(R, status, made, audience):
@@ -174,21 +212,43 @@ def _month_chart(d, R, X, x, y, w, h):
     base_y = y - h + 34
     for i, m in enumerate(R["months"]):
         t = X["totals"][m]
-        x0 = x + 30 + i * bw
-        for j, (k, col) in enumerate((("records", xp.BLUE), ("unique", xp.VIOLET))):
+        mid = x + 30 + i * bw + bw / 2                   # each month's pair and its name centred in its slot (2026-11-28:
+        for j, (k, col) in enumerate((("records", xp.BLUE), ("unique", xp.VIOLET))):   # drawn 10 pt from its left)
             hgt = (top - base_y - 26) * t[k] / mx[k]
-            d.c.setFillColor(col); d.c.rect(x0 + 10 + j * 52, base_y, 30, max(hgt, .5), stroke=0, fill=1)
-            d.text(x0 + 25 + j * 52, base_y + max(hgt, .5) + 4, fmt(t[k]), 7.4, xp.TXT, True, "middle")
-        d.text(x0 + 51, base_y - 12, month_name(m), 8, xp.DIM, anchor="middle")
-    d.pill(x + w - 150, y - 18, "records", xp.BLUE, 6.8); d.pill(x + w - 100, y - 18, "unique addresses", xp.VIOLET, 6.8)
+            bx = mid - 41 + j * 52                        # two bars of 30 with 22 between: 82 wide
+            d.c.setFillColor(col); d.c.rect(bx, base_y, 30, max(hgt, .5), stroke=0, fill=1)
+            d.text(bx + 15, base_y + max(hgt, .5) + 4, fmt(t[k]), 7.4, xp.TXT, True, "middle")
+        d.text(mid, base_y - 12, month_name(m), 8, xp.DIM, anchor="middle")
+    # the legend at the card's right padding (14 pt, as its title on the left), the pills 4 pt apart like every pill row
+    pw = lambda s: d.c.stringWidth(d.s(s), d.F["b"], 6.8) + 10 + 4               # noqa: E731
+    lx = x + w - 14 - pw("records") - pw("unique addresses") + 4
+    d.pill(d.pill(lx, y - 18, "records", xp.BLUE, 6.8), y - 18, "unique addresses", xp.VIOLET, 6.8)
 
 
 def _read_me(R, X, W, running):
+    un = X.get("unknown_network") or {}
     notes = [f"Months so far: {', '.join(month_name(m) for m in X['elapsed'])}." + (" The quarter is still running." if running else ""),
-             f"Records without an address: {fmt(X['noaddr'])}. Records without a network are counted under \"Unknown network\".",
-             "Unique addresses across reports count each address once, so they are lower than the sum over reports.",
-             f"Findings count each finding or case once ({fmt(W['opened'])} opened, {fmt(W['cases'])} of them cases). Management "
-             f"decides once per organisation of a case, so there can be more decisions ({fmt(W['reviews'])}) than findings."]
+             f"Records without an address: {fmt(X['noaddr'])}. Records without a network ({fmt(un.get('records', 0))}) are "
+             "shown as \"Unknown network\" and are not counted as a network. Networks are counted by company: two AS "
+             "numbers of one company are one network.",
+             "Unique addresses across reports count each address once, so they are lower than the sum over reports. An "
+             "address seen in two regions, or in networks of two types, counts in each of them.",
+             "Sectors are the network types of the addresses' networks (as the portal shows them). Shadowserver's own "
+             "sector column is listed apart as Industry (Shadowserver).",
+             "The quarter holds the reports sent in it (by the date in the file name)"
+             + (f"; their events are dated {X['event_span'][0]} to {X['event_span'][1]}" if X.get("event_span") else "")
+             + (f"; {fmt(X['undated'])} rows have no time and are counted by their file's date" if X.get("undated") else "")
+             + "."]
+    if X.get("duplicates"):
+        notes.append(f"{fmt(X['duplicates'])} rows were also in another file of the same day (a country file and a "
+                     "network file): each is counted once.")
+    if X.get("not_on_portal"):
+        notes.append("Counted here but not shown on the portal (reports its pages cannot read in full): "
+                     + ", ".join(f"{r['label']} ({fmt(r['records'])} records)" for r in X["not_on_portal"]) + ".")
+    # the findings note stays the last one (the advisor's report leaves it out: _read_me(...)[:-1])
+    notes.append(f"Findings count each finding or case once ({fmt(W['opened'])} opened, {fmt(W['cases'])} of them cases). "
+                 f"Management decides once per organisation of a case, so there can be more decisions ({fmt(W['reviews'])}) "
+                 "than findings.")
     if R["failed"]:
         notes.insert(0, "Collections that could not be read: " + ", ".join(sorted(R["failed"])) + ".")
     notes.insert(0, f"Counted for: {(R.get('constituency') or {}).get('label') or 'the whole country'}. Every figure in this "
@@ -231,7 +291,7 @@ def write_management(path, R, X, W, A, status, made):
     y = d.new_page("The quarter at a glance")
     y = d.kpis(y, [(fmt(T["records"]), "Records", "rows in the quarter's reports", xp.BLUE),
                    (fmt(T["unique"]), "Unique addresses", "each counted once, across every report", xp.VIOLET),
-                   (fmt(T["networks"]), "Networks", "with records (unknown network included)", xp.TEAL),
+                   (fmt(T["networks"]), "Networks", "companies with records (Unknown network not counted)", xp.TEAL),
                    (fmt(T["reports"]), "Reports with data", "of the Shadowserver reports received", xp.SLATE),
                    (fmt(A["sends"]), "Advisories sent", f"to {fmt(len(A['to']))} recipients", xp.AMBER),
                    (fmt(W["opened"]), "Findings opened", f"{fmt(W['still_open'])} still open · {fmt(W['reviews'])} decisions "
@@ -241,7 +301,7 @@ def write_management(path, R, X, W, A, status, made):
     top2 = d.card(x2, y, cw, ch, "Report families", "Unique addresses per family (an address in two families counts in each)")
     d.bars(x2 + 14, top2, cw - 28, X["families"], metric="unique", n=7, bottom=y - ch + 8)
     y -= ch + 10
-    d.notes(y, "Read me", _read_me(R, X, W, running))
+    d.notes(y, "Read me", _read_me(R, X, W, running), "The quarter at a glance")
     # 2 reports and networks
     y = d.new_page("Reports and networks")
     hgt = y - 50
@@ -252,15 +312,19 @@ def write_management(path, R, X, W, A, status, made):
     # 3 regions, sectors, infections, KEV
     y = d.new_page("Where and what")
     hgt = (y - 60) / 2
-    top = d.card(M, y, cw, hgt, "Regions", "Unique addresses per region")
+    top = d.card(M, y, cw, hgt, "Regions", "Unique addresses per region" + _shown(X["regions"], 7))
     d.bars(M + 14, top, cw - 28, X["regions"], metric="unique", n=7, bottom=y - hgt + 8)
-    top = d.card(x2, y, cw, hgt, "Sectors", "Unique addresses per sector")
+    top = d.card(x2, y, cw, hgt, "Sectors (network type)", "Unique addresses per network type" + _shown(X["sectors"], 7))
     d.bars(x2 + 14, top, cw - 28, X["sectors"], metric="unique", n=7, bottom=y - hgt + 8)
     y2 = y - hgt - 10
-    top = d.card(M, y2, cw, hgt, "Infections", "Top infection families (sinkhole and compromised reports), unique addresses")
+    cut = _shown(X["infections"], 7)                   # a cut card says so on one line: the shorter subtitle then
+    top = d.card(M, y2, cw, hgt, "Infections", ("Sinkhole and compromised reports, unique addresses" + cut) if cut else
+                 "Top infection families (sinkhole and compromised reports), unique addresses")
     d.bars(M + 14, top, cw - 28, X["infections"], metric="unique", n=7, bottom=y2 - hgt + 8)
+    cut = _shown(X["kev"]["top"], 6)
     top = d.card(x2, y2, cw, hgt, "Actively exploited (CISA KEV)",
-                 f"{fmt(X['kev']['hosts'])} addresses, {fmt(X['kev']['records'])} records with a CVE in the KEV catalogue")
+                 f"{fmt(X['kev']['hosts'])} addresses, {fmt(X['kev']['records'])} records"
+                 + (f" with a KEV CVE{cut}" if cut else " with a CVE in the KEV catalogue"))
     if X["kev"]["top"]:
         d.bars(x2 + 14, top, cw - 28, X["kev"]["top"], metric="unique", n=6, bottom=y2 - hgt + 8)
     else:
@@ -299,9 +363,16 @@ def write_management(path, R, X, W, A, status, made):
                     [[f"{r['finding']} {r['title']}", r["organisation"] or "-", r["decision"], r["date"], r["reason"] or "-"]
                      for r in W["decisions"]])
     if X["recurring"]:
-        y = d.table(y, sec, "Recurring networks", "Records in every month of the quarter so far",
+        y = d.table(y, sec, "Recurring networks", "Records in every month of the quarter so far"
+                    + _shown(X["recurring"], 12, metric="label"),
                     [("Network", 0, "start"), ("Unique addresses", 110, "end"), ("Records", 90, "end")],
                     [[r["label"], fmt(r["unique"]), fmt(r["records"])] for r in X["recurring"][:12]])
+    if X.get("industries"):
+        # Shadowserver's own sector column, never under Sectors (the user, 2026-11-26)
+        y = d.table(y, sec, "Industry (Shadowserver)", "Shadowserver's own sector column, not the network type"
+                    + _shown(X["industries"], 12, metric="label"),
+                    [("Industry", 0, "start"), ("Unique addresses", 110, "end"), ("Records", 90, "end")],
+                    [[r["label"], fmt(r["unique"]), fmt(r["records"])] for r in X["industries"][:12]])
     # 5 advisories in summary
     y = d.new_page("Advisories")
     _advisory_tables(d, y, "Advisories", R, A, with_orgs=False)
@@ -353,7 +424,7 @@ def write_advisor(path, R, X, W, A, status, made):
     y = d.new_page("The quarter for advisors")
     y = d.kpis(y, [(fmt(T["records"]), "Records", "rows in the quarter's reports", xp.BLUE),
                    (fmt(T["unique"]), "Unique addresses", "each counted once, across every report", xp.VIOLET),
-                   (fmt(T["networks"]), "Networks", "with records (unknown network included)", xp.TEAL),
+                   (fmt(T["networks"]), "Networks", "companies with records (Unknown network not counted)", xp.TEAL),
                    (fmt(A["sends"]), "Advisories sent", f"{fmt(len(A['advisories']))} advisories to {fmt(len(A['to']))} recipients", xp.AMBER),
                    (fmt(W["opened"]), "Findings opened", f"{fmt(W['cases'])} of them cases", xp.SLATE),
                    (fmt(W["still_open"]), "Still open", f"{fmt(W['advisory_sent'])} with an advisory sent this quarter", xp.RED)])
@@ -363,9 +434,11 @@ def write_advisor(path, R, X, W, A, status, made):
     d.bars(M + cw + 24, top2, cw - 28, X["networks"], metric="unique", n=7, bottom=y - 200 + 8)
     y -= 210
     notes = _read_me(R, X, W, running)[:-1] + [
-        "The networks, reports and months are in advisor_networks; the follow-up per organisation in advisor_organisations; "
-        "every issue and CVE per network, with the CVE's full description, in advisor_network_issues."]
-    d.notes(y, "Read me", notes)
+        # the files named as the issues card names them ("the advisor_network_issues CSV"; the user, 2026-11-28)
+        "The networks, reports and months are in the advisor_networks CSV; the follow-up per organisation in the "
+        "advisor_organisations CSV; every issue and CVE per network, with the CVE's full description, in the "
+        "advisor_network_issues CSV."]
+    d.notes(y, "Read me", notes, "The quarter for advisors")
     # 2 advisories
     y = d.new_page("Advisories")
     _advisory_tables(d, y, "Advisories", R, A, with_orgs=True)
@@ -381,16 +454,22 @@ def write_advisor(path, R, X, W, A, status, made):
     # 4 issues per network
     sec = "Issues per network"
     y = d.new_page(sec)
-    top_nets = sorted(X["net_issues"].items(), key=lambda kv: (-len(R["net_hosts"].get(kv[0], {})), kv[0]))[:12]
+    all_nets = sorted(X["net_issues"].items(), key=lambda kv: (-len(R["net_hosts"].get(kv[0], {})), kv[0]))
+    top_nets = all_nets[:12]
     rows = []
-    for asn, lst in top_nets:
+    for asn, lst in top_nets:                           # X holds every issue; the PDF draws 5 per network and says "5 of M"
         for r in lst[:5]:
-            rows.append([netname(asn) + (f" (AS{asn})" if asn else ""), X["cve_label"](r["issue"]) if r["issue"].upper().startswith("CVE-") else r["issue"],
+            rows.append([netname(asn) + (f" (AS{asn})" if asn else "") + (f": 5 of {len(lst):,} issues" if len(lst) > 5 else ""),
+                         X["cve_label"](r["issue"]) if r["issue"].upper().startswith("CVE-") else r["issue"],
                          "yes" if r["kev"] else "no", fmt(r["unique"])])
     if rows:
-        d.table(y, sec, "Top issues and CVEs of the 12 largest networks",
-                "Up to five per network; every one, with each CVE's full description, is in the advisor_network_issues CSV",
-                [("Network", 190, "start"), ("Issue or CVE", 0, "start"), ("CISA KEV", 60, "start"), ("Unique addresses", 100, "end")], rows)
+        nets = (f"the {len(top_nets)} largest of {len(all_nets):,} networks" if len(all_nets) > len(top_nets)
+                else f"every network ({len(all_nets):,})")
+        d.table(y, sec, f"Top issues and CVEs of {nets}",
+                "Up to five per network; every issue of every network, with each CVE's full description, is in the "
+                "advisor_network_issues CSV",
+                [("Network", 190, "start"), ("Issue or CVE", 0, "start"), ("CISA KEV", 60, "start"), ("Unique addresses", 100, "end")], rows,
+                group=0)
     else:
         d.text(M, y - 10, "No issue or CVE was reported for a network this quarter.", 9, xp.MUTE)
     # 5 accuracy

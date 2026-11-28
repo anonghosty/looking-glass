@@ -1,5 +1,5 @@
 # Looking Glass: every file this release ships in this folder (deploy/stale_files.py reads it on update)
-# files: 47
+# files: 50
 .env.example
 .gitignore
 README.md
@@ -27,8 +27,11 @@ run.sh
 safe_libraries.py
 shadowserver_pipeline.py
 store_mongo_admin.sh
+tests/test_count_gaps.py
 tests/test_dns_https.py
 tests/test_equivalence.py
+tests/test_fix_b12.py
+tests/test_fix_r2.py
 tests/test_line_hash.py
 tests/test_link_downloads.py
 tests/test_load_stamps.py

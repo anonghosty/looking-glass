@@ -20,18 +20,25 @@ export LG_MONGO_ADMIN_FILE=$tmp
 fail=0
 for t in tests/test_new_collections.py tests/test_new_service_collections.py tests/check_quarterly.py tests/check_quarterly_purge_e2e.py; do
   printf '%-45s ' "$t"; out=$(.venv/bin/python "$t" 2>&1); rc=$?
-  [ $rc = 0 ] && echo passed || { echo "FAILED ($rc)"; echo "$out" | tail -5; fail=1; }
+  # 77 is a skip: WE DO NOT SKIP, so it fails here like any other exit code that is not 0
+  if [ $rc = 0 ]; then echo passed
+  elif [ $rc = 77 ]; then echo "FAILED (skipped, exit 77)"; echo "$out" | tail -5; fail=1
+  else echo "FAILED ($rc)"; echo "$out" | tail -5; fail=1; fi
 done
+# the pipeline's own database tests: a skipped part, or no pipeline found to run them in, is a failure too (WE DO NOT
+# SKIP; audit 2026-11-27: both passed with exit 0)
 DB=""; for d in ../database ../shadowserver; do [ -f "$d/tests/test_report_names.py" ] && [ -x "$d/.venv/bin/python" ] && DB=$d && break; done
-if [ -n "$DB" ]; then
+if [ -z "$DB" ]; then
+  printf '%-45s %s\n' "pipeline: tests/test_report_names.py" "FAILED (not run: no ../database or ../shadowserver with tests/ and .venv)"; fail=1
+else
   printf '%-45s ' "pipeline: tests/test_report_names.py"; out=$(cd "$DB" && .venv/bin/python tests/test_report_names.py 2>&1); rc=$?
   if [ $rc = 0 ] && ! echo "$out" | grep -q skipped; then echo passed
-  elif [ $rc = 0 ]; then echo "passed, but some tests skipped:"; echo "$out" | grep -i skip | head -3
+  elif [ $rc = 0 ] || [ $rc = 77 ]; then echo "FAILED (some tests skipped):"; echo "$out" | grep -i skip | head -3; fail=1
   else echo "FAILED ($rc)"; echo "$out" | tail -5; fail=1; fi
   if [ -f "$DB/tests/test_quarterly_purge.py" ]; then
     printf '%-45s ' "pipeline: tests/test_quarterly_purge.py"; out=$(cd "$DB" && .venv/bin/python tests/test_quarterly_purge.py 2>&1); rc=$?
     if [ $rc = 0 ] && ! echo "$out" | grep -q SKIPPED; then echo passed
-    elif [ $rc = 0 ]; then echo "passed, but the database part was skipped"
+    elif [ $rc = 0 ] || [ $rc = 77 ]; then echo "FAILED (the database part was skipped)"; fail=1
     else echo "FAILED ($rc)"; echo "$out" | tail -5; fail=1; fi
   fi
 fi

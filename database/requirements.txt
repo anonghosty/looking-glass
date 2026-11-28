@@ -1,4 +1,10 @@
+# Each library is allowed up to (not including) its next major version, as the platform's requirements.txt explains;
+# tools/lock_requirements.sh turns this into requirements.lock, which is what deploy.sh installs.
 pymongo>=4.15,<5
 requests>=2.32,<3
-cryptography>=42
+# the senders' signature checks (mail_auth.py) and the Gmail service-account sign-in (mail_sources.py); capped like
+# the platform's copy
+cryptography>=42,<51
 dnspython>=2.6,<3
+# the download retries (shadowserver_pipeline.py imports its Retry): named here, not only reached through requests
+urllib3>=2.8,<3

@@ -12,7 +12,6 @@ body.settings-page .hud { position: sticky; top: 0; }
 @media (max-width: 420px) { .st-field select, .st-field .lgs { min-width: 0; width: 100%; } }
 /* on a phone: the country's map and its region list shrink to the screen; long buttons wrap */
 .st-country > * { min-width: 0; }
-@media (max-width: 860px) { .st-country { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 520px) { .pp-card .lg-btn { white-space: normal; text-align: left; max-width: 100%; } }
 .st-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
 /* the researchers' work moved to /definitions: a signpost where it used to be */
@@ -51,7 +50,7 @@ body.settings-page .hud { position: sticky; top: 0; }
 .st-apply { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; align-items: center; gap: 12px; padding: 12px max(16px, calc((100vw - 1180px) / 2 + 16px));
   background: rgba(14,14,17,.96); border-top: 1px solid var(--border-strong); backdrop-filter: blur(8px); }
 .st-apply-text { flex: 1; display: flex; flex-direction: column; gap: 2px; font-size: 13px; min-width: 0; }
-.st-apply-text .muted { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-apply-text .muted { font-size: 12px; overflow-wrap: anywhere; }
 .st-apply.dirty { border-top-color: rgba(245,181,74,.7); }
 .st-apply.dirty #applyState { color: #f5b54a; }
 .st-apply.done #applyState { color: #3dd68c; }
@@ -85,13 +84,6 @@ body.settings-page .hud { position: sticky; top: 0; }
 
 /* Malware names: definitions and references */
 .kb-head h2 { margin: 0; flex: 1; }
-.kb-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 6px; }
-.kb-tabs b { margin-left: 4px; font-variant-numeric: tabular-nums; }
-.kb-status { font-size: 12.5px; min-height: 1em; margin: 4px 0 8px; }
-.kb-table { max-height: 420px; }
-.kb-table td { vertical-align: top; font-size: 12.5px; }
-.kb-table td.def { color: var(--text-2); max-width: 420px; }
-.kb-table .ok { color: #3dd68c; } .kb-table .warn { color: #f5b54a; }
 .kb-modal { width: min(720px, calc(100vw - 32px)); }
 .kb-form { display: grid; gap: 10px; }
 .kb-form input, .kb-form textarea { padding: 7px 10px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: inherit; font-size: 13px; }
@@ -106,16 +98,10 @@ body.settings-page .hud { position: sticky; top: 0; }
 .kb-mp-hits .pill-btn { font-family: var(--mono); font-size: 12px; } .kb-mp-hits .muted { font-size: 12px; }
 .kb-mp-note { font-size: 11.5px; }
 .kb-only .st-main { padding-bottom: 40px; }
-.kb-table .bad { color: #ff8a8f; font-weight: 600; }
 /* Network names editor */
 .net-table input, .net-table select { width: 100%; min-width: 120px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: inherit; font-size: 12.5px; }
 .net-table td { vertical-align: middle; }
 #netEdSearch { max-width: 300px; }
-.net-add { margin: 6px 0 8px; font-size: 13px; }
-.net-add summary { cursor: pointer; color: var(--text-2); }
-.net-add input { padding: 6px 9px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: inherit; min-width: 240px; }
-.net-type { display: inline-block; padding: 1px 7px; margin: 2px 0; border: 1px solid var(--border); border-radius: 999px; font-size: 11.5px; }
-.net-type.own { border-color: rgba(139, 92, 246, .5); color: #c4b5fd; }
 #netTypeMsg.ok { color: #3dd68c; } #netTypeMsg.bad { color: #ff8a8f; }
 
 /* ===== Researchers' work: infections & categories, issues (redesign) ===== */
@@ -304,10 +290,6 @@ body.settings-page .hud { position: sticky; top: 0; }
 #sevMore:empty { display: none; }
 
 /* Settings → Organisation → Sign-in page logo (neutral.py): like the page's other boxes, not the browser's fieldset */
-.org-signin { margin: 18px 0 0; padding: 12px 16px 14px; border: 1px solid var(--border, rgba(255, 255, 255, .08)); border-radius: 12px;
-  background: rgba(255, 255, 255, .02); display: grid; gap: 8px; }
-.org-signin legend { padding: 0 6px; font-size: 13px; font-weight: 600; color: var(--text, #e8e9ee); }
-.org-signin .st-field { max-width: 420px; }
 /* Admin → Users → Add a person (invites-admin.js) */
 .adm-invite { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border, rgba(255, 255, 255, .08)); }
 .adm-invite h3 { margin: 0 0 6px; font-size: 15px; }
@@ -359,7 +341,6 @@ body.settings-page .hud { position: sticky; top: 0; }
 .ci-card .ci-acts { display: flex; flex-wrap: wrap; gap: 8px; }
 .ci-card .ci-acts .lg-btn, .ci-card .ci-acts .pill-btn { white-space: normal; text-align: left; }
 .ci-card .st-hint.bad { color: #ff8a8f; }
-.ci-card .ci-list { margin: 4px 0 10px 18px; padding: 0; overflow-wrap: anywhere; }
 .ci-card pre.st-env { white-space: pre-wrap; overflow-wrap: anywhere; }
 /* Settings -> Update (platform-update.js): the buttons, where the run stands, and its steps (full text, wrapped) */
 .up-pane .up-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
@@ -374,3 +355,12 @@ body.settings-page .hud { position: sticky; top: 0; }
 .up-pane .up-l.up-bad .up-m { color: #ff8a8f; }
 .up-pane .up-l.up-ok .up-m { color: #7fd99a; }
 @media (max-width: 640px) { .up-pane .up-l { grid-template-columns: 1fr; gap: 0; } }
+
+/* the definitions tables' "What it is" / "Definition" column keeps room for its text (docs screenshots 2026-11-27: a
+   CVE description stood in a column about 12 letters wide): words break only when one alone is too long */
+.dz-table td.dz-def { min-width: 260px; }
+.dz-def .dz-what-d { overflow-wrap: break-word; }
+@media (max-width: 700px) { .dz-table td.dz-def { min-width: 220px; } }
+/* ...and the row's buttons stack when the row has no room for them side by side, never pushed past the table's edge */
+.dz-table td.dz-act { white-space: normal; }
+.dz-table td.dz-act .lg-btn { display: inline-flex; margin: 3px 0 3px 6px; }

@@ -49,17 +49,24 @@
       const shown = edits.has(i.key) ? edits.get(i.key) : (i.saved != null ? i.saved : i.value);
       inp.value = shown;
       inp.setAttribute("aria-describedby", `${id}_meta`);
+      // outside its range: marked, and Save stays off (also for a value kept from before a redraw)
+      const check = () => {
+        const n = Number(inp.value);
+        inp.classList.toggle("bad", inp.value !== "" && (!Number.isFinite(n) || n < i.min || n > i.max || (i.kind !== "float" && !Number.isInteger(n))));
+      };
+      check();
       inp.addEventListener("input", () => {
         const base = i.saved != null ? String(i.saved) : String(i.value);
         if (inp.value === base) edits.delete(i.key); else edits.set(i.key, inp.value);
-        const n = Number(inp.value);
-        inp.classList.toggle("bad", inp.value !== "" && (!Number.isFinite(n) || n < i.min || n > i.max || (i.kind !== "float" && !Number.isInteger(n))));
+        check();
         state();
       });
       const back = el("button", "pill-btn cf-back", "Use the default");
       back.type = "button"; back.title = `Forget the value kept here: ${fmt(i.default)} unless .env sets another`;
       back.hidden = i.saved == null;
-      back.addEventListener("click", () => { edits.set(i.key, ""); inp.value = ""; inp.placeholder = `default ${fmt(i.default)}`; state(); });
+      // back to the default: the value typed before is gone, so is its "outside its range" mark (2026-11-27 audit: it
+      // stayed, and Save stayed off)
+      back.addEventListener("click", () => { edits.set(i.key, ""); inp.value = ""; inp.placeholder = `default ${fmt(i.default)}`; check(); state(); });
       line.append(inp, back);
       const meta = el("small", "muted cf-meta",
         `In use: ${fmt(i.value)} (${sourceText(i)}) · default ${fmt(i.default)} · from ${fmt(i.min)} to ${fmt(i.max)}`);
@@ -132,7 +139,11 @@
       S = await api("/api/admin/config", { values });
       edits.clear(); draw();
       say(S.pending_restart ? "Saved. It applies after a restart: use Restart now when it suits (about a minute)." : "Saved.");
-    } catch (e) { say(window.LGLoader.errorText(e, true), true); state(); }
+    } catch (e) {
+      // the buttons back first, then the server's refusal in its own words, so "N changes not saved yet" never hides
+      // why the save was refused (2026-11-26); the changes stay in the boxes to correct or undo
+      state(); say(window.LGLoader.errorText(e, true), true);
+    }
   });
   undo.addEventListener("click", () => { edits.clear(); draw(); say(""); });
 

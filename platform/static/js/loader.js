@@ -567,6 +567,34 @@
   // reports by device; the same text as device_note.py (tests/check_device_note.py keeps them equal)
   window.LG_DEVICE_NOTE = "Devices are matched by IP address, as Shadowserver reports them: one address can sometimes be several devices (NAT, shared mobile connections).";
   window.lgDeviceNote = () => { const p = document.createElement("p"); p.className = "lg-device-note"; p.textContent = window.LG_DEVICE_NOTE; return p; };
+  // Shares and cut lists in words that never mislead (the user, 2026-11-26: "nothing gets missing on the whole
+  // platform"), the same rules as shares.py on the server, for every page:
+  //   LGShare.pct(x, d)  a part that has records is never "0%", a part of the whole is never "100%": "<1%", ">99%"
+  //                      (d decimals: "<0.1%", ">99.9%"); x is a fraction (0..1)
+  //   LGShare.of(part, total, d)  the same for a count of a total (total 0: "0%")
+  //   LGShare.cut(shown, total, noun)  "Top 8 of 23 networks" when a list is cut, "" when every one is shown
+  //   LGShare.other(rows, total, key)  what the rows leave out of the total (an "Other" row's count), never below 0
+  // rounded half up, the same text as shares.py for the same share (Bend law f compares them)
+  const digits = (r, d) => { if (!d) return String(r); const s = String(r).padStart(d + 1, "0"); return `${s.slice(0, -d)}.${s.slice(-d)}`; };
+  const words = (r, d, pos, part) => {
+    const whole = 100 * 10 ** d;
+    if (pos && r <= 0) return `<${digits(1, d)}%`;
+    if (part && r >= whole) return `>${digits(whole - 1, d)}%`;
+    return `${digits(r, d)}%`;
+  };
+  window.LGShare = {
+    pct(x, d = 0) { x = Number(x) || 0; return words(Math.floor(x * 100 * 10 ** d + 0.5), d, x > 0, x < 1); },
+    of(part, total, d = 0) {
+      part = Number(part) || 0; total = Number(total) || 0;
+      return total > 0 ? words(Math.floor((2 * part * 100 * 10 ** d + total) / (2 * total)), d, part > 0, part < total) : "0%";
+    },
+    cut(shown, total, noun = "") {
+      return total > shown ? `Top ${shown.toLocaleString()} of ${total.toLocaleString()}${noun ? " " + noun : ""}` : "";
+    },
+    other(rows, total, key = "count") {
+      return Math.max(0, (Number(total) || 0) - (rows || []).reduce((a, r) => a + (Number(r[key]) || 0), 0));
+    },
+  };
   const start = () => { mark(document); new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) mark(n.parentElement || n); }).observe(document.body, { childList: true, subtree: true }); };
   if (document.body) start(); else document.addEventListener("DOMContentLoaded", start);
 })();

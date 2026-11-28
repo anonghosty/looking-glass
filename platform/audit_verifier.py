@@ -133,10 +133,11 @@ def when(t):
 def _pre_chain(lines):
     for i, ln in enumerate(lines):
         try:
-            if "prev" in json.loads(ln):
-                return lines[:i]
+            rec = json.loads(ln)
         except ValueError:
-            pass
+            continue
+        if isinstance(rec, dict) and "prev" in rec:     # valid JSON that is not an entry (5, "x", [..]) is no entry
+            return lines[:i]
     return []
 
 
@@ -310,7 +311,7 @@ def check(folder, earlier=None, gap_days=30, checkpoints=None, extra_keys=None):
                 rec = json.loads(ln)
             except ValueError:
                 continue
-            m = _SEAL_RX.search(str(rec.get("detail") or "")) if rec.get("event") == "audit_sealed" else None
+            m = _SEAL_RX.search(str(rec.get("detail") or "")) if isinstance(rec, dict) and rec.get("event") == "audit_sealed" else None
             if m:
                 chain_seal = {"entries": int(m.group(1)), "sha256": m.group(2)}
     if chain_seal:
@@ -503,7 +504,8 @@ def check(folder, earlier=None, gap_days=30, checkpoints=None, extra_keys=None):
             if x == h:
                 found = {"entry": gone + i + 1, "where": "kept"}
                 try:
-                    found["t"] = json.loads(lines[i]).get("t")
+                    rec = json.loads(lines[i])
+                    found["t"] = rec.get("t") if isinstance(rec, dict) else None
                 except ValueError:
                     pass
                 break

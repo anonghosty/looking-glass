@@ -26,6 +26,8 @@ from collections import OrderedDict
 
 MAX_ENTRIES = 200
 TTL_MAX = 3600
+# the longest a request waits for another one computing the same answer; then it works the answer out itself
+WAIT_S = 120
 # the time chosen on Settings → Task monitor (data/performance.json) takes precedence over .env; read when it changes
 OVERRIDE = {"path": None, "mtime": None, "ttl": None}
 
@@ -140,19 +142,29 @@ class ResponseCache:
             if e and e[1] == gen and time.time() - e[0] < limit:
                 self.stats["hit"] += 1
                 return answer(e)
+            # the key's lock, with how many requests use it: the last one out removes it, so the table holds only the
+            # keys being worked on now (audit 2026-11-27: a lock per key was kept for good, one per address ever asked)
             with self.lock:
-                klock = self.locks.setdefault(key, threading.Lock())
-            if e and e[1] == gen and not klock.acquire(blocking=False):
-                self.stats["stale"] += 1          # someone is computing it: the last answer now, not a queue
-                return answer(e)
-            if not (e and e[1] == gen):
-                klock.acquire()                     # nothing usable yet: wait for the one computing it
-                e2, gen2 = self._get(key)
-                if e2 and e2[1] == gen2 and time.time() - e2[0] < limit:
-                    klock.release()
-                    self.stats["hit"] += 1
-                    return answer(e2)
+                slot = self.locks.get(key)
+                if slot is None:
+                    slot = self.locks[key] = [threading.Lock(), 0]
+                slot[1] += 1
+            klock, held = slot[0], False
             try:
+                if e and e[1] == gen:
+                    held = klock.acquire(blocking=False)
+                    if not held:
+                        self.stats["stale"] += 1      # someone is computing it: the last answer now, not a queue
+                        return answer(e)
+                else:
+                    # nothing usable yet: wait for the one computing it, but never for good (audit 2026-11-27: a hung
+                    # computation held every later request of the key): after WAIT_S it is worked out here
+                    held = klock.acquire(timeout=WAIT_S)
+                    if held:
+                        e2, gen2 = self._get(key)
+                        if e2 and e2[1] == gen2 and time.time() - e2[0] < limit:
+                            self.stats["hit"] += 1
+                            return answer(e2)
                 self.stats["miss"] += 1
                 started_gen = self.gen
                 resp = app.make_response(view(*a, **kw))
@@ -161,7 +173,12 @@ class ResponseCache:
                     self._put(key, (time.time(), started_gen, 200, headers, resp.get_data()))
                 return resp
             finally:
-                klock.release()
+                if held:
+                    klock.release()
+                with self.lock:
+                    slot[1] -= 1
+                    if slot[1] <= 0 and self.locks.get(key) is slot:
+                        del self.locks[key]
 
         app.view_functions[endpoint] = cached
 

@@ -44,17 +44,37 @@ n=1; base="$stamp"
 while ls "$dest/$name-$stamp".tar.gz* >/dev/null 2>&1; do n=$((n + 1)); stamp="$base-$n"; done
 py="$project/.venv/bin/python"; [ -x "$py" ] || py=python3
 umask 077
+# the archive, to FILE (or - for stdout). GNU tar's exit code 1 means "a file changed while it was read" (the running
+# service appends to its audit log and sessions): the archive is complete, that file as it was at that moment. Said, and
+# the backup goes on to its checksum and signature; any other failure stops it (audit 2026-11-27: exit 1 deleted the
+# encrypted archive, and left the unencrypted one without its checksum and signature)
+make_tar() {
+  local rc=0 out="$1" errf changed
+  # tar's messages are kept (only its messages, never file contents) to name the files it reported, then shown as they were
+  errf="$(mktemp)"
+  tar -C "$(dirname "$project")" --exclude="$name/.venv" --exclude="$name/.venvs" --exclude='__pycache__' \
+      --exclude="$name/data/audit_signing/signing_key" --exclude="$name/data/audit_signing/.lock" -czf "$out" "$name" 2> "$errf" || rc=$?
+  cat "$errf" >&2
+  if [ "$rc" = 1 ]; then
+    # GNU tar: "tar: FILE: file changed as we read it", "...: File shrank by N bytes; padding with zeros",
+    # "...: File removed before we read it" (review 2026-11-28: name them, never only "a file")
+    changed="$(sed -n -e 's/^tar: \(.*\): file changed as we read it$/\1/p' -e 's/^tar: \(.*\): File shrank by .*$/\1/p' \
+                      -e 's/^tar: \(.*\): File removed before we read it$/\1/p' "$errf" | sort -u | paste -sd, - | sed 's/,/, /g')"
+    rm -f "$errf"
+    echo "note: a file changed while it was being read (the service was writing it): the backup may be incomplete for these files: ${changed:-(tar did not name them; see its messages above)}. The backup is kept." >&2
+    return 0
+  fi
+  rm -f "$errf"
+  return "$rc"
+}
 if [ "$plain" = 1 ]; then
   out="$dest/$name-$stamp.tar.gz"
   echo "WARNING: an UNENCRYPTED backup (--unencrypted): anyone who gets this file can read .env and the accounts." >&2
-  tar -C "$(dirname "$project")" --exclude="$name/.venv" --exclude="$name/.venvs" --exclude='__pycache__' \
-      --exclude="$name/data/audit_signing/signing_key" --exclude="$name/data/audit_signing/.lock" -czf "$out" "$name"
+  make_tar "$out" || { rm -f "$out"; echo "NOT BACKED UP: the archive could not be made (see above)" >&2; exit 3; }
 else
   kind="$(bc_kind "$key")"
   out="$dest/$name-$stamp.tar.gz$(bc_ext "$kind")"
-  tar -C "$(dirname "$project")" --exclude="$name/.venv" --exclude="$name/.venvs" --exclude='__pycache__' \
-      --exclude="$name/data/audit_signing/signing_key" --exclude="$name/data/audit_signing/.lock" -czf - "$name" \
-    | bc_encrypt "$key" > "$out" || { rm -f "$out"; echo "NOT BACKED UP: encryption failed (see above)" >&2; exit 3; }
+  make_tar - | bc_encrypt "$key" > "$out" || { rm -f "$out"; echo "NOT BACKED UP: the archive or its encryption failed (see above)" >&2; exit 3; }
   echo "encrypted ($kind) to the public key in $key"
 fi
 chmod 600 "$out"

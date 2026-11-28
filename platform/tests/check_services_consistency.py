@@ -4,7 +4,7 @@
 endpoint must agree (stats, analysis, regions, replayed, stream over the whole day, drill-down lists), in normal and
 demo mode. Read-only; runs against the live service.
 
-Usage: .venv/bin/python tests/check_services_consistency.py [YYYY-MM-DD]   (default: yesterday UTC)
+Usage: .venv/bin/python tests/check_services_consistency.py [YYYY-MM-DD]   (default: the day the service replays)
 Exit code: 0 all consistent, 1 any mismatch (so tests/run_all_checks.sh reports it), 77 skipped (no services data
 for the day yet, e.g. a fresh install). Before 2026-11-11 it printed FAIL lines but always exited 0.
 """
@@ -17,7 +17,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
-day = sys.argv[1] if len(sys.argv) > 1 else (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+day = sys.argv[1] if len(sys.argv) > 1 else lgauth.replay_day()    # the day the service replays (lgauth.replay_day)
 start = datetime.fromisoformat(day).replace(tzinfo=timezone.utc)
 end_at = (start + timedelta(hours=23, minutes=59, seconds=59)).isoformat().replace("+00:00", "Z")
 at = (start + timedelta(hours=12)).isoformat().replace("+00:00", "Z")

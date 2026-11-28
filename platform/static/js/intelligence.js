@@ -140,7 +140,10 @@
     fetchView(true);
   }
 
+  // only the newest read draws: a slower, older answer (another day, a chip removed) never draws over a newer one
+  let viewSeq = 0;
   async function fetchView(scroll) {
+    const seq = ++viewSeq;
     const pane = $("itView"); pane.hidden = false;
     pane.replaceChildren(el("div", "st-loading", "Reading the report's records…"));
     if (scroll) pane.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -148,7 +151,8 @@
     // the platform's loading animation while the records are read (2026-11-14: the page showed only a line of text)
     window.LGLoader?.busy("Reading the report's records");
     try { r = await postJSON("/api/intelligence/report", body()); d = await r.json().catch(() => ({})); }
-    catch (e) { window.LGLoader?.ready(); pane.replaceChildren(el("p", "fd-empty", `Could not read it: ${window.LGLoader.errorText(e)}`)); return; }
+    catch (e) { if (seq !== viewSeq) return; window.LGLoader?.ready(); pane.replaceChildren(el("p", "fd-empty", `Could not read it: ${window.LGLoader.errorText(e)}`)); return; }
+    if (seq !== viewSeq) return;              // a newer read is under way: it draws, and ends the loading animation
     window.LGLoader?.ready();
     if (!r.ok) { pane.replaceChildren(el("p", "fd-empty", d.error || `Could not read it (HTTP ${r.status})`)); return; }
     drawView(pane, d);
@@ -169,6 +173,9 @@
     close.addEventListener("click", () => { pane.hidden = true; pane.replaceChildren(); });
     right.append(sel, close); head.append(t, right); pane.append(head);
     pane.append(el("p", "it-range", d.total ? `Records reported by Shadowserver on ${dayLabel(d.day)}, inside the constituency` : `No records for ${dayLabel(d.day)} with this selection`));
+    // which day the figures are of: the report's file date, and the days its records carry (count audit round 2)
+    const dated = String((d.dated && d.dated.text) || "").trim();
+    if (dated) pane.append(el("p", "it-range it-dated", dated));
     // the selection, as chips (each removable), and a free text
     const parts = el("div", "i-parts it-parts");
     const nf = Object.values(view.filters).reduce((s, v) => s + v.length, 0) + (view.q ? 1 : 0);
@@ -213,7 +220,7 @@
       ul.append(el("li", null, `${pl(d.total, "record")}${d.no_ip ? "" : ` from ${pl(st.hosts ?? d.hosts, "host")} in ${pl(st.networks || 0, "network")}`} on ${dayLabel(d.day)}.`));
       for (const fc of d.facets.slice(0, 4)) {
         const top = fc.values[0]; if (!top) continue;
-        ul.append(el("li", null, `Most common ${fc.label.toLowerCase()}: ${top.label || top.value} (${pl(top.rows, "record")}, ${Math.round((top.rows / d.total) * 100)}%).`));
+        ul.append(el("li", null, `Most common ${fc.label.toLowerCase()}: ${top.label || top.value} (${pl(top.rows, "record")}, ${window.LGShare.of(top.rows, d.total)}).`));
       }
       f.append(ul); pane.append(f);
     }
@@ -228,7 +235,8 @@
           lab.title = `${v.label || v.value}: ${pl(v.rows, "record")}`; bl.append(lab);
           const share = d.total ? v.rows / d.total : 0;
           const bs = el("span", "bs"); const bi = el("i"); bi.style.width = `${Math.max(2, share * 100)}%`; bs.append(bi);
-          li.append(bl, bs, el("span", "bv", `${Math.round(share * 100)}%`));
+          // never "0%" for a value with records, never "100%" for a part (loader.js LGShare)
+          li.append(bl, bs, el("span", "bv", window.LGShare.pct(share)));
           const on = (view.filters[fc.key] || []).includes(v.value);
           if (!on) {
             li.classList.add("click"); li.tabIndex = 0; li.setAttribute("role", "button");
@@ -346,16 +354,21 @@
   }
 
   // ------------------------------------------------------------------ a host's cross-view
+  // one Escape listener at a time: the last box's goes when it closes, however it closes (2026-11-27 audit: each box
+  // opened left its listener behind unless Escape closed it)
+  let hostKey = null;
   async function hostView(ip, from) {
     let box = document.querySelector(".it-host");
     if (box) box.remove();
+    if (hostKey) { document.removeEventListener("keydown", hostKey); hostKey = null; }
     box = el("aside", "it-host"); box.setAttribute("role", "dialog"); box.setAttribute("aria-label", `What ${ip} carries`);
     const head = el("header"); head.append(el("b", null, ip));
-    const x = el("button", "lg-btn sm", "Close"); x.type = "button"; x.addEventListener("click", () => { box.remove(); from?.focus(); });
+    const shut = () => { box.remove(); from?.focus(); if (hostKey === onKey) { document.removeEventListener("keydown", onKey); hostKey = null; } };
+    const onKey = (e) => { if (e.key === "Escape") shut(); };
+    const x = el("button", "lg-btn sm", "Close"); x.type = "button"; x.addEventListener("click", shut);
     head.append(x); box.append(head, el("div", "st-loading", "Following this host through the week's reports…"));
     document.body.append(box); x.focus();
-    const onKey = (e) => { if (e.key === "Escape") { box.remove(); from?.focus(); document.removeEventListener("keydown", onKey); } };
-    document.addEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey); hostKey = onKey;
     let r, d;
     window.LGLoader?.busy("Following this host through the week's reports");
     try { r = await postJSON("/api/intelligence/host", { ip }); d = await r.json().catch(() => ({})); }

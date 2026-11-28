@@ -768,16 +768,24 @@ def _decode_once(url):
 _CACHE, _CACHE_LOCK, _CACHE_MAX = collections.OrderedDict(), threading.Lock(), 4096
 
 
+def _key(url):
+    """The caches' key for a request line: its SHA-256, not the line (up to MAX_URL characters each, thousands kept:
+    audit 2026-11-27)."""
+    import hashlib
+    return hashlib.sha256(str(url).encode("utf-8", "surrogatepass")).hexdigest()
+
+
 def _decode_cached(url):
+    k = _key(url)
     with _CACHE_LOCK:
-        hit = _CACHE.get(url)
+        hit = _CACHE.get(k)
         if hit is not None:
-            _CACHE.move_to_end(url)
+            _CACHE.move_to_end(k)
             return hit
     out, finished = _decode_once(url)
     if finished:
         with _CACHE_LOCK:
-            _CACHE[url] = out
+            _CACHE[k] = out
             while len(_CACHE) > _CACHE_MAX:
                 _CACHE.popitem(last=False)
     return out
@@ -787,7 +795,7 @@ def decode_finished(url):
     """True when this request line's decode finished (its answer is kept): only then is a value that did not decode at a
     format's own place reported as "did not decode"."""
     with _CACHE_LOCK:
-        return str(url) in _CACHE
+        return _key(url) in _CACHE
 
 
 _decode_cached.cache_clear = lambda: _CACHE.clear()
@@ -935,7 +943,7 @@ _SUMMARY, _SUMMARY_MAX = collections.OrderedDict(), 16384
 def _summary(url, host):
     """The public summary of a request's beacon, kept only once its decode finished (a decode cut short by the budget
     is worked out again next time, never kept as "no beacon": 2026-11-17)."""
-    k = (url, host)
+    k = (_key(url), host)
     with _CACHE_LOCK:
         hit = _SUMMARY.get(k)
         if hit is not None:
@@ -1007,9 +1015,9 @@ def mask_url(url):
             label = f"<{here} beacon>"
         elif opaque and len(value) >= 16:               # host not known here: masked wherever its path and parameter are
             label = f"<{opaque} value>"
-        elif MIN_BLOB <= len(value) <= MAX_BLOB and _BLOB.fullmatch(value):
+        elif len(value) >= MIN_BLOB and _BLOB.fullmatch(value):
             # decoded by a format, by the generic fallback, or by nothing yet: a long encoded value may carry the device's
-            # own data, so a masked view never shows it
+            # own data, so a masked view never shows it, at any length (audit 2026-11-27: one over MAX_BLOB was shown)
             label = f"<{got[param]} beacon>" if got.get(param) not in (None, "generic") else "<encoded value>"
         if label:
             parts[i] = f"{k}={label}"

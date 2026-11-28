@@ -116,14 +116,15 @@
     // the checks carry evidence, not a verdict: the auditor decides
     top.append(kpi("Control checks", fmt(d.checks.length), `evidence for ${nistN} NIST controls · ${cisBacked.size} CIS safeguards backed by a check (${cisAll.size - cisBacked.size} more related by CIS's mapping)`),
       kpi("Audit log", d.integrity.ok ? "Unbroken" : "Broken", `${fmt(d.integrity.entries)} entries kept`, d.integrity.ok ? "good" : "bad"),
-      kpi("Sign-ins", fmt(k.signins), `${fmt(k.people)} people`), kpi("Failed sign-ins", fmt(k.failed), `${k.failure_rate} % of attempts`, k.failed ? "warn" : ""),
+      // the share from the counts (LGShare): 1 failure in 43,281 attempts is "<0.1%", never "0.0 %" (2026-11-26)
+      kpi("Sign-ins", fmt(k.signins), `${fmt(k.people)} people`), kpi("Failed sign-ins", fmt(k.failed), `${window.LGShare.of(k.failed || 0, (k.signins || 0) + (k.failed || 0), 1)} of attempts`, k.failed ? "warn" : ""),
       kpi("Lockouts", fmt(k.lockouts), null, k.lockouts ? "warn" : ""), kpi("Privileged changes", fmt(k.privileged), "roles, accounts, settings"),
       kpi("Exports", fmt(k.exports), "reports, CSV, evidence"), kpi("Outside working hours", fmt(k.after_hours), `sign-ins outside ${String(d.work_hours[0]).padStart(2, "0")}:00–${String(d.work_hours[1]).padStart(2, "0")}:00 UTC`, k.after_hours ? "warn" : ""));
     body.append(el("p", "au-sub", `${d.period.from} to ${d.period.to} (UTC) · ${fmt(k.events)} events, self-test left out · access mode: ${d.access_mode}`
       + (d.started ? ` · system started ${d.started} (running ${fmt(d.running_days)} day${d.running_days === 1 ? "" : "s"})` : "")), top);
 
     // the control checks, by area
-    const cc = card("Control checks", `Automated checks of Looking Glass's own controls (LG-01…), each mapped to the ${d.nist_release || "NIST SP 800-53 Rev. 5"} controls it supports and, through them, to the ${d.cis_release || "CIS Controls v8.1"} safeguards of CIS's own official mapping (each with the NIST control it comes through and CIS's relationship: equivalent, subset or superset), with its evidence. Next to CIS's safeguards, and kept apart from them, Looking Glass's own reading of each: backed (the check produces evidence for the safeguard as CIS words it), related (CIS's mapping relates it; nothing more is claimed) or not backed (with the reason). ${d.cis_note || "The CIS Controls are used here as a map, to guide Looking Glass's security and make the auditor's work easier. They are voluntary best practice, not a law or a requirement, and CIS issues no certificate for meeting them: organisations measure themselves with CIS's free Self Assessment Tool (CSAT) or with an auditor, and those that need a formal certificate usually go for ISO 27001 or SOC 2, with the CIS Controls as a guide."} They give no pass or fail: the conclusion is the auditor's. Click a check to open the records behind it; the PDF report carries the same, with its scope and limits.`);
+    const cc = card("Control checks", `Automated checks of Looking Glass's own controls (numbered from LG-01), each mapped to the ${d.nist_release || "NIST SP 800-53 Rev. 5"} controls it supports and, through them, to the ${d.cis_release || "CIS Controls v8.1"} safeguards of CIS's own official mapping (each with the NIST control it comes through and CIS's relationship: equivalent, subset or superset), with its evidence. Next to CIS's safeguards, and kept apart from them, Looking Glass's own reading of each: backed (the check produces evidence for the safeguard as CIS words it), related (CIS's mapping relates it; nothing more is claimed) or not backed (with the reason). ${d.cis_note || "The CIS Controls are used here as a map, to guide Looking Glass's security and make the auditor's work easier. They are voluntary best practice, not a law or a requirement, and CIS issues no certificate for meeting them: organisations measure themselves with CIS's free Self Assessment Tool (CSAT) or with an auditor, and those that need a formal certificate usually go for ISO 27001 or SOC 2, with the CIS Controls as a guide."} They give no pass or fail: the conclusion is the auditor's. Click a check to open the records behind it; the PDF report carries the same, with its scope and limits.`);
     const areas = [...new Set(d.checks.map((c) => c.area))];
     for (const a of areas) {
       const g = el("div", "au-check-g"); g.append(el("h4", null, a));
@@ -177,10 +178,29 @@
     const c1 = card("Sign-ins per day"); c1.append(dayChart(d.per_day), legend([["au-c-ok", "signed in"], ["au-c-fail", "failed"], ["au-c-lock", "locked out"]]));
     const c2 = card("Sign-ins by hour of the day (UTC)", "The shaded band is working hours (AUDIT_WORK_HOURS)."); c2.append(hourChart(d.hours, d.work_hours), legend([["au-c-ok", "within working hours"], ["au-c-late", "outside"]]));
     const c3 = card("Events by kind"); c3.append(bars(d.tabs.map((t) => ({ label: t.label, n: t.n })), "n"));
+    // the server sends the top 8 addresses and exporters: their full counts (d.totals, audit_portal.py) say when more
+    // are left out, with the log tab that holds every one (insider deterrence; 2026-11-26: no word that it was cut)
+    const tot = d.totals || {};
+    const cutNote = (shown, total, noun, tab) => {
+      const words = window.LGShare.cut(shown, total || shown, noun);
+      if (!words) return null;
+      const p = el("p", "au-sub au-cut"), b = el("button", "au-cut-go", `every one is in the ${TAB_NAMES[tab] || tab} tab`);
+      b.type = "button"; b.addEventListener("click", () => { show(tab); window.scrollTo({ top: 0, behavior: "smooth" }); });
+      p.append(`${words}: `, b); return p;
+    };
+    const withNote = (c, note) => { if (note) c.append(note); return c; };
     const c4 = card("Failed sign-ins by address", "Failed sign-ins, refusals and lockouts."); c4.append(bars(d.fail_sources.map((s) => ({ label: `${s.ip} · ${s.location}`, n: s.n })), "n"));
+    withNote(c4, cutNote(d.fail_sources.length, tot.fail_sources ?? d.fail_sources.length, "addresses", "auth"));
     const c5 = card("Exports by person"); c5.append(bars(d.exports_by.map((s) => ({ label: s.who, n: s.n })), "n"));
+    withNote(c5, cutNote(d.exports_by.length, tot.exports_by ?? d.exports_by.length, "people", "data"));
     const c6 = card("Recent privileged changes", "Roles, accounts, settings, Peace of mind, sessions ended.");
     c6.append(d.privileged_recent.length ? eventTable(d.privileged_recent, [["Time", (r) => r.when, "mono"], ["Change", (r) => r.label], ["By", (r) => r.user_label || r.user], ["Account", (r) => r.target_label || r.target || "–"], ["Detail", (r) => r.detail, "adm-detail"]]) : el("p", "muted", "None in the period."));
+    // the newest few of the period's privileged changes (k.privileged counts them all)
+    const privN = tot.privileged_recent ?? Math.max(d.privileged_recent.length, k.privileged || 0);
+    if (privN > d.privileged_recent.length) {
+      const p = el("p", "au-sub au-cut", `The newest ${fmt(d.privileged_recent.length)} of ${fmt(privN)} privileged changes in the period: every one is in the log tabs, marked as privileged.`);
+      c6.append(p);
+    }
     grid.append(c1, c2, c3, c4, c5, c6);
     body.append(cc, grid);
   }
@@ -236,7 +256,10 @@
       kpi("Waiting for approval", fmt(a.filter((x) => x.status === "pending").length)), kpi("Revoked", fmt(a.filter((x) => x.status === "disabled").length)));
     body.append(k);
     const c1 = card("Accounts", "Sorted by name. Flags: no authenticator, dormant, pending too long, every permission (administrators).");
-    c1.append(eventTable(a, [["Account", (x) => (x.full_name ? `${x.full_name} (${x.name})` : x.name)], ["Organisation", (x) => x.organisation || "–"], ["Role", (x) => x.role],
+    // the access review is audit evidence, like the audit trail: each account by its exact sign-in name, with the full
+    // name when there is one (the owner, 2026-11-27: an auditor checking who may do what needs the exact account)
+    const who = (name, full) => (full && full.toLowerCase() !== String(name || "").toLowerCase() ? `${full} (${name})` : name || full || "–");
+    c1.append(eventTable(a, [["Account", (x) => who(x.name, x.full_name)], ["Organisation", (x) => x.organisation || "–"], ["Role", (x) => x.role],
       ["Status", (x) => ({ active: "Active", pending: "Pending", disabled: "Revoked" }[x.status] || x.status)], ["Authenticator", (x) => (x.mfa ? `yes · ${x.recovery_left} recovery codes` : "NO")],
       ["Last sign-in", (x) => (x.last_login ? `${x.last_login} · ${x.last_login_location}` : "never"), "mono"], ["Approved", (x) => [x.approved_by, x.approved_at].filter(Boolean).join(" · ") || "–"],
       ["Signed in now", (x) => (x.sessions ? `${x.sessions} session(s)` : "–")], ["Flags", (x) => x.flags.join("; ") || "–", (x) => (x.flags.length ? "au-flags" : "muted")]]));
@@ -288,7 +311,8 @@
     const tb = $("sessionsTable").querySelector("tbody"); tb.replaceChildren();
     if (!d.sessions.length) { const tr = el("tr"); const td = el("td", "muted", "No active sessions."); td.colSpan = 7; tr.append(td); tb.append(tr); }
     for (const s of d.sessions) {
-      const tr = el("tr"); const who = el("td"); who.append(el("b", null, s.user)); if (s.current) who.append(el("span", "adm-you", " (this session)"));
+      // the full name, else the person code (audit 2026-11-27, 9-1): never the sign-in name
+      const tr = el("tr"); const who = el("td"); who.append(el("b", null, s.user_label || s.person_code || "–")); if (s.current) who.append(el("span", "adm-you", " (this session)"));
       const br = el("td", null, shortUA(s.browser)); br.title = s.browser || "";
       const type = el("td", "adm-meta"); type.append(el("div", null, s.persist ? "Stay signed in" : "Browser session"), el("div", "muted", `until ${fmtT(s.expires)}`));
       tr.append(who, el("td", "mono", s.ip), el("td", null, s.location), br, type, el("td", null, fmtT(s.created)), el("td", null, fmtAgo(s.idle_s)));

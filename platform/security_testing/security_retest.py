@@ -10,6 +10,7 @@ one, unchanged.
 
 Usage: .venv/bin/python security_testing/security_retest.py   (from the project folder, on the server)
 """
+import html as html_mod                 # "html" is the pages' text further down
 import http.cookiejar
 import json
 import re
@@ -168,6 +169,18 @@ UA = "LookingGlass-retest/1.0"
 
 
 SKIPS = []
+
+
+def verdict(fails, skips):
+    """(exit code, last line) of the run. A skipped check is a failed run (WE DO NOT SKIP; audit 2026-11-27: a run with
+    skips said "ALL PASSED" and exited 0): it names what was not checked and what the installation needs for it."""
+    if not fails and not skips:
+        return 0, "ALL PASSED"
+    bits = [f"{fails} FAILED"] if fails else []
+    if skips:
+        bits.append(f"{len(skips)} NOT CHECKED (a skipped check fails the run): " + "; ".join(skips)
+                    + ". Load reports into this installation (records in the replay window on both platforms) and run it again")
+    return 1, ", ".join(bits)
 
 
 def skip(label, why):
@@ -475,7 +488,13 @@ try:
     op3, (s, _), _ = login(ADMIN, apw, asec)
     must("login for the logout checks", s)
     s, _, _ = req(op3, "/logout"); s2, _, _ = req(op3, "/api/clock"); ok("GET /logout does not log out (no cross-site logout)", s2 == 200, str(s2))
-    s, _, _ = req(op3, "/logout", data=b"", method="POST"); s2, _, _ = req(op3, "/api/clock"); ok("POST /logout ends the session on the server", s2 == 401, str(s2))
+    # sign-out needs the page's own CSRF token (another site cannot sign someone out): without it the session stays
+    s, _, _ = req(op3, "/logout", data=b"", method="POST"); s2, _, _ = req(op3, "/api/clock")
+    ok("POST /logout without the page's token keeps the session (no forced sign-out)", s2 == 200, str(s2))
+    tok = csrf(op3)
+    s, _, _ = req(op3, "/logout", data=("csrf_token=" + urllib.parse.quote(tok)).encode(),
+                  headers={"Content-Type": "application/x-www-form-urlencoded"}, method="POST")
+    s2, _, _ = req(op3, "/api/clock"); ok("POST /logout with the page's token ends the session on the server", s2 == 401, str(s2))
 
     print("\nStay signed in")
     _, _, lp = req(anon, "/login?form=signin")
@@ -740,9 +759,12 @@ try:
         _, _, lp_ = req(anon, "/login?next=" + urllib.parse.quote(trick, safe=""))
         nv = re.search(r'name="next" value="([^"]*)"', lp_)
         if not nv and 'name="setup_code"' in lp_:
-            # no administrator yet: the page offers the first administrator's set-up, not a sign-in form, so there is no
-            # next= to keep (a fresh installation, 2026-11-19); the sign-in form is checked once an administrator exists
-            print(f"  SKIPPED sign-in keeps no foreign next= ({trick!r}): no administrator yet, no sign-in form")
+            # no administrator yet (a new installation): the page offers the first administrator's set-up, not a sign-in
+            # form. What is checked there, never skipped (2026-11-26): the foreign target is nowhere on the page, in no
+            # spelling (raw, quoted, HTML-escaped), so nothing on it can send anyone there
+            forms = {trick, urllib.parse.quote(trick, safe=""), html_mod.escape(trick), "evil.example"}
+            leak = sorted(f for f in forms if f.strip() and f.strip() in lp_)
+            ok(f"first run: the set-up page carries no foreign next= ({trick!r})", not leak, ", ".join(leak))
             continue
         ok(f"sign-in keeps no foreign next= ({trick!r})", bool(nv) and not re.match(r"^\s*(/[\\/\t\r\n]|[\\/]{2}|\w+:)", nv.group(1) if nv else "x"),
            nv.group(1) if nv else "no next field")
@@ -843,6 +865,6 @@ finally:
     if PUBLIC:
         print(f"temporary passkeys removed: {not any(_pks.count(n) for n in (ADMIN, VIEWER, 'lg-selftest-new', 'lg-selftest-res', 'lg-selftest-ext'))}")
     print(f"\ntemporary accounts removed: {not any(n in users.all() for n in (ADMIN, VIEWER, 'lg-selftest-res', 'lg-selftest-ext'))}")
-print(("\nALL PASSED" if not fails else f"\n{fails} FAILED")
-      + (f" ({len(SKIPS)} skipped until reports are loaded: run it again later)" if SKIPS else ""))
-sys.exit(1 if fails else 0)
+_code, _line = verdict(fails, SKIPS)
+print("\n" + _line)
+sys.exit(_code)

@@ -54,13 +54,69 @@ ok("no em or en dash in any label", not any(("—" in v or "–" in v) for v in 
 ok("label(): the file's words", field_labels.label("ip_header_urg") == labels.get("ip_header_urg") and "URG" in field_labels.label("ip_header_urg"))
 ok("label(): x:name is looked up by its name", field_labels.label("x:jarm") == labels.get("jarm"))
 ok("label(): an unknown field falls back to plain words", field_labels.label("made_up_new_field") == "Made up new field")
-js = open(os.path.join(HERE, "static", "js", "lg-fields.js"), encoding="utf-8").read()
-ok("lg-fields.js reads the same file and falls back the same way", "/static/data/field_labels.json" in js and 'replace(/_/g, " ")' in js)
-for tpl in ("index.html", "services.html", "intelligence.html"):
-    t = open(os.path.join(HERE, "templates", tpl), encoding="utf-8").read()
-    ok(f"{tpl} loads lg-fields.js before its page script", "js/lg-fields.js" in t)
-for f, needle in (("app.js", "LGFields.label"), ("services.js", "LGFields.label"), ("intelligence.js", "LGFields.label")):
-    ok(f"{f} labels the report's fields with it", needle in open(os.path.join(HERE, "static", "js", f), encoding="utf-8").read())
+# the page files that ship: the held copies in $LG_HELD_DIR when there are; node runs lg-fields.js on the same file
+sys.path.insert(0, os.path.join(HERE, "tests"))
+import html.parser  # noqa: E402
+
+import jinja2  # noqa: E402
+import page_harness as PH  # noqa: E402
+
+sample = sorted(labels)[::max(1, len(labels) // 60)] + ["x:jarm", "made_up_new_field", "ip_header_urg", "x:made_up", "_lead", "plain", ""]
+if PH.NODE:
+    R, raw = PH.run(r"""
+const DOC = JSON.parse(process.argv[1]).doc, asked = [];
+const myFetch = async (url) => { asked.push(String(url)); return { ok: true, status: 200, json: async () => DOC }; };
+((fetch) => {""" + PH.page_src("lg-fields.js") + r"""})(myFetch);
+(async () => { const early = LGFields.label("ip_header_urg"); await LGFields.ready;
+  console.log(JSON.stringify({ asked, early, got: JSON.parse(process.argv[1]).keys.map((k) => LGFields.label(k)) })); })();
+""", {"doc": doc, "keys": sample})
+    R = R or {}
+    want = [field_labels.label(k) for k in sample]
+    diff = [(k, g, w) for k, g, w in zip(sample, R.get("got") or [], want) if g != w]
+    ok("lg-fields.js reads the same file (once)", R.get("asked") == ["/static/data/field_labels.json"], str(R.get("asked")) if R else raw[-300:])
+    ok(f"...and labels every field as field_labels.label() does ({len(sample)} fields, unknown and x: names among them)",
+       len(R.get("got") or []) == len(sample) and not diff, diff[:6])
+    ok("...before the file has arrived: plain words, never the raw name", R.get("early") == "Ip header urg", str(R.get("early")))
+else:
+    PH.no_node(ok, "node is there to run the page")
+
+
+def _held_tpl(name):
+    p = os.path.join(PH.HELD, name + ".new") if PH.HELD else ""
+    src = p if p and os.path.isfile(p) else os.path.join(HERE, "templates", name)
+    return (open(src, encoding="utf-8").read(), src, lambda: True) if os.path.isfile(src) else None
+
+
+class _Blank(jinja2.ChainableUndefined):          # what the app would fill in: empty, and callable like its helpers
+    def __call__(self, *a, **k):
+        return self
+
+
+class _Scripts(html.parser.HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.srcs = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "script" and dict(attrs).get("src"):
+            self.srcs.append(dict(attrs)["src"].rsplit("/", 1)[-1].split("?")[0])
+
+
+_env = jinja2.Environment(loader=jinja2.FunctionLoader(_held_tpl), undefined=_Blank, autoescape=True)
+_env.globals.update(url_for=lambda ep, filename="", **k: f"/{ep}/{filename}", csrf_token=lambda: "t")
+_env.filters["tojson"] = lambda v, *a, **k: jinja2.utils.markupsafe.Markup(json.dumps(None if isinstance(v, jinja2.Undefined) else v, default=str))
+ALL_PERMS = {"view", "unmasked", "export", "malpedia", "services", "intelligence", "research", "analyst", "settings", "users"}
+for tpl, script in (("index.html", "app.js"), ("services.html", "services.js"), ("intelligence.html", "intelligence.js")):
+    try:
+        p = _Scripts()
+        p.feed(_env.get_template(tpl).render(lg_perms=ALL_PERMS))
+        names, why = p.srcs, ""
+    except Exception as e:      # noqa: BLE001 - a page that does not render is the failure itself
+        names, why = [], f"{type(e).__name__}: {e}"
+    ok(f"{tpl} (rendered) loads lg-fields.js before {script}", "lg-fields.js" in names and script in names
+       and names.index("lg-fields.js") < names.index(script), why or names)
+for f in ("app.js", "services.js", "intelligence.js"):
+    ok(f"{f} (as it ships) labels the report's fields with it", "LGFields.label" in PH.page_src(f))
 src = open(os.path.join(HERE, "intelligence.py"), encoding="utf-8").read()
 ok("Abused or Compromised: column labels and CSV headers in readable words", src.count("field_labels.label(k)") >= 2)
 
@@ -72,8 +128,10 @@ row = {"threat_framework": "MITRE ATT&CK", "threat_tactic_id": "TA0001;TA0002", 
 m = ss_attack.for_row(row)
 ok("techniques: valid IDs once each, in order", [t["id"] for t in m["techniques"]] == ["T1190", "T1059"], m["techniques"])
 ok("…each with MITRE's link", all(t["url"].startswith("https://attack.mitre.org/techniques/") for t in m["techniques"]))
+# the link is MITRE's own (from the local ATT&CK copy, which the installer downloads: no trailing slash) or, without
+# that copy, the same page's address built by Looking Glass (with one); both open MITRE's page of that tactic
 ok("tactics by ID, with MITRE's link", [t["id"] for t in m["tactics"]] == ["TA0001", "TA0002"]
-   and m["tactics"][0]["url"] == "https://attack.mitre.org/tactics/TA0001/")
+   and m["tactics"][0]["url"].rstrip("/") == "https://attack.mitre.org/tactics/TA0001", m["tactics"][:1])
 ok("the CVE in capitals, with its CVSS score and severity", m["vulnerability"]["id"] == "CVE-2023-28771" and m["vulnerability"]["is_cve"]
    and m["vulnerability"]["score"] == "9.8" and m["vulnerability"]["severity"] == "Critical")
 ok("the device targeted", m["target"] == {"vendor": "Zyxel", "product": "ZyWALL", "class": "router"})
@@ -93,9 +151,27 @@ ok("the map's event carries it (sources.normalise)", (ev.get("ss_attack") or {})
 ok("…and keeps the raw fields in extras", (ev.get("extras") or {}).get("threat_technique_id") == "T1190;T1059;bogus;T1190")
 ev2 = sources.normalise({"src_ip": "192.0.2.11", "timestamp": "2026-11-22T10:00:00", "tag": "rdp-scan"}, reg)
 ok("…an event without them carries none", "ss_attack" not in ev2)
-app_js = open(os.path.join(HERE, "static", "js", "app.js"), encoding="utf-8").read()
-ok("the map's detail window shows it as Shadowserver's, apart from Looking Glass's suggestion",
-   "Shadowserver's mapping for this event" in app_js and "ssAttackSection" in app_js)
+app_js = PH.page_src("app.js")
+R = None
+if PH.NODE:
+    R, raw = PH.run(PH.extract(app_js, ["el", "ssAttackSection"]) + r"""
+const s = ssAttackSection(JSON.parse(process.argv[1]));
+console.log(JSON.stringify({ text: lines(s), links: s.querySelectorAll("a").map((a) => [a.textContent, a.href, a.rel]) }));
+""", m)
+if PH.NODE:
+    R = R or {}
+    txt = R.get("text") or []
+    ok("the map's detail window (node runs ssAttackSection) shows it as Shadowserver's, apart from Looking Glass's suggestion",
+       txt[:1] == ["Shadowserver's mapping for this event"] and any("Looking Glass's own suggestion" in t for t in txt), txt[:3])
+    ok("...the techniques, tactics, CVE with its score and the device targeted, in words",
+       {"ATT&CK techniques", "ATT&CK tactics", "Vulnerability", "Device targeted", "Zyxel ZyWALL · router"} <= set(txt)
+       and any(t.startswith("CVSS") and "9.8" in t and "Critical" in t for t in txt), txt)
+    links = R.get("links") or []
+    ok("...each technique and the CVE open MITRE's and cve.org's own pages, in a new tab without the opener",
+       any(h == "https://www.cve.org/CVERecord?id=CVE-2023-28771" for _t, h, _r in links)
+       and any(h.startswith("https://attack.mitre.org/techniques/T1190") for _t, h, _r in links) and all(r == "noopener noreferrer" for *_x, r in links), links)
+else:
+    PH.no_node(ok, "node runs the map's detail window (ssAttackSection)")
 
 
 class Day:
@@ -118,7 +194,7 @@ ok("Definitions: per report, the techniques Shadowserver tagged its events with,
 ok("…only reports whose schema has the field are read", "event4_sinkhole" not in s["techniques"])
 am_src = open(os.path.join(HERE, "attack_map.py"), encoding="utf-8").read()
 ok("…sent with GET /api/attack, never changing a mapping", "ss_seen=ss_seen" in am_src)
-ok("…and drawn on the Definitions page", "data.ss_seen" in open(os.path.join(HERE, "static", "js", "attack-map.js"), encoding="utf-8").read())
+ok("…and drawn on the Definitions page (as it ships)", "data.ss_seen" in PH.page_src("attack-map.js"))
 bundle = {"objects": [{"type": "x-mitre-tactic", "name": "Initial Access",
                        "external_references": [{"source_name": "mitre-attack", "external_id": "TA0001", "url": "https://attack.mitre.org/tactics/TA0001"}]},
                       {"type": "x-mitre-tactic", "name": "Old", "revoked": True,
@@ -143,7 +219,7 @@ ok("a certificate still valid when scanned", tls_facts.facts({"cert_expiration_d
 ok("no TLS fields: no facts", tls_facts.facts({"tag": "x"}, None) == [])
 sa = open(os.path.join(HERE, "services_api.py"), encoding="utf-8").read()
 ok("the services detail sends them, masked viewers without dates", "tls_facts.facts(ex," in sa and "dates=not demo" in sa)
-ok("…and the window shows them", "Certificate and TLS" in open(os.path.join(HERE, "static", "js", "services.js"), encoding="utf-8").read())
+ok("…and the window shows them (as it ships)", "Certificate and TLS" in PH.page_src("services.js"))
 
 print("Exports")
 import intel  # noqa: E402

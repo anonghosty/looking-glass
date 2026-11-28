@@ -79,7 +79,8 @@ class Flow:
         width = width or (W - M - x)
         lead = size * 1.42
         for block in str(text or "").replace("\r", "").split("\n"):
-            lines = simpleSplit(d.s(block), d.F["b"] if bold else d.F["r"], size, width) or [""]
+            font = d.F["b"] if bold else d.F["r"]
+            lines = _hard(d, simpleSplit(d.s(block), font, size, width) or [""], font, size, width)   # a long word broken too
             for ln in lines:                  # wrapped, never cut
                 self.need(lead + 2)
                 d.text(x, self.y - size, ln, size, color, bold)
@@ -122,7 +123,8 @@ class Flow:
         """How much room para() would take for this text (to keep a block together before drawing it)."""
         d = self.doc
         width = width or (W - M - x)
-        n = sum(len(simpleSplit(d.s(b), d.F["b"] if bold else d.F["r"], size, width) or [""])
+        font = d.F["b"] if bold else d.F["r"]
+        n = sum(len(_hard(d, simpleSplit(d.s(b), font, size, width) or [""], font, size, width))
                 for b in str(text or "").replace("\r", "").split("\n"))
         return n * size * 1.42 + 4
 
@@ -143,7 +145,14 @@ class Flow:
             for i, seg in enumerate(body.split("**")):
                 words += [(w, i % 2 == 1) for w in seg.split()]
             lines, cur, cw = [], [], 0
-            for w, b in words:
+            pieces = []                                  # a word wider than the line (a long URL) broken as table cells
+            for w, b in words:                           # are (_hard), never run off the page (audit 2026-11-27, 1-5)
+                font = d.F["b"] if b else d.F["r"]
+                if d.c.stringWidth(d.s(w), font, size) > width:
+                    pieces += [(p, b) for p in _hard(d, [d.s(w)], font, size, width) if p]
+                else:
+                    pieces.append((w, b))
+            for w, b in pieces:
                 ww = d.c.stringWidth(d.s(w), d.F["b"] if b else d.F["r"], size)
                 sp = d.c.stringWidth(" ", d.F["r"], size) if cur else 0
                 if cur and cw + sp + ww > width:
@@ -368,6 +377,14 @@ def group_mitigations(groups):
     return [by[k] for k in sorted(order, key=code_key)]
 
 
+def _other_days(earlier):
+    """A device's Other days cell: its notes joined with "; " when they are a list, the text as it is when it is one
+    (2026-11-28: a text given here was joined letter by letter, "2; 0; 2; 6; -; ...")."""
+    if isinstance(earlier, str):
+        return earlier.strip().rstrip(";").strip() or "–"
+    return "; ".join(str(e) for e in earlier or [] if str(e).strip()) or "–"
+
+
 def _logo_section(doc, a, y):
     """The logo section, top left: the organisation's logo (or its initial), its name and the advisory's title."""
     c = doc.c
@@ -460,7 +477,7 @@ def front(doc, a):
         trows = [[d["ip"], d.get("hostname") or "–", ", ".join(d.get("ports") or []) or "–", ", ".join(d.get("reports") or []) or "–",
                   ", ".join((d.get("cves") or []) + (d.get("issues") or [])) or "–",
                   ", ".join(d.get("infections") or d.get("categories") or []) or "–", d.get("last") or "–"]
-                 + (["; ".join(d.get("earlier") or []) or "–"] if other else []) for d in devs]
+                 + ([_other_days(d.get("earlier"))] if other else []) for d in devs]
         if len(devs) > LIST_MAX and a.get("devices_csv"):
             # many addresses: said, not listed (the user, 2026-11-18: "this will save space and prevent too much
             # information"); the devices CSV sent with the PDF holds every one, with all these columns

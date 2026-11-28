@@ -7,7 +7,9 @@ Shown to accounts with the 'settings' permission, next to their findings notific
 like them so the bell shows them as they are:
   - Looking Glass restarted (each start in the last 24 hours, from data/restarts.jsonl, written at start)
   - the pipeline's last run failed, or no run finished for PIPELINE_STALE_HOURS (default 26), or its disk is low
-    (the pipeline's pipeline_status.json, retention.py in the pipeline's folder; read only)
+    (the pipeline's pipeline_status.json, retention.py in the pipeline's folder; read only), with the pipeline's own
+    words for each error; and its warnings (CSV files not loaded because their name is not a report file name, rows
+    without a timestamp, files loaded again because they changed...), one alert that comes back when they change
   - the weekly MISP Galaxy / ATT&CK refresh failed (data/names_refresh.json)
   - the HTTPS certificate (data/tls) expires within 30 days: again at 14 and at 3 days, and once it has expired
   - the audit log cannot be written (a full disk...), and for 7 days after, that entries were lost (auth.Audit)
@@ -28,11 +30,13 @@ Each alert has an id that changes when something new happens; clearing one hides
 (data/system_alerts_seen.json). Nothing here holds an address or a report's content.
 """
 import calendar
+import glob
 import json
 import os
 import threading
 import time
 
+import people
 import pipeline_link
 import filesig  # noqa: E402
 
@@ -62,8 +66,23 @@ def _read_json(path):
         return None
 
 
+def _who(name, u):
+    """How an alert names an account: the full name it registered with, else its person code (people.person_label);
+    never the sign-in name, half of what signs someone in (audit 2026-11-27, 8-12)."""
+    full = str((((u if isinstance(u, dict) else {}).get("profile") or {}).get("full_name") or "")).strip()
+    return full or people.person_label(name)
+
+
 def _when(t):
     return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(t)) if t else ""
+
+
+def _iso_ts(s):
+    """'2026-11-27T06:30:01Z' (UTC) -> seconds since 1970, or None when it is not such a time."""
+    try:
+        return calendar.timegm(time.strptime(str(s or "").strip()[:19], "%Y-%m-%dT%H:%M:%S"))
+    except (ValueError, TypeError):
+        return None
 
 
 PASSKEY_EVENTS = "passkey_events.json"
@@ -168,13 +187,33 @@ class Alerts:
             stale_h = 26.0
         if st:
             t = st.get("finished") or 0
-            if not st.get("ok"):
+            # the pipeline's own texts of what went wrong and what to look at (run_problems, count audit 2026-11-26:
+            # a run that left whole reports out said "ok"); an older pipeline's status has none, then the counts below
+            errs = [str(e.get("text") or "")[:600] for e in (st.get("errors") or []) if isinstance(e, dict)]
+            warns = [str(w.get("text") or "")[:900] for w in (st.get("warnings") or []) if isinstance(w, dict)]
+            if not st.get("ok") and errs:
+                out.append({"key": f"pipeline-failed:{t}", "problem": True, "title": "The last report run had problems",
+                            "text": f"the pipeline's run of {_when(t)} did not go well: " + "; ".join(e for e in errs if e)
+                            + ". Its log says more (Settings → Workers).", "at": t, "link": "/settings#workers"})
+            elif not st.get("ok"):
                 bits = [f"{st.get('file_errors', 0)} file error(s)" if st.get("file_errors") else "",
                         (f"{st.get('rows_failed', 0):,} row(s) not written in {st.get('files_rows_failed', 0)} file(s), tried again next run"
                          if st.get("files_rows_failed") else ""),
-                        "the mailbox could not be read" if st.get("email_failed") else ""]
+                        # the reason the pipeline gives (2026-11-26: "certificate has expired" was only in its log)
+                        (f"the mailbox could not be read ({str(st['email_error'])[:120]})" if st.get("email_error")
+                         else "the mailbox could not be read") if st.get("email_failed") else ""]
                 out.append({"key": f"pipeline-failed:{t}", "problem": True, "title": "The last report run had problems",
                             "text": f"the pipeline's run of {_when(t)} did not go well" + (": " + ", ".join(b for b in bits if b) if any(bits) else "")
+                            + ". Its log says more (Settings → Workers).", "at": t, "link": "/settings#workers"})
+            if warns:
+                # its key follows what it says, so a cleared one stays cleared while the same thing is said again
+                # (a file not matched stays until someone renames or removes it), and comes back when it changes
+                import hashlib
+                wkey = hashlib.sha256("\n".join(sorted(f"{w.get('key')}={w.get('count')}" for w in st["warnings"]
+                                                       if isinstance(w, dict))).encode()).hexdigest()[:16]
+                out.append({"key": f"pipeline-warnings:{wkey}", "problem": True,
+                            "title": "The last report run has something to check",
+                            "text": f"the pipeline's run of {_when(t)}: " + "; ".join(w for w in warns if w)
                             + ". Its log says more (Settings → Workers).", "at": t, "link": "/settings#workers"})
             if t and now - t > stale_h * 3600:
                 out.append({"key": f"pipeline-stale:{t}", "problem": True, "title": "No report run lately",
@@ -214,6 +253,8 @@ class Alerts:
         out += self._signups()
         out += self._public_signins(now)
         out += self._no_caddy_internal(now)
+        out += self._mail_tls_off(now)
+        out += self._report_feed(now)
         out += self._connectors_paused(now)
         out += self._small_traces(now)
         out += self._addresses(now)
@@ -289,8 +330,7 @@ class Alerts:
         for name, u in users.items():
             if isinstance(u, dict) and u.get("status") == "pending" and not str(name).startswith("lg-selftest"):
                 at = float((u.get("registered") or {}).get("at") or u.get("created") or 0)
-                full = str(((u.get("profile") or {}).get("full_name") or "")).strip()
-                waiting.append((at, f"{full} ({name})" if full and full.lower() != str(name).lower() else str(name)))
+                waiting.append((at, _who(name, u)))
         if not waiting:
             return []
         waiting.sort()
@@ -322,11 +362,11 @@ class Alerts:
             except ValueError:
                 continue
             if now - at < 7 * 86400 and ip.is_global and not str(name).startswith("lg-selftest"):
-                seen.append((at, str(ip), str(name)))
+                seen.append((at, str(ip), _who(name, u)))
         if not seen:
             return []
         seen.sort()
-        at, ip, name = seen[-1]
+        at, ip, name = seen[-1]                      # name: the full name or person code (_who)
         return [{"key": f"public-signin:{ip}", "problem": True,
                  "title": "Sign-ins from the internet on an internal installation",
                  "text": (f"{len(seen)} sign-in(s) in the last 7 days came from public internet addresses, the latest {ip} "
@@ -390,6 +430,75 @@ class Alerts:
                           "reminder comes every day until then."),
                  "at": now, "link": "/settings#monitor"}]
 
+    def mail_tls_off(self):
+        """True when the pipeline reads an IMAP mailbox with the mail server's certificate NOT checked
+        (IMAP_VERIFY_TLS off in the pipeline's .env), by the pipeline's own rule (mail_sources._truthy: on is 1, true,
+        yes or on; unset is on). Gmail API and Microsoft Graph always check: never off for them."""
+        pdir = pipeline_link.find_dir(self.base_dir)
+        if not pdir:
+            return False
+        penv = pipeline_link.read_env(os.path.join(pdir, ".env"))
+        if (penv.get("MAIL_PROVIDER") or "imap").strip().lower() != "imap":
+            return False
+        return (penv.get("IMAP_VERIFY_TLS", "true") or "").strip().lower() not in ("1", "true", "yes", "on")
+
+    def _mail_tls_off(self, now):
+        """The mail server's certificate is not checked (the user, 2026-11-26: set off for a while when a mail server's
+        certificate expired): said every day until it is on again, so it is not left off. Administrators only."""
+        if not self.mail_tls_off():
+            return []
+        day = time.strftime("%Y-%m-%d", time.gmtime(now))
+        return [{"key": f"mail-tls-off:{day}", "problem": True,
+                 "title": "The mail server's certificate is not checked",
+                 "text": ("The pipeline reads the mailbox with certificate checking switched off (IMAP_VERIFY_TLS=false), so "
+                          "someone on the network path could pretend to be the mail server: read the mailbox password and "
+                          "hand over forged reports. Switch it on again as soon as the mail server has a valid certificate: "
+                          "Settings → Workers → Check the mail server's certificate (it applies on the next run). This "
+                          "reminder comes every day until then."),
+                 "at": now, "link": "/settings#workers"}]
+
+    FEED_READ_LATE_S = 2 * 86400          # the installation reads the feed once a day after 06:30 GMT
+    FEED_BUILDER_LATE_S = 3 * 3600        # the builder runs every hour
+
+    def _report_feed(self, now):
+        """The report feed (report_map.py): an installation whose daily read keeps failing or has stopped, and, on the
+        computer that runs the feed builder, a builder that has stopped running (2026-11-27: from 10 to 23 November the
+        builder did not run, its script had lost its run permission, and nothing said so; the feed's own 'built' time is
+        no sign, it only changes when Shadowserver's reports change). Administrators only, every day until it is well."""
+        out, day = [], time.strftime("%Y-%m-%d", time.gmtime(now))
+        st = (_read_json(os.path.join(self.data, "report_map.json")) or {}).get("status") or {}
+        checked = _iso_ts(st.get("feed_checked"))
+        if st.get("feed_error") or (checked and now - checked > self.FEED_READ_LATE_S):
+            since = st.get("feed_checked") or "never"
+            out.append({"key": f"report-feed-read:{day}", "problem": True,
+                        "title": "The report feed could not be read",
+                        "text": (f"the daily read of the report feed (report names, pages and mappings) last ran {since}"
+                                 + (f" and failed: {str(st['feed_error'])[:160]}" if st.get("feed_error") else "")
+                                 + ". The last good copy is kept meanwhile, so new Shadowserver reports may be shown without their "
+                                 "mappings. Check that this server reaches GitHub (raw.githubusercontent.com); Settings → Task "
+                                 "monitor says more."), "at": now, "link": "/settings#monitor"})
+        bdir = (self.env.get("FEED_BUILDER_DIR") or "").strip() or os.path.expanduser("~/looking-glass-feed-builder")
+        logs = sorted(glob.glob(os.path.join(bdir, "logs", "feed-*.log")))
+        if os.path.isdir(bdir) and logs:
+            last = None
+            try:
+                with open(logs[-1], "rb") as fh:
+                    fh.seek(0, os.SEEK_END); fh.seek(max(0, fh.tell() - 8192))
+                    for line in fh.read().decode("utf-8", "replace").splitlines():
+                        if line.startswith("== "):
+                            last = _iso_ts(line[3:].strip()) or last
+            except OSError:
+                last = None
+            if last is None or now - last > self.FEED_BUILDER_LATE_S:
+                when = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(last)) if last else "(no run found in its log)"
+                out.append({"key": f"report-feed-builder:{day}", "problem": True,
+                            "title": "The report feed builder has stopped",
+                            "text": (f"the feed builder on this computer ({bdir}) runs every hour; its last run was {when}. "
+                                     "Every installation reads the feed it publishes, so new or changed Shadowserver reports reach "
+                                     "none of them until it runs again. Check its cron line (crontab -l) and that run_feed.sh "
+                                     "can still be run (it lost its run permission once)."), "at": now, "link": "/settings#monitor"})
+        return out
+
     def _small_traces(self, now):
         """Someone ran many small Trace a leak searches (at most 3 lines or addresses each) within 24 hours: one or two addresses at a
         time can test guesses (external review of 1a7b016; the user, 2026-11-20). One alert per person, again at every
@@ -407,9 +516,9 @@ class Alerts:
             if len(recent) < limit:
                 continue
             step = len(recent) // limit                    # a new alert at each further `limit` traces
-            full = str((((users.get(name) or {}).get("profile") or {}).get("full_name") or "")).strip()
-            who = f"{full} ({name})" if full and full.lower() != str(name).lower() else str(name)
-            out.append({"key": f"small-traces:{name}:{step}:{round(recent[step * limit - 1])}", "problem": True,
+            who = _who(name, users.get(name))
+            # the key holds the person code, not the sign-in name (it is sent to the page as the bell item's id)
+            out.append({"key": f"small-traces:{people.person_label(name)}:{step}:{round(recent[step * limit - 1])}", "problem": True,
                         "title": f"{who} ran {len(recent)} small traces in 24 hours",
                         "text": (f"{len(recent)} Trace a leak searches of at most {insider.SMALL_TRACE_ITEMS} lines or addresses each since "
                                  f"{_when(recent[0])}. One or two addresses at a time can be used to test guesses at what was "

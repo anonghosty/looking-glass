@@ -20,7 +20,7 @@
   const fmt = (n) => Math.round(n || 0).toLocaleString("en-US");
   const titleCase = (s) => (s || "").toLowerCase().replace(/(^|[\s-])\w/g, (c) => c.toUpperCase());
   // "UK" is how some reports write the United Kingdom; its flag file is "gb" (r90: the UK flag never loaded)
-  const flagUrl = (cc) => (cc && /^[a-z]{2}$/i.test(cc) && cc !== "EU" ? `https://flagcdn.com/w40/${cc.toLowerCase() === "uk" ? "gb" : cc.toLowerCase()}.png` : "");
+  const flagUrl = (cc) => (cc && /^[a-z]{2}$/i.test(cc) && cc !== "EU" ? `/static/img/flags/${cc.toLowerCase() === "uk" ? "gb" : cc.toLowerCase()}.png` : "");
   const flagImg = (cc) => { const i = el("img", "flag"); i.alt = ""; const u = flagUrl(cc); if (u) { i.src = u; i.loading = "lazy"; } else i.style.visibility = "hidden"; return i; };
   const SEV = { critical: "#e5484d", high: "#f76b15", medium: "#ffc53d", low: "#3e8ef7", info: "#8b8d98" };
   const SEV_ORDER = ["critical", "high", "medium", "low", "info"];
@@ -31,11 +31,10 @@
   const PAL = ["#5b8def", "#12a594", "#e2a336", "#8e7cf0", "#d6409f", "#46a758", "#00a2c7", "#c98a5e"];
   const ls = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } } };
+  // a share in words that never mislead (loader.js LGShare): a part with records is never "0%", a part never "100%"
   const pct = (n, total) => {
     const f = n / Math.max(1, total);
-    if (f > 0 && f < 0.001) return "<0.1%";
-    if (f > 0.995 && f < 1) return `${(Math.floor(f * 1000) / 10).toFixed(1)}%`;
-    return `${(f * 100).toFixed(f < 0.1 ? 1 : 0)}%`;
+    return window.LGShare.pct(f, f < 0.1 ? 1 : 0);
   };
   const hhmm = (m) => `${String(Math.floor(m / 60) % 25).padStart(2, "0")}:${String(Math.floor(m) % 60).padStart(2, "0")}`;
   // the country comes from Settings (both platforms); Shadowserver writes the country name when only it is known
@@ -54,7 +53,7 @@
     demo: qs.has("demo") ? qs.get("demo") === "1" : ls.get("lg.svc.demo", false),
     speed: 1, paused: false, autoPaused: false, pauseReplay: 0, anchorReplay: Date.now() - 86400000, anchorWall: Date.now(),
     dayStart: 0, dayEnd: 0, sched: null, schedState: null, replayDay: null, waiting: false, behind: false,
-    filters: { family: new Set(), service: new Set(), severity: new Set(), issue: new Set(), region: "", city: "", asn: "", port: "", vendor: "", device_type: "", ip: "",
+    filters: { family: new Set(), service: new Set(), severity: new Set(), issue: new Set(), region: "", city: "", asn: "", port: "", vendor: "", device_type: "", industry: "", ip: "",
       vulnerable: false, multi: false, cross: false },
     cursor: null, pending: [], generation: 0, events: new Map(), recent: [],
     stats: null, facets: null, svcFamily: new Map(), defs: new Map(), glossary: null,
@@ -137,7 +136,7 @@
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
     return r.json();
   }
-  const SETS = ["family", "service", "severity", "issue"], SINGLES = ["region", "city", "asn", "port", "vendor", "device_type", "ip"];
+  const SETS = ["family", "service", "severity", "issue"], SINGLES = ["region", "city", "asn", "port", "vendor", "device_type", "industry", "ip"];
   // "Hosts in several reports" (cross): the filters set when it was switched on CHOOSE the hosts (the seed); filters added
   // afterwards narrow the hosts' widened records. The seed travels in the value: cross=seed:<filters>, so the server
   // can tell them apart (e.g. Blocklisted + several reports + Accessible HTTP = the Accessible HTTP records of
@@ -170,7 +169,7 @@
   const filterParams = () => new URLSearchParams(filterPairs());
   const NAMES = { family: "Report family", service: "Service report", severity: "Severity", issue: "Issue", region: "Region", city: "City", asn: "Network", port: "Port",
     vendor: "Vendor", device_type: "Device type", ip: "Host", vulnerable: "Hosts with issues", multi: "Hosts with multiple issues", cross: "Hosts in several reports",
-    tag: "Tag", product: "Product", sector: "Sector", protocol: "Protocol", time: "Time", version: "Version" };
+    tag: "Tag", product: "Product", sector: "Sector (network type)", industry: "Industry (Shadowserver)", protocol: "Protocol", time: "Time", version: "Version" };
   const FLAG_TITLE = { vulnerable: "Hosts with issues", multi: "Hosts with multiple issues", cross: "Hosts in several reports" };
   const refLabels = new Map();
   function valueLabel(k, v) {
@@ -337,8 +336,15 @@
     $("streamResize").addEventListener("pointerdown", (e) => { startY = e.clientY; startH = $("stream").getBoundingClientRect().height; addEventListener("pointermove", move); addEventListener("pointerup", up); });
   })();
   document.addEventListener("keydown", (e) => {
-    // Escape works while typing (e.g. the glossary search); only the letter shortcut skips fields (review 2026-11-13)
-    if (e.key === "Escape") { closeInsight(); closeModal(); closeGlossary(); setDrawer(false); }
+    // Escape works while typing (e.g. the glossary search); only the letter shortcut skips fields (review 2026-11-13).
+    // One Escape closes one layer, the top-most: the Glossary, then the insight, the details, the drawer; an Escape a
+    // drop-down already used (defaultPrevented) closes nothing more (as app.js, Ponytail review 2026-11-28)
+    if (e.key === "Escape") {
+      if (e.defaultPrevented) return;
+      if (!$("glossary").hidden) closeGlossary(); else if (!$("insight").hidden) closeInsight();
+      else if (!$("modal").hidden) closeModal(); else { setDrawer(false); return; }
+      e.preventDefault();
+    }
     else if (e.target.matches("input, select, textarea")) return;
     else if (e.key.toLowerCase() === "l") setStreamCollapsed(!$("stream").classList.contains("collapsed"));
   });
@@ -522,15 +528,26 @@
     });
     canvas.addEventListener("blur", () => { say.hidden = true; });
   }
+  /* opts.total: the whole the rows are part of (the server sends only the top rows): the centre shows it, every share is
+     of it, and what the rows leave out is one more grey "Other" slice and legend entry, so the parts add up (as app.js).
+     opts.other: the "Other" count when it is not total minus the rows: a list where one record has several values
+     (issues: the server's others.issue, records with an issue outside the rows); opts.otherLabel names it. */
+  const OTHER = "\u0000other";
   function donutChart(svg, legend, rows, opts = {}) {
     svg.replaceChildren(); legend.replaceChildren();
     const NS = "http://www.w3.org/2000/svg", cx = 60, cy = 60, R = 54, r0 = 36;
-    const sum = rows.reduce((a, r) => a + r.count, 0) || 1, color = opts.color || (() => ACCENT);
+    const parts = rows.reduce((a, r) => a + r.count, 0);
+    const rest = opts.other != null ? Math.max(0, Number(opts.other) || 0) : opts.total ? window.LGShare.other(rows, opts.total) : 0;
+    if (rows.length && rest > 0) rows = [...rows, { value: OTHER, label: opts.otherLabel || "Other", count: rest }];
+    const ring = Math.max(parts + rest, 1), baseColor = opts.color || (() => ACCENT);
+    const sum = opts.total || ring;   // shares are of the whole (the centre figure); the ring is drawn from the parts
+    const color = (v) => (v === OTHER ? "#3a3f4d" : baseColor(v));
+    const describe = (v) => (v === OTHER ? "Everything not listed separately: the other values, or none recorded" : opts.describe && opts.describe(v));
     let a0 = -Math.PI / 2;
     const arc = (a1, a2) => { const large = a2 - a1 > Math.PI ? 1 : 0, p = (r, a) => `${cx + r * Math.cos(a)} ${cy + r * Math.sin(a)}`;
       return `M${p(R, a1)} A${R} ${R} 0 ${large} 1 ${p(R, a2)} L${p(r0, a2)} A${r0} ${r0} 0 ${large} 0 ${p(r0, a1)} Z`; };
     for (const r of rows) {
-      const frac = r.count / sum, a1 = a0, a2 = a0 + Math.max(frac * Math.PI * 2, 0.02); a0 = a1 + frac * Math.PI * 2;
+      const frac = r.count / ring, a1 = a0, a2 = a0 + Math.max(frac * Math.PI * 2, 0.02); a0 = a1 + frac * Math.PI * 2;
       const path = document.createElementNS(NS, "path");
       path.setAttribute("d", frac >= 0.9999 ? arc(-Math.PI / 2, Math.PI * 1.5 - 0.0001) : arc(a1, a2));
       path.setAttribute("fill", color(r.value)); path.setAttribute("stroke", "#141417"); path.setAttribute("stroke-width", "1"); svg.append(path);
@@ -538,19 +555,20 @@
       const name = el("span", null, r.label || r.value); name.title = r.label || r.value;
       // clickable: a real button inside the list item (2026-11-18 sweep: the item made into a button left the list
       // without list items, and its row was under the 24 px touch target); the list stays a list
-      const box = opts.onClick ? el("button", "legend-btn") : li;
-      if (opts.onClick) { box.type = "button"; li.append(box); }
+      const click = opts.onClick && r.value !== OTHER;   // "Other" is not one value to analyse
+      const box = click ? el("button", "legend-btn") : li;
+      if (click) { box.type = "button"; li.append(box); }
       box.append(sw, name, el("span", "n", pct(r.count, sum))); legend.append(li);
       const on = () => { svg.classList.add("hovering"); path.classList.add("hot"); li.classList.add("hot"); };
       const off = () => { svg.classList.remove("hovering"); path.classList.remove("hot"); li.classList.remove("hot"); hideTip(); };
       const tip = () => [tipLine(r.label || r.value), tipLine(null, `${fmt(r.count)} ${opts.unit || "records"} · ${pct(r.count, sum)}`),
-        ...(opts.describe && opts.describe(r.value) ? [tipLine(null, opts.describe(r.value))] : []), ...(opts.onClick ? [tipLine(null, "Click for analysis")] : [])];
+        ...(describe(r.value) ? [tipLine(null, describe(r.value))] : []), ...(click ? [tipLine(null, "Click for analysis")] : [])];
       for (const n of [path, li]) {
         n.addEventListener("mouseenter", on); n.addEventListener("mouseleave", off); n.addEventListener("mousemove", (e) => showTip(e, tip()));
-        if (opts.onClick) { n.addEventListener("click", () => opts.onClick(r.value)); n.style.cursor = "pointer"; } else n.style.cursor = "default";
+        if (click) { n.addEventListener("click", () => opts.onClick(r.value)); n.style.cursor = "pointer"; } else n.style.cursor = "default";
       }
       path.setAttribute("aria-hidden", "true");          // the legend entry is the control; the slice repeats it
-      if (opts.onClick) {
+      if (click) {
         box.setAttribute("aria-label", `${r.label || r.value}, ${pct(r.count, sum)}: analyse`);
         box.addEventListener("focus", on); box.addEventListener("blur", off);
       }
@@ -647,10 +665,29 @@
     }
     if (!rows.length) leg.append(el("span", null, "No data yet"));
   }
-  function topList(id, rows, key, labelFn, colorFn, total) {
+  // A "Top N" list of the Intel panel: the first 6 of the rows the page has (up to 80), a line under it saying how many
+  // there are in all ("Top 6 of 23 networks") and a button that shows every row the page has. `all` is the distinct
+  // count (s.totals), the number of rows sent when the server does not say.
+  const TOP_SHOWN = 6, topOpen = {};
+  function topList(id, rows, key, labelFn, colorFn, total, all, noun = "") {
     const ol = $(id); if (!ol) return; ol.replaceChildren();
+    rows = rows || [];
     const max = Math.max(1, ...rows.map((r) => r.count)), sum = total || rows.reduce((a, r) => a + r.count, 0);
-    for (const r of rows.slice(0, 6)) {
+    const known = Math.max(rows.length, Number(all) || 0);
+    const shown = topOpen[id] ? rows : rows.slice(0, TOP_SHOWN);
+    let more = ol._more;
+    if (!more) { more = el("p", "hint top-more"); more.style.margin = "4px 0 0"; ol.after(more); ol._more = more; }
+    more.replaceChildren();
+    const cutText = window.LGShare.cut(shown.length, known, noun);
+    if (cutText) more.append(document.createTextNode(cutText + "."));
+    if (rows.length > TOP_SHOWN) {
+      const label = topOpen[id] ? `Show the top ${TOP_SHOWN}` : known > rows.length ? `Show the top ${rows.length}` : `Show all ${rows.length}`;
+      const b = el("button", "link-btn", label); b.type = "button";
+      b.addEventListener("click", () => { topOpen[id] = !topOpen[id]; topList(id, rows, key, labelFn, colorFn, total, all, noun); });
+      more.append(b);
+    }
+    more.hidden = !more.childNodes.length;
+    for (const r of shown) {
       // a real button inside the list item, as on the map page (2026-11-18 sweep: list semantics)
       const li = el("li"), btn = el("button", "tl-btn"); btn.type = "button";
       const bar = el("span", "bar"); bar.style.width = `calc(${(r.count / max) * 100}% - 16px)`; if (colorFn) bar.style.setProperty("--bc", colorFn(r.value));
@@ -678,25 +715,63 @@
       window.LGLoader?.ready();   // arriving from another page: the logo hands over once the figures are in
       $("kTotal").textContent = fmt(s.total); $("kHosts").textContent = fmt(s.hosts); $("kVuln").textContent = fmt(s.vulnerable_hosts);
       $("kCrit").textContent = fmt(s.critical); $("kServices").textContent = fmt(s.services);
-      renderIntel(s); stage.setData(s); loadRegions();
+      redrawIntel(s); stage.setData(s); loadRegions();
     } catch (err) { toast(`Could not load figures: ${window.LGLoader.errorText(err)}`); }
   }
+  // Intel is drawn again every 30 s (the figures), every 60 s (the replay hour) and when the window is resized: the
+  // keyboard focus goes back to the same control (by its id, else by its place among the focusable elements of the
+  // nearest part with an id), so someone tabbing through the lists keeps their place (audit 2026-11-27, 11-4)
+  const INTEL_FOCUSABLE = 'a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])';
+  function keepIntelFocus(draw) {
+    const a = document.activeElement;
+    let spot = null;
+    if (a && a !== document.body && a.matches?.(INTEL_FOCUSABLE)) {
+      if (a.id) spot = { id: a.id };
+      else {
+        const host = a.parentElement?.closest("[id]");
+        const i = host ? [...host.querySelectorAll(INTEL_FOCUSABLE)].indexOf(a) : -1;
+        if (i >= 0) spot = { host: host.id, i };
+      }
+    }
+    draw();
+    const now = document.activeElement;
+    if (!spot || (now && now !== document.body && now.isConnected)) return;
+    const n = spot.id ? document.getElementById(spot.id) : [...(document.getElementById(spot.host)?.querySelectorAll(INTEL_FOCUSABLE) || [])][spot.i];
+    n?.focus({ preventScroll: true });
+  }
+  // the periodic and resize redraws go through redrawIntel; renderIntel itself only draws
+  const redrawIntel = (s) => keepIntelFocus(() => renderIntel(s));
   function renderIntel(s) {
     const b = s.breakdowns, total = Math.max(1, s.total);
     const curQ = state.dayStart ? Math.floor((replayNow() - state.dayStart) / 900000) : null;
     quarterHours($("timeline"), s.quarters, $("tlInfo"), ACCENT, curQ, (st, m) => openInsight(narrow(filterPairs(), "time", `${st}+${m}`)));
-    donutChart($("donut"), $("topFamily"), b.family, { color: famColor, unit: "records", onClick: (v) => openInsight(narrow(filterPairs(), "family", v)),
+    // a family is one per record, so the ring is of all records (s.total), the rest "Other"
+    donutChart($("donut"), $("topFamily"), b.family || [], { color: famColor, unit: "records", total: s.total, onClick: (v) => openInsight(narrow(filterPairs(), "family", v)),
       describe: (v) => (state.glossary?.families.find((f) => f.name === v) || {}).def });
     stackedHours($("hourClass"), s.hours_by_family || {}, curQ != null ? Math.floor(curQ / 4) : null, $("hbcInfo"), (st, m) => openInsight(narrow(filterPairs(), "time", `${st}+${m}`)));
     severityMix($("sevBar"), $("sevLegend"), s.severity || [], { onClick: (v) => openInsight(narrow(filterPairs(), "severity", v)) });
-    topList("topIssue", b.issue, "issue", swatchLabel("#f5b54a"), () => "#f5b54a", total);
-    topList("topService", b.service, "service", (r) => { const sw = el("span", "swatch"); sw.style.background = famColor(state.svcFamily.get(r.value)); return [sw, el("span", null, r.label)]; }, (v) => famColor(state.svcFamily.get(v)), total);
-    topList("topNet", b.network, "asn", swatchLabel("#7c7c85"), null, total);
-    topList("topRegion", b.region, "region", (r) => [flagImg(COUNTRY.code), el("span", null, r.label)], null, total);
-    topList("topCity", b.city, "city", (r) => [flagImg(COUNTRY.code), el("span", null, r.label)], null, total);
-    topList("topVendor", b.vendor, "vendor", swatchLabel("#12a594"), () => "#12a594", total);
-    topList("topProduct", b.product, "product", (r) => [el("span", "mono", r.label)], null, total);
-    topList("topPort", b.port, "port", (r) => [el("span", "mono", `Port ${r.label}`)], null, total);
+    // up to 80 rows are in the browser, 6 are drawn: "Top 6 of N" with the distinct count (s.totals) when there are more
+    const T = s.totals || {};
+    topList("topIssue", b.issue, "issue", swatchLabel("#f5b54a"), () => "#f5b54a", total, T.issue, "issues");
+    topList("topService", b.service, "service", (r) => { const sw = el("span", "swatch"); sw.style.background = famColor(state.svcFamily.get(r.value)); return [sw, el("span", null, r.label)]; }, (v) => famColor(state.svcFamily.get(v)), total, T.service, "services");
+    topList("topNet", b.network, "asn", swatchLabel("#7c7c85"), null, total, T.network, "networks");
+    topList("topRegion", b.region, "region", (r) => [flagImg(COUNTRY.code), el("span", null, r.label)], null, total, T.region, "regions");
+    // the Unknown network / Unknown region rows are records without one, not counted as one (count audit round 2)
+    noteUnder($("topNet"), "unknown-note", unknownNote(s, "network"));
+    noteUnder($("topRegion"), "unknown-note", unknownNote(s, "region"));
+    // with the load figures: records without an address (no host) and what the day's loader kept once or left out. At
+    // the top of the Intel panel (the header row has no room for a sentence) and on the Records tile's hover
+    const ln = loadNotes(s), intel = $("intel");
+    if (intel) {
+      let p = intel._loadNote;
+      if (!p) { p = el("p", "hint load-note"); intel.prepend(p); intel._loadNote = p; }
+      p.textContent = ln; p.hidden = !ln;
+    }
+    const kt = $("kTotal"); if (kt && kt.parentElement) kt.parentElement.title = ln;
+    topList("topCity", b.city, "city", (r) => [flagImg(COUNTRY.code), el("span", null, r.label)], null, total, T.city, "cities");
+    topList("topVendor", b.vendor, "vendor", swatchLabel("#12a594"), () => "#12a594", total, T.vendor, "vendors");
+    topList("topProduct", b.product, "product", (r) => [el("span", "mono", r.label)], null, total, T.product, "products");
+    topList("topPort", b.port, "port", (r) => [el("span", "mono", `Port ${r.label}`)], null, total, T.port, "ports");
   }
 
   // ================================================================== the stage: constellation or Ghana regions
@@ -757,13 +832,27 @@
     }
     const nameOf = (key) => (file && file.regions[key] ? (window.LGRegions ? window.LGRegions.shortName(file.regions[key].name) : file.regions[key].name) : titleCase(key));
     // several report names can fall on one map region (e.g. a newer province drawn inside the one it was carved from): add them up
+    // Each list is the region's top few (the server's totals: how many different ones there are; the list length when it
+    // does not say). Two report names on one region can share values, so a merged count is a floor ("at least").
+    const LISTS = ["services", "issues", "cities", "networks"];
+    const countOf = (r, k) => Math.max((r[k] || []).length, Number((r.totals || {})[k]) || 0);
     function mergeRegion(a, b) {
       if (!a) return { ...b, raws: [b.raw] };
-      const add = (x, y) => { const m = new Map(x); for (const [k, n] of y) m.set(k, (m.get(k) || 0) + n); return [...m].sort((p, q) => q[1] - p[1]).slice(0, 6); };
+      const add = (x, y) => { const m = new Map(x); for (const [k, n] of y) m.set(k, (m.get(k) || 0) + n); return [...m].sort((p, q) => q[1] - p[1]); };
+      const lists = {}, totals = {};
+      for (const k of LISTS) {
+        const all = add(a[k] || [], b[k] || []);
+        lists[k] = all.slice(0, 6);
+        totals[k] = Math.max(all.length, countOf(a, k), countOf(b, k));
+      }
       return { ...a, events: a.events + b.events, hosts: a.hosts + b.hosts, vulnerable_hosts: a.vulnerable_hosts + b.vulnerable_hosts, critical: a.critical + b.critical,
-        services: add(a.services, b.services), issues: add(a.issues, b.issues), cities: add(a.cities, b.cities), networks: add(a.networks, b.networks),
-        raw: a.events >= b.events ? a.raw : b.raw, raws: [...a.raws, b.raw] };
+        ...lists, totals, approx: true, raw: a.events >= b.events ? a.raw : b.raw, raws: [...a.raws, b.raw] };
     }
+    // "Reports: a 3, b 2 and 5 more": a hover list never reads as complete when it is cut
+    const tipList = (r, k) => {
+      const list = r[k] || [], more = countOf(r, k) - list.length;
+      return list.map(([v, n]) => `${v} ${fmt(n)}`).join(", ") + (more > 0 ? ` and ${r.approx ? "at least " : ""}${fmt(more)} more` : "");
+    };
     const RAMP = ["#1d2a4a", "#1f6f8b", "#2bb07f", "#f5b54a", "#e5484d"];   // never passes through grey
     function rampColor(f) {
       const x = Math.max(0, Math.min(1, f)) * (RAMP.length - 1), i = Math.min(RAMP.length - 2, Math.floor(x)), t = x - i;
@@ -857,10 +946,10 @@
       if (r && r.raws && r.raws.length > 1) lines.push(tipLine("In the reports as: ", r.raws.map(titleCase).join(", ")));
       if (!r) return [...lines, tipLine(null, "No records with the active filters.")];
       lines.push(tipLine(null, `${fmt(r.events)} records · ${fmt(r.hosts)} hosts · ${fmt(r.vulnerable_hosts)} with issues · ${fmt(r.critical)} critical`));
-      if (r.services.length) lines.push(tipLine("Reports: ", r.services.map(([k, n]) => `${k} ${fmt(n)}`).join(", ")));
-      if (r.issues.length) lines.push(tipLine("Issues: ", r.issues.map(([k, n]) => `${k} ${fmt(n)}`).join(", ")));
-      if (r.cities.length) lines.push(tipLine("Cities: ", r.cities.map(([k, n]) => `${k} ${fmt(n)}`).join(", ")));
-      if (r.networks.length) lines.push(tipLine("Networks: ", r.networks.map(([k, n]) => `${k} ${fmt(n)}`).join(", ")));
+      if (r.services?.length) lines.push(tipLine("Reports: ", tipList(r, "services")));
+      if (r.issues?.length) lines.push(tipLine("Issues: ", tipList(r, "issues")));
+      if (r.cities?.length) lines.push(tipLine("Cities: ", tipList(r, "cities")));
+      if (r.networks?.length) lines.push(tipLine("Networks: ", tipList(r, "networks")));
       lines.push(el("div", "tt-hint", "Click to analyse this region"));
       return lines;
     }
@@ -1020,7 +1109,7 @@
       const f = await getJSON(`/api/svc/facets?${p}`);
       if (my !== loadFacets.seq) return;
       state.facets = f; state.svcFamily = new Map(f.reports.map((r) => [r.label, r.family]));
-      if (state.stats) { stage.setData(state.stats); renderIntel(state.stats); }
+      if (state.stats) { stage.setData(state.stats); redrawIntel(state.stats); }
       keepFocus(buildFilters);
       const ub = $("unsupportedBox"); ub.hidden = !f.unsupported.length;
       if (f.unsupported.length) ub.replaceChildren(el("h3", null, `${f.unsupported.length} report type(s) not processed yet`), el("p", "fg-hint", f.unsupported.map((u) => `${u.label}: missing ${u.missing.join(", ")}`).join(" · ")));
@@ -1068,6 +1157,19 @@
     if (state.filters[key] && !rows.some((r) => String(r.value) === String(state.filters[key]))) { const o = el("option", null, valueLabel(key, state.filters[key])); o.value = state.filters[key]; sel.append(o); }
     sel.value = state.filters[key] || "";
   }
+  // the Industry (Shadowserver) menu (count audit round 2, 2026-11-26): made once, right after Device type, as the
+  // other menus (lg-select.js styles a select added to the page)
+  function industryMenu() {
+    if (industryMenu.sel) return industryMenu.sel;
+    const dev = $("fDevice"), after = dev && dev.closest ? dev.closest("label") : null;
+    if (!after) return null;
+    const lab = el("label"), name = el("span", null, "Industry (Shadowserver)"), sel = el("select", "lg-enhance");
+    sel.id = "fIndustry";
+    lab.append(name, sel); after.after(lab);
+    sel.addEventListener("change", () => { state.filters.industry = sel.value; filtersChanged(); });
+    industryMenu.sel = sel;
+    return sel;
+  }
   function buildFilters() {
     const f = state.facets; if (!f) return;
     const b = f.facets;
@@ -1086,6 +1188,9 @@
     select($("fPort"), "port", b.port, "All ports");
     select($("fVendor"), "vendor", b.vendor, "All vendors");
     select($("fDevice"), "device_type", b.device_type, "All device types");
+    // Shadowserver's own sector column (the Sectors list is the network type): from the lists' facets, else the figures
+    const ind = industryMenu();
+    if (ind) select(ind, "industry", b.industry || ((state.stats || {}).breakdowns || {}).industry || [], "All industries");
     $("fVuln").checked = state.filters.vulnerable; $("fMulti").checked = state.filters.multi; $("fCross").checked = state.filters.cross;
   }
   $("svcSearch").addEventListener("input", buildFilters);
@@ -1171,7 +1276,9 @@
     if (narrowScreen && intel.parentElement !== $("intelSlot")) $("intelSlot").append(intel);
     else if (!narrowScreen && intel.parentElement !== $("intelCol")) $("intelCol").append(intel);
   }
-  addEventListener("resize", () => { placeIntel(); if (state.stats) renderIntel(state.stats); });
+  // once the resizing settles (150 ms), not on every resize event (audit 2026-11-27, 11-4)
+  let intelResize = 0;
+  addEventListener("resize", () => { clearTimeout(intelResize); intelResize = setTimeout(() => { placeIntel(); if (state.stats) redrawIntel(state.stats); }, 150); });
 
   // ================================================================== record details (same dialog as the map platform)
   function section(title, rows, wide) {
@@ -1190,7 +1297,7 @@
     const d = defOf(label); if (!d) return;
     box.append(el("b", null, `${d.title}${d.ipv6 ? " (IPv6)" : ""}`), document.createTextNode(` · Shadowserver rating: ${d.rating || "n/a"}. `), document.createTextNode(d.def));
     if (d.why) box.append(el("div", null, `Why it matters: ${d.why}`));
-    if (d.url) { const a = el("a", null, "Shadowserver report page ↗"); a.href = d.url; a.target = "_blank"; a.rel = "noopener"; box.append(el("div"), a); }
+    if (httpUrl(d.url)) { const a = el("a", null, "Shadowserver report page ↗"); a.href = d.url; a.target = "_blank"; a.rel = "noopener"; box.append(el("div"), a); }
   }
   async function openModal(ev) {
     hideTip();
@@ -1224,7 +1331,8 @@
     const net = e.network ? e.network.replace(/ \(AS\d+\)$/, "") : "";
     body.append(
       section("Host", [["IP", e.ip, ["ip", e.ip_ref]], ["Port", e.port, e.port ? ["port", e.port] : null], ["Protocol", e.protocol], ["Hostname", e.hostname],
-        [state.demo ? "Network" : "Network (ASN)", e.network, net ? ["asn", net] : null], ["Sector", e.sector, e.sector ? ["sector", e.sector] : null]]),
+        // a record's own sector is Shadowserver's column: the Industry (Shadowserver) filter, never the network type's
+        [state.demo ? "Network" : "Network (ASN)", e.network, net ? ["asn", net] : null], ["Industry (Shadowserver)", e.sector, e.sector ? ["industry", e.sector] : null]]),
       section("Location", [["City", titleCase(e.city), e.city ? ["city", e.city] : null], ["Region", regionLabel(e.region), e.region ? ["region", e.region] : null], ["Country", e.geo && `${e.geo === COUNTRY.code ? COUNTRY.name : e.geo} (${e.geo})`]]),
       section("Service and device", [["Report", `${e.service} (${e.report})`, ["service", e.service]], ["Report family", e.family, ["family", e.family]], ["Severity", e.severity, ["severity", e.severity]],
         ["Vendor", e.vendor, e.vendor ? ["vendor", e.vendor] : null], ["Device type", e.device_type, e.device_type ? ["device_type", e.device_type] : null],
@@ -1235,7 +1343,9 @@
     if ((e.tls || []).length) {
       const s = section("Certificate and TLS", e.tls.map((f) => [f.label, f.value]), true);
       s.classList.add("tls-facts");
-      s.querySelectorAll("dd").forEach((dd, i) => { if (e.tls[i]?.flag) dd.classList.add("flag"); });
+      // "tls-act", not "flag": .flag is the 16 x 12 px country-flag picture, and it squeezed these values into one
+      // (2026-11-26: "Expired ..." stood one letter per line over the rows below)
+      s.querySelectorAll("dd").forEach((dd, i) => { if (e.tls[i]?.flag) dd.classList.add("tls-act"); });
       body.append(s);
     }
     const ex = Object.entries(e.extras || {});
@@ -1277,7 +1387,7 @@
     const k = pairs[0][0];
     return { service: "Service report", ip: "Host", issue: "Issue", region: "Region", city: "City", asn: "Network", family: "Report family", severity: "Severity",
       port: "Port", vendor: "Vendor", product: "Product", time: "Time window", vulnerable: "Hosts with issues", multi: "Hosts with multiple issues", cross: "Hosts in several reports",
-      device_type: "Device type", tag: "Tag", sector: "Sector" }[k] || NAMES[k] || "Analysis";
+      device_type: "Device type", tag: "Tag", sector: "Sector (network type)", industry: "Industry (Shadowserver)" }[k] || NAMES[k] || "Analysis";
   }
   async function openInsight(pairs, opts = {}) {
     hideTip();
@@ -1314,9 +1424,30 @@
     return out;
   }
   const BREAK_TITLES = { service: "Services (reports)", issue: "Issues", region: "Regions", city: "Cities", network: "Networks", vendor: "Device vendors", product: "Products",
-    port: "Ports", tag: "Tags", sector: "Sectors", device_type: "Device types", family: "Report families", protocol: "Protocols" };
+    port: "Ports", tag: "Tags", sector: "Sectors (network type)", industry: "Industry (Shadowserver)", device_type: "Device types", family: "Report families", protocol: "Protocols" };
   const KEY_OF = { service: "service", issue: "issue", region: "region", city: "city", network: "asn", vendor: "vendor", product: "product", port: "port", tag: "tag",
-    sector: "sector", device_type: "device_type", family: "family", protocol: "protocol", severity: "severity" };
+    sector: "sector", industry: "industry", device_type: "device_type", family: "family", protocol: "protocol", severity: "severity" };
+  // count audit round 2 (2026-11-26): what a list or figure does not count, in words. The "Unknown network" / "Unknown
+  // region" rows are records without one (unknowns), never a network or region; a record without an address is no host.
+  function unknownNote(s, key) {
+    const what = key === "network" || key === "region" ? key : "", n = Number((((s || {}).unknowns || {})[key] || {}).records) || 0;
+    return what && n ? `${fmt(n)} record${n === 1 ? "" : "s"} without a ${what} (not counted as a ${what}).` : "";
+  }
+  function loadNotes(s) {
+    const out = [], na = Number((s || {}).no_address ?? ((s || {}).kpis || {}).no_address) || 0;
+    if (na) out.push(`${fmt(na)} record${na === 1 ? "" : "s"} without an address (not counted as hosts).`);
+    const t = String((((s || {}).load_notes) || {}).text || "").trim();
+    if (t) out.push(t);
+    return out.join(" ");
+  }
+  // a line of these notes right under a node (made once, then kept current; hidden when there is nothing to say)
+  function noteUnder(node, cls, text) {
+    if (!node) return null;
+    let p = node["_" + cls];
+    if (!p) { p = el("p", `hint ${cls}`); (node._more || node).after(p); node["_" + cls] = p; }
+    p.textContent = text || ""; p.hidden = !text;
+    return p;
+  }
   function renderInsight(pairs, d, autoDrill) {
     $("iKind").textContent = kindLabel(pairs);
     const title = $("iTitle"); title.replaceChildren();
@@ -1370,17 +1501,26 @@
     const cSev = card("Severity mix", "sev");
     row1.append(cHour.sec, cQuarter.sec, cSev.sec); body.append(row1);
     setTimeout(() => {
-      donutChart(mixCard.svg, mixCard.legend, mix.rows, { color: mix.color, unit: "records", center: "records", onClick: (v) => openInsight(narrow(pairs, mix.key, v)) });
-      donutChart(netCard.svg, netCard.legend, second.rows, { color: (v) => PAL[Math.max(0, second.rows.findIndex((r) => r.value === v)) % PAL.length], unit: "records", center: "records", onClick: (v) => openInsight(narrow(pairs, second.key, v)) });
+      // the rows are the server's top 10: the ring is of the whole selection (d.total) and the rest is "Other"; a record
+      // has one family, service and network, but can have several issues, so their "Other" is the server's own count
+      const O = d.others || {};
+      donutChart(mixCard.svg, mixCard.legend, mix.rows, { color: mix.color, unit: "records", center: "records", total: d.total, onClick: (v) => openInsight(narrow(pairs, mix.key, v)) });
+      donutChart(netCard.svg, netCard.legend, second.rows, { color: (v) => PAL[Math.max(0, second.rows.findIndex((r) => r.value === v)) % PAL.length], unit: "records", center: "records", total: d.total,
+        ...(second.key === "issue" ? { other: O.issue ?? 0, otherLabel: "Other issues" } : {}), onClick: (v) => openInsight(narrow(pairs, second.key, v)) });
       const scope = (st, m) => openInsight(narrow(pairs, "time", `${st}+${m}`));
       stackedHours(cHour.canvas, d.hours_by_family || {}, null, null, scope);
       quarterHours(cQuarter.canvas, d.quarters || [], null, svcPair ? famColor(state.svcFamily.get(svcPair)) : ACCENT, null, scope);
       severityMix(cSev.bar, cSev.legend, d.severity || [], { onClick: (v) => openInsight(narrow(pairs, "severity", v)) });
     }, 0);
     const breaks = el("div", "i-breaks");
-    for (const key of ["service", "issue", "region", "city", "network", "vendor", "product", "port", "device_type", "sector", "tag", "family"]) {
+    for (const key of ["service", "issue", "region", "city", "network", "vendor", "product", "port", "device_type", "sector", "industry", "tag", "family"]) {
       const rows = B[key] || []; if (!rows.length) continue;
       const sec = el("section", "m-sec"); sec.append(el("h3", null, BREAK_TITLES[key]));
+      // the server sends the top 10: say so when there are more (d.totals: the distinct count of each list)
+      const cutText = window.LGShare.cut(rows.length, Math.max(rows.length, Number((d.totals || {})[key]) || 0));
+      if (cutText) sec.append(el("p", "hint brk-cut", `${cutText}, by records.`));
+      const unk = unknownNote(d, key);
+      if (unk) sec.append(el("p", "hint brk-unknown", unk));
       const list = el("ul", "brk");
       for (const r of rows) {
         const li = el("li"); const bl = el("span", "bl");
@@ -1403,6 +1543,9 @@
     body.append(breaks);
     if (d.host_rows.length && !isHost) {
       const sec = el("section", "m-sec wide"); sec.append(el("h3", null, "Hosts to follow up first"));
+      // the first 15 by follow-up priority of all the selection's hosts (hosts_total): say how many there are
+      const hostCut = window.LGShare.cut(d.host_rows.length, Math.max(d.host_rows.length, Number(d.hosts_total ?? d.hosts) || 0), "hosts");
+      if (hostCut) sec.append(el("p", "hint brk-cut", `${hostCut}, by follow-up priority.`));
       const wrap = el("div", "table-wrap"); const tbl = el("table", "hosts");
       const thead = el("thead"); const hr = el("tr");
       for (const h of ["Host IP", "Issues", "Reports / services", "Records", "City", "Network", "Device / product", "Last seen"]) hr.append(el("th", null, h));
@@ -1553,10 +1696,13 @@
     }
     // quoted, and spreadsheet-safe: a cell starting with = + - @ (not a plain number) would run as a formula
     const q = (s) => { s = String(s); if (/^[=+\-@\t\r\n＝＋－＠]/.test(s) && !/^([+-]?\d+([.,]\d+)*%?|-+)$/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; };
-    const lines = [[...r.columns.map(([, l]) => q(l)), ...(iss ? [q("What the issues are (CVE: NVD / CISA KEV / EPSS; others: definition)")] : [])].join(",")];
+    // who downloaded it and when: two columns on every row, the names and cells from the server (2026-11-27)
+    const st = r.download_stamp && Array.isArray(r.download_stamp.columns) && Array.isArray(r.download_stamp.cells) ? r.download_stamp : null;
+    const lines = [[...r.columns.map(([, l]) => q(l)), ...(iss ? [q("What the issues are (CVE: NVD / CISA KEV / EPSS; others: definition)")] : []), ...(st ? st.columns.map(q) : [])].join(",")];
     for (const row of r.rows) {
       const cells = r.columns.map(([k]) => q(k === "followup" ? (row[k] || []).join("; ") : drillCell(row[k])));
       if (iss) cells.push(q((kind === "issue" ? [row.name] : row.issues || []).filter((n) => iss[n]).map((n) => `${n}: ${issueShort(iss[n])}`).join(" | ")));
+      if (st) cells.push(...st.cells.map(q));
       lines.push(cells.join(","));
     }
     const blob = new Blob([lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
@@ -1564,26 +1710,39 @@
     window.LGLoader.saveBlob(blob, `looking-glass-services_${d.day}_${name}_${r.metric}.csv`);
   }
   // ---------------- issues explained: CVEs (NVD, CISA KEV, EPSS) and the others (definitions written by researchers)
+  // a link only to an http(s) address: anything else (javascript:, data:) is never a link (audit 2026-11-27, 11-13)
+  function httpUrl(u) { try { return ["http:", "https:"].includes(new URL(u).protocol); } catch { return false; } }
   const LOOKUPS = !!(window.SVC_CONFIG || {}).lookups;
   const extLink = (href, text) => {
     let ok = false; try { ok = ["http:", "https:"].includes(new URL(href).protocol); } catch { ok = false; }
     if (!ok) return el("span", null, text);
     const a = el("a", null, text); a.href = href; a.target = "_blank"; a.rel = "noopener noreferrer"; return a;
   };
+  // every reference, each address in full (it wraps); past the first 10, "The first 10 of N" with a button for the
+  // rest (audit 2026-11-27, 11-6: cut at 10, and each address at 90 characters, without a word)
+  const REFS_SHOWN = 10;
   function refList(card, refs, label) {
     refs = [...new Set((refs || []).filter(Boolean))]; if (!refs.length) return;
     const ul = el("ul", "mp-refs");
-    for (const u of refs.slice(0, 10)) { const li = el("li"); li.append(extLink(u, u.replace(/^https?:\/\//, "").slice(0, 90))); ul.append(li); }
+    const put = (n) => ul.replaceChildren(...refs.slice(0, n).map((u) => { const li = el("li"); li.append(extLink(u, u.replace(/^https?:\/\//, ""))); return li; }));
+    put(REFS_SHOWN);
     card.append(el("p", "mp-meta", label), ul);
+    if (refs.length > REFS_SHOWN) {
+      const more = el("p", "mp-meta mp-refs-more", `The first ${REFS_SHOWN} of ${refs.length} references. `);
+      const b = el("button", "link-btn", `Show all ${refs.length}`); b.type = "button";
+      b.addEventListener("click", (ev) => { ev.stopPropagation(); put(refs.length); more.remove(); });
+      more.append(b); card.append(more);
+    }
   }
   function issueShort(x) {
     if (x.kind === "cve") {
       const bits = [];
       if (x.exploited) bits.push("ACTIVELY EXPLOITED");
       if (x.cvss) bits.push(`CVSS ${x.cvss.score}`);
-      if (x.epss != null) bits.push(`EPSS ${(x.epss * 100).toFixed(1)}%`);
+      if (x.epss != null) bits.push(`EPSS ${window.LGShare.pct(x.epss, 1)}`);
       if (x.pending) bits.push("not looked up yet"); else if (!x.found) bits.push("no public record");
-      return `${x.kev?.name || (x.description || "").slice(0, 70)}${bits.length ? ` (${bits.join(", ")})` : ""}`;
+      // the whole description (on the page and in the CSV; audit 2026-11-27, 11-6: cut at 70 characters, in both)
+      return `${x.kev?.name || x.description || ""}${bits.length ? ` (${bits.join(", ")})` : ""}`;
     }
     return x.curated ? x.title : "no definition yet";
   }
@@ -1632,7 +1791,7 @@
       const t = el("b"); t.append(extLink(x.url, x.kev?.name ? `${name}: ${x.kev.name}` : name)); head.append(t); card.append(head);
       const facts = [];
       if (x.cvss) facts.push(`CVSS ${x.cvss.version} score ${x.cvss.score} (${String(x.cvss.severity || "").toLowerCase()}${x.cvss.source ? `, ${x.cvss.source}` : ""})`);
-      if (x.epss != null) facts.push(`EPSS ${(x.epss * 100).toFixed(1)}% chance of exploitation in the next 30 days`);
+      if (x.epss != null) facts.push(`EPSS ${window.LGShare.pct(x.epss, 1)} chance of exploitation in the next 30 days`);
       if (x.published) facts.push(`published ${x.published}`);
       if (facts.length) card.append(el("p", "mp-meta", facts.join(" · ")));
       if (x.description) card.append(el("p", "mp-desc", x.description));
@@ -1644,7 +1803,7 @@
       if (x.pending) card.append(el("p", "mp-meta", "Not looked up yet: try again in a minute."));
       if (x.cwes?.length) card.append(el("p", "mp-meta", `Weakness: ${x.cwes.join(", ")}`));
       if (x.note) card.append(el("p", "mp-meta", `Note by ${x.note_by || "a researcher"}: ${x.note}`));
-      refList(card, [x.kev_url, x.nvd ? "" : x.cveorg_url, ...(x.references || []).slice(0, 6), ...(x.curated_references || [])], "References:");
+      refList(card, [x.kev_url, x.nvd ? "" : x.cveorg_url, ...(x.references || []), ...(x.curated_references || [])], "References:");
     } else if (x.curated) {
       card.classList.add("mp-curated");
       head.append(el("span", "badge mp-badge mp-badge-kb", "Looking Glass definition"), el("b", null, `${name}: ${x.title}`)); card.append(head);
@@ -1705,7 +1864,7 @@
     for (const gr of groups) {
       const items = gr.items.filter((it) => !q || it.term.toLowerCase().includes(q) || it.def.toLowerCase().includes(q)); if (!items.length) continue;
       const sec = el("section", "gl-group"); sec.append(el("h3", null, gr.group)); const dl = el("dl");
-      for (const it of items) { const dd = el("dd", null, it.def + " "); if (it.url) { const a = el("a", null, "Report page ↗"); a.href = it.url; a.target = "_blank"; a.rel = "noopener"; dd.append(a); } dl.append(el("dt", null, it.term), dd); n++; }
+      for (const it of items) { const dd = el("dd", null, it.def + " "); if (httpUrl(it.url)) { const a = el("a", null, "Report page ↗"); a.href = it.url; a.target = "_blank"; a.rel = "noopener"; dd.append(a); } dl.append(el("dt", null, it.term), dd); n++; }
       sec.append(dl); box.append(sec);
     }
     if (!n) box.append(el("p", "muted", "No matching terms."));
@@ -1787,7 +1946,7 @@
     renderFilterBar(); refreshReplayed(); backfill();
     setInterval(poll, POLL_MS); setInterval(refreshReplayed, 3000); setInterval(refreshStats, 30000);
     setInterval(() => syncClock().catch(() => {}), 15000); setInterval(tickHud, 250);
-    setInterval(() => { if (state.stats) renderIntel(state.stats); }, 60000);
+    setInterval(() => { if (state.stats) redrawIntel(state.stats); }, 60000);
     requestAnimationFrame(loop);
   })();
 })();
