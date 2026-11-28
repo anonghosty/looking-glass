@@ -5,11 +5,11 @@ hide:
   - toc
 ---
 
-!!! warning "The releases published so far are test releases"
-    You can use them for your constituency, but know that they are test releases: expect changes between releases
-    and follow [Updating](INSTALLATION.md#updating) for each one. The first production release, **prod stable**, is
-    under strict testing and comes out before Sunday 29 November 2026, with **prod experimental** for new features
-    still being tried out.
+!!! note "prod stable is out"
+    [v2026.11.28](https://github.com/anonghosty/looking-glass/releases/tag/v2026.11.28) is the first production
+    release, tested in full: use it for your constituency, and follow [Updating](INSTALLATION.md#updating) for each
+    new release. Releases called **prod experimental** carry new features still being tried out, and say so on their
+    release page.
 
 <div class="lg-hero" markdown>
 
